@@ -132,7 +132,11 @@ describe('dim sum code name', () => {
       id: 'hk-dish-0001',
       nameEn: 'Classic Har Gow',
       nameZh: '蝦餃',
-      assetName: 'hk-dish-0001-classic-har-gow.png',
+      // The photo is LINKED from the catalog release now, not attached to ours — the section
+      // says so in as many words. The filename still has to reach the reader, so it is
+      // asserted through the URL that carries it rather than as a bare name.
+      assetUrl:
+        'https://github.com/Ding-Ding-Projects/dim-sum-photos/releases/download/catalog-v1/hk-dish-0001-classic-har-gow.png',
       alt: 'Warm tea-house photograph'
     })
     expect(out).toContain('Classic Har Gow · 蝦餃')

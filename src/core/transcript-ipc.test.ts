@@ -29,6 +29,7 @@ const chat = (nodeId?: string) =>
   f.handlers[IPC.chatReadTranscript](SID, CWD, undefined, nodeId) as Promise<ChatTranscriptResult>
 const search = (nodeId?: string) =>
   f.handlers[IPC.claudeReadTranscript](SID, CWD, undefined, nodeId) as Promise<TranscriptLine[]>
+const searchIndex = (query: string) => f.handlers[IPC.transcriptSearch](query)
 
 beforeEach(() => {
   home = fs.mkdtempSync(path.join(os.tmpdir(), 'nt-transcript-ipc-'))
@@ -51,6 +52,11 @@ const writeTranscript = (body: string, name = `${SID}.jsonl`): string => {
 }
 
 describe('registerTranscriptIpc — local resolution', () => {
+  it('registers transcript index search through the shared core seam', () => {
+    registerTranscriptIpc()
+    expect(searchIndex('browser query')).toEqual([])
+  })
+
   it('reads the session transcript and reports it found', async () => {
     writeTranscript(lines(userLine('merhaba'), assistantLine('selam')))
     registerTranscriptIpc()

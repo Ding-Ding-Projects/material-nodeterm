@@ -10,6 +10,7 @@ import {
   type OllamaModelInfo,
   type OllamaRunningModel,
   type OllamaStatus,
+  type PullItemStatus,
   type PullQueueItem,
   type PullQueueState
 } from '@shared/ollama'
@@ -17,6 +18,7 @@ import { E_UNSUPPORTED } from '@shared/rpc'
 import { formatBytes } from '../../lib/bytesFormat'
 import { useActiveSessionApi } from '../../session/session'
 import { ConfirmDialog } from '../ConfirmDialog'
+import { MaterialSymbol, type MaterialSymbolName } from '../MaterialSymbol'
 import { promptDialog } from '../promptDialog'
 import {
   catalogPollDelayMs,
@@ -100,8 +102,34 @@ const toast = (message: string, kind: 'error' | 'info' = 'info'): void => {
   window.dispatchEvent(new CustomEvent('nodeterm:toast', { detail: { kind, message } }))
 }
 
+const PULL_STATUS_ICON: Record<PullItemStatus, MaterialSymbolName> = {
+  queued: 'schedule',
+  running: 'sync',
+  paused: 'hourglass_top',
+  done: 'check_circle',
+  failed: 'warning',
+  cancelled: 'close'
+}
+
+function pullStatusIcon(status: PullItemStatus): MaterialSymbolName {
+  return PULL_STATUS_ICON[status]
+}
+
+const FIT_ICON: Record<FitEvaluation['verdict'], MaterialSymbolName> = {
+  'runs-well': 'check_circle',
+  'runs-with-limits': 'warning',
+  unlikely: 'block',
+  unknown: 'radio_button_unchecked'
+}
+
 function FitBadge({ fit }: { fit: FitEvaluation | undefined }) {
-  if (!fit) return <span className="om-fit om-fit--unknown">Unknown</span>
+  if (!fit)
+    return (
+      <span className="om-fit om-fit--unknown">
+        <MaterialSymbol name="radio_button_unchecked" size={14} />
+        Unknown
+      </span>
+    )
   const label =
     fit.verdict === 'runs-well'
       ? 'Runs well'
@@ -110,7 +138,12 @@ function FitBadge({ fit }: { fit: FitEvaluation | undefined }) {
         : fit.verdict === 'unlikely'
           ? 'Unlikely'
           : 'Unknown'
-  return <span className={`om-fit om-fit--${fit.verdict}`}>{label}</span>
+  return (
+    <span className={`om-fit om-fit--${fit.verdict}`}>
+      <MaterialSymbol name={FIT_ICON[fit.verdict]} size={14} />
+      {label}
+    </span>
+  )
 }
 
 function FitDetail({ fit }: { fit: FitEvaluation | undefined }) {
@@ -442,12 +475,12 @@ function OllamaManagerPanelForApi({
   }, [cart])
 
   return createPortal(
-    <div className="drawer-overlay" onClick={onClose}>
+    <div className="drawer-overlay md3-ollama" onClick={onClose}>
       <aside className="drawer ollama" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Ollama manager">
         <div className="drawer__head">
           <h2>Ollama manager</h2>
           <button className="drawer__close" onClick={onClose} aria-label="Close">
-            ×
+            <MaterialSymbol name="close" size={18} />
           </button>
         </div>
         <div className="drawer__body om-body">
@@ -960,7 +993,7 @@ function StoreTab({
                 <li key={item.id} className={`cv-item cv-item--${item.status}`}>
                   <div className="cv-item__row">
                     <span className="cv-item__icon" aria-hidden>
-                      {item.status === 'done' ? '✓' : item.status === 'failed' ? '✕' : item.status === 'running' ? '↻' : '⋯'}
+                      <MaterialSymbol name={pullStatusIcon(item.status)} size={16} />
                     </span>
                     <span className="cv-item__name">{item.ref}</span>
                     <span className="cv-item__size">

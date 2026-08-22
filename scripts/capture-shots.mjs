@@ -44,6 +44,11 @@ import {
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const OUT = join(ROOT, 'docs/assets/shots')
+// GitHub Pages serves ONLY site/ (see .github/workflows/pages.yml: `path: site`), so a capture
+// under docs/ is unreachable from the site. Rather than hand-copying — two copies of one picture
+// are two pictures that disagree eventually — ONE run writes both, and
+// scripts/check-site-shots.mjs asserts they stay byte-identical.
+const SITE_OUT = join(ROOT, 'site/assets/shots')
 
 const argv = process.argv.slice(2)
 const flag = (name) => {
@@ -53,6 +58,251 @@ const flag = (name) => {
 const attachPort = flag('attach')
 const doLaunch = flag('launch')
 const only = typeof flag('only') === 'string' ? String(flag('only')).split(',') : null
+
+// ---------------------------------------------------------------------
+// Shared driver for the Kids surfaces (see their entries below for why they need one).
+// ---------------------------------------------------------------------
+// Written as one string so the steps compose: every driver opens with the same helpers and then
+// appends only what its own surface needs. `until()` polls rather than sleeping, because a fixed
+// wait is a guess about how long a state change takes and it guessed wrong here.
+const KIDS_DRIVER = `(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms))
+  const until = async (sel, ms) => {
+    const end = Date.now() + ms
+    while (Date.now() < end) { if (document.querySelector(sel)) return true; await wait(150) }
+    return false
+  }
+  const byLabel = (needle) => [...document.querySelectorAll('button,[role=button]')].find((e) =>
+    (e.getAttribute('aria-label') || e.title || e.textContent || '').trim().toLowerCase().includes(needle))
+  const pad = async (pin) => {
+    for (const digit of pin) {
+      const key = document.querySelector('[aria-label="Digit ' + digit + '"]')
+      if (!key) return false
+      key.click()
+      await wait(150)
+    }
+    return true
+  }
+`
+
+// Enter the mode from the rail. First run also gets the choose/confirm PIN dialog; a later run in
+// the same profile skips straight through, so both paths are handled.
+const KIDS_HOME_STEPS = `
+  if (document.querySelector('.md3-kids-home')) return true
+  const kidsBtn = byLabel('kids')
+  if (!kidsBtn) return false
+  kidsBtn.click()
+  if (await until('[aria-label="Choose a 4-digit PIN"]', 5000)) {
+    if (!(await pad('1234'))) return false
+    if (!(await until('[aria-label="Confirm the 4-digit PIN"]', 5000))) return false
+    if (!(await pad('1234'))) return false
+  }
+  return await until('.md3-kids-home', 15000)
+})()`
+
+const KIDS_GATE_STEPS = `
+  if (document.querySelector('.md3-kids-pinpad')) return true
+  if (!(await until('.md3-kids-home', 10000))) return false
+  const gate = document.querySelector('[aria-label="Grown-up gate"]')
+  if (!gate) return false
+  gate.click()
+  return await until('.md3-kids-pinpad', 10000)
+})()`
+
+const KIDS_PARENT_STEPS = `
+  if (document.querySelector('.md3-kids-parent')) return true
+  if (!(await until('.md3-kids-pinpad', 3000))) {
+    const gate = document.querySelector('[aria-label="Grown-up gate"]')
+    if (!gate) return false
+    gate.click()
+    if (!(await until('.md3-kids-pinpad', 10000))) return false
+  }
+  if (!(await pad('1234'))) return false
+  return await until('.md3-kids-parent', 12000)
+})()`
+
+// ---------------------------------------------------------------------
+// Shared driver for the Windows terminal-profile surfaces (see their entries below).
+// ---------------------------------------------------------------------
+// Same shape as KIDS_DRIVER, for the same reason: the picker is two clicks deep and profile
+// detection is on demand (`useTerminalProfiles.ensureLoaded`, kicked off by Canvas on mount),
+// so the menu can open a beat before it has anything to list. A fixed sleep here would be a
+// guess about how long probing PATH for four shells and enumerating WSL takes on this machine.
+const PROFILE_DRIVER = `(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms))
+  const until = async (fn, ms) => {
+    const end = Date.now() + ms
+    while (Date.now() < end) { const v = fn(); if (v) return v; await wait(150) }
+    return null
+  }
+  const byText = (needle) => [...document.querySelectorAll('button,[role=menuitem]')].find((e) =>
+    (e.textContent || '').trim() === needle)
+  const picker = () =>
+    document.querySelector('.md3-fab-menu[aria-label="Choose terminal profile"]')
+  // What the picker LISTS, minus the drill-out button that is always its first child.
+  const profileRows = () =>
+    picker() ? [...picker().querySelectorAll('[role=menuitem]')].slice(1) : []
+  const openPicker = async () => {
+    if (picker()) return true
+    const stale = document.querySelector('.md3-fab-backdrop')
+    if (stale) { stale.click(); await wait(250) }
+    const fab = document.querySelector('.md3-fab')
+    if (!fab) return false
+    fab.click()
+    const drill = await until(() => byText('New terminal with profile…'), 6000)
+    if (!drill) return false
+    drill.click()
+    return !!(await until(picker, 6000))
+  }
+`
+
+const PROFILE_PICKER_STEPS = `
+  if (!(await openPicker())) return false
+  // A picker showing its empty state is not a picker "listing detected profiles" — filing that
+  // screen under this id would be a confidently-wrong caption for one that says the opposite.
+  if (picker().querySelector('#fab-terminal-profile-empty-reason')) return false
+  return profileRows().length > 0
+})()`
+
+// ---------------------------------------------------------------------
+// Shared driver for the ADHD node-surfaces — the elapsed-time chip and the momentum note (see
+// docs/adhd-modes.md and src/renderer/components/AdhdNodeSurfaces.tsx).
+// ---------------------------------------------------------------------
+// Both surfaces are decisions made by `lib/adhdModes.ts` and `lib/nodeActivity.ts` from real
+// clock time, not a flag the harness can flip from outside — there is no test-only backdoor that
+// backdates a node's `lastActivityAt`, and adding one here would mean these captures show a state
+// the app can never actually reach on its own. So this driver does what a person does: opens
+// Settings, flips the real switch, creates a real terminal node through the real FAB, and (for
+// momentum) waits out the real idle window. Every step operates the app's own controls; nothing
+// reaches past the UI into store or module state.
+const ADHD_DRIVER = `(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms))
+  const until = async (fn, ms) => {
+    const end = Date.now() + ms
+    while (Date.now() < end) { const v = fn(); if (v) return v; await wait(150) }
+    return null
+  }
+  const byLabel = (needle) => [...document.querySelectorAll('button,a,[role=button],li')].find((e) =>
+    (e.textContent || '').trim() === needle)
+  // A React-controlled <input> ignores a plain \`.value = x\` assignment (React's own value
+  // setter shadows it), so the number field for "after how long" needs the native setter — the
+  // same trick a real browser extension or automation tool uses to drive a controlled input.
+  const setControlledValue = (input, value) => {
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set
+    setter.call(input, String(value))
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  }
+  const openAdhdModesSection = async () => {
+    const settingsBtn = document.querySelector('[title*="Settings" i],[aria-label*="Settings" i]')
+    if (!settingsBtn) return false
+    settingsBtn.click()
+    const sectionBtn = await until(() => byLabel('ADHD modes'), 6000)
+    if (!sectionBtn) return false
+    sectionBtn.click()
+    return !!(await until(() => document.querySelector('[aria-label="Time awareness mode"]'), 6000))
+  }
+  const closeSettings = async () => {
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true }))
+    await wait(500)
+  }
+  // Creates one plain terminal node through the nav rail's FAB (the same "+" a person uses) and
+  // returns its node id, discovered by diffing the canvas before/after — the same technique the
+  // profile driver above uses for the same reason: a freshly created node has no id known in
+  // advance.
+  const createTerminalNode = async () => {
+    const liveTerminalIds = () => [...document.querySelectorAll('.react-flow__node[data-id]')]
+      .filter((n) => n.querySelector('.term-node')).map((n) => n.dataset.id)
+    const before = new Set(liveTerminalIds())
+    const fab = document.querySelector('.md3-fab')
+    if (!fab) return null
+    fab.click()
+    const item = await until(() => byLabel('Terminal'), 4000)
+    if (!item) return null
+    item.click()
+    return await until(() => liveTerminalIds().find((id) => !before.has(id)) || null, 8000)
+  }
+  // Every node this driver creates is a real tmux/session-host session that OUTLIVES the app by
+  // design (see the terminal session continuity section of CLAUDE.md) — it must be destroyed
+  // before the sandbox is torn down, or cleanup fails with EPERM while every capture already sits
+  // on disk. Tracked here so the harness can find and destroy them after this surface is done,
+  // regardless of whether the capture itself succeeded.
+  window.__adhdCreatedNodeIds = window.__adhdCreatedNodeIds || []
+`
+
+const ADHD_ELAPSED_STEPS = `
+  if (!(await openAdhdModesSection())) return false
+  const sw = document.querySelector('[aria-label="Time awareness mode"]')
+  if (sw.getAttribute('aria-checked') !== 'true') sw.click()
+  await closeSettings()
+  const nodeId = await createTerminalNode()
+  if (!nodeId) return false
+  window.__adhdCreatedNodeIds.push(nodeId)
+  const nodeEl = await until(() => document.querySelector('.react-flow__node[data-id="' + nodeId + '"]'), 8000)
+  if (!nodeEl) return false
+  // "just now" renders the instant the node's own mount records its opened time — no wait needed.
+  return !!(await until(() => nodeEl.querySelector('.adhd-elapsed'), 8000))
+})()`
+
+// Momentum cannot fire before real idle time has genuinely passed — `momentumMinutes` is clamped
+// to a 5-minute floor (`MOMENTUM_MIN_MINUTES`, lib/adhdModes.ts) precisely so a person cannot be
+// nagged sooner than that, and there is no way to shorten it from outside the app. So this driver
+// sets the field to that floor, spawns one idle terminal, and returns immediately — the multi-
+// minute wait happens on the NODE side (see MOMENTUM_POLL_MS below), never inside one
+// `Runtime.evaluate` call, which times out at 30s (see cdp()'s send()).
+const ADHD_MOMENTUM_STEPS = `
+  if (!(await openAdhdModesSection())) return false
+  const momentumSw = document.querySelector('[aria-label="Momentum mode"]')
+  if (!momentumSw) return false
+  if (momentumSw.getAttribute('aria-checked') !== 'true') momentumSw.click()
+  const minutesInput = await until(
+    () => document.querySelector('[aria-label="Minutes untouched before the momentum note appears"]'),
+    4000
+  )
+  if (!minutesInput) return false
+  setControlledValue(minutesInput, 5)
+  await closeSettings()
+  const nodeId = await createTerminalNode()
+  if (!nodeId) return false
+  window.__adhdCreatedNodeIds.push(nodeId)
+  // The node is created and left untouched from here — the harness polls for the note from Node
+  // side while genuine idle time elapses. Nothing further happens in this script.
+  return true
+})()`
+// Real wait: 5 minutes (the clamped floor) plus one full activity tick (60s, ACTIVITY_TICK_MS —
+// the momentum readout only re-evaluates when the shared minute clock wakes it) plus a margin for
+// the poll's own 150ms step and process scheduling jitter.
+const MOMENTUM_POLL_MS = 5 * 60_000 + 90_000 + 30_000
+
+const slowShots = process.env.NT_SHOTS_SLOW === '1'
+
+// Always reachable and fast — no gating needed.
+const ADHD_ELAPSED_SURFACE = {
+  id: 'app-adhd-elapsed-chip',
+  required: true,
+  title: 'ADHD modes — the time-awareness elapsed chip',
+  open: { script: ADHD_DRIVER + ADHD_ELAPSED_STEPS },
+  verify: '.adhd-elapsed'
+}
+
+// Gated behind NT_SHOTS_SLOW=1: genuinely takes several real minutes (the momentum window cannot
+// be shortened — see ADHD_MOMENTUM_STEPS above), so it must not block an ordinary run. Skipped
+// (not failed) otherwise, with an honest reason, per rule 2 — this is a real, reachable surface,
+// just an expensive one to prove, so it is optional rather than required.
+const ADHD_MOMENTUM_SURFACE = slowShots
+  ? {
+      id: 'app-adhd-momentum-note',
+      required: true,
+      title: 'ADHD modes — the momentum note',
+      open: { script: ADHD_DRIVER + ADHD_MOMENTUM_STEPS },
+      verify: '.adhd-momentum[role="status"]',
+      pollMs: MOMENTUM_POLL_MS
+    }
+  : {
+      id: 'app-adhd-momentum-note',
+      required: false,
+      title: 'ADHD modes — the momentum note',
+      why: 'the momentum window has a real 5-minute floor that cannot be shortened from outside the app; run with NT_SHOTS_SLOW=1 to capture it (adds several real minutes to the run)'
+    }
 
 // ---------------------------------------------------------------------
 // The surface list. REQUIRED failures fail the run — see rule 2.
@@ -68,7 +318,7 @@ const SURFACES = [
     required: true,
     title: 'App at launch',
     open: null,
-    verify: '.tabbar',
+    verify: '.md3-app-bar',
     // The tab bar is present underneath the kanban overlay too, so without this a re-run that
     // started with the board open photographed the BOARD under this name. Observed, not feared.
     verifyAbsent: '[class*="kanban"]'
@@ -119,7 +369,159 @@ const SURFACES = [
     open: { clicks: ['[title*="Settings" i],[aria-label*="Settings" i]', 'Kids mode'] },
     verify: '[class*="settings"]'
   },
+    {
+      // The History destination existed as a fully-built screen that nothing imported — reachable
+      // only by reading the source. REQUIRED here so an unreachable screen fails the run rather
+      // than quietly going missing again.
+      id: 'app-06-history',
+      required: true,
+      title: 'History — session memory, settings history, changelog',
+      open: { click: '[aria-label*="History" i],[title*="History" i]' },
+      verify: '.md3-history-screen'
+    },
+    {
+      // The Status destination is what feat/status-hub-surface owed and never had: a capture
+      // of the real screen from the built artifact. Its host is imported, stated and
+      // reachable, and during integration the render site was dropped while typecheck stayed
+      // green — so REQUIRED here, because a screen whose button opens nothing must fail this
+      // run rather than go missing quietly a second time.
+      id: 'app-status-surface',
+      required: true,
+      title: 'Status surface',
+      open: { click: '.md3-rail-item[title="Status" i]' },
+      // .md3-status-screen exists ONLY inside StatusSurface. The host div alone would not do:
+      // it is rendered by Canvas, so it would be present even if the component drew nothing.
+      verify: '.md3-status-screen'
+    },
+    // These five were last taken 2026-08-15 — BEFORE the Material 3 rewrite — and the README
+    // embedded them as current, so it published the old blue-accent interface. Required now so a
+    // stale settings shot fails the run instead of quietly outliving the design it shows.
+    {
+      id: 'app-settings-language',
+      required: true,
+      title: 'Settings — Language',
+      open: { clicks: ['[title*="Settings" i],[aria-label*="Settings" i]', 'Language'] },
+      verify: '[class*="settings"]'
+    },
+    {
+      id: 'app-settings-narrator',
+      required: true,
+      title: 'Settings — Narrator',
+      open: { clicks: ['[title*="Settings" i],[aria-label*="Settings" i]', 'Narrator'] },
+      verify: '[class*="settings"]'
+    },
+    {
+      id: 'app-settings-schedule',
+      required: true,
+      title: 'Settings — Schedule',
+      open: { clicks: ['[title*="Settings" i],[aria-label*="Settings" i]', 'Schedule'] },
+      verify: '[class*="settings"]'
+    },
+    {
+      id: 'app-settings-app-identity',
+      required: true,
+      title: 'Settings — App name & logo',
+      open: { clicks: ['[title*="Settings" i],[aria-label*="Settings" i]', 'App name & logo'] },
+      verify: '[class*="settings"]'
+    },
+    {
+      id: 'app-settings-appearance-editor',
+      required: true,
+      title: 'Settings — Appearance editor',
+      open: { clicks: ['[title*="Settings" i],[aria-label*="Settings" i]', 'Appearance editor'] },
+      verify: '[class*="settings"]'
+    },
+    {
+      // The README has always described this app as built for scattered workflows; until these
+      // modes existed it shipped nothing a person could switch on. Required so the settings
+      // surface cannot quietly regress into an unreachable one.
+      id: 'app-adhd-modes',
+      required: true,
+      title: 'Settings — ADHD modes',
+      open: { clicks: ['[title*="Settings" i],[aria-label*="Settings" i]', 'ADHD modes'] },
+      verify: '[class*="settings"]'
+    },
+    // ── Windows terminal profiles ───────────────────────────────────────────────────────────────
+    // The `app-` prefix is load-bearing twice over. scripts/check-site-shots.mjs mirrors and
+    // byte-compares only `app-*.png`, so a capture outside it ships to the site with nothing
+    // asserting the two copies still agree. And the bare `windows-terminal-profile-*` ids belong
+    // to scripts/windows-profile-packaged-driver.mjs, which produces PACKAGED evidence over the
+    // cheap Lowlevel headless route for the contract row of the same name — writing those ids
+    // from here would half-satisfy that row with unpackaged out/ screenshots.
+    // Placed BEFORE the Kids block on purpose: Kids mode does not hide the canvas, it unmounts
+    // it (App.tsx routes to <KidsShell/>), so the rail FAB and the settings page are simply gone
+    // for every surface that follows it.
+    {
+      id: 'app-windows-terminal-profiles',
+      required: true,
+      title: 'Windows terminal profiles — the picker',
+      open: { script: PROFILE_DRIVER + PROFILE_PICKER_STEPS },
+      verify: '.md3-fab-menu[aria-label="Choose terminal profile"]',
+      // The settings overlay is `fixed inset-0`, and a programmatic click reaches the FAB straight
+      // through it, so without this a settings screen could be photographed under this name.
+      verifyAbsent: '.nt-settings'
+    },
+    {
+      id: 'app-windows-terminal-profile-availability',
+      required: true,
+      title: 'Windows terminal profiles — detected availability',
+      open: { clicks: ['[title*="Settings" i],[aria-label*="Settings" i]', 'Shell'] },
+      // Not merely the availability list. The reason span exists ONLY on a row that is both
+      // unavailable and says why, so a machine where every profile resolved fails the run rather
+      // than filing an all-Available screenshot under a name promising the opposite.
+      verify: '#terminal-profile-availability li span.block'
+    },
+    // ── ADHD node-surfaces ──────────────────────────────────────────────────────────────────────
+    // Placed before the Kids block for the same reason the profile entries above are: Kids mode
+    // unmounts the canvas (App.tsx routes to <KidsShell/>), so the FAB and Settings are gone once
+    // it is entered. See ADHD_DRIVER above for why these are driven rather than asserted from
+    // source, and docs/adhd-modes.md for the three surfaces the feature owes captures of.
+    ADHD_ELAPSED_SURFACE,
+    ADHD_MOMENTUM_SURFACE,
+    // ── The Kids screens ────────────────────────────────────────────────────────────────────────
+    // These had no captures because they had no way in: `components/kids/entry.ts` has always
+    // documented the rail's Kids destination as the caller of `enterKidsModeFromRail()`, but the
+    // rail was built by a different lane and shipped a placeholder that opened a settings page, so
+    // that function had zero callers and the whole shell was unreachable. Wired now, so it can be
+    // both driven and photographed.
+    //
+    // The PIN is 1234 and lives only inside the disposable sandbox profile this harness creates and
+    // deletes (see createAppSandbox — HOME and every agent config root are redirected too). It is
+    // not a credential and never touches a real home directory.
+    //
+    // Each driver POLLS for its target rather than sleeping a fixed time. Fixed sleeps failed here
+    // in a way worth remembering: the enable→shell swap outran a 1.5s wait, so `kids-home` reported
+    // failure while `kids-gate`, running afterwards, passed — the flow had worked and only the
+    // verification was early.
+    {
+      id: 'app-kids-home',
+      required: true,
+      title: 'Kids mode — Home',
+      open: { script: KIDS_DRIVER + KIDS_HOME_STEPS },
+      verify: '.md3-kids-home'
+    },
+    {
+      id: 'app-kids-gate',
+      required: true,
+      title: 'Kids mode — the grown-up gate',
+      open: { script: KIDS_DRIVER + KIDS_GATE_STEPS },
+      verify: '.md3-kids-pinpad'
+    },
+    {
+      id: 'app-kids-parent',
+      required: true,
+      title: 'Kids mode — the grown-up screen',
+      open: { script: KIDS_DRIVER + KIDS_PARENT_STEPS },
+      verify: '.md3-kids-parent'
+    },
   // Optional: these need state the harness cannot manufacture.
+  // Measured, not assumed: driving the picker through to a real node spawns a Windows session
+  // host, and a session host OUTLIVES the app on purpose — that is the persistence contract. It
+  // then holds the disposable sandbox open, so `rmSync` fails with EPERM and the run exits
+  // non-zero with every capture already on disk. Reaching it needs either a scoped teardown of
+  // the exact host this run started, or driving the destructive-delete gate and waiting out the
+  // host's 30s empty-exit grace; neither is worth a flaky REQUIRED surface.
+  { id: 'app-windows-terminal-profile-node', required: false, title: 'Windows terminal profiles — a terminal opened with an explicit profile', why: 'the spawned Windows session host outlives the app by design and holds the disposable capture sandbox open' },
   { id: 'app-agent-running', required: false, title: 'Agent mid-turn', why: 'needs a real agent CLI session' },
   { id: 'app-ssh-project', required: false, title: 'SSH project', why: 'needs a reachable host and credentials' }
 ]
@@ -381,6 +783,24 @@ await send('Emulation.setDeviceMetricsOverride', {
   await sleep(1500)
 }
 
+// `--launch` always boots a genuinely fresh, isolated sandbox (createAppSandbox — no prior
+// projects), so `.md3-welcome__card--primary` ("New project") is on screen at this point. Several
+// required surfaces — the kanban toggle chief among them — render ONLY once a project exists
+// (ProjectSwitcher's `{activeProject && <button className="tab__board-toggle">}`), so a run that
+// never creates one can NEVER capture them: not a stale selector, a state the harness never
+// reaches. (`--attach` is unaffected — it drives an already-open, already-populated dev profile,
+// which is how earlier committed captures show a real "Project 1" with a terminal on it.) Create
+// one empty project so `--launch` reaches the same reachable state on its own.
+{
+  const created = await send('Runtime.evaluate', { returnByValue: true, expression: `(function(){
+    var card = document.querySelector('.md3-welcome__card--primary');
+    if (card) { card.click(); return 'created'; }
+    return 'already have a project';
+  })()` })
+  console.log(`  starter project: ${created.result.value}`)
+  await sleep(1200)
+}
+
 // Return to a KNOWN BASE STATE before photographing anything. The previous run ends on the
 // kanban board (it is the last surface), and a board left open made the next run capture it
 // under two other surfaces' names. A harness whose output depends on how the last run finished
@@ -453,6 +873,23 @@ for (const s of SURFACES) {
         continue
       }
       await sleep(1500)
+    } else if (!alreadyOpen && s.open?.script) {
+      // A SCRIPTED DRIVER, for a surface no click sequence can reach. The Kids flow has to enter
+      // the mode, choose a PIN on a pad, confirm the same PIN, then unlock the grown-up screen with
+      // it — a sequence that must remember a value between steps. This still drives the app's OWN
+      // controls (it clicks real buttons and polls for the real result); it is not a way to reach
+      // past the UI into state. It must resolve `true`, or the run fails rather than photographing
+      // wherever it stopped — the same rule every other opener here obeys.
+      const drove = await send('Runtime.evaluate', {
+        returnByValue: true,
+        awaitPromise: true,
+        expression: s.open.script
+      })
+      if (drove.result.value !== true) {
+        failures.push({ id: s.id, why: `scripted opener did not reach its surface (returned ${JSON.stringify(drove.result.value)})` })
+        continue
+      }
+      await sleep(900)
     } else if (!alreadyOpen && s.open) {
       // Chords go through the real key path so the app's own handlers run. The code/vk pair is
       // spelled out per surface rather than derived from the key — deriving it produced
@@ -475,11 +912,13 @@ for (const s of SURFACES) {
     // THE CHECK THAT MAKES THIS HARNESS WORTH ANYTHING. Without it a chord that did nothing
     // still yields a screenshot of the previous screen, filed under the new surface's name.
     if (s.verify) {
-      const seen = await send('Runtime.evaluate', {
-        returnByValue: true,
-        expression: `!!document.querySelector(${JSON.stringify(s.verify)})${s.verifyAbsent ? ` && !document.querySelector(${JSON.stringify(s.verifyAbsent)})` : ''}`
-      })
-      if (seen.result.value !== true) {
+      const verifyExpr = `!!document.querySelector(${JSON.stringify(s.verify)})${s.verifyAbsent ? ` && !document.querySelector(${JSON.stringify(s.verifyAbsent)})` : ''}`
+      // `pollMs` is for a surface whose real state takes minutes to arrive (the ADHD momentum
+      // note) — the opener already returned, and this polls repeatedly from the NODE side
+      // (`until`, defined above) rather than inside one `Runtime.evaluate` call, which times out
+      // at 30s regardless of `awaitPromise`.
+      const ok = s.pollMs ? await until(verifyExpr, s.pollMs) : (await evaluate(verifyExpr))
+      if (ok !== true) {
         failures.push({
           id: s.id,
           why: `surface never opened — "${s.verify}" is not in the DOM, so any capture here would be the previous screen under this name`
@@ -495,6 +934,8 @@ for (const s of SURFACES) {
       continue
     }
     writeFileSync(join(OUT, `${s.id}.png`), buf)
+    mkdirSync(SITE_OUT, { recursive: true })
+    writeFileSync(join(SITE_OUT, `${s.id}.png`), buf)
     captured.push({ id: s.id, title: s.title, bytes: buf.length, hadOpener: !!s.open })
     console.log(`✓ ${s.id}.png  ${(buf.length / 1024).toFixed(0)} KB`)
     // Return to a known state so the next surface does not open on top of this one.
@@ -503,6 +944,64 @@ for (const s of SURFACES) {
     await sleep(500)
   } catch (err) {
     failures.push({ id: s.id, why: err.message })
+  }
+}
+
+// The ADHD surfaces above each create a real terminal node, which is a real tmux/session-host
+// session that OUTLIVES THE APP BY DESIGN (see the terminal session continuity section of
+// CLAUDE.md). On Windows that is a standalone session host process — it must be destroyed here,
+// before the disposable sandbox is torn down in the `finally` block, or `rmSync` fails with EPERM
+// while every capture already sits safely on disk (measured with the near-identical Windows
+// terminal-profile node, which this same trap is why that one is optional rather than required).
+// Destruction happens whether or not the surfaces above succeeded — a failed capture must not
+// leave an orphaned session behind either.
+{
+  const createdIds = await evaluate(`window.__adhdCreatedNodeIds || []`)
+  for (const nodeId of Array.isArray(createdIds) ? createdIds : []) {
+    try {
+      await evaluate(
+        `window.nodeTerminal.pty.destroy(${JSON.stringify(nodeId)}, {everySocket: true}); true`
+      )
+      // `destroy` is a one-way renderer cast; its CONSEQUENCE is the trustworthy boundary, not the
+      // cast's own return value — poll for the session actually being gone (three consecutive
+      // negative reads), the same discipline scripts/windows-profile-packaged-driver.mjs uses for
+      // the identical cleanup. Each check is its own `awaitPromise: true` call rather than a
+      // single long-lived one, because `send()` hard-times-out at 30s regardless.
+      const deadline = Date.now() + 30000
+      let consecutiveAbsent = 0
+      let destroyed = false
+      while (Date.now() < deadline) {
+        try {
+          const result = await send('Runtime.evaluate', {
+            returnByValue: true,
+            awaitPromise: true,
+            expression: `Promise.all([
+              window.nodeTerminal.pty.sendText(${JSON.stringify(nodeId)}, '', {enter: false}),
+              window.nodeTerminal.pty.capture(${JSON.stringify(nodeId)}, true)
+            ]).then((values) => ({ writable: values[0], screen: String(values[1] || '') }))`
+          })
+          const { writable, screen } = result.result.value || {}
+          if (writable === false && screen === '') {
+            consecutiveAbsent += 1
+            if (consecutiveAbsent >= 3) {
+              destroyed = true
+              break
+            }
+          } else {
+            consecutiveAbsent = 0
+          }
+        } catch {
+          // A transport error is not proof of absence — keep polling for explicit negatives.
+          consecutiveAbsent = 0
+        }
+        await sleep(150)
+      }
+      if (!destroyed) {
+        console.warn(`  ! ADHD capture session ${nodeId} did not report destroyed within 30s`)
+      }
+    } catch (err) {
+      console.warn(`  ! could not destroy ADHD capture session ${nodeId}: ${err.message}`)
+    }
   }
 }
 

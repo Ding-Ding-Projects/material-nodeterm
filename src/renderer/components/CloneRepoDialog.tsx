@@ -118,42 +118,55 @@ export function CloneRepoDialog({ open, onClose, onCloned }: CloneRepoDialogProp
   return createPortal(
     <div className="confirm-overlay" onClick={cancel}>
       <div className="confirm clone-dialog" onClick={(e) => e.stopPropagation()}>
-        <p className="confirm__msg">Clone repository</p>
-        <label className="clone-dialog__label">Repository URL</label>
-        <input
-          ref={urlRef}
-          className="confirm__input"
-          value={url}
-          placeholder="https://github.com/user/repo.git — or user/repo"
-          spellCheck={false}
-          disabled={cloning}
-          onChange={(e) => setUrl(e.target.value)}
-          onKeyDown={onKeyDown}
-        />
-        {showPreview && <div className="clone-dialog__preview">→ {expanded}</div>}
-        <label className="clone-dialog__label">Parent folder</label>
-        <div className="clone-dialog__row">
+        <p className="confirm__msg">Clone a repository</p>
+        {/* Floating-label outlined field, the MD3 shape: the label overlaps the field's own top
+            border rather than sitting above it as a separate line — see design/v2/MD3
+            Overlays.dc.html's "Clone repo dialog". */}
+        <div className="md3-field">
+          <label className="md3-field__label" htmlFor="clone-dialog-url">
+            Repository URL
+          </label>
           <input
+            ref={urlRef}
+            id="clone-dialog-url"
             className="confirm__input"
-            value={parent}
-            placeholder="/path/to/projects"
+            value={url}
+            placeholder="https://github.com/user/repo.git — or user/repo"
             spellCheck={false}
             disabled={cloning}
-            onChange={(e) => setParent(e.target.value)}
+            onChange={(e) => setUrl(e.target.value)}
             onKeyDown={onKeyDown}
           />
-          <button
-            className="confirm__btn"
-            title="Choose folder"
-            disabled={cloning}
-            onClick={() => {
-              void api.dialog.selectFolder().then((f) => {
-                if (f) setParent(f)
-              })
-            }}
-          >
-            📁
-          </button>
+        </div>
+        {showPreview && <div className="clone-dialog__preview">→ {expanded}</div>}
+        <div className="md3-field">
+          <label className="md3-field__label" htmlFor="clone-dialog-parent">
+            Parent folder
+          </label>
+          <div className="clone-dialog__row">
+            <input
+              id="clone-dialog-parent"
+              className="confirm__input"
+              value={parent}
+              placeholder="/path/to/projects"
+              spellCheck={false}
+              disabled={cloning}
+              onChange={(e) => setParent(e.target.value)}
+              onKeyDown={onKeyDown}
+            />
+            <button
+              className="confirm__btn clone-dialog__browse-btn"
+              title="Choose folder"
+              disabled={cloning}
+              onClick={() => {
+                void api.dialog.selectFolder().then((f) => {
+                  if (f) setParent(f)
+                })
+              }}
+            >
+              Browse
+            </button>
+          </div>
         </div>
         {error && <div className="clone-dialog__error">{error}</div>}
         {cloning && (

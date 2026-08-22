@@ -201,19 +201,19 @@ describe('ShellSection Windows terminal profiles', () => {
     })
   })
 
-  it('persists the exact custom path before refreshing detection', async () => {
+  it('hands detection the exact custom path WITHOUT persisting base settings', async () => {
+    // This used to assert that Refresh persisted `base` first. That was the defect, not the
+    // contract: persisting here bypassed project scope, ignored sparse overrides and could
+    // make a project-local shell look global — refreshDetection's own comment records why it
+    // was removed. Detection now receives the effective value directly and persistence stays
+    // owned by useSettings.update().
     await render()
-    typeCustom('C:\\Program Files\\Git\\bin\\bash.exe')
+    typeCustom('C:\Program Files\Git\bin\bash.exe')
 
     await click(button('Refresh detection'))
 
-    expect(save).toHaveBeenCalledWith(
-      expect.objectContaining({
-        defaultShell: 'C:\\Program Files\\Git\\bin\\bash.exe',
-        defaultTerminalProfileId: 'custom'
-      })
-    )
-    expect(save.mock.invocationCallOrder[0]).toBeLessThan(refresh.mock.invocationCallOrder[0])
+    expect(refresh).toHaveBeenCalledWith('C:\Program Files\Git\bin\bash.exe')
+    expect(save).not.toHaveBeenCalled()
   })
 
   it('changes nothing when the native picker is cancelled', async () => {

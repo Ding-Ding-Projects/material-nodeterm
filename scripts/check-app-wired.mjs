@@ -115,6 +115,7 @@ let child = null
 let close = null
 let selected = []
 let failed = 0
+let skipped = 0
 let runError = null
 let cleanupError = null
 
@@ -244,6 +245,273 @@ if (sandbox) {
   }
 }
 
+// ---- Windows terminal profiles -------------------------------------------------------------
+//
+// The feature's whole claim is that a stable profile ID — never an executable path — crosses the
+// bridge, and that the trusted core resolves it into a real program immediately before spawn. The
+// unit suites prove the resolver in isolation; only the built app can prove that the picker a user
+// actually operates is wired to that resolver, that a spawn honours the chosen ID, and that a
+// profile this machine does not have is REFUSED rather than quietly becoming some other shell.
+
+/** Declared up front, per rule 3, so a skip can never be inferred at runtime from a control that
+ *  was not found. `terminalProfiles` is deliberately absent from the preload bridge off win32 (see
+ *  src/preload/index.ts), so on any other host there is no picker to drive and no defect to find. */
+const windowsProfilesSkip =
+  process.platform === 'win32'
+    ? null
+    : `Windows terminal profiles exist only in the win32 desktop app; this host is ${process.platform}`
+
+/** Settle a promise-returning bridge call and hand back its outcome. `Runtime.evaluate` cannot
+ *  await on this Electron/Node pairing (the dead end recorded at `evaluate` above), so the renderer
+ *  parks the settled value on `window` and we poll for it — the same shape the `terminal-spawns`
+ *  and `ipc-bridge` cases write out by hand, factored out because the profile cases make eight of
+ *  these calls between them. A rejection is a VALUE here, not a throw: refusing a bad profile is
+ *  the behaviour one of these checks is asserting. */
+async function settle(slot, expression, ms = 20000) {
+  await evaluate(`(function(){
+    window.${slot} = 'pending';
+    try {
+      (${expression}).then(
+        function (v) { window.${slot} = { ok: true, value: v } },
+        function (e) { window.${slot} = { ok: false, error: String((e && e.message) || e) } }
+      );
+    } catch (e) { window.${slot} = { ok: false, error: 'threw: ' + e } }
+    return true;
+  })()`)
+  const settled = await until(`window.${slot} !== 'pending' ? window.${slot} : null`, ms)
+  return settled || { ok: false, error: 'never settled — main did not answer' }
+}
+
+/** Wait for the shell the profile cases drive, and leave no overlay behind from an earlier one.
+ *  Checks share a single app instance and run in table order, so a case that returned early with
+ *  Settings still up would hand the next one a canvas it cannot reach. This makes each profile case
+ *  independently runnable under `--only`, which is the whole point of having ids. */
+async function readyCanvas() {
+  if (!(await until(`!!document.querySelector('.react-flow__pane')`, 30000))) {
+    return { ok: false, why: 'the canvas never mounted — nothing to drive' }
+  }
+  const overlays = `'.nt-settings, .ctx-menu, .destgate, .nt-palette, [class*="palette" i] input'`
+  for (let i = 0; i < 4; i += 1) {
+    if (!(await evaluate(`!!document.querySelector(${overlays})`))) return { ok: true }
+    await chord({ key: 'Escape', code: 'Escape', vk: 27 })
+  }
+  if (await evaluate(`!!document.querySelector(${overlays})`)) {
+    return { ok: false, why: 'an overlay from an earlier case would not close on Escape' }
+  }
+  return { ok: true }
+}
+
+/** The live catalog, read through the real preload bridge rather than by importing the detector: a
+ *  catalog the built app cannot fetch is exactly the defect worth catching here. */
+async function profileCatalog() {
+  const bridged = await evaluate(`typeof (window.nodeTerminal.terminalProfiles || {}).list`)
+  if (bridged !== 'function') {
+    return { ok: false, why: `window.nodeTerminal.terminalProfiles.list is ${bridged} on win32` }
+  }
+  const listed = await settle('__wiredProfileList', 'window.nodeTerminal.terminalProfiles.list()')
+  if (!listed.ok) return { ok: false, why: `terminalProfiles.list() → ${listed.error}` }
+  if (!Array.isArray(listed.value) || listed.value.length === 0) {
+    return {
+      ok: false,
+      why: `terminalProfiles.list() returned ${JSON.stringify(listed.value).slice(0, 140)}`,
+    }
+  }
+  return { ok: true, list: listed.value }
+}
+
+/** Read one settings field back out of MAIN. The renderer store would report the optimistic value
+ *  it just set whether or not anything reached disk, so it cannot answer "did the choice stick". */
+async function settingFromMain(key, want, ms = 8000) {
+  const deadline = Date.now() + ms
+  let last
+  for (;;) {
+    const loaded = await settle('__wiredProfileSettings', 'window.nodeTerminal.settings.load()')
+    if (!loaded.ok) return { ok: false, why: `settings.load() → ${loaded.error}` }
+    last = loaded.value ? loaded.value[key] : undefined
+    if (last === want) return { ok: true, value: last }
+    if (Date.now() > deadline) {
+      return {
+        ok: false,
+        why: `main still reports ${key}=${JSON.stringify(last)} after ${ms}ms (wanted ${JSON.stringify(want)})`,
+      }
+    }
+    await sleep(200)
+  }
+}
+
+/** The disposable profile starts with no project, so the canvas has nowhere to put a node until the
+ *  welcome screen's own primary action has run. It creates an empty, folder-less canvas — no native
+ *  picker, nothing outside the sandbox. */
+async function ensureProject() {
+  if (!(await evaluate(`!!document.querySelector('.md3-welcome__card--primary')`))) {
+    return { ok: true }
+  }
+  await evaluate(`(document.querySelector('.md3-welcome__card--primary').click(), true)`)
+  const dismissed = await until(
+    `document.querySelector('.md3-welcome__card--primary') ? null : 'gone'`,
+    10000,
+  )
+  if (!dismissed) return { ok: false, why: 'the welcome screen stayed up after New project' }
+  return { ok: true }
+}
+
+/** Open a context menu with a real bubbling `contextmenu` event, which is what React's delegated
+ *  onContextMenu listens for — CDP's own mouse events do not synthesize one here. `target` is a JS
+ *  expression evaluated in the page so a caller can aim at a node's header rather than its xterm. */
+async function openContextMenu(what, target) {
+  const dispatched = await evaluate(`(function(){
+    var el = ${target};
+    if (!el) return false;
+    var r = el.getBoundingClientRect();
+    var x = Math.round(r.left + Math.min(Math.max(r.width / 2, 8), 120));
+    var y = Math.round(r.top + Math.min(Math.max(r.height / 2, 8), 60));
+    el.dispatchEvent(new MouseEvent('contextmenu', {
+      bubbles: true, cancelable: true, clientX: x, clientY: y
+    }));
+    return true;
+  })()`)
+  if (!dispatched) return { ok: false, why: `there is no ${what} on screen to right-click` }
+  if (!(await until(`!!document.querySelector('.ctx-menu')`, 8000))) {
+    return { ok: false, why: `right-clicking the ${what} opened no context menu` }
+  }
+  return { ok: true }
+}
+
+/** Open a submenu by its exact visible label and return its child rows. The trigger's own onClick
+ *  opens the flyout, so no hover simulation is needed. Exact match, never `includes`: "New terminal
+ *  with profile…" and "Restart with profile…" end in the same words. */
+async function openMenuSubmenu(label) {
+  const opened = await evaluate(`(function(){
+    var triggers = Array.prototype.slice.call(document.querySelectorAll('.ctx-item--submenu'));
+    var hit = triggers.filter(function (t) {
+      return ((t.querySelector('.ctx-item__label') || t).textContent || '').trim() === ${JSON.stringify(label)};
+    })[0];
+    if (!hit) return false;
+    hit.click();
+    return true;
+  })()`)
+  if (!opened) {
+    const seen = await evaluate(`Array.prototype.slice.call(
+      document.querySelectorAll('.ctx-item--submenu .ctx-item__label')
+    ).map(function (n) { return (n.textContent || '').trim() })`)
+    return { ok: false, why: `no “${label}” submenu in the menu (saw: ${JSON.stringify(seen)})` }
+  }
+  const items = await until(
+    `(function(){
+      var flyout = document.querySelector('.ctx-submenu');
+      if (!flyout) return null;
+      var rows = Array.prototype.slice.call(flyout.querySelectorAll('[role="menuitem"]'));
+      if (rows.length === 0) return null;
+      return rows.map(function (r) {
+        return {
+          label: ((r.querySelector('.ctx-item__label') || r).textContent || '').trim(),
+          enabled: r.getAttribute('aria-disabled') !== 'true'
+        };
+      });
+    })()`,
+    6000,
+  )
+  if (!items) {
+    const state = await evaluate(`(function(){
+      var flyout = document.querySelector('.ctx-submenu');
+      var menu = document.querySelector('.ctx-menu');
+      return {
+        flyout: !!flyout,
+        rows: flyout ? flyout.querySelectorAll('[role="menuitem"]').length : 0,
+        expanded: Array.prototype.slice.call(document.querySelectorAll('.ctx-item--submenu'))
+          .map(function (t) {
+            return ((t.querySelector('.ctx-item__label') || t).textContent || '').trim()
+              + '=' + t.getAttribute('aria-expanded');
+          }),
+        menu: menu ? (menu.textContent || '').slice(0, 220) : null
+      };
+    })()`)
+    return { ok: false, why: `the “${label}” flyout rendered nothing (${JSON.stringify(state)})` }
+  }
+  return { ok: true, items }
+}
+
+/** Click one flyout row by its exact label. Returns false when the row is not there any more, which
+ *  a caller must treat as a failure rather than as "nothing to do". */
+async function clickSubmenuItem(label) {
+  return await evaluate(`(function(){
+    var flyout = document.querySelector('.ctx-submenu');
+    if (!flyout) return false;
+    var rows = Array.prototype.slice.call(flyout.querySelectorAll('[role="menuitem"]'));
+    var hit = rows.filter(function (r) {
+      return ((r.querySelector('.ctx-item__label') || r).textContent || '').trim() === ${JSON.stringify(label)}
+        && r.getAttribute('aria-disabled') !== 'true';
+    })[0];
+    if (!hit) return false;
+    hit.click();
+    return true;
+  })()`)
+}
+
+/** Every terminal node on the canvas, with the profile label its header is currently showing. */
+async function terminalNodes() {
+  return await evaluate(`Array.prototype.slice.call(
+    document.querySelectorAll('.react-flow__node[data-id]')
+  ).filter(function (n) { return !!n.querySelector('.term-node') })
+   .map(function (n) {
+     var chip = n.querySelector('.term-profile-chip');
+     return {
+       id: n.getAttribute('data-id'),
+       profile: chip ? (chip.textContent || '').trim() : null,
+       failed: !!n.querySelector('.term-node__closed')
+     };
+   })`)
+}
+
+/** Drive the two-key destructive gate all the way through: arm both keys, then run the slider to
+ *  the end exactly as a full drag does. Nothing here shortcuts the gate — the app's own one-shot
+ *  latch and its completion animation still decide when `onConfirm` fires. */
+async function completeDestructiveGate() {
+  if (!(await until(`!!document.querySelector('.destgate')`, 8000))) {
+    return { ok: false, why: 'the destructive confirmation gate never opened' }
+  }
+  const armed = await evaluate(`(function(){
+    var keys = Array.prototype.slice.call(document.querySelectorAll('.destgate__key'));
+    if (keys.length !== 2) return keys.length;
+    keys.forEach(function (k) { if (k.getAttribute('aria-pressed') !== 'true') k.click() });
+    return 2;
+  })()`)
+  if (armed !== 2) return { ok: false, why: `the gate offered ${armed} keys, not two` }
+  const unlocked = await until(
+    `(function(){
+      var s = document.querySelector('.destgate__slider');
+      return s && !s.disabled ? true : null;
+    })()`,
+    4000,
+  )
+  if (!unlocked) return { ok: false, why: 'both keys were armed but the slider stayed locked' }
+  await evaluate(`(function(){
+    var s = document.querySelector('.destgate__slider');
+    var set = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+    set.call(s, '100');
+    s.dispatchEvent(new Event('input', { bubbles: true }));
+    s.dispatchEvent(new Event('change', { bubbles: true }));
+    return true;
+  })()`)
+  // The gate plays a short completion animation before it calls back, then its host unmounts it.
+  const closed = await until(`document.querySelector('.destgate') ? null : 'closed'`, 10000)
+  if (!closed) return { ok: false, why: 'the gate never closed after a full slide with both keys' }
+  return { ok: true }
+}
+
+/** End every terminal session this run started. A persistent session deliberately OUTLIVES the app,
+ *  so leaving one behind would leak a real session-host process onto the machine — the same reason
+ *  the `terminal-spawns` case destroys its probe. */
+async function destroyCanvasTerminals() {
+  const nodes = await terminalNodes()
+  for (const node of nodes) {
+    await evaluate(
+      `(function(){ try { window.nodeTerminal.pty.destroy(${JSON.stringify(node.id)}) } catch (e) {} return true })()`,
+    )
+  }
+  return nodes.length
+}
+
 const CHECKS = [
   {
     id: 'palette',
@@ -360,6 +628,17 @@ const CHECKS = [
       // `color:var(--accent)` proves only that Chromium implements CSS variables — it stays green
       // if every app rule stops consuming the token. Ensure one real, visible switch is ON, move
       // the token, then restore both the exact prior inline declaration and the switch state.
+      //
+      // Post-M3 (`.md3-switch[aria-checked='true']`, styles.md3.css), the Switch's ON background
+      // is `var(--md-primary)`, not `var(--accent)` directly — `styles.md3.css` never references
+      // `--accent` at all (grep it). The two stay in sync only because a REAL accent change runs
+      // through `accentTokens.ts`'s `applyAccentTokens()`, which republishes the whole derived
+      // family (`--md-primary` included) in one call — see `CUSTOM_PROPERTIES` there. Moving
+      // `--accent` alone, as this check did pre-M3 when every rule read `var(--accent)` straight,
+      // now proves nothing: the CSS has no fallback chain back to it any more. Move both, exactly
+      // as `applyAccentTokens` does for a real user-picked colour, so this still exercises the
+      // actual consequence (a rendered control's paint) rather than an implementation detail that
+      // moved when the redesign landed.
       const target = await evaluate(`(function(){
         var switches = Array.prototype.slice.call(document.querySelectorAll('[role="switch"]'))
           .filter(function(x){ return !x.disabled && x.offsetParent !== null; });
@@ -379,8 +658,11 @@ const CHECKS = [
         var root = document.documentElement;
         window.__wiredAccentPrior = root.style.getPropertyValue('--accent');
         window.__wiredAccentPriority = root.style.getPropertyPriority('--accent');
+        window.__wiredPrimaryPrior = root.style.getPropertyValue('--md-primary');
+        window.__wiredPrimaryPriority = root.style.getPropertyPriority('--md-primary');
         var colour = getComputedStyle(control).backgroundColor;
         root.style.setProperty('--accent', 'rgb(1, 2, 3)');
+        root.style.setProperty('--md-primary', 'rgb(1, 2, 3)');
         return colour;
       })()`)
       // Switch has a deliberate 200 ms colour transition. Reading in the same JS turn measures its
@@ -395,6 +677,11 @@ const CHECKS = [
         } else {
           root.style.removeProperty('--accent');
         }
+        if (window.__wiredPrimaryPrior) {
+          root.style.setProperty('--md-primary', window.__wiredPrimaryPrior, window.__wiredPrimaryPriority);
+        } else {
+          root.style.removeProperty('--md-primary');
+        }
         return colour;
       })()`)
       if (!target.wasOn) {
@@ -407,10 +694,10 @@ const CHECKS = [
       if (before === after || !/rgb\(1, 2, 3\)/.test(after)) {
         return {
           ok: false,
-          why: `the real switch ignored --accent (${before} → ${after})`,
+          why: `the real switch ignored --accent/--md-primary (${before} → ${after})`,
         }
       }
-      return { ok: true, detail: `Switch background followed --accent (${accent} → ${after})` }
+      return { ok: true, detail: `Switch background followed --accent/--md-primary (${accent} → ${after})` }
     },
   },
   {
@@ -475,6 +762,391 @@ const CHECKS = [
       return { ok: true, detail: `${members} bridge namespaces; settings.load() round-tripped` }
     },
   },
+  {
+    id: 'terminal-profile-picker',
+    title: 'The Windows profile picker offers this machine’s real catalog and the choice reaches main',
+    skip: windowsProfilesSkip,
+    async run() {
+      const ready = await readyCanvas()
+      if (!ready.ok) return ready
+      const catalog = await profileCatalog()
+      if (!catalog.ok) return catalog
+
+      await chord({ key: ',', code: 'Comma', vk: 188, ctrl: true })
+      // Generously, because Settings is a lazily-loaded chunk: on a cold profile this is the first
+      // time it is fetched and parsed, and a slow load is not the defect this case is looking for.
+      if (!(await until(`!!document.querySelector('.nt-settings')`, 20000))) {
+        return { ok: false, why: 'settings did not open on Ctrl+,' }
+      }
+      // Global mode, explicitly. `settings.load()` below reads the app-wide store, and a project
+      // scope would route the same edit into that project's sparse overlay instead — a green
+      // assertion about a file the picker never wrote.
+      await evaluate(`(function(){
+        var group = document.querySelector('[aria-label="Choose settings mode"]');
+        if (!group) return false;
+        var globalButton = Array.prototype.slice.call(group.querySelectorAll('button'))
+          .filter(function (b) { return (b.textContent || '').indexOf('Global') >= 0 })[0];
+        if (globalButton && globalButton.getAttribute('aria-pressed') !== 'true') globalButton.click();
+        return true;
+      })()`)
+
+      // The section list carries no stable per-section attribute, so ask the DOM the one question
+      // that cannot go stale: keep opening sections until the picker itself is on screen. The named
+      // row is tried first only because it is one click instead of a dozen.
+      const jumped = await evaluate(`(function(){
+        if (document.getElementById('terminal-profile-select')) return 'already';
+        var rows = Array.prototype.slice.call(document.querySelectorAll('.md3-settings-nav-row'));
+        window.__wiredSettingsNav = rows;
+        var shell = rows.filter(function (r) {
+          return ((r.querySelector('.md3-settings-nav-row__label') || {}).textContent || '').trim() === 'Shell';
+        })[0];
+        if (shell) { shell.click(); return 'named'; }
+        return 'scan';
+      })()`)
+      if (jumped === 'scan' || !(await until(`!!document.getElementById('terminal-profile-select')`, 2500))) {
+        const rows = await evaluate(`(window.__wiredSettingsNav || []).length`)
+        for (let i = 0; i < rows; i += 1) {
+          await evaluate(`(window.__wiredSettingsNav[${i}].click(), true)`)
+          if (await until(`!!document.getElementById('terminal-profile-select')`, 600)) break
+        }
+      }
+      if (!(await until(`!!document.getElementById('terminal-profile-select')`, 4000))) {
+        return { ok: false, why: 'no settings section rendered #terminal-profile-select' }
+      }
+
+      const picker = await evaluate(`(function(){
+        var select = document.getElementById('terminal-profile-select');
+        return {
+          value: select.value,
+          options: Array.prototype.slice.call(select.options).map(function (o) {
+            return { value: o.value, enabled: !o.disabled, text: (o.textContent || '').trim() };
+          })
+        };
+      })()`)
+
+      // Two assertions, in the direction that matters. The picker must offer exactly the detected
+      // catalog — a row it invented would be a profile nothing can spawn — and every row it leaves
+      // ENABLED must be a profile this machine actually has. The reverse is deliberately not
+      // asserted: the Shell section legitimately disables `custom` on top of the catalog while no
+      // custom executable is configured.
+      const detected = catalog.list.map((profile) => profile.id)
+      const offered = picker.options
+        .map((option) => option.value)
+        .filter((value) => value !== '__configured-profile-unavailable__')
+      if (offered.join('|') !== detected.join('|')) {
+        return {
+          ok: false,
+          why: `picker offers ${JSON.stringify(offered)} but core detected ${JSON.stringify(detected)}`,
+        }
+      }
+      const availableIds = new Set(
+        catalog.list.filter((profile) => profile.available).map((profile) => profile.id),
+      )
+      const offeredButMissing = picker.options
+        .filter((option) => option.enabled && !availableIds.has(option.value))
+        .map((option) => option.value)
+      if (offeredButMissing.length) {
+        return {
+          ok: false,
+          why: `picker left ${JSON.stringify(offeredButMissing)} selectable, but core reports them unavailable`,
+        }
+      }
+      // A detection that cannot say WHY is how an unavailable profile becomes a mystery instead of
+      // an instruction — the same honesty the real-Windows suite asserts against the live machine.
+      const silent = catalog.list
+        .filter((profile) => !profile.available && !String(profile.unavailableReason || '').trim())
+        .map((profile) => profile.id)
+      if (silent.length) {
+        return { ok: false, why: `unavailable without a reason: ${JSON.stringify(silent)}` }
+      }
+
+      const selectable = picker.options.filter((option) => option.enabled)
+      if (selectable.length < 2) {
+        return {
+          ok: false,
+          why: `only ${selectable.length} selectable profile(s) — the picker cannot be shown to move`,
+        }
+      }
+      const chosen = (selectable.find((option) => option.value !== picker.value) || selectable[0]).value
+      await evaluate(`(function(){
+        var select = document.getElementById('terminal-profile-select');
+        var set = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value').set;
+        set.call(select, ${JSON.stringify(chosen)});
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+        return true;
+      })()`)
+      const stuck = await settingFromMain('defaultTerminalProfileId', chosen)
+      if (!stuck.ok) {
+        await chord({ key: 'Escape', code: 'Escape', vk: 27 })
+        return stuck
+      }
+      // Put it back and confirm the restore also takes: a picker that only moves one way is half
+      // wired, and the later cases read this same default. Restored to the value the picker was
+      // SHOWING, which is the resolved default — an implicit default therefore comes back explicit,
+      // harmless in a sandbox this run deletes on the way out.
+      await evaluate(`(function(){
+        var select = document.getElementById('terminal-profile-select');
+        var set = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value').set;
+        set.call(select, ${JSON.stringify(picker.value)});
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+        return true;
+      })()`)
+      const restored = await settingFromMain('defaultTerminalProfileId', picker.value)
+      await chord({ key: 'Escape', code: 'Escape', vk: 27 })
+      if (!restored.ok) return restored
+      return {
+        ok: true,
+        detail:
+          `picker offered all ${detected.length} detected profile(s), ${selectable.length} selectable; ` +
+          `default ${picker.value} → ${chosen} → ${picker.value} through main`,
+      }
+    },
+  },
+  {
+    id: 'terminal-profile-spawn',
+    title: 'Creating a terminal with an explicit profile spawns under it, and a missing profile is refused',
+    skip: windowsProfilesSkip,
+    async run() {
+      const ready = await readyCanvas()
+      if (!ready.ok) return ready
+      const catalog = await profileCatalog()
+      if (!catalog.ok) return catalog
+      const project = await ensureProject()
+      if (!project.ok) return project
+
+      // Prefer a named shell over Automatic: its label cannot coincide with the one a node that
+      // merely inherited the default would show, so the chip below actually discriminates.
+      const available = catalog.list.filter((profile) => profile.available)
+      const pick = available.find((profile) => profile.id !== 'auto') || available[0]
+      if (!pick) {
+        return { ok: false, why: 'core detected no available profile — nothing could spawn here' }
+      }
+
+      const before = (await terminalNodes()).map((node) => node.id)
+      const menu = await openContextMenu('canvas', `document.querySelector('.react-flow__pane')`)
+      if (!menu.ok) return menu
+      const submenu = await openMenuSubmenu('New terminal with profile…')
+      if (!submenu.ok) return submenu
+      const offered = submenu.items.find((item) => item.label === pick.label)
+      if (!offered || !offered.enabled) {
+        return {
+          ok: false,
+          why: `“${pick.label}” is available to core but ${offered ? 'disabled' : 'absent'} in the create menu`,
+        }
+      }
+      if (!(await clickSubmenuItem(pick.label))) {
+        return { ok: false, why: `the “${pick.label}” row vanished before it could be clicked` }
+      }
+
+      const spawned = await until(
+        `(function(){
+          var known = ${JSON.stringify(before)};
+          var nodes = Array.prototype.slice.call(document.querySelectorAll('.react-flow__node[data-id]'));
+          var fresh = nodes.filter(function (n) {
+            return !!n.querySelector('.term-node') && known.indexOf(n.getAttribute('data-id')) < 0;
+          })[0];
+          if (!fresh) return null;
+          var chip = fresh.querySelector('.term-profile-chip');
+          return chip ? { id: fresh.getAttribute('data-id'), profile: (chip.textContent || '').trim() } : null;
+        })()`,
+        15000,
+      )
+      if (!spawned) return { ok: false, why: 'no new terminal node with a profile chip appeared' }
+      if (spawned.profile !== pick.label) {
+        return {
+          ok: false,
+          why: `the new node reports profile “${spawned.profile}”, not the chosen “${pick.label}”`,
+        }
+      }
+      // A profile chip is a label; a running shell is the consequence. Give the real spawn a moment,
+      // then insist the node is showing a terminal rather than its ended/failed plate.
+      await sleep(2500)
+      const live = await evaluate(`(function(){
+        var nodes = Array.prototype.slice.call(document.querySelectorAll('.react-flow__node[data-id]'));
+        var node = nodes.filter(function (n) {
+          return n.getAttribute('data-id') === ${JSON.stringify(spawned.id)};
+        })[0];
+        if (!node) return null;
+        return {
+          failed: !!node.querySelector('.term-node__closed'),
+          xterm: !!node.querySelector('.xterm')
+        };
+      })()`)
+      if (!live) return { ok: false, why: 'the new node disappeared while its shell was starting' }
+      if (live.failed || !live.xterm) {
+        return {
+          ok: false,
+          why: `the node under “${pick.label}” did not reach a running terminal (failed=${live.failed}, xterm=${live.xterm})`,
+        }
+      }
+
+      // The trust boundary, from the renderer's side of the bridge. A profile ID is the ONLY launch
+      // choice that crosses it, so core must resolve a real one and refuse one it cannot — never
+      // fall through to whatever shell happens to be lying around. An `unavailable` result would be
+      // just as wrong an answer as a session: the request named a profile that does not exist.
+      const key = `wired-profile-probe-${Date.now()}`
+      const good = await settle(
+        '__wiredProfileSpawn',
+        `window.nodeTerminal.pty.create({ cols: 80, rows: 24, persistKey: ${JSON.stringify(key)}, profileId: ${JSON.stringify(pick.id)} })`,
+      )
+      await evaluate(
+        `(function(){ try { window.nodeTerminal.pty.destroy(${JSON.stringify(key)}) } catch (e) {} return true })()`,
+      )
+      if (!good.ok) return { ok: false, why: `pty.create under ${pick.id} → ${good.error}` }
+      if (!good.value || !good.value.sessionId) {
+        return { ok: false, why: `pty.create under ${pick.id} gave ${JSON.stringify(good.value).slice(0, 140)}` }
+      }
+      const bogusKey = `wired-profile-bogus-${Date.now()}`
+      const bogus = await settle(
+        '__wiredProfileBogus',
+        `window.nodeTerminal.pty.create({ cols: 80, rows: 24, persistKey: ${JSON.stringify(bogusKey)}, profileId: 'nodeterm-wired-not-a-profile' })`,
+      )
+      await evaluate(
+        `(function(){ try { window.nodeTerminal.pty.destroy(${JSON.stringify(bogusKey)}) } catch (e) {} return true })()`,
+      )
+      if (bogus.ok) {
+        return {
+          ok: false,
+          why: `an unknown profile ID still produced a session (${JSON.stringify(bogus.value).slice(0, 140)}) — the spawn boundary is open`,
+        }
+      }
+      return {
+        ok: true,
+        detail:
+          `created a node under “${pick.label}” (${pick.id}) and it reached a live terminal; ` +
+          `an unknown profile ID was refused: ${String(bogus.error).slice(0, 90)}`,
+      }
+    },
+  },
+  {
+    id: 'terminal-profile-restart',
+    title: 'Restart with profile… ends the old session and relaunches the node under the new profile',
+    skip: windowsProfilesSkip,
+    async run() {
+      const ready = await readyCanvas()
+      if (!ready.ok) return ready
+      const catalog = await profileCatalog()
+      if (!catalog.ok) return catalog
+      const project = await ensureProject()
+      if (!project.ok) return project
+
+      // Reuse the node the spawn case left behind when it is there, but never depend on it: a check
+      // that only works after its neighbour passed reports its neighbour's failure twice. The
+      // fallback deliberately creates the node through the same menu the spawn case drives rather
+      // than through ⌘T, so this case starts from a node whose profile was chosen explicitly.
+      let nodes = await terminalNodes()
+      if (nodes.length === 0) {
+        const seed = catalog.list.find((profile) => profile.available && profile.id !== 'auto')
+          || catalog.list.find((profile) => profile.available)
+        if (!seed) return { ok: false, why: 'core detected no available profile to open a node with' }
+        const seedMenu = await openContextMenu('canvas', `document.querySelector('.react-flow__pane')`)
+        if (!seedMenu.ok) return seedMenu
+        const seedSubmenu = await openMenuSubmenu('New terminal with profile…')
+        if (!seedSubmenu.ok) return seedSubmenu
+        if (!(await clickSubmenuItem(seed.label))) {
+          return { ok: false, why: `could not open a terminal under “${seed.label}” to restart` }
+        }
+        if (!(await until(`!!document.querySelector('.term-profile-chip')`, 15000))) {
+          return { ok: false, why: `no terminal node appeared under “${seed.label}” to restart` }
+        }
+        await sleep(2000)
+        nodes = await terminalNodes()
+      }
+      const node = nodes[0]
+      if (!node || !node.profile) {
+        return { ok: false, why: 'the terminal node on the canvas shows no profile chip to change' }
+      }
+
+      const target = catalog.list.find(
+        (profile) => profile.available && profile.label !== node.profile,
+      )
+      if (!target) {
+        return {
+          ok: false,
+          why: `no second available profile to switch to (node is on “${node.profile}”)`,
+        }
+      }
+
+      const header = `(function(){
+        var nodes = Array.prototype.slice.call(document.querySelectorAll('.react-flow__node[data-id]'));
+        var el = nodes.filter(function (n) { return n.getAttribute('data-id') === ${JSON.stringify(node.id)} })[0];
+        return el ? (el.querySelector('.term-node__header') || el) : null;
+      })()`
+      const menu = await openContextMenu('terminal node', header)
+      if (!menu.ok) return menu
+      const submenu = await openMenuSubmenu('Restart with profile…')
+      if (!submenu.ok) return submenu
+      const offered = submenu.items.find((item) => item.label === target.label)
+      if (!offered || !offered.enabled) {
+        return {
+          ok: false,
+          why: `“${target.label}” is available to core but ${offered ? 'disabled' : 'absent'} in the restart menu`,
+        }
+      }
+      if (!(await clickSubmenuItem(target.label))) {
+        return { ok: false, why: `the “${target.label}” restart row vanished before it could be clicked` }
+      }
+
+      // Ending a live session is destructive, so it goes through the app's own two-key gate. Driving
+      // that gate is part of the check: a restart reachable without it would be a defect in the
+      // other direction.
+      const gate = await completeDestructiveGate()
+      if (!gate.ok) return gate
+
+      const relaunched = await until(
+        `(function(){
+          var nodes = Array.prototype.slice.call(document.querySelectorAll('.react-flow__node[data-id]'));
+          var el = nodes.filter(function (n) { return n.getAttribute('data-id') === ${JSON.stringify(node.id)} })[0];
+          if (!el) return null;
+          var chip = el.querySelector('.term-profile-chip');
+          var label = chip ? (chip.textContent || '').trim() : '';
+          return label === ${JSON.stringify(target.label)} ? label : null;
+        })()`,
+        25000,
+      )
+      if (!relaunched) {
+        const now = await terminalNodes()
+        return {
+          ok: false,
+          why: `the node never came back under “${target.label}” (canvas now: ${JSON.stringify(now)})`,
+        }
+      }
+      // The chip proves the renderer relaunched it. This proves the decision LEFT the renderer: the
+      // same node id, carrying the new profile, read back out of main's workspace store after the
+      // canvas's debounced save.
+      const persisted = await (async () => {
+        const deadline = Date.now() + 15000
+        let seen
+        for (;;) {
+          const loaded = await settle('__wiredProfileWorkspace', 'window.nodeTerminal.workspace.load()')
+          if (!loaded.ok) return { ok: false, why: `workspace.load() → ${loaded.error}` }
+          seen = ((loaded.value || {}).projects || [])
+            .flatMap((entry) => entry.nodes || [])
+            .filter((state) => state.id === node.id)
+            .map((state) => state.terminalProfileId)[0]
+          if (seen === target.id) return { ok: true }
+          if (Date.now() > deadline) {
+            return {
+              ok: false,
+              why: `main's workspace still reports terminalProfileId=${JSON.stringify(seen)} for the restarted node (wanted ${target.id})`,
+            }
+          }
+          await sleep(300)
+        }
+      })()
+      if (!persisted.ok) return persisted
+
+      // A persistent session outlives the app by design, so nothing this run started may be left
+      // behind. Best effort — the run's own process sweep is the backstop when a case returns early.
+      const ended = await destroyCanvasTerminals()
+      return {
+        ok: true,
+        detail:
+          `“${node.profile}” → “${target.label}” (${target.id}) through the two-key gate; ` +
+          `main's workspace agrees; ended ${ended} session(s)`,
+      }
+    },
+  },
 ]
 
 selected = only ? CHECKS.filter((c) => only.includes(c.id)) : CHECKS
@@ -482,6 +1154,13 @@ const unknown = only ? only.filter((id) => !CHECKS.some((c) => c.id === id)) : [
 if (unknown.length) throw new Error(`unknown --only check(s): ${unknown.join(', ')}`)
 console.log('')
 for (const c of selected) {
+  // A DECLARED skip (rule 3): its reason is decided before the run, never inferred at runtime
+  // from a control that was not found. Counted apart from passes so it can never read as one.
+  if (c.skip) {
+    skipped += 1
+    console.log(`⊘ ${c.title}\n    declared skip: ${c.skip}`)
+    continue
+  }
   let r
   try {
     r = await c.run()
@@ -568,7 +1247,11 @@ const sha = (() => {
     return 'unknown'
   }
 })()
-console.log(`${selected.length - failed}/${selected.length} interaction checks passed at ${sha}`)
+const ran = selected.length - skipped
+console.log(
+  `${ran - failed}/${ran} interaction checks passed at ${sha}` +
+    (skipped ? ` (${skipped} declared skip(s))` : ''),
+)
 if (failed) {
   console.error(`\n${failed} FAILURE(S). A control that does not do its labelled thing is a defect, not a gap.`)
   process.exit(1)

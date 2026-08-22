@@ -1,13 +1,15 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest'
 import { contrastRatio, parseAnyColor, type RGBA } from './color/convert'
-import { accentTokens, applyAccentTokens } from './accentTokens'
+import { accentTokens, applyAccentTokens, CUSTOM_PROPERTIES } from './accentTokens'
 
-// Mirrors the PANEL constant in accentTokens.ts (styles.css --panel: #1d2024 / #ededf4). Keep
-// all three in step, or these floors certify contrast against a surface nobody paints.
+// Mirrors accentTokens.ts's own PANEL, deliberately duplicated rather than imported (a test that
+// imports its fixture from the module under test cannot notice the module's own value drifting).
+// M3-baseline re-seed (2026-08): these are the M3 `--md-surface-container` literal per theme, not
+// the app's old hand-picked panel hexes (`#282828` dark / `#f3efe7` light) this used to carry.
 const PANEL: Record<'dark' | 'light', RGBA> = {
-  dark: { r: 29, g: 32, b: 36, a: 1 },
-  light: { r: 237, g: 237, b: 244, a: 1 }
+  dark: { r: 0x21, g: 0x1f, b: 0x26, a: 1 }, // #211F26
+  light: { r: 0xf3, g: 0xed, b: 0xf7, a: 1 } // #F3EDF7
 }
 
 function parsed(value: string): RGBA {
@@ -58,7 +60,10 @@ describe('accentTokens', () => {
   })
 
   it('keeps every shipped accent swatch readable across every dependent text role', () => {
-    const accents = ['#0a84ff', '#32d74b', '#ffd60a', '#ff453a', '#bf5af2', '#64d2ff']
+    // '#6750a4' is the current default (M3 seed); '#0a84ff' is the pre-M3 default, kept reachable
+    // as an ordinary swatch — both still need to work as a CUSTOM accent choice, not just whichever
+    // one happens to be shipped as default this release.
+    const accents = ['#6750a4', '#0a84ff', '#32d74b', '#ffd60a', '#ff453a', '#bf5af2', '#64d2ff']
     for (const theme of ['dark', 'light'] as const) {
       for (const value of accents) {
         const tokens = accentTokens(value, theme)!
@@ -87,14 +92,27 @@ describe('applyAccentTokens', () => {
     expect(root.style.getPropertyValue('--md-on-primary-container')).not.toBe('')
   })
 
+  it('a custom accent republishes the whole primary family', () => {
+    // Replaces a stylesheet-side check ("themed container roles stay derived from their theme's
+    // own RGB triple", styles.theme.test.ts) that verified a custom accent's container role
+    // stayed live via a CSS-side `rgba(var(--accent-rgb), α)` tint. The M3-baseline re-seed makes
+    // `--md-primary-container` an opaque design LITERAL in the stylesheet (see styles.css's M3
+    // foundation section), so that CSS-cascade relationship no longer exists — a custom accent
+    // reaches every dependent role ONLY because this function sets each one explicitly, inline.
+    // This is the stronger, more direct guarantee: every member of `CUSTOM_PROPERTIES` is actually
+    // published, not merely that a stylesheet declaration happens to reference the right variable.
+    const root = document.documentElement
+    applyAccentTokens(root, '#32d74b', 'dark')
+    for (const name of CUSTOM_PROPERTIES) {
+      expect(root.style.getPropertyValue(name), name).not.toBe('')
+    }
+  })
+
   it('clears every inline override for an invalid hand-edited value', () => {
     const root = document.documentElement
     applyAccentTokens(root, '#ff453a', 'dark')
     applyAccentTokens(root, 'definitely not css', 'light')
-    for (const name of [
-      '--accent', '--accent-hover', '--accent-text', '--accent-rgb', '--md-primary',
-      '--md-on-primary', '--md-primary-container', '--md-on-primary-container'
-    ]) {
+    for (const name of CUSTOM_PROPERTIES) {
       expect(root.style.getPropertyValue(name), name).toBe('')
     }
   })
@@ -102,7 +120,7 @@ describe('applyAccentTokens', () => {
   it('leaves the default accent family to the authored dark/light stylesheet values', () => {
     const root = document.documentElement
     applyAccentTokens(root, '#bf5af2', 'dark')
-    applyAccentTokens(root, '#0a84ff', 'light')
+    applyAccentTokens(root, '#6750a4', 'light')
     expect(root.getAttribute('style')).toBe('')
   })
 })

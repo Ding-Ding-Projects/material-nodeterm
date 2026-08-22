@@ -90,7 +90,7 @@ function StatusDot({ state, hollow }: { state: AgentState | null; hollow: boolea
     state === 'working' ? 'working' : state === 'waiting' || state === 'blocked' ? 'attention' : 'idle'
   return (
     <span
-      className={`sessmem-row__dot sessmem-row__dot--${kind}${hollow ? ' sessmem-row__dot--hollow' : ''}`}
+      className={`sessmem-row__dot md3-sessmem-dot sessmem-row__dot--${kind}${hollow ? ' sessmem-row__dot--hollow' : ''}`}
       aria-hidden
     />
   )
@@ -192,23 +192,23 @@ export function SessionMemoryPanel({
   let body: JSX.Element
   if (relay) {
     body = (
-      <div className="sessmem-panel__note">
+      <div className="sessmem-panel__note md3-sessmem-note">
         Session memory is not available on a relay tab — these sessions run on the other machine.
       </div>
     )
   } else if (!ok) {
     // Rendering an empty list here would report "nothing is using memory" at exactly the moment we
     // failed to measure it.
-    body = <div className="sessmem-panel__note">Could not measure sessions on this machine.</div>
+    body = <div className="sessmem-panel__note md3-sessmem-note">Could not measure sessions on this machine.</div>
   } else if (!measured) {
-    body = <div className="sessmem-panel__note">Measuring…</div>
+    body = <div className="sessmem-panel__note md3-sessmem-note">Measuring…</div>
   } else if (views.length === 0) {
     // We looked, and there really is nothing — a different sentence from the two above.
-    body = <div className="sessmem-panel__note">No sessions are running here.</div>
+    body = <div className="sessmem-panel__note md3-sessmem-note">No sessions are running here.</div>
   } else {
     body = (
       <>
-        <div className="sessmem-panel__export">
+        <div className="sessmem-panel__export md3-sessmem-export">
           <ExportMenu kind="tabular" label="session memory" build={(format) => buildTableExport(toExportTable(views), format)} />
         </div>
         <BulkActionBar<SessionMemoryView>
@@ -228,17 +228,17 @@ export function SessionMemoryPanel({
           }}
         />
         {exportResult && (
-          <div className="sessmem-panel__toast" role="status" aria-live="polite">
+          <div className="sessmem-panel__toast md3-sessmem-toast" role="status" aria-live="polite">
             {exportResult}
           </div>
         )}
-      <ul className="sessmem-panel__rows">
+      <ul className="sessmem-panel__rows md3-sessmem-rows">
         {/* Every row, in core's order (already sorted by total, descending). */}
         {views.map((v) => (
-          <li key={v.row.session} className="sessmem-row">
+          <li key={v.row.session} className="sessmem-row md3-sessmem-row">
             <input
               type="checkbox"
-              className="sessmem-row__select"
+              className="sessmem-row__select md3-sessmem-row__select"
               checked={isSelected(selection, v.row.nodeId)}
               aria-label={`Select ${v.title}`}
               onClick={(e) => {
@@ -253,7 +253,7 @@ export function SessionMemoryPanel({
               onChange={() => {}}
             />
             <button
-              className="sessmem-row__main"
+              className="sessmem-row__main md3-sessmem-row__main"
               // Nothing to travel to. The guard inside is not redundant: `disabled` is the DOM's
               // answer and this is the code's.
               disabled={v.orphan}
@@ -265,19 +265,19 @@ export function SessionMemoryPanel({
               title={v.orphan ? 'No node on any canvas' : `Go to ${v.title}`}
             >
               <StatusDot state={v.state} hollow={v.orphan} />
-              <span className="sessmem-row__title">{v.title}</span>
+              <span className="sessmem-row__title md3-sessmem-row__title">{v.title}</span>
               {v.orphan ? (
-                <span className="sessmem-row__orphan">no node</span>
+                <span className="sessmem-row__orphan md3-sessmem-chip">no node</span>
               ) : (
                 v.projectId !== activeProjectId && (
-                  <span className="sessmem-row__project">{v.projectName}</span>
+                  <span className="sessmem-row__project md3-sessmem-chip">{v.projectName}</span>
                 )
               )}
-              <span className="sessmem-row__cmd">{v.row.command}</span>
-              <span className="sessmem-row__mb">{formatMb(v.row.totalMb)}</span>
+              <span className="sessmem-row__cmd md3-sessmem-row__cmd">{v.row.command}</span>
+              <span className="sessmem-row__mb md3-sessmem-row__mb">{formatMb(v.row.totalMb)}</span>
             </button>
             <button
-              className="sessmem-row__kill"
+              className="sessmem-row__kill md3-sessmem-row__kill"
               title="End this session"
               aria-label={`End ${v.title}`}
               onClick={() => onKillSession(v.row.nodeId, v.orphan)}
@@ -288,7 +288,7 @@ export function SessionMemoryPanel({
               // "child processes", NOT "MCP servers": `pane_pid` is the pane's SHELL, so the count
               // is the agent CLI itself plus everything it spawned. A claude session with two MCP
               // servers reads as 3, and a plain `npm run dev` has children too.
-              <div className="sessmem-row__kids">
+              <div className="sessmem-row__kids md3-sessmem-row__kids">
                 └ +{v.row.childCount} child processes <span>{formatMb(v.row.childrenMb)}</span>
               </div>
             )}
@@ -300,15 +300,15 @@ export function SessionMemoryPanel({
   }
 
   return (
-    <div className="sessmem-panel" id="sessmem-panel" role="region" aria-label="Session memory">
-      <div className="sessmem-panel__head">
-        <span className="sessmem-panel__title">Session memory</span>
+    <div className="sessmem-panel md3-sessmem-panel" id="sessmem-panel" role="region" aria-label="Session memory">
+      <div className="sessmem-panel__head md3-sessmem-head">
+        <span className="sessmem-panel__title md3-sessmem-title">Session memory</span>
         {/* Which machine these numbers describe. The SSH panel is visually identical to the local
             one, so the scope has to be written down. */}
-        <span className="sessmem-panel__scope">{scopeKey || 'This machine'}</span>
+        <span className="sessmem-panel__scope md3-sessmem-scope">{scopeKey || 'This machine'}</span>
         {/* No total unless we measured one: a grand total of `0 MB` beside a failure is the exact
             conflation this panel exists to end. */}
-        {measured && <span className="sessmem-panel__total">{formatMb(totalMb(views))}</span>}
+        {measured && <span className="sessmem-panel__total md3-sessmem-total">{formatMb(totalMb(views))}</span>}
       </div>
 
       {body}
@@ -319,19 +319,19 @@ export function SessionMemoryPanel({
           nodeterm's chrome with nothing said about it lets the panel repeat the mistake it was
           built to correct. One line, no figures: the measurements vary per machine and per model,
           and quoting one here would age into a lie (docs/session-memory.md §1 has them). */}
-      <div className="sessmem-panel__attrib">
+      <div className="sessmem-panel__attrib md3-sessmem-attrib">
         Memory held by each session's own processes — the agent CLI and what it spawned, not
         nodeterm itself.
       </div>
 
-      <div className="sessmem-panel__foot">
-        <span className="sessmem-panel__count">
+      <div className="sessmem-panel__foot md3-sessmem-foot">
+        <span className="sessmem-panel__count md3-sessmem-count">
           {measured ? `${views.length} session${views.length === 1 ? '' : 's'}` : ''}
         </span>
         {/* A relay tab has nothing to retry — the answer is a stub, not a failure. */}
         {!relay && (
           <button
-            className={`sessmem-panel__refresh${loading ? ' spin' : ''}`}
+            className={`sessmem-panel__refresh md3-sessmem-refresh${loading ? ' spin' : ''}`}
             title="Re-measure"
             aria-label="Re-measure"
             disabled={loading}

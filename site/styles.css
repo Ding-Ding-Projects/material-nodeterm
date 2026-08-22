@@ -1,103 +1,304 @@
 /* site/styles.css
  *
- * The nodeterm playground — a hand-drawn, paper-and-ink design system:
- * chunky --line borders, hard offset --shadow drops, big rounded corners,
- * a "day" (light) palette and a "night" (dark) palette toggled by
- * :root[data-theme='night'].
+ * The nodeterm Pages site — Material Design 3, on the SAME classic-MD3 baseline scheme (seed
+ * #6750A4) the desktop app carries in src/renderer/styles.css, both transcribed from
+ * design/v2/md3/tokens.css. This closes the one deliberately deferred phase of the MD3 rewrite:
+ * docs/app-design-tokens.md's "Why a second landing, not a tune of the first" section used this
+ * site's OLD hand-drawn "paper-and-ink" palette (chunky --line borders, hard offset --shadow
+ * drops, a warm cream/deep-purple day/night pair) as the cautionary example of what NOT to seed
+ * a real design system from — a placeholder standing in for the real thing. This file replaces
+ * that placeholder outright: same --md-* role names, same literal hex values, same light/dark
+ * split, restated under this site's OWN 'day'/'night' data-theme values rather than the app's
+ * 'light'/absent convention — the store, the history log and the toggle button all persist and
+ * compare against those exact two strings (see app/core/engine.js's applyTheme() and
+ * app/core/store.js's DEFAULTS), and this pass is a palette swap, not a theme-plumbing rebuild.
  *
- * FONT DIVERGENCE FROM THE IMPORTED DESIGN (documented, see the site
- * redesign pig's report): the imported design links the two Google Fonts
- * CDN hosts for "Baloo 2" and "Nunito". This project forbids CDN assets
- * and third-party network requests of any kind. Baloo 2 and Nunito are
- * both licensed under the SIL Open Font License, which *does* permit
- * bundling — but vendoring ~6 weight files was cut for time in this pass
- * (see the pig's report for the honest reason). Until someone vendors the
- * real font files under ./assets/fonts/ with their OFL.txt licence
- * alongside them, this file uses the design's OWN declared fallback
- * stacks, unmodified, so nothing ever leaves the origin:
- *   --fun  -> 'Baloo 2','Comic Sans MS','Chalkboard SE','Trebuchet MS',system-ui,sans-serif
- *   --body -> 'Nunito','Segoe UI',system-ui,-apple-system,sans-serif
- * The named webfonts stay first in the stack (so vendoring them later is a
- * one-line change: drop in the files + one @font-face block, done) but
- * resolve to their system fallback everywhere today. This file
- * deliberately never spells out either CDN hostname, so a completeness
- * guard scanning for exactly those two hostnames (see
- * scripts/check-site-contract.mjs section 6) can never mistake this
- * comment for the CDN reference it exists to forbid.
+ * TONAL ELEVATION, NO DROP SHADOWS: the design ships "tonal elevation only" — flat surface-tone
+ * steps, no shadow recipe at all (design/v2/md3/HANDOFF.md). --shadow/--shadow-sm below now
+ * resolve to `none`, so every `box-shadow: var(--shadow…)` call site downstream keeps compiling
+ * unchanged while rendering nothing — that covers the large majority of this file's box-shadow
+ * uses without touching each one by hand. The handful of rules that wrote a LITERAL offset
+ * shadow instead of the variable (dialogs, the active nav tab, the picked-swatch ring, the
+ * button press effect) are rewritten individually, at each one's own rule, further down.
+ *
+ * FONTS ARE BUNDLED HERE NOW, NOT A FALLBACK STACK: this file used to fall back to each
+ * system's generic sans/monospace because vendoring the imported design's two Google Fonts
+ * (Baloo 2, Nunito) was cut for time. That stand-in is gone; this file instead reuses the app's
+ * OWN already-committed, already-licensed webfonts — Outfit (UI) and Roboto Mono (code) — copied
+ * byte-for-byte from src/renderer/assets/fonts/ into ./assets/fonts/ (identical files, identical
+ * SIL OFL-1.1 licence; see THIRD-PARTY-NOTICES.md — nothing new was fetched, generated or
+ * re-encoded). scripts/check-site-contract.mjs's CDN-host scan (section 6) still applies and
+ * still passes: the @font-face blocks below load from this origin only, never from either of
+ * the two Google-hosted font CDN hosts that scan forbids (deliberately not spelled out here,
+ * same reason the pre-M3 version of this comment gave: so a scan for those exact hostnames
+ * can never mistake this sentence for the reference it exists to forbid).
+ *
+ * DATA/STATUS SWATCHES STAY OUTSIDE THE --md-* ROLES, ON PURPOSE: --yellow/--red/--orange/
+ * --green/--blue/--purple/--pink are this site's own seven-hue palette — the regex-builder token
+ * chips (RX_TOKENS in app/shared/data.js), the favourite-colour picker (SWATCHES), and every
+ * on/off/right/wrong/lossy status chip across the rooms key off these seven names by literal
+ * string. CLAUDE.md exempts exactly this: "functional data colours (data-encoding swatches,
+ * chart series, status palettes) are exempt as data, not chrome" — the same reasoning that keeps
+ * the app's own git-graph lane colours outside its --md-* ramp. Values are unchanged from the
+ * pre-M3 palette in both themes.
  */
+
+/* ---------------------------------------------------------------------------------------- */
+/* Outfit Variable -- primary UI font (weight axis: 100-900), Roboto Mono -- code font        */
+/* Identical @font-face declarations to src/renderer/fonts.css, over the same committed bytes  */
+/* (./assets/fonts/… is this pass's copy of src/renderer/assets/fonts/…) — see that file for   */
+/* why each face is split into two unicode-range subsets and why 'swap' is used, not 'block'.  */
+/* ---------------------------------------------------------------------------------------- */
+@font-face {
+  font-family: 'Outfit Variable';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('./assets/fonts/outfit/outfit-latin-wght-normal.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Outfit Variable';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('./assets/fonts/outfit/outfit-latin-ext-wght-normal.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308,
+    U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113,
+    U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Roboto Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./assets/fonts/roboto-mono/roboto-mono-latin-400-normal.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Roboto Mono';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./assets/fonts/roboto-mono/roboto-mono-latin-400-italic.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Roboto Mono';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('./assets/fonts/roboto-mono/roboto-mono-latin-700-normal.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Roboto Mono';
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+  src: url('./assets/fonts/roboto-mono/roboto-mono-latin-700-italic.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
 
 :root {
   color-scheme: light;
-  --paper: #fff6e2;
-  --paper2: #fffdf7;
-  --card: #ffffff;
-  --sunk: #fff1cf;
-  --ink: #2c2036;
-  --ink2: #5d5170;
-  --faint: #8d829c;
-  --line: #2c2036;
+  /* ---- Material Design 3 -- token foundation (day / light), literal from
+     design/v2/md3/tokens.css's light block -- the exact roles + values the app's own
+     src/renderer/styles.css carries under :root[data-theme='light']. */
+  --md-primary: #6750A4;
+  --md-on-primary: #FFFFFF;
+  --md-primary-container: #EADDFF;
+  --md-on-primary-container: #21005D;
+  --md-secondary: #625B71;
+  --md-on-secondary: #FFFFFF;
+  --md-secondary-container: #E8DEF8;
+  --md-on-secondary-container: #1D192B;
+  --md-tertiary: #7D5260;
+  --md-on-tertiary: #FFFFFF;
+  --md-tertiary-container: #FFD8E4;
+  --md-on-tertiary-container: #31111D;
+  --md-error: #B3261E;
+  --md-on-error: #FFFFFF;
+  --md-error-container: #F9DEDC;
+  --md-on-error-container: #410E0B;
+  --md-success: #226C33;
+  --md-success-container: #A8F5B4;
+  --md-on-success-container: #00210A;
+  --md-warning: #785900;
+  --md-warning-container: #FFDF9E;
+  --md-on-warning-container: #261A00;
+  --md-surface: #FEF7FF;
+  --md-surface-dim: #DED8E1;
+  --md-surface-bright: #FEF7FF;
+  --md-surface-container-lowest: #FFFFFF;
+  --md-surface-container-low: #F7F2FA;
+  --md-surface-container: #F3EDF7;
+  --md-surface-container-high: #ECE6F0;
+  --md-surface-container-highest: #E6E0E9;
+  --md-on-surface: #1D1B20;
+  --md-on-surface-variant: #49454F;
+  --md-outline: #79747E;
+  --md-outline-variant: #CAC4D0;
+  --md-inverse-surface: #322F35;
+  --md-inverse-on-surface: #F5EFF7;
+  --md-inverse-primary: #D0BCFF;
+  --md-scrim: rgba(0, 0, 0, 0.32);
+
+  /* ---- Shape -- design/v2/md3/tokens.css's own 8/12/16/28/999 scale, literal. ---- */
+  --md-shape-xs: 8px;
+  --md-shape-sm: 12px;
+  --md-shape-md: 16px;
+  --md-shape-lg: 28px;
+  --md-shape-full: 999px;
+
+  /* ---- Motion -- theme-independent, declared once (see :root[data-theme='night'] for why
+     it is not repeated there). ---- */
+  --md-motion-spatial: 500ms cubic-bezier(0.38, 1.21, 0.22, 1);
+  --md-motion-effect: 200ms cubic-bezier(0.34, 0.80, 0.34, 1);
+
+  /* ---- Type -- Outfit for UI/headings, Roboto Mono for code. -apple-system/Segoe UI/
+     system-ui stay behind Outfit because Outfit ships no CJK glyphs and this site's Cantonese
+     language mode (app/shared/data.js's YUE table) needs a real platform CJK face, exactly the
+     reasoning src/renderer/fonts.css documents for the app. */
+  --md-font-ui: 'Outfit Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui,
+    sans-serif;
+  --md-font-mono: 'Roboto Mono', ui-monospace, 'SF Mono', Menlo, Monaco, Consolas, monospace;
+  /* site/docs/assets/docs.css reads the un-suffixed name. */
+  --md-font: var(--md-font-ui);
+
+  /* ---- Legacy compatibility shim -- every selector below this block keeps working
+     unchanged, now SOURCED FROM the M3 roles above instead of a bespoke paper-and-ink hex
+     (direction flipped from the pre-M3 file, same pattern src/renderer/styles.css uses). ---- */
+  --paper: var(--md-surface);
+  --paper2: var(--md-surface-container-low);
+  --card: var(--md-surface-container-highest);
+  --sunk: var(--md-surface-container-high);
+  --ink: var(--md-on-surface);
+  --ink2: var(--md-on-surface-variant);
+  --faint: var(--md-outline);
+  --line: var(--md-outline);
+  --accent: var(--md-primary);
+  --round: var(--md-shape-lg);
+  --round-sm: var(--md-shape-md);
+  --fun: var(--md-font-ui);
+  --body: var(--md-font-ui);
+  --mono: var(--md-font-mono);
+  /* Tonal elevation only -- see this file's top comment. Both names stay defined (nothing
+     downstream reads them from JS) so every existing `box-shadow: var(--shadow…)` call site
+     keeps compiling while rendering no shadow at all. */
+  --shadow: none;
+  --shadow-sm: none;
+
+  /* ---- Data/status swatch palette -- exempt from the --md-* roles, see this file's top
+     comment. Values unchanged from the pre-M3 file. ---- */
+  --yellow: #ffd93d;
   --red: #ff5d5d;
   --orange: #ffa41b;
-  --yellow: #ffd93d;
   --green: #3fce7f;
   --blue: #4dabf7;
   --purple: #9775fa;
   --pink: #ff8fc7;
-  --accent: var(--yellow);
-  --shadow: 6px 6px 0 var(--line);
-  --shadow-sm: 4px 4px 0 var(--line);
-  --round: 20px;
-  --round-sm: 12px;
-  --fun: 'Baloo 2', 'Comic Sans MS', 'Chalkboard SE', 'Trebuchet MS', system-ui, sans-serif;
-  --body: 'Nunito', 'Segoe UI', system-ui, -apple-system, sans-serif;
-  --mono: ui-monospace, 'SF Mono', 'Cascadia Code', Consolas, monospace;
-
-  /* Compatibility aliases so site/docs/assets/docs.css (untouched by this
-     redesign) keeps drawing from this file's real tokens instead of
-     resolving to nothing. */
-  --md-font: var(--body);
-  --md-font-mono: var(--mono);
-  --md-on-surface: var(--ink);
-  --md-on-surface-variant: var(--ink2);
-  --md-primary: #6b4fd8;
-  --md-outline-variant: var(--line);
-  --md-shape-lg: var(--round);
-  --md-shape-xs: 6px;
-  --md-surface-container-high: var(--sunk);
-  --md-surface-container-low: var(--paper2);
 }
 
 :root[data-theme='night'] {
   color-scheme: dark;
-  --paper: #241a45;
-  --paper2: #2e2257;
-  --card: #372a66;
-  --sunk: #1e1638;
-  --ink: #fff6e2;
-  --ink2: #d3c7f5;
-  --faint: #a397cc;
-  --line: #120c26;
-  --yellow: #ffd93d;
+  /* ---- Material Design 3 -- token foundation (night / dark), literal from
+     design/v2/md3/tokens.css's default (dark) :root block. ---- */
+  --md-primary: #D0BCFF;
+  --md-on-primary: #381E72;
+  --md-primary-container: #4F378B;
+  --md-on-primary-container: #EADDFF;
+  --md-secondary: #CCC2DC;
+  --md-on-secondary: #332D41;
+  --md-secondary-container: #4A4458;
+  --md-on-secondary-container: #E8DEF8;
+  --md-tertiary: #EFB8C8;
+  --md-on-tertiary: #492532;
+  --md-tertiary-container: #633B48;
+  --md-on-tertiary-container: #FFD8E4;
+  --md-error: #F2B8B5;
+  --md-on-error: #601410;
+  --md-error-container: #8C1D18;
+  --md-on-error-container: #F9DEDC;
+  --md-success: #89D88C;
+  --md-success-container: #0B5219;
+  --md-on-success-container: #A4F5A6;
+  --md-warning: #E7C26C;
+  --md-warning-container: #5B4300;
+  --md-on-warning-container: #FFDF9E;
+  --md-surface: #141218;
+  --md-surface-dim: #141218;
+  --md-surface-bright: #3B383E;
+  --md-surface-container-lowest: #0F0D13;
+  --md-surface-container-low: #1D1B20;
+  --md-surface-container: #211F26;
+  --md-surface-container-high: #2B2930;
+  --md-surface-container-highest: #36343B;
+  --md-on-surface: #E6E0E9;
+  --md-on-surface-variant: #CAC4D0;
+  --md-outline: #938F99;
+  --md-outline-variant: #49454F;
+  --md-inverse-surface: #E6E0E9;
+  --md-inverse-on-surface: #322F35;
+  --md-inverse-primary: #6750A4;
+  --md-scrim: rgba(0, 0, 0, 0.6);
+
+  /* Data/status swatches: yellow is unchanged across themes (see the pre-M3 file, same
+     behaviour kept); the other six get their existing brighter night variants. */
   --red: #ff7b7b;
   --green: #5fe3a1;
   --blue: #74c0fc;
   --purple: #b197fc;
   --pink: #ffa8d4;
   --orange: #ffc078;
-  --md-primary: #b197fc;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='day']):not([data-theme='night']) {
     color-scheme: dark;
-    --paper: #241a45;
-    --paper2: #2e2257;
-    --card: #372a66;
-    --sunk: #1e1638;
-    --ink: #fff6e2;
-    --ink2: #d3c7f5;
-    --faint: #a397cc;
-    --line: #120c26;
+    --md-primary: #D0BCFF;
+    --md-on-primary: #381E72;
+    --md-primary-container: #4F378B;
+    --md-on-primary-container: #EADDFF;
+    --md-secondary: #CCC2DC;
+    --md-on-secondary: #332D41;
+    --md-secondary-container: #4A4458;
+    --md-on-secondary-container: #E8DEF8;
+    --md-tertiary: #EFB8C8;
+    --md-on-tertiary: #492532;
+    --md-tertiary-container: #633B48;
+    --md-on-tertiary-container: #FFD8E4;
+    --md-error: #F2B8B5;
+    --md-on-error: #601410;
+    --md-error-container: #8C1D18;
+    --md-on-error-container: #F9DEDC;
+    --md-success: #89D88C;
+    --md-success-container: #0B5219;
+    --md-on-success-container: #A4F5A6;
+    --md-warning: #E7C26C;
+    --md-warning-container: #5B4300;
+    --md-on-warning-container: #FFDF9E;
+    --md-surface: #141218;
+    --md-surface-dim: #141218;
+    --md-surface-bright: #3B383E;
+    --md-surface-container-lowest: #0F0D13;
+    --md-surface-container-low: #1D1B20;
+    --md-surface-container: #211F26;
+    --md-surface-container-high: #2B2930;
+    --md-surface-container-highest: #36343B;
+    --md-on-surface: #E6E0E9;
+    --md-on-surface-variant: #CAC4D0;
+    --md-outline: #938F99;
+    --md-outline-variant: #49454F;
+    --md-inverse-surface: #E6E0E9;
+    --md-inverse-on-surface: #322F35;
+    --md-inverse-primary: #6750A4;
+    --md-scrim: rgba(0, 0, 0, 0.6);
     --red: #ff7b7b;
     --green: #5fe3a1;
     --blue: #74c0fc;
@@ -152,7 +353,11 @@ button { touch-action: manipulation; }
   background: var(--card); color: var(--ink);
 }
 .btn:hover { text-decoration: none; filter: brightness(1.04); }
-.btn:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 var(--line); }
+/* Was a diagonal translate + a matching offset box-shadow shrinking underneath it (the "physical
+   button being pushed into its own shadow" trick). No shadow exists to shrink into any more, so
+   the press feedback is now a plain M3-style tonal dip: a small vertical nudge plus a brightness
+   drop standing in for a pressed-state overlay. */
+.btn:active { transform: translateY(1px); filter: brightness(0.92); }
 .btn-sm { height: 44px; padding: 0 14px; font-size: 14px; }
 .btn-plain {
   height: 44px; padding: 0 14px; border: 3px solid var(--line); border-radius: 999px;
@@ -349,7 +554,13 @@ button { touch-action: manipulation; }
   border: 3px solid var(--line); border-radius: 16px; cursor: pointer; font-weight: 700; font-size: 15px;
   text-align: left; background: var(--card); box-shadow: none;
 }
-.nav-btn.is-active { box-shadow: 4px 4px 0 var(--line); }
+/* Was a diagonal box-shadow "pop" ON TOP OF an already-existing accent-coloured fill: the
+   active nav button gets its `background: <favourite colour>` inline, from JS
+   (app/core/render.js's room-nav template, `style="background:" + s.accent`), which -- being
+   an inline style -- always outranks anything this class sets, so a background/color rule
+   here would be silently dead. The fill is therefore untouched (pre-existing, JS-driven, and
+   out of this token pass's scope); only the shadow this class DOES still control is dropped. */
+.nav-btn.is-active { box-shadow: none; }
 .nav-btn__icon { font-size: 20px; }
 .nav-btn__label { flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .room-rail__storage {
@@ -423,7 +634,10 @@ textarea.mono-area {
 }
 .export-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 14px; }
 .dataset-btn { display: flex; align-items: center; gap: 8px; min-height: 54px; padding: 0 14px; border: 3px solid var(--line); border-radius: 14px; cursor: pointer; background: var(--paper2); width: 100%; }
-.dataset-btn.is-active { background: var(--accent); }
+/* --accent now resolves to the M3 primary role (was the --yellow swatch), which needs its own
+   --md-on-primary text -- the inherited --ink default reads at ~2.7:1 on it in day mode and is
+   all but invisible in night mode (~1.3:1), well under WCAG's 4.5:1 floor. */
+.dataset-btn.is-active { background: var(--accent); color: var(--md-on-primary); }
 .format-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
 .format-btn { min-height: 54px; padding: 0 10px; border: 3px solid var(--line); border-radius: 14px; cursor: pointer; font-weight: 800; background: var(--green); }
 .format-btn.is-lossy { background: var(--orange); }
@@ -475,7 +689,9 @@ textarea.mono-area {
 .ctl-range__val { font-family: var(--fun); font-size: 20px; font-weight: 800; width: 26px; text-align: right; }
 .swatch-row { flex: 1 1 170px; display: flex; gap: 8px; flex-wrap: wrap; }
 .swatch { width: 46px; height: 46px; border: 3px solid var(--line); border-radius: 14px; cursor: pointer; }
-.swatch.is-picked { box-shadow: 0 0 0 5px var(--line) inset; }
+/* Was an inset box-shadow ring; the "picked" cue is now a thicker primary-coloured border --
+   still reads instantly in a tightly packed swatch row, no shadow needed. */
+.swatch.is-picked { border-width: 4px; border-color: var(--md-primary); }
 .btn-set { flex: 0 0 auto; min-height: 46px; padding: 0 16px; border: 3px solid var(--line); border-radius: 999px; cursor: pointer; font-weight: 800; background: var(--blue); }
 .vocab-locked-list { font-weight: 700; }
 
@@ -496,10 +712,13 @@ textarea.mono-area {
   position: fixed;
   width: min(276px, calc(100vw - 16px));
   padding: 10px;
+  /* Was --card plus an 8px offset box-shadow "pop" off the page behind it. --card already
+     sits at the top of the M3 surface-container ramp (--md-surface-container-highest -- see
+     the legacy compatibility shim above), so tonal elevation needs no change here beyond
+     dropping the shadow: the outline border is what now carries the whole separation cue. */
   background: var(--card);
   border: 4px solid var(--line);
   border-radius: 18px;
-  box-shadow: 8px 8px 0 var(--line);
   z-index: 81;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -521,11 +740,16 @@ textarea.mono-area {
 .menu-item__label { flex: 1; text-align: left; }
 .menu-item__hint { font-size: 11px; color: var(--faint); }
 
-.dialog-scrim { position: fixed; inset: 0; background: rgba(20, 10, 40, 0.4); display: flex; align-items: flex-start; justify-content: center; padding: 8vh 16px; z-index: 90; overflow: auto; }
+/* Was a fixed rgba(20,10,40,0.4) regardless of theme; --md-scrim gives the same "dim the page
+   behind a modal" job its real M3 role, correctly lighter in day and darker in night. */
+.dialog-scrim { position: fixed; inset: 0; background: var(--md-scrim); display: flex; align-items: flex-start; justify-content: center; padding: 8vh 16px; z-index: 90; overflow: auto; }
 .dialog-scrim.is-center { align-items: center; padding: 16px; }
+/* Modal dialogs sitting on the scrim above needed the box-shadow to "pop" off the PAGE; a
+   scrim already does that job, so tonal --card + --line border is enough with the shadow gone
+   -- the same convention M3's own flat modal dialogs use. */
 .rx-dialog {
   position: relative; width: min(560px, calc(100vw - 24px)); max-height: 88vh; overflow: auto; padding: 18px;
-  background: var(--card); border: 5px solid var(--line); border-radius: 24px; box-shadow: 10px 10px 0 var(--line);
+  background: var(--card); border: 5px solid var(--line); border-radius: 24px;
 }
 .rx-dialog__head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
 .rx-dialog__badge { font-size: 12px; background: var(--yellow); border: 3px solid var(--line); border-radius: 999px; padding: 0 10px; font-weight: 700; }
@@ -543,7 +767,7 @@ textarea.mono-area {
 .rx-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
 .rx-footnote { margin: 10px 0 0; font-size: 11.5px; color: var(--ink2); line-height: 1.55; }
 
-.palette-dialog { width: min(660px, 100%); background: var(--card); border: 5px solid var(--line); border-radius: 26px; box-shadow: 10px 10px 0 var(--line); overflow: hidden; }
+.palette-dialog { width: min(660px, 100%); background: var(--card); border: 5px solid var(--line); border-radius: 26px; overflow: hidden; }
 .palette-dialog__search { display: flex; align-items: center; gap: 0; border-bottom: 4px solid var(--line); height: 60px; background: var(--purple); }
 .palette-dialog__search input { flex: 1; min-width: 0; height: 100%; border: 0; background: transparent; outline: none; font-size: 17px; font-weight: 700; }
 .palette-dialog__list { max-height: 56vh; overflow: auto; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
@@ -552,7 +776,7 @@ textarea.mono-area {
 .palette-item__label { flex: 1; text-align: left; font-weight: 700; }
 .palette-item__hint { font-size: 12px; color: var(--ink2); }
 
-.confirm-dialog { width: min(520px, 100%); background: var(--card); border: 5px solid var(--line); border-radius: 26px; box-shadow: 10px 10px 0 var(--line); padding: 18px; }
+.confirm-dialog { width: min(520px, 100%); background: var(--card); border: 5px solid var(--line); border-radius: 26px; padding: 18px; }
 .confirm-dialog h3 { margin: 0 0 6px; font-size: 22px; }
 .confirm-dialog p { margin: 0 0 10px; font-size: 14px; color: var(--ink2); line-height: 1.6; }
 .confirm-preview { margin: 0 0 12px; max-height: 150px; overflow: auto; background: var(--paper2); border: 3px solid var(--line); border-radius: 12px; padding: 10px; font-size: 12px; white-space: pre-wrap; font-family: var(--mono); }
@@ -605,3 +829,80 @@ textarea.mono-area {
 .pair-btn:hover { background: var(--orange); }
 .pair-btn:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
 @media (max-width: 620px) { .pair-route-grid { grid-template-columns: 1fr; } }
+
+/* ---- Screenshots room ----
+   A responsive gallery of real app captures. auto-fit rather than a fixed column count so it
+   reflows from a phone to a wide desktop without a media query per breakpoint; each image keeps
+   its aspect ratio and never forces the page to scroll sideways. */
+.shots-room__lede, .shots-room__foot { max-width: 68ch; color: var(--ink2); }
+.shots-room__foot { margin-top: 22px; font-size: 0.92em; }
+.shot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  gap: 18px;
+  margin: 18px 0 0;
+}
+.shot-card {
+  margin: 0;
+  /* Grid items default to min-width:auto, so they refuse to shrink below their content's
+     INTRINSIC width — a 1600px capture then forces the cell wide and the page body scrolls
+     sideways, which is the one thing the responsive rule forbids. Measured at a 320px body:
+     the column was 317px and the image rendered 389px. */
+  min-width: 0;
+}
+.shot-card__link {
+  display: block;
+  border: 3px solid var(--line);
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--paper2);
+}
+.shot-card__link:focus-visible { outline: 3px solid var(--brand); outline-offset: 3px; }
+.shot-card__img { display: block; width: 100%; height: auto; }
+.shot-card__cap { display: flex; flex-direction: column; gap: 3px; padding: 9px 3px 0; }
+.shot-card__title { font-size: 1em; }
+.shot-card__note { color: var(--ink2); font-size: 0.9em; }
+.shot-empty { color: var(--ink2); }
+
+/* ---- ADHD modes ----
+   Focus dims the chrome AROUND what is being read (the room rail, the header actions, the search
+   bar) and leaves `.room-main` — the content itself — untouched.
+
+   The selectors are the ones this page actually renders. The first version of this rule targeted
+   `.room-main__aside`, `.rail` and `.home-hero__art`, none of which exist here: the switch flipped
+   its attribute and absolutely nothing faded — a control that looks live and does nothing, which is
+   the defect this project forbids everywhere else. Caught by measuring computed opacity in a real
+   browser rather than trusting that the CSS matched something.
+
+   Focus DIMS, it never hides: nothing below sets display:none, visibility:hidden or
+   pointer-events:none, and hovering or focusing brings a faded region straight back. A page that
+   makes content disappear is a worse problem than a busy one. */
+:root[data-adhd-focus="on"] .room-rail,
+:root[data-adhd-focus="on"] .header-actions,
+:root[data-adhd-focus="on"] .searchbar {
+  opacity: 0.45;
+  transition: opacity 200ms ease;
+}
+:root[data-adhd-focus="on"] .room-rail:hover,
+:root[data-adhd-focus="on"] .header-actions:hover,
+:root[data-adhd-focus="on"] .searchbar:hover,
+:root[data-adhd-focus="on"] .room-rail:focus-within,
+:root[data-adhd-focus="on"] .header-actions:focus-within,
+:root[data-adhd-focus="on"] .searchbar:focus-within {
+  opacity: 1;
+}
+
+/* Low stimulation only ever REMOVES motion, so it composes with a reduced-motion preference the
+   visitor already set instead of overriding it. */
+:root[data-adhd-quiet="on"] *,
+:root[data-adhd-quiet="on"] *::before,
+:root[data-adhd-quiet="on"] *::after {
+  animation-duration: 1ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 1ms !important;
+}
+/* Quieter colour, not a different palette: only saturation moves, so every contrast pairing the
+   page already meets is untouched. */
+:root[data-adhd-quiet="on"] body {
+  filter: saturate(0.55);
+}

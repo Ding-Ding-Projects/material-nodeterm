@@ -17,6 +17,7 @@ import { IPC } from '../../shared/ipc'
 import type { GitHubControlApi, GitHubIssuesApi } from '../../shared/github-issues'
 import type { ConverterApi } from '../../shared/converter'
 import type { OllamaApi } from '../../shared/ollama'
+import type { MinecraftApi } from '../../shared/minecraft'
 import {
   UNKNOWN_CLAUDE_CLI_CAPS,
   type BoardLogApi,
@@ -57,7 +58,8 @@ import {
   type Workspace,
   type WorkspaceApi,
   type ToylockApi,
-  type AuthenticatorApi
+  type AuthenticatorApi,
+  type PasswordManagerApi
 } from '../../shared/types'
 import type {
   ToyLockBeginTotpInput,
@@ -69,7 +71,10 @@ import type {
   ToyLockRecord,
   ToyLockUpdateInput,
   ToyLockVerifyInput,
-  ToyLockVerifyResult
+  ToyLockVerifyResult,
+  ToyLockLadderState,
+  ToyLockLadderVerifyInput,
+  ToyLockLadderVerifyResult
 } from '../../shared/toylock'
 import type {
   AuthenticatorAddManualInput,
@@ -83,6 +88,28 @@ import type {
   AuthenticatorRemoveResult,
   AuthenticatorRevealResult
 } from '../../shared/authenticator'
+import type {
+  BindManagerGroupInput,
+  ChangeVaultPasswordInput,
+  ChangeVaultPasswordResult,
+  CreateCredentialInput,
+  CreateCredentialResult,
+  CreateManagerInput,
+  CreateManagerResult,
+  CredentialCodeResult,
+  ManagerMutationResult,
+  ReleaseGroupBindingResult,
+  RemoveCredentialInput,
+  RemoveCredentialResult,
+  RenameCredentialInput,
+  RenameManagerInput,
+  RevealCredentialResult,
+  UpdateCredentialResult,
+  UpdateCredentialSecretInput,
+  VaultCreateResult,
+  VaultStatus,
+  VaultUnlockResult
+} from '../../shared/password-manager'
 import type { PeerIdentity } from '../../shared/presence'
 import type {
   ScheduledSettingsActiveState,
@@ -324,7 +351,7 @@ export function buildRealApi(
   client: RpcClient
 ): Pick<
   NodeTerminalApi,
-  'pty' | 'workspace' | 'settings' | 'schoolMode' | 'kidsMode' | 'scheduledSettings' | 'userDataDir'
+  'pty' | 'workspace' | 'serverDeployment' | 'settings' | 'schoolMode' | 'kidsMode' | 'scheduledSettings' | 'userDataDir'
 > {
   const pty: PtyApi = {
     create: (options: PtyCreateOptions) =>
@@ -395,6 +422,25 @@ export function buildRealApi(
     // next writeDisk() overwrote the team's shared canvas. Data loss, not a degrade.
     probeFolder: (folder: string) =>
       client.request(IPC.workspaceProbeFolder, folder) as ReturnType<WorkspaceApi['probeFolder']>,
+    exportProject: async () => ({
+      ok: false,
+      error: 'Project archive export is available in the Windows desktop app.'
+    }),
+    importProject: async () => ({
+      ok: false,
+      error: 'Project archive import is available in the Windows desktop app.'
+    }),
+    // Archive save/open are desktop-only here, so their password prompt — and therefore its
+    // ladder — cannot be reached in the browser at all. No wait exists to end.
+    archiveLadderIssue: async () => ({ challenge: null, budgetLeft: 0, waitMs: 0 }),
+    archiveLadderVerify: async () => ({
+      cleared: false,
+      next: null,
+      budgetLeft: 0,
+      waitMs: 0,
+      challenge: null,
+      message: 'Project archives are available in the Windows desktop app.'
+    }),
     // REAL: core broadcasts IPC.workspaceMigrated after a v2→v3 migration (workspace-store.ts).
     onMigrated: (cb) => client.subscribe(IPC.workspaceMigrated, cb as Listener),
     // REAL: core broadcasts IPC.workspaceCorruptRecovered from the load path (workspace-store.ts).
@@ -458,7 +504,17 @@ export function buildRealApi(
   // `/worktrees/…` at the filesystem root (the server usually runs as root, and git would create it).
   const userDataDir = (): Promise<string> => client.request(IPC.appUserDataDir) as Promise<string>
 
-  return { pty, workspace, settings, schoolMode, kidsMode, scheduledSettings, userDataDir }
+  const serverDeployment = {
+    start: async () => ({
+      ok: false,
+      state: 'failed' as const,
+      error: 'Deployment is controlled by the Windows desktop app.'
+    }),
+    currentTotp: async () => '',
+    status: async () => ({ running: false }),
+    onProgress: () => () => {}
+  }
+  return { pty, workspace, serverDeployment, settings, schoolMode, kidsMode, scheduledSettings, userDataDir }
 }
 
 export function buildGitHubApi(
@@ -851,6 +907,40 @@ export function buildOllamaApi(client: RpcClient): Pick<NodeTerminalApi, 'ollama
   return { ollama }
 }
 
+/** Local Minecraft server create-and-manage (docs/minecraft-server-manager.md) — same core engine
+ *  as desktop; the server process is the one downloading, spawning and owning `java`, exactly as
+ *  main does. */
+export function buildMinecraftApi(client: RpcClient): Pick<NodeTerminalApi, 'minecraft'> {
+  const minecraft: MinecraftApi = {
+    versions: () => client.request(IPC.minecraftVersions) as ReturnType<MinecraftApi['versions']>,
+    status: (id) => client.request(IPC.minecraftStatus, id) as ReturnType<MinecraftApi['status']>,
+    create: (input) => client.request(IPC.minecraftCreate, input) as ReturnType<MinecraftApi['create']>,
+    acceptEula: (id) => client.request(IPC.minecraftAcceptEula, id) as ReturnType<MinecraftApi['acceptEula']>,
+    start: (id) => client.request(IPC.minecraftStart, id) as ReturnType<MinecraftApi['start']>,
+    stop: (id) => client.request(IPC.minecraftStop, id) as ReturnType<MinecraftApi['stop']>,
+    sendCommand: (id, command) => client.request(IPC.minecraftSendCommand, id, command) as Promise<boolean>,
+    remove: (id, deleteFiles) => client.request(IPC.minecraftRemove, id, deleteFiles) as Promise<void>,
+    recentConsole: (id) =>
+      client.request(IPC.minecraftRecentConsole, id) as ReturnType<MinecraftApi['recentConsole']>,
+    readProperties: (id) =>
+      client.request(IPC.minecraftPropertiesRead, id) as ReturnType<MinecraftApi['readProperties']>,
+    writeProperties: (id, updates) =>
+      client.request(IPC.minecraftPropertiesWrite, id, updates) as ReturnType<MinecraftApi['writeProperties']>,
+    readPlayerLists: (id) =>
+      client.request(IPC.minecraftPlayerLists, id) as ReturnType<MinecraftApi['readPlayerLists']>,
+    listBackups: (id) =>
+      client.request(IPC.minecraftBackupsList, id) as ReturnType<MinecraftApi['listBackups']>,
+    createBackup: (id) =>
+      client.request(IPC.minecraftBackupCreate, id) as ReturnType<MinecraftApi['createBackup']>,
+    restoreBackup: (id, backupId) =>
+      client.request(IPC.minecraftBackupRestore, id, backupId) as ReturnType<MinecraftApi['restoreBackup']>,
+    deleteBackup: (id, backupId) =>
+      client.request(IPC.minecraftBackupDelete, id, backupId) as Promise<void>,
+    onEvent: (listener) => client.subscribe(IPC.minecraftEvent, listener as Listener)
+  }
+  return { minecraft }
+}
+
 /**
  * Build the `usage` namespace over an RpcClient. The server shell runs the same core usage
  * service the desktop does, so this is real end to end — including `onUpdate`, which subscribes
@@ -952,7 +1042,11 @@ export function buildToylockApi(client: RpcClient): Pick<NodeTerminalApi, 'toylo
     remove: (id: string) => client.request(IPC.toylockRemove, id) as Promise<void>,
     verify: (input: ToyLockVerifyInput) =>
       client.request(IPC.toylockVerify, input) as Promise<ToyLockVerifyResult>,
-    relock: (lockId: string) => client.request(IPC.toylockRelock, lockId) as Promise<void>
+    relock: (lockId: string) => client.request(IPC.toylockRelock, lockId) as Promise<void>,
+    ladderIssue: (lockId: string) =>
+      client.request(IPC.toylockLadderIssue, lockId) as Promise<ToyLockLadderState>,
+    ladderVerify: (input: ToyLockLadderVerifyInput) =>
+      client.request(IPC.toylockLadderVerify, input) as Promise<ToyLockLadderVerifyResult>
   }
   return { toylock }
 }
@@ -978,6 +1072,58 @@ export function buildAuthenticatorApi(client: RpcClient): Pick<NodeTerminalApi, 
       client.request(IPC.authenticatorExportSecrets, input) as Promise<AuthenticatorExportResult>
   }
   return { authenticator }
+}
+
+/** Build the `passwordManager` namespace over an RpcClient. Server Edition genuinely registers
+ *  `registerPasswordManagerHandlers` (src/server/index.ts), so — unlike the relay peer surface in
+ *  relay-api.ts, which deliberately excludes this namespace — this is a REAL implementation, not
+ *  a stub: a browser talking to its own Server Edition instance is the machine owner, exactly as
+ *  the Electron preload's `passwordManager` is. See PasswordManagerApi's doc comment in
+ *  shared/types.ts for why the namespace stays out of the relay allowlist. */
+export function buildPasswordManagerApi(client: RpcClient): Pick<NodeTerminalApi, 'passwordManager'> {
+  const passwordManager: PasswordManagerApi = {
+    status: (projectId: string) => client.request(IPC.passwordManagerStatus, projectId) as Promise<VaultStatus>,
+    createVault: (projectId: string, password: string) =>
+      client.request(IPC.passwordManagerCreateVault, projectId, password) as Promise<VaultCreateResult>,
+    unlock: (projectId: string, password: string) =>
+      client.request(IPC.passwordManagerUnlock, projectId, password) as Promise<VaultUnlockResult>,
+    lock: (projectId: string) => client.request(IPC.passwordManagerLock, projectId) as Promise<void>,
+    changePassword: (projectId: string, input: ChangeVaultPasswordInput) =>
+      client.request(IPC.passwordManagerChangePassword, projectId, input) as Promise<ChangeVaultPasswordResult>,
+    createManager: (projectId: string, input: CreateManagerInput) =>
+      client.request(IPC.passwordManagerCreateManager, projectId, input) as Promise<CreateManagerResult>,
+    renameManager: (projectId: string, input: RenameManagerInput) =>
+      client.request(IPC.passwordManagerRenameManager, projectId, input) as Promise<ManagerMutationResult>,
+    bindManagerGroup: (projectId: string, input: BindManagerGroupInput) =>
+      client.request(IPC.passwordManagerBindManagerGroup, projectId, input) as Promise<ManagerMutationResult>,
+    releaseGroupBinding: (projectId: string, groupId: string) =>
+      client.request(IPC.passwordManagerReleaseGroupBinding, projectId, groupId) as Promise<ReleaseGroupBindingResult>,
+    deleteManager: (projectId: string, id: string) =>
+      client.request(IPC.passwordManagerDeleteManager, projectId, id) as Promise<ManagerMutationResult>,
+    createCredential: (projectId: string, input: CreateCredentialInput) =>
+      client.request(IPC.passwordManagerCreateCredential, projectId, input) as Promise<CreateCredentialResult>,
+    renameCredential: (projectId: string, input: RenameCredentialInput) =>
+      client.request(IPC.passwordManagerRenameCredential, projectId, input) as Promise<ManagerMutationResult>,
+    updateCredentialSecret: (projectId: string, input: UpdateCredentialSecretInput) =>
+      client.request(IPC.passwordManagerUpdateCredentialSecret, projectId, input) as Promise<UpdateCredentialResult>,
+    removeCredential: (projectId: string, input: RemoveCredentialInput) =>
+      client.request(IPC.passwordManagerRemoveCredential, projectId, input) as Promise<RemoveCredentialResult>,
+    revealCredential: (projectId: string, managerId: string, credentialId: string) =>
+      client.request(
+        IPC.passwordManagerRevealCredential,
+        projectId,
+        managerId,
+        credentialId
+      ) as Promise<RevealCredentialResult>,
+    credentialCode: (projectId: string, managerId: string, credentialId: string) =>
+      client.request(
+        IPC.passwordManagerCredentialCode,
+        projectId,
+        managerId,
+        credentialId
+      ) as Promise<CredentialCodeResult>
+  }
+  return { passwordManager }
 }
 
 /**
@@ -1020,9 +1166,9 @@ export function buildClaudeApi(client: RpcClient, stub: ClaudeApi): ClaudeApi {
 }
 
 /**
- * The two transcript READ channels, now that `registerTranscriptIpc` serves them in the server
- * shell too. Before this the browser had no handler at all: the stub rejected, the ⌘M panel never
- * caught it, and every Server Edition session read as an empty conversation.
+ * The transcript search and two READ channels, now that `registerTranscriptIpc` serves all three
+ * in the server shell too. Before this the browser search stayed on the stub while the read stubs
+ * rejected, so command-palette search returned nothing and every session looked empty.
  *
  * Server Edition ONLY (see buildClaudeApi's note): the server runs on the machine whose
  * transcripts these are, so no `nodeId` remote leg is needed — the argument still rides along
@@ -1030,8 +1176,12 @@ export function buildClaudeApi(client: RpcClient, stub: ClaudeApi): ClaudeApi {
  */
 export function buildTranscriptApi(
   client: RpcClient
-): Pick<NodeTerminalApi, 'chat'> & { claudeReadTranscript: ClaudeApi['readTranscript'] } {
+): Pick<NodeTerminalApi, 'chat' | 'transcripts'> & { claudeReadTranscript: ClaudeApi['readTranscript'] } {
   return {
+    transcripts: {
+      search: (query) =>
+        client.request(IPC.transcriptSearch, query) as ReturnType<NodeTerminalApi['transcripts']['search']>
+    },
     chat: {
       readTranscript: (sessionId, cwd, accountId, nodeId) =>
         client.request(
@@ -1074,9 +1224,14 @@ export function showReconnectOverlay(): void {
   const el = document.createElement('div')
   el.id = OVERLAY_ID
   el.setAttribute('data-nt-reconnect', '')
+  // M3 tokens with literal fallbacks: this can mount before the app's own stylesheet has
+  // painted (an initial-connect failure races React's first render), so the fallback is what
+  // actually renders in that split second and the var() takes over once styles.css is live —
+  // which is also what keeps this overlay in step with the app's own light/dark switch instead
+  // of a fixed dark-only wash.
   el.style.cssText =
     'position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;' +
-    'justify-content:center;background:rgba(0,0,0,0.72);color:#fff;' +
+    'justify-content:center;background:var(--md-scrim,rgba(0,0,0,0.6));color:var(--md-on-surface,#E6E0E9);' +
     'font:15px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;text-align:center;padding:24px'
   el.textContent = 'Connection lost — reconnecting…'
   document.body.appendChild(el)
@@ -1168,12 +1323,14 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildSpeechApi(client),
     ...buildConverterApi(client),
     ...buildOllamaApi(client),
+    ...buildMinecraftApi(client),
     ...buildUsageApi(client),
     ...buildSessionMemoryApi(client),
     ...buildVsCodeApi(client),
     ...buildLocalHistoryApi(client),
     ...buildToylockApi(client),
     ...buildAuthenticatorApi(client),
+    ...buildPasswordManagerApi(client),
     ...buildGitHubApi(client),
     codex: buildCodexApi(client),
     // `claude` is assembled from two builders: `cliCaps` from the relay-shared one, and the
@@ -1181,6 +1338,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...(() => {
       const t = buildTranscriptApi(client)
       return {
+        transcripts: t.transcripts,
         chat: t.chat,
         claude: { ...buildClaudeApi(client, stubApi.claude), readTranscript: t.claudeReadTranscript }
       }

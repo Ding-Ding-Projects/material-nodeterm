@@ -3,6 +3,7 @@ import { IPC } from '../shared/ipc'
 import type {
   CanvasMutation,
   CanvasState,
+  CanvasWidgetLiveState,
   ClipboardWriteOptions,
   NodeTerminalApi,
   PairingDoneResult,
@@ -12,6 +13,7 @@ import type {
   RecycledInfo,
   RelayPeerPending,
   RemoteUsageQuery,
+  ServerDeploymentStage,
   SessionMemoryQuery,
   UpdateInfo,
   UpdateProgress,
@@ -23,6 +25,7 @@ import type { HistoryFilters } from '../shared/local-history'
 import type { ClientId, PeerDiff, PeerIdentity, PeerState } from '../shared/presence'
 import type { ConvertQueueItem, ConverterQueueState } from '../shared/converter'
 import type { PullQueueItem, PullQueueState } from '../shared/ollama'
+import type { MinecraftEvent } from '../shared/minecraft'
 
 // Fan a single ipcRenderer listener per channel out to many renderer subscribers. Without
 // this, every node that subscribes (e.g. Cmd+M markdown toggle on each terminal/editor) adds
@@ -66,6 +69,8 @@ const subscribeOllamaPullSummary = subscribe<[Pick<PullQueueState, 'running' | '
 const subscribeOllamaChatStream = subscribe<
   [{ sessionId: string; kind: 'token' | 'done' | 'error' | 'stopped'; delta?: string; error?: string }]
 >(IPC.ollamaChatStream)
+const subscribeMinecraftEvent = subscribe<[MinecraftEvent]>(IPC.minecraftEvent)
+const subscribeWidgetState = subscribe<[CanvasWidgetLiveState]>(IPC.widgetStateChanged)
 
 const subscribeRelayPeerPending = subscribe<[RelayPeerPending]>(IPC.relayHostPeerPending)
 const subscribeRelayHostOpen = subscribe<[{ id: string; email?: string }]>(IPC.relayHostOpen)
@@ -161,6 +166,14 @@ const api: NodeTerminalApi = {
     load: () => ipcRenderer.invoke(IPC.workspaceLoad),
     save: (workspace: Workspace) => ipcRenderer.invoke(IPC.workspaceSave, workspace),
     probeFolder: (folder: string) => ipcRenderer.invoke(IPC.workspaceProbeFolder, folder),
+    exportProject: (project: Project, password?: string) =>
+      ipcRenderer.invoke(IPC.projectArchiveExport, project, password),
+    importProject: (opts?: { path?: string; password?: string }) =>
+      ipcRenderer.invoke(IPC.projectArchiveImport, opts),
+    archiveLadderIssue: (filePath: string) =>
+      ipcRenderer.invoke(IPC.projectArchiveLadderIssue, filePath),
+    archiveLadderVerify: (input: unknown) =>
+      ipcRenderer.invoke(IPC.projectArchiveLadderVerify, input),
     onMigrated: (cb: (kind: WorkspaceMigrationKind) => void) => {
       // Older mains broadcast no payload; that was the v2→v3 migration.
       const h = (_e: unknown, kind?: WorkspaceMigrationKind) => cb(kind ?? 'v2')
@@ -178,6 +191,16 @@ const api: NodeTerminalApi = {
       return () => ipcRenderer.removeListener(IPC.workspaceExternalChange, h)
     }
   },
+  serverDeployment: {
+    start: () => ipcRenderer.invoke(IPC.serverDeploymentStart),
+    currentTotp: () => ipcRenderer.invoke(IPC.serverDeploymentTotp),
+    status: () => ipcRenderer.invoke(IPC.serverDeploymentStatus),
+    onProgress: (cb: (stage: ServerDeploymentStage) => void) => {
+      const h = (_e: unknown, stage: ServerDeploymentStage) => cb(stage)
+      ipcRenderer.on(IPC.serverDeploymentProgress, h)
+      return () => ipcRenderer.removeListener(IPC.serverDeploymentProgress, h)
+    }
+  },
   dialog: {
     selectFolder: () => ipcRenderer.invoke(IPC.dialogSelectFolder),
     selectFile: () => ipcRenderer.invoke(IPC.dialogSelectFile),
@@ -191,7 +214,8 @@ const api: NodeTerminalApi = {
     ? {
         terminalProfiles: {
           list: () => ipcRenderer.invoke(IPC.terminalProfilesList),
-          refresh: () => ipcRenderer.invoke(IPC.terminalProfilesRefresh)
+          refresh: (customExecutable?: string) =>
+            ipcRenderer.invoke(IPC.terminalProfilesRefresh, customExecutable)
         }
       }
     : {}),
@@ -211,6 +235,9 @@ const api: NodeTerminalApi = {
     rename: (name) => ipcRenderer.invoke(IPC.kidsModeRename, name),
     changePin: (currentPin, nextPin) => ipcRenderer.invoke(IPC.kidsModeChangePin, currentPin, nextPin),
     hasCredential: () => ipcRenderer.invoke(IPC.kidsModeHasCredential),
+    // Read-only PIN check for the grown-up screen's parent gate — never leaves kids mode, unlike
+    // `disable`. Always goes over IPC: the renderer never holds or compares a PIN itself.
+    verifyPin: (pin) => ipcRenderer.invoke(IPC.kidsModeVerifyPin, pin),
     onChanged: subscribe(IPC.kidsModeChanged)
   },
   scheduledSettings: {
@@ -389,6 +416,14 @@ const api: NodeTerminalApi = {
     openPath: (path: string) => ipcRenderer.send(IPC.shellOpenPath, path),
     openExternal: (url: string) => ipcRenderer.send(IPC.shellOpenExternal, url)
   },
+  canvasWidget: {
+    open: (nodeId: string) => ipcRenderer.invoke(IPC.widgetOpen, nodeId),
+    close: (nodeId: string) => ipcRenderer.invoke(IPC.widgetClose, nodeId),
+    setAlwaysOnTop: (nodeId: string, alwaysOnTop: boolean) =>
+      ipcRenderer.invoke(IPC.widgetSetAlwaysOnTop, nodeId, alwaysOnTop),
+    getState: (nodeId: string) => ipcRenderer.invoke(IPC.widgetGetState, nodeId),
+    onStateChanged: subscribeWidgetState
+  },
   fs: {
     list: (dirPath: string) => ipcRenderer.invoke(IPC.fsList, dirPath),
     read: (filePath: string) => ipcRenderer.invoke(IPC.fsRead, filePath),
@@ -411,6 +446,12 @@ const api: NodeTerminalApi = {
       const handler = (_e: unknown, ev: { url: string; sourceNodeId: string }) => listener(ev)
       ipcRenderer.on(IPC.browserNewWindow, handler)
       return () => ipcRenderer.removeListener(IPC.browserNewWindow, handler)
+    },
+    extensions: {
+      list: (partition) => ipcRenderer.invoke(IPC.browserExtensionsList, partition),
+      pickDir: () => ipcRenderer.invoke(IPC.browserExtensionsPickDir),
+      add: (partition, dirPath) => ipcRenderer.invoke(IPC.browserExtensionsAdd, partition, dirPath),
+      remove: (partition, dirPath) => ipcRenderer.invoke(IPC.browserExtensionsRemove, partition, dirPath)
     }
   },
   files: {
@@ -517,7 +558,9 @@ const api: NodeTerminalApi = {
     update: (input) => ipcRenderer.invoke(IPC.toylockUpdate, input),
     remove: (id) => ipcRenderer.invoke(IPC.toylockRemove, id),
     verify: (input) => ipcRenderer.invoke(IPC.toylockVerify, input),
-    relock: (lockId) => ipcRenderer.invoke(IPC.toylockRelock, lockId)
+    relock: (lockId) => ipcRenderer.invoke(IPC.toylockRelock, lockId),
+    ladderIssue: (lockId) => ipcRenderer.invoke(IPC.toylockLadderIssue, lockId),
+    ladderVerify: (input) => ipcRenderer.invoke(IPC.toylockLadderVerify, input)
   },
   authenticator: {
     list: () => ipcRenderer.invoke(IPC.authenticatorList),
@@ -529,6 +572,36 @@ const api: NodeTerminalApi = {
     codes: (ids) => ipcRenderer.invoke(IPC.authenticatorCodes, ids),
     reveal: (id) => ipcRenderer.invoke(IPC.authenticatorReveal, id),
     exportSecrets: (input) => ipcRenderer.invoke(IPC.authenticatorExportSecrets, input)
+  },
+  // Per-project password manager (shared/password-manager.ts). LOCAL-ONLY, same reasoning as
+  // toylock/authenticator above — see PasswordManagerApi's doc comment in shared/types.ts and
+  // main/relay-rpc-policy.ts: a relay peer must never reach credential reveal/code on this
+  // desktop's vault, however trusted it is for the joined project's files/terminals.
+  passwordManager: {
+    status: (projectId) => ipcRenderer.invoke(IPC.passwordManagerStatus, projectId),
+    createVault: (projectId, password) => ipcRenderer.invoke(IPC.passwordManagerCreateVault, projectId, password),
+    unlock: (projectId, password) => ipcRenderer.invoke(IPC.passwordManagerUnlock, projectId, password),
+    lock: (projectId) => ipcRenderer.invoke(IPC.passwordManagerLock, projectId),
+    changePassword: (projectId, input) => ipcRenderer.invoke(IPC.passwordManagerChangePassword, projectId, input),
+    createManager: (projectId, input) => ipcRenderer.invoke(IPC.passwordManagerCreateManager, projectId, input),
+    renameManager: (projectId, input) => ipcRenderer.invoke(IPC.passwordManagerRenameManager, projectId, input),
+    bindManagerGroup: (projectId, input) =>
+      ipcRenderer.invoke(IPC.passwordManagerBindManagerGroup, projectId, input),
+    releaseGroupBinding: (projectId, groupId) =>
+      ipcRenderer.invoke(IPC.passwordManagerReleaseGroupBinding, projectId, groupId),
+    deleteManager: (projectId, id) => ipcRenderer.invoke(IPC.passwordManagerDeleteManager, projectId, id),
+    createCredential: (projectId, input) =>
+      ipcRenderer.invoke(IPC.passwordManagerCreateCredential, projectId, input),
+    renameCredential: (projectId, input) =>
+      ipcRenderer.invoke(IPC.passwordManagerRenameCredential, projectId, input),
+    updateCredentialSecret: (projectId, input) =>
+      ipcRenderer.invoke(IPC.passwordManagerUpdateCredentialSecret, projectId, input),
+    removeCredential: (projectId, input) =>
+      ipcRenderer.invoke(IPC.passwordManagerRemoveCredential, projectId, input),
+    revealCredential: (projectId, managerId, credentialId) =>
+      ipcRenderer.invoke(IPC.passwordManagerRevealCredential, projectId, managerId, credentialId),
+    credentialCode: (projectId, managerId, credentialId) =>
+      ipcRenderer.invoke(IPC.passwordManagerCredentialCode, projectId, managerId, credentialId)
   },
   context: {
     onUpdate: (listener) => {
@@ -622,6 +695,7 @@ const api: NodeTerminalApi = {
     setPhoneAccess: (enabled) => ipcRenderer.send(IPC.remoteStandingHostSet, enabled)
   },
   relayHost: {
+    dockerContexts: () => ipcRenderer.invoke(IPC.relayHostDockerContexts),
     start: (projectId?: string) => ipcRenderer.invoke(IPC.relayHostStart, projectId),
     invite: (opts?: { projectId?: string; email?: string }) =>
       ipcRenderer.invoke(IPC.relayHostInvite, opts ?? {}),
@@ -663,6 +737,7 @@ const api: NodeTerminalApi = {
     disconnect: (connectionId) => ipcRenderer.send(IPC.relayClientDisconnect, connectionId)
   },
   handoff: {
+    supported: true,
     build: (sessionId, agentId, sourceNodeId, cwd, accountId) =>
       ipcRenderer.invoke(IPC.handoffBuild, sessionId, agentId, sourceNodeId, cwd, accountId)
   },
@@ -824,6 +899,25 @@ const api: NodeTerminalApi = {
     chatSend: (id, text) => ipcRenderer.invoke(IPC.ollamaChatSend, id, text),
     chatStop: (id) => ipcRenderer.invoke(IPC.ollamaChatStop, id),
     onChatStream: (listener) => subscribeOllamaChatStream(listener)
+  },
+  minecraft: {
+    versions: () => ipcRenderer.invoke(IPC.minecraftVersions),
+    status: (id) => ipcRenderer.invoke(IPC.minecraftStatus, id),
+    create: (input) => ipcRenderer.invoke(IPC.minecraftCreate, input),
+    acceptEula: (id) => ipcRenderer.invoke(IPC.minecraftAcceptEula, id),
+    start: (id) => ipcRenderer.invoke(IPC.minecraftStart, id),
+    stop: (id) => ipcRenderer.invoke(IPC.minecraftStop, id),
+    sendCommand: (id, command) => ipcRenderer.invoke(IPC.minecraftSendCommand, id, command),
+    remove: (id, deleteFiles) => ipcRenderer.invoke(IPC.minecraftRemove, id, deleteFiles),
+    recentConsole: (id) => ipcRenderer.invoke(IPC.minecraftRecentConsole, id),
+    readProperties: (id) => ipcRenderer.invoke(IPC.minecraftPropertiesRead, id),
+    writeProperties: (id, updates) => ipcRenderer.invoke(IPC.minecraftPropertiesWrite, id, updates),
+    readPlayerLists: (id) => ipcRenderer.invoke(IPC.minecraftPlayerLists, id),
+    listBackups: (id) => ipcRenderer.invoke(IPC.minecraftBackupsList, id),
+    createBackup: (id) => ipcRenderer.invoke(IPC.minecraftBackupCreate, id),
+    restoreBackup: (id, backupId) => ipcRenderer.invoke(IPC.minecraftBackupRestore, id, backupId),
+    deleteBackup: (id, backupId) => ipcRenderer.invoke(IPC.minecraftBackupDelete, id, backupId),
+    onEvent: (listener) => subscribeMinecraftEvent(listener)
   }
 }
 

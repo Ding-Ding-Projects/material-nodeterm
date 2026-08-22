@@ -386,6 +386,24 @@ export class KidsModeStore {
     return run
   }
 
+  /**
+   * Verify the grown-up PIN WITHOUT changing anything — the check the parent gate uses to reach
+   * the grown-up screen without turning kids mode off. Never mutates the record and is never
+   * chained behind `this.chain`: a read-only check must not queue behind (or block) a pending
+   * write, and it has nothing to race.
+   *
+   * Mirrors `disable()`'s "no credential" honesty: a record that is ON with no credential ever
+   * set (another app enabled it, or a partial restore dropped the credential file) has no PIN
+   * that could ever be right, so refusing entry there would lock a grown-up out of a screen whose
+   * only job is administering the mode. The mode itself is a self-imposed speed bump, not
+   * security — see KIDS_DISCLOSURE — so this stays consistent with that promise rather than
+   * inventing a stricter rule for one screen.
+   */
+  async verifyPin(pin: string): Promise<boolean> {
+    if (!(await this.hasCredential())) return true
+    return checkPin(credentialFile(), pin)
+  }
+
   registerIpc(): void {
     const p = platform()
     p.handle(IPC.kidsModeLoad, () => this.snapshot())
@@ -394,6 +412,7 @@ export class KidsModeStore {
     p.handle(IPC.kidsModeRename, (name: string) => this.rename(name))
     p.handle(IPC.kidsModeChangePin, (a: string, b: string) => this.changePin(a, b))
     p.handle(IPC.kidsModeHasCredential, () => this.hasCredential())
+    p.handle(IPC.kidsModeVerifyPin, (pin: string) => this.verifyPin(pin))
     this.onChange((r) => p.broadcast(IPC.kidsModeChanged, r))
   }
 }

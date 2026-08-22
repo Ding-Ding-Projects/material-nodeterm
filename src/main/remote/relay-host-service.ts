@@ -5,7 +5,7 @@
 // shares the same offer format and pairing-token mint, but everything a bridged peer does afterwards
 // flows through `connectRelayHost` (→ `platform.dispatch`/`cast`), not the legacy phone RPC vocabulary.
 //
-// TEAM ACCESS — a POOL, not one listener. A paying host shares this Mac with up to `seats` devices
+// TEAM ACCESS — a POOL, not one listener. A host shares this machine with up to `seats` devices
 // (one seat per connected device). This module manages a POOL of independent `RelayHostSession`s;
 // each seat still goes through the UNCHANGED per-session mutual-SAS + ConsentNotice gate in
 // relay-host.ts. `relay:host:invite` (and the legacy `relay:host:start`) ADD a seat (cap-checked, no
@@ -32,9 +32,11 @@ import type { RelayTransport } from './relay-socket'
 import { publicKeyToB64, type KeyPair } from './e2ee'
 import { encodeOffer } from './pairing'
 import { loadOrCreatePeerKeyPair } from './peer-identity'
-import { isPremium as licenseIsPremium, getStoredEntitlement, licensedSeats as licenseSeats } from '../../core/license'
+import { getStoredEntitlement, licensedSeats as licenseSeats } from '../../core/license'
 import { RELAY_URL, relayAllowed as hostRelayAllowed, mintPairingToken } from './host-service'
 import { canAcceptSeat } from './seat-cap'
+import { discoverDockerContexts, startDockerHostRuntime, type DockerHostRuntime } from './docker-host-runtime'
+import type { DockerHostSettings } from '../../shared/types'
 
 /** Thrown (as an Error message) when a new invite would exceed the licensed seat cap. The renderer
  *  maps it to "All seats in use — add a seat." Host-side/UX enforcement only (see below). */
@@ -50,14 +52,19 @@ export interface RelayHostDeps {
   /** The long-lived peer identity this desktop presents (defaults to loadOrCreatePeerKeyPair). */
   loadKeys?: () => Promise<KeyPair>
   /** Mint the single-use pairing token (defaults to the shared `mintPairingToken`). */
-  mintToken?: (entitlement: string) => Promise<{ pairingToken: string }>
-  isPremium?: () => boolean
+  mintToken?: (entitlement?: string) => Promise<{ pairingToken: string }>
   relayAllowed?: () => boolean
   getEntitlement?: () => string | null
   /** The licensed seat cap (Team Access). Defaults to the real `licensedSeats()` (core/license.ts). */
   licensedSeats?: () => number
   /** TEST ONLY: override the wire-up (defaults to `connectRelayHost`). */
   connect?: typeof connectRelayHost
+  /** Resolve the local Docker workspace for a project. REQUIRED, not optional: `addSeat` demands it
+   *  unconditionally, so an omitted dep is a runtime throw rather than a compile error — which is
+   *  exactly how 30 tests drove a real container start and failed. */
+  dockerSettingsFor: (projectId: string) => { settings: DockerHostSettings; cwd: string } | null
+  /** TEST ONLY: override the container start (defaults to the real `startDockerHostRuntime`). */
+  startDocker?: typeof startDockerHostRuntime
 }
 
 /** Metadata options for a new seat. `email` is a DISPLAY label only (never trust/identity — the SAS
@@ -74,20 +81,19 @@ export interface RelayHost {
 
 /**
  * Wire the interactive relay-host IPC. `relay:host:invite` (and legacy `relay:host:start`) gate on
- * Pro + a free seat, mint a pairing token, open a NEW relay host listener via `connectRelayHost`, and
+ * a free seat, mint a pairing token, open a NEW relay host listener via `connectRelayHost`, and
  * return the offer to hand to a peer — ADDING it to the pool (no supersede). `relay:host:confirm`
  * approves a pending peer; `relay:host:revoke` cuts one; `relay:host:stop` tears the whole pool down.
  */
 export function initRelayHost(
   win: BrowserWindow,
   platform: ElectronPlatform,
-  deps: RelayHostDeps = {}
+  deps: RelayHostDeps
 ): RelayHost {
   const url = deps.url ?? RELAY_URL
   const connect = deps.connect ?? connectRelayHost
   const loadKeys = deps.loadKeys ?? loadOrCreatePeerKeyPair
   const mintToken = deps.mintToken ?? mintPairingToken
-  const isPremium = deps.isPremium ?? licenseIsPremium
   const relayAllowed = deps.relayAllowed ?? hostRelayAllowed
   const getEntitlement = deps.getEntitlement ?? getStoredEntitlement
   const licensedSeats = deps.licensedSeats ?? licenseSeats
@@ -101,7 +107,9 @@ export function initRelayHost(
   // peer-pending/open/close and revoke, so a stray IPC event can only ever act on the seat it names,
   // and a pending-never-connected seat is revocable from the moment it is minted. Replaces the old
   // dual `byId`/`pool` bookkeeping — one map keyed by the id the UI and revoke already use.
-  const byId = new Map<string, { session: RelayHostSession | null; email?: string }>()
+  const byId = new Map<string, { session: RelayHostSession | null; docker: DockerHostRuntime | null; email?: string }>()
+
+  ipcMain.handle(IPC.relayHostDockerContexts, () => discoverDockerContexts())
 
   function send(channel: string, ...args: unknown[]): void {
     if (!win.isDestroyed()) win.webContents.send(channel, ...args)
@@ -114,23 +122,18 @@ export function initRelayHost(
    * plus the seat's renderer `id`.
    */
   async function addSeat({ projectId, email }: AddSeatOptions): Promise<{ offer: string; id: string }> {
-    if (!isPremium()) {
-      throw new Error('Remote access requires nodeterm Pro.')
-    }
     if (!relayAllowed()) {
       throw new Error('Remote access is unavailable in development builds (set NODETERM_RELAY_URL).')
     }
-    const entitlement = getEntitlement()
-    if (!entitlement) {
-      throw new Error('No entitlement found — please re-activate nodeterm Pro.')
-    }
+    const entitlement = getEntitlement() ?? undefined
 
     // SEAT CAP + RESERVATION — atomic (no await between reading the count and reserving). The count is
     // minted (reserved + pending + live) seats. This is HOST-SIDE / UX enforcement, NOT a
-    // server-guaranteed limit: a host that patched it out only cheats itself (it is paying for the
-    // seats). Real, un-bypassable enforcement is v2, server-side (the relay refuses the (seats+1)th
+    // server-guaranteed limit. Real enforcement is server-side (the relay refuses the (seats+1)th
     // bridge per account). Do NOT close others here — Team Access is ADDITIVE.
-    if (!canAcceptSeat(byId.size, licensedSeats())) {
+    // One encrypted Docker-host connection is free. Legacy paid seat metadata may raise the cap,
+    // but an absent entitlement must never collapse the free host path back to zero.
+    if (!canAcceptSeat(byId.size, Math.max(1, licensedSeats()))) {
       throw new Error(E_SEATS_FULL)
     }
     // Reserve the seat SYNCHRONOUSLY — with a revocable id — before any await, so two concurrent
@@ -138,9 +141,20 @@ export function initRelayHost(
     // pending-never-connected seat is revocable from the moment it's minted (Finding 2). `session` is
     // filled in once `connect()` wires the listener below.
     const rendererId = randomUUID()
-    byId.set(rendererId, { session: null, email })
+    byId.set(rendererId, { session: null, docker: null, email })
 
     try {
+      if (!projectId) throw new Error('Choose a local project before starting Docker host.')
+      const dockerConfig = deps.dockerSettingsFor(projectId)
+      if (!dockerConfig) throw new Error('The selected project has no local Docker workspace.')
+      const startDocker = deps.startDocker ?? startDockerHostRuntime
+      const docker = await startDocker(dockerConfig.settings, dockerConfig.cwd)
+      const reservation = byId.get(rendererId)
+      if (!reservation) {
+        await docker.stop()
+        throw new Error('Docker host start was cancelled.')
+      }
+      reservation.docker = docker
       // A locked keyring surfaces here as a rejected invite (PeerKeyLockedError / E_PEER_KEY_LOCKED):
       // the identity on disk is intact and must not be rotated — the renderer tells the human to unlock.
       const keys = await loadKeys()
@@ -154,6 +168,7 @@ export function initRelayHost(
         transport: deps.transport,
         // The single project this hosting session shares with the peer. Absent → unscoped, as before.
         sharedProjectId: projectId,
+        docker: { context: docker.context, containerName: docker.containerName },
         // The SAS is known — ask the human to compare it. NOTHING is served yet. Reuse the reserved
         // id (do NOT mint a fresh one) so onOpen/onClose/revoke all name the same seat.
         onPeerPending: (s) => {
@@ -172,7 +187,9 @@ export function initRelayHost(
         },
         // The relay socket dropped (the peer is already torn down when this fires). Free the seat.
         onClose: () => {
+          const removed = byId.get(rendererId)
           byId.delete(rendererId)
+          void removed?.docker?.stop()
           send(IPC.relayHostClosed, { id: rendererId })
         }
       })
@@ -181,7 +198,10 @@ export function initRelayHost(
       // entry is gone — don't leak a live listener; close it.
       const entry = byId.get(rendererId)
       if (entry) entry.session = session
-      else session.close()
+      else {
+        session.close()
+        await docker.stop()
+      }
 
       return {
         offer: encodeOffer({
@@ -194,7 +214,9 @@ export function initRelayHost(
     } catch (err) {
       // Mint/keyring/connect failed after we reserved the slot — roll the reservation back so a failed
       // invite doesn't leak a seat.
+      const removed = byId.get(rendererId)
       byId.delete(rendererId)
+      void removed?.docker?.stop()
       throw err
     }
   }
@@ -241,11 +263,15 @@ export function initRelayHost(
     // drop, not a local close), so free the seat and notify the renderer here.
     if (peerKeyB64) killRelayHostsByPeerKey(peerKeyB64)
     byId.delete(msg.id!)
+    void entry.docker?.stop()
     send(IPC.relayHostClosed, { id: msg.id })
   })
 
   const stop = (): void => {
-    for (const { session } of byId.values()) session?.close()
+    for (const { session, docker } of byId.values()) {
+      session?.close()
+      void docker?.stop()
+    }
     byId.clear()
   }
 

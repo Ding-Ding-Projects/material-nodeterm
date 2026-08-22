@@ -12,11 +12,18 @@
 // same node-auth-secret.ts convention the rest of the app already uses).
 
 import type { OtpAlgorithm } from './otp'
+import type { LadderAnswer, LadderChallenge, LadderVerdict } from './unlock-ladder-types'
 
 /** What kind of on-screen thing a lock is attached to. The engine is generic; today's shipped
  *  integrations are a project tab, a canvas node, and one appearance control (Settings →
- *  Appearance → Accent) — see docs/toy-locks.md for how to wire up another target kind. */
-export type ToyLockTargetKind = 'tab' | 'node' | 'appearance'
+ *  Appearance → Accent) — see docs/toy-locks.md for how to wire up another target kind.
+ *
+ *  `'group'` is a canvas GROUP FRAME. It gates the frame's own structural actions — ungroup,
+ *  remove, rename, recolour — and says so on the label pill. It deliberately does NOT hide the
+ *  nodes inside the frame: those are separate objects with their own locks, and pretending
+ *  otherwise would be the one thing a toy lock must never do, which is claim to protect something
+ *  it does not. */
+export type ToyLockTargetKind = 'tab' | 'node' | 'group' | 'appearance'
 
 /** A lockable thing. `id` is whatever identifier the target kind uses natively (a project id, a
  *  node id, a stable setting key like `'accent'`); `label` is a human-readable name captured at
@@ -211,4 +218,37 @@ export type NodeLockTeardownMode = 'release-client' | 'detach-view-only'
  */
 export function nodeLockTeardownMode(sessionPersistent: boolean): NodeLockTeardownMode {
   return sessionPersistent ? 'release-client' : 'detach-view-only'
+}
+
+// ---- The unlock ladder (docs/unlock-ladder.md) ---------------------------------------------
+//
+// A wrong toy-lock attempt earns an escalating WAIT (see toylock-service.ts's rate limiter).
+// Rather than leave the user watching a countdown, the same ladder the Server Edition's lockout
+// screen offers is offered here: dim sum -> ten easy sums -> whack-a-mole. Clearing a rung ends
+// the WAIT and nothing else -- no credential is supplied, no attempt is refunded, and the next
+// wrong attempt still waits longer than the last one. Under School mode the dim-sum rung is
+// absent (not disabled-with-a-message), exactly as the server-side ladder requires.
+
+export interface ToyLockLadderState {
+  /** Null when the ladder is not on offer at all (no wait in effect, budget spent, or this
+   *  lockout's climb has already been failed to the bottom). */
+  challenge: LadderChallenge | null
+  /** Clears still available in the rolling hour. Shown so the offer never looks unlimited. */
+  budgetLeft: number
+}
+
+/** What the renderer sends to grade one rung. `lockId` scopes the climb: every lock owns its own
+ *  ladder, exactly as every lock owns its own credential -- clearing one lock's wait says nothing
+ *  about any other lock. */
+export interface ToyLockLadderVerifyInput {
+  lockId: string
+  answer: LadderAnswer
+}
+
+export interface ToyLockLadderVerifyResult extends LadderVerdict {
+  /** The next challenge to draw, already issued -- saves a round trip after a wrong rung, and
+   *  means the renderer can never render a rung the engine has moved on from. Null when the climb
+   *  is over (cleared, exhausted, or out of budget). */
+  challenge: LadderChallenge | null
+  budgetLeft: number
 }

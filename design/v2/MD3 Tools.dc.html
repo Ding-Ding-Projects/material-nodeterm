@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..700,0..1,0" rel="stylesheet">
+<link rel="stylesheet" href="md3/tokens.css">
+<style>
+  body { margin:0; background:#0A090D; }
+  a { color:var(--md-primary); text-decoration:none; }
+  a:hover { color:var(--md-on-primary-container); }
+  .msr { font-family:'Material Symbols Rounded'; font-weight:400; font-style:normal; line-height:1;
+         letter-spacing:normal; display:inline-block; white-space:nowrap; direction:ltr;
+         font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24; }
+  .msrf { font-variation-settings:'FILL' 1,'wght' 500,'GRAD' 0,'opsz' 24; }
+</style>
+</helmet>
+
+<div style="font-family:var(--md-font-ui);padding:36px;display:flex;flex-direction:column;gap:14px;color:#E6E0E9">
+  <div style="display:flex;align-items:flex-end;gap:16px">
+    <div>
+      <div style="font-size:21px;font-weight:600">Tools · Material 3 rewrite</div>
+      <div style="font-size:13px;color:#938F99;margin-top:2px">Ollama manager · file converter · authenticator &amp; toy locks · exports — <a href="MD3 Canvas.dc.html">Canvas</a> · <a href="MD3 History.dc.html">History</a></div>
+    </div>
+    <div style="flex:1"></div>
+    <button onClick="{{ toggleTheme }}" style="display:flex;align-items:center;gap:8px;height:40px;padding:0 20px;border-radius:999px;border:1px solid #49454F;background:transparent;color:#E6E0E9;font-family:inherit;font-size:14px;font-weight:500;cursor:pointer"><span class="msr" style="font-size:18px">contrast</span>{{ themeLabel }}</button>
+  </div>
+
+<div style="width:1440px;height:900px;border-radius:28px;overflow:hidden;position:relative;background:var(--md-surface);color:var(--md-on-surface);display:flex;flex-direction:column;outline:1px solid var(--md-outline-variant)">
+
+  <div style="height:64px;flex:0 0 64px;display:flex;align-items:center;gap:14px;padding:0 20px 0 16px;background:var(--md-surface-container)">
+    <div style="display:flex;gap:8px"><div style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></div><div style="width:12px;height:12px;border-radius:50%;background:#febc2e"></div><div style="width:12px;height:12px;border-radius:50%;background:#28c840"></div></div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div style="width:38px;height:38px;border-radius:14px;background:var(--md-primary-container);color:var(--md-on-primary-container);display:flex;align-items:center;justify-content:center"><span class="msr msrf" style="font-size:22px">hub</span></div>
+      <div style="font-size:17px;font-weight:600">nodeterm</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;width:260px;height:40px;padding:0 8px 0 16px;border-radius:999px;background:var(--md-surface-container-high);color:var(--md-on-surface-variant);margin-left:6px">
+      <span class="msr" style="font-size:18px">search</span>
+      <input value="{{ q }}" onChange="{{ setQ }}" placeholder="Filter this tool…" style="flex:1;min-width:0;border:none;background:transparent;color:var(--md-on-surface);font-family:inherit;font-size:13px;outline:none">
+      <span style="font-family:var(--md-font-mono);font-size:10.5px;padding:3px 7px;border-radius:7px;background:var(--md-surface-container-highest);cursor:pointer">.*</span>
+    </div>
+    <div style="flex:1"></div>
+    <sc-for list="{{ toolTabs }}" as="t" hint-placeholder-count="4">
+      <span onClick="{{ t.go }}" style="display:flex;align-items:center;gap:8px;height:36px;padding:0 16px;border-radius:999px;border:1px solid {{ t.bd }};background:{{ t.bg }};color:{{ t.fg }};font-size:13px;font-weight:600;cursor:pointer"><span class="msr" style="font-size:17px">{{ t.icon }}</span>{{ t.label }}</span>
+    </sc-for>
+  </div>
+
+  <div style="flex:1;display:flex;min-height:0">
+    <div style="width:88px;flex:0 0 88px;background:var(--md-surface-container);display:flex;flex-direction:column;align-items:center;padding:10px 0 14px;gap:2px;overflow:hidden">
+      <button style="width:56px;height:56px;border-radius:16px;border:none;background:var(--md-primary-container);color:var(--md-on-primary-container);cursor:pointer;display:flex;align-items:center;justify-content:center;margin-bottom:10px"><span class="msr" style="font-size:26px">add</span></button>
+      <sc-for list="{{ rail }}" as="r" hint-placeholder-count="8">
+        <a href="{{ r.href }}" style="display:flex;flex-direction:column;align-items:center;gap:3px;width:80px;padding:4px 0;color:inherit">
+          <span style="width:56px;height:30px;border-radius:999px;background:{{ r.pill }};color:{{ r.fg }};display:flex;align-items:center;justify-content:center"><span class="msr {{ r.fill }}" style="font-size:21px">{{ r.icon }}</span></span>
+          <span style="font-size:11px;font-weight:{{ r.weight }};color:{{ r.labelFg }}">{{ r.label }}</span>
+        </a>
+      </sc-for>
+    </div>
+
+    <div data-screen-label="Tools" style="flex:1;min-width:0;overflow-y:auto;padding:24px 28px;display:flex;flex-direction:column;gap:16px">
+
+      <sc-if value="{{ isOllama }}" hint-placeholder-val="{{ true }}">
+      <div>
+        <div style="font-size:24px;font-weight:600">Ollama suite manager</div>
+        <div style="font-size:13px;color:var(--md-on-surface-variant);margin-top:3px">Model browsing, hardware-fit verdicts against this machine (32 GB RAM · 12 GB VRAM), and local chat.</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <sc-for list="{{ models }}" as="m" hint-placeholder-count="3">
+          <div style="border-radius:24px;background:var(--md-surface-container-low);padding:16px 20px;display:flex;align-items:center;gap:16px">
+            <div style="width:44px;height:44px;border-radius:14px;background:var(--md-secondary-container);color:var(--md-on-secondary-container);display:flex;align-items:center;justify-content:center"><span class="msr" style="font-size:22px">memory</span></div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:15px;font-weight:600;font-family:var(--md-font-mono)">{{ m.name }}</div>
+              <div style="font-size:12.5px;color:var(--md-on-surface-variant);margin-top:2px">{{ m.meta }}</div>
+            </div>
+            <span style="display:flex;align-items:center;gap:7px;height:30px;padding:0 13px;border-radius:999px;background:{{ m.fitBg }};color:{{ m.fitFg }};font-size:12px;font-weight:700"><span class="msr" style="font-size:16px">{{ m.fitIcon }}</span>{{ m.fit }}</span>
+            <button style="display:flex;align-items:center;gap:7px;height:38px;padding:0 18px;border-radius:999px;border:none;background:{{ m.btnBg }};color:{{ m.btnFg }};font-family:inherit;font-size:13px;font-weight:600;cursor:pointer"><span class="msr" style="font-size:16px">{{ m.btnIcon }}</span>{{ m.btn }}</button>
+          </div>
+        </sc-for>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ isConverter }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <div style="font-size:24px;font-weight:600">File converter</div>
+        <div style="font-size:13px;color:var(--md-on-surface-variant);margin-top:3px">Offline, categorized queue. Lossy formats disclose before running; unsupported inputs say so.</div>
+      </div>
+      <div style="display:flex;gap:16px;min-height:0">
+        <div style="width:250px;flex:0 0 250px;display:flex;flex-direction:column;gap:2px">
+          <sc-for list="{{ convCats }}" as="c" hint-placeholder-count="6">
+            <div style="display:flex;align-items:center;gap:12px;height:42px;padding:0 16px;border-radius:999px;background:{{ c.bg }};color:{{ c.fg }};font-size:13px;font-weight:{{ c.weight }};cursor:pointer">
+              <span class="msr {{ c.fill }}" style="font-size:19px">{{ c.icon }}</span><span style="flex:1">{{ c.label }}</span>
+              <span style="font-size:11.5px;color:var(--md-on-surface-variant)">{{ c.n }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:10px">
+          <div style="border:2px dashed var(--md-outline-variant);border-radius:24px;padding:26px;display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--md-on-surface-variant)">
+            <span class="msr" style="font-size:32px">upload_file</span>
+            <div style="font-size:13.5px;font-weight:600">Drop files to convert</div>
+          </div>
+          <sc-for list="{{ convQueue }}" as="q" hint-placeholder-count="4">
+            <div style="border-radius:16px;background:var(--md-surface-container-low);padding:12px 16px;display:flex;align-items:center;gap:14px">
+              <span class="msr" style="font-size:20px;color:{{ q.fg }}">{{ q.icon }}</span>
+              <div style="flex:1;font-size:13.5px;font-weight:600;font-family:var(--md-font-mono)">{{ q.name }}</div>
+              <span style="font-size:12px;color:var(--md-on-surface-variant)">{{ q.from }} → {{ q.to }}</span>
+              <span style="height:26px;padding:0 12px;border-radius:999px;background:{{ q.bg }};color:{{ q.fg }};font-size:11px;font-weight:700;display:flex;align-items:center">{{ q.state }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ isAuth }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <div style="font-size:24px;font-weight:600">Authenticator &amp; toy locks</div>
+        <div style="font-size:13px;color:var(--md-on-surface-variant);margin-top:3px">Offline TOTP with in-process QR pairing. Toy locks are a speed bump, never security.</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <sc-for list="{{ totps }}" as="t" hint-placeholder-count="3">
+            <div style="border-radius:24px;background:var(--md-surface-container-low);padding:16px 20px;display:flex;align-items:center;gap:16px">
+              <div style="width:44px;height:44px;border-radius:50%;background:{{ t.bg }};color:{{ t.fg }};font-size:18px;font-weight:700;display:flex;align-items:center;justify-content:center">{{ t.initial }}</div>
+              <div style="flex:1">
+                <div style="font-size:14px;font-weight:600">{{ t.issuer }}</div>
+                <div style="font-size:12px;color:var(--md-on-surface-variant)">{{ t.account }}</div>
+              </div>
+              <div style="font-size:24px;font-weight:700;font-family:var(--md-font-mono);letter-spacing:2px">{{ t.code }}</div>
+              <span style="width:32px;height:32px;border-radius:50%;background:conic-gradient(var(--md-primary) {{ t.rot }}, var(--md-surface-container-highest) 0)"></span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="border-radius:24px;background:var(--md-surface-container-low);padding:18px 20px;display:flex;flex-direction:column;gap:4px">
+          <div style="font-size:12px;font-weight:700;letter-spacing:.6px;color:var(--md-on-surface-variant);padding-bottom:8px">TOY LOCKS · session-scoped</div>
+          <sc-for list="{{ locks }}" as="l" hint-placeholder-count="3">
+            <div style="display:flex;align-items:center;gap:14px;min-height:52px;padding:4px 2px">
+              <span class="msr" style="font-size:20px;color:var(--md-tertiary)">{{ l.icon }}</span>
+              <div style="flex:1">
+                <div style="font-size:13.5px;font-weight:600">{{ l.target }}</div>
+                <div style="font-size:12px;color:var(--md-on-surface-variant)">{{ l.kind }}</div>
+              </div>
+              <button style="height:32px;padding:0 14px;border-radius:999px;border:1px solid var(--md-outline);background:transparent;color:var(--md-on-surface);font-family:inherit;font-size:12px;font-weight:600;cursor:pointer">Unlock</button>
+            </div>
+          </sc-for>
+          <button style="margin-top:8px;height:38px;border-radius:999px;border:1px dashed var(--md-outline);background:transparent;color:var(--md-on-surface-variant);font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer">+ Lock a surface</button>
+        </div>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ isExports }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <div style="font-size:24px;font-weight:600">Exports</div>
+        <div style="font-size:13px;color:var(--md-on-surface-variant);margin-top:3px">Settings, notification history and local history in every format. Lossy formats disclose before downloading.</div>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <sc-for list="{{ formats }}" as="f" hint-placeholder-count="10">
+          <span style="display:flex;align-items:center;gap:7px;height:36px;padding:0 16px;border-radius:8px;border:1px solid {{ f.bd }};background:{{ f.bg }};color:{{ f.fg }};font-size:13px;font-weight:600;font-family:var(--md-font-mono);cursor:pointer">{{ f.f }}<sc-if value="{{ f.lossy }}" hint-placeholder-val="{{ false }}"><span class="msr" style="font-size:15px;color:var(--md-warning)">warning</span></sc-if></span>
+        </sc-for>
+      </div>
+      <div style="border-radius:24px;background:var(--md-warning-container);color:var(--md-on-warning-container);padding:16px 20px;display:flex;align-items:center;gap:14px;width:640px">
+        <span class="msr msrf" style="font-size:24px">warning</span>
+        <div style="flex:1;font-size:13px;line-height:1.5">CSV cannot represent nested settings — they will be flattened. Download anyway?</div>
+        <button style="height:36px;padding:0 16px;border-radius:999px;border:none;background:var(--md-on-warning-container);color:var(--md-warning-container);font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer">Download anyway</button>
+      </div>
+      <div style="border-radius:24px;background:var(--md-surface-container-low);padding:16px 20px;display:flex;align-items:center;gap:14px;width:640px">
+        <span class="msr" style="font-size:22px;color:var(--md-primary)">checklist</span>
+        <div style="flex:1;font-size:13px;color:var(--md-on-surface-variant)"><b style="color:var(--md-on-surface)">4 items will change.</b> Bulk actions require this reviewable preview plus a second confirm.</div>
+        <button style="height:36px;padding:0 16px;border-radius:999px;border:none;background:var(--md-error);color:var(--md-on-error);font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer">Remove selected</button>
+      </div>
+      </sc-if>
+    </div>
+  </div>
+</div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1520,&quot;height&quot;:1040},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dark&quot;,&quot;light&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;'dark' | 'light'&quot;,&quot;section&quot;:&quot;Appearance&quot;}}">
+class Component extends DCLogic {
+  state = { theme: 'dark', tool: 'ollama', q: '' };
+  match(txt) { const q = this.state.q.toLowerCase(); return !q || txt.toLowerCase().includes(q); }
+  componentDidMount() { this.applyTheme(); }
+  componentDidUpdate() { this.applyTheme(); }
+  applyTheme() { document.documentElement.dataset.theme = this.props.theme ?? this.state.theme; }
+  renderVals() {
+    const s = this.state;
+    return {
+      themeLabel: (this.props.theme ?? s.theme) === 'dark' ? 'Dark' : 'Light',
+      toggleTheme: () => this.setState((p) => ({ theme: p.theme === 'dark' ? 'light' : 'dark' })),
+      isOllama: s.tool === 'ollama', isConverter: s.tool === 'converter',
+      isAuth: s.tool === 'auth', isExports: s.tool === 'exports',
+      toolTabs: [
+        ['ollama', 'memory', 'Ollama'],
+        ['converter', 'swap_horiz', 'Converter'],
+        ['auth', 'password', 'Authenticator & locks'],
+        ['exports', 'download', 'Exports']
+      ].map(([id, icon, label]) => {
+        const on = s.tool === id;
+        return { icon, label, go: () => this.setState({ tool: id }),
+          bg: on ? 'var(--md-secondary-container)' : 'transparent',
+          fg: on ? 'var(--md-on-secondary-container)' : 'var(--md-on-surface)',
+          bd: on ? 'transparent' : 'var(--md-outline)' };
+      }),
+      rail: [
+        ['workspaces', 'Canvas', 'MD3 Canvas.dc.html', false],
+        ['view_kanban', 'Board', 'MD3 Board.dc.html', false],
+        ['folder', 'Files', 'MD3 Files.dc.html', false],
+        ['construction', 'Tools', 'MD3 Tools.dc.html', true],
+        ['history', 'History', 'MD3 History.dc.html', false],
+        ['notifications', 'Alerts', 'MD3 Overlays.dc.html', false],
+        ['settings', 'Settings', 'MD3 Settings.dc.html', false]
+      ].map(([icon, label, href, on]) => ({
+        icon, label, href, fill: on ? 'msrf' : '',
+        pill: on ? 'var(--md-secondary-container)' : 'transparent',
+        fg: on ? 'var(--md-on-secondary-container)' : 'var(--md-on-surface-variant)',
+        labelFg: on ? 'var(--md-on-surface)' : 'var(--md-on-surface-variant)',
+        weight: on ? 600 : 500
+      })),
+      q: s.q,
+      setQ: (e) => this.setState({ q: e.target.value }),
+      models: [
+        { name: 'llama3.2:3b', meta: '2.0 GB · Meta · installed', fit: 'Comfortable', fitIcon: 'check_circle', fitBg: 'var(--md-success-container)', fitFg: 'var(--md-on-success-container)', btn: 'Chat', btnIcon: 'forum', btnBg: 'var(--md-primary)', btnFg: 'var(--md-on-primary)' },
+        { name: 'qwen2.5-coder:14b', meta: '9.0 GB · Alibaba · pulling 64%', fit: 'Tight fit', fitIcon: 'warning', fitBg: 'var(--md-warning-container)', fitFg: 'var(--md-on-warning-container)', btn: 'Cancel', btnIcon: 'close', btnBg: 'var(--md-surface-container-high)', btnFg: 'var(--md-on-surface)' },
+        { name: 'deepseek-r1:70b', meta: '43 GB · needs 48 GB VRAM', fit: 'Will not fit', fitIcon: 'block', fitBg: 'var(--md-error-container)', fitFg: 'var(--md-on-error-container)', btn: 'Add', btnIcon: 'add', btnBg: 'var(--md-surface-container-high)', btnFg: 'var(--md-on-surface-variant)' }
+      ].filter((m) => this.match(m.name + ' ' + m.meta)),
+      convCats: [
+        ['Structured data', 'data_object', 5, 1],
+        ['Text encodings', 'text_fields', 3, 0],
+        ['Markup', 'code', 2, 0],
+        ['Binary encodings', 'memory', 2, 0],
+        ['Compression', 'folder_zip', 2, 0],
+        ['Unsupported', 'block', 14, 0]
+      ].map(([label, icon, n, on]) => ({ label, icon, n, fill: on ? 'msrf' : '',
+        bg: on ? 'var(--md-secondary-container)' : 'transparent',
+        fg: on ? 'var(--md-on-secondary-container)' : 'var(--md-on-surface-variant)', weight: on ? 600 : 500 })),
+      convQueue: [
+        { name: 'hosts.yaml', from: 'YAML', to: 'JSON', state: 'Done', icon: 'check_circle', fg: 'var(--md-on-success-container)', bg: 'var(--md-success-container)' },
+        { name: 'catalog.json', from: 'JSON', to: 'TOML', state: 'Running', icon: 'sync', fg: 'var(--md-on-primary-container)', bg: 'var(--md-primary-container)' },
+        { name: 'notes.md', from: 'Markdown', to: 'HTML', state: 'Queued', icon: 'schedule', fg: 'var(--md-on-surface-variant)', bg: 'var(--md-surface-container-highest)' },
+        { name: 'scan.heic', from: 'HEIC', to: '—', state: 'Unsupported', icon: 'block', fg: 'var(--md-on-error-container)', bg: 'var(--md-error-container)' }
+      ].filter((x) => this.match(x.name + ' ' + x.from + ' ' + x.to + ' ' + x.state)),
+      totps: [
+        { issuer: 'GitHub', account: 'eneskirca', code: '481 902', initial: 'G', bg: 'var(--md-primary-container)', fg: 'var(--md-on-primary-container)', rot: '120deg' },
+        { issuer: 'Cloudflare', account: 'ops@nodeterm.dev', code: '730 155', initial: 'C', bg: 'var(--md-warning-container)', fg: 'var(--md-on-warning-container)', rot: '250deg' },
+        { issuer: 'Discord', account: 'status-bot', code: '206 344', initial: 'D', bg: 'var(--md-tertiary-container)', fg: 'var(--md-on-tertiary-container)', rot: '40deg' }
+      ].filter((t) => this.match(t.issuer + ' ' + t.account)),
+      locks: [
+        { target: 'ha-box tab', kind: 'Password · project tab', icon: 'tab' },
+        { target: 'Claude · refactor transport', kind: 'TOTP · canvas node', icon: 'workspaces' },
+        { target: 'Personal vocabulary', kind: 'Password · setting', icon: 'spellcheck' }
+      ],
+      formats: ['JSON', 'JSONL', 'YAML', 'TOML', 'XML', 'CSV', 'TSV', 'Markdown', 'HTML', 'SQL'].map((f, i) => {
+        const lossy = ['CSV', 'TSV', 'Markdown', 'HTML'].includes(f);
+        const on = f === 'CSV';
+        return { f, lossy,
+          bg: on ? 'var(--md-secondary-container)' : 'transparent',
+          fg: on ? 'var(--md-on-secondary-container)' : 'var(--md-on-surface)',
+          bd: on ? 'transparent' : 'var(--md-outline)' };
+      })
+    };
+  }
+}
+
+</script>
+</body>
+</html>

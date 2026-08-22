@@ -8,12 +8,14 @@
  * runner never launches an app directly and never falls back to the visible desktop or a kill.
  */
 import fs from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import net from 'node:net'
 import path from 'node:path'
 import process from 'node:process'
 import { spawnSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { parseArgs } from 'node:util'
+import { renameAtomicSync } from './lib/rename-atomic.mjs'
 
 const require = createRequire(import.meta.url)
 const {
@@ -94,11 +96,11 @@ function optionalAbsolute(name, fallback) {
 }
 
 function atomicJson(file, value) {
-  const temporary = `${file}.${process.pid}.tmp`
+  const temporary = `${file}.${randomUUID()}.tmp`
   fs.mkdirSync(path.dirname(file), { recursive: true })
   try {
     fs.writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`, { flag: 'wx' })
-    fs.renameSync(temporary, file)
+    renameAtomicSync(temporary, file)
   } catch (error) {
     try {
       fs.rmSync(temporary, { force: true })
@@ -276,11 +278,39 @@ async function execute(plan, options) {
     return validateCheapInvocation(result, tool)
   }
 
+  // The script goes in a FILE, never inline after -e.
+  //
+  // Measured against the real cheap route: `run_command` with shell:false does NOT preserve a
+  // quoted argument, so `node -e "<script>"` arrived mangled — node evaluated an inert string
+  // literal and exited 0 with EMPTY stdout. The probe read that as "returned no JSON" and the run
+  // died at cleanup, three captures in, with an error naming neither the cause nor the command.
+  // Proven both ways on this machine: the identical call with shell:true returns {"alive":true},
+  // and `cmd /c echo hello` with shell:false returns its output fine — it is specifically the
+  // quoted argument that is lost.
+  //
+  // shell:true would also fix it and is the WRONG fix: it routes the line through cmd.exe and
+  // reintroduces the injection surface this harness deliberately avoids. A file path carries no
+  // quotes, so nothing needs escaping and shell:false stays.
+  const livenessScript = path.join(options.taskRoot, 'process-alive.cjs')
+  let livenessScriptWritten = false
   const processAlive = (pid) => {
-    const script =
-      "let alive=true;try{process.kill(Number(process.argv[1]),0)}catch{alive=false}" +
-      "process.stdout.write(JSON.stringify({alive}))"
-    const command = [process.execPath, '-e', script, String(pid)].map(quoteWindowsArg).join(' ')
+    if (!livenessScriptWritten) {
+      fs.writeFileSync(
+        livenessScript,
+        [
+          'let alive = true',
+          'try {',
+          '  process.kill(Number(process.argv[2]), 0)',
+          '} catch {',
+          '  alive = false',
+          '}',
+          'process.stdout.write(JSON.stringify({ alive }))',
+          ''
+        ].join('\n')
+      )
+      livenessScriptWritten = true
+    }
+    const command = [process.execPath, livenessScript, String(pid)].map(quoteWindowsArg).join(' ')
     const payload = runCheap('run_command', { command, cwd: options.repoRoot, timeout: 15, shell: false }, 20)
     return parseJsonDocument(payload.stdout, `PID ${pid} liveness probe`).alive === true
   }

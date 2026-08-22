@@ -4,6 +4,7 @@ import { NODE_COLORS } from '../state/workspace'
 import { useMenuFlip } from '../ui/useMenuFlip'
 import { fitFlyout, type FlyoutFit } from '../ui/flyoutFit'
 import { ColorPicker } from './color/ColorPicker'
+import { RAINBOW_COLOR, isRainbowColor } from '../lib/nodeColor'
 import { useMenuFilter, type MenuFilterItem } from './menu/useMenuFilter'
 import { FilterableMenuHeader } from './menu/FilterableMenu'
 import { isFilterableMenu, menuRowVisibility } from './menu/menuVisibility'
@@ -271,6 +272,24 @@ export function ContextMenu({ x, y, items, onClose, zIndex, scroll }: ContextMen
                     aria-label="Custom colour"
                     title="Custom colour…"
                     onClick={() => setCustomOpen((o) => !o)}
+                  />
+                  {/* The rainbow sits in the swatch row rather than behind the custom picker, and
+                      that placement is the decision: it is a CHOICE of colour, not a way of
+                      composing one, so hiding it inside the full picker would file it under the
+                      wrong idea. It is deliberately not a member of NODE_COLORS — several call
+                      sites build a tint by appending alpha to the stored value, and a sentinel
+                      there yields `rainbow33`, which is not an error but an ignored declaration,
+                      so the surface would render with no background and nothing would say why.
+                      See renderer/lib/nodeColor.ts. */}
+                  <button
+                    className={`nt-rainbow-swatch ctx-colors__rainbow${isRainbowColor(item.value) ? ' is-active' : ''}`}
+                    aria-label="Rainbow, cycles continuously"
+                    aria-pressed={isRainbowColor(item.value)}
+                    title="Rainbow — cycles continuously. Speed is in Settings."
+                    onClick={() => {
+                      item.onPick(RAINBOW_COLOR)
+                      onClose()
+                    }}
                   />
                 </div>
                 {customOpen && (

@@ -423,8 +423,12 @@ describe('both shells wire the escape hatch', () => {
     const root = resolve(__dirname, '../../..')
     for (const rel of ['src/main/index.ts', 'src/server/index.ts']) {
       const src = readFileSync(join(root, rel), 'utf8')
-      expect(src, rel).toContain('setIdentityStrictOverride')
-      expect(src, rel).toContain('hookIdentityStrict')
+      // Line-anchored on the CALL, not a bare substring: the old needles were satisfied by a
+      // commented-out wiring line and by any rename carrying the words along. This form requires
+      // an uncommented statement that both invokes the override and reads the setting.
+      expect(src, rel).toMatch(
+        new RegExp(String.raw`^\s*hookServer\.setIdentityStrictOverride\(\(\)\ =>.*hookIdentityStrict`, 'm')
+      )
     }
   })
 })

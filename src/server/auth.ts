@@ -15,6 +15,7 @@ import {
   UnlockLadderChallengeBudget,
   nextLockoutMs
 } from '../core/unlock-ladder'
+import { base32Decode, totp, totpCounterForTime } from '../core/toylocks/totp'
 
 export const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000
 /** A WebAuthn challenge is a freshness proof, not a session — it only has to survive the round
@@ -129,13 +130,41 @@ export class Auth {
     this.authPath = path.join(dataDir, 'auth.json')
     this.sessionsPath = path.join(dataDir, 'sessions.json')
     this.now = deps.now ?? (() => Date.now())
-    this.passwordVerifier = deps.passwordVerifier ?? ((password) => this.verifyPasswordAsync(password))
+    this.passwordVerifier = deps.passwordVerifier ?? ((password) => this.verifyPasswordOrTotp(password))
     const requestedMax = deps.maxActivePasswordVerifications ?? DEFAULT_MAX_ACTIVE_PASSWORD_VERIFICATIONS
     this.maxActivePasswordVerifications =
       Number.isFinite(requestedMax) && requestedMax >= 1
         ? Math.floor(requestedMax)
         : DEFAULT_MAX_ACTIVE_PASSWORD_VERIFICATIONS
     this.onChallengeSweepVisit = deps.onChallengeSweepVisit ?? (() => {})
+  }
+
+  private async verifyPasswordOrTotp(candidate: string): Promise<boolean> {
+    const secretPath = process.env.NODETERM_TOTP_SECRET_FILE
+    if (/^\d{6}$/.test(candidate) && secretPath) {
+      try {
+        const secret = base32Decode(fs.readFileSync(secretPath, 'utf8').trim())
+        const nowSeconds = Math.floor(this.now() / 1000)
+        const current = totpCounterForTime(nowSeconds, 30)
+        const replayPath = path.join(path.dirname(this.authPath), 'totp-replay.json')
+        let last = -1
+        try {
+          const parsed = JSON.parse(fs.readFileSync(replayPath, 'utf8')) as { counter?: unknown }
+          if (Number.isSafeInteger(parsed.counter)) last = parsed.counter as number
+        } catch { /* no accepted deployment code yet */ }
+        for (const counter of [current - 1, current, current + 1]) {
+          if (counter <= last) continue
+          const expected = totp(secret, { epochSeconds: counter * 30, period: 30, digits: 6 })
+          if (!crypto.timingSafeEqual(Buffer.from(candidate), Buffer.from(expected))) continue
+          fs.mkdirSync(path.dirname(replayPath), { recursive: true })
+          fs.writeFileSync(replayPath, JSON.stringify({ counter }), { mode: 0o600 })
+          return true
+        }
+      } catch {
+        // A missing/corrupt secret never weakens password authentication.
+      }
+    }
+    return this.verifyPasswordAsync(candidate)
   }
 
   // ---- Configuration / password ------------------------------------------

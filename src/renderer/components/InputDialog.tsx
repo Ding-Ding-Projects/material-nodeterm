@@ -9,6 +9,13 @@ interface InputDialogProps {
   placeholder?: string
   confirmLabel?: string
   cancelLabel?: string
+  /** Mask the input and turn off every convenience that would leak the value: a password typed
+   *  here is a real credential (it opens an encrypted project file), so it must not be spell
+   *  checked, autofilled, or offered as an autocomplete suggestion later. */
+  password?: boolean
+  /** Shown under the input in the error colour — a failed attempt, so the dialog stays open with
+   *  the reason in it rather than closing and reporting elsewhere. */
+  error?: string
   onSubmit: (value: string) => void
   onCancel: () => void
 }
@@ -24,6 +31,8 @@ export function InputDialog({
   placeholder,
   confirmLabel = 'OK',
   cancelLabel = 'Cancel',
+  password = false,
+  error,
   onSubmit,
   onCancel
 }: InputDialogProps) {
@@ -50,6 +59,8 @@ export function InputDialog({
         <input
           ref={inputRef}
           className="confirm__input"
+          type={password ? 'password' : 'text'}
+          autoComplete={password ? 'off' : undefined}
           value={value}
           placeholder={vocab(placeholder)}
           spellCheck={false}
@@ -64,6 +75,11 @@ export function InputDialog({
             }
           }}
         />
+        {error ? (
+          <p className="confirm__error" role="alert">
+            {vocab(error)}
+          </p>
+        ) : null}
         <div className="confirm__actions">
           <button className="confirm__btn" onClick={onCancel}>
             {vocab(cancelLabel)}

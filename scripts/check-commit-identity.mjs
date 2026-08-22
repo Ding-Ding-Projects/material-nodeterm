@@ -23,18 +23,22 @@
 import { execFileSync } from 'node:child_process'
 import { reservedAddress } from './reserved-identity.mjs'
 
-const range = process.argv[2]
-if (!range) {
-  console.error('usage: check-commit-identity.mjs <rev-range>')
+const rangeArgs = process.argv.slice(2)
+if (rangeArgs.length === 0) {
+  console.error('usage: check-commit-identity.mjs <rev-range-or-arguments...>')
   process.exit(2)
 }
 
 let out = ''
 try {
-  out = execFileSync('git', ['log', '--format=%H%x1f%an%x1f%ae%x1f%cn%x1f%ce', range], {
+  out = execFileSync(
+    'git',
+    ['log', '--format=%H%x1f%an%x1f%ae%x1f%cn%x1f%ce', ...rangeArgs],
+    {
     encoding: 'utf8',
     maxBuffer: 8 * 1024 * 1024
-  })
+    }
+  )
 } catch {
   // An unreadable range is not evidence of a bad identity; say so rather than blocking a push on it.
   console.warn('commit identity: could not read the range, skipping')

@@ -57,7 +57,7 @@
   <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
     <div>
       <div style="font-size:22px;font-weight:700;letter-spacing:-.2px">nodeterm — Material 3 Expressive</div>
-      <div style="font-size:13px;color:#8D9199;margin-top:2px">Full UI rewrite · kids mode · every @uh feature surfaced</div>
+      <div style="font-size:13px;color:#8D9199;margin-top:2px">Full UI rewrite · kids mode · every memory feature surfaced</div>
     </div>
     <div style="flex:1"></div>
     <div style="display:flex;gap:8px;align-items:center">
@@ -400,13 +400,13 @@
       </div>
       </sc-if>
 
-      <!-- ══ @uh HUB ══ -->
+      <!-- ══ MEMORY HUB ══ -->
       <sc-if value="{{ isUh }}" hint-placeholder-val="{{ false }}">
       <div style="position:absolute;inset:0;display:flex">
         <div style="width:268px;flex:0 0 268px;background:var(--sc);padding:22px 12px;display:flex;flex-direction:column;gap:4px;overflow:hidden">
           <div style="padding:0 12px 16px">
-            <div style="font-size:20px;font-weight:600;letter-spacing:-.2px">@uh</div>
-            <div style="font-size:12.5px;color:var(--on-surface-var);margin-top:3px">agent-global-memory · 43 features</div>
+            <div style="font-size:20px;font-weight:600;letter-spacing:-.2px">Memory</div>
+            <div style="font-size:12.5px;color:var(--on-surface-var);margin-top:3px">Knowledge base · 43 features</div>
           </div>
           <sc-for list="{{ uhCats }}" as="c" hint-placeholder-count="5">
             <div onClick="{{ c.go }}" style="display:flex;align-items:center;gap:14px;height:52px;padding:0 16px;border-radius:999px;background:{{ c.bg }};color:{{ c.fg }};font-size:14px;font-weight:{{ c.weight }};cursor:pointer">
@@ -1308,7 +1308,7 @@ class Component extends DCLogic {
       ['board', 'view_kanban', 'Board'],
       ['files', 'folder', 'Files'],
       ['history', 'history', 'History'],
-      ['uh', 'database', '@uh'],
+      ['uh', 'database', 'Memory'],
       ['tools', 'construction', 'Tools'],
       ['panels', 'widgets', 'Panels'],
       ['notif', 'notifications', 'Alerts'],
@@ -1543,7 +1543,7 @@ class Component extends DCLogic {
 
       tabs: [
         { name: 'nodeterm', dot: 'var(--primary)', bg: 'var(--sc-lowest)', fg: 'var(--on-surface)', weight: 600, badge: '2' },
-        { name: 'agent-global-memory', dot: 'var(--tertiary)', bg: 'transparent', fg: 'var(--on-surface-var)', weight: 500, badge: '' },
+        { name: 'knowledge-base', dot: 'var(--tertiary)', bg: 'transparent', fg: 'var(--on-surface-var)', weight: 500, badge: '' },
         { name: 'ha-box · SSH', dot: 'var(--success)', bg: 'transparent', fg: 'var(--on-surface-var)', weight: 500, badge: '' }
       ],
       barIcons: [
@@ -1675,7 +1675,7 @@ class Component extends DCLogic {
       notifs: [
         { title: 'Codex needs you', body: 'Permission prompt on ha-box · migrate iOS protocol', time: 'now', icon: 'pan_tool', iconBg: 'var(--error-container)', iconFg: 'var(--on-error-container)', bg: 'var(--sc)', unread: true },
         { title: 'Turn complete', body: 'Claude finished refactoring the transport seam', time: '2 min', icon: 'task_alt', iconBg: 'var(--success-container)', iconFg: 'var(--on-success-container)', bg: 'var(--sc)', unread: true },
-        { title: 'Memory synced', body: '@uh attestation valid · 3 skills updated', time: '4 min', icon: 'sync_alt', iconBg: 'var(--primary-container)', iconFg: 'var(--on-primary-container)', bg: 'var(--sc)', unread: true },
+        { title: 'Memory synced', body: 'Attestation valid · 3 skills updated', time: '4 min', icon: 'sync_alt', iconBg: 'var(--primary-container)', iconFg: 'var(--on-primary-container)', bg: 'var(--sc)', unread: true },
         { title: 'Restart to update', body: 'nodeterm 0.9.5 downloaded from the self-hosted feed', time: '1 h', icon: 'system_update', iconBg: 'var(--tertiary-container)', iconFg: 'var(--on-tertiary-container)', bg: 'var(--sc)', unread: false },
         { title: 'Phone paired', body: 'iPhone 16 Pro attached to nt-claude-3 over the relay', time: '3 h', icon: 'smartphone', iconBg: 'var(--secondary-container)', iconFg: 'var(--on-secondary-container)', bg: 'var(--sc)', unread: false },
         { title: 'Runner offline', body: 'self-hosted runner ha-box-2 dropped; cloud fallback used', time: '5 h', icon: 'dns', iconBg: 'var(--warning-container)', iconFg: 'var(--on-warning-container)', bg: 'var(--sc)', unread: false }
@@ -1719,7 +1719,7 @@ class Component extends DCLogic {
         { label: 'New Claude — work@ha', sub: 'Managed account', icon: 'account_circle', iconBg: 'var(--secondary-container)', iconFg: 'var(--on-secondary-container)', bg: 'transparent', kbd: '' },
         { label: 'New terminal', sub: 'zsh · persistent tmux session', icon: 'terminal', iconBg: 'var(--secondary-container)', iconFg: 'var(--on-secondary-container)', bg: 'transparent', kbd: '⌘T' },
         { label: 'Toggle kanban board', sub: 'Same project, other view', icon: 'view_kanban', iconBg: 'var(--secondary-container)', iconFg: 'var(--on-secondary-container)', bg: 'transparent', kbd: '⌘⇧B' },
-        { label: 'Open @uh memory console', sub: 'Search 1 284 memory documents', icon: 'database', iconBg: 'var(--tertiary-container)', iconFg: 'var(--on-tertiary-container)', bg: 'transparent', kbd: '' },
+        { label: 'Open memory console', sub: 'Search 1 284 memory documents', icon: 'database', iconBg: 'var(--tertiary-container)', iconFg: 'var(--on-tertiary-container)', bg: 'transparent', kbd: '' },
         { label: 'Switch to kids mode', sub: 'Guided home for 4–5 year olds', icon: 'child_care', iconBg: 'var(--tertiary-container)', iconFg: 'var(--on-tertiary-container)', bg: 'transparent', kbd: '' }
       ],
 

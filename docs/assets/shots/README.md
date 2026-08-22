@@ -21,6 +21,11 @@ Every image in this directory is a **real screen capture** — not a mockup, not
 hand-edited image, and not reused from anywhere upstream. There are two sets:
 
 - `site-*.png` — the live, deployed documentation/landing site.
+  Includes `site-screenshots-room.png` — the **Screenshots** room
+  (`site/app/features/screenshots.js`), captured from the DEPLOYED page at
+  <https://ding-ding-projects.github.io/material-nodeterm/> rather than a local server, at
+  1440px through a headless browser. It is the room that publishes the `app-*.png` set to the
+  site: 15 cards, all 15 images decoded, no horizontal scroll.
 - `app-*.png` — the **desktop Electron app**, captured from a real running build.
 
 The desktop set was blocked for most of this work and is no longer; the section
@@ -130,29 +135,46 @@ cropped, or otherwise edited after capture.
 
 | File | Surface | Verified by |
 | --- | --- | --- |
-| `app-01-launch.png` | First screen of the built app | `document.title === 'nodeterm'`, canvas present |
-| `app-02-settings.png` | Settings surface — sidebar nav, search + its regex affordance | rendered heading |
-| `app-03-palette.png` | Command palette | `.palette` present |
-| `app-settings-language.png` | Language modes + both funny-level sliders | heading `Language` |
-| `app-settings-narrator.png` | Narrator — per-language voice pickers, live status line | heading `Narrator` |
-| `app-settings-app-identity.png` | App rename + logo customization | heading `App name & logo` |
-| `app-settings-appearance-editor.png` | Per-element appearance editor | heading `Appearance editor` |
-| `app-settings-schedule.png` | Scheduled settings | heading `Schedule` |
-| `app-04-canvas.png` | A project on the canvas: one terminal node, the sessions sidebar, minimap and dock | project tab + `Terminal 1` in the sidebar |
-| `app-05-kanban.png` | The same project as a kanban board — the session as a card in Ungrouped | board columns rendered |
+| `app-01-launch.png` | First screen of the built app | `.md3-app-bar` present, and no kanban overlay |
+| `app-02-settings.png` | Settings surface — sidebar nav, search + its regex affordance | a `settings` class present |
+| `app-03-palette.png` | Command palette | a `palette` class present |
+| `app-04-canvas.png` | The project on the canvas: sessions sidebar, minimap, canvas actions | `.react-flow` present, and no kanban overlay |
+| `app-05-kanban.png` | The same project as a kanban board | a `kanban` class present |
+| `app-settings-kids-mode.png` | Settings → Kids mode — the shared switch and its disclosure | a `settings` class present |
+| `app-06-history.png` | History — session memory, settings history, changelog | `.md3-history-screen` present |
+| `app-settings-language.png` | Language modes + both funny-level sliders | a `settings` class present |
+| `app-settings-narrator.png` | Narrator — per-language voice pickers, live status line | a `settings` class present |
+| `app-settings-schedule.png` | Scheduled settings | a `settings` class present |
+| `app-settings-app-identity.png` | App rename + logo customization | a `settings` class present |
+| `app-settings-appearance-editor.png` | Per-element appearance editor | a `settings` class present |
+| `app-adhd-modes.png` | Settings → ADHD modes | a `settings` class present |
+| `app-windows-terminal-profiles.png` | The Windows terminal-profile picker, listing the profiles detected on this machine | the FAB menu relabelled `Choose terminal profile`, with the settings overlay absent |
+| `app-windows-terminal-profile-availability.png` | Settings → Shell — detected profiles, each Available or Unavailable with its reason | a reason span inside `#terminal-profile-availability`, which exists only on a row that is unavailable AND says why |
+| `app-kids-home.png` | Kids mode — Home | `.md3-kids-home` present |
+| `app-kids-gate.png` | Kids mode — the grown-up gate (the PIN pad) | `.md3-kids-pinpad` present |
+| `app-kids-parent.png` | Kids mode — the grown-up screen | `.md3-kids-parent` present |
 
-- **Captured from:** the Electron app running out of this working tree at commit `489c71eeb8cc9f831dd054d4cf608377c82921a3`.
-- **Route:** the cheap Lowlevel MCP headless desktop (`NodetermShots`) — the app ran with a
-  real GUI on an off-screen Win32 desktop, so the visible desktop, cursor and focus were
-  never touched. Frames were taken over the Chrome DevTools Protocol
-  (`--remote-debugging-port=9400` -> `Page.captureScreenshot`), which this repository's own
-  notes record as the route that works for an Electron target — `screenshot(hwnd=...)` does
-  not.
-- **Each shot is gated on the surface actually rendering.** The script reads back the panel's
-  own heading first and *skips* rather than shooting if it is absent, and refuses to shoot at
-  all while a palette or other overlay is on top. That check earned its keep immediately: the
-  first run of the settings-section batch produced five images with the command palette left
-  open over them from an earlier script. They were discarded and retaken, not shipped.
+- **Captured from:** whatever commit `capture-manifest.json` names, beside these files. The commit
+  is written per run rather than transcribed into prose here, because a hand-copied SHA is the one
+  part of a provenance record that silently stops being true — this line named `489c71ee`, which is
+  637 commits behind HEAD as of this edit.
+- **Route:** `npm run shots -- --launch` starts `node_modules/electron` on the built `out/` tree
+  itself, inside a disposable home and Electron profile it deletes afterwards, and takes frames
+  over the Chrome DevTools Protocol (`--remote-debugging-port=9222` -> `Page.captureScreenshot`).
+  CDP is used because this repository's notes record it as the route that works for an Electron
+  target. It is NOT the cheap Lowlevel MCP headless route, and nothing here should be read as
+  packaged-app evidence: the Windows terminal-profile contract row wants packaged captures taken
+  through that route (`scripts/windows-profile-packaged-driver.mjs`), which is exactly why the two
+  `app-windows-terminal-profile*` files above carry different ids from the ones that row requires.
+  `npm run shots -- --attach <port>` drives an already-running app instead.
+- **Each shot is gated on the surface actually rendering, and a REQUIRED one that never opened
+  fails the run.** Every entry names a selector that exists only on its own surface, and several
+  also name one that must be ABSENT, because the canvas stays mounted under the kanban overlay and
+  the settings page is `fixed inset-0` over everything. Skipping an unreachable surface — which is
+  what this harness used to do — is the thing rule 2 in `scripts/capture-shots.mjs` was written to
+  stop: a gap recorded in a manifest nobody opens lets a real defect through a green run. The check
+  earned its keep immediately: an early settings batch produced five images with the command
+  palette left open over them from an earlier script. They were discarded and retaken, not shipped.
 
 ## How the desktop app became capturable
 

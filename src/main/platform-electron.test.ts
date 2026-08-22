@@ -133,6 +133,10 @@ describe('electronPlatform + relay peers', () => {
       typeof method === 'string' && method.startsWith('authenticator:') ? [method] : []
     )
     expect(authenticatorMethods).toHaveLength(9)
+    const passwordManagerMethods: string[] = Object.values(IPC).flatMap((method) =>
+      typeof method === 'string' && method.startsWith('password-manager:') ? [method] : []
+    )
+    expect(passwordManagerMethods).toHaveLength(16)
     const denied = [
       IPC.settingsLoad,
       IPC.schoolModeDisable,
@@ -142,6 +146,7 @@ describe('electronPlatform + relay peers', () => {
       IPC.usageSetProviderCookie,
       IPC.toylockVerify,
       ...authenticatorMethods,
+      ...passwordManagerMethods,
       IPC.contextLinkInfo,
       IPC.transcriptSearch,
       IPC.handoffBuild,
@@ -162,6 +167,40 @@ describe('electronPlatform + relay peers', () => {
     // belongs only to the raw relay dispatch path; it must not disable the host's own UI.
     await h.handlers[IPC.authenticatorReveal]!({ sender: { id: 1 } }, 'entry-1')
     expect(reached).toEqual([IPC.authenticatorReveal])
+  })
+
+  // password-manager:reveal-credential / password-manager:credential-code decrypt this desktop's
+  // stored credentials — exactly the class of namespace CLAUDE.md's "Relay RPC authorization is
+  // an exact allowlist" section documents (same reasoning as authenticator:reveal above). A
+  // mutually-approved relay peer gets shell-equivalent access to the joined project's files and
+  // terminals, but must never unlock or read this desktop's vault. Prove the refusal happens
+  // BEFORE the registered handler — i.e. before the vault store is even touched, not merely
+  // before it answers.
+  it('denies password-manager:reveal-credential to a relay peer before the handler is entered', async () => {
+    const p = electronPlatform()
+    let entered = false
+    p.handle(IPC.passwordManagerRevealCredential, () => {
+      entered = true
+      return { ok: true, username: 'u', password: 'p' }
+    })
+    const res = await p.dispatch(PEER, {
+      t: 'req',
+      id: 42,
+      method: IPC.passwordManagerRevealCredential,
+      args: ['project-1', 'manager-1', 'cred-1']
+    })
+    expect(res).toMatchObject({ t: 'res', id: 42, ok: false, error: { code: 'E_FORBIDDEN' } })
+    expect(entered).toBe(false)
+
+    // Same registration reached normally through Electron IPC from the LOCAL renderer — the
+    // allowlist governs only the raw relay dispatch path.
+    await h.handlers[IPC.passwordManagerRevealCredential]!(
+      { sender: { id: 1 } },
+      'project-1',
+      'manager-1',
+      'cred-1'
+    )
+    expect(entered).toBe(true)
   })
 
   it('clientIds = webContents ids ++ peer ids', () => {

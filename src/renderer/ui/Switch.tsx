@@ -1,5 +1,11 @@
-import { cn } from './cn'
-
+/**
+ * Material Design 3 switch: 52×32 track, 16px off-knob growing to a 24px on-knob (recipe in
+ * design/v2/md3/HANDOFF.md's component table). `.md3-switch`/`.md3-switch__knob` (styles.md3.css)
+ * do the whole visual — this component just owns the `role="switch"` contract, which several
+ * built-app harnesses key off directly (the first switch on Settings → Agents, in particular),
+ * so it stays a plain `<button>` in normal document flow rather than gaining any positioning of
+ * its own.
+ */
 export function Switch({
   checked,
   onChange,
@@ -16,17 +22,9 @@ export function Switch({
       aria-checked={checked}
       aria-label={ariaLabel}
       onClick={() => onChange(!checked)}
-      className={cn(
-        'relative box-border block h-[24px] w-[42px] shrink-0 cursor-pointer rounded-full border-0 p-0 outline-none transition-colors duration-200',
-        checked ? 'bg-accent' : 'bg-fill'
-      )}
+      className="md3-switch"
     >
-      <span
-        className={cn(
-          'absolute left-[3px] top-[3px] size-[18px] rounded-full bg-white shadow-sm transition-transform duration-200',
-          checked ? 'translate-x-[18px]' : 'translate-x-0'
-        )}
-      />
+      <span className="md3-switch__knob" />
     </button>
   )
 }

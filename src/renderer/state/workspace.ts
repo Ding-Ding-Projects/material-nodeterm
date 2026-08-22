@@ -1,5 +1,6 @@
 import type { Node } from '@xyflow/react'
-import type { AgentLaunchIntent, CanvasMutation, CanvasNodeState, ClaudeAccount, NodeKind, PendingLaunch, Project } from '@shared/types'
+import type { AgentLaunchIntent, BrowserTab, CanvasMutation, CanvasNodeState, ClaudeAccount, NodeKind, PendingLaunch, Project, ServiceNodeKind } from '@shared/types'
+import type { ServiceConnection } from '@shared/node-exec'
 import type { AgentId, AgentPermissionMode } from '@shared/agents/config'
 import {
   agentConfig,
@@ -58,12 +59,34 @@ const NATIVE_LOOP_SIZE = { width: 340, height: 280 }
  *  width/height at all (every production creation path draws a real rect — see createAnnotationNode
  *  — so this is a defensive floor, matching how every other kind gets a fallback in `sizeFor`). */
 const ANNOTATION_SIZE = { width: 240, height: 160 }
+/**
+ * Service managers. Two shapes rather than six numbers, because the distinction that matters is how
+ * much a surface has to SHOW, not which product it manages:
+ *
+ * - a console-and-list manager (Minecraft, Docker, Proxmox) needs room for output beside a list, so
+ *   it starts nearer a terminal's footprint;
+ * - a summary manager (GitLab, Home Assistant, FreePBX) opens on counts and status rows and can
+ *   start smaller without immediately needing a resize.
+ *
+ * Both are only STARTING sizes; every one of these nodes resizes like any other.
+ */
+const SERVICE_CONSOLE_SIZE = { width: 720, height: 520 }
+const SERVICE_SUMMARY_SIZE = { width: 520, height: 400 }
 
 /** Height of a node when collapsed (header only). */
 export const COLLAPSED_HEIGHT = 40
 
 /** User data carried in the React Flow node's data field. */
 export interface NodeData {
+  /** A live canvas object that was never asked to survive the session — today only a browser
+   *  popup. `flowToNodeStates` drops it, so it is absent from project.json, the SSH mirror and the
+   *  export archive alike; the node's own "Keep" action clears the flag to promote it. */
+  temporary?: boolean
+  /** Set by ADHD focus mode on every node that is NOT the focus target; the stylesheet fades it.
+   *  Marked rather than filtered, because focus DIMS and never hides — the node stays in the graph,
+   *  stays clickable, and returns to full opacity on hover. Transient: derived on every render from
+   *  the live selection and never written by `flowToNodeStates`, so it cannot reach project.json. */
+  adhdDimmed?: boolean
   title: string
   /**
    * Agent nodes only: while true (the default for agent nodes), the title auto-tracks the
@@ -131,10 +154,22 @@ export interface NodeData {
   url?: string
   /** Browser-only: agent node allowed to control this tab through the Browser Plugin. */
   browserOwnerNodeId?: string
+  /** Browser-only: which of the project's browserProfiles this node's webview session uses.
+   *  Undefined = the app's default (unpartitioned) session — see @shared/browser-profiles. */
+  browserProfileId?: string
+  /** Browser-only: the node's open tabs (git-shared project content — see `CanvasNodeState`). */
+  browserTabs?: BrowserTab[]
+  /** Browser-only: which `browserTabs[].id` is currently shown. Undefined = the first tab. */
+  browserActiveTabId?: string
   diffStaged?: boolean
   commitOid?: string
   /** dino-only: best score reached in the T-Rex Runner game. */
   highScore?: number
+  /** service-kinds only: the display name the user gave this manager. See `CanvasNodeState`. */
+  serviceLabel?: string
+  /** service-kinds only, MACHINE-LOCAL: where this node reaches its service. Stripped from the
+   *  shared document and from inbound peers; see shared/node-exec.ts. */
+  serviceConnection?: ServiceConnection
   /** Which agent runs in this terminal node (claude/codex/gemini/custom). */
   agentId?: AgentId
   /**
@@ -810,7 +845,14 @@ export function createBrowserNode(
   index: number,
   url: string,
   center?: { x: number; y: number },
-  ownerNodeId?: string
+  ownerNodeId?: string,
+  profileId?: string,
+  /** A popup (`target=_blank` / `window.open`) opens as a TEMPORARY canvas node: real, live and
+   *  interactive, but never written to project.json — closing it leaves nothing behind, which is
+   *  what a popup is. The node's own "Keep" action clears this flag and promotes it into an
+   *  ordinary persisted node. See `flowToNodeStates`, which is where the promise is actually
+   *  kept. */
+  temporary?: boolean
 ): CanvasNode {
   const title = url ? url.replace(/^https?:\/\//, '').slice(0, 40) : 'Browser'
   return {
@@ -825,7 +867,9 @@ export function createBrowserNode(
       color: '#0a84ff',
       group: null,
       ...(url ? { url } : {}),
-      ...(ownerNodeId ? { browserOwnerNodeId: ownerNodeId } : {})
+      ...(ownerNodeId ? { browserOwnerNodeId: ownerNodeId } : {}),
+      ...(profileId ? { browserProfileId: profileId } : {}),
+      ...(temporary ? { temporary: true } : {})
     }
   }
 }
@@ -872,6 +916,56 @@ export function createStickyNode(index: number, center?: { x: number; y: number 
       color: '#ffd60a',
       group: null,
       text: ''
+    }
+  }
+}
+
+/**
+ * Human-readable name and default title per service kind. One table, so the menu row, the node
+ * header and any future palette entry cannot disagree about what a kind is called.
+ */
+export const SERVICE_NODE_LABELS: Record<ServiceNodeKind, string> = {
+  minecraft: 'Minecraft server',
+  dockerhost: 'Docker host',
+  proxmox: 'Proxmox',
+  gitlab: 'GitLab',
+  homeassistant: 'Home Assistant',
+  freepbx: 'FreePBX'
+}
+
+/**
+ * Creates a service-manager node.
+ *
+ * ONE factory with six callers rather than six near-identical factories, because the only thing that
+ * varies is the kind, its starting size and its default title — and this codebase's most repeated
+ * lesson is that a duplicated rule drifts from its copies.
+ *
+ * The id prefix is the kind's own name and is deliberately NOT `term-`. That is not tidiness:
+ * `SAFE_NODE_ID` in `core/project-node-append.ts` is `/^term-…/`, and it is how the relay and the
+ * mobile-companion append path decide an incoming id may register as a real terminal session. A
+ * service node borrowing that prefix would let a peer be persuaded to treat a manager as a shell.
+ *
+ * Nothing identifying is seeded into `data`. See `serviceLabel` on `CanvasNodeState` for why a host
+ * must not live there.
+ */
+export function createServiceNode(
+  kind: ServiceNodeKind,
+  index: number,
+  center?: { x: number; y: number }
+): CanvasNode {
+  const size = NODE_START_SIZE[kind]
+  return {
+    id: nextId(kind),
+    type: kind,
+    position: placeAt(center, index, size.width, size.height),
+    width: size.width,
+    height: size.height,
+    style: { width: size.width, height: size.height },
+    data: {
+      title: SERVICE_NODE_LABELS[kind],
+      color: NODE_COLORS[index % NODE_COLORS.length],
+      group: null,
+      serviceLabel: ''
     }
   }
 }
@@ -1276,7 +1370,50 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   loop: true,
   scheduler: true,
   dino: true,
-  annotation: true
+  annotation: true,
+  minecraft: true,
+  dockerhost: true,
+  proxmox: true,
+  gitlab: true,
+  homeassistant: true,
+  freepbx: true
+}
+
+/**
+ * Every kind's starting size, as a table for exactly the reason `NODE_KIND_TABLE` is one.
+ *
+ * This replaced a hand-written nested ternary that ended in `TERMINAL_SIZE`. That shape had a trap
+ * the compiler could not see: a new kind which simply was not mentioned fell through to the terminal
+ * fallback and persisted at 640x440, with nothing failing and no test noticing. `Record<NodeKind, …>`
+ * turns that silent default into a typecheck error, so the size question has to be answered for
+ * every kind that is ever added — which is the same guarantee, and the same reasoning, as the table
+ * above.
+ *
+ * `terminal` keeps its own entry rather than being a default, because a value nothing names is a
+ * value nobody has decided.
+ */
+const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
+  terminal: TERMINAL_SIZE,
+  sticky: STICKY_SIZE,
+  group: GROUP_SIZE,
+  editor: EDITOR_SIZE,
+  diff: DIFF_SIZE,
+  video: VIDEO_SIZE,
+  web: WEB_SIZE,
+  browser: BROWSER_SIZE,
+  // Ephemeral kinds are never persisted (they are derived from live hook events), so these are
+  // defensive floors rather than values a project.json will ever carry.
+  subagent: TERMINAL_SIZE,
+  loop: NATIVE_LOOP_SIZE,
+  scheduler: NATIVE_LOOP_SIZE,
+  dino: DINO_SIZE,
+  annotation: ANNOTATION_SIZE,
+  minecraft: SERVICE_CONSOLE_SIZE,
+  dockerhost: SERVICE_CONSOLE_SIZE,
+  proxmox: SERVICE_CONSOLE_SIZE,
+  gitlab: SERVICE_SUMMARY_SIZE,
+  homeassistant: SERVICE_SUMMARY_SIZE,
+  freepbx: SERVICE_SUMMARY_SIZE
 }
 
 /** A `Set`, not `type in NODE_KIND_TABLE`: `in` walks the prototype, so `'constructor'` and
@@ -1561,6 +1698,16 @@ export function reorderNodeBefore(
 }
 
 /** Converts persisted node states into live React Flow nodes (parents first). */
+/**
+ * Synthesizes a one-tab `browserTabs` array from a legacy/fresh browser node's `url`/`title`.
+ * Shared by the persisted-load migration below and by `BrowserNode` for a node that has no
+ * `data.browserTabs` yet (a freshly created node, or one loaded before this field existed) —
+ * one definition so the two paths cannot drift on what "no tabs yet" defaults to.
+ */
+export function defaultBrowserTabs(nodeId: string, url: string | undefined, title: string): BrowserTab[] {
+  return [{ id: `${nodeId}-tab-0`, url: url ?? '', title: title || 'New Tab' }]
+}
+
 export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
   // React Flow requires a parent node to appear before its children. With nested frames a flat
   // "groups first" sort is not enough (two frames compare equal), so `groupsFirst` re-emits the
@@ -1595,6 +1742,16 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
     // tag. Backfill agentId so saved workspaces keep working.
     let agentId = n.agentId
     if (!agentId && Array.isArray(n.tags) && n.tags.includes('claude')) agentId = 'claude'
+    // Legacy migration: a browser node saved before tabs existed carries only `url`/`title`.
+    // Synthesize a single tab from them so the tab strip has something to show — this is a
+    // read-side migration only (not written back to disk until the user actually edits a tab).
+    const browserTabs =
+      n.browserTabs && n.browserTabs.length > 0
+        ? n.browserTabs
+        : (n.kind ?? 'terminal') === 'browser'
+          ? defaultBrowserTabs(n.id, n.url, n.title)
+          : undefined
+    const browserActiveTabId = n.browserActiveTabId ?? browserTabs?.[0]?.id
     return {
       id: n.id,
       // Default to 'terminal' for nodes saved before the kind field existed.
@@ -1625,9 +1782,14 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         terminalProfileId: n.ssh ? undefined : n.terminalProfileId,
         cwd: n.cwd,
         text: n.text,
+        serviceLabel: n.serviceLabel,
+        serviceConnection: n.serviceConnection,
         filePath: n.filePath,
         fileMissing: n.fileMissing,
         url: n.url,
+        browserProfileId: n.browserProfileId,
+        browserTabs,
+        browserActiveTabId,
         diffStaged: n.diffStaged,
         commitOid: n.commitOid,
         highScore: n.highScore,
@@ -1652,29 +1814,16 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
 
 /** Serializes live React Flow nodes back into persisted node states. */
 export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
-  const sizeFor = (kind: NodeKind) =>
-    kind === 'sticky'
-      ? STICKY_SIZE
-      : kind === 'group'
-        ? GROUP_SIZE
-        : kind === 'editor'
-          ? EDITOR_SIZE
-          : kind === 'diff'
-            ? DIFF_SIZE
-            : kind === 'video'
-              ? VIDEO_SIZE
-              : kind === 'browser'
-                ? BROWSER_SIZE
-                : kind === 'web'
-                  ? WEB_SIZE
-                    : kind === 'scheduler'
-                      ? NATIVE_LOOP_SIZE
-                  : kind === 'dino'
-                    ? DINO_SIZE
-                    : kind === 'annotation'
-                      ? ANNOTATION_SIZE
-                      : TERMINAL_SIZE
+  // One lookup, not a ternary chain. The chain this replaced could not fail for a kind it simply
+  // did not mention: it fell through to TERMINAL_SIZE and persisted at 640x440 silently. See
+  // NODE_START_SIZE for why that is now a typecheck error instead.
+  const sizeFor = (kind: NodeKind) => NODE_START_SIZE[kind] ?? TERMINAL_SIZE
   return nodes
+    // Temporary nodes (browser popups) are live canvas objects that were never asked to outlive
+    // the session. Dropping them HERE rather than at each call site means every save path -- the
+    // debounced autosave, an explicit save, the SSH mirror, the export archive -- agrees, and a
+    // popup can never be resurrected by a reload into a node nobody opened.
+    .filter((n) => !n.data.temporary)
     .map((n) => {
       const kind: NodeKind = (n.type as NodeKind) ?? 'terminal'
       const collapsed = !!n.data.collapsed
@@ -1706,9 +1855,14 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         terminalProfileId: n.data.ssh ? undefined : n.data.terminalProfileId,
         cwd: n.data.cwd,
         text: n.data.text,
+        serviceLabel: n.data.serviceLabel,
+        serviceConnection: n.data.serviceConnection,
         filePath: n.data.filePath,
         fileMissing: n.data.fileMissing,
         url: n.data.url,
+        browserProfileId: n.data.browserProfileId,
+        browserTabs: n.data.browserTabs,
+        browserActiveTabId: n.data.browserActiveTabId,
         diffStaged: n.data.diffStaged,
         commitOid: n.data.commitOid,
         highScore: n.data.highScore,

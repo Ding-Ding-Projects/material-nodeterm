@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..700,0..1,0" rel="stylesheet">
+<link rel="stylesheet" href="md3/tokens.css">
+<style>
+  body { margin:0; background:#0A090D; }
+  a { color:var(--md-primary); text-decoration:none; }
+  a:hover { color:var(--md-on-primary-container); }
+  .msr { font-family:'Material Symbols Rounded'; font-weight:400; font-style:normal; line-height:1;
+         letter-spacing:normal; display:inline-block; white-space:nowrap; direction:ltr;
+         font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24; }
+  .msrf { font-variation-settings:'FILL' 1,'wght' 500,'GRAD' 0,'opsz' 24; }
+</style>
+</helmet>
+
+<div style="font-family:var(--md-font-ui);padding:36px;display:flex;flex-direction:column;gap:14px;color:#E6E0E9">
+  <div style="display:flex;align-items:flex-end;gap:16px">
+    <div>
+      <div style="font-size:21px;font-weight:600">Files, source control &amp; history · Material 3 rewrite</div>
+      <div style="font-size:13px;color:#938F99;margin-top:2px"><a href="MD3 Canvas.dc.html">Canvas</a> · <a href="MD3 Board.dc.html">Board</a> · <a href="MD3 Settings.dc.html">Settings</a> · <a href="MD3 Overlays.dc.html">Overlays</a></div>
+    </div>
+    <div style="flex:1"></div>
+    <button onClick="{{ toggleTheme }}" style="display:flex;align-items:center;gap:8px;height:40px;padding:0 20px;border-radius:999px;border:1px solid #49454F;background:transparent;color:#E6E0E9;font-family:inherit;font-size:14px;font-weight:500;cursor:pointer"><span class="msr" style="font-size:18px">contrast</span>{{ themeLabel }}</button>
+  </div>
+
+<div style="width:1440px;height:900px;border-radius:28px;overflow:hidden;position:relative;background:var(--md-surface);color:var(--md-on-surface);display:flex;flex-direction:column;outline:1px solid var(--md-outline-variant)">
+
+  <div style="height:64px;flex:0 0 64px;display:flex;align-items:center;gap:14px;padding:0 20px 0 16px;background:var(--md-surface-container)">
+    <div style="display:flex;gap:8px"><div style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></div><div style="width:12px;height:12px;border-radius:50%;background:#febc2e"></div><div style="width:12px;height:12px;border-radius:50%;background:#28c840"></div></div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div style="width:38px;height:38px;border-radius:14px;background:var(--md-primary-container);color:var(--md-on-primary-container);display:flex;align-items:center;justify-content:center"><span class="msr msrf" style="font-size:22px">hub</span></div>
+      <div style="font-size:17px;font-weight:600">nodeterm</div>
+    </div>
+    <button style="display:flex;align-items:center;gap:10px;height:44px;padding:0 12px 0 16px;border-radius:999px;border:none;background:var(--md-secondary-container);color:var(--md-on-secondary-container);font-family:inherit;font-size:14.5px;font-weight:600;cursor:pointer">
+      <span style="width:10px;height:10px;border-radius:50%;background:var(--md-primary)"></span>material-nodeterm<span class="msr" style="font-size:20px">arrow_drop_down</span>
+    </button>
+    <div style="flex:1"></div>
+    <div style="display:flex;align-items:center;gap:12px;width:300px;height:44px;padding:0 8px 0 18px;border-radius:999px;background:var(--md-surface-container-high);color:var(--md-on-surface-variant)">
+      <span class="msr" style="font-size:20px">search</span>
+      <input value="{{ q }}" onChange="{{ setQ }}" placeholder="Filter files — folders never hide" style="flex:1;min-width:0;border:none;background:transparent;color:var(--md-on-surface);font-family:inherit;font-size:14px;outline:none">
+      <span style="font-family:var(--md-font-mono);font-size:11px;padding:4px 8px;border-radius:8px;background:var(--md-surface-container-highest);cursor:pointer">.*</span>
+    </div>
+  </div>
+
+  <div style="flex:1;display:flex;min-height:0">
+    <div style="width:88px;flex:0 0 88px;background:var(--md-surface-container);display:flex;flex-direction:column;align-items:center;padding:10px 0 14px;gap:6px">
+      <button style="width:56px;height:56px;border-radius:16px;border:none;background:var(--md-primary-container);color:var(--md-on-primary-container);cursor:pointer;display:flex;align-items:center;justify-content:center;margin-bottom:14px"><span class="msr" style="font-size:26px">add</span></button>
+      <sc-for list="{{ rail }}" as="r" hint-placeholder-count="5">
+        <a href="{{ r.href }}" style="display:flex;flex-direction:column;align-items:center;gap:4px;width:80px;padding:6px 0;color:inherit">
+          <span style="width:56px;height:32px;border-radius:999px;background:{{ r.pill }};color:{{ r.fg }};display:flex;align-items:center;justify-content:center"><span class="msr {{ r.fill }}" style="font-size:22px">{{ r.icon }}</span></span>
+          <span style="font-size:12px;font-weight:{{ r.weight }};color:{{ r.labelFg }}">{{ r.label }}</span>
+        </a>
+      </sc-for>
+    </div>
+
+    <div data-screen-label="Files and source control" style="flex:1;min-width:0;display:flex;min-height:0">
+
+      <!-- EXPLORER -->
+      <div style="width:300px;flex:0 0 300px;display:flex;flex-direction:column;padding:20px 12px 16px 20px;gap:12px;min-height:0">
+        <div style="display:flex;align-items:center;gap:8px;padding:0 6px">
+          <div style="font-size:15px;font-weight:700">Explorer</div>
+          <div style="flex:1"></div>
+          <span class="msr" style="font-size:18px;color:var(--md-on-surface-variant);cursor:pointer">create_new_folder</span>
+          <span class="msr" style="font-size:18px;color:var(--md-on-surface-variant);cursor:pointer">refresh</span>
+        </div>
+        <div style="flex:1;overflow:hidden;display:flex;flex-direction:column;gap:1px">
+          <sc-for list="{{ tree }}" as="f" hint-placeholder-count="10">
+            <div style="display:flex;align-items:center;gap:9px;height:34px;padding-left:{{ f.pad }};padding-right:10px;border-radius:999px;background:{{ f.bg }};color:{{ f.fg }};font-size:13px;font-weight:500;cursor:pointer;opacity:{{ f.op }}" style-hover="background:var(--md-surface-container-high)">
+              <span class="msr {{ f.fill }}" style="font-size:17px;color:{{ f.iconFg }}">{{ f.icon }}</span>
+              <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-style:{{ f.style }}">{{ f.name }}</span>
+              <sc-if value="{{ f.dl }}" hint-placeholder-val="{{ false }}"><span class="msr" style="font-size:16px;color:var(--md-on-surface-variant)">download</span></sc-if>
+            </div>
+          </sc-for>
+        </div>
+        <!-- download strip -->
+        <div style="border-radius:16px;background:var(--md-surface-container);padding:10px 12px;display:flex;align-items:center;gap:10px">
+          <span class="msr" style="font-size:18px;color:var(--md-primary)">downloading</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">scrollback-2026-08-18.log</div>
+            <div style="margin-top:5px;height:4px;border-radius:2px;background:var(--md-surface-container-highest);overflow:hidden"><div style="width:68%;height:100%;background:var(--md-primary)"></div></div>
+          </div>
+          <span class="msr" style="font-size:16px;color:var(--md-on-surface-variant);cursor:pointer">close</span>
+        </div>
+      </div>
+
+      <!-- SOURCE CONTROL -->
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column;padding:20px 12px 16px;gap:14px;min-height:0;border-left:1px solid var(--md-outline-variant);border-right:1px solid var(--md-outline-variant)">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="font-size:15px;font-weight:700">Source control</div>
+          <span style="display:flex;align-items:center;gap:6px;height:28px;padding:0 12px;border-radius:999px;background:var(--md-primary-container);color:var(--md-on-primary-container);font-size:12px;font-weight:600"><span class="msr" style="font-size:15px">call_split</span>feat/md3-rewrite</span>
+          <span style="font-size:12px;color:var(--md-on-surface-variant)">↑2 ↓0</span>
+          <div style="flex:1"></div>
+          <button style="display:flex;align-items:center;gap:6px;height:32px;padding:0 14px;border-radius:999px;border:1px solid var(--md-outline);background:transparent;color:var(--md-on-surface);font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer"><span class="msr" style="font-size:16px">sync</span>Sync</button>
+        </div>
+        <div style="font-size:12px;font-weight:700;letter-spacing:.6px;color:var(--md-on-surface-variant);padding:0 4px">STAGED · 2</div>
+        <div style="display:flex;flex-direction:column;gap:2px">
+          <sc-for list="{{ staged }}" as="c" hint-placeholder-count="2">
+            <div style="display:flex;align-items:center;gap:10px;height:36px;padding:0 10px;border-radius:12px;cursor:pointer" style-hover="background:var(--md-surface-container-high)">
+              <span style="width:22px;height:22px;border-radius:7px;background:{{ c.tagBg }};color:{{ c.tagFg }};font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center">{{ c.tag }}</span>
+              <span style="flex:1;font-family:var(--md-font-mono);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ c.path }}</span>
+              <span style="font-family:var(--md-font-mono);font-size:11px;color:var(--md-success)">{{ c.plus }}</span>
+              <span style="font-family:var(--md-font-mono);font-size:11px;color:var(--md-error)">{{ c.minus }}</span>
+              <span class="msr" style="font-size:16px;color:var(--md-on-surface-variant)">remove</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="font-size:12px;font-weight:700;letter-spacing:.6px;color:var(--md-on-surface-variant);padding:0 4px">CHANGES · 2</div>
+        <div style="display:flex;flex-direction:column;gap:2px">
+          <sc-for list="{{ changes }}" as="c" hint-placeholder-count="2">
+            <div style="display:flex;align-items:center;gap:10px;height:36px;padding:0 10px;border-radius:12px;cursor:pointer" style-hover="background:var(--md-surface-container-high)">
+              <span style="width:22px;height:22px;border-radius:7px;background:{{ c.tagBg }};color:{{ c.tagFg }};font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center">{{ c.tag }}</span>
+              <span style="flex:1;font-family:var(--md-font-mono);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ c.path }}</span>
+              <span style="font-family:var(--md-font-mono);font-size:11px;color:var(--md-success)">{{ c.plus }}</span>
+              <span style="font-family:var(--md-font-mono);font-size:11px;color:var(--md-error)">{{ c.minus }}</span>
+              <span class="msr" style="font-size:16px;color:var(--md-on-surface-variant)">add</span>
+            </div>
+          </sc-for>
+        </div>
+        <!-- diff preview -->
+        <div style="flex:1;border-radius:16px;background:var(--md-surface-container-lowest);padding:14px 16px;font-family:var(--md-font-mono);font-size:11.5px;line-height:1.8;overflow:hidden;min-height:0">
+          <div style="color:var(--md-on-surface-variant)">@@ src/renderer/styles.css @@</div>
+          <div style="background:color-mix(in srgb, var(--md-error) 14%, transparent);color:var(--md-on-surface-variant);border-radius:4px;padding:0 6px">- --md-surface: var(--md-tone-neutral-11);</div>
+          <div style="background:color-mix(in srgb, var(--md-success) 14%, transparent);border-radius:4px;padding:0 6px">+ --md-surface: #141218; /* M3 baseline */</div>
+          <div style="background:color-mix(in srgb, var(--md-success) 14%, transparent);border-radius:4px;padding:0 6px">+ --md-primary: #D0BCFF;</div>
+        </div>
+        <!-- commit composer -->
+        <div style="border-radius:24px;background:var(--md-surface-container-high);padding:14px 14px 12px;display:flex;flex-direction:column;gap:10px">
+          <div style="font-size:13.5px;color:var(--md-on-surface-variant)">feat(ui): re-seed tonal ramps from the M3 baseline scheme</div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <button style="display:flex;align-items:center;gap:7px;height:36px;padding:0 14px;border-radius:999px;border:1px solid var(--md-outline);background:transparent;color:var(--md-on-surface);font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer"><span class="msr" style="font-size:16px">auto_awesome</span>Generate</button>
+            <div style="flex:1"></div>
+            <button style="display:flex;align-items:center;gap:7px;height:40px;padding:0 20px;border-radius:999px;border:none;background:var(--md-primary);color:var(--md-on-primary);font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer"><span class="msr" style="font-size:17px">check</span>Commit 2 staged</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- GIT HISTORY -->
+      <div style="width:400px;flex:0 0 400px;display:flex;flex-direction:column;padding:20px 20px 16px 12px;gap:12px;min-height:0">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="font-size:15px;font-weight:700">History</div>
+          <div style="flex:1"></div>
+          <sc-for list="{{ histTabs }}" as="t" hint-placeholder-count="3">
+            <span style="height:30px;padding:0 12px;border-radius:999px;background:{{ t.bg }};color:{{ t.fg }};border:1px solid {{ t.bd }};font-size:12px;font-weight:600;display:flex;align-items:center;cursor:pointer">{{ t.label }}</span>
+          </sc-for>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:8px;overflow:hidden">
+          <sc-for list="{{ commits }}" as="c" hint-placeholder-count="5">
+            <div style="display:flex;gap:12px;padding:12px 14px;border-radius:16px;background:var(--md-surface-container);cursor:pointer" style-hover="background:var(--md-surface-container-high)">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:4px;padding-top:3px">
+                <span style="width:12px;height:12px;border-radius:50%;background:{{ c.lane }}"></span>
+                <span style="flex:1;width:2px;background:var(--md-outline-variant)"></span>
+              </div>
+              <div style="flex:1;min-width:0">
+                <div style="font-size:13px;font-weight:600;line-height:1.4;text-wrap:pretty">{{ c.msg }}</div>
+                <div style="display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap">
+                  <span style="font-family:var(--md-font-mono);font-size:11px;color:var(--md-on-surface-variant)">{{ c.sha }}</span>
+                  <span style="font-size:11.5px;color:var(--md-on-surface-variant)">{{ c.who }} · {{ c.when }}</span>
+                  <sc-for list="{{ c.refs }}" as="ref" hint-placeholder-count="0">
+                    <span style="height:20px;padding:0 8px;border-radius:6px;background:var(--md-primary-container);color:var(--md-on-primary-container);font-size:10px;font-weight:700;font-family:var(--md-font-mono);display:flex;align-items:center">{{ ref }}</span>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1520,&quot;height&quot;:1040},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dark&quot;,&quot;light&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;'dark' | 'light'&quot;,&quot;section&quot;:&quot;Appearance&quot;}}">
+class Component extends DCLogic {
+  state = { theme: 'dark', q: '' };
+  componentDidMount() { this.applyTheme(); }
+  componentDidUpdate() { this.applyTheme(); }
+  applyTheme() { document.documentElement.dataset.theme = this.props.theme ?? this.state.theme; }
+  filterTree(rows) {
+    const q = this.state.q.toLowerCase();
+    if (!q) return rows;
+    return rows.filter((r) => r.fill === 'msrf' || r.name.toLowerCase().includes(q));
+  }
+  renderVals() {
+    const s = this.state;
+    const file = (name, icon, pad, opts = {}) => ({
+      name, icon, pad: pad + 'px',
+      fill: opts.dir ? 'msrf' : '',
+      bg: opts.active ? 'var(--md-secondary-container)' : 'transparent',
+      fg: opts.active ? 'var(--md-on-secondary-container)' : 'var(--md-on-surface)',
+      iconFg: opts.dir ? 'var(--md-primary)' : 'var(--md-on-surface-variant)',
+      op: opts.ignored ? 0.55 : 1, style: opts.ignored ? 'italic' : 'normal',
+      dl: !!opts.dl
+    });
+    return {
+      themeLabel: (this.props.theme ?? s.theme) === 'dark' ? 'Dark' : 'Light',
+      toggleTheme: () => this.setState((p) => ({ theme: p.theme === 'dark' ? 'light' : 'dark' })),
+      rail: [
+        ['workspaces', 'Canvas', 'MD3 Canvas.dc.html', false],
+        ['view_kanban', 'Board', 'MD3 Board.dc.html', false],
+        ['folder', 'Files', 'MD3 Files.dc.html', true],
+        ['construction', 'Tools', 'MD3 Tools.dc.html', false],
+        ['history', 'History', 'MD3 History.dc.html', false],
+        ['notifications', 'Alerts', 'MD3 Overlays.dc.html', false],
+        ['settings', 'Settings', 'MD3 Settings.dc.html', false]
+      ].map(([icon, label, href, on]) => ({
+        icon, label, href, fill: on ? 'msrf' : '',
+        pill: on ? 'var(--md-secondary-container)' : 'transparent',
+        fg: on ? 'var(--md-on-secondary-container)' : 'var(--md-on-surface-variant)',
+        labelFg: on ? 'var(--md-on-surface)' : 'var(--md-on-surface-variant)',
+        weight: on ? 600 : 500
+      })),
+      q: s.q,
+      setQ: (e) => this.setState({ q: e.target.value }),
+      tree: this.filterTree([
+        file('src', 'folder_open', 6, { dir: true }),
+        file('core', 'folder', 22, { dir: true }),
+        file('renderer', 'folder_open', 22, { dir: true }),
+        file('canvas', 'folder', 38, { dir: true }),
+        file('components', 'folder', 38, { dir: true }),
+        file('styles.css', 'css', 38, { active: true }),
+        file('App.tsx', 'description', 38, {}),
+        file('main.tsx', 'description', 38, { dl: true }),
+        file('shared', 'folder', 22, { dir: true }),
+        file('node_modules', 'folder', 6, { dir: true, ignored: true }),
+        file('package.json', 'data_object', 6, {}),
+        file('README.md', 'description', 6, {})
+      ]),
+      staged: [
+        { tag: 'M', path: 'src/renderer/styles.css', plus: '+412', minus: '−1 108', tagBg: 'var(--md-warning-container)', tagFg: 'var(--md-on-warning-container)' },
+        { tag: 'A', path: 'src/renderer/md3/tokens.css', plus: '+118', minus: '', tagBg: 'var(--md-success-container)', tagFg: 'var(--md-on-success-container)' }
+      ],
+      changes: [
+        { tag: 'M', path: 'src/renderer/components/SettingsSidebar.tsx', plus: '+96', minus: '−54', tagBg: 'var(--md-warning-container)', tagFg: 'var(--md-on-warning-container)' },
+        { tag: 'A', path: 'src/renderer/components/NavRail.tsx', plus: '+240', minus: '', tagBg: 'var(--md-success-container)', tagFg: 'var(--md-on-success-container)' }
+      ],
+      histTabs: [
+        { label: 'Git', bg: 'var(--md-secondary-container)', fg: 'var(--md-on-secondary-container)', bd: 'transparent' },
+        { label: 'Memory', bg: 'transparent', fg: 'var(--md-on-surface)', bd: 'var(--md-outline)' },
+        { label: 'Settings', bg: 'transparent', fg: 'var(--md-on-surface)', bd: 'var(--md-outline)' }
+      ],
+      commits: [
+        { sha: 'a41c9e2', msg: 'feat(ui): Material 3 renderer chrome', who: 'Enes', when: '4 min', lane: 'var(--md-primary)', refs: ['feat/md3-rewrite', 'HEAD'] },
+        { sha: '7f0b135', msg: 'feat(kids): guided home, parent gate, sticker rewards', who: 'Enes', when: '38 min', lane: 'var(--md-primary)', refs: [] },
+        { sha: 'c92aa07', msg: 'refactor: TerminalTransport interface', who: 'Claude', when: '2 h', lane: 'var(--md-tertiary)', refs: [] },
+        { sha: '15de884', msg: 'fix(board): GitHub reopen sync drops label', who: 'Enes', when: '5 h', lane: 'var(--md-warning)', refs: ['origin/main'] },
+        { sha: '3b7c410', msg: 'chore: bundle tmux for macOS builds', who: 'Enes', when: '1 d', lane: 'var(--md-success)', refs: [] }
+      ]
+    };
+  }
+}
+
+</script>
+</body>
+</html>

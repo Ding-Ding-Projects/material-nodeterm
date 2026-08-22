@@ -42,6 +42,8 @@ export function BulkActionPreview<T>({
     <ConfirmDialog
       message={message}
       confirmLabel={busy ? 'Working…' : title}
+      // The label alone never stopped a second submit — pass it through so the button disables.
+      busy={busy}
       cancelLabel="Cancel"
       danger={destructive}
       // A pure-informational action (export) has nothing irreversible to gate behind Enter, so it

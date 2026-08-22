@@ -10,6 +10,10 @@ interface PromptOptions {
   initialValue?: string
   placeholder?: string
   confirmLabel?: string
+  /** Mask the field — see `InputDialog`'s own note on why this is more than a visual change. */
+  password?: boolean
+  /** A failed previous attempt, shown inside the dialog. */
+  error?: string
 }
 
 interface PromptState {
@@ -61,6 +65,8 @@ export function PromptDialogHost() {
       initialValue={current.initialValue}
       placeholder={current.placeholder}
       confirmLabel={current.confirmLabel}
+      password={current.password}
+      error={current.error}
       onSubmit={submit}
       onCancel={cancel}
     />

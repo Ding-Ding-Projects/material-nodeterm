@@ -24,7 +24,8 @@ export const TERMINAL_RESET_KEYS = [
   'cursorBlink',
   'terminalLineHeight',
   'terminalLetterSpacing',
-  'terminalGpuRendering'
+  'terminalGpuRendering',
+  'terminalWordSeparators'
 ] as const satisfies readonly (keyof Settings)[]
 // NOTE: `tmuxScrollback` is deliberately absent even though the terminal renders with it — it
 // belongs to the tmux section, and resetting a history limit from an appearance button would be a

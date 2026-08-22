@@ -1,3 +1,5 @@
+import { DEFAULT_WORD_SEPARATORS } from './word-separators'
+import type { ServiceConnection } from './node-exec'
 // Types shared across the main, preload, and renderer processes.
 
 import type { CloneProgress } from './clone-url'
@@ -22,7 +24,10 @@ import type {
   ToyLockRecord,
   ToyLockUpdateInput,
   ToyLockVerifyInput,
-  ToyLockVerifyResult
+  ToyLockVerifyResult,
+  ToyLockLadderState,
+  ToyLockLadderVerifyInput,
+  ToyLockLadderVerifyResult
 } from './toylock'
 import type {
   AuthenticatorAddManualInput,
@@ -36,6 +41,28 @@ import type {
   AuthenticatorRemoveResult,
   AuthenticatorRevealResult
 } from './authenticator'
+import type {
+  BindManagerGroupInput,
+  ChangeVaultPasswordInput,
+  ChangeVaultPasswordResult,
+  CreateCredentialInput,
+  CreateCredentialResult,
+  CreateManagerInput,
+  CreateManagerResult,
+  CredentialCodeResult,
+  ManagerMutationResult,
+  ReleaseGroupBindingResult,
+  RemoveCredentialInput,
+  RemoveCredentialResult,
+  RenameCredentialInput,
+  RenameManagerInput,
+  RevealCredentialResult,
+  UpdateCredentialResult,
+  UpdateCredentialSecretInput,
+  VaultCreateResult,
+  VaultStatus,
+  VaultUnlockResult
+} from './password-manager'
 
 /** Profile-switch replacement intent. The trusted core validates and re-resolves it before teardown. */
 export interface PtyRecycleTarget {
@@ -314,6 +341,50 @@ export type NodeKind =
   | 'scheduler'
   | 'dino'
   | 'annotation'
+  // The SERVICE family: one node per external thing this canvas can manage. They are ordinary
+  // nodes — dragged, resized, coloured, grouped, persisted and deleted exactly like a terminal —
+  // because a managed service is a thing you arrange on a canvas beside the terminals working on
+  // it, not a modal you visit.
+  //
+  // Every one of them is a MANAGER, and for `proxmox` that is not a limitation but the only
+  // coherent reading: Proxmox VE is a bare-metal hypervisor distribution, so there is nothing to
+  // install from a right-click and the node drives an instance that already exists.
+  //
+  // What they deliberately do NOT persist is how to reach anything. A node's `data` is written into
+  // `.nodeterm/project.json`, which is git-shared and travels to every machine that clones the
+  // repository, so a host, a username, a container id or an executable path in there would be one
+  // person's machine leaking into everybody else's checkout. Only `serviceLabel` — a display name
+  // the user chose — is persisted here. The connection record is machine-local and belongs beside
+  // `localExec` on the index entry; see `IndexEntryV3` and `projectToFile`.
+  | 'minecraft'
+  | 'dockerhost'
+  | 'proxmox'
+  | 'gitlab'
+  | 'homeassistant'
+  | 'freepbx'
+
+/**
+ * The service kinds, as a runtime list. Exported because both the renderer (menu rows, one shared
+ * component) and any future core service need to agree on the membership, and two copies of a list
+ * like this drift — the failure this repository has recorded more than once.
+ */
+export const SERVICE_NODE_KINDS = [
+  'minecraft',
+  'dockerhost',
+  'proxmox',
+  'gitlab',
+  'homeassistant',
+  'freepbx'
+] as const
+
+export type ServiceNodeKind = (typeof SERVICE_NODE_KINDS)[number]
+
+/** True when `kind` is one of the service family. A `Set` rather than `in`, for the same reason
+ *  `NODE_KINDS` is: `in` walks the prototype chain and would accept `'constructor'`. */
+const SERVICE_NODE_KIND_SET: ReadonlySet<string> = new Set(SERVICE_NODE_KINDS)
+export function isServiceNodeKind(kind: string | undefined): kind is ServiceNodeKind {
+  return typeof kind === 'string' && SERVICE_NODE_KIND_SET.has(kind)
+}
 
 /** Persisted state of a single canvas node (terminal, sticky note, group frame, or editor). */
 /**
@@ -416,6 +487,22 @@ export interface CanvasNodeState {
   text?: string
   // dino-only: best score reached in the T-Rex Runner game.
   highScore?: number
+  /**
+   * service-kinds only: the display name the user gave this manager ("Home lab Proxmox", "Survival
+   * server"). This is the ONLY thing a service node persists, and the restraint is deliberate — the
+   * record travels in `.nodeterm/project.json` to every machine that clones the repository, so a
+   * host, a username, a container id or a token here would be one person's environment appearing in
+   * everybody else's checkout. The connection itself is machine-local and belongs beside
+   * `localExec` on the index entry, exactly where the shell and Windows profile already live.
+   */
+  serviceLabel?: string
+  /**
+   * service-kinds only, and MACHINE-LOCAL: where this node reaches its service. Stripped from
+   * every project file we write and from every node arriving over the wire, then restored from the
+   * machine-local index — the same round trip `shell` and `ssh.extraArgs` take, for the same
+   * reasons. It never carries a secret; see `ServiceConnection` in shared/node-exec.ts.
+   */
+  serviceConnection?: ServiceConnection
   // editor / diff
   filePath?: string
   /**
@@ -426,6 +513,27 @@ export interface CanvasNodeState {
   fileMissing?: boolean
   /** web-only: when set, the web node loads this live URL (else it loads `filePath` as local html). */
   url?: string
+  /**
+   * browser-only: which of the project's `browserProfiles` (see `Project.browserProfiles`) this
+   * node's webview session uses. Undefined = the app's default (unpartitioned) session — the
+   * pre-feature behavior, and the default for every new browser node until the user picks one.
+   * References `BrowserProfile.id`; a dangling reference (profile since removed) still derives a
+   * stable partition — see `browserPartitionFor` — so the node keeps its own isolated cookie jar
+   * rather than silently falling back to the default session's. User-changeable at any time from
+   * the node's profile picker (unlike `accountId`, which is immutable) — the webview remounts
+   * onto the new partition when it changes.
+   */
+  browserProfileId?: string
+  /**
+   * browser-only: the node's open tabs. Project content (git-shared) — a tab's URL/title are not
+   * secrets; cookies/localStorage stay in the Electron partition (`browserProfileId`) and are
+   * never mirrored here. Absent/empty on a legacy node = migrate the single `url`/`title` pair
+   * into a one-tab array (done once by `nodeStatesToFlow`, never persisted back until the user
+   * actually edits a tab).
+   */
+  browserTabs?: BrowserTab[]
+  /** browser-only: which `browserTabs[].id` is currently shown. Absent = the first tab. */
+  browserActiveTabId?: string
   /** diff-only: true = staged diff (HEAD vs index), false = unstaged (index vs working). */
   diffStaged?: boolean
   /** diff-only: when set, the diff shows parent (<oid>^) vs commit (<oid>) for a file from history. */
@@ -503,6 +611,33 @@ export interface BridgeLink {
   id: string
   source: string
   target: string
+}
+
+/**
+ * A named browser profile for one project. Browser nodes assigned to the same profile id share
+ * that profile's cookies/localStorage/session state (an isolated Electron session partition
+ * derived from `projectId + profileId` — see `shared/browser-profiles.ts`); nodes on different
+ * profiles are isolated from each other. The profile's NAME is shareable (it rides
+ * `Project.browserProfiles` into the git-shared project file, like `KanbanColumn.title`); the
+ * cookie jar itself is not — it lives only in this machine's Electron partition storage and is
+ * never persisted or exported here.
+ */
+export interface BrowserProfile {
+  id: string
+  name: string
+  color: string
+}
+
+/**
+ * One tab in a browser node's tab strip. Project content (git-shared, see `BrowserProfile`'s doc
+ * comment above) — the URL and title are not secrets. What is NOT here on purpose: cookies,
+ * localStorage, session state — those stay in the node's Electron partition
+ * (`CanvasNodeState.browserProfileId`) and are never duplicated into the project file.
+ */
+export interface BrowserTab {
+  id: string
+  url: string
+  title: string
 }
 
 /** One kanban board column. Column order = array order in ProjectKanban.columns. */
@@ -654,10 +789,22 @@ export interface Project {
   /** Permission mode for new Claude TERMINAL (CLI) sessions in this project. SDK chat nodes are
    *  not covered — the chat driver still runs in `default`. Unset = use the global setting. */
   defaultPermissionMode?: AgentPermissionMode
+  /** Machine-local app-wide setting overrides for this project. The complete Settings surface
+   * edits this sparse overlay; absent keys inherit the global default. It is deliberately kept
+   * out of the git-shared project file because Settings contains credentials, executable paths,
+   * host labels, and other values a cloned repository must never inject. */
+  settingsOverrides?: Partial<Settings>
   /** Best dino-game score in this project — new dino nodes seed from it, so the record survives closing the node. */
   dinoHighScore?: number
   /** Kanban task board — shared via .nodeterm/project.json like nodes. */
   kanban?: ProjectKanban
+  /**
+   * Named browser profiles for this project — shared via .nodeterm/project.json like nodes/kanban.
+   * See `BrowserProfile`. Absent = no profiles defined yet; browser nodes with no `browserProfileId`
+   * use the app's default (unpartitioned) Electron session, which is bit-for-bit the pre-feature
+   * behavior.
+   */
+  browserProfiles?: BrowserProfile[]
   /** Bridge links between Claude nodes (optional; absent in pre-bridge files). */
   bridges?: BridgeLink[]
   /**
@@ -771,7 +918,7 @@ export interface WindowsTerminalProfile {
 /** Optional desktop capability for detecting the Windows terminal profiles on this machine. */
 export interface TerminalProfilesApi {
   list(): Promise<WindowsTerminalProfile[]>
-  refresh(): Promise<WindowsTerminalProfile[]>
+  refresh(customExecutable?: string): Promise<WindowsTerminalProfile[]>
 }
 
 export interface PtyApi {
@@ -885,11 +1032,133 @@ export interface PtyApi {
 
 export type WorkspaceMigrationKind = 'v2' | 'exec'
 
+/**
+ * Why one path inside the project folder was left OUT of a `.nodeterm-project` save file.
+ * NOTHING is dropped silently: every exclusion appears here (gitignored trees are grouped per
+ * ignored root — `path` ends with '/' and `files`/`bytes` sum what the group holds).
+ */
+export interface ProjectArchiveExclusion {
+  /** Project-folder-relative path, '/'-separated. A grouped directory ends with '/'. */
+  path: string
+  reason: 'gitignored' | 'nested-repository' | 'symlink' | 'special' | 'missing' | 'unreadable'
+  /** File count under a grouped directory exclusion. Absent for a single file. */
+  files?: number
+  bytes?: number
+  /** True when an enormous ignored tree hit the bounded scan cap — `files`/`bytes` are then
+   *  honest lower bounds, not totals. */
+  atLeast?: boolean
+}
+
+/**
+ * What a `.nodeterm-project` save file actually carries (or carried, on import) — shown to the
+ * user so the inclusion rule is stated rather than guessed at.
+ */
+export interface ProjectArchiveContents {
+  /**
+   * How the project's own repository travelled:
+   * - 'git-bundle'       — full history as a `git bundle --all` inside the file.
+   * - 'files-only'       — working files but no bundle (repo has no commits yet, or the folder
+   *                        sits inside a larger repository that was not dragged along).
+   * - 'no-repository'    — folder has no git repo; every regular file was included instead.
+   * - 'remote-project'   — SSH project: the folder lives on the remote host; canvas+history only.
+   * - 'no-folder'        — inline (cwd-less) project; canvas+history only.
+   * - 'folder-missing'   — the project's folder no longer exists on disk; canvas+history only.
+   * - 'not-in-archive'   — a V1 archive: the format carried no repository or working files.
+   */
+  repository:
+    | 'git-bundle'
+    | 'files-only'
+    | 'no-repository'
+    | 'remote-project'
+    | 'no-folder'
+    | 'folder-missing'
+    | 'not-in-archive'
+  /** Plain-words caveat when `repository` is not 'git-bundle' (why, and what that means). */
+  repositoryNote?: string
+  /** Working files included under `files/` (count and raw bytes before compression). */
+  workingFiles: number
+  workingBytes: number
+  /** Every excluded path, each with its reason. Empty when nothing was excluded. */
+  excluded: ProjectArchiveExclusion[]
+  /** Sums over `excluded` (lower bounds when any entry is `atLeast`). */
+  excludedFiles: number
+  excludedBytes: number
+}
+
 export interface WorkspaceApi {
   load(): Promise<Workspace>
   save(workspace: Workspace): Promise<void>
   /** Reads <folder>/.nodeterm/project.json and returns the assembled Project (cwd resolved), or null. */
   probeFolder(folder: string): Promise<Project | null>
+  /** Save the whole project as ONE file: canvas snapshot, app-owned local history, the project's
+   *  git repository (as a bundle) and its working files, in a ZIP container. `contents` states
+   *  exactly what was included and every exclusion with its reason. */
+  exportProject(
+    project: Project,
+    /** When given, the finished archive is wrapped whole in AES-256-GCM under a key derived from
+     *  this password (core/project-archive-encryption.ts) and the file leaks nothing about the
+     *  project — not its name, not its file list. Omitted ⇒ the historical plain container. */
+    password?: string
+  ): Promise<{
+    ok: boolean
+    path?: string
+    canceled?: boolean
+    error?: string
+    encrypted?: boolean
+    contents?: ProjectArchiveContents
+  }>
+  /** Open and validate a one-file project archive, restoring a fresh project, its history and —
+   *  for a V2 archive — its repository and working files into `restoredTo`. */
+  importProject(opts?: {
+    /** Skip the file picker and open exactly this file — the second leg of the password prompt:
+     *  the first call found the file protected and returned its path, and this one supplies the
+     *  password for that same file rather than making the user pick it again. */
+    path?: string
+    password?: string
+  }): Promise<{
+    ok: boolean
+    project?: Project
+    canceled?: boolean
+    error?: string
+    /** The file is password-protected: `path` names it, and nothing was opened. Not an error —
+     *  it is the prompt. */
+    needsPassword?: boolean
+    /** The supplied password did not open the file. Indistinguishable from a tampered file by
+     *  design (see core/project-archive-encryption.ts), and the copy says so. */
+    wrongPassword?: boolean
+    /** Too many wrong passwords for this file: no password may be tried for this many more
+     *  milliseconds. Set alongside `wrongPassword` when that failure started the wait, and alone
+     *  when the wait was already running. */
+    lockedMs?: number
+    /** The unlock ladder may be offered to end that wait — see core/archive-unlock-guard.ts. It
+     *  ends the WAITING and never the password. */
+    ladderAvailable?: boolean
+    path?: string
+    archiveVersion?: 1 | 2
+    contents?: ProjectArchiveContents
+    restoredTo?: string
+  }>
+  /** Hand out the next unlock-ladder question for a rate-limited protected project file. `null`
+   *  means no ladder is on offer (no wait to end, this climb already failed to the bottom, or the
+   *  shared rolling budget is spent). */
+  archiveLadderIssue(filePath: string): Promise<{
+    challenge: import('./unlock-ladder-types').LadderChallenge | null
+    budgetLeft: number
+    waitMs: number
+  }>
+  /** Grade an answer core-side against its one-shot nonce. A clear ends the WAIT and nothing
+   *  else — it never supplies, weakens, or checks the file's password. */
+  archiveLadderVerify(input: {
+    path: string
+    answer: import('./unlock-ladder-types').LadderAnswer
+  }): Promise<
+    import('./unlock-ladder-types').LadderVerdict & {
+      waitMs: number
+      budgetLeft: number
+      /** The next rung's question, minted with the verdict so one round-trip advances the climb. */
+      challenge: import('./unlock-ladder-types').LadderChallenge | null
+    }
+  >
   /** Fired once after an on-disk migration: `v2` = a v2→v3 migration wrote .nodeterm/ dirs into the
    *  project folders; `exec` = the custom shell / advanced ssh args of already-open projects moved
    *  out of the shared project file into this machine's own workspace index (@shared/node-exec). */
@@ -900,6 +1169,39 @@ export interface WorkspaceApi {
   onCorruptRecovered(cb: (backupFile: string) => void): () => void
   /** Fired when a project file changed on disk outside the app (git pull, sync, teammate). */
   onExternalChange(cb: (project: Project) => void): () => void
+}
+
+/** One step of an in-flight `serverDeployment.start()` call, in the order they can occur. Not
+ *  every deployment passes through every stage (an already-installed Docker skips
+ *  `installing-docker`; an already-running daemon skips `starting-docker-daemon`) — a listener
+ *  must not assume a fixed sequence, only that stages move forward and end in either `ready` or
+ *  the promise rejecting/resolving with `ok:false`. */
+export type ServerDeploymentStage =
+  | 'preparing-secrets'
+  | 'checking-docker'
+  | 'installing-docker'
+  | 'starting-docker-daemon'
+  | 'building-and-starting'
+  | 'ready'
+
+export interface ServerDeploymentApi {
+  start(): Promise<{
+    ok: boolean
+    state: 'ready' | 'docker-restart-required' | 'failed'
+    url?: string
+    totpCode?: string
+    error?: string
+  }>
+  currentTotp(): Promise<string>
+  /** Cheap, in-memory status: whether THIS app process has a deployment it believes is up, and if
+   *  so its connect URL. It does not re-probe Docker — it reflects the last successful `start()`
+   *  in this run, which is what the always-visible canvas indicator needs (it must never do a
+   *  multi-second Docker round trip just to decide whether to render). */
+  status(): Promise<{ running: boolean; url?: string }>
+  /** Subscribes to progress stages for whichever `start()` call is currently in flight (there is
+   *  at most one — `start()` dedupes concurrent callers onto a single run). Returns an
+   *  unsubscribe function. */
+  onProgress(cb: (stage: ServerDeploymentStage) => void): () => void
 }
 
 export interface DialogApi {
@@ -932,6 +1234,43 @@ export interface ShellApi {
   openPath(path: string): void
   /** Open an http(s) URL in the OS default browser. */
   openExternal(url: string): void
+}
+
+/** One node's canvas-widget state, as reported over IPC (see `CanvasWidgetState` for what is
+ *  actually persisted — this adds the live `open` flag, which is main-process runtime state, not
+ *  something settings.json remembers across restarts). */
+export interface CanvasWidgetLiveState {
+  nodeId: string
+  /** Is a widget window for this node currently open? */
+  open: boolean
+  alwaysOnTop: boolean
+  bounds?: { x: number; y: number; width: number; height: number }
+}
+
+/**
+ * Pop a terminal node's live session into its own always-on-top-configurable desktop window —
+ * see `CanvasWidgetState`'s doc comment above for the full design and `main/canvas-widget-window.ts`
+ * for the Electron-side implementation this calls into. Electron-only: every method rejects with
+ * `E_UNSUPPORTED` in the Server Edition (no OS window to open), and `onStateChanged` still returns
+ * a real no-op unsubscribe there so a mounting component never has to branch on which shell it is
+ * running under.
+ */
+export interface CanvasWidgetApi {
+  /** Open (or focus, if already open) the widget window for this node. Resolves once the window
+   *  has been created/focused; rejects `E_UNSUPPORTED` in the Server Edition. */
+  open(nodeId: string): Promise<void>
+  /** Close the widget window for this node. A no-op if it isn't open. Never touches the
+   *  underlying pty/session — the session keeps running exactly as it does when a canvas node is
+   *  merely unmounted (see the module doc in `main/canvas-widget-window.ts`). */
+  close(nodeId: string): Promise<void>
+  /** User-configurable always-on-top, both at open time and while the widget is open. Persists
+   *  per node; applies live if the widget window is currently open. */
+  setAlwaysOnTop(nodeId: string, alwaysOnTop: boolean): Promise<void>
+  /** Current live + persisted state for one node. */
+  getState(nodeId: string): Promise<CanvasWidgetLiveState>
+  /** Fires whenever any node's widget state changes (opened, closed, always-on-top toggled, or
+   *  bounds persisted) — main window and widget window alike listen on this. Returns unsubscribe. */
+  onStateChanged(listener: (state: CanvasWidgetLiveState) => void): () => void
 }
 
 export interface DirEntry {
@@ -1004,12 +1343,58 @@ export interface MediaApi {
   writeHtml(html: string): Promise<string>
 }
 
+/** One extension Electron actually has loaded into a partition's session, as reported live by
+ *  `session.extensions.getAllExtensions()` — id/name/version come from the extension's own
+ *  manifest, never invented by this app. See `BrowserExtensionsApi`. */
+export interface BrowserExtensionInfo {
+  id: string
+  name: string
+  version: string
+  /** Absolute directory path this extension was loaded from (unpacked only — Electron does not
+   *  support installing packed .crx extensions; see `BrowserExtensionsApi` doc). */
+  path: string
+}
+
+/**
+ * Unpacked Chrome-extension loading for a browser profile's Electron session.
+ *
+ * Desktop (Electron) only. Electron's extension support (Manifest V2/V3 subset, see
+ * https://electronjs.org/docs/api/extensions-api) has two real limits worth stating plainly
+ * rather than pretending this is full Chrome Web Store parity:
+ *   - Unpacked directories only — no packed `.crx` install flow, no Web Store browsing.
+ *   - "Electron does not support the full range of Chrome extensions APIs" (Electron's own
+ *     docs) — an extension that leans on an unimplemented `chrome.*` API may partly or fully not
+ *     work; this app cannot detect that in advance, only whether `loadExtension` itself accepted
+ *     the directory.
+ * The Server Edition and relay tabs run in a real browser tab, not Electron, and reject every
+ * method with `E_UNSUPPORTED` — there is no Chromium extension host to load into there at all.
+ */
+export interface BrowserExtensionsApi {
+  /** Extensions currently loaded into this profile's session (`partition` — see
+   *  `browserPartitionFor`; `undefined` = the app's default/unpartitioned session). Read live
+   *  from Electron, so a load that failed at boot never appears here. */
+  list(partition: string | undefined): Promise<BrowserExtensionInfo[]>
+  /** Open a native folder picker for an unpacked extension directory (must contain
+   *  `manifest.json`); `null` if the user cancelled. Desktop-only, mirroring `dialog:select-folder`. */
+  pickDir(): Promise<string | null>
+  /** Load an unpacked extension directory into `partition`'s session and persist it so it reloads
+   *  on the next app launch (Electron itself forgets loaded extensions across restarts). */
+  add(
+    partition: string | undefined,
+    dirPath: string
+  ): Promise<{ ok: true; extension: BrowserExtensionInfo } | { ok: false; error: string }>
+  /** Unload an extension (identified by the directory path it was added with) from `partition`'s
+   *  session and stop reloading it at boot. */
+  remove(partition: string | undefined, dirPath: string): Promise<void>
+}
+
 export interface BrowserApi {
   /** Map a browser node's <webview> guest to its node id (for new-window capture). */
   register(webContentsId: number, nodeId: string, ownerNodeId?: string): void
   unregister(webContentsId: number): void
   /** Fires when a browser guest requested a new window; the renderer opens another browser node. */
   onBrowserNewWindow(listener: (e: { url: string; sourceNodeId: string }) => void): () => void
+  extensions: BrowserExtensionsApi
 }
 
 /** A user-defined agent (BYO CLI). In no capability list, so it gets only spawn +
@@ -1193,8 +1578,77 @@ export interface AppLogoSettings {
   customImage?: AppLogoCustomImage
 }
 
+export interface DockerHostSettings {
+  /** Docker CLI context name. Empty means Docker's current context. */
+  context: string
+  /** Allowlisted image reference selected by the guided host surface. */
+  image: string
+  containerPrefix: string
+  mountMode: 'readonly' | 'writable'
+  cpus: number
+  memoryMb: number
+  pidsLimit: number
+  network: 'none' | 'bridge'
+  workdir: '/workspace'
+}
+
+/**
+ * ADHD modes — five independent interface accommodations, all off by default.
+ *
+ * Independent on purpose: someone may want a quieter interface without time nudges, or want the
+ * nudges precisely because they are hyperfocusing. One master switch means most people turn the
+ * whole thing off to escape the single part that does not suit them.
+ *
+ * Named for what each one DOES, not for who it is for, so a person can use one without disclosing
+ * anything to a colleague reading over their shoulder. These are interface accommodations, never
+ * medical: no diagnosis, no assessment, no advice, no claim of clinical benefit.
+ *
+ * Logic lives in `renderer/lib/adhdModes.ts`; every field here is re-validated on read because
+ * settings.json is hand-editable and these values reach CSS properties and timer comparisons.
+ */
+export interface AdhdModes {
+  /** Spotlight the focused node and fade the rest. Dims — never hides. */
+  focus: boolean
+  /** Less motion, quieter colour, and only notifications that genuinely need a person. */
+  lowStimulation: boolean
+  /** Show elapsed time where the work is, because time blindness is not helped by a clock in a menu. */
+  timeAwareness: boolean
+  /** One visible, user-chosen next action that survives a context switch. */
+  oneThing: boolean
+  /** A dismissible, factual note when something has sat untouched. Never a verdict. */
+  momentum: boolean
+  /** How much to fade unfocused nodes, 0.1–0.8. Capped so an unfocused node stays visible. */
+  focusDim: number
+  /** Minutes untouched before the momentum note appears, 5–240. */
+  momentumMinutes: number
+  /** The person's own next action, in their words. Bounded to 200 characters. */
+  oneThingText: string
+  /** "Not now", respected until this timestamp rather than until the next render. */
+  snoozeUntilMs: number | null
+}
+
+/**
+ * One terminal node "escaped" from the canvas into its own always-on-top-configurable desktop
+ * widget window (see `main/canvas-widget-window.ts`, `renderer/widget/WidgetApp.tsx`). The widget
+ * is a SECOND live view of the SAME tmux/session-host session the canvas node owns — the exact
+ * viewer-identity co-attach mechanism the kanban card modal already uses (`ModalTerminal.tsx`) —
+ * never a copy, and closing it never destroys the underlying session (see the widget-open/close
+ * IPC handlers in `main/canvas-widget-window.ts`, which call no pty destroy/kill on window close).
+ */
+export interface CanvasWidgetState {
+  /** Stay above other windows while the widget is open. User-configurable, both when opening the
+   *  widget and while it is open; persists per node. */
+  alwaysOnTop: boolean
+  /** Window bounds in OS screen coordinates, persisted per node so re-opening the SAME node's
+   *  widget reuses its last position/size. Absent until the widget has been moved/resized once. */
+  bounds?: { x: number; y: number; width: number; height: number }
+}
+
 /** User-configurable application settings (settings.json). */
 export interface Settings {
+  /** ADHD modes — five independent accommodations, all off by default. See `AdhdModes`. */
+  adhdModes: AdhdModes
+  dockerHost: DockerHostSettings
   fontSize: number
   fontFamily: string
   cursorBlink: boolean
@@ -1249,8 +1703,25 @@ export interface Settings {
   /** Fallback view for projects the user hasn't explicitly toggled (canvas or the kanban board).
    *  Personal machine-local preference; per-project explicit choices override it. */
   defaultProjectView: 'canvas' | 'kanban'
+  /**
+   * Persisted state for a terminal node "escaped" from the canvas into its own desktop widget
+   * window (Windows/Linux/macOS — see `main/canvas-widget-window.ts`). Keyed by node id.
+   * Machine-local UI chrome, exactly like `sidebarCollapsedItems` above: never written into the
+   * git-shared `project.json` (see `core/workspace-files.ts`'s `ProjectFileV1`/`projectToFile`),
+   * because a widget's screen position on THIS machine means nothing on somebody else's. Pruned
+   * against live node ids on every write (`pruneCanvasWidgets` in `core/canvas-widget.ts`) so a
+   * deleted node's widget state doesn't grow settings.json forever.
+   */
+  canvasWidgets: Record<string, CanvasWidgetState>
   /** ms to dwell over a terminal before it takes pointer focus (pan-across guard). */
   panHoverDelay: number
+  /**
+   * Rainbow node-colour speed, 1 (slow drift) to 5 (fast). Stored as a level rather than a
+   * duration because seconds are a unit nobody has an intuition for, and because a control where a
+   * bigger number means slower is a control people fight. The level-to-seconds mapping lives in
+   * renderer/lib/nodeColor.ts so the setting and the stylesheet cannot disagree about what 3 means.
+   */
+  rainbowSpeed: number
   doubleClickFocus: boolean
   /**
    * Let a MIDDLE CLICK inside a terminal paste the X PRIMARY selection (Linux only — macOS and
@@ -1320,6 +1791,10 @@ export interface Settings {
    *  renderer. See `resolveTerminalRenderer` (shared/webgl.ts) for the full history. */
   terminalGpuRendering: 'auto' | 'on' | 'off' | 'shared'
   tmuxScrollback: number
+  /** Characters that END a word on double-click. See src/shared/word-separators.ts — this one
+   *  setting reaches THREE writers (xterm, local tmux, remote tmux), because tmux owns the mouse
+   *  and an xterm-only change would be a no-op for the common case. */
+  terminalWordSeparators: string
   /** Minutes a terminal may sit fully offscreen before its xterm+PTY client is torn down in
    *  place (tmux keeps the session; re-approach reattaches and redraws). 0 = never. */
   offscreenTerminalMinutes: number
@@ -1542,7 +2017,38 @@ export interface Settings {
   shortcuts: ShortcutMap
 }
 
+/** The M3-baseline seed colour (design/v2/md3/tokens.css) — `--md-primary`'s literal value in
+ *  `styles.css`'s light block. `DEFAULT_SETTINGS.accent` reads it, and `accentTokens.ts`'s
+ *  `applyAccentTokens()` compares an incoming accent against it (lowercase, matching what
+ *  `toHex()` always produces) to decide whether to skip inline overrides and leave the two
+ *  authored dark/light `--md-primary` defaults in charge. Replaces the pre-M3 default,
+ *  `#0a84ff` (systemBlue) — see `mergeSettings`'s migration in `core/settings-store.ts` for the
+ *  one-time upgrade of an existing install's saved `#0a84ff`. */
+export const DEFAULT_ACCENT = '#6750a4'
+
 export const DEFAULT_SETTINGS: Settings = {
+  adhdModes: {
+    focus: false,
+    lowStimulation: false,
+    timeAwareness: false,
+    oneThing: false,
+    momentum: false,
+    focusDim: 0.55,
+    momentumMinutes: 20,
+    oneThingText: '',
+    snoozeUntilMs: null
+  },
+  dockerHost: {
+    context: '',
+    image: 'node:24-bookworm-slim',
+    containerPrefix: 'nodeterm-host',
+    mountMode: 'readonly',
+    cpus: 1,
+    memoryMb: 1024,
+    pidsLimit: 256,
+    network: 'none',
+    workdir: '/workspace'
+  },
   fontSize: 13,
   fontFamily: 'Menlo, Monaco, Consolas, "Cascadia Mono", "Courier New", monospace',
   cursorBlink: true,
@@ -1570,18 +2076,21 @@ export const DEFAULT_SETTINGS: Settings = {
   sidebarAutoCollapse: true,
   sidebarCollapsedItems: {},
   defaultProjectView: 'canvas',
+  canvasWidgets: {},
   panHoverDelay: 600,
+  rainbowSpeed: 3,
   doubleClickFocus: true,
   terminalMiddleClickPaste: false,
-  wheelZoom: false,
+  wheelZoom: true,
   trackpadPan: true,
-  canvasDragMode: 'select',
+  canvasDragMode: 'pan',
   browserMemorySaver: true,
-  accent: '#0a84ff',
+  accent: DEFAULT_ACCENT,
   tmuxEnabled: true,
   ptyShadowClients: true,
   terminalGpuRendering: 'auto',
   tmuxScrollback: 50000,
+  terminalWordSeparators: DEFAULT_WORD_SEPARATORS,
   offscreenTerminalMinutes: 10,
   commitAgent: 'claude',
   commitAgentCommand: '',
@@ -1727,6 +2236,16 @@ export interface KidsModeApi {
   rename(name: string): Promise<KidsModeSnapshot>
   changePin(currentPin: string, nextPin: string): Promise<boolean>
   hasCredential(): Promise<boolean>
+  /**
+   * Verify the grown-up PIN WITHOUT changing state — the entry point for the grown-up screen,
+   * which must be reachable without leaving Kids mode. Optional on the interface: the desktop
+   * preload implements it for real (backed by the same core `KidsModeStore.verifyPin`, registered
+   * on both shells over IPC), but the Server Edition's browser bridge (`renderer/bridge/
+   * ws-bridge.ts`) predates this member and does not yet expose it — a follow-up, not a design
+   * gap. Callers must fail CLOSED (never assume success) when this is `undefined`, exactly as an
+   * unreadable credential fails closed; see `bridge/stubs.ts`'s `verifyKidsModePin`.
+   */
+  verifyPin?(pin: string): Promise<boolean>
   onChanged(cb: (r: KidsModeSnapshot) => void): () => void
 }
 
@@ -2765,6 +3284,10 @@ export interface ClaudeApi {
 export type HandoffResult = { filePath: string } | { error: string }
 
 export interface HandoffApi {
+  /** False on Server Edition: `handoff:build` is registered only in `src/main`, so the browser
+   *  bridge has nothing to call and its stub rejects. UI must hide the transfer affordance rather
+   *  than offer a menu item whose rejection escapes the resolved-result contract below. */
+  readonly supported: boolean
   /**
    * Render the source agent's full conversation transcript (located by `sessionId`)
    * to a portable Markdown file under `<cwd>/.nodeterm/` and return its absolute path.
@@ -2864,9 +3387,10 @@ export interface RelayPeerPending {
  * the Server Edition browser build degrades every member to `E_UNSUPPORTED`/no-op.
  */
 export interface RelayHostApi {
+  dockerContexts(): Promise<Array<{ name: string; current: boolean; endpoint: string }>>
   /**
    * Enter host mode over the relay: connect and return a pairing offer string to hand to a client.
-   * Rejects if the device is not entitled (or a dev build without the relay URL). `projectId` is the
+   * Rejects when Docker or the configured relay is unavailable. `projectId` is the
    * single project this hosting session shares with the peer; omit for the legacy whole-workspace view.
    */
   start(projectId?: string): Promise<{ offer: string; id: string }>
@@ -2952,6 +3476,16 @@ export type PairingDoneResult = {
 }
 
 /** Phone-pairing (nodeterm iOS "scan a QR" flow) bridge. */
+/** Result of the Remote Login help action. `opened:'none'` is an honest answer, not a failure: it
+ *  means this platform has no settings surface worth opening and `command` is what to run. */
+export interface RemoteLoginHelp {
+  opened: 'settings' | 'none'
+  /** Which settings surface, when knowing matters for the copy (Windows: the OpenSSH feature). */
+  note?: 'openssh-server'
+  /** Present only when `opened` is 'none' — the exact command the user should run. */
+  command?: string
+}
+
 export interface PairingApi {
   /** False on Server Edition, where the browser is already attached to its host and no desktop
    *  LAN listener / OS SSH-key store exists. UI must show a deliberate degrade, not call stubs. */
@@ -2980,7 +3514,10 @@ export interface PairingApi {
   /** Open System Settings → General → Sharing (Remote Login). The deep link is a main-side
    *  constant — x-apple.* schemes never pass shellOpenExternal's http(s) allowlist. macOS-only;
    *  a no-op elsewhere. */
-  openRemoteLoginSettings(): Promise<void>
+  /** What the help action actually did, so the renderer can say so rather than guess.
+   *  macOS/Windows open a real settings surface; Linux has no settings URL that is right
+   *  across desktops, so it returns the command to run instead of misfiring a button. */
+  openRemoteLoginSettings(): Promise<RemoteLoginHelp>
   /** List paired devices from ~/.nodeterm/agent.json (never includes the token). */
   listDevices(): Promise<PairedDevice[]>
   /** Revoke a device: remove its registry entry and delete its authorized_keys line. */
@@ -3031,6 +3568,12 @@ export interface ToylockApi {
    *  without this call core would keep authorizing name-addressed writes (dictation) after the
    *  lock visibly re-engaged. Fire-and-forget. */
   relock(lockId: string): Promise<void>
+  /** The unlock ladder for a lock whose wrong attempts have earned a wait (docs/unlock-ladder.md):
+   *  dim sum → ten easy sums → whack-a-mole. `challenge: null` means no ladder is on offer — no
+   *  wait in effect, the rolling budget is spent, or this climb has already been failed to the
+   *  bottom. Clearing a rung ends the WAIT only. */
+  ladderIssue(lockId: string): Promise<ToyLockLadderState>
+  ladderVerify(input: ToyLockLadderVerifyInput): Promise<ToyLockLadderVerifyResult>
 }
 
 /** The built-in authenticator (docs/authenticator.md) — arbitrary TOTP secrets kept locally,
@@ -3047,11 +3590,39 @@ export interface AuthenticatorApi {
   exportSecrets(input: AuthenticatorExportInput): Promise<AuthenticatorExportResult>
 }
 
+/** Per-project password manager (shared/password-manager.ts, docs pending). Every method is
+ *  scoped by `projectId` because the vault lives at that project's `<cwd>/.nodeterm/vault.json`
+ *  (core/password-manager/vault-store.ts) — there is no machine-global vault. LOCAL-ONLY: this
+ *  namespace is deliberately absent from the relay peer allowlist (main/relay-rpc-policy.ts),
+ *  exactly like ToylockApi/AuthenticatorApi — a mutually-approved relay peer gets shell-equivalent
+ *  access to the joined project, but must never be able to unlock or read this desktop's stored
+ *  credentials. See main/relay-rpc-policy.ts's header comment for why the allowlist is exact
+ *  rather than a blocklist. */
+export interface PasswordManagerApi {
+  status(projectId: string): Promise<VaultStatus>
+  createVault(projectId: string, password: string): Promise<VaultCreateResult>
+  unlock(projectId: string, password: string): Promise<VaultUnlockResult>
+  lock(projectId: string): Promise<void>
+  changePassword(projectId: string, input: ChangeVaultPasswordInput): Promise<ChangeVaultPasswordResult>
+  createManager(projectId: string, input: CreateManagerInput): Promise<CreateManagerResult>
+  renameManager(projectId: string, input: RenameManagerInput): Promise<ManagerMutationResult>
+  bindManagerGroup(projectId: string, input: BindManagerGroupInput): Promise<ManagerMutationResult>
+  releaseGroupBinding(projectId: string, groupId: string): Promise<ReleaseGroupBindingResult>
+  deleteManager(projectId: string, id: string): Promise<ManagerMutationResult>
+  createCredential(projectId: string, input: CreateCredentialInput): Promise<CreateCredentialResult>
+  renameCredential(projectId: string, input: RenameCredentialInput): Promise<ManagerMutationResult>
+  updateCredentialSecret(projectId: string, input: UpdateCredentialSecretInput): Promise<UpdateCredentialResult>
+  removeCredential(projectId: string, input: RemoveCredentialInput): Promise<RemoveCredentialResult>
+  revealCredential(projectId: string, managerId: string, credentialId: string): Promise<RevealCredentialResult>
+  credentialCode(projectId: string, managerId: string, credentialId: string): Promise<CredentialCodeResult>
+}
+
 export interface NodeTerminalApi {
   pty: PtyApi
   /** Desktop-only Windows profile detection; absent on Server Edition and mobile bridges. */
   terminalProfiles?: TerminalProfilesApi
   workspace: WorkspaceApi
+  serverDeployment: ServerDeploymentApi
   dialog: DialogApi
   settings: SettingsApi
   schoolMode: SchoolModeApi
@@ -3062,6 +3633,8 @@ export interface NodeTerminalApi {
   converter: import('./converter').ConverterApi
   /** Local Ollama suite manager — docs/ollama-manager.md. */
   ollama: import('./ollama').OllamaApi
+  /** Local Minecraft server create-and-manage — docs/minecraft-server-manager.md. */
+  minecraft: import('./minecraft').MinecraftApi
   ssh: SshApi
   sshProject: SshProjectApi
   sshFs: SshFsApi
@@ -3100,6 +3673,9 @@ export interface NodeTerminalApi {
   presence: PresenceApi
   toylock: ToylockApi
   authenticator: AuthenticatorApi
+  passwordManager: PasswordManagerApi
+  /** "Escape to widget" — one node's session in its own always-on-top-configurable window. */
+  canvasWidget: CanvasWidgetApi
   /** Fires when the user presses Cmd/Ctrl+M (toggle markdown view). Returns unsubscribe. */
   onMarkdownToggle(listener: () => void): () => void
   /** Fires when the user presses Cmd/Ctrl+W (close selected node). Returns unsubscribe. */

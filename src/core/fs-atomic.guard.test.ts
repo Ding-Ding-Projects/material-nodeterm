@@ -20,8 +20,27 @@ import { describe, expect, it } from 'vitest'
 import { readFileSync, readdirSync, statSync } from 'fs'
 import { join, relative } from 'path'
 
-const ROOTS = ['core', 'main', 'server', 'session-host'].map((d) => join(__dirname, '..', d))
 const SOURCE_ROOT = join(__dirname, '..')
+const REPO_ROOT = join(SOURCE_ROOT, '..')
+
+interface ScanRoot {
+  directory: string
+  includes: RegExp
+  excludes: RegExp
+}
+
+const ROOTS: ScanRoot[] = [
+  ...['core', 'main', 'server', 'session-host'].map((directory) => ({
+    directory: join(SOURCE_ROOT, directory),
+    includes: /\.ts$/,
+    excludes: /\.test\.ts$/
+  })),
+  {
+    directory: join(REPO_ROOT, 'scripts'),
+    includes: /\.(?:mjs|cjs|js)$/,
+    excludes: /\.test\.(?:mjs|cjs|js)$/
+  }
+]
 
 /** Guard comparisons use one separator regardless of the host running Vitest. */
 function normalizedSourcePath(value: string): string {
@@ -29,15 +48,16 @@ function normalizedSourcePath(value: string): string {
 }
 
 function sourceRelativePath(file: string): string {
-  return normalizedSourcePath(relative(SOURCE_ROOT, file))
+  const repoRelative = normalizedSourcePath(relative(REPO_ROOT, file))
+  return repoRelative.startsWith('src/') ? repoRelative.slice('src/'.length) : repoRelative
 }
 
-function sources(dir: string, out: string[] = []): string[] {
+function sources(root: ScanRoot, out: string[] = [], dir = root.directory): string[] {
   for (const entry of readdirSync(dir)) {
     const p = join(dir, entry)
     if (statSync(p).isDirectory()) {
-      if (entry !== 'node_modules') sources(p, out)
-    } else if (/\.ts$/.test(entry) && !/\.test\.ts$/.test(entry)) {
+      if (entry !== 'node_modules') sources(root, out, p)
+    } else if (root.includes.test(entry) && !root.excludes.test(entry)) {
       out.push(p)
     }
   }
@@ -55,6 +75,10 @@ const RENAME_ALLOWED = new Map<string, string>([
   [
     'session-host/state-file.ts',
     'the standalone host cannot import core; this helper owns its bounded synchronous rename retry'
+  ],
+  [
+    'scripts/lib/rename-atomic.mjs',
+    'scripts cannot import core TypeScript; this shared helper owns their bounded rename retries'
   ]
 ])
 
@@ -63,12 +87,18 @@ function isRenameAllowed(relativeFile: string): boolean {
 }
 
 describe('every store publishes through renameAtomic', () => {
-  const files = ROOTS.flatMap((r) => sources(r))
+  const files = ROOTS.flatMap((root) => sources(root))
 
   it('finds the source tree (a zero-file scan would pass silently)', () => {
     // The failure this whole file is about, one level up: a scan that matches nothing reports
     // clean. If a directory is renamed and this drops to nothing, it must go red, not quiet.
     expect(files.length).toBeGreaterThan(100)
+    expect(files.map(sourceRelativePath)).toEqual(expect.arrayContaining([
+      'scripts/windows-installer.mjs',
+      'scripts/write-windows-profile-build-provenance.mjs',
+      'scripts/windows-profile-packaged-driver.mjs',
+      'scripts/run-windows-profile-packaged-acceptance.mjs'
+    ]))
   })
 
   // Every spelling of the call, because the first version of this test knew only `fs.rename(` and
@@ -133,11 +163,20 @@ describe('every store publishes through renameAtomic', () => {
     return found
   }
 
+  function stripImports(text: string): string {
+    return text
+      // Ordinary imports stay on one line: never bridge through code looking for a later `from`.
+      .replace(/^[ \t]*import[ \t]+[^{}\r\n;]+[ \t]+from[ \t]+['"][^'"\r\n]+['"][ \t]*;?[ \t]*\r?$/gm, '')
+      // A braced import may span lines, but `[^{}]*` confines it to that one import clause.
+      .replace(/^[ \t]*import[ \t]+(?:[A-Za-z_$][\w$]*[ \t]*,[ \t]*)?\{[^{}]*\}[ \t]*from[ \t]*['"][^'"]+['"][ \t]*;?[ \t]*\r?$/gm, '')
+  }
+
   function renameHits(text: string): string[] {
-    const code = text
-      .replace(/\/\*[\s\S]*?\*\//g, '')
-      .replace(/(^|[^:])\/\/.*$/gm, '$1')
-      .replace(/import\s*[\s\S]*?\s+from\s*['"][^'"]+['"]/g, '')
+    const code = stripImports(
+      text
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/(^|[^:])\/\/.*$/gm, '$1')
+    )
     const bindings = fsRenameBindings(text)
     const hits: string[] = []
     for (const namespace of bindings.namespaces) {
@@ -187,6 +226,18 @@ describe('every store publishes through renameAtomic', () => {
       .toEqual([])
   })
 
+  it('does not let an inline import type arm import stripping across a bare rename', () => {
+    const armed = [
+      "import fs from 'fs'",
+      "type Project = import('../shared/types').Project",
+      'await fs.rename(tmp, target)',
+      `const marker = " from 'x'"`
+    ].join('\n')
+    const stripped = stripImports(armed)
+    expect(stripped).toContain('await fs.rename(tmp, target)')
+    expect(renameHits(armed)).not.toEqual([])
+  })
+
   it('the fs-import qualifier separates a real rename from a method called rename', () => {
     // The false positives that made this necessary were all real: kids-mode, School-mode and the
     // Ollama chat store each expose a `rename()` of their own.
@@ -209,6 +260,8 @@ describe('every store publishes through renameAtomic', () => {
     expect(isRenameAllowed(String.raw`core\fs-atomic.ts`)).toBe(true)
     expect(isRenameAllowed('session-host/state-file.ts')).toBe(true)
     expect(isRenameAllowed(String.raw`session-host\state-file.ts`)).toBe(true)
+    expect(isRenameAllowed('scripts/lib/rename-atomic.mjs')).toBe(true)
+    expect(isRenameAllowed(String.raw`scripts\lib\rename-atomic.mjs`)).toBe(true)
     expect(isRenameAllowed('nested/session-host/state-file.ts')).toBe(false)
     expect(isRenameAllowed('session-host/state-file.ts.bak')).toBe(false)
     const scanned = new Set(files.map(sourceRelativePath))
@@ -217,7 +270,7 @@ describe('every store publishes through renameAtomic', () => {
 })
 
 describe('no local .tmp publisher uses a shared temp name', () => {
-  const files = ROOTS.flatMap((r) => sources(r))
+  const files = ROOTS.flatMap((root) => sources(root))
 
   it('every local temp path carries random UUID entropy', () => {
     // The second bug at the same sites, independent of the platform question: a FIXED temp name

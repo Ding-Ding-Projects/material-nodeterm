@@ -4,6 +4,8 @@ import { COLLAPSED_HEIGHT, type CanvasNode } from '../state/workspace'
 import { ColumnPill } from '../components/kanban/ColumnPill'
 import { ColorMenu } from '../components/color/ColorMenu'
 import { alphaTint } from '../components/color/tint'
+import { EditableNodeTitle } from '../components/EditableNodeTitle'
+import { nodeHeaderFillStyle } from '../lib/nodeColor'
 
 /**
  * A sticky note node: a colored, resizable card with free-text content.
@@ -15,18 +17,24 @@ export function StickyNode({ id, data, selected }: NodeProps<CanvasNode>) {
    *  boolean because the surface is a body portal (see ColorMenu). */
   const [colorAnchor, setColorAnchor] = useState<{ x: number; y: number } | null>(null)
   /**
-   * The title is a plain SPAN until it is clicked, exactly as on a terminal node.
+   * The title is a plain button until it is clicked, exactly as on a terminal node — rendered by
+   * the shared `EditableNodeTitle` (see that file for why TerminalNode itself is not on it).
    *
    * It used to be a permanent `<input class="term-node__title">`, and that class is `flex: 1` — so
    * the input covered the whole header strip. Everything in that strip was therefore a text field:
    * clicking to pick the note up put a caret in the title instead, and there was no bare header
    * left to grab. Reported 2026-08-09 ("the click area is full width, it should only be the name").
-   * The terminal's `.term-node__title-text` is content-width, which is the behaviour being matched.
+   * `editingTitle` here only mirrors EditableNodeTitle's internal state (via `onEditingChange`) so
+   * the header spacer below can still hide itself while editing, matching the old behaviour.
    */
   const [editingTitle, setEditingTitle] = useState(false)
-  /** The value editing started with, so Escape can put it back. */
-  const [titleBefore, setTitleBefore] = useState('')
   const collapsed = !!data.collapsed
+
+  // Collapsed, the header IS the whole node — a thin tint no longer reads as "this note is
+  // orange" the way a full-bleed fill does (same fix as the terminal/editor/etc. headers; see
+  // `nodeHeaderFillStyle`'s doc comment). Expanded keeps its existing low-alpha tint, which already
+  // reads fine against the body text beneath it.
+  const headerFill = collapsed ? nodeHeaderFillStyle(data.color) : null
 
   const toggleCollapse = () =>
     setNodes((ns) =>
@@ -74,7 +82,10 @@ export function StickyNode({ id, data, selected }: NodeProps<CanvasNode>) {
         data-tip="Link in — drop a link here to attach this note as context"
       />
 
-      <div className="sticky-node__header" style={{ background: alphaTint(data.color, 51 / 255) }}>
+      <div
+        className={`sticky-node__header${headerFill?.filled ? ' sticky-node__header--filled' : ''}`}
+        style={headerFill?.filled ? headerFill.style : { background: alphaTint(data.color, 51 / 255) }}
+      >
         <button className="term-node__collapse" title={collapsed ? 'Expand' : 'Collapse'} onClick={toggleCollapse}>
           {collapsed ? '▸' : '▾'}
         </button>
@@ -101,39 +112,14 @@ export function StickyNode({ id, data, selected }: NodeProps<CanvasNode>) {
             onClose={() => setColorAnchor(null)}
           />
         )}
-        {editingTitle ? (
-          <input
-            className="term-node__title nodrag"
-            value={data.title}
-            spellCheck={false}
-            autoFocus
-            onChange={(e) => updateNodeData(id, { title: e.target.value })}
-            // Every exit commits what is on screen — the edits are live, so there is nothing to
-            // save — except Escape, which puts back the value editing started with.
-            onBlur={() => setEditingTitle(false)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                setEditingTitle(false)
-              } else if (e.key === 'Escape') {
-                e.preventDefault()
-                updateNodeData(id, { title: titleBefore })
-                setEditingTitle(false)
-              }
-            }}
-          />
-        ) : (
-          <span
-            className="term-node__title-text nodrag"
-            title="Click to rename"
-            onClick={() => {
-              setTitleBefore((data.title as string) ?? '')
-              setEditingTitle(true)
-            }}
-          >
-            {(data.title as string) || 'Note'}
-          </span>
-        )}
+        <EditableNodeTitle
+          value={(data.title as string) ?? ''}
+          onChange={(next) => updateNodeData(id, { title: next })}
+          emptyLabel="Note"
+          ariaLabel="Note name"
+          rejectEmpty={false}
+          onEditingChange={setEditingTitle}
+        />
         {/* Pushes the close button back to the right edge now that the title is content-width — and
             it is deliberately NOT `nodrag`, so this is the bare strip of header the note is picked
             up by. That grab area is what the permanent full-width input used to swallow. Absent

@@ -7,7 +7,15 @@ import {
   stripSharedNodeExec,
   type LocalNodeExecMap
 } from '../shared/node-exec'
-import type { BridgeLink, CanvasNodeState, Project, ProjectKanban, Viewport, Workspace } from '../shared/types'
+import type {
+  BridgeLink,
+  BrowserProfile,
+  CanvasNodeState,
+  Project,
+  ProjectKanban,
+  Viewport,
+  Workspace
+} from '../shared/types'
 
 export const PROJECT_DIR = '.nodeterm'
 export const PROJECT_FILE = 'project.json'
@@ -68,6 +76,9 @@ export interface ProjectFileV1 {
   defaultPermissionMode?: AgentPermissionMode
   dinoHighScore?: number
   kanban?: ProjectKanban
+  /** Named browser profiles — see `BrowserProfile` in `../shared/types` and
+   *  `shared/browser-profiles.ts`. Names only; the cookie jar is machine-local. */
+  browserProfiles?: BrowserProfile[]
 }
 
 /** One workspace.json v3 entry. Exactly one of: `cwd` (local ref), `ssh` (remote ref),
@@ -92,6 +103,8 @@ export interface IndexEntryV3 {
   /** MACHINE-LOCAL default managed Claude account for a ref'd project: the id names a credential
    *  dir in THIS machine's userData, so it is meaningless in anyone else's checkout. */
   defaultAccountId?: string
+  /** Sparse machine-local project settings overlay. Never serialized into ProjectFileV1. */
+  settingsOverrides?: Project['settingsOverrides']
   cwd?: string
   ssh?: Project['ssh']
   cache?: ProjectFileV1
@@ -183,7 +196,8 @@ export function projectToFile(
     ...(p.ropes ? { ropes: p.ropes } : {}),
     ...(p.defaultPermissionMode ? { defaultPermissionMode: p.defaultPermissionMode } : {}),
     ...(p.dinoHighScore ? { dinoHighScore: p.dinoHighScore } : {}),
-    ...(p.kanban ? { kanban: p.kanban } : {})
+    ...(p.kanban ? { kanban: p.kanban } : {}),
+    ...(p.browserProfiles && p.browserProfiles.length > 0 ? { browserProfiles: p.browserProfiles } : {})
   }
 }
 
@@ -197,6 +211,23 @@ export function validKanban(k: unknown): k is ProjectKanban {
     Array.isArray((k as ProjectKanban).columns) &&
     Array.isArray((k as ProjectKanban).assignments)
   )
+}
+
+/** The browser-profiles shape rule used on every load path — same discipline as `validKanban`:
+ *  anything but a real array of `{id, name, color}` objects is dropped, so a hand-edited or
+ *  legacy-shaped file degrades to "no profiles yet" instead of crashing the picker. A malformed
+ *  ENTRY inside an otherwise-valid array is dropped individually rather than discarding the whole
+ *  list — one bad row must not take a teammate's real profiles down with it. */
+export function validBrowserProfiles(v: unknown): BrowserProfile[] | undefined {
+  if (!Array.isArray(v)) return undefined
+  const cleaned = v.filter(
+    (p): p is BrowserProfile =>
+      !!p &&
+      typeof (p as BrowserProfile).id === 'string' &&
+      typeof (p as BrowserProfile).name === 'string' &&
+      typeof (p as BrowserProfile).color === 'string'
+  )
+  return cleaned.length > 0 ? cleaned : undefined
 }
 
 /**
@@ -220,6 +251,7 @@ export function fileToProject(
     viewport?: Viewport
     /** This machine's default managed account; falls back to the file's legacy value. */
     defaultAccountId?: string
+    settingsOverrides?: Project['settingsOverrides']
     /** This machine's own exec values for these nodes (from the local index entry). A file read
      *  WITHOUT them — an adopted/cloned folder, a probe — gets the safe defaults, never the file's
      *  own `shell`/`ssh.extraArgs`. */
@@ -227,6 +259,7 @@ export function fileToProject(
   }
 ): Project {
   const defaultAccountId = base.defaultAccountId ?? f.defaultAccountId
+  const browserProfiles = validBrowserProfiles(f.browserProfiles)
   return {
     id: base.id,
     name: f.name,
@@ -238,9 +271,11 @@ export function fileToProject(
     ...(f.bridges ? { bridges: f.bridges } : {}),
     ...(f.ropes ? { ropes: f.ropes } : {}),
     ...(defaultAccountId ? { defaultAccountId } : {}),
+    ...(base.settingsOverrides ? { settingsOverrides: base.settingsOverrides } : {}),
     ...(f.defaultPermissionMode ? { defaultPermissionMode: f.defaultPermissionMode } : {}),
     ...(f.dinoHighScore ? { dinoHighScore: f.dinoHighScore } : {}),
     ...(validKanban(f.kanban) ? { kanban: f.kanban } : {}),
+    ...(browserProfiles ? { browserProfiles } : {}),
     ...(base.cwd ? { cwd: base.cwd } : {}),
     ...(base.ssh ? { ssh: base.ssh } : {}),
     ...(base.closed ? { closed: true } : {})
@@ -329,7 +364,8 @@ export function splitWorkspace(
     // Inline entries need none of this: they store the whole Project verbatim.
     const localState = {
       ...(p.viewport ? { viewport: p.viewport } : {}),
-      ...(p.defaultAccountId ? { defaultAccountId: p.defaultAccountId } : {})
+      ...(p.defaultAccountId ? { defaultAccountId: p.defaultAccountId } : {}),
+      ...(p.settingsOverrides ? { settingsOverrides: p.settingsOverrides } : {})
     }
     if (p.unavailable) {
       // Placeholder (folder missing / server unreachable at load): its nodes:[] is not real

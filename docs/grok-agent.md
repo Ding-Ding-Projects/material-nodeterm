@@ -85,7 +85,7 @@ another integration's reader, not from grok's own documentation.
 † **The `Notification` payload is the one row with no documented source.** Grok's docs describe the
 event but not its body, so the three key spellings — plus the `message` and `level` fields the mapping
 in §5 reads — come from **orca** (`/root/orca-main`, MIT, a shipping grok integration):
-`notificationType ?? notification_type ?? type` at `src/shared/agent-hook-listener.ts:2370-2376`,
+`notificationType ?? notification_type ?? type` at orca's `/root/orca-main/src/shared/agent-hook-listener.ts:2370-2376`,
 `message`/`level` at `:3973-3975`. Treat every Notification claim in this document as inference from
 that reader until checklist **10** replaces it with a capture.
 

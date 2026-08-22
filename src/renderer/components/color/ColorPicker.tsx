@@ -53,10 +53,12 @@ const FORMATS: { id: Format; label: string }[] = [
 ]
 
 /** Convenience swatches from the app's own node-colour palette; a layer ON TOP of the continuous
- *  picker, never a replacement for it (docs/colour-picker.md). */
+ *  picker, never a replacement for it (docs/colour-picker.md). `#6750a4` leads as the M3-baseline
+ *  seed (the shipped default, styles.css `--md-primary`); `#0a84ff` (systemBlue, the pre-M3
+ *  default) stays reachable a step behind it rather than being dropped. */
 const QUICK_SWATCHES = [
-  '#0a84ff', '#32d74b', '#ff9f0a', '#ff453a', '#bf5af2', '#ffd60a', '#64d2ff', '#ff375f',
-  '#30d158', '#a2845e', '#ffffff', '#8e8e93', '#1c1c1e', '#000000'
+  '#6750a4', '#0a84ff', '#32d74b', '#ff9f0a', '#ff453a', '#bf5af2', '#ffd60a', '#64d2ff',
+  '#ff375f', '#30d158', '#a2845e', '#ffffff', '#8e8e93', '#1c1c1e', '#000000'
 ]
 
 /** In-memory only (not persisted to disk) — a session convenience, most recently used first. */

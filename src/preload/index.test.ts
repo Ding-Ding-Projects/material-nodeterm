@@ -55,7 +55,10 @@ describe('preload IPC wiring', () => {
       await api.terminalProfiles!.list()
       await api.terminalProfiles!.refresh()
       expect(h.invoke).toHaveBeenCalledWith(IPC.terminalProfilesList)
-      expect(h.invoke).toHaveBeenCalledWith(IPC.terminalProfilesRefresh)
+      // `refresh(customExecutable?)` always forwards its parameter, so an argument-less call
+      // still invokes with an explicit undefined — assert the real two-argument shape rather
+      // than a one-argument call that never happens.
+      expect(h.invoke).toHaveBeenCalledWith(IPC.terminalProfilesRefresh, undefined)
     } else {
       expect(api.terminalProfiles).toBeUndefined()
     }
@@ -197,5 +200,68 @@ describe('preload IPC wiring', () => {
 
     expect(h.invoke).toHaveBeenCalledWith(IPC.pairingStart, attemptId)
     expect(h.invoke).toHaveBeenCalledWith(IPC.pairingStop, attemptId)
+  })
+
+  // Every method routes to its own exact channel with `projectId` forwarded first — the vault
+  // lives at THAT project's <cwd>/.nodeterm/vault.json (core/password-manager/vault-store.ts),
+  // so a swapped/collapsed channel here would silently read or mutate the wrong project's vault.
+  it('routes every passwordManager method to its exact channel with projectId forwarded', async () => {
+    const pid = 'proj-1'
+
+    await api.passwordManager.status(pid)
+    expect(h.invoke).toHaveBeenCalledWith(IPC.passwordManagerStatus, pid)
+
+    await api.passwordManager.createVault(pid, 'pw')
+    expect(h.invoke).toHaveBeenCalledWith(IPC.passwordManagerCreateVault, pid, 'pw')
+
+    await api.passwordManager.unlock(pid, 'pw')
+    expect(h.invoke).toHaveBeenCalledWith(IPC.passwordManagerUnlock, pid, 'pw')
+
+    await api.passwordManager.lock(pid)
+    expect(h.invoke).toHaveBeenCalledWith(IPC.passwordManagerLock, pid)
+
+    const changePw = { currentPassword: 'old', newPassword: 'new' }
+    await api.passwordManager.changePassword(pid, changePw)
+    expect(h.invoke).toHaveBeenCalledWith(IPC.passwordManagerChangePassword, pid, changePw)
+
+    const createManager = { name: 'Work logins' }
+    await api.passwordManager.createManager(pid, createManager)
+    expect(h.invoke).toHaveBeenCalledWith(IPC.passwordManagerCreateManager, pid, createManager)
+
+    const renameManager = { id: 'mgr-1', name: 'Renamed' }
+    await api.passwordManager.renameManager(pid, renameManager)
+    expect(h.invoke).toHaveBeenCalledWith(IPC.passwordManagerRenameManager, pid, renameManager)
+
+    const bindGroup = { id: 'mgr-1', groupId: 'grp-1' }
+    await api.passwordManager.bindManagerGroup(pid, bindGroup)
+    expect(h.invoke).toHaveBeenCalledWith(IPC.passwordManagerBindManagerGroup, pid, bindGroup)
+
+    await api.passwordManager.releaseGroupBinding(pid, 'grp-1')
+    expect(h.invoke).toHaveBeenCalledWith(IPC.passwordManagerReleaseGroupBinding, pid, 'grp-1')
+
+    await api.passwordManager.deleteManager(pid, 'mgr-1')
+    expect(h.invoke).toHaveBeenCalledWith(IPC.passwordManagerDeleteManager, pid, 'mgr-1')
+
+    const createCred = { managerId: 'mgr-1', label: 'GitHub', username: 'u', password: 'p' }
+    await api.passwordManager.createCredential(pid, createCred)
+    expect(h.invoke).toHaveBeenCalledWith(IPC.passwordManagerCreateCredential, pid, createCred)
+
+    const renameCred = { managerId: 'mgr-1', credentialId: 'cred-1', label: 'GitHub (work)' }
+    await api.passwordManager.renameCredential(pid, renameCred)
+    expect(h.invoke).toHaveBeenCalledWith(IPC.passwordManagerRenameCredential, pid, renameCred)
+
+    const updateSecret = { managerId: 'mgr-1', credentialId: 'cred-1', password: 'new-pw' }
+    await api.passwordManager.updateCredentialSecret(pid, updateSecret)
+    expect(h.invoke).toHaveBeenCalledWith(IPC.passwordManagerUpdateCredentialSecret, pid, updateSecret)
+
+    const removeCred = { managerId: 'mgr-1', credentialId: 'cred-1' }
+    await api.passwordManager.removeCredential(pid, removeCred)
+    expect(h.invoke).toHaveBeenCalledWith(IPC.passwordManagerRemoveCredential, pid, removeCred)
+
+    await api.passwordManager.revealCredential(pid, 'mgr-1', 'cred-1')
+    expect(h.invoke).toHaveBeenCalledWith(IPC.passwordManagerRevealCredential, pid, 'mgr-1', 'cred-1')
+
+    await api.passwordManager.credentialCode(pid, 'mgr-1', 'cred-1')
+    expect(h.invoke).toHaveBeenCalledWith(IPC.passwordManagerCredentialCode, pid, 'mgr-1', 'cred-1')
   })
 })

@@ -17,6 +17,7 @@ const ROW = {
 function targetKindLabel(kind: ToyLockRecord['target']['kind']): string {
   if (kind === 'tab') return 'Tab'
   if (kind === 'node') return 'Node'
+  if (kind === 'group') return 'Group frame'
   return 'Setting'
 }
 

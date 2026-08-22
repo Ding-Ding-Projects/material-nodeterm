@@ -1,3 +1,4 @@
+import { DEFAULT_WORD_SEPARATORS } from '@shared/word-separators'
 import { promises as fs } from 'fs'
 import path from 'path'
 import { createHash, randomUUID } from 'crypto'
@@ -51,6 +52,16 @@ import {
 } from '../../core/codex-accounts-core'
 
 interface Runners {
+  /**
+   * The live terminal settings, when the caller has them.
+   *
+   * Optional because the tests construct this manager with a bare `{ run }`. Absent, the conf
+   * falls back to shipped defaults — which is why the remote conf hardcoded a 50000 scrollback
+   * for as long as it did: nothing here could read the setting, so an SSH project quietly
+   * ignored the user`s `tmuxScrollback`. Wiring this fixes that pre-existing gap by the same
+   * seam that carries the word separators.
+   */
+  getSettings?: () => { tmuxScrollback: number; terminalWordSeparators: string }
   userDataDir: string
   /** Spawn the long-lived master; returns a handle we can kill. `stderr()` (when the spawner wires
    *  it) returns the master's captured stderr so a failed connect can surface the REAL ssh error
@@ -336,6 +347,17 @@ function scpBin(): string {
   const found = findExecutableSync('scp', opensshFallbacks('scp'))
   if (found || shellPathNow() !== undefined) cachedScp = found
   return found ?? 'scp'
+}
+
+/** The remote conf`s scrollback, from live settings when the caller wired them. */
+function sshTmuxScrollback(r: Runners): number {
+  return r.getSettings?.().tmuxScrollback ?? 50000
+}
+
+/** The remote conf`s word separators. Sanitised again inside `tmuxWordSeparatorsLine`, because
+ *  this value is about to be written into a config file on somebody else`s machine. */
+function sshWordSeparators(r: Runners): string {
+  return r.getSettings?.().terminalWordSeparators ?? DEFAULT_WORD_SEPARATORS
 }
 
 export class SshProjectManager {
@@ -652,7 +674,7 @@ export class SshProjectManager {
             const confWrite = remoteAtomicWrite(confPath)
             const w = await this.r.run(
               childArgs(conn, controlPath, confWrite.command),
-              remoteTmuxConf(50000)
+              remoteTmuxConf(sshTmuxScrollback(this.r), sshWordSeparators(this.r))
             )
             if (w.code === 0) {
               // source-file is best-effort (pushes options into a warm server); ignore its result.
@@ -1992,7 +2014,10 @@ export function initSshProject(
    *  caller because the resync it drives needs main's agent-status funnel and transcript readers,
    *  none of which this module knows about. */
   onTunnelVerified?: (projectId: string, controlPath: string, conn: SshConnection) => void,
-  codexRelaySource?: () => Promise<string>
+  codexRelaySource?: () => Promise<string>,
+  /** Live terminal settings, so the remote tmux conf honours the user`s scrollback and word
+   *  separators instead of shipped constants. */
+  getSettings?: () => { tmuxScrollback: number; terminalWordSeparators: string },
 ): SshProjectManager {
   const ssh = sshBin()
   const scp = scpBin()
@@ -2003,6 +2028,7 @@ export function initSshProject(
     resolvePassphrasePrompt(requestId, value)
   )
   const mgr = new SshProjectManager({
+    getSettings,
     userDataDir: app.getPath('userData'),
     spawnMaster: (args, env) => {
       // Capture the master's stderr (stdin/stdout stay ignored) so a failed connect can report the

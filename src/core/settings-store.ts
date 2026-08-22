@@ -3,9 +3,10 @@ import path from 'path'
 import { IPC } from '../shared/ipc'
 import { platform } from './platform'
 import { renameAtomic, tempNameFor } from './fs-atomic'
-import { DEFAULT_SETTINGS, type Settings } from '../shared/types'
+import { DEFAULT_ACCENT, DEFAULT_SETTINGS, type CanvasWidgetState, type Settings } from '../shared/types'
 import { normalizeLanguageMode } from '../shared/i18n'
 import type { HistoryAction } from '../shared/local-history'
+import { mergeCanvasWidgetState } from './canvas-widget'
 
 /**
  * Merge a possibly-partial/legacy `Settings` object over `DEFAULT_SETTINGS`. A plain
@@ -18,6 +19,7 @@ import type { HistoryAction } from '../shared/local-history'
 function mergeSettings(saved: Partial<Settings> | null | undefined): Settings {
   const merged = { ...DEFAULT_SETTINGS, ...saved }
   merged.speech = { ...DEFAULT_SETTINGS.speech, ...saved?.speech }
+  merged.dockerHost = { ...DEFAULT_SETTINGS.dockerHost, ...saved?.dockerHost }
   // Windows terminal profiles replaced the old implicit meaning of `defaultShell`. Migrate only
   // when the new key is genuinely ABSENT: an explicit profile id — including a hand-edited or
   // currently unavailable one — must survive byte-for-byte so the trusted resolver can fail
@@ -49,6 +51,24 @@ function mergeSettings(saved: Partial<Settings> | null | undefined): Settings {
   // returned `undefined` and took whole localized surfaces down. Normalize both load and save
   // through this merge so Desktop and Server Edition persist the same safe English fallback.
   merged.languageMode = normalizeLanguageMode(saved?.languageMode)
+  // The M3-baseline re-seed (2026-08) changed the shipped default accent from systemBlue
+  // (`#0a84ff`) to the design's seed purple (`DEFAULT_ACCENT`, `#6750a4`). `{ ...DEFAULT_SETTINGS,
+  // ...saved }` above already carries the NEW default forward for an install with no `accent` key
+  // at all — but every EXISTING install has `#0a84ff` written into its settings.json byte-for-byte
+  // (the app always persists the full object, including untouched defaults), which is
+  // indistinguishable from a user who deliberately picked systemBlue on purpose. Same ambiguity,
+  // same resolution, as the `terminalGpuRendering` migration just above: treat the old literal
+  // default as "never touched" and carry it forward to the new one. A user who really did want
+  // systemBlue loses that choice once, and can re-pick it from the swatch row (still shipped,
+  // still reachable — see ColorPicker.tsx's QUICK_SWATCHES) after this one-time migration.
+  if (saved?.accent === '#0a84ff') merged.accent = DEFAULT_ACCENT
+  // These were the old shipped canvas defaults and were persisted even when untouched. Carry
+  // existing installs to the mouse-first interaction: wheel rotation zooms and dragging empty
+  // canvas pans. Both remain ordinary Settings controls after this one-time default migration.
+  if (saved?.wheelZoom === false && saved?.canvasDragMode === 'select') {
+    merged.wheelZoom = true
+    merged.canvasDragMode = 'pan'
+  }
   return merged
 }
 
@@ -123,6 +143,30 @@ export class SettingsStore {
 
   get(): Settings {
     return this.cache
+  }
+
+  /**
+   * Machine-local mutation for one node's canvas-widget state (bounds moved/resized,
+   * always-on-top toggled) — called directly from the main process's widget-window manager
+   * (`main/canvas-widget-window.ts`), NOT over the renderer's `settings:save` IPC round trip,
+   * because the widget window's own move/resize events fire in main and the canvas that owns the
+   * node's other settings may not even be the focused window. Reuses the exact same save chain
+   * and atomic-write discipline as `registerIpc`'s handler above, so a widget move save can never
+   * race or clobber a concurrent renderer save.
+   */
+  async updateCanvasWidget(nodeId: string, patch: Partial<CanvasWidgetState>): Promise<void> {
+    const run = this.saveChain.then(() => {
+      const next: Settings = {
+        ...this.cache,
+        canvasWidgets: {
+          ...this.cache.canvasWidgets,
+          [nodeId]: mergeCanvasWidgetState(this.cache.canvasWidgets[nodeId], patch)
+        }
+      }
+      return this.saveNow(next)
+    })
+    this.saveChain = run.catch(() => {})
+    return run
   }
 
   registerIpc(): void {

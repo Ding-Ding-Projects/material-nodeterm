@@ -148,14 +148,24 @@ describe('the branded launch-plan funnel', () => {
  * Files allowed to mention the raw setting, with the reason each is not a launch.
  *
  * Keys are renderer-relative POSIX paths even on Windows. Keeping one canonical spelling makes
- * the comparison portable; exact membership prevents `nested/components/TabBar.tsx` from
- * inheriting TabBar's exception merely because its path has the same suffix.
+ * the comparison portable; exact membership prevents `nested/components/ProjectSwitcher.tsx` from
+ * inheriting ProjectSwitcher's exception merely because its path has the same suffix.
  */
 const ALLOWED = new Map<string, string>([
   // Settings UI: edits the value rather than launching anything with it.
   ['components/settings/sections/AgentsSection.tsx', 'the settings control that edits the value'],
-  // The tab menu shows the current global default beside the per-project override.
-  ['components/TabBar.tsx', 'displays the global default in the override menu; launches nothing']
+  // The project switcher's per-project actions panel shows the current global default beside the
+  // per-project override (formerly TabBar.tsx's tab caret menu — same duty, new file).
+  [
+    'components/ProjectSwitcher.tsx',
+    'displays the global default in the override menu; launches nothing'
+  ],
+  // The funnel module itself: `setKidsAllowedPermissionMode` is the ONE write path for Kids
+  // mode's "Allow Beep to answer freely" switch, so a Kids-facing component never reaches into
+  // `useSettings` directly. It only ever writes 'plan'/'manual' (the two Kids-allowed modes), and
+  // `activePermissionMode`'s own `gateKidsPermissionMode` narrows the result regardless — see
+  // docs/kids-mode.md, "The grown-up screen's switches".
+  ['state/permissionMode.ts', 'hosts the sole reviewable Kids-mode write path, beside the gate']
 ])
 
 function normalizeRelativePath(path: string): string {
@@ -202,10 +212,10 @@ describe('every launch resolves its permission mode through the one funnel', () 
   })
 
   it('normalizes slash dialects but does not suffix-match a lookalike path', () => {
-    expect(isAllowedRawConsumer('components/TabBar.tsx')).toBe(true)
-    expect(isAllowedRawConsumer('components\\TabBar.tsx')).toBe(true)
-    expect(isAllowedRawConsumer('nested/components/TabBar.tsx')).toBe(false)
-    expect(isAllowedRawConsumer('components/TabBar.tsx.backup')).toBe(false)
+    expect(isAllowedRawConsumer('components/ProjectSwitcher.tsx')).toBe(true)
+    expect(isAllowedRawConsumer('components\\ProjectSwitcher.tsx')).toBe(true)
+    expect(isAllowedRawConsumer('nested/components/ProjectSwitcher.tsx')).toBe(false)
+    expect(isAllowedRawConsumer('components/ProjectSwitcher.tsx.backup')).toBe(false)
   })
 
   it('ignores comments but fails closed on a raw read even in obvious dead code', () => {

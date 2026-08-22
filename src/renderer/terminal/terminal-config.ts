@@ -1,3 +1,4 @@
+import { resolveWordSeparators } from '@shared/word-separators'
 import type { FontWeight, ITheme } from '@xterm/xterm'
 import type { ClientId } from '@shared/presence'
 import type {
@@ -231,6 +232,7 @@ export type XtermVisualSettings = Pick<
   | 'terminalLetterSpacing'
   | 'terminalTheme'
   | 'tmuxScrollback'
+  | 'terminalWordSeparators'
 >
 
 /** The keys `XtermVisualSettings` is made of — the single list the settings hook selects by, so a
@@ -248,7 +250,8 @@ export const XTERM_VISUAL_KEYS = [
   'terminalLineHeight',
   'terminalLetterSpacing',
   'terminalTheme',
-  'tmuxScrollback'
+  'tmuxScrollback',
+  'terminalWordSeparators'
 ] as const satisfies readonly (keyof XtermVisualSettings)[]
 
 /** The appearance-derived options, resolved and clamped. */
@@ -268,6 +271,7 @@ export interface XtermVisualOptions {
   lineHeight: number
   letterSpacing: number
   scrollback: number
+  wordSeparator: string
   theme: ITheme
 }
 
@@ -297,6 +301,10 @@ export function xtermOptionsFromSettings(
     // tmux's own history (see pty-manager's tmuxConf). This buffer backs the plain-shell
     // fallback (tmux unavailable) and the cold-snapshot replay. Capped: per node, many nodes.
     scrollback: xtermScrollback(s.tmuxScrollback),
+    // Sanitised, never taken raw: this same value is interpolated into a generated tmux conf
+    // (see src/shared/word-separators.ts), and one resolver for all three writers is what keeps
+    // xterm and tmux from disagreeing about where a word ends.
+    wordSeparator: resolveWordSeparators(s.terminalWordSeparators),
     theme: resolveTerminalTheme(s.terminalTheme).theme,
     allowProposedApi: true,
     // Inside an app that requested mouse tracking (vim, htop) a plain drag goes to the app;
@@ -372,6 +380,9 @@ export function applyLiveOptions(
     o.cursorInactiveStyle = next.cursorInactiveStyle
   }
   if (o.scrollback !== next.scrollback) o.scrollback = next.scrollback
+  // Not in metricsChanged above, deliberately: where a word ends moves no glyph, so re-fitting
+  // on it would SIGWINCH a pty that other viewers share, for a change that cannot alter the grid.
+  if (o.wordSeparator !== next.wordSeparator) o.wordSeparator = next.wordSeparator
   if (themeChanged) o.theme = next.theme
 
   return { metricsChanged, themeChanged }

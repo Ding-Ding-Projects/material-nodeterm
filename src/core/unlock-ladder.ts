@@ -52,9 +52,33 @@
 import { randomInt } from 'crypto'
 
 import { DIM_SUM_NAMES } from '../shared/dimsum-names'
+// Wire shapes moved to `shared/` so the renderer (which must never import `src/core`) can speak
+// this protocol over IPC for the toy-lock ladder. Re-exported here so every existing import of
+// `LadderChallenge` & friends from this module keeps working unchanged.
+import type {
+  DimSumChallenge,
+  LadderAnswer,
+  LadderChallenge,
+  LadderRung,
+  LadderVerdict,
+  MathChallenge,
+  WhackChallenge,
+  WhackHit,
+  WhackMole
+} from '../shared/unlock-ladder-types'
 
-/** Rungs, in the order they are climbed. */
-export type LadderRung = 'dimsum' | 'math' | 'whack'
+export type {
+  DimSumChallenge,
+  LadderAnswer,
+  LadderChallenge,
+  LadderRung,
+  LadderVerdict,
+  MathChallenge,
+  WhackChallenge,
+  WhackHit,
+  WhackMole
+}
+
 
 /** Wrong dim-sum answers tolerated before the ladder moves on to maths. */
 export const DIMSUM_MAX_FAILS = 5
@@ -131,63 +155,6 @@ export class UnlockLadderChallengeBudget {
 }
 
 // ---- Question shapes (what a surface renders) --------------------------------------------
-
-export interface DimSumChallenge {
-  kind: 'dimsum'
-  nonce: string
-  /** The dish named in Traditional Chinese; the user picks its English name. */
-  prompt: string
-  choices: string[]
-  /** Wrong answers left before this rung gives up and hands over to maths. */
-  triesLeft: number
-}
-
-export interface MathChallenge {
-  kind: 'math'
-  nonce: string
-  /** Ten renderable sums, e.g. `"7 + 6"`. Answers are integers. */
-  questions: string[]
-}
-
-export interface WhackMole {
-  /** Index into a `gridSize × gridSize` grid. */
-  cell: number
-  showAtMs: number
-  hideAtMs: number
-}
-
-export interface WhackChallenge {
-  kind: 'whack'
-  nonce: string
-  gridSize: number
-  durationMs: number
-  requiredHits: number
-  moles: WhackMole[]
-}
-
-export type LadderChallenge = DimSumChallenge | MathChallenge | WhackChallenge
-
-/** A claimed hit: the cell tapped, at this many ms after the round started. */
-export interface WhackHit {
-  cell: number
-  atMs: number
-}
-
-export type LadderAnswer =
-  | { kind: 'dimsum'; nonce: string; choice: string }
-  | { kind: 'math'; nonce: string; answers: number[] }
-  | { kind: 'whack'; nonce: string; hits: WhackHit[] }
-
-export interface LadderVerdict {
-  /** True only when the wait has been cleared. Never means "authenticated". */
-  cleared: boolean
-  /** The rung to present next, or null when the ladder is finished (cleared, or exhausted). */
-  next: LadderRung | null
-  /** Plain-language outcome. Carries the fact; funny levels style the copy around it. */
-  message: string
-  /** Set when the ladder is over and the user must serve the remaining wait. */
-  exhausted?: boolean
-}
 
 // ---- Internal challenge record -------------------------------------------------------------
 

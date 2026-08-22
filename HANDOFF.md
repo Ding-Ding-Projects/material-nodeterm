@@ -1,5 +1,382 @@
 # Handoff
 
+## 2026-08-20, second pass — a hunt that found real defects, and the fixes that landed
+
+`main` moved `f5caf128 -> f0a0453e`. Suite fully green at the tip: **717 files, 8,852 tests,
+0 failed**. Three read-only hunters swept the repository's own documented failure families;
+everything below was verified by command before being believed, and fixed in four isolated
+lanes, each proven red-then-green and re-proven here independently before merging.
+
+### Shipped
+
+- **Word separators** (`0b59782a`, upstream #349) — double-click now keeps identifiers, paths
+  and package names whole. One setting reaches THREE writers (xterm, local tmux conf, remote
+  tmux conf) because tmux owns the mouse and an xterm-only change is a no-op; the value is
+  re-validated at the interpolation site since it lands in a config written onto SSH hosts.
+  Bonus fix: SSH projects had ignored `tmuxScrollback` forever (hardcoded 50000) — the new
+  settings seam in `SshProjectManager` closes that too.
+- **Three dead ADHD modes wired** (`d697f78f`). Time awareness renders an elapsed chip in the
+  node header and the kanban card modal (ONE module-level ticker, started by the first
+  subscriber); Momentum floats its dismissible note over the terminal top (never resizing the
+  body — a resize is a SIGWINCH); Low stimulation's notification half now actually filters,
+  with needs-you provably never silenced and quieted items landing pre-dismissed in the centre
+  rather than vanishing. Worth reading in that lane's history: its first gate break stayed
+  GREEN because two independent gates covered the same render — the duplicate was removed so
+  the gate has one owner.
+- **Server Edition transcript search** (`82bc8b19`) — `transcript:search` moved from an inline
+  main-only registration into `core/transcript-ipc.ts`, which both shells call; the browser
+  palette's transcript results now exist. The textbook 'logic left in src/main silently does
+  not exist on the server' case, in a file that otherwise did it right.
+- **Server Edition transfer menu** (`15d6cb6e`) — was visible, enabled, and threw into a
+  voided promise. Now follows the house `supported`-bit pattern (the PairingApi precedent):
+  hidden where absent, caught with an honest toast as the second boundary, documented in
+  SERVER.md.
+- **Four bare Windows renames fixed and the guard taught to see them** (`63407c1a`).
+  `windows-installer.mjs` published metadata with a bare rename on the `dist:win` path — the
+  exact Defender-EPERM case `renameAtomic` exists for, in the Windows installer itself. A
+  shared bounded-retry helper now lives at `scripts/lib/rename-atomic.mjs`; the fs-atomic
+  guard scans `scripts/` and non-.ts files (it could not see any of this before); its lazy
+  import-strip hole is closed with the arming input pinned as a fixture; both `no-electron`
+  guards now catch dynamic `await import('electron')` and carry non-empty floors; and the
+  theme test's `s`-collapsed-to-`s` regex is repaired.
+
+### Corrected guard needles, each watched failing
+
+`check-app-contract.mjs`'s session-memory needle was the two-letter string `ok` (satisfied by
+'looking'); the AnchoredRegexBuilder row's needle was the bare keyword `export` and its
+`wiredInAny` counted import lines and comments; the docs inventory sweep read `docs/`
+non-recursively — 58 of 94 docs, none of `docs/features/`. All fixed and independently
+re-broken here before being believed: collapsing the session-memory discriminator now goes
+red on a line-anchored return-shape regex; planting a bare rename in `scripts/` goes red;
+planting a dynamic electron import in core goes red.
+
+### Still open from the hunt
+
+- `check-site-contract.mjs:252`'s `voiceschanged` needle points at a file whose only match is
+  a comment; the real subscription is `site/app/main.js:440`. Site guard — not fixed in this
+  pass, which took only app-side lanes.
+- `hook-identity-enforcement.test.ts:426`'s whole-file needles survive commenting out the one
+  wiring line.
+- The `KIDS_DISCLOSURE` needle is comment-satisfiable.
+- `agent-status-mirror.ts:507` still rolls its own cross-dialect basename against the
+  sanctioned `core/path-basename.ts` verdict.
+- The ADHD surfaces owe a packaged capture (three states named in `docs/adhd-modes.md`), and a
+  visual check at narrow widths / 200% scale.
+- **The blur verdict, for whoever picks this up**: PHASE is fixed on `main`; the SCALE branch
+  helps only zoomed IN (0% at zoom 1.0 and out). Correction to an earlier version of this line:
+  the zoom-out case is NOT "needs supersampling" — at zoom < 1 the raster is already denser than
+  the display needs (built at `dpr`, display needs `dpr × zoom < dpr`), so the loss is
+  RESAMPLING (the compositor bilinearly shrinking an already-big-enough raster), not a resolution
+  shortfall a denser raster would fix. What `RASTER_SCALE_MIN_FACTOR = 1` actually forbids is the
+  raster getting COARSER to match the display exactly, i.e. letting the font rasterizer draw the
+  smaller glyphs directly with real hinting/AA instead of the GPU downsampling. One of its two
+  stated reasons for the floor is disproven (measured: the mip chain engages zero levels above a
+  0.5 ratio); the other (a rebuild on every zoom OUT, not just in) stands, and the column-reflow
+  proof (`cellWidthIsStable`) has only ever been derived for the zoom-IN direction — going
+  coarser is unproven, not merely un-shipped. A device eyeball at 150% remains the gate for both.
+
+
+## 2026-08-20 — six branches integrated, and the stale-failure list retracted
+
+`main` moved `289fcb47 -> baf67860`. Six of the eight open branches are merged and **proven
+ancestors of the dewed `main`** with `git merge-base --is-ancestor`, not assumed:
+`feat/suites-a`, `feat/suites-b`, `feat/openrows`, `feat/uh-feature-inventory`,
+`fix/pairing-no-qr-dead-end`, `feat/project-single-file`. All six merged with zero conflicts.
+
+### Retraction: the seven failing test files are all green, and were before this pass started
+
+The section below headed "The seven failing test files, with cause" is **stale**, and it is worth
+saying plainly because the next reader would otherwise spend an afternoon re-diagnosing fixed bugs.
+Every one of those seven files passes at `main`, measured by running them rather than by reading:
+
+| File the addendum listed as failing | Measured now |
+|---|---|
+| `src/renderer/styles.theme.test.ts` | passes |
+| `src/core/fs-atomic.guard.test.ts` | passes |
+| `src/renderer/state/permissionMode.funnel.test.ts` | passes |
+| `src/renderer/nodes/ServiceNode.test.tsx` | passes |
+| `src/renderer/terminal/webgl-addon-pair.test.ts` | passes |
+| `src/core/build-bat.test.ts` | passes |
+| `src/main/remote/relay-host-service.test.ts` | passes |
+
+147 tests across those seven files, 0 failures. The 51 commits that landed between `38280b0b`
+and `289fcb47` fixed them; the document was simply never updated. The named `.mc-console`,
+`--mono`, bare-`fs.rename` and Kids-mode funnel defects are all closed.
+
+### Verified at the integration tip
+
+| Check | Command | Result |
+|---|---|---|
+| Full suite | `npx vitest run` (alone, uncontended) | **706 files: 700 passed, 6 skipped. 8,912 tests: 8,720 passed, 192 skipped, 0 failed.** 121.24 s, exit 0. Measured at `2cb5882d`, the merge tip. |
+| Type checking | `npm run typecheck` | Clean on both projects, exit 0. |
+| Production build | `npm run build` | exit 0. |
+| Feature inventory | `node scripts/check-uh-inventory.mjs` | 37 shipped, 2 not-applicable, 5 open; all 44 required features present, every shipped path exists. |
+| App contract | `node scripts/check-app-contract.mjs` | 835 assertions across 49 features, **1 failure** — the pre-existing Windows terminal-profile row still owing packaged headless capture evidence. |
+| Site contract | `node scripts/check-site-contract.mjs` | 366 assertions, all clear. |
+| Instruction mirror | `node scripts/check-instruction-mirror.mjs` | OK, 8 markers in each of README.md and AGENTS.md, no leak pattern matched. |
+| Vocabulary lock | `node scripts/check-vocabulary.mjs` | Passed (re-locked at the start of this pass — the dictionary had changed and the build correctly refused until it was re-read). |
+
+### Three defects the integration itself surfaced, all fixed here
+
+1. **A shipped article that never entered the docs bundle.** `feat/uh-feature-inventory` added
+   `docs/uh-feature-inventory.md` and never regenerated `src/shared/docs-data.ts`, so the in-app
+   documentation browser had 89 articles and no route to the 90th. The docs-bundle guard failed
+   the first build after integration — exactly the job it exists for. Regenerated to 90 articles.
+2. **A fail-closed guard with nothing to run it.** `scripts/check-uh-inventory.mjs` arrived on the
+   same branch as the guard over all 44 canonical features, and nothing called it: no npm script,
+   no build step, no workflow. Its only two references in the whole tree were its own header
+   comment and the document describing it. It is now wired into `build` beside the vocabulary,
+   changelog and docs-bundle checks, and `check:uh-inventory` / `check:site-contract` exist as
+   runnable scripts. Both passed at the time of wiring, so this costs nothing today and catches
+   the next drift.
+3. **The new inventory document had no contract row.** The app contract's completeness sweep asked
+   where its feature row was; the honest answer is that it is the register OF the contracts rather
+   than a forty-fifth one, so it is now exempted in `NON_FEATURE_DOCS` **with that reason stated**.
+
+### Three delegated lanes, landed
+
+Run as isolated workers in their own Gerk Tong Huis, each reviewed and independently re-verified
+here rather than accepted on its own report.
+
+**Converter defects** (`913bffe9`). `README.md` was detected as `xml` because the file opens with
+an embedded HTML block and the generic leading-tag heuristic ran *before* the Markdown extension
+check. Fixed in the producer, with no filename special case: an explicit `<?xml` declaration stays
+authoritative, a known Markdown extension now outranks a merely generic tag, and the broad
+XML/HTML heuristic moved below both. Separately, `ConverterService.detect()` called `stat()` and
+never asked `isFile()`, so a directory opened to an empty sample and came back as
+`detectedKind: text, sizeBytes: 0`; every non-regular entry is now refused before it is opened.
+Proven red-then-green by reverting the two producers with the tests in place: 2 failed, then 2
+passed on restore.
+
+**Release documentation** (`d4fbc627`). `docs/ci-and-releases.md` claimed the workflow was
+manual-dispatch-only with automatic publication disabled; `release.yml` actually declares both
+`push: branches: [main]` and `workflow_dispatch`, and its own header says every push to `main`
+releases. Corrected, with the 2026-08-15 tag-loop incident and its counts preserved as history
+and the restoration recorded rather than the lesson deleted.
+
+  The same lane **refused** the other half of its brief, correctly. This document had claimed
+  `CLAUDE.md` still described `TabBar.tsx` as the drag region; `CLAUDE.md:2104` already says that
+  file is deleted and that its job moved to `ProjectSwitcher`/`TopAppBar`. That claim was stale
+  too, and is retracted here rather than acted on.
+
+**Explorer drag and drop** (`d1b7da3a`) — a new feature, not a repair. Dropping an agent node on
+an Explorer folder row opens a NEW agent of the same kind rooted there, leaving the dragged
+session untouched; dragging a folder the other way onto empty canvas opens a terminal at the drop
+point. A terminal's cwd is fixed at spawn, so spawning a sibling is the only honest way to open
+in a folder without killing a session mid-turn, and the reverse direction is deliberately a
+terminal because a folder drag carries no agent identity. Each direction uses its own namespaced
+MIME type so neither collides with an OS file drop or the sessions-sidebar reorder drag. The agent
+path goes through the branded launch-plan funnel under a new `explorer-drop-agent` row in
+`AGENT_LAUNCH_SURFACES`, so `permissionMode.funnel.test.ts` now exercises it. SSH projects stamp
+the remote cwd. Keyboard and context-menu equivalents ship with it.
+
+### One guard corrected, and watched failing first
+
+The new drop indicator is the first rule in `styles.css` to reference `var(--font-ui)`, and
+`styles.theme.test.ts` went red. The guard was right by its own logic and wrong about the world:
+that token is defined in `fonts.css`, which `boot.tsx` imports immediately *before* `styles.css`,
+and `styles.md3.css` already uses it about seventy-five times. Its corpus was a single file.
+`fonts.css`'s **definitions** are now merged in and nothing else — it carries no colours and no
+theme blocks, so adding it to the literal-colour or theme-block corpora would have cost teeth for
+nothing, and it does not define `--mono`, so the historical `.mc-console` defect stays catchable.
+Verified by appending a genuinely undefined token: red, naming it; green again on removal.
+
+### Suite state, stated honestly
+
+Two full runs at effectively the same tree each reported **one** failure, and **a different one
+each time** — `styles.theme.test.ts` in the first, `src/core/ollama/catalog-store.test.ts` in the
+second. The Ollama file passes in isolation twice. Two different single failures across two runs
+is nondeterminism under load rather than a deterministic regression, which is exactly the
+contention shape this document already records elsewhere. Final measured figures: **709 files,
+702 passed, 6 skipped; 8,925 tests, 8,732 passed, 192 skipped**, with the one contended failure
+above. Typecheck clean, build exit 0.
+
+### The status surface, and the capture it owed
+
+`feat/status-hub-surface` was held out of `main` for one reason: no packaged capture of its own
+screen. It has one now — `docs/assets/shots/app-status-surface.png`, taken from the real built
+artifact driven over CDP **on an off-screen Win32 desktop**, so nothing appeared on anyone's
+display while it ran. The manifest binds it to the exact commit rather than to "recently".
+19 surfaces captured, 3 skipped for stated reasons, 0 failed.
+
+**Three conflicts, and the third is the one worth reading.** `closeAllDrawers` existed twice —
+`main` had grown a `useCallback` while the branch added an inline copy that shadowed it for every
+call site below; collapsed to one definition now closing all eight drawers. `anyDrawerOpen` had to
+become the union of both lists rather than either one. And the stylesheet conflict was git
+mis-aligning two disjoint blocks (`.md3-docs*` against `.md3-status*`); resolving it by
+concatenation broke brace balance because one hunk cut a rule in half, so it was redone by taking
+`main`'s file whole and appending the branch's self-balanced 340-line block.
+
+**Then the one that matters: the merge dropped `<StatusSurface />` entirely.** The import survived,
+the rail destination survived, the `useState` survived, and **`tsc` passed** — a whole screen
+reachable by a button that rendered nothing. It was found by grepping for the render site rather
+than by trusting the green typecheck, and recovered from the branch rather than reinvented. This
+is the identical shape this document already records under “the convergence dropped working
+code”, and the identical warning that a clean typecheck is not evidence. It happened again, in
+the same repository, to an agent that had just finished reading the warning.
+
+The capture row is therefore **required**, not optional, and verifies `.md3-status-screen` — a
+selector that exists only inside the component. The host div would not do: `Canvas` renders that
+even when the component draws nothing, which is exactly the broken state that has to stay
+catchable.
+
+### Suite, re-measured clean
+
+After the status surface merged, a full run came back **entirely green**: **711 files, 705 passed,
+6 skipped; 8,959 tests, 8,767 passed, 192 skipped, 0 failed**, exit 0. That settles the two
+single-failure runs recorded above as contention rather than regression — they are left in the
+record anyway, because the honest version of “it passes now” includes the runs where it did not.
+
+### The Windows packaged-capture row is blocked on a MISSING PROMOTION PATH, not on the capture
+
+This was investigated properly rather than guessed at, and the answer is more useful than
+“still pending”. Everything upstream of the last step is ready, verified by running commands:
+the tree is clean, `HEAD` is byte-identical to the hui's `main` tip, the immutable icon is
+publicly fetchable at that SHA (HTTP 200, 15633 bytes matching the committed blob), the
+Spectre-mitigated MSVC libraries are installed, no process from this checkout holds a native
+addon, and the cheap headless executable is exactly where the orchestrator demands it. A
+purpose-built harness for precisely these four capture ids
+(`windows-terminal-profile-picker` / `-terminal` / `-unavailable` / `-reattached`) has been
+sitting unrun since `a4e3b13d`.
+
+**The blocker is that the harness writes its evidence where the contract does not read.**
+`run-windows-profile-packaged-acceptance.mjs` emits its manifest to the TASK ROOT, and it is the
+only place in the tree carrying the required `cheap Lowlevel MCP headless` needle. The contract
+reads `docs/assets/shots/capture-manifest.json` — a file `capture-shots.mjs` **regenerates
+wholesale** on every run with a hard-coded `method: 'Electron + CDP ... out/ artifact'` and
+`app-*` ids only. So a hand-merge is both unearned and self-erasing: the next `npm run shots`
+deletes it. The generic promotion tooling the `promote-ui-evidence` skill assumes
+(`scripts/stage-evidence.mjs`, `scripts/verify-evidence-receipt.mjs`) **does not exist in this
+repository**.
+
+That missing promotion path is the actual defect, and it is the thing to build. Either teach
+`capture-shots.mjs` to MERGE a packaged-acceptance block rather than overwrite, or add a
+promotion script that copies the PNGs in, verifies each against the SHA-256 the driver recorded,
+and writes a manifest whose `method` names the cheap route. Whichever way, **`npm run shots` must
+stop being able to erase it** — without that, the row can be made green once and will go red
+again for reasons nobody will connect to the capture run.
+
+Two further traps worth carrying, both found by reading the code rather than by running it:
+
+- **Existing `dist/` artifacts can never be reused.** `createBuildProvenance` fails any artifact
+  whose mtime predates the frozen source snapshot, so `npm run dist:win` must run AFTER the
+  snapshot step, not before. `REQUIRED_ARTIFACT_ROLES` also demands the full Squirrel set exist
+  and be hashed even though the run only ever launches `win-unpacked/nodeterm.exe`.
+- **Flipping the status is a three-file change, not a one-liner.** The same feature row requires
+  a docs needle matching `does not claim that the pending capture`, which is a real sentence in
+  `windows-shell-profiles.md`. Marking captures verified while that sentence stands would be
+  self-contradictory, so the article, the needle and the status must move together — and the
+  acceptance manifest self-declares `acceptanceComplete: false` with `installer: blocked`, so
+  closing the capture row must not be described as installed-artifact proof.
+
+### An adversarial audit of this session's own merges found nothing
+
+Two independent auditors were pointed at `289fcb47..HEAD` and told to assume it was broken —
+one hunting code wired at one end and consumed at neither, the other hunting the merge-semantic
+shapes this document already records (dropped symbols, silently merged same-named interfaces, a
+guard whose scaffolding survived while its body did not). They raised **eleven** candidates.
+Each faced two independent judges, one trying to refute it and one asking whether it would
+matter even if real, with a finding surviving only if both agreed. **Zero survived.**
+
+That is recorded as a result rather than skipped as a non-event. The `<StatusSurface />` drop
+earlier the same day proved this repository can ship a clean typecheck over a missing screen, so
+“we looked hard and found nothing” is worth exactly as much as a finding would have been — and
+it is now the difference between an integration nobody re-checked and one that survived being
+attacked.
+
+### Still open
+
+- **`fix/blur-scale-wiring`** (`f003a05d`) — the ONLY branch still out, and it is blocked on a
+  person rather than on work. `CLAUDE.md` forbids shipping it without a device eyeball at zoom 1
+  and at a fractional zoom, on each renderer, and no agent can supply that. It already contains
+  all of `main`.
+- **`feat/status-hub-surface` is now merged** (`05df0a4f`) — see below.
+- The Windows terminal-profile contract row still owes packaged, cheap-headless capture evidence.
+  `npm run shots` photographs the picker from the unpackaged `out/` build over plain CDP, which is
+  deliberately filed under different ids and cannot half-satisfy the packaged row.
+- **The addendum's "nobody has launched the built app and looked at it" is also retracted.**
+  `docs/md3-render-verification.md` records exactly that work, done at `38280b0b` by launching the
+  real built `out/` artifact in a real Electron process and driving it over CDP: `check:wired`
+  reached 6/6, `npm run shots -- --launch` ran, and it found and fixed a real light-mode scrim
+  defect. What that document itself still lists as unverified is the narrower set: OS-level window
+  frame capture against a live HWND (CDP only sees an emulated viewport), the two surfaces needing
+  a live agent CLI or a reachable SSH host, Roboto Mono's glyphs with a terminal actually open,
+  and a light-theme sweep of every remaining dialog beyond the six selectors named. Neither
+  `check:wired` nor `shots` was re-run in THIS pass, so those results bind to `38280b0b`, not to
+  `main`.
+
+---
+
+
+## Release timing, dim-sum link, and Pages trigger repair
+
+The release workflow now requires GitHub's run start time, records a post-publication completion
+boundary, regenerates the same release body with exact start/completion/duration fields, and reads
+the published body back for byte-equivalent text verification. Already-published retries validate
+those fields and mutate nothing. Dim-sum prose links the catalog's published photo and explicitly
+says it is not a consumer-release attachment. Pages now runs on every `main` push and manual
+dispatch. Local build evidence does not prove the remote publication/deployment transaction; use
+the exact workflow and Pages run links recorded for the final commit.
+
+## Project-aware shell detection persistence repair
+
+`ShellSection.refreshDetection` no longer writes `useSettings.getState().base` directly before
+refreshing Windows terminal profiles. It passes the bounded effective active-project custom
+executable to a read-only detector path instead, so sparse `defaultShell` and
+`defaultTerminalProfileId` overrides remain project-owned and global `settings.json` is untouched.
+`TerminalPreview` now reads effective Settings as well. The production Settings-source sweep found
+no second direct `settings.save(base)` bypass. Build/package evidence belongs to the commit reported
+for this section; no tests, lint, type checking, runtime interaction, installer execution, or
+screenshots were performed in the ultra-speed lane.
+
+The same lane repaired the pre-push identity checker to forward every revision argument supplied
+by the hook. New-branch ranges now retain `--not --remotes`, so already-published placeholder
+history is excluded without bypassing the hook or rewriting history; newly introduced reserved
+addresses remain refused.
+
+## 2026-08-19 runtime, project history, deployment and device-access pass
+
+Three milestones were implemented and pushed to `main` during this session:
+
+- `66163ba0` — automatic verified Temurin Java provisioning for managed Minecraft servers;
+  mouse-wheel canvas zoom and empty-background drag panning defaults; per-project app-data Git
+  history on successful saves; one-file `.nodeterm-project` export/import containing a Git bundle;
+  and personal-vocabulary coverage for the worktree dialog while preserving paths, refs, typed
+  values and raw Git errors.
+- `d475bdee` — the top-right device shortcut now invokes the Server Edition deployment path,
+  automatically obtains/starts Docker Desktop where possible, runs the validated host wrapper,
+  builds the local image when absent, waits for health and offers the local site.
+- `fd752f51` — rotating deployment TOTP login with persisted replay prevention; no payment checkout
+  at the core IPC boundary; paid License/seat and upgrade surfaces removed; Remote Access presented
+  as free; and phone-sized Server Edition layouts forced to the sessions/board experience with the
+  Canvas destination omitted.
+
+While the third milestone was being pushed, `origin/main` advanced through `976bc0a6`, including
+project-wide settings and a bounded Docker-host runtime. A normal merge was started and the three
+overlapping renderer conflicts were resolved in favor of the newer Docker-host/settings
+implementation. Before finalizing the merge, rerun `npm run typecheck` and the focused suites below;
+the pre-merge third-milestone verdict was green, but a verdict never transfers across a merge.
+
+Focused evidence before that reconciliation:
+
+- `npm run typecheck` — passed.
+- Project/Java/canvas/settings/history/vocabulary suites — 150 tests passed.
+- Deployment production build (`npm run build`) — passed at `d475bdee`.
+- Server TOTP/auth/HTTP/license/mobile-view suites — 58 tests passed at `fd752f51`.
+
+Important remaining boundaries:
+
+- The deployed site is still advertised at loopback HTTP. Do not expose the application port on
+  `0.0.0.0`; mobile reach needs the existing TLS/private-network route completed and verified.
+- The TOTP secret is stored in `.nodeterm-server-totp`, excluded from Git, ACL-restricted by the
+  deployment service and mounted read-only into the container. Verify the ACL and real container
+  login in a fresh deployment before calling mobile pairing complete.
+- `src/renderer/styles.css` contains an unrelated unstaged user/other-session change (monospace
+  token alias and terminal background token). It was deliberately excluded from this session's
+  commits and must be preserved.
+- No real built-app UI capture or real Docker container interaction was completed for the third
+  milestone after the concurrent merge.
+
 This document records the measured repository state before the 2026-08-16 branch-convergence pass.
 It is intentionally explicit about evidence that belongs to an older commit and work that remains
 unintegrated. A passing check on one branch is not presented as proof for another branch. Treat
@@ -239,7 +616,13 @@ disabled. The list must be converted into tracked issues if issue tracking is en
 - Ollama image attachments, exhaustive catalog metadata, regex search, copy-model UI, relay
   routing, and the stronger destructive gate remain incomplete.
 - Site nested tab grouping remains unimplemented.
-- Material 3 elevation roles and migration of existing components remain unstarted.
+- ~~Material 3 elevation roles and migration of existing components remain unstarted.~~ **Stale
+  as of 2026-08-19 — this line was wrong the moment it was written into this section and nobody
+  caught it for three days.** The migration happened in full: the tab strip and dock were torn out
+  and replaced with an M3 nav shell, both stylesheets were re-seeded to the M3 baseline, and the
+  app now declares 46 M3 roles in both themes. See "Handoff addendum — the Material Design 3
+  rewrite this file never recorded" at the end of this document for what shipped, what was
+  verified, and what is still open.
 - Speech native ABI/device proof remains incomplete, and the cloud transcription endpoint is not
   built.
 - Session-memory macOS per-row comparison and a real memory-pressure signal remain open.
@@ -716,3 +1099,276 @@ fix one writer, look at what the survivor still contains. `hook-endpoint.env` di
 Ask what is IN the leftover, then remove writers one at a time. Both of tonight's directory
 mysteries — this one and the EPERM flake — gave themselves up to that same question, after five
 hypotheses between them had failed.
+---
+
+## Handoff addendum — the Material Design 3 rewrite this file never recorded (2026-08-19)
+
+### Why this section exists
+
+`HANDOFF.md` is the handoff of record for this repository, and until this section was added it
+contained **zero** occurrences of "Material Design 3", "MD3", "NavRail", "TopAppBar",
+"styles.md3", or "TabBar.tsx" — confirmed with a plain `grep`, not assumed. The largest change to
+this app's UI in its history — every stock chrome surface torn out and replaced — happened
+entirely underneath a document that kept describing an app whose tab strip and dock still existed.
+A handoff that is confidently wrong about the biggest recent change is worse than no handoff at
+all, because the next reader trusts it. Every claim below was checked against the tree at commit
+`38280b0b7d3d7a22641464984225c07c4df833f8` (this worktree's `HEAD`, and `origin/main`'s tip at
+write time) before being written down; none of it is restated from the brief that asked for this
+correction.
+
+### What actually shipped
+
+The rewrite spans roughly twenty commits landing 2026-08-18 (`git log --oneline -- design/v2/`
+and `-- src/renderer/styles.md3.css` both bottom out that day), starting from
+`84ef6d14 feat(design): apply the M3 roles to the low-risk surfaces` and running through
+`41a593eb feat(tools): Ollama, converter, authenticator and toy locks get the M3 seed`. It is
+fully merged into `main` — not stranded on a branch — via `main`'s own first-parent chain
+(`db0c00ed Merge branch 'feat/minecraft-server-manage'` and `7c922e70 fix(md3): rebuild the M3
+sheet from its lanes, and let the bar be 64` both sit on that chain, ahead of the
+Docker-hosted-deployment commits `d475bdee`/`fd752f51` at the very tip).
+
+**The tab strip and bottom dock are gone.** `src/renderer/components/TabBar.tsx` and `Dock.tsx`
+were deleted outright in `b4061448 feat(shell): wire the app to the nav shell; retire the tab
+strip and dock`. In their place: `TopAppBar.tsx` (51 lines — a flat 64px surface-container bar
+that is also the window drag region), `ProjectSwitcher.tsx` (799 lines — a menu button replacing
+the project tab strip: one dropdown lists every project, drag-reorders them, and expands a
+per-project actions panel carrying everything the old tab caret menu did, including the
+session-duration toy-lock relock effect, which moved here so it could never go missing), `NavRail`
+(81 lines — an 88px rail that is a real flex sibling of the canvas, not a floating overlay, with
+Canvas/Board/Files/Tools/Alerts/Settings destinations and Kids pinned to the bottom), and
+`FabMenu.tsx` (350 lines — the "add a node" dropdown, the old dock menu moved here verbatim). The
+floating `.controls-cluster` is gone entirely too: search, the presence facepile, notifications,
+phone pairing and help moved into the app bar; Explorer/Source Control/the file converter/the
+Ollama manager are now reached through the rail's Files/Tools destinations. **`CLAUDE.md` itself
+was not fully updated for this** — as of this writing it still says, in its own "Window chrome"
+section, that "the tab bar (`TabBar.tsx`) is the drag region" (`CLAUDE.md:2060`), a file that no
+longer exists. That correction belongs to whoever next touches that file; it is out of scope for
+this pass, which only writes `HANDOFF.md`.
+
+**The app bar is 64px, the rail is 88px.** `--app-bar-h: 64px` and `--nav-rail-w: 88px` are
+declared at `src/renderer/styles.css:100-101`; every floating panel/overlay that positions itself
+below the bar does so via `calc(var(--app-bar-h) + …)`. `src/shared/layout.ts` exports
+`APP_BAR_HEIGHT = 64` as main's independent copy of the same number (the file's own doc comment
+says outright that the two have no shared build-time link and must be changed together), consumed
+by `src/main/index.ts:569` for the Windows `titleBarOverlay` height so the native caption-button
+overlay lines up with the app bar instead of floating over the canvas below it.
+
+**There are now two stylesheets.** `src/renderer/styles.css` (14,569 lines — the pre-existing
+token layer plus legacy rules) and `src/renderer/styles.md3.css` (8,414 lines — the new chrome),
+the second imported immediately after the first in `src/renderer/boot.tsx` (`import
+'./styles.css'` then `import './styles.md3.css'`) so it wins on source order wherever the two
+declare the same selector.
+
+**Three font families ship as committed, subsetted `.woff2` under
+`src/renderer/assets/fonts/`** — `material-symbols/material-symbols-rounded-subset.woff2` (one
+file), `outfit/` (two variable-weight files, latin and latin-ext), `roboto-mono/` (four files:
+400/700 × normal/italic) — seven files total, all tracked in Git (`git ls-files` confirms none are
+gitignored). `scripts/build-fonts.mjs` regenerates them and also emits
+`src/renderer/components/materialSymbols.generated.ts`, a generated name union consumed by
+`MaterialSymbol.tsx`. Material Symbols is subset **by codepoint, not by ligature name**: the
+component renders the glyph's raw private-use-area character directly, never the ligature text,
+because the subset was built with GSUB/ligature substitutions stripped — confirmed by reading both
+`build-fonts.mjs`'s own comments and `MaterialSymbol.tsx`'s doc comment, which say this in nearly
+identical words.
+
+**The token layer was re-seeded to the M3 baseline, and the default accent changed.**
+`DEFAULT_ACCENT = '#6750a4'` (`src/shared/types.ts:1655`) replaced the prior default of systemBlue
+`#0a84ff`. This is a real, user-visible appearance change for every existing install, and
+`src/core/settings-store.ts` carries an explicit one-time migration for it (its own comment and
+guard, lines 53-63): because the app always persists the full settings object including untouched
+defaults,
+every existing `settings.json` has `#0a84ff` written in byte-for-byte — indistinguishable from a
+user who deliberately chose systemBlue — so the migration treats the old literal default as "never
+touched" and carries it forward to the new default once. A user who genuinely wanted systemBlue
+loses that choice on first launch after upgrade and has to re-pick it from the swatch row. The
+same migration also flips two canvas interaction defaults (`wheelZoom`/`canvasDragMode`) forward
+for anyone still on the old literal defaults.
+
+**New surfaces that did not exist before this window, confirmed present:** a changelog viewer
+(`src/renderer/components/changelog/ChangelogPanel.tsx`), Kids Mode as a set of dedicated screens
+distinct from the pre-existing School mode (`src/renderer/components/kids/`:
+`EnableKidsModeDialog.tsx`, `KidsActivityCanvas.tsx`, `KidsGate.tsx`, `KidsHome.tsx`,
+`KidsParent.tsx`, `KidsShell.tsx`, `KidsStickers.tsx`, plus its own settings section and state
+store), and a Minecraft server create/manage panel
+(`src/renderer/components/minecraft/MinecraftServerPanel.tsx`) wired to
+`src/core/minecraft/{java.ts,register-ipc.ts,server-manager.ts,version-resolve.ts}`. All four are
+present in `check-app-contract.mjs`'s feature inventory with passing existence/content checks (see
+Verification below).
+
+**The design bundle lives at `design/v2/`.** Ten `.dc.html` handoff artifacts (Board, Canvas,
+Files, History, Kids Mode, Overlays, Regex Builder, Settings, Tools, Welcome), a `support.js`, a
+`HANDOFF-README.md`, and `design/v2/md3/tokens.css` (102 lines, 3,665 bytes) — the token contract
+the rewrite drew from.
+
+### Verification actually performed at `38280b0b` (this HEAD)
+
+Every number below was observed by running the command, not assumed from a prior session's
+report.
+
+| Check | Command | Result |
+|---|---|---|
+| Type checking | `npm run typecheck` | **Clean.** Zero errors on both `tsconfig.node.json` and `tsconfig.web.json`. |
+| Vocabulary lock | `node scripts/check-vocabulary.mjs` | Passed. |
+| App contract | `node scripts/check-app-contract.mjs` | 725 assertions across 47 features. **3 failures**, all under "First-class Windows terminal profiles" (a suite-boundary string match, a pending built-artifact-interaction assertion, and a pending real-capture-evidence assertion) — none related to the M3 rewrite. The same run's "M3 foundation" checks passed: no CDN font/icon link across 748 scanned renderer files, all 46 M3 roles declared in the dark `:root` block, all 46 roles defined for both themes, and the app's `data-theme` attribute (not a stray `data-md-theme`) is what's actually used. |
+| Site contract | `node scripts/check-site-contract.mjs` | 340 assertions, all clear. |
+| Full test suite | `npx vitest run` (default parallel workers) | **691 test files: 677 passed, 7 failed, 7 skipped. 8,730 tests: 8,477 passed, 55 failed, 198 skipped.** Wall time 213.19 s. Full breakdown below. |
+| Production build | `npm run build` (vocabulary + changelog checks, `electron-vite build`, `host:build`) | **Succeeded, exit 0.** Produces `out/main`, `out/preload`, `out/renderer` (including the ~7.6 MB `monaco-setup` chunk and the ~2.8 MB `boot` chunk) and `out/session-host/host.cjs`. |
+
+**The redesign has never been visually verified. Nobody has launched the built app and looked at
+it.** This pass ran `npm run build` and confirmed it exits 0 and produces the expected output
+files; it did not run `npm run check:wired`, did not launch the packaged app on a headless
+desktop, and took no screenshots of the new app bar, nav rail, project switcher, or FAB menu. A
+clean typecheck and a clean production build are evidence the code compiles and bundles — they are
+**not** evidence that the 64px bar actually renders at 64px, that the rail's destinations actually
+open the right panels, that the re-seeded accent doesn't clash with something, or that the two
+stylesheets' cascade order produces the intended result on screen. That gap is exactly the kind of
+thing this document exists to be honest about rather than paper over.
+
+### The seven failing test files, with cause
+
+None of the 55 failing tests are new MD3 *layout* regressions beyond the one CSS defect below;
+most belong to other work that landed at the same tip. Recorded here because they were found
+while doing the verification this section reports, and leaving them undiagnosed would just mean
+the next reader re-does this work.
+
+1. **`src/renderer/styles.theme.test.ts` (2 failures) — real, and MD3-adjacent.** The Minecraft
+   panel's `.mc-console` rule (`src/renderer/styles.css:14543-14554`) hardcodes
+   `background: #000000` instead of a theme token, and both `.mc-console` and `.mc-path`
+   (`styles.css:14453`, `14552`) reference an undefined `--mono` custom property — only
+   `--mono-font` is actually defined anywhere in either stylesheet. This is very likely the exact
+   drift this document's own earlier section already flagged in passing ("`src/renderer/styles.css`
+   contains an unrelated unstaged user/other-session change (monospace token alias and terminal
+   background token)... deliberately excluded from this session's commits") that never got
+   finished. Not fixed here — out of scope for a document-only pass — but the cause is confirmed,
+   not guessed.
+2. **`src/core/build-bat.test.ts` (~19 failures)** — Windows batch installer-build tests
+   (Authenticode probing, `cmd.exe` orchestration). Not MD3-related on its face; needs an isolated
+   re-run per this repo's own documented contention guidance before attributing it to a real
+   regression versus environment noise, which this pass did not have time to do.
+3. **`src/core/fs-atomic.guard.test.ts` (1 failure) — real, and worth flagging loudly given how
+   much this repo's own documentation (see "Atomic writes" above) cares about this exact
+   invariant.** `core/local-history.ts` and `core/minecraft/java.ts` both publish through a bare
+   `fs.rename`/`rename(` instead of the required `renameAtomic` helper. `core/minecraft/java.ts` is
+   new code from this cycle (the automatic Java provisioning for managed Minecraft servers) and
+   never got the atomic-write treatment this repo dedicates an entire section of `CLAUDE.md` to.
+4. **`src/main/remote/relay-host-service.test.ts` (~28 failures) — not MD3-related.** These come
+   from the Docker-hosted-remote-access work merged at the very tip (`fd752f51`/`d475bdee`); tests
+   throw `Choose a local project before starting Docker host.` / `The selected project has no local
+   Docker workspace.` — the test harness was not updated after `addSeat` grew a new required
+   Docker-project precondition.
+5. **`src/renderer/nodes/ServiceNode.test.tsx` (3 failures) — a test-harness gap from the new
+   Minecraft surface.** The new `minecraft` kind renders `MinecraftServerPanel`, which calls
+   `useSession()`; the shared `ServiceNode.test.tsx` harness (`render(...)` → `Harness`) never
+   wraps in a `SessionProvider` for any kind, so the three Minecraft-specific cases throw `[session]
+   useSession() outside a SessionProvider`.
+6. **`src/renderer/terminal/webgl-addon-pair.test.ts` (1 failure) — an install artifact in this
+   environment, not a source defect.** `node_modules/@xterm/addon-webgl/lib/` does not exist at all
+   in this checkout (confirmed with `ls`), so the test's `fs.readFileSync` on
+   `lib/addon-webgl.js` fails with `ENOENT` before it ever gets to compare version guards.
+7. **`src/renderer/state/permissionMode.funnel.test.ts` (1 failure) — real, and in the new Kids
+   Mode surface.** `components/kids/KidsParent.tsx` reads `settings.claudePermissionMode` directly
+   instead of through `activePermissionMode()`, which is exactly the funnel-bypass class of bug
+   this test exists to catch (it names the Kids-mode gate specifically).
+
+### Corrections to other claims already in this file
+
+Checked because the brief asked whether the file's existing draft-release text was still accurate
+— it was not, and neither were two adjacent claims found along the way.
+
+- **The two stranded drafts this file described (`v0.4.4`, `v0.4.5`) no longer exist.**
+  `gh release view v0.4.4` / `v0.4.5` both return "release not found." Whether they were deleted by
+  the repository owner or superseded some other way is not recorded anywhere this pass could find;
+  either way, the "two drafts sitting there" state this document described is gone. In its place,
+  as of this write, there is exactly **one** draft release across the entire repository (checked
+  via `gh api repos/.../releases --paginate`, 100+ releases scanned): `v0.4.41`, whose
+  `targetCommitish` is `38280b0b` — **this exact commit**. The pattern this document already
+  documents (a failed run strands a version number nobody can reuse) is continuing under new
+  numbers; it was not a one-time event that got cleaned up.
+- **"`.github/workflows/release.yml` is a manual-only `workflow_dispatch` pipeline" and "Automatic
+  publication is disabled because the workflow has no push trigger" are both false as of this
+  commit.** Read directly from the file (`.github/workflows/release.yml:31-34`):
+  ```yaml
+  on:
+    push:
+      branches: [main]
+    workflow_dispatch:
+  ```
+  The workflow's own header comment says plainly: "EVERY PUSH TO MAIN RELEASES. There is no manual
+  bump step." `gh workflow list` confirms the Release workflow's status as `active`, and `gh run
+  list --workflow=Release` shows it firing on essentially every push to `main` throughout
+  2026-08-18/19, publishing a new version each time (`v0.4.27` through `v0.4.40` published, in
+  order, over the course of the day this rewrite landed). `docs/ci-and-releases.md` describes the
+  same old push-triggers-an-infinite-tag-loop incident and the resulting "no push trigger, ever"
+  fix — that document is now **also** stale in the same direction as this one was; it is not
+  touched by this pass (out of scope), but a future pass should reconcile it with the workflow file
+  it is supposed to describe.
+- **"The repository is public but has issues disabled... `gh issue list` fails for that reason" is
+  false as of this commit.** `gh api repos/.../material-nodeterm --jq .has_issues` returns `true`,
+  and `gh issue list --state open` returns two open issues (`#2` "Session handoff: test-suite
+  reliability, two server leaks, integration research", `#3` "Add global defaults, full project
+  settings, and Docker-hosted remote access") — neither is about the MD3 rewrite; `#2` is an
+  earlier handoff largely covering ground this file's own later sections already describe (the
+  temp-directory leaks, the contention-timeout run), and `#3`'s timing lines up with the
+  Docker-hosted-deployment commits at this file's very first section. This pass did not post
+  anything to either issue or open a new one; posting a handoff copy to GitHub Issues, now that
+  they're enabled, is a reasonable next step for whoever picks this up, but it was not part of what
+  was asked here.
+
+### Published baseline, re-verified
+
+- **Latest non-draft release: `v0.4.40`**, published `2026-08-19T04:03:10Z`, targeting commit
+  `d475bdee6e60612722f62981c9a67c4f11f4e7e1`. Verified via `gh release view v0.4.40 --json
+tagName,targetCommitish,publishedAt,isDraft,isPrerelease,assets`: `isDraft: false`,
+  `isPrerelease: false`, three assets uploaded
+  (`node-terminal-0.4.40-full.nupkg` 218,055,235 bytes, `nodeterm-Setup-0.4.40.exe`
+  218,183,168 bytes, `RELEASES` 85 bytes).
+- **Ancestry confirmed, not assumed**: `git merge-base --is-ancestor d475bdee HEAD` succeeds (the
+  published target is an ancestor of this worktree's `HEAD`), and `git merge-base --is-ancestor
+b4061448 d475bdee` also succeeds — the commit that deleted `TabBar.tsx`/`Dock.tsx` and wired in
+  the nav shell is itself an ancestor of what `v0.4.40` shipped. **The published `v0.4.40` build
+  does carry the Material Design 3 rewrite.** It does not carry the two Docker-hosted-deployment
+  commits at this file's tip (`fd752f51`, `d475bdee`'s sibling `38280b0b` merge) — those are one
+  and two commits ahead of what's published, respectively, and are what the draft `v0.4.41` (see
+  above) is attempting and has not yet succeeded at publishing cleanly.
+- Package version in the tree remains `"0.4.3"` (`package.json`), consistent with this release
+  pipeline's documented design: the computed release version is applied to the working tree at
+  build time and deliberately never committed back to `main`, so the Git tag (`v0.4.40`) is the
+  source of truth for what shipped, not `package.json`.
+
+### Open boundaries found or reconfirmed during this pass
+
+- No built-artifact interaction proof (`check:wired`) or real screenshot capture exists for the
+  Material Design 3 rewrite. This is the single biggest gap this addendum exists to name plainly.
+- No dedicated documentation file exists for the M3 rewrite under a categorized `docs/` subfolder,
+  unlike Kids Mode (`docs/kids-mode.md`) and the Minecraft server manager
+  (`docs/minecraft-server-manager.md`), both of which ship one and both of which are checked for by
+  `check-app-contract.mjs`. The "M3 foundation" contract check is narrower (four structural CSS
+  assertions) and does not require or check for a feature write-up.
+- `.mc-console`'s hardcoded black background and the dangling `--mono` token reference
+  (`src/renderer/styles.theme.test.ts`, both failing) are unfixed.
+- `core/local-history.ts` and `core/minecraft/java.ts` publish via bare renames instead of
+  `renameAtomic` (`src/core/fs-atomic.guard.test.ts`, failing) — a real Windows data-loss risk per
+  this repository's own extensively documented reasoning for why that helper exists.
+- `components/kids/KidsParent.tsx` bypasses the permission-mode funnel
+  (`src/renderer/state/permissionMode.funnel.test.ts`, failing).
+- `ServiceNode.test.tsx`'s shared test harness has no `SessionProvider`, so all three
+  Minecraft-kind test cases fail on mount.
+- `src/core/build-bat.test.ts`'s ~19 failures and the `relay-host-service.test.ts` failures (Docker
+  precondition, unrelated to MD3) were observed but not root-caused to the same depth as the items
+  above in the time available for this pass; both deserve an isolated re-run.
+- `CLAUDE.md`'s own "Window chrome" section still describes `TabBar.tsx` as the drag region
+  (`CLAUDE.md:2060`); that file was not touched by this pass.
+- `docs/ci-and-releases.md` still describes the release workflow as manual-`workflow_dispatch`-only
+  with no push trigger, which the workflow file itself now contradicts; also not touched by this
+  pass.
+- The stranded-draft pattern this document already flagged is recurring under new numbers
+  (`v0.4.41`, targeting this exact commit) rather than resolved.
+
+### Next-owner note
+
+Before claiming the Material Design 3 rewrite is release-ready: launch the packaged build (or run
+`npm run build && npm run check:wired`) and actually look at the new app bar, nav rail, project
+switcher and FAB menu on a real screen — nothing above substitutes for that. Then decide whether
+the `.mc-console` styling defect and the two atomic-write violations found above are worth a
+one-line fix before the next release, since both are small, both are diagnosed, and neither
+requires touching anything MD3-specific to correct.

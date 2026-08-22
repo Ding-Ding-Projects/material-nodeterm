@@ -1,8 +1,9 @@
 import { join, resolve, posix } from 'path'
 import { startSessionNameSweep, displayNodeTitle } from '../core/session-name-sweep'
 import { readAgentSessionName, type AgentSessionNameDeps } from '../core/agent-session-name'
-import { readFile, writeFile } from 'fs/promises'
+import { readFile, writeFile, rm as rmFile } from 'fs/promises'
 import { statSync } from 'fs'
+import { renameAtomic, tempNameFor } from '../core/fs-atomic'
 import { homedir, hostname } from 'os'
 import { randomUUID } from 'crypto'
 import {
@@ -42,16 +43,29 @@ import { matchesShortcut } from '../shared/shortcut'
 import { registerFsHandlers } from '../core/fs-handlers'
 import { registerConverterIpc } from '../core/converter/register-ipc'
 import { registerOllamaIpc } from '../core/ollama/register-ipc'
+import { registerMinecraftIpc } from '../core/minecraft/register-ipc'
 import { registerVsCodeHandlers } from '../core/vscode-handlers'
 import { LocalHistoryStore } from '../core/local-history'
+import { ProjectArchiveService } from '../core/project-archive'
+import { ServerDeploymentService, resolveServerDeploymentRoot } from './server-deployment'
 import { registerLocalHistoryHandlers } from '../core/local-history-handlers'
 import { describeSettingsChange } from '../shared/settings-diff'
-import type { Settings } from '../shared/types'
+import type { RemoteLoginHelp, Settings } from '../shared/types'
 import {
   registerBrowserGuestRequest,
   type BrowserGuest
 } from './browser-guest-registry'
+import {
+  addExtension,
+  listLoadedExtensions,
+  reloadPersistedBrowserExtensions,
+  removeExtensionByPath
+} from './browser-extensions'
 import { registerBoardLogHandlers, type BoardLogRoute } from '../core/board-log-handlers'
+import {
+  registerPasswordManagerHandlers,
+  type PasswordManagerRoute
+} from '../core/password-manager/password-manager-handlers'
 import type { RemoteLogExec } from '../core/board-log'
 import { boardLogRemotePath } from '../core/board-log'
 import { PtyManager } from '../core/pty-manager'
@@ -70,6 +84,8 @@ import { runGitHubCliCommand } from '../core/github/credentials'
 import { ElectronGitHubSecretStore, registerElectronGitHubControl } from './github-control'
 import { generateCommitMessage, generateGroupName, generateTerminalName } from '../core/commit-message'
 import { initUpdater } from './updater'
+import { decryptArchive, encryptArchive, looksLikeEncryptedArchive } from '../core/project-archive-encryption'
+import { ArchiveUnlockGuard } from '../core/archive-unlock-guard'
 import { desktopBuildPaths } from './desktop-build-paths'
 import { applyWindowsSquirrelAppUserModelId } from './windows-squirrel-identity'
 import { fetchCheck } from '../core/check'
@@ -92,6 +108,7 @@ import {
   notchHudOnContextUpdate,
   assertRegularDockPresence
 } from './notch-hud'
+import { registerCanvasWidgetIpc, closeAllCanvasWidgets } from './canvas-widget-window'
 import {
   initAgentStatusMirror,
   onMirrorFlush,
@@ -167,7 +184,7 @@ import { buildHandoff, type HandoffRemote } from './handoff'
 import { initContextLink, setNodeTranscript } from '../core/context-link'
 import { transcriptPathOf } from '../core/context-link-core'
 import { initCanvasControl, installCanvasSkillInto } from './canvas-control'
-import { initTranscriptIndex, searchTranscripts } from '../core/transcript-index'
+import { initTranscriptIndex } from '../core/transcript-index'
 import { initTelemetry } from './telemetry'
 import { initClaudeUsage } from './claude-usage'
 import { remoteUsageTargets } from '../core/usage/remote-claude-usage'
@@ -236,6 +253,7 @@ import {
 } from './relay-pty-create'
 import { wirePeerRegistry } from './peer-registry'
 import { WEBGL_CONTEXT_CAP_DESKTOP } from '../shared/webgl'
+import { APP_BAR_HEIGHT } from '../shared/layout'
 import { registerConfirmedRecycleIpc } from './confirmed-recycle-ipc'
 import { registerWindowsTerminalProfileIpc } from './windows-terminal-profiles'
 import { assertSupportedNodeRuntime } from '../core/node-runtime'
@@ -274,6 +292,10 @@ if (NT_MULTI && process.platform === 'darwin') app.commandLine.appendSwitch('use
 // metadata instead of maintaining a second literal that can drift from installed shortcuts.
 applyWindowsSquirrelAppUserModelId(process.platform, app)
 
+// Platform-abstracted primary modifier target for shortcut matching in the main process
+// (⌘ on mac, Ctrl elsewhere) — mirrors the renderer's `isMac` reader.
+const isMacMain = process.platform === 'darwin'
+
 // First thing in bootstrap: install the Electron CorePlatform so anything in src/core
 // (wired in later tasks) can resolve platform() at boot. Placed after the NT_MULTI
 // userData override so userDataDir reads the final path; nothing consumes it yet.
@@ -287,6 +309,10 @@ const corePlatform = electronPlatform({
       : { ok: false, message: 'host terminal authority is not ready' }
 })
 initPlatform(corePlatform)
+// Set once registerMinecraftIpc runs inside app.whenReady() below; read by before-quit to ask any
+// live managed server to shut down gracefully. See requestGracefulStopAll's own doc comment for
+// why that call is synchronous and unawaited rather than joining the flush Promise.allSettled below.
+let minecraftServers: ReturnType<typeof registerMinecraftIpc>['manager'] | undefined
 
 // Only hand the OS a URL with a vetted scheme. Blocks file://, smb://, and custom
 // protocol-handler schemes that could be smuggled in via remote announcement feeds or
@@ -533,29 +559,30 @@ function createWindow(): BrowserWindow {
         ? buildPaths.devIcon // BrowserWindow.icon accepts PNG fine; the
           // .ico is only required for the exe/installer resource electron-builder embeds.
         : undefined
-  // Windows-native chrome: `hidden` removes the native title bar text and icon while keeping the
-  // native minimize/maximize/close buttons, and `titleBarOverlay` draws those buttons as an
-  // overlay on top of our page instead of a separate native strip above it — so our `.tabbar`
-  // really is the only chrome. (The macOS traffic-light branch — `hiddenInset` +
-  // `trafficLightPosition` — was deleted with mac desktop support.) Non-Windows deliberately gets
-  // NO title-bar options rather than the Windows overlay: the only non-Windows desktop run left
-  // is Linux dev, and it previously received the mac-only `hiddenInset`, which Electron IGNORES
-  // off-mac — so `{}` preserves the native frame Linux was actually getting. Extending the
-  // overlay there would be a behavior change smuggled inside a mac deletion.
+  // macOS gets the traffic lights integrated into our own top bar (`hiddenInset` + a custom
+  // `trafficLightPosition`), which is a look only macOS supports. Windows/Linux get the
+  // equivalent for THIS app's Material title bar: `hidden` removes the native title bar text and
+  // icon while keeping the native minimize/maximize/close buttons, and `titleBarOverlay` draws
+  // those buttons as an overlay on top of our page instead of a separate native strip above it —
+  // so our `.md3-app-bar` really is the only chrome, on every platform, not just macOS. Electron
+  // only honours `titleBarOverlay` on Windows/Linux; `hiddenInset` is macOS-only and is ignored
+  // elsewhere, which is why this was already safe to leave unconditional before this branch.
   const titleBarOptions: Pick<
     BrowserWindowConstructorOptions,
-    'titleBarStyle' | 'titleBarOverlay'
+    'titleBarStyle' | 'trafficLightPosition' | 'titleBarOverlay'
   > =
     process.platform === 'win32'
       ? {
           titleBarStyle: 'hidden',
-          // Colors match the tab bar's own panel background/text (styles.css `--panel`/`--text`
-          // at the time this was written) so the native caption buttons don't look like a
-          // different app's chrome pasted on top. Height matches `.tabbar`'s 44px so the overlay
-          // buttons line up with our own row instead of floating over the canvas below it.
-          titleBarOverlay: { color: '#1a1a1e', symbolColor: '#e6e6e6', height: 44 }
+          // Colors match the MD3 app bar's own dark surface-container / on-surface tokens
+          // (design/v2/md3/tokens.css: --md-surface-container / --md-on-surface, dark) so the
+          // native caption buttons don't look like a different app's chrome pasted on top.
+          // Height matches `.md3-app-bar` (styles.css `--app-bar-h`); APP_BAR_HEIGHT is
+          // main's copy of that same value so the overlay buttons line up with our own row
+          // instead of floating over the canvas below it.
+          titleBarOverlay: { color: '#211F26', symbolColor: '#E6E0E9', height: APP_BAR_HEIGHT }
         }
-      : {}
+      : { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 16, y: 26 } }
   const win = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -648,29 +675,20 @@ function createWindow(): BrowserWindow {
     }
   })
 
-  // Steal Ctrl+M / Ctrl+W / Ctrl+0 back from Electron's default application menu (minimize /
-  // close / resetZoom — the default menu binds them as CmdOrCtrl accelerators, so it owns them
-  // on Windows and Linux too, and a menu accelerator is handled before the page ever sees the
-  // key) and forward each to the renderer instead.
+  // Steal ⌘M / ⌘W / ⌘0 back from Electron's default application menu (minimize / close /
+  // resetZoom) and forward each to the renderer instead.
   //
-  // Ctrl+M (markdown-view toggle) and Ctrl+W (close selected node) are read from
-  // settings.shortcuts (Settings → Shortcuts) via `matchesShortcut`, so a rebind is honoured
-  // here too — this is the inline handler `feat(settings): configurable keyboard shortcuts`
-  // introduced, kept here rather than folded into `keydown-intercept.ts`'s pure
-  // `keydownIntercept` (which predates the Shortcuts section and pins a deliberately BROADER
-  // match — any Ctrl+M regardless of Shift/Alt — as a fixed, non-configurable menu-accelerator
-  // steal; narrowing that match to the exact configured combo is the whole point of making it
-  // reconfigurable, so the two cannot share one decision function without re-litigating that
-  // pin). Ctrl+0 (zoom-actual-size) is NOT part of the shortcuts registry — it is matched on the
-  // physical `code` like the renderer's `zoomShortcutChord`, unrelated to this feature — so it
-  // keeps the same fixed check `keydown-intercept.ts` uses.
-  //
-  // `matchesShortcut`'s platform argument is pinned FALSE (was `process.platform === 'darwin'`):
-  // the main process only exists in the desktop app — Windows delivery plus Linux dev runs,
-  // never the deleted mac build and never the Server Edition browser — so Ctrl is always the
-  // primary modifier here. Un-pinning it to a platform sniff would make metaKey (the Windows
-  // key) a required modifier nowhere and is pure dead weight; see
-  // `menu-accelerator-intercepts.test.ts` for the behavioral pins.
+  // ⌘M (markdown-view toggle) and ⌘W (close selected node) are read from settings.shortcuts
+  // (Settings → Shortcuts) via `matchesShortcut`, so a rebind is honoured here too — this is the
+  // inline handler `feat(settings): configurable keyboard shortcuts` introduced, kept here rather
+  // than folded into `keydown-intercept.ts`'s pure `keydownIntercept` (which predates the
+  // Shortcuts section and pins a deliberately BROADER match — any Cmd/Ctrl+M regardless of
+  // Shift/Alt — as a fixed, non-configurable menu-accelerator steal; narrowing that match to the
+  // exact configured combo is the whole point of making it reconfigurable, so the two cannot
+  // share one decision function without re-litigating that pin). ⌘0 (zoom-actual-size) is NOT
+  // part of the shortcuts registry — it is matched on the physical `code` like the renderer's
+  // `zoomShortcutChord`, unrelated to this feature — so it keeps the same fixed check
+  // `keydown-intercept.ts` uses.
   win.webContents.on('before-input-event', (event, input) => {
     if (input.type !== 'keyDown') return
     const shortcuts = settingsStore.get().shortcuts
@@ -681,10 +699,10 @@ function createWindow(): BrowserWindow {
       altKey: input.alt,
       key: input.key
     }
-    if (matchesShortcut(evt, shortcuts.toggleMarkdown, false)) {
+    if (matchesShortcut(evt, shortcuts.toggleMarkdown, isMacMain)) {
       event.preventDefault()
       win.webContents.send(IPC.appToggleMarkdown)
-    } else if (matchesShortcut(evt, shortcuts.closeNode, false)) {
+    } else if (matchesShortcut(evt, shortcuts.closeNode, isMacMain)) {
       // Repurpose Cmd/Ctrl+W: the renderer closes the selected node(s); if none are
       // selected it asks us to close the window (the standard behavior).
       event.preventDefault()
@@ -753,6 +771,12 @@ app.whenReady().then(async () => {
     console.error('[browser-use] backend start failed', error)
   })
 
+  // Electron forgets loaded extensions across restarts (its own docs: "loadExtension must be
+  // called on every boot… if you want the changes to be applied"), so replay whatever was
+  // persisted the last time the user added one. Non-blocking on the rest of boot: a slow/failed
+  // reload for one profile must not delay the window opening.
+  void reloadPersistedBrowserExtensions()
+
   // Harden every <webview> guest (WebNode runs its page in its own webContents, so the main
   // window's setWindowOpenHandler / will-navigate above don't cover it). Registered once at
   // startup for all current and future guests.
@@ -777,6 +801,11 @@ app.whenReady().then(async () => {
 
   settingsStore.init()
   settingsStore.registerIpc()
+  // "Escape to widget" — see main/canvas-widget-window.ts's module doc. Uses the same
+  // `desktopBuildPaths(__dirname)` call every window creation path uses; cheap and pure, so
+  // recomputing it here rather than threading the `createWindow()`-local `buildPaths` through
+  // costs nothing and keeps this registration call self-contained.
+  registerCanvasWidgetIpc(settingsStore, desktopBuildPaths(__dirname), ptyManager)
   // Native Electron IPC on purpose: profile detection is machine-local desktop state and must not
   // enter CorePlatform's relay-dispatch table. The same service resolves the chosen id at spawn.
   // The preload namespace is Windows-only, so keep its handlers absent on every other desktop too.
@@ -798,6 +827,155 @@ app.whenReady().then(async () => {
   // save; the diff-based label lives in shared/settings-diff.ts so it is shared with any future
   // shell that saves settings, rather than re-derived per process.
   const localHistoryStore = new LocalHistoryStore(app.getPath('userData'))
+  const projectArchives = new ProjectArchiveService(localHistoryStore)
+  // The packaged extraResources directory in a production install, the repo root in dev (see
+  // resolveServerDeploymentRoot's own doc comment; `build.extraResources` in package.json ships
+  // the matching `server-deployment/` directory). Writable state (the generated .env password,
+  // the TOTP secret) lives under userData instead, since a packaged install's project directory
+  // sits in a Squirrel version folder that is replaced wholesale on every update.
+  const serverDeploymentRoot = resolveServerDeploymentRoot({
+    isPackaged: app.isPackaged,
+    resourcesPath: process.resourcesPath,
+    repoRoot: app.getAppPath()
+  })
+  const serverDeployment = new ServerDeploymentService(
+    serverDeploymentRoot,
+    join(app.getPath('userData'), 'server-deployment')
+  )
+  ipcMain.handle(IPC.serverDeploymentStart, () => serverDeployment.start())
+  ipcMain.handle(IPC.serverDeploymentTotp, () => serverDeployment.currentTotp())
+  ipcMain.handle(IPC.serverDeploymentStatus, () => serverDeployment.status())
+  // Forwarded to every window (not just the one that started it) so the always-visible canvas
+  // indicator in a second window reflects a deployment kicked off from the first one.
+  serverDeployment.onProgress((stage) => {
+    for (const w of BrowserWindow.getAllWindows()) {
+      if (!w.isDestroyed()) w.webContents.send(IPC.serverDeploymentProgress, stage)
+    }
+  })
+  workspaceStore.setProjectHistoryRecorder((project, content, change) =>
+    localHistoryStore.record({
+      domain: `project_${project.id}`,
+      filename: 'project.json',
+      content,
+      // What actually happened on the canvas, not that a save happened — see shared/project-diff.ts.
+      label: change.label,
+      action: change.action
+    })
+  )
+  // ONE export/import at a time, enforced HERE and not only by disabled renderer controls — a
+  // keyboard-driven second submit (or a second window) walks straight past a disabled button, and
+  // two concurrent archive operations could interleave dialogs and history-domain writes.
+  let projectArchiveBusy = false
+  // Wrong-password rate limiting for protected project files, keyed by resolved path. Lives HERE
+  // rather than in the renderer for the reason the ladder's own header gives: a count kept by the
+  // guesser is not a count.
+  const archiveUnlock = new ArchiveUnlockGuard({ schoolMode: () => schoolModeStore.get().enabled })
+  ipcMain.handle(
+    IPC.projectArchiveExport,
+    async (_event, project: import('../shared/types').Project, password?: string) => {
+    if (projectArchiveBusy) return { ok: false, error: 'Another project export or import is still running.' }
+    projectArchiveBusy = true
+    try {
+      const result = await dialog.showSaveDialog({
+        title: password ? 'Save protected project as one file' : 'Save project as one file',
+        defaultPath: `${project.name.replace(/[<>:"/\\|?*]+/g, '_') || 'project'}.nodeterm-project`,
+        filters: [{ name: 'nodeterm project file', extensions: ['nodeterm-project'] }]
+      })
+      if (result.canceled || !result.filePath) return { ok: false, canceled: true }
+      // The OS save dialog's own "replace?" prompt is the overwrite confirmation; the write itself
+      // is temp + atomic rename (binary — the V2 archive is a ZIP container, never utf-8 text), so
+      // an interrupted save can never tear an existing save file.
+      const exported = await projectArchives.export(project)
+      // Encrypt the FINISHED container, never its entries: a ZIP's entry names alone would say
+      // which repository travelled and what the project is called. See project-archive-encryption.ts.
+      const bytes = password ? encryptArchive(exported.bytes, password) : exported.bytes
+      const tmp = tempNameFor(result.filePath)
+      try {
+        await writeFile(tmp, bytes)
+        await renameAtomic(tmp, result.filePath)
+      } catch (error) {
+        await rmFile(tmp, { force: true }).catch(() => {})
+        throw error
+      }
+      return { ok: true, path: result.filePath, contents: exported.contents, encrypted: Boolean(password) }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    } finally {
+      projectArchiveBusy = false
+    }
+    }
+  )
+  ipcMain.handle(IPC.projectArchiveImport, async (_event, opts?: { path?: string; password?: string }) => {
+    if (projectArchiveBusy) return { ok: false, error: 'Another project export or import is still running.' }
+    projectArchiveBusy = true
+    try {
+      // A password retry re-opens the file the FIRST call already found protected, by path: making
+      // the user pick the same file again for every wrong password would be its own small cruelty.
+      let chosen = opts?.path
+      if (!chosen) {
+        const result = await dialog.showOpenDialog({
+          title: 'Open a project file',
+          properties: ['openFile'],
+          filters: [{ name: 'nodeterm project file', extensions: ['nodeterm-project'] }]
+        })
+        if (result.canceled || !result.filePaths[0]) return { ok: false, canceled: true }
+        chosen = result.filePaths[0]
+      }
+      let raw = await readFile(chosen)
+      if (looksLikeEncryptedArchive(raw)) {
+        const key = resolve(chosen)
+        const gate = archiveUnlock.state(key)
+        // Refuse BEFORE deriving a key: the whole point of the wait is that the next guess costs
+        // wall-clock rather than only 128 MiB of scrypt.
+        if (gate.waitMs > 0) {
+          return { ok: false, lockedMs: gate.waitMs, ladderAvailable: gate.ladderAvailable, path: chosen }
+        }
+        // Protected: not an error, a prompt. The path travels back so the retry needs no picker.
+        if (!opts?.password) return { ok: false, needsPassword: true, path: chosen }
+        // A malformed envelope THROWS out of here and is reported as the damage it is — showing it
+        // as a wrong password would have the user retype a correct one forever.
+        const opened = decryptArchive(raw, opts.password)
+        if (!opened.ok) {
+          const after = archiveUnlock.recordFailure(key)
+          return {
+            ok: false,
+            wrongPassword: true,
+            path: chosen,
+            ...(after.waitMs > 0
+              ? { lockedMs: after.waitMs, ladderAvailable: after.ladderAvailable }
+              : {})
+          }
+        }
+        archiveUnlock.recordSuccess(key)
+        raw = opened.archive
+      }
+      const inspection = projectArchives.inspect(raw)
+      let destination: string | undefined
+      if (inspection.needsDestination) {
+        // The file carries the repository and working files — they need a place on disk. Only an
+        // EMPTY folder is accepted (the service enforces it), so import can never overwrite.
+        const dest = await dialog.showOpenDialog({
+          title: `Choose an EMPTY folder for ${inspection.projectName ?? 'the imported project'}`,
+          buttonLabel: 'Import here',
+          properties: ['openDirectory', 'createDirectory']
+        })
+        if (dest.canceled || !dest.filePaths[0]) return { ok: false, canceled: true }
+        destination = dest.filePaths[0]
+      }
+      const outcome = await projectArchives.import(raw, { destination })
+      return {
+        ok: true,
+        project: outcome.project,
+        archiveVersion: outcome.archiveVersion,
+        contents: outcome.contents,
+        ...(outcome.restoredTo ? { restoredTo: outcome.restoredTo } : {})
+      }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    } finally {
+      projectArchiveBusy = false
+    }
+  })
   settingsStore.setHistoryRecorder(async (before, after, override) => {
     if (override) {
       await localHistoryStore.record({
@@ -917,6 +1095,24 @@ app.whenReady().then(async () => {
     browserGuests.delete(webContentsId)
     browserUseBackend.unregister(webContentsId)
   })
+
+  // Unpacked Chrome-extension loading, per browser profile — see `BrowserExtensionsApi`'s doc
+  // comment in shared/types.ts for the real limits this establishes from the pinned Electron's
+  // own typings (unpacked-only, no persistence across restarts without the boot-time replay
+  // below, a subset of chrome.* is implemented).
+  ipcMain.handle(IPC.browserExtensionsList, (_e, partition: string | undefined) =>
+    listLoadedExtensions(partition)
+  )
+  ipcMain.handle(IPC.browserExtensionsPickDir, async () => {
+    const result = await dialog.showOpenDialog({ properties: ['openDirectory'] })
+    return result.canceled || result.filePaths.length === 0 ? null : result.filePaths[0]
+  })
+  ipcMain.handle(IPC.browserExtensionsAdd, (_e, partition: string | undefined, dirPath: string) =>
+    addExtension(partition, dirPath)
+  )
+  ipcMain.handle(IPC.browserExtensionsRemove, (_e, partition: string | undefined, dirPath: string) =>
+    removeExtensionByPath(partition, dirPath)
+  )
 
   // The naming agent runs LOCALLY on captured output, so it needs a cwd that exists on THIS
   // machine. An SSH-project node's `data.cwd` is a path on the REMOTE host — spawning there fails
@@ -1092,16 +1288,32 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC.pairingStop, (_event, attemptId: string) => pairingService.stop(attemptId))
   ipcMain.handle(IPC.pairingProbeSsh, () => pairingService.probeSsh())
   // Same pattern as appOpenNotificationSettings: a main-side constant deep link, NOT routed
-  // through shellOpenExternal's http(s)-only allowlist (which silently drops x-apple.* URLs —
-  // the "Open System Settings" button did nothing when it sent the URL from the renderer).
-  // The `Services_RemoteLogin` query selected the service in the pre-Ventura prefpane and is
-  // harmless on newer macOS, which opens the Sharing pane either way.
-  ipcMain.handle(IPC.pairingOpenRemoteLoginSettings, () => {
-    if (process.platform !== 'darwin') return
-    void shell.openExternal(
-      'x-apple.systempreferences:com.apple.preferences.sharing?Services_RemoteLogin'
-    )
-  })
+    // Returns what it actually DID, because the renderer has to tell the truth about it. This used
+    // to be `if (process.platform !== 'darwin') return` — a silent no-op on Windows and Linux,
+    // reached from a button the renderer only rendered on macOS anyway. So a Windows user was told
+    // "Remote Login is off, turn it on", handed no control, and the one control that did exist
+    // would have done nothing for them: a dead end at the exact moment they knew what they wanted.
+    ipcMain.handle(IPC.pairingOpenRemoteLoginSettings, async (): Promise<RemoteLoginHelp> => {
+      if (process.platform === 'darwin') {
+        // Must open from MAIN: shellOpenExternal's http(s)-only allowlist silently drops x-apple.*
+        // URLs, which is why this button once did nothing when the renderer sent it.
+        await shell.openExternal(
+          'x-apple.systempreferences:com.apple.preferences.sharing?Services_RemoteLogin'
+        )
+        return { opened: 'settings' }
+      }
+      if (process.platform === 'win32') {
+        // "Remote Login" on Windows is the OpenSSH Server optional feature plus its sshd service.
+        // Optional features is the right first stop: with the feature absent there is no service to
+        // start, so the Services console would send them somewhere with nothing in it.
+        await shell.openExternal('ms-settings:optionalfeatures')
+        return { opened: 'settings', note: 'openssh-server' }
+      }
+      // Linux has no settings URL that is right across desktops, and guessing one yields a button
+      // that opens the wrong thing or nothing. Hand back the command and let the renderer show it
+      // as copyable text — an honest instruction beats a control that misfires.
+      return { opened: 'none', command: 'sudo systemctl enable --now ssh' }
+    })
   ipcMain.handle(IPC.pairingListDevices, () => pairingService.listDevices())
   ipcMain.handle(IPC.pairingRevokeDevice, (_e, id: string) => pairingService.revokeDevice(id))
 
@@ -1142,10 +1354,13 @@ app.whenReady().then(async () => {
   })
 
   // Universal file converter (docs/file-converter.md) + local Ollama suite manager
-  // (docs/ollama-manager.md) — both register on the shared CorePlatform, so the Server Edition
-  // gets the identical engine via src/server/handlers/index.ts's own call to these same functions.
+  // (docs/ollama-manager.md) + local Minecraft server create-and-manage
+  // (docs/minecraft-server-manager.md) — all three register on the shared CorePlatform, so the
+  // Server Edition gets the identical engine via src/server/handlers/index.ts's own call to these
+  // same functions.
   registerConverterIpc(corePlatform)
   registerOllamaIpc(corePlatform)
+  minecraftServers = registerMinecraftIpc(corePlatform).manager
 
   const githubSecret = new ElectronGitHubSecretStore(app.getPath('userData'), safeStorage)
   const github = registerGitHubIntegration({
@@ -1235,6 +1450,27 @@ app.whenReady().then(async () => {
       return { kind: 'unsupported' }
     }
   })
+
+  // Password managers (core/password-manager/): v1 is local-only, same starting scope board-log
+  // above shipped with — an SSH-ref or cwd-less inline project answers `unsupported` rather than
+  // guessing at a remote vault path.
+  registerPasswordManagerHandlers(corePlatform, {
+    route: (projectId: string): PasswordManagerRoute => {
+      const cwd = workspaceStore.localCwdForProject(projectId)
+      return cwd ? { kind: 'local', cwd } : { kind: 'unsupported' }
+    }
+  })
+
+  // The ladder for a protected project file's prompt. Both routes are pure pass-through to the
+  // guard — every rule, and every grading decision, lives in core (see archive-unlock-guard.ts).
+  ipcMain.handle(IPC.projectArchiveLadderIssue, async (_event, filePath: string) =>
+    archiveUnlock.issue(resolve(filePath))
+  )
+  ipcMain.handle(
+    IPC.projectArchiveLadderVerify,
+    async (_event, input: { path: string; answer: import('../shared/unlock-ladder-types').LadderAnswer }) =>
+      archiveUnlock.verify(resolve(input.path), input.answer)
+  )
 
   ipcMain.handle(IPC.dialogSelectFolder, async () => {
     const result = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] })
@@ -1991,7 +2227,6 @@ app.whenReady().then(async () => {
   })
 
   initTranscriptIndex(() => settingsStore.get().claudeAccounts ?? [])
-  corePlatform.handle(IPC.transcriptSearch, (query: string) => searchTranscripts(query))
   // Populate the context meter without a live hook event: the renderer calls this on mount
   // (the continuing session may be idle after a restart). Track under the sessionId (the key
   // the meter looks up); cwd is only a path fallback. contextTail.track reads immediately and
@@ -2224,7 +2459,11 @@ app.whenReady().then(async () => {
   // core-bound services — no shell-specific wiring beyond what CorePlatform already offers
   // (userDataDir + Electron's safeStorage seal/unseal). Registered on the Server Edition too, in
   // src/server/index.ts, so a browser tab reaches the exact same service over the WS bridge.
-  const toyLockService = startToyLockService()
+  const toyLockService = startToyLockService({
+    // Live read, never a boot-time sample: School mode is a shared switch a running app must pick
+    // up without a restart, and it removes the ladder's dim-sum rung entirely.
+    schoolMode: () => schoolModeStore.get().enabled
+  })
   // Close the name-addressed write bypass: sendText must ask the lock service before typing into
   // a node (see pty-manager.sendText). Wired here because the service starts after the manager.
   ptyManager.setTextWriteGate((persistKey) => toyLockService.mayWriteToNode(persistKey))
@@ -2667,7 +2906,15 @@ app.whenReady().then(async () => {
   // CorePlatform client of this desktop after mutual SAS approval. Runs BESIDE initRemoteHost (the
   // phone still uses the legacy flow). Inert until `relay:host:start` — a solo user pays nothing.
   // Revocation reaches its sessions via `killRelayHostsByPeerKey` (peerRevoker, above).
-  initRelayHost(win, corePlatform, {})
+  initRelayHost(win, corePlatform, {
+    dockerSettingsFor: (projectId) => {
+      const cwd = workspaceStore.localCwdForProject(projectId)
+      if (!cwd) return null
+      const global = settingsStore.get().dockerHost
+      const project = workspaceStore.settingsOverridesForProject(projectId)?.dockerHost
+      return { settings: { ...global, ...project }, cwd }
+    }
+  })
   // Standing (phone) relay host: keep a host connection registered so a paired phone can reach
   // this Mac from anywhere. Honors settings.phoneAccessEnabled internally.
   const standingHost = initStandingHost(win, ptyManager, () => settingsStore.get(), listProjectsOutput, hostBridge)
@@ -2808,7 +3055,13 @@ app.whenReady().then(async () => {
         // best-effort: a failed resync leaves the stale sweep as the backstop, exactly as today
       })
     },
-    () => readFile(codexRelayScript, 'utf8')
+    () => readFile(codexRelayScript, 'utf8'),
+    // The remote tmux conf reads these, so an SSH project honours the same scrollback and
+    // word-separator settings a local one does.
+    () => ({
+      tmuxScrollback: settingsStore.get().tmuxScrollback,
+      terminalWordSeparators: settingsStore.get().terminalWordSeparators
+    })
   )
   // Wake-from-sleep: re-validate every SSH master NOW instead of letting ServerAlive discover the
   // dead TCP ~60s later — until it does, every remote terminal looks alive and is dead (no echo,
@@ -2893,6 +3146,15 @@ app.on('window-all-closed', () => {
 let quitFlushed = false
 app.on('before-quit', (e) => {
   quitting = true // from here on, window close-events must NOT be turned into hide
+  // Destroy every open widget window (never the sessions they were co-attached to — see
+  // canvas-widget-window.ts's module doc; PtyManager.killAll() below detaches every client the
+  // normal way, including the ones these windows opened).
+  closeAllCanvasWidgets()
+  // Fire-and-forget on purpose (see the method's own doc comment): a managed Minecraft server is
+  // an ordinary child process that outlives its parent quitting, so there is nothing to await here
+  // — writing "stop" now is enough for it to shut down gracefully on its own schedule. Called on
+  // BOTH passes; the method itself no-ops for an instance already asked.
+  minecraftServers?.requestGracefulStopAll()
   destroyNotchHud()
   const scheduledSettingsStop = scheduledSettingsRuntime.stop()
   // Electron releases power assertions at exit anyway; disposing keeps the hold/release log honest.

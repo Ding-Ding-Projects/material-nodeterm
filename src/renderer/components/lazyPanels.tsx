@@ -74,3 +74,6 @@ export const FileConverterPanel = withSuspense(
 export const OllamaManagerPanel = withSuspense(
   lazy(() => import('./ollama/OllamaManagerPanel').then((m) => ({ default: m.OllamaManagerPanel })))
 )
+export const PasswordManagerPanel = withSuspense(
+  lazy(() => import('./passwordManager/PasswordManagerPanel').then((m) => ({ default: m.PasswordManagerPanel })))
+)

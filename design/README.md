@@ -5,10 +5,35 @@ them next to the running app.
 
 | File | What it is |
 | --- | --- |
-| `Nodeterm MD3.dc.html` | The Material Design 3 target. Open it in a browser — everything is clickable. |
+| `Nodeterm MD3.dc.html` | The original Material Design 3 target. Superseded by `v2/` — kept for reference. |
 | `Nodeterm Today.dc.html` | The current-state reference it was designed against. |
+| `v2/` | The current Material Design 3 rewrite target. See below. |
 | `pages/` | The published-site design, its `HANDOFF.md`, and the brand assets. |
 | `compare/` | An Electron tool that shows the prototype and the running app together. |
+
+## v2 — the current rewrite target
+
+`v2/` supersedes the prototypes above. It is a full-surface Material Design 3 rewrite —
+canvas, kanban board, files and source control, settings, command palette and every overlay,
+notifications, welcome, kids mode, tools, and history — landed as ten clickable `.dc.html`
+screens plus their own token layer and handoff notes:
+
+| File | What it is |
+| --- | --- |
+| `v2/MD3 *.dc.html` | The ten screen prototypes. Open any of them in a browser — keep `v2/support.js` and `v2/md3/` alongside. |
+| `v2/md3/tokens.css` | The production-ready token layer — drop it in ahead of the current `:root` ramps. |
+| `v2/md3/HANDOFF.md` | Component recipes: exact values, the known palette divergence, per-component notes. |
+| `v2/HANDOFF-README.md` | The bundle's own overview: implementation order, screen-to-source mapping, interaction notes. |
+| `v2/support.js` | Prototype runtime only — never ship it. |
+
+The bundle this was extracted from also specified an eleventh screen, a console for managing
+internal tooling integrations, with its own nav-rail destination. That console is out of scope
+for this application, so it and its rail entry are deliberately not implemented and not
+committed here.
+
+The v1 prototypes above (`Nodeterm MD3.dc.html`, `Nodeterm Today.dc.html`) remain for
+reference — they document what the app was designed against before this rewrite — but `v2/`
+is the current target.
 
 ## Comparing
 

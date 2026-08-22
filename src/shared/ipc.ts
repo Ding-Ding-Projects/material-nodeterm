@@ -76,6 +76,21 @@ export const IPC = {
   appZoomActualSize: 'app:zoom-actual-size',
   appCloseWindow: 'app:close-window',
   appFocusWindow: 'app:focus-window',
+  /** Canvas widget mode (`main/canvas-widget-window.ts`, `core/canvas-widget.ts`, `renderer/widget/
+   *  WidgetApp.tsx`): pop one terminal node's live tmux/session-host session into its own
+   *  always-on-top-configurable desktop window — a second co-attached viewer of the SAME session,
+   *  never a copy (see `Settings.canvasWidgets`'s doc comment in shared/types.ts). Electron-only:
+   *  Server Edition has no OS window to open, so the ws-bridge implementation answers every call
+   *  `{ unsupported: true }` rather than registering a handler. All four payloads carry the
+   *  target node id first. `widgetStateChanged` is main → every listening renderer (the main
+   *  window AND the widget window itself), fired on open/close/always-on-top change and once in
+   *  reply to `widgetGetState`, so the "escaped" indicator on the canvas node and the widget's own
+   *  toggle never have to poll. */
+  widgetOpen: 'widget:open',
+  widgetClose: 'widget:close',
+  widgetSetAlwaysOnTop: 'widget:set-always-on-top',
+  widgetGetState: 'widget:get-state',
+  widgetStateChanged: 'widget:state-changed',
   /** Write text to the system clipboard from the MAIN process. Renderer-side `clipboard` access is
    *  deprecated in Electron; resolves true only after MAIN completes the write. */
   clipboardWrite: 'clipboard:write',
@@ -216,6 +231,19 @@ export const IPC = {
   workspaceLoad: 'workspace:load',
   workspaceSave: 'workspace:save',
   workspaceProbeFolder: 'workspace:probe-folder',
+  projectArchiveExport: 'project-archive:export',
+  projectArchiveImport: 'project-archive:import',
+  /** The unlock ladder for a protected project file's password prompt — issue a challenge, and
+   *  grade an answer core-side against its one-shot nonce. Never touches the password itself:
+   *  clearing a rung ends the WAIT and nothing else (core/archive-unlock-guard.ts). */
+  projectArchiveLadderIssue: 'project-archive:ladder-issue',
+  projectArchiveLadderVerify: 'project-archive:ladder-verify',
+  serverDeploymentStart: 'server-deployment:start',
+  serverDeploymentTotp: 'server-deployment:totp',
+  serverDeploymentStatus: 'server-deployment:status',
+  /** Main → renderer event (not invoke/handle): one `ServerDeploymentStage` per emission, sent
+   *  while a `serverDeployment.start()` call is in flight. */
+  serverDeploymentProgress: 'server-deployment:progress',
   // main → renderer events
   workspaceMigrated: 'workspace:migrated',
   /** Payload: the `workspace.json.corrupt-<ts>` filename the unreadable index was preserved as. */
@@ -263,6 +291,7 @@ export const IPC = {
   kidsModeRename: 'kids-mode:rename',
   kidsModeChangePin: 'kids-mode:change-pin',
   kidsModeHasCredential: 'kids-mode:has-credential',
+  kidsModeVerifyPin: 'kids-mode:verify-pin',
   kidsModeChanged: 'kids-mode:changed',
   schoolModeLoad: 'school-mode:load',
   /** Turn the mode on. A `pin` is required only the FIRST time (no stored credential yet); it is
@@ -380,6 +409,10 @@ export const IPC = {
   browserRegister: 'browser:register',
   browserUnregister: 'browser:unregister',
   browserNewWindow: 'browser:new-window',
+  browserExtensionsList: 'browser:extensions-list',
+  browserExtensionsAdd: 'browser:extensions-add',
+  browserExtensionsRemove: 'browser:extensions-remove',
+  browserExtensionsPickDir: 'browser:extensions-pick-dir',
   remoteHostStart: 'remote:host:start',
   remoteHostStop: 'remote:host:stop',
   // Connection approval gate: main → renderer when a client finishes the handshake (carries the
@@ -413,6 +446,7 @@ export const IPC = {
   // the host human answers with `relayHostConfirm` (id). `relayHostOpen` / `relayHostClosed` fire
   // main → renderer when a bridged peer becomes a live client / drops (payload `{ id }`).
   relayHostStart: 'relay:host:start',
+  relayHostDockerContexts: 'relay:host:docker-contexts',
   // Team Access (multi-seat): `relayHostInvite` ADDS a seat (invoke, `{ projectId?, email? }` →
   // `{ offer }`, cap-checked → rejects `E_SEATS_FULL`); `relayHostRevoke` (send, `{ id }`) cuts one
   // bridged peer's live session. `relayHostPeerPending`/`relayHostOpen` now also carry the seat
@@ -517,6 +551,30 @@ export const IPC = {
   /** main/server → renderer: a streamed chat token/finish/error for the session named in the
    *  payload. One shared channel (not per-session) — the renderer filters by sessionId. */
   ollamaChatStream: 'ollama:chat-stream',
+  // Local Minecraft server create-and-manage (docs/minecraft-server-manager.md). Registered on
+  // BOTH shells over the same `platform.handle`/`platform.broadcast` seam as Ollama above, so it
+  // manages whichever machine is actually running the shell. NOT carried over the relay (a peer
+  // must not provision or run processes on the host it joined) — see relay-rpc-policy.ts, which
+  // deliberately has no entries for this namespace.
+  minecraftVersions: 'minecraft:versions',
+  minecraftStatus: 'minecraft:status',
+  minecraftCreate: 'minecraft:create',
+  minecraftAcceptEula: 'minecraft:accept-eula',
+  minecraftStart: 'minecraft:start',
+  minecraftStop: 'minecraft:stop',
+  minecraftSendCommand: 'minecraft:send-command',
+  minecraftRemove: 'minecraft:remove',
+  minecraftRecentConsole: 'minecraft:recent-console',
+  minecraftPropertiesRead: 'minecraft:properties-read',
+  minecraftPropertiesWrite: 'minecraft:properties-write',
+  minecraftPlayerLists: 'minecraft:player-lists',
+  minecraftBackupsList: 'minecraft:backups-list',
+  minecraftBackupCreate: 'minecraft:backup-create',
+  minecraftBackupRestore: 'minecraft:backup-restore',
+  minecraftBackupDelete: 'minecraft:backup-delete',
+  // Shell → renderer: one multiplexed status/console stream, like ollama:chat-stream above.
+  // Payload: MinecraftEvent. A listener filters to the instance id it owns.
+  minecraftEvent: 'minecraft:event',
   // "Open in Visual Studio Code" (src/core/vscode-detect.ts, src/core/vscode-handlers.ts).
   // Registered on BOTH shells via the generic `platform.handle` seam, so it opens VS Code on
   // whichever machine is actually running the shell (this desktop, or the Server Edition host).
@@ -544,6 +602,11 @@ export const IPC = {
   toylockRemove: 'toylock:remove',
   toylockVerify: 'toylock:verify',
   toylockRelock: 'toylock:relock',
+  // The unlock ladder for a rate-limited toy lock (docs/unlock-ladder.md). Clearing a rung ends
+  // the WAIT and nothing else — it never supplies a credential, never refunds an attempt, and
+  // never shortens the next wait.
+  toylockLadderIssue: 'toylock:ladder-issue',
+  toylockLadderVerify: 'toylock:ladder-verify',
   // The built-in authenticator (docs/authenticator.md). Same core-bound registration pattern.
   authenticatorList: 'authenticator:list',
   authenticatorAddManual: 'authenticator:add-manual',
@@ -553,5 +616,25 @@ export const IPC = {
   authenticatorCode: 'authenticator:code',
   authenticatorCodes: 'authenticator:codes',
   authenticatorReveal: 'authenticator:reveal',
-  authenticatorExportSecrets: 'authenticator:export-secrets'
+  authenticatorExportSecrets: 'authenticator:export-secrets',
+  // Real per-project password managers (docs pending) — core-bound, registered by BOTH shells
+  // (core/password-manager/password-manager-handlers.ts), same pattern as toylocks/authenticator
+  // above. Unlike those, credentials live in a project-scoped file (<cwd>/.nodeterm/vault.json),
+  // not machine-local userData — see vault-store.ts's header.
+  passwordManagerStatus: 'password-manager:status',
+  passwordManagerCreateVault: 'password-manager:create-vault',
+  passwordManagerUnlock: 'password-manager:unlock',
+  passwordManagerLock: 'password-manager:lock',
+  passwordManagerChangePassword: 'password-manager:change-password',
+  passwordManagerCreateManager: 'password-manager:create-manager',
+  passwordManagerRenameManager: 'password-manager:rename-manager',
+  passwordManagerBindManagerGroup: 'password-manager:bind-manager-group',
+  passwordManagerReleaseGroupBinding: 'password-manager:release-group-binding',
+  passwordManagerDeleteManager: 'password-manager:delete-manager',
+  passwordManagerCreateCredential: 'password-manager:create-credential',
+  passwordManagerRenameCredential: 'password-manager:rename-credential',
+  passwordManagerUpdateCredentialSecret: 'password-manager:update-credential-secret',
+  passwordManagerRemoveCredential: 'password-manager:remove-credential',
+  passwordManagerRevealCredential: 'password-manager:reveal-credential',
+  passwordManagerCredentialCode: 'password-manager:credential-code'
 } as const

@@ -4,6 +4,7 @@ import type { SpeechModelInfo } from '@shared/types'
 import { AGENT_CONFIG, BUILTIN_AGENT_IDS, type BuiltinAgentId } from '@shared/agents/config'
 import { isHoldChord, shortcutKeyParts } from '@shared/shortcut'
 import { keyLabel } from '@shared/platform-utils'
+import { resolveAppDisplayName } from '@shared/appIdentity'
 import { useSettings } from '../../state/settings'
 import { Switch } from '@renderer/ui/Switch'
 import { AgentIcon } from '../../lib/agentIcons'
@@ -167,7 +168,7 @@ export function OnboardingFlow({ onClose }: { onClose: () => void }) {
         <div className="onb-cover">
           <div className="onb-cover__brand">
             <OnbBrandMark />
-            <span className="onb-cover__name">nodeterm</span>
+            <span className="onb-cover__name">{resolveAppDisplayName(settings.appDisplayName)}</span>
           </div>
           <p className="onb-cover__tagline">A canvas of terminals — spatial, not stacked.</p>
           <div className="onb-cover__props">

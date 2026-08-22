@@ -24,6 +24,10 @@ import { runGitHubCliCommand } from '../core/github/credentials'
 import { registerServerGitHubControl, ServerGitHubSecretStore } from './github-control'
 import { DownloadTickets } from '../core/download-tickets'
 import { registerBoardLogHandlers, type BoardLogRoute } from '../core/board-log-handlers'
+import {
+  registerPasswordManagerHandlers,
+  type PasswordManagerRoute
+} from '../core/password-manager/password-manager-handlers'
 import os from 'os'
 import { hookServer } from '../core/agents/hook-server'
 import { installServerEditionControlHandler } from './control-unsupported'
@@ -68,6 +72,7 @@ import { initCanvasSync } from '../core/canvas-sync'
 import { wireAgentStatus } from './agent-status'
 import { initServerContextLink } from './context-link'
 import { registerTranscriptIpc } from '../core/transcript-ipc'
+import { initTranscriptIndex } from '../core/transcript-index'
 import { IPC } from '@shared/ipc'
 import { WhisperModelStore } from '../core/speech/whisper-models'
 import { SpeechService } from '../core/speech/speech-service'
@@ -249,11 +254,12 @@ export async function startServer(
   // between the RPC side (which mints) and the HTTP side (which redeems) — one instance, so a
   // ticket minted over the socket is redeemable by the GET that follows it.
   const downloadTickets = new DownloadTickets()
-  const { gitService } = registerCoreHandlers(platform, {
+  const { gitService, minecraftServers } = registerCoreHandlers(platform, {
     getSettings: () => settingsStore.get(),
     downloadTickets,
     localProjectCwd: (projectId: string) => workspaceStore.localCwdForProject(projectId),
-    settingsStore
+    settingsStore,
+    workspaceStore
   })
   const github = registerGitHubIntegration({
     platform,
@@ -270,6 +276,14 @@ export async function startServer(
   // an SSH-ref project answers `{ entries: [], unsupported: true }` (v1: no remote board log here).
   registerBoardLogHandlers(platform, {
     route: (projectId: string): BoardLogRoute => {
+      const cwd = workspaceStore.localCwdForProject(projectId)
+      return cwd ? { kind: 'local', cwd } : { kind: 'unsupported' }
+    }
+  })
+
+  // Password managers (core/password-manager/) — same local-only v1 scope as board log above.
+  registerPasswordManagerHandlers(platform, {
+    route: (projectId: string): PasswordManagerRoute => {
       const cwd = workspaceStore.localCwdForProject(projectId)
       return cwd ? { kind: 'local', cwd } : { kind: 'unsupported' }
     }
@@ -342,6 +356,7 @@ export async function startServer(
   // leg: the Server Edition runs ON the host whose transcripts it reads, so local resolution is
   // the complete answer (an SSH-project node is a desktop-only concept here).
   registerTranscriptIpc({ pathFor: (sessionId) => contextTail.pathFor(sessionId) })
+  initTranscriptIndex(() => settingsStore.get().claudeAccounts ?? [])
   // Deterministic hook-reply approvals (docs/hook-reply-approvals.md): the browser canvas answers a
   // held Claude permission hook here. The Server Edition runs ON the host, so a local project's
   // answer file is written right there (under os.homedir(), which the hook uses as $HOME). SSH
@@ -596,7 +611,11 @@ export async function startServer(
   // headless/relay-specific behaviour — the plain core-bound service, same as src/main/index.ts.
   // Secrets land as raw 0600 bytes under this server's own userDataDir (CorePlatform.sealSecret is
   // absent here — no OS keychain on a headless Linux box — see core/secure-store.ts).
-  const toyLockService = startToyLockService()
+  const toyLockService = startToyLockService({
+    // Live read, never a boot-time sample: School mode is a shared switch a running app must pick
+    // up without a restart, and it removes the ladder's dim-sum rung entirely.
+    schoolMode: () => schoolModeStore.get().enabled
+  })
   // Same bypass exists in the browser shell — sendText is core, not Electron. Parity rule:
   // both raw shells change together (CLAUDE.md, agent-support section).
   ptyManager.setTextWriteGate((persistKey) => toyLockService.mayWriteToNode(persistKey))
@@ -623,6 +642,10 @@ export async function startServer(
         ptyPressure.stop()
         await contextLink.stop()
         await ptyManager.killAll()
+        // Fire-and-forget, same as the desktop app's before-quit — a managed Minecraft server is
+        // an ordinary child process that outlives this process quitting; see the method's own doc
+        // comment in server-manager.ts for why there is nothing to await here.
+        minecraftServers.requestGracefulStopAll()
         // Same native hazard as the desktop app: a whisper transcribe still running when the
         // node env is torn down aborts the process. See SpeechService.shutdown.
         await speechService.shutdown()
@@ -679,6 +702,8 @@ export async function startServer(
       ptyPressure.stop()
       await contextLink.stop()
       await ptyManager.killAll()
+      // Fire-and-forget, same as the desktop app's before-quit and the headless close() above.
+      minecraftServers.requestGracefulStopAll()
       // Same native hazard as the desktop app: a whisper transcribe still running when the node
       // env is torn down aborts the process. See SpeechService.shutdown.
       await speechService.shutdown()

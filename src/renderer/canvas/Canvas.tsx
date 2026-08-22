@@ -49,8 +49,17 @@ import { codexAccountSwitchStillEligible } from './codex-account-switch'
 import {
   canvasImagePasteArmedAfterKey,
   guardedCanvasImagePlacements,
-  isCanvasImageDropTarget
+  isCanvasImageDropTarget,
+  isEmptyCanvasDropTarget
 } from './canvas-image-import'
+import {
+  EXPLORER_FOLDER_DRAG_MIME,
+  OPEN_EXPLORER_FOR_AGENT_EVENT,
+  createAgentNodeForExplorerFolder,
+  createTerminalNodeForExplorerFolder,
+  hasDragType,
+  readExplorerFolderDrag
+} from '../lib/explorerNodeDrag'
 import {
   SharedGlyphLayer,
   flushOpaqueNodeIds,
@@ -83,7 +92,9 @@ import { useAnnotationDrawTool } from './useAnnotationDrawTool'
 import { annotationEndpoints } from '../lib/annotation'
 import { LazyEditorNode, LazyDiffNode } from '../nodes/lazyMonacoNodes'
 import { DinoNode } from '../nodes/DinoNode'
+import { SERVICE_NODE_KINDS, type ServiceNodeKind, type ProjectArchiveContents } from '@shared/types'
 import BrowserNode from '../nodes/BrowserNode'
+import { ServiceNode } from '../nodes/ServiceNode'
 import { normalizeAddress } from '../nodes/browserUrl'
 import VideoNode from '../nodes/VideoNode'
 import WebNode from '../nodes/WebNode'
@@ -96,14 +107,26 @@ import {
   validLoopInterval
 } from '../lib/nativeLoop'
 import { withNodeBoundary } from '../components/NodeBoundary'
-import { Dock } from '../components/Dock'
-import { TabBar } from '../components/TabBar'
+import { NavRail, type RailDestination } from '../components/NavRail'
+import { enterKidsModeFromRail } from '../components/kids/entry'
+import {
+  allowsNotification,
+  focusTargetId as adhdFocusTarget,
+  normalizeAdhdModes
+} from '../lib/adhdModes'
+import { TopAppBar } from '../components/TopAppBar'
+import { ProjectSwitcher } from '../components/ProjectSwitcher'
 import { type MenuItem } from '../components/ContextMenu'
 import { devicePixelSnapOffset } from '../terminal/device-pixel-fit'
 import { VocabularyContextMenu } from '../components/menu/VocabularyContextMenu'
 import { seedColor } from '../components/color/seedColor'
 import { appearanceId } from '../lib/appearance/registry'
 import { openAppearanceEditor } from '../state/appearanceEditorHost'
+import {
+  SAVE_PROJECT_ARCHIVE_ACTION,
+  OPEN_PROJECT_ARCHIVE_ACTION,
+  EDIT_TAB_APPEARANCE_ACTION
+} from '../lib/projectMenuActions'
 import { CommandPalette, type Command } from '../components/CommandPalette'
 import {
   IconAgent,
@@ -112,6 +135,7 @@ import {
   IconCollapse,
   IconBellFilled,
   IconBranch,
+  IconCircleCheck,
   IconDuplicate,
   IconEditor,
   IconColor,
@@ -126,6 +150,7 @@ import {
   IconCanvasView,
   IconLock,
   IconMarkdown,
+  IconMic,
   IconReload,
   IconPower,
   IconNote,
@@ -159,13 +184,15 @@ import {
   PhonePairPopover,
   KanbanView,
   FileConverterPanel,
-  OllamaManagerPanel
+  OllamaManagerPanel,
+  PasswordManagerPanel
 } from '../components/lazyPanels'
 import { WelcomeScreen, canDismissWelcomeScreen } from '../components/WelcomeScreen'
 import { CloneRepoDialog } from '../components/CloneRepoDialog'
 import type { DictationTarget } from '../components/DictationOverlay'
 import { describeOs, REPO_URL } from '../lib/bugReport'
 import { shouldReleasePaneFocus } from '../lib/paneFocus'
+import { buildTransferHandoff, canOfferTransfer } from '../lib/transferGates'
 import { viewportAtZoom1 } from '../lib/zoomReset'
 import { isSpaceRelease, spacePanKeydown } from '../lib/spacePan'
 import { UpdateCard } from '../components/UpdateCard'
@@ -211,13 +238,23 @@ import {
   type AccountRemovalTeardownDetail
 } from '../lib/accountRemoval'
 import { NotificationCenter } from '../components/NotificationCenter'
-import { notify, useNotifications, selectUnreadCount } from '../state/notifications'
+import { HistoryScreen } from '../components/HistoryScreen'
+import { DocsBrowser } from '../components/DocsBrowser'
+import { StatusSurface } from '../components/StatusSurface'
+import { useNotifications, selectUnreadCount } from '../state/notifications'
+// Every in-app notification raised on this surface goes through the ADHD-aware funnel rather than
+// the raw store push, so LOW STIMULATION can quiet the ones that do not need a person. Aliased at
+// the import so the ~16 call sites below read as they always did and none of them can opt itself
+// out by reaching past it; the classification is made once, in adhdNotify.ts, from the `kind` each
+// call site already declares. A quieted notification still lands in the notification centre unread.
+import { notify } from '../lib/adhdNotify'
 import { ConsentNotice } from '../remote/ConsentNotice'
 import { peerApprovalView } from '@shared/remote/approval'
 import { promptDialog } from '../components/promptDialog'
-import { UpgradeDialog } from '../components/UpgradeDialog'
+import { requestArchivePassword } from '../components/archiveUnlockDialog'
 import { RemotePicker } from '../components/RemotePicker'
 import { WorktreeDialog } from '../components/WorktreeDialog'
+import { GroupPickerDialog, type GroupPickerOption } from '../components/canvas/GroupPickerDialog'
 import { NotifyConsentDialog } from '../components/NotifyConsentDialog'
 import { SessionsSidebar } from '../components/SessionsSidebar'
 import type { SessionNodeInput } from '../lib/sessionList'
@@ -230,6 +267,8 @@ import {
 } from '../lib/zoomShortcut'
 import { UsageIndicator } from '../components/UsageIndicator'
 import { SystemResourcePill } from '../components/SystemResourcePill'
+import { ServerDeploymentPill } from '../components/ServerDeploymentPill'
+import { MinecraftConnectBanner } from '../components/MinecraftConnectBanner'
 import { PresenceLayer } from '../components/PresenceLayer'
 import { Facepile } from '../components/Facepile'
 import { PresenceNamePrompt } from '../components/PresenceNamePrompt'
@@ -311,8 +350,10 @@ import { newEntryPath, parentDir } from '../lib/explorerCreate'
 import { useProjects } from '../state/projects'
 import { useAgentStatus } from '../state/agentStatus'
 import { useToyLocks } from '../state/toylocks'
+import { useSessionRelock } from '../state/useSessionRelock'
 import { LockWizard } from '../components/toylocks/LockWizard'
 import { UnlockPrompt } from '../components/toylocks/UnlockPrompt'
+import { isNodeLockEngaged as isTabLockEngaged } from '@shared/toylock'
 import {
   useCodexIdentity,
   codexFallbackText,
@@ -363,7 +404,6 @@ import {
   canBranch,
   canControlCanvas,
   canRename,
-  canTransferFrom,
   canContextLink,
   createdAgentId,
   explicitCodexResumeSession,
@@ -446,7 +486,7 @@ import { isHidden, tidySeparators } from '../lib/ui-visibility'
 import { presentAccount, type AccountPresentation } from '../lib/accountPresentation'
 import { boardLogEvents } from '../lib/boardLogDiff'
 import { useBoardLog } from '../state/boardLog'
-import { isKanbanOpen, useViewMode, viewFor } from '../state/viewMode'
+import { isKanbanOpen, isMobileServerEdition, useViewMode, viewFor } from '../state/viewMode'
 import { useFocusNode, FOCUS_SURFACE_ID } from '../state/focusNode'
 import { focusTargetId } from '../lib/focusTarget'
 import {
@@ -457,7 +497,13 @@ import {
 } from '@shared/canvas-publish'
 import { createCanvasOrder, createReconnectWatch, type CanvasOrder } from '@shared/canvas-order'
 import { createMutationGuard, isEdgeMutation, type CanvasScene } from '@shared/canvas-mutations'
-import { chordHeld, isHoldChord, isModifierEventKey, matchesShortcut } from '@shared/shortcut'
+import {
+  chordHeld,
+  formatShortcut,
+  isHoldChord,
+  isModifierEventKey,
+  matchesShortcut
+} from '@shared/shortcut'
 import { dispatchDestructiveControl } from '../lib/controlDestructive'
 import { canvasSyncTarget } from './collab-sync'
 import { receiveActiveEdgeMutation } from './team-edge-receive'
@@ -478,6 +524,7 @@ import {
   createAgentNode,
   createCanvasControlTerminalNode,
   createBrowserNode,
+  defaultBrowserTabs,
   createDinoNode,
   createDiffNode,
   createEditorNode,
@@ -488,6 +535,8 @@ import {
   createStickyNode,
   createTerminalNode,
   nodeSshFor,
+  createServiceNode,
+  SERVICE_NODE_LABELS,
   createVideoNode,
   createWebNode,
   isVideoFile,
@@ -657,6 +706,32 @@ const WORKTREE_SSH_HINT = 'Not supported in SSH projects yet'
 const WORKTREE_SSH_NOTICE = 'Worktrees are not supported in SSH projects yet.'
 const FOCUS_NO_TARGET_NOTICE = 'Select a terminal or agent node to focus.'
 
+const archiveBytesLabel = (n: number): string => {
+  if (n >= 1024 * 1024 * 1024) return `${(n / (1024 * 1024 * 1024)).toFixed(1)} GB`
+  if (n >= 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`
+  if (n >= 1024) return `${(n / 1024).toFixed(1)} KB`
+  return `${n} B`
+}
+
+/** The save-file result in one honest sentence: what went in, what stayed out and why. Exclusions
+ *  are never silent — the count and bytes always appear when anything was left behind. */
+const archiveContentsSummary = (contents: ProjectArchiveContents | undefined): string => {
+  if (!contents) return ''
+  const parts: string[] = []
+  if (contents.workingFiles > 0) {
+    parts.push(`${contents.workingFiles.toLocaleString()} files (${archiveBytesLabel(contents.workingBytes)})`)
+  }
+  if (contents.repository === 'git-bundle') parts.push('full Git history')
+  const head = parts.length > 0 ? `Included: ${parts.join(' + ')}.` : ''
+  const note = contents.repositoryNote ? ` ${contents.repositoryNote}` : ''
+  const atLeast = contents.excluded.some((e) => e.atLeast) ? 'at least ' : ''
+  const excluded =
+    contents.excludedFiles > 0 || contents.excluded.length > 0
+      ? ` Excluded (listed in the file's archive.json): ${atLeast}${contents.excludedFiles.toLocaleString()} ignored/skipped files (${archiveBytesLabel(contents.excludedBytes)}).`
+      : ''
+  return `${head}${note}${excluded}`.trim()
+}
+
 // The webview's file loader renders off the LOCAL disk and has no remote counterpart, so a host
 // path from a remote agent could only resolve to a same-named local file — or nothing. Refuse and
 // say why, rather than opening a node that quietly shows the wrong thing. `%s` is the verb.
@@ -772,6 +847,7 @@ function toKanbanSession(n: CanvasNode): KanbanSession | null {
       color: (n.data.color as string) ?? NODE_COLORS[0],
       kind: 'browser',
       url: n.data.url as string | undefined,
+      browserProfileId: n.data.browserProfileId as string | undefined,
       spawn: {}
     }
   }
@@ -896,6 +972,10 @@ export function Canvas() {
   // This canvas's core api (a context read — stable for the session, no store subscription).
   // For the local session it IS window.nodeTerminal, so every call resolves identically.
   const { api, source: sessionSource } = useSession()
+  // 'session'-duration toy-lock re-lock-on-tab-leave (docs/toy-locks.md). Mounted exactly once
+  // here rather than in TabBar — it is a session-lifecycle rule, not tab-bar UI, and must keep
+  // working regardless of which component renders the project switcher.
+  useSessionRelock()
   const profileText = useLocalizedVocabularyText()
   const terminalProfiles = useTerminalProfiles((state) => state.profiles)
   const terminalProfilesError = useTerminalProfiles((state) => state.error)
@@ -1015,13 +1095,20 @@ export function Canvas() {
   const lastMenuScreenPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
   // Toy locks (docs/toy-locks.md) — a for-fun, opt-in gate on a canvas node. See TabBar.tsx and
   // AppearanceSection.tsx for the same pattern applied to a tab and an appearance control.
-  const [lockWizardTarget, setLockWizardTarget] = useState<{ nodeId: string; x: number; y: number } | null>(
-    null
-  )
+  // `kind` selects which target the lock addresses: a canvas node, or a GROUP FRAME (whose lock
+  // gates the frame's own structural actions -- see GroupNode). Defaulted rather than required so
+  // every existing call site keeps meaning exactly what it meant.
+  const [lockWizardTarget, setLockWizardTarget] = useState<{
+    nodeId: string
+    x: number
+    y: number
+    kind?: 'node' | 'group'
+  } | null>(null)
   const [unlockPromptTarget, setUnlockPromptTarget] = useState<{
     nodeId: string
     x: number
     y: number
+    kind?: 'node' | 'group'
   } | null>(null)
   const [remotePicker, setRemotePicker] = useState<{ x: number; y: number } | null>(null)
   const [paletteOpen, setPaletteOpen] = useState(false)
@@ -1035,6 +1122,9 @@ export function Canvas() {
   const captureTsRef = useRef<Record<string, number>>({})
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [notifCenterOpen, setNotifCenterOpen] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [docsOpen, setDocsOpen] = useState(false)
+  const [statusOpen, setStatusOpen] = useState(false)
   const unreadNotifCount = useNotifications((s) => selectUnreadCount(s.items))
   // Quick phone-pair popover (top-right phone button); non-null = open, anchored to the button.
   const [phonePairAnchor, setPhonePairAnchor] = useState<{
@@ -1087,10 +1177,37 @@ export function Canvas() {
       .catch(() => {})
   }, [])
   const [explorerOpen, setExplorerOpen] = useState(false)
+  const [explorerAgentNodeId, setExplorerAgentNodeId] = useState<string | null>(null)
+  const [explorerFolderDropActive, setExplorerFolderDropActive] = useState(false)
+  useEffect(() => {
+    if (!explorerOpen) setExplorerAgentNodeId(null)
+  }, [explorerOpen])
   // File converter + Ollama manager panels (docs/file-converter.md, docs/ollama-manager.md) — same
   // toggle-a-flag pattern as every other drawer/panel on this canvas.
   const [converterOpen, setConverterOpen] = useState(false)
   const [ollamaOpen, setOllamaOpen] = useState(false)
+  // Password manager (shared/password-manager.ts) — same drawer pattern, but per-project rather
+  // than per-machine, and it can jump straight to "add a credential" when opened from the canvas
+  // pane menu's "New credential…" row (see onPaneContextMenu below).
+  const [pwmOpen, setPwmOpen] = useState(false)
+  const [pwmIntent, setPwmIntent] = useState<'default' | 'new-credential'>('default')
+  // Every full-area screen and drawer on this canvas is mutually exclusive: opening one closes
+  // the rest. Hoisted to component scope (from inside the nav-rail block below) because the Help
+  // menu's Documentation row opens the same docs screen and needs the same close -- a full-area
+  // host painted over a drawer that is still open hides it with no way to tell it is there.
+  // Every setter here is a stable useState setter, so the empty dependency list is complete.
+  const closeAllDrawers = useCallback(() => {
+    setExplorerOpen(false)
+    setScOpen(false)
+    setConverterOpen(false)
+    setOllamaOpen(false)
+    setPwmOpen(false)
+    setSettingsOpen(false)
+    setNotifCenterOpen(false)
+    setHistoryOpen(false)
+    setDocsOpen(false)
+    setStatusOpen(false)
+  }, [])
   // Reveal-in-Explorer target (relative to the active project cwd). The nonce makes each reveal
   // distinct so revealing the same file twice still re-fires the Explorer effect.
   const [reveal, setReveal] = useState<{ path: string; nonce: number } | null>(null)
@@ -1169,6 +1286,10 @@ export function Canvas() {
   // project's saved viewport. Set by reloadActiveProject (in-place external-change reload).
   const preserveViewportRef = useRef(false)
   const [consentOpen, setConsentOpen] = useState(false)
+  // Drives GroupPickerDialog ("Add to existing group…" — the node/selection context menu's
+  // move-into-group action). `ids` is the selection being moved; `groups` is the eligible-target
+  // list computed at click time (only frames addSelectionToGroup would actually change).
+  const [groupPicker, setGroupPicker] = useState<{ ids: string[]; groups: GroupPickerOption[] } | null>(null)
   // Drives WorktreeDialog. `groupId` null = create the group frame around the new worktree;
   // set = bind an existing group (the group context menu). `at` is the pane cursor, if any.
   const [worktreeDialog, setWorktreeDialog] = useState<{
@@ -1208,6 +1329,19 @@ export function Canvas() {
   // Every group on this canvas that owns a worktree — the one derivation the worktree dialog, the
   // store refresh and the Source Control scope list all read.
   const boundGroupList = useMemo(() => boundGroups(nodes), [nodes])
+  // Every Minecraft server manager node on THIS project's canvas — what MinecraftConnectBanner
+  // needs to know which live statuses are ours to show. A stable-content key (rather than `nodes`
+  // itself, which changes identity on every drag) keeps the banner's subscriptions from tearing
+  // down and rebuilding on unrelated canvas edits.
+  const minecraftIdsKey = nodes
+    .filter((n) => n.type === 'minecraft')
+    .map((n) => n.id)
+    .sort()
+    .join(',')
+  const minecraftNodeIds = useMemo(
+    () => (minecraftIdsKey ? minecraftIdsKey.split(',') : []),
+    [minecraftIdsKey]
+  )
   const boundWorktreePaths = useMemo(
     () => new Set(boundGroupList.map((b) => normWorktreePath(b.worktree.path))),
     [boundGroupList]
@@ -1414,6 +1548,12 @@ export function Canvas() {
   }, [getViewport, setViewport])
 
   const activeProjectId = useProjects((s) => s.activeProjectId)
+  const activeProjectSettingsOverrides = useProjects(
+    (s) => s.projects.find((p) => p.id === s.activeProjectId)?.settingsOverrides
+  )
+  useEffect(() => {
+    useSettings.getState().setProjectContext(activeProjectId, activeProjectSettingsOverrides)
+  }, [activeProjectId, activeProjectSettingsOverrides])
   // Bumped by `requestReload()`; a dependency of the project-load effect so an in-place reload of
   // the ALREADY-active project actually re-runs it (see reloadActiveProject).
   const reloadNonce = useProjects((s) => s.reloadNonce)
@@ -1469,6 +1609,19 @@ export function Canvas() {
     [terminalProfiles, profileText]
   )
   nodesRef.current = nodes
+  useEffect(() => {
+    const onPrepareAgentFolder = (event: Event): void => {
+      const nodeId = (event as CustomEvent<{ nodeId?: unknown }>).detail?.nodeId
+      if (typeof nodeId !== 'string') return
+      const source = nodesRef.current.find((node) => node.id === nodeId)
+      if (!source || !createdAgentId(source.data)) return
+      setExplorerAgentNodeId(nodeId)
+      closeAllDrawers()
+      setExplorerOpen(true)
+    }
+    window.addEventListener(OPEN_EXPLORER_FOR_AGENT_EVENT, onPrepareAgentFolder)
+    return () => window.removeEventListener(OPEN_EXPLORER_FOR_AGENT_EVENT, onPrepareAgentFolder)
+  }, [closeAllDrawers])
   /**
    * ONE confirm dialog at a time — mirrored into a ref so the []-dep agent-control effect sees the
    * CURRENT dialogs (it closes over a stale `confirm`).
@@ -1539,7 +1692,16 @@ export function Canvas() {
       dino: withNodeBoundary(DinoNode),
       video: withNodeBoundary(VideoNode),
       web: withNodeBoundary(WebNode),
-      browser: withNodeBoundary(BrowserNode)
+      browser: withNodeBoundary(BrowserNode),
+      // The service family. One component for all six: they differ in what they manage, not in how
+      // they behave as canvas objects, and React Flow hands each its own `type` so the component can
+      // tell them apart without six registrations of six near-identical files.
+      minecraft: withNodeBoundary(ServiceNode),
+      dockerhost: withNodeBoundary(ServiceNode),
+      proxmox: withNodeBoundary(ServiceNode),
+      gitlab: withNodeBoundary(ServiceNode),
+      homeassistant: withNodeBoundary(ServiceNode),
+      freepbx: withNodeBoundary(ServiceNode)
     }),
     []
   )
@@ -1813,10 +1975,36 @@ export function Canvas() {
 
   // Merge the persisted nodes with the ephemeral ones once per change (not per render),
   // so React Flow's array-identity short-circuit holds while panning/zooming.
-  const allNodes = useMemo(
-    () => (ephemeralNodes.length ? [...nodes, ...ephemeralNodes] : nodes),
-    [nodes, ephemeralNodes]
-  )
+  // ADHD focus mode marks every node that is NOT the focus target, and the stylesheet fades it.
+  // Marked rather than filtered on purpose: focus dims and never hides, so the node stays in the
+  // graph, stays clickable, and comes back to full opacity on hover. Off, `dimmedId` is null and
+  // this maps to exactly the array it was given.
+  const adhdModes = normalizeAdhdModes(settings.adhdModes)
+  const adhdFocusId = adhdModes.focus
+    ? adhdFocusTarget(
+        nodes.filter((n) => n.selected).map((n) => n.id),
+        null
+      )
+    : null
+  const allNodes = useMemo(() => {
+    const base = ephemeralNodes.length ? [...nodes, ...ephemeralNodes] : nodes
+    if (!adhdFocusId) return base
+    // `as typeof n` keeps each element's own type: `base` is a union of canvas nodes and the
+    // ephemeral subagent/loop nodes, and a bare object literal here widens it until <ReactFlow>
+    // no longer accepts it.
+    return base.map((n) =>
+      n.id === adhdFocusId
+        ? n
+        : ({
+            ...n,
+            // React Flow puts a node's `className` on its own `.react-flow__node` wrapper, which
+            // is the element the fade has to apply to — the component inside cannot reach it.
+            // Appended rather than replaced: nodes carry their own classes.
+            className: n.className ? `${n.className} adhd-dimmed` : 'adhd-dimmed',
+            data: { ...n.data, adhdDimmed: true }
+          } as typeof n)
+    )
+  }, [nodes, ephemeralNodes, adhdFocusId])
 
   // Context-link edges, statically styled (no per-message activity in the pull model).
   const accent = settings.accent
@@ -2332,6 +2520,62 @@ export function Canvas() {
   // "Draw arrow" — see useAnnotationDrawTool.ts for the interaction and src/renderer/lib/annotation.ts
   // for the pure geometry. `drawTool.tool` also gates the crosshair cursor on .flow-wrap below.
   const drawTool = useAnnotationDrawTool({ flowWrapRef, screenToFlowPosition, setNodes, markDirty })
+
+  // Toy-lock enforcement for the ACTIVE project's tab (docs/toy-locks.md — the fix for "a locked
+  // tab does not actually lock and hide"). `ProjectSwitcher` already gates SWITCHING TO a locked,
+  // not-currently-unlocked project (it prompts to unlock instead of teleporting past the lock),
+  // but nothing previously stopped a project that was ALREADY active — or became locked while
+  // active — from just sitting there fully visible and interactive. This mirrors the node-lock
+  // block above almost exactly (same `isNodeLockEngaged` gate, reused generically as
+  // `isTabLockEngaged` — its fields were never node-specific), and covers the whole canvas the
+  // same way that block covers one terminal: a full-screen plate over the flow (and the kanban
+  // board, which is just another view of the SAME project's nodes and must be covered too) rather
+  // than tearing anything down — the project's sessions keep running underneath, exactly like a
+  // locked node's persistent session does.
+  const tabLockRecords = useToyLocks((s) => s.records)
+  const tabLockUnlockedUntil = useToyLocks((s) => s.unlockedUntil)
+  const tabLockStoreLoaded = useToyLocks((s) => s.loaded)
+  useEffect(() => {
+    // Idempotent with ProjectSwitcher's own on-mount refresh() — both just overwrite `records`
+    // with the latest list. Canvas must not assume ProjectSwitcher is mounted first (or at all).
+    void useToyLocks.getState().refresh()
+  }, [])
+  const activeTabLockRecord = activeProjectId
+    ? tabLockRecords.find((r) => r.target.kind === 'tab' && r.target.id === activeProjectId)
+    : undefined
+  const activeTabLockUnlockedUntil = activeTabLockRecord
+    ? tabLockUnlockedUntil[activeTabLockRecord.id]
+    : undefined
+  const activeTabLockUnlockedNow =
+    activeTabLockUnlockedUntil !== undefined && Date.now() < activeTabLockUnlockedUntil
+  const activeTabLocked = isTabLockEngaged({
+    storeLoaded: tabLockStoreLoaded,
+    hasRecord: !!activeTabLockRecord,
+    unlockedNow: activeTabLockUnlockedNow
+  })
+  // A 'minutes' unlock expires by TIMESTAMP, not by an event — nothing else here re-renders on a
+  // schedule while the user is simply looking at the canvas. Without this, an expired-but-still-
+  // rendered-unlocked tab would only actually re-hide on the NEXT incidental re-render, which
+  // could be minutes late. Scoped to only run while there is an active 'minutes' unlock to catch
+  // expiring, same as the node-lock block above.
+  const [, forceTabLockRecheck] = useState(0)
+  useEffect(() => {
+    if (!activeTabLockRecord || activeTabLockRecord.duration !== 'minutes' || !activeTabLockUnlockedNow) {
+      return
+    }
+    const t = setInterval(() => forceTabLockRecheck((n) => n + 1), 1000)
+    return () => clearInterval(t)
+  }, [activeTabLockRecord, activeTabLockUnlockedNow])
+  const [tabUnlockPromptAnchor, setTabUnlockPromptAnchor] = useState<{ x: number; y: number } | null>(
+    null
+  )
+  useEffect(() => {
+    // The record can disappear out from under an open prompt (removed elsewhere while this popover
+    // is open) or the project itself can change underneath it (project switch — though switching
+    // AWAY from a locked-and-visible project should be impossible via the switcher's own gate,
+    // this stays defensive rather than trusting that invariant from a distance).
+    if (tabUnlockPromptAnchor && !activeTabLockRecord) setTabUnlockPromptAnchor(null)
+  }, [tabUnlockPromptAnchor, activeTabLockRecord])
 
   const kanbanOpen = useViewMode((s) => !!activeProjectId && viewFor(s, activeProjectId) === 'kanban')
   const projectKanban = useProjects((s) => s.projects.find((p) => p.id === s.activeProjectId)?.kanban)
@@ -4131,6 +4375,21 @@ export function Canvas() {
     [commitActiveToStore, writeDisk]
   )
 
+  /**
+   * Adds a service-manager node. One handler for all six kinds rather than six copies of the same
+   * three lines — the kind is data, so it is a parameter.
+   */
+  const addService = useCallback(
+    (kind: ServiceNodeKind, center?: { x: number; y: number }, groupId?: string) => {
+      setNodes((ns) => {
+        const node = createServiceNode(kind, ns.length, center ?? emptyNodePos())
+        return [...ns, groupId ? parentInto(node, groupId) : node]
+      })
+      markDirty()
+    },
+    [setNodes, markDirty, emptyNodePos, parentInto]
+  )
+
   const addSticky = useCallback(
     (center?: { x: number; y: number }, groupId?: string) => {
       setNodes((ns) => {
@@ -4358,6 +4617,127 @@ export function Canvas() {
     },
     [setNodes, markDirty, activeProjectId, emptyNodePos, cwdForNewNodeIn, parentInto]
   )
+
+  const openAgentAtExplorerFolder = useCallback(
+    (drop: { nodeId: string; projectId: string; path: string }): void => {
+      const projects = useProjects.getState()
+      if (projects.activeProjectId !== drop.projectId) {
+        notify({
+          kind: 'warning',
+          title: 'Folder drop cancelled',
+          body: 'The active project changed before the drop completed.'
+        })
+        return
+      }
+      const project = projects.getProject(drop.projectId)
+      const source = nodesRef.current.find((node) => node.id === drop.nodeId)
+      const agentId = source ? createdAgentId(source.data) : undefined
+      if (!project || !source || !agentId) {
+        notify({
+          kind: 'warning',
+          title: 'Agent drop cancelled',
+          body: 'The source agent is no longer available.'
+        })
+        return
+      }
+
+      const launchPlan = activeAgentLaunchPlan('explorer-drop-agent', agentId)
+      const settings = useSettings.getState().settings
+      const accountId =
+        agentId === 'claude'
+          ? resolveNewNodeAccount(undefined, project, settings.claudeAccounts)
+          : undefined
+      setNodes((current) => {
+        const liveSource = current.find((node) => node.id === drop.nodeId)
+        if (!liveSource || createdAgentId(liveSource.data) !== agentId) return current
+        const created = createAgentNodeForExplorerFolder({
+          source: liveSource,
+          index: current.length,
+          project,
+          path: drop.path,
+          accountId,
+          launchPlan,
+          options: terminalCreationOptionsFor(drop.projectId)
+        })
+        return created ? [...current, placeSpawned(created, besideNode(liveSource))] : current
+      })
+      markDirty()
+    },
+    [setNodes, markDirty, placeSpawned, besideNode]
+  )
+
+  const openTerminalAtExplorerFolder = useCallback(
+    (
+      folder: { projectId: string; path: string },
+      center: { x: number; y: number } | undefined = emptyNodePos()
+    ): void => {
+      const projects = useProjects.getState()
+      if (projects.activeProjectId !== folder.projectId) {
+        notify({
+          kind: 'warning',
+          title: 'Folder drop cancelled',
+          body: 'The active project changed before the drop completed.'
+        })
+        return
+      }
+      const project = projects.getProject(folder.projectId)
+      if (!project) return
+      setNodes((current) => [
+        ...current,
+        createTerminalNodeForExplorerFolder({
+          index: current.length,
+          project,
+          path: folder.path,
+          center,
+          options: terminalCreationOptionsFor(folder.projectId)
+        })
+      ])
+      markDirty()
+    },
+    [setNodes, markDirty, emptyNodePos]
+  )
+
+  useEffect(() => {
+    const wrap = flowWrapRef.current
+    if (!wrap) return
+    const onDragOver = (event: DragEvent): void => {
+      if (!hasDragType(event.dataTransfer, EXPLORER_FOLDER_DRAG_MIME)) return
+      if (!isEmptyCanvasDropTarget(event.target, wrap)) {
+        setExplorerFolderDropActive(false)
+        return
+      }
+      event.preventDefault()
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
+      setExplorerFolderDropActive(true)
+    }
+    const clearDropState = (): void => setExplorerFolderDropActive(false)
+    const onDragLeave = (event: DragEvent): void => {
+      const related = event.relatedTarget as Element | null
+      if (!related || !wrap.contains(related)) clearDropState()
+    }
+    const onDrop = (event: DragEvent): void => {
+      clearDropState()
+      if (!isEmptyCanvasDropTarget(event.target, wrap)) return
+      const folder = readExplorerFolderDrag(event.dataTransfer)
+      if (!folder) return
+      event.preventDefault()
+      event.stopPropagation()
+      openTerminalAtExplorerFolder(
+        folder,
+        screenToFlowPosition({ x: event.clientX, y: event.clientY })
+      )
+    }
+    window.addEventListener('dragover', onDragOver)
+    window.addEventListener('dragleave', onDragLeave)
+    window.addEventListener('dragend', clearDropState)
+    window.addEventListener('drop', onDrop)
+    return () => {
+      window.removeEventListener('dragover', onDragOver)
+      window.removeEventListener('dragleave', onDragLeave)
+      window.removeEventListener('dragend', clearDropState)
+      window.removeEventListener('drop', onDrop)
+    }
+  }, [openTerminalAtExplorerFolder, screenToFlowPosition])
 
   // Open a terminal node that ssh's into a saved server. `screenPos` (a pane/dock cursor) is
   // converted to a flow position; otherwise the node lands at the view center. The new node is
@@ -5146,6 +5526,17 @@ export function Canvas() {
       // Order matters: release FIRST (it resolves the children through the group's `parentId`, which
       // `ungroupNodes` is about to clear), then dissolve. The refresh waits for the prune, so the
       // pruned path cannot come back as an orphan the bind dialog offers.
+      // The frame's toy lock is re-asked HERE too, not only on GroupNode's own buttons: this
+      // callback is also the context menu's Ungroup and "Delete (keeps nodes)", and a gate that
+      // only guards one of three routes to the same dissolve is not a gate.
+      const lock = useToyLocks
+        .getState()
+        .records.find((r) => r.target.kind === 'group' && r.target.id === groupId)
+      if (lock && !useToyLocks.getState().isUnlocked(lock.id)) {
+        const pos = lastMenuScreenPosRef.current
+        setUnlockPromptTarget({ nodeId: groupId, x: pos.x, y: pos.y, kind: 'group' })
+        return
+      }
       const wasBound = !!nodesRef.current.find((n) => n.id === groupId)?.data.worktree
       const released = wasBound ? releaseWorktreeBinding(groupId) : null
       setNodes((ns) => ungroupNodes(ns as CanvasNode[], groupId))
@@ -6589,12 +6980,19 @@ export function Canvas() {
         notify({ kind: 'warning', title: 'Conversation not ready to transfer yet.' })
         return
       }
-      const res = await window.nodeTerminal.handoff.build(
-        sessionId,
-        sourceAgentId,
-        sourceNodeId,
-        source.data.cwd,
-        source.data.accountId
+      // `build` is expected to RESOLVE `{ filePath } | { error }`, but a bridge that has no
+      // handler for it rejects instead (the Server Edition stub does exactly that), and a
+      // rejection here would throw straight past the `'error' in res` check below into a `void`ed
+      // promise — no toast, no console entry, nothing. `buildTransferHandoff` never throws, so a
+      // refusal reports itself through the same error toast every other failure uses.
+      const res = await buildTransferHandoff(() =>
+        window.nodeTerminal.handoff.build(
+          sessionId,
+          sourceAgentId,
+          sourceNodeId,
+          source.data.cwd,
+          source.data.accountId
+        )
       )
       if ('error' in res) {
         notify({ kind: 'error', title: 'Transfer failed', body: res.error })
@@ -7014,9 +7412,12 @@ export function Canvas() {
           rootNodes.length > 0 &&
           (ids.length === 1 || rootNodes.length > 1) &&
           new Set(rootNodes.map((node) => node.parentId ?? null)).size === 1
-        // Frames in the selection that this selection could actually be ADDED to (the pure
-        // transform is asked, so the item can never be a no-op).
-        const targetGroups = selectedNodes.filter(
+        // EVERY frame on the canvas this selection could actually be ADDED to — not only frames
+        // that happen to be selected too. Requiring the destination in the selection made the row
+        // unreachable for the ordinary "I have a node, put it in that group" gesture. The pure
+        // transform is still asked per frame, so the list can never offer a no-op (a frame that
+        // already holds the whole selection, or one that would make a cycle).
+        const targetGroups = (nodesRef.current as CanvasNode[]).filter(
           (node) =>
             node.type === 'group' &&
             addSelectionToGroup(nodesRef.current as CanvasNode[], ids, node.id) !==
@@ -7026,23 +7427,24 @@ export function Canvas() {
           (nid) => !!nodesRef.current.find((nd) => nd.id === nid)?.parentId
         )
         const items: MenuItem[] = []
-        if (targetGroups.length === 1 && !isHidden('group', hidden)) {
-          const targetGroup = targetGroups[0]
+        // "Add to existing group…" opens a searchable listbox dialog rather than inlining one
+        // menu row per group — see GroupPickerDialog.tsx and docs/appearance.md's move-into-group
+        // contract. The ellipsis is deliberate: this row always opens a further surface, whether
+        // there's one eligible frame or several.
+        if (targetGroups.length > 0 && !isHidden('group', hidden)) {
           items.push({
-            label: `Add selection to ${targetGroup.data.title || 'group'}`,
+            label: 'Add to existing group…',
             icon: <IconGroup />,
-            onClick: () => addToExistingGroup(ids, targetGroup.id)
-          })
-        } else if (targetGroups.length > 1 && !isHidden('group', hidden)) {
-          items.push({
-            type: 'submenu',
-            label: 'Add selection to group',
-            icon: <IconGroup />,
-            children: targetGroups.map((targetGroup) => ({
-              label: targetGroup.data.title || 'Group',
-              icon: <IconGroup />,
-              onClick: () => addToExistingGroup(ids, targetGroup.id)
-            }))
+            onClick: () =>
+              setGroupPicker({
+                ids,
+                groups: targetGroups.map((targetGroup) => ({
+                  id: targetGroup.id,
+                  title: targetGroup.data.title || 'Group',
+                  color: targetGroup.data.color,
+                  memberCount: nodesRef.current.filter((n) => n.parentId === targetGroup.id).length
+                }))
+              })
           })
         }
         if (groupable && !isHidden('group', hidden))
@@ -7107,8 +7509,15 @@ export function Canvas() {
         : []),
       ...(ids.length === 1 &&
       (() => {
-        const a = agentIdOf(ids[0])
-        return !!a && canTransferFrom(a) && !!useAgentStatus.getState().byId[ids[0]]?.sessionId
+        // The handoff FILE is rendered by `src/main`; a bridge without that handler (Server
+        // Edition) declares `handoff.supported = false`, and the section is absent there rather
+        // than an enabled menu item that silently does nothing. Same capability-bit pattern as
+        // `pairing.supported` further down this file.
+        return canOfferTransfer({
+          agentId: agentIdOf(ids[0]),
+          sessionId: useAgentStatus.getState().byId[ids[0]]?.sessionId,
+          handoffSupported: window.nodeTerminal.handoff.supported
+        })
       })()
         ? (() => {
             const src = agentIdOf(ids[0]) as AgentId
@@ -7452,6 +7861,7 @@ export function Canvas() {
   }, [
     groupSelection,
     addToExistingGroup,
+    setGroupPicker,
     removeFromGroup,
     setNodesColor,
     duplicateNodes,
@@ -7650,8 +8060,11 @@ export function Canvas() {
         selectedIds.includes(groupId) &&
         rootNodes.length > 1 &&
         new Set(rootNodes.map((node) => node.parentId ?? null)).size === 1
+      // Deliberately NOT gated on the frame being selected too: a frame's body passes clicks
+      // through to the pane, so right-clicking one while some nodes are selected is exactly the
+      // gesture that never put the frame in the selection. The pure transform is the only gate.
       const canAddSelection =
-        selectedIds.includes(groupId) &&
+        selectedIds.length > 0 &&
         addSelectionToGroup(nodesRef.current as CanvasNode[], selectedIds, groupId) !==
           nodesRef.current
       const groupHidden = isHidden('group', useSettings.getState().settings.hiddenNodeMenuItems)
@@ -7712,6 +8125,25 @@ export function Canvas() {
                 onClick: () => openWorktreeDialog(groupId)
               } as MenuItem
             ]),
+        ...(() => {
+          // The frame's own toy lock (docs/toy-locks.md). Never hidden by the Settings
+          // "node menu items" list: a lock the user cannot reach from the thing it locks is a
+          // lock they cannot remove either.
+          const lock = useToyLocks
+            .getState()
+            .records.find((r) => r.target.kind === 'group' && r.target.id === groupId)
+          const pos = lastMenuScreenPosRef.current
+          return [
+            {
+              label: lock ? 'Manage frame lock…' : 'Lock this frame…',
+              icon: <IconLock />,
+              onClick: () =>
+                lock
+                  ? setUnlockPromptTarget({ nodeId: groupId, x: pos.x, y: pos.y, kind: 'group' })
+                  : setLockWizardTarget({ nodeId: groupId, x: pos.x, y: pos.y, kind: 'group' })
+            } as MenuItem
+          ]
+        })(),
         { label: 'Ungroup', icon: <IconUngroup />, onClick: () => ungroup(groupId) },
         {
           label: 'Delete (keeps nodes)',
@@ -7812,6 +8244,21 @@ export function Canvas() {
           // Stays flat-with-a-heading exactly as before whenever an agent row is an account
           // picker (Claude/Codex with ≥1 account); one row when a single agent is enabled.
           ...paneMenuGroup('Agents', <IconAgent />, agentItems),
+          // Managers for things outside this app. A group with ONE row that opens a submenu,
+          // rather than six product rows: six names spliced into an already long pane menu is the
+          // clutter the menu filter exists to avoid, and a submenu still matches on its children’s
+          // labels, so typing “prox” reaches Proxmox from the top level anyway.
+          ...paneMenuGroup('Managers', <IconRemote />, [
+            {
+              type: 'submenu' as const,
+              label: 'New manager…',
+              icon: <IconRemote />,
+              children: SERVICE_NODE_KINDS.map((kind) => ({
+                label: SERVICE_NODE_LABELS[kind],
+                onClick: () => addService(kind, at)
+              }))
+            }
+          ]),
           ...paneMenuGroup('Canvas objects', <IconShapes />, [
             {
               label: 'New browser',
@@ -7859,6 +8306,20 @@ export function Canvas() {
               disabled: isSshProject,
               hint: isSshProject ? WORKTREE_SSH_HINT : undefined,
               onClick: () => openWorktreeDialog(null, at)
+            }
+          ]),
+          // One row, so `paneMenuGroup` keeps it top level (same shape as Worktree just above).
+          // Opens the drawer already unlocked-and-into-"add credential" mode when a vault exists,
+          // or the create-vault form when it doesn't — the panel itself decides which, from its
+          // own status() read; this row only has to say WHICH intent it wants.
+          ...paneMenuGroup('Password manager', <IconLock />, [
+            {
+              label: 'New credential…',
+              icon: <IconLock />,
+              onClick: () => {
+                setPwmIntent('new-credential')
+                setPwmOpen(true)
+              }
             }
           ]),
           // Draw tools (issue #145): arm one, then drag on the canvas — Esc cancels. "Draw colored
@@ -7940,6 +8401,21 @@ export function Canvas() {
   const onNodeContextMenu = useCallback(
     (e: React.MouseEvent, node: Node) => {
       e.preventDefault()
+      // Shift+right-click on a node whose header carries a `data-appearance-id` (terminal/agent
+      // nodes) opens Edit appearance… directly — same convention as the project switcher's tab
+      // trigger — instead of routing through the ordinary context menu. A node with no anchor yet
+      // (a group frame, an ephemeral subagent/loop card) falls through to the normal menu rather
+      // than silently doing nothing.
+      if (e.shiftKey) {
+        const anchor = document.querySelector<HTMLElement>(
+          `[data-appearance-id="${appearanceId('node', node.id)}"]`
+        )
+        if (anchor) {
+          const nodeLabel = nodesRef.current.find((n) => n.id === node.id)?.data.title || 'Node'
+          openAppearanceEditor(appearanceId('node', node.id), nodeLabel, 'node', anchor)
+          return
+        }
+      }
       lastNodeMenuPosRef.current = { x: e.clientX, y: e.clientY }
       lastMenuScreenPosRef.current = { x: e.clientX, y: e.clientY }
       // For a group frame, remember WHERE inside it the user right-clicked so "New …" creation
@@ -8404,15 +8880,24 @@ export function Canvas() {
   const presence = presenceForProject(activeProjectId || '')
   useEffect(() => presence.connect(), [presence])
 
-  // A browser guest's new-window (target=_blank / window.open) request → open another browser node
-  // (never a real popup; main denies the real one) roped below/right of the source. Reads the
-  // latest nodes via nodesRef so the deps stay []. Rope is display-only (controlEdges, not persisted).
+  // A browser guest's new-window (target=_blank / window.open) request → opens a TEMPORARY canvas
+  // node beside the opener, roped to it (never a real OS popup; main denies that one).
+  //
+  // It is a canvas node again rather than a new tab, but the thing that made the original
+  // sibling-node behaviour a poke guy is fixed rather than reintroduced: every link click used to
+  // mint a PERSISTED node, so a canvas quietly accumulated roped browsers nobody opened on
+  // purpose and project.json grew with them. A temporary node is dropped by flowToNodeStates, so
+  // closing it leaves nothing behind — which is exactly what a popup is — and the node's own
+  // "Keep" button promotes it if the user wants it kept. The dedup + rate cap below still stands
+  // between a setInterval(window.open) page and the canvas.
+  //
+  // Reads the latest nodes via nodesRef so the deps stay [].
   useEffect(() => {
     return window.nodeTerminal.browser.onBrowserNewWindow(({ url, sourceNodeId }) => {
       const src = nodesRef.current.find((n) => n.id === sourceNodeId)
       if (!src) return
-      // Guard against a hostile/careless page flooding the canvas with real Chromium nodes
-      // (ad loops, setInterval(window.open)). Prune old records, then dedup + rate-cap.
+      // Guard against a hostile/careless page flooding the canvas/tab strip (ad loops,
+      // setInterval(window.open)). Prune old records, then dedup + rate-cap.
       const now = Date.now()
       const recent = browserPopupSpawnsRef.current.filter((r) => now - r.t < 10000)
       const isDup = recent.some((r) => r.url === url && r.source === sourceNodeId && now - r.t < 2000)
@@ -8423,22 +8908,32 @@ export function Canvas() {
       }
       recent.push({ url, source: sourceNodeId, t: now })
       browserPopupSpawnsRef.current = recent
+
       const srcW = src.measured?.width ?? (src.width as number) ?? 800
       const srcH = src.measured?.height ?? (src.height as number) ?? 560
       // src.position is group-relative when the opener sits in a group frame: place in absolute
       // coords, then join the opener's group (parentInto converts back) so the popup node stays
       // inside the frame and moves with it.
       const srcGroup = src.parentId ? nodesRef.current.find((n) => n.id === src.parentId) : undefined
-      const node = createBrowserNode(nodesRef.current.length, url, {
-        x: src.position.x + (srcGroup?.position.x ?? 0) + srcW / 2 + 40,
-        y: src.position.y + (srcGroup?.position.y ?? 0) + srcH + 80 + 280
-      },
-      src.data.browserOwnerNodeId as string | undefined
-    )
+      const node = createBrowserNode(
+        nodesRef.current.length,
+        url,
+        {
+          x: src.position.x + (srcGroup?.position.x ?? 0) + srcW / 2 + 40,
+          y: src.position.y + (srcGroup?.position.y ?? 0) + srcH + 80 + 280
+        },
+        src.data.browserOwnerNodeId as string | undefined,
+        // The popup inherits the opener's profile, so a login popup lands in the SAME cookie jar
+        // as the page that opened it — a popup in a different session is a popup that cannot
+        // finish the sign-in it was opened for.
+        src.data.browserProfileId as string | undefined,
+        true
+      )
       const placed = src.parentId ? parentInto(node, src.parentId) : node
       setNodes((ns) => [...ns, placed])
       setControlEdges((es) => [...es, ropeEdge(`ctrl-${sourceNodeId}-${placed.id}`, sourceNodeId, placed.id, '#0a84ff')])
-      markDirty()
+      // Deliberately NO markDirty: a temporary node is absent from every save, so marking the
+      // project dirty would write a file whose only change is one the file cannot contain.
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -10714,6 +11209,19 @@ export function Canvas() {
         // OS notification only when the whole window is in the background.
         if (document.hasFocus()) return
         const s = useSettings.getState().settings
+        // ADHD low stimulation, on the notification that matters most. `sound` is the real kind
+        // this call site already carries — 'needsYou' is an agent stopped on a permission prompt,
+        // 'done' is a turn that ended — so nothing is reclassified here; it is threaded straight
+        // into the decision. A blocked agent is NEVER silenced: dropping that one would make the
+        // mode cost the user work rather than save them noise, which is the whole line it must
+        // not cross.
+        if (
+          !allowsNotification(
+            normalizeAdhdModes(s.adhdModes),
+            sound === 'needsYou' ? 'needs-you' : 'done'
+          )
+        )
+          return
         if (!(s.notifyOnClaudeDone && s.notifyConsentAsked)) return
         const now = Date.now()
         if (now - (notifyCooldownRef.current[e.nodeId] ?? 0) < 5000) return // dedup/cooldown
@@ -11246,6 +11754,168 @@ export function Canvas() {
     [commitActiveToStore, writeDisk, disposeRelayTabForProject]
   )
 
+  // ONE archive operation at a time. The ref is the real renderer-side guard (a keyboard-driven
+  // second activation walks straight past a disabled menu row), the main process refuses re-entry
+  // independently, and the menu rows read the same ref for their disabled state.
+  const projectArchiveBusyRef = useRef(false)
+  const exportProjectArchive = useCallback(
+    async (projectId: string, password?: string) => {
+      if (projectArchiveBusyRef.current) {
+        notify({ kind: 'info', title: 'Project save already running', body: 'Wait for the current save or open to finish.' })
+        return
+      }
+      projectArchiveBusyRef.current = true
+      try {
+        if (projectId === useProjects.getState().activeProjectId) commitActiveToStore()
+        await writeDisk()
+        const project = useProjects.getState().projects.find((candidate) => candidate.id === projectId)
+        if (!project) return
+        // Progress where the action started: packing a repository takes real time, and there is no
+        // byte-progress channel — so the copy is honestly indeterminate, never a fabricated %.
+        notify({
+          kind: 'info',
+          title: 'Saving project…',
+          body: `Packing "${project.name}" — canvas, history, repository and working files. A large repository can take a moment.`
+        })
+        const result = await api.workspace.exportProject(project, password)
+        if (result.ok) {
+          // The archive packs the project's OWN git-tracked working files verbatim (see
+          // project-archive.ts), and a password-manager vault (core/password-manager/vault-store.ts)
+          // is deliberately a git-tracked sibling of project.json — so a vault the user committed
+          // travels inside the save file too, encrypted envelopes and all. That is by design (it is
+          // how the vault survives a clone on another machine), but it means the ONE save file is now
+          // exactly as sensitive as the vault's own password: whoever gets the file and the password
+          // gets every secret in it. Say so, every time a vault exists, whether locked or unlocked —
+          // "unlocked" here is only THIS process's cached key, never the presence of a vault.
+          let vaultKind: 'uninitialized' | 'locked' | 'unlocked' | 'unsupported' = 'uninitialized'
+          try {
+            vaultKind = (await api.passwordManager.status(projectId)).state.kind
+          } catch {
+            // Status is best-effort here — a failed read must never block reporting a save that
+            // already succeeded, and a missed warning is strictly safer than a false one.
+          }
+          const vaultWarning =
+            vaultKind === 'locked' || vaultKind === 'unlocked'
+              ? ' This project has a password-manager vault: its encrypted secrets travel inside this file too, and they are only as safe as the vault password.'
+              : ''
+          notify({
+            kind: vaultKind !== 'uninitialized' ? 'warning' : 'success',
+            title: result.encrypted ? 'Protected project saved as one file' : 'Project saved as one file',
+            body:
+              [result.path, archiveContentsSummary(result.contents)].filter(Boolean).join(' — ') +
+              (result.encrypted
+                ? ' The file is encrypted: without this password nobody can open it, and there is no way to recover it.'
+                : '') +
+              vaultWarning
+          })
+        } else {
+          notify(
+            result.canceled
+              ? { kind: 'info', title: 'Project save cancelled' }
+              : { kind: 'error', title: 'Project save failed', body: result.error }
+          )
+        }
+      } finally {
+        projectArchiveBusyRef.current = false
+      }
+    },
+    [api, commitActiveToStore, writeDisk]
+  )
+
+  /**
+   * "Save project as one file", with the optional password in front of it. Blank means the
+   * historical plain container — protection is opt-in, because a password nobody chose is a
+   * project nobody can open.
+   *
+   * The retype is not ceremony: there is NO recovery path for this password (the file is
+   * AES-256-GCM under a key derived from it and nothing else), so a typo at this prompt destroys
+   * the save file's usefulness silently, and the user finds out weeks later.
+   */
+  const saveProjectArchive = useCallback(
+    async (projectId: string) => {
+      const password = await promptDialog({
+        message:
+          'Password for this project file — leave blank to save it unprotected. ' +
+          'A protected file cannot be opened without this password, and it cannot be recovered.',
+        placeholder: 'Password (optional)',
+        password: true,
+        confirmLabel: 'Continue'
+      })
+      if (password === null) return
+      if (password !== '') {
+        const again = await promptDialog({
+          message: 'Type the password again to confirm it.',
+          placeholder: 'Password',
+          password: true,
+          confirmLabel: 'Save'
+        })
+        if (again === null) return
+        if (again !== password) {
+          notify({
+            kind: 'error',
+            title: 'The passwords did not match',
+            body: 'Nothing was saved. Try again — a mistyped password here cannot be recovered later.'
+          })
+          return
+        }
+      }
+      await exportProjectArchive(projectId, password === '' ? undefined : password)
+    },
+    [exportProjectArchive]
+  )
+
+  const importProjectArchive = useCallback(async () => {
+    if (projectArchiveBusyRef.current) {
+      notify({ kind: 'info', title: 'Project open already running', body: 'Wait for the current save or open to finish.' })
+      return
+    }
+    projectArchiveBusyRef.current = true
+    try {
+      let result = await api.workspace.importProject()
+      // A protected file is a PROMPT, not a failure: the first call reports `needsPassword` with
+      // the path it already picked, and each retry re-opens that same file rather than making the
+      // user find it again. `wrongPassword` cannot distinguish a wrong password from a tampered
+      // file (AES-GCM refuses to tell them apart — see core/project-archive-encryption.ts), so the
+      // copy says both rather than guessing at one.
+      let attempt = 0
+      while ((result.needsPassword || result.wrongPassword || result.lockedMs) && result.path) {
+        attempt += 1
+        const password = await requestArchivePassword({
+          path: result.path,
+          ...(result.wrongPassword
+            ? { error: 'That password did not open the file. It may be wrong, or the file may have been altered.' }
+            : {}),
+          ...(result.lockedMs ? { lockedMs: result.lockedMs } : {}),
+          ...(result.ladderAvailable ? { ladderAvailable: true } : {})
+        })
+        if (password === null) {
+          notify({ kind: 'info', title: 'Project open cancelled' })
+          return
+        }
+        // Deriving the key deliberately costs 128 MiB of scrypt and a few hundred ms — the same
+        // price an attacker pays per guess — so say something before the UI goes quiet.
+        if (attempt === 1) {
+          notify({ kind: 'info', title: 'Unlocking project file…', body: 'Checking the password.' })
+        }
+        result = await api.workspace.importProject({ path: result.path, password })
+      }
+      if (result.ok && result.project) {
+        useProjects.getState().adoptProject(result.project)
+        await writeDisk()
+        const where = result.restoredTo ? `Repository and files restored to ${result.restoredTo}. ` : ''
+        notify({
+          kind: 'success',
+          title: 'Project opened from file',
+          body: `${where}${archiveContentsSummary(result.contents)}`.trim() || 'The project and its complete local history are ready.'
+        })
+      } else if (!result.canceled) {
+        notify({ kind: 'error', title: 'Project open failed', body: result.error })
+      }
+    } finally {
+      projectArchiveBusyRef.current = false
+    }
+  }, [api, writeDisk])
+
   // Right-click on a sidebar project header: mostly the same project actions as the tab caret
   // menu (plus a color swatch the tab caret menu doesn't have), in the shared ContextMenu shell.
   const onProjectContextMenu = useCallback(
@@ -11254,6 +11924,10 @@ export function Canvas() {
       e.stopPropagation()
       const project = useProjects.getState().projects.find((p) => p.id === projectId)
       if (!project) return
+      // Captured now (the row that was right-clicked) — MenuItem.onClick takes no argument, and
+      // by the time a menu item is clicked the pointer is over the ContextMenu portal, not the
+      // sidebar row, so `e.currentTarget` has to be grabbed here instead of inside the item.
+      const anchor = e.currentTarget as HTMLElement
       setMenu({
         x: e.clientX,
         y: e.clientY,
@@ -11274,6 +11948,27 @@ export function Canvas() {
             }
           },
           { label: 'Set folder…', icon: <IconProject />, onClick: () => setProjectFolder(projectId) },
+          {
+            label: SAVE_PROJECT_ARCHIVE_ACTION.label,
+            icon: <IconSave />,
+            disabled: projectArchiveBusyRef.current,
+            onClick: () => void saveProjectArchive(projectId)
+          },
+          {
+            label: OPEN_PROJECT_ARCHIVE_ACTION.label,
+            icon: <IconProject />,
+            disabled: projectArchiveBusyRef.current,
+            onClick: () => void importProjectArchive()
+          },
+          {
+            // Same target the project switcher's "Edit tab appearance…" opens — the appearance
+            // registry keys this by `appearanceId('tab', projectId)` regardless of which row
+            // anchors the popover, so the sidebar and the switcher edit the SAME appearance.
+            label: EDIT_TAB_APPEARANCE_ACTION.label,
+            icon: <IconEditor />,
+            onClick: () =>
+              openAppearanceEditor(appearanceId('tab', projectId), project.name, 'tab', anchor)
+          },
           { type: 'separator' },
           // Seeded from the project's CURRENT colour: without `value` the full picker opened on
           // the first preset, so the first drag jumped the tab to a colour nowhere near the one
@@ -11289,7 +11984,7 @@ export function Canvas() {
         ]
       })
     },
-    [activeProjectId, switchProject, renameProject, setProjectFolder, setProjectColor, closeProject]
+    [activeProjectId, switchProject, renameProject, setProjectFolder, setProjectColor, closeProject, saveProjectArchive, importProjectArchive]
   )
 
   // Reopen a previously closed project and make it active — the active-project effect reloads its
@@ -11637,6 +12332,19 @@ export function Canvas() {
         run: toggleFocusMode
       },
       { id: 'fit', label: 'Fit view', icon: <IconFit />, run: fitAll },
+      {
+        id: 'show-test-notification',
+        label: 'Show a test notification',
+        hint: 'preview toast low stimulation quiet',
+        section: 'Settings',
+        icon: <IconBellFilled />,
+        run: () =>
+          notify({
+            kind: 'info',
+            title: 'Test notification',
+            body: 'This is what a notification looks like — useful while you tune Settings → Notifications.'
+          })
+      },
       // Hidden below 2 top-level nodes — see arrangeAllNodes.
       ...(hasArrangeableNodes()
         ? [
@@ -11809,6 +12517,27 @@ export function Canvas() {
           content: bufferCache[n.id],
           run: () => goToNode(n)
         })
+        // Keyboard-reachable equivalent to right-click → Edit appearance… (only terminal/agent
+        // nodes carry a `data-appearance-id` anchor today — see TerminalNode.tsx). Focus the
+        // node first so its header is actually mounted before the anchor lookup, matching the
+        // right-click path's own "don't open on a node that visibly has nowhere to land" rule.
+        if (n.type === 'terminal') {
+          cmds.push({
+            id: `node-appearance-${n.id}`,
+            label: `Edit appearance — ${n.data.title}`,
+            section: 'Opened terminals',
+            icon: <IconColor />,
+            run: () => {
+              goToNode(n)
+              requestAnimationFrame(() => {
+                const anchor = document.querySelector<HTMLElement>(
+                  `[data-appearance-id="${appearanceId('node', n.id)}"]`
+                )
+                if (anchor) openAppearanceEditor(appearanceId('node', n.id), n.data.title || 'Node', 'node', anchor)
+              })
+            }
+          })
+        }
       })
     const kanbanId = useProjects.getState().activeProjectId
     if (kanbanId) {
@@ -11914,21 +12643,119 @@ export function Canvas() {
 
   return (
     <div className="canvas-root">
-      <TabBar
-        onSwitch={switchProject}
-        onReconnect={reconnectRelay}
-        onReorder={reorderProject}
-        onOpenWelcome={() => setWelcomeOpen(true)}
-        onRename={renameProject}
-        onSetFolder={setProjectFolder}
-        onCloseProject={closeProject}
-        onRemoteAccess={() => setRemoteDialogOpen(true)}
-        onSetDefaultAccount={setProjectDefaultAccount}
-        onSetDefaultPermissionMode={setProjectDefaultPermissionMode}
-        onSetColor={setProjectColor}
-      />
+      <TopAppBar>
+        <ProjectSwitcher
+          onSwitch={switchProject}
+          onReconnect={reconnectRelay}
+          onReorder={reorderProject}
+          onOpenWelcome={() => setWelcomeOpen(true)}
+          onRename={renameProject}
+          onSetFolder={setProjectFolder}
+          onCloseProject={closeProject}
+          onRemoteAccess={() => setRemoteDialogOpen(true)}
+          onSetDefaultAccount={setProjectDefaultAccount}
+          onSetDefaultPermissionMode={setProjectDefaultPermissionMode}
+          onSetColor={setProjectColor}
+          onSaveArchive={(id) => void saveProjectArchive(id)}
+          onOpenArchive={() => void importProjectArchive()}
+          archiveBusy={() => projectArchiveBusyRef.current}
+        />
+        <div className="md3-app-bar__spacer" />
+        {/* The docked search bar — the SAME `.cluster-search` button/title the packaged-app
+            driver script selects; re-themed, never renamed. */}
+        <button
+          className="cluster-search"
+          title="Command palette"
+          onClick={() => setPaletteOpen(true)}
+        >
+          <span className="cluster-search__icon">⌕</span>
+            <span className="cluster-search__placeholder">Search everything…</span>
+          <span className="kbd">{hintLabel('⌘K')}</span>
+        </button>
+        <div className="md3-app-bar__cluster">
+          {/* Mounted here unconditionally (the cluster always renders): the facepile is null
+              with no peers — taking no space — but must stay mounted to prune the presence face
+              cache (state/presence.ts → selectFaces). */}
+          <Facepile onJump={travelToNode} onSwitchProject={travelToProject} />
+          <button
+            className="notif-bell"
+            title="Notifications"
+            aria-label={
+              unreadNotifCount > 0 ? `Notifications (${unreadNotifCount} unread)` : 'Notifications'
+            }
+            onClick={() => setNotifCenterOpen(true)}
+          >
+            <IconBellFilled />
+            {unreadNotifCount > 0 && (
+              <span className="notif-bell__badge" aria-hidden>
+                {unreadNotifCount > 99 ? '99+' : unreadNotifCount}
+              </span>
+            )}
+          </button>
+          {window.nodeTerminal.pairing.supported ? (
+            <button
+              className="md3-icon-btn"
+              title="Pair phone"
+              onClick={(e) => {
+                const r = e.currentTarget.getBoundingClientRect()
+                setPhonePairAnchor((cur) => (cur ? null : { right: r.right, bottom: r.bottom }))
+              }}
+            >
+              <IconPhone />
+            </button>
+          ) : null}
+          {/* Dictation moved here from the old bottom dock — on-device Whisper, hold-to-talk by
+              default (⌘⌥ per settings.speech.shortcut). */}
+          <button
+            className={`md3-icon-btn${dictationOpen ? ' is-active' : ''}`}
+            title={
+              isHoldChord(settings.speech.shortcut)
+                ? `Dictate (hold ${formatShortcut(settings.speech.shortcut, isMac)})`
+                : `Dictate (${formatShortcut(settings.speech.shortcut, isMac)})`
+            }
+            onClick={toggleDictation}
+          >
+            <IconMic />
+          </button>
+          <button
+            className="md3-icon-btn"
+            title="Help"
+            onClick={(e) => {
+              const r = e.currentTarget.getBoundingClientRect()
+              setMenu({
+                // Right-align the ~220px menu under the button; never off-screen left.
+                x: Math.max(8, r.right - 220),
+                y: r.bottom + 6,
+                items: [
+                  { label: 'Keyboard shortcuts', hint: hintLabel('⌘/'), onClick: () => setShortcutsOpen(true) },
+                  { label: 'Report a bug…', onClick: () => setBugReportOpen(true) },
+                  {
+                    label: 'Documentation',
+                    onClick: () => {
+                      closeAllDrawers()
+                      setDocsOpen(true)
+                    }
+                  },
+                  {
+                    label: 'GitHub repository',
+                    onClick: () => window.nodeTerminal.shell.openExternal(REPO_URL)
+                  },
+                  { type: 'separator' },
+                  {
+                    type: 'label',
+                    label: `nodeterm${appVersion ? ` v${appVersion}` : ''} · ${describeOs(navigator.userAgent)}`
+                  }
+                ]
+              })
+            }}
+          >
+            ?
+          </button>
+        </div>
+      </TopAppBar>
 
       <div className="top-banners">
+        <MinecraftConnectBanner minecraftNodeIds={minecraftNodeIds} />
         <AnnouncementBanner />
         <TmuxBanner onInstall={runInTerminal} />
         {/* This MACHINE is running out of pty devices — subscribes for itself; a failed
@@ -12084,7 +12911,7 @@ export function Canvas() {
             )
           })()}
       </div>
-      {kanbanOpen && (
+      {kanbanOpen && !activeTabLocked && (
         <KanbanView
           board={projectKanban ?? seedBoard}
           sessions={kanbanSessions}
@@ -12103,6 +12930,53 @@ export function Canvas() {
           terminalProfileRestartPending={terminalProfileRestartPending}
         />
       )}
+      {/* Toy-lock enforcement for the active tab (docs/toy-locks.md) — see the `activeTabLocked`
+          block above for why this exists. Full-screen, over the canvas AND the kanban board (both
+          are just views of this same project's nodes), under the nav rail / app bar / dialogs so
+          the user can still navigate away or open the unlock popover. The project's name and the
+          unlock affordance stay visible, per the shipped toy-lock copy: this is a for-fun gate,
+          never security, and the recovery route (deleting the app's local application-data
+          folder) is stated in the unlock prompt itself, not hidden along with everything else. */}
+      {activeTabLocked && (
+        <div
+          className="tab-lock-overlay nodrag"
+          role="button"
+          tabIndex={0}
+          onClick={(e) => setTabUnlockPromptAnchor({ x: e.clientX, y: e.clientY })}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+              setTabUnlockPromptAnchor({ x: r.left + r.width / 2, y: r.top + r.height / 2 })
+            }
+          }}
+        >
+          <span className="tab-lock-overlay__icon" aria-hidden>
+            🔒
+          </span>
+          <span className="tab-lock-overlay__title">{activeProjectName ?? 'This tab'} is locked</span>
+          <span className="tab-lock-overlay__hint">Click to unlock — just for fun, not security</span>
+        </div>
+      )}
+      {tabUnlockPromptAnchor &&
+        activeTabLockRecord &&
+        (() => {
+          // Re-resolved from the live store (not the closed-over `activeTabLockRecord`), same
+          // pattern as the node-lock prompt below and ProjectSwitcher's own — the record can
+          // change (duration edited in Settings, removed elsewhere) while this popover is open.
+          const record = useToyLocks
+            .getState()
+            .records.find((r) => r.target.kind === 'tab' && r.target.id === activeProjectId)
+          if (!record) return null
+          return (
+            <UnlockPrompt
+              record={record}
+              anchor={tabUnlockPromptAnchor}
+              onClose={() => setTabUnlockPromptAnchor(null)}
+              onUnlocked={() => setTabUnlockPromptAnchor(null)}
+            />
+          )
+        })()}
       <UpdateCard />
 
       <div
@@ -12115,102 +12989,212 @@ export function Canvas() {
         </button>
       </div>
 
-      <div className="controls-cluster">
-        {/* First in the cluster so the "who's connected" faces sit to the LEFT of the toolbar on the
-            SAME row (flex, no hardcoded width) instead of colliding with it / hiding under the tab
-            bar. Mounted here unconditionally (the cluster always renders): the facepile is null with
-            no peers — taking no space — but must stay mounted to prune the presence face cache
-            (state/presence.ts → selectFaces). */}
-        <Facepile onJump={travelToNode} onSwitchProject={travelToProject} />
-        <button
-          className="cluster-search"
-          title="Command palette"
-          onClick={() => setPaletteOpen(true)}
-        >
-          <span className="cluster-search__icon">⌕</span>
-          <span className="kbd">{hintLabel('⌘K')}</span>
-        </button>
-        <button title={hintLabel('Explorer (⌘⇧E)')} onClick={() => setExplorerOpen(true)}>
-          <IconExplorer />
-        </button>
-        <button title={hintLabel('Source Control (⌘⇧G)')} onClick={() => setScOpen(true)}>
-          <IconBranch />
-        </button>
-        <button title="File converter" onClick={() => setConverterOpen(true)}>
-          <IconConvert />
-        </button>
-        <button title="Ollama manager" onClick={() => setOllamaOpen(true)}>
-          <IconOllama />
-        </button>
-        <button
-          className="notif-bell"
-          title="Notifications"
-          aria-label={
-            unreadNotifCount > 0 ? `Notifications (${unreadNotifCount} unread)` : 'Notifications'
+      {/* The old floating `.controls-cluster` is gone — the search bar, facepile, notifications,
+          phone pairing, dictate and help all moved into the top app bar above; Explorer, Source
+          Control, the file converter and Ollama manager are now reached through the nav rail's
+          Files/Tools destinations (below), and Settings through its own rail destination. */}
+
+      {/* The nav rail is a REAL flex sibling of `.flow-wrap` (not a floating overlay drawn on top
+          of it), so the canvas area is genuinely narrower — fit-view never needs to treat the
+          rail as an obstacle (see fit-view.ts). Destinations are computed inline (an IIFE, not a
+          hook) because everything below `return (` is presentation, and every one of these
+          open/close states already lives in this component's hook body above. */}
+      <div className="md3-canvas-row">
+      {(() => {
+        const mobileServer = isMobileServerEdition()
+        const leaveBoard = () => {
+          if (!mobileServer && kanbanOpen && activeProjectId) useViewMode.getState().toggle(activeProjectId)
+        }
+        const enterBoard = () => {
+          if (!kanbanOpen && activeProjectId) useViewMode.getState().toggle(activeProjectId)
+        }
+        const anyDrawerOpen =
+          explorerOpen ||
+          scOpen ||
+          converterOpen ||
+          ollamaOpen ||
+          pwmOpen ||
+          settingsOpen ||
+          notifCenterOpen ||
+          historyOpen ||
+          docsOpen ||
+          statusOpen
+        const destinations: RailDestination[] = [
+          {
+            id: 'canvas',
+            icon: <IconCanvasView />,
+            label: 'Canvas',
+            active: !kanbanOpen && !anyDrawerOpen,
+            onClick: () => {
+              closeAllDrawers()
+              leaveBoard()
+            }
+          },
+          {
+            id: 'board',
+            icon: <IconKanban />,
+            label: 'Board',
+            active: kanbanOpen,
+            onClick: () => {
+              closeAllDrawers()
+              enterBoard()
+            }
+          },
+          {
+            id: 'files',
+            icon: <IconExplorer />,
+            label: 'Files',
+            active: explorerOpen || scOpen,
+            onClick: (anchor: HTMLElement) => {
+              closeAllDrawers()
+              leaveBoard()
+              const r = anchor.getBoundingClientRect()
+              setMenu({
+                x: r.right + 8,
+                y: r.top,
+                items: [
+                  {
+                    label: 'Explorer',
+                    hint: hintLabel('⌘⇧E'),
+                    onClick: () => setExplorerOpen(true)
+                  },
+                  {
+                    label: 'Source Control',
+                    hint: hintLabel('⌘⇧G'),
+                    onClick: () => setScOpen(true)
+                  }
+                ]
+              })
+            }
+          },
+          {
+            id: 'tools',
+            icon: <IconConvert />,
+            label: 'Tools',
+            active: converterOpen || ollamaOpen || pwmOpen,
+            onClick: (anchor: HTMLElement) => {
+              closeAllDrawers()
+              leaveBoard()
+              const r = anchor.getBoundingClientRect()
+              setMenu({
+                x: r.right + 8,
+                y: r.top,
+                items: [
+                  { label: 'File converter', onClick: () => setConverterOpen(true) },
+                  { label: 'Ollama manager', onClick: () => setOllamaOpen(true) },
+                  {
+                    label: 'Password manager',
+                    icon: <IconLock />,
+                    onClick: () => {
+                      setPwmIntent('default')
+                      setPwmOpen(true)
+                    }
+                  }
+                ]
+              })
+            }
+          },
+          {
+            id: 'history',
+            icon: <IconSessions />,
+            label: 'History',
+            active: historyOpen,
+            onClick: () => {
+              closeAllDrawers()
+              leaveBoard()
+              setHistoryOpen(true)
+            }
+          },
+          {
+            id: 'status',
+            icon: <IconCircleCheck />,
+            label: 'Status',
+            active: statusOpen,
+            onClick: () => {
+              closeAllDrawers()
+              leaveBoard()
+              setStatusOpen(true)
+            }
+          },
+          {
+            id: 'alerts',
+            icon: <IconBellFilled />,
+            label: 'Alerts',
+            active: notifCenterOpen,
+            badge: unreadNotifCount,
+            onClick: () => {
+              closeAllDrawers()
+              leaveBoard()
+              setNotifCenterOpen(true)
+            }
+          },
+          {
+            id: 'settings',
+            icon: <IconGear />,
+            label: 'Settings',
+            active: settingsOpen,
+            onClick: () => {
+              closeAllDrawers()
+              leaveBoard()
+              setSettingsSection(undefined)
+              setSettingsOpen(true)
+            }
           }
-          onClick={() => setNotifCenterOpen(true)}
-        >
-          <IconBellFilled />
-          {unreadNotifCount > 0 && (
-            <span className="notif-bell__badge" aria-hidden>
-              {unreadNotifCount > 99 ? '99+' : unreadNotifCount}
-            </span>
-          )}
-        </button>
-        {window.nodeTerminal.pairing.supported ? (
-          <button
-            title="Pair phone"
-            onClick={(e) => {
-              const r = e.currentTarget.getBoundingClientRect()
-              setPhonePairAnchor((cur) => (cur ? null : { right: r.right, bottom: r.bottom }))
+        ].filter((destination) => !(mobileServer && destination.id === 'canvas'))
+        return (
+          <NavRail
+            destinations={destinations}
+            kidsLabel="Kids"
+            // ENTERS Kids mode; it does not open a settings page about it. `components/kids/entry.ts`
+            // has always documented this destination as its caller ("the clean entry point the nav
+            // rail's child_care destination calls instead of toggling a local view"), but the rail was
+            // built by a different lane and shipped a placeholder that opened Settings — so
+            // enterKidsModeFromRail() had no callers and the whole Kids shell was unreachable from the
+            // rail. Entering flips the shared record; App.tsx's fail-closed routing swaps the canvas for
+            // <KidsShell/> on its own, and there is deliberately no way back out that a child can take.
+            onOpenKids={() => {
+              void enterKidsModeFromRail()
             }}
-          >
-            <IconPhone />
-          </button>
-        ) : null}
-        <button
-          title={hintLabel('Settings (⌘,)')}
-          onClick={() => {
-            setSettingsSection(undefined)
-            setSettingsOpen(true)
-          }}
-        >
-          <IconGear />
-        </button>
-        <button
-          title="Help"
-          onClick={(e) => {
-            const r = e.currentTarget.getBoundingClientRect()
-            setMenu({
-              // Right-align the ~220px menu under the button; never off-screen left.
-              x: Math.max(8, r.right - 220),
-              y: r.bottom + 6,
-              items: [
-                { label: 'Keyboard shortcuts', hint: hintLabel('⌘/'), onClick: () => setShortcutsOpen(true) },
-                { label: 'Report a bug…', onClick: () => setBugReportOpen(true) },
-                {
-                  label: 'Documentation',
-                  onClick: () => window.nodeTerminal.shell.openExternal(`${REPO_URL}#readme`)
-                },
-                {
-                  label: 'GitHub repository',
-                  onClick: () => window.nodeTerminal.shell.openExternal(REPO_URL)
-                },
-                { type: 'separator' },
-                {
-                  type: 'label',
-                  label: `nodeterm${appVersion ? ` v${appVersion}` : ''} · ${describeOs(navigator.userAgent)}`
-                }
-              ]
-            })
-          }}
-        >
-          ?
-        </button>
-      </div>
+            onAddTerminal={defaultTerminalCreationHandler(addTerminal)}
+            offersTerminalProfiles={offersTerminalProfiles}
+            terminalProfileChoices={terminalProfileMenuChoices}
+            terminalProfileEmptyState={{
+              label: terminalProfilesLoading
+                ? profileText('terminalProfiles.common.detectingProfiles', 'Detecting profiles…')
+                : profileText(
+                    'terminalProfiles.common.profilesUnavailable',
+                    'Profiles unavailable'
+                  ),
+              hint:
+                terminalProfilesDisplayError ??
+                (terminalProfilesInitialized
+                  ? profileText(
+                      'terminalProfiles.common.noProfilesDetected',
+                      'No Windows terminal profiles were detected.'
+                    )
+                  : profileText(
+                      'terminalProfiles.common.detectionPending',
+                      'Profile detection has not finished yet.'
+                    ))
+            }}
+            onAddTerminalWithProfile={(profileId) =>
+              profileTerminalCreationHandler(addTerminal, profileId)()
+            }
+            onAddSticky={addSticky}
+            onAddLoop={addNativeLoop}
+            onAddDino={addDino}
+            onAddAgent={(aid, accountId) => addAgentNode(aid, undefined, undefined, accountId)}
+            onOpenFile={() => void openFileDialog()}
+            onAddRemote={() =>
+              openRemotePicker({ x: window.innerWidth / 2, y: window.innerHeight / 2 })
+            }
+            onConnectRemote={() => void connectRemote()}
+          />
+        )
+      })()}
 
       <div
-        className={`flow-wrap${drawTool.tool ? ' canvas-draw-active' : ''}`}
+        className={`flow-wrap${drawTool.tool ? ' canvas-draw-active' : ''}${explorerFolderDropActive ? ' explorer-folder-drop-target' : ''}`}
         ref={flowWrapRef}
       >
         {/* Live preview of the annotation drag in progress (issue #145) — screen-space `fixed`
@@ -12361,7 +13345,31 @@ export function Canvas() {
               mounted in the experimental 'shared' renderer mode; nothing about it exists for the
               default modes. */}
           {glyphLayerActive && <SharedGlyphLayer />}
-          <Controls showInteractive={false} position="bottom-left" onFitView={fitAll}>
+          {/* zoom −/%/+ and Fit view merged in here from the old bottom dock — React Flow's own
+              built-in zoom/fit buttons are disabled so these MD3 buttons (with the live zoom
+              percentage between them) take their place instead of duplicating them. */}
+          <Controls
+            showZoom={false}
+            showFitView={false}
+            showInteractive={false}
+            position="bottom-left"
+          >
+            <ControlButton title="Zoom out" onClick={() => zoomOut({ duration: 150 })}>
+              <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+                <path d="M5 12h14" />
+              </svg>
+            </ControlButton>
+            <span className="md3-zoom-pct" aria-hidden>
+              {zoomPct}%
+            </span>
+            <ControlButton title="Zoom in" onClick={() => zoomIn({ duration: 150 })}>
+              <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+            </ControlButton>
+            <ControlButton title="Fit view" onClick={fitAll}>
+              <IconFit />
+            </ControlButton>
             <ControlButton
               className={`canvas-lock-btn${canvasLocked ? ' locked' : ''}`}
               title={canvasLocked ? 'Unlock view (pan/zoom)' : 'Lock view (pan/zoom) — nodes stay movable'}
@@ -12388,6 +13396,35 @@ export function Canvas() {
             `data-canvas-chrome` is fit-view's own documented opt-in: it makes the whole cluster ONE
             obstacle rect (instead of one per pill, overlapping after inflation), so fitView never
             parks a node underneath either pill. */}
+        {/* Undo/redo/save, moved here from the old bottom dock — stacked above the merged zoom
+            Controls row so the two bottom-left clusters don't collide. */}
+        <div className="md3-canvas-actions" data-canvas-chrome>
+          <button title={hintLabel('Undo (⌘Z)')} disabled={pastRef.current.length === 0} onClick={undo}>
+            <svg width={17} height={17} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 7L4 12l5 5M4 12h11a5 5 0 0 1 0 10h-2" />
+            </svg>
+          </button>
+          <button title={hintLabel('Redo (⌘⇧Z)')} disabled={futureRef.current.length === 0} onClick={redo}>
+            <svg width={17} height={17} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15 7l5 5-5 5M20 12H9a5 5 0 0 0 0 10h2" />
+            </svg>
+          </button>
+          <span className="md3-canvas-actions__sep" />
+          <button title="Save" onClick={persist}>
+            <IconSave />
+            <span className={`md3-canvas-actions__dirty${dirty ? ' dirty' : ''}`} />
+          </button>
+        </div>
+        {/* ADHD 'one thing at a time': the person's own next action, kept visible so it survives a
+            context switch. Written by them and never inferred — a guess here would be the app
+            deciding what matters, which is exactly the judgement this feature must not make.
+            `data-canvas-chrome` is the documented opt-out so fit-view ignores it. */}
+        {adhdModes.oneThing && adhdModes.oneThingText.trim() ? (
+          <div className="adhd-one-thing" data-canvas-chrome role="status">
+            <span className="adhd-one-thing__label">Right now:</span>
+            <span className="adhd-one-thing__text">{adhdModes.oneThingText}</span>
+          </div>
+        ) : null}
         <CanvasPills>
           {/* `travelToNode`, not `focusNodeById`: the panel resolves sessions in CLOSED projects
               too (their tmux sessions keep running), and reaching one means reopening its tab
@@ -12399,6 +13436,7 @@ export function Canvas() {
           />
         
           <UsageIndicator overBoard={kanbanOpen} />
+          <ServerDeploymentPill overBoard={kanbanOpen} />
         </CanvasPills>
 
         <PresenceNamePrompt />
@@ -12418,6 +13456,13 @@ export function Canvas() {
             }}
             onCloneRepo={cloneRepo}
             onConnectSsh={() => setSshDialogOpen(true)}
+            onOpenProjectFile={() => {
+              // Same rule as "Open folder…": the welcome screen stays up behind the native picker
+              // and the password prompt, and closes only once a project is actually open.
+              void importProjectArchive().then(() => {
+                if (useProjects.getState().projects.some((p) => !p.closed)) setWelcomeOpen(false)
+              })
+            }}
             closedProjects={closedProjects.map((p) => ({ id: p.id, name: p.name, cwd: p.cwd }))}
             onReopen={reopenProject}
             onDeleteClosed={requestDeleteProject}
@@ -12431,6 +13476,7 @@ export function Canvas() {
           onClose={() => setCloneDialogOpen(false)}
           onCloned={onRepoCloned}
         />
+      </div>
       </div>
 
       {window.nodeTerminal.pairing.supported && phonePairAnchor && (
@@ -12486,9 +13532,11 @@ export function Canvas() {
       {lockWizardTarget && (
         <LockWizard
           target={{
-            kind: 'node',
+            kind: lockWizardTarget.kind ?? 'node',
             id: lockWizardTarget.nodeId,
-            label: (nodesRef.current.find((n) => n.id === lockWizardTarget.nodeId)?.data.title as string) || 'this node'
+            label:
+              (nodesRef.current.find((n) => n.id === lockWizardTarget.nodeId)?.data.title as string) ||
+              (lockWizardTarget.kind === 'group' ? 'this frame' : 'this node')
           }}
           anchor={{ x: lockWizardTarget.x, y: lockWizardTarget.y }}
           onClose={() => setLockWizardTarget(null)}
@@ -12498,7 +13546,11 @@ export function Canvas() {
         (() => {
           const record = useToyLocks
             .getState()
-            .records.find((r) => r.target.kind === 'node' && r.target.id === unlockPromptTarget.nodeId)
+            .records.find(
+              (r) =>
+                r.target.kind === (unlockPromptTarget.kind ?? 'node') &&
+                r.target.id === unlockPromptTarget.nodeId
+            )
           if (!record) return null
           return (
             <UnlockPrompt
@@ -12534,6 +13586,24 @@ export function Canvas() {
         />
       )}
 
+      {historyOpen && (
+        <div className="md3-history-host">
+        <HistoryScreen
+          onGoToNode={travelToNode}
+          onKillSession={killSessionById}
+        />
+        </div>
+      )}
+      {docsOpen && (
+        <div className="md3-docs-host">
+          <DocsBrowser />
+        </div>
+      )}
+      {statusOpen && (
+        <div className="md3-status-host">
+          <StatusSurface />
+        </div>
+      )}
       {notifCenterOpen && (
         <NotificationCenter
           onClose={() => setNotifCenterOpen(false)}
@@ -12612,12 +13682,27 @@ export function Canvas() {
         <ExplorerPanel
           onClose={() => setExplorerOpen(false)}
           onOpenFile={(path, isSsh) => openFile(path, undefined, isSsh)}
+          onAgentNodeDrop={openAgentAtExplorerFolder}
+          onOpenTerminalAtFolder={(folder) => openTerminalAtExplorerFolder(folder)}
+          keyboardAgentNodeId={explorerAgentNodeId}
           reveal={reveal}
         />
       )}
 
       {converterOpen && <FileConverterPanel onClose={() => setConverterOpen(false)} />}
       {ollamaOpen && <OllamaManagerPanel onClose={() => setOllamaOpen(false)} />}
+      {pwmOpen && (
+        <PasswordManagerPanel
+          onClose={() => setPwmOpen(false)}
+          initialIntent={pwmIntent}
+          // Computed only while the drawer is actually open — `nodes` changes on every drag, and
+          // this list is read once per open by the panel itself (see its own header comment on
+          // why a rename mid-session is a cosmetic staleness, not a correctness one).
+          groups={nodes
+            .filter((n) => n.type === 'group')
+            .map((n) => ({ id: n.id, title: n.data.title || 'Untitled group' }))}
+        />
+      )}
 
       <SessionsSidebar
         open={sessionsOpen}
@@ -12696,7 +13781,6 @@ export function Canvas() {
         />
       )}
 
-      <UpgradeDialog />
 
       {remotePicker && (
         <RemotePicker
@@ -12708,6 +13792,18 @@ export function Canvas() {
             setSettingsOpen(true)
           }}
           onClose={() => setRemotePicker(null)}
+        />
+      )}
+
+      {groupPicker && (
+        <GroupPickerDialog
+          count={groupPicker.ids.length}
+          groups={groupPicker.groups}
+          onPick={(groupId) => {
+            addToExistingGroup(groupPicker.ids, groupId)
+            setGroupPicker(null)
+          }}
+          onCancel={() => setGroupPicker(null)}
         />
       )}
 
@@ -12827,6 +13923,11 @@ export function Canvas() {
         <NotifyConsentDialog
           onEnable={() => {
             useSettings.getState().update({ notifyOnClaudeDone: true })
+            // Deliberately NOT filtered by ADHD low stimulation, unlike the agent-status alert
+            // above: this is the confirmation of the button the person is looking at, fired by
+            // their own click a moment ago (and `force: true` for the same reason). A permission
+            // switch that silently proves nothing when flipped reads as broken, and the mode is
+            // about unsolicited interruptions — this is the opposite of one.
             void window.nodeTerminal.notify({
               title: 'Notifications enabled',
               body: "You'll be told when Claude Code finishes in the background.",
@@ -12839,55 +13940,10 @@ export function Canvas() {
         />
       )}
 
-      <Dock
-        dirty={dirty}
-        zoomPct={zoomPct}
-        canUndo={pastRef.current.length > 0}
-        canRedo={futureRef.current.length > 0}
-        onUndo={undo}
-        onRedo={redo}
-        onAddTerminal={defaultTerminalCreationHandler(addTerminal)}
-        offersTerminalProfiles={offersTerminalProfiles}
-        terminalProfileChoices={terminalProfileMenuChoices}
-        terminalProfileEmptyState={{
-          label: terminalProfilesLoading
-            ? profileText(
-                'terminalProfiles.common.detectingProfiles',
-                'Detecting profiles…'
-              )
-            : profileText(
-                'terminalProfiles.common.profilesUnavailable',
-                'Profiles unavailable'
-              ),
-          hint:
-            terminalProfilesDisplayError ??
-            (terminalProfilesInitialized
-              ? profileText(
-                  'terminalProfiles.common.noProfilesDetected',
-                  'No Windows terminal profiles were detected.'
-                )
-              : profileText(
-                  'terminalProfiles.common.detectionPending',
-                  'Profile detection has not finished yet.'
-                ))
-        }}
-        onAddTerminalWithProfile={(profileId) =>
-          profileTerminalCreationHandler(addTerminal, profileId)()
-        }
-        onAddSticky={addSticky}
-        onAddLoop={addNativeLoop}
-        onAddDino={addDino}
-        onAddAgent={(aid, accountId) => addAgentNode(aid, undefined, undefined, accountId)}
-        onOpenFile={() => void openFileDialog()}
-        onAddRemote={() => openRemotePicker({ x: window.innerWidth / 2, y: window.innerHeight / 2 })}
-        onConnectRemote={() => void connectRemote()}
-        onSave={persist}
-        onFitView={fitAll}
-        onZoomIn={() => zoomIn({ duration: 150 })}
-        onZoomOut={() => zoomOut({ duration: 150 })}
-        onDictate={toggleDictation}
-        dictateActive={dictationOpen}
-      />
+      {/* The old bottom dock is gone — node creation moved to the nav rail's FAB (rendered above,
+          beside `.flow-wrap`), undo/redo/save moved to the `.md3-canvas-actions` pill and the
+          zoom/fit controls merged into React Flow's own `<Controls>` (both inside `.flow-wrap`,
+          near the CanvasPills below), and dictate moved to the top app bar. */}
 
       {/* Focus mode surface (issue #78). ALWAYS mounted so the reparent target exists before the
           commit that moves a node into it, and OUTSIDE <ReactFlow> on purpose — the flow wrapper

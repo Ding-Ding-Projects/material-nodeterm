@@ -1,0 +1,670 @@
+/* ---------------------------------------------------------------------------------------------
+   Material Design 3 — shared primitive components (src/renderer/ui/md3/).
+
+   Fourteen lanes shipped `styles.md3.css` (8k+ lines) each writing their own scoped BEM classes
+   for the same handful of MD3 building blocks — a button is `.md3-kids-filled-btn` in Kids mode,
+   `.confirm__btn` in a dialog, `.term-node__status--busy` on a canvas node, all describing the
+   same "filled pill" or "status chip" shape with slightly different literals. This file is the
+   ONE definition of each of those shapes, for the primitives in this directory to consume.
+
+   Deliberately prefixed `mdx-` (never `md3-`) for the classes this file DEFINES, even though the
+   rest of the app writes `md3-*`. Reusing `md3-` here risks colliding with a same-named class
+   another lane already shipped in `styles.md3.css` (this file isn't imported anywhere yet, so no
+   collision is live today, but the moment something imports the `ui/md3` barrel it would become
+   one) — `mdx-` guarantees this sheet can never fight a rule this app has already committed.
+   Where an exact, already-correct shared class exists (`.md3-icon-btn`, `.md3-fab`), the
+   component reuses it verbatim rather than duplicating the recipe under a second name — see the
+   component files themselves for which those are.
+
+   Every value below is read from `design/v2/md3/tokens.css` / `design/v2/md3/HANDOFF.md`'s
+   component-recipe table, or measured directly out of the shipped `.dc.html` prototypes'
+   `style=""` attributes (this bundle documents itself that way — "Recreate pixel-perfectly").
+   Colours are `var(--md-*)` tokens only; there is no `box-shadow` in this file — elevation here
+   is tonal, exactly as the rest of the app's MD3 pass. */
+
+/* ============================================================================
+   Button — filled / tonal / outlined / text, all 40px pills.
+   ("Buttons: filled primary, outlined 1px outline, text primary; all 40px pills" — HANDOFF.)
+   ============================================================================ */
+.mdx-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 24px;
+  border: none;
+  border-radius: var(--md-shape-full);
+  font-family: var(--md-font-ui);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background var(--md-motion-effect),
+    color var(--md-motion-effect),
+    border-color var(--md-motion-effect);
+}
+.mdx-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.38;
+}
+.mdx-btn:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+/* An icon (leading or trailing) shrinks the horizontal padding on that side, per M3 spec. */
+.mdx-btn--has-leading-icon {
+  padding-left: 16px;
+}
+.mdx-btn--has-trailing-icon {
+  padding-right: 16px;
+}
+
+.mdx-btn--filled {
+  background: var(--md-primary);
+  color: var(--md-on-primary);
+}
+.mdx-btn--filled:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--md-primary) 92%, var(--md-on-primary) 8%);
+}
+.mdx-btn--filled:active:not(:disabled) {
+  background: color-mix(in srgb, var(--md-primary) 88%, var(--md-on-primary) 12%);
+}
+
+.mdx-btn--tonal {
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+.mdx-btn--tonal:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--md-secondary-container) 92%, var(--md-on-secondary-container) 8%);
+}
+.mdx-btn--tonal:active:not(:disabled) {
+  background: color-mix(in srgb, var(--md-secondary-container) 88%, var(--md-on-secondary-container) 12%);
+}
+
+.mdx-btn--outlined {
+  background: transparent;
+  color: var(--md-on-surface);
+  border: 1px solid var(--md-outline);
+}
+.mdx-btn--outlined:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--md-on-surface) 8%, transparent);
+}
+.mdx-btn--outlined:active:not(:disabled) {
+  background: color-mix(in srgb, var(--md-on-surface) 12%, transparent);
+}
+.mdx-btn--outlined:disabled {
+  border-color: color-mix(in srgb, var(--md-on-surface) 12%, transparent);
+}
+
+.mdx-btn--text {
+  background: transparent;
+  color: var(--md-primary);
+  padding-left: 16px;
+  padding-right: 16px;
+}
+.mdx-btn--text:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--md-primary) 8%, transparent);
+}
+.mdx-btn--text:active:not(:disabled) {
+  background: color-mix(in srgb, var(--md-primary) 12%, transparent);
+}
+
+/* A dedicated destructive tone, layered onto any variant via a second class — the context menu
+   and the destructive-gate prototypes both render their one dangerous action in error red while
+   every sibling stays neutral, and that is a colour override, not a fifth shape. */
+.mdx-btn--danger.mdx-btn--filled {
+  background: var(--md-error);
+  color: var(--md-on-error);
+}
+.mdx-btn--danger.mdx-btn--text,
+.mdx-btn--danger.mdx-btn--outlined {
+  color: var(--md-error);
+}
+.mdx-btn--danger.mdx-btn--outlined {
+  border-color: color-mix(in srgb, var(--md-error) 55%, var(--md-outline) 45%);
+}
+
+/* ============================================================================
+   IconButton reuses `.md3-icon-btn` (styles.md3.css) verbatim — "Shared 44px round icon
+   button — every app-bar action", already exactly this recipe. Only the active/selected state
+   and the compact size are new here.
+   ============================================================================ */
+.mdx-icon-btn--dense {
+  width: 40px;
+  height: 40px;
+}
+.mdx-icon-btn.is-active {
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+.mdx-icon-btn.is-active:hover {
+  background: color-mix(in srgb, var(--md-secondary-container) 90%, var(--md-on-secondary-container) 10%);
+}
+
+/* Fab reuses `.md3-fab` verbatim (56px, r16, primary-container — matches the recipe exactly).
+   The one addition is the small 40px form M3 also defines. */
+.mdx-fab--small {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--md-shape-sm);
+}
+
+/* ============================================================================
+   TextField — outlined, floating label, optional trailing slot.
+   Recipe measured from the Clone dialog prototype: 56px tall, r16, 1px `--md-outline` border,
+   label sits in a notch cut into the top border. A notch works by painting a solid patch behind
+   the label matching the field's ambient surface — CSS cannot know that surface on its own, so
+   `--mdx-field-surface` carries it, defaulting to `--md-surface-container-high` (the surface
+   every dialog in the design bundle sits on, and so the notch's own default). Place a field on a
+   different surface by setting that custom property on it or an ancestor.
+   ============================================================================ */
+.mdx-field {
+  --mdx-field-surface: var(--md-surface-container-high);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  margin-top: 9px;
+}
+.mdx-field__label {
+  position: absolute;
+  top: -8px;
+  left: 14px;
+  padding: 0 6px;
+  background: var(--mdx-field-surface);
+  color: var(--md-on-surface-variant);
+  font-family: var(--md-font-ui);
+  font-size: 11.5px;
+  font-weight: 600;
+  pointer-events: none;
+  z-index: 1;
+  transition: color var(--md-motion-effect);
+}
+.mdx-field__control {
+  height: 56px;
+  border-radius: var(--md-shape-md);
+  border: 1px solid var(--md-outline);
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: border-color var(--md-motion-effect);
+}
+.mdx-field__control:has(.mdx-field__input:focus) {
+  border-color: var(--md-primary);
+  border-width: 2px;
+  padding: 0 15px;
+}
+.mdx-field__control:has(.mdx-field__input:focus) ~ .mdx-field__label,
+.mdx-field--focused .mdx-field__label {
+  color: var(--md-primary);
+}
+.mdx-field--invalid .mdx-field__control {
+  border-color: var(--md-error);
+}
+.mdx-field--invalid .mdx-field__label {
+  color: var(--md-error);
+}
+.mdx-field--disabled .mdx-field__control {
+  border-color: color-mix(in srgb, var(--md-on-surface) 12%, transparent);
+}
+.mdx-field__input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--md-on-surface);
+  font-family: var(--md-font-mono);
+  font-size: 13.5px;
+}
+.mdx-field__input::placeholder {
+  color: var(--md-on-surface-variant);
+}
+.mdx-field__input:disabled {
+  color: color-mix(in srgb, var(--md-on-surface) 38%, transparent);
+  cursor: not-allowed;
+}
+.mdx-field__trailing {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+.mdx-field__support {
+  margin: 4px 16px 0;
+  font-size: 11.5px;
+  color: var(--md-on-surface-variant);
+}
+.mdx-field--invalid .mdx-field__support {
+  color: var(--md-error);
+}
+
+/* ============================================================================
+   Chip — assist (default) and filter (selectable). 32px, r8 — matches the Board filter-chip row
+   and the kanban session-id chip.
+   ============================================================================ */
+.mdx-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--md-shape-xs);
+  border: 1px solid var(--md-outline-variant);
+  background: transparent;
+  color: var(--md-on-surface);
+  font-family: var(--md-font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background var(--md-motion-effect),
+    border-color var(--md-motion-effect),
+    color var(--md-motion-effect);
+}
+.mdx-chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.38;
+}
+.mdx-chip:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--md-on-surface) 8%, transparent);
+}
+.mdx-chip--selected {
+  border-color: transparent;
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+.mdx-chip--selected:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--md-secondary-container) 90%, var(--md-on-secondary-container) 10%);
+}
+.mdx-chip__icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+/* ============================================================================
+   StatusChip — the RUNNING / NEEDS YOU / ok / idle tone map. 28px pill, 11.5px/700, per HANDOFF's
+   literal recipe (the same shape as the Board card-modal header badge). A `compact` size (24px)
+   matches the smaller in-card badge already shipped as `.kanban-badge`, for a consumer that sits
+   inline on a crowded row.
+   ============================================================================ */
+.mdx-status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: var(--md-shape-full);
+  font-family: var(--md-font-ui);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.mdx-status-chip--compact {
+  height: 24px;
+  padding: 0 10px;
+  font-size: 10.5px;
+}
+.mdx-status-chip__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: 0 0 auto;
+}
+.mdx-status-chip--compact .mdx-status-chip__dot {
+  width: 6px;
+  height: 6px;
+}
+.mdx-status-chip--pulse .mdx-status-chip__dot {
+  animation: mdx-status-pulse 1.4s ease-in-out infinite;
+}
+@keyframes mdx-status-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.3);
+  }
+}
+/* Tones: running (tertiary-container), attention/needs-you (error-container),
+   ok/tmux (success-container), idle/sleeping (surface-container-highest). */
+.mdx-status-chip--running {
+  color: var(--md-on-tertiary-container);
+  background: var(--md-tertiary-container);
+}
+.mdx-status-chip--attention {
+  color: var(--md-on-error-container);
+  background: var(--md-error-container);
+}
+.mdx-status-chip--ok {
+  color: var(--md-on-success-container);
+  background: var(--md-success-container);
+}
+.mdx-status-chip--idle {
+  color: var(--md-on-surface-variant);
+  background: var(--md-surface-container-highest);
+}
+
+/* ============================================================================
+   Card — a generic tonal surface container. Default r16/surface-container-high matches the
+   kanban session card ("Card r16 surface-container-high (hover -highest)"); `tone`/`shape`
+   variants cover the other surfaces the design bundle reuses this same shape for (columns,
+   dialogs' inner panels, settings list-cards).
+   ============================================================================ */
+.mdx-card {
+  border-radius: var(--md-shape-sm);
+  background: var(--md-surface-container);
+  color: var(--md-on-surface);
+}
+.mdx-card--tone-lowest {
+  background: var(--md-surface-container-lowest);
+}
+.mdx-card--tone-low {
+  background: var(--md-surface-container-low);
+}
+.mdx-card--tone-high {
+  background: var(--md-surface-container-high);
+}
+.mdx-card--tone-highest {
+  background: var(--md-surface-container-highest);
+}
+.mdx-card--tone-outlined {
+  background: transparent;
+  border: 1px solid var(--md-outline-variant);
+}
+.mdx-card--shape-xs {
+  border-radius: var(--md-shape-xs);
+}
+.mdx-card--shape-md {
+  border-radius: var(--md-shape-md);
+}
+.mdx-card--shape-lg {
+  border-radius: var(--md-shape-lg);
+}
+.mdx-card--interactive {
+  cursor: pointer;
+  transition: background var(--md-motion-effect);
+}
+.mdx-card--interactive:hover {
+  background: var(--md-surface-container-highest);
+}
+.mdx-card--interactive.mdx-card--tone-highest:hover {
+  background: color-mix(in srgb, var(--md-surface-container-highest) 100%, var(--md-on-surface) 4%);
+}
+.mdx-card--interactive:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: -2px;
+}
+
+/* ============================================================================
+   ListRow — the row shape shared by menu items, palette results and settings list items: a
+   leading icon tile, a label/sub-label stack, and trailing content (kbd chip, switch, chevron).
+   Radius sits inside HANDOFF's stated "rows r14-20" range for menu/dialog surfaces.
+   ============================================================================ */
+.mdx-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 42px;
+  padding: 0 14px;
+  border-radius: var(--md-shape-sm);
+  color: var(--md-on-surface);
+  background: transparent;
+  border: none;
+  width: 100%;
+  text-align: left;
+  font-family: var(--md-font-ui);
+  cursor: pointer;
+  transition: background var(--md-motion-effect);
+}
+.mdx-row:disabled,
+.mdx-row[aria-disabled='true'] {
+  cursor: not-allowed;
+  color: var(--md-outline);
+}
+.mdx-row:hover:not(:disabled):not([aria-disabled='true']) {
+  background: var(--md-surface-container-highest);
+}
+.mdx-row:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: -2px;
+}
+.mdx-row--danger {
+  color: var(--md-error);
+}
+.mdx-row__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--md-shape-sm);
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface-variant);
+}
+.mdx-row--danger .mdx-row__icon {
+  background: color-mix(in srgb, var(--md-error) 16%, transparent);
+  color: var(--md-error);
+}
+.mdx-row__body {
+  flex: 1;
+  min-width: 0;
+}
+.mdx-row__label {
+  font-size: 14px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mdx-row__sub {
+  margin-top: 1px;
+  font-size: 12px;
+  color: var(--md-on-surface-variant);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mdx-row__trailing {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--md-font-mono);
+  font-size: 11px;
+  color: var(--md-on-surface-variant);
+}
+.mdx-row__kbd {
+  padding: 5px 10px;
+  border-radius: var(--md-shape-xs);
+  background: var(--md-surface-container);
+  color: var(--md-on-surface-variant);
+}
+
+/* ============================================================================
+   Menu — a floating tonal surface. Positioning (anchoring, portal, viewport clamping) is left to
+   the consumer (see `ui/AnchoredPopover.tsx`) — this is the panel's own chrome only.
+   ============================================================================ */
+.mdx-menu {
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+  border-radius: var(--md-shape-lg);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+}
+.mdx-menu--compact {
+  border-radius: 20px;
+}
+
+/* ============================================================================
+   Dialog — centered modal surface + scrim. Escape and a scrim click both close it; focus returns
+   to whatever triggered it (the component owns that contract, not its consumer, per the app's
+   existing dialog convention).
+   ============================================================================ */
+.mdx-dialog-scrim {
+  position: fixed;
+  inset: 0;
+  background: var(--md-scrim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 55;
+}
+.mdx-dialog {
+  width: 480px;
+  max-width: calc(100vw - 48px);
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+  border-radius: var(--md-shape-lg);
+  padding: 26px 26px 22px;
+}
+.mdx-dialog__icon {
+  width: 52px;
+  height: 52px;
+  border-radius: var(--md-shape-md);
+  background: var(--md-error-container);
+  color: var(--md-on-error-container);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.mdx-dialog__title {
+  font-size: 19px;
+  font-weight: 600;
+  margin-top: 16px;
+}
+.mdx-dialog__body {
+  font-size: 13.5px;
+  color: var(--md-on-surface-variant);
+  line-height: 1.6;
+  margin-top: 6px;
+}
+.mdx-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+/* ============================================================================
+   Badge — small numeric/dot indicator, matching the app-bar notification bell's badge
+   (`.notif-bell__badge`). `corner` positions it absolutely over a `position: relative` ancestor.
+   ============================================================================ */
+.mdx-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--md-error);
+  color: var(--md-on-error);
+  font-family: var(--md-font-ui);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+.mdx-badge--dot {
+  min-width: 8px;
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border-radius: 50%;
+}
+.mdx-badge--corner {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+}
+.mdx-badge--neutral {
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface-variant);
+}
+
+/* ============================================================================
+   SegmentedButton — the Canvas/Board nav toggle shape: one 40px pill container, 1px outline
+   border, divider between un-selected neighbours, selected segment filled secondary-container.
+   ============================================================================ */
+.mdx-seg {
+  display: inline-flex;
+  height: 40px;
+  border: 1px solid var(--md-outline);
+  border-radius: var(--md-shape-full);
+  overflow: hidden;
+}
+.mdx-seg__opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 18px;
+  border: none;
+  background: transparent;
+  color: var(--md-on-surface);
+  font-family: var(--md-font-ui);
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--md-motion-effect);
+  position: relative;
+}
+.mdx-seg__opt:not(:first-child)::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 1px;
+  background: var(--md-outline);
+}
+.mdx-seg__opt:disabled {
+  cursor: not-allowed;
+  opacity: 0.38;
+}
+.mdx-seg__opt:hover:not(:disabled):not(.mdx-seg__opt--active) {
+  background: color-mix(in srgb, var(--md-on-surface) 8%, transparent);
+}
+/* Hide the divider on either side of the active segment — a filled pill butting against a hairline
+   reads as a stray mark, per M3 segmented-button spec. */
+.mdx-seg__opt--active::before,
+.mdx-seg__opt--active + .mdx-seg__opt::before {
+  background: transparent;
+}
+.mdx-seg__opt--active {
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+  font-weight: 600;
+}
+
+/* ============================================================================
+   Divider — 1px hairline, horizontal (default) or vertical.
+   ============================================================================ */
+.mdx-divider {
+  border: none;
+  background: var(--md-outline-variant);
+  flex: 0 0 auto;
+}
+.mdx-divider--horizontal {
+  width: 100%;
+  height: 1px;
+  margin: 4px 0;
+}
+.mdx-divider--vertical {
+  width: 1px;
+  align-self: stretch;
+  margin: 0 4px;
+}

@@ -151,6 +151,15 @@ export const IconSettings = () => (
   </svg>
 )
 
+/** "Escape to widget" — a small floating rectangle detaching off a larger one, the same visual
+ *  grammar as picture-in-picture. See `main/canvas-widget-window.ts`. */
+export const IconPictureInPicture = () => (
+  <svg {...S}>
+    <rect x="3" y="4" width="18" height="14" rx="1.5" />
+    <rect x="11" y="11" width="8" height="6" rx="1" fill="currentColor" stroke="none" />
+  </svg>
+)
+
 export const IconReload = () => (
   <svg {...S}>
     <path d="M20 12a8 8 0 1 1-2.34-5.66" />

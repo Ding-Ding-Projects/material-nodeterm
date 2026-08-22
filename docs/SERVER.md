@@ -1,5 +1,22 @@
 # nodeterm Server Edition (Phase 2)
 
+The Windows desktop app's top-right device button drives this same deployment automatically. It
+obtains Docker Desktop through Windows Package Manager when missing, invokes the validated
+`host.bat` path, builds `nodeterm-server:local` when absent, reuses the named data volume, waits for
+the container health check, and offers the verified local URL. This route is free and has no Pro,
+seat, subscription, or purchase requirement.
+
+The deployment creates `.nodeterm-server-totp` with owner-only permissions and mounts it read-only
+at `/run/secrets/nodeterm-totp`. The desktop panel shows the current six-digit code and refreshes it
+every second. Enter it in the site's password field. Codes tolerate one 30-second clock step of
+drift, pass through the normal per-peer attempt and lockout limits, and an accepted counter is
+persisted so the same code cannot be replayed after a process restart.
+
+On phone-sized coarse-pointer browsers, Server Edition resolves every project to the sessions/board
+view and omits the Canvas navigation destination. This removes precision pan/zoom interaction while
+retaining the rest of the browser application, including sessions, chat/transcripts, files, source
+control, tools, alerts, settings and history.
+
 Run nodeterm's canvas in a browser, backed by a headless Node server on your own
 machine or box. The server serves the **same** built renderer the desktop app uses
 and speaks a WebSocket-RPC protocol to it; a browser-side `window.nodeTerminal`
@@ -504,6 +521,18 @@ Two intentional departures from `docs/superpowers/specs/2026-07-10-server-editio
   bridge declares `pairing.supported = false`; the quick action is hidden and Settings → Phone
   shows the deliberate desktop-only route. Headless mobile push uses the separate SSH-possession
   grant flow documented above.
+- **"Transfer conversation to…" is unavailable.** The handoff file that a transfer hands the target
+  agent is rendered by `src/main/handoff` behind the `handoff:build` IPC channel, which is
+  registered in `src/main` only — no core service, no server handler, so the bridge has nothing to
+  call. The bridge declares `handoff.supported = false` and the node context-menu section is
+  **absent** rather than an enabled item that silently does nothing (which is exactly what it was
+  until this was gated: the stub's rejection threw past the call site's resolved-`{ error }` check
+  into a `void`ed promise, so clicking it produced no file, no toast and no console entry).
+  `buildTransferHandoff` in `renderer/lib/transferGates.ts` keeps that second boundary — any route
+  that still reaches a rejection now reports it in the normal "Transfer failed" toast. Branching a
+  conversation is unaffected; transferring is done from the desktop app on the host. Wiring it
+  properly means moving the builder into `src/core` behind `CorePlatform` so both shells register
+  it — the ordinary route for a deferred feature here.
 - **Terminal-only.** Terminal nodes work (spawn, I/O, resize, tmux continuity). The
   git panel, source control, Monaco editor/diff nodes, SDK chat node, agent-status
   badges/hooks, and the folder picker are **not** wired into the server bridge yet —

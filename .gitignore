@@ -11,6 +11,7 @@ dist/
 # never become a tempting untracked credential that can be added to a commit by accident.
 /.env
 /.env.bak
+/.nodeterm-server-totp
 /.nodeterm-env-*
 
 build/icon.png

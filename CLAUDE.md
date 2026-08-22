@@ -30,22 +30,16 @@ npm run rebuild    # re-run electron-rebuild for node-pty if you hit ABI/native 
 ```
 
 **`rebuild` and `postinstall` both run `scripts/patch-node-pty.mjs` first, and that is not
-optional.** node-pty 1.1.0 deletes its native `pty_baton` as soon as the shell process handle
-signals, without closing the HPCON the baton owns; a taskkill-first teardown of a silent shell
-tree then leaves a host-parented conhost alive until the whole Node process exits, and
-`conpty.kill(id)` silently finds no baton. The script rewrites
-`node_modules/node-pty/src/win/conpty.cc` before electron-rebuild compiles it: baton access is
-serialized, the exact HPCON is closed before deletion, and `kill(id)` returns positive proof.
-(The script's former darwin `pty_posix_spawn` ptmx-leak patch — microsoft/node-pty#950, filed by
-us — was deleted with the macOS desktop target, 2026-08; the leak lives in a darwin-only
-compilation unit no Windows or Linux build compiles.)
+optional.** node-pty 1.1.0's darwin `pty_posix_spawn` leaks a ptmx device on every SUCCESSFUL spawn
+(an off-by-one in the low-fd cleanup) and master+slave on every FAILED one; on this app's spawn
+churn that exhausts `kern.tty.ptmx_max` within hours, and terminals then simply stop opening. The
+script rewrites `node_modules/node-pty/src/unix/pty.cc` before electron-rebuild compiles it.
 
 `src/main/node-pty-patch.test.ts` asserts the marker is present in those sources, so a node-pty
 upgrade that silently drops the patch fails loudly. **If that test is red, your `node_modules` is
-unpatched, not your code** — run `npm run rebuild`. It deliberately does not measure handles
-(that is environment-dependent); it checks the source the native module is built from. If a
-node-pty release closes the exact HPCON before baton deletion, delete the script, its wiring and
-that test.
+unpatched, not your code** — run `npm run rebuild`. It deliberately does not measure descriptors
+(that is environment-dependent); it checks the source the native module is built from. Upstream:
+microsoft/node-pty#950 — if the fix lands there, delete the script, its wiring and that test.
 
 ```
 
@@ -267,6 +261,18 @@ canonical read succeeds.
 
 ## Projects (tabs)
 
+### Global and per-project settings
+
+`renderer/state/settings.ts` resolves settings once: project override over the persisted global
+default, followed by a currently active scheduled override. SettingsPage changes only the editing
+scope; every section remains the same component and `update()` routes to either `settings.json` or
+the active project's sparse `settingsOverrides`. Canvas updates that context on tab changes.
+
+Project overrides are machine-local in `WorkspaceIndexV3`. They are absent from `ProjectFileV1`
+and `projectToFile()`, so Git-shared JSON cannot inject executable paths, credential/account ids,
+host labels, or other machine-local values. Resetting removes sparse keys and immediately reveals
+the current global values.
+
 Each project is one canvas/page; terminals and notes belong to a project. The `projects`
 zustand store (`renderer/state/projects.ts`) holds project metadata + the _serialized_ nodes
 of all projects. **React Flow remains the single live source of truth for the _active_
@@ -280,10 +286,11 @@ project's nodes only.** The contract:
   another machine last saved, and restoring it mid-work teleported the camera (most visibly
   right after a cross-project sidebar focus, when the connect-time SSH reconcile landed a
   second after fitView centered the node).
-- **Project order = array order**, and it is ONE order shared by the tab bar and the sessions
-  sidebar (the sidebar no longer hoists the active project to the top). Both surfaces reorder
-  via drag-drop through `reorderProject(draggedId, beforeId|null)` (null = to the end; tab
-  strip empty area and sidebar body are the end-drop zones), persisted like any node reorder.
+- **Project order = array order**, and it is ONE order shared by the top app bar's project
+  switcher (`ProjectSwitcher.tsx`) and the sessions sidebar (the sidebar no longer hoists the
+  active project to the top). Both surfaces reorder via drag-drop through
+  `reorderProject(draggedId, beforeId|null)` (null = to the end; the switcher dropdown's list
+  body and the sidebar body are the end-drop zones), persisted like any node reorder.
   Sidebar disclosure is **persisted**, for group frames as well as projects:
   `settings.sidebarCollapsedItems` maps `project:<id>` / `project:<id>:group:<groupId>` → collapsed
   (`isGroupCollapsed`), and `settings.sidebarAutoCollapse` (default on) now only supplies the
@@ -303,9 +310,10 @@ project's nodes only.** The contract:
 - Switching away unmounts the old project's `TerminalNode`s → their persistent clients detach but
   the tmux/session-host sessions keep running; switching back reattaches. Session names are
   per-node-id (globally unique), so projects never collide.
-- The tab caret menu's **Close project** (`closeProject`) is **non-destructive**: it sets
-  `project.closed = true` (hidden from the tab bar, kept on disk with all nodes) and leaves the
-  persistent sessions running, so closing just detaches like a project switch. Closed projects are
+- The project switcher's per-row **⋮** actions panel's **Close project** (`closeProject`) is
+  **non-destructive**: it sets `project.closed = true` (hidden from the switcher, kept on disk
+  with all nodes) and leaves the persistent sessions running, so closing just detaches like a
+  project switch. Closed projects are
   reopenable from the **"Recently closed"** list on `WelcomeScreen` (`reopenProject` → restores
   nodes, which reattach warm or cold-restore). `hasProjects` counts only **open** projects, so
   closing the last open one shows the welcome screen. **Permanent** deletion (`deleteProject`:
@@ -579,10 +587,13 @@ The node id is the `persistKey` (passed to `transport.create`), so it must stay 
 If tmux is unavailable while persistent support is enabled, `PtyManager` selects the standalone
 session host; a plain shell is the final non-persistent path when persistence is disabled or cannot
 be used. `findTmux()` resolves an absolute path because GUI apps don't inherit the
-shell PATH, and it tries two sources **in this order: fixed system paths → the shell's
-PATH**. (A third source — a tmux binary the macOS app bundled as a floor — was deleted with the
-macOS desktop target, 2026-08; a Linux/Server Edition host is expected to have its own tmux, and
-Windows never had a bundled one.) If tmux is unavailable from both, selection
+shell PATH, and it tries three sources **in this order: fixed system paths → the shell's
+PATH → the tmux the macOS app SHIPS** (`bundledTmuxPath`). System first is deliberate — a
+machine that already has tmux keeps using its own, so the bundled copy is a floor, never an
+override. `resourcesPath` is `undefined` on the **Server Edition**, so the bundled binary is
+unreachable there by construction; a Linux host is expected to have its own. Under
+`electron-vite dev` the last candidate resolves against `process.cwd()`, which is where
+`scripts/build-tmux.mjs` writes its artifact. If tmux is unavailable from all three, selection
 continues to the session host before the plain fallback; `TMUX`/`TMUX_PANE` are stripped from the
 child env to avoid nesting refusal.
 
@@ -1323,10 +1334,10 @@ untrusted|on-request|never`. Two rules the mapping exists to enforce: a mode the
   `sshHostKey` = `user@host`; `remoteAccountConfigDir` is `~`-relative for ssh expansion,
   `remoteAccountConfigDirAbs` resolves it against the connection's `remoteHome`). The **claude
   CLI owns login, credential storage, and token refresh** inside that dir — the app NEVER writes
-  credentials. On Windows the CLI keeps its credentials in files under that config dir, so the
-  directory boundary is the whole isolation mechanism. (The macOS desktop additionally depended on
-  Claude Code ≥ 2.1 scoping its Keychain service per config dir; that Keychain leg left with the
-  macOS desktop target, 2026-08.)
+  credentials. On macOS this works because Claude Code **≥ 2.1** scopes its Keychain service per
+  config dir (`Claude Code-credentials-<sha256(configDir)[:8]>`, `claudeKeychainService`); on
+  < 2.1 one unscoped service is shared → accounts collide, so add-account **warns** (`claude
+--version`, `isSupportedClaudeVersion`).
   - **`data.accountId` (terminal nodes)** — resolved **once at node creation**
     (`resolveNewNodeAccount`: explicit submenu pick → `project.defaultAccountId` → system default
     `~/.claude`), then **immutable** and **persisted** (serializers). `undefined` = system default
@@ -1350,17 +1361,17 @@ untrusted|on-request|never`. Two rules the mapping exists to enforce: a mode the
   - **Account-aware readers** — transcript resolution is scoped per account (`transcriptRootFor`
     picks the account dir's `projects/`, composite cache key includes `accountId`); the same
     threading runs through the session-name poll, restart handoff, and `ChatPanel` (the ⌘M
-    transcript view, `chat.readTranscript`). The **usage indicator** is per account
-    (`claude-usage.ts` reads each account's own stored credentials; popover lists a row per
-    account with **System** first). **Remote (SSH host) accounts are included** — see **Remote
-    usage** below.
+    transcript view, `chat.readTranscript`). The **usage indicator** is per account (`claude-usage.ts`: scoped Keychain
+    service first, legacy unscoped fallback; popover lists a row per account with **System**
+    first). **Remote (SSH host) accounts are included** — see **Remote usage** below.
   - **Pickers** — New Claude exposes an account **submenu** (pane menu; flat entries in
-    the dock; palette commands; TabBar sets the **per-project default**). A **local** project
-    lists local accounts, an **SSH** project lists only accounts whose `host` matches its
-    connection; both offer a **System account** option. An SSH project whose host has **no**
-    matching accounts gets a disabled hint row instead of a bare System-only list
-    (`sshAccountsHint` — pane submenu, dock, TabBar; the palette deliberately omits it: a
-    disabled row would surface as a search result) saying accounts for this host are added in
+    the nav rail's `FabMenu`; palette commands; `ProjectSwitcher` sets the **per-project
+    default**). A **local** project lists local accounts, an **SSH** project lists only accounts
+    whose `host` matches its connection; both offer a **System account** option. An SSH project
+    whose host has **no** matching accounts gets a disabled hint row instead of a bare
+    System-only list (`sshAccountsHint` — pane submenu, `FabMenu`, `ProjectSwitcher`; the
+    palette deliberately omits it: a disabled row would surface as a search result) saying
+    accounts for this host are added in
     Settings → Accounts while the project is connected — local accounts being invisible there is
     correct (their credentials aren't on the host) but read as "multi-account is broken on SSH".
   - **Remote accounts** — selection + login + env injection, plus **usage** (below); no
@@ -1720,6 +1731,36 @@ descriptor `chmod` for the managed root, token directories, and immediate single
 replace it with `lstat` followed by path `chmod` (a symlink-swap window), and never chmod a
 multiply-linked inode whose other name may be outside the staging tree.
 
+- **Chrome shell** (2026-08, replaces the old `TabBar.tsx` + `Dock.tsx`) — `TopAppBar.tsx` (64px,
+  flat `--md-surface-container`, no border/shadow) is the window's drag region and renders the
+  brand mark plus whatever the caller composes into it: the project switcher, the docked search
+  bar, the presence facepile, and the icon-button cluster (all owned by `Canvas.tsx`, which
+  already had their state/handlers — this only changed WHERE they render, not how they work).
+  `NavRail.tsx` (88px, left) replaces the old bottom `Dock.tsx`, and is a REAL flex sibling of
+  `.flow-wrap`, not a floating overlay drawn on top of it — the canvas area is genuinely
+  narrower, so `fit-view.ts` never needs to treat the rail as an obstacle. Its FAB
+  (`FabMenu.tsx`) owns node creation (same choices as the old dock `+`, same ⌘T/⌘⇧C, same
+  profile drill-in); the rail body lists the primary destinations — Canvas / Board / Files /
+  Tools / Alerts / Settings, computed inline in `Canvas.tsx` since every one of their open/close
+  states already lived there (Files opens a small anchored picker for Explorer/Source Control,
+  Tools one for the file converter/Ollama manager, reusing the same generic menu the old Help
+  button used) — and Kids mode is pinned to the bottom. `ProjectSwitcher.tsx` replaces
+  `TabBar.tsx` outright, including its `session`-duration toy-lock relock effect (which must
+  never go missing): a menu button naming the active project opens a dropdown listing every
+  project (click to switch, drag to reorder), each row expandable into a per-row **⋮** actions
+  panel carrying everything the old per-tab caret menu did (rename, appearance, colour, folder,
+  remote access, default Claude account, default permission mode, lock, close). The old floating
+  `.controls-cluster` is gone entirely: search, the presence facepile, notifications, phone
+  pairing, dictate and help all moved into the app bar; undo/redo/save became the floating
+  `.md3-canvas-actions` pill (stacked above the merged zoom `Controls` row so the two bottom-left
+  clusters don't collide), and zoom −/%/+ plus Fit view merged into React Flow's own
+  `<Controls>` (now horizontal) — every one of these still calls the exact same handlers as
+  before. `--app-bar-h` (64px) / `--nav-rail-w` (88px) / `APP_BAR_HEIGHT`
+  (`src/shared/layout.ts`, main's copy, feeding the win32 `titleBarOverlay` height) are the
+  three named sources for this geometry and move together; every floating overlay that assumed
+  the old 44px bar and no left rail (kanban, the sessions sidebar and its icon cluster, the
+  banner stack, the presence prompt) carries a matching offset in `styles.md3.css`.
+
 - **Context menus** (`components/ContextMenu.tsx`, portal, icons from `components/icons.tsx`):
   pane right-click = add nodes at cursor (terminal / Claude / sticky / open file) + select
   all + fit + **Tidy canvas** (`arrangeAllNodes` — packs every top-level node, including group
@@ -1793,10 +1834,14 @@ multiply-linked inode whose other name may be outside the staging tree.
   index (unchanged contract), but now also handles a `submenu` row: **Enter on a filtered submenu
   opens its flyout** (the same target `ArrowRight` already reaches) instead of silently no-op'ing,
   since submenu rows are keyboard-reachable through the filter for the first time.
-- **Add menu** = bottom dock (`Dock.tsx`) `+`, mirrored by the pane menu and command palette.
+- **Add menu** = the nav rail's FAB `+` (`NavRail.tsx` + `FabMenu.tsx`; the old bottom `Dock.tsx`
+  `+`, moved verbatim — same choices, same `⌘T`/`⌘⇧C`), mirrored by the pane menu and command
+  palette.
 - **Undo/redo**: debounced snapshot of the nodes array on settle (drag/edit), `pastRef`/
-  `futureRef` stacks, ⌘Z / ⌘⇧Z + dock buttons. History resets per project load; skipped
-  while typing in inputs/terminals.
+  `futureRef` stacks, ⌘Z / ⌘⇧Z + the floating `.md3-canvas-actions` cluster's buttons (moved off
+  the old bottom dock, stacked above the merged zoom `Controls` row so the two bottom-left
+  clusters don't collide). History resets per project load; skipped while typing in
+  inputs/terminals.
 - **Selection/pan**: box-select on left-drag (`SelectionMode.Partial` — touch to select);
   pan = middle-drag or trackpad two-finger (`panOnScroll`, `zoomOnScroll:false`); pinch
   zoom. Right mouse is free for the context menu.
@@ -1964,10 +2009,10 @@ worktree list`: a worktree deleted outside the app makes its group **stale** (ch
     nodes work fine). Deliberately out of scope here: both index a single root, and making them
     scope-aware is the same "which checkout am I looking at?" question Source Control already answers
     with `ScmScope` — that is the seam to reuse when it is built.
-- **Kanban view** (`components/kanban/KanbanView.tsx`; toggle is a Trello-style icon ON the
-  **active project tab** (`.tab__board-toggle`, after the name, before the caret — the view
-  belongs to the project; earlier homes were the tab-strip end, then the controls-cluster,
-  both rejected in use) plus ⌘⇧B / ⌘K): per-project
+- **Kanban view** (`components/kanban/KanbanView.tsx`; toggle is a Trello-style icon beside the
+  **project switcher's trigger button** in the top app bar (`.tab__board-toggle`, after the
+  name, before the caret — the view belongs to the project; earlier homes were the tab-strip
+  end, then the floating top-right controls cluster, both rejected in use) plus ⌘⇧B / ⌘K): per-project
   full-page SESSION board OVER the canvas — cards ARE the project's session nodes (React Flow
   type `terminal`), derived LIVE from the canvas nodes (title/color/kind/agentId), with
   RUNNING / NEEDS YOU badges + unread dot from the default `agentStatus` store; click = back to
@@ -1988,12 +2033,14 @@ worktree list`: a worktree deleted outside the app makes its group **stale** (ch
   persists in localStorage, so a render throw would boot-loop). Pure transforms in
   `renderer/lib/kanban.ts`; view choice is personal (`state/viewMode.ts`, localStorage
   `nodeterm.projectView`). The board opens with a **title strip** (`.kanban-header`: project
-  dot + name) whose height clears the floating controls-cluster icons — columns never sit under
-  them. **Cards collapse/expand on single click** (transient state); the expanded detail row
+  dot + name) tall enough to clear the floating icon clusters that still sit over the canvas
+  (`sessions-icon-cluster`, the banner stack) — columns never sit under them. **Cards
+  collapse/expand on single click** (transient state); the expanded detail row
   reuses `ContextMeter` (model + % pill, per the node header) + session chip + an ↗
   open-on-canvas button; double-click opens the node directly. Z-order contract: overlay 25 <
-  `.controls-cluster` 26 (Explorer/SC/Settings stay clickable ON the board) < `.top-banners` 27
-  (a mandatory-update card must not hide behind the board) < tabbar 30. An assigned session
+  `.top-banners` 27 (a mandatory-update card must not hide behind the board) < the nav rail 28
+  (Files/Tools/Settings live there now — the old floating `.controls-cluster` is gone; see
+  "Chrome shell" above) < the top app bar 30. An assigned session
   node shows its column as a **half-pill flush on the node's TOP edge** — see the pill sentence
   below. A card's ↗ / double-click opens the **card modal** (`components/kanban/CardModal.tsx`, body
   portal on the dialog-stack, scrim z 55, scrim/Esc close — Esc in CAPTURE phase, and an Esc
@@ -2048,28 +2095,83 @@ worktree list`: a worktree deleted outside the app makes its group **stale** (ch
   `seenShortcuts`.
 - **Shortcuts** (`ShortcutsPanel.tsx`, ? / ⌘/): shown once on first launch (`seenShortcuts`).
 - **Welcome** (`WelcomeScreen.tsx`): shown when no projects exist.
-- **Window chrome**: integrated (frameless) title bar — the Windows build reserves the
-  caption-button strip on the right (`[data-platform='win']` tab-bar padding); the tab
-  bar (`TabBar.tsx`) is the drag region with the `nodeterm` logo + a rounded pill of project
-  tabs. Cmd+M is intercepted in `main/index.ts` `before-input-event` (the live default
-  application menu would otherwise consume the chord before the page ever sees it)
-  and forwarded to the renderer via `app:toggle-markdown`; Cmd+W (`app:close-node`) and Cmd+0
-  (`app:zoom-actual-size`) are taken back from the same default menu the same way. We never call
-  `Menu.setApplicationMenu`, so Electron's DEFAULT menu is live and owns every accelerator in it —
-  a chord that collides with one never reaches the renderer at all
+- **Window chrome**: macOS gets the traffic lights integrated into the app bar
+  (`titleBarStyle: 'hiddenInset'` + a custom `trafficLightPosition: {x:16,y:26}`); Windows gets
+  `titleBarStyle: 'hidden'` + a `titleBarOverlay` colored to match the app bar's dark
+  surface-container tokens at `height: APP_BAR_HEIGHT`, so the native caption buttons overlay
+  `.md3-app-bar` instead of floating a separate strip above it — `.md3-app-bar` really is the
+  only chrome, on every platform (see "Chrome shell" above for what renders inside it, and note
+  `TabBar.tsx` is deleted — its whole job, including the drag region, moved into
+  `ProjectSwitcher`/`TopAppBar`). Cmd+M is intercepted in `main/index.ts` `before-input-event`
+  (else macOS minimizes) and forwarded to the renderer via `app:toggle-markdown`; Cmd+W
+  (`app:close-node`) and Cmd+0 (`app:zoom-actual-size`) are taken back from the same default menu
+  the same way. We never call `Menu.setApplicationMenu`, so Electron's DEFAULT menu is live and
+  owns every accelerator in it — a chord that collides with one never reaches the renderer at all
   (`main/menu-accelerator-intercepts.test.ts` pins the three we steal).
-- **Theme**: macOS dark palette as CSS tokens in `styles.css` `:root` (`--accent` = systemBlue,
-  label/separator opacities, SF font stack). Canvas background is black with dot grid. A runtime
-  accent is expanded by `lib/accentTokens.ts`, not assigned as one isolated property: hover,
-  readable text, RGB tint and every Material primary/container foreground move with it and are
-  re-derived against the resolved light/dark panel. HSV and CMYK remain picker/copy formats, while
-  the value crossing into stored/live CSS is RGBA so Chromium accepts it and alpha survives.
-  Custom-logo processing is generation-owned: an older decode/crop/fit may not overwrite a newer
-  adjustment or synchronous preset choice, and shallow `appLogo` patches retain `customImage`
-  unless the explicit Remove action is used. Preset Blob exports share the 30-second delayed URL
-  revocation path; same-turn revocation can cancel Chromium before the download starts.
+- **Two stylesheets, load order matters** (`boot.tsx` imports `fonts.css`, then `styles.css`,
+  then `styles.md3.css`). `styles.css` holds the M3 token layer (`--md-*` roles, dark on bare
+  `:root`, light under `:root[data-theme='light']`, seed `#6750A4`) plus most of the app's
+  structural CSS; `styles.md3.css` is the newer chrome and component restyle — the app bar, nav
+  rail, switcher, kanban, canvas nodes, settings, tonal overlays, and more — and wins on source
+  order wherever the two disagree. Colours come only from `var(--md-*)` tokens — no hex
+  literals, no `box-shadow` (elevation is tonal; the one exception is React Flow's own
+  connection-handle ring, which needs a shadow because a transform there breaks React Flow's own
+  centering translate). `design/v2/md3/tokens.css` is the design bundle's token contract and
+  `design/v2/md3/HANDOFF.md` the component recipes both sheets were built from; the ten
+  `design/v2/MD3 *.dc.html` prototypes are the visual reference — all DATA the app was
+  implemented from, never files the running app reads.
+- **Fonts and icons are bundled, never fetched.** Three local `@font-face`s in `fonts.css`:
+  Outfit Variable (`--font-ui`), Roboto Mono (`--font-mono`, code/terminal), and Material Symbols
+  Rounded (icons) — every one committed as woff2 under `src/renderer/assets/fonts/`, regenerated
+  from pinned devDependencies by `scripts/build-fonts.mjs`. `check-app-contract.mjs` scans for
+  any font/icon CDN reference anywhere under `src/renderer`, including in a comment, and fails —
+  the CSP's `font-src 'self' data:` would silently drop a remote `@font-face` at runtime rather
+  than merely slow it down. The icon font is subsetted to the app's 92 used glyphs by CODEPOINT,
+  not ligature (ligature subsetting pulls in every other glyph built from the same letters), so
+  `MaterialSymbol` (`components/MaterialSymbol.tsx`, names typed against the generated
+  `materialSymbols.generated.ts` codepoint map — an unknown name is a compile error, not tofu)
+  renders each glyph's raw private-use-area codepoint directly, never the ligature name as text.
+- **Theme**: M3 dark is the default; light lives under `:root[data-theme='light']`. `--accent`
+  now resolves to `var(--md-primary)` rather than a literal systemBlue (see the accent-default
+  migration below). Canvas background is black with dot grid. A runtime accent is expanded by
+  `lib/accentTokens.ts`, not assigned as one isolated property: hover, readable text, RGB tint
+  and every Material primary/container foreground move with it and are re-derived against the
+  resolved light/dark panel. HSV and CMYK remain picker/copy formats, while the value crossing
+  into stored/live CSS is RGBA so Chromium accepts it and alpha survives. Custom-logo processing
+  is generation-owned: an older decode/crop/fit may not overwrite a newer adjustment or
+  synchronous preset choice, and shallow `appLogo` patches retain `customImage` unless the
+  explicit Remove action is used. Preset Blob exports share the 30-second delayed URL revocation
+  path; same-turn revocation can cancel Chromium before the download starts.
+  **The default accent migrated from systemBlue (`#0a84ff`) to the M3 baseline seed
+  (`DEFAULT_ACCENT`, `#6750a4` in `shared/types.ts`) — this changes the appearance of every
+  existing install, once.** `core/settings-store.ts`'s `mergeSettings` always persists the WHOLE
+  settings object, so an existing `settings.json` already has `#0a84ff` written into it
+  byte-for-byte — indistinguishable, on read, from a user who deliberately picked systemBlue. The
+  migration treats that old literal default as "never touched" and carries it forward
+  (`if (saved?.accent === '#0a84ff') merged.accent = DEFAULT_ACCENT`); a user who really did want
+  blue loses that choice once and can re-pick it from `ColorPicker.tsx`'s `QUICK_SWATCHES`
+  (`#0a84ff` is kept, one step behind the new `#6750a4` default, never deleted).
+  `accentTokens.ts`'s default-family bail-out (skip inline overrides and let the stylesheet's own
+  light/dark defaults win) compares against `DEFAULT_ACCENT` for the same reason — comparing
+  against the old literal would make every fresh install compute and inject an inline
+  purple-on-purple override for the colour the stylesheet already ships.
 
-## Remote access (phone relay) — free, not Pro
+## Remote access (Docker-hosted relay) — free, not Pro
+
+The interactive surface is **Docker host**. It retains the existing relay transport, single-use
+offer, E2EE handshake, and mutual SAS approval. Hosting has a free one-connection floor and no
+entitlement requirement. The pairing request omits legacy entitlement metadata when none exists;
+it never invents a credential. Packaged builds use the configured relay, while development still
+requires an explicit `NODETERM_RELAY_URL`.
+
+`main/remote/docker-host-runtime.ts` is the execution boundary. It discovers contexts with
+`docker context ls --format {{json .}}`, validates bounded settings at point of use, and starts one
+labelled random-name container per host seat using `execFile` argument arrays. The container is
+never privileged, receives no Docker socket, drops all capabilities, has no-new-privileges,
+read-only root, bounded CPU/memory/PIDs, a tmpfs `/tmp`, no network by default, and a read-only
+project bind by default. `RelayPtyCreateSource.docker` makes the trusted relay PTY authorizer replace
+all host/profile execution with `docker exec -i <owned-container> /bin/sh`. Revoke, socket close,
+stop, cancellation, and failed startup remove only that task-owned container; bind data survives.
 
 **LAN pairing is encrypted or it does not start.** `pairing-service.ts` loads the host's persistent
 NaCl key before binding the one-shot HTTP listener and advertises that public key as `hostKey` in
@@ -2320,16 +2422,13 @@ Voice-to-text input captured via microphone, turned into terminal text via on-de
 ## Packaging & auto-update
 
 Built with **electron-builder** (config in the `package.json` `build` block: appId
-`com.nodeterm.app`, productName `nodeterm`, Squirrel.Windows + Linux AppImage/deb targets,
-`asarUnpack` node-pty, output `dist/`). The macOS dmg/zip targets, entitlements, and the mac
-`npm run dist`/`release` scripts were deleted with the macOS desktop target (2026-08); the
-packaged-relay verification the darwin-only afterPack hook used to perform now runs against the
-flat `resources/` layout on Windows and Linux (`scripts/after-pack.cjs` — note it normalizes
-`asar.listPackage`'s host-separator entries before comparing). The app icon is generated from the
-nodeterm mark by `scripts/make-icon.mjs` (sharp → `build/icon.png`, 1024², gitignored —
-regenerated by `make-icon` — plus the committed seven-frame `build/icon.ico`). Scripts:
-`npm run make-icon`, `npm run dist:win`, `npm run dist:linux`. The Linux update feed is hosted
-separately; Windows consumes Squirrel assets attached to the project's stable GitHub Release.
+`com.nodeterm.app`, productName `nodeterm`, mac dmg+zip for arm64 **and** x64, `asarUnpack`
+node-pty, output `dist/`). The app icon is generated from the nodeterm mark by
+`scripts/make-icon.mjs` (sharp → `build/icon.png`, 1024², gitignored — regenerated by
+`make-icon`); electron-builder derives the `.icns`. Scripts: `npm run make-icon`, `npm run dist`
+(local **unsigned** arm64 `.dmg` smoke test). Production release signing/notarization remains
+outside this repo. The macOS/Linux update feed is hosted separately; Windows consumes Squirrel
+assets attached to the project's stable GitHub Release.
 
 **Windows** (the active delivery target for CI): `build.win` targets Squirrel.Windows
 (`build.squirrelWindows`), signing permanently disabled — no `CSC_LINK`/`CSC_KEY_PASSWORD` is
@@ -2389,9 +2488,10 @@ not an installation barrier. The manual `main`-only stable publisher is the chan
 `--squirrel-firstrun` launch delays the first automatic check so Update.exe can release its
 package lock. An unreachable or 404 feed never implies that no update exists: automatic checks
 stay out of the way and retry normally, while an explicit user check reports the error without
-blocking the installed app. **Linux deliberately retains `electron-updater`** and its
-existing determinate/manual-download behavior. Server Edition and the mobile companion have no
-Squirrel install and are explicitly not applicable to this desktop-only updater.
+blocking the installed app. **macOS/Linux deliberately retain `electron-updater`** and their
+existing determinate/manual-download behavior; macOS silent self-install still requires a
+signed+notarized build. Server Edition and the mobile companion have no Squirrel install and are
+explicitly not applicable to this desktop-only updater.
 
 The installed Windows `0.3.0` build cannot discover `0.4.0`: its app-side updater expected NSIS
 metadata at the old generic feed, while the published Windows artifacts are Squirrel
@@ -2475,8 +2575,8 @@ redirect the stack or bypass the loopback decision.
 **main process** calls `GET https://api.nodeterm.dev/v1/check?version=&os=&channel=stable` (so the
 renderer CSP stays `'self'`) on launch + every 6h, cached 5 min, returning `{ messages, update }`.
 Exposed split over two IPC handlers: `announcements.fetch()` → `messages`, `appUpdatePolicy` →
-`update`. `components/AnnouncementBanner.tsx` (stacked above `UpdateCard` under the tab bar in a
-`.top-banners` column) shows the newest message the user hasn't dismissed (dismissed `id`s persist
+`update`. `components/AnnouncementBanner.tsx` (stacked above `UpdateCard` under the top app bar in
+a `.top-banners` column) shows the newest message the user hasn't dismissed (dismissed `id`s persist
 in `localStorage`); `update.mandatory`/`minSupported` flips `UpdateCard` into a blocking required-
 update state. The call no-ops under `DO_NOT_TRACK`/`NODETERM_TELEMETRY_DISABLED` or in unpackaged
 builds (unless `NODETERM_API_BASE` targets a local server). Schema example:
@@ -2752,8 +2852,7 @@ the overlap tests exercise the resulting race.
 - **Three surfaces — design every feature for all of them.** nodeterm now ships on three
   fronts, and a feature is not "done" until you've decided how it behaves on each (even if
   the decision is "not applicable here"):
-  1. **Desktop** (Electron, Windows — the delivery target; Linux packages are also built) — the
-     primary app (`src/main` + `src/renderer` via the preload).
+  1. **Desktop** (Electron) — the primary app (`src/main` + `src/renderer` via the preload).
   2. **Server Edition** (Linux, browser) — `src/server` + the `src/renderer/bridge` shim (see
      the `src/server/` bullet above and docs/SERVER.md).
   3. **Mobile companion** — _nodeterm mobile_, a **separate PRIVATE repo** (`nodeterm-ios`)
@@ -2788,5 +2887,5 @@ the overlap tests exercise the resulting race.
   - **Consider whether the mobile companion should surface the feature** over its
     transport/protocol. It's a different repo and stack (Swift), so this is usually a
     follow-up note rather than same-PR work — but flag it so it isn't forgotten.
-    When a change is genuinely desktop-only (native menus, auto-update, OS credential storage),
-    say so; the point is to make the call consciously, not to leave the other surfaces to rot.
+    When a change is genuinely desktop-only (native menus, auto-update, Keychain), say so; the
+    point is to make the call consciously, not to leave the other surfaces to rot.

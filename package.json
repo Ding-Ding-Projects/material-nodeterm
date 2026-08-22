@@ -14,7 +14,12 @@
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
-    "build": "node scripts/check-vocabulary.mjs && electron-vite build && npm run host:build",
+    "build": "node scripts/check-vocabulary.mjs && node scripts/check-changelog.mjs && node scripts/check-docs-bundle.mjs && node scripts/check-uh-inventory.mjs && npm run build:app",
+    "build:app": "electron-vite build && npm run host:build",
+    "build-changelog": "node scripts/build-changelog.mjs",
+    "check-changelog": "node scripts/check-changelog.mjs",
+    "build-docs": "node scripts/build-docs-bundle.mjs",
+    "check-docs": "node scripts/check-docs-bundle.mjs",
     "preview": "electron-vite preview",
     "start": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
@@ -32,10 +37,16 @@
     "make-social": "node scripts/make-social.mjs",
     "count-lines": "node scripts/count-lines.mjs",
     "check:app-contract": "node scripts/check-app-contract.mjs",
+    "check:mirror": "node scripts/check-instruction-mirror.mjs",
+    "check:uh-inventory": "node scripts/check-uh-inventory.mjs",
+    "check:site-contract": "node scripts/check-site-contract.mjs",
+    "dist": "npm run make-icon && npm run build && electron-builder --mac --arm64 --publish never -c.mac.identity=null -c.mac.notarize=false -c.extraMetadata.nodeTermUpdates=disabled",
     "dist:linux": "npm run make-icon && npm run build && electron-builder --linux --publish never -c.extraMetadata.nodeTermUpdates=disabled",
     "dist:win": "node scripts/windows-installer.mjs build",
+    "release": "npm run make-icon && npm run build && sh -c 'electron-builder --mac --arm64 --x64 --publish never; s=$?; npm run rebuild; exit $s'",
     "postinstall": "node scripts/patch-node-pty.mjs && electron-rebuild -f -w node-pty,smart-whisper",
-    "design:compare": "electron design/compare"
+    "design:compare": "electron design/compare",
+    "design:v2": "electron design/v2-preview"
   },
   "build": {
     "appId": "com.nodeterm.app",
@@ -72,6 +83,54 @@
       {
         "from": "dist/.pack-resources/codex-relay.js",
         "to": "codex-relay.js"
+      },
+      {
+        "from": "host.bat",
+        "to": "server-deployment/host.bat"
+      },
+      {
+        "from": "docker-compose.yml",
+        "to": "server-deployment/docker-compose.yml"
+      },
+      {
+        "from": "Dockerfile",
+        "to": "server-deployment/Dockerfile"
+      },
+      {
+        "from": ".dockerignore",
+        "to": "server-deployment/.dockerignore"
+      },
+      {
+        "from": "dist/.pack-resources/server-deployment/package.json",
+        "to": "server-deployment/package.json"
+      },
+      {
+        "from": "package-lock.json",
+        "to": "server-deployment/package-lock.json"
+      },
+      {
+        "from": "electron.vite.config.ts",
+        "to": "server-deployment/electron.vite.config.ts"
+      },
+      {
+        "from": "tsconfig.json",
+        "to": "server-deployment/tsconfig.json"
+      },
+      {
+        "from": "tsconfig.node.json",
+        "to": "server-deployment/tsconfig.node.json"
+      },
+      {
+        "from": "tsconfig.web.json",
+        "to": "server-deployment/tsconfig.web.json"
+      },
+      {
+        "from": "deploy",
+        "to": "server-deployment/deploy"
+      },
+      {
+        "from": "src",
+        "to": "server-deployment/src"
       }
     ],
     "linux": {
@@ -92,6 +151,44 @@
       "category": "Development",
       "icon": "build/icon.png",
       "maintainer": "enes <eneskirca@gmail.com>"
+    },
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "icon": "build/icon.png",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "notarize": true,
+      "extraResources": [
+        {
+          "from": "resources/bin/tmux",
+          "to": "bin/tmux"
+        },
+        {
+          "from": "resources/licenses",
+          "to": "licenses"
+        }
+      ],
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "nodeterm uses the microphone so you can dictate into your terminals."
+      },
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ]
     },
     "win": {
       "icon": "build/icon.ico",
@@ -134,6 +231,7 @@
     "qrcode": "^1.5.4",
     "smart-whisper": "^0.8.1",
     "tweetnacl": "^1.0.3",
+    "unzipper": "^0.12.5",
     "ws": "^8.21.3",
     "zustand": "^4.5.7"
   },
@@ -144,11 +242,14 @@
   },
   "devDependencies": {
     "@electron/rebuild": "^4.2.0",
+    "@fontsource-variable/outfit": "5.3.0",
+    "@fontsource/roboto-mono": "5.3.0",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^26.2.0",
     "@types/qrcode": "^1.5.6",
     "@types/react": "^18.3.31",
     "@types/react-dom": "^18.3.7",
+    "@types/unzipper": "^0.10.11",
     "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^4.7.0",
     "@xterm/addon-fit": "^0.11.0",
@@ -163,6 +264,7 @@
     "esbuild": "^0.28.2",
     "js-yaml": "^4.3.1",
     "jsdom": "^30.0.1",
+    "material-symbols": "0.46.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "resedit": "^1.7.2",
@@ -170,7 +272,6 @@
     "sharp": "^0.35.3",
     "tailwindcss": "^4.3.1",
     "typescript": "^7.0.2",
-    "unzipper": "^0.12.5",
     "vite": "^7.3.6",
     "vitest": "^4.1.10"
   }

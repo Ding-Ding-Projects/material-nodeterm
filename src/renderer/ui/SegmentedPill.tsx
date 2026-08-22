@@ -1,30 +1,10 @@
-export function SegmentedPill<T extends string>({
-  value,
-  options,
-  onChange,
-  ariaLabel
-}: {
-  value: T
-  options: { value: T; label: string }[]
-  onChange: (v: T) => void
-  ariaLabel?: string
-}): React.JSX.Element {
-  return (
-    <div className="seg-pill" role="radiogroup" aria-label={ariaLabel}>
-      {options.map((opt) => (
-        <button
-          key={opt.value}
-          type="button"
-          role="radio"
-          aria-checked={opt.value === value}
-          className={`seg-pill-opt${opt.value === value ? ' active' : ''}`}
-          onClick={() => {
-            if (opt.value !== value) onChange(opt.value)
-          }}
-        >
-          {opt.label}
-        </button>
-      ))}
-    </div>
-  )
-}
+/**
+ * Re-exports `ui/md3/SegmentedButton` under this component's historical name. Its prop shape
+ * (`{ value, options, onChange, ariaLabel }`, generic over `T extends string`) is byte-identical
+ * to what this file used to declare itself, so there is no call site to migrate — every existing
+ * `<SegmentedPill .../>` usage now renders the MD3 primitive (40px pill, `--md-outline` border,
+ * `secondary-container` selected segment) instead of the old `.seg-pill`/`.seg-pill-opt` classes
+ * in `styles.css`, which stayed on the app's pre-MD3 `--tint-rgb` palette rather than the token
+ * set the rest of the app moved onto.
+ */
+export { SegmentedButton as SegmentedPill } from './md3/SegmentedButton'

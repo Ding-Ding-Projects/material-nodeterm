@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useDialogStack } from './dialog-stack'
-import { useEntitlement } from '../state/entitlement'
 import { useProjects } from '../state/projects'
 import { hostShareOptions } from '../lib/relayHostShare'
 import { Button } from '@renderer/ui/Button'
@@ -13,20 +12,18 @@ import { Select } from '@renderer/ui/Select'
  * Remote access dialog — a self-contained popup reachable from the project (tab) caret menu, so
  * remote access isn't buried in Settings. Mirrors the Settings RemoteSection flow over the NEW
  * relay tunnel (`relayHost` / `relayClient`):
- *  - Host "Allow remote access" (Pro): start → show the single-use pairing offer + copy/stop.
- *  - Non-Pro: hosting is gated — show the upgrade popup (Upgrade → Stripe checkout).
+ *  - Host "Allow remote access" (free): start → show the single-use pairing offer + copy/stop.
  *  - Client "Connect to a host" (free): paste an offer → Canvas runs the SAS-compare + open-tab flow.
  * It deliberately does NOT import RemoteSection (which the Settings redesign owns).
  */
 export function RemoteAccessDialog({ onClose }: { onClose: () => void }): React.JSX.Element {
-  const isPremium = useEntitlement((s) => s.isPremium)
-  const upgrade = useEntitlement((s) => s.upgrade)
   const projects = useProjects((s) => s.projects)
   const activeProjectId = useProjects((s) => s.activeProjectId)
   const [hostOffer, setHostOffer] = useState('')
   const [hostBusy, setHostBusy] = useState(false)
   const [error, setError] = useState('')
   const [clientCode, setClientCode] = useState('')
+  const [dockerStatus, setDockerStatus] = useState('Checking Docker…')
 
   // Which project this host shares with the joiner. Default = the active project (hoisted first
   // by hostShareOptions); the user can pick any other OPEN project before minting the offer.
@@ -51,6 +48,14 @@ export function RemoteAccessDialog({ onClose }: { onClose: () => void }): React.
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [isTop, onClose])
+
+  useEffect(() => {
+    let live = true
+    window.nodeTerminal.relayHost.dockerContexts()
+      .then((contexts) => { if (live) setDockerStatus(contexts.length ? 'Docker is ready.' : 'No Docker context was found. Open Settings → Docker host to retry.') })
+      .catch((error) => { if (live) setDockerStatus(`Docker is unavailable: ${error instanceof Error ? error.message : String(error)}`) })
+    return () => { live = false }
+  }, [])
 
   // HOST side — the NEW relay tunnel (`relayHost`). `start()` returns the single-use pairing offer;
   // a connecting peer's approval + canvas sync are handled globally by Canvas (`relayHost.onPeerPending`
@@ -94,17 +99,17 @@ export function RemoteAccessDialog({ onClose }: { onClose: () => void }): React.
           </button>
         </div>
         <p className="remote-dialog__desc">
-          Open terminals that run on another machine you own — end-to-end encrypted over the relay.
-          Hosting (sharing this machine) is Pro; connecting to a host is free.
+          Open terminals on a Docker host you own — end-to-end encrypted over the relay. Hosting
+          and connecting are free.
         </p>
 
         <h4 className="remote-dialog__head4">Allow remote access</h4>
-        {isPremium ? (
-          hostOffer ? (
+        <p className="remote-dialog__hint" role="status">{dockerStatus}</p>
+        {hostOffer ? (
             <div className="remote-dialog__block">
               <p className="remote-dialog__hint">
                 Sharing <strong>{sharedName || 'this project'}</strong> — the joiner will see this
-                project and can run commands on this Mac. Share this pairing code (single use):
+                project and can run commands on this Docker host. Share this pairing code (single use):
               </p>
               <Input
                 className="w-full"
@@ -137,23 +142,14 @@ export function RemoteAccessDialog({ onClose }: { onClose: () => void }): React.
               ) : (
                 <p className="remote-dialog__hint">
                   Sharing <strong>{sharedName || 'this project'}</strong> — the joiner sees this
-                  project and can run commands on this Mac.
+                  project and can run commands on this Docker host.
                 </p>
               )}
               <Button disabled={hostBusy} onClick={() => void startHosting()}>
                 {hostBusy ? 'Starting…' : 'Allow remote access'}
               </Button>
             </div>
-          )
-        ) : (
-          <div className="remote-dialog__block">
-            <p className="remote-dialog__hint">
-              Sharing this machine requires nodeterm Pro. Connecting to a host you were given a code
-              for is free.
-            </p>
-            <Button onClick={() => void upgrade()}>Upgrade to Pro — $10/mo</Button>
-          </div>
-        )}
+          )}
 
         <h4 className="remote-dialog__head4">Connect to a host</h4>
         <div className="remote-dialog__block">

@@ -284,7 +284,17 @@ describe('task ownership and dynamic UI identity', () => {
   })
 
   it('rejects stale, ambiguous, or non-Chromium PID/HWND matches', () => {
-    const good = { handle: 101, process_id: 44, class: 'Chrome_WidgetWin_1', width: 1000, height: 700 }
+    // The fixture carries a title because the real application window has one. Without it this
+    // fixture was describing a window the app never produces, which is how the selector shipped
+    // with a filter that could not tell the app window from its own same-PID helper.
+    const good = {
+      handle: 101,
+      process_id: 44,
+      class: 'Chrome_WidgetWin_1',
+      width: 1000,
+      height: 700,
+      title: 'nodeterm',
+    }
     expect(core.selectHeadlessWindow({ ok: true, windows: [good] }, 44)).toMatchObject({ hwnd: 101, pid: 44 })
     expect(() => core.selectHeadlessWindow({ ok: true, windows: [good] }, 45)).toThrow(/found 0/)
     expect(() => core.selectHeadlessWindow({ ok: true, windows: [good, { ...good, handle: 102 }] }, 44)).toThrow(
@@ -293,6 +303,27 @@ describe('task ownership and dynamic UI identity', () => {
     expect(() =>
       core.selectHeadlessWindow({ ok: true, windows: [{ ...good, class: 'Notepad' }] }, 44)
     ).toThrow(/found 0/)
+
+    // The case that actually happened, transcribed from a real headless enumeration of this app's
+    // packaged build: one PID, thirteen top-level windows, and TWO that pass on class and size —
+    // the app window, and a same-PID Chrome_WidgetWin_0 at 1440x753 with no title. Before the
+    // title requirement this threw "found 2" and every acceptance run died at launch.
+    const helper = { handle: 102, process_id: 44, class: 'Chrome_WidgetWin_0', width: 1440, height: 753, title: '' }
+    expect(core.selectHeadlessWindow({ ok: true, windows: [good, helper] }, 44)).toMatchObject({
+      hwnd: 101,
+      title: 'nodeterm',
+    })
+    // Order must not decide it. A filter that took the first match would pass the line above and
+    // still drive the wrong window whenever the enumeration came back the other way round.
+    expect(core.selectHeadlessWindow({ ok: true, windows: [helper, good] }, 44)).toMatchObject({ hwnd: 101 })
+    // Whitespace is not a title.
+    expect(() =>
+      core.selectHeadlessWindow({ ok: true, windows: [{ ...good, title: '   ' }] }, 44)
+    ).toThrow(/found 0/)
+    // Two genuinely titled windows stay a loud failure rather than a coin toss.
+    expect(() =>
+      core.selectHeadlessWindow({ ok: true, windows: [good, { ...helper, title: 'nodeterm' }] }, 44)
+    ).toThrow(/found 2/)
 
     const candidate = path.resolve('C:\\artifact path\\nodeterm.exe')
     expect(core.validateProcessIdentity({ exists: true, pid: 44, executable: candidate, parentPid: 1 }, 44, candidate)).toMatchObject({
@@ -514,7 +545,10 @@ describe('session-host continuity and cleanup precedence', () => {
     mainPid: 100,
     hwnd: 1000,
     sessionHostPid: 200,
-    sessionHostStartedAt: '2026-08-16T00:00:00.000Z',
+    // A NUMBER, because that is what the app actually writes — the harness was corrected to
+    // validate the real shape (see the comment in validateContinuity); this fixture was the stale
+    // half of that change and failed every run against it.
+    sessionHostStartedAt: 1_755_302_400_000,
     sessionHostProtocolVersion: '1',
     terminalProcessPid: 300,
     marker: 'NT_CONTINUITY:fixture',
@@ -556,6 +590,102 @@ describe('session-host continuity and cleanup precedence', () => {
         throw new Error('cleanup-only failure')
       })
     ).rejects.toThrow(/cleanup-only failure/)
+  })
+
+  it('drives palette commands that the app actually offers', () => {
+    // The driver types a label into the command palette and clicks the row that matches it
+    // EXACTLY. That makes an ordinary UI rename a silent breakage of a harness nobody runs on
+    // every commit — and it already happened: the palette command became 'Open Settings' while
+    // the driver still asked for 'Settings', so every packaged run died fifteen seconds in with a
+    // timeout that read like the app had failed to boot. It cost a full build-and-run to find.
+    //
+    // Cheap static agreement instead. Anchored to the real declarations, so a rename on either
+    // side turns this red in a second rather than after a twenty-minute package.
+    // The real checkout, not the temp fixture root the rest of this file builds.
+    const root = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/(?=[A-Za-z]:)/u, '')), '../..')
+    const driver = fs.readFileSync(path.join(root, 'scripts/windows-profile-packaged-driver.mjs'), 'utf8')
+    const canvas = fs.readFileSync(path.join(root, 'src/renderer/canvas/Canvas.tsx'), 'utf8')
+
+    expect(driver).toMatch(/^\s*await openPaletteCommand\('Open Settings'\)/m)
+    expect(canvas).toMatch(/^\s*label: 'Open Settings',/m)
+
+    // The other label the driver drives is a template the app fills in per profile. Assert the
+    // stem rather than a rendered instance, since the profile name is machine-dependent.
+    expect(driver).toContain('`New terminal — ${profile.label}`')
+    expect(canvas).toContain("'New terminal — {profile}'")
+
+    // And the button it clicks to open the palette at all. The 2026-08 chrome rework moved this
+    // cluster into the app bar; a future move would strand every palette-driven step.
+    expect(driver).toContain(`.cluster-search[title="Command palette"]`)
+    expect(canvas).toContain('cluster-search')
+  })
+
+  it('never asks the page for a DOM node when it wants a value', () => {
+    // `evaluate` serializes by value, so an expression whose final term is `querySelector(...)`
+    // returns a node CDP cannot serialize: "Object reference chain is too long", on every poll.
+    // `waitFor` catches that as a transient (a reload really does invalidate the context), so the
+    // bad expression does not fail fast — it burns its whole timeout and is then reported as
+    // "did not become true", which reads as the app never reaching the state. One line like this
+    // cost a full package-and-run to diagnose.
+    const root = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/(?=[A-Za-z]:)/u, '')), '../..')
+    const driver = fs.readFileSync(path.join(root, 'scripts/windows-profile-packaged-driver.mjs'), 'utf8')
+
+    const offenders: string[] = []
+    driver.split(/\r?\n/).forEach((line, index) => {
+      const match = /return\s+(.+?);\s*\}\)\(\)/u.exec(line)
+      if (!match) return
+      const returned = match[1].trim()
+      // A coercion wrapping the WHOLE expression settles it, and checking only the final `&&`
+      // term does not see one — the first version of this guard flagged `!!(a && b.querySelector(c))`
+      // as an offender, i.e. it went red on the very fix it exists to enforce.
+      if (/^(?:!!|Boolean\()/u.test(returned)) return
+      const finalTerm = returned.split('&&').pop()!.trim()
+      // A comparison, a length, an explicit coercion — all fine. A bare node lookup is not.
+      if (!/querySelector\(|querySelectorAll\(|\.find\(/u.test(finalTerm)) return
+      if (/===|!==|>|<|\.length|!!|Boolean\(/u.test(finalTerm)) return
+      offenders.push(`line ${index + 1}: ${finalTerm}`)
+    })
+
+    expect(offenders, 'expressions must end in a value, not a DOM node — wrap them in !!( )').toEqual([])
+
+    // And the fast-fail itself, so the diagnosis stays one run rather than two.
+    expect(driver).toMatch(/^\s*if \(\/reference chain is too long\/i\.test/m)
+  })
+
+  it('never synthesises a drag without saying which button is held', () => {
+    // CDP's `button` names the button that CHANGED; `buttons` is the bitmask of what is HELD. A
+    // mouseMoved carrying `button: 'left'` but no `buttons` arrives at the page as
+    // `event.buttons === 0` — a hover — and d3-drag, which React Flow's NodeResizer is built on,
+    // ignores it. The press and release land, nothing drags, and the failure reads as the app
+    // refusing to resize rather than as a malformed input event.
+    const root = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/(?=[A-Za-z]:)/u, '')), '../..')
+    const driver = fs.readFileSync(path.join(root, 'scripts/windows-profile-packaged-driver.mjs'), 'utf8')
+
+    // Scan whole CALLS, not lines: these object literals are routinely wrapped across several
+    // lines, and a line-based version of this guard flagged the very fix it exists to enforce.
+    const offenders: string[] = []
+    const call = /cdp\.send\(\s*'Input\.dispatchMouseEvent'\s*,\s*\{([\s\S]*?)\}\s*\)/gu
+    let match: RegExpExecArray | null
+    while ((match = call.exec(driver)) !== null) {
+      const body = match[1]
+      // Widened from moves to presses on evidence, not on principle. The first version of this
+      // guard deliberately exempted clicks, reasoning that they "demonstrably work in this
+      // driver" — and they did, for every palette button, because an ordinary DOM button fires on
+      // `click` and does not care what `buttons` says. A React Flow node does care: it is selected
+      // through d3-drag, whose pointerdown handler reads the mask, so a press without it selected
+      // nothing and the run failed two steps later. The exemption was the wrong call and this is
+      // what corrects it.
+      if (!/type:\s*'mouse(Moved|Pressed)'/u.test(body)) continue
+      if (/button:\s*'none'/u.test(body)) continue
+      if (/buttons:/u.test(body)) continue
+      const line = driver.slice(0, match.index).split(/\r?\n/).length
+      offenders.push(`line ${line}: ${body.replace(/\s+/gu, ' ').trim().slice(0, 110)}`)
+    }
+
+    expect(
+      offenders,
+      'a mouseMoved naming a real button must also state `buttons` — without it the page sees event.buttons === 0 and no drag happens',
+    ).toEqual([])
   })
 
   it('never promotes final evidence until cleanup has succeeded', async () => {

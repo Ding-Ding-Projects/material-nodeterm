@@ -14,15 +14,6 @@ import { ENTITLEMENT_PUBLIC_KEY } from './entitlement-key'
 
 const API_BASE = process.env.NODETERM_API_BASE || 'https://api.nodeterm.dev'
 
-// Stripe Payment Link (live) for the base Pro subscription ($10/mo, includes the 3 free seats).
-// The app appends ?client_reference_id=<deviceId> so the webhook binds the purchase to this device
-// → keyless ("device-bound") activation. NODETERM_CHECKOUT_URL overrides it (e.g. the test link).
-const CHECKOUT_URL = process.env.NODETERM_CHECKOUT_URL || 'https://buy.stripe.com/eVq00lbeY0qNbwz90w7EQ02'
-
-// Add-seats checkout: the live quantity-based Payment Link for buying seats BEYOND the free 3 (the
-// buyer picks the total; extra seats are $5/seat/mo). NODETERM_SEATS_CHECKOUT_URL overrides it.
-const SEATS_CHECKOUT_URL = process.env.NODETERM_SEATS_CHECKOUT_URL || 'https://buy.stripe.com/28E9AV6YI8Xj303a4A7EQ03'
-
 // Tokens are short-lived (the server mints 7-day entitlements) and the app is designed to
 // stay open for days, so a launch-only refresh would let the token expire mid-session and
 // silently drop Pro. Re-refresh on the same 6h cadence as the check/update polls.
@@ -207,36 +198,9 @@ export function initLicense(onChange?: () => void): void {
 
   platform().handle(IPC.licenseStatus, () => statusFrom(load().token))
 
-  // Device-bound upgrade: open Stripe checkout (carrying our deviceId), then poll the status
-  // endpoint until the webhook has bound + minted the entitlement. Status arrives via broadcast.
-  let polling = false
-  platform().handle(IPC.licenseUpgrade, async (target?: 'pro' | 'seats') => {
-    // 'seats' opens the add-seats (quantity) link; anything else opens base Pro. Both carry the
-    // deviceId so the same device-bound webhook binds either purchase to this machine.
-    const base = target === 'seats' ? SEATS_CHECKOUT_URL : CHECKOUT_URL
-    const url = `${base}${base.includes('?') ? '&' : '?'}client_reference_id=${encodeURIComponent(deviceId)}`
-    await platform().openExternal(url)
-    if (!polling) {
-      polling = true
-      const deadline = Date.now() + 6 * 60 * 1000 // poll up to 6 min after opening checkout
-      const poll = async (): Promise<void> => {
-        if (Date.now() > deadline) {
-          polling = false
-          return
-        }
-        const r = await getJson(`/v1/license/status?deviceId=${encodeURIComponent(deviceId)}`)
-        if (r.active && r.token) {
-          await save({ ...load(), token: r.token })
-          broadcast(statusFrom(r.token))
-          polling = false
-          return
-        }
-        setTimeout(() => void poll(), 4000)
-      }
-      setTimeout(() => void poll(), 4000)
-    }
-    return statusFrom(load().token)
-  })
+  // Compatibility-only endpoint for older renderers. Purchasing is no longer a product action:
+  // never open checkout, mint a paid seat, or start a payment-status poll.
+  platform().handle(IPC.licenseUpgrade, async () => statusFrom(load().token))
 
   platform().handle(IPC.licenseActivate, async (key: string) => {
     const r = await call('/v1/license/activate', { key: String(key).trim(), deviceId })

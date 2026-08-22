@@ -14,6 +14,7 @@ import process from 'node:process'
 import { createRequire } from 'node:module'
 import { parseArgs } from 'node:util'
 import WebSocket from 'ws'
+import { renameAtomicSync } from './lib/rename-atomic.mjs'
 
 const require = createRequire(import.meta.url)
 const {
@@ -198,6 +199,17 @@ async function evaluate(expression) {
   return result.result?.value
 }
 
+/**
+ * Poll `expression` until it yields something truthy.
+ *
+ * The expression must evaluate to a VALUE, not a DOM node. `evaluate` serializes by value, and a
+ * node's reference graph is unserializable — CDP answers `Object reference chain is too long`,
+ * every time, forever. Because that throw is caught below as a transient, an expression ending in
+ * `querySelector(...)` does not fail fast: it spins for the whole timeout and is then reported as
+ * `did not become true`, which reads as the app never reaching the state rather than as a bug in
+ * the question being asked. One such expression cost a full packaged run. End predicates with
+ * `!!(...)`.
+ */
 async function waitFor(expression, description, timeoutMs = 15_000) {
   const deadline = Date.now() + timeoutMs
   let lastError
@@ -206,12 +218,25 @@ async function waitFor(expression, description, timeoutMs = 15_000) {
       const value = await evaluate(expression)
       if (value) return value
     } catch (error) {
-      // A reload destroys the current execution context. Retry against the replacement context.
+      // A reload destroys the current execution context, and retrying against the replacement is
+      // the whole reason this is caught. But an unserializable RESULT is not transient — it will
+      // fail identically on every poll — so surface it immediately instead of spending the
+      // timeout proving it again and then blaming the application.
+      if (/reference chain is too long/i.test(String(error?.message ?? ''))) {
+        throw new Error(
+          `${typeof description === 'function' ? '(evidence pending)' : description}: the expression returned a DOM node rather than a value ` +
+            `(${error.message}). Wrap the predicate in !!(...).`
+        )
+      }
       lastError = error
     }
     await sleep(100)
   }
-  throw new Error(`${description} did not become true within ${timeoutMs}ms${lastError ? `: ${lastError.message}` : '.'}`)
+  // `description` may be a function — including an async one — so a failure can report live
+  // screen state gathered at the moment it gave up rather than a fixed string decided before
+  // the wait even started.
+  const detail = typeof description === 'function' ? await description() : description
+  throw new Error(`${detail} did not become true within ${timeoutMs}ms${lastError ? `: ${lastError.message}` : '.'}`)
 }
 
 async function rendererPromise(expression, description, timeoutMs = 30_000) {
@@ -248,10 +273,20 @@ async function key(key, code, virtualKey, modifiers = 0) {
   }
 }
 
+/** CDP bitmask for a held button, matching `MouseEvent.buttons`. */
+const BUTTONS_MASK = { left: 1, right: 2, middle: 4, none: 0 }
+
 async function clickPoint(x, y, button = 'left') {
-  await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y, button: 'none' })
-  await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button, clickCount: 1 })
-  await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button, clickCount: 1 })
+  // `buttons` matters for a CLICK too, not just a drag, and its absence here is why selecting a
+  // React Flow node did nothing. An ordinary DOM button fires on the `click` event and does not
+  // care; a React Flow node is selected through d3-drag, whose pointerdown handler checks which
+  // buttons are held. Without the mask the press arrives as `buttons === 0` — nothing held — so
+  // no drag starts and no selection happens, while every palette click in this file kept working
+  // and made the omission look harmless.
+  const mask = BUTTONS_MASK[button] ?? 1
+  await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y, button: 'none', buttons: 0 })
+  await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button, buttons: mask, clickCount: 1 })
+  await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button, buttons: 0, clickCount: 1 })
 }
 
 async function elementPoint(expression, description) {
@@ -288,13 +323,28 @@ async function openPaletteCommand(label) {
   await waitFor(`!!document.querySelector('.palette__input')`, 'command palette')
   await setInput('.palette__input', label)
   const labelJson = JSON.stringify(label)
-  await clickElement(
-    `Array.from(document.querySelectorAll('.palette__item')).find(function(row){
-      var label=row.querySelector('.palette__label');
-      return label && label.textContent.trim()===${labelJson} && row.getAttribute('aria-disabled')!=='true';
-    })`,
-    `enabled palette command ${label}`
-  )
+  try {
+    await clickElement(
+      `Array.from(document.querySelectorAll('.palette__item')).find(function(row){
+        var label=row.querySelector('.palette__label');
+        return label && label.textContent.trim()===${labelJson} && row.getAttribute('aria-disabled')!=='true';
+      })`,
+      `enabled palette command ${label}`
+    )
+  } catch (error) {
+    // Say what WAS on offer. A palette label is a user-facing string that gets renamed by ordinary
+    // UI work, and the bare timeout ("did not become true within 15000ms") is indistinguishable
+    // from the app failing to boot — it cost a whole packaged run to learn that `Settings` had
+    // become `Open Settings`. Listing the rows turns the next rename into a one-run diagnosis.
+    const offered = await evaluate(
+      `Array.from(document.querySelectorAll('.palette__item')).map(function(row){
+         var l=row.querySelector('.palette__label');
+         return (l ? l.textContent.trim() : '(no label)') + (row.getAttribute('aria-disabled')==='true' ? ' [disabled]' : '');
+       })`
+    ).catch(() => null)
+    const seen = Array.isArray(offered) && offered.length > 0 ? offered.join(', ') : '(none)'
+    throw new Error(`${error.message} — palette offered: ${seen}`)
+  }
 }
 
 async function closeTransientUi() {
@@ -394,15 +444,40 @@ async function ptyCaptureUntil(nodeId, predicate, description, timeoutMs = 30_00
     }
     await sleep(150)
   }
-  throw new Error(`${description} did not appear in PTY ${nodeId}. Tail: ${JSON.stringify(last.slice(-1200))}`)
+  throw new Error(`${typeof description === 'function' ? description() : description} did not appear in PTY ${nodeId}. Tail: ${JSON.stringify(last.slice(-1200))}`)
 }
 
-async function sendPtyText(nodeId, text) {
-  const sent = await rendererPromise(
-    `window.nodeTerminal.pty.sendText(${JSON.stringify(nodeId)},${JSON.stringify(text)},{enter:false})`,
-    `send text to PTY ${nodeId}`
+/**
+ * Type into a node's session, waiting for the session to exist first.
+ *
+ * `.term-node__xterm` in the DOM proves the node MOUNTED, not that its persistent session has
+ * finished attaching — the gap is acknowledged in this file's own capture loop ("The node can
+ * mount before its persistent session finishes attaching"). `sendText` addresses the session by
+ * NAME, so during that gap it finds nothing and answers false, exactly as it answers false for a
+ * locked node: one bare boolean for every refusal, which is right for the product and gives a
+ * caller nothing to distinguish "not yet" from "never".
+ *
+ * Measured: sending the instant the xterm appears returns false and fails the run; the identical
+ * call against the same build a few seconds later returns true.
+ *
+ * So retry, but BOUNDED. A permanent refusal still fails — it just costs the deadline first — and
+ * the message says both things that could have caused it rather than only the one that did not.
+ */
+async function sendPtyText(nodeId, text, timeoutMs = 30_000) {
+  const deadline = Date.now() + timeoutMs
+  let sent = false
+  while (Date.now() < deadline) {
+    sent = await rendererPromise(
+      `window.nodeTerminal.pty.sendText(${JSON.stringify(nodeId)},${JSON.stringify(text)},{enter:false})`,
+      `send text to PTY ${nodeId}`
+    )
+    if (sent === true) return
+    await sleep(250)
+  }
+  throw new Error(
+    `PTY ${nodeId} rejected acceptance input for ${timeoutMs}ms — its session never became ` +
+      `writable (no live session by that name, or a write gate refused it).`
   )
-  if (sent !== true) throw new Error(`PTY ${nodeId} rejected acceptance input.`)
 }
 
 async function waitForPtyDestroyed(nodeId, timeoutMs = 30_000) {
@@ -484,23 +559,31 @@ async function createProfileNode(profile, catalog, onNodeDiscovered) {
     var c=n&&n.querySelector('.term-profile-chip'); return c&&c.textContent.trim()===${JSON.stringify(profile.label)};})()`,
     `profile label ${profile.label}`)
   await waitFor(`(function(){var n=document.querySelector(${JSON.stringify(nodeSelector)});
-    return n && !n.querySelector('.term-node__closed') && n.querySelector('.term-node__xterm');})()`,
+    return !!(n && !n.querySelector('.term-node__closed') && n.querySelector('.term-node__xterm'));})()`,
     `running terminal for ${profile.id}`, 30_000)
 
   const probe = buildProfileProbe(profile, catalog, { token: runId, customDialect })
   await sendPtyText(nodeId, probe.command)
   let parsed
+  // The probe demands FOUR independent verifications and the timeout named NONE of them, so a
+  // git-bash run satisfying marker, unicode and cwd but not size reported the identical "did not
+  // appear in PTY" as one where nothing ran at all. That cost an hour of guessing, with only a
+  // base64 tail of the echoed command as evidence. Recording the last decode makes the failure
+  // say which leg is red — a measurement instead of a guess.
+  let lastVerdict = 'no decode succeeded'
   const screen = await ptyCaptureUntil(
     nodeId,
     (value) => {
       try {
         parsed = parseProfileProbeOutput(probe, value, projectDirectory)
+        lastVerdict = `marker=${parsed.markerVerified} unicode=${parsed.unicodeVerified} cwd=${parsed.cwdVerified} size=${parsed.sizeVerified} cwdSeen=${JSON.stringify(parsed.cwd)}`
         return parsed.markerVerified && parsed.unicodeVerified && parsed.cwdVerified && parsed.sizeVerified
-      } catch {
+      } catch (decodeError) {
+        lastVerdict = `decode failed: ${decodeError && decodeError.message ? decodeError.message : String(decodeError)}`
         return false
       }
     },
-    `profile probe for ${profile.id}`
+    () => `profile probe for ${profile.id} [${lastVerdict}]`
   )
   parsed = parseProfileProbeOutput(probe, screen, projectDirectory)
   return {
@@ -521,37 +604,203 @@ async function createProfileNode(profile, catalog, onNodeDiscovered) {
 
 async function resizeRepresentative(result, profile, catalog) {
   const selector = `.react-flow__node[data-id=${JSON.stringify(result.nodeId)}]`
-  await clickElement(`document.querySelector(${JSON.stringify(selector)})`, 'representative terminal node')
+  // Click the HEADER, not the node. `clickElement` aims at an element's centre, and the centre of
+  // a terminal node is its body — measured on a live packaged build, `elementFromPoint` there
+  // returns `DIV.term-hover-guard nowheel`, the overlay that exists precisely so a click in the
+  // body does not behave like a click on the node. The header is the node's designated drag
+  // handle and is what a person clicks to select it.
+  //
+  // Selection is not cosmetic here: React Flow renders NO resize controls on an unselected node.
+  // Measured on the same build — `.react-flow__resize-control.handle.bottom.right` is absent
+  // before selection and present after, and a header-click → drag then grew the node from
+  // 640x440 to 760x520, exactly the requested delta.
+  // Click a point that is provably the HEADER ITSELF, not one of its children.
+  //
+  // `elementPoint` aims at an element's centre, and a terminal node's header centre is not bare
+  // header — the strip is packed with controls (collapse, colour, folder-drag, the click-to-rename
+  // title, search, close), and several call stopPropagation, so React Flow never sees the click
+  // and the node is never selected. Aiming at the header and hitting a button looks identical to
+  // aiming correctly, which is why this failed twice with two different-looking causes.
+  //
+  // So ask the PAGE which point is really the header: walk candidate offsets and take the first
+  // whose elementFromPoint is the header element (or a non-interactive descendant of it).
+  const headerSelector = `${selector} .term-node__header`
+  // Bring the node ON SCREEN first, through the app's own Fit view command.
+  //
+  // This is why two plausible fixes in a row changed nothing. `elementFromPoint` returns null for
+  // coordinates outside the viewport, so every click computed from an off-screen node's rect was
+  // dispatched into empty space — indistinguishable, from the outside, from a click that landed on
+  // the wrong element. The probe's own diagnostic settled it: it reported "every sampled point was
+  // interactive" with an EMPTY list of sampled elements, i.e. it never saw an element at all.
+  //
+  // The canvas pans; nothing had ever scrolled this node into view. Fit view is the control a user
+  // would reach for, and driving it keeps this on the app's own surface rather than reaching past
+  // the UI to set a viewport transform.
+  await openPaletteCommand('Fit view')
+  await sleep(900)
+
+  // Sweep the whole header, both axes, and REPORT what it saw when nothing qualifies.
+  //
+  // A single mid-line sweep found no bare-header point at all: at that height the strip is wall
+  // to wall controls. The header IS the node's drag handle, so a draggable pixel must exist —
+  // it just is not where the first guess looked. Rather than move the guess again, this returns
+  // the elements it rejected, so one failed run names the answer instead of costing another.
+  const headerProbe = await evaluate(
+    `(function(){
+       var h=document.querySelector(${JSON.stringify(headerSelector)});
+       if(!h) return {ok:false, why:'header not found'};
+       var r=h.getBoundingClientRect();
+       if(!(r.width>0 && r.height>0)) return {ok:false, why:'header has no box'};
+       var seen=[];
+       for (var yf=0.15; yf<=0.85; yf+=0.2) {
+         var y=Math.round(r.top + r.height*yf);
+         for (var xf=0.02; xf<=0.98; xf+=0.04) {
+           var x=Math.round(r.left + r.width*xf);
+           var el=document.elementFromPoint(x,y);
+           if(!el) continue;
+           if(el===h) return {ok:true, x:x, y:y, hit:'header'};
+           if(h.contains(el) && !el.closest('button,input,a,[role=button],.nodrag')) {
+             return {ok:true, x:x, y:y, hit:(el.tagName+'.'+String(el.className||'').slice(0,40))};
+           }
+           var tag=el.tagName+'.'+String(el.className||'').slice(0,40);
+           if(seen.indexOf(tag)<0 && seen.length<14) seen.push(tag);
+         }
+       }
+       var onScreen = r.right>0 && r.bottom>0 && r.left<window.innerWidth && r.top<window.innerHeight;
+       return {ok:false, why: onScreen ? 'every sampled point was interactive'
+         : 'the header is OFF SCREEN, so elementFromPoint sees nothing there',
+         rect:{left:Math.round(r.left),top:Math.round(r.top),width:Math.round(r.width),height:Math.round(r.height)},
+         viewport:{w:window.innerWidth,h:window.innerHeight}, seen:seen};
+     })()`
+  )
+  if (!headerProbe || headerProbe.ok !== true) {
+    throw new Error(
+      `No draggable point on the node header: ${headerProbe ? headerProbe.why : 'probe failed'}` +
+        (headerProbe && headerProbe.rect
+          ? ` — header at ${headerProbe.rect.left},${headerProbe.rect.top} ${headerProbe.rect.width}x${headerProbe.rect.height}`
+            + ` in a ${headerProbe.viewport.w}x${headerProbe.viewport.h} viewport`
+          : '') +
+        (headerProbe && headerProbe.seen && headerProbe.seen.length
+          ? ` — elements sampled: ${headerProbe.seen.join(', ')}` : '')
+    )
+  }
+  const headerPoint = { x: headerProbe.x, y: headerProbe.y }
+  await clickPoint(headerPoint.x, headerPoint.y)
+  try {
+    await waitFor(`!!document.querySelector(${JSON.stringify(`${selector}.selected`)})`, 'representative node selected')
+  } catch (error) {
+    // Report what was actually under the pointer. "did not become true" cannot distinguish a
+    // mis-aimed click from a node that refuses selection, and those need opposite fixes.
+    const at = await evaluate(
+      `(function(){
+         var el=document.elementFromPoint(${headerPoint.x},${headerPoint.y});
+         var n=document.querySelector(${JSON.stringify(selector)});
+         return {
+           at: el ? (el.tagName+'.'+String(el.className||'').slice(0,60)) : null,
+           anySelected: !!document.querySelector('.react-flow__node.selected'),
+           nodeClass: n ? String(n.className||'').slice(0,90) : null
+         };
+       })()`
+    ).catch(() => null)
+    throw new Error(
+      `${error.message} — clicked (${headerPoint.x},${headerPoint.y}); ` +
+        (at ? `elementFromPoint=${at.at}, anyNodeSelected=${at.anySelected}, nodeClass="${at.nodeClass}"` : 'point unreadable')
+    )
+  }
   const handleSelector = `${selector} .react-flow__resize-control.handle.bottom.right`
   const before = await waitFor(`(function(){var n=document.querySelector(${JSON.stringify(selector)});
     if(!n)return null;var r=n.getBoundingClientRect();return {width:r.width,height:r.height};})()`, 'node dimensions')
   const point = await elementPoint(`document.querySelector(${JSON.stringify(handleSelector)})`, 'terminal resize handle')
-  await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: point.x, y: point.y, button: 'left', clickCount: 1 })
-  await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: point.x + 120, y: point.y + 80, button: 'left' })
-  await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: point.x + 120, y: point.y + 80, button: 'left', clickCount: 1 })
-  await waitFor(`(function(){var n=document.querySelector(${JSON.stringify(selector)});if(!n)return false;
-    var r=n.getBoundingClientRect();return r.width>${before.width + 60} && r.height>${before.height + 30};})()`,
-    'resized terminal dimensions')
-  const resizedProbe = buildProfileProbe(profile, catalog, { token: `${runId}-resized`, customDialect })
-  await sendPtyText(result.nodeId, resizedProbe.command)
-  let resized
-  const screen = await ptyCaptureUntil(
-    result.nodeId,
-    (value) => {
-      try {
-        resized = parseProfileProbeOutput(resizedProbe, value, projectDirectory)
-        return resized.markerVerified && resized.cwdVerified && resized.sizeVerified
-      } catch {
-        return false
-      }
-    },
-    'resized PTY report'
-  )
-  resized = parseProfileProbeOutput(resizedProbe, screen, projectDirectory)
-  const next = resized.size
-  if (!next) throw new Error('Resized PTY did not report its new size.')
-  if (result.size && next.cols === result.size.cols && next.rows === result.size.rows) {
-    throw new Error('Node resize did not change the child PTY size.')
+  // `buttons: 1` is the load-bearing field, and its absence is why this drag did nothing.
+  //
+  // CDP's `button` names the button that CHANGED; `buttons` is the bitmask of what is currently
+  // HELD. A mouseMoved without it arrives at the page with `event.buttons === 0` — a hover. The
+  // resize control is React Flow's NodeResizer, which is d3-drag underneath, and d3-drag ignores a
+  // move with no button held. So the press and release landed, nothing dragged, and the run failed
+  // on "resized terminal dimensions did not become true" as though the app had refused to resize.
+  //
+  // Intermediate steps rather than one jump: a drag implementation is entitled to expect a motion
+  // sequence, and a single teleport is the shape least likely to be honoured. Hover first, exactly
+  // as `clickPoint` does, so the handle is the element under the pointer when the press arrives.
+  await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: point.x, y: point.y, button: 'none', buttons: 0 })
+  await cdp.send('Input.dispatchMouseEvent', {
+    type: 'mousePressed', x: point.x, y: point.y, button: 'left', buttons: 1, clickCount: 1
+  })
+  for (const step of [0.25, 0.5, 0.75, 1]) {
+    await cdp.send('Input.dispatchMouseEvent', {
+      type: 'mouseMoved',
+      x: point.x + 120 * step,
+      y: point.y + 80 * step,
+      button: 'left',
+      buttons: 1
+    })
+    await sleep(30)
+  }
+  await cdp.send('Input.dispatchMouseEvent', {
+    type: 'mouseReleased', x: point.x + 120, y: point.y + 80, button: 'left', buttons: 0, clickCount: 1
+  })
+  try {
+    await waitFor(`(function(){var n=document.querySelector(${JSON.stringify(selector)});if(!n)return false;
+      var r=n.getBoundingClientRect();return r.width>${before.width + 60} && r.height>${before.height + 30};})()`,
+      'resized terminal dimensions')
+  } catch (error) {
+    // Report the measurement, not just the timeout. "did not become true" is the same sentence
+    // whether the drag did nothing, moved the node instead of resizing it, or grew it slightly
+    // less than the threshold — three different bugs with three different fixes, and the bare
+    // message distinguishes none of them.
+    const after = await evaluate(`(function(){var n=document.querySelector(${JSON.stringify(selector)});
+      if(!n)return null;var r=n.getBoundingClientRect();
+      return {x:Math.round(r.x),y:Math.round(r.y),width:Math.round(r.width),height:Math.round(r.height)};})()`).catch(() => null)
+    throw new Error(
+      `${error.message} — before ${before.width}x${before.height}, after ` +
+        `${after ? `${after.width}x${after.height} at ${after.x},${after.y}` : '(unreadable)'}, ` +
+        `needed >${before.width + 60}x>${before.height + 30}`
+    )
+  }
+  // The DOM node is bigger; the CHILD is not, yet. Nothing here is synchronous: a ResizeObserver
+  // notices the element, the fit addon recomputes cols/rows, and only then does a resize reach the
+  // pty. Asking the shell its size the instant the drag ends reports the size it had BEFORE — and
+  // the run then failed with "Node resize did not change the child PTY size", which is a true
+  // sentence about a false conclusion: the resize was fine, the question was early.
+  //
+  // So ask again until the answer changes. Each attempt carries its OWN token, because a repeated
+  // token would let the parser match the first attempt's still-on-screen output and conclude
+  // nothing had changed no matter how long we waited.
+  let next = null
+  let resized = null
+  const resizeDeadline = Date.now() + 30_000
+  for (let attempt = 1; Date.now() < resizeDeadline; attempt += 1) {
+    const resizedProbe = buildProfileProbe(profile, catalog, {
+      token: `${runId}-resized-${attempt}`,
+      customDialect
+    })
+    await sendPtyText(result.nodeId, resizedProbe.command)
+    let parsedAttempt
+    const screen = await ptyCaptureUntil(
+      result.nodeId,
+      (value) => {
+        try {
+          parsedAttempt = parseProfileProbeOutput(resizedProbe, value, projectDirectory)
+          return parsedAttempt.markerVerified && parsedAttempt.cwdVerified && parsedAttempt.sizeVerified
+        } catch {
+          return false
+        }
+      },
+      `resized PTY report (attempt ${attempt})`
+    )
+    resized = parseProfileProbeOutput(resizedProbe, screen, projectDirectory)
+    next = resized.size
+    if (!next) throw new Error('Resized PTY did not report its new size.')
+    if (!result.size || next.cols !== result.size.cols || next.rows !== result.size.rows) break
+    next = null
+    await sleep(1_000)
+  }
+  if (!next) {
+    throw new Error(
+      `Node resize did not change the child PTY size within 30000ms — still ` +
+        `${result.size ? `${result.size.cols}x${result.size.rows}` : '(unknown)'} after the node grew ` +
+        `to ${before.width + 120}x${before.height + 80}.`
+    )
   }
   result.resizeVerified = true
   result.resizedSize = next
@@ -595,9 +844,18 @@ function readSessionHostState(userDataDir) {
 
 function writeState(state) {
   fs.mkdirSync(path.dirname(stateFile), { recursive: true })
-  const temporary = `${stateFile}.${process.pid}.tmp`
-  fs.writeFileSync(temporary, `${JSON.stringify(state, null, 2)}\n`)
-  fs.renameSync(temporary, stateFile)
+  const temporary = `${stateFile}.${crypto.randomUUID()}.tmp`
+  try {
+    fs.writeFileSync(temporary, `${JSON.stringify(state, null, 2)}\n`, { flag: 'wx' })
+    renameAtomicSync(temporary, stateFile)
+  } catch (error) {
+    try {
+      fs.rmSync(temporary, { force: true })
+    } catch {
+      // Retain the primary write failure.
+    }
+    throw error
+  }
 }
 
 async function startContinuity(profileResult) {
@@ -612,7 +870,10 @@ async function startContinuity(profileResult) {
 }
 
 async function openProfileSettingsAndCapture(captures, catalog) {
-  await openPaletteCommand('Settings')
+  // 'Open Settings', not 'Settings'. The palette command is built in Canvas.tsx's `buildCommands`
+  // and the nav-rail DESTINATION beside it is the one labelled plain 'Settings' — two different
+  // surfaces, one of which the palette does not search. Verified against the shipped list.
+  await openPaletteCommand('Open Settings')
   await waitFor(`!!document.querySelector('[class*="settings"]')`, 'Settings')
   await clickElement(
     `Array.from(document.querySelectorAll('button')).find(function(button){return button.textContent.trim()==='Shell'})`,
@@ -671,7 +932,27 @@ async function chooseRestartProfile(nodeId, label) {
     })`,
     `restart profile ${label}`
   )
-  await waitFor(`!!document.querySelector('.destgate[role="alertdialog"]')`, 'restart destructive gate')
+  // Same lesson as the profile probe: a bare "did not become true" names nothing, and the
+  // handler's early-return path raises a NOTIFICATION rather than the gate — so the evidence
+  // that distinguishes "click missed" from "handler refused" is already on screen and was
+  // simply never read. Report it instead of guessing at a fifth hypothesis.
+  const restartGateEvidence = async () => {
+    try {
+      return String(
+        await rendererPromise(
+          `JSON.stringify({gate:!!document.querySelector('.destgate'),`
+            + `submenuOpen:!!document.querySelector('.ctx-submenu'),`
+            + `menuOpen:!!document.querySelector('.ctx-menu'),`
+            + `toasts:Array.from(document.querySelectorAll('.toast,.notif-row')).map(function(t){return t.textContent.trim().slice(0,180)}),`
+            + `submenuRows:Array.from(document.querySelectorAll('.ctx-submenu .ctx-item')).map(function(r){var l=r.querySelector('.ctx-item__label');return (l?l.textContent.trim():'?')+(r.getAttribute('aria-disabled')==='true'?' [disabled]':'')})})`,
+          'restart gate evidence'
+        )
+      )
+    } catch (error) {
+      return `evidence unavailable: ${error && error.message ? error.message : String(error)}`
+    }
+  }
+  await waitFor(`!!document.querySelector('.destgate[role="alertdialog"]')`, async () => `restart destructive gate (screen: ${await restartGateEvidence()})`)
 }
 
 async function restartWithProfile(state, captures) {
@@ -759,6 +1040,12 @@ async function bootstrap() {
     userDataDir,
     projectDirectory,
     catalog,
+    // Node ids journaled the INSTANT the renderer reports them, before any probe can fail.
+    // `state.profiles` only ever gains a node that completed every probe, so a node created for a
+    // profile whose probe then throws would never appear there — and its session would outlive the
+    // run, which is the one thing a Windows session host is designed to do. `cleanup()` reads both
+    // lists through `journaledNodeIds`, so a half-created node is still destroyed.
+    pendingNodeIds: [],
     profiles: [],
     captures: []
   }
@@ -766,7 +1053,16 @@ async function bootstrap() {
   await openProfileSettingsAndCapture(state.captures, catalog)
   writeState(state)
   for (const profile of catalog.filter((candidate) => candidate.available)) {
-    const result = await createProfileNode(profile, catalog)
+    // The third argument is not optional, and omitting it was a real defect rather than a style
+    // choice: `createProfileNode` awaits `onNodeDiscovered(nodeId)` the moment the renderer hands
+    // back the new node id, so calling it with two arguments threw
+    // `TypeError: onNodeDiscovered is not a function` on the FIRST profile — two captures into a
+    // five-capture run, every time, since the refactor that introduced the parameter. The journal
+    // write is the whole point of the callback: it happens before any probe can fail.
+    const result = await createProfileNode(profile, catalog, async (nodeId) => {
+      state.pendingNodeIds.push(nodeId)
+      writeState(state)
+    })
     state.profiles.push(result)
     writeState(state)
     if (state.profiles.length === 1) {
@@ -900,15 +1196,15 @@ async function cleanup() {
     ) {
       throw new Error('Cleanup state provenance does not match this invocation.')
     }
-    const ids = [...new Set((state.profiles ?? []).map((profile) => profile.nodeId))]
-    for (const nodeId of ids) {
-      if (typeof nodeId !== 'string' || nodeId === '') throw new Error('Cleanup journal contains an invalid node id.')
-      await rendererPromise(
-        `(function(){window.nodeTerminal.pty.destroy(${JSON.stringify(nodeId)},{everySocket:true}); return true;})()`,
-        `destroy journaled session ${nodeId}`
-      )
-      destroyed += 1
-    }
+    // `journaledNodeIds` unions pendingNodeIds with the completed profiles and validates every
+    // entry, so a node created for a profile whose probe later threw is destroyed too. Deriving
+    // the list from `state.profiles` alone — as this did — leaks exactly the sessions a failed run
+    // creates, and a Windows session host outlives the app on purpose, so the leak is permanent.
+    const ids = journaledNodeIds(state)
+    // `destroyJournaledSessions` is the intended implementation and was defined but never called.
+    // It does not trust the one-way `destroy` cast: it waits for send AND capture to report the
+    // session absent, then removes the nodes from the workspace.
+    destroyed = await destroyJournaledSessions(ids)
     await sleep(500)
   }
   await closeWindow()

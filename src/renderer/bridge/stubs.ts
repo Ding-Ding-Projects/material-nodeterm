@@ -38,6 +38,31 @@ export function unsupported(name: string): Promise<never> {
 /** A subscription stub: ignores its listener, returns a no-op unsubscribe. */
 export const noopUnsub: () => () => void = () => () => {}
 
+/**
+ * `kidsMode.verifyPin` is optional on the shared API (see shared/types.ts): it is a member the
+ * desktop preload implements for real, but it predates the Server Edition's ws-bridge `kidsMode`
+ * object and a relay/older bridge can simply lack it. `kidsMode` itself is APP-GLOBAL and never
+ * routed through this file's stub object (every session composer spreads the LOCAL preload for it
+ * — see relay-api.ts), so there is no `kidsMode` key here for `verifyPin` to join.
+ *
+ * This is the fail-closed stand-in for the surfaces that reach it instead: a bridge with no
+ * `verifyPin` at all must answer "cannot verify" rather than silently letting a caller assume the
+ * check passed (or, worse, throwing past a caller that only guards against a rejection). A grown-up
+ * screen a stranger can walk into by pointing a stale bridge at the PIN pad is worse than one that
+ * is occasionally unreachable on an older build.
+ */
+export async function verifyKidsModePin(
+  api: Pick<NodeTerminalApi['kidsMode'], 'verifyPin'>,
+  pin: string
+): Promise<boolean> {
+  if (typeof api.verifyPin !== 'function') return false
+  try {
+    return await api.verifyPin(pin)
+  } catch {
+    return false
+  }
+}
+
 // Per-member helpers. Each returned function ignores its arguments, so it is assignable to the
 // real (more-specific) member signature while `satisfies` still enforces the member exists.
 /** Promise member that is unavailable on the server. */
@@ -111,6 +136,7 @@ export function buildStubApi(): Omit<
   NodeTerminalApi,
   | 'pty'
   | 'workspace'
+  | 'serverDeployment'
   | 'settings'
   | 'schoolMode'
   | 'kidsMode'
@@ -141,6 +167,7 @@ export function buildStubApi(): Omit<
   // userDataDir), so a stub here would make the whole feature silently do nothing in the browser.
   | 'toylock'
   | 'authenticator'
+  | 'passwordManager'
 > {
   const api = {
     ssh: {
@@ -201,6 +228,16 @@ export function buildStubApi(): Omit<
         window.open(url, '_blank', 'noopener')
       }
     },
+    // "Escape to widget" opens a real OS window (`main/canvas-widget-window.ts`) — there is no
+    // such thing in a browser tab, so every call is a documented, coded refusal rather than a
+    // silent no-op the UI would have no way to explain.
+    canvasWidget: {
+      open: U('canvasWidget.open'),
+      close: U('canvasWidget.close'),
+      setAlwaysOnTop: U('canvasWidget.setAlwaysOnTop'),
+      getState: U('canvasWidget.getState'),
+      onStateChanged: noopUnsub
+    },
     media: {
       allow: U('media.allow'),
       // Deliberate graceful degrade: the remote-media cache lives on the DESKTOP shell (scp over
@@ -213,7 +250,16 @@ export function buildStubApi(): Omit<
     browser: {
       register: noop,
       unregister: noop,
-      onBrowserNewWindow: noopUnsub
+      onBrowserNewWindow: noopUnsub,
+      // Electron-only: the Server Edition/relay run inside a real browser tab, which has no
+      // Chromium extension host for the page to load an unpacked extension into — there is no
+      // graceful "sort of works" here, so every member refuses rather than pretending.
+      extensions: {
+        list: U('browser.extensions.list'),
+        pickDir: U('browser.extensions.pickDir'),
+        add: U('browser.extensions.add'),
+        remove: U('browser.extensions.remove')
+      }
     },
     updates: {
       onAvailable: noopUnsub,
@@ -374,6 +420,7 @@ export function buildStubApi(): Omit<
     // the affordance. Because those never yield a live connection, the gate/frame void members are
     // inert no-ops (there is no connectionId to act on) and the subscriptions are no-op unsubscribes.
     relayHost: {
+      dockerContexts: U('relayHost.dockerContexts'),
       start: U('relayHost.start'),
       invite: U('relayHost.invite'),
       stop: U('relayHost.stop'),
@@ -394,6 +441,11 @@ export function buildStubApi(): Omit<
       disconnect: noop
     },
     handoff: {
+      // `handoff:build` is registered in src/main only — no core service, no server handler — so
+      // there is nothing here to bridge to. Same explicit capability bit as `pairing` below: the
+      // transfer affordance is hidden on this bit (renderer/lib/transferGates.ts), and the
+      // rejecting method stays as the second boundary for any caller that ignores it.
+      supported: false,
       build: U('handoff.build')
     },
     pairing: {
@@ -509,17 +561,38 @@ export function buildStubApi(): Omit<
       chatSend: U('ollama.chatSend'),
       chatStop: U('ollama.chatStop'),
       onChatStream: noopUnsub
+    },
+    minecraft: {
+      versions: U('minecraft.versions'),
+      status: U('minecraft.status'),
+      create: U('minecraft.create'),
+      acceptEula: U('minecraft.acceptEula'),
+      start: U('minecraft.start'),
+      stop: U('minecraft.stop'),
+      sendCommand: U('minecraft.sendCommand'),
+      remove: U('minecraft.remove'),
+      recentConsole: U('minecraft.recentConsole'),
+      readProperties: U('minecraft.readProperties'),
+      writeProperties: U('minecraft.writeProperties'),
+      readPlayerLists: U('minecraft.readPlayerLists'),
+      listBackups: U('minecraft.listBackups'),
+      createBackup: U('minecraft.createBackup'),
+      restoreBackup: U('minecraft.restoreBackup'),
+      deleteBackup: U('minecraft.deleteBackup'),
+      onEvent: noopUnsub
     }
   } satisfies Omit<
     NodeTerminalApi,
     | 'pty'
     | 'workspace'
+    | 'serverDeployment'
     | 'settings'
     | 'schoolMode'
   | 'kidsMode'
     | 'scheduledSettings'
     | 'toylock'
     | 'authenticator'
+    | 'passwordManager'
     | 'fs'
     | 'git'
     | 'files'

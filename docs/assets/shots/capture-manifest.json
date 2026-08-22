@@ -1,6 +1,6 @@
 {
-  "commit": "b5815d21381bb8b578a09b2f7e4c1a98a815b325",
-  "capturedAt": "2026-08-15T20:20:39.692Z",
+  "commit": "74cdac7fb8b1e3031166295ab302011f3a0a2d58",
+  "capturedAt": "2026-08-20T17:13:18.513Z",
   "method": "Electron + CDP Page.captureScreenshot against the built out/ artifact, 1600x1000",
   "viewport": {
     "width": 1600,
@@ -11,41 +11,123 @@
     {
       "id": "app-01-launch",
       "title": "App at launch",
-      "bytes": 44539,
+      "bytes": 50482,
       "hadOpener": false
     },
     {
       "id": "app-02-settings",
       "title": "Settings",
-      "bytes": 115685,
+      "bytes": 112656,
       "hadOpener": true
     },
     {
       "id": "app-03-palette",
       "title": "Command palette",
-      "bytes": 70685,
+      "bytes": 73643,
       "hadOpener": true
     },
     {
       "id": "app-04-canvas",
       "title": "Canvas",
-      "bytes": 44539,
+      "bytes": 50482,
       "hadOpener": false
     },
     {
       "id": "app-05-kanban",
       "title": "Kanban board",
-      "bytes": 29714,
+      "bytes": 33546,
       "hadOpener": true
     },
     {
       "id": "app-settings-kids-mode",
       "title": "Settings — Kids mode",
-      "bytes": 86649,
+      "bytes": 103665,
+      "hadOpener": true
+    },
+    {
+      "id": "app-06-history",
+      "title": "History — session memory, settings history, changelog",
+      "bytes": 39254,
+      "hadOpener": true
+    },
+    {
+      "id": "app-status-surface",
+      "title": "Status surface",
+      "bytes": 108730,
+      "hadOpener": true
+    },
+    {
+      "id": "app-settings-language",
+      "title": "Settings — Language",
+      "bytes": 76226,
+      "hadOpener": true
+    },
+    {
+      "id": "app-settings-narrator",
+      "title": "Settings — Narrator",
+      "bytes": 85133,
+      "hadOpener": true
+    },
+    {
+      "id": "app-settings-schedule",
+      "title": "Settings — Schedule",
+      "bytes": 72903,
+      "hadOpener": true
+    },
+    {
+      "id": "app-settings-app-identity",
+      "title": "Settings — App name & logo",
+      "bytes": 82542,
+      "hadOpener": true
+    },
+    {
+      "id": "app-settings-appearance-editor",
+      "title": "Settings — Appearance editor",
+      "bytes": 87221,
+      "hadOpener": true
+    },
+    {
+      "id": "app-adhd-modes",
+      "title": "Settings — ADHD modes",
+      "bytes": 84388,
+      "hadOpener": true
+    },
+    {
+      "id": "app-windows-terminal-profiles",
+      "title": "Windows terminal profiles — the picker",
+      "bytes": 64112,
+      "hadOpener": true
+    },
+    {
+      "id": "app-windows-terminal-profile-availability",
+      "title": "Windows terminal profiles — detected availability",
+      "bytes": 96344,
+      "hadOpener": true
+    },
+    {
+      "id": "app-kids-home",
+      "title": "Kids mode — Home",
+      "bytes": 75880,
+      "hadOpener": true
+    },
+    {
+      "id": "app-kids-gate",
+      "title": "Kids mode — the grown-up gate",
+      "bytes": 26074,
+      "hadOpener": true
+    },
+    {
+      "id": "app-kids-parent",
+      "title": "Kids mode — the grown-up screen",
+      "bytes": 63281,
       "hadOpener": true
     }
   ],
   "skipped": [
+    {
+      "id": "app-windows-terminal-profile-node",
+      "why": "the spawned Windows session host outlives the app by design and holds the disposable capture sandbox open"
+    },
     {
       "id": "app-agent-running",
       "why": "needs a real agent CLI session"

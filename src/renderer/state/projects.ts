@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type { AgentPermissionMode } from '@shared/agents/config'
 import type {
   BridgeLink,
+  BrowserProfile,
   CanvasMutation,
   CanvasNodeState,
   Project,
@@ -67,10 +68,14 @@ interface ProjectsState {
   /** Sets (or clears, with undefined = fall back to the global setting) the project's default
    *  permission mode for new Claude terminal (CLI) sessions. Chat nodes are not covered. */
   setProjectDefaultPermissionMode(id: string, mode: AgentPermissionMode | undefined): void
+  setProjectSettingsOverrides(id: string, overrides: Project['settingsOverrides']): void
   /** Raises the project's dino high score (never lowers it). */
   setDinoHighScore(id: string, score: number): void
   /** Replaces the project's kanban board (the UI computes the next board via lib/kanban). */
   setProjectKanban(id: string, kanban: ProjectKanban): void
+  /** Replaces the project's browser-profile list (create/rename/remove all funnel through this).
+   *  See `BrowserProfile` in @shared/types and `shared/browser-profiles.ts`. */
+  setProjectBrowserProfiles(id: string, browserProfiles: BrowserProfile[]): void
   /** Writes the serialized canvas (nodes + viewport + bridge links + control ropes) back into a project. */
   commitCanvas(
     id: string,
@@ -347,6 +352,16 @@ export const useProjects = create<ProjectsState>((set, get) => ({
     }))
   },
 
+  setProjectSettingsOverrides(id, settingsOverrides) {
+    set((s) => ({
+      projects: s.projects.map((p) =>
+        p.id === id
+          ? { ...p, ...(settingsOverrides && Object.keys(settingsOverrides).length > 0 ? { settingsOverrides } : { settingsOverrides: undefined }) }
+          : p
+      )
+    }))
+  },
+
   setDinoHighScore(id, score) {
     // Raise-only: a stale/lower report (e.g. a second dino node) must never shrink the record.
     set((s) => ({
@@ -359,6 +374,12 @@ export const useProjects = create<ProjectsState>((set, get) => ({
   setProjectKanban(id, kanban) {
     set((s) => ({
       projects: s.projects.map((p) => (p.id === id ? { ...p, kanban } : p))
+    }))
+  },
+
+  setProjectBrowserProfiles(id, browserProfiles) {
+    set((s) => ({
+      projects: s.projects.map((p) => (p.id === id ? { ...p, browserProfiles } : p))
     }))
   },
 

@@ -140,6 +140,37 @@ const indexText = readText(INDEX_FILE) || ''
 
 const FEATURES = [
   {
+    // Every user-facing app AND every user-facing page carries the accommodations — a docs site
+    // that describes one while not offering it is the exact gap that rule closes.
+    id: 'adhd-modes',
+    label: 'ADHD modes',
+    file: 'site/app/features/adhd-modes.js',
+    exportName: 'registerAdhdModes',
+    contentChecks: [
+      // Five independent switches, never a master toggle.
+      ['site/app/features/adhd-modes.js', 'adhd-toggle-'],
+      // Focus dims and never hides — asserted on the stylesheet, where it would actually break.
+      ['site/styles.css', 'data-adhd-focus'],
+      ['site/styles.css', 'data-adhd-quiet'],
+      // Not medical, said on the surface rather than only in the docs.
+      ['site/app/features/adhd-modes.js', 'Not a diagnosis'],
+    ],
+  },
+  {
+    // The site is a tour of a desktop app, and until this room existed it showed no picture of
+    // that app: the captures lived only under docs/, which Pages never serves. Listed here so a
+    // gallery that silently stops rendering fails the inventory rather than going quietly.
+    id: 'app-screenshots',
+    label: 'Screenshots of the real built app',
+    file: 'site/app/features/screenshots.js',
+    exportName: 'registerScreenshots',
+    contentChecks: [
+      ['site/app/features/screenshots.js', 'makeMatcher'],
+      ['site/app/shared/data.js', "id: 'shots'"],
+      ['site/styles.css', '.shot-grid'],
+    ],
+  },
+  {
     id: 'language-modes-funny-emoji',
     label: 'Language modes, funny levels, emoji toggle',
     file: 'site/app/features/language-settings.js',
@@ -218,7 +249,19 @@ const FEATURES = [
     file: 'site/app/features/narrator.js',
     exportName: 'registerNarrator',
     contentChecks: [
-      ['site/app/features/narrator.js', 'voiceschanged'],
+      // The subscription lives in main.js, not the narrator module — the ORIGINAL needle here was
+      // satisfied by a COMMENT in narrator.js while the real listener could be deleted unseen.
+      //
+      // Moving it to the right file was only half the repair, and the half that was missing is the
+      // one this repository keeps relearning: as a bare substring it was STILL satisfied by
+      // `// window.speechSynthesis.addEventListener('voiceschanged', readVoices)`, so commenting
+      // the real subscription out left the site contract fully green. Watched, on this file.
+      //
+      // Anchored to the start of the line, which a `//` prefix cannot survive. Optional whitespace
+      // only, and the receiver is named so the listener cannot be moved onto some other object and
+      // still match. Without this, the site silently reverts to the documented empty-voice-list bug
+      // — reporting "no voices installed" on a machine with forty.
+      ['site/app/main.js', /^\s*window\.speechSynthesis\.addEventListener\('voiceschanged'/m],
       ['site/app/shared/narrator-state.js', 'voiceUri'],
     ],
   },

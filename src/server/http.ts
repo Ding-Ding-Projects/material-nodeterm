@@ -198,17 +198,47 @@ function esc(s: string): string {
     .replace(/'/g, '&#39;')
 }
 
+/**
+ * M3 color roles for these four pre-render pages, inlined rather than imported: they render
+ * before the renderer bundle — and its styles.css — exists, so this IS the whole palette, not a
+ * subset borrowed from design/v2/md3/tokens.css. Dark is the baseline (`:root`), matching the
+ * app's own default; light activates under `prefers-color-scheme` because these pages carry no
+ * `data-theme` attribute to key off — the app's own light/dark switch hasn't loaded yet either.
+ */
+const PAGE_THEME_STYLE = `<style>
+:root{
+  --md-primary:#D0BCFF;--md-on-primary:#381E72;
+  --md-error:#F2B8B5;
+  --md-surface:#141218;--md-surface-container:#211F26;--md-surface-container-low:#1D1B20;
+  --md-surface-container-lowest:#0F0D13;--md-surface-container-high:#2B2930;
+  --md-on-surface:#E6E0E9;--md-on-surface-variant:#CAC4D0;
+  --md-outline:#938F99;--md-outline-variant:#49454F;
+  --md-shape-xs:8px;--md-shape-sm:12px;
+  --md-font-ui:'Outfit','Segoe UI',system-ui,sans-serif;
+}
+@media (prefers-color-scheme: light){
+  :root{
+    --md-primary:#6750A4;--md-on-primary:#FFFFFF;
+    --md-error:#B3261E;
+    --md-surface:#FEF7FF;--md-surface-container:#F3EDF7;--md-surface-container-low:#F7F2FA;
+    --md-surface-container-lowest:#FFFFFF;--md-surface-container-high:#ECE6F0;
+    --md-on-surface:#1D1B20;--md-on-surface-variant:#49454F;
+    --md-outline:#79747E;--md-outline-variant:#CAC4D0;
+  }
+}
+</style>`
+
 const PAGE_STYLE =
-  "margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0b0d10;color:#e6e6e6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif"
+  'margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--md-surface);color:var(--md-on-surface);font-family:var(--md-font-ui)'
 const CARD_STYLE =
-  'background:#16191d;border:1px solid #26292e;border-radius:12px;padding:32px;width:320px;box-shadow:0 10px 40px rgba(0,0,0,0.4)'
+  'background:var(--md-surface-container);border:1px solid var(--md-outline-variant);border-radius:var(--md-shape-sm);padding:32px;width:320px'
 const INPUT_STYLE =
-  'width:100%;box-sizing:border-box;margin:8px 0;padding:10px 12px;border-radius:8px;border:1px solid #33373d;background:#0b0d10;color:#e6e6e6;font-size:14px'
+  'width:100%;box-sizing:border-box;margin:8px 0;padding:10px 12px;border-radius:var(--md-shape-xs);border:1px solid var(--md-outline);background:var(--md-surface-container-lowest);color:var(--md-on-surface);font-size:14px'
 const BUTTON_STYLE =
-  'width:100%;box-sizing:border-box;margin-top:12px;padding:10px 12px;border-radius:8px;border:none;background:#2f6feb;color:#fff;font-size:14px;font-weight:600;cursor:pointer'
+  'width:100%;box-sizing:border-box;margin-top:12px;padding:10px 12px;border-radius:var(--md-shape-xs);border:none;background:var(--md-primary);color:var(--md-on-primary);font-size:14px;font-weight:600;cursor:pointer'
 const H1_STYLE = 'margin:0 0 4px;font-size:18px;font-weight:600'
-const SUB_STYLE = 'margin:0 0 16px;font-size:13px;color:#9aa0a6'
-const ERR_STYLE = 'margin:0 0 12px;font-size:13px;color:#f26d6d'
+const SUB_STYLE = 'margin:0 0 16px;font-size:13px;color:var(--md-on-surface-variant)'
+const ERR_STYLE = 'margin:0 0 12px;font-size:13px;color:var(--md-error)'
 
 /**
  * Sign-in. A passkey is offered FIRST when one is enrolled, with the password kept underneath as
@@ -230,7 +260,7 @@ function loginPage(hasError: boolean, hasPasskey: boolean): string {
     ? `<div id="pk-wrap" hidden style="display:flex;flex-direction:column;gap:10px;margin-bottom:6px">
          <button style="${BUTTON_STYLE}" type="button" id="pk-btn">Unlock with a passkey</button>
          <p id="pk-err" style="${ERR_STYLE};display:none"></p>
-         <p style="${SUB_STYLE};margin:2px 0 0">or sign in with your password</p>
+         <p style="${SUB_STYLE};margin:2px 0 0">or sign in with your password or deployment TOTP code</p>
        </div>`
     : ''
   const script = hasPasskey
@@ -303,7 +333,7 @@ function loginPage(hasError: boolean, hasPasskey: boolean): string {
 })();
 </script>`
     : ''
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sign in — nodeterm</title></head><body style="${PAGE_STYLE}"><div style="${CARD_STYLE}"><h1 style="${H1_STYLE}">nodeterm</h1><p style="${SUB_STYLE}">Sign in to continue</p>${errLine}${passkeyBlock}<form method="post" action="/auth/login" style="display:flex;flex-direction:column;gap:10px"><input style="${INPUT_STYLE}" type="password" name="password" placeholder="Password" autocomplete="current-password"><button style="${BUTTON_STYLE}" type="submit">Sign in</button></form></div>${script}</body></html>`
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sign in — nodeterm</title>${PAGE_THEME_STYLE}</head><body style="${PAGE_STYLE}"><div style="${CARD_STYLE}"><h1 style="${H1_STYLE}">nodeterm</h1><p style="${SUB_STYLE}">Sign in to continue</p>${errLine}${passkeyBlock}<form method="post" action="/auth/login" style="display:flex;flex-direction:column;gap:10px"><input style="${INPUT_STYLE}" type="password" name="password" placeholder="Password or 6-digit TOTP code" autocomplete="current-password"><button style="${BUTTON_STYLE}" type="submit">Sign in</button></form></div>${script}</body></html>`
 }
 
 /**
@@ -403,8 +433,8 @@ function lockedPage(remainingMs: number, ladderOffered: boolean): string {
          ',1fr);gap:8px;margin:8px 0">';
     for (var i = 0; i < c.gridSize * c.gridSize; i++) {
       h += '<button type="button" data-cell="' + i +
-           '" style="aspect-ratio:1;border-radius:12px;border:1px solid rgba(255,255,255,.14);' +
-           'background:rgba(255,255,255,.05);font-size:26px;cursor:pointer"></button>';
+           '" style="aspect-ratio:1;border-radius:var(--md-shape-sm);border:1px solid var(--md-outline-variant);' +
+           'background:var(--md-surface-container-high);font-size:26px;cursor:pointer"></button>';
     }
     h += '</div>';
     box.innerHTML = h;
@@ -473,7 +503,7 @@ function lockedPage(remainingMs: number, ladderOffered: boolean): string {
 </script>`
     : ''
 
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Locked out — nodeterm</title></head><body style="${PAGE_STYLE}"><div style="${CARD_STYLE}"><h1 style="${H1_STYLE}">Locked out</h1><p style="${SUB_STYLE}">Too many wrong passwords. Try again in <strong id="lad-clock">${secs}</strong>s.</p>${offer}<p id="lad-note" style="${ERR_STYLE}"></p><div id="lad-box"></div></div><script>
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Locked out — nodeterm</title>${PAGE_THEME_STYLE}</head><body style="${PAGE_STYLE}"><div style="${CARD_STYLE}"><h1 style="${H1_STYLE}">Locked out</h1><p style="${SUB_STYLE}">Too many wrong passwords. Try again in <strong id="lad-clock">${secs}</strong>s.</p>${offer}<p id="lad-note" style="${ERR_STYLE}"></p><div id="lad-box"></div></div><script>
 (function () {
   var left = ${secs};
   var el = document.getElementById('lad-clock');
@@ -487,11 +517,11 @@ function lockedPage(remainingMs: number, ladderOffered: boolean): string {
 }
 
 function setupNeedsTokenPage(): string {
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Set up — nodeterm</title></head><body style="${PAGE_STYLE}"><div style="${CARD_STYLE}"><h1 style="${H1_STYLE}">Set up nodeterm</h1><p style="${SUB_STYLE}">Open the setup link printed in the server console — it carries a one-time token. This page can't be used without it.</p></div></body></html>`
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Set up — nodeterm</title>${PAGE_THEME_STYLE}</head><body style="${PAGE_STYLE}"><div style="${CARD_STYLE}"><h1 style="${H1_STYLE}">Set up nodeterm</h1><p style="${SUB_STYLE}">Open the setup link printed in the server console — it carries a one-time token. This page can't be used without it.</p></div></body></html>`
 }
 
 function setupPage(token: string): string {
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Set up — nodeterm</title></head><body style="${PAGE_STYLE}"><form method="post" action="/auth/setup" style="${CARD_STYLE}"><h1 style="${H1_STYLE}">Welcome to nodeterm</h1><p style="${SUB_STYLE}">Choose a password to secure this server.</p><input type="hidden" name="token" value="${esc(token)}"><input style="${INPUT_STYLE}" type="password" name="password" placeholder="New password (min 8 chars)" autofocus autocomplete="new-password" minlength="8"><button style="${BUTTON_STYLE}" type="submit">Create password</button></form></body></html>`
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Set up — nodeterm</title>${PAGE_THEME_STYLE}</head><body style="${PAGE_STYLE}"><form method="post" action="/auth/setup" style="${CARD_STYLE}"><h1 style="${H1_STYLE}">Welcome to nodeterm</h1><p style="${SUB_STYLE}">Choose a password to secure this server.</p><input type="hidden" name="token" value="${esc(token)}"><input style="${INPUT_STYLE}" type="password" name="password" placeholder="New password (min 8 chars)" autofocus autocomplete="new-password" minlength="8"><button style="${BUTTON_STYLE}" type="submit">Create password</button></form></body></html>`
 }
 
 /**
@@ -727,7 +757,11 @@ export function createHttpHandler(
 
     if (pathname === '/setup' && method === 'GET') {
       if (auth.isConfigured()) {
-        sendPage(res, 403, '<!doctype html><title>403</title><p style="color:#fff">Already configured.</p>')
+        sendPage(
+          res,
+          403,
+          `<!doctype html><html><head><meta charset="utf-8"><title>403</title>${PAGE_THEME_STYLE}</head><body style="${PAGE_STYLE}"><div style="${CARD_STYLE}"><p style="margin:0">Already configured.</p></div></body></html>`
+        )
         return
       }
       // The setup token is printed to the SERVER CONSOLE and must be presented as `?token=`.

@@ -23,7 +23,14 @@ COPY package.json package-lock.json ./
 # --ignore-scripts skips electron-rebuild AND electron's own binary download (not needed to build)
 RUN npm ci --ignore-scripts
 COPY . .
-RUN npm run build && npm run server:build
+# `build:app`, NOT `build`. `build` is prefixed with four repo-hygiene gates
+# (vocabulary lock, changelog, docs bundle, feature inventory) that live under scripts/ and
+# docs/ — both excluded by .dockerignore, so `npm run build` dies here on a clean clone with
+# "Cannot find module '/app/scripts/check-vocabulary.mjs'". Those gates are about repository
+# consistency, not about whether this artifact is correct; un-excluding their inputs would
+# drag docs/ and the whole scripts/ tree into the build context to run checks a container has
+# no business running. See check-app-contract.mjs, which asserts this split holds.
+RUN npm run build:app && npm run server:build
 
 # ---- deps: production node_modules with node-pty compiled for Node (toolchain lives here) ----
 FROM node:${NODE_VERSION}-bookworm AS deps

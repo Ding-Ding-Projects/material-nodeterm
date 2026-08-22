@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { NodeResizer, useReactFlow, type NodeProps } from '@xyflow/react'
 import { NODE_COLORS, type CanvasNode } from '../state/workspace'
 import { annotationEndpoints, type AnnotationDiagonal, type AnnotationVariant } from '../lib/annotation'
+import { ColorMenu } from '../components/color/ColorMenu'
 
 /** Line thickness and arrowhead size, both in the node's own local px space (see AnnotationNode). */
 const STROKE_WIDTH = 3
@@ -30,7 +31,9 @@ const FALLBACK_SIZE = { width: 240, height: 160 }
  */
 export function AnnotationNode({ id, data, selected, width, height }: NodeProps<CanvasNode>) {
   const { updateNodeData, deleteElements } = useReactFlow()
-  const [showColors, setShowColors] = useState(false)
+  /** Viewport anchor for the colour surface, or null when closed — coordinates rather than a
+   *  boolean because ColorMenu is a body portal. */
+  const [colorAnchor, setColorAnchor] = useState<{ x: number; y: number } | null>(null)
   const variant: AnnotationVariant = data.annotationVariant === 'arrow' ? 'arrow' : 'line'
   const dir: AnnotationDiagonal = data.annotationDir === 'tr-bl' ? 'tr-bl' : 'tl-br'
   const w = width ?? FALLBACK_SIZE.width
@@ -88,21 +91,19 @@ export function AnnotationNode({ id, data, selected, width, height }: NodeProps<
           className="annotation-node__dot"
           style={{ background: color }}
           title="Color"
-          onClick={() => setShowColors((v) => !v)}
+          onClick={(e) => {
+            const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+            setColorAnchor((a) => (a ? null : { x: r.left, y: r.bottom }))
+          }}
         />
-        {showColors && (
-          <div className="color-popover">
-            {NODE_COLORS.map((c) => (
-              <button
-                key={c}
-                style={{ background: c }}
-                onClick={() => {
-                  updateNodeData(id, { color: c })
-                  setShowColors(false)
-                }}
-              />
-            ))}
-          </div>
+        {colorAnchor && (
+          <ColorMenu
+            x={colorAnchor.x}
+            y={colorAnchor.y}
+            value={data.color}
+            onPick={(c: string) => updateNodeData(id, { color: c })}
+            onClose={() => setColorAnchor(null)}
+          />
         )}
         <button
           className="annotation-node__variant"

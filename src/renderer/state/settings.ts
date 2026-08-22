@@ -6,6 +6,9 @@ import {
   applyResolvedCodexAccounts,
   discoverResolvedCodexAccounts
 } from './codexAccountReconcile'
+import { useProjects } from './projects'
+
+export type SettingsScope = 'global' | 'project'
 
 interface SettingsState {
   /** What actually RENDERS: `base` with the currently-active scheduled-settings override (if
@@ -21,8 +24,16 @@ interface SettingsState {
   base: Settings
   /** True once settings have been loaded from disk (so first-run logic can wait). */
   hydrated: boolean
+  scope: SettingsScope
+  activeProjectId: string
+  projectOverrides: Partial<Settings>
   hydrate(): Promise<void>
   update(patch: Partial<Settings>): void
+  setScope(scope: SettingsScope): void
+  setProjectContext(projectId: string, overrides?: Partial<Settings>): void
+  resetProjectKey(key: keyof Settings): void
+  resetProjectSection(keys: readonly (keyof Settings)[]): void
+  resetProjectAll(): void
   /** Called by the scheduled-settings apply-controller (Canvas.tsx) whenever the resolved
    *  schedule changes. `null` = no rule is active right now → `settings` reverts to `base`
    *  exactly. Purely in-memory: never persisted, never round-tripped through `settings.save()`. */
@@ -92,19 +103,23 @@ if (typeof window !== 'undefined') {
 // must agree on the end state whichever order they land in.
 let currentOverride: SchedulableSettingsPatch | null = null
 
-function withOverride(base: Settings): Settings {
-  return currentOverride ? { ...base, ...currentOverride } : base
+function withOverride(base: Settings, project: Partial<Settings>): Settings {
+  const effective = { ...base, ...project }
+  return currentOverride ? { ...effective, ...currentOverride } : effective
 }
 
 export const useSettings = create<SettingsState>((set, get) => ({
   settings: DEFAULT_SETTINGS,
   base: DEFAULT_SETTINGS,
   hydrated: false,
+  scope: 'global',
+  activeProjectId: '',
+  projectOverrides: {},
 
   async hydrate() {
     const s = await window.nodeTerminal.settings.load()
     const base = { ...DEFAULT_SETTINGS, ...s }
-    set({ base, settings: withOverride(base), hydrated: true })
+    set({ base, settings: withOverride(base, get().projectOverrides), hydrated: true })
     // Pending is renderer persistence, while auth.json/app-server identity is authoritative.
     // Reconcile at application startup so a completed login becomes selectable without requiring
     // the user to discover and reopen Settings after every restart.
@@ -122,17 +137,50 @@ export const useSettings = create<SettingsState>((set, get) => ({
   },
 
   update(patch) {
+    if (get().scope === 'project' && get().activeProjectId) {
+      const projectOverrides = { ...get().projectOverrides, ...patch }
+      useProjects.getState().setProjectSettingsOverrides(get().activeProjectId, projectOverrides)
+      set({ projectOverrides, settings: withOverride(get().base, projectOverrides) })
+      return
+    }
     const base = { ...get().base, ...patch }
-    set({ base, settings: withOverride(base) })
+    set({ base, settings: withOverride(base, get().projectOverrides) })
     // Only ever `base` — see `SettingsState.base`'s doc. An active scheduled override must never
     // be able to overwrite the user's own edits on disk, and a user edit while an override is
     // active must not silently discard the override either (it's re-applied on the very next line).
     scheduleSave(base)
   },
 
+  setScope(scope) {
+    set({ scope })
+  },
+
+  setProjectContext(activeProjectId, projectOverrides = {}) {
+    set({ activeProjectId, projectOverrides, settings: withOverride(get().base, projectOverrides) })
+  },
+
+  resetProjectKey(key) {
+    const projectOverrides = { ...get().projectOverrides }
+    delete projectOverrides[key]
+    if (get().activeProjectId) useProjects.getState().setProjectSettingsOverrides(get().activeProjectId, projectOverrides)
+    set({ projectOverrides, settings: withOverride(get().base, projectOverrides) })
+  },
+
+  resetProjectSection(keys) {
+    const projectOverrides = { ...get().projectOverrides }
+    for (const key of keys) delete projectOverrides[key]
+    if (get().activeProjectId) useProjects.getState().setProjectSettingsOverrides(get().activeProjectId, projectOverrides)
+    set({ projectOverrides, settings: withOverride(get().base, projectOverrides) })
+  },
+
+  resetProjectAll() {
+    if (get().activeProjectId) useProjects.getState().setProjectSettingsOverrides(get().activeProjectId, {})
+    set({ projectOverrides: {}, settings: withOverride(get().base, {}) })
+  },
+
   applyScheduleOverride(patch) {
     currentOverride = patch
-    set({ settings: withOverride(get().base) })
+    set({ settings: withOverride(get().base, get().projectOverrides) })
   }
 }))
 
@@ -178,7 +226,11 @@ export function restoreSettingsRevision(
       // not canceled, and can resurrect the state on the next timer turn.
       invalidateQueuedSave()
       const base = { ...DEFAULT_SETTINGS, ...loaded }
-      useSettings.setState({ base, settings: withOverride(base), hydrated: true })
+      useSettings.setState({
+        base,
+        settings: withOverride(base, useSettings.getState().projectOverrides),
+        hydrated: true
+      })
       return result
     } catch (e) {
       return {

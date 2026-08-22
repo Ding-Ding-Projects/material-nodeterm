@@ -12,7 +12,7 @@ interface TerminalProfilesState {
   /** Detect once, on demand. Callers should invoke this only after their surface is visible. */
   ensureLoaded(): Promise<void>
   /** Re-run detection without discarding the last usable result while the request is in flight. */
-  refresh(): Promise<void>
+  refresh(customExecutable?: string): Promise<void>
 }
 
 function profileApi(): TerminalProfilesApi | undefined {
@@ -38,11 +38,13 @@ export function terminalProfileDisplayError(
 async function detect(
   api: TerminalProfilesApi,
   method: 'list' | 'refresh',
-  set: (patch: Partial<TerminalProfilesState>) => void
+  set: (patch: Partial<TerminalProfilesState>) => void,
+  customExecutable?: string
 ): Promise<void> {
   set({ loading: true, supported: true, error: null })
   try {
-    const profiles = await api[method]()
+    const profiles =
+      method === 'refresh' ? await api.refresh(customExecutable) : await api.list()
     set({
       profiles,
       loading: false,
@@ -85,7 +87,7 @@ export const useTerminalProfiles = create<TerminalProfilesState>((set, get) => (
     await detect(api, 'list', set)
   },
 
-  async refresh() {
+  async refresh(customExecutable) {
     if (get().loading) return
     const api = profileApi()
     if (!api) {
@@ -98,7 +100,7 @@ export const useTerminalProfiles = create<TerminalProfilesState>((set, get) => (
       })
       return
     }
-    await detect(api, 'refresh', set)
+    await detect(api, 'refresh', set, customExecutable)
   }
 }))
 

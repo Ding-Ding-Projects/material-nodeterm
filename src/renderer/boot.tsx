@@ -3,7 +3,16 @@ import ReactDOM from 'react-dom/client'
 import App from './App'
 import { ensureClaudeCliCaps } from './state/permissionMode'
 import { ensureCodexIdentityCaps } from './state/codexIdentity'
+import './fonts.css'
 import './styles.css'
+import './styles.md3.css'
+// The MD3 primitive sheet (mdx-btn/-seg/-chip/-field/-dialog/…). `ui/md3/index.ts` imports it too,
+// but a deep import — `ui/SegmentedPill.tsx` re-exports straight from `./md3/SegmentedButton` —
+// bypasses that barrel, and then NONE of its 105 rules reach the bundle. Verified: `mdx-seg` and
+// `mdx-btn` appeared 0 times in every built CSS file, so every segmented button, switch, chip and
+// dialog in the app was rendering on browser defaults. Imported here so the sheet ships whatever
+// path a consumer takes.
+import './ui/md3/primitives.css'
 import './tailwind.css'
 
 // Probe the local Claude CLI once, up front (never awaited — a launch is never blocked on it):

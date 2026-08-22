@@ -8,16 +8,17 @@ deliberately does **not** do, and the honest cost of that trade-off.
 
 **GitHub Actions runs no tests, type-check or lint. Nothing in a workflow gates the release.**
 
-When explicitly and manually dispatched from `main`, `release.yml` builds the app,
-packages a Windows installer, and publishes it as a GitHub Release — that is the whole job. A run
-fails only when its ref guard, build, packaging, validation, or publication fails. It does not run
-`npm test`, it does not run `npm run typecheck`, and it does not run a linter. This is a standing
-decision, not an oversight:
+On every push to `main`, and on a manual `workflow_dispatch` from `main`, `release.yml` builds the
+app, packages a Windows installer, and publishes it as a GitHub Release — that is the whole job. A
+run fails only when its ref guard, build, packaging, validation, or publication fails. It does not
+run `npm test`, it does not run `npm run typecheck`, and it does not run a linter. This is a
+standing decision, not an oversight:
 
 - **What this costs.** With no gate in the pipeline, a release can ship from a commit whose
   tests would have failed. The first thing that notices is a person running the installer,
   not a red CI check. That is the accepted trade-off in exchange for artifacts reaching
-  people quickly once a release owner deliberately dispatches the final `main` candidate.
+  people quickly whenever `main` advances. Manual dispatch remains available for an explicit
+  rerun from `main`.
 - **Where checking actually happens.** The repository's own test scripts
   (`npm test`, `npm run typecheck`) still exist and are still meant to be run — just locally,
   by whoever is changing the code, before they push. See `CONTRIBUTING.md`. A failing local
@@ -28,22 +29,21 @@ decision, not an oversight:
   no `needs:` relationship to `release.yml`, is not a required status check, and cancels a
   superseded run outright (`concurrency: cancel-in-progress: true`) — safe only because it never
   publishes anything. `release.yml` instead uses a non-cancelling group keyed by workflow and ref,
-  so two manual attempts for `main` cannot mutate one stable release concurrently. Release owners
-  dispatch one final candidate at a time.
+  so attempts for the same `main` ref cannot cancel one another between draft creation and
+  publication. Push-triggered runs and manual reruns use the same non-cancelling protection.
 
 ## What `release.yml` actually does
 
-Triggered only by `workflow_dispatch`, on `windows-latest` — Windows is the active delivery target
-for this project. The workflow's first step refuses anything except a branch ref exactly equal to
-`refs/heads/main`, before checkout can load a feature-branch tree. Feature-branch, tag, scheduled,
-and ordinary push events cannot publish. Automatic publication is therefore disabled. The
-committed definition is manually dispatchable, while the hosted workflow is currently recorded as
-manually disabled pending the final packaged update interactions. Once re-enabled and deliberately
-dispatched, one job:
+Triggered by a push to the `main` branch or by `workflow_dispatch`, on `windows-latest` — Windows
+is the active delivery target for this project. The branch-filtered push trigger excludes tags and
+feature branches, while the workflow's first step independently refuses anything except a branch
+ref exactly equal to `refs/heads/main` before checkout. Every accepted push to `main` therefore
+publishes automatically; manual dispatch remains available from `main` for an explicit rerun. One
+job:
 
 1. **Refuse non-`main` refs** before checkout, dependency installation, or token-bearing release
-   steps. This is redundant with the manual trigger on purpose: manual dispatch can otherwise
-   select another ref.
+   steps. The push trigger is already filtered to `main`; this independent check exists because a
+   manual dispatch can otherwise select another ref.
 2. **Checkout** with full history (`fetch-depth: 0`) — needed for the line-count report's
    `git blame` attribution and for an honest commit link in the release notes.
 3. **Verify the checked-out commit** equals the dispatch event's exact `GITHUB_SHA`; packaging a
@@ -85,7 +85,7 @@ dispatched, one job:
 12. **Upload only to the draft.** Unexpected leftovers from an older failed attempt are pruned,
     and expected names are replaced with `--clobber`. Any failure leaves a private draft, never
     a public empty or partial release.
-13. **Generate the final release notes after upload** (`scripts/release-notes.mjs`, embedding
+13. **Generate the publication-ready release notes after upload** (`scripts/release-notes.mjs`, embedding
     `scripts/count-lines.mjs`'s report — see [Release notes content](#release-notes-content)).
 14. **Read the draft back and recheck version authority immediately before publication.** The
     exact hosted asset inventory, draft/non-prerelease state, target/tag ownership, and stable
@@ -93,7 +93,11 @@ dispatched, one job:
     build ran.
 15. **Publish once, explicitly as latest and non-prerelease**, then re-read the tag, release, and
     latest-release view to prove the complete inventory and exact target survived the transition.
-16. **Collect and upload build artifacts**, `if: always()`, `continue-on-error: true` on both
+16. **Record the post-publication completion boundary and finalize the notes.** Regenerate notes
+    with exact `Workflow started`, `Workflow completed`, and `Workflow duration` values, edit the
+    same published release, then read it back and require exact body equality. A retry of an
+    already-published release verifies those fields and changes nothing.
+17. **Collect and upload build artifacts**, `if: always()`, `continue-on-error: true` on both
     the collection and the upload — so a failed run still leaves the packaged output, the
     generated notes, and the run context inspectable, without ever masking or reversing the
     real pass/fail verdict of the steps above it. Only explicitly safe paths are copied: the
@@ -111,16 +115,16 @@ The stable package version owns the tag, and the workflow/ref concurrency key wi
 `cancel-in-progress: false` prevents two `main` attempts from mutating its draft at once. A
 completed rerun is also safe: it checks the tag's exact commit plus the public names and sizes,
 then reuses the release instead of applying `--clobber`, whose replacement sequence could
-otherwise remove a good public asset and then fail before uploading its replacement. A new
-release advances the package version before dispatch, so it owns a new tag and cannot overwrite
-the preceding stable channel.
+otherwise remove a good public asset and then fail before uploading its replacement. A new release
+gets its version from the workflow's planner, which reads the existing tags and releases and applies
+the selected version to the working tree only. The resulting new tag cannot overwrite the
+preceding stable channel.
 
-GitHub evaluates the workflow file from the selected dispatch ref, not retroactively from
-`main`. The pre-checkout `main` guard therefore protects only refs that contain the corrected
-workflow. An old feature ref may still contain an unsafe historical copy; it must be updated,
-removed, or separately disabled before it can be treated as harmless. The current manual-only
-definition does not retroactively protect that old file. Removing those refs is
-repository administration outside this change.
+For manual dispatch, GitHub evaluates the workflow file from the selected ref, not retroactively
+from `main`. The pre-checkout `main` guard therefore protects only refs that contain the corrected
+workflow. Push publication is separately restricted by `on.push.branches: [main]`, so the current
+tag creation does not match the trigger. The historical incident below records why old refs with a
+bare `push:` trigger still required manual workflow disablement at the time.
 
 The workflow contract is checked locally, never in Actions:
 
@@ -131,7 +135,7 @@ npx vitest run src/main/release-workflow-contract.test.ts \
 ```
 
 The checker parses the YAML, follows invoked npm scripts, and verifies command ordering and draft
-state. Its gates deliberately mutate the manual trigger, pre-checkout `main` guard, stable-version
+state. Its gates deliberately mutate the trigger allowlist, pre-checkout `main` guard, stable-version
 tag, concurrency, package target, signing
 status, draft creation, upload retry, remote verification, and hidden package-script validation;
 source-text presence alone is not accepted as evidence.
@@ -176,10 +180,9 @@ instead of by a signature that does not exist.
 a check ran that did not, and it never estimates a missing timestamp — a missing value is
 printed as **missing**, not guessed at. It always includes:
 
-1. **Release-preparation timing** — `Workflow started` (from GitHub's own `run_started_at`,
-   or "missing" if that read failed), `Release notes generated` (stamped after asset upload),
-   and `Elapsed to release notes` as a stable `HH:mm:ss`. It deliberately does not call this
-   workflow completion: remote verification, publication, and the public post-check follow.
+1. **Workflow timing** — final published notes carry `Workflow started` from GitHub's own
+   `run_started_at`, the post-publication `Workflow completed` boundary, and `Workflow duration`
+   as stable `HH:mm:ss`. Missing, invalid, or reversed timing fails closed; it is never estimated.
 2. **The project's line count at that exact commit**, via `scripts/count-lines.mjs` —
    see below.
 3. **What actually ran** — an explicit statement that no tests, type-check, or lint ran in
@@ -188,6 +191,8 @@ printed as **missing**, not guessed at. It always includes:
    specifically so a release is never read as "passing" a check it never ran.
 4. **The unsigned-installer warning** described above.
 5. **The asset list** (installer filename + size), when the packaging step located any.
+6. **A dim-sum code name with an honest public catalog-photo link.** The photo remains hosted by
+   the catalog release and is not described as attached to this consumer release.
 
 ### `scripts/count-lines.mjs`
 
@@ -259,12 +264,13 @@ loop:
    already-published tags checking out their own, unfixed, copy of the file. The branch filter
    is necessary but was not, by itself, sufficient to end an already-running loop.
 
-The durable contract is now narrower still: the committed workflow has **no push trigger**, only
-manual dispatch, and its first step accepts only `main`. The definition remains dispatchable once
-the hosted workflow is re-enabled; the hosted workflow itself is currently manually disabled.
-Publication of `0.4.0` is pending both the real production-identity `0.3.0` → `0.4.0` Setup
-migration and the isolated new-code updater fixture proof. This change does not dispatch or publish
-it.
+The trigger was later restored, but only for the `main` branch. The current committed contract has
+`on.push.branches: [main]` alongside `workflow_dispatch`, and its first step still accepts only
+`main`. The old tag loop cannot recur through this definition because a created tag is not a branch
+push to `main`. A second guard prevents a different automatic loop: the workflow applies its
+planned version bump to the working tree only and must contain no `git commit` or `git push`, so it
+cannot create another `main` push from inside the release run. `scripts/check-release-workflow.mjs`
+enforces both boundaries.
 
 ### Recurrence snapshot (2026-08-16)
 
@@ -275,20 +281,20 @@ full Squirrel assets; the hosted latest release became `v0.3.0-ci.208` at commit
 packaged application version `0.3.0`. That CI-suffixed release is not the stable feed authority the
 new updater requires, even though GitHub currently treats it as non-prerelease/latest.
 
-The hosted release workflow is now `disabled_manually`, and the recurrence audit found no queued
-or in-progress release run. Keep it disabled until the exact manual-only/main-guard workflow is on
-`main`, the packaged migration and isolated updater trials are green, and one verified `v0.4.0`
-release can deliberately replace the legacy CI release as repository latest. Do not reinterpret
-the absence of active runs as proof that an old ref was made safe; disabling the hosted workflow is
-the boundary that currently prevents those copies from publishing again.
+At the time of this snapshot, the hosted release workflow was `disabled_manually`, and the
+recurrence audit found no queued or in-progress release run. That was the boundary that stopped the
+unsafe historical copies; the absence of active runs did not prove those refs had become safe.
+Commit `69d2db23` later restored automatic publication for pushes to `main`, with the branch filter,
+working-tree-only version update, and no-commit/no-push guard described above. The snapshot remains
+here as incident history, not as a description of the current trigger.
 
 ### The fail-fast `main` guard
 
 Manual dispatch can select a branch or tag, and the workflow file comes from that selected ref.
 So the release job's very first step fails unless `github.ref_type` is `branch` and `github.ref`
-is exactly `refs/heads/main`, before checkout or dependency installation. A genuinely old copy
-without that guard is not retroactively protected; leaving the hosted workflow disabled, or
-updating/removing the unsafe ref, remains the remedy.
+is exactly `refs/heads/main`, before checkout or dependency installation. Push-triggered runs are
+already limited to `main` by the trigger itself; the step is the independent protection for manual
+dispatch.
 
 ### The honest cost of an ungated pipeline, restated
 
@@ -300,10 +306,10 @@ shipped once," but a runaway trigger turning one broken build into dozens of emp
 under an hour, entirely unattended, because nothing in the pipeline's own design could tell it to
 stop. An ungated pipeline is not just a pipeline that might publish something broken — it is a
 pipeline that, absent an explicit guard, has no internal reason to publish exactly one thing per
-change instead of an unbounded number. The manual-only trigger and fail-fast `main` guard above are
-that explicit reason, made cheap and redundant on purpose: they do not reintroduce a quality gate
-(nothing here runs a test or a linter); they constrain publication to one deliberate stable
-candidate instead of letting an ordinary branch or tag event enter the release job.
+change instead of an unbounded number. The `main`-only branch trigger, fail-fast ref guard, and
+prohibition on committing or pushing the in-run version change provide that boundary without
+reintroducing a quality gate: nothing here runs a test or a linter, tags cannot retrigger the job,
+and the job cannot manufacture another push to `main` from inside itself.
 
 ## Windows icon provenance
 

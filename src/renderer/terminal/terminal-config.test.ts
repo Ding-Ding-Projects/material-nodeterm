@@ -1,3 +1,4 @@
+import { DEFAULT_WORD_SEPARATORS } from '@shared/word-separators'
 import { describe, it, expect, beforeEach } from 'vitest'
 import {
   attachReplay,
@@ -720,6 +721,7 @@ const visual = (p: Partial<XtermVisualSettings> = {}): XtermVisualSettings => ({
   terminalLetterSpacing: 0,
   terminalTheme: 'nodeterm-dark',
   tmuxScrollback: 50000,
+  terminalWordSeparators: DEFAULT_WORD_SEPARATORS,
   ...p
 })
 

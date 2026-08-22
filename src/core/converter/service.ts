@@ -117,6 +117,10 @@ export class ConverterService {
 
   async detect(path: string): Promise<ConverterDetectionResult> {
     const st = await stat(path)
+    if (!st.isFile()) {
+      const sourceType = st.isDirectory() ? 'directory' : 'non-file filesystem entry'
+      throw new Error(`Unsupported converter input: expected a regular file, received ${sourceType}.`)
+    }
     const fh = await open(path, 'r')
     try {
       const buf = Buffer.alloc(Math.min(CONVERTER_SNIFF_BYTES, st.size))

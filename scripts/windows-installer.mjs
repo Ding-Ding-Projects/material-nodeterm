@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
 import { createRequire } from 'node:module'
 import { createReadStream, readFileSync } from 'node:fs'
-import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import unzipper from 'unzipper'
@@ -13,6 +13,7 @@ import {
   parseReleases,
   readReleaseIdentity as readAssetReleaseIdentity,
 } from './release-assets.mjs'
+import { renameAtomic } from './lib/rename-atomic.mjs'
 
 const require = createRequire(import.meta.url)
 // Keep Vitest/Vite and the production CLI on resedit's real CommonJS implementation.
@@ -517,8 +518,13 @@ export function validateIconMetadata(value) {
 async function writeMetadataAtomic(file, metadata) {
   await mkdir(path.dirname(file), { recursive: true })
   const temporary = `${file}.${randomUUID()}.tmp`
-  await writeFile(temporary, `${JSON.stringify(metadata, null, 2)}\n`, { encoding: 'utf8', flag: 'wx' })
-  await rename(temporary, file)
+  try {
+    await writeFile(temporary, `${JSON.stringify(metadata, null, 2)}\n`, { encoding: 'utf8', flag: 'wx' })
+    await renameAtomic(temporary, file)
+  } catch (error) {
+    await rm(temporary, { force: true }).catch(() => undefined)
+    throw error
+  }
 }
 
 export async function readReleaseIdentity(packageJsonFile) {

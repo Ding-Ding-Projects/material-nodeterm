@@ -34,8 +34,8 @@ export function SectionReset<K extends keyof Settings>({
 
   return (
     <>
-      <div className="flex items-center justify-between gap-6">
-        <p className="text-[13px] leading-relaxed text-muted">
+      <div className="md3-settings-row">
+        <p className="md3-settings-hint">
           {pristine
             ? `${what[0].toUpperCase()}${what.slice(1)} are at their defaults.`
             : `Put ${what} back the way they shipped. Nothing else is touched.`}

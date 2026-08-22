@@ -182,9 +182,9 @@ export function LockWizard({
 
   return createPortal(
     <>
-      <div className="toylock-wizard__backdrop" onClick={cancelAndClose} />
+      <div className="toylock-wizard__backdrop md3-toylock-wizard" onClick={cancelAndClose} />
       <div
-        className="toylock-wizard"
+        className="toylock-wizard md3-toylock-wizard"
         style={{ top: Math.max(8, top), left: Math.max(8, left) }}
         role="dialog"
         aria-modal="false"

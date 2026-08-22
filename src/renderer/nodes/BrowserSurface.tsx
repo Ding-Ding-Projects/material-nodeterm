@@ -4,6 +4,7 @@ import { BrowserStartPage } from './BrowserStartPage'
 import { useBrowserHistory } from '../state/browserHistory'
 import { useDiscardWhenHidden, webviewAudible } from './useDiscardWhenHidden'
 import { DiscardedPlate } from './DiscardedPlate'
+import { BrowserExtensionsPanel } from './BrowserExtensionsPanel'
 
 // Minimal typing for the Electron <webview> element methods/events we use.
 type WebviewEl = HTMLElement & {
@@ -30,6 +31,16 @@ interface BrowserSurfaceProps {
   onUrlChange: (url: string) => void
   /** Persist the page title. */
   onTitleChange: (title: string) => void
+  /**
+   * Electron session partition (see `shared/browser-profiles.ts`'s `browserPartitionFor`).
+   * Undefined = the app's default (unpartitioned) session — bit-for-bit the pre-profiles
+   * behavior. Two webviews given the SAME partition share cookies/localStorage/session state;
+   * different partitions are isolated from each other. Read once at mount: the caller (`BrowserNode`)
+   * keys this component by the partition string, so a profile CHANGE remounts a fresh
+   * `BrowserSurface` (and a fresh `<webview>`) on the new partition rather than trying to reparent
+   * a live guest across sessions — see `CanvasNodeState.browserProfileId`.
+   */
+  partition?: string
 }
 
 /**
@@ -39,7 +50,14 @@ interface BrowserSurfaceProps {
  * webview never emits dom-ready, so imperative loadURL before then is a no-op); `did-navigate` only
  * updates the address, so in-page navigation can't loop.
  */
-export function BrowserSurface({ nodeId, ownerNodeId, url, onUrlChange, onTitleChange }: BrowserSurfaceProps) {
+export function BrowserSurface({
+  nodeId,
+  ownerNodeId,
+  url,
+  onUrlChange,
+  onTitleChange,
+  partition
+}: BrowserSurfaceProps) {
   const ref = useRef<WebviewEl | null>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const lastUrlRef = useRef('')
@@ -50,6 +68,7 @@ export function BrowserSurface({ nodeId, ownerNodeId, url, onUrlChange, onTitleC
   const [canBack, setCanBack] = useState(false)
   const [canFwd, setCanFwd] = useState(false)
   const [failed, setFailed] = useState('')
+  const [showExtensions, setShowExtensions] = useState(false)
   // Memory saver (see `useDiscardWhenHidden`): the page is released while hidden and rebuilt on
   // reveal. `loadingRef` mirrors the `loading` state because the hook reads it at fire time, from
   // a callback that must not force the observer to be re-created.
@@ -249,6 +268,20 @@ export function BrowserSurface({ nodeId, ownerNodeId, url, onUrlChange, onTitleC
             if (e.key === 'Enter') go()
           }}
         />
+        <div className="browser-ext-panel__anchor">
+          <button
+            className="browser-node__btn"
+            onClick={() => setShowExtensions((v) => !v)}
+            title="Extensions"
+            aria-label="Extensions"
+            aria-expanded={showExtensions}
+          >
+            ⬒
+          </button>
+          {showExtensions && (
+            <BrowserExtensionsPanel partition={partition} onClose={() => setShowExtensions(false)} />
+          )}
+        </div>
       </div>
       <div className="browser-node__view nodrag nowheel">
         {/* The element is UNMOUNTED while discarded — that is what ends the guest process; an
@@ -259,6 +292,7 @@ export function BrowserSurface({ nodeId, ownerNodeId, url, onUrlChange, onTitleC
             ref={ref as unknown as React.Ref<HTMLElement>}
             src={src || undefined}
             allowpopups={true}
+            {...(partition ? { partition } : {})}
             style={{ width: '100%', height: '100%' }}
           />
         )}

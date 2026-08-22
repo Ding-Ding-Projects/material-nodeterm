@@ -772,17 +772,36 @@ function selectHeadlessWindow(payload, expectedPid) {
     fail('Headless window enumeration returned an invalid payload.')
   }
   const pid = Number(expectedPid)
+  // A NON-EMPTY TITLE is the discriminator, and leaving it out made this refuse every real run.
+  //
+  // Measured on this app's packaged build, one PID, on a headless desktop: 13 top-level windows,
+  // of which TWO passed the class-and-size filter alone —
+  //
+  //   Chrome_WidgetWin_1   1416x908   title "nodeterm"   <- the application window
+  //   Chrome_WidgetWin_0   1440x753   title ""           <- a same-PID helper
+  //
+  // The helper is not zero-sized, so the size floor cannot separate them, and it shares the class
+  // prefix. Size and class together are simply not enough. The repository's own recorded lesson
+  // says so in as many words — resolve by title AND class, never by index or by size — and this
+  // filter predated that note by asking for neither.
+  //
+  // Titles are still not trusted to IDENTIFY the window: an exact match on "nodeterm" would break
+  // the moment somebody renames the app, which this product explicitly lets a user do. Emptiness
+  // is the honest test, because a window with no title is not the one a person is looking at. If a
+  // future Electron gives the helper a title, two will match again and the count check below fails
+  // LOUDLY rather than silently driving the wrong window.
   const matches = payload.windows.filter((window) => {
     const className = String(window.class ?? '')
     return (
       Number(window.process_id) === pid &&
       /^Chrome_WidgetWin_/u.test(className) &&
       Number(window.width) > 0 &&
-      Number(window.height) > 0
+      Number(window.height) > 0 &&
+      String(window.title ?? '').trim() !== ''
     )
   })
   if (matches.length !== 1) {
-    fail(`Expected exactly one PID ${pid} Chromium HWND; found ${matches.length}.`)
+    fail(`Expected exactly one PID ${pid} titled Chromium HWND; found ${matches.length}.`)
   }
   const handle = Number(matches[0].handle)
   if (!Number.isSafeInteger(handle) || handle <= 0) fail('Headless window returned an invalid HWND.')
@@ -855,8 +874,22 @@ function validateContinuity(before, after) {
   if (!Number.isInteger(hostPid) || hostPid <= 0 || Number(after.sessionHostPid) !== hostPid) {
     fail('Persistent session-host PID changed across app relaunch.')
   }
-  const startedAt = nonEmptyString(before.sessionHostStartedAt, 'Session-host startedAt')
-  if (after.sessionHostStartedAt !== startedAt) fail('Persistent session-host startedAt changed across app relaunch.')
+  // `startedAt` is a NUMBER, not a string: the session host writes `startedAt: Date.now()`
+  // (src/session-host/host.ts), types it `startedAt: number` (paths.ts) and validates it as
+  // `typeof state.startedAt !== 'number'` (existing-host-state.ts). Demanding a non-empty
+  // STRING here failed every run at the last hurdle, after all five captures were already on
+  // disk — the harness asserting a shape the app has never written.
+  //
+  // What the check is actually for is identity: the same host, still running, across an app
+  // relaunch. A finite positive number carries that exactly as well as a string, so validate
+  // the real type and keep the comparison.
+  const startedAt = Number(before.sessionHostStartedAt)
+  if (!Number.isFinite(startedAt) || startedAt <= 0) {
+    fail(`Session-host startedAt must be a positive finite number (got ${JSON.stringify(before.sessionHostStartedAt)}).`)
+  }
+  if (Number(after.sessionHostStartedAt) !== startedAt) {
+    fail('Persistent session-host startedAt changed across app relaunch.')
+  }
   const protocolVersion = nonEmptyString(
     String(before.sessionHostProtocolVersion ?? ''),
     'Session-host protocol version'
@@ -1125,7 +1158,16 @@ function buildProfileProbe(profile, catalog, options) {
       `ntcwd="$(${cwdExpression})"; ` +
       `ntcwdhex=$(printf '%s' "$ntcwd" | od -An -tx1 | tr -d ' \\n'); ` +
       `printf '%s%s%s\\n' ${shellSingleQuote(cwdPrefix)} "$ntcwdhex" ${shellSingleQuote(cwdSuffix)}; ` +
-      `set -- $(stty size); printf '%s%sx%s\\n' ${shellSingleQuote(sizePrefix)} "$2" "$1"`
+      // `stty size` reads STDIN, and this script is delivered as `... | base64 -d | sh`, so sh's
+      // stdin is the PIPE — it was asking a pipe for a window size and getting "Inappropriate
+      // ioctl for device" every time. Not a ConPTY or MSYS quirk: it fails the same way on any
+      // platform, and the other dialects escape it only by not using the piped form.
+      //
+      // Measured before this fix: marker=true unicode=true cwd=true size=FALSE, with the cwd
+      // decoding perfectly — so `pwd -W` and `od` were fine and this one line was the whole
+      // failure. Read the terminal directly, keeping the bare form as a fallback for a shell
+      // with no /dev/tty rather than losing the probe entirely there.
+      `set -- $(stty size < /dev/tty 2>/dev/null || stty size 2>/dev/null); printf '%s%sx%s\\n' ${shellSingleQuote(sizePrefix)} "$2" "$1"`
     const encoded = Buffer.from(script, 'utf8').toString('base64')
     command = `printf '%s' ${shellSingleQuote(encoded)} | base64 -d | sh\r`
   }

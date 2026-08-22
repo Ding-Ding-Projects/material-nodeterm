@@ -9,6 +9,8 @@ import { SectionReset } from '../SectionReset'
 import { Switch } from '@renderer/ui/Switch'
 import { Select } from '@renderer/ui/Select'
 import { NumberField } from '@renderer/ui/NumberField'
+import { Input } from '@renderer/ui/Input'
+import { DEFAULT_WORD_SEPARATORS } from '@shared/word-separators'
 import { SegmentedPill } from '@renderer/ui/SegmentedPill'
 import { TERMINAL_RESET_KEYS } from '@renderer/lib/settingsReset'
 import {
@@ -49,6 +51,13 @@ const ROWS = {
     title: 'Spacing',
     keywords: [
       'spacing', 'line', 'height', 'leading', 'density', 'letter', 'tracking', 'character'
+    ]
+  },
+  wordSeparators: {
+    title: 'Word selection',
+    keywords: [
+      'word', 'words', 'separator', 'separators', 'boundary', 'boundaries', 'double click',
+      'double-click', 'select', 'selection', 'iterm', 'iterm2', 'hyphen', 'dash', 'underscore'
     ]
   },
   cursor: {
@@ -253,6 +262,30 @@ export function TerminalSection({ isActive }: { isActive: boolean }): React.JSX.
                 step={0.5}
                 onChange={(v) => update({ terminalLetterSpacing: v ?? 0 })}
               />
+            </span>
+          }
+        />
+      </SearchableRow>
+      <SearchableRow {...ROWS.wordSeparators}>
+        <FieldRow
+          label="Word separators"
+          description="Characters that end a word when you double-click. The default keeps hyphens, underscores, dots, slashes and @ INSIDE a word, so a whole identifier, path or package name selects in one double-click — closer to iTerm2 than to the tmux default, which breaks on all three. Applies to new terminals; existing ones pick it up on restart."
+          control={
+            <span className="flex items-center gap-2">
+              <Input
+                value={settings.terminalWordSeparators}
+                onChange={(e) => update({ terminalWordSeparators: e.target.value })}
+                aria-label="Word separator characters"
+                spellCheck={false}
+                className="font-mono"
+              />
+              <button
+                type="button"
+                className="md3-text-button"
+                onClick={() => update({ terminalWordSeparators: DEFAULT_WORD_SEPARATORS })}
+              >
+                Reset
+              </button>
             </span>
           }
         />

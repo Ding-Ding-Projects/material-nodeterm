@@ -18,12 +18,36 @@ import { canRevealLocally, downloadRoute, triggerBrowserDownload } from '../lib/
 import { isBrowserRuntime } from '../bridge/runtime'
 import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
 import { AnchoredRegexBuilder } from './regex/AnchoredRegexBuilder'
+import { MaterialSymbol, type MaterialSymbolName } from './MaterialSymbol'
+import {
+  AGENT_NODE_DRAG_MIME,
+  hasDragType,
+  readAgentNodeDrag,
+  writeExplorerFolderDrag
+} from '../lib/explorerNodeDrag'
+
+export interface ExplorerAgentFolderDrop {
+  nodeId: string
+  projectId: string
+  path: string
+}
+
+export interface ExplorerFolderAction {
+  projectId: string
+  path: string
+}
 
 export interface ExplorerPanelProps {
   onClose: () => void
   /** Open a file as an editor node. `sshFs` is true for SSH projects (the path is remote, read/
    *  written over the project's ControlMaster fs); false/omitted for local + relay projects. */
   onOpenFile: (path: string, sshFs?: boolean) => void
+  /** Spawn a same-type sibling for the dragged/keyboard-selected agent in this folder. */
+  onAgentNodeDrop?: (drop: ExplorerAgentFolderDrop) => void
+  /** Keyboard/context-menu equivalent for dropping this folder onto empty canvas. */
+  onOpenTerminalAtFolder?: (folder: ExplorerFolderAction) => void
+  /** Agent prepared by the node header's keyboard-operable Explorer action. */
+  keyboardAgentNodeId?: string | null
   /** File to reveal (expand ancestors + select + scroll). `path` is relative to the active project
    *  cwd; `nonce` increments per request so revealing the same file twice still re-fires. */
   reveal?: { path: string; nonce: number } | null
@@ -33,6 +57,7 @@ type ContextFn = (x: number, y: number, path: string, isDir: boolean, ignored?: 
 type OpenFn = (path: string) => void
 type SelectFn = (path: string) => void
 type DownloadFn = (path: string, isDir: boolean) => void
+type AgentFolderDropFn = (drop: ExplorerAgentFolderDrop) => void
 
 /** What a tree row's download button is showing right now. */
 type RowDownloadState = 'running' | 'done' | 'error'
@@ -64,16 +89,23 @@ const toast = (message: string): void => {
   window.dispatchEvent(new CustomEvent('nodeterm:toast', { detail: { kind: 'error', message } }))
 }
 
-function EntryIcon({ dir }: { dir: boolean }) {
-  return dir ? (
-    <svg className="ex-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
-      <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-    </svg>
-  ) : (
-    <svg className="ex-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
-      <path d="M6 3h8l4 4v14H6z" />
-      <path d="M14 3v4h4" />
-    </svg>
+/** Best-effort file glyph from the extension — every name not called out here (the overwhelming
+ *  majority) gets the plain document glyph, matching the tree's previous one-icon-for-every-file
+ *  behavior. Only extensions the bundled 92-glyph subset actually has a distinct icon for are
+ *  special-cased (see scripts/material-symbols-glyphs.json). */
+function fileIconName(name: string): MaterialSymbolName {
+  const ext = name.slice(name.lastIndexOf('.') + 1).toLowerCase()
+  return ext === 'css' ? 'css' : 'description'
+}
+
+function EntryIcon({ dir, open, name }: { dir: boolean; open: boolean; name: string }) {
+  return (
+    <MaterialSymbol
+      className={`ex-icon${dir ? ' ex-icon--dir' : ''}`}
+      name={dir ? (open ? 'folder_open' : 'folder') : fileIconName(name)}
+      size={17}
+      fill={dir}
+    />
   )
 }
 
@@ -90,7 +122,8 @@ function TreeEntry({
   onSelect,
   onDownload,
   rowDl,
-  filterTest
+  filterTest,
+  onAgentNodeDrop
 }: {
   entry: DirEntry
   path: string
@@ -108,6 +141,7 @@ function TreeEntry({
   /** Download state per path — the whole map, so a row deep in the tree sees its own entry
    *  without every level having to thread a single value down. */
   rowDl: Record<string, RowDownloadState>
+  onAgentNodeDrop?: AgentFolderDropFn
   /**
    * The Explorer's own filter/regex field, or undefined when the filter is empty (no filtering
    * at all — the common case). Applied to FILE rows only: the tree is lazy-loaded, so a
@@ -121,6 +155,7 @@ function TreeEntry({
   const [children, setChildren] = useState<DirEntry[] | null>(null)
   const rowRef = useRef<HTMLDivElement>(null)
   const dl = rowDl[path]
+  const [agentDragOver, setAgentDragOver] = useState(false)
 
   const toggleDir = useCallback(() => {
     useExplorer.getState().setExpanded(projectId, path, !open)
@@ -177,9 +212,59 @@ function TreeEntry({
     <>
       <div
         ref={rowRef}
-        className={`ex-row${entry.ignored ? ' ignored' : ''}${selected === path ? ' selected' : ''}`}
+        className={`ex-row md3-explorer__row${entry.ignored ? ' ignored' : ''}${selected === path ? ' selected' : ''}${agentDragOver ? ' ex-row--agent-drop' : ''}`}
         style={{ paddingLeft: 8 + depth * 14 }}
+        role="treeitem"
+        aria-expanded={entry.dir ? open : undefined}
+        tabIndex={0}
+        draggable={entry.dir}
+        onDragStart={(event) => {
+          if (!entry.dir) return
+          event.stopPropagation()
+          event.dataTransfer.effectAllowed = 'copy'
+          writeExplorerFolderDrag(event.dataTransfer, { projectId, path })
+        }}
+        onDragOver={(event) => {
+          if (
+            !entry.dir ||
+            !onAgentNodeDrop ||
+            !hasDragType(event.dataTransfer, AGENT_NODE_DRAG_MIME)
+          ) {
+            return
+          }
+          event.preventDefault()
+          event.stopPropagation()
+          event.dataTransfer.dropEffect = 'copy'
+          setAgentDragOver(true)
+        }}
+        onDragLeave={(event) => {
+          const related = event.relatedTarget as Node | null
+          if (!related || !event.currentTarget.contains(related)) setAgentDragOver(false)
+        }}
+        onDrop={(event) => {
+          if (!entry.dir || !onAgentNodeDrop) return
+          const payload = readAgentNodeDrag(event.dataTransfer)
+          if (!payload) return
+          event.preventDefault()
+          event.stopPropagation()
+          setAgentDragOver(false)
+          onAgentNodeDrop({ nodeId: payload.nodeId, projectId, path })
+        }}
         onClick={onClick}
+        onKeyDown={(event) => {
+          if (event.target !== event.currentTarget) return
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault()
+            onClick()
+            return
+          }
+          if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
+            event.preventDefault()
+            const rect = event.currentTarget.getBoundingClientRect()
+            onSelect(path)
+            onContext(rect.left + 16, rect.top + 16, path, entry.dir, entry.ignored)
+          }
+        }}
         onContextMenu={(e) => {
           e.preventDefault()
           onSelect(path)
@@ -187,8 +272,12 @@ function TreeEntry({
         }}
         title={entry.name}
       >
-        <span className={`ex-chevron${entry.dir ? '' : ' hidden'}${open ? ' open' : ''}`}>›</span>
-        <EntryIcon dir={entry.dir} />
+        <MaterialSymbol
+          className={`ex-chevron${entry.dir ? '' : ' hidden'}${open ? ' open' : ''}`}
+          name="chevron_right"
+          size={16}
+        />
+        <EntryIcon dir={entry.dir} open={open} name={entry.name} />
         <span className="ex-name">{entry.name}</span>
         {onDownload && (
           <button
@@ -205,7 +294,15 @@ function TreeEntry({
               onDownload(path, entry.dir)
             }}
           >
-            {dl === 'running' ? <span className="ex-dl__spin" /> : dl === 'done' ? '✓' : dl === 'error' ? '!' : '⤓'}
+            {dl === 'running' ? (
+              <span className="ex-dl__spin" />
+            ) : (
+              <MaterialSymbol
+                name={dl === 'done' ? 'check_circle' : dl === 'error' ? 'error' : 'download'}
+                size={15}
+                fill={dl === 'done' || dl === 'error'}
+              />
+            )}
           </button>
         )}
       </div>
@@ -227,6 +324,7 @@ function TreeEntry({
             onDownload={onDownload}
             rowDl={rowDl}
             filterTest={filterTest}
+            onAgentNodeDrop={onAgentNodeDrop}
           />
         ))}
     </>
@@ -241,7 +339,14 @@ function TreeEntry({
  * NOTE (relay): a relay session's Explorer is still rooted at the local project's `cwd` — the host's
  * root cwd isn't known client-side. A relay tab reaches the host fs through its bridged session api
  * (the same seam TerminalNode/EditorNode use), not a separate per-connection fs client. */
-export function ExplorerPanel({ onClose, onOpenFile, reveal }: ExplorerPanelProps) {
+export function ExplorerPanel({
+  onClose,
+  onOpenFile,
+  onAgentNodeDrop,
+  onOpenTerminalAtFolder,
+  keyboardAgentNodeId,
+  reveal
+}: ExplorerPanelProps) {
   // Filters visible FILE rows by name (plain text, or regex via the `.*` trigger). See the
   // `filterTest` doc comment on TreeEntry for why directories are never hidden by it.
   const filter = useRegexSearchField()
@@ -464,16 +569,16 @@ export function ExplorerPanel({ onClose, onOpenFile, reveal }: ExplorerPanelProp
   )
 
   return createPortal(
-    <div className="drawer-overlay" onClick={onClose}>
-      <aside className="drawer" onClick={(e) => e.stopPropagation()}>
+    <div className="drawer-overlay explorer-overlay">
+      <aside className="drawer md3-explorer" onClick={(e) => e.stopPropagation()}>
         <div className="drawer__head">
           <h2>{project?.name || 'Explorer'}</h2>
           <div className="ex-head-actions">
-            <button title="Refresh" onClick={() => setVersion((v) => v + 1)}>
-              ↻
+            <button title="Refresh" aria-label="Refresh" onClick={() => setVersion((v) => v + 1)}>
+              <MaterialSymbol name="refresh" size={18} />
             </button>
-            <button className="drawer__close" onClick={onClose}>
-              ×
+            <button className="drawer__close" aria-label="Close" onClick={onClose}>
+              <MaterialSymbol name="close" size={19} />
             </button>
           </div>
         </div>
@@ -486,7 +591,7 @@ export function ExplorerPanel({ onClose, onOpenFile, reveal }: ExplorerPanelProp
 
         {cwd && (
           <>
-            <div className="ex-filter-row">
+            <div className="ex-filter-row md3-explorer__filter">
               <input
                 ref={filterInputRef}
                 className="ex-filter-input"
@@ -505,6 +610,8 @@ export function ExplorerPanel({ onClose, onOpenFile, reveal }: ExplorerPanelProp
             )}
             <div
               className="drawer__body ex-body"
+              role="tree"
+              aria-label={`${project?.name || 'Project'} folders and files`}
               onContextMenu={(e) => {
                 if (e.target !== e.currentTarget || !cwd) return
                 e.preventDefault()
@@ -528,6 +635,7 @@ export function ExplorerPanel({ onClose, onOpenFile, reveal }: ExplorerPanelProp
                   onDownload={onDownload}
                   rowDl={rowDl}
                   filterTest={filterTest}
+                  onAgentNodeDrop={onAgentNodeDrop}
                 />
               ))}
             </div>
@@ -535,10 +643,18 @@ export function ExplorerPanel({ onClose, onOpenFile, reveal }: ExplorerPanelProp
         )}
 
         {downloads.length > 0 && (
-          <div className="ex-dls">
+          <div className="ex-dls md3-explorer__downloads">
             {downloads.map((d) => (
               <div key={d.id} className={`ex-dls__row ${d.status}`}>
-                {d.status === 'running' && <span className="ex-dls__spin" />}
+                {d.status === 'running' ? (
+                  <span className="ex-dls__spin" />
+                ) : (
+                  <MaterialSymbol
+                    className="ex-dls__icon"
+                    name={d.status === 'error' ? 'error' : 'downloading'}
+                    size={17}
+                  />
+                )}
                 <span className="ex-dls__name" title={d.detail || d.localPath || d.name}>
                   {d.name}
                   {d.dir && d.status === 'running' ? ' (folder)' : ''}
@@ -552,11 +668,11 @@ export function ExplorerPanel({ onClose, onOpenFile, reveal }: ExplorerPanelProp
                   </button>
                 )}
                 <button
-                  className="ex-dls__act"
+                  className="ex-dls__act ex-dls__dismiss"
                   aria-label="Dismiss"
                   onClick={() => setDownloads((list) => list.filter((x) => x.id !== d.id))}
                 >
-                  ×
+                  <MaterialSymbol name="close" size={15} />
                 </button>
               </div>
             ))}
@@ -603,6 +719,37 @@ export function ExplorerPanel({ onClose, onOpenFile, reveal }: ExplorerPanelProp
               >
                 New Folder…
               </button>
+              {menu.dir && onOpenTerminalAtFolder && (
+                <>
+                  <div className="ctx-sep" />
+                  <button
+                    className="ctx-item"
+                    onClick={() => {
+                      const folder = { projectId: project!.id, path: menu.path }
+                      setMenu(null)
+                      onOpenTerminalAtFolder(folder)
+                    }}
+                  >
+                    Open terminal here
+                  </button>
+                  {keyboardAgentNodeId && onAgentNodeDrop && (
+                    <button
+                      className="ctx-item"
+                      onClick={() => {
+                        const path = menu.path
+                        setMenu(null)
+                        onAgentNodeDrop({
+                          nodeId: keyboardAgentNodeId,
+                          projectId: project!.id,
+                          path
+                        })
+                      }}
+                    >
+                      Open selected agent here
+                    </button>
+                  )}
+                </>
+              )}
               {route !== 'none' && (
                 <>
                   <div className="ctx-sep" />

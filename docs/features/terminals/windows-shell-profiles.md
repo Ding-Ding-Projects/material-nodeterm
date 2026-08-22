@@ -29,6 +29,12 @@ Settings → Shell lists the catalog, shows why an unavailable profile cannot be
 refresh detection after a shell or WSL distribution is installed or removed. The custom profile
 keeps an executable picker/text field for advanced setups.
 
+Detection refresh evaluates the effective active-project custom executable without persisting it
+as a global default. The renderer sends one bounded control-character-free string for that
+read-only refresh; the trusted desktop service uses it only while deriving the public availability
+row. It is never stored by the refresh path and never becomes launch arguments. Global and sparse
+project persistence remains owned by the shared Settings store.
+
 An explicit profile never silently changes identity. If PowerShell 7, Git Bash, or a selected WSL
 distribution later disappears, an existing node reports that profile as unavailable and offers a
 profile choice; it does not open cmd, another distribution, or the automatic profile instead.
@@ -87,9 +93,11 @@ replaces the shell and therefore cannot preserve the process that shell owns.
 
 ## Trust boundary
 
-Executable paths and launch arguments are private to the trusted desktop core. The renderer sends
-only `profileId`, and core validates and resolves that id again at the point of use. A malformed,
-unknown, unavailable, or hand-edited id fails closed.
+Executable launch paths and launch arguments are private to the trusted desktop core. The renderer
+sends only `profileId` for launch, and core validates and resolves that id again at the point of
+use. For read-only detection refresh only, the renderer may send the bounded effective custom
+executable setting described above; it is validated again, used only for availability, and never
+stored or executed by that call. A malformed, unknown, unavailable, or hand-edited id fails closed.
 
 `terminalProfileId`, the legacy custom `shell`, and advanced SSH execution fields live in the
 machine-local `LocalNodeExec` overlay. They are stripped from `.nodeterm/project.json`, portable
@@ -116,8 +124,44 @@ replaced by resolver and spawn behaviour tests.
 Profile-specific Settings, creation, unavailable-state, restart, header, and recovery copy is
 registered for every shipped app language and passes through the local personal-vocabulary
 boundary; detected profile names, WSL distribution names, executable paths, and host diagnostics
-remain verbatim facts. Packaged-app interaction and capture evidence is recorded only after it has
-been exercised through the required cheap Lowlevel MCP headless Windows route. This article does not claim that the pending packaged interaction or capture verification has happened.
+remain verbatim facts. Capture evidence is recorded only after it has been exercised through the
+required cheap Lowlevel MCP headless Windows route.
+
+Packaged-app interaction **is** exercised, by `npm run check:wired` against the real built
+artifact. Three cases in `scripts/check-app-wired.mjs` drive this feature end to end over CDP in
+a disposable profile: `terminal-profile-picker` opens Settings → Shell, checks the picker offers
+exactly the catalog core detected and leaves selectable only what this machine actually has, then
+moves the default and reads it back out of main; `terminal-profile-spawn` creates a terminal from
+the canvas menu under a named profile, confirms the node reaches a live terminal under it, and
+confirms an unknown profile id is REFUSED rather than quietly becoming another shell;
+`terminal-profile-restart` takes a live node through **Restart with profile…** and its two-key
+destructive gate, and requires both the relaunched node and main’s workspace to agree on the new
+profile. Those three cases are win32-only and declare a skip, with its reason, on any other host.
+
+Capture evidence remains pending. This article does not claim that the pending capture
+verification has happened.
+
+What changed is *why* it is pending. Until recently the blocker was structural rather than
+practical: `scripts/run-windows-profile-packaged-acceptance.mjs` produced real packaged evidence
+but wrote it to a disposable task root, and the contract read a committed manifest, and nothing
+carried one to the other. Somebody could have done the whole run and still had nowhere to put the
+result. The obvious shortcut — hand-adding the ids to `docs/assets/shots/capture-manifest.json` —
+is self-erasing (`capture-shots.mjs` rewrites that file wholesale on every `npm run shots`) and
+dishonest besides, since one manifest declares one `method` and that file's method describes the
+unpackaged CDP sweep against a different artifact.
+
+So packaged evidence now has its own committed manifest,
+`docs/assets/shots/packaged-capture-manifest.json`, written only by
+`node scripts/promote-packaged-captures.mjs --evidence <acceptance manifest>` and untouched by the
+capture sweep. That promoter is deliberately hostile: it verifies the schema version, that the
+route passed, that the method names the cheap headless route, that every required id is present,
+that every referenced PNG opens and carries the real PNG signature, clears the 6000-byte
+blank-frame floor and matches its own recorded `sha256`, and that the recorded `gitHead` is a real
+commit in this repository. It refuses on the first unmet condition and writes nothing — a
+half-promoted manifest is worse than none, because it reads as evidence.
+
+The mechanism exists; the evidence does not. What is left is running the harness on a Windows
+machine against a packaged build of the commit under test.
 
 ## Suggested articles
 

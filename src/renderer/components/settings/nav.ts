@@ -9,6 +9,7 @@ export type SettingsSectionId =
   | 'phone'
   | 'speech'
   | 'schedule'
+  | 'adhd-modes'
   | 'shortcuts'
   | 'agents'
   | 'usage'
@@ -87,6 +88,7 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
       { id: 'narrator', title: 'Narrator' },
       { id: 'speech', title: 'Speech' },
       { id: 'schedule', title: 'Schedule' },
+      { id: 'adhd-modes', title: 'ADHD modes' },
       { id: 'shortcuts', title: 'Shortcuts' }
     ]
   },
@@ -96,7 +98,7 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
     sections: [
       { id: 'presence', title: 'Your name' },
       { id: 'phone', title: 'Phone' },
-      { id: 'remote', title: 'Remote access' },
+      { id: 'remote', title: 'Docker host' },
       { id: 'team-access', title: 'Team seats' },
       { id: 'ssh', title: 'Remote (SSH)' }
     ]

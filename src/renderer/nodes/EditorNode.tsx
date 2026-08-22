@@ -12,6 +12,7 @@ import type { CanvasNode } from '../state/workspace'
 import { tooLargeSize, formatBytes } from '@shared/fsLimits'
 import { hintLabel } from '@shared/platform-utils'
 import { pdfBlobUrl } from '../lib/pdfBlob'
+import { nodeHeaderFillStyle } from '../lib/nodeColor'
 
 // Image extensions get a visual preview instead of the Monaco text editor.
 const IMAGE_MIME: Record<string, string> = {
@@ -238,6 +239,8 @@ export function EditorNode({ id, data, selected }: NodeProps<CanvasNode>) {
     if (hoveredRef.current) toggleRef.current()
   }), [])
 
+  const headerFill = nodeHeaderFillStyle(data.color)
+
   return (
     <div
       className={`term-node editor-node${selected ? ' selected' : ''}`}
@@ -255,7 +258,12 @@ export function EditorNode({ id, data, selected }: NodeProps<CanvasNode>) {
         style={{ opacity: 0, pointerEvents: 'none', top: 0 }}
       />
 
-      <div className="term-node__header">
+      <div
+        className={`term-node__header ${headerFill.className}${
+          headerFill.filled ? ' term-node__header--filled' : ''
+        }`}
+        style={headerFill.style}
+      >
         <span className="term-node__title-text" title={filePath}>
           {fileName}
           {!isImage && !isPdf && dirty ? ' ●' : ''}

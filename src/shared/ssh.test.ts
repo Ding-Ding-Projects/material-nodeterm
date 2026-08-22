@@ -1,3 +1,4 @@
+import { DEFAULT_WORD_SEPARATORS } from './word-separators'
 import { describe, expect, it } from 'vitest'
 import {
   buildSshArgs,
@@ -232,7 +233,7 @@ describe('remoteTmuxCommand', () => {
 })
 
 describe('remoteTmuxConf', () => {
-  const c = remoteTmuxConf(50000)
+  const c = remoteTmuxConf(50000, DEFAULT_WORD_SEPARATORS)
   it('leaves the mouse ON — tmux owns scrolling and selection (native, alternate screen)', () => {
     expect(c).toContain('set -g mouse on')
     expect(c).not.toContain('set -g mouse off')
@@ -274,8 +275,8 @@ describe('remoteTmuxConf', () => {
     expect(c).not.toContain('pbcopy')
   })
   it('floors history-limit at 1000', () => {
-    expect(remoteTmuxConf(10)).toContain('set -g history-limit 1000')
-    expect(remoteTmuxConf(50000)).toContain('set -g history-limit 50000')
+    expect(remoteTmuxConf(10, DEFAULT_WORD_SEPARATORS)).toContain('set -g history-limit 1000')
+    expect(remoteTmuxConf(50000, DEFAULT_WORD_SEPARATORS)).toContain('set -g history-limit 50000')
   })
 })
 
@@ -375,5 +376,52 @@ describe('buildSshArgs exec guard', () => {
     // A bare positional token: with no exec option it survives stripLocalExecArgs (dropped=[]), so
     // the OLD code passed it through and ssh took `evilhost` as the destination instead of u@h.
     expect(buildSshArgs({ ...base, extraArgs: 'evilhost' })).toEqual(['-p', '22', 'u@h'])
+  })
+})
+
+describe('word separators reach the remote conf (issue #349)', () => {
+  // tmux owns the mouse in this app, so a double-click is tmux's `select-word`, governed by tmux's
+  // own `word-separators` — whose DEFAULT is " -_@", i.e. it breaks on hyphen, underscore AND
+  // at-sign. That default IS the reported bug. Setting only xterm's `wordSeparator` would have
+  // been a no-op for the common case, so these assert the line actually lands in the conf.
+
+  /**
+   * The VALUE, not the whole line.
+   *
+   * The line itself contains hyphens — in `-g` and in `word-separators` — so asserting "no hyphen"
+   * against it fails on perfectly correct output. That is exactly how this test first went red,
+   * and it is worth the extra helper: an assertion that fails on correct code gets "fixed" by
+   * weakening it, which is how a test quietly stops testing.
+   */
+  const separatorValue = (conf: string): string => {
+    const line = conf.split('\n').find((l) => l.startsWith('set -g word-separators ')) ?? ''
+    const m = /^set -g word-separators "(.*)"$/.exec(line)
+    return m ? m[1] : ''
+  }
+
+  it('emits a word-separators line', () => {
+    expect(separatorValue(remoteTmuxConf(50000, DEFAULT_WORD_SEPARATORS)).length).toBeGreaterThan(0)
+  })
+
+  it('keeps hyphen, underscore and at-sign inside a word — the whole point of the issue', () => {
+    const value = separatorValue(remoteTmuxConf(50000, DEFAULT_WORD_SEPARATORS))
+    expect(value.length).toBeGreaterThan(0)
+    for (const ch of ['-', '_', '@', '.', '/', '~', '+', ':']) {
+      expect(value).not.toContain(ch)
+    }
+  })
+
+  it('passes a custom set through', () => {
+    expect(separatorValue(remoteTmuxConf(50000, ' ,;'))).toBe(' ,;')
+  })
+
+  // Re-validated where it is interpolated, not merely where it is typed: a newline here would
+  // append an attacker-chosen tmux command to a config file — for an SSH project, one written
+  // onto somebody else's host.
+  it('refuses a forged value at the interpolation site rather than trusting its type', () => {
+    const forged = ' "' + String.fromCharCode(10) + 'set -g default-command "evil'
+    const conf = remoteTmuxConf(50000, forged)
+    expect(conf).not.toContain('default-command')
+    expect(separatorValue(conf)).toBe(separatorValue(remoteTmuxConf(50000, DEFAULT_WORD_SEPARATORS)))
   })
 })

@@ -16,6 +16,7 @@ import { isBrowserRuntime } from '../../bridge/runtime'
 import { formatBytes } from '../../lib/bytesFormat'
 import { bytesToBase64 } from '../../lib/browserBytes'
 import { useActiveSessionApi } from '../../session/session'
+import { MaterialSymbol, type MaterialSymbolName } from '../MaterialSymbol'
 import { AdapterCatalog } from './AdapterCatalog'
 
 export interface FileConverterPanelProps {
@@ -82,24 +83,24 @@ async function uploadBrowserFiles(filesApi: NodeTerminalApi['files'], files: Fil
   return paths
 }
 
-function statusIcon(status: ConvertQueueItem['status']): string {
+function statusIcon(status: ConvertQueueItem['status']): MaterialSymbolName {
   switch (status) {
     case 'done':
-      return '✓'
+      return 'check_circle'
     case 'failed':
-      return '✕'
+      return 'warning'
     case 'cancelled':
-      return '⦸'
+      return 'close'
     case 'running':
-      return '↻'
+      return 'sync'
     case 'needs-confirm':
-      return '⚠'
+      return 'warning'
     case 'paused':
-      return '⏸'
+      return 'hourglass_top'
     case 'skipped':
-      return '⊘'
+      return 'close'
     default:
-      return '⋯'
+      return 'schedule'
   }
 }
 
@@ -123,7 +124,7 @@ function QueueRow({
     <li className={`cv-item cv-item--${item.status}`}>
       <div className="cv-item__row">
         <span className="cv-item__icon" aria-hidden>
-          {statusIcon(item.status)}
+          <MaterialSymbol name={statusIcon(item.status)} size={16} />
         </span>
         <span className="cv-item__name" title={item.sourcePath}>
           {item.sourceName}
@@ -509,12 +510,12 @@ function FileConverterPanelForApi({
   }, [queue])
 
   return createPortal(
-    <div className="drawer-overlay" onClick={onClose}>
+    <div className="drawer-overlay md3-converter" onClick={onClose}>
       <aside className="drawer converter" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="File converter">
         <div className="drawer__head">
           <h2>File converter</h2>
           <button className="drawer__close" onClick={onClose} aria-label="Close">
-            ×
+            <MaterialSymbol name="close" size={18} />
           </button>
         </div>
         <div className="drawer__body cv-body">
@@ -582,6 +583,7 @@ function FileConverterPanelForApi({
             {selectedAdapter && selectedAdapter.lossy && (
               <div className="cv-lossy">
                 <p>
+                  <MaterialSymbol name="warning" size={16} />
                   <strong>This conversion can lose information:</strong>
                 </p>
                 <ul>

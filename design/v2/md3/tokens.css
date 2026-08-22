@@ -1,0 +1,102 @@
+/* nodeterm — Material Design 3 token layer (classic MD3, seed #6750A4 baseline).
+   Drop-in: same --md-* names src/renderer/styles.css already speaks.
+   Dark is the default (:root); light keys off html[data-theme='light'] exactly like today. */
+:root {
+  /* Primary */
+  --md-primary: #D0BCFF;
+  --md-on-primary: #381E72;
+  --md-primary-container: #4F378B;
+  --md-on-primary-container: #EADDFF;
+  /* Secondary */
+  --md-secondary: #CCC2DC;
+  --md-on-secondary: #332D41;
+  --md-secondary-container: #4A4458;
+  --md-on-secondary-container: #E8DEF8;
+  /* Tertiary */
+  --md-tertiary: #EFB8C8;
+  --md-on-tertiary: #492532;
+  --md-tertiary-container: #633B48;
+  --md-on-tertiary-container: #FFD8E4;
+  /* Error */
+  --md-error: #F2B8B5;
+  --md-on-error: #601410;
+  --md-error-container: #8C1D18;
+  --md-on-error-container: #F9DEDC;
+  /* Custom semantic roles (harmonized to seed) */
+  --md-success: #89D88C;
+  --md-success-container: #0B5219;
+  --md-on-success-container: #A4F5A6;
+  --md-warning: #E7C26C;
+  --md-warning-container: #5B4300;
+  --md-on-warning-container: #FFDF9E;
+  /* Surfaces — tonal elevation ladder */
+  --md-surface: #141218;
+  --md-surface-dim: #141218;
+  --md-surface-bright: #3B383E;
+  --md-surface-container-lowest: #0F0D13;
+  --md-surface-container-low: #1D1B20;
+  --md-surface-container: #211F26;
+  --md-surface-container-high: #2B2930;
+  --md-surface-container-highest: #36343B;
+  --md-on-surface: #E6E0E9;
+  --md-on-surface-variant: #CAC4D0;
+  --md-outline: #938F99;
+  --md-outline-variant: #49454F;
+  --md-inverse-surface: #E6E0E9;
+  --md-inverse-on-surface: #322F35;
+  --md-inverse-primary: #6750A4;
+  --md-scrim: rgba(0, 0, 0, 0.6);
+  /* Fixed non-theme roles */
+  --term-bg: #0F0D13;           /* terminal bodies stay dark in both themes */
+  --md-canvas-dot: #322F38;
+  /* Shape */
+  --md-shape-xs: 8px;  --md-shape-sm: 12px;  --md-shape-md: 16px;
+  --md-shape-lg: 28px; --md-shape-full: 999px;
+  /* Motion (MD3 expressive springs approximated for CSS) */
+  --md-motion-spatial: 500ms cubic-bezier(0.38, 1.21, 0.22, 1);
+  --md-motion-effect: 200ms cubic-bezier(0.34, 0.80, 0.34, 1);
+  /* Type */
+  --md-font-ui: 'Outfit', 'Segoe UI', system-ui, sans-serif;
+  --md-font-mono: 'Roboto Mono', ui-monospace, Menlo, monospace;
+}
+:root[data-theme='light'] {
+  --md-primary: #6750A4;
+  --md-on-primary: #FFFFFF;
+  --md-primary-container: #EADDFF;
+  --md-on-primary-container: #21005D;
+  --md-secondary: #625B71;
+  --md-on-secondary: #FFFFFF;
+  --md-secondary-container: #E8DEF8;
+  --md-on-secondary-container: #1D192B;
+  --md-tertiary: #7D5260;
+  --md-on-tertiary: #FFFFFF;
+  --md-tertiary-container: #FFD8E4;
+  --md-on-tertiary-container: #31111D;
+  --md-error: #B3261E;
+  --md-on-error: #FFFFFF;
+  --md-error-container: #F9DEDC;
+  --md-on-error-container: #410E0B;
+  --md-success: #226C33;
+  --md-success-container: #A8F5B4;
+  --md-on-success-container: #00210A;
+  --md-warning: #785900;
+  --md-warning-container: #FFDF9E;
+  --md-on-warning-container: #261A00;
+  --md-surface: #FEF7FF;
+  --md-surface-dim: #DED8E1;
+  --md-surface-bright: #FEF7FF;
+  --md-surface-container-lowest: #FFFFFF;
+  --md-surface-container-low: #F7F2FA;
+  --md-surface-container: #F3EDF7;
+  --md-surface-container-high: #ECE6F0;
+  --md-surface-container-highest: #E6E0E9;
+  --md-on-surface: #1D1B20;
+  --md-on-surface-variant: #49454F;
+  --md-outline: #79747E;
+  --md-outline-variant: #CAC4D0;
+  --md-inverse-surface: #322F35;
+  --md-inverse-on-surface: #F5EFF7;
+  --md-inverse-primary: #D0BCFF;
+  --md-scrim: rgba(0, 0, 0, 0.32);
+  --md-canvas-dot: #D8D0DE;
+}

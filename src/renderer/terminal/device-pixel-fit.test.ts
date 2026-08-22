@@ -2,9 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
   RASTER_SCALE_MAX,
   RASTER_SCALE_STEP,
+  cellWidthIsStable,
   devicePixelSnapOffset,
   isPixelExact,
+  quantizedCellWidth,
   resampleFactor,
+  safeRasterScale,
   terminalRasterScale
 } from './device-pixel-fit'
 
@@ -136,6 +139,169 @@ describe('resampleFactor / isPixelExact', () => {
   it('treats an unreadable dpr/zoom/scale as 1 rather than dividing by zero', () => {
     expect(Number.isFinite(resampleFactor(NaN, 1, 1.5))).toBe(true)
     expect(resampleFactor(1.5, 1, 0)).toBeCloseTo(1.5, 10)
+  })
+})
+
+/**
+ * A spread of raw measured char widths rather than one tidy number. Real measurements are
+ * fractional and arbitrary — 13px Consolas measures ~7.8, 14px ~8.4 — and the whole point of the
+ * stability rule is that it must hold for a width nobody chose.
+ */
+const RAW_WIDTHS: number[] = []
+for (let i = 0; i < 800; i++) RAW_WIDTHS.push(5 + i * 0.0085)
+
+describe('safeRasterScale / cellWidthIsStable', () => {
+  it('never moves the CSS cell width of a grid-aligned terminal, at any dpr or zoom', () => {
+    // THE contract. `addon-fit` divides the available pixels by `css.cell.width` to get `cols`, so
+    // a cell that moves is a `terminal.resize()` — SIGWINCH into the user's tmux session — on every
+    // zoom step. Widths are put on the display grid first because that is what `quantizeCharSize`
+    // hands the renderers, and it is the precondition the multiple-of-dpr proof rests on.
+    // 800 widths x 4 dprs x 9 zooms; a single failure here is a reflow bug.
+    for (const raw of RAW_WIDTHS) {
+      for (const dpr of DPRS) {
+        const aligned = quantizedCellWidth(raw, dpr)
+        for (const zoom of ZOOMS) {
+          expect(cellWidthIsStable(aligned, dpr, safeRasterScale(dpr, zoom))).toBe(true)
+        }
+      }
+    }
+  })
+
+  it('is a constraint that earns its place — the unconstrained ideal moves the cell', () => {
+    // Proof that `safeRasterScale` is not ceremony around `terminalRasterScale`: over the very same
+    // sweep the quarter-step ideal moves the cell in thousands of combinations. Here is one, worked
+    // end to end at the dpr the header's measurements were taken on.
+    const cell = quantizedCellWidth(8.7, 1.5)
+    expect(cell).toBeCloseTo(8.6667, 4)
+
+    const ideal = terminalRasterScale(1.5, 1.1)
+    expect(ideal).toBe(1.75)
+    expect(cellWidthIsStable(cell, 1.5, ideal)).toBe(false)
+    // ...and this is what that costs: the cell narrows by 1.1%, so an 800px-wide terminal gains a
+    // column and the pty is resized.
+    expect(quantizedCellWidth(cell, ideal)).toBeCloseTo(8.5714, 4)
+    expect(Math.floor(800 / cell)).toBe(92)
+    expect(Math.floor(800 / quantizedCellWidth(cell, ideal))).toBe(93)
+
+    // The safe answer covers the same zoom and leaves the column count alone.
+    expect(safeRasterScale(1.5, 1.1)).toBe(3)
+    expect(cellWidthIsStable(cell, 1.5, 3)).toBe(true)
+    expect(quantizedCellWidth(cell, 3)).toBeCloseTo(cell, 10)
+
+    // Sanity that the sweep above is not vacuously true because nothing is ever unstable.
+    let unstable = 0
+    for (const raw of RAW_WIDTHS) {
+      for (const dpr of DPRS) {
+        const aligned = quantizedCellWidth(raw, dpr)
+        for (const zoom of ZOOMS) {
+          if (!cellWidthIsStable(aligned, dpr, terminalRasterScale(dpr, zoom))) unstable++
+        }
+      }
+    }
+    expect(unstable).toBeGreaterThan(1000)
+  })
+
+  it('refuses a width that never reached the display grid', () => {
+    // The case the runtime check in `raster-scale.ts` exists for: `quantizeCharSize` is fail-open,
+    // so a future xterm can leave the raw fractional measurement in place. The multiple-of-dpr
+    // proof does not cover that, and supersampling it WOULD move the cell.
+    expect(quantizedCellWidth(8.43, 1.5)).toBeCloseTo(8, 10)
+    expect(quantizedCellWidth(8.43, 3)).toBeCloseTo(8.3333, 4)
+    expect(cellWidthIsStable(8.43, 1.5, 3)).toBe(false)
+
+    // It is not a rare corner either — about half of the scale changes this module would otherwise
+    // propose are refused once the width is off-grid.
+    let proposed = 0
+    let refused = 0
+    for (const raw of RAW_WIDTHS) {
+      for (const dpr of DPRS) {
+        for (const zoom of ZOOMS) {
+          const scale = safeRasterScale(dpr, zoom)
+          if (scale === dpr) continue
+          proposed++
+          if (!cellWidthIsStable(raw, dpr, scale)) refused++
+        }
+      }
+    }
+    expect(proposed).toBeGreaterThan(0)
+    expect(refused / proposed).toBeGreaterThan(0.25)
+  })
+
+  it('is always a whole multiple of the display dpr', () => {
+    // The mechanism behind the stability above: `floor(w x d)/d x n x d = n x floor(w x d)` is an
+    // integer, so the renderer's floor loses nothing.
+    for (const dpr of DPRS) {
+      for (const zoom of ZOOMS) {
+        const n = safeRasterScale(dpr, zoom) / dpr
+        expect(Math.abs(n - Math.round(n))).toBeLessThan(1e-9)
+        expect(Math.round(n)).toBeGreaterThanOrEqual(1)
+      }
+    }
+  })
+
+  it('never rasterizes coarser than the ideal, unless the memory ceiling says so', () => {
+    for (const dpr of DPRS) {
+      // The ceiling is a multiple too — `Math.min(RASTER_SCALE_MAX, ...)` would hand dpr 2 a scale
+      // of 3, which is not a multiple of 2 and would move the cell.
+      const ceilingMultiple = Math.max(1, Math.floor(RASTER_SCALE_MAX / dpr)) * dpr
+      for (const zoom of ZOOMS) {
+        const safe = safeRasterScale(dpr, zoom)
+        expect(safe).toBeGreaterThanOrEqual(dpr)
+        // Rounding UP to a multiple, never down: the step bounds rebuilds, it does not license
+        // blur. The one exception is being clamped, and then it must sit exactly ON the ceiling.
+        if (safe + 1e-9 < terminalRasterScale(dpr, zoom)) {
+          expect(safe).toBeCloseTo(ceilingMultiple, 10)
+        }
+      }
+    }
+    // Spelled out, because it is the whole reason dpr 2 is inert: the ideal wants 2.25 and the
+    // largest multiple of 2 within the ceiling is 2, so the clamp wins.
+    expect(terminalRasterScale(2, 1.0725)).toBe(2.25)
+    expect(safeRasterScale(2, 1.0725)).toBe(2)
+  })
+
+  it('costs at most one rebuild per zoom-in gesture, and none for zoom-out', () => {
+    // The cost argument for the wiring is a property of this function, not of a debounce: the
+    // multiples of dpr are far enough apart that the answer only changes as zoom crosses 1.
+    for (const dpr of DPRS) {
+      const scales = new Set(ZOOMS.map((z) => safeRasterScale(dpr, z)))
+      expect(scales.size).toBeLessThanOrEqual(2)
+      // Zooming out re-rasterizes nothing at all.
+      for (const zoom of [0.01, 0.37, 0.83, 0.9048, 1]) {
+        expect(safeRasterScale(dpr, zoom)).toBeCloseTo(dpr, 10)
+      }
+    }
+  })
+
+  it('stays inside the memory ceiling, and is deliberately inert at dpr 2', () => {
+    expect(safeRasterScale(1.5, 2)).toBe(3)
+    expect(safeRasterScale(1.25, 2)).toBe(2.5)
+    expect(safeRasterScale(1, 2)).toBe(2)
+    // dpr 2's next multiple is 4, past RASTER_SCALE_MAX — so the scale half does nothing on an
+    // integer-dpr display, at any zoom. Stated as a test so nobody "fixes" it into a 4x atlas.
+    for (const zoom of ZOOMS) expect(safeRasterScale(2, zoom)).toBe(2)
+    for (const dpr of DPRS) {
+      for (const zoom of ZOOMS) {
+        expect(safeRasterScale(dpr, zoom)).toBeLessThanOrEqual(Math.max(RASTER_SCALE_MAX, dpr))
+      }
+    }
+    // A display whose own dpr is past the ceiling is never rasterized coarser than itself.
+    expect(safeRasterScale(4, 1)).toBe(4)
+    expect(safeRasterScale(4, 2)).toBe(4)
+  })
+
+  it('answers a finite, usable scale for a browser that reported nonsense', () => {
+    for (const bad of [NaN, 0, -1, Infinity, -Infinity]) {
+      expect(Number.isFinite(safeRasterScale(bad, 1))).toBe(true)
+      expect(safeRasterScale(bad, 1)).toBeGreaterThan(0)
+      expect(safeRasterScale(1.5, bad)).toBeCloseTo(1.5, 10)
+    }
+  })
+
+  it('keeps a sub-device-pixel width rather than quantizing it to zero', () => {
+    // Same fallback `quantizeCharSize` makes: a 0 cell width invalidates the whole char size.
+    expect(quantizedCellWidth(0.3, 1)).toBeCloseTo(0.3, 10)
+    expect(quantizedCellWidth(8.43, 1.5)).toBeCloseTo(8, 10)
   })
 })
 

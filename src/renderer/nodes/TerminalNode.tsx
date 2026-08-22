@@ -28,6 +28,7 @@ import { WebglAddon } from '@xterm/addon-webgl'
 // here. `lazy` + a null fallback — the panel replaces the terminal body on a keypress, and a
 // one-frame spinner in that slot reads as a glitch.
 const ChatPanel = lazy(() => import('./ChatPanel').then((m) => ({ default: m.ChatPanel })))
+import { nodeHeaderFillStyle } from '../lib/nodeColor'
 import { LocalTransport } from '../terminal/local-transport'
 import { clipboardImages, droppedPaths, pasteHasText, pastedFiles } from '../terminal/file-drop'
 import type { TerminalTransport } from '../terminal/transport'
@@ -87,6 +88,7 @@ import {
   planParkEviction,
   type ParkTimer
 } from '../terminal/park-budget'
+import { canEscapeToWidget } from '../terminal/widget-escape'
 import {
   mayDisposeOffscreen,
   offscreenCoreIsRemote,
@@ -135,12 +137,14 @@ import {
   type ResumePhaseOutcome
 } from '../terminal/agent-restart'
 import { FindBar } from '../components/FindBar'
-import { IconSearch, IconChat, IconMic, IconReload } from '../components/icons'
+import { IconSearch, IconChat, IconMic, IconReload, IconPictureInPicture } from '../components/icons'
 import { NodeLabels } from '../components/kanban/NodeLabels'
 import { Tooltip } from '../components/Tooltip'
 import { useTerminalSearch } from '../terminal/useTerminalSearch'
 import { useCopyFeedback } from '../terminal/useCopyFeedback'
 import { ContextMeter } from '../components/ContextMeter'
+import { AdhdElapsedChip, AdhdMomentumNote } from '../components/AdhdNodeSurfaces'
+import { markNodeActivity, markNodeOpened } from '../lib/nodeActivity'
 import { AccountIdentityPills } from '../components/AccountIdentityPills'
 import { presentAccount } from '../lib/accountPresentation'
 import { isZoomModifierHeld } from '../lib/zoomModifier'
@@ -222,6 +226,12 @@ import { uuid } from '../lib/uuid'
 import { runPendingLaunchOnce } from '../lib/pendingLaunch'
 import { coldAgentLaunchIntent } from '../terminal/agent-launch-intent'
 import { executePendingLaunchForSession } from '../terminal/pending-launch-executor'
+import { ColorMenu } from '../components/color/ColorMenu'
+import { MaterialSymbol } from '../components/MaterialSymbol'
+import {
+  OPEN_EXPLORER_FOR_AGENT_EVENT,
+  writeAgentNodeDrag
+} from '../lib/explorerNodeDrag'
 
 /** How long a remote terminal waits for its project's ControlMaster before giving up and showing
  *  the offline overlay. Sized for the SLOW-but-fine case (a cold app load whose connect is still
@@ -1205,7 +1215,9 @@ export function TerminalNode({
   )
   const boardOpenRef = useRef(boardOpen)
   const dwellRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [showColors, setShowColors] = useState(false)
+  /** Viewport anchor for the colour surface, or null when closed — coordinates rather than a
+   *  boolean because ColorMenu is a body portal. */
+  const [colorAnchor, setColorAnchor] = useState<{ x: number; y: number } | null>(null)
   const [armed, setArmed] = useState(true)
   const [dropping, setDropping] = useState(false)
   // Overlay while dropped files upload to an SSH host (scp is seconds-long with zero feedback);
@@ -1714,6 +1726,14 @@ export function TerminalNode({
     !remoteSession &&
     (data.cwd as string | undefined) !== parentWtPath
   const status = useAgentStatus((s) => s.byId[id])
+  // ADHD time awareness / momentum need a "when did this node start" and a "when did anything last
+  // happen here". Recording it is unconditional and free (one Map write; nothing subscribes, so
+  // nothing re-renders) — the MODES decide whether anybody ever looks. Idempotent by design: this
+  // effect re-runs on an offscreen release and revive, and restarting the clock there would erase
+  // exactly the idle stretch momentum exists to notice.
+  useEffect(() => {
+    markNodeOpened(id)
+  }, [id])
   // Transient, per-launch: what this node's Codex launcher reported it actually got. Undefined for
   // every non-codex node and for a codex node whose launcher never spoke.
   const codexIdentity = useCodexIdentity((s) => s.byId[id])
@@ -3254,6 +3274,11 @@ export function TerminalNode({
             // still count towards `pending`, so a flood during the gap pauses the source.
             const gate = createDataGate(writeChunk)
             offData = transport.onData(sid, (chunk) => {
+              // "Something changed here" for ADHD time awareness / momentum. Deliberately on the
+              // hottest path in the app, because output IS the change — and deliberately cheap
+              // enough to sit there: one Map lookup and one number, no allocation, no store write
+              // and no render. A store would re-render the canvas per chunk on a flooding terminal.
+              markNodeActivity(id)
               pending += chunk.length
               if (!paused && pending > HIGH_WATER) {
                 paused = true
@@ -3369,6 +3394,10 @@ export function TerminalNode({
             )
             cleanups.push(
               term.onData((input) => {
+                // Typing counts as activity too. A person can sit reading and composing a long
+                // prompt in a pane that has produced no output for half an hour, and nudging them
+                // about it would be the feature interrupting the exact work it exists to protect.
+                markNodeActivity(id)
                 // Lone Esc / Ctrl-C while the agent works: Claude Code fires NO hook on a user
                 // interrupt, so probe the cancelled turn (still-silent working → done). Exact
                 // match — arrow keys etc. arrive as multi-byte \x1b[… sequences.
@@ -4751,6 +4780,8 @@ export function TerminalNode({
     status?.state !== 'waiting' &&
     status?.state !== 'blocked'
 
+  const headerFill = nodeHeaderFillStyle(data.color)
+
   return (
     <>
       {/* Sibling of the root: .term-node is overflow:hidden and would clip the half-pill. */}
@@ -4770,7 +4801,7 @@ export function TerminalNode({
           minWidth={260}
           minHeight={160}
           isVisible={selected && !collapsed}
-          color="#0a84ff"
+          color="var(--md-primary)"
         />
         {/* Invisible source handle so edges to subagent/loop nodes can attach. */}
         <Handle
@@ -4814,7 +4845,12 @@ export function TerminalNode({
           }
         />
 
-        <div className="term-node__header">
+        <div
+          className={`term-node__header ${headerFill.className}${
+            headerFill.filled ? ' term-node__header--filled' : ''
+          }`}
+          style={headerFill.style}
+        >
           <button
             className="term-node__collapse"
             title={collapsed ? 'Expand' : 'Collapse'}
@@ -4826,21 +4862,40 @@ export function TerminalNode({
             className="term-node__color"
             style={{ background: data.color }}
             title="Color"
-            onClick={() => setShowColors((v) => !v)}
+            onClick={(e) => {
+              const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+              setColorAnchor((a) => (a ? null : { x: r.left, y: r.bottom }))
+            }}
           />
-          {showColors && (
-            <div className="color-popover">
-              {NODE_COLORS.map((c) => (
-                <button
-                  key={c}
-                  style={{ background: c }}
-                  onClick={() => {
-                    updateNodeData(id, { color: c })
-                    setShowColors(false)
-                  }}
-                />
-              ))}
-            </div>
+          {colorAnchor && (
+            <ColorMenu
+              x={colorAnchor.x}
+              y={colorAnchor.y}
+              value={data.color}
+              onPick={(c: string) => updateNodeData(id, { color: c })}
+              onClose={() => setColorAnchor(null)}
+            />
+          )}
+          {agentId && (
+            <button
+              className="term-node__folder-drag nodrag"
+              draggable
+              title={`Drag to an Explorer folder to open a new ${data.title} there`}
+              aria-label={`Choose an Explorer folder for a new ${data.title} agent`}
+              onDragStart={(event) => {
+                event.stopPropagation()
+                event.dataTransfer.effectAllowed = 'copy'
+                writeAgentNodeDrag(event.dataTransfer, id)
+              }}
+              onClick={(event) => {
+                event.stopPropagation()
+                window.dispatchEvent(
+                  new CustomEvent(OPEN_EXPLORER_FOR_AGENT_EVENT, { detail: { nodeId: id } })
+                )
+              }}
+            >
+              <MaterialSymbol name="folder_open" size={16} />
+            </button>
           )}
           {editingTitle ? (
             <input
@@ -4921,6 +4976,9 @@ export function TerminalNode({
             </span>
           ) : null}
           {showUsage && <ContextMeter sessionId={status?.sessionId ?? null} />}
+          {/* ADHD time awareness — beside the session chip, because a clock in a menu does nothing
+            for time blindness. Renders nothing at all while the mode is off. */}
+          <AdhdElapsedChip nodeId={id} />
           {/* Who else is in this node. Subscribes to presence itself — see PresenceChips. */}
           <PresenceChips nodeId={id} />
           {status?.state === 'working' && (
@@ -5075,6 +5133,32 @@ export function TerminalNode({
               </button>
             </Tooltip>
           )}
+          {/* "Escape to widget" (docs/features/terminals/canvas-widget.md): pop this node's live session into its
+            own always-on-top-configurable desktop window. Electron-only — a Server Edition
+            browser tab has no OS window to open, so this button is simply absent there rather
+            than present-and-refusing (`isBrowserRuntime()`, the same seam `shell.reveal`'s
+            desktop-only affordance uses). */}
+          {/* LOCAL sessions only, and this gate is load-bearing rather than tidy: WidgetApp
+            builds its own `new LocalTransport()`, so escaping a REMOTE node would hand a remote
+            node id to the LOCAL core. That is the `requireRemote` hole this repo already paid
+            for once — an SSH node quietly becoming a local shell in the local $HOME, with the
+            remote session's scrollback replayed into it. `remoteSession` covers an SSH project
+            and an SSH-project terminal; `offscreenCoreIsRemote(session.source)` covers a
+            relay/server tab, whose core is another machine entirely and which `data.remote`
+            does not report (nothing sets that field). */}
+          {canEscapeToWidget({ browserRuntime: isBrowserRuntime(), remoteSession, sessionSource: session.source }) && (
+            <Tooltip label="Escape to widget — always-on-top window, same live session">
+              <button
+                className="term-node__widget-escape nodrag"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  void window.nodeTerminal.canvasWidget.open(id)
+                }}
+              >
+                <IconPictureInPicture />
+              </button>
+            </Tooltip>
+          )}
           {/* `claudeTranscript`, NOT `showUsage`: the transcript leg of the search is gated on the
             claude-transcript fact (see the `useTerminalSearch` call above), so keying the label on
             the meter promised a codex/gemini node a conversation search it does not run. */}
@@ -5186,6 +5270,13 @@ export function TerminalNode({
               {copy.feedback.label}
             </div>
           )}
+          {/* ADHD momentum — floated over the TOP of the terminal, not inserted above it: a strip
+            in the layout would change the body's height, and a terminal that resizes because a
+            note appeared sends SIGWINCH to whatever is running in it. Top rather than bottom
+            because every agent CLI writes its input line bottom-left, and the container ignores
+            the pointer entirely (only "Not now" takes a click) so a drag through it still selects
+            text. Renders nothing at all while the mode is off, or while a "not now" stands. */}
+          <AdhdMomentumNote nodeId={id} />
           {/* Offscreen-disposed: the xterm and the PTY client are gone, the tmux session is not.
             Deliberately above the overlays below it in the DOM but the least insistent of them —
             it states a resting state, not a failure. Nobody is ever looking at it as it appears

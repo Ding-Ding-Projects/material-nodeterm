@@ -6,11 +6,13 @@ import {
   commonParentId,
   createAccountLoginNode,
   createAnnotationNode,
+  createBrowserNode,
   createCodexAccountLoginNode,
   createAgentNode,
   createCanvasControlTerminalNode,
   createDinoNode,
   createGroupNode,
+  defaultBrowserTabs,
   duplicateNode,
   fitGroupToChildren,
   flowToNodeStates,
@@ -1088,7 +1090,17 @@ describe('duplicateNode across every node kind', () => {
     loop: 'loop',
     scheduler: 'scheduler',
     dino: 'dino',
-    annotation: 'annotation'
+    annotation: 'annotation',
+    // The service family. Each prefix is the kind's own name, and none of them is `term` — that is
+    // the point, not an aesthetic: `SAFE_NODE_ID` in core/project-node-append.ts is /^term-…/ and it
+    // decides whether an incoming id may register as a real terminal session, so a manager wearing
+    // that prefix could be pushed through as a shell by a peer or the mobile append path.
+    minecraft: 'minecraft',
+    dockerhost: 'dockerhost',
+    proxmox: 'proxmox',
+    gitlab: 'gitlab',
+    homeassistant: 'homeassistant',
+    freepbx: 'freepbx'
   }
   const ALL_KINDS = Object.keys(EXPECTED_PREFIX) as NodeKind[]
 
@@ -1303,5 +1315,106 @@ describe('duplicateNode across every node kind', () => {
     const childCopy = duplicateNode(child)
     expect(childCopy.parentId).toBeUndefined()
     expect(childCopy.extent).toBeUndefined()
+  })
+})
+
+describe('browser tabs', () => {
+  it('defaultBrowserTabs synthesizes one tab from a legacy url/title', () => {
+    const tabs = defaultBrowserTabs('n1', 'https://example.com', 'Example')
+    expect(tabs).toEqual([{ id: 'n1-tab-0', url: 'https://example.com', title: 'Example' }])
+  })
+
+  it('defaultBrowserTabs falls back to "New Tab" for an empty title', () => {
+    const tabs = defaultBrowserTabs('n1', undefined, '')
+    expect(tabs).toEqual([{ id: 'n1-tab-0', url: '', title: 'New Tab' }])
+  })
+
+  it('nodeStatesToFlow migrates a pre-tabs browser node into a one-tab array', () => {
+    const flow = nodeStatesToFlow([
+      {
+        id: 'b1',
+        kind: 'browser',
+        position: { x: 0, y: 0 },
+        size: { width: 640, height: 480 },
+        title: 'My Site',
+        color: '#000',
+        group: null,
+        url: 'https://example.com'
+      }
+    ])
+    expect(flow[0].data.browserTabs).toEqual([{ id: 'b1-tab-0', url: 'https://example.com', title: 'My Site' }])
+    expect(flow[0].data.browserActiveTabId).toBe('b1-tab-0')
+  })
+
+  it('nodeStatesToFlow preserves an already-persisted multi-tab array untouched', () => {
+    const tabs = [
+      { id: 't1', url: 'https://a.example', title: 'A' },
+      { id: 't2', url: 'https://b.example', title: 'B' }
+    ]
+    const flow = nodeStatesToFlow([
+      {
+        id: 'b1',
+        kind: 'browser',
+        position: { x: 0, y: 0 },
+        size: { width: 640, height: 480 },
+        title: 'A',
+        color: '#000',
+        group: null,
+        browserTabs: tabs,
+        browserActiveTabId: 't2'
+      }
+    ])
+    expect(flow[0].data.browserTabs).toEqual(tabs)
+    expect(flow[0].data.browserActiveTabId).toBe('t2')
+  })
+
+  it('flowToNodeStates round-trips browserTabs/browserActiveTabId', () => {
+    const node: CanvasNode = {
+      id: 'b1',
+      type: 'browser',
+      position: { x: 0, y: 0 },
+      width: 640,
+      height: 480,
+      data: {
+        title: 'A',
+        color: '#000',
+        group: null,
+        browserTabs: [{ id: 't1', url: 'https://a.example', title: 'A' }],
+        browserActiveTabId: 't1'
+      }
+    }
+    const states = flowToNodeStates([node])
+    expect(states[0].browserTabs).toEqual([{ id: 't1', url: 'https://a.example', title: 'A' }])
+    expect(states[0].browserActiveTabId).toBe('t1')
+  })
+
+  it('a non-browser node never gets a synthesized browserTabs array', () => {
+    const flow = nodeStatesToFlow([
+      {
+        id: 't1',
+        kind: 'terminal',
+        position: { x: 0, y: 0 },
+        size: { width: 640, height: 480 },
+        title: 'Term',
+        color: '#000',
+        group: null
+      }
+    ])
+    expect(flow[0].data.browserTabs).toBeUndefined()
+  })
+})
+
+describe('flowToNodeStates — temporary nodes', () => {
+  it('drops a temporary (popup) browser node from every save, and keeps it once promoted', () => {
+    const kept = createBrowserNode(0, 'https://example.com/a')
+    const popup = createBrowserNode(1, 'https://example.com/b', undefined, undefined, undefined, true)
+    expect(popup.data.temporary).toBe(true)
+
+    const saved = flowToNodeStates([kept, popup])
+    expect(saved.map((n) => n.id)).toEqual([kept.id])
+
+    // "Keep" clears the flag; the same node then persists like any other.
+    const promoted = { ...popup, data: { ...popup.data, temporary: undefined } }
+    expect(flowToNodeStates([kept, promoted]).map((n) => n.id)).toEqual([kept.id, popup.id])
   })
 })

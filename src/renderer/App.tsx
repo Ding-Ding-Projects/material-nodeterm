@@ -1,10 +1,14 @@
 import { useEffect } from 'react'
+import { rainbowDurationSeconds } from './lib/nodeColor'
 import { ReactFlowProvider } from '@xyflow/react'
 import { Canvas } from './canvas/Canvas'
 import { PromptDialogHost } from './components/promptDialog'
+import { ArchiveUnlockDialogHost } from './components/archiveUnlockDialog'
 import { DestructiveGateHost } from './components/DestructiveGateHost'
 import { DimSumSurprise } from './components/DimSumSurprise'
 import { NotificationToasts } from './components/NotificationToasts'
+import { KidsShell } from './components/kids/KidsShell'
+import { EnableKidsModeDialogHost } from './components/kids/EnableKidsModeDialog'
 import { SessionProvider } from './session/session'
 import { localSession } from './session/localSession'
 import { useSettings } from './state/settings'
@@ -25,6 +29,7 @@ import { AppearanceStyleInjector } from './components/appearance/AppearanceStyle
 import { AppearanceEditorHost } from './components/appearance/AppearanceEditor'
 import { resolveAppDisplayName } from '../shared/appIdentity'
 import { applyAccentTokens } from './lib/accentTokens'
+import { adhdCssVars, anyAdhdModeOn, normalizeAdhdModes } from './lib/adhdModes'
 
 export default function App() {
   // Apply the terminal-rendering setting to the two GPU coordinators, live. 'auto' is
@@ -51,6 +56,46 @@ export default function App() {
     const { background } = resolveTerminalTheme(terminalTheme).theme
     if (background) document.documentElement.style.setProperty('--term-bg', background)
   }, [terminalTheme])
+
+  // Publish the rainbow cycle duration once, on the root, rather than per node.
+  //
+  // Every rainbow node reads the same variable, so they all turn together. Setting it per node
+  // would let them drift apart by however long apart they were mounted, and a canvas where six
+  // rainbow nodes are each showing a different hue reads as a rendering fault rather than as a
+  // deliberate colour. The level-to-seconds mapping is in lib/nodeColor.ts so this and the
+  // stylesheet cannot disagree about what a speed of 3 means.
+  const rainbowSpeed = useSettings((s) => s.settings.rainbowSpeed)
+  useEffect(() => {
+    document.documentElement.style.setProperty(
+      '--nt-rainbow-duration',
+      `${rainbowDurationSeconds(rainbowSpeed)}s`
+    )
+  }, [rainbowSpeed])
+
+  // ADHD modes publish their CSS custom properties on <html>, the same way the accent and the
+  // rainbow duration do, so every stylesheet reads one source rather than each surface deriving
+  // its own. `data-adhd` is the hook a rule needs when a property cannot express the change.
+  //
+  // Properties are REMOVED when a mode is off rather than set to a neutral value: an authored
+  // stylesheet's own value should win when nothing is overriding it, which is the same reason
+  // applyAccentTokens deletes its properties at the default accent.
+  const adhdModes = useSettings((s) => s.settings.adhdModes)
+  useEffect(() => {
+    const modes = normalizeAdhdModes(adhdModes)
+    const root = document.documentElement
+    const vars = adhdCssVars(modes)
+    for (const name of ['--nt-adhd-motion-scale', '--nt-adhd-chroma', '--nt-adhd-dim']) {
+      const value = vars[name]
+      if (value === undefined) root.style.removeProperty(name)
+      else root.style.setProperty(name, value)
+    }
+    if (anyAdhdModeOn(modes)) root.dataset.adhd = 'on'
+    else delete root.dataset.adhd
+    root.dataset.adhdFocus = modes.focus ? 'on' : ''
+    if (!modes.focus) delete root.dataset.adhdFocus
+    root.dataset.adhdQuiet = modes.lowStimulation ? 'on' : ''
+    if (!modes.lowStimulation) delete root.dataset.adhdQuiet
+  }, [adhdModes])
 
   // Publish the resolved appearance as `data-theme` on <html> — what the light palette in
   // styles.css keys off. Absent, or 'dark', leaves every token at its original value, so this one
@@ -92,14 +137,35 @@ export default function App() {
     document.title = resolveAppDisplayName(appDisplayName)
   }, [appDisplayName])
 
+  // Kids-mode routing — and it MUST fail closed. `hydrated` starts false on every cold start
+  // (see state/kidsMode.ts), and `enabled` starts false right alongside it as a placeholder, not
+  // as evidence the shared record is off. Rendering the developer canvas while `hydrated` is
+  // still false would flash the full dev surface — dock, tab bar, every project — to a child on
+  // the very first frame of every launch, for exactly as long as the one IPC round trip to read
+  // the shared record takes. So the order below is deliberate and load-bearing:
+  //   not hydrated  → a neutral splash (no dev chrome, no Kids branding — we don't know which
+  //                    surface belongs on screen yet)
+  //   hydrated + on → <KidsShell/>, and <Canvas/> is not mounted AT ALL
+  //   hydrated + off→ <Canvas/>, exactly as before this feature existed
+  const kidsHydrated = useKidsMode((s) => s.hydrated)
+  const kidsEnabled = useKidsMode((s) => s.enabled)
+
   return (
     <SessionProvider session={localSession}>
       <ReactFlowProvider>
-        <Canvas />
+        {!kidsHydrated ? (
+          <div className="md3-kids-boot-splash" aria-hidden="true" />
+        ) : kidsEnabled ? (
+          <KidsShell />
+        ) : (
+          <Canvas />
+        )}
         {/* In-app window.prompt replacement (Electron has no prompt); driven by promptDialog(). */}
         <PromptDialogHost />
+        <ArchiveUnlockDialogHost />
       {/* Mounted at the root so every surface can reach the super gate, and so an open one
-          survives a project switch beneath it. See state/destructiveGate.ts. */}
+          survives a project switch beneath it. See state/destructiveGate.ts. Kids mode upgrades
+          every destructive surface to this same gate — see kids-mode-policy.ts. */}
       <DestructiveGateHost />
         {/* Non-blocking corner-anchored toast stack — mounted once, app-wide. See
             docs/notifications.md. */}
@@ -108,7 +174,13 @@ export default function App() {
             plus the one shared anchored editor popover, both mounted once. */}
         <AppearanceStyleInjector />
         <AppearanceEditorHost />
+        {/* The nav rail's `child_care` entry point (components/kids/entry.ts) — mounted
+            unconditionally so it is reachable the moment a rail lane wires the destination up,
+            regardless of whether Kids mode is currently on. Renders nothing while closed. */}
+        <EnableKidsModeDialogHost />
       </ReactFlowProvider>
+      {/* Kids mode explicitly KEEPS the dim-sum surprise (see kids-mode.ts's header) — it is not
+          suppressed here, unlike the developer-only surfaces above. */}
       <DimSumSurprise />
     </SessionProvider>
   )

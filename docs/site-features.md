@@ -6,7 +6,8 @@ per-feature documentation articles under `site/docs/`, and the completeness
 guard at `scripts/check-site-contract.mjs`.
 
 It does **not** cover `site/index.html`, `site/styles.css`, or
-`site/app/core/registry.js` — those are owned by a different lane building the
+the shell modules under `site/app/core/` (`site/app/core/engine.js`, `site/app/core/store.js`,
+`site/app/core/render.js`, `site/app/core/dom.js`) — those are owned by a different lane building the
 site's shell (tab strip, settings screen, command palette). This document only
 covers what plugs into that shell, and how.
 
