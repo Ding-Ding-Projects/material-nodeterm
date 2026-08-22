@@ -1126,11 +1126,39 @@ export interface WorkspaceApi {
     /** The supplied password did not open the file. Indistinguishable from a tampered file by
      *  design (see core/project-archive-encryption.ts), and the copy says so. */
     wrongPassword?: boolean
+    /** Too many wrong passwords for this file: no password may be tried for this many more
+     *  milliseconds. Set alongside `wrongPassword` when that failure started the wait, and alone
+     *  when the wait was already running. */
+    lockedMs?: number
+    /** The unlock ladder may be offered to end that wait — see core/archive-unlock-guard.ts. It
+     *  ends the WAITING and never the password. */
+    ladderAvailable?: boolean
     path?: string
     archiveVersion?: 1 | 2
     contents?: ProjectArchiveContents
     restoredTo?: string
   }>
+  /** Hand out the next unlock-ladder question for a rate-limited protected project file. `null`
+   *  means no ladder is on offer (no wait to end, this climb already failed to the bottom, or the
+   *  shared rolling budget is spent). */
+  archiveLadderIssue(filePath: string): Promise<{
+    challenge: import('./unlock-ladder-types').LadderChallenge | null
+    budgetLeft: number
+    waitMs: number
+  }>
+  /** Grade an answer core-side against its one-shot nonce. A clear ends the WAIT and nothing
+   *  else — it never supplies, weakens, or checks the file's password. */
+  archiveLadderVerify(input: {
+    path: string
+    answer: import('./unlock-ladder-types').LadderAnswer
+  }): Promise<
+    import('./unlock-ladder-types').LadderVerdict & {
+      waitMs: number
+      budgetLeft: number
+      /** The next rung's question, minted with the verdict so one round-trip advances the climb. */
+      challenge: import('./unlock-ladder-types').LadderChallenge | null
+    }
+  >
   /** Fired once after an on-disk migration: `v2` = a v2→v3 migration wrote .nodeterm/ dirs into the
    *  project folders; `exec` = the custom shell / advanced ssh args of already-open projects moved
    *  out of the shared project file into this machine's own workspace index (@shared/node-exec). */

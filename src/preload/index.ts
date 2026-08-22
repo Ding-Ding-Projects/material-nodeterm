@@ -170,6 +170,10 @@ const api: NodeTerminalApi = {
       ipcRenderer.invoke(IPC.projectArchiveExport, project, password),
     importProject: (opts?: { path?: string; password?: string }) =>
       ipcRenderer.invoke(IPC.projectArchiveImport, opts),
+    archiveLadderIssue: (filePath: string) =>
+      ipcRenderer.invoke(IPC.projectArchiveLadderIssue, filePath),
+    archiveLadderVerify: (input: unknown) =>
+      ipcRenderer.invoke(IPC.projectArchiveLadderVerify, input),
     onMigrated: (cb: (kind: WorkspaceMigrationKind) => void) => {
       // Older mains broadcast no payload; that was the v2→v3 migration.
       const h = (_e: unknown, kind?: WorkspaceMigrationKind) => cb(kind ?? 'v2')

@@ -233,6 +233,11 @@ export const IPC = {
   workspaceProbeFolder: 'workspace:probe-folder',
   projectArchiveExport: 'project-archive:export',
   projectArchiveImport: 'project-archive:import',
+  /** The unlock ladder for a protected project file's password prompt — issue a challenge, and
+   *  grade an answer core-side against its one-shot nonce. Never touches the password itself:
+   *  clearing a rung ends the WAIT and nothing else (core/archive-unlock-guard.ts). */
+  projectArchiveLadderIssue: 'project-archive:ladder-issue',
+  projectArchiveLadderVerify: 'project-archive:ladder-verify',
   serverDeploymentStart: 'server-deployment:start',
   serverDeploymentTotp: 'server-deployment:totp',
   serverDeploymentStatus: 'server-deployment:status',

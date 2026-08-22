@@ -36,6 +36,41 @@ A **damaged envelope** — not JSON, no KDF block, a payload the version does no
 reported as damage instead, never as a wrong password. Otherwise the user retypes a correct
 password forever against a file no password can open.
 
+## Too many wrong passwords
+
+After 5 wrong passwords for one file, that file earns a **wait** — 60s, then 2m, then 4m, capped at
+an hour — and during it no password may be tried at all
+([`core/archive-unlock-guard.ts`](../src/core/archive-unlock-guard.ts)). The refusal happens
+*before* a key is derived, because the point of the wait is that the next guess costs wall-clock
+rather than only 128 MiB of scrypt.
+
+The prompt then offers the **unlock ladder** (`docs/unlock-ladder.md`) to end that wait: dim sum →
+mental maths → whack-a-mole, exactly the rungs the toy locks and the Server Edition login use.
+Every one of the ladder's five rules holds here unchanged, and two are worth restating:
+
+- **Clearing a rung ends the WAITING, never the credential.** Winning returns you to the same
+  password field, still needing the same password. Nothing in the ladder path decrypts anything —
+  there is a test that fails if the dialog ever resolves a password from a cleared rung.
+- **No attempt refund.** The failure count survives a clear, so the next wrong password waits
+  *longer* than this one did. The ladder skips a wait; it never shortens the next one.
+
+The rolling clear budget (3 per hour) is **shared across every file**, because every rung is
+machine-solvable and spreading guesses over several files must not multiply the waits a script can
+skip. That cap, not the difficulty of the games, is what keeps this playful rather than dangerous.
+
+Under **School mode** the climb starts at maths — the dim-sum rung is absent, not skipped with a
+message that would name the hidden thing.
+
+The wait lives in the **main process** and only in memory. In the renderer it would be kept by the
+guesser; persisted, a file you typo'd twice could refuse you after a reboot with no way to see why.
+
+### What the wait is not
+
+It is not what protects the file. Anyone holding the bytes attacks them offline at their own pace
+with none of this code involved; what costs them is the KDF. This is a speed bump for the person at
+the keyboard, in exactly the sense the toy locks are, and the copy in front of it never implies
+otherwise.
+
 ## How it is encrypted
 
 [`core/project-archive-encryption.ts`](../src/core/project-archive-encryption.ts).
@@ -69,15 +104,6 @@ travels inside the archive, and is only as safe as its own password.
 
 ## Not built yet
 
-- **The unlock ladder on this prompt.** Repeated wrong passwords currently just re-prompt: there is
-  no lockout, and therefore nothing for the ladder
-  ([`core/unlock-ladder.ts`](../src/core/unlock-ladder.ts), `docs/unlock-ladder.md`) to rescue.
-  Wiring it means per-file attempt state in the main process (a renderer-side count would be
-  bypassable, and the ladder's own safety rests on the grader not being the guesser) plus a React
-  port of the three rungs, which today exist only as server-rendered HTML in
-  `src/server/http.ts`'s `lockedPage()`. Note the honest framing when it is built: against someone
-  holding the file this is a speed bump for the person at the keyboard, not a security boundary —
-  the KDF is the real cost.
 - **A password manager for a project with no folder.** The vault still lives at
   `<cwd>/.nodeterm/vault.json`, so an SSH project or a cwd-less canvas still shows "Not available
   for this project". The chosen design is to keep a file-backed project's vault inside its own

@@ -169,12 +169,33 @@ export class ArchiveUnlockGuard {
     }
   }
 
-  /** Grade an answer core-side against its one-shot nonce (rule 5) and, on a clear, end the wait. */
-  verify(key: string, answer: LadderAnswer): LadderVerdict & { waitMs: number } {
+  /**
+   * Grade an answer core-side against its one-shot nonce (rule 5) and, on a clear, end the wait.
+   * The next rung's question is minted here rather than left to a second round-trip, and the
+   * remaining rolling budget travels with the verdict — the panel drawing this has no other way
+   * to know either, and must never compute them itself.
+   */
+  verify(
+    key: string,
+    answer: LadderAnswer
+  ): LadderVerdict & { waitMs: number; budgetLeft: number; challenge: LadderChallenge | null } {
     const s = this.rate.get(key)
     const ladder = this.ladderFor(key, s?.lockouts ?? 0)
+    if (this.state(key).waitMs <= 0) {
+      // The wait ended on its own while the round was being played. Say so rather than spending a
+      // ladder clear on a wait that is already over.
+      return {
+        cleared: true,
+        next: null,
+        message: 'The wait is over — try the password again.',
+        challenge: null,
+        budgetLeft: ladder.budgetLeft(),
+        waitMs: 0
+      }
+    }
     const verdict = ladder.verify(answer)
     if (verdict.cleared) this.clearWaitByLadder(key)
-    return { ...verdict, waitMs: this.state(key).waitMs }
+    const challenge = verdict.cleared || !verdict.next ? null : ladder.issue(verdict.next)
+    return { ...verdict, challenge, budgetLeft: ladder.budgetLeft(), waitMs: this.state(key).waitMs }
   }
 }

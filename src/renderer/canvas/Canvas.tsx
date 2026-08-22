@@ -251,6 +251,7 @@ import { notify } from '../lib/adhdNotify'
 import { ConsentNotice } from '../remote/ConsentNotice'
 import { peerApprovalView } from '@shared/remote/approval'
 import { promptDialog } from '../components/promptDialog'
+import { requestArchivePassword } from '../components/archiveUnlockDialog'
 import { RemotePicker } from '../components/RemotePicker'
 import { WorktreeDialog } from '../components/WorktreeDialog'
 import { GroupPickerDialog, type GroupPickerOption } from '../components/canvas/GroupPickerDialog'
@@ -11877,16 +11878,15 @@ export function Canvas() {
       // file (AES-GCM refuses to tell them apart — see core/project-archive-encryption.ts), so the
       // copy says both rather than guessing at one.
       let attempt = 0
-      while ((result.needsPassword || result.wrongPassword) && result.path) {
+      while ((result.needsPassword || result.wrongPassword || result.lockedMs) && result.path) {
         attempt += 1
-        const password = await promptDialog({
-          message: `This project file is password-protected.\n\n${result.path}`,
-          placeholder: 'Password',
-          password: true,
-          confirmLabel: 'Open',
+        const password = await requestArchivePassword({
+          path: result.path,
           ...(result.wrongPassword
             ? { error: 'That password did not open the file. It may be wrong, or the file may have been altered.' }
-            : {})
+            : {}),
+          ...(result.lockedMs ? { lockedMs: result.lockedMs } : {}),
+          ...(result.ladderAvailable ? { ladderAvailable: true } : {})
         })
         if (password === null) {
           notify({ kind: 'info', title: 'Project open cancelled' })
