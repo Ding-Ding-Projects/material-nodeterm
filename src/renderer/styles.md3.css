@@ -10969,3 +10969,14 @@ button.term-node__title-text:focus-visible {
 .browser-node__keep:hover {
   filter: brightness(1.08);
 }
+
+/* A locked group frame says so on its own label pill (docs/toy-locks.md). The chip is the unlock
+   affordance, so it is a real button rather than decoration. */
+.group-node__lock {
+  border: 0;
+  background: none;
+  padding: 0 2px;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}

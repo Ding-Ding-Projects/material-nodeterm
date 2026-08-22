@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { NodeResizer, useReactFlow, type NodeProps } from '@xyflow/react'
 import { ungroupNodes, type CanvasNode } from '../state/workspace'
+import { useToyLocks } from '../state/toylocks'
+import { UnlockPrompt } from '../components/toylocks/UnlockPrompt'
 import { useProjects } from '../state/projects'
 import { useWorktrees, WORKTREE_STATUS_POLL_MS } from '../state/worktrees'
 import { ColorMenu } from '../components/color/ColorMenu'
@@ -114,7 +116,26 @@ export function GroupNode({ id, data, selected }: NodeProps<CanvasNode>) {
   // worktree itself stays on disk. Route that through Canvas's `unbind` first, so the store
   // re-reconciles (the worktree is offered as an orphan again, and a stale registration is
   // pruned) instead of the binding silently vanishing until the next project switch.
-  const ungroup = (): void => {
+  // Toy lock on the FRAME (docs/toy-locks.md). It gates this frame's own structural actions and
+  // nothing else: the nodes inside are separate objects carrying their own locks, and a frame lock
+  // that pretended to cover them would be claiming a protection it does not provide -- the one
+  // thing a toy lock must never do.
+  const lockRecords = useToyLocks((s) => s.records)
+  const lockUnlockedUntil = useToyLocks((s) => s.unlockedUntil)
+  const lockRecord = lockRecords.find((r) => r.target.kind === 'group' && r.target.id === id)
+  const frameLocked = !!lockRecord && !(lockUnlockedUntil[lockRecord.id] > Date.now())
+  const [unlockAnchor, setUnlockAnchor] = useState<{ x: number; y: number } | null>(null)
+
+  const promptUnlock = (e: { clientX: number; clientY: number }): void =>
+    setUnlockAnchor({ x: e.clientX, y: e.clientY })
+
+  const ungroup = (e?: { clientX: number; clientY: number }): void => {
+    // Re-asked at CLICK time, not captured when the button rendered: the lock can engage while
+    // the frame is on screen (a minutes timer expiring, a relock from elsewhere).
+    if (frameLocked) {
+      if (e) promptUnlock(e)
+      return
+    }
     if (wt) worktreeActionHandler?.(id, 'unbind')
     setNodes((ns) => ungroupNodes(ns as CanvasNode[], id))
   }
@@ -155,11 +176,24 @@ export function GroupNode({ id, data, selected }: NodeProps<CanvasNode>) {
       />
 
       <div className="group-node__label">
+        {frameLocked && (
+          <button
+            className="group-node__lock nodrag"
+            title="This frame is locked — click to unlock"
+            onClick={(e) => promptUnlock(e)}
+          >
+            🔒
+          </button>
+        )}
         <button
           className="group-node__dot nodrag"
           style={{ background: data.color }}
-          title="Color"
+          title={frameLocked ? 'Locked — click to unlock' : 'Color'}
           onClick={(e) => {
+            if (frameLocked) {
+              promptUnlock(e)
+              return
+            }
             const r = e.currentTarget.getBoundingClientRect()
             setColorAnchor((cur) => (cur ? null : { x: r.left, y: r.bottom + 4 }))
           }}
@@ -179,6 +213,11 @@ export function GroupNode({ id, data, selected }: NodeProps<CanvasNode>) {
           className="group-node__name nodrag"
           value={data.title}
           spellCheck={false}
+          readOnly={frameLocked}
+          title={frameLocked ? 'Locked — unlock the frame to rename it' : undefined}
+          onMouseDown={(e) => {
+            if (frameLocked) promptUnlock(e)
+          }}
           onChange={(e) => updateNodeData(id, { title: e.target.value })}
         />
         {wt && (
@@ -250,14 +289,36 @@ export function GroupNode({ id, data, selected }: NodeProps<CanvasNode>) {
         )}
       </div>
 
+      {unlockAnchor &&
+        (() => {
+          // Re-resolved live rather than closed over: the record can be removed or edited from
+          // Settings while this popover is open.
+          const live = useToyLocks
+            .getState()
+            .records.find((r) => r.target.kind === 'group' && r.target.id === id)
+          if (!live) return null
+          return (
+            <UnlockPrompt
+              record={live}
+              anchor={unlockAnchor}
+              onClose={() => setUnlockAnchor(null)}
+              onUnlocked={() => setUnlockAnchor(null)}
+            />
+          )
+        })()}
+
       <div className="group-node__actions nodrag">
-        <button className="group-node__ungroup" title="Ungroup" onClick={ungroup}>
-          ungroup
+        <button
+          className="group-node__ungroup"
+          title={frameLocked ? 'Locked — click to unlock' : 'Ungroup'}
+          onClick={(e) => ungroup(e)}
+        >
+          {frameLocked ? '🔒' : 'ungroup'}
         </button>
         <button
           className="group-node__close"
-          title="Remove group (keeps nodes)"
-          onClick={ungroup}
+          title={frameLocked ? 'Locked — click to unlock' : 'Remove group (keeps nodes)'}
+          onClick={(e) => ungroup(e)}
         >
           ×
         </button>
