@@ -1222,8 +1222,8 @@ function PasswordManagerPanelInner({
         <MaterialSymbol name="lock" size={28} aria-hidden="true" />
         <h3>Not available for this project</h3>
         <p className="pwm-hint">
-          A password manager is kept in the project&apos;s own folder, and this project has none — it is either an SSH
-          project or a canvas with no folder. Open a local folder project to use one.
+          This tab is a live connection to a project on another machine, so its password manager lives there too -
+          open it on the machine that owns the project.
         </p>
       </section>
     )

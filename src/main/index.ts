@@ -1,7 +1,7 @@
-import { join, resolve, posix } from 'path'
+import { join, resolve, posix, dirname as dirnameOf } from 'path'
 import { startSessionNameSweep, displayNodeTitle } from '../core/session-name-sweep'
 import { readAgentSessionName, type AgentSessionNameDeps } from '../core/agent-session-name'
-import { readFile, writeFile, rm as rmFile } from 'fs/promises'
+import { readFile, writeFile, rm as rmFile, mkdir as mkdirFs } from 'fs/promises'
 import { statSync } from 'fs'
 import { renameAtomic, tempNameFor } from '../core/fs-atomic'
 import { homedir, hostname } from 'os'
@@ -66,6 +66,8 @@ import {
   registerPasswordManagerHandlers,
   type PasswordManagerRoute
 } from '../core/password-manager/password-manager-handlers'
+import { vaultRootFor } from '../core/password-manager/vault-location'
+import { vaultPathFor } from '../core/password-manager/vault-store'
 import type { RemoteLogExec } from '../core/board-log'
 import { boardLogRemotePath } from '../core/board-log'
 import { PtyManager } from '../core/pty-manager'
@@ -866,6 +868,38 @@ app.whenReady().then(async () => {
   // keyboard-driven second submit (or a second window) walks straight past a disabled button, and
   // two concurrent archive operations could interleave dialogs and history-domain writes.
   let projectArchiveBusy = false
+  /** The working-copy vault document of a folder-less project, or undefined when it has none.
+   *  A read failure counts as "no vault" only for a MISSING file; anything else propagates, because
+   *  silently saving a project without the vault it has would be data loss wearing a success
+   *  message. */
+  const readFolderlessVault = async (projectId: string): Promise<Buffer | undefined> => {
+    const root = vaultRootFor({
+      projectId,
+      userDataDir: app.getPath('userData'),
+      known: workspaceStore.hasProject(projectId)
+    })
+    if (!root) return undefined
+    try {
+      return await readFile(vaultPathFor(root))
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') return undefined
+      throw error
+    }
+  }
+
+  /** Put an imported archive's carried vault into the freshly minted project's working copy.
+   *  `wx` so it can never overwrite: a brand-new project id cannot already have a vault, so a file
+   *  already there is something we do not understand, and leaving it alone is the safe move. */
+  const restoreFolderlessVault = async (projectId: string, vault: Buffer): Promise<void> => {
+    const root = vaultRootFor({ projectId, userDataDir: app.getPath('userData'), known: true })
+    if (!root) return
+    const file = vaultPathFor(root)
+    await mkdirFs(dirnameOf(file), { recursive: true })
+    await writeFile(file, vault, { flag: 'wx' }).catch((error: NodeJS.ErrnoException) => {
+      if (error?.code !== 'EEXIST') throw error
+    })
+  }
+
   // Wrong-password rate limiting for protected project files, keyed by resolved path. Lives HERE
   // rather than in the renderer for the reason the ladder's own header gives: a count kept by the
   // guesser is not a count.
@@ -885,7 +919,12 @@ app.whenReady().then(async () => {
       // The OS save dialog's own "replace?" prompt is the overwrite confirmation; the write itself
       // is temp + atomic rename (binary — the V2 archive is a ZIP container, never utf-8 text), so
       // an interrupted save can never tear an existing save file.
-      const exported = await projectArchives.export(project)
+      // A FOLDER-LESS project's vault is a working copy under this machine's app data, so nothing
+      // else in the archive would carry it - read it explicitly. A folder project's vault is one of
+      // its own files and is captured with the rest; passing it here too would put two copies in
+      // one save file. See core/password-manager/vault-location.ts.
+      const vault = project.cwd ? undefined : await readFolderlessVault(project.id)
+      const exported = await projectArchives.export(project, vault ? { vault } : {})
       // Encrypt the FINISHED container, never its entries: a ZIP's entry names alone would say
       // which repository travelled and what the project is called. See project-archive-encryption.ts.
       const bytes = password ? encryptArchive(exported.bytes, password) : exported.bytes
@@ -963,6 +1002,9 @@ app.whenReady().then(async () => {
         destination = dest.filePaths[0]
       }
       const outcome = await projectArchives.import(raw, { destination })
+      // The project id is minted by the import, so a carried vault can only be placed once it
+      // exists. A folder-restoring import already got its vault back with the working files.
+      if (outcome.vault) await restoreFolderlessVault(outcome.project.id, outcome.vault)
       return {
         ok: true,
         project: outcome.project,
@@ -1454,10 +1496,19 @@ app.whenReady().then(async () => {
   // Password managers (core/password-manager/): v1 is local-only, same starting scope board-log
   // above shipped with — an SSH-ref or cwd-less inline project answers `unsupported` rather than
   // guessing at a remote vault path.
+  // A folder project keeps its vault beside project.json (git-shareable, unchanged). A
+  // folder-less one - an SSH project, a cwd-less canvas, a project opened from a one-file save -
+  // keeps a working copy under this machine's app data, which is what stopped the panel from
+  // refusing every project without a folder. See core/password-manager/vault-location.ts.
   registerPasswordManagerHandlers(corePlatform, {
     route: (projectId: string): PasswordManagerRoute => {
-      const cwd = workspaceStore.localCwdForProject(projectId)
-      return cwd ? { kind: 'local', cwd } : { kind: 'unsupported' }
+      const root = vaultRootFor({
+        projectId,
+        cwd: workspaceStore.localCwdForProject(projectId),
+        userDataDir: app.getPath('userData'),
+        known: workspaceStore.hasProject(projectId)
+      })
+      return root ? { kind: 'local', cwd: root } : { kind: 'unsupported' }
     }
   })
 

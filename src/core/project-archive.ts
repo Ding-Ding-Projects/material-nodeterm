@@ -8,6 +8,11 @@
 //                            the V1 tamper proof (snapshot must match the bundled history tip)
 //                            survives unchanged
 //   history.bundle           the app-owned local-history git bundle (raw bytes; V1 carried base64)
+//   vault.json               the password-manager vault of a FOLDER-LESS project (a folder
+//                            project's vault is already one of its own working files below).
+//                            Every secret in it is an AEAD envelope under the vault's own
+//                            password, so this carries no plaintext - but it does make the save
+//                            file as sensitive as that password, which the export UI states.
 //   repo/repository.bundle   `git bundle create --all` of the project's OWN repository
 //   files/<relative path>    working files: tracked files at their CURRENT on-disk content plus
 //                            untracked-but-not-ignored files
@@ -96,6 +101,24 @@ export interface ProjectArchiveImportResult {
   archiveVersion: 1 | 2
   contents: ProjectArchiveContents
   restoredTo?: string
+  /** The password-manager vault the archive carried for a FOLDER-LESS project, verbatim. The
+   *  caller writes it to the new project's working-copy root - see the export note below. */
+  vault?: Buffer
+}
+
+export interface ProjectArchiveExportOptions {
+  /**
+   * A folder-less project's password-manager vault, to travel inside the save file.
+   *
+   * Only for a project with no folder. A folder project's vault is already a file in its own
+   * directory and is captured with the rest of the working files, so passing it here would put two
+   * copies in one archive and leave import to guess which is current.
+   *
+   * The bytes are the vault document exactly as it sits on disk - every secret in it is already an
+   * AEAD envelope under the vault's OWN password, so this carries no plaintext. It does mean the
+   * save file is as sensitive as that password, which the export UI says out loud.
+   */
+  vault?: Buffer
 }
 
 function isProjectFile(value: unknown): value is ProjectFileV1 {
@@ -282,7 +305,10 @@ export class ProjectArchiveService {
     private readonly git: ProjectGitRunner = runProjectGit
   ) {}
 
-  async export(project: Project): Promise<ProjectArchiveExportResult> {
+  async export(
+    project: Project,
+    opts: ProjectArchiveExportOptions = {}
+  ): Promise<ProjectArchiveExportResult> {
     const exportedAt = new Date().toISOString()
     const snapshot = projectToFile(project, 0, exportedAt)
     const snapshotText = serializeProjectFile(snapshot)
@@ -303,6 +329,7 @@ export class ProjectArchiveService {
       { path: 'project.json', data: Buffer.from(snapshotText, 'utf-8') },
       { path: 'history.bundle', data: historyBundle }
     ]
+    if (opts.vault) entries.push({ path: 'vault.json', data: opts.vault })
     if (capture.bundle) entries.push({ path: 'repo/repository.bundle', data: capture.bundle })
     for (const f of capture.files) entries.push({ path: `files/${f.path}`, data: f.data })
 
@@ -436,7 +463,19 @@ export class ProjectArchiveService {
           ? (manifest.contents as ProjectArchiveContents)
           : emptyContents(repoBundle ? 'git-bundle' : 'no-folder')
       const project = fileToProject(parsedProject, { id, ...(restoredTo ? { cwd: restoredTo } : {}) })
-      return { project, archiveVersion: 2, contents, ...(restoredTo ? { restoredTo } : {}) }
+      // A carried vault is handed BACK rather than written here: where it belongs depends on the
+      // project this import just minted (a restored folder's own .nodeterm, or the machine-local
+      // working copy for a folder-less one), and that decision has exactly one home -
+      // password-manager/vault-location.ts. A folder-restoring import already got its vault back
+      // with the working files, so the entry is only expected on the folder-less path.
+      const vault = restoredTo ? undefined : entries.get('vault.json')
+      return {
+        project,
+        archiveVersion: 2,
+        contents,
+        ...(restoredTo ? { restoredTo } : {}),
+        ...(vault ? { vault } : {})
+      }
     } catch (error) {
       // importBundle only publishes a fresh domain, and the destination was proven EMPTY before
       // the first write — so everything under both is ours to remove, and removing it is what

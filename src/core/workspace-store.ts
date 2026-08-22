@@ -705,6 +705,14 @@ export class WorkspaceStore {
     return this.index?.entries.find((e) => e.id === projectId && e.cwd)?.cwd
   }
 
+  /** Does this workspace hold a project with this id at all (of ANY kind - folder, ssh, inline)?
+   *  Sync (reads the in-memory index). A relay tab is deliberately absent: it is a live connection
+   *  to another machine's project, never a workspace on this disk. Used by the password-manager
+   *  router, which must not mint a working-copy vault for an id from nowhere. */
+  hasProject(projectId: string): boolean {
+    return (this.index?.entries ?? []).some((e) => e.id === projectId)
+  }
+
   settingsOverridesForProject(projectId: string): Project['settingsOverrides'] {
     const entry = this.index?.entries.find((candidate) => candidate.id === projectId)
     return entry?.settingsOverrides ?? entry?.project?.settingsOverrides

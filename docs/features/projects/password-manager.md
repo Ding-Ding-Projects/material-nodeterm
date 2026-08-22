@@ -29,6 +29,27 @@ without the project password — which is exactly what makes committing it to gi
 than committing `project.json` itself. A teammate who clones the repo and knows the project
 password can unlock the same vault; one who doesn't sees only opaque ciphertext.
 
+### Projects with no folder
+
+A vault needs a root to sit under, and three kinds of project have no folder at all: an SSH
+project, a cwd-less canvas, and one opened from a [one-file save](../../protected-project-files.md)
+that carried no working files. Those used to be refused outright - the panel said "Not available
+for this project" and there was nothing the user could do about it.
+
+They now keep a **working copy** at `<userData>/project-vaults/<projectId>/.nodeterm/vault.json`,
+and the one-file save carries that copy inside the project file (a `vault.json` container entry) so
+it travels with the project the way a folder project's committed vault travels with a clone. Same
+store, same format, same crypto, same cross-process locking - only the root differs.
+
+Which root a project gets is decided in exactly one place, `core/password-manager/vault-location.ts`:
+
+- a folder wins whenever there is one, because that copy is the one a teammate's clone receives;
+- a project id that cannot safely be a directory name gets **no vault** rather than a mangled one,
+  since mangling can collide two projects onto a single vault and a shared vault is a credential
+  leak, not a tidy fallback;
+- a project this workspace does not hold gets none either - which is what keeps a
+  [relay tab](#relay-refusal) pointed at the machine that actually owns the project.
+
 ## Key derivation and encryption
 
 `core/password-manager/crypto.ts` derives the AES-256-GCM key from the project password with

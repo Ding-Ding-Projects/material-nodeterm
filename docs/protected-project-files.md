@@ -102,9 +102,19 @@ travels inside the archive, and is only as safe as its own password.
 - **Mobile companion** — not applicable: it attaches to tmux sessions over the transport protocol
   and has no archive concept.
 
-## Not built yet
+## The vault travels too
 
-- **A password manager for a project with no folder.** The vault still lives at
-  `<cwd>/.nodeterm/vault.json`, so an SSH project or a cwd-less canvas still shows "Not available
-  for this project". The chosen design is to keep a file-backed project's vault inside its own
-  project file.
+A project's [password manager](features/projects/password-manager.md) rides inside the save file.
+For a folder project it always did - its `vault.json` is one of the project's own files and is
+captured with the rest of the working files. A **folder-less** project (an SSH project, a cwd-less
+canvas, one opened from a save file) now has a vault at all, kept as a working copy under the app's
+data directory, and the archive carries that copy as its own `vault.json` entry.
+
+Import hands those bytes back rather than writing them: where a vault belongs depends on the
+project the import just minted, and that decision has one home
+(`core/password-manager/vault-location.ts`). A save file from an older build simply has no such
+entry and opens exactly as it always did.
+
+Every secret inside is an AEAD envelope under the **vault's** own password, so the entry carries no
+plaintext - but it does make the save file as sensitive as that password, which is why the export
+notification says so whenever a vault exists.
