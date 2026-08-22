@@ -76,13 +76,16 @@ export function registerCoreHandlers(
   // identical feature acting on the SERVER's own machine (docs/exports.md, docs/local-history.md).
   registerVsCodeHandlers(platform)
   const localHistoryStore = new LocalHistoryStore(platform.userDataDir)
-  deps.workspaceStore?.setProjectHistoryRecorder((project, content) =>
+  deps.workspaceStore?.setProjectHistoryRecorder((project, content, change) =>
     localHistoryStore.record({
       domain: `project_${project.id}`,
       filename: 'project.json',
       content,
-      label: `Saved project ${project.name}`,
-      action: 'updated'
+      // What actually happened on the canvas, not that a save happened — see shared/project-diff.ts.
+      // Kept identical to the desktop shell's wiring on purpose: this repo has shipped a one-shell
+      // history change before, and the boundary tests cannot tell you a label is missing.
+      label: change.label,
+      action: change.action
     })
   )
   if (deps.settingsStore) {

@@ -22,6 +22,7 @@ import {
   type LocalNodeExecMap
 } from '../shared/node-exec'
 import { collisionSeed, derivedProjectId, freshProjectId } from '../shared/project-id'
+import { describeProjectChange, type ProjectChangeDescription } from '../shared/project-diff'
 import { appendProjectNode, type RemoteNodeInput } from './project-node-append'
 
 /** Checked remote read: `absent` (no file — safe to push our cache) is NOT `error` (connection
@@ -100,7 +101,17 @@ async function writeAtomic(filePath: string, content: string): Promise<void> {
  * v2-shaped Workspace.
  */
 export class WorkspaceStore {
-  private projectHistoryRecorder?: (project: Project, content: string) => void | Promise<void>
+  private projectHistoryRecorder?: (
+    project: Project,
+    content: string,
+    change: ProjectChangeDescription
+  ) => void | Promise<void>
+  /** project id -> the canonical snapshot we last handed the history recorder. Kept so the label
+   *  can say WHAT changed (added/edited/deleted which nodes) rather than only that a save
+   *  happened -- the same job `describeSettingsChange` does for settings.json. Runtime-only: on
+   *  the first save of a run there is nothing to diff against, and that is reported honestly as a
+   *  creation rather than guessed at. */
+  private lastRecordedProject = new Map<string, string>()
   /** file path -> exact content of the file as we last WROTE or READ it (skip-unchanged + watcher
    *  self-write suppression). Always the RAW bytes, never a re-serialization: a project.json whose
    *  on-disk formatting differs from ours (a teammate's editor, a git checkout) would otherwise
@@ -132,7 +143,9 @@ export class WorkspaceStore {
 
   constructor(private remoteIO?: RemoteWorkspaceIO) {}
 
-  setProjectHistoryRecorder(fn: (project: Project, content: string) => void | Promise<void>): void {
+  setProjectHistoryRecorder(
+    fn: (project: Project, content: string, change: ProjectChangeDescription) => void | Promise<void>
+  ): void {
     this.projectHistoryRecorder = fn
   }
 
@@ -584,8 +597,20 @@ export class WorkspaceStore {
         const canonical = serializeProjectFile(
           projectToFile(project, this.revs.get(project.id) ?? 0, savedAt)
         )
+        // An unchanged project records nothing -- that rule starts HERE, before the recorder is
+        // reached, exactly as it does for settings.
+        const change = describeProjectChange(
+          this.lastRecordedProject.get(project.id) ?? null,
+          canonical,
+          project.name
+        )
+        if (!change) continue
         try {
-          await this.projectHistoryRecorder(project, canonical)
+          await this.projectHistoryRecorder(project, canonical, change)
+          // Advanced only on a recorder that did not throw, so a failed write leaves the next save
+          // describing the change from the last state actually recorded rather than silently
+          // losing the intervening edits from the log.
+          this.lastRecordedProject.set(project.id, canonical)
         } catch {
           // The recorder is an audit/undo companion, never the authority for the live save.
         }
