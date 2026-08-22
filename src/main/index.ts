@@ -274,10 +274,6 @@ if (NT_MULTI && process.platform === 'darwin') app.commandLine.appendSwitch('use
 // metadata instead of maintaining a second literal that can drift from installed shortcuts.
 applyWindowsSquirrelAppUserModelId(process.platform, app)
 
-// Platform-abstracted primary modifier target for shortcut matching in the main process
-// (⌘ on mac, Ctrl elsewhere) — mirrors the renderer's `isMac` reader.
-const isMacMain = process.platform === 'darwin'
-
 // First thing in bootstrap: install the Electron CorePlatform so anything in src/core
 // (wired in later tasks) can resolve platform() at boot. Placed after the NT_MULTI
 // userData override so userDataDir reads the final path; nothing consumes it yet.
@@ -537,17 +533,18 @@ function createWindow(): BrowserWindow {
         ? buildPaths.devIcon // BrowserWindow.icon accepts PNG fine; the
           // .ico is only required for the exe/installer resource electron-builder embeds.
         : undefined
-  // macOS gets the traffic lights integrated into our own top bar (`hiddenInset` + a custom
-  // `trafficLightPosition`), which is a look only macOS supports. Windows/Linux get the
-  // equivalent for THIS app's Material title bar: `hidden` removes the native title bar text and
-  // icon while keeping the native minimize/maximize/close buttons, and `titleBarOverlay` draws
-  // those buttons as an overlay on top of our page instead of a separate native strip above it —
-  // so our `.tabbar` really is the only chrome, on every platform, not just macOS. Electron only
-  // honours `titleBarOverlay` on Windows/Linux; `hiddenInset` is macOS-only and is ignored
-  // elsewhere, which is why this was already safe to leave unconditional before this branch.
+  // Windows-native chrome: `hidden` removes the native title bar text and icon while keeping the
+  // native minimize/maximize/close buttons, and `titleBarOverlay` draws those buttons as an
+  // overlay on top of our page instead of a separate native strip above it — so our `.tabbar`
+  // really is the only chrome. (The macOS traffic-light branch — `hiddenInset` +
+  // `trafficLightPosition` — was deleted with mac desktop support.) Non-Windows deliberately gets
+  // NO title-bar options rather than the Windows overlay: the only non-Windows desktop run left
+  // is Linux dev, and it previously received the mac-only `hiddenInset`, which Electron IGNORES
+  // off-mac — so `{}` preserves the native frame Linux was actually getting. Extending the
+  // overlay there would be a behavior change smuggled inside a mac deletion.
   const titleBarOptions: Pick<
     BrowserWindowConstructorOptions,
-    'titleBarStyle' | 'trafficLightPosition' | 'titleBarOverlay'
+    'titleBarStyle' | 'titleBarOverlay'
   > =
     process.platform === 'win32'
       ? {
@@ -558,7 +555,7 @@ function createWindow(): BrowserWindow {
           // buttons line up with our own row instead of floating over the canvas below it.
           titleBarOverlay: { color: '#1a1a1e', symbolColor: '#e6e6e6', height: 44 }
         }
-      : { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 16, y: 15 } }
+      : {}
   const win = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -651,20 +648,29 @@ function createWindow(): BrowserWindow {
     }
   })
 
-  // Steal ⌘M / ⌘W / ⌘0 back from Electron's default application menu (minimize / close /
-  // resetZoom) and forward each to the renderer instead.
+  // Steal Ctrl+M / Ctrl+W / Ctrl+0 back from Electron's default application menu (minimize /
+  // close / resetZoom — the default menu binds them as CmdOrCtrl accelerators, so it owns them
+  // on Windows and Linux too, and a menu accelerator is handled before the page ever sees the
+  // key) and forward each to the renderer instead.
   //
-  // ⌘M (markdown-view toggle) and ⌘W (close selected node) are read from settings.shortcuts
-  // (Settings → Shortcuts) via `matchesShortcut`, so a rebind is honoured here too — this is the
-  // inline handler `feat(settings): configurable keyboard shortcuts` introduced, kept here rather
-  // than folded into `keydown-intercept.ts`'s pure `keydownIntercept` (which predates the
-  // Shortcuts section and pins a deliberately BROADER match — any Cmd/Ctrl+M regardless of
-  // Shift/Alt — as a fixed, non-configurable menu-accelerator steal; narrowing that match to the
-  // exact configured combo is the whole point of making it reconfigurable, so the two cannot
-  // share one decision function without re-litigating that pin). ⌘0 (zoom-actual-size) is NOT
-  // part of the shortcuts registry — it is matched on the physical `code` like the renderer's
-  // `zoomShortcutChord`, unrelated to this feature — so it keeps the same fixed check
-  // `keydown-intercept.ts` uses.
+  // Ctrl+M (markdown-view toggle) and Ctrl+W (close selected node) are read from
+  // settings.shortcuts (Settings → Shortcuts) via `matchesShortcut`, so a rebind is honoured
+  // here too — this is the inline handler `feat(settings): configurable keyboard shortcuts`
+  // introduced, kept here rather than folded into `keydown-intercept.ts`'s pure
+  // `keydownIntercept` (which predates the Shortcuts section and pins a deliberately BROADER
+  // match — any Ctrl+M regardless of Shift/Alt — as a fixed, non-configurable menu-accelerator
+  // steal; narrowing that match to the exact configured combo is the whole point of making it
+  // reconfigurable, so the two cannot share one decision function without re-litigating that
+  // pin). Ctrl+0 (zoom-actual-size) is NOT part of the shortcuts registry — it is matched on the
+  // physical `code` like the renderer's `zoomShortcutChord`, unrelated to this feature — so it
+  // keeps the same fixed check `keydown-intercept.ts` uses.
+  //
+  // `matchesShortcut`'s platform argument is pinned FALSE (was `process.platform === 'darwin'`):
+  // the main process only exists in the desktop app — Windows delivery plus Linux dev runs,
+  // never the deleted mac build and never the Server Edition browser — so Ctrl is always the
+  // primary modifier here. Un-pinning it to a platform sniff would make metaKey (the Windows
+  // key) a required modifier nowhere and is pure dead weight; see
+  // `menu-accelerator-intercepts.test.ts` for the behavioral pins.
   win.webContents.on('before-input-event', (event, input) => {
     if (input.type !== 'keyDown') return
     const shortcuts = settingsStore.get().shortcuts
@@ -675,10 +681,10 @@ function createWindow(): BrowserWindow {
       altKey: input.alt,
       key: input.key
     }
-    if (matchesShortcut(evt, shortcuts.toggleMarkdown, isMacMain)) {
+    if (matchesShortcut(evt, shortcuts.toggleMarkdown, false)) {
       event.preventDefault()
       win.webContents.send(IPC.appToggleMarkdown)
-    } else if (matchesShortcut(evt, shortcuts.closeNode, isMacMain)) {
+    } else if (matchesShortcut(evt, shortcuts.closeNode, false)) {
       // Repurpose Cmd/Ctrl+W: the renderer closes the selected node(s); if none are
       // selected it asks us to close the window (the standard behavior).
       event.preventDefault()

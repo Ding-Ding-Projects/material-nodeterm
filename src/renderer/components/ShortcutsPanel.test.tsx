@@ -10,7 +10,10 @@ import { ShortcutsPanel } from './ShortcutsPanel'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
-const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
+// Same platform reader the component uses, so badge expectations track the test host's navigator
+// (jsdom is never a Mac here, which the mac-glyph absence test below relies on and asserts).
+import { isMacPlatform } from '@shared/platform-utils'
+const isMac = isMacPlatform()
 
 /** ShortcutsPanel portals into document.body; read the rendered rows there. */
 function renderedText(): string {
@@ -78,5 +81,19 @@ describe('ShortcutsPanel', () => {
     expect(text).toContain('Pan the canvas')
     expect(text).toContain('Zoom in / out')
     expect(text).toContain('Actions menu (empty space or node)')
+  })
+
+  it('renders every badge in canonical Ctrl/Shift notation on a non-mac host — no mac glyphs', () => {
+    // Guard the premise so the absence assertions below cannot green-wash on a mis-detected
+    // platform: jsdom's navigator is not a Mac, so nothing in this panel may emit ⌘/⇧/⌥.
+    // Failure prevented: reintroducing a mac-glyph token in GESTURE_ROWS (or a display path that
+    // stops rewriting through shortcutKeyParts) would show mac notation in the Windows UI.
+    expect(isMac).toBe(false)
+    const text = renderedText()
+    expect(text).toContain('Ctrl')
+    expect(text).toContain('Shift')
+    expect(text).not.toContain('⌘')
+    expect(text).not.toContain('⇧')
+    expect(text).not.toContain('⌥')
   })
 })

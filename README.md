@@ -11,7 +11,7 @@ project doubles as a **Trello-style board of live agent sessions**. Built for pe
 ADHD and scattered workflows: a spatial layout instead of a stack of hidden tabs.
 
 [![Build check](https://github.com/Ding-Ding-Projects/material-nodeterm/actions/workflows/ci.yml/badge.svg)](https://github.com/Ding-Ding-Projects/material-nodeterm/actions/workflows/ci.yml)
-[![Platform](https://img.shields.io/badge/platform-Windows%20·%20macOS%20(arm64%20%2B%20x64)%20·%20Linux-black)](#windows)
+[![Platform](https://img.shields.io/badge/platform-Windows%20·%20Linux-black)](#windows)
 [![Built with Electron](https://img.shields.io/badge/built%20with-Electron-47848F?logo=electron&logoColor=white)](https://www.electronjs.org/)
 [![License](https://img.shields.io/badge/license-BUSL--1.1-blue)](./LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/Ding-Ding-Projects/material-nodeterm?style=flat)](https://github.com/Ding-Ding-Projects/material-nodeterm/stargazers)
@@ -38,7 +38,7 @@ Stacked terminal tabs hide context — you lose track of what's running where. n
 that into a **map**: every shell is a node you can place, group, label, and zoom into. Sessions
 are spatial and persistent, so your mental model stays intact across restarts. And because the
 app is built around a clean service seam, the same canvas runs two ways: as the **desktop
-app** (Windows, macOS and Linux), and as a **self-hosted browser app** you reach from anywhere
+app** (Windows, with Linux packages built too), and as a **self-hosted browser app** you reach from anywhere
 (Server Edition) — including from a phone, with no app to install.
 
 ## ✨ Features
@@ -75,10 +75,10 @@ is ever interrupted by switching views.
 ### Session continuity
 
 Every terminal node runs inside a persistent [tmux](https://github.com/tmux/tmux) session on
-macOS and Linux, so a shell — and anything running in it, including an in-flight agent turn —
+Linux, so a shell — and anything running in it, including an in-flight agent turn —
 survives closing a node, switching projects, and quitting the app. A machine reboot ends the live
 process; the cold-restore path replays saved scrollback and resumes supported agent conversations.
-**Windows has no tmux binary to bundle**, so nodeterm ships a from-scratch equivalent instead:
+**Windows has no native tmux**, so nodeterm ships a from-scratch equivalent instead:
 the [Windows session host](#windows), a standalone process that owns the real PTYs and outlives
 the app. See [Windows](#windows) for its two honest caveats.
 
@@ -200,11 +200,11 @@ Three scripts live at the repository root, each with a Windows `.bat` and a POSI
 sibling. A checkout with nothing installed should reach a running app (or a real installer) by
 running one of them:
 
-| Script | Windows | macOS / Linux | What it does |
+| Script | Windows | Linux | What it does |
 | --- | --- | --- | --- |
 | Dependencies | `download-dependencies.bat` | `download-dependencies.sh` | Installs Node.js (if missing) and every npm dependency, from canonical upstreams into a user-scoped location. |
 | Build | `build.bat` | `build.sh` | Runs the dependency script, builds `out/`, then offers to launch the app. |
-| Installer | `build-installer.bat` | `build-installer.sh` | Runs the dependency script, then packages and verifies the real platform installer (Squirrel on Windows, `.dmg`/`.zip` on macOS, `.AppImage`/`.deb` on Linux). |
+| Installer | `build-installer.bat` | `build-installer.sh` | Runs the dependency script, then packages and verifies the real platform installer (Squirrel on Windows, `.AppImage`/`.deb` on Linux). |
 
 All three accept a silent flag (`/s` / `--silent` on Windows, `-s` / `--silent` elsewhere, or a
 `SILENT=1` environment variable) for unattended use, and exit non-zero on the first real
@@ -221,7 +221,6 @@ npm start           # preview the production build
 npm run typecheck   # tsc for both the main/preload and renderer projects
 npm test            # vitest (unit + integration)
 npm run dist:win     # package the Windows Squirrel installer
-npm run dist         # package the macOS .dmg + .zip
 npm run dist:linux   # package the Linux .AppImage + .deb
 npm run server:dev   # build and run the Server Edition
 ```

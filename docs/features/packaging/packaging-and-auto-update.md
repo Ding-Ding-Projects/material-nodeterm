@@ -9,9 +9,9 @@ newer one.
 
 **Building.** The desktop app uses
 [electron-builder](https://www.electron.build/). Windows packages as an unsigned Squirrel set:
-`Setup.exe`, `RELEASES`, and a full `.nupkg`. macOS packages `.dmg`/`.zip` for Apple Silicon and
-Intel; Linux packages an x64 AppImage and `.deb`. Native dependencies are rebuilt against the
-Electron ABI during installation.
+`Setup.exe`, `RELEASES`, and a full `.nupkg`. Linux packages an x64 AppImage and `.deb`. (The
+macOS `.dmg`/`.zip` targets were deleted with the macOS desktop target.) Native dependencies are
+rebuilt against the Electron ABI during installation.
 
 The supported Windows entry point is `npm run dist:win`. Its wrapper starts from a clean checkout,
 regenerates the committed seven-frame ICO, proves that the bytes match the current commit, derives
@@ -56,7 +56,7 @@ Automatic publication is disabled because the workflow has no push trigger. It r
 dispatchable from `main`, but no `0.4.0` publication is claimed by this change; manual publication
 is pending the final packaged install/update interactions.
 
-**Other platforms.** macOS and Linux deliberately retain `electron-updater` and their existing
+**Other platforms.** Linux deliberately retains `electron-updater` and its existing
 feed/manual-download behavior. The Server Edition has no desktop installer, and the separately
 maintained mobile companion does not consume Squirrel packages, so this updater is explicitly not
 applicable to those two surfaces.

@@ -226,11 +226,12 @@ one). This command does not build the zip target configured for broader packagin
   `build.win.signAndEditExecutable` stays enabled at its default so icon and version resources are
   still written; signing and resource editing are separate controls. Do not add a certificate or
   signing script.
-- **`npm run rebuild`** still matters on Windows exactly as it does on macOS/Linux: it rebuilds
+- **`npm run rebuild`** matters on Windows: it rebuilds
   `node-pty` (and `smart-whisper`) against Electron's ABI via `electron-rebuild`. The
-  `patch-node-pty.mjs` step it runs first patches a **darwin-only** `pty_posix_spawn` fd leak
-  (see `CLAUDE.md`) and is a documented no-op on Windows — `src/main/node-pty-patch.test.ts` only
-  asserts the marker on the darwin source path.
+  `patch-node-pty.mjs` step it runs first patches node-pty's **Windows ConPTY baton/handle race**
+  (see `CLAUDE.md`) before the native module compiles — `src/main/node-pty-patch.test.ts`
+  asserts the patch marker on the `conpty.cc` source path. (The script's former darwin
+  `pty_posix_spawn` fd-leak patch was deleted with the macOS desktop target.)
 
 ### Windows host requirement
 

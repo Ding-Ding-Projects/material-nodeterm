@@ -3,9 +3,11 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { contrastRatio, parseAnyColor, type RGBA } from './color/convert'
 import { accentTokens, applyAccentTokens } from './accentTokens'
 
+// Mirrors the PANEL constant in accentTokens.ts (styles.css --panel: #1d2024 / #ededf4). Keep
+// all three in step, or these floors certify contrast against a surface nobody paints.
 const PANEL: Record<'dark' | 'light', RGBA> = {
-  dark: { r: 40, g: 40, b: 40, a: 1 },
-  light: { r: 243, g: 239, b: 231, a: 1 }
+  dark: { r: 29, g: 32, b: 36, a: 1 },
+  light: { r: 237, g: 237, b: 244, a: 1 }
 }
 
 function parsed(value: string): RGBA {

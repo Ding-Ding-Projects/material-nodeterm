@@ -63,9 +63,12 @@ floors above and excludes Node 23 and 25. Both Desktop and Server Edition probe 
 startup, so a custom build or `--no-experimental-sqlite` fails before persistent services start.
 
 **If `src/main/node-pty-patch.test.ts` is red, your `node_modules` is unpatched — not your code.**
-Run `npm run rebuild`. node-pty 1.1.0 leaks a pty device per spawn on macOS
-([node-pty#950](https://github.com/microsoft/node-pty/issues/950)); we patch its source before
-`electron-rebuild` compiles it, and that test guards the patch surviving upgrades.
+Run `npm run rebuild`. node-pty 1.1.0 deletes its Windows ConPTY baton without closing the HPCON
+it owns, leaving orphaned conhosts behind a taskkill-first teardown; we patch its `conpty.cc`
+before `electron-rebuild` compiles it, and that test guards the patch surviving upgrades. (The
+script's former darwin ptmx-leak patch —
+[node-pty#950](https://github.com/microsoft/node-pty/issues/950) — left with the macOS desktop
+target.)
 
 ## Where code goes
 
@@ -92,7 +95,7 @@ boundary tests cannot tell you a feature is *missing*.
 A feature is not done until you have decided how it behaves on each — even if the decision is "not
 applicable here":
 
-1. **Desktop** (Electron)
+1. **Desktop** (Electron, Windows — the delivery target; Linux packages are also built)
 2. **Server Edition** (Linux, browser)
 3. **Mobile companion** — *nodeterm mobile*, a **private** repo (`nodeterm-ios`, SwiftUI). You
    cannot open a PR against it, so this is normally a follow-up note rather than same-PR

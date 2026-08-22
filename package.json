@@ -32,10 +32,8 @@
     "make-social": "node scripts/make-social.mjs",
     "count-lines": "node scripts/count-lines.mjs",
     "check:app-contract": "node scripts/check-app-contract.mjs",
-    "dist": "npm run make-icon && npm run build && electron-builder --mac --arm64 --publish never -c.mac.identity=null -c.mac.notarize=false -c.extraMetadata.nodeTermUpdates=disabled",
     "dist:linux": "npm run make-icon && npm run build && electron-builder --linux --publish never -c.extraMetadata.nodeTermUpdates=disabled",
     "dist:win": "node scripts/windows-installer.mjs build",
-    "release": "npm run make-icon && npm run build && sh -c 'electron-builder --mac --arm64 --x64 --publish never; s=$?; npm run rebuild; exit $s'",
     "postinstall": "node scripts/patch-node-pty.mjs && electron-rebuild -f -w node-pty,smart-whisper",
     "design:compare": "electron design/compare"
   },
@@ -94,44 +92,6 @@
       "category": "Development",
       "icon": "build/icon.png",
       "maintainer": "enes <eneskirca@gmail.com>"
-    },
-    "mac": {
-      "category": "public.app-category.developer-tools",
-      "icon": "build/icon.png",
-      "hardenedRuntime": true,
-      "gatekeeperAssess": false,
-      "entitlements": "build/entitlements.mac.plist",
-      "entitlementsInherit": "build/entitlements.mac.plist",
-      "notarize": true,
-      "extraResources": [
-        {
-          "from": "resources/bin/tmux",
-          "to": "bin/tmux"
-        },
-        {
-          "from": "resources/licenses",
-          "to": "licenses"
-        }
-      ],
-      "extendInfo": {
-        "NSMicrophoneUsageDescription": "nodeterm uses the microphone so you can dictate into your terminals."
-      },
-      "target": [
-        {
-          "target": "dmg",
-          "arch": [
-            "arm64",
-            "x64"
-          ]
-        },
-        {
-          "target": "zip",
-          "arch": [
-            "arm64",
-            "x64"
-          ]
-        }
-      ]
     },
     "win": {
       "icon": "build/icon.ico",

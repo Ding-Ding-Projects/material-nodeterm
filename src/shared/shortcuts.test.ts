@@ -18,6 +18,14 @@ describe('shortcuts registry', () => {
     }
   })
 
+  it('every default is spelled in canonical Ctrl notation, not the legacy Cmd alias', () => {
+    // A `Cmd+…` default would still WORK (the alias parses), which is exactly why nothing else
+    // would catch it: it silently reintroduces mac-first notation as the shipped source of truth.
+    for (const d of SHORTCUT_DEFS) {
+      expect(d.default, `${d.id} default is canonical`).toMatch(/^Ctrl\+/)
+    }
+  })
+
   it('defaults map matches the registry, one entry per action', () => {
     expect(Object.keys(DEFAULT_SHORTCUTS).sort()).toEqual(
       SHORTCUT_DEFS.map((d) => d.id).sort()
@@ -50,14 +58,27 @@ describe('shortcuts registry', () => {
   it('findShortcutConflicts pairs duplicates (incl. 3-way)', () => {
     const conflicts = findShortcutConflicts({
       ...DEFAULT_SHORTCUTS,
-      commandPalette: 'Cmd+K',
-      settings: 'Cmd+K',
-      undo: 'Cmd+K'
+      commandPalette: 'Ctrl+K',
+      settings: 'Ctrl+K',
+      undo: 'Ctrl+K'
     })
-    // The three-way clash yields three pairs, all involving Cmd+K.
+    // The three-way clash yields three pairs, all involving Ctrl+K.
     expect(conflicts).toHaveLength(3)
     const pairs = conflicts.map(([a, b]) => [a, b].sort().join(','))
     expect(pairs).toEqual(['commandPalette,settings', 'commandPalette,undo', 'settings,undo'])
+  })
+
+  it('findShortcutConflicts sees through mixed legacy/canonical notation', () => {
+    // A pre-rewire settings.json keeps `Cmd+K` for an untouched action while a fresh rebind
+    // stores `Ctrl+K` — one chord, two spellings. Raw-string grouping (the mutant) reports no
+    // conflict, and both actions then fight over a single keydown with no warning in Settings.
+    const conflicts = findShortcutConflicts({
+      ...DEFAULT_SHORTCUTS,
+      commandPalette: 'Cmd+K',
+      settings: 'Ctrl+K'
+    })
+    const pairs = conflicts.map(([a, b]) => [a, b].sort().join(','))
+    expect(pairs).toContain('commandPalette,settings')
   })
 
   // Cross-platform: the whole feature keys off the shared engine's platform abstraction
@@ -65,7 +86,7 @@ describe('shortcuts registry', () => {
   // the full parse -> format -> match/capture cycle on BOTH branches, so a Windows or macOS
   // user gets the same behaviour and the settings capture field renders the right badge.
   // (The generic engine is already tested on both branches in shortcut.test.ts; this pins the
-  // exact defaults — including the punctuation keys like `Cmd+,` — on both.)
+  // exact defaults — including the punctuation keys like `Ctrl+,` — on both.)
   for (const isMac of [true, false]) {
     describe(`defaults on ${isMac ? 'macOS (⌘/meta)' : 'Windows/Linux (Ctrl)'}`, () => {
       it('parse -> format round-trips every default to a renderable badge', () => {
@@ -115,7 +136,7 @@ describe('shortcuts registry', () => {
             },
             isMac
           )
-          // Same modifiers + key as the default, modulo canonical casing (e.g. 'Cmd+Enter').
+          // Same modifiers + key as the default, modulo canonical casing (e.g. 'Ctrl+Enter').
           expect(captured, `${d.id}: ${d.default} is capturable on ${isMac}`).not.toBeNull()
           if (captured) expect(parseShortcut(captured)).toEqual(parsed)
         }

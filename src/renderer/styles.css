@@ -2,7 +2,8 @@
 @import '@xyflow/react/dist/style.css';
 
 :root {
-  /* macOS dark-mode palette (NSColor / HIG). The LIGHT overrides live in the
+  /* Material 3 dark scheme, re-seeded 2026-08 from the design/ prototype's cool blue-neutral
+     tokens (design/README.md, "The tokens are the contract"). The LIGHT overrides live in the
      `:root[data-theme='light']` block below — everything here is the dark default, which is what
      an install with no appearance choice keeps rendering, byte for byte. */
 
@@ -14,23 +15,24 @@
   --tint-rgb: 255, 255, 255;
   /* The inverse: text/icons that must read as "maximum contrast against the app surface". In dark
      that is white; on light it has to become near-black, so `#fff` cannot be written literally.
-     (A white that sits on a saturated ACCENT fill is a different thing and stays `#fff`.) */
+     (Text sitting on an ACCENT fill is a different thing again — that is --md-on-primary's job,
+     since the dark primary is now a pale P80 that white text fails on.) */
   --text-strong: #fff;
 
   /* Working (agent mid-turn) accent: the clay spinner/glow color, shared by every "working"
      indicator (node glow, sidebar dot, project-header badge) so it only has to be edited once. */
   --agent-working: #d97757;
 
-  /* bars, panels, node chrome (underPage). It sits BETWEEN two ramp steps, so it has no single
-     honest Material role — but leaving it an authored #282828 made it the ONLY neutral grey
-     (R-B = 0) among surfaces that had all become warm (R-B ~ 8), and node chrome read visibly
-     cooler than the canvas behind it. Invisible to every test: contrast was still fine and the
-     token was still defined. Caught by rendering the palette and looking at it.
-     Tone 16 is the measured L* of the old #282828, so the elevation is unchanged and only the
-     hue joins the ramp. --panel-header/-2 follow it for the same reason. */
-  --panel: var(--md-tone-neutral-16);
-  --panel-header: #35322b; /* elevated / hover (windowBackground) — warm twin of the old #323232 */
-  --panel-2: #35322b;
+  /* bars, panels, node chrome (underPage). This is the design ramp's plain surface-container
+     step (`--sc` #1D2024 in the prototype) — the slot between container-low and container-high
+     that the old between-steps tone-16 alias approximated. Kept ON the ramp rather than authored
+     ad hoc because an off-ramp panel grey is invisible to every test — contrast still fine, token
+     still defined — while node chrome visibly mismatches the hue of the canvas behind it; that
+     exact bug shipped once as the lone neutral #282828 among warm surfaces, and was only caught
+     by rendering the palette and looking at it. --panel-header/-2 follow for the same reason. */
+  --panel: #1d2024;
+  --panel-header: #282a2f; /* elevated / hover — the ramp's container-high step */
+  --panel-2: #282a2f;
   /* Surfaces that were spelled as one-off hexes all over the sheet — nine slightly different
      darks, which was already drift before a second theme existed. Named by ELEVATION, so the light
      palette can invert the ramp instead of guessing what each hex meant.
@@ -54,11 +56,17 @@
   --text: var(--md-on-surface); /* label */
   --muted: var(--md-on-surface-variant); /* secondaryLabel */
   --muted-2: rgba(var(--tint-rgb), 0.25); /* tertiaryLabel */
-  --accent: #0a84ff; /* systemBlue */
-  --accent-hover: #3a9bff;
-  /* Accent as TEXT on a surface — lighter than the fill accent so it reads on a dark panel, and
-     the light theme has to go the other way. Was `#6cb0ff`/`#a9c0ff` at ~14 hover/link sites. */
-  --accent-text: #6cb0ff;
+  /* The design contract's dark primary (design/README.md: `--primary` #AAC7FF — an M3 P80 tone,
+     pale on purpose so one value reads as fill AND text on dark surfaces). Still user-
+     configurable: lib/accentTokens.ts overrides this whole family inline for a non-default
+     persisted accent, and leaves these authored values in charge for the default (its sentinel
+     note explains why the persisted default hex is still the historical systemBlue). */
+  --accent: #aac7ff;
+  --accent-hover: #b9d1ff;
+  /* Accent as TEXT on a surface. The pale P80 primary is already text-grade on every dark
+     surface (10.9:1 on --md-surface), so text and fill share one value here; the light theme
+     still needs its own darker treatment. */
+  --accent-text: #aac7ff;
   /* Status hues, named so the light theme can darken them for a white field in one place. */
   --danger: #ff453a;
   --warn: #ff9f0a;
@@ -70,7 +78,7 @@
      BOTH themes; the light theme redefines all of them together.
      (Written without a literal variable reference on purpose: styles.theme.test.ts scans this
      file for referenced-but-undefined tokens, and it reads comments too.) */
-  --accent-rgb: 10, 132, 255;
+  --accent-rgb: 170, 199, 255;
   --danger-rgb: 255, 69, 58;
   --warn-rgb: 255, 159, 10;
   /* The monospace stack, defined once so the terminal, code blocks and the converter's byte
@@ -88,10 +96,12 @@
      greyer than a node, or the nodes lose their edges. */
   --canvas-bg: #000000;
   /* Floating surfaces, each written as a triple so every per-use alpha survives (same idea as
-     --tint-rgb). Menus/dock/banners, popovers, and cards sit at three different depths. */
-  --menu-rgb: 40, 40, 42;
-  --popover-rgb: 20, 20, 22;
-  --card-rgb: 28, 28, 30;
+     --tint-rgb). Menus/dock/banners, popovers, and cards sit at three different depths — the
+     triples track the cool ramp (menu = container-high, popover = surface, card = container-low)
+     so translucent chrome stays in the same hue family as the opaque surfaces behind it. */
+  --menu-rgb: 40, 42, 47;
+  --popover-rgb: 17, 19, 24;
+  --card-rgb: 25, 28, 32;
   /* Drop-shadow weight multiplier. A shadow is black in BOTH themes — what changes is how hard it
      may land: 0.55 black reads as depth over a dark field and as mud over a white one. Every
      box-shadow alpha is multiplied by this, so the light theme turns them all down at once
@@ -103,7 +113,7 @@
      at the call site, and it is restated per-theme below — token-driven already. No --md-* role
      fits it: it is a deliberately standalone texture hue (see the light block's own comment), not
      part of the --tint-rgb border/outline ramp the surface roles alias. Left as its own token. */
-  --canvas-dot: #4a4a4a;
+  --canvas-dot: #45474c; /* the old neutral #4a4a4a, re-hued onto the cool ramp (tone 30) */
   --minimap-mask: rgba(10, 12, 18, 0.6);
   --git-graph-ref: var(--accent);
   --git-graph-remote-ref: #bf5af2;
@@ -129,25 +139,30 @@
      bare alias (primary/tertiary/error, still tied to their live identity colours — see below)
      needs no restatement, since it flips for free with whatever it points at. */
 
-  /* Surface container ramp — the app's six-step elevation ramp, wearing M3's names. Each value is
-     the Neutral tonal palette (see below) held at the tone whose lightness matches this app's
-     ORIGINAL hand-picked hex for that step (measured via CIE L*, e.g. surface = the app's old
-     `--bg` #1e1e1e was L*≈11, so it becomes Neutral tone 11) — so the ramp keeps its existing
-     elevation feel and every measured contrast floor, but is now genuinely mixed from the seed's
-     neutral hue instead of being a bag of nine independently-chosen dark greys. `--bg` and the
-     five `--surface-*` tokens above now alias INTO these roles instead of the other way around. */
-  --md-surface-container-lowest: var(--md-tone-neutral-3);
-  --md-surface-dim: var(--md-tone-neutral-6);
-  --md-surface-container-low: var(--md-tone-neutral-9);
-  --md-surface: var(--md-tone-neutral-11);
-  --md-surface-container-high: var(--md-tone-neutral-14);
-  --md-surface-container-highest: var(--md-tone-neutral-18);
-  --md-on-surface: var(--md-tone-neutral-90);
-  --md-on-surface-variant: var(--md-tone-neutral-variant-80);
-  --md-outline-variant: var(--md-tone-neutral-variant-30);
-  --md-outline: var(--md-tone-neutral-variant-60); /* a stronger boundary than outline-variant,
-    quieter than on-surface text; previously a plain --tint-rgb mix, now the same tonal family the
-    rest of the on-surface roles use, so it stays in step with them as the seed changes. */
+  /* Surface container ramp — the design contract's EXACT dark values (design/README.md, "The
+     tokens are the contract"): canonical M3 dark neutrals for the cool blue scheme. Written as
+     literals, not tone-ladder aliases, because the contract's CAM16-derived hexes do not land
+     exactly on this app's Lab-derived integer rungs — snapping each role to its nearest rung
+     would drift every surface a few RGB units off-contract, which is the "reconcile by eye"
+     failure the README warns against. The tonal palettes below stay as the reference scale for
+     tones the contract does not name. Note the real M3 dark ordering this adopts: `surface` sits
+     BELOW the containers (elevation lightens the containers, never the page), unlike the
+     pre-2026-08 warm ramp where surface sat above low/dim. `--bg` and the five `--surface-*`
+     tokens above keep aliasing INTO these roles. */
+  --md-surface-container-lowest: #0c0e13;
+  --md-surface-dim: #0c0e13; /* the contract has no dim row, and M3 proper puts dim AT surface in
+    dark — but this app uses dim for SUNKEN wells (--surface-sunken), which must stay below the
+    page or code blocks and empty states lose their depth; container-lowest is the only contract
+    tone below surface, so dim shares it. */
+  --md-surface-container-low: #191c20;
+  --md-surface: #111318;
+  --md-surface-container-high: #282a2f;
+  --md-surface-container-highest: #33353a;
+  --md-on-surface: #e2e2e9;
+  --md-on-surface-variant: #c3c6cf;
+  --md-outline-variant: #43474e;
+  --md-outline: #8d9199; /* a stronger boundary than outline-variant, quieter than on-surface
+    text — kept in the same neutral-variant family so it moves with the seed. */
 
   /* Primary stays tied to the app's LIVE, user-configurable accent (`--accent`), not a fixed P40/P80
      tone: `lib/accentTokens.ts` expands whatever accent the user picks into this exact family
@@ -157,7 +172,10 @@
      The container is a real tint of that accent (not a neutral surface), built from --accent-rgb
      so it themes automatically; styles.theme.test.ts pins this wiring by name. */
   --md-primary: var(--accent);
-  --md-on-primary: #fff; /* white text on a saturated accent fill, in both themes — same call as --knob */
+  --md-on-primary: #0a305f; /* the design's dark on-primary: INK on the pale P80 fill — white on
+    #AAC7FF measures 2.2:1, which is why every accent-filled control reads this role instead of a
+    literal #fff (the sweep that replaced `color: #fff` at ~25 fill sites; do not write #fff on an
+    accent fill again). The light block restates the design's white. */
   --md-primary-container: rgba(var(--accent-rgb), 0.16);
   --md-on-primary-container: var(--accent-text);
 
@@ -219,19 +237,25 @@
      a faithful, reproducible tonal palette without needing a CAM16 implementation this app does
      not have. Theme-independent by design — only WHICH tone a role picks differs between the
      dark and light blocks, never the scale itself:
-       primary   — seed #0a84ff (the app's accent): hue 283.5°, chroma 71.0
+       primary   — seed #0a84ff (the HISTORICAL systemBlue accent — still the persisted-default
+                   sentinel in lib/accentTokens.ts): hue 283.5°, chroma 71.0. Kept unchanged when
+                   the 2026-08 re-seed moved the authored accent to the design primary
+                   (#aac7ff / #005ac1): no role reads these rungs directly, and the design's own
+                   primary rows land on the roles as literals.
        secondary — same hue as primary, chroma reduced to 16 (M3's own "quieter, same identity"
                    convention), so a second hue is never invented (docs/app-design-tokens.md)
        tertiary  — seed #d97757 (--agent-working, the app's real second identity colour): hue
                    44.2°, chroma 49.3
        error     — seed #ff453a (--danger): hue 35.2°, chroma 84.2
-       neutral / neutral-variant — hue 88°, chroma 4 / 8. NOT the accent's hue: 88° is measured
-                   from the app's OWN pre-existing warm light surfaces (--bg light was already
-                   hue≈87°, chroma≈2.8 — "warm, not white", see the light block below), so the
-                   ramp keeps the anti-glare warmth that was already deliberately tuned and
-                   contrast-tested there instead of fighting it with an unrelated blue cast.
-                   Material Theme Builder itself treats Neutral as an independently choosable seed
-                   for exactly this reason. */
+       neutral / neutral-variant — re-seeded 2026-08 from the design contract's cool blue
+                   neutrals (design/README.md), replacing the warm hue-88° ramp. Rungs are
+                   interpolated in LCH THROUGH the contract's own hexes (neutral anchors
+                   #0C0E13..#33353A and #E2E2E9..#F9F9FF, chroma ~3-4, hue ~265-290°; variant
+                   anchors #43474E / #74777F / #8D9199 / #C3C6CF, chroma ~4.8), holding
+                   L* = tone as before. Anchoring through the contract instead of one fixed
+                   hue/chroma keeps every rung inside the design's own family — a single
+                   averaged hue is exactly the "reconcile by eye" drift the README warns
+                   against. */
   --md-tone-primary-0: #000000;
   --md-tone-primary-10: #001f7f;
   --md-tone-primary-20: #003299;
@@ -272,47 +296,48 @@
   --md-tone-tertiary-99: #fff9f4;
   --md-tone-tertiary-100: #ffffff;
   --md-tone-neutral-0: #000000;
-  --md-tone-neutral-10: #1e1b16;
-  --md-tone-neutral-20: #33302b;
-  --md-tone-neutral-30: #4a4640;
-  --md-tone-neutral-40: #615e58;
-  --md-tone-neutral-50: #7a7770;
-  --md-tone-neutral-60: #94908a;
-  --md-tone-neutral-70: #afaba4;
-  --md-tone-neutral-80: #cac6bf;
-  --md-tone-neutral-90: #e6e2db;
-  --md-tone-neutral-95: #f3f0ec;
-  --md-tone-neutral-99: #fdfcfb;
+  --md-tone-neutral-10: #191c20;
+  --md-tone-neutral-20: #2e3035;
+  --md-tone-neutral-30: #45474c;
+  --md-tone-neutral-40: #5d5e64;
+  --md-tone-neutral-50: #75777d;
+  --md-tone-neutral-60: #8f9097;
+  --md-tone-neutral-70: #aaabb1;
+  --md-tone-neutral-80: #c6c6cd;
+  --md-tone-neutral-90: #e2e2e9;
+  --md-tone-neutral-95: #f0f0f7;
+  --md-tone-neutral-99: #fbfcff;
   --md-tone-neutral-100: #ffffff;
-  /* Extra rungs the canonical 13-step ladder does not carry, completing it exactly the way
-     --radius-xs completes the shape scale (see that token's own comment): the surface-container
-     ramp below matches each of its six steps to the app's PRE-EXISTING elevation hex by lightness
-     (measured CIE L*), and those measured tones do not land on round multiples of 10. */
-  --md-tone-neutral-3: #0d0b07;
-  --md-tone-neutral-6: #16130e;
-  --md-tone-neutral-9: #1c1914;
-  --md-tone-neutral-11: #201d18;
-  --md-tone-neutral-14: #26231e;
-  /* L* 16.1 — the measured lightness of the old --panel #282828, so node chrome keeps its exact
-     elevation while joining the warm ramp. See the --panel note above. */
-  --md-tone-neutral-16: #2a2722;
-  --md-tone-neutral-18: #2f2c26;
-  --md-tone-neutral-89: #e3dfd8;
-  --md-tone-neutral-93: #eeebe4;
-  --md-tone-neutral-97: #f8f6f3;
-  --md-tone-neutral-98: #faf9f7;
+  /* Extra rungs the canonical 13-step ladder does not carry. They were minted when the
+     surface-container roles aliased rungs matched by measured L* to the old hand-picked hexes;
+     the roles now carry the design contract's literals instead, but every rung NAME stays
+     declared — docs/features/appearance/material-3-migration-status.md documents why deleting a
+     token name here can vanish silently behind a green suite (var() references are also built at
+     runtime from bare strings), so a dropped rung is a decision, never a cleanup. Values are the
+     cool re-derivation at the same tones. */
+  --md-tone-neutral-3: #090b0f;
+  --md-tone-neutral-6: #111318;
+  --md-tone-neutral-9: #171a1e;
+  --md-tone-neutral-11: #1b1e22;
+  --md-tone-neutral-14: #212428;
+  --md-tone-neutral-16: #26282d;
+  --md-tone-neutral-18: #2a2c31;
+  --md-tone-neutral-89: #dfdfe6;
+  --md-tone-neutral-93: #eaeaf1;
+  --md-tone-neutral-97: #f6f6fc;
+  --md-tone-neutral-98: #f9f9ff;
   --md-tone-neutral-variant-0: #000000;
-  --md-tone-neutral-variant-10: #201b10;
-  --md-tone-neutral-variant-20: #353025;
-  --md-tone-neutral-variant-30: #4c463a;
-  --md-tone-neutral-variant-40: #645e51;
-  --md-tone-neutral-variant-50: #7d7669;
-  --md-tone-neutral-variant-60: #979083;
-  --md-tone-neutral-variant-70: #b2aa9d;
-  --md-tone-neutral-variant-80: #cdc6b8;
-  --md-tone-neutral-variant-90: #eae2d3;
-  --md-tone-neutral-variant-95: #f5f0e7;
-  --md-tone-neutral-variant-99: #fdfcfa;
+  --md-tone-neutral-variant-10: #1a1c1e;
+  --md-tone-neutral-variant-20: #2e3035;
+  --md-tone-neutral-variant-30: #43474e;
+  --md-tone-neutral-variant-40: #5b5e66;
+  --md-tone-neutral-variant-50: #74777f;
+  --md-tone-neutral-variant-60: #8d9199;
+  --md-tone-neutral-variant-70: #a8abb4;
+  --md-tone-neutral-variant-80: #c3c6cf;
+  --md-tone-neutral-variant-90: #e0e2e7;
+  --md-tone-neutral-variant-95: #f0f1f3;
+  --md-tone-neutral-variant-99: #fcfcfd;
   --md-tone-neutral-variant-100: #ffffff;
   --md-tone-error-0: #000000;
   --md-tone-error-10: #680000;
@@ -366,17 +391,20 @@
 :root[data-theme='light'] {
   color-scheme: light;
 
-  /* WARM, not white. The first light palette was pure #fff surfaces with pure black ink — the
-     brightest thing a screen can do — which reads as glare in a full-window canvas app somebody
-     sits in front of all day. Two changes fix it TOGETHER, and neither works alone:
-       1. every surface carries a cream cast and none of them reaches 255; the brightest thing
-          here is #fdfbf7, and the canvas behind the nodes is darker still;
-       2. the INK is a warm near-black, not #000 — which is what stops the contrast reading like
+  /* COOL, not white — and still never 255. The first light palette was pure #fff surfaces with
+     pure black ink — the brightest thing a screen can do — which reads as glare in a full-window
+     canvas app somebody sits in front of all day. The design contract's cool neutrals keep both
+     halves of that fix:
+       1. every surface carries a blue-grey cast and none reaches 255; the brightest thing here
+          is --md-surface #F9F9FF (luminance 0.95), and the canvas behind the nodes is darker;
+       2. the INK is a cool near-black, not #000 — which is what stops the contrast reading like
           print on paper.
      `--tint-rgb` does the second job for the entire sheet at once: text, borders, hover fills and
-     gradient stops are all mixed from it (see the dark block's note). */
-  --tint-rgb: 58, 48, 38;
-  --text-strong: #2b241c;
+     gradient stops are all mixed from it (see the dark block's note). The triple is the ramp's
+     #33353A — deliberately the same L* (~22) as the old warm ink, so the ~280 authored overlay
+     alphas keep their tuned visual weight and only the hue flips. */
+  --tint-rgb: 51, 53, 58;
+  --text-strong: #27292e;
 
   /* --border/--muted/--text carry no literal here any more: they alias --md-outline-variant /
      --md-on-surface-variant / --md-on-surface (see the dark block's comment), and those roles get
@@ -390,41 +418,45 @@
 
   /* `--bg` and the five `--surface-*` tokens likewise carry no literal here: they alias the M3
      surface-container roles (dark block), restated with their own tonal-palette literal below. */
-  --panel: #f3efe7; /* bars, panels, node chrome */
-  --panel-header: #eae5db; /* elevated / hover */
-  --panel-2: #eae5db;
+  --panel: #ededf4; /* bars, panels, node chrome — the design ramp's plain surface-container */
+  --panel-header: #e7e8ee; /* elevated / hover — container-high */
+  --panel-2: #e7e8ee;
 
-  /* systemBlue's light-mode value — the dark one is deliberately lighter for a dark field and
-     loses contrast against a pale one. Kept BLUE on a warm field: the accent is the product's
-     identity across both themes and is user-configurable (Settings → Appearance), so it is not
-     the palette's job to change it. */
-  --accent: #007aff;
-  --accent-hover: #0a6ed1;
-  /* Accent as text has to DARKEN here, where the dark theme's lightened blue disappears. */
-  --accent-text: #0060df;
+  /* The design contract's light primary (design/README.md: `--primary` #005AC1) — darker than
+     the dark theme's pale P80 because it sits on pale fields. Still user-configurable
+     (Settings → Appearance): lib/accentTokens.ts overrides the family for a non-default pick. */
+  --accent: #005ac1;
+  --accent-hover: #004a9e;
+  /* Accent as text needs no separate treatment here: #005AC1 measures 6.2:1 on --md-surface and
+     5.6:1 on --panel, so text and fill share one value (same collapse as the dark block). */
+  --accent-text: #005ac1;
 
   /* The canvas sits BELOW every node, so it is the one surface that must be darker than the
      panels — otherwise the nodes dissolve into the field and the layout loses its edges. */
-  --canvas-bg: #f4efe6;
+  --canvas-bg: #e9eaf1;
   /* Floating surfaces come UP the ramp (see the elevation note above) without going white. */
-  --menu-rgb: 253, 251, 247;
-  --popover-rgb: 253, 251, 247;
-  --card-rgb: 253, 251, 247;
-  /* macOS light-mode shadows are about a third of the weight of its dark ones. */
+  --menu-rgb: 250, 250, 254;
+  --popover-rgb: 250, 250, 254;
+  --card-rgb: 250, 250, 254;
+  /* Light-mode shadows land at about a third of the dark weight — heavier reads as mud on a
+     pale field. */
   --shadow-k: 0.35;
 
   /* The status hues are tuned for a dark field: on a pale one, yellow and orange fall under any
-     reasonable contrast floor. Darkened here rather than at each of their ~50 call sites, and
-     warmed a little so they belong to this palette. */
+     reasonable contrast floor. Darkened here rather than at each of their ~50 call sites. --warn
+     went one step further in the 2026-08 cool re-seed: the old #a85c00 measured 4.29:1 on the new
+     --panel and 4.17:1 on --canvas-bg against the 4.3 floor styles.theme.test.ts asserts
+     (the cool panels are one L* step darker than the warm ones it was tuned on); #a35900 is the
+     nearest passing tone at the same hue — 4.52:1 / 4.39:1. */
   --danger: #c62a1f;
-  --warn: #a85c00;
+  --warn: #a35900;
   --caution: #806100;
   --success: #1f7a38;
   /* Triplets for the darkened light-theme hues — see the dark block's note. Left out, the tinted
      call sites would keep painting the DARK theme's brighter hues onto a white field. */
-  --accent-rgb: 0, 122, 255;
+  --accent-rgb: 0, 90, 193;
   --danger-rgb: 198, 42, 31;
-  --warn-rgb: 168, 92, 0;
+  --warn-rgb: 163, 89, 0;
   /* Same white knob on this theme too — a switch/slider thumb sits on its own coloured track, not
      on the page, so it does not need to darken the way the status hues above do. Restated here
      rather than inherited because the light theme is required to override every colour token, so
@@ -437,43 +469,43 @@
   --agent-working: #b04a28;
 
   /* Dots must read as a grid, not as noise: the dark-mode grey is far too heavy on a pale field,
-     and a neutral one would be the only cold thing on screen. */
-  --canvas-dot: #d8cdba;
-  --minimap-mask: rgba(251, 248, 243, 0.6);
+     and the old warm #d8cdba would now be the only warm thing on screen. */
+  --canvas-dot: #c3c6cf;
+  --minimap-mask: rgba(249, 249, 255, 0.6);
 
   /* ---- Material Design 3 — literal roles restated for light --------------------------------
      A bare alias straight to another APP token (`--md-primary: var(--accent)`, `--md-tertiary`,
-     `--md-error`) already flips with the token it points at and needs nothing here. Every role
-     that is now backed by a tonal palette is restated with its OWN `--md-tone-` reference —
-     tonal palettes are theme-independent (declared once, in the dark block above), so what changes
-     per theme is only WHICH tone a role points at, same mechanism, different target. A
-     `var(--tint-rgb)`-only mix is exempted the same way --muted-2 already is — none remain among
-     the roles below after this pass; --md-outline used to be one and is now tonal too. */
-  --md-surface-container-lowest: var(--md-tone-neutral-95);
-  --md-surface-dim: var(--md-tone-neutral-93);
-  --md-surface-container-low: var(--md-tone-neutral-89);
-  --md-surface: var(--md-tone-neutral-97); /* tone 98/99 measured >=0.97 relative luminance, the
-    "no light surface is pure white" floor styles.theme.test.ts asserts (the same anti-glare
-    reason the pre-palette #fbf8f3 never reached 255 either) */
-  --md-surface-container-high: var(--md-tone-neutral-98);
-  --md-surface-container-highest: var(--md-tone-neutral-98); /* same tone as container-high, same
-    as the pre-palette --surface-raised/--surface-overlay pair this ramp aliases, which were also
-    identical (#fdfbf7 both) */
-  --md-on-surface: var(--md-tone-neutral-10);
-  --md-on-surface-variant: var(--md-tone-neutral-variant-30);
-  --md-outline-variant: var(--md-tone-neutral-variant-80);
-  --md-outline: var(--md-tone-neutral-variant-50);
+     `--md-error`) already flips with the token it points at and needs nothing here. The surface
+     and on-surface roles carry the design contract's EXACT light values (design/README.md), the
+     same way the dark block does — literals, for the same off-by-a-few-units reason named there.
+     Note the real M3 light ordering this adopts: containers DARKEN as they elevate (the tint
+     ramp goes down from surface), the inverse of the pre-2026-08 warm ramp where raised/overlay
+     went whiter than the page. */
+  --md-surface-container-lowest: #f4f4fb; /* M3 proper puts light lowest at pure #FFFFFF, which
+    trips this palette's own no-pure-white anti-glare floor — nearest passing tone, held just
+    above container-low like the slot it replaced. */
+  --md-surface-dim: #eaeaf1;
+  --md-surface-container-low: #f3f3fa;
+  --md-surface: #f9f9ff; /* luminance 0.951, under the "no light surface is pure white" 0.97
+    floor styles.theme.test.ts asserts (the same anti-glare reason the pre-palette #fbf8f3 never
+    reached 255 either) */
+  --md-surface-container-high: #e7e8ee;
+  --md-surface-container-highest: #e2e2e9;
+  --md-on-surface: #1a1b21;
+  --md-on-surface-variant: #43474e;
+  --md-outline-variant: #c3c6cf;
+  --md-outline: #74777f;
   --md-secondary: var(--md-tone-secondary-40);
   --md-secondary-container: var(--md-tone-secondary-90);
   --md-on-secondary-container: var(--md-tone-secondary-10);
-  --md-on-primary: #fff; /* same call as --knob: a white knob/label needs no theme flip */
+  --md-on-primary: #fff; /* the design's light on-primary: white on the saturated #005AC1 fill
+    (6.5:1). Only LIGHT keeps white — the dark block's pale P80 fill needs ink, see there. */
   --md-primary-container: rgba(var(--accent-rgb), 0.16); /* --accent-rgb already themes */
-  /* Darker than --accent-text (#0060df), which this used to alias. That token is tuned to sit
-     on a PLAIN light surface; over a primary-container tint it measured 4.41:1 — under the 4.5
-     floor for the palette's secondary label, which is real clickable text. #004fb8 measures
-     5.87:1 there and 5.34:1 for the canvas lock glyph. Dark needs no restatement: its #6cb0ff
-     already clears both (5.39 / 5.41). M3's own light on-primary-container tones are darker
-     still; this is the closest step to the app's existing hue that clears both consumers. */
+  /* Darker than --accent-text (#005ac1), because this role sits over a primary-container TINT,
+     not a plain surface, and the tinted field costs contrast. Re-measured for the 2026-08 cool
+     palette: #004fb8 clears 5.6:1 for the palette's secondary label (real clickable text, 4.5
+     floor) and 5.05:1 for the canvas lock glyph (3:1 floor). Dark needs no restatement: its
+     #aac7ff alias clears both (5.8 / 6.6). */
   --md-on-primary-container: #004fb8;
   --md-tertiary-container: var(--md-tone-tertiary-90);
   --md-on-tertiary-container: var(--md-tone-tertiary-10);
@@ -656,7 +688,7 @@ body,
   margin-left: 2px;
   border-radius: 9px;
   background: var(--accent);
-  color: #fff;
+  color: var(--md-on-primary);
   font-size: 10.5px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
@@ -887,7 +919,8 @@ body,
 .dock-add.active {
   background: #0060df; /* pre-existing hardcoded accent, unrelated to this M3 pass — left alone,
     see report: it does not track the accent-rgb/theme model even before this change */
-  color: var(--md-on-primary);
+  color: #fff; /* pinned WITH the pinned fill: --md-on-primary became dark ink for the pale P80
+    accent, which would be unreadable on this frozen saturated blue */
 }
 
 .dock-btn.active {
@@ -1255,7 +1288,7 @@ body,
 .dictation__btn--primary {
   background: var(--accent);
   border-color: transparent;
-  color: #fff;
+  color: var(--md-on-primary);
   font-weight: 600;
 }
 
@@ -2674,7 +2707,7 @@ body,
 .term-chat__msg--user {
   align-self: flex-end;
   background: var(--accent, #0a84ff);
-  color: #fff;
+  color: var(--md-on-primary);
 }
 .term-chat__msg--assistant {
   align-self: flex-start;
@@ -3678,7 +3711,7 @@ body,
   margin-left: auto;
   background: var(--accent);
   border-color: transparent;
-  color: #fff;
+  color: var(--md-on-primary);
   font-weight: 600;
 }
 
@@ -3753,7 +3786,7 @@ body,
 }
 
 .editor-node__save:not(:disabled) {
-  color: #fff;
+  color: var(--md-on-primary);
   background: var(--accent);
   border-color: transparent;
 }
@@ -4061,7 +4094,7 @@ body,
   background: var(--accent);
   border: none;
   border-radius: 8px;
-  color: #fff;
+  color: var(--md-on-primary);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -4087,7 +4120,8 @@ body,
   height: 8px;
   border-radius: 50%;
   background: var(--accent);
-  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.25);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.25); /* was a frozen rgba(10,132,255,…) ring
+    around a var(--accent) dot — visibly mismatched once the accent re-seeded off systemBlue */
 }
 
 .set-value {
@@ -4604,7 +4638,7 @@ body,
 
 .sc-btn.primary {
   background: var(--accent, var(--accent));
-  color: #fff;
+  color: var(--md-on-primary);
   border-color: transparent;
   font-weight: 600;
 }
@@ -4977,7 +5011,7 @@ body,
   width: 100%;
   margin-top: 10px;
   background: var(--accent);
-  color: #fff;
+  color: var(--md-on-primary);
   border: none;
   border-radius: 9px;
   padding: 11px;
@@ -5531,7 +5565,7 @@ body,
 
 .consent-btn.primary {
   background: var(--accent);
-  color: #fff;
+  color: var(--md-on-primary);
 }
 
 .consent-btn.primary:hover {
@@ -5641,7 +5675,7 @@ body,
 .confirm__btn.primary {
   background: var(--accent);
   border-color: transparent;
-  color: #fff;
+  color: var(--md-on-primary);
   font-weight: 600;
 }
 
@@ -7224,7 +7258,7 @@ body,
 }
 .seg-pill-opt.active {
   background: var(--accent);
-  color: #fff;
+  color: var(--md-on-primary);
 }
 .agents-row {
   display: flex;
@@ -7418,7 +7452,7 @@ body,
 .pubdlg__opt:hover:not(:disabled),
 .pubdlg__opt:focus-visible {
   background: var(--accent);
-  color: #fff;
+  color: var(--md-on-primary);
   outline: none;
 }
 .pubdlg__opt:disabled {
@@ -8193,7 +8227,7 @@ body,
 }
 .chat-node__slash-item--active {
   background: var(--accent);
-  color: #fff;
+  color: var(--md-on-primary);
 }
 /* Image-attachment chips row (above the compose box). */
 .chat-node__attach {
@@ -8536,7 +8570,7 @@ body,
 
 .presence-prompt__ok {
   background: var(--accent);
-  color: #fff;
+  color: var(--md-on-primary);
   border: none;
 }
 
@@ -8924,7 +8958,7 @@ body,
 }
 .kanban-card__open:hover {
   background: var(--accent);
-  color: #fff;
+  color: var(--md-on-primary);
 }
 .kanban-card:hover {
   border-color: rgba(var(--tint-rgb), 0.2);
@@ -9422,7 +9456,7 @@ body,
 }
 .kanban-col__newmenu button:hover {
   background: var(--accent);
-  color: #fff;
+  color: var(--md-on-primary);
 }
 .kanban-card__stickytext {
   flex: 1;
@@ -9731,7 +9765,7 @@ body,
 }
 .kanban-modal__action[aria-pressed='true'] {
   background: var(--accent);
-  color: #fff;
+  color: var(--md-on-primary);
 }
 
 /* ---- Node comments flyout: the header 💬 expands the board-log feed to the node's right ---- */
@@ -10238,7 +10272,7 @@ body,
 }
 .kanban-meta__picker > button:hover {
   background: var(--accent);
-  color: #fff;
+  color: var(--md-on-primary);
 }
 .kanban-meta__pname {
   flex: 1;
@@ -10563,7 +10597,7 @@ body,
 .onb-btn--primary {
   background: var(--accent);
   border-color: transparent;
-  color: #fff;
+  color: var(--md-on-primary);
 }
 .onb-btn--primary:hover {
   background: var(--accent);
@@ -10710,7 +10744,7 @@ body,
 }
 .onb-seg__btn.is-on {
   background: var(--accent);
-  color: #fff;
+  color: var(--md-on-primary);
 }
 .onb-tryit.is-done {
   border-style: solid;
@@ -10792,7 +10826,7 @@ body,
 }
 @keyframes onb-menu-hl {
   0%, 30% { background: transparent; }
-  36%, 54% { background: var(--accent); color: #fff; }
+  36%, 54% { background: var(--accent); color: var(--md-on-primary); }
   58%, 100% { background: transparent; }
 }
 /* The spawned node mirrors the real .term-node look: 3px color top border, panel header. */
@@ -11308,7 +11342,7 @@ body,
   right: 15%;
   transform: rotate(8deg);
   background: var(--accent);
-  color: #fff;
+  color: var(--md-on-primary);
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -11343,7 +11377,7 @@ body,
   .onb-menu__hl {
     animation: none;
     background: var(--accent);
-    color: #fff;
+    color: var(--md-on-primary);
   }
   .onb-node {
     animation: none;
@@ -12435,7 +12469,7 @@ body,
 .color-picker__format-tab.is-active {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--md-on-primary);
 }
 .color-picker__entry {
   display: flex;
@@ -13866,7 +13900,7 @@ body,
 }
 .toylock-btn:hover { background: rgba(var(--tint-rgb), 0.12); }
 .toylock-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.toylock-btn--primary { background: var(--accent, #0a84ff); border-color: transparent; color: #fff; }
+.toylock-btn--primary { background: var(--accent, #0a84ff); border-color: transparent; color: var(--md-on-primary); }
 .toylock-btn--primary:hover { filter: brightness(1.08); }
 .toylock-btn--sm { padding: 3px 9px; font-size: 11.5px; }
 .toylock-btn--link {

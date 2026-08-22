@@ -3,7 +3,7 @@
 **Category:** [Terminals](./README.md)
 
 Terminal and agent nodes use a persistent backend rather than tying the live shell directly to
-the desktop window. On macOS/Linux that backend is normally
+the desktop window. On Linux that backend is normally
 [tmux](https://github.com/tmux/tmux); on Windows it is nodeterm's standalone session host when no
 native tmux is available. In both cases the process can survive closing a node, switching
 projects, and quitting or crashing the app.
@@ -50,9 +50,9 @@ nothing to reattach to. nodeterm bridges this gap instead of pretending it did n
 
 - **Settings → tmux** — turn persistent backend support on/off, and set the scrollback bound used
   by tmux history, the Windows host's headless terminal, and cold-start replay.
-- The macOS desktop build ships its own tmux binary as a fallback so terminal continuity works
-  with nothing pre-installed; a tmux already on your system is always preferred over the
-  bundled one.
+- A system tmux found on `PATH` (or at a fixed system location) is always preferred over the
+  session host. (The macOS desktop build used to bundle its own tmux binary as a fallback; that
+  bundle was deleted with the macOS desktop target.)
 - **Settings → Shell** on Windows selects the default detected profile. Profile choices are
   machine-local and snapshotted per node; see [Windows shell profiles](./windows-shell-profiles.md).
 

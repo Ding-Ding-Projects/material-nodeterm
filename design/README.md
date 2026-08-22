@@ -46,7 +46,13 @@ Note the naming difference: the prototype uses the short form (`--sc`, `--outlin
 the same Material roles; the app's names are the ones to keep, because the whole stylesheet and
 `styles.theme.test.ts` already speak them.
 
-**Known divergence:** the app's current palette is warm (neutral hue ~88°, e.g. `--md-surface`
-`#201d18`) while this prototype is a cool blue-tinted neutral (`#111318`). Reconciling them means
-re-seeding the app's tonal ramps from these values — do that from the table above rather than by
-eye.
+**Known divergence — CLOSED (2026-08-18).** The app's palette used to be warm (neutral hue ~88°,
+e.g. the old `--md-surface` `#201d18`) while this prototype is a cool blue-tinted neutral
+(`#111318`). The app's `--md-*` roles now carry the exact values from the table above, taken from
+the table rather than by eye (`src/renderer/styles.css`, both theme blocks; the neutral tonal
+ramps are re-derived through these same hexes). Two recorded departures, both floor-driven:
+
+- light `--md-surface-container-lowest` is `#F4F4FB`, not M3's pure `#FFFFFF` — the app's
+  anti-glare rule forbids a pure-white surface (`styles.theme.test.ts`);
+- the light `--warn` status hue (not in this table) darkened one step to `#A35900` to keep its
+  4.3:1 floor on the new, slightly darker cool panels.

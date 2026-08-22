@@ -30,16 +30,22 @@ npm run rebuild    # re-run electron-rebuild for node-pty if you hit ABI/native 
 ```
 
 **`rebuild` and `postinstall` both run `scripts/patch-node-pty.mjs` first, and that is not
-optional.** node-pty 1.1.0's darwin `pty_posix_spawn` leaks a ptmx device on every SUCCESSFUL spawn
-(an off-by-one in the low-fd cleanup) and master+slave on every FAILED one; on this app's spawn
-churn that exhausts `kern.tty.ptmx_max` within hours, and terminals then simply stop opening. The
-script rewrites `node_modules/node-pty/src/unix/pty.cc` before electron-rebuild compiles it.
+optional.** node-pty 1.1.0 deletes its native `pty_baton` as soon as the shell process handle
+signals, without closing the HPCON the baton owns; a taskkill-first teardown of a silent shell
+tree then leaves a host-parented conhost alive until the whole Node process exits, and
+`conpty.kill(id)` silently finds no baton. The script rewrites
+`node_modules/node-pty/src/win/conpty.cc` before electron-rebuild compiles it: baton access is
+serialized, the exact HPCON is closed before deletion, and `kill(id)` returns positive proof.
+(The script's former darwin `pty_posix_spawn` ptmx-leak patch — microsoft/node-pty#950, filed by
+us — was deleted with the macOS desktop target, 2026-08; the leak lives in a darwin-only
+compilation unit no Windows or Linux build compiles.)
 
 `src/main/node-pty-patch.test.ts` asserts the marker is present in those sources, so a node-pty
 upgrade that silently drops the patch fails loudly. **If that test is red, your `node_modules` is
-unpatched, not your code** — run `npm run rebuild`. It deliberately does not measure descriptors
-(that is environment-dependent); it checks the source the native module is built from. Upstream:
-microsoft/node-pty#950 — if the fix lands there, delete the script, its wiring and that test.
+unpatched, not your code** — run `npm run rebuild`. It deliberately does not measure handles
+(that is environment-dependent); it checks the source the native module is built from. If a
+node-pty release closes the exact HPCON before baton deletion, delete the script, its wiring and
+that test.
 
 ```
 
@@ -573,13 +579,10 @@ The node id is the `persistKey` (passed to `transport.create`), so it must stay 
 If tmux is unavailable while persistent support is enabled, `PtyManager` selects the standalone
 session host; a plain shell is the final non-persistent path when persistence is disabled or cannot
 be used. `findTmux()` resolves an absolute path because GUI apps don't inherit the
-shell PATH, and it tries three sources **in this order: fixed system paths → the shell's
-PATH → the tmux the macOS app SHIPS** (`bundledTmuxPath`). System first is deliberate — a
-machine that already has tmux keeps using its own, so the bundled copy is a floor, never an
-override. `resourcesPath` is `undefined` on the **Server Edition**, so the bundled binary is
-unreachable there by construction; a Linux host is expected to have its own. Under
-`electron-vite dev` the last candidate resolves against `process.cwd()`, which is where
-`scripts/build-tmux.mjs` writes its artifact. If tmux is unavailable from all three, selection
+shell PATH, and it tries two sources **in this order: fixed system paths → the shell's
+PATH**. (A third source — a tmux binary the macOS app bundled as a floor — was deleted with the
+macOS desktop target, 2026-08; a Linux/Server Edition host is expected to have its own tmux, and
+Windows never had a bundled one.) If tmux is unavailable from both, selection
 continues to the session host before the plain fallback; `TMUX`/`TMUX_PANE` are stripped from the
 child env to avoid nesting refusal.
 
@@ -1320,10 +1323,10 @@ untrusted|on-request|never`. Two rules the mapping exists to enforce: a mode the
   `sshHostKey` = `user@host`; `remoteAccountConfigDir` is `~`-relative for ssh expansion,
   `remoteAccountConfigDirAbs` resolves it against the connection's `remoteHome`). The **claude
   CLI owns login, credential storage, and token refresh** inside that dir — the app NEVER writes
-  credentials. On macOS this works because Claude Code **≥ 2.1** scopes its Keychain service per
-  config dir (`Claude Code-credentials-<sha256(configDir)[:8]>`, `claudeKeychainService`); on
-  < 2.1 one unscoped service is shared → accounts collide, so add-account **warns** (`claude
---version`, `isSupportedClaudeVersion`).
+  credentials. On Windows the CLI keeps its credentials in files under that config dir, so the
+  directory boundary is the whole isolation mechanism. (The macOS desktop additionally depended on
+  Claude Code ≥ 2.1 scoping its Keychain service per config dir; that Keychain leg left with the
+  macOS desktop target, 2026-08.)
   - **`data.accountId` (terminal nodes)** — resolved **once at node creation**
     (`resolveNewNodeAccount`: explicit submenu pick → `project.defaultAccountId` → system default
     `~/.claude`), then **immutable** and **persisted** (serializers). `undefined` = system default
@@ -1347,9 +1350,10 @@ untrusted|on-request|never`. Two rules the mapping exists to enforce: a mode the
   - **Account-aware readers** — transcript resolution is scoped per account (`transcriptRootFor`
     picks the account dir's `projects/`, composite cache key includes `accountId`); the same
     threading runs through the session-name poll, restart handoff, and `ChatPanel` (the ⌘M
-    transcript view, `chat.readTranscript`). The **usage indicator** is per account (`claude-usage.ts`: scoped Keychain
-    service first, legacy unscoped fallback; popover lists a row per account with **System**
-    first). **Remote (SSH host) accounts are included** — see **Remote usage** below.
+    transcript view, `chat.readTranscript`). The **usage indicator** is per account
+    (`claude-usage.ts` reads each account's own stored credentials; popover lists a row per
+    account with **System** first). **Remote (SSH host) accounts are included** — see **Remote
+    usage** below.
   - **Pickers** — New Claude exposes an account **submenu** (pane menu; flat entries in
     the dock; palette commands; TabBar sets the **per-project default**). A **local** project
     lists local accounts, an **SSH** project lists only accounts whose `host` matches its
@@ -2044,9 +2048,11 @@ worktree list`: a worktree deleted outside the app makes its group **stale** (ch
   `seenShortcuts`.
 - **Shortcuts** (`ShortcutsPanel.tsx`, ? / ⌘/): shown once on first launch (`seenShortcuts`).
 - **Welcome** (`WelcomeScreen.tsx`): shown when no projects exist.
-- **Window chrome**: macOS integrated title bar (`titleBarStyle: 'hiddenInset'`); the tab
+- **Window chrome**: integrated (frameless) title bar — the Windows build reserves the
+  caption-button strip on the right (`[data-platform='win']` tab-bar padding); the tab
   bar (`TabBar.tsx`) is the drag region with the `nodeterm` logo + a rounded pill of project
-  tabs. Cmd+M is intercepted in `main/index.ts` `before-input-event` (else macOS minimizes)
+  tabs. Cmd+M is intercepted in `main/index.ts` `before-input-event` (the live default
+  application menu would otherwise consume the chord before the page ever sees it)
   and forwarded to the renderer via `app:toggle-markdown`; Cmd+W (`app:close-node`) and Cmd+0
   (`app:zoom-actual-size`) are taken back from the same default menu the same way. We never call
   `Menu.setApplicationMenu`, so Electron's DEFAULT menu is live and owns every accelerator in it —
@@ -2314,13 +2320,16 @@ Voice-to-text input captured via microphone, turned into terminal text via on-de
 ## Packaging & auto-update
 
 Built with **electron-builder** (config in the `package.json` `build` block: appId
-`com.nodeterm.app`, productName `nodeterm`, mac dmg+zip for arm64 **and** x64, `asarUnpack`
-node-pty, output `dist/`). The app icon is generated from the nodeterm mark by
-`scripts/make-icon.mjs` (sharp → `build/icon.png`, 1024², gitignored — regenerated by
-`make-icon`); electron-builder derives the `.icns`. Scripts: `npm run make-icon`, `npm run dist`
-(local **unsigned** arm64 `.dmg` smoke test). Production release signing/notarization remains
-outside this repo. The macOS/Linux update feed is hosted separately; Windows consumes Squirrel
-assets attached to the project's stable GitHub Release.
+`com.nodeterm.app`, productName `nodeterm`, Squirrel.Windows + Linux AppImage/deb targets,
+`asarUnpack` node-pty, output `dist/`). The macOS dmg/zip targets, entitlements, and the mac
+`npm run dist`/`release` scripts were deleted with the macOS desktop target (2026-08); the
+packaged-relay verification the darwin-only afterPack hook used to perform now runs against the
+flat `resources/` layout on Windows and Linux (`scripts/after-pack.cjs` — note it normalizes
+`asar.listPackage`'s host-separator entries before comparing). The app icon is generated from the
+nodeterm mark by `scripts/make-icon.mjs` (sharp → `build/icon.png`, 1024², gitignored —
+regenerated by `make-icon` — plus the committed seven-frame `build/icon.ico`). Scripts:
+`npm run make-icon`, `npm run dist:win`, `npm run dist:linux`. The Linux update feed is hosted
+separately; Windows consumes Squirrel assets attached to the project's stable GitHub Release.
 
 **Windows** (the active delivery target for CI): `build.win` targets Squirrel.Windows
 (`build.squirrelWindows`), signing permanently disabled — no `CSC_LINK`/`CSC_KEY_PASSWORD` is
@@ -2380,10 +2389,9 @@ not an installation barrier. The manual `main`-only stable publisher is the chan
 `--squirrel-firstrun` launch delays the first automatic check so Update.exe can release its
 package lock. An unreachable or 404 feed never implies that no update exists: automatic checks
 stay out of the way and retry normally, while an explicit user check reports the error without
-blocking the installed app. **macOS/Linux deliberately retain `electron-updater`** and their
-existing determinate/manual-download behavior; macOS silent self-install still requires a
-signed+notarized build. Server Edition and the mobile companion have no Squirrel install and are
-explicitly not applicable to this desktop-only updater.
+blocking the installed app. **Linux deliberately retains `electron-updater`** and its
+existing determinate/manual-download behavior. Server Edition and the mobile companion have no
+Squirrel install and are explicitly not applicable to this desktop-only updater.
 
 The installed Windows `0.3.0` build cannot discover `0.4.0`: its app-side updater expected NSIS
 metadata at the old generic feed, while the published Windows artifacts are Squirrel
@@ -2744,7 +2752,8 @@ the overlap tests exercise the resulting race.
 - **Three surfaces — design every feature for all of them.** nodeterm now ships on three
   fronts, and a feature is not "done" until you've decided how it behaves on each (even if
   the decision is "not applicable here"):
-  1. **Desktop** (Electron) — the primary app (`src/main` + `src/renderer` via the preload).
+  1. **Desktop** (Electron, Windows — the delivery target; Linux packages are also built) — the
+     primary app (`src/main` + `src/renderer` via the preload).
   2. **Server Edition** (Linux, browser) — `src/server` + the `src/renderer/bridge` shim (see
      the `src/server/` bullet above and docs/SERVER.md).
   3. **Mobile companion** — _nodeterm mobile_, a **separate PRIVATE repo** (`nodeterm-ios`)
@@ -2779,5 +2788,5 @@ the overlap tests exercise the resulting race.
   - **Consider whether the mobile companion should surface the feature** over its
     transport/protocol. It's a different repo and stack (Swift), so this is usually a
     follow-up note rather than same-PR work — but flag it so it isn't forgotten.
-    When a change is genuinely desktop-only (native menus, auto-update, Keychain), say so; the
-    point is to make the call consciously, not to leave the other surfaces to rot.
+    When a change is genuinely desktop-only (native menus, auto-update, OS credential storage),
+    say so; the point is to make the call consciously, not to leave the other surfaces to rot.

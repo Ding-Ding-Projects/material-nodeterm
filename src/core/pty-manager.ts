@@ -18,7 +18,7 @@ import {
   type Settings,
   type TmuxStatus
 } from '../shared/types'
-import { bundledTmuxPath, findCommand, findFixedTmux, tmuxInstall } from './tmux-hint'
+import { findCommand, findFixedTmux, tmuxInstall } from './tmux-hint'
 import { hookServer, PERM_WAIT_SECS_DEFAULT } from './agents/hook-server'
 import {
   probeSaysAbsent,
@@ -215,15 +215,12 @@ bind -T copy-mode-vi TripleClick1Pane send-keys -X select-line \\; send-keys -X 
  * fallback here was a SYNC login-shell `command -v tmux` — sourcing the profile (nvm/conda:
  * 100-800ms) on the main thread, re-triggered every 3s by the tmux-missing banner's install poll,
  * freezing all windows and IPC each time. Now it walks a fixed candidate list
- * (`tmuxCandidatePaths` — Homebrew, MacPorts, Nix, Linuxbrew, the distro paths), then the
- * cached login-shell PATH, and only THEN the tmux the macOS app bundles.
+ * (`tmuxCandidatePaths` — Nix, Linuxbrew, the distro paths), then the cached login-shell PATH.
  *
- * THE BUNDLED COPY IS DELIBERATELY LAST. A tmux client attaches to a tmux SERVER that outlives the
- * app and was started by whatever tmux the user has installed; preferring our binary could pair a
- * new client with their old running server, which upstream refuses ("server version is too old").
- * System-first means every user who already has tmux sees zero change, and the bundle only rescues
- * the population that had none — where there is no server to be incompatible with. See
- * `bundledTmuxPath` in tmux-hint.ts and scripts/build-tmux.mjs.
+ * (A THIRD source — the static tmux the macOS app bundled as a last resort — died with the macOS
+ * desktop. Windows persistence is the standalone session host, and a Linux server is expected to
+ * install its own tmux; neither ever reached the bundled binary, so the two-source walk is the
+ * whole behavior both platforms already had.)
  *
  * BEFORE THAT ASYNC PATH PROBE SETTLES, a tmux living ONLY on the user's shell PATH is still
  * invisible, and a session spawned in that window silently becomes a plain shell with no
@@ -234,14 +231,13 @@ bind -T copy-mode-vi TripleClick1Pane send-keys -X select-line \\; send-keys -X 
  * process into a tmux pane); its recovery is the node's own Refresh/respawn, which re-creates it
  * through the now-resolved tmux.
  */
-function findTmux(resourcesPath?: string): string | null {
-  // Windows has none of `tmuxCandidatePaths`' targets (Homebrew, MacPorts, Nix, the distro
-  // `/usr/bin` family — all POSIX filesystem layouts) and no bundled tmux (macOS-only, see
-  // `bundledTmuxPath`'s doc comment; `scripts/build-tmux.mjs` never runs for a Windows package).
-  // Walking either list would just be `existsSync` calls against paths that can never resolve on
-  // this platform — skip straight to the PATH probe, the one route that can find a real tmux a
-  // Windows user installed themselves (WSL's own tmux is a different filesystem entirely and is
-  // never on the Windows PATH; MSYS2/Cygwin tmux, if the user put it there, is).
+function findTmux(): string | null {
+  // Windows has none of `tmuxCandidatePaths`' targets (Homebrew, Nix, the distro `/usr/bin`
+  // family — all POSIX filesystem layouts). Walking the list would just be `existsSync` calls
+  // against paths that can never resolve on this platform — skip straight to the PATH probe, the
+  // one route that can find a real tmux a Windows user installed themselves (WSL's own tmux is a
+  // different filesystem entirely and is never on the Windows PATH; MSYS2/Cygwin tmux, if the
+  // user put it there, is).
   if (os.platform() === 'win32') {
     return findInPathString('tmux', shellPathNow() ?? process.env.PATH)
   }
@@ -260,16 +256,7 @@ function findTmux(resourcesPath?: string): string | null {
   }
   const fixed = findFixedTmux((p) => fs.existsSync(p), home, user)
   if (fixed) return fixed
-  const onPath = findInPathString('tmux', shellPathNow() ?? process.env.PATH)
-  if (onPath) return onPath
-  // Last: the binary the macOS app ships. `process.cwd()` is the repo root under
-  // `electron-vite dev`, which is where scripts/build-tmux.mjs writes its artifact; in a packaged
-  // app it is meaningless and simply misses.
-  return bundledTmuxPath({
-    resourcesPath,
-    repoRoot: process.cwd(),
-    exists: (p) => fs.existsSync(p)
-  })
+  return findInPathString('tmux', shellPathNow() ?? process.env.PATH)
 }
 
 /** Resolve an absolute ssh path (GUI apps don't inherit the shell PATH). */
@@ -1361,9 +1348,8 @@ export class PtyManager {
   ensureTmux(): void {
     if (this.tmuxPath || !this.getSettings) return
     // platform() is safe past the guard above: getSettings is only set by init(), which the shell
-    // calls after initPlatform(). resourcesPath is undefined on the Server Edition, so the bundled
-    // candidate is simply absent there (Linux keeps system-tmux-only).
-    const found = findTmux(platform().resourcesPath)
+    // calls after initPlatform().
+    const found = findTmux()
     if (!found) return
     this.confPath = path.join(platform().userDataDir, 'tmux.conf')
     try {

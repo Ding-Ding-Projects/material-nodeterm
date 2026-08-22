@@ -10,7 +10,7 @@
 
 import fs from 'fs'
 import os from 'os'
-import { execFile, execFileSync } from 'child_process'
+import { execFile } from 'child_process'
 import { promisify } from 'util'
 import type { MemInfo, SessionMemoryRow, SessionMemoryReport } from '../shared/types'
 import { TMUX_SOCKET } from './tmux-naming'
@@ -139,126 +139,15 @@ export function parseWindowsProcessTable(stdout: string): ProcEntry[] {
   return out
 }
 
-/**
- * Parse `top -l 1 -stats pid,mem` into pid → **phys_footprint** in kB.
- *
- * On darwin this REPLACES `ps`'s `rss` as the panel's memory number, because the two measure
- * different things and `rss` is the wrong one here. Measured on a real Mac (2026-08-12, 8 claude
- * processes captured in the same tick against Apple's own `footprint` tool):
- *   - ACTIVE processes: footprint/rss ≈ 1, and one read **0.73×** — `rss` counts shared resident
- *     pages that footprint does not, so the two accountings diverge in BOTH directions.
- *   - IDLE processes: **1.84–2.20×**. macOS moves an idle process's pages into the compressor,
- *     which drops out of `rss` but stays in footprint.
- * That is the population this panel exists to describe: it asks what idle sessions cost, and macOS
- * compresses exactly those. `rss` therefore understated a six-hour-idle session by about half.
- *
- * `phys_footprint` is also what Activity Monitor's "Memory" column shows, which makes the panel
- * agree with the pill — the pill's `vm_stat` reading already counts compressor pages and was
- * verified against Activity Monitor to 0.05%. Two surfaces describing one machine must not use two
- * accountings.
- *
- * Format facts, all MEASURED on that host (980 data rows) rather than assumed:
- *   - ~10 header lines, a blank, then a `PID    MEM` column header; data follows. We locate that
- *     header rather than counting lines, because the header block's size is not a contract.
- *   - The MEM column is LEFT-aligned in five characters, so values carry TRAILING SPACES
- *     (`12M  `, `859M `, `1314M`). A naive `/M$/` misses two thirds of them.
- *   - Units seen: `K` (553 rows) and `M` (427). `G` was never observed — a 1314M process stayed in
- *     M — but `top`'s own header prints `PhysMem: 23G`, so `G` is accepted anyway.
- *   - `B` and any restricted-process rendering were NOT observed and are deliberately not guessed:
- *     an unrecognised suffix skips the row, the same tolerance the rest of this file uses.
- *   - `top` rounds the M column to whole megabytes (29M and 28M across two ticks); K rows keep kB
- *     precision. The panel renders MB, so the rounding is below what it shows.
- *   - pid 0 (`kernel_task`) appears and is accessible; column spacing varies with pid width.
- */
-export function parseTopFootprint(stdout: string): Map<number, number> {
-  const out = new Map<number, number>()
-  const lines = stdout.split('\n')
-  // Find the column header, not a line number: the header block above it is not a contract.
-  const head = lines.findIndex((l) => /^\s*PID\s+MEM\s*$/.test(l))
-  if (head < 0) return out
-  const UNIT: Record<string, number> = { B: 1 / 1024, K: 1, M: 1024, G: 1024 * 1024 }
-  for (const line of lines.slice(head + 1)) {
-    // `\s*$` rather than an end-anchored unit: the value is left-aligned and padded.
-    const m = /^\s*(\d+)\s+(\d+(?:\.\d+)?)([A-Za-z])\s*$/.exec(line)
-    if (!m) continue
-    const factor = UNIT[m[3].toUpperCase()]
-    // An unrecognised suffix skips the row rather than guessing a scale — a wrong scale here is a
-    // wrong number presented as a fact, which is the failure this whole feature exists to end.
-    if (factor === undefined) continue
-    const pid = Number(m[1])
-    if (!Number.isFinite(pid)) continue
-    out.set(pid, Number(m[2]) * factor)
-  }
-  return out
-}
-
 /** Linux `/proc/meminfo` (MemAvailable is the honest number); `os.freemem()` fallback elsewhere.
  *  Returns null when nothing is readable — callers treat that as "no signal", never as zero.
  *
- *  Lives here rather than in session-budget.ts because two features now read it (the reaper's
- *  watermark and the system-resource pill) and a second copy would drift. */
-/**
- * macOS reading, or `null`. **There is deliberately no fallback to `os.freemem()` here.**
+ *  Lives here rather than in session-budget.ts because two features read it (the reaper's
+ *  watermark and the system-resource pill) and a second copy would drift.
  *
- * That fallback is the very number this function exists to replace: on macOS it sits near zero, and
- * the session reaper's watermark (10% of RAM) then reads as permanent memory pressure — which had a
- * Mac reaping idle detached sessions every 10 minutes regardless of how much memory was free. A
- * confirmed field symptom, reported as "my sessions keep disappearing".
- *
- * So a `vm_stat` we cannot run or cannot parse yields NO SIGNAL, not a wrong one. Both consumers
- * degrade correctly on null: `planReap` treats it as "no pressure" (absence of evidence never
- * triggers a kill) and the pill pulses instead of printing a number it has not earned.
- */
-export function darwinMemInfo(runVmStat: () => string, totalBytes: number): MemInfo | null {
-  try {
-    return parseVmStat(runVmStat(), totalBytes)
-  } catch {
-    return null
-  }
-}
-
-/**
- * Parse `vm_stat` into the same MemInfo shape, given the machine's total bytes.
- *
- * macOS deliberately keeps almost nothing "free": file-backed and purgeable pages are held until
- * something needs them, so libuv's `os.freemem()` — which counts only genuinely free pages —
- * reports near zero on a healthy Mac. `total - free` therefore renders every Mac as ~100% full,
- * which is both useless and alarming. (It also pinned the session reaper's watermark permanently
- * below its threshold, so a Mac reaped idle detached sessions on every sweep regardless of memory.)
- *
- * The number Activity Monitor calls "Memory Used" is app + wired + compressed, i.e.
- * `anonymous - purgeable + wired + compressor`; everything else is reclaimable and counts as
- * available. This is an approximation of Activity Monitor, not a reproduction of it — Apple does not
- * document the exact figure, and on Apple Silicon the parts are known not to sum to its total.
- *
- * The page size is READ FROM THE HEADER, never assumed: Apple Silicon uses 16 KiB pages, and
- * hard-coding 4096 is the identical bug this file already fixed on the Linux side.
- */
-export function parseVmStat(text: string, totalBytes: number): MemInfo | null {
-  const pageSize = Number(/page size of (\d+) bytes/.exec(text)?.[1])
-  if (!Number.isFinite(pageSize) || pageSize <= 0 || !Number.isFinite(totalBytes) || totalBytes <= 0) {
-    return null
-  }
-  const pages = (label: string): number | null => {
-    const m = new RegExp(`^${label}:\\s+(\\d+)\\.`, 'm').exec(text)
-    return m ? Number(m[1]) : null
-  }
-  const anonymous = pages('Anonymous pages')
-  const wired = pages('Pages wired down')
-  const compressor = pages('Pages occupied by compressor')
-  // `Pages purgeable` is a SUBSET of anonymous — caches an app has volunteered as droppable.
-  const purgeable = pages('Pages purgeable') ?? 0
-  // A missing field means we are not looking at vm_stat output we understand. Report nothing rather
-  // than a number built from a partial read — the pill pulses, which is the honest answer.
-  if (anonymous === null || wired === null || compressor === null) return null
-
-  const usedBytes = (Math.max(0, anonymous - purgeable) + wired + compressor) * pageSize
-  const totalMb = Math.round(totalBytes / 1048576)
-  // Clamp: the parts are an approximation and can exceed the total on a heavily compressed system.
-  const availableMb = Math.max(0, totalMb - Math.round(usedBytes / 1048576))
-  return { availableMb, totalMb }
-}
-
+ *  (A darwin `vm_stat` reader used to sit between the two legs — macOS keeps almost nothing
+ *  genuinely "free", so `os.freemem()` there read near zero and permanently tripped the reaper's
+ *  watermark. It died with the macOS desktop; neither surviving platform has that pathology.) */
 export function readMemInfo(): MemInfo | null {
   try {
     const text = fs.readFileSync('/proc/meminfo', 'utf8')
@@ -273,20 +162,9 @@ export function readMemInfo(): MemInfo | null {
   } catch {
     // fall through to the os fallback
   }
-  // macOS: `os.freemem()` counts only genuinely free pages, which a healthy Mac keeps near zero —
-  // see parseVmStat. Ask the kernel for the real breakdown instead. Sync on purpose: both callers
-  // (the 30 s pill poll and the reaper's 10 min sweep) are far apart, and keeping ONE signature
-  // means the reaper's watermark is fixed by the same change.
-  if (process.platform === 'darwin') {
-    return darwinMemInfo(
-      () => execFileSync('vm_stat', { encoding: 'utf8', timeout: 5_000 }),
-      os.totalmem()
-    )
-  }
   // Windows (and every other platform without its own reader above): `os.freemem()`/`os.totalmem()`
-  // are accurate here — unlike macOS, Win32's `GlobalMemoryStatusEx` (what libuv calls under the
-  // hood) reports genuinely free pages without the "nothing is ever free" behavior that makes the
-  // same call useless on darwin, so no separate win32 branch is needed.
+  // are accurate here — Win32's `GlobalMemoryStatusEx` (what libuv calls under the hood) reports
+  // genuinely free pages, so no separate win32 branch is needed.
   try {
     return {
       availableMb: Math.round(os.freemem() / 1048576),
@@ -448,26 +326,13 @@ export async function collectSessionMemory(
     // this file may reach a subprocess around it). A failed spawn (no PowerShell on PATH, a
     // locked-down execution policy that still refuses `-Command`, …) is caught below exactly like
     // a missing `ps` — `table` stays null and the caller reports `ok:false`, never zero rows
-    // dressed up as a real answer.
-    //
-    // On darwin a SECOND call is merged in: `top` carries phys_footprint, which is what Activity
-    // Monitor shows and what the pill's `vm_stat` reading already counts. `ps`'s own `rss` drops
-    // an idle process's compressed pages and understated a six-hour-idle session by about half —
-    // exactly the population this panel exists to describe. See parseTopFootprint.
+    // dressed up as a real answer. The `ps` leg survives for the POSIX host whose `/proc` read
+    // failed above (an unreadable /proc is not evidence there are no processes).
     try {
-      if (process.platform === 'win32') {
-        table = parseWindowsProcessTable(await exec('powershell.exe', WIN_PROCESS_TABLE_ARGS))
-      } else {
-        const rows = parseProcessTable(await exec('ps', ['-eo', 'pid,ppid,rss']))
-        if (process.platform === 'darwin') {
-          const fp = parseTopFootprint(await exec('top', ['-l', '1', '-stats', 'pid,mem']))
-          // A pid `top` did not list keeps its `rss`. The two snapshots are a moment apart, so a
-          // miss is a process that came or went between them — not a reason to report nothing.
-          table = rows.map((e) => ({ ...e, rssKb: fp.get(e.pid) ?? e.rssKb }))
-        } else {
-          table = rows
-        }
-      }
+      table =
+        process.platform === 'win32'
+          ? parseWindowsProcessTable(await exec('powershell.exe', WIN_PROCESS_TABLE_ARGS))
+          : parseProcessTable(await exec('ps', ['-eo', 'pid,ppid,rss']))
     } catch {
       table = null
     }

@@ -541,8 +541,8 @@ describe('measured contrast floors', () => {
     )
     const a = containerAlpha()
     for (const [theme, block, panelHex] of [
-      ['dark', DARK, '#282828'],
-      ['light', LIGHT, '#f3efe7']
+      ['dark', DARK, '#1d2024'],
+      ['light', LIGHT, '#ededf4']
     ] as const) {
       const panel = hex(panelHex)
       const wash = over(rgbTriple(block, '--accent-rgb'), a, panel)

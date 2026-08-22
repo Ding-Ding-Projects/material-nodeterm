@@ -12,9 +12,12 @@ export interface AccentTokens {
   mdOnPrimaryContainer: string
 }
 
+// Mirrors styles.css --panel in each theme (#1d2024 / #ededf4, the cool ramp's plain
+// surface-container step). If the stylesheet's panel moves again, move this with it — a stale
+// backdrop here makes readableAccent() certify contrast against a surface nobody paints.
 const PANEL: Record<ResolvedAppTheme, RGBA> = {
-  dark: { r: 40, g: 40, b: 40, a: 1 },
-  light: { r: 243, g: 239, b: 231, a: 1 }
+  dark: { r: 29, g: 32, b: 36, a: 1 },
+  light: { r: 237, g: 237, b: 244, a: 1 }
 }
 
 const WHITE: RGBA = { r: 255, g: 255, b: 255, a: 1 }
@@ -102,9 +105,13 @@ export function applyAccentTokens(
   theme: ResolvedAppTheme
 ): void {
   const tokens = accentTokens(accentValue, theme)
-  // The persisted default is the dark palette's systemBlue. Leaving it to styles.css preserves
-  // BOTH authored default families: dark #0a84ff and light #007aff plus their deliberately tuned
-  // hover/text/container roles. Inline derivation is only for a genuine override.
+  // The persisted default (shared/types.ts DEFAULT_SETTINGS.accent) is still the HISTORICAL
+  // systemBlue hex — it is a sentinel meaning "no explicit choice", not a colour request, so it
+  // must keep matching what settings.json files already carry. Leaving it to styles.css hands the
+  // default install BOTH authored design-seeded families (dark #aac7ff / light #005ac1, the
+  // design/README.md primary rows) plus their tuned hover/text/container roles; deriving inline
+  // here would resurrect the retired systemBlue look for every default install. Inline
+  // derivation is only for a genuine override.
   if (!tokens || tokens.accent === '#0a84ff') {
     for (const property of CUSTOM_PROPERTIES) root.style.removeProperty(property)
     return

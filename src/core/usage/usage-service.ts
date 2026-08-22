@@ -8,8 +8,6 @@
 import { promises as fs } from 'fs'
 import os from 'os'
 import path from 'path'
-import { execFile } from 'child_process'
-import { promisify } from 'util'
 import { IPC } from '../../shared/ipc'
 import type {
   ClaudeUsage,
@@ -39,8 +37,6 @@ import {
 import { usageCredsPaths } from '../claude-accounts-core'
 import { claudeConfigDirFor } from '../claude-config-dir'
 import { platform } from '../platform'
-
-const execFileP = promisify(execFile)
 
 const USAGE_URL = 'https://api.anthropic.com/api/oauth/usage'
 const OAUTH_BETA = 'oauth-2025-04-20'
@@ -85,46 +81,27 @@ export function parseCreds(raw: string): OAuthCreds {
 }
 
 /**
- * macOS Keychain → {config}/.credentials.json → email backfill from {config}/.claude.json.
- * With an `accountId` the config dir is the managed account's isolated dir (scoped Keychain
- * service first); without, it's exactly the system default (`~/.claude`, unscoped services).
+ * {config}/.credentials.json → email backfill from {config}/.claude.json.
+ * With an `accountId` the config dir is the managed account's isolated dir; without, it's exactly
+ * the system default (`~/.claude`).
  *
- * The Keychain leg is darwin-only by construction — on the Server Edition's Linux host the
- * `security` binary does not exist, so the file leg is the whole story there.
+ * The file leg is the whole story on Windows AND the Server Edition's Linux host: the claude CLI
+ * stores credentials in `.credentials.json` on both. (A macOS Keychain leg — `security
+ * find-generic-password` over the scoped/unscoped service names — died with the macOS desktop;
+ * it could never run on either surviving platform, and keeping a subprocess fallback that can
+ * only ever fail would just hide a broken file read behind a second failure.)
  */
 async function resolveCreds(accountId?: string): Promise<OAuthCreds> {
   const configDir = accountId ? claudeConfigDirFor(accountId) : undefined
-  const { services, credsFile, identityFile } = usageCredsPaths(os.homedir(), configDir)
+  const { credsFile, identityFile } = usageCredsPaths(os.homedir(), configDir)
 
   let creds: OAuthCreds = { accessToken: null, email: null }
 
-  if (process.platform === 'darwin') {
-    for (const service of services) {
-      try {
-        const { stdout } = await execFileP('security', [
-          'find-generic-password',
-          '-s',
-          service,
-          '-w'
-        ])
-        const parsed = parseCreds(stdout.trim())
-        if (parsed.accessToken) {
-          creds = parsed
-          break
-        }
-      } catch {
-        // not in keychain under this service — try the next / the file
-      }
-    }
-  }
-
-  if (!creds.accessToken) {
-    try {
-      const raw = await fs.readFile(credsFile, 'utf-8')
-      creds = parseCreds(raw)
-    } catch {
-      // no file — leave creds empty
-    }
+  try {
+    const raw = await fs.readFile(credsFile, 'utf-8')
+    creds = parseCreds(raw)
+  } catch {
+    // no file — leave creds empty
   }
 
   if (creds.accessToken && !creds.email) {
@@ -145,7 +122,7 @@ async function resolveCreds(accountId?: string): Promise<OAuthCreds> {
   return creds
 }
 
-/** The OAuth access token alone (keychain → {config}/.credentials.json), or null. */
+/** The OAuth access token alone ({config}/.credentials.json), or null. */
 export async function resolveClaudeAccessToken(accountId?: string): Promise<string | null> {
   return (await resolveCreds(accountId)).accessToken
 }

@@ -15,6 +15,8 @@ import { IconCanvasView, IconKanban } from './icons'
 import { appearanceId } from '../lib/appearance/registry'
 import { openAppearanceEditor } from '../state/appearanceEditorHost'
 import { resolveAppDisplayName } from '@shared/appIdentity'
+import { formatShortcut } from '@shared/shortcut'
+import { isMacPlatform } from '@shared/platform-utils'
 import { resolveLogoPreset } from './appearance/BrandMark'
 import { AccountIdentityPills } from './AccountIdentityPills'
 import { presentAccount } from '../lib/accountPresentation'
@@ -148,6 +150,13 @@ export function TabBar({
   // The mode a project without an override falls back to, shown in the "Use global (…)" entry.
   const globalMode = useSettings((s) => s.settings.claudePermissionMode)
   const systemLabelSetting = useSettings((s) => s.settings.systemAccountLabel)
+  // The board-toggle tooltip renders the CURRENT toggleViewMode binding through the registry
+  // rather than a hardcoded literal — the old '⌘⇧B' string showed mac glyphs on Windows and went
+  // stale on rebind. isMacPlatform survives here only for the Server Edition browser tab on a
+  // real Mac, where matching keys off metaKey and the badge must say ⌘ to be true.
+  const viewToggleBadge = useSettings((s) =>
+    formatShortcut(s.settings.shortcuts.toggleViewMode, isMacPlatform())
+  )
   const remoteSystemAccountLabels = useSettings((s) => s.settings.remoteSystemAccountLabels)
   const systemEmail = useSystemAccount((s) => s.email)
 
@@ -457,7 +466,7 @@ export function TabBar({
                 {active && editingId !== p.id && (
                   <button
                     className="tab__board-toggle"
-                    title={kanbanActive ? 'Canvas view (⌘⇧B)' : 'Kanban view (⌘⇧B)'}
+                    title={kanbanActive ? `Canvas view (${viewToggleBadge})` : `Kanban view (${viewToggleBadge})`}
                     onClick={(e) => {
                       e.stopPropagation() // a tab click switches projects, this only flips the view
                       useViewMode.getState().toggle(p.id)
