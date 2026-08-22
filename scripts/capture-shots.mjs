@@ -39,7 +39,8 @@ import { fileURLToPath } from 'node:url'
 import {
   assertManagedConfigUnchanged,
   captureManagedConfigSentinel,
-  createAppSandbox
+  createAppSandbox,
+  terminateSpawnedChild
 } from './check-app-wired-core.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -569,8 +570,17 @@ const { default: WebSocket } = await import('ws')
 async function cdp(port) {
   const targets = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()
   // The renderer, not the devtools page or a background target.
-  const page = targets.find((t) => t.type === 'page' && !t.url.startsWith('devtools://'))
-  if (!page) throw new Error('no renderer target on the debugging port')
+  // The app exposes MORE than one page target: the main window and the Notch HUD, and the HUD is
+  // routinely listed FIRST. Taking "the first page" attaches to the HUD, whose renderer has no
+  // app bridge on it at all - which reads as "the preload never loaded" or, worse, silently
+  // drives the wrong window. Select the main window by its own document.
+  const pages = targets.filter((t) => t.type === 'page' && !t.url.startsWith('devtools://'))
+  const page = pages.find((t) => /\/index\.html(\?|#|$)/.test(t.url)) ?? null
+  if (!page) {
+    throw new Error(
+      `no main-window target on the debugging port (saw: ${pages.map((t) => t.url).join(', ') || 'none'})`
+    )
+  }
   const ws = new WebSocket(page.webSocketDebuggerUrl, { maxPayload: 256 * 1024 * 1024 })
   let id = 0
   const pending = new Map()
@@ -631,32 +641,6 @@ function looksBlank(pngBuffer) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
-function waitForChildExit(child, timeoutMs) {
-  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve(true)
-  return new Promise((resolveExit) => {
-    let timer = null
-    const finish = (exited) => {
-      if (timer) clearTimeout(timer)
-      child.off('exit', onExit)
-      resolveExit(exited)
-    }
-    const onExit = () => finish(true)
-    child.once('exit', onExit)
-    if (child.exitCode !== null || child.signalCode !== null) return finish(true)
-    timer = setTimeout(() => finish(false), timeoutMs)
-  })
-}
-
-/** Stop only the exact Electron child this run spawned, with no repository-wide process sweep. */
-async function terminateSpawnedChild(child) {
-  if (!child || child.exitCode !== null || child.signalCode !== null) return
-  child.kill()
-  if (await waitForChildExit(child, 3000)) return
-  child.kill('SIGKILL')
-  if (!(await waitForChildExit(child, 3000))) {
-    throw new Error(`spawned Electron child ${child.pid} did not exit within the cleanup deadline`)
-  }
-}
 
 // ---------------------------------------------------------------------
 

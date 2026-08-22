@@ -33,6 +33,7 @@
     "shots": "node scripts/capture-shots.mjs",
     "check:wired": "node scripts/check-app-wired.mjs",
     "make-social-card": "node scripts/make-social-card.mjs",
+    "record-app": "node scripts/record-app.mjs",
     "make-icon": "node scripts/make-icon.mjs",
     "make-social": "node scripts/make-social.mjs",
     "count-lines": "node scripts/count-lines.mjs",
