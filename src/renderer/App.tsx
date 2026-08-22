@@ -3,6 +3,7 @@ import { rainbowDurationSeconds } from './lib/nodeColor'
 import { ReactFlowProvider } from '@xyflow/react'
 import { Canvas } from './canvas/Canvas'
 import { PromptDialogHost } from './components/promptDialog'
+import { ArchiveUnlockDialogHost } from './components/archiveUnlockDialog'
 import { DestructiveGateHost } from './components/DestructiveGateHost'
 import { DimSumSurprise } from './components/DimSumSurprise'
 import { NotificationToasts } from './components/NotificationToasts'
@@ -161,6 +162,7 @@ export default function App() {
         )}
         {/* In-app window.prompt replacement (Electron has no prompt); driven by promptDialog(). */}
         <PromptDialogHost />
+        <ArchiveUnlockDialogHost />
       {/* Mounted at the root so every surface can reach the super gate, and so an open one
           survives a project switch beneath it. See state/destructiveGate.ts. Kids mode upgrades
           every destructive surface to this same gate — see kids-mode-policy.ts. */}

@@ -23,15 +23,44 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { LadderAnswer, LadderChallenge, WhackHit } from '@shared/unlock-ladder-types'
 
+/**
+ * How this panel reaches an engine. Two surfaces climb the same ladder against two different
+ * cores — a toy lock (`toylock:ladder-*`) and a protected project file
+ * (`project-archive:ladder-*`) — so the transport is injected rather than hardcoded. The RULES are
+ * not injectable: they live in `src/core/unlock-ladder.ts` and neither caller can weaken them.
+ */
+export interface LadderTransport {
+  issue(): Promise<{ challenge: LadderChallenge | null; budgetLeft: number }>
+  verify(answer: LadderAnswer): Promise<{
+    cleared: boolean
+    challenge?: LadderChallenge | null
+    next?: unknown
+    budgetLeft: number
+    message?: string
+  }>
+}
+
+/** The historical transport: a toy lock, addressed by its lock id. */
+export function toyLockLadderTransport(lockId: string): LadderTransport {
+  return {
+    issue: () => window.nodeTerminal.toylock.ladderIssue(lockId),
+    verify: (answer) => window.nodeTerminal.toylock.ladderVerify({ lockId, answer })
+  }
+}
+
 export function UnlockLadderPanel({
   lockId,
+  transport,
   onCleared,
   onDone
 }: {
-  lockId: string
+  /** Historical caller: a toy lock. Ignored when `transport` is given. */
+  lockId?: string
+  transport?: LadderTransport
   onCleared: () => void
   onDone: () => void
 }): React.JSX.Element {
+  const link = transport ?? toyLockLadderTransport(lockId ?? '')
   const [challenge, setChallenge] = useState<LadderChallenge | null>(null)
   const [budgetLeft, setBudgetLeft] = useState(0)
   const [message, setMessage] = useState<string | null>(null)
@@ -40,7 +69,7 @@ export function UnlockLadderPanel({
 
   useEffect(() => {
     let alive = true
-    void window.nodeTerminal.toylock.ladderIssue(lockId).then((state) => {
+    void link.issue().then((state) => {
       if (!alive) return
       setChallenge(state.challenge)
       setBudgetLeft(state.budgetLeft)
@@ -49,23 +78,30 @@ export function UnlockLadderPanel({
     return () => {
       alive = false
     }
-  }, [lockId])
+    // `link` is rebuilt per render for the historical lockId caller, so the identity that matters
+    // is the lock/file this panel is climbing for — not the closure wrapping it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lockId, transport])
 
   const answer = useCallback(
     async (a: LadderAnswer): Promise<void> => {
       if (busy) return
       setBusy(true)
       try {
-        const verdict = await window.nodeTerminal.toylock.ladderVerify({ lockId, answer: a })
-        setMessage(verdict.message)
+        const verdict = await link.verify(a)
+        setMessage(verdict.message ?? null)
         setBudgetLeft(verdict.budgetLeft)
-        setChallenge(verdict.challenge)
+        // A verdict that carries no follow-up challenge ends this climb — the caller's own
+        // `next` bookkeeping is core's, never this panel's, so an absent field means "nothing
+        // more to draw" rather than "keep the last question up".
+        setChallenge(verdict.challenge ?? null)
         if (verdict.cleared) onCleared()
       } finally {
         setBusy(false)
       }
     },
-    [busy, lockId, onCleared]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [busy, lockId, transport, onCleared]
   )
 
   if (!loaded) return <div className="toylock-ladder__note">Loading…</div>

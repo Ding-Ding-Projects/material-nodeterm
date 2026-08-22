@@ -430,6 +430,17 @@ export function buildRealApi(
       ok: false,
       error: 'Project archive import is available in the Windows desktop app.'
     }),
+    // Archive save/open are desktop-only here, so their password prompt — and therefore its
+    // ladder — cannot be reached in the browser at all. No wait exists to end.
+    archiveLadderIssue: async () => ({ challenge: null, budgetLeft: 0, waitMs: 0 }),
+    archiveLadderVerify: async () => ({
+      cleared: false,
+      next: null,
+      budgetLeft: 0,
+      waitMs: 0,
+      challenge: null,
+      message: 'Project archives are available in the Windows desktop app.'
+    }),
     // REAL: core broadcasts IPC.workspaceMigrated after a v2→v3 migration (workspace-store.ts).
     onMigrated: (cb) => client.subscribe(IPC.workspaceMigrated, cb as Listener),
     // REAL: core broadcasts IPC.workspaceCorruptRecovered from the load path (workspace-store.ts).

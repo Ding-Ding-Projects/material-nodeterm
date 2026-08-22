@@ -85,6 +85,7 @@ import { ElectronGitHubSecretStore, registerElectronGitHubControl } from './gith
 import { generateCommitMessage, generateGroupName, generateTerminalName } from '../core/commit-message'
 import { initUpdater } from './updater'
 import { decryptArchive, encryptArchive, looksLikeEncryptedArchive } from '../core/project-archive-encryption'
+import { ArchiveUnlockGuard } from '../core/archive-unlock-guard'
 import { desktopBuildPaths } from './desktop-build-paths'
 import { applyWindowsSquirrelAppUserModelId } from './windows-squirrel-identity'
 import { fetchCheck } from '../core/check'
@@ -865,6 +866,10 @@ app.whenReady().then(async () => {
   // keyboard-driven second submit (or a second window) walks straight past a disabled button, and
   // two concurrent archive operations could interleave dialogs and history-domain writes.
   let projectArchiveBusy = false
+  // Wrong-password rate limiting for protected project files, keyed by resolved path. Lives HERE
+  // rather than in the renderer for the reason the ladder's own header gives: a count kept by the
+  // guesser is not a count.
+  const archiveUnlock = new ArchiveUnlockGuard({ schoolMode: () => schoolModeStore.get().enabled })
   ipcMain.handle(
     IPC.projectArchiveExport,
     async (_event, project: import('../shared/types').Project, password?: string) => {
@@ -918,12 +923,30 @@ app.whenReady().then(async () => {
       }
       let raw = await readFile(chosen)
       if (looksLikeEncryptedArchive(raw)) {
+        const key = resolve(chosen)
+        const gate = archiveUnlock.state(key)
+        // Refuse BEFORE deriving a key: the whole point of the wait is that the next guess costs
+        // wall-clock rather than only 128 MiB of scrypt.
+        if (gate.waitMs > 0) {
+          return { ok: false, lockedMs: gate.waitMs, ladderAvailable: gate.ladderAvailable, path: chosen }
+        }
         // Protected: not an error, a prompt. The path travels back so the retry needs no picker.
         if (!opts?.password) return { ok: false, needsPassword: true, path: chosen }
         // A malformed envelope THROWS out of here and is reported as the damage it is — showing it
         // as a wrong password would have the user retype a correct one forever.
         const opened = decryptArchive(raw, opts.password)
-        if (!opened.ok) return { ok: false, wrongPassword: true, path: chosen }
+        if (!opened.ok) {
+          const after = archiveUnlock.recordFailure(key)
+          return {
+            ok: false,
+            wrongPassword: true,
+            path: chosen,
+            ...(after.waitMs > 0
+              ? { lockedMs: after.waitMs, ladderAvailable: after.ladderAvailable }
+              : {})
+          }
+        }
+        archiveUnlock.recordSuccess(key)
         raw = opened.archive
       }
       const inspection = projectArchives.inspect(raw)
@@ -1437,6 +1460,17 @@ app.whenReady().then(async () => {
       return cwd ? { kind: 'local', cwd } : { kind: 'unsupported' }
     }
   })
+
+  // The ladder for a protected project file's prompt. Both routes are pure pass-through to the
+  // guard — every rule, and every grading decision, lives in core (see archive-unlock-guard.ts).
+  ipcMain.handle(IPC.projectArchiveLadderIssue, async (_event, filePath: string) =>
+    archiveUnlock.issue(resolve(filePath))
+  )
+  ipcMain.handle(
+    IPC.projectArchiveLadderVerify,
+    async (_event, input: { path: string; answer: import('../shared/unlock-ladder-types').LadderAnswer }) =>
+      archiveUnlock.verify(resolve(input.path), input.answer)
+  )
 
   ipcMain.handle(IPC.dialogSelectFolder, async () => {
     const result = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] })

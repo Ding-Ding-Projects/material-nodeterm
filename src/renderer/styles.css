@@ -4785,6 +4785,17 @@ body,
   color: var(--md-error);
 }
 
+/* The file a protected-project prompt is asking about — long, and never worth wrapping mid-word
+   into something unreadable. */
+.confirm__path {
+  display: inline-block;
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  word-break: break-all;
+  color: var(--md-on-surface-variant);
+}
+
 .confirm__msg {
   margin: 0 0 16px;
   /* The scrollable region once the box hits its max-height, so the action buttons
