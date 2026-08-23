@@ -1,5 +1,9 @@
 # Handoff
 
+## 2026-08-22 — vendored paste-frame duplicate + drift guard
+
+`src/core/paste-injection.ts` is a deliberate vendored duplicate of `agent-whip/packages/paste-frame/src/index.ts` (sibling repo, not a dependency — material-nodeterm is public, that package is unpublished, a `file:` dependency would dangle for anyone cloning this repo alone). `scripts/check-paste-frame-parity.mjs`, wired into `npm run typecheck`, fails loudly if the two drift and skips cleanly when the sibling checkout is absent. Full writeup: `docs/paste-frame-vendoring.md`. This is a mitigation, not the fix — the fix is publishing the package once registry rights exist.
+
 ## 2026-08-20, second pass — a hunt that found real defects, and the fixes that landed
 
 `main` moved `f5caf128 -> f0a0453e`. Suite fully green at the tip: **717 files, 8,852 tests,

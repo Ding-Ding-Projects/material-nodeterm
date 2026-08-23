@@ -22,7 +22,7 @@
     "check-docs": "node scripts/check-docs-bundle.mjs",
     "preview": "electron-vite preview",
     "start": "electron-vite preview",
-    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json && node scripts/check-paste-frame-parity.mjs",
     "test": "vitest run",
     "test:unit": "vitest run test/remote",
     "rebuild": "node scripts/check-build-preflight.mjs && node scripts/patch-node-pty.mjs && electron-rebuild -f -w node-pty,smart-whisper",
