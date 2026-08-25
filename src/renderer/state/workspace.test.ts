@@ -1079,6 +1079,7 @@ describe('duplicateNode across every node kind', () => {
   // covered. The prefixes are the ones the factories in workspace.ts actually mint.
   const EXPECTED_PREFIX: Record<NodeKind, string> = {
     terminal: 'term',
+    authenticator: 'authenticator',
     sticky: 'sticky',
     group: 'group',
     editor: 'editor',

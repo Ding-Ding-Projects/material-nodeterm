@@ -103,6 +103,34 @@ crosses back to the renderer; the secret itself never needs to live in renderer 
 use. It only ever reaches the renderer in two deliberate, narrow places: [reveal](#reveal) and
 [export](#secrets-stay-local-and-out-of-ordinary-exports).
 
+## On the canvas
+
+The generators are also a **node**: right-click the canvas, **Canvas objects -> New authenticator**
+(also on the FAB menu and in the command palette). It lists this machine's entries with their live
+codes, a per-entry countdown, and click-to-copy on the code itself, which is the one thing anybody
+wants from the row and therefore the whole button rather than a smaller icon beside it.
+
+This exists because the codes were only readable from Settings -> Just for fun -> Authenticator,
+which is four levels from anywhere and closes the moment you go back to work. A code you need every
+few minutes belongs beside the terminal you are about to paste it into.
+
+**What the node persists is a title and a colour, and deliberately nothing else.** A node's `data`
+is written into `.nodeterm/project.json`, which is git-shared and travels to every machine that
+clones the repository, so a list of which entries to show would be one person's credential store
+leaking into everybody else's checkout - and it would be meaningless there anyway, since the vault
+is not what git carries. The node reads this machine's own store every time it renders. A teammate
+who opens the shared canvas sees their own entries, or the empty state, and never a trace of yours.
+This is the same rule the service nodes follow, for the same reason.
+
+The secret never comes near the node. It calls the same batched `authenticator.codes` the settings
+section uses - one round trip for every visible row, never one per row - and that returns the
+current code and nothing else. Revealing a seed stays behind the settings section's own gate.
+
+Two failures it distinguishes rather than collapsing: a store it could not READ says so, because
+showing an empty list there would tell somebody with several generators that they have none; and a
+refresh that fails leaves the last codes on screen, because a transient failure is not evidence the
+entries are gone.
+
 ## Reveal
 
 Each entry has a **"Reveal secret"** action that fetches and shows the raw base32 key (with its

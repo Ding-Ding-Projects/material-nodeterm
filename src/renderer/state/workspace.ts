@@ -903,6 +903,31 @@ export function createDiffNode(
 }
 
 /** Creates a new sticky note. */
+const AUTHENTICATOR_SIZE = { width: 340, height: 260 }
+
+/**
+ * A view of this machine's own TOTP generators, on the canvas.
+ *
+ * Carries a title and a colour and nothing else. Which entries exist is read live from this
+ * machine's credential store every time the node renders, never persisted here - see
+ * AuthenticatorNode.tsx for why a list of entry ids must not travel in a git-shared project file.
+ */
+export function createAuthenticatorNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  return {
+    id: nextId('authenticator'),
+    type: 'authenticator',
+    position: placeAt(center, index, AUTHENTICATOR_SIZE.width, AUTHENTICATOR_SIZE.height),
+    width: AUTHENTICATOR_SIZE.width,
+    height: AUTHENTICATOR_SIZE.height,
+    style: { width: AUTHENTICATOR_SIZE.width, height: AUTHENTICATOR_SIZE.height },
+    data: {
+      title: 'Authenticator',
+      color: NODE_COLORS[4] ?? NODE_COLORS[0],
+      group: null
+    }
+  }
+}
+
 export function createStickyNode(index: number, center?: { x: number; y: number }): CanvasNode {
   return {
     id: nextId('sticky'),
@@ -1359,6 +1384,7 @@ export function groupSelectedNodes(
  */
 const NODE_KIND_TABLE: Record<NodeKind, true> = {
   terminal: true,
+  authenticator: true,
   sticky: true,
   group: true,
   editor: true,
@@ -1394,6 +1420,7 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
  */
 const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   terminal: TERMINAL_SIZE,
+  authenticator: AUTHENTICATOR_SIZE,
   sticky: STICKY_SIZE,
   group: GROUP_SIZE,
   editor: EDITOR_SIZE,

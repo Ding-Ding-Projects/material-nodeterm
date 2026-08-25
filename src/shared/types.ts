@@ -341,6 +341,10 @@ export type NodeKind =
   | 'scheduler'
   | 'dino'
   | 'annotation'
+  // The built-in authenticator, as a node. A VIEW of this machine's own TOTP generators: it
+  // persists a title and a colour and nothing else, because an entry id names a credential in
+  // this machine's OS vault while project.json is git-shared. See AuthenticatorNode.tsx.
+  | 'authenticator'
   // The SERVICE family: one node per external thing this canvas can manage. They are ordinary
   // nodes — dragged, resized, coloured, grouped, persisted and deleted exactly like a terminal —
   // because a managed service is a thing you arrange on a canvas beside the terminals working on

@@ -88,6 +88,7 @@ import {
 import { StickyNode } from '../nodes/StickyNode'
 import { GroupNode, setWorktreeActionHandler } from '../nodes/GroupNode'
 import { AnnotationNode } from '../nodes/AnnotationNode'
+import AuthenticatorNode from '../nodes/AuthenticatorNode'
 import { useAnnotationDrawTool } from './useAnnotationDrawTool'
 import { annotationEndpoints } from '../lib/annotation'
 import { LazyEditorNode, LazyDiffNode } from '../nodes/lazyMonacoNodes'
@@ -532,6 +533,7 @@ import {
   createNativeLoopNode,
   WORKTREE_GROUP_SIZE,
   createSshTerminalNode,
+  createAuthenticatorNode,
   createStickyNode,
   createTerminalNode,
   nodeSshFor,
@@ -1684,6 +1686,7 @@ export function Canvas() {
       sticky: withNodeBoundary(StickyNode),
       group: withNodeBoundary(GroupNode),
       annotation: withNodeBoundary(AnnotationNode),
+      authenticator: withNodeBoundary(AuthenticatorNode),
       editor: withNodeBoundary(LazyEditorNode),
       diff: withNodeBoundary(LazyDiffNode),
       subagent: withNodeBoundary(SubagentNode),
@@ -4394,6 +4397,18 @@ export function Canvas() {
     (center?: { x: number; y: number }, groupId?: string) => {
       setNodes((ns) => {
         const node = createStickyNode(ns.length, center ?? emptyNodePos())
+        return [...ns, groupId ? parentInto(node, groupId) : node]
+      })
+      markDirty()
+    },
+    [setNodes, markDirty, emptyNodePos, parentInto]
+  )
+
+  /** A view of this machine's own TOTP generators, on the canvas. See AuthenticatorNode.tsx. */
+  const addAuthenticator = useCallback(
+    (center?: { x: number; y: number }, groupId?: string) => {
+      setNodes((ns) => {
+        const node = createAuthenticatorNode(ns.length, center ?? emptyNodePos())
         return [...ns, groupId ? parentInto(node, groupId) : node]
       })
       markDirty()
@@ -8107,6 +8122,11 @@ export function Canvas() {
           icon: <IconReload />,
           onClick: () => addNativeLoop(at, groupId)
         },
+        {
+          label: 'New authenticator',
+          icon: <IconLock />,
+          onClick: () => addAuthenticator(at, groupId)
+        },
         { type: 'separator' },
         ...(isHidden('colors', useSettings.getState().settings.hiddenNodeMenuItems)
           ? []
@@ -8163,6 +8183,7 @@ export function Canvas() {
       terminalProfileCreationItems,
       agentCreationItems,
       addSticky,
+      addAuthenticator,
       addNativeLoop,
       addToExistingGroup,
       groupSelection
@@ -8276,6 +8297,11 @@ export function Canvas() {
               onClick: () => addNativeLoop(at)
             },
             {
+              label: 'New authenticator',
+              icon: <IconLock />,
+              onClick: () => addAuthenticator(at)
+            },
+            {
               label: 'New dino game',
               icon: <IconDino />,
               onClick: () => addDino(at)
@@ -8379,6 +8405,7 @@ export function Canvas() {
       terminalProfileCreationItems,
       agentCreationItems,
       addSticky,
+      addAuthenticator,
       addNativeLoop,
       addDino,
       addBrowser,
@@ -12250,6 +12277,12 @@ export function Canvas() {
             label: 'New Loop',
             icon: <IconReload />,
             run: () => addNativeLoop()
+          },
+          {
+            id: 'new-authenticator',
+            label: 'New authenticator',
+            icon: <IconLock />,
+            run: () => addAuthenticator()
           },
           {
             id: 'new-dino',

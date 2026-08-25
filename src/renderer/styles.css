@@ -12285,6 +12285,117 @@ body,
 .toylock-hint { font-size: 11.5px; color: var(--muted, rgba(var(--tint-rgb), 0.55)); }
 .toylock-success { font-size: 13.5px; font-weight: 600; }
 
+/* The authenticator node (AuthenticatorNode.tsx): this machine's TOTP generators on the canvas. */
+.authenticator-node__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.authenticator-node__empty {
+  margin: 0;
+  padding: 12px 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--md-on-surface-variant);
+}
+
+.authenticator-node__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.authenticator-node__row {
+  display: grid;
+  /* Name, code, countdown. The code column is fixed so every row's digits line up: a column of
+     codes that shifts with the length of the account name above it is much harder to read at a
+     glance, which is the only thing this node is for. */
+  grid-template-columns: minmax(0, 1fr) auto 52px;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: var(--md-surface-container-high);
+}
+
+.authenticator-node__who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.authenticator-node__issuer,
+.authenticator-node__account {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.authenticator-node__issuer {
+  font-size: 12px;
+  color: var(--md-on-surface);
+}
+
+.authenticator-node__account {
+  font-size: 11px;
+  color: var(--md-on-surface-variant);
+}
+
+.authenticator-node__code {
+  font-family: var(--font-mono);
+  /* Tabular figures so the digits do not jitter sideways as the code changes every period. */
+  font-variant-numeric: tabular-nums;
+  font-size: 16px;
+  letter-spacing: 1px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--md-outline-variant);
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface);
+  cursor: pointer;
+}
+
+.authenticator-node__code:hover:not(:disabled) {
+  border-color: var(--md-primary);
+}
+
+.authenticator-node__code:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.authenticator-node__countdown {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  height: 18px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--md-surface-container);
+}
+
+.authenticator-node__countdown-bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--md-primary);
+  opacity: 0.28;
+  transition: width 250ms linear;
+}
+
+.authenticator-node__countdown-text {
+  position: relative;
+  padding-right: 5px;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--md-on-surface-variant);
+}
+
 /* The shared password/PIN entry (PasswordField.tsx): the input and its reveal toggle share one
    bordered surface, so the toggle reads as part of the field rather than a button parked beside it. */
 .toylock-passwordfield {
