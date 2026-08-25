@@ -1,13 +1,35 @@
 #!/bin/sh
-# Two refusals, both cheap, both about things that are expensive to undo once pushed.
+# Three refusals, all cheap, all about things that are expensive to undo once pushed.
 #
 # 1. A checkout without the current shared working dictionary (see scripts/check-vocabulary.mjs
 #    for why only a SHA-256 lives in the repository).
-# 2. A commit carrying a reserved, un-routable author or committer address — a harness placeholder
+# 2. A generated documentation bundle that no longer matches docs/ (scripts/check-docs-bundle.mjs).
+# 3. A commit carrying a reserved, un-routable author or committer address - a harness placeholder
 #    that git blame and the release line counter would otherwise take at face value.
 #
 # Enable with:  git config core.hooksPath .githooks
 node "$(dirname "$0")/../scripts/check-vocabulary.mjs" || exit $?
+
+# The stale docs bundle is here because it is the ONLY thing that has ever turned this repository's
+# release red: twice, on two different commits, each time because somebody added or edited an
+# article and did not re-run the generator. It costs a quarter of a second here and a whole failed
+# release there - and the failure lands in the packaging step, so it reads as a build problem and
+# nothing ships until somebody reads the log.
+#
+# It checks the WORKING TREE rather than the pushed commits, which is the honest limit of a cheap
+# hook: it catches the case that actually happens (the generator was never run) and not a stale
+# bundle sitting in an older commit while the tree is fresh.
+node "$(dirname "$0")/../scripts/check-docs-bundle.mjs" >/dev/null 2>&1 || {
+  echo "pre-push refused: the documentation bundle is stale relative to docs/." >&2
+  echo "The in-app docs browser bundles articles at build time, so an article that never" >&2
+  echo "reached the bundle is one the app silently does not have. This is what has turned" >&2
+  echo "the release red every time it has been red. Run:" >&2
+  echo "" >&2
+  echo "    node scripts/build-docs-bundle.mjs" >&2
+  echo "" >&2
+  echo "and commit the result (it is generated output; never hand-edit it)." >&2
+  exit 1
+}
 
 # git hands us "<local ref> <local sha> <remote ref> <remote sha>" per ref on stdin. Only the
 # commits actually being sent are checked: what is already on the remote is not this push's to fix,

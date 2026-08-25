@@ -583,6 +583,13 @@ pass paths as data and compare them literally—never put a checkout path into a
   `npm run typecheck` and `npm test` yourself before you push** — that is where checking
   actually happens now, and a failing local test is still a real defect to fix in the same
   change even though nothing in Actions will stop you from pushing it.
+- **If you touched `docs/`, run `node scripts/build-docs-bundle.mjs` and commit the result.** The
+  in-app documentation browser bundles articles at build time, so an article that never reached
+  `src/shared/docs-data.ts` is one the app silently does not have. This is the only thing that has
+  ever turned this repository's release red, and it has done it twice; the failure lands inside the
+  packaging step, so it reads as a build problem and nothing ships until somebody opens the log.
+  Opting into the repo's hooks (`git config core.hooksPath .githooks`) makes the push refuse
+  instead. Never hand-edit that file: it is generated output.
 - Explain **why**, not just what. If a decision has a trade-off, name it and say what you rejected.
 - If you measured something, put the numbers in — they save the next person the same afternoon.
 - Say what you did **not** verify. That is more useful than a confident summary.
