@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
+  preserving safe canvas presentation and relationships while rejecting machine-local and
+  authority-bearing state. Archive integration and verification remain pending.
+
 - Add the platform-free schema 3 portable-project manifest validator with canonical required
   entries, bounded raw and compressed budgets, deterministic SHA-256 metadata, safe path and
   collision refusal, omission reporting, and pure V1/V2 migration filtering. Verification is

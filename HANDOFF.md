@@ -1,5 +1,42 @@
 # Handoff
 
+## 2026-08-26, portable canvas projection implementation
+
+Implemented `src/core/portable-canvas-projection.ts`, re-exported through
+`src/core/project-archive.ts`. The module projects safe root canvas content and future Multiverse
+and AWS Universe scopes into deterministic schema 3 JSON, preserving display metadata, geometry,
+node presentation, grouping, relationships, ordering, and bounded appearance values. It excludes
+machine-local, credential, process, provider, browser-profile, path, endpoint, and other
+authority-bearing state, and rejects those fields on imported payloads. Serialization emits stable
+UTF-8 bytes and validation enforces bounded counts, depth, strings, references, and bytes without
+hydrating or starting anything.
+
+This lane deliberately did not run tests, type checking, linting, security checks, builds,
+packaging, installer execution, UI interaction, or captures. Archive writing, atomic import,
+media, catalog, Shop, portals, providers, and UI remain unimplemented risks for later lanes. No
+commit or dew was made by this lane.
+
+## 2026-08-26, projection validation tightening
+
+The projection validator was tightened after review. Numeric bounds now apply to every finite
+number, future canvas input is reconstructed from allowed fields rather than spread, and imported
+objects use strict allowed-key sets at every schema level. Canvas hierarchy validation now enforces
+one root, parent existence, child-parent requirements, no self-parent or cycle, and depth eight.
+Node membership is unique and complete, node parents are validated, and relationship identifiers
+are unique without case collisions. HTTP(S) URLs are normalized without embedded credentials or
+control characters, while empty content remains valid and required labels remain non-empty. Tag
+and browser-tab counts are bounded. No tests, type checks, lint, builds, packaging, UI interaction,
+or captures were run, and no commit or dew was made by this lane.
+
+## 2026-08-26, normalized projection boundary
+
+Validation now reconstructs and returns an allowed normalized copy, including canonical HTTP(S)
+URLs and omitted empty URLs. It explicitly validates every optional field and nested shape, icon
+allowlists, numeric and collection bounds, canvas hierarchy and membership invariants, and converts
+malformed input into `PortableProjectV3Error`. This lane keeps only strict global appearance fields;
+per-element appearance is postponed until a typed schema exists. No tests, type checks, lint, builds,
+packaging, UI interaction, or captures were run, and no commit or dew was made by this lane.
+
 ## 2026-08-26, portable schema 3 envelope implementation
 
 Follow-up repair keeps `manifest.json` as required archive framing outside the hashed payload
