@@ -286,6 +286,7 @@ Every listed renderer producer has an explicit local mapper boundary. Commands, 
 | `find-bar` | Find bar | `src/renderer/components/FindBar.tsx` | `useVocabularyMapper()` |
 | `remote-picker` | Remote picker | `src/renderer/components/RemotePicker.tsx` | `useVocabularyMapper()` |
 | `browser-profile-picker` | Browser profile picker | `src/renderer/nodes/BrowserProfilePicker.tsx` | `useVocabularyMapper()` |
+| `wsl-create-dialog` | WSL distribution and instance creation dialog | `src/renderer/wsl/WslCreateDialog.tsx` | `useI18n()`, `useVocabularyMapper()`, and `mapAroundExactFacts()` |
 | `terminal-node` | Terminal node chrome and status copy | `src/renderer/nodes/TerminalNode.tsx` | `useVocabularyMapper()` and `useLocalizedVocabularyText()` |
 | `sticky-node` | Sticky note node chrome | `src/renderer/nodes/StickyNode.tsx` | `useVocabularyMapper()` |
 | `group-node` | Group and WSL/worktree node chrome | `src/renderer/nodes/GroupNode.tsx` | `useVocabularyMapper()` |
@@ -355,7 +356,7 @@ single React element cannot reach the descendants produced by a component.
 | browser-start-page | src/renderer/nodes/BrowserStartPage.tsx | mapped-callsite |
 | browser-extensions-panel | src/renderer/nodes/BrowserExtensionsPanel.tsx | mapped-callsite |
 | discarded-plate | src/renderer/nodes/DiscardedPlate.tsx | mapped-callsite |
-| wsl-dialog | src/renderer/wsl/WslCreateDialog.tsx | unmapped-callsite-pending |
+| wsl-dialog | src/renderer/wsl/WslCreateDialog.tsx | mapped-callsite |
 | regex-builder | src/renderer/components/regex/RegexBuilder.tsx | unmapped-callsite-pending |
 | anchored-regex-builder | src/renderer/components/regex/AnchoredRegexBuilder.tsx | unmapped-callsite-pending |
 | notification-center | src/renderer/components/NotificationCenter.tsx | mapped-callsite |
