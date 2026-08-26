@@ -21,4 +21,29 @@ describe('typed vocabulary copy and fact boundary', () => {
       `Diagnostic: ${diagnostic}`
     )
   })
+
+  it('maps a copy segment once and never applies the mapper again to its result', () => {
+    let calls = 0
+    const once = (text: string): string => {
+      calls += 1
+      return map(text)
+    }
+    expect(mapOwnedSentence(once, [copy('model'), fact('/error')])).toBe('machine/error')
+    expect(calls).toBe(1)
+  })
+
+  it('detects a copy and fact swap by keeping the exact visible query value', () => {
+    const query = 'Download/model'
+    expect(mapOwnedSentence(map, [copy('Filter: '), fact(query)])).toBe(`Filter: ${query}`)
+    expect(mapOwnedSentence(map, [fact('Filter: '), copy(query)])).toBe('Filter: Beam/machine')
+  })
+
+  it('keeps diagnostic signatures and numeric values exact', () => {
+    const signature = 'application/octet-stream: error at offset 256'
+    const count = 256
+    expect(mapOwnedSentence(map, [copy('Diagnostic: '), fact(signature)])).toBe(`Diagnostic: ${signature}`)
+    expect(mapOwnedSentence(map, [copy('Showing '), fact(String(count)), copy(' records')])).toBe(
+      'Showing 256 records'
+    )
+  })
 })

@@ -61,8 +61,10 @@ cleared file never applies partially.
 ## Verification boundary
 
 `scripts/check-personal-vocabulary-coverage.mjs` carries hand-written rows for these surfaces and
-checks the exact mapper call on each production file. The rows are intentionally separate from the
-discovered source list so removing one surface cannot make the inventory shrink with the implementation.
+checks the production mapper boundary. The field-level copy/fact contract is exercised behaviorally
+by `ownedCopy.test.ts`, rather than by brittle source substring needles. The rows are intentionally
+separate from the discovered source list so removing one surface cannot make the inventory shrink
+with the implementation.
 Runtime rendering, narrow-layout behavior, and the packaged artifact remain separate evidence and are
 not claimed by this source-level record.
 

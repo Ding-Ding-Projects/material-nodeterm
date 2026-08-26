@@ -21,7 +21,7 @@ import { ConfirmDialog } from '../ConfirmDialog'
 import { MaterialSymbol, type MaterialSymbolName } from '../MaterialSymbol'
 import { promptDialog } from '../promptDialog'
 import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
-import { copy, fact, mapOwnedSentence } from '../../lib/personalVocabulary/ownedCopy'
+import { copy, fact, mapOwnedSentence, type DisplaySegment } from '../../lib/personalVocabulary/ownedCopy'
 import {
   catalogPollDelayMs,
   catalogPollShouldContinue,
@@ -793,7 +793,7 @@ function catalogHeadlineText(
 function catalogStalenessSegments(
   view: CatalogView,
   now: number
-): readonly ReturnType<typeof copy>[] | null {
+): readonly DisplaySegment[] | null {
   switch (view.staleness) {
     case 'never':
       return view.registryEnabled ? [copy('The catalog has never been fetched on this machine.')] : null
@@ -941,7 +941,11 @@ function StoreTab({
             ? catalog && catalog.rows.length > 0
               ? vocab('No catalog row matches this search or filter.')
               : vocab('No rows are listed. See the catalog state above for whether that is a load failure or a catalog that is genuinely still being fetched.')
-            : vocab(`Showing ${page.from}–${page.to} of ${page.total} matching references (page ${page.page} of ${page.pageCount}).`)}
+            : mapOwnedSentence(vocab, [
+              copy('Showing '), fact(String(page.from)), copy('–'), fact(String(page.to)), copy(' of '),
+              fact(String(page.total)), copy(' matching references (page '), fact(String(page.page)), copy(' of '),
+              fact(String(page.pageCount)), copy(').')
+            ])}
         </p>
         <ul className="om-model-list">
           {page.rows.map((row) => (

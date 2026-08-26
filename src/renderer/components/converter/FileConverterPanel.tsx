@@ -20,6 +20,7 @@ import { MaterialSymbol, type MaterialSymbolName } from '../MaterialSymbol'
 import { AdapterCatalog } from './AdapterCatalog'
 import { Checkbox } from '@renderer/ui/md3'
 import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
+import { copy, fact, mapOwnedSentence } from '../../lib/personalVocabulary/ownedCopy'
 
 export interface FileConverterPanelProps {
   onClose: () => void
@@ -628,7 +629,7 @@ function FileConverterPanelForApi({
               disabled={pending.length === 0 || !selectedAdapter || !destDir}
               onClick={() => void handleAddToQueue()}
             >
-              {vocab(`Add ${pending.length || ''} file${pending.length === 1 ? '' : 's'} to queue`)}
+              {mapOwnedSentence(vocab, [copy('Add '), fact(pending.length ? String(pending.length) : ''), copy(` file${pending.length === 1 ? '' : 's'} to queue`)])}
             </button>
           </section>
 
@@ -665,7 +666,11 @@ function FileConverterPanelForApi({
               {summary.scanning && <span className="cv-scanning">{vocab('Scanning folder…')}</span>}
             </div>
             <p className="cv-summary-counts">
-              {vocab(`${counts.queued} queued · ${counts.running} running · ${counts.needsConfirm} need attention · ${counts.done} done · ${counts.failed} failed · ${counts.cancelled} cancelled`)}
+              {mapOwnedSentence(vocab, [
+                fact(String(counts.queued)), copy(' queued · '), fact(String(counts.running)), copy(' running · '),
+                fact(String(counts.needsConfirm)), copy(' need attention · '), fact(String(counts.done)), copy(' done · '),
+                fact(String(counts.failed)), copy(' failed · '), fact(String(counts.cancelled)), copy(' cancelled')
+              ])}
             </p>
             {queue.length === 0 ? (
               <p className="cv-empty-note">{vocab('Nothing in the queue yet.')}</p>
