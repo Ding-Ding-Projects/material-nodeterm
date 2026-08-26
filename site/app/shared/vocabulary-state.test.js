@@ -4,7 +4,9 @@ import { isFreshVocabularyCache, validateVocabularyCacheJson, validateVocabulary
 import { shapeCopy, shapeTitle } from './i18n.js'
 import { createStore } from '../core/store.js'
 import { render } from '../core/render.js'
-import { toast } from '../core/engine.js'
+import { notify, registerListRoom, toast } from '../core/engine.js'
+import { DIM_SUM_TOAST_OWNERSHIP, registerDimSum } from '../features/dimsum.js'
+import { datasetRecords } from '../features/exports.js'
 import { handleVocabularyFileChange, readVocabularyFile, registerVocabulary } from '../features/vocabulary.js'
 
 function storageFixture(initial = {}) {
@@ -327,6 +329,51 @@ test('Day Teet Hui toasts map authored title, body, and sub fields while facts s
     assert.match(output, /mapped sub/)
     assert.doesNotMatch(output, /wrong fact/)
     assert.throws(() => toast(store, 'ℹ️', 'title', 'body', '', undefined, { titleKind: 'unknown' }), /ownership/)
+  } finally {
+    if (original === undefined) delete globalThis.localStorage
+    else globalThis.localStorage = original
+  }
+})
+
+test('dim sum surprise marks its authored trolley title separately from factual dish fields', () => {
+  const store = createStore()
+  let another
+  registerDimSum(store, {}, (id, handler) => { if (id === 'dish-another') another = handler }, () => {})
+  const calls = []
+  another(store.state, '', null, { toast: (...args) => calls.push(args) })
+  assert.equal(calls.length, 1)
+  assert.deepEqual(calls[0][4], DIM_SUM_TOAST_OWNERSHIP)
+  assert.equal(calls[0][4].titleKind, 'authored')
+  assert.equal(calls[0][4].bodyKind, 'fact')
+  assert.equal(calls[0][4].subKind, 'fact')
+})
+
+test('persistent Day Teet Hui messages retain ownership through render, search, and export', () => {
+  const original = globalThis.localStorage
+  globalThis.localStorage = storageFixture()
+  try {
+    const store = createStore()
+    store.state.vocabEntries = { terminal: 'shell box' }
+    notify(store, 'Open terminal', 'fatal: C:/workspace/terminal', 'fact-check', { titleKind: 'authored', bodyKind: 'fact' })
+    const saved = store.state.notes[0]
+    assert.equal(saved.titleKind, 'authored')
+    assert.equal(saved.bodyKind, 'fact')
+    registerListRoom('notes', { kind: 'list', getRows: (s) => s.notes.map((n) => ({ ...n, meta: '', right: '' })) })
+    store.state.view = 'room'
+    store.state.sec = 'notes'
+    assert.match(render(store), /Open shell box/)
+    assert.match(render(store), /fatal: C:\/workspace\/terminal/)
+    store.state.qSec = 'shell box'
+    assert.match(render(store), /Open shell box/)
+    const exported = datasetRecords(store, 'notes')[0]
+    assert.deepEqual(exported, {
+      title: 'Open terminal',
+      body: 'fatal: C:/workspace/terminal',
+      titleKind: 'authored',
+      bodyKind: 'fact',
+      tag: 'fact-check',
+      when: saved.when
+    })
   } finally {
     if (original === undefined) delete globalThis.localStorage
     else globalThis.localStorage = original

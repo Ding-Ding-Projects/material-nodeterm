@@ -309,17 +309,19 @@ function renderHomeRoom(store) {
 
 function rowItem(state, row) {
   const picked = !!state.picked[row.id]
+  const title = row.titleKind === 'fact' ? fact(row.title) : row.titleKind === 'authored' ? copy(state, row.title) : esc(row.title)
+  const body = row.bodyKind === 'fact' ? fact(row.body) : row.bodyKind === 'authored' ? copy(state, row.body) : esc(row.body)
   const name = row.title + (picked ? ', picked' : '') + (row.tag ? ', ' + row.tag : '') + (row.body ? '. ' + row.body : '')
   const btn = `<button type="button" class="row-item" aria-pressed="${picked}" aria-label="${factAttr(name)}" data-action="toggle-pick" data-id="${factAttr(row.id)}" data-menu-kind="row" data-menu-label="${factAttr(row.title)}" data-menu-extra='${factAttr(JSON.stringify({ id: row.id, title: row.title, body: row.body, url: row.url || '', canUndo: !!row.canUndo }))}'>
     <span class="row-item__check ${picked ? 'is-picked' : ''}" aria-hidden="true">${picked ? '✔' : ''}</span>
     ${row.img ? `<img src="${attr(row.img)}" alt="" width="44" height="44" aria-hidden="true" style="flex:0 0 auto;border:3px solid var(--line);border-radius:12px;background:var(--paper2)" />` : ''}
     <span class="row-item__body" aria-hidden="true">
       <span class="row-item__title">
-        <span class="row-item__title-text">${esc(row.title)}</span>
+        <span class="row-item__title-text">${title}</span>
         ${row.tag ? `<span class="chip" style="background:${state.accent}">${esc(row.tag)}</span>` : ''}
         ${row.meta ? `<span class="row-item__meta">${esc(row.meta)}</span>` : ''}
       </span>
-      <span class="row-item__text">${esc(row.body)}</span>
+      <span class="row-item__text">${body}</span>
     </span>
     ${row.right && !row.docHref ? `<span class="row-item__right" aria-hidden="true">${esc(row.right)}</span>` : ''}
   </button>`
@@ -349,7 +351,15 @@ function renderListRoom(store, room) {
   const rawRows = room.getRows(s)
   const gm = makeMatcher(s, 'global', s.qGlobal)
   const sm = makeMatcher(s, 'sec', s.qSec)
-  const rows = rawRows.filter((r) => sm(r.title + ' ' + r.body + ' ' + (r.tag || '')) && gm(r.title + ' ' + r.body))
+  const searchable = (r) => {
+    const title = r.titleKind === 'authored' ? shapeCopy(s, r.title) : r.title
+    const body = r.bodyKind === 'authored' ? shapeCopy(s, r.body) : r.body
+    return { title, body }
+  }
+  const rows = rawRows.filter((r) => {
+    const text = searchable(r)
+    return sm(text.title + ' ' + text.body + ' ' + (r.tag || '')) && gm(text.title + ' ' + text.body)
+  })
   const pickedIds = Object.keys(s.picked).filter((k) => rawRows.some((r) => r.id === k))
   const allPicked = rawRows.length > 0 && pickedIds.length === rawRows.length
   const panelActions = room.panelActions ? room.panelActions(store) : []

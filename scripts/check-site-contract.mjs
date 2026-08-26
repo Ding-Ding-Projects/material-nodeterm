@@ -926,6 +926,82 @@ function hasOwnedRenderString(body, text, owner) {
   return copied
 }
 
+function balancedExpression(source, start) {
+  let depth = 1
+  let quote = ''
+  let escaped = false
+  for (let i = start; i < source.length; i += 1) {
+    const ch = source[i]
+    if (quote) {
+      if (escaped) escaped = false
+      else if (ch === '\\') escaped = true
+      else if (ch === quote) quote = ''
+      continue
+    }
+    if (ch === "'" || ch === '"' || ch === '`') {
+      quote = ch
+    } else if (ch === '{') {
+      depth += 1
+    } else if (ch === '}' && --depth === 0) {
+      return source.slice(start, i)
+    }
+  }
+  return null
+}
+
+// Parse attributes structurally instead of treating one physical source line as the unit. A
+// template expression can span lines, contain nested calls, and contain quoted text with braces.
+function unownedLabelAttributes(source) {
+  const found = []
+  const attrRe = /(data-menu-label|aria-label|title)\s*=\s*(["'])/g
+  for (const match of source.matchAll(attrRe)) {
+    const contentStart = match.index + match[0].length
+    const quote = match[2]
+    let end = -1
+    let expressionDepth = 0
+    let expressionQuote = ''
+    let escaped = false
+    for (let i = contentStart; i < source.length; i += 1) {
+      const ch = source[i]
+      if (expressionDepth > 0) {
+        if (expressionQuote) {
+          if (escaped) escaped = false
+          else if (ch === '\\') escaped = true
+          else if (ch === expressionQuote) expressionQuote = ''
+        } else if (ch === "'" || ch === '"' || ch === '`') {
+          expressionQuote = ch
+        } else if (ch === '{') {
+          expressionDepth += 1
+        } else if (ch === '}') {
+          expressionDepth -= 1
+        }
+      } else if (ch === '$' && source[i + 1] === '{') {
+        expressionDepth = 1
+        i += 1
+      } else if (ch === quote) {
+        end = i
+        break
+      }
+    }
+    if (end < 0) {
+      found.push(source.slice(match.index, match.index + 80))
+      continue
+    }
+    const content = source.slice(contentStart, end)
+    if (!content.includes('${')) {
+      found.push(content)
+      continue
+    }
+    let cursor = 0
+    while ((cursor = content.indexOf('${', cursor)) >= 0) {
+      const expression = balancedExpression(content, cursor + 2)
+      if (expression === null || !/(copyAttr|factAttr)/.test(expression)) found.push(expression || content.slice(cursor))
+      cursor += 2
+    }
+  }
+  return found
+}
+
 {
   const ids = SITE_RENDER_COPY_FUNNELS.map(([id]) => id)
   checkedCount += 1
@@ -961,10 +1037,7 @@ function hasOwnedRenderString(body, text, owner) {
   // Every user-visible menu, accessibility, and regex-token label must declare its ownership
   // helper at the callsite. A raw `attr(...)` or `esc(...)` can accidentally bypass the mapper,
   // while a broad substring check would miss a renamed or commented-out helper call.
-  const untypedLabels = renderSource.split(/\r?\n/).filter((line) => {
-    if (!/(data-menu-label=|aria-label=|<button[^>]*title=)/.test(line)) return false
-    return !/(copyAttr|factAttr)/.test(line)
-  })
+  const untypedLabels = unownedLabelAttributes(renderSource)
   checkedCount += 1
   if (untypedLabels.length) {
     fail(`Site renderer has ${untypedLabels.length} user-visible label line(s) without copyAttr/factAttr ownership`)
@@ -1014,6 +1087,11 @@ function hasOwnedRenderString(body, text, owner) {
       else pass(`${id}: file-backed string mutation is rejected`)
       writeFileSync(renderCopy, original, 'utf8')
     }
+    const labelsWithoutOwnership = join(mutationRoot, 'render-labels.fixture.js')
+    writeFileSync(labelsWithoutOwnership, original.split('copyAttr').join('').split('factAttr').join(''), 'utf8')
+    checkedCount += 1
+    if (unownedLabelAttributes(readFileSync(labelsWithoutOwnership, 'utf8')).length === 0) fail('Site renderer copied label ownership mutation was not rejected')
+    else pass('Site renderer copied label ownership mutation is rejected')
     const ownershipWithoutFirst = SITE_RENDER_STRING_OWNERSHIP.slice(1).map(([id]) => id)
     checkedCount += 1
     if (ownershipWithoutFirst.length === CANONICAL_SITE_RENDER_STRING_IDS.length && ownershipWithoutFirst.every((id, i) => id === CANONICAL_SITE_RENDER_STRING_IDS[i])) {

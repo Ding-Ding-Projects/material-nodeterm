@@ -115,9 +115,14 @@ export function toast(store, icon, title, body, sub, speakFn, ownership = {}) {
 export function dismissToast(store, id) {
   store.setState((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }), { persist: false })
 }
-export function notify(store, title, body, tag) {
+export function notify(store, title, body, tag, ownership = {}) {
+  const titleKind = ownership.titleKind || 'authored'
+  const bodyKind = ownership.bodyKind || 'authored'
+  if (!['authored', 'fact'].includes(titleKind) || !['authored', 'fact'].includes(bodyKind)) {
+    throw new TypeError('Notification copy ownership must be authored or fact.')
+  }
   store.setState((s) => ({
-    notes: [{ id: 'n' + Date.now() + Math.random().toString(36).slice(2, 5), title, body, when: nowIso(), tag: tag || 'note' }].concat(s.notes).slice(0, 200),
+    notes: [{ id: 'n' + Date.now() + Math.random().toString(36).slice(2, 5), title, body, titleKind, bodyKind, when: nowIso(), tag: tag || 'note' }].concat(s.notes).slice(0, 200),
   }))
 }
 
