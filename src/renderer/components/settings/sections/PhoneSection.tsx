@@ -29,6 +29,21 @@ const ROWS = {
   devices: {
     title: 'Paired devices',
     keywords: ['phone', 'device', 'devices', 'paired', 'revoke', 'remove']
+  },
+  relayPeers: {
+    title: 'Approved relay peers',
+    keywords: [
+      'relay',
+      'peer',
+      'peers',
+      'approved',
+      'trusted',
+      'revoke',
+      'remove',
+      'session',
+      'phone',
+      'desktop'
+    ]
   }
 }
 const ENTRIES = Object.values(ROWS)
@@ -101,6 +116,22 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
     }
   }, [])
 
+  // Mutually-approved relay peers — a phone or another desktop that can reach THIS machine's
+  // terminals over the relay tunnel (see the "Relay RPC authorization" section in CLAUDE.md).
+  // A separate store from the SSH pairing registry above: approval here is durable and, until
+  // today, had no revoke UI at all.
+  const [relayPeers, setRelayPeers] = useState<string[]>([])
+  const [pendingRevokePeer, setPendingRevokePeer] = useState<string | null>(null)
+  const [revokePeerError, setRevokePeerError] = useState('')
+
+  const refreshRelayPeers = useCallback(async (): Promise<void> => {
+    try {
+      setRelayPeers(await window.nodeTerminal.relayPeers.list())
+    } catch {
+      // leave the last-known list on a transient read error
+    }
+  }, [])
+
   // The shared pairing machine (also behind the top-right quick-pair popover); a completed
   // pairing refreshes the device list below.
   const { phase, qr, sshOpen, sshHealed, relayResult, relayPlan, error, busy, start, stop, reset } = usePhonePairing(
@@ -123,12 +154,15 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
     void refreshDevices()
   }, [refreshDevices])
 
+  useEffect(() => {
+    void refreshRelayPeers()
+  }, [refreshRelayPeers])
+
   // Read at RENDER: the mode is a shared record another process can flip, so a Settings page left
   // open across that change must honour the new state rather than one captured at mount.
-  const kidsGateRequired = requiresDestructiveGate(
-    'revoke-device',
-    useKidsMode(kidsDestructiveGateRequired)
-  ).required
+  const kidsModeOn = useKidsMode(kidsDestructiveGateRequired)
+  const kidsGateRequired = requiresDestructiveGate('revoke-device', kidsModeOn).required
+  const relayPeerKidsGateRequired = requiresDestructiveGate('revoke-relay-peer', kidsModeOn).required
 
   const requestRevoke = (device: PairedDevice, anchorEl: HTMLElement | null): void => {
     if (!kidsGateRequired) {
@@ -164,6 +198,59 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
       )
     } finally {
       void refreshDevices()
+    }
+  }
+
+  /** Show a peer's key truncated for readability — there is no label on disk to show instead. */
+  const shortPeerKey = (peerKeyB64: string): string =>
+    peerKeyB64.length > 16 ? `${peerKeyB64.slice(0, 8)}…${peerKeyB64.slice(-8)}` : peerKeyB64
+
+  const requestRevokePeer = (peerKeyB64: string, anchorEl: HTMLElement | null): void => {
+    if (!relayPeerKidsGateRequired) {
+      setPendingRevokePeer(peerKeyB64)
+      return
+    }
+    const rect = anchorEl?.getBoundingClientRect()
+    openDestructiveGate({
+      title: `Revoke peer “${shortPeerKey(peerKeyB64)}”`,
+      description:
+        'This peer is un-pinned AND its live relay session (if any) is cut immediately. It cannot reconnect without a fresh mutual approval.',
+      affected: [shortPeerKey(peerKeyB64)],
+      confirmLabel: 'Revoke',
+      anchor: rect ? { x: rect.left, y: rect.bottom } : undefined,
+      restoreFocusEl: anchorEl,
+      onConfirm: () => void revokeRelayPeer(peerKeyB64)
+    })
+  }
+
+  const revokeRelayPeer = async (peerKeyB64: string): Promise<void> => {
+    setPendingRevokePeer(null)
+    try {
+      const result = await window.nodeTerminal.relayPeers.revoke(peerKeyB64)
+      // Both halves of the outcome are reported independently (revocation.ts's RevokeResult):
+      // a peer that stays pinned on disk is a different, worse failure than one whose live
+      // session could not be cut, and neither may be collapsed into a bare "Removed".
+      if (!result.persisted) {
+        setRevokePeerError(
+          `Couldn’t un-pin “${shortPeerKey(peerKeyB64)}” on disk. It may still be able to ` +
+            'reconnect with no approval prompt. The peer remains listed; retry Revoke.'
+        )
+      } else if (!result.killed) {
+        setRevokePeerError(
+          `“${shortPeerKey(peerKeyB64)}” is un-pinned, but its live session could not be ` +
+            'confirmed cut. It may still hold an open connection to this machine.'
+        )
+      } else {
+        setRevokePeerError('')
+      }
+    } catch (error) {
+      const detail = error instanceof Error && error.message ? ` (${error.message})` : ''
+      setRevokePeerError(
+        `Couldn’t revoke “${shortPeerKey(peerKeyB64)}”${detail}. It may still be able to ` +
+          'reach this machine. The peer remains listed; retry Revoke.'
+      )
+    } finally {
+      void refreshRelayPeers()
     }
   }
 
@@ -352,6 +439,52 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
           )}
         </div>
       </SearchableRow>
+
+      <SearchableRow {...ROWS.relayPeers}>
+        <div className="space-y-3">
+          <h4 className="text-[13px] font-medium text-text">Approved relay peers</h4>
+          <p className="text-sm text-muted">
+            Every phone or other desktop that has mutually approved a relay connection to this
+            machine, and can therefore reach its terminals whenever it connects. Public keys
+            only — never a credential.
+          </p>
+          {revokePeerError ? (
+            <p role="alert" className="text-sm" style={{ color: '#ff9f0a' }}>
+              {revokePeerError}
+            </p>
+          ) : null}
+          {relayPeers.length === 0 ? (
+            <p className="text-sm text-muted">No relay peers approved yet</p>
+          ) : (
+            <ul className="space-y-2">
+              {relayPeers.map((peerKeyB64) => (
+                <li
+                  key={peerKeyB64}
+                  className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2"
+                >
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-medium text-text" title={peerKeyB64}>
+                      {shortPeerKey(peerKeyB64)}
+                    </div>
+                  </div>
+                  <Button onClick={(e) => requestRevokePeer(peerKeyB64, e.currentTarget)}>
+                    Revoke
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </SearchableRow>
+
+      {pendingRevokePeer && !relayPeerKidsGateRequired ? (
+        <ConfirmDialog
+          message={`Revoke peer “${shortPeerKey(pendingRevokePeer)}”? It is un-pinned and its live relay session (if any) is cut immediately.`}
+          confirmLabel="Revoke"
+          onConfirm={() => void revokeRelayPeer(pendingRevokePeer)}
+          onCancel={() => setPendingRevokePeer(null)}
+        />
+      ) : null}
 
       {/* Revoking is destructive in a way the wording has to carry: the device's key is gone, so
           this is not "sign it out" — that phone has to be paired again from scratch, in person,

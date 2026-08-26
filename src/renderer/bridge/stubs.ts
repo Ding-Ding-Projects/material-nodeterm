@@ -460,6 +460,14 @@ export function buildStubApi(): Omit<
       listDevices: U('pairing.listDevices'),
       revokeDevice: U('pairing.revokeDevice')
     },
+    relayPeers: {
+      // Server Edition has no desktop relay host and no `remote-approved-devices.json` — the
+      // browser tab IS the session it is attached to, so there is no separate peer-trust store to
+      // list or revoke. Same explicit-capability-bit pattern as `pairing` above.
+      supported: false,
+      list: U('relayPeers.list'),
+      revoke: U('relayPeers.revoke')
+    },
     onMarkdownToggle: noopUnsub,
     onCloseNode: noopUnsub,
     // Deliberate no-op (not a gap): a browser tab has no application menu to steal ⌘0, so the

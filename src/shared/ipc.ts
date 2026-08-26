@@ -442,6 +442,9 @@ export const IPC = {
   // handshake — the open relay socket keeps full shell access — so this ALSO cuts the live session
   // (revocation.ts's whole point; see relay-host.ts's killRelayHostsByPeerKey).
   remoteRevokePeer: 'remote:revoke-peer',
+  // List every relay peer pinned by mutual approval (base64 box public keys — public, never
+  // credentials), so Settings can show who can reach this machine and offer to revoke them.
+  remoteListApprovedPeers: 'remote:list-approved-peers',
   // ── New E2EE relay tunnel (Stage 4) ─────────────────────────────────────────────────────────
   // The successor to the legacy `remote:host:*` dialect above (the `remote:client:*` desktop-client
   // channels were deleted in Task 10; the desktop client is now the `relay:*` tunnel). The phone

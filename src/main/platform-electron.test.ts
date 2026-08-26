@@ -529,7 +529,9 @@ describe('electronPlatform.dispatch / cast (the peer inbound path)', () => {
     IPC.terminalProfilesRefresh,
     IPC.ptyRecycleConfirmed,
     IPC.ptyExecuteLaunchIntent,
-    IPC.workspaceSave
+    IPC.workspaceSave,
+    IPC.remoteRevokePeer,
+    IPC.remoteListApprovedPeers
   ])('refuses machine-local %s over relay while its local IPC handler still works', async (method) => {
     const p = electronPlatform()
     const localResult = { method, local: true }

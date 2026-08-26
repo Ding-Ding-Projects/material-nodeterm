@@ -3600,6 +3600,35 @@ export interface RemoteLoginHelp {
   command?: string
 }
 
+/** Result of revoking one mutually-approved relay peer (revocation.ts's RevokeResult, mirrored so
+ *  the renderer never imports main-process code). Both booleans are reported independently: a
+ *  peer that stays pinned on disk (`persisted:false`) is a different, worse failure than a peer
+ *  whose live session could not be cut (`killed:false`), and the UI must never collapse the two
+ *  into a bare success. */
+export interface RelayPeerRevokeResult {
+  /** `true` iff the unpin decision is durable on disk. `false` means the peer may still be
+   *  pinned and could reconnect with no approval prompt — never report this as "Removed". */
+  persisted: boolean
+  /** `true` iff the peer's live relay session (if any) was cut. `false` means it may still hold
+   *  an open, shell-equivalent connection. */
+  killed: boolean
+}
+
+/** Every relay peer pinned by mutual approval, and the ability to revoke one. Public keys only —
+ *  never a credential — mirroring `main/remote/approved-devices.ts`'s on-disk store. This is a
+ *  host-security control surface: it is registered on raw ipcMain (see `RELAY_LOCAL_ONLY_METHODS`
+ *  in `platform-electron.ts`) and a relay peer can never reach either method over the tunnel. */
+export interface RelayPeersApi {
+  /** False on Server Edition, which has no desktop relay host and no pinned-peer store. */
+  readonly supported: boolean
+  /** Base64 NaCl box public keys of every peer approved at least once. There is no label or
+   *  last-seen timestamp on disk today — the UI shows the key itself, truncated for readability. */
+  list(): Promise<string[]>
+  /** Unpin a peer AND cut its live relay session(s) — unpinning alone only refuses the NEXT
+   *  handshake while an already-open socket keeps full shell access. */
+  revoke(peerKeyB64: string): Promise<RelayPeerRevokeResult>
+}
+
 export interface PairingApi {
   /** False on Server Edition, where the browser is already attached to its host and no desktop
    *  LAN listener / OS SSH-key store exists. UI must show a deliberate degrade, not call stubs. */
@@ -3793,6 +3822,7 @@ export interface NodeTerminalApi {
   relayClient: RelayClientApi
   handoff: HandoffApi
   pairing: PairingApi
+  relayPeers: RelayPeersApi
   presence: PresenceApi
   toylock: ToylockApi
   authenticator: AuthenticatorApi
