@@ -7,16 +7,20 @@
  * the failure this codebase keeps rediscovering under its own name -- a feature wired at one end,
  * consumed at neither -- so the composition gets its own test rather than an assumption.
  *
+ * It lives on the core side rather than beside the binding module, because the renderer's
+ * tsconfig deliberately cannot see `src/core` -- that boundary is the whole point of the
+ * `CorePlatform` seam, and a test is not a reason to punch through it. Core may import shared.
+ *
  * The threat is concrete and is the one the user named: `.nodeterm/project.json` is git-shared,
  * so cloning a repository hands this machine a canvas somebody else authored. A frame in it can
  * claim to be bound to any distribution name at all, including one that really exists here and
  * belongs to the person rather than to the app.
  */
 import { describe, it, expect } from 'vitest'
-import { sanitizeGroupWsl, canManageWslDistro } from './wsl-binding'
-import { inMemoryWslOwnershipStore } from '../core/wsl/ownership'
-import { sleepWslDistribution } from '../core/wsl/lifecycle'
-import { fakeWslRuntime, STATUS_OK } from '../core/wsl/__fixtures__'
+import { sanitizeGroupWsl, canManageWslDistro } from '../../shared/wsl-binding'
+import { inMemoryWslOwnershipStore } from './ownership'
+import { sleepWslDistribution } from './lifecycle'
+import { fakeWslRuntime, STATUS_OK } from './__fixtures__'
 
 /** Real distributions on the machine this was written on. Named literally, because a test that
  *  invents a placeholder name proves only that the placeholder is refused. */
