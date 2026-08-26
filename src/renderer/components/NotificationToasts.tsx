@@ -31,15 +31,13 @@ function Toast({ n }: { n: AppNotification }): React.JSX.Element {
   // pushed anywhere in the renderer surfaces through this one component, so translating here is
   // what reaches all of them.
   //
-  // `title` and the action labels are OUR prose ("Restart with profile failed", "Retry"). `body`
-  // deliberately is NOT translated: the push sites hand it raw machine text — `error.message`,
-  // an `assessment.reason` from core, a git failure string, a clipped agent transcript line
-  // (Canvas.tsx's notify calls) — i.e. exactly the log lines and quoted output the vocabulary
-  // boundary must never rewrite. Substituting inside one would show the user a "quoted" error
-  // that no tool ever printed, and there is no field here that separates the prose bodies from
-  // the machine ones.
+  // `title` and the action labels are authored prose. A body is fact text by default, because push
+  // sites commonly pass `error.message`, an assessment reason, a git failure string, or a clipped
+  // agent transcript line. A producer that owns the body may opt into `bodyKind: 'authored'`; the
+  // type is carried with the notification so a broad string replacement cannot rewrite host facts.
   const vocab = useVocabularyMapper()
   const title = vocab(n.title)
+  const body = n.bodyKind === 'authored' && n.body ? vocab(n.body) : n.body
   // One source for the visible × and its accessible name, so a screen reader and the screen never
   // announce two different words for the same button.
   const dismissLabel = vocab('Dismiss')
@@ -74,7 +72,7 @@ function Toast({ n }: { n: AppNotification }): React.JSX.Element {
       <div className="toast__body">
         <span className="sr-only">{vocab(KIND_LABEL[n.kind])}: </span>
         <div className="toast__title">{title}</div>
-        {n.body && <div className="toast__text">{n.body}</div>}
+        {body && <div className="toast__text">{body}</div>}
         {n.actions && n.actions.length > 0 && (
           <div className="toast__actions">
             {n.actions.map((a, i) => (

@@ -87,6 +87,8 @@ export function sendToHud(channel: string, ...args: unknown[]): void {
 export interface NotchHudDeps {
   /** Sync in-memory node title (workspaceStore.getNodeTitle). */
   getNodeTitle: (nodeId: string) => string | undefined
+  /** Shared School-mode snapshot. Unhydrated keeps non-React vocabulary mapping fail-closed. */
+  getSchoolMode: () => { enabled: boolean; hydrated: boolean }
 }
 
 /** The user-tunable part of the HUD (Settings → Interface). Applied live, no restart. */
@@ -339,7 +341,7 @@ class NotchHudController {
     })
   }
 
-  private schedulePush(): void {
+  schedulePush(): void {
     if (this.pushTimer) return
     this.pushTimer = setTimeout(() => {
       this.pushTimer = null
@@ -357,6 +359,7 @@ class NotchHudController {
     const g = this.geometry()
     w.webContents.send(IPC.hudRows, {
       rows,
+      ...this.deps.getSchoolMode(),
       bar: g.bar,
       width: g.width,
       notchWidth: g.notchWidth,
@@ -436,4 +439,9 @@ export function notchHudOnContextUpdate(p: {
   usedPercent?: number
 }): void {
   controller?.onContextUpdate(p)
+}
+
+/** Push the current HUD snapshot immediately when the shared School-mode record changes. */
+export function notchHudOnSchoolModeChange(): void {
+  controller?.schedulePush()
 }

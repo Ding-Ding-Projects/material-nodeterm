@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { NotifyPayload } from '../../shared/types'
 
 /**
  * Non-blocking notification system — the store behind the corner-anchored toast stack
@@ -17,6 +18,10 @@ import { create } from 'zustand'
 
 export type NotificationKind = 'info' | 'success' | 'progress' | 'warning' | 'error'
 
+/** Notification copy is typed at the producer boundary. Authored prose may use the local
+ * vocabulary, while a provider or host fact must remain byte-identical. */
+export type NotificationBodyKind = NonNullable<NotifyPayload['bodyKind']>
+
 export interface NotificationAction {
   label: string
   onClick: () => void
@@ -27,6 +32,7 @@ export interface AppNotification {
   kind: NotificationKind
   title: string
   body?: string
+  bodyKind?: NotificationBodyKind
   createdAt: number
   /** null while still shown as a toast (or never dismissed); a timestamp once dismissed. */
   dismissedAt: number | null
@@ -44,7 +50,7 @@ export interface AppNotification {
 
 export type PushNotificationInput = Omit<
   AppNotification,
-  'id' | 'createdAt' | 'dismissedAt' | 'read' | 'deliveredSilently'
+  'id' | 'createdAt' | 'dismissedAt' | 'read' | 'deliveredSilently' | 'bodyKind'
 > & {
   id?: string
   /** Land in history without ever appearing as a toast — pushed already dismissed, still unread,
@@ -52,6 +58,9 @@ export type PushNotificationInput = Omit<
    *  interruption without removing the information. Set at construction rather than by pushing and
    *  then dismissing, so the item is never briefly a live toast in any render. */
   silent?: boolean
+  /** Defaults to `fact` so existing host/provider errors stay verbatim unless a producer opts into
+   * authored copy explicitly. */
+  bodyKind?: NotificationBodyKind
 }
 
 interface NotificationsState {
@@ -115,6 +124,7 @@ export const useNotifications = create<NotificationsState>((set) => ({
       kind: input.kind,
       title: input.title,
       body: input.body,
+      bodyKind: input.bodyKind ?? 'fact',
       actions: input.actions,
       autoDismissMs,
       createdAt: Date.now(),

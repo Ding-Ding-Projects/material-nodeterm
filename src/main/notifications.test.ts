@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import {
+  composeNativeNotification,
   retainUntilDismissed,
   retainedNotificationCount,
   clearRetainedNotifications,
@@ -21,6 +22,16 @@ function fakeNotification(): NotificationLike & { emit(event: string): void } {
     }
   }
 }
+
+describe('composeNativeNotification', () => {
+  it('keeps authored title and fact body as separate exact fields', () => {
+    const body = 'fatal: C:/workspace/project could not be read'
+    expect(composeNativeNotification({ title: 'Open failed', body, bodyKind: 'fact' })).toEqual({
+      title: 'Open failed',
+      body
+    })
+  })
+})
 
 describe('retainUntilDismissed', () => {
   beforeEach(() => clearRetainedNotifications())

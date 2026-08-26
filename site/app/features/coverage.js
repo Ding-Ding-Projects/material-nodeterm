@@ -8,11 +8,12 @@
 
 import { registerListRoom } from '../core/engine.js'
 import { COVERAGE } from '../shared/data.js'
+import { vocabularyAllowed } from '../shared/i18n.js'
 
 export function registerCoverage(store, deps, registerAction, registerBinding) {
   registerListRoom('coverage', {
-    getRows: () =>
-      COVERAGE.map((c, i) => ({
+    getRows: (s) =>
+      COVERAGE.filter((c) => vocabularyAllowed(s) || !String(c[0]).toLowerCase().includes('vocabulary')).map((c, i) => ({
         id: 'cov' + i,
         title: c[0],
         body: 'Lives in: ' + c[1],

@@ -1,42 +1,63 @@
 // site/app/features/vocabulary.js
 //
-// The "My own words" settings card: swap any friendly word on this page
-// for one of your own — "terminal=magic box, robot=helper" — validated
-// and bounded (see app/shared/vocabulary-state.js) and applied only to
-// friendly sentences, never to a command, a file path or a piece of code
-// (see app/shared/i18n.js#applyReplacements).
+// The landing-page personal-vocabulary surface uses the same local JSON contract as the desktop
+// renderer. The page keeps its existing visual style, while the data path is strict and file-based.
 
 import { registerSettingsCard } from '../core/engine.js'
-import { validateVocabularyText, MAX_TEXT_LENGTH } from '../shared/vocabulary-state.js'
-import { applyReplacements } from '../shared/i18n.js'
+import {
+  validateVocabularyJson,
+  VOCAB_MAX_ENTRIES,
+  VOCAB_MAX_FILE_BYTES,
+  VOCAB_MAX_KEY_LENGTH,
+  VOCAB_MAX_VALUE_LENGTH
+} from '../shared/vocabulary-state.js'
+
+const CACHE_KEY = 'nodeterm-playground.vocabulary.v1'
 
 export function registerVocabulary(store, deps, registerAction, registerBinding) {
-  registerBinding('vocab-text', (s, id, value, h) => {
-    const text = value.slice(0, MAX_TEXT_LENGTH)
-    const result = validateVocabularyText(text)
+  registerBinding('vocab-file', (s, id, text, h) => {
+    const result = validateVocabularyJson(text)
     if (!result.ok) {
+      h.save({ vocabError: result.reason }, 'Vocabulary file rejected')
       h.toast('❌', 'That did not fit', result.reason)
       return
     }
-    h.save({ vocab: text }, 'Word swaps changed')
+    const savedAt = Date.now()
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ version: 1, entries: result.entries, entryCount: result.entryCount, savedAt }))
+    } catch (_err) {
+      // The in-memory page state still applies; the status remains honest about this visit.
+    }
+    h.save({ vocabEntries: result.entries, vocabSavedAt: savedAt, vocabStatus: 'loaded', vocabError: '', vocab: '' }, 'Vocabulary file changed')
   })
   registerAction('vocab-clear', (s, id, el, h) => {
-    h.save({ vocab: '' }, 'Word swaps cleared')
+    try { localStorage.removeItem(CACHE_KEY) } catch (_err) {}
+    h.save({ vocabEntries: Object.create(null), vocabSavedAt: 0, vocabStatus: 'no-file', vocabError: '', vocab: '' }, 'Vocabulary file cleared')
     h.toast('📖', 'Cleared', 'Everything reads normally again.')
   })
 
   registerSettingsCard('vocab', {
     icon: '📖',
     title: 'My own words',
-    desc: 'Swap any word on this page for one of your own. Write them as word=newword, separated by commas.',
-    note: 'Only the friendly sentences are swapped — never a command, a file path or a piece of code.',
+    desc: 'Choose a local JSON file with the same versioned word pairs used by the desktop app.',
+    note: (s) => s.vocabError
+      ? `${s.vocabError}${s.vocabStatus === 'loaded' ? ' The previous valid file remains active.' : ''}`
+      : s.vocabStatus === 'loaded'
+        ? `${Object.keys(s.vocabEntries || {}).length} usable pair(s) loaded locally. Nothing leaves this browser.`
+        : 'No file loaded. Original wording is shown everywhere.',
     controls: (s) => [
-      { label: 'Swaps', isText: true, action: 'vocab-text', value: s.vocab, placeholder: 'terminal=magic box, robot=helper' },
-      { label: 'Clear them', isButton: true, action: 'vocab-clear', toggleLabel: 'Remove all swaps' },
+      {
+        label: 'Vocabulary JSON file',
+        isFile: true,
+        action: 'vocab-file',
+        accept: 'application/json,.json',
+        status: s.vocabError
+          ? `${s.vocabStatus === 'loaded' ? 'Previous file active, ' : ''}new file rejected`
+          : s.vocabStatus === 'loaded' ? `${Object.keys(s.vocabEntries || {}).length} pairs loaded` : 'No file selected'
+      },
+      { label: 'Clear file', isButton: true, action: 'vocab-clear', toggleLabel: 'Remove local vocabulary' }
     ],
   })
 }
 
-// Re-exported for anything that only needs the pure text-shaping helper
-// without pulling in the settings-card registration.
-export { applyReplacements }
+export { CACHE_KEY, VOCAB_MAX_ENTRIES, VOCAB_MAX_FILE_BYTES, VOCAB_MAX_KEY_LENGTH, VOCAB_MAX_VALUE_LENGTH }

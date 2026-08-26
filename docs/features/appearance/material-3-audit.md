@@ -296,6 +296,15 @@ Every listed renderer producer has an explicit local mapper boundary. Commands, 
 | `toy-lock-wizard` | Toy lock wizard | `src/renderer/components/toylocks/LockWizard.tsx` | `useVocabularyMapper` |
 | `personal-vocabulary-surface-mapper` | Structured surface mapper | `src/renderer/lib/personalVocabulary/surfaces.ts` | `applyVocabularyToMenuItems` |
 | `personal-vocabulary-application` | Replacement engine | `src/renderer/lib/personalVocabulary/apply.ts` | `export function applyVocabulary` |
+| `personal-vocabulary-host-message` | Typed authored/fact host message boundary | `src/renderer/lib/personalVocabulary/hostMessage.ts` | `formatHostMessage(` |
+| `widget-entrypoint` | Detached widget entrypoint | `src/renderer/widget/WidgetApp.tsx` | `useVocabularyMapper()` |
+| `hud-entrypoint` | Vanilla DOM HUD entrypoint | `src/renderer/hud/main.ts` | `mapLocalVocabularyText(` |
+| `dialog-picker-root` | Browser dialog-picker root | `src/renderer/bridge/dialog-picker.tsx` | `useVocabularyMapper()` |
+| `ws-reconnect-overlay` | Browser reconnect overlay | `src/renderer/bridge/ws-bridge.ts` | `mapLocalVocabularyText(` |
+| `browser-bridge-stubs` | Browser bridge stub messages | `src/renderer/bridge/stubs.ts` | `formatHostMessage(` |
+| `notification-body-classification` | Typed authored versus fact notification body | `src/renderer/state/notifications.ts` | `bodyKind` |
+| `site-vocabulary-json` | Landing-page JSON upload | `site/app/features/vocabulary.js` | `validateVocabularyJson(` |
+| `site-vocabulary-cache` | Landing-page cache envelope | `site/app/shared/vocabulary-state.js` | `validateVocabularyCacheJson(` |
 
 ## Complete production surface classification
 
@@ -341,10 +350,25 @@ single React element cannot reach the descendants produced by a component.
 | pty-pressure | src/renderer/components/PtyPressureBanner.tsx | unmapped-callsite-pending |
 | update-card | src/renderer/components/UpdateCard.tsx | unmapped-callsite-pending |
 | resume-card | src/renderer/components/ResumeCard.tsx | unmapped-callsite-pending |
+| widget-entrypoint | src/renderer/widget/WidgetApp.tsx | mapped-callsite |
+| hud-entrypoint | src/renderer/hud/main.ts | mapped-callsite |
+| dialog-picker-root | src/renderer/bridge/dialog-picker.tsx | mapped-callsite |
+| ws-reconnect-overlay | src/renderer/bridge/ws-bridge.ts | mapped-callsite |
+| browser-bridge-stubs | src/renderer/bridge/stubs.ts | mapped-callsite |
 
 ## Documentation site data refresh
 
 The site stylesheet was not changed by this audit. The stale packaging article was corrected to describe the current push-triggered release workflow and current Squirrel artifact language. The page remains in its existing Kids-mode visual style. No desktop styling rule is copied into the site.
+
+## Vocabulary entrypoint reconciliation
+
+The personal-vocabulary inventory now has independent canonical producer and surface manifests in
+`scripts/check-personal-vocabulary-coverage.mjs`. The manifests are separate from mutable evidence
+rows, and the executable check mutates copied real files to prove that removing a mapper, producer
+row, or audit row is rejected. The host-entrypoint lane covers the detached widget, HUD, browser
+picker, reconnect overlay, bridge stubs, notification body classification, and landing-page
+JSON/cache validators. Runtime facts such as paths, IDs, model names, and provider errors remain
+outside the authored-copy mapper.
 
 ## Verification
 

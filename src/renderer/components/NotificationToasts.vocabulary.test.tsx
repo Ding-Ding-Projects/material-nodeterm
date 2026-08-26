@@ -76,4 +76,24 @@ describe('NotificationToasts personal vocabulary', () => {
     render()
     expect(document.body.querySelector('.toast__title')?.textContent).toBe('terminal failed')
   })
+
+  it('maps an explicitly authored body while keeping the default fact body exact', () => {
+    usePersonalVocabulary.setState({
+      status: 'loaded',
+      entries: { terminal: 'shell box' },
+      entryCount: 1
+    })
+    useSchoolMode.setState({ enabled: false, hydrated: true })
+    act(() => {
+      useNotifications.getState().push({
+        kind: 'info',
+        title: 'Notice',
+        body: 'Open the terminal now',
+        bodyKind: 'authored',
+        autoDismissMs: null
+      })
+    })
+    render()
+    expect(document.body.querySelector('.toast__text')?.textContent).toBe('Open the shell box now')
+  })
 })

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { usePersonalVocabulary } from './personalVocabulary'
 
 const CACHE_KEY = 'nodeterm.personalVocabulary.v1'
@@ -37,16 +37,73 @@ describe('personal vocabulary cache validation', () => {
   })
 
   it('rehydrates a valid cache through the same validator and restores a safe dictionary', () => {
+    const savedAt = Date.now()
     localStorage.setItem(
       CACHE_KEY,
-      '{"version":1,"entries":{"飲茶 🫖":"yum cha"},"entryCount":999,"savedAt":456}'
+      JSON.stringify({ version: 1, entries: { '飲茶 🫖': 'yum cha' }, entryCount: 1, savedAt })
     )
 
     usePersonalVocabulary.getState().hydrate()
 
     const state = usePersonalVocabulary.getState()
-    expect(state).toMatchObject({ status: 'loaded', entryCount: 1, loadedAt: 456 })
+    expect(state).toMatchObject({ status: 'loaded', entryCount: 1, loadedAt: savedAt })
     expect(Object.getPrototypeOf(state.entries)).toBeNull()
     expect(state.entries['飲茶 🫖']).toBe('yum cha')
+  })
+
+  it('rejects a cache whose entryCount was edited independently of its entries', () => {
+    localStorage.setItem(
+      CACHE_KEY,
+      JSON.stringify({ version: 1, entries: { terminal: 'shell box' }, entryCount: 999, savedAt: Date.now() })
+    )
+
+    usePersonalVocabulary.getState().hydrate()
+
+    expect(usePersonalVocabulary.getState()).toMatchObject({ status: 'no-file', entryCount: 0 })
+  })
+
+  it('keeps the prior memory and cache when a replacement upload is rejected', () => {
+    const first = usePersonalVocabulary.getState().upload(
+      '{"version":1,"entries":{"terminal":"shell box"}}'
+    )
+    expect(first).toEqual({ ok: true, entryCount: 1 })
+    const second = usePersonalVocabulary.getState().upload(
+      '{"version":1,"entries":{"terminal":42}}'
+    )
+    expect(second.ok).toBe(false)
+    expect(usePersonalVocabulary.getState().entries.terminal).toBe('shell box')
+    expect(JSON.parse(localStorage.getItem(CACHE_KEY) ?? '{}')).toMatchObject({
+      entries: { terminal: 'shell box' },
+      entryCount: 1
+    })
+  })
+
+  it('keeps the accepted upload in memory when browser storage is blocked', () => {
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('storage blocked')
+    })
+    try {
+      const result = usePersonalVocabulary.getState().upload(
+        '{"version":1,"entries":{"terminal":"shell box"}}'
+      )
+      expect(result).toEqual({ ok: true, entryCount: 1 })
+      expect(usePersonalVocabulary.getState()).toMatchObject({ status: 'loaded', entryCount: 1 })
+      expect(usePersonalVocabulary.getState().entries.terminal).toBe('shell box')
+    } finally {
+      setItem.mockRestore()
+    }
+  })
+
+  it.each([
+    Date.now() - 31 * 24 * 60 * 60 * 1000,
+    Date.now() + 24 * 60 * 60 * 1000,
+    0
+  ])('rejects a cache outside the savedAt freshness window: %s', (savedAt) => {
+    localStorage.setItem(
+      CACHE_KEY,
+      JSON.stringify({ version: 1, entries: { terminal: 'shell box' }, entryCount: 1, savedAt })
+    )
+    usePersonalVocabulary.getState().hydrate()
+    expect(usePersonalVocabulary.getState()).toMatchObject({ status: 'no-file', entryCount: 0 })
   })
 })

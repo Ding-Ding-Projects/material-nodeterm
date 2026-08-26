@@ -2881,6 +2881,9 @@ export interface AnnouncementsApi {
 export interface NotifyPayload {
   title: string
   body: string
+  /** Whether the body is app-authored copy or an exact host/provider fact. Native composition
+   *  never rewrites either kind. Omitted remains a fact for backwards compatibility. */
+  bodyKind?: 'authored' | 'fact'
   /** Node to focus/center when the notification is clicked. */
   nodeId: string
   /** Show even when the window is focused (used to trigger the macOS permission prompt). */

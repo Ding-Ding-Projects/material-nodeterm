@@ -60,6 +60,15 @@ exported with the rest of app settings, or sent anywhere. Hydration passes the c
 the **same complete validator** as a new upload; hand-editing `localStorage` is not a second,
 weaker import path.
 
+The upload shape and the persisted-cache shape are intentionally separate. An upload accepts only
+`version` and `entries`. The cache additionally requires `entryCount` and `savedAt`, rejects unknown
+fields, and checks that the count equals the validated entries before the age policy is applied.
+This prevents persistence metadata from accidentally widening the upload contract and prevents a
+hand-edited count from masquerading as a loaded dictionary. Non-React entrypoints such as the
+detached widget, the HUD, the browser directory picker, and reconnect overlay use this same cache
+validator and map only their app-authored copy; node IDs, paths, host errors, model names, and other
+runtime facts remain unchanged.
+
 ## The JSON contract (versioned, bounded)
 
 ```json
@@ -78,7 +87,7 @@ One documented shape, enforced completely — a rejected file **never applies pa
 | --- | --- | --- |
 | File size | 256 KB (measured in actual UTF-8 bytes, not JS string length) | `VOCAB_MAX_FILE_BYTES` |
 | Schema version | must be exactly `1` | `VOCAB_SCHEMA_VERSION` |
-| Max JSON nesting depth | 3 (root object → `entries` object → string value) | `VOCAB_MAX_DEPTH` |
+| Max JSON nesting depth | 12 (upload and persisted-cache envelopes) | `VOCAB_MAX_DEPTH` |
 | Max JSON nodes visited | 20,000 | `VOCAB_MAX_NODES` |
 | Max entries | 2,000 | `VOCAB_MAX_ENTRIES` |
 | Max key length | 200 characters | `VOCAB_MAX_KEY_LENGTH` |
@@ -107,7 +116,8 @@ Rejected outright, with no partial application:
 - a key or value over its length limit,
 - a non-string value (**only string replacements are allowed** — no nested objects/arrays as
   values; the substitution boundary is a literal text replacement, which has no defined meaning
-  for anything else).
+  for anything else), or a control character. Control characters are rejected even when escaped
+  as `\u001b`, so a replacement cannot inject terminal control sequences into the detached widget.
 
 ## How a replacement is applied
 
@@ -149,6 +159,18 @@ the substitution without anyone remembering to opt in:
   card menu (including its "Move to" column titles) and the source-control ⋯ menu
 - ✅ Node header chrome, dock, kanban cards/columns and the card modal, via the separate
   `useLocalizedVocabularyText` helper (shipped catalog prose → vocabulary → dynamic facts last)
+- ✅ Detached widget controls and its missing-node copy (`widget/WidgetApp.tsx`)
+- ✅ HUD controls, state labels, and document title (`hud/main.ts`)
+- ✅ Browser directory-picker labels, status text, and actions (`bridge/dialog-picker.tsx`)
+- ✅ Browser reconnect overlay copy (`bridge/ws-bridge.ts`)
+- ✅ Browser bridge unsupported-copy suffix and clipboard failure templates (`bridge/stubs.ts`)
+- ✅ Shared host-message formatter and validated cache reader
+  (`lib/personalVocabulary/hostMessage.ts`)
+- ✅ Notification bodies are typed as authored prose or verbatim facts
+  (`state/notifications.ts`, `NotificationToasts.tsx`); fact bodies remain unchanged by default
+- ✅ The landing page uses the same JSON upload and cache-envelope contract in
+  `site/app/shared/vocabulary-state.js` and `site/app/features/vocabulary.js`; it keeps its existing
+  Kids-mode presentation and persists the validated cache only in per-visitor browser storage
 
 **Never** applied — these stay verbatim regardless of any uploaded file, by design:
 
@@ -159,9 +181,10 @@ the substitution without anyone remembering to opt in:
 
 Named exclusions worth knowing, each for a reason above:
 
-- **A notification's `body`.** Push sites hand it raw machine text — `error.message`, a core
+- **A notification's fact `body`.** Push sites hand it raw machine text — `error.message`, a core
   `assessment.reason`, a git failure line, a clipped agent transcript line. The title and the
-  action labels are ours; the body is quoted output.
+  action labels are ours; the body is quoted output. A producer that owns a body may explicitly set
+  `bodyKind: 'authored'`, which is the only body form that maps through the vocabulary boundary.
 - **`DestructiveConfirmGate`.** Its own contract already says the funny-level/localization rules
   apply to copy elsewhere and never to that sentence, and its `affected` list names the exact
   items being destroyed.
@@ -174,6 +197,11 @@ Named exclusions worth knowing, each for a reason above:
   one would announce a chord no key listener answers.
 - **The command palette's file results and transcript hits** (`fileCommands` / `extraCommands`) —
   basenames, directories, and a conversation's own text.
+
+The non-React entrypoints above deliberately do not map runtime facts. For example, a reconnect
+message maps its authored “Connection lost” wording but never rewrites the current URL, socket
+address, node id, or server-provided error detail. This split is enforced by the typed
+`HostMessagePart` formatter rather than by a broad string replacement.
 
 `useVocabularyMapper` (`renderer/lib/personalVocabulary/useVocabularyText.ts`) is the hook this
 boundary is meant to be reached through for loose strings — `useVocabularyText` is the

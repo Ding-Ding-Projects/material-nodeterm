@@ -403,12 +403,13 @@ export function buildPaletteTargets(store, deps) {
   const targets = []
   deps.sections.forEach((x) => targets.push({ icon: x.icon, label: 'Go to ' + x.label, hint: 'room', run: () => deps.goRoom(x.id) }))
   deps.features.forEach((f) => targets.push({ icon: f.icon, label: f.title, hint: 'card', run: () => store.setState({ sec: 'home', qSec: f.title, view: 'room', paletteOpen: false }, { persist: false }) }))
-  deps.docs.forEach((d) => targets.push({ icon: '📖', label: d[0], hint: 'guide page', run: () => store.setState({ sec: 'docs', qSec: d[0], view: 'room', paletteOpen: false }, { persist: false }) }))
+  deps.docs.filter((d) => !store.state.school || d[2] !== 'personal-vocabulary').forEach((d) => targets.push({ icon: '📖', label: d[0], hint: 'guide page', run: () => store.setState({ sec: 'docs', qSec: d[0], view: 'room', paletteOpen: false }, { persist: false }) }))
   allSettingsCards().forEach((c) => {
+    if (store.state.school && c.id === 'vocab') return
     const controls = typeof c.controlLabels === 'function' ? c.controlLabels(store.state) : typeof c.controls === 'function' ? c.controls(store.state).map((x) => x.label) : []
     controls.forEach((label) => targets.push({ icon: c.icon, label, hint: c.title, run: () => store.setState({ sec: 'settings', qSec: c.title, view: 'room', paletteOpen: false }, { persist: false }) }))
   })
-  deps.coverage.forEach((c) => targets.push({ icon: c[2] === 'done' ? '✅' : '⚠️', label: c[0], hint: 'checklist', run: () => store.setState({ sec: 'coverage', qSec: c[0], view: 'room', paletteOpen: false }, { persist: false }) }))
+  deps.coverage.filter((c) => !store.state.school || !String(c[0]).toLowerCase().includes('vocabulary')).forEach((c) => targets.push({ icon: c[2] === 'done' ? '✅' : '⚠️', label: c[0], hint: 'checklist', run: () => store.setState({ sec: 'coverage', qSec: c[0], view: 'room', paletteOpen: false }, { persist: false }) }))
   targets.push({ icon: '🚪', label: 'Back to the hallway', hint: 'action', run: () => store.setState({ view: 'hall', paletteOpen: false }, { persist: false }) })
   targets.push({ icon: '🌗', label: 'Switch day / night', hint: 'action', run: () => { store.setState({ paletteOpen: false }, { persist: false }); deps.toggleTheme() } })
   targets.push({ icon: '🧺', label: 'Empty the model basket', hint: 'action', run: () => { store.setState({ cart: {}, paletteOpen: false }); toast(store, '🧺', 'Basket emptied', 'Nothing was downloaded either way.') } })

@@ -1,5 +1,10 @@
 import { create } from 'zustand'
-import { validateVocabularyPayload, type PersonalVocabularyEntries } from '../lib/personalVocabulary/schema'
+import {
+  validateVocabularyCachePayload,
+  validateVocabularyPayload,
+  type PersonalVocabularyCacheEnvelope,
+  type PersonalVocabularyEntries
+} from '../lib/personalVocabulary/schema'
 
 /**
  * The personal-vocabulary cache. Local-only, renderer-side, no IPC and no network request: the
@@ -16,35 +21,23 @@ import { validateVocabularyPayload, type PersonalVocabularyEntries } from '../li
 const CACHE_KEY = 'nodeterm.personalVocabulary.v1'
 const CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
 
-interface CachedPayload {
-  version: 1
-  entries: PersonalVocabularyEntries
-  entryCount: number
-  savedAt: number
-}
+type CachedPayload = PersonalVocabularyCacheEnvelope
 
 function readCache(): CachedPayload | null {
   try {
     const raw = localStorage.getItem(CACHE_KEY)
     if (!raw) return null
-    // localStorage is hand-editable input too. Reusing the upload validator keeps a forged
-    // `__proto__` entry, duplicate key, oversized cache, or stale schema from bypassing the exact
-    // contract merely because it arrived on restart rather than through the file picker.
-    const validated = validateVocabularyPayload(raw)
+    // localStorage is hand-editable input too. The cache-envelope validator keeps a forged
+    // `__proto__` entry, duplicate key, oversized cache, mismatched count, or stale schema from
+    // bypassing the exact contract merely because it arrived on restart rather than through the
+    // file picker.
+    const validated = validateVocabularyCachePayload(raw)
     if (!validated.ok) return null
-    const parsed = JSON.parse(raw) as Record<string, unknown>
-    if (!Object.hasOwn(parsed, 'savedAt') || typeof parsed.savedAt !== 'number' || !Number.isFinite(parsed.savedAt)) {
+    const savedAt = validated.cache.savedAt
+    if (savedAt <= 0 || Date.now() - savedAt > CACHE_MAX_AGE_MS || savedAt > Date.now() + 60_000) {
       return null
     }
-    if (parsed.savedAt <= 0 || Date.now() - parsed.savedAt > CACHE_MAX_AGE_MS || parsed.savedAt > Date.now() + 60_000) {
-      return null
-    }
-    return {
-      version: 1,
-      entries: validated.entries,
-      entryCount: validated.entryCount,
-      savedAt: parsed.savedAt
-    }
+    return validated.cache
   } catch {
     return null
   }

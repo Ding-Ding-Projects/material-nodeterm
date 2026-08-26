@@ -109,6 +109,7 @@ import {
   destroyNotchHud,
   notchHudOnAgentEvent,
   notchHudOnContextUpdate,
+  notchHudOnSchoolModeChange,
   assertRegularDockPresence
 } from './notch-hud'
 import { registerCanvasWidgetIpc, closeAllCanvasWidgets } from './canvas-widget-window'
@@ -152,7 +153,7 @@ import { getDeviceId } from '../core/device-id'
 import { initRemoteStatusPush } from './remote-ssh/remote-status-push'
 import { runGitRemoteOp } from '../core/git-remote-proxy'
 import { initCanvasSync } from '../core/canvas-sync'
-import { retainUntilDismissed } from './notifications'
+import { composeNativeNotification, retainUntilDismissed } from './notifications'
 import { installManagedAgentHooks } from '../core/agents/hooks'
 import { createSubagentTail } from '../core/subagent-tail'
 import { createContextTail, type TaskNotification } from '../core/context-tail'
@@ -1323,7 +1324,8 @@ app.whenReady().then(async () => {
       // `force` (permission request / confirmation) shows even when focused; normal
       // completion notifications only show when the window is in the background.
       if (!payload.force && win.isFocused()) return 'skipped'
-      const n = new Notification({ title: payload.title, body: payload.body })
+      const copy = composeNativeNotification(payload)
+      const n = new Notification(copy)
       n.on('click', () => {
         // Re-resolve at click time — the window may have been hidden/recreated since.
         const w = getMainWindow()
@@ -1878,10 +1880,14 @@ app.whenReady().then(async () => {
     return { enabled: s.notchHud, notchWidth: s.notchWidth, hoverExpand: s.notchHoverExpand }
   }
   const startNotchHud = (): void =>
-    initNotchHud({ getNodeTitle: displayTitleFor }, notchTunables())
+    initNotchHud({
+      getNodeTitle: displayTitleFor,
+      getSchoolMode: () => ({ enabled: schoolModeStore.get().enabled, hydrated: schoolModeStore.isHydrated() })
+    }, notchTunables())
   if (win.isVisible()) startNotchHud()
   else win.once('show', startNotchHud)
   settingsStore.onChange(() => applyNotchHudSettings(notchTunables()))
+  schoolModeStore.onChange(() => notchHudOnSchoolModeChange())
   // Keep awake while agents work (docs/superpowers/specs/2026-08-18-keep-awake-design.md): hold an
   // idle-sleep power assertion while a LOCAL agent node is working, released the moment the last
   // one stops. Folds the same mirror edges the notch does; the stale sweep's synthetic end

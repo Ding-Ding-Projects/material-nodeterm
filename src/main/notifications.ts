@@ -8,6 +8,21 @@ export interface NotificationLike {
   on(event: 'click' | 'close' | 'failed', cb: () => void): void
 }
 
+export interface NativeNotificationCopy {
+  title: string
+  body: string
+}
+
+/** Native notifications receive already-classified copy from the renderer. Keep title and body
+ * separate, and never concatenate or map the body here: provider/host facts must survive exactly. */
+export function composeNativeNotification(payload: {
+  title: string
+  body: string
+  bodyKind?: 'authored' | 'fact'
+}): NativeNotificationCopy {
+  return { title: payload.title, body: payload.body }
+}
+
 // Backstop for notifications macOS parks in Notification Center without ever emitting
 // 'close' — beyond this, the oldest retained one is dropped (its click stops working,
 // which is the pre-fix behavior; anything recent keeps its handler alive).

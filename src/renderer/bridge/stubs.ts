@@ -25,11 +25,16 @@ import {
 } from '../../shared/types'
 import type { HistoryListResult } from '../../shared/local-history'
 import { E_UNSUPPORTED } from '../../shared/rpc'
+import { formatHostMessage, hostFact, hostText, mapLocalVocabularyText } from '../lib/personalVocabulary/hostMessage'
 
 /** Reject with a coded error the RPC layer + renderer recognize (renderer degrades silently). */
 export function unsupported(name: string): Promise<never> {
+  const message = formatHostMessage(
+    [hostFact(name), hostText(' is not supported in the browser build')],
+    mapLocalVocabularyText
+  )
   return Promise.reject(
-    Object.assign(new Error(`${name} is not supported in the browser build`), {
+    Object.assign(new Error(message), {
       code: E_UNSUPPORTED
     })
   )
@@ -112,8 +117,8 @@ function copyViaExecCommand(text: string, reportFailure: boolean): boolean {
           detail: {
             kind: 'error',
             message: secure
-              ? 'Copy failed — the browser denied clipboard access. Click the page and try again.'
-              : 'Copy failed — the browser blocks clipboard access over plain http. Use https or localhost.'
+              ? mapLocalVocabularyText('Copy failed — the browser denied clipboard access. Click the page and try again.')
+              : mapLocalVocabularyText('Copy failed — the browser blocks clipboard access over plain http. Use https or localhost.')
           }
         })
       )
@@ -244,7 +249,10 @@ export function buildStubApi(): Omit<
       // the project's ControlMaster). Resolve a typed refusal instead of rejecting so the
       // VideoNode shows the reason rather than a generic load failure.
       allowSsh: (): Promise<{ ok: false; error: string }> =>
-        Promise.resolve({ ok: false, error: 'Playing videos from an SSH host is not available in the browser.' }),
+        Promise.resolve({
+          ok: false,
+          error: mapLocalVocabularyText('Playing videos from an SSH host is not available in the browser.')
+        }),
       writeHtml: U('media.writeHtml')
     },
     browser: {
@@ -363,7 +371,7 @@ export function buildStubApi(): Omit<
       // `ok`, and without it the object literal's `ok: false` would widen to plain `boolean` and
       // stop matching either union member.
       list: (): Promise<HistoryListResult> =>
-        Promise.resolve({ ok: false, error: 'History is not connected yet.' }),
+        Promise.resolve({ ok: false, error: mapLocalVocabularyText('History is not connected yet.') }),
       restore: U('history.restore')
     },
     codex: {
@@ -512,7 +520,7 @@ export function buildStubApi(): Omit<
     onPtyPressure: noopUnsub,
     raisePtyDeviceLimit: async () => ({
       ok: false as const,
-      error: 'Raising the terminal limit must be done on the machine running the server.'
+      error: mapLocalVocabularyText('Raising the terminal limit must be done on the machine running the server.')
     }),
     onAgentControl: noopUnsub,
     sendAgentControlResult: noop,

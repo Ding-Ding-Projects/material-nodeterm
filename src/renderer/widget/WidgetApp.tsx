@@ -21,6 +21,8 @@ import { quantizeCharSize } from '../terminal/char-size-quantize'
 import { LocalTransport } from '../terminal/local-transport'
 import { localSession } from '../session/localSession'
 import { useSettings } from '../state/settings'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { widgetTerminalMarker } from './widgetVocabulary'
 import { activateUnicode11 } from '../terminal/unicode-width'
 import { parseOsc52 } from '../terminal/osc52'
 import {
@@ -51,9 +53,20 @@ export function isWidgetWindow(): boolean {
 
 export default function WidgetApp(): React.JSX.Element {
   const nodeId = widgetNodeIdFromLocation() ?? ''
+  const vocab = useVocabularyMapper()
+  const vocabRef = useRef(vocab)
   const hostRef = useRef<HTMLDivElement>(null)
   const [alwaysOnTop, setAlwaysOnTop] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    vocabRef.current = vocab
+  }, [vocab])
+
+  const widgetMarker = useCallback(
+    (text: string) => widgetTerminalMarker(text, vocabRef.current),
+    []
+  )
 
   // Live state (this node's always-on-top choice) — reflects a change made elsewhere (a future
   // second trigger for the same node) without polling.
@@ -86,7 +99,7 @@ export default function WidgetApp(): React.JSX.Element {
 
   useEffect(() => {
     if (!nodeId) {
-      setError('No node id was given to this widget window.')
+      setError(vocab('No node id was given to this widget window.'))
       return
     }
     let dead = false
@@ -110,17 +123,19 @@ export default function WidgetApp(): React.JSX.Element {
       })
       if (dead) return
       if (res.unavailable) {
-        term.write('\r\n\x1b[90m[not connected — nothing was started locally]\x1b[0m\r\n')
+        term.write(`\r\n\x1b[90m[${widgetMarker('not connected — nothing was started locally')}]\x1b[0m\r\n`)
         return
       }
       if (res.closed) {
-        term.write('\r\n\x1b[90m[session closed]\x1b[0m\r\n')
+        term.write(`\r\n\x1b[90m[${widgetMarker('session closed')}]\x1b[0m\r\n`)
         return
       }
       sessionId = res.sessionId
       cleanups.push(transport.onData(res.sessionId, (d) => term.write(d)))
       cleanups.push(
-        transport.onExit(res.sessionId, () => term.write('\r\n\x1b[90m[session ended]\x1b[0m\r\n'))
+        transport.onExit(res.sessionId, () =>
+          term.write(`\r\n\x1b[90m[${widgetMarker('session ended')}]\x1b[0m\r\n`)
+        )
       )
       if (transport.onSize)
         cleanups.push(transport.onSize(res.sessionId, (size) => term.resize(size.cols, size.rows)))
@@ -149,7 +164,7 @@ export default function WidgetApp(): React.JSX.Element {
       })
       if (paint === 'snapshot') {
         if (snapshot) term.write(toXtermText(snapshot))
-        term.write('\r\n\x1b[90m— session restored —\x1b[0m\r\n')
+        term.write(`\r\n\x1b[90m${widgetMarker('— session restored —')}\x1b[0m\r\n`)
       } else if (paint === 'create-screen' && res.screen) {
         term.write('\x1b[0m' + toXtermText(stripTrailingNewline(res.screen)))
         term.write(cursorPlacementSeq(res.cursor))
@@ -205,7 +220,7 @@ export default function WidgetApp(): React.JSX.Element {
         <button
           type="button"
           className="widget-app__btn"
-          aria-label={alwaysOnTop ? 'Turn off always on top' : 'Keep this widget on top'}
+          aria-label={vocab(alwaysOnTop ? 'Turn off always on top' : 'Keep this widget on top')}
           aria-pressed={alwaysOnTop}
           onClick={toggleAlwaysOnTop}
         >
@@ -214,12 +229,12 @@ export default function WidgetApp(): React.JSX.Element {
         <button
           type="button"
           className="widget-app__btn"
-          aria-label="Back to canvas"
+          aria-label={vocab('Back to canvas')}
           onClick={backToCanvas}
         >
           ⤢
         </button>
-        <button type="button" className="widget-app__btn" aria-label="Close widget" onClick={close}>
+        <button type="button" className="widget-app__btn" aria-label={vocab('Close widget')} onClick={close}>
           ×
         </button>
       </div>

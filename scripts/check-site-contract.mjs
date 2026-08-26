@@ -215,8 +215,11 @@ const FEATURES = [
     file: 'site/app/features/vocabulary.js',
     exportName: 'registerVocabulary',
     contentChecks: [
-      ['site/app/shared/vocabulary-state.js', 'validateVocabularyText'],
-      ['site/app/shared/vocabulary-state.js', 'MAX_ENTRIES'],
+      ['site/app/shared/vocabulary-state.js', 'validateVocabularyJson'],
+      ['site/app/shared/vocabulary-state.js', 'validateVocabularyCacheJson'],
+      ['site/app/shared/vocabulary-state.js', 'VOCAB_MAX_ENTRIES'],
+      ['site/app/core/render.js', 'data-bind-file'],
+      ['site/app/main.js', 'bindFile'],
       ['site/app/shared/vocabulary-state.js', '__proto__'],
       ['site/app/shared/i18n.js', 'applyReplacements'],
     ],

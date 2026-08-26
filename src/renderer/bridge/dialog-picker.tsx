@@ -11,6 +11,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import type { DirEntry } from '../../shared/types'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { formatHostMessage, hostText, type HostMessagePart } from '../lib/personalVocabulary/hostMessage'
 
 export type PickerMode = 'folder' | 'file'
 
@@ -61,10 +63,11 @@ interface PickerProps {
 }
 
 function DirectoryPicker({ mode, startDir, list, onDone }: PickerProps): React.ReactElement {
+  const vocab = useVocabularyMapper()
   const [dir, setDir] = useState(startDir)
   const [rows, setRows] = useState<PickerRow[]>([])
   const [parent, setParent] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<HostMessagePart[] | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -78,7 +81,7 @@ function DirectoryPicker({ mode, startDir, list, onDone }: PickerProps): React.R
         setParent(view.parent)
       })
       .catch(() => {
-        if (!cancelled) setError('Could not read this folder')
+        if (!cancelled) setError([hostText('Could not read this folder')])
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -113,14 +116,14 @@ function DirectoryPicker({ mode, startDir, list, onDone }: PickerProps): React.R
         className="confirm dir-picker"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
-        aria-label={mode === 'folder' ? 'Choose a folder' : 'Choose a file'}
+        aria-label={vocab(mode === 'folder' ? 'Choose a folder' : 'Choose a file')}
       >
         <div className="dir-picker__head">
           <button
             className="dir-picker__up"
             onClick={() => parent && setDir(parent)}
             disabled={parent === null}
-            title="Up one level"
+            title={vocab('Up one level')}
           >
             ↑
           </button>
@@ -130,11 +133,11 @@ function DirectoryPicker({ mode, startDir, list, onDone }: PickerProps): React.R
         </div>
 
         <div className="dir-picker__list">
-          {loading && <div className="dir-picker__empty">Loading…</div>}
-          {!loading && error && <div className="dir-picker__empty">{error}</div>}
+          {loading && <div className="dir-picker__empty">{vocab('Loading…')}</div>}
+          {!loading && error && <div className="dir-picker__empty">{formatHostMessage(error, vocab)}</div>}
           {!loading && !error && rows.length === 0 && (
             <div className="dir-picker__empty">
-              {mode === 'folder' ? 'No subfolders here' : 'Empty folder'}
+              {vocab(mode === 'folder' ? 'No subfolders here' : 'Empty folder')}
             </div>
           )}
           {!loading &&
@@ -145,7 +148,7 @@ function DirectoryPicker({ mode, startDir, list, onDone }: PickerProps): React.R
                 className={`dir-picker__row${row.dir ? ' is-dir' : ''}`}
                 onClick={() => openRow(row)}
               >
-                <span className="dir-picker__icon">{row.dir ? '📁' : '📄'}</span>
+                <span className="dir-picker__icon" aria-hidden="true">{row.dir ? '📁' : '📄'}</span>
                 <span className="dir-picker__name">{row.name}</span>
               </button>
             ))}
@@ -153,11 +156,11 @@ function DirectoryPicker({ mode, startDir, list, onDone }: PickerProps): React.R
 
         <div className="confirm__actions">
           <button className="confirm__btn" onClick={() => onDone(null)}>
-            Cancel
+            {vocab('Cancel')}
           </button>
           {mode === 'folder' && (
             <button className="confirm__btn primary" onClick={() => onDone(stripTrailingSlash(dir))}>
-              Use this folder
+              {vocab('Use this folder')}
             </button>
           )}
         </div>
