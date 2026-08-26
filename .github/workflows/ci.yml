@@ -26,6 +26,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Full history, not the default depth-1 shallow clone. The build runs
+          # check-changelog.mjs, which verifies that every commit SHA linked from
+          # CHANGELOG.md exists in the checkout -- in a shallow clone none of them do, so
+          # this job reported 42 failures for commits that are all perfectly present on the
+          # remote. release.yml already sets this for the same reason.
+          fetch-depth: 0
 
       - uses: actions/setup-node@v7
         with:

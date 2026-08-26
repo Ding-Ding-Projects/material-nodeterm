@@ -37,8 +37,17 @@ jobs:
 
   dependency-review:
     name: Dependency review
-    # Only meaningful on a PR (it diffs the PR's manifest against the base).
-    if: github.event_name == 'pull_request'
+    # Only meaningful on a PR (it diffs the PR's manifest against the base), and only possible
+    # on a repository that is not a fork. GitHub does not support Dependency review on a fork:
+    # the action exits with "Dependency review is not supported on this repository. Please
+    # ensure that Dependency graph is enabled", and the setting cannot be turned on there --
+    # a PATCH to security_and_analysis comes back with no dependency_graph key at all.
+    #
+    # Skipping is honest rather than weakening: this is a job that CANNOT pass here, not one
+    # that is failing. Left as-is it was a permanently red check on every pull request, which
+    # teaches a reader nothing and trains them to ignore a red security job. It runs normally
+    # the moment this repository stops being a fork, or on the upstream it was forked from.
+    if: github.event_name == 'pull_request' && github.event.repository.fork == false
     runs-on: ubuntu-latest
     permissions:
       contents: read
