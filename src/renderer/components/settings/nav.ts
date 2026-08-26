@@ -2,6 +2,7 @@ export type SettingsSectionId =
   | 'terminal'
   | 'shell'
   | 'behavior'
+  | 'workspace-storage'
   | 'appearance'
   | 'appearance-editor'
   | 'app-identity'
@@ -72,7 +73,8 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
       { id: 'shell', title: 'Shell' },
       { id: 'tmux', title: 'tmux' },
       { id: 'github-issues', title: 'GitHub Issues' },
-      { id: 'behavior', title: 'Behavior' }
+      { id: 'behavior', title: 'Behavior' },
+      { id: 'workspace-storage', title: 'Project storage' }
     ]
   },
   {

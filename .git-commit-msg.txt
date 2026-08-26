@@ -1,0 +1,29 @@
+feat(workspace): wire the project-parts engine into UI (Settings + project switcher)
+
+Split/join for a project's .nodeterm/project.json existed as a fully verified core engine
+(project-parts.ts, WorkspaceStore.splitProjectIntoParts/joinProjectParts) with no way to reach
+it -- no IPC channel, no preload member, no UI. Wired it end to end:
+
+- New IPC channels: workspace:split-into-parts, workspace:join-parts, workspace:has-parts-manifest,
+  registered in WorkspaceStore.registerIpc() (core, served by both Desktop and Server Edition).
+- Preload + ws-bridge expose workspace.splitIntoParts/joinParts/hasPartsManifest on
+  NodeTerminalApi. Server Edition gets the REAL implementation (same local core, same host).
+- Deliberately DENIED over a relay session: absent from relay-rpc-policy.ts's exact allowlist
+  (default-deny), and relay-api.ts overrides all three to reject locally with E_UNSUPPORTED and a
+  clear reason instead of round-tripping to a host refusal.
+- New Settings > Workspace > "Project storage" section: only the DEFAULT size an explicit split
+  offers (projectPartSizeValue/Unit already existed in Settings) -- turning it on/off never
+  resizes or re-encodes a project on its own, per splitProjectIntoParts's own contract. Carries an
+  honest default-provenance line and participates in the app-wide settings search.
+- The actual split/join action lives per-project in the project switcher's "..." actions panel:
+  shows the project's CURRENT storage state (checking / single file / parts), refuses with a
+  stated reason for an SSH project or a cwd-less canvas, and gates the rewrite behind a
+  ConfirmDialog that states plainly what changes on disk and that the file is git-shared.
+
+Also fixes the hand-written settings-section completeness inventory (nav.test.ts), which caught
+the new un-enumerated section immediately (watched red -> green).
+
+呢個 project-parts 引擎起好幾個星期都冇門口入得去，依家終於有樓梯上得去喇 -- Settings 度揀預設
+size，project switcher 度真正 split/join，relay 就話「唔得，呢度做唔到」。
+
+Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>

@@ -241,6 +241,12 @@ export const IPC = {
   workspaceLoad: 'workspace:load',
   workspaceSave: 'workspace:save',
   workspaceProbeFolder: 'workspace:probe-folder',
+  /** Explicit split/join for a local project's storage encoding (project-parts.ts). See
+   *  WorkspaceStore.splitProjectIntoParts/joinProjectParts for the fail-closed contract — these
+   *  never fire on their own from a settings toggle. */
+  workspaceSplitIntoParts: 'workspace:split-into-parts',
+  workspaceJoinParts: 'workspace:join-parts',
+  workspaceHasPartsManifest: 'workspace:has-parts-manifest',
   projectArchiveExport: 'project-archive:export',
   projectArchiveImport: 'project-archive:import',
   /** The unlock ladder for a protected project file's password prompt — issue a challenge, and

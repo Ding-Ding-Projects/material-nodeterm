@@ -423,6 +423,20 @@ export function buildRealApi(
     // next writeDisk() overwrote the team's shared canvas. Data loss, not a degrade.
     probeFolder: (folder: string) =>
       client.request(IPC.workspaceProbeFolder, folder) as ReturnType<WorkspaceApi['probeFolder']>,
+    // REAL on Server Edition too: it's the same local core (this filesystem, this host), no
+    // different from probeFolder above. An SSH-project cwd is refused by core itself since
+    // splitProjectIntoParts reads a purely local path; nothing here has to special-case it.
+    hasPartsManifest: (cwd: string) =>
+      client.request(IPC.workspaceHasPartsManifest, cwd) as Promise<boolean>,
+    splitIntoParts: (cwd: string, sizeValue: number, sizeUnit: 'KB' | 'MB' | 'GB') =>
+      client.request(
+        IPC.workspaceSplitIntoParts,
+        cwd,
+        sizeValue,
+        sizeUnit
+      ) as ReturnType<WorkspaceApi['splitIntoParts']>,
+    joinParts: (cwd: string) =>
+      client.request(IPC.workspaceJoinParts, cwd) as ReturnType<WorkspaceApi['joinParts']>,
     exportProject: async () => ({
       ok: false,
       error: 'Project archive export is available in the Windows desktop app.'

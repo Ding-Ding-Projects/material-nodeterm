@@ -1147,6 +1147,23 @@ export interface WorkspaceApi {
   save(workspace: Workspace): Promise<void>
   /** Reads <folder>/.nodeterm/project.json and returns the assembled Project (cwd resolved), or null. */
   probeFolder(folder: string): Promise<Project | null>
+  /** True when `cwd`'s project is currently stored as sized parts + a manifest, rather than a
+   *  single `project.json` (project-parts.ts). Local-only: see splitIntoParts's own doc comment. */
+  hasPartsManifest(cwd: string): Promise<boolean>
+  /** Explicitly convert (or re-split at a new size) a LOCAL project's `.nodeterm/project.json`
+   *  into sized parts + a manifest. LOCAL-ONLY: never call on an SSH project's cwd, and never
+   *  reachable over a relay session (see relay-rpc-policy.ts / relay-api.ts). A global settings
+   *  toggle for the default size must never call this on its own — only an explicit user action
+   *  may change a project's storage encoding. */
+  splitIntoParts(
+    cwd: string,
+    sizeValue: number,
+    sizeUnit: 'KB' | 'MB' | 'GB'
+  ): Promise<{ ok: true } | { ok: false; reason: string }>
+  /** Reverse a split back to a single `project.json`. Refuses with a reason if the project is not
+   *  currently split, or if the parts fail verification (a broken parts set is never silently
+   *  joined from partial data). LOCAL-ONLY, same as splitIntoParts. */
+  joinParts(cwd: string): Promise<{ ok: true } | { ok: false; reason: string }>
   /** Save the whole project as ONE file: canvas snapshot, app-owned local history, the project's
    *  git repository (as a bundle) and its working files, in a ZIP container. `contents` states
    *  exactly what was included and every exclusion with its reason. */

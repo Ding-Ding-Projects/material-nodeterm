@@ -35,6 +35,7 @@ import type { ProjectIcon } from '@shared/project-icon'
 import { useToyLocks } from '../state/toylocks'
 import { LockWizard } from './toylocks/LockWizard'
 import { UnlockPrompt } from './toylocks/UnlockPrompt'
+import { ConfirmDialog } from './ConfirmDialog'
 
 interface ProjectSwitcherProps {
   onSwitch: (id: string) => void
@@ -155,6 +156,23 @@ export function ProjectSwitcher({
   const [acctOpen, setAcctOpen] = useState(false)
   // Whether the actions panel's "Default permission mode" group is expanded (same idiom).
   const [modeOpen, setModeOpen] = useState(false)
+  // Whether the actions panel's "Project storage" group is expanded (same idiom). Lazily queries
+  // hasPartsManifest for the project on open — see the effect below.
+  const [storageOpen, setStorageOpen] = useState(false)
+  // Per-project "is this project currently stored as parts?" — undefined = not yet queried/still
+  // loading, so the row can show a truthful "Checking…" rather than guessing single-file. 'error'
+  // means the check itself failed (never collapsed into a guessed true/false — see
+  // queryPartsStatus).
+  const [partsStatus, setPartsStatus] = useState<Record<string, boolean | 'error' | undefined>>({})
+  const [storageConfirm, setStorageConfirm] = useState<{
+    projectId: string
+    cwd: string
+    action: 'split' | 'join'
+  } | null>(null)
+  const [storageBusy, setStorageBusy] = useState(false)
+  const [storageError, setStorageError] = useState<string | null>(null)
+  const partSizeValue = useSettings((s) => s.settings.projectPartSizeValue)
+  const partSizeUnit = useSettings((s) => s.settings.projectPartSizeUnit)
   /**
    * The open project-colour surface (project id + viewport anchor), or null.
    *
@@ -269,6 +287,7 @@ export function ProjectSwitcher({
     setExpandedId(null)
     setAcctOpen(false)
     setModeOpen(false)
+    setStorageOpen(false)
   }
 
   const openSwitcher = () => {
@@ -283,6 +302,18 @@ export function ProjectSwitcher({
     setExpandedId((cur) => (cur === id ? null : id))
     setAcctOpen(false)
     setModeOpen(false)
+    setStorageOpen(false)
+  }
+
+  // Query "is this project currently split into parts?" the moment its storage group opens. Only
+  // when we don't already have an answer — a status the user just watched a split/join change is
+  // refreshed explicitly by the action itself, never silently re-fetched underneath them.
+  const queryPartsStatus = (projectId: string, cwd: string) => {
+    if (partsStatus[projectId] !== undefined) return
+    void window.nodeTerminal.workspace
+      .hasPartsManifest(cwd)
+      .then((v) => setPartsStatus((cur) => ({ ...cur, [projectId]: v })))
+      .catch(() => setPartsStatus((cur) => ({ ...cur, [projectId]: 'error' })))
   }
 
   // Viewport-edge flip for the dropdown, same behavior as the right-click ContextMenu. Re-measures
@@ -777,6 +808,59 @@ export function ProjectSwitcher({
                             ))}
                           </div>
                         )}
+                        {p.ssh ? (
+                          <button disabled title="Splitting a project into parts is local-only — not available for SSH projects yet.">
+                            Project storage: not available (SSH)
+                          </button>
+                        ) : !p.cwd ? (
+                          <button disabled title="This canvas has no folder on disk yet, so there is no project.json to split.">
+                            Project storage: no folder yet
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              className={`tab-menu__group${storageOpen ? ' open' : ''}`}
+                              onClick={() => {
+                                setStorageOpen((v) => !v)
+                                if (!storageOpen) queryPartsStatus(p.id, p.cwd!)
+                              }}
+                            >
+                              Project storage
+                              <span className="tab-menu__caret">▸</span>
+                            </button>
+                            {storageOpen && p.id === expandedId && (
+                              <div className="tab-menu__sub">
+                                <button disabled>
+                                  {partsStatus[p.id] === undefined
+                                    ? 'Checking…'
+                                    : partsStatus[p.id] === 'error'
+                                      ? 'Could not check — see project.json directly'
+                                      : partsStatus[p.id]
+                                        ? 'Currently stored as parts + a manifest'
+                                        : 'Currently a single project.json'}
+                                </button>
+                                {partsStatus[p.id] === true && (
+                                  <button
+                                    onClick={() =>
+                                      setStorageConfirm({ projectId: p.id, cwd: p.cwd!, action: 'join' })
+                                    }
+                                  >
+                                    Join back into a single file…
+                                  </button>
+                                )}
+                                {partsStatus[p.id] === false && (
+                                  <button
+                                    onClick={() =>
+                                      setStorageConfirm({ projectId: p.id, cwd: p.cwd!, action: 'split' })
+                                    }
+                                  >
+                                    {`Split into ${partSizeValue} ${partSizeUnit} parts…`}
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </>
+                        )}
                         <button
                           onClick={() => {
                             const lock = lockForProject(p.id)
@@ -868,6 +952,53 @@ export function ProjectSwitcher({
             />
           )
         })()}
+      {storageConfirm && (
+        <ConfirmDialog
+          message={
+            storageConfirm.action === 'split'
+              ? `Split "${projects.find((p) => p.id === storageConfirm.projectId)?.name ?? 'this project'}" into ${partSizeValue} ${partSizeUnit} parts?`
+              : `Join "${projects.find((p) => p.id === storageConfirm.projectId)?.name ?? 'this project'}" back into a single project.json?`
+          }
+          body={
+            <p>
+              {storageConfirm.action === 'split'
+                ? 'This rewrites .nodeterm/project.json into a manifest + numbered part files, at that folder\'s own path. It is git-shared: everyone who pulls this repo gets the new file layout too. An older nodeterm build cannot read a split project until it is joined back.'
+                : 'This rewrites the parts + manifest back into a single .nodeterm/project.json, at that folder\'s own path. It is git-shared: everyone who pulls this repo gets the new file layout too.'}
+              {storageError && <><br /><strong>{storageError}</strong></>}
+            </p>
+          }
+          confirmLabel={storageConfirm.action === 'split' ? 'Split' : 'Join'}
+          busy={storageBusy}
+          onCancel={() => {
+            setStorageConfirm(null)
+            setStorageError(null)
+          }}
+          onConfirm={async () => {
+            const { projectId, cwd, action } = storageConfirm
+            setStorageBusy(true)
+            setStorageError(null)
+            try {
+              const result =
+                action === 'split'
+                  ? await window.nodeTerminal.workspace.splitIntoParts(cwd, partSizeValue, partSizeUnit)
+                  : await window.nodeTerminal.workspace.joinParts(cwd)
+              if (!result.ok) {
+                setStorageError(result.reason)
+                setStorageBusy(false)
+                return
+              }
+              // Re-read the true state rather than assuming the requested action landed.
+              const now = await window.nodeTerminal.workspace.hasPartsManifest(cwd)
+              setPartsStatus((cur) => ({ ...cur, [projectId]: now }))
+              setStorageConfirm(null)
+              setStorageBusy(false)
+            } catch (e) {
+              setStorageError(e instanceof Error ? e.message : String(e))
+              setStorageBusy(false)
+            }
+          }}
+        />
+      )}
     </>
   )
 }

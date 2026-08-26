@@ -8,8 +8,8 @@ describe('SETTINGS_GROUPS', () => {
   // until the build — which is exactly how several sections shipped iconless.
   it('lists exactly 36 sections with no duplicates', () => {
     const ids = allSectionIds()
-    expect(ids).toHaveLength(36)
-    expect(new Set(ids).size).toBe(36)
+    expect(ids).toHaveLength(37)
+    expect(new Set(ids).size).toBe(37)
   })
   it('starts at a section that exists in the groups', () => {
     expect(allSectionIds()).toContain(FIRST_SECTION_ID)
@@ -17,8 +17,8 @@ describe('SETTINGS_GROUPS', () => {
   it('hides mac-only sections off macOS, keeps them on', () => {
     const off = visibleSettingsGroups(false).flatMap((g) => g.sections.map((s) => s.id))
     expect(off).not.toContain('notch')
-    // 36 total minus the one mac-only section.
-    expect(off).toHaveLength(35)
+    // 37 total minus the one mac-only section.
+    expect(off).toHaveLength(36)
     expect(visibleSettingsGroups(true)).toEqual(SETTINGS_GROUPS)
     // No group is left empty by the filter.
     expect(visibleSettingsGroups(false).every((g) => g.sections.length > 0)).toBe(true)

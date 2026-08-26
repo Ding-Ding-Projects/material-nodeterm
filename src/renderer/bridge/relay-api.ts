@@ -96,7 +96,13 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
       ...real.workspace,
       // A raw whole-workspace save can remove unrelated host projects. Relay tabs converge their
       // shared project through canvas mutations; there is no safe project-scoped save contract.
-      save: () => relayUnsupported('workspace.save')
+      save: () => relayUnsupported('workspace.save'),
+      // Rewrites the host's local .nodeterm/project.json storage encoding with no host-scoped
+      // project check (see relay-rpc-policy.ts's matching omission). Refused locally with a clear
+      // reason rather than round-tripping to the host only to be denied there.
+      hasPartsManifest: () => relayUnsupported('workspace.hasPartsManifest'),
+      splitIntoParts: () => relayUnsupported('workspace.splitIntoParts'),
+      joinParts: () => relayUnsupported('workspace.joinParts')
     },
     userDataDir: real.userDataDir, // the host's writable base — worktree default paths live there
     fs: files.fs,

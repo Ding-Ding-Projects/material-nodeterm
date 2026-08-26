@@ -24,6 +24,15 @@ const PATHS: Record<SettingsSectionId, React.JSX.Element> = {
       <circle cx="6.3" cy="10.5" r="1.4" />
     </>
   ),
+  // Stacked file parts + a manifest line, for the split-into-parts storage section.
+  'workspace-storage': (
+    <>
+      <rect x="2.5" y="2.5" width="6" height="4.5" rx="1" />
+      <rect x="9.5" y="2.5" width="4" height="4.5" rx="1" />
+      <rect x="2.5" y="9" width="4" height="4.5" rx="1" />
+      <rect x="8.5" y="9" width="5" height="4.5" rx="1" />
+    </>
+  ),
   appearance: (
     <>
       <circle cx="8" cy="8" r="5.5" />
