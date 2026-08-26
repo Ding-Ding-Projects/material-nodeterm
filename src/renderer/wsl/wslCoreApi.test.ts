@@ -9,6 +9,8 @@ describe('resolveWslApi', () => {
           list: async () => [{ name: 'Ubuntu', state: 'running', ownedByApp: true }],
           catalogue: async () => [],
           create: async () => ({ ok: true, name: 'x' }),
+          cancelCreate: async () => false,
+          onCreateProgress: () => () => {},
           sleep: async () => ({ ok: true }),
           wake: async () => ({ ok: true }),
           delete: async () => ({ ok: true })
@@ -25,7 +27,7 @@ describe('resolveWslApi', () => {
     expect(await api.sleep('anything')).toEqual({ ok: false, error: WSL_UNSUPPORTED_ERROR })
     expect(await api.wake('anything')).toEqual({ ok: false, error: WSL_UNSUPPORTED_ERROR })
     expect(await api.delete('anything')).toEqual({ ok: false, error: WSL_UNSUPPORTED_ERROR })
-    expect(await api.create({ catalogueId: 'x', name: 'y' })).toEqual({
+    expect(await api.create({ operationId: 'test', catalogueId: 'x', name: 'y' })).toEqual({
       ok: false,
       error: WSL_UNSUPPORTED_ERROR
     })

@@ -39,6 +39,7 @@ describe('WslCreateDialog', () => {
 
   function render(overrides: Partial<React.ComponentProps<typeof WslCreateDialog>> = {}) {
     const onCreate = vi.fn()
+    const onCancelCreate = vi.fn(async () => true)
     const onCancel = vi.fn()
     root = createRoot(host)
     act(() => {
@@ -51,12 +52,13 @@ describe('WslCreateDialog', () => {
           busy={false}
           error={null}
           onCreate={onCreate}
+          onCancelCreate={onCancelCreate}
           onCancel={onCancel}
           {...overrides}
         />
       )
     })
-    return { onCreate, onCancel }
+    return { onCreate, onCancel, onCancelCreate }
   }
 
   it('lists the catalogue and disables Create until a distro and a valid name are chosen', () => {
@@ -79,7 +81,15 @@ describe('WslCreateDialog', () => {
     const create = Array.from(document.querySelectorAll('button')).find((b) => b.textContent === 'Create')!
     expect(create.disabled).toBe(false)
     act(() => create.click())
-    expect(onCreate).toHaveBeenCalledWith({ catalogueId: 'ubuntu-24.04', name: 'my-project' })
+    act(() => create.click())
+    expect(onCreate).toHaveBeenCalledWith(expect.objectContaining({ catalogueId: 'ubuntu-24.04', name: 'my-project' }))
+    expect(onCreate).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps Create disabled while an operation is busy', () => {
+    render({ busy: true })
+    const create = Array.from(document.querySelectorAll('button')).find((b) => b.textContent === 'Creating…') as HTMLButtonElement
+    expect(create.disabled).toBe(true)
   })
 
   it('refuses a name colliding with a real distribution on this machine', () => {

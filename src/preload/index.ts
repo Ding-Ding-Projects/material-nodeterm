@@ -27,6 +27,7 @@ import type { ConvertQueueItem, ConverterQueueState } from '../shared/converter'
 import type { PullQueueItem, PullQueueState } from '../shared/ollama'
 import type { MinecraftEvent } from '../shared/minecraft'
 import type { NodeDependencyAvailability, NodeDependencyProgress, NodeDependencyInstallResult } from '../shared/node-dependencies'
+import type { WslCreateProgress } from '../shared/wsl'
 
 // Fan a single ipcRenderer listener per channel out to many renderer subscribers. Without
 // this, every node that subscribes (e.g. Cmd+M markdown toggle on each terminal/editor) adds
@@ -544,7 +545,13 @@ const api: NodeTerminalApi = {
   wsl: {
     list: () => ipcRenderer.invoke(IPC.wslList),
     catalogue: () => ipcRenderer.invoke(IPC.wslCatalogue),
-    create: (input: { catalogueId: string; name: string }) => ipcRenderer.invoke(IPC.wslCreate, input),
+    create: (input: { operationId: string; catalogueId: string; name: string }) => ipcRenderer.invoke(IPC.wslCreate, input),
+    cancelCreate: (operationId: string) => ipcRenderer.invoke(IPC.wslCreateCancel, operationId),
+    onCreateProgress: (listener: (progress: WslCreateProgress) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, progress: WslCreateProgress) => listener(progress)
+      ipcRenderer.on(IPC.wslCreateProgress, handler)
+      return () => ipcRenderer.removeListener(IPC.wslCreateProgress, handler)
+    },
     sleep: (name: string) => ipcRenderer.invoke(IPC.wslSleep, name),
     wake: (name: string) => ipcRenderer.invoke(IPC.wslWake, name),
     delete: (name: string) => ipcRenderer.invoke(IPC.wslDelete, name)

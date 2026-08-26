@@ -53,6 +53,30 @@ an empty list — "we could not look" and "there is nothing here" are different 
 second one is invisible once it has been rendered as the first: a name that really does collide
 would look free, and a live bound frame would look gone.
 
+## Creating an instance
+
+The **New WSL instance** surface is a guided Material Design 3 dialog. It loads the live online
+catalogue into a searchable listbox, keeps the exact distribution name in the selected row, and
+validates the new local name before enabling **Create instance**. The distribution selector and
+the name field are separate from the Linux ISO VM installer, which uses QEMU and has a different
+lifecycle.
+
+Creation is an observable, cancellable operation rather than a promise hidden behind a spinner.
+The dialog reports validation, availability checking, installation, ownership recording, and
+completion as a bounded four-step phase indicator with elapsed time. Installation is explicitly
+indeterminate because `wsl.exe` provides no byte or percentage telemetry. While the operation is active,
+the submit control is disabled and the handler rejects a duplicate operation id. **Cancel** sends
+that id to the local service, which aborts the child process and returns a cancellation result;
+the service also fences progress by operation id so a late result cannot repaint a newer dialog.
+If cancellation arrives after `wsl.exe` has finished but before the ownership record is complete,
+the result says that the instance was created and no canvas frame was bound, because the app does
+not unregister a distribution as a cancellation side effect.
+Operation ids use the UUID v4 shape emitted by `crypto.randomUUID()`; another UUID version is
+rejected at the core boundary rather than entering the cancellation map.
+Timeouts remain bounded by the WSL command deadline, and failures stay in the dialog with an
+actionable retry path. The progress surface respects reduced motion and exposes status and
+progressbar roles for keyboard and assistive-technology users.
+
 ## Surfaces
 
 | | |

@@ -13,6 +13,7 @@ import { WSL_INSTALL_TIMEOUT_MS } from './runtime'
 import type { WslOwnershipStore } from './ownership'
 import { validateWslDistributionName, type WslNameValidation } from './name'
 import { detectWsl } from './install'
+import type { WslCreateProgress } from '../../shared/wsl'
 
 export type WslCreateResult =
   | { ok: true }
@@ -29,11 +30,20 @@ export interface WslCreateRequest {
   existingNames: readonly string[]
 }
 
+export interface WslCreateOptions {
+  signal?: AbortSignal
+  onProgress?: (progress: Pick<WslCreateProgress, 'stage' | 'step' | 'steps' | 'determinate' | 'message'>) => void
+}
+
 export async function createWslDistribution(
   runtime: WslRuntime,
   ownership: WslOwnershipStore,
-  request: WslCreateRequest
+  request: WslCreateRequest,
+  options: WslCreateOptions = {}
 ): Promise<WslCreateResult> {
+  const progress = (stage: WslCreateProgress['stage'], step: number, message: string, determinate = false): void =>
+    options.onProgress?.({ stage, step, steps: 4, determinate, message })
+  progress('validating', 1, 'Validating the selected distribution and name.')
   const validation = validateWslDistributionName(request.name, request.existingNames)
   if (!validation.ok) {
     return { ok: false, error: validation.message, validation }
@@ -42,16 +52,21 @@ export async function createWslDistribution(
     return { ok: false, error: 'Choose which Linux distribution to install.' }
   }
 
+  if (options.signal?.aborted) return { ok: false, error: 'WSL instance creation was cancelled.' }
+  progress('checking', 2, 'Checking WSL availability and the current distribution list.')
   const availability = await detectWsl(runtime)
+  if (options.signal?.aborted) return { ok: false, error: 'WSL instance creation was cancelled.' }
   if (!availability.installed) {
     return { ok: false, error: 'WSL is not installed on this machine, so nothing can be created.' }
   }
 
+  progress('installing', 3, 'Installing the selected WSL distribution. This can take several minutes.')
   const result = await runtime.execFile(
     availability.wslExePath,
     ['--install', '--distribution', request.catalogName, '--name', request.name, '--no-launch'],
-    { timeoutMs: WSL_INSTALL_TIMEOUT_MS }
+    { timeoutMs: WSL_INSTALL_TIMEOUT_MS, signal: options.signal }
   )
+  if (options.signal?.aborted) return { ok: false, error: 'WSL instance creation was cancelled.' }
   if (result.error || result.exitCode !== 0) {
     return {
       ok: false,
@@ -64,6 +79,7 @@ export async function createWslDistribution(
   // failure here must be reported as a failed create even though wsl.exe already did its part,
   // because an unrecorded distribution is functionally orphaned from this app's point of view.
   try {
+    progress('recording', 4, 'Recording ownership so this app can manage the new instance.')
     await ownership.record(request.name)
   } catch {
     return {
@@ -74,5 +90,13 @@ export async function createWslDistribution(
     }
   }
 
+  if (options.signal?.aborted) {
+    return {
+      ok: false,
+      error:
+        `WSL instance "${request.name}" was created before cancellation completed; no canvas frame was bound.`
+    }
+  }
+  progress('completed', 4, 'WSL instance created and ownership recorded.', true)
   return { ok: true }
 }

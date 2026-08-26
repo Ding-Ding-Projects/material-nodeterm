@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useDialogStack } from './dialog-stack'
 import { BranchSelect } from './BranchSelect'
+import { AnchoredRegexBuilder } from './regex/AnchoredRegexBuilder'
+import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
 import { isValidGitRef, type WorktreeCreateValue, type WorktreeEntry } from '@shared/worktree'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
@@ -43,6 +45,13 @@ export function WorktreeDialog({
   onCancel
 }: Props) {
   const vocabulary = useVocabularyMapper()
+  const existingSearch = useRegexSearchField({ mode: 'text' })
+  const existingSearchInputRef = useRef<HTMLInputElement>(null)
+  const returnFocusRef = useRef<HTMLElement | null>(
+    typeof document !== 'undefined' && document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null
+  )
   const [mode, setMode] = useState<'new' | 'existing'>('new')
   const [branch, setBranch] = useState('feature/')
   // `feature/` is a head-start for typing, not a submittable value — it fails `isValidGitRef`
@@ -68,6 +77,28 @@ export function WorktreeDialog({
   }, [defaultBaseRef, baseEdited])
 
   const hasBranches = branches.length > 0
+
+  const filteredExisting = useMemo(
+    () =>
+      existing.filter((entry) =>
+        existingSearch.test(`${entry.branch ?? '(detached HEAD — check out a branch first)'} ${entry.path}`)
+      ),
+    [
+      existing,
+      existingSearch.mode,
+      existingSearch.query,
+      existingSearch.pattern,
+      existingSearch.flags,
+      existingSearch.test
+    ]
+  )
+
+  // Search is the only field in this picker that can narrow the collection, so it receives focus
+  // on open and returns focus to the control that launched the dialog when the portal closes.
+  useEffect(() => {
+    existingSearchInputRef.current?.focus()
+    return () => returnFocusRef.current?.focus()
+  }, [])
 
   // Only the topmost modal answers a key (./dialog-stack): this dialog and a ConfirmDialog can be
   // open at the same time, and one Escape must not close both.
@@ -100,38 +131,89 @@ export function WorktreeDialog({
 
   return createPortal(
     <div className="confirm-overlay" onClick={onCancel}>
-      <div className="confirm bind-dialog" onClick={(e) => e.stopPropagation()}>
-        <p className="confirm__msg">{title}</p>
+      <div
+        className="confirm bind-dialog worktree-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="worktree-dialog-title"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <p className="confirm__msg" id="worktree-dialog-title">{title}</p>
 
         <div className="bind-repo" title={repoPath}>
           {repoPath || vocabulary('This project is not a git repository.')}
         </div>
 
         {existing.length > 0 && (
-          <div className="bind-existing">
-            <div className="bind-existing__title">{vocabulary('Existing worktrees')}</div>
-            {existing.map((e) => (
-              // A detached-HEAD worktree cannot be bound (there is no branch to merge or name the
-              // group after), so the row is DISABLED and says why — clicking it used to be a
-              // silent no-op.
-              <button
-                key={e.path}
-                className="bind-existing__row"
-                disabled={busy || !e.branch}
-                onClick={() => onBindExisting(e)}
-                title={
-                  e.branch
-                    ? e.path
-                    : `${e.path}\nDetached HEAD — check out a branch in this worktree first.`
-                }
-              >
-                <span className="bind-existing__branch">
-                  {e.branch ? `⎇ ${e.branch}` : '⎇ (detached HEAD — check out a branch first)'}
-                </span>
-                <span className="bind-existing__path">{e.path}</span>
-              </button>
-            ))}
-          </div>
+          <section className="bind-existing" aria-labelledby="bind-existing-title">
+            <div className="bind-existing__title" id="bind-existing-title">
+              {vocabulary('Existing worktrees')} <span className="bind-existing__count">({existing.length})</span>
+            </div>
+            <div className="menu-filter bind-existing__search">
+              <div className="menu-filter__row">
+                <input
+                  ref={existingSearchInputRef}
+                  className="menu-filter__input"
+                  value={existingSearch.value}
+                  spellCheck={false}
+                  placeholder={
+                    existingSearch.mode === 'regex'
+                      ? vocabulary('Filter existing worktrees… (regex)')
+                      : vocabulary('Filter existing worktrees…')
+                  }
+                  aria-label={vocabulary('Filter existing worktrees')}
+                  aria-controls="bind-existing-list"
+                  onChange={(e) => existingSearch.setValue(e.target.value)}
+                />
+                <AnchoredRegexBuilder
+                  search={existingSearch}
+                  fieldRef={existingSearchInputRef}
+                  label="Regex — existing worktrees"
+                  zIndex={93}
+                />
+              </div>
+              {existingSearch.error && <div className="menu-filter__error">{existingSearch.error}</div>}
+            </div>
+            <div className="sr-only" role="status" aria-live="polite">
+              {existingSearch.active
+                ? `${filteredExisting.length} of ${existing.length} existing worktrees shown`
+                : `${existing.length} existing worktrees available`}
+            </div>
+            <ul
+              id="bind-existing-list"
+              className="bind-existing__list"
+              role="list"
+              aria-label={`${filteredExisting.length} of ${existing.length} existing worktrees available`}
+            >
+              {filteredExisting.length === 0 ? (
+                <li className="bind-existing__empty" role="status">
+                  {vocabulary('No existing worktrees match that filter.')}
+                </li>
+              ) : (
+                filteredExisting.map((e) => (
+                  <li key={e.path} className="bind-existing__item">
+                    {/* A detached-HEAD worktree cannot be bound (there is no branch to merge or name
+                        the group after), so the row is disabled and says why. */}
+                    <button
+                      className="bind-existing__row"
+                      disabled={busy || !e.branch}
+                      onClick={() => onBindExisting(e)}
+                      title={
+                        e.branch
+                          ? e.path
+                          : `${e.path}\nDetached HEAD — check out a branch in this worktree first.`
+                      }
+                    >
+                      <span className="bind-existing__branch">
+                        {e.branch ? `⎇ ${e.branch}` : '⎇ (detached HEAD — check out a branch first)'}
+                      </span>
+                      <span className="bind-existing__path">{e.path}</span>
+                    </button>
+                  </li>
+                ))
+              )}
+            </ul>
+          </section>
         )}
 
         <div className="bind-mode">

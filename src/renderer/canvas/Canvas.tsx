@@ -5838,13 +5838,13 @@ export function Canvas() {
   }, [])
 
   const createWslInstanceAndGroup = useCallback(
-    async (v: { catalogueId: string; name: string }) => {
+    async (v: { operationId: string; catalogueId: string; name: string }) => {
       const target = wslDialog
       if (!target) return
       setWslBusy(true)
       setWslError(null)
       const res = await resolveWslApi()
-        .create({ catalogueId: v.catalogueId, name: v.name })
+        .create({ operationId: v.operationId, catalogueId: v.catalogueId, name: v.name })
         .catch((e: unknown) => ({
           ok: false as const,
           error: `Could not create the WSL instance: ${e instanceof Error ? e.message : String(e)}`
@@ -5874,6 +5874,10 @@ export function Canvas() {
     },
     [wslDialog, setNodes, markDirty, viewCenter]
   )
+
+  const cancelWslCreation = useCallback(async (operationId: string): Promise<boolean> => {
+    return resolveWslApi().cancelCreate(operationId)
+  }, [])
 
   /** Unbind never touches the distribution — dropping `data.wsl` is always safe, on any binding,
    *  owned or not (mirrors the worktree Unbind's "keeps the worktree on disk" contract). Sleep,
@@ -14675,6 +14679,7 @@ export function Canvas() {
           busy={wslBusy}
           error={wslError}
           onCreate={createWslInstanceAndGroup}
+          onCancelCreate={cancelWslCreation}
           onCancel={() => {
             setWslDialog(null)
             setWslError(null)
