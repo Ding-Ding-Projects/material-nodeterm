@@ -9,6 +9,7 @@ import type { GroupWorktree } from './worktree'
 import type { ClientId, DinoSnapshot, PeerDiff, PeerIdentity, PeerState } from './presence'
 import type { WhisperModelInfo } from './speech'
 import type { ProjectKanbanGitHub } from './github-issues'
+import type { ProjectIcon } from './project-icon'
 import type { ShortcutMap } from './shortcuts'
 import { DEFAULT_SHORTCUTS } from './shortcuts'
 import type { FunnyLevel, LanguageMode } from './i18n/types'
@@ -783,6 +784,10 @@ export interface Project {
   id: string
   name: string
   color: string
+  /** Optional icon shown beside `name` (project switcher, sessions sidebar, welcome screen).
+   *  Git-shared like `name`/`color` — see `sanitizeProjectIcon` (@shared/project-icon) for the
+   *  hostile-input rules a stored value must pass on load. */
+  icon?: ProjectIcon
   /** Default working directory for new terminals created in this project. */
   cwd?: string
   /** When set, this is an SSH project: its terminals run on `server` in `remoteCwd` (remote tmux). */

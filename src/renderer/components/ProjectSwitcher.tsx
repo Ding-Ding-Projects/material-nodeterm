@@ -29,6 +29,9 @@ import {
 } from '@shared/agents/config'
 import { bypassSandboxCaveat, permissionModeAgentsLabel } from '@shared/agents/approval-mode'
 import { ColorMenu } from './color/ColorMenu'
+import { IconMenu } from './icon/IconMenu'
+import { ProjectGlyph } from './ProjectGlyph'
+import type { ProjectIcon } from '@shared/project-icon'
 import { useToyLocks } from '../state/toylocks'
 import { LockWizard } from './toylocks/LockWizard'
 import { UnlockPrompt } from './toylocks/UnlockPrompt'
@@ -56,6 +59,9 @@ interface ProjectSwitcherProps {
   /** Set the project's colour — the switcher dot, the kanban header dot, the sidebar monogram.
    *  Called LIVE while the picker is dragged, so it must be a cheap, coalescing writer. */
   onSetColor: (id: string, color: string) => void
+  /** Set (or clear, with undefined) the project's icon — the switcher dot, the sessions
+   *  sidebar monogram, the welcome screen's recently-closed list. */
+  onSetIcon: (id: string, icon: ProjectIcon | undefined) => void
   /** {@link SAVE_PROJECT_ARCHIVE_ACTION} — pack this project into one archive file. Shared with
    *  the sidebar project-header menu (`Canvas.tsx`'s `onProjectContextMenu`); see
    *  `lib/projectMenuActions.ts`. */
@@ -104,6 +110,7 @@ export function ProjectSwitcher({
   onSetDefaultAccount,
   onSetDefaultPermissionMode,
   onSetColor,
+  onSetIcon,
   onSaveArchive,
   onOpenArchive,
   archiveBusy
@@ -155,6 +162,7 @@ export function ProjectSwitcher({
    * picker the node context menu has. Opening it closes the switcher dropdown (same idiom as
    * "Lock this project…"), so there is never a menu behind a menu.
    */
+  const [iconMenu, setIconMenu] = useState<{ projectId: string } | null>(null)
   const [colorMenu, setColorMenu] = useState<{ projectId: string; x: number; y: number } | null>(
     null
   )
@@ -347,9 +355,12 @@ export function ProjectSwitcher({
             toggleActions(activeProject.id)
           }}
         >
-          <span
+          <ProjectGlyph
             className="md3-switcher__dot"
-            style={activeProject ? { background: activeProject.color } : undefined}
+            variant="dot"
+            icon={activeProject?.icon}
+            color={activeProject?.color}
+            name={activeProject?.name ?? ''}
           />
           <span className="md3-switcher__name">{activeProject?.name ?? 'No project'}</span>
           {activeUnread > 0 && (
@@ -512,9 +523,12 @@ export function ProjectSwitcher({
                             : p.cwd || undefined
                       }
                     >
-                      <span
+                      <ProjectGlyph
                         className="md3-switcher-row__dot"
-                        style={{ background: p.color }}
+                        variant="dot"
+                        icon={p.icon}
+                        color={p.color}
+                        name={p.name}
                       />
                       {/* An SSH project looks identical to a local one once it is named, and the
                           difference matters: its terminals, git and file ops all run on another
@@ -576,6 +590,17 @@ export function ProjectSwitcher({
                     {expanded && (
                       <div className="md3-switcher-actions" onClick={(e) => e.stopPropagation()}>
                         <button onClick={() => startRename(p.id, p.name)}>Rename</button>
+                        <button
+                          onClick={() => {
+                            closeMenu()
+                            setIconMenu({ projectId: p.id })
+                          }}
+                        >
+                          <span className="tab-menu__check" aria-hidden>
+                            <ProjectGlyph icon={p.icon} color={p.color} name={p.name} size={12} />
+                          </span>
+                          Icon…
+                        </button>
                         <button
                           onClick={() => {
                             const anchor = rowElRef.current[p.id]
@@ -786,6 +811,17 @@ export function ProjectSwitcher({
           </div>,
           document.body
         )}
+
+      {iconMenu && (
+        <IconMenu
+          open
+          value={projects.find((p) => p.id === iconMenu.projectId)?.icon}
+          color={projects.find((p) => p.id === iconMenu.projectId)?.color}
+          name={projects.find((p) => p.id === iconMenu.projectId)?.name ?? ''}
+          onPick={(icon) => onSetIcon(iconMenu.projectId, icon)}
+          onClose={() => setIconMenu(null)}
+        />
+      )}
 
       {colorMenu && (
         <ColorMenu

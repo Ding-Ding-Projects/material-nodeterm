@@ -97,6 +97,7 @@ import { annotationEndpoints } from '../lib/annotation'
 import { LazyEditorNode, LazyDiffNode } from '../nodes/lazyMonacoNodes'
 import { DinoNode } from '../nodes/DinoNode'
 import { SERVICE_NODE_KINDS, type ServiceNodeKind, type ProjectArchiveContents } from '@shared/types'
+import type { ProjectIcon } from '@shared/project-icon'
 import BrowserNode from '../nodes/BrowserNode'
 import { ServiceNode } from '../nodes/ServiceNode'
 import { normalizeAddress } from '../nodes/browserUrl'
@@ -11768,6 +11769,17 @@ export function Canvas() {
     [markDirty]
   )
 
+  const setProjectIcon = useCallback(
+    (id: string, icon: ProjectIcon | undefined) => {
+      useProjects.getState().setProjectIcon(id, icon)
+      // Icon choice is a single discrete pick (not a dragged live-preview interaction like the
+      // colour wheel), so this persists immediately rather than riding the debounced markDirty
+      // lane — same rule renameProject uses.
+      void persist()
+    },
+    [persist]
+  )
+
   const setProjectFolder = useCallback(
     async (id: string) => {
       const folder = await window.nodeTerminal.dialog.selectFolder()
@@ -12727,6 +12739,7 @@ export function Canvas() {
           onSetDefaultAccount={setProjectDefaultAccount}
           onSetDefaultPermissionMode={setProjectDefaultPermissionMode}
           onSetColor={setProjectColor}
+          onSetIcon={setProjectIcon}
           onSaveArchive={(id) => void saveProjectArchive(id)}
           onOpenArchive={() => void importProjectArchive()}
           archiveBusy={() => projectArchiveBusyRef.current}
@@ -13535,7 +13548,7 @@ export function Canvas() {
                 if (useProjects.getState().projects.some((p) => !p.closed)) setWelcomeOpen(false)
               })
             }}
-            closedProjects={closedProjects.map((p) => ({ id: p.id, name: p.name, cwd: p.cwd }))}
+            closedProjects={closedProjects.map((p) => ({ id: p.id, name: p.name, cwd: p.cwd, color: p.color, icon: p.icon }))}
             onReopen={reopenProject}
             onDeleteClosed={requestDeleteProject}
             onClose={canDismissWelcomeScreen(hasProjects) ? () => setWelcomeOpen(false) : undefined}

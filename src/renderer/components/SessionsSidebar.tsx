@@ -20,6 +20,7 @@ import { useSettings } from '../state/settings'
 import { useAgentStatus } from '../state/agentStatus'
 import { useSessionNaming } from '../state/sessionNaming'
 import { useSession } from '../session/session'
+import { ProjectGlyph } from './ProjectGlyph'
 
 export interface SessionsSidebarProps {
   open: boolean
@@ -508,9 +509,12 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
                 >
                   {isCollapsed ? '▶' : '▼'}
                 </button>
-                <span className="ss-group__monogram" style={{ background: g.projectColor }}>
-                  {(g.projectName.trim() || '?').charAt(0).toUpperCase()}
-                </span>
+                <ProjectGlyph
+                  className="ss-group__monogram"
+                  icon={g.projectIcon}
+                  color={g.projectColor}
+                  name={g.projectName}
+                />
                 <span className="ss-group__name">{g.projectName}</span>
                 {branches[g.projectId] && (
                   <span className="ss-group__branch">⎇ {branches[g.projectId]}</span>

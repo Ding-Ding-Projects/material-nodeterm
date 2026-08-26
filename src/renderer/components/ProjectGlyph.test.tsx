@@ -1,0 +1,93 @@
+// @vitest-environment jsdom
+import { act } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { ProjectGlyph } from './ProjectGlyph'
+
+;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+describe('ProjectGlyph', () => {
+  let root: Root
+  let host: HTMLElement
+
+  beforeEach(() => {
+    host = document.createElement('div')
+    document.body.appendChild(host)
+    root = createRoot(host)
+  })
+
+  afterEach(() => {
+    act(() => root.unmount())
+    host.remove()
+  })
+
+  const render = async (el: React.ReactElement): Promise<void> => {
+    await act(async () => root.render(el))
+  }
+
+  it('renders an emoji icon as its literal character', async () => {
+    await render(
+      <ProjectGlyph icon={{ type: 'emoji', emoji: '🚀' }} color="#f00" name="Rocket" />
+    )
+    expect(host.textContent).toBe('🚀')
+  })
+
+  it('renders a material-symbol icon as a MaterialSymbol glyph', async () => {
+    await render(
+      <ProjectGlyph icon={{ type: 'material-symbol', name: 'folder' }} color="#3355ff" name="Folder Project" />
+    )
+    // MaterialSymbol renders the glyph's raw private-use-area codepoint as text content, never
+    // the ligature name — see MaterialSymbol.tsx. Assert a glyph rendered at all (non-empty,
+    // non-Latin text) rather than the exact codepoint, which is an implementation detail of the
+    // generated map.
+    expect(host.textContent).not.toBe('')
+    expect(host.textContent).not.toMatch(/^[A-Za-z]+$/)
+  })
+
+  it('falls back to the monogram when the icon names an unknown material-symbol id', async () => {
+    // Defensive path: sanitizeProjectIcon already keeps this from happening for anything read
+    // from disk, but ProjectGlyph must not crash or render nothing if it ever does.
+    await render(
+      <ProjectGlyph
+        icon={{ type: 'material-symbol', name: 'not-a-real-glyph' }}
+        color="#3355ff"
+        name="Bad Icon"
+      />
+    )
+    expect(host.textContent).toBe('B')
+  })
+
+  it('falls back to a colored dot when icon is absent and variant is "dot"', async () => {
+    await render(<ProjectGlyph color="#abc123" name="Dotty" variant="dot" className="tab__dot" />)
+    const span = host.querySelector('span.tab__dot')
+    expect(span).not.toBeNull()
+    expect(span?.textContent).toBe('')
+    expect((span as HTMLElement).style.background).toBe('rgb(171, 193, 35)')
+  })
+
+  it('dot fallback has no inline style at all when color is undefined (matches an inactive tab)', async () => {
+    await render(<ProjectGlyph name="Dotty" variant="dot" className="tab__dot" />)
+    const span = host.querySelector('span.tab__dot')
+    expect(span?.getAttribute('style')).toBeNull()
+  })
+
+  it('falls back to a colored monogram (first initial) by default when icon is absent', async () => {
+    await render(<ProjectGlyph color="#112233" name="Alpha Project" className="ss-mark--project" />)
+    const span = host.querySelector('span.ss-mark--project')
+    expect(span?.textContent).toBe('A')
+    expect((span as HTMLElement).style.background).toBe('rgb(17, 34, 51)')
+  })
+
+  it('monogram fallback uses "?" for an empty/whitespace name', async () => {
+    await render(<ProjectGlyph color="#112233" name="   " variant="monogram" />)
+    expect(host.textContent).toBe('?')
+  })
+
+  it('passes className and title through on every fallback branch', async () => {
+    await render(
+      <ProjectGlyph color="#fff" name="Titled" variant="monogram" className="my-class" title="Titled" />
+    )
+    const span = host.querySelector('span.my-class')
+    expect(span?.getAttribute('title')).toBe('Titled')
+  })
+})
