@@ -347,7 +347,7 @@ export function createDinoGame(
     ctx.fillStyle = COLOR_DIM
     ctx.font = '12px ui-monospace, Menlo, monospace'
     ctx.textAlign = 'right'
-    const hi = best > 0 ? `HI ${String(best).padStart(5, '0')}  ` : ''
+    const hi = best > 0 ? `${text('HI')} ${String(best).padStart(5, '0')}  ` : ''
     ctx.fillText(`${hi}${String(Math.round(score)).padStart(5, '0')}`, W - 10, 18)
     ctx.textAlign = 'left'
 

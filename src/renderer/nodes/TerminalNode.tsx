@@ -1032,6 +1032,8 @@ export function TerminalNode({
 }: NodeProps<CanvasNode>) {
   const profileText = useLocalizedVocabularyText()
   const vocab = useVocabularyMapper()
+  const vocabRef = useRef(vocab)
+  vocabRef.current = vocab
   const agentRelaunchRecoveryText = (error: AgentColdRelaunchRecoveryError): string => {
     switch (error.code) {
       case 'custom-agent-not-configured':
@@ -1956,6 +1958,13 @@ export function TerminalNode({
   // local default (else a relay tab shows "another user" / a wrong name). Byte-identical on a
   // local tab (active presence IS the default).
   const closedName = co.closed ? closedByLabel(co.closed.by, presence.store.getState().peers) : ''
+  const codexFallback = codexIdentity?.mode === 'plain' ? codexFallbackText(codexIdentity.reason) : ''
+  const codexFallbackDisplay = (() => {
+    const marker = ' codex — '
+    const markerAt = codexFallback.indexOf(marker)
+    if (markerAt < 0) return codexFallback ? vocab(codexFallback) : ''
+    return `${vocab(codexFallback.slice(0, markerAt))}${marker}${vocab(codexFallback.slice(markerAt + marker.length))}`
+  })()
 
   // "Session ended" (a recycle whose replacement never came — see CoState.ended): the user asks for
   // a shell explicitly. Only now do we spawn, in THIS client's cwd — no silent stale-cwd respawn.
@@ -3020,7 +3029,7 @@ export function TerminalNode({
         // Drop the overlay for the duration of the attempt (this respawn IS the retry the user or
         // the coordinator asked for) so the line below is visible; it comes back if we fail.
         setCo(termKey, { offline: false })
-        term.write(`\x1b[90m[connecting to ${ssh.user}@${ssh.host}…]\x1b[0m\r\n`)
+        term.write(`\x1b[90m[${vocabRef.current('connecting to')} ${ssh.user}@${ssh.host}…]\x1b[0m\r\n`)
       }
       const sshRemote =
         sshRemoteTmux && ssh
@@ -3036,7 +3045,7 @@ export function TerminalNode({
       if (sshRemoteTmux && !sshRemote) {
         setCo(termKey, { offline: true })
         term.write(
-          `\r\n\x1b[90m[not connected — this session lives on ${ssh ? `${ssh.user}@${ssh.host}` : 'the remote host'}; nothing was started locally]\x1b[0m\r\n`
+          `\r\n\x1b[90m[${vocabRef.current('not connected')} — ${vocabRef.current('this session lives on')} ${ssh ? `${ssh.user}@${ssh.host}` : vocabRef.current('the remote host')}; ${vocabRef.current('nothing was started locally')}]\x1b[0m\r\n`
         )
         if (sshProjectId) reportSshDrop(sshProjectId, id)
         return
@@ -3117,8 +3126,8 @@ export function TerminalNode({
               if (!disposed)
                 term.write(
                   unavailable === 'codex-account'
-                    ? '\r\n\x1b[90m[Codex account unavailable — nothing was started; open Settings → Accounts]\x1b[0m\r\n'
-                    : '\r\n\x1b[90m[not connected — nothing was started locally]\x1b[0m\r\n'
+                    ? `\r\n\x1b[90m[${vocabRef.current('Codex account unavailable')} — ${vocabRef.current('nothing was started')}; ${vocabRef.current('open Settings')} → ${vocabRef.current('Accounts')}]\x1b[0m\r\n`
+                    : `\r\n\x1b[90m[${vocabRef.current('not connected')} — ${vocabRef.current('nothing was started locally')}]\x1b[0m\r\n`
                 )
               if (sshProjectId) reportSshDrop(sshProjectId, id)
               return
@@ -3129,7 +3138,7 @@ export function TerminalNode({
             // BEFORE `onDisposed()`: there is no session here, so there is nothing to kill or unwire.
             if (closed) {
               setCo(termKey, { closed })
-              if (!disposed) term.write('\r\n\x1b[90m[session closed by another user]\x1b[0m\r\n')
+              if (!disposed) term.write(`\r\n\x1b[90m[${vocabRef.current('session closed by another user')}]\x1b[0m\r\n`)
               return
             }
             // Disposal while the spawn/seed was in flight is NOT necessarily a teardown: an unmount
@@ -3205,7 +3214,7 @@ export function TerminalNode({
               cleanups.push(
                 transport.onClosed(sid, ({ by }) => {
                   setCo(termKey, { closed: { by } })
-                  term.write('\r\n\x1b[90m[session closed by another user]\x1b[0m\r\n')
+                  term.write(`\r\n\x1b[90m[${vocabRef.current('session closed by another user')}]\x1b[0m\r\n`)
                 })
               )
             }
@@ -3222,7 +3231,7 @@ export function TerminalNode({
                   if (recycleAction(info) === 'ended') {
                     disposeParkedTerminal(termKey) // the park holds a dead pty either way
                     setCo(termKey, { ended: true })
-                    term.write('\r\n\x1b[90m[session ended — reopen to restart]\x1b[0m\r\n')
+                    term.write(`\r\n\x1b[90m[${vocabRef.current('session ended — reopen to restart')}]\x1b[0m\r\n`)
                     return
                   }
                   const restart = restartSubs.get(termKey)
@@ -3240,7 +3249,7 @@ export function TerminalNode({
             // us; the first thing on this screen is whatever the new shell prints next.)
             if (wasRecycled)
               term.write(
-                '\r\n\x1b[90m── session restarted by another user (moved to a new folder) ──\x1b[0m\r\n'
+                `\r\n\x1b[90m── ${vocabRef.current('session restarted by another user (moved to a new folder)')} ──\x1b[0m\r\n`
               )
             // Flow control: track xterm's unprocessed write backlog (bytes handed to
             // term.write but not yet parsed, plus anything still queued in the gate below). Past a
@@ -3350,7 +3359,7 @@ export function TerminalNode({
                   // with convertEol:false, so writing it raw would render as a staircase.
                   term.write(toXtermText(snapshot))
                   term.write(
-                    '\r\n\x1b[90m── session restored (process ended by a restart) ──\x1b[0m\r\n'
+                    `\r\n\x1b[90m── ${vocabRef.current('session restored (process ended by a restart)')} ──\x1b[0m\r\n`
                   )
                 }
               } else if (replay === 'warm-attach') {
@@ -3388,7 +3397,7 @@ export function TerminalNode({
             }
             cleanups.push(
               transport.onExit(sid, (code) => {
-                term.write(`\r\n\x1b[90m[process exited with code ${code}]\x1b[0m\r\n`)
+                term.write(`\r\n\x1b[90m[${vocabRef.current('process exited with code')} ${code}]\x1b[0m\r\n`)
                 // ssh exiting 255 on an SSH-project terminal is a CONNECTION drop (sleep/wake,
                 // network change, NAT idle) — the remote tmux session survives. Report it so the
                 // reconnect coordinator can re-establish the master and respawn this node.
@@ -3474,7 +3483,7 @@ export function TerminalNode({
                     code: 'launch-intent-failed',
                     detail:
                       agentLaunch?.message ??
-                      'This host did not confirm the trusted agent launch. No fallback command was run.'
+                      vocabRef.current('This host did not confirm the trusted agent launch. No fallback command was run.')
                   }
                 })
               }
@@ -4542,8 +4551,12 @@ export function TerminalNode({
         ? sshConnectionScope(dropConn)
         : useProjects.getState().activeProjectId
       if (uploadNoteTimer.current) clearTimeout(uploadNoteTimer.current)
+      const uploadName =
+        files.length === 1
+          ? files[0].name
+          : `${files.length} ${vocabRef.current('files')}`
       setUploadNote({
-        text: `Uploading ${files.length === 1 ? files[0].name : `${files.length} files`}…`
+        text: `${vocabRef.current('Uploading')} ${uploadName}…`
       })
       try {
         paths = await droppedPaths(api, files, { sshRemoteTmux: true, projectId })
@@ -4551,19 +4564,19 @@ export function TerminalNode({
         setUploadNote(null)
       }
       if (!paths.length) {
-        setUploadNote({ text: 'Upload failed', failed: true })
+        setUploadNote({ text: vocabRef.current('Upload failed'), failed: true })
         uploadNoteTimer.current = setTimeout(() => setUploadNote(null), 2500)
       }
     } else if (needsWrite) {
       if (uploadNoteTimer.current) clearTimeout(uploadNoteTimer.current)
-      setUploadNote({ text: 'Saving pasted file…' })
+      setUploadNote({ text: vocabRef.current('Saving pasted file…') })
       try {
         paths = await droppedPaths(api, files, { sshRemoteTmux: false, projectId: '' })
       } finally {
         setUploadNote(null)
       }
       if (!paths.length) {
-        setUploadNote({ text: 'Could not save the pasted file', failed: true })
+        setUploadNote({ text: vocabRef.current('Could not save the pasted file'), failed: true })
         uploadNoteTimer.current = setTimeout(() => setUploadNote(null), 2500)
       }
     } else {
@@ -4949,7 +4962,7 @@ export function TerminalNode({
                 setEditingTitle(true)
               }}
             >
-              {data.title || 'Untitled'}
+              {data.title || vocab('Untitled')}
             </span>
           )}
           {status?.session && status.session !== data.title && (
@@ -4969,9 +4982,9 @@ export function TerminalNode({
           {codexIdentity?.mode === 'plain' && (
             <span
               className="node-account-chip node-account-chip--warning"
-              title={codexFallbackText(codexIdentity.reason)}
+              title={codexFallbackDisplay}
             >
-              plain codex
+              {vocab('plain')} codex
             </span>
           )}
           {accountPresentation ? (
@@ -5483,7 +5496,7 @@ export function TerminalNode({
               <div className="term-md nodrag nowheel">
                 <div className="term-md__bar">
                   <span>{vocab('Markdown')}</span>
-                  <span className="term-md__hint">{hintLabel('⌘M to exit')}</span>
+                  <span className="term-md__hint">{hintLabel(`⌘M ${vocab('to exit')}`)}</span>
                 </div>
                 <div className="term-md__content" dangerouslySetInnerHTML={{ __html: mdHtml }} />
               </div>

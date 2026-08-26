@@ -49,8 +49,8 @@ export function SubagentNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const elapsed = working && startedAt ? fmtDur(now - startedAt) : durationMs ? fmtDur(durationMs) : ''
   const meta = [
     elapsed,
-    tokens != null ? `↓ ${fmtTokens(tokens)} tokens` : null,
-    toolUses ? `${toolUses} tool${toolUses === 1 ? '' : 's'}` : null
+    tokens != null ? `↓ ${fmtTokens(tokens)} ${vocab('tokens')}` : null,
+    toolUses ? `${toolUses} ${vocab(toolUses === 1 ? 'tool' : 'tools')}` : null
   ]
     .filter(Boolean)
     .join(' · ')

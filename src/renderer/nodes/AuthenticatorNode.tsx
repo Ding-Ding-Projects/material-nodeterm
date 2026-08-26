@@ -94,7 +94,7 @@ export default function AuthenticatorNode({ id, data, selected }: NodeProps<Canv
         // Not "no codes": the vault has some and this process cannot read them yet. Saying so is
         // the whole difference between a locked door and an empty room.
         setVaultRows([])
-        setVaultNote(vocab('This project’s password manager is locked, so its codes are hidden.'))
+        setVaultNote('This project’s password manager is locked, so its codes are hidden.')
         return
       }
       setVaultNote(null)
@@ -117,7 +117,7 @@ export default function AuthenticatorNode({ id, data, selected }: NodeProps<Canv
       setVaultRows(rows)
     } catch {
       setVaultRows([])
-      setVaultNote(vocab('Could not read this project’s password manager.'))
+      setVaultNote('Could not read this project’s password manager.')
     }
   }, [projectId])
 
@@ -145,7 +145,7 @@ export default function AuthenticatorNode({ id, data, selected }: NodeProps<Canv
     } catch {
       // A read failure is reported as a read failure. An empty list here would say "you have no
       // generators", which is a different and much worse thing to tell somebody who has several.
-      setLoadError(vocab('Could not read this computer’s authenticator store.'))
+      setLoadError('Could not read this computer’s authenticator store.')
     }
   }, [])
 
@@ -231,12 +231,13 @@ export default function AuthenticatorNode({ id, data, selected }: NodeProps<Canv
       <div className="authenticator-node__body nodrag nowheel">
         {loadError ? (
           <p className="authenticator-node__empty" role="alert">
-            {loadError}
+            {vocab(loadError)}
           </p>
         ) : rows.length === 0 && vaultRows.length === 0 ? (
           <p className="authenticator-node__empty">
-            {vaultNote ??
-              vocab('No generators yet. Add one in Settings under Authenticator, or add a credential with a TOTP secret to this project’s password manager.')}
+            {vaultNote
+              ? vocab(vaultNote)
+              : vocab('No generators yet. Add one in Settings under Authenticator, or add a credential with a TOTP secret to this project’s password manager.')}
           </p>
         ) : (
           <ul className="authenticator-node__list">
@@ -245,7 +246,7 @@ export default function AuthenticatorNode({ id, data, selected }: NodeProps<Canv
               return (
                 <li key={entry.id} className="authenticator-node__row">
                   <div className="authenticator-node__who">
-                    <span className="authenticator-node__issuer">{entry.issuer || 'Unnamed'}</span>
+                    <span className="authenticator-node__issuer">{entry.issuer || vocab('Unnamed')}</span>
                     <span className="authenticator-node__account">{entry.account}</span>
                   </div>
                   <button
@@ -308,7 +309,7 @@ export default function AuthenticatorNode({ id, data, selected }: NodeProps<Canv
         {/* Shown beside real rows too: a locked vault while the authenticator store has entries is
             exactly the case where an unexplained absence would look like a defect. */}
         {vaultNote && (rows.length > 0 || vaultRows.length > 0) && (
-          <p className="authenticator-node__empty">{vaultNote}</p>
+          <p className="authenticator-node__empty">{vocab(vaultNote)}</p>
         )}
       </div>
     </div>

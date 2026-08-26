@@ -59,7 +59,7 @@ export function BrowserProfilePicker({
   const vocab = useVocabularyMapper()
 
   const current = findBrowserProfile(profiles, selectedId)
-  const label = selectedId ? (current?.name ?? 'Unknown profile') : 'Default'
+  const label = selectedId ? (current?.name ?? vocab('Unknown profile')) : vocab('Default')
   const visibleProfiles = useMemo(
     () =>
       (profiles ?? []).filter((profile) =>

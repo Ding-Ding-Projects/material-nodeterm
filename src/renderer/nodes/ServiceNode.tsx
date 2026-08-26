@@ -149,7 +149,7 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
   const rootBorder = nodeBorderStyle(data.color)
   const headerTint = nodeColorStyle(data.color, 0.2)
   const productName = kind ? SERVICE_NODE_LABELS[kind] : data.title || 'Service'
-  const displayProductName = kind ? vocab(productName) : productName
+  const displayProductName = kind ? vocab(productName) : data.title ? productName : vocab('Service')
   const label = data.serviceLabel ?? ''
 
   const toggleCollapse = () =>

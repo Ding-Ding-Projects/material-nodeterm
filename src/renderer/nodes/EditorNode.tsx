@@ -128,19 +128,19 @@ export function EditorNode({ id, data, selected }: NodeProps<CanvasNode>) {
       // Guard: readBinary may be missing if the preload is stale (dev not restarted).
       const readBinary = fs.readBinary
       if (typeof readBinary !== 'function') {
-        setImageError(vocab('Image preview needs an app restart.'))
+        setImageError('Image preview needs an app restart.')
         return
       }
       readBinary(filePath)
         .then((b64) => {
           if (disposed) return
           const tooBig = b64 ? tooLargeSize(b64) : null
-          if (tooBig != null) setImageError(vocab('Image too large to preview') + ` (${formatBytes(tooBig)}).`)
+          if (tooBig != null) setImageError(`Image too large to preview (${formatBytes(tooBig)}).`)
           else if (b64) setImageSrc(`data:${IMAGE_MIME[ext]};base64,${b64}`)
-          else setImageError(vocab('Couldn’t read this image.'))
+          else setImageError('Couldn’t read this image.')
         })
         .catch(() => {
-          if (!disposed) setImageError(vocab('Couldn’t read this image.'))
+          if (!disposed) setImageError('Couldn’t read this image.')
         })
       return () => {
         disposed = true
@@ -155,7 +155,7 @@ export function EditorNode({ id, data, selected }: NodeProps<CanvasNode>) {
       let url = ''
       const readBinary = fs.readBinary
       if (typeof readBinary !== 'function') {
-        setPdfError(vocab('PDF preview needs an app restart.'))
+        setPdfError('PDF preview needs an app restart.')
         return
       }
       readBinary(filePath)
@@ -163,23 +163,23 @@ export function EditorNode({ id, data, selected }: NodeProps<CanvasNode>) {
           if (disposed) return
           const tooBig = b64 ? tooLargeSize(b64) : null
           if (tooBig != null) {
-            setPdfError(vocab('PDF too large to preview') + ` (${formatBytes(tooBig)}).`)
+            setPdfError(`PDF too large to preview (${formatBytes(tooBig)}).`)
             return
           }
           if (!b64) {
-            setPdfError(vocab('Couldn’t read this PDF.'))
+            setPdfError('Couldn’t read this PDF.')
             return
           }
           const made = pdfBlobUrl(b64)
           if (!made) {
-            setPdfError(vocab('Couldn’t read this PDF.'))
+            setPdfError('Couldn’t read this PDF.')
             return
           }
           url = made
           setPdfSrc(made)
         })
         .catch(() => {
-          if (!disposed) setPdfError(vocab('Couldn’t read this PDF.'))
+          if (!disposed) setPdfError('Couldn’t read this PDF.')
         })
       return () => {
         disposed = true
@@ -201,7 +201,7 @@ export function EditorNode({ id, data, selected }: NodeProps<CanvasNode>) {
       if (tooBig != null) {
         // Refuse to open rather than showing an empty buffer: ⌘S on a placeholder would
         // overwrite the real (large) file with nothing.
-        setLoadError(vocab('File too large to open here') + ` (${formatBytes(tooBig)}).`)
+        setLoadError(`File too large to open here (${formatBytes(tooBig)}).`)
         return
       }
       const s = useSettings.getState().settings
@@ -277,7 +277,7 @@ export function EditorNode({ id, data, selected }: NodeProps<CanvasNode>) {
           <>
             <button
               className="editor-node__toggle"
-              title={hintLabel('Toggle markdown preview (⌘M)')}
+              title={hintLabel(`${vocab('Toggle markdown preview')} (⌘M)`)}
               onClick={togglePreview}
             >
               {vocab(preview ? 'Edit' : 'Preview')}
@@ -285,7 +285,7 @@ export function EditorNode({ id, data, selected }: NodeProps<CanvasNode>) {
             <button
               className="editor-node__save"
               disabled={!dirty}
-              title={hintLabel('Save (⌘S)')}
+              title={hintLabel(`${vocab('Save')} (⌘S)`)}
               onClick={save}
             >
               {vocab('Save')}
@@ -320,7 +320,7 @@ export function EditorNode({ id, data, selected }: NodeProps<CanvasNode>) {
                 }}
               />
             ) : (
-              <span className="editor-node__loading">{imageError || vocab('Loading…')}</span>
+              <span className="editor-node__loading">{imageError ? vocab(imageError) : vocab('Loading…')}</span>
             )}
           </div>
         ) : isPdf ? (
@@ -331,12 +331,12 @@ export function EditorNode({ id, data, selected }: NodeProps<CanvasNode>) {
             {pdfSrc ? (
               <iframe src={pdfSrc} title={fileName} />
             ) : (
-              <span className="editor-node__loading">{pdfError || vocab('Loading…')}</span>
+              <span className="editor-node__loading">{pdfError ? vocab(pdfError) : vocab('Loading…')}</span>
             )}
           </div>
         ) : loadError ? (
           <div className="editor-node__image nodrag">
-            <span className="editor-node__loading">{loadError}</span>
+            <span className="editor-node__loading">{vocab(loadError)}</span>
           </div>
         ) : (
           <>

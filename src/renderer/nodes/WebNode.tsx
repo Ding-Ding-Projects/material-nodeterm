@@ -21,7 +21,8 @@ export default function WebNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const [error, setError] = useState('')
   const url = (data.url as string) ?? ''
   const filePath = (data.filePath as string) ?? ''
-  const title = (data.title as string) || url || filePath.split('/').pop() || 'web'
+  const title = (data.title as string) || url || filePath.split('/').pop() || ''
+  const displayTitle = title || vocab('web')
   const rootRef = useRef<HTMLDivElement | null>(null)
   /** The guest, for the audible check only — a local html page can hold a playing <video>. */
   const wvRef = useRef<AudibleWebview | null>(null)
@@ -52,7 +53,7 @@ export default function WebNode({ id, data, selected }: NodeProps<CanvasNode>) {
         setSrc(safe)
         srcRef.current = safe
       } else {
-        setError(vocab('Unsupported URL scheme — only http/https'))
+        setError('Unsupported URL scheme — only http/https')
       }
       settled()
     } else if (filePath) {
@@ -69,7 +70,7 @@ export default function WebNode({ id, data, selected }: NodeProps<CanvasNode>) {
         })
         .catch(() => {
           grantingRef.current = false
-          if (alive) setError(vocab('Couldn’t load this page.'))
+          if (alive) setError('Couldn’t load this page.')
           settled()
         })
     } else {
@@ -126,7 +127,7 @@ export default function WebNode({ id, data, selected }: NodeProps<CanvasNode>) {
         <EditableNodeTitle
           value={(data.title as string) ?? ''}
           onChange={(next) => updateNodeData(id, { title: next })}
-          emptyLabel={title}
+          emptyLabel={displayTitle}
           title={url || filePath || vocab('Click to rename')}
           ariaLabel={vocab('Web page name')}
           rejectEmpty={false}
@@ -167,7 +168,7 @@ export default function WebNode({ id, data, selected }: NodeProps<CanvasNode>) {
               style={{ width: '100%', height: '100%' }}
             />
           ) : (
-            <span className="editor-node__loading">{error || vocab('No source')}</span>
+            <span className="editor-node__loading">{error ? vocab(error) : vocab('No source')}</span>
           )}
         </div>
       </div>

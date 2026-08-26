@@ -128,7 +128,7 @@ export function ChatPanel({ nodeId, sessionId, cwd, accountId }: ChatPanelProps)
     <div className="term-chat nodrag nowheel">
       <div className="term-chat__bar">
         <span>{vocab('Chat')}</span>
-        <span className="term-chat__hint">{vocab(hintLabel('⌘M to exit'))}</span>
+        <span className="term-chat__hint">{hintLabel(`⌘M ${vocab('to exit')}`)}</span>
       </div>
       <div className="term-chat__msgs" ref={msgsRef}>
         {messages.length === 0 && loadState !== 'loading' && (
