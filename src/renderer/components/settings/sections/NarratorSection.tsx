@@ -20,6 +20,7 @@ import {
 import { schoolModeAllowsOptionalFeatures } from '@renderer/lib/schoolModePolicy'
 import { executeNarratorPreview } from '@renderer/canvas/narration-policy'
 import type { NarratorLanguage } from '@shared/types'
+import { Slider } from '@renderer/ui/md3'
 
 const ROWS = {
   enabled: {
@@ -266,8 +267,7 @@ export function NarratorSection({ isActive }: { isActive: boolean }): React.JSX.
             label="Rate"
             control={
               <div className="flex items-center gap-3">
-                <input
-                  type="range"
+                <Slider
                   min={50}
                   max={300}
                   step={5}
@@ -286,8 +286,7 @@ export function NarratorSection({ isActive }: { isActive: boolean }): React.JSX.
             label="Pitch"
             control={
               <div className="flex items-center gap-3">
-                <input
-                  type="range"
+                <Slider
                   min={0}
                   max={200}
                   step={5}

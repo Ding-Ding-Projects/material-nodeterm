@@ -6,6 +6,7 @@ import { FieldRow } from '../FieldRow'
 import { Switch } from '@renderer/ui/Switch'
 import { Button } from '@renderer/ui/Button'
 import { playSfx } from '@renderer/lib/sfx'
+import { Slider } from '@renderer/ui/md3'
 
 const ROWS = {
   notify: {
@@ -107,8 +108,7 @@ export function NotificationsSection({ isActive }: { isActive: boolean }): React
             label="Volume"
             control={
               <div className="flex items-center gap-3">
-                <input
-                  type="range"
+                <Slider
                   min={0}
                   max={100}
                   step={5}

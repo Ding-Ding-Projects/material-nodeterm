@@ -33,6 +33,7 @@ import {
 import { UI_FONT_CATALOG } from '@renderer/lib/appearance/uiFontDetect'
 import type { AppearancePreset, AppearanceTextStyle, ElementAppearanceEntry } from '@shared/types'
 import { saveBlobDownload } from '@renderer/lib/exportSave'
+import { Slider } from '@renderer/ui/md3'
 
 type Tab = 'font' | 'color' | 'layout' | 'presets'
 
@@ -296,8 +297,7 @@ function FontTab({
         onReset={style.fontSizePx != null ? () => clear('fontSizePx') : undefined}
         control={
           <div className="flex items-center gap-2">
-            <input
-              type="range"
+            <Slider
               min={8}
               max={72}
               step={1}

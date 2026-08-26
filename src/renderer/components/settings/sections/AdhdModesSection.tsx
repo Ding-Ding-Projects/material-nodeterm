@@ -12,6 +12,7 @@ import {
   normalizeAdhdModes
 } from '@renderer/lib/adhdModes'
 import type { AdhdModes } from '@shared/types'
+import { Slider } from '@renderer/ui/md3'
 
 /**
  * The ADHD modes settings surface.
@@ -115,9 +116,8 @@ export function AdhdModesSection({ isActive }: { isActive: boolean }): React.JSX
               ).primary
             }
             control={
-              <input
+              <Slider
                 className="adhd-range"
-                type="range"
                 min={FOCUS_DIM_MIN}
                 max={FOCUS_DIM_MAX}
                 step={0.05}
