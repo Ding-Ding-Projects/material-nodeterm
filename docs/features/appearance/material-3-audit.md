@@ -286,7 +286,7 @@ Every listed renderer producer has an explicit local mapper boundary. Commands, 
 | `find-bar` | Find bar | `src/renderer/components/FindBar.tsx` | `useVocabularyMapper()` |
 | `remote-picker` | Remote picker | `src/renderer/components/RemotePicker.tsx` | `useVocabularyMapper()` |
 | `browser-profile-picker` | Browser profile picker | `src/renderer/nodes/BrowserProfilePicker.tsx` | `useVocabularyMapper()` |
-| `wsl-create-dialog` | WSL distribution and instance creation dialog | `src/renderer/wsl/WslCreateDialog.tsx` | `useI18n()`, `useVocabularyMapper()`, and `mapAroundExactFacts()` |
+| `wsl-create-dialog` | WSL distribution and instance creation dialog | `src/renderer/wsl/WslCreateDialog.tsx` | `useI18n()`, `useVocabularyMapper()`, `WSL_COPY_IDS`, and typed template parameters that preserve runtime facts |
 | `terminal-node` | Terminal node chrome and status copy | `src/renderer/nodes/TerminalNode.tsx` | `useVocabularyMapper()` and `useLocalizedVocabularyText()` |
 | `sticky-node` | Sticky note node chrome | `src/renderer/nodes/StickyNode.tsx` | `useVocabularyMapper()` |
 | `group-node` | Group and WSL/worktree node chrome | `src/renderer/nodes/GroupNode.tsx` | `useVocabularyMapper()` |

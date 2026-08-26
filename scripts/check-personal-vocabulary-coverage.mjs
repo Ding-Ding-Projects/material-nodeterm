@@ -33,7 +33,7 @@ const PRODUCERS = [
   ['find-bar', 'src/renderer/components/FindBar.tsx', 'useVocabularyMapper()'],
   ['remote-picker', 'src/renderer/components/RemotePicker.tsx', 'useVocabularyMapper()'],
   ['browser-profile-picker', 'src/renderer/nodes/BrowserProfilePicker.tsx', 'useVocabularyMapper()'],
-  ['wsl-create-dialog', 'src/renderer/wsl/WslCreateDialog.tsx', 'useI18n()'],
+  ['wsl-create-dialog', 'src/renderer/wsl/WslCreateDialog.tsx', 'useVocabularyMapper()'],
   ['terminal-node', 'src/renderer/nodes/TerminalNode.tsx', 'useVocabularyMapper()'],
   ['sticky-node', 'src/renderer/nodes/StickyNode.tsx', 'useVocabularyMapper()'],
   ['group-node', 'src/renderer/nodes/GroupNode.tsx', 'useVocabularyMapper()'],

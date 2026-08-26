@@ -77,6 +77,15 @@ Timeouts remain bounded by the WSL command deadline, and failures stay in the di
 actionable retry path. The progress surface respects reduced motion and exposes status and
 progressbar roles for keyboard and assistive-technology users.
 
+Every dialog label, action, validation message, status, accessibility name, and progress heading
+resolves through the shared `wsl.create.*` catalogue ids. The catalogue stores templates with
+placeholders such as `{brand}` and `{exe}`; the dialog fills those placeholders only after the
+personal-vocabulary mapping has run. This keeps machine facts such as distribution names,
+instance names, paths, operation ids, `wsl.exe` output, and parser details verbatim while still
+allowing the user-supplied vocabulary to rename authored wording. Incoming catalogue and service
+errors are displayed as authored prefixes plus the original factual detail. School mode disables
+the optional vocabulary layer and restores the shipped copy live.
+
 ## Surfaces
 
 | | |
