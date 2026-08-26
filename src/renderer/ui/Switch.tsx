@@ -9,11 +9,15 @@
 export function Switch({
   checked,
   onChange,
-  ariaLabel
+  ariaLabel,
+  disabled = false
 }: {
   checked: boolean
   onChange: (v: boolean) => void
   ariaLabel?: string
+  /** Renders inert (native `disabled` + aria): for a switch whose subject does not currently
+   *  exist, e.g. a per-project capability while no project is open. */
+  disabled?: boolean
 }): React.JSX.Element {
   return (
     <button
@@ -21,6 +25,8 @@ export function Switch({
       role="switch"
       aria-checked={checked}
       aria-label={ariaLabel}
+      disabled={disabled}
+      aria-disabled={disabled || undefined}
       onClick={() => onChange(!checked)}
       className="md3-switch"
     >
