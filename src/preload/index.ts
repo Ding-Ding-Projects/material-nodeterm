@@ -166,6 +166,10 @@ const api: NodeTerminalApi = {
     load: () => ipcRenderer.invoke(IPC.workspaceLoad),
     save: (workspace: Workspace) => ipcRenderer.invoke(IPC.workspaceSave, workspace),
     probeFolder: (folder: string) => ipcRenderer.invoke(IPC.workspaceProbeFolder, folder),
+    hasPartsManifest: (cwd: string) => ipcRenderer.invoke(IPC.workspaceHasPartsManifest, cwd),
+    splitIntoParts: (cwd: string, sizeValue: number, sizeUnit: 'KB' | 'MB' | 'GB') =>
+      ipcRenderer.invoke(IPC.workspaceSplitIntoParts, cwd, sizeValue, sizeUnit),
+    joinParts: (cwd: string) => ipcRenderer.invoke(IPC.workspaceJoinParts, cwd),
     exportProject: (project: Project, password?: string) =>
       ipcRenderer.invoke(IPC.projectArchiveExport, project, password),
     importProject: (opts?: { path?: string; password?: string }) =>

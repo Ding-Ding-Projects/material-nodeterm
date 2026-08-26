@@ -34,6 +34,11 @@ const RELAY_REQUEST_METHODS = new Set<string>([
   // The shared canvas/project and its filesystem.
   IPC.workspaceLoad,
   IPC.workspaceProbeFolder,
+  // workspaceSplitIntoParts/workspaceJoinParts/workspaceHasPartsManifest are DELIBERATELY
+  // absent: they read/write raw bytes at a local filesystem path with no host-scoped project
+  // check (see WorkspaceStore.splitProjectIntoParts's own doc comment) and rewrite a git-shared
+  // file's on-disk encoding. A relay peer must not trigger that from across the tunnel; the
+  // relay API refuses these with E_UNSUPPORTED instead (see relay-api.ts).
   IPC.fsList,
   IPC.fsRead,
   IPC.fsReadBinary,

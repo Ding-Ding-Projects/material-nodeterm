@@ -25,6 +25,7 @@ import { NotificationsSection } from './sections/NotificationsSection'
 import { NarratorSection } from './sections/NarratorSection'
 import { CommitSection } from './sections/CommitSection'
 import { TmuxSection } from './sections/TmuxSection'
+import { WorkspaceStorageSection } from './sections/WorkspaceStorageSection'
 import { LicenseSection } from './sections/LicenseSection'
 import { PresenceIdentitySection } from './sections/PresenceIdentitySection'
 import { RemoteSection } from './sections/RemoteSection'
@@ -195,6 +196,7 @@ export function SettingsPage({
             <CommitSection isActive={active === 'commit'} />
             <TmuxSection isActive={active === 'tmux'} />
             <GitHubIssuesSection isActive={active === 'github-issues'} />
+            <WorkspaceStorageSection isActive={active === 'workspace-storage'} />
             <LicenseSection isActive={active === 'license'} />
             <PresenceIdentitySection isActive={active === 'presence'} />
             <RemoteSection isActive={active === 'remote'} onClose={onClose} />

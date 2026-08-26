@@ -178,6 +178,13 @@ export class WorkspaceStore {
     platform().handle(IPC.workspaceLoad, () => this.load())
     platform().handle(IPC.workspaceSave, (workspace: Workspace) => this.save(workspace))
     platform().handle(IPC.workspaceProbeFolder, (folder: string) => this.probeFolder(folder))
+    // Explicit split/join for a local project's storage encoding (project-parts.ts). Never fired
+    // by a settings toggle — see splitProjectIntoParts/joinProjectParts's own doc comments.
+    platform().handle(IPC.workspaceSplitIntoParts, (cwd: string, sizeValue: number, sizeUnit: PartSizeUnit) =>
+      this.splitProjectIntoParts(cwd, sizeValue, sizeUnit)
+    )
+    platform().handle(IPC.workspaceJoinParts, (cwd: string) => this.joinProjectParts(cwd))
+    platform().handle(IPC.workspaceHasPartsManifest, (cwd: string) => hasPartsManifest(cwd))
   }
 
   /**
