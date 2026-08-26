@@ -7,6 +7,7 @@ import type { ToyLockCredentialKind, ToyLockRecord } from '@shared/toylock'
 import { useToyLocks } from '../../../state/toylocks'
 import { ConfirmDialog } from '../../ConfirmDialog'
 import { SettingsSection } from '../SettingsSection'
+import { SettingsText } from '../SettingsText'
 import { SearchableRow } from '../SearchableRow'
 import { Checkbox } from '@renderer/ui/md3'
 
@@ -126,7 +127,7 @@ export function ToyLocksSection({ isActive }: { isActive: boolean }): React.JSX.
           </div>
 
           {!loaded ? (
-            <p className="text-[13px] text-muted">Loading…</p>
+            <p className="text-[13px] text-muted"><SettingsText>Loading…</SettingsText></p>
           ) : loadError ? null : filtered.length === 0 ? (
             <p className="text-[13px] text-muted">
               {records.length === 0

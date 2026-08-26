@@ -159,6 +159,10 @@ the substitution without anyone remembering to opt in:
 - ✅ The settings field boundary has focused coverage in
   `src/renderer/components/settings/FieldRow.vocabulary.test.tsx`, including the unknown-School
   hydration fail-closed state and protection for interpolated facts.
+- ✅ Standalone Settings prose uses the explicit `SettingsText` boundary, including section reset
+  feedback, font and theme pickers, status/empty states, and inline headings. The hand-written
+  inventory names every production Settings section and its audit row, so removing a section does
+  not silently remove its vocabulary review.
 - ✅ Node header chrome, dock, kanban cards/columns and the card modal, via the separate
   `useLocalizedVocabularyText` helper (localized shipped prose → vocabulary → dynamic facts last)
 

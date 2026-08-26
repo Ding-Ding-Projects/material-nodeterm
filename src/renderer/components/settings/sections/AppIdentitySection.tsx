@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSettings } from '../../../state/settings'
 import { SettingsSection } from '../SettingsSection'
+import { SettingsText } from '../SettingsText'
 import { SearchableRow } from '../SearchableRow'
 import { FieldRow } from '../FieldRow'
 import { Input } from '@renderer/ui/Input'
@@ -148,7 +149,7 @@ export function AppIdentitySection({ isActive }: { isActive: boolean }): React.J
 
       <SearchableRow {...ROWS.logo}>
         <div>
-          <h4 className="text-[13px] font-medium text-text">App logo</h4>
+          <h4 className="text-[13px] font-medium text-text"><SettingsText>App logo</SettingsText></h4>
           <p className="mt-1 text-[13px] leading-relaxed text-muted">
             Changes the mark shown in the tab bar (and anywhere else it's used). This does not
             change the packaged application icon (dock/taskbar/installer) — that is generated at
@@ -217,7 +218,7 @@ export function AppIdentitySection({ isActive }: { isActive: boolean }): React.J
             )}
           </div>
 
-          {processing && <p className="mt-2 text-[12px] text-muted">Processing…</p>}
+          {processing && <p className="mt-2 text-[12px] text-muted"><SettingsText>Processing…</SettingsText></p>}
           {processError && (
             <p className="mt-2 text-[12px] text-[color:var(--danger)]">
               {processError.message} The logo shown above is unchanged.

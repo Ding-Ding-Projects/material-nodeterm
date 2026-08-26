@@ -21,6 +21,11 @@ const PRODUCERS = [
   ['settings-page', 'src/renderer/components/settings/SettingsPage.tsx', 'useLocalizedVocabularyText()'],
   ['settings-sidebar', 'src/renderer/components/settings/SettingsSidebar.tsx', 'useI18n()'],
   ['settings-search-corpus', 'src/renderer/components/settings/SearchableRow.tsx', 'useVocabularyMapper()'],
+  ['settings-inline-copy', 'src/renderer/components/settings/SettingsText.tsx', 'useVocabularyMapper()'],
+  ['settings-reset', 'src/renderer/components/settings/SectionReset.tsx', 'useVocabularyMapper()'],
+  ['settings-font-picker', 'src/renderer/components/settings/FontPicker.tsx', 'useVocabularyMapper()'],
+  ['settings-theme-picker', 'src/renderer/components/settings/ThemeSelect.tsx', 'useVocabularyMapper()'],
+  ['settings-section-inline-copy', 'src/renderer/components/settings/SettingsText.tsx', 'export function SettingsText'],
   ['personal-vocabulary-upload', 'src/renderer/components/settings/sections/PersonalVocabularySection.tsx', 'usePersonalVocabulary'],
   ['command-palette', 'src/renderer/components/CommandPalette.tsx', 'useVocabularyCommands'],
   ['context-menus', 'src/renderer/components/menu/VocabularyContextMenu.tsx', 'useVocabularyMenuItems'],
@@ -116,6 +121,48 @@ const PRODUCTION_SURFACES = [
   ['update-card', 'src/renderer/components/UpdateCard.tsx', 'unmapped-callsite-pending'],
   ['resume-card', 'src/renderer/components/ResumeCard.tsx', 'unmapped-callsite-pending']
 ]
+// Every Settings section is listed explicitly. The shared FieldRow/SettingsSection funnels cover
+// their ordinary rows, while SettingsText marks standalone inline prose and the shared primitives
+// cover labels/options. Keeping this list hand-written means deleting a section cannot make its
+// vocabulary audit disappear with it.
+const SETTINGS_SECTION_INVENTORY = [
+  ['settings-accounts', 'src/renderer/components/settings/sections/AccountsSection.tsx'],
+  ['settings-adhd', 'src/renderer/components/settings/sections/AdhdModesSection.tsx'],
+  ['settings-agents', 'src/renderer/components/settings/sections/AgentsSection.tsx'],
+  ['settings-appearance', 'src/renderer/components/settings/sections/AppearanceSection.tsx'],
+  ['settings-appearance-editor', 'src/renderer/components/settings/sections/AppearanceEditorSection.tsx'],
+  ['settings-authenticator', 'src/renderer/components/settings/sections/AuthenticatorSection.tsx'],
+  ['settings-behavior', 'src/renderer/components/settings/sections/BehaviorSection.tsx'],
+  ['settings-commit', 'src/renderer/components/settings/sections/CommitSection.tsx'],
+  ['settings-custom-agents', 'src/renderer/components/settings/sections/CustomAgentsSection.tsx'],
+  ['settings-github-issues', 'src/renderer/components/settings/sections/GitHubIssuesSection.tsx'],
+  ['settings-kids', 'src/renderer/components/settings/sections/KidsModeSection.tsx'],
+  ['settings-language', 'src/renderer/components/settings/sections/LanguageSection.tsx'],
+  ['settings-license', 'src/renderer/components/settings/sections/LicenseSection.tsx'],
+  ['settings-local-history', 'src/renderer/components/settings/sections/LocalHistorySection.tsx'],
+  ['settings-narrator', 'src/renderer/components/settings/sections/NarratorSection.tsx'],
+  ['settings-notch', 'src/renderer/components/settings/sections/NotchSection.tsx'],
+  ['settings-notifications', 'src/renderer/components/settings/sections/NotificationsSection.tsx'],
+  ['settings-personal-vocabulary', 'src/renderer/components/settings/sections/PersonalVocabularySection.tsx'],
+  ['settings-phone', 'src/renderer/components/settings/sections/PhoneSection.tsx'],
+  ['settings-presence', 'src/renderer/components/settings/sections/PresenceIdentitySection.tsx'],
+  ['settings-privacy', 'src/renderer/components/settings/sections/PrivacySection.tsx'],
+  ['settings-remote', 'src/renderer/components/settings/sections/RemoteSection.tsx'],
+  ['settings-schedule', 'src/renderer/components/settings/sections/ScheduleSection.tsx'],
+  ['settings-school', 'src/renderer/components/settings/sections/SchoolModeSection.tsx'],
+  ['settings-shell', 'src/renderer/components/settings/sections/ShellSection.tsx'],
+  ['settings-shortcuts', 'src/renderer/components/settings/sections/ShortcutsSection.tsx'],
+  ['settings-speech', 'src/renderer/components/settings/sections/SpeechSection.tsx'],
+  ['settings-ssh', 'src/renderer/components/settings/sections/SshSection.tsx'],
+  ['settings-support', 'src/renderer/components/settings/sections/SupportTicketsSection.tsx'],
+  ['settings-team', 'src/renderer/components/settings/sections/TeamAccessSection.tsx'],
+  ['settings-terminal', 'src/renderer/components/settings/sections/TerminalSection.tsx'],
+  ['settings-tmux', 'src/renderer/components/settings/sections/TmuxSection.tsx'],
+  ['settings-toy-locks', 'src/renderer/components/settings/sections/ToyLocksSection.tsx'],
+  ['settings-updates', 'src/renderer/components/settings/sections/UpdatesSection.tsx'],
+  ['settings-usage', 'src/renderer/components/settings/sections/UsageSection.tsx'],
+  ['settings-workspace', 'src/renderer/components/settings/sections/WorkspaceStorageSection.tsx']
+]
 let failures = 0
 let checked = 0
 const read = (file) => existsSync(join(ROOT, file)) ? readFileSync(join(ROOT, file), 'utf8') : null
@@ -156,6 +203,10 @@ for (const [id, file, reason] of PRODUCTION_SURFACES) {
   check(id + ': production surface exists', read(file) !== null)
   check(id + ': classification reason is explicit', reason.length > 0)
   if (reason === 'mapped-callsite') check(id + ': mapper call is present', hasMarker(read(file), 'useVocabularyMapper()') || hasMarker(read(file), 'useLocalizedVocabularyText()'))
+}
+for (const [id, file] of SETTINGS_SECTION_INVENTORY) {
+  check(id + ': exact settings section exists', read(file) !== null)
+  check(id + ': exact Material/settings audit row', (read(DOC) || '').includes('| ' + String.fromCharCode(96) + id + String.fromCharCode(96) + ' |'))
 }
 const pendingProductionSurfaces = PRODUCTION_SURFACES.filter(([, , reason]) => reason === 'unmapped-callsite-pending')
 check('all listed production surfaces are mapper-covered', pendingProductionSurfaces.length === 0)

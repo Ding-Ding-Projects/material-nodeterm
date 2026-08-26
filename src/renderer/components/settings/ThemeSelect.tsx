@@ -2,6 +2,7 @@ import { useState, type MouseEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { useMenuFlip } from '@renderer/ui/useMenuFlip'
 import { TERMINAL_THEMES, resolveTerminalTheme, type TerminalTheme } from '@renderer/terminal/themes'
+import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 
 /** The colours worth showing at a glance: the field, then the hues a prompt actually uses. */
 function swatchColors(t: TerminalTheme): string[] {
@@ -34,15 +35,16 @@ function Group({
   value: string
   onPick: (id: string) => void
 }): React.JSX.Element | null {
+  const vocab = useVocabularyMapper()
   if (!themes.length) return null
   return (
     <>
-      <div className="md3-theme-menu__group">{label}</div>
+      <div className="md3-theme-menu__group">{vocab(label)}</div>
       {themes.map((t) => (
         <button type="button" key={t.id} onClick={() => onPick(t.id)}>
           <span className="md3-theme-menu__check">{t.id === value ? '✓' : ''}</span>
           <Swatch theme={t} />
-          <span className="md3-theme-menu__name">{t.label}</span>
+          <span className="md3-theme-menu__name">{vocab(t.label)}</span>
         </button>
       ))}
     </>
@@ -65,6 +67,7 @@ export function ThemeSelect({
   value: string
   onChange: (id: string) => void
 }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   const [menu, setMenu] = useState<{ top: number; left: number; width: number; base: number } | null>(
     null
   )
@@ -81,7 +84,7 @@ export function ThemeSelect({
     <>
       <button type="button" className="md3-theme-trigger" onClick={open}>
         <Swatch theme={current} />
-        <span className="md3-theme-trigger__val">{current.label}</span>
+        <span className="md3-theme-trigger__val">{vocab(current.label)}</span>
         <span className="md3-theme-trigger__chev">⌄</span>
       </button>
       {menu && (

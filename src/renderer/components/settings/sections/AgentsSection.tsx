@@ -39,6 +39,7 @@ import { Select } from '@renderer/ui/Select'
 import { Switch } from '@renderer/ui/Switch'
 import { NumberField } from '@renderer/ui/NumberField'
 import { SettingsSection } from '../SettingsSection'
+import { SettingsText } from '../SettingsText'
 import { SearchableRow } from '../SearchableRow'
 import { FieldRow } from '../FieldRow'
 
@@ -446,7 +447,7 @@ export function AgentsSection({ isActive }: { isActive: boolean }): React.JSX.El
                 // real guard is `planHibernation`, which refuses any non-positive window outright.
                 onChange={(v) => update({ agentHibernationIdleMinutes: v || 30 })}
               />
-              <span className="text-[13px] text-muted">min</span>
+              <span className="text-[13px] text-muted"><SettingsText>min</SettingsText></span>
             </div>
           }
         />

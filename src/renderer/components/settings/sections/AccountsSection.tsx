@@ -30,6 +30,7 @@ import {
 } from '../../../lib/destructiveAuthorization'
 import { ConfirmDialog } from '../../ConfirmDialog'
 import { SettingsSection } from '../SettingsSection'
+import { SettingsText } from '../SettingsText'
 import { SearchableRow } from '../SearchableRow'
 import { Button } from '@renderer/ui/Button'
 import { Input } from '@renderer/ui/Input'
@@ -176,7 +177,7 @@ function AccountRow({
         ) : null}
         {labelControl}
         {unavailable ? (
-          <p className="text-[12px] text-muted">Not logged in or unavailable</p>
+          <p className="text-[12px] text-muted"><SettingsText>Not logged in or unavailable</SettingsText></p>
         ) : null}
         {details}
       </div>

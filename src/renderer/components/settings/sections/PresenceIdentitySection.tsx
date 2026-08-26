@@ -3,6 +3,7 @@ import { NAME_MAX_LEN, PRESENCE_COLORS } from '@shared/presence'
 import { loadIdentity } from '../../../state/presence'
 import { setMeAll } from '../../../session/session'
 import { SettingsSection } from '../SettingsSection'
+import { SettingsText } from '../SettingsText'
 import { SearchableRow } from '../SearchableRow'
 import { FieldRow } from '../FieldRow'
 import { Button } from '@renderer/ui/Button'
@@ -101,7 +102,7 @@ export function PresenceIdentitySection({ isActive }: { isActive: boolean }): Re
             <Button variant="primary" disabled={!trimmed || !dirty} onClick={save}>
               Save
             </Button>
-            {justSaved && !dirty ? <span className="text-sm text-muted">Saved</span> : null}
+            {justSaved && !dirty ? <span className="text-sm text-muted"><SettingsText>Saved</SettingsText></span> : null}
           </div>
           <p className="text-sm text-muted">
             If you never pick a name you appear to others as “Someone”. This is separate from your

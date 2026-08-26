@@ -4,6 +4,7 @@ import { useTeamAccess } from '../../../state/teamAccess'
 import { listSeats, usedCount, type SeatEntry } from '../../../state/teamAccessCore'
 import { inviteShare, seatFullMessage, teamAccessView } from '../teamAccessView'
 import { SettingsSection } from '../SettingsSection'
+import { SettingsText } from '../SettingsText'
 import { SearchableRow } from '../SearchableRow'
 import { FieldRow } from '../FieldRow'
 import { Button } from '@renderer/ui/Button'
@@ -91,18 +92,18 @@ export function TeamAccessSection({
             {/* Seat counter */}
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h4 className="text-[13px] font-medium text-text">Seats</h4>
+                <h4 className="text-[13px] font-medium text-text"><SettingsText>Seats</SettingsText></h4>
                 <p className="text-sm text-muted">{view.counterText}</p>
-                <p className="text-xs text-muted">3 included with Pro · extra seats $5/seat/month</p>
+                <p className="text-xs text-muted"><SettingsText>3 included with Pro · extra seats $5/seat/month</SettingsText></p>
               </div>
               <Button onClick={() => void ent.upgrade('seats')}>Add seats</Button>
             </div>
 
             {/* Connected devices */}
             <div className="space-y-2">
-              <h4 className="text-[13px] font-medium text-text">Connected devices</h4>
+                <h4 className="text-[13px] font-medium text-text"><SettingsText>Connected devices</SettingsText></h4>
               {seatList.length === 0 ? (
-                <p className="text-sm text-muted">No teammates connected yet.</p>
+                <p className="text-sm text-muted"><SettingsText>No teammates connected yet.</SettingsText></p>
               ) : (
                 <div className="space-y-2">
                   {seatList.map((seat) => (
@@ -114,7 +115,7 @@ export function TeamAccessSection({
 
             {/* Invite */}
             <div className="space-y-3">
-              <h4 className="text-[13px] font-medium text-text">Invite a teammate</h4>
+                <h4 className="text-[13px] font-medium text-text"><SettingsText>Invite a teammate</SettingsText></h4>
               <p className="text-sm text-muted">
                 A teammate on a seat can run commands on this Mac — the same as giving them SSH
                 access. Only invite people you trust.
@@ -139,7 +140,7 @@ export function TeamAccessSection({
                 {busy ? 'Generating…' : 'Generate invite'}
               </Button>
               {!view.canInvite ? (
-                <p className="text-sm text-muted">All seats in use — add a seat.</p>
+                <p className="text-sm text-muted"><SettingsText>All seats in use — add a seat.</SettingsText></p>
               ) : null}
               {atCap ? (
                 <p className="text-sm" style={{ color: '#ff9f0a' }}>

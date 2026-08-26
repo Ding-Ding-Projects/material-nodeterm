@@ -267,6 +267,11 @@ Every listed renderer producer has an explicit local mapper boundary. Commands, 
 | `settings-page` | Settings scope and every production section host | `src/renderer/components/settings/SettingsPage.tsx` | `useLocalizedVocabularyText()` |
 | `settings-sidebar` | Settings group and section navigation | `src/renderer/components/settings/SettingsSidebar.tsx` | `useI18n()` shared vocabulary boundary |
 | `settings-search-corpus` | Settings search matches visible replacements and shipped aliases | `src/renderer/components/settings/SearchableRow.tsx` | `useVocabularyMapper()` |
+| `settings-inline-copy` | Explicit prose boundary for settings inline text | `src/renderer/components/settings/SettingsText.tsx` | `useVocabularyMapper()` |
+| `settings-reset` | Section reset copy | `src/renderer/components/settings/SectionReset.tsx` | `useVocabularyMapper()` |
+| `settings-font-picker` | Font picker labels and states | `src/renderer/components/settings/FontPicker.tsx` | `useVocabularyMapper()` |
+| `settings-theme-picker` | Theme picker labels | `src/renderer/components/settings/ThemeSelect.tsx` | `useVocabularyMapper()` |
+| `settings-section-inline-copy` | Standalone settings prose boundary | `src/renderer/components/settings/SettingsText.tsx` | `export function SettingsText` |
 | `shared-prose-primitives` | Shared controls carrying prose props | `src/renderer/ui/` | `useVocabularyMapper()` in each primitive |
 | `shared-input-controls` | Shared range, checkbox and radio accessible copy | `src/renderer/ui/md3/Slider.tsx`, `Checkbox.tsx`, `Radio.tsx` | `useVocabularyMapper()` |
 | `personal-vocabulary-upload` | Upload settings | `src/renderer/components/settings/sections/PersonalVocabularySection.tsx` | `usePersonalVocabulary` |

@@ -30,13 +30,14 @@ function mapOptionChildren(children: ReactNode, map: ReturnType<typeof useVocabu
 export function Select({
   className,
   children,
+  vocabularyOptions = true,
   ...rest
-}: SelectHTMLAttributes<HTMLSelectElement>): React.JSX.Element {
+}: SelectHTMLAttributes<HTMLSelectElement> & { vocabularyOptions?: boolean }): React.JSX.Element {
   const vocab = useVocabularyMapper()
   return (
     <span className="mdx-select__wrap">
       <select className={cn('mdx-select', className)} {...rest} aria-label={vocab(rest['aria-label'])} title={vocab(rest.title)}>
-        {mapOptionChildren(children, vocab)}
+        {vocabularyOptions ? mapOptionChildren(children, vocab) : children}
       </select>
       <svg
         aria-hidden="true"

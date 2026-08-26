@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSupportTickets, type SupportTicket, type TicketStatus } from '../../../state/supportTickets'
 import { isBrowserRuntime } from '../../../bridge/runtime'
 import { SettingsSection } from '../SettingsSection'
+import { SettingsText } from '../SettingsText'
 import { SearchableRow } from '../SearchableRow'
 import { TextArea } from '@renderer/ui/md3'
 import { Select } from '@renderer/ui/Select'
@@ -199,7 +200,7 @@ export function SupportTicketsSection({ isActive }: { isActive: boolean }): Reac
           </div>
 
           {filtered.length === 0 ? (
-            <p className="text-[13px] text-muted">No tickets yet.</p>
+            <p className="text-[13px] text-muted"><SettingsText>No tickets yet.</SettingsText></p>
           ) : (
             <ul className="toylock-ticket-list">
               {filtered.map((t) => (

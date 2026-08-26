@@ -4,6 +4,7 @@ import { modelAfterDelete, modelAfterDownload } from '@shared/speech'
 import { DEFAULT_SETTINGS } from '@shared/types'
 import { useSettings } from '../../../state/settings'
 import { SettingsSection } from '../SettingsSection'
+import { SettingsText } from '../SettingsText'
 import { SearchableRow } from '../SearchableRow'
 import { FieldRow } from '../FieldRow'
 import { Select } from '@renderer/ui/Select'
@@ -234,9 +235,9 @@ export function SpeechSection({ isActive }: { isActive: boolean }): React.JSX.El
 
       <SearchableRow {...ROWS.models}>
         <div className="space-y-3">
-          <h4 className="text-[13px] font-medium text-text">Whisper models</h4>
+          <h4 className="text-[13px] font-medium text-text"><SettingsText>Whisper models</SettingsText></h4>
           {models.length === 0 ? (
-            <p className="text-[12px] text-muted">Loading models…</p>
+            <p className="text-[12px] text-muted"><SettingsText>Loading models…</SettingsText></p>
           ) : (
             <div className="space-y-2">
               {models.map((m) => {

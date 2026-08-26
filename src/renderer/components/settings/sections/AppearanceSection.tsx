@@ -5,6 +5,7 @@ import { useSettings } from '../../../state/settings'
 import { RAINBOW_SPEED_MAX, RAINBOW_SPEED_MIN, rainbowDurationSeconds } from '../../../lib/nodeColor'
 import { NODE_COLORS } from '../../../state/workspace'
 import { SettingsSection } from '../SettingsSection'
+import { SettingsText } from '../SettingsText'
 import { SearchableRow } from '../SearchableRow'
 import { FieldRow } from '../FieldRow'
 import { Switch } from '@renderer/ui/Switch'
@@ -172,7 +173,7 @@ export function AppearanceSection({ isActive }: { isActive: boolean }): React.JS
       </SearchableRow>
       <SearchableRow {...ROWS.accent}>
         <div className="flex items-center justify-between gap-4 py-2.5">
-          <span className="text-[13px] text-text">Accent</span>
+          <span className="text-[13px] text-text"><SettingsText>Accent</SettingsText></span>
           {accentLocked ? (
             <button
               type="button"
@@ -236,7 +237,7 @@ export function AppearanceSection({ isActive }: { isActive: boolean }): React.JS
           every direct child, so a heading + caption + list must arrive as a single node. */}
       <SearchableRow {...ROWS.menuItems}>
         <div>
-          <h4 className="text-[13px] font-medium text-text">Node menu items</h4>
+          <h4 className="text-[13px] font-medium text-text"><SettingsText>Node menu items</SettingsText></h4>
           <p className="mt-1 text-[13px] leading-relaxed text-muted">
             Which rows the node right-click menu offers (and, for Colors, the group frame's colour
             strip too) — it applies to the next right-click. Destructive and recovery actions
@@ -252,7 +253,7 @@ export function AppearanceSection({ isActive }: { isActive: boolean }): React.JS
       </SearchableRow>
       <SearchableRow {...ROWS.headerButtons}>
         <div>
-          <h4 className="text-[13px] font-medium text-text">Terminal header buttons</h4>
+          <h4 className="text-[13px] font-medium text-text"><SettingsText>Terminal header buttons</SettingsText></h4>
           <p className="mt-1 text-[13px] leading-relaxed text-muted">
             Which icon buttons the terminal node header shows. Close and the terminal Search
             button are always shown, as are the right-click menu's destructive and recovery

@@ -16,6 +16,7 @@ import {
 } from '../../../lib/authenticatorRemoval'
 import type { DestructiveAuthorization } from '../../../lib/destructiveAuthorization'
 import { SettingsSection } from '../SettingsSection'
+import { SettingsText } from '../SettingsText'
 import { SearchableRow } from '../SearchableRow'
 import { Select } from '@renderer/ui/Select'
 import { Radio } from '@renderer/ui/md3'
@@ -286,7 +287,7 @@ function EntryRow({
             <span className="sr-only" aria-live="off">
               New code in {secondsRemaining} seconds
             </span>
-            {copied && <span className="toylock-hint">Copied</span>}
+            {copied && <span className="toylock-hint"><SettingsText>Copied</SettingsText></span>}
             {code.clockWarning && <div className="toylock-warn">{code.clockWarning}</div>}
           </>
         ) : (
@@ -323,7 +324,7 @@ function EntryRow({
       </div>
       {revealed && (
         <div className="toylock-manual-secret">
-          <span className="toylock-field__label">Secret for {entry.issuer} — {entry.account}</span>
+          <span className="toylock-field__label"><SettingsText>Secret for</SettingsText>{' '}{entry.issuer} — {entry.account}</span>
           <code className="toylock-secret-text">{revealed.secretBase32.replace(/(.{4})/g, '$1 ').trim()}</code>
           <button className="toylock-btn toylock-btn--sm" onClick={() => setRevealed(null)}>
             Hide
@@ -448,7 +449,7 @@ export function AuthenticatorSection({ isActive }: { isActive: boolean }): React
             aria-label="Filter authenticator entries"
           />
           {loadError ? null : filtered.length === 0 ? (
-            <p className="md3-authenticator__empty">No entries yet.</p>
+            <p className="md3-authenticator__empty"><SettingsText>No entries yet.</SettingsText></p>
           ) : (
             <ul className="toylock-auth-list">
               {filtered.map((e) => (
@@ -468,7 +469,7 @@ export function AuthenticatorSection({ isActive }: { isActive: boolean }): React
 
           {entries.length > 0 && (
             <div className="toylock-export-section">
-              <h4 className="md3-authenticator__export-title">Export secrets</h4>
+              <h4 className="md3-authenticator__export-title"><SettingsText>Export secrets</SettingsText></h4>
               <p className="md3-authenticator__export-body">
                 Ordinary exports (backups, sharing) never include these secrets. This is the ONE
                 deliberate action that writes them out, in the clear, behind a real two-key gate.

@@ -15,6 +15,8 @@ import {
   type Weekday
 } from '@shared/scheduled-settings'
 import { SettingsSection } from '../SettingsSection'
+import { SettingsText } from '../SettingsText'
+import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
 import { SearchableRow } from '../SearchableRow'
 import { Button } from '@renderer/ui/Button'
 import { Input } from '@renderer/ui/Input'
@@ -70,14 +72,15 @@ function Labeled({
   error?: string
   children: React.ReactNode
 }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   return (
     <div className="min-w-0 space-y-1">
-      <span className="block text-[12px] font-medium text-muted">{label}</span>
+      <span className="block text-[12px] font-medium text-muted">{vocab(label)}</span>
       {children}
       {error ? (
         <p className="text-[11px] leading-snug text-[color:var(--warn)]">{error}</p>
       ) : hint ? (
-        <p className="text-[11px] leading-snug text-muted-2">{hint}</p>
+        <p className="text-[11px] leading-snug text-muted-2">{vocab(hint)}</p>
       ) : null}
     </div>
   )
@@ -689,12 +692,12 @@ function RuleCard({
       </div>
 
       <div>
-        <p className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-muted-2">When</p>
+        <p className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-muted-2"><SettingsText>When</SettingsText></p>
         <WindowEditor window={rule.window} onChange={(window) => onPatch({ window })} />
       </div>
 
       <div>
-        <p className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-muted-2">Source</p>
+        <p className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-muted-2"><SettingsText>Source</SettingsText></p>
         <SourceEditor
           source={rule.source}
           hasToken={hasToken}
@@ -758,7 +761,7 @@ export function ScheduleSection({ isActive }: { isActive: boolean }): React.JSX.
   if (!hydrated || !settingsHydrated) {
     return (
       <SettingsSection id="schedule" title="Schedule" isActive={isActive} searchEntries={ENTRIES}>
-        <p className="text-[13px] text-muted">Loading…</p>
+          <p className="text-[13px] text-muted"><SettingsText>Loading…</SettingsText></p>
       </SettingsSection>
     )
   }
