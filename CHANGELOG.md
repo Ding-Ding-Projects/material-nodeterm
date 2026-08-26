@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Fix the WSL instance creator so installation has operation ids, bounded staged progress,
+  cancellation, duplicate-submit refusal, and stale-progress fencing. Replace the legacy WSL
+  prompt chrome with a guided Material Design 3 dialog that keeps WSL creation separate from the
+  Linux ISO VM installer. Focused implementation verification remains pending in this lane.
+
 - Add the shared automatic node-dependency foundation: an explicit manifest, canonical HTTPS
   sources, SHA-256 verification, reusable machine-local cache, bounded download and extraction,
   atomic user-scoped publication, health probes, cancellation, repair, restart reconciliation, and

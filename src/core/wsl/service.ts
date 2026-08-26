@@ -22,9 +22,11 @@
 
 import { IPC } from '../../shared/ipc'
 import { platform } from '../platform'
+import { isWslCreateOperationId } from '../../shared/wsl'
 import type {
   WslActionResult,
   WslCatalogueEntry,
+  WslCreateProgress,
   WslCreateResult,
   WslInstanceSummary
 } from '../../shared/wsl'
@@ -101,6 +103,10 @@ async function buildCatalogue(runtime: WslRuntime): Promise<WslCatalogueEntry[]>
 }
 
 export function startWslService(opts: WslServiceOptions): { dispose(): void } {
+  const createOperations = new Map<string, AbortController>()
+  const emitCreateProgress = (progress: WslCreateProgress): void => {
+    platform().broadcast(IPC.wslCreateProgress, progress)
+  }
   platform().handle(IPC.wslList, async (): Promise<WslInstanceSummary[]> => buildInstanceList(opts))
 
   platform().handle(
@@ -110,23 +116,73 @@ export function startWslService(opts: WslServiceOptions): { dispose(): void } {
 
   platform().handle(
     IPC.wslCreate,
-    async (input: { catalogueId: string; name: string }): Promise<WslCreateResult> => {
+    async (input: { operationId: string; catalogueId: string; name: string }): Promise<WslCreateResult> => {
+      if (!input || !isWslCreateOperationId(input.operationId)) {
+        return { ok: false, error: 'WSL instance creation could not start because its operation id was invalid.' }
+      }
+      if (createOperations.has(input.operationId)) {
+        return { ok: false, error: 'This WSL instance creation is already in progress.' }
+      }
+      const controller = new AbortController()
+      createOperations.set(input.operationId, controller)
+      const startedAt = Date.now()
+      const emit = (stage: WslCreateProgress['stage'], step: number, message: string, determinate = false, error?: string): void => {
+        emitCreateProgress({ operationId: input.operationId, stage, step, steps: 4, determinate, elapsedMs: Date.now() - startedAt, message, ...(error ? { error } : {}) })
+      }
+      emit('validating', 1, 'Validating the selected distribution and name.')
       // The collision check inside `createWslDistribution` needs every existing name on the
       // machine. A failed enumeration here is reported as a failed create (never silently treated
       // as "nothing exists yet") — proceeding with an empty existingNames would risk letting a
       // real collision through undetected, past the one check this app can make before wsl.exe
       // itself refuses.
-      const enumeration = await listInstalledWslDistributions(opts.runtime, opts.ownership)
-      if (!enumeration.ok) return { ok: false, error: enumeration.error }
-
-      const result = await createWslDistribution(opts.runtime, opts.ownership, {
-        name: input.name,
-        catalogName: input.catalogueId,
-        existingNames: enumeration.installed.map((d) => d.name)
-      })
-      return result.ok ? { ok: true, name: input.name } : { ok: false, error: result.error }
+      try {
+        const enumeration = await listInstalledWslDistributions(opts.runtime, opts.ownership)
+        if (!enumeration.ok) {
+          emit('failed', 2, 'The current WSL distribution list could not be read.', false, enumeration.error)
+          return { ok: false, error: enumeration.error }
+        }
+        if (controller.signal.aborted) {
+          emit('cancelled', 2, 'WSL instance creation was cancelled.')
+          return { ok: false, error: 'WSL instance creation was cancelled.' }
+        }
+        emit('checking', 2, 'WSL is available and the distribution name is free.')
+        const result = await createWslDistribution(opts.runtime, opts.ownership, {
+          name: input.name,
+          catalogName: input.catalogueId,
+          existingNames: enumeration.installed.map((d) => d.name)
+        }, {
+          signal: controller.signal,
+          onProgress: (progress) => emit(progress.stage, progress.step, progress.message, progress.determinate)
+        })
+        if (result.ok && controller.signal.aborted) {
+          const lateCancel = 'WSL instance was created before cancellation completed; no canvas frame was bound.'
+          emit('cancelled', 4, lateCancel, true, lateCancel)
+          return { ok: false, error: lateCancel }
+        }
+        if (result.ok) {
+          emit('completed', 4, 'WSL instance created and ownership recorded.', true)
+          return { ok: true, name: input.name }
+        }
+        const cancelled = controller.signal.aborted
+        emit(cancelled ? 'cancelled' : 'failed', 3, cancelled ? 'WSL instance creation was cancelled.' : 'WSL instance creation failed.', false, result.error)
+        return { ok: false, error: result.error }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        emit(controller.signal.aborted ? 'cancelled' : 'failed', 3, controller.signal.aborted ? 'WSL instance creation was cancelled.' : 'WSL instance creation failed.', false, message)
+        return { ok: false, error: message }
+      } finally {
+        createOperations.delete(input.operationId)
+      }
     }
   )
+
+  platform().handle(IPC.wslCreateCancel, async (operationId: string): Promise<boolean> => {
+    if (typeof operationId !== 'string') return false
+    const controller = createOperations.get(operationId)
+    if (!controller) return false
+    controller.abort()
+    return true
+  })
 
   platform().handle(IPC.wslSleep, async (name: string): Promise<WslActionResult> => {
     const result = await sleepWslDistribution(opts.runtime, opts.ownership, name)
@@ -156,5 +212,8 @@ export function startWslService(opts: WslServiceOptions): { dispose(): void } {
 
   // Nothing to tear down: every handler is pull-only, with no timer, no cache and no open
   // resource. `dispose` exists so a shell can treat this like the other services it starts.
-  return { dispose: (): void => {} }
+  return { dispose: (): void => {
+    for (const controller of createOperations.values()) controller.abort()
+    createOperations.clear()
+  } }
 }

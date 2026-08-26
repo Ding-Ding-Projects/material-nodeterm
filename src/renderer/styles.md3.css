@@ -3931,6 +3931,153 @@ button.term-node__title-text:focus-visible {
   border-radius: 999px;
 }
 
+/* ---- MD3: WSL instance creator ----
+   This surface stays distinct from the Linux ISO VM installer. It uses the shared dialog and
+   outlined-field primitives, while the long-running install gets a determinate stage bar instead
+   of a spinner that could be mistaken for a frozen operation. */
+.wsl-create-dialog {
+  width: min(560px, calc(100vw - 32px));
+  max-height: min(760px, calc(100vh - 32px));
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  gap: 0;
+}
+.wsl-create-dialog__body {
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 12px;
+  scrollbar-gutter: stable;
+}
+.wsl-create-dialog__description {
+  margin: -4px 0 4px;
+  color: var(--md-on-surface-variant);
+  font-family: var(--md-font-ui);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.wsl-create-dialog__search,
+.wsl-create-dialog__search .menu-filter__row {
+  display: block;
+}
+.wsl-create-dialog__search-field,
+.wsl-create-dialog__name-field {
+  --mdx-field-surface: var(--md-surface-container-high);
+}
+.wsl-create-dialog__search-field .mdx-field__control {
+  min-height: 56px;
+}
+.wsl-create-dialog__list {
+  display: grid;
+  gap: 6px;
+  max-height: 260px;
+  overflow: auto;
+  padding: 4px;
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-md);
+  background: var(--md-surface-container-low);
+}
+.wsl-create-dialog__option {
+  min-height: 48px;
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid transparent;
+  border-radius: var(--md-shape-sm);
+  background: transparent;
+  color: var(--md-on-surface);
+  font: 500 14px/1.25 var(--md-font-ui);
+  text-align: left;
+  cursor: pointer;
+}
+.wsl-create-dialog__option:hover:not(:disabled),
+.wsl-create-dialog__option.is-active {
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+.wsl-create-dialog__option:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+.wsl-create-dialog__option:disabled {
+  cursor: not-allowed;
+  opacity: .55;
+}
+.wsl-create-dialog__empty {
+  padding: 18px 14px;
+  color: var(--md-on-surface-variant);
+  font: 13px/1.45 var(--md-font-ui);
+}
+.wsl-create-dialog__empty--error,
+.wsl-create-dialog__field-error {
+  color: var(--md-error);
+}
+.wsl-create-dialog__field-error {
+  margin: 2px 0 0;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--md-error) 45%, var(--md-outline-variant));
+  border-radius: var(--md-shape-sm);
+  background: var(--md-error-container);
+  font: 13px/1.4 var(--md-font-ui);
+}
+.wsl-create-dialog__progress {
+  padding: 14px 16px;
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-md);
+  background: var(--md-surface-container-low);
+}
+.wsl-create-dialog__progress-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  color: var(--md-on-surface);
+  font: 13px/1.4 var(--md-font-ui);
+}
+.wsl-create-dialog__progress-heading span {
+  flex: 0 0 auto;
+  color: var(--md-primary);
+  font-variant-numeric: tabular-nums;
+}
+.wsl-create-dialog__progress-track {
+  height: 10px;
+  margin-top: 10px;
+  overflow: hidden;
+  border-radius: var(--md-shape-full);
+  background: var(--md-surface-container-highest);
+}
+.wsl-create-dialog__progress-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--md-primary);
+  transition: width var(--md-motion-effect);
+}
+.wsl-create-dialog__progress-track.is-indeterminate span {
+  width: 36%;
+  background: var(--md-tertiary);
+  animation: wsl-create-progress-indeterminate 1.4s ease-in-out infinite alternate;
+}
+.wsl-create-dialog__progress-detail {
+  margin: 8px 0 0;
+  color: var(--md-on-surface-variant);
+  font: 12px/1.4 var(--md-font-ui);
+}
+@media (prefers-reduced-motion: reduce) {
+  .wsl-create-dialog__progress-track span {
+    transition: none;
+  }
+  .wsl-create-dialog__progress-track.is-indeterminate span {
+    animation: none;
+  }
+}
+@keyframes wsl-create-progress-indeterminate {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(280%); }
+}
+
 /* ---- MD3: Destructive confirmation gate ---- */
 
 .destgate-overlay {

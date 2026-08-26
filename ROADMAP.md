@@ -57,6 +57,11 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## In progress / partially landed
 
+- [ ] **WSL instance creator repair**: the guided Material Design 3 surface now has staged,
+      cancellable operation plumbing and duplicate-submit protection in `src/core/wsl/`,
+      `src/shared/wsl.ts`, the bridges, and `src/renderer/wsl/WslCreateDialog.tsx`. Focused
+      verification and real built-artifact interaction remain pending.
+
 - [ ] **Portable canvas projection**: schema 3 root and future universe canvas payloads now have
       a deterministic, bounded, platform-free projection and validator in
       `src/core/portable-canvas-projection.ts`; archive export/import wiring and verification

@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { useDialogStack } from '../components/dialog-stack'
 import { AnchoredRegexBuilder } from '../components/regex/AnchoredRegexBuilder'
 import { useRegexSearchField } from '@renderer/lib/regex/useRegexSearchField'
-import { Button } from '../ui/Button'
-import { Input } from '../ui/Input'
-import type { WslCatalogueEntry } from './wslCoreApi'
+import { Button, Dialog, TextField } from '../ui/md3'
+import { resolveWslApi, type WslCatalogueEntry } from './wslCoreApi'
+import type { WslCreateProgress } from '@shared/wsl'
 import { validateWslCreateForm } from './wslCreateForm'
 
 interface WslCreateDialogProps {
@@ -15,7 +14,8 @@ interface WslCreateDialogProps {
   existingNames: ReadonlySet<string>
   busy: boolean
   error: string | null
-  onCreate: (v: { catalogueId: string; name: string }) => void
+  onCreate: (v: { operationId: string; catalogueId: string; name: string }) => void
+  onCancelCreate: (operationId: string) => Promise<boolean>
   onCancel: () => void
 }
 
@@ -38,14 +38,71 @@ export function WslCreateDialog({
   busy,
   error,
   onCreate,
+  onCancelCreate,
   onCancel
 }: WslCreateDialogProps): React.JSX.Element {
   const [catalogueId, setCatalogueId] = useState<string | null>(null)
   const [name, setName] = useState('')
+  const [operationId, setOperationId] = useState<string | null>(null)
+  const operationIdRef = useRef<string | null>(null)
+  const [progress, setProgress] = useState<WslCreateProgress | null>(null)
+  const [cancelRequested, setCancelRequested] = useState(false)
+  const [cancelError, setCancelError] = useState<string | null>(null)
+  const [elapsedMs, setElapsedMs] = useState(0)
+  const startedAtRef = useRef<number | null>(null)
   const search = useRegexSearchField({ mode: 'text' })
   const searchInputRef = useRef<HTMLInputElement>(null)
   const nameInputRef = useRef<HTMLInputElement>(null)
   const isTop = useDialogStack()
+
+  const cancel = async (): Promise<void> => {
+    if (!busy) {
+      onCancel()
+      return
+    }
+    const activeOperationId = operationIdRef.current
+    if (!activeOperationId) {
+      setCancelRequested(false)
+      setCancelError('Cancellation could not be sent because there is no active WSL operation.')
+      return
+    }
+    if (cancelRequested) return
+    setCancelRequested(true)
+    setCancelError(null)
+    try {
+      const accepted = await onCancelCreate(activeOperationId)
+      if (!accepted) {
+        setCancelRequested(false)
+        setCancelError('Cancellation was not accepted because the WSL operation is no longer active. You can retry or close this dialog.')
+      }
+    } catch (e) {
+      setCancelRequested(false)
+      setCancelError(`Could not cancel WSL creation: ${e instanceof Error ? e.message : String(e)}`)
+    }
+  }
+
+  useEffect(() => {
+    if (!operationId) return
+    return resolveWslApi().onCreateProgress((next) => {
+      if (next.operationId === operationId) setProgress(next)
+    })
+  }, [operationId])
+
+  useEffect(() => {
+    if (!busy && operationId) {
+      operationIdRef.current = null
+      setOperationId(null)
+      startedAtRef.current = null
+    }
+  }, [busy, operationId])
+
+  useEffect(() => {
+    if (!busy || !startedAtRef.current) return
+    const timer = window.setInterval(() => {
+      setElapsedMs(Date.now() - (startedAtRef.current ?? Date.now()))
+    }, 1000)
+    return () => window.clearInterval(timer)
+  }, [busy, operationId])
 
   useEffect(() => {
     searchInputRef.current?.focus()
@@ -70,54 +127,83 @@ export function WslCreateDialog({
       if (!isTop()) return
       if (e.key === 'Escape') {
         e.preventDefault()
-        onCancel()
+        cancel()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [isTop, onCancel])
+  }, [isTop, onCancel, onCancelCreate, busy, operationId])
 
   const submit = (): void => {
-    if (!validation.valid || !catalogueId) return
-    onCreate({ catalogueId, name: name.trim() })
+    if (busy || operationIdRef.current || !validation.valid || !catalogueId) return
+    const nextOperationId = operationIdRef.current ?? crypto.randomUUID()
+    operationIdRef.current = nextOperationId
+    setOperationId(nextOperationId)
+    startedAtRef.current = Date.now()
+    setElapsedMs(0)
+    setProgress({ operationId: nextOperationId, stage: 'validating', step: 1, steps: 4, determinate: false, elapsedMs: 0, message: 'Validating the selected distribution and name.' })
+    setCancelRequested(false)
+    setCancelError(null)
+    onCreate({ operationId: nextOperationId, catalogueId, name: name.trim() })
   }
 
-  return createPortal(
-    <div className="confirm-overlay" onClick={onCancel}>
-      <div
-        className="confirm bind-dialog wsl-create-dialog"
-        role="dialog"
-        aria-label="New WSL instance"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <p className="confirm__msg">New WSL instance</p>
+  return (
+    <Dialog
+      open
+      onClose={cancel}
+      closeOnScrimClick={!busy}
+      closeOnEscape={false}
+      className="wsl-create-dialog"
+      title="New WSL instance"
+      actions={
+        <>
+          <Button type="button" variant="text" onClick={() => void cancel()} disabled={cancelRequested}>
+            {cancelRequested ? 'Cancelling…' : 'Cancel'}
+          </Button>
+          <Button
+            type="button"
+            variant="filled"
+            disabled={busy || !validation.valid}
+            title={validation.disabledReason ?? undefined}
+            onClick={submit}
+          >
+            {busy ? 'Creating…' : 'Create'}
+          </Button>
+        </>
+      }
+    >
+      <div className="wsl-create-dialog__body">
+        <p className="wsl-create-dialog__description">
+          Choose a distribution from the live WSL catalogue, then give this machine-local instance a unique name.
+        </p>
 
         <div className="menu-filter wsl-create-dialog__search">
           <div className="menu-filter__row">
-            <input
+            <TextField
               ref={searchInputRef}
-              className="menu-filter__input"
+              className="wsl-create-dialog__search-field"
+              label="Filter distributions"
+              aria-label="Filter distributions"
               value={search.value}
               spellCheck={false}
-              placeholder={search.mode === 'regex' ? 'Filter distributions… (regex)' : 'Filter distributions…'}
-              aria-label="Filter distributions"
+              disabled={busy}
+              trailingSlot={<AnchoredRegexBuilder
+                search={search}
+                fieldRef={searchInputRef}
+                label="Regex for WSL distributions"
+                zIndex={93}
+              />}
               onChange={(e) => search.setValue(e.target.value)}
-            />
-            <AnchoredRegexBuilder
-              search={search}
-              fieldRef={searchInputRef}
-              label="Regex — WSL distributions"
-              zIndex={93}
             />
           </div>
           {search.error && <div className="menu-filter__error">{search.error}</div>}
         </div>
 
-        <div className="wsl-create-dialog__list" role="listbox" aria-label="Available distributions">
+        <div className="wsl-create-dialog__list" role="listbox" aria-label="Available WSL distributions" aria-busy={catalogueLoading}>
           {catalogueLoading ? (
-            <div className="wsl-create-dialog__empty">Loading available distributions…</div>
+            <div className="wsl-create-dialog__empty" role="status">Loading available distributions…</div>
           ) : catalogueError ? (
-            <div className="wsl-create-dialog__empty wsl-create-dialog__empty--error">
+            <div className="wsl-create-dialog__empty wsl-create-dialog__empty--error" role="alert">
               Could not load available distributions: {catalogueError}
             </div>
           ) : filtered.length === 0 ? (
@@ -131,6 +217,8 @@ export function WslCreateDialog({
                 type="button"
                 role="option"
                 aria-selected={catalogueId === c.id}
+                aria-disabled={busy || undefined}
+                disabled={busy}
                 className={`wsl-create-dialog__option${catalogueId === c.id ? ' is-active' : ''}`}
                 onClick={() => setCatalogueId(c.id)}
               >
@@ -140,41 +228,48 @@ export function WslCreateDialog({
           )}
         </div>
 
-        <label className="wsl-create-dialog__field">
-          <span className="wsl-create-dialog__field-label">Name</span>
-          <Input
+        <TextField
             ref={nameInputRef}
+            className="wsl-create-dialog__name-field"
+            label="Instance name"
+            aria-label="WSL instance name"
             value={name}
             spellCheck={false}
             placeholder="my-project"
-            aria-label="WSL instance name"
-            aria-invalid={!!validation.nameError}
+            disabled={busy}
+            invalid={!!validation.nameError}
+            supportText={validation.nameError ?? 'Letters, numbers, spaces, dots, hyphens, and underscores are accepted.'}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') submit()
             }}
           />
-          {validation.nameError && <div className="wsl-create-dialog__field-error">{validation.nameError}</div>}
-        </label>
 
-        {error && <div className="wsl-create-dialog__field-error">{error}</div>}
+        {(error ?? cancelError) && <div className="wsl-create-dialog__field-error" role="alert">{error ?? cancelError}</div>}
 
-        <div className="confirm__actions">
-          <Button type="button" variant="ghost" onClick={onCancel}>
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            variant="primary"
-            disabled={!validation.valid}
-            title={validation.disabledReason ?? undefined}
-            onClick={submit}
-          >
-            Create
-          </Button>
-        </div>
+        {busy && (
+          <div className="wsl-create-dialog__progress" role="status" aria-live="polite">
+            <div className="wsl-create-dialog__progress-heading">
+              <strong>{cancelRequested ? 'Cancelling WSL creation…' : progress?.message ?? 'Starting WSL creation…'}</strong>
+              <span>Step {progress?.step ?? 1} of {progress?.steps ?? 4}</span>
+            </div>
+            <div
+              className={`wsl-create-dialog__progress-track${progress?.determinate ? '' : ' is-indeterminate'}`}
+              role="progressbar"
+              aria-valuemin={1}
+              aria-valuemax={progress?.steps ?? 4}
+              aria-valuenow={progress?.step ?? 1}
+              aria-valuetext={`Step ${progress?.step ?? 1} of ${progress?.steps ?? 4}, ${progress?.stage ?? 'validating'}${progress?.determinate ? '' : '; installation byte progress is unavailable'}`}
+              aria-label="WSL creation phase progress"
+            >
+              <span style={progress?.determinate ? { width: '100%' } : undefined} />
+            </div>
+            <p className="wsl-create-dialog__progress-detail">
+              {'Elapsed time: ' + Math.floor((Math.max(elapsedMs, progress?.elapsedMs ?? 0)) / 1000) + ' seconds. ' + (progress?.stage === 'installing' ? 'Installation progress is reported by phase because wsl.exe provides no byte or percentage telemetry.' : 'The operation is bounded and can be cancelled.')}
+            </p>
+          </div>
+        )}
       </div>
-    </div>,
-    document.body
+    </Dialog>
   )
 }

@@ -192,6 +192,8 @@ export const IPC = {
   wslList: 'wsl:list',
   wslCatalogue: 'wsl:catalogue',
   wslCreate: 'wsl:create',
+  wslCreateCancel: 'wsl:create-cancel',
+  wslCreateProgress: 'wsl:create-progress',
   wslSleep: 'wsl:sleep',
   wslWake: 'wsl:wake',
   wslDelete: 'wsl:delete',
