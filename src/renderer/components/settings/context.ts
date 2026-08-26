@@ -8,6 +8,8 @@ export const SettingsSearchContext = createContext<SettingsSearchState>(DEFAULT_
 export interface SettingsVocabularyResolution {
   source: 'i18n' | 'localized-vocabulary'
   fields: 'section' | 'row' | 'all'
+  /** Search metadata is complete only when the caller explicitly proves it was already mapped. */
+  searchEntries?: 'mapped' | 'unmapped'
 }
 
 /** A resolution only suppresses the producer boundary it explicitly covers. */

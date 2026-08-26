@@ -268,11 +268,7 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <h4 className="text-[13px] font-medium text-text"><SettingsText>Remote access from your phone</SettingsText></h4>
-              <p className="mt-1 text-sm text-muted">
-                Reach this machine from anywhere — not just your local network — end-to-end encrypted
-                over the relay. Your paired phone connects through the relay; the connection is
-                verified with a code the first time.
-              </p>
+              <p className="mt-1 text-sm text-muted"><SettingsText>Reach this machine from anywhere — not just your local network — end-to-end encrypted over the relay. Your paired phone connects through the relay; the connection is verified with a code the first time.</SettingsText></p>
             </div>
             <Switch
               checked={phoneAccessEnabled}
@@ -315,7 +311,7 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
                 // The live probe (usePhonePairing) flips sshOpen and the QR appears by itself.
                 <div className="space-y-2">
                   <p className="text-sm" style={{ color: '#ff9f0a' }}>
-                      {remoteLoginCopy.what} <SettingsText>is off, so your phone wouldn&apos;t be able to connect after pairing. Turn it on — the QR appears here the moment it is, with no need to restart pairing.</SettingsText>
+                      <SettingsText segments={[{ kind: 'fact', value: remoteLoginCopy.what }, { kind: 'copy', value: " is off, so your phone wouldn't be able to connect after pairing. Turn it on — the QR appears here the moment it is, with no need to restart pairing." }]} />
                   </p>
                   {/* Rendered from what the handler RETURNS, never from the platform we guessed. The
                       button was mac-only and the handler was `if (platform !== 'darwin') return` — so a
@@ -367,7 +363,7 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
               </p>
               {relayResult === 'ok' ? (
                 <p className="text-sm" style={{ color: '#30d158' }}>
-                  Remote access is set up — the phone can reach this machine from anywhere.
+                  <SettingsText>Remote access is set up — the phone can reach this machine from anywhere.</SettingsText>
                 </p>
               ) : relayResult === 'failed' ? (
                 <p className="text-sm" style={{ color: '#ff9f0a' }}>
@@ -377,13 +373,11 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
                 </p>
               ) : relayResult === 'off' ? (
                 <p className="text-sm text-muted">
-                  LAN-only pairing — remote access is switched off above.
+                  <SettingsText>LAN-only pairing — remote access is switched off above.</SettingsText>
                 </p>
               ) : relayResult === 'dev' ? (
                 <p className="text-sm text-muted">
-                  LAN-only pairing — this is an unpackaged (dev) build, where the relay is
-                  disabled regardless of the toggle. Set NODETERM_RELAY_URL to test remote
-                  access, or use a packaged build.
+                  <SettingsText>LAN-only pairing — this is an unpackaged (dev) build, where the relay is disabled regardless of the toggle. Set NODETERM_RELAY_URL to test remote access, or use a packaged build.</SettingsText>
                 </p>
               ) : null}
               <Button onClick={reset}>Pair another device</Button>
@@ -435,9 +429,7 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
         <div className="space-y-3">
           <h4 className="text-[13px] font-medium text-text"><SettingsText>Approved relay peers</SettingsText></h4>
           <p className="text-sm text-muted">
-            Every phone or other desktop that has mutually approved a relay connection to this
-            machine, and can therefore reach its terminals whenever it connects. Public keys
-            only — never a credential.
+            <SettingsText>Every phone or other desktop that has mutually approved a relay connection to this machine, and can therefore reach its terminals whenever it connects. Public keys only — never a credential.</SettingsText>
           </p>
           {revokePeerError ? (
             <p role="alert" className="text-sm" style={{ color: '#ff9f0a' }}>

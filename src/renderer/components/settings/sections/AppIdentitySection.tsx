@@ -145,7 +145,7 @@ export function AppIdentitySection({ isActive }: { isActive: boolean }): React.J
             }
           />
           <p className="mt-2 text-[12px] text-muted">
-            Currently shown as: <strong className="text-text">{effectiveName}</strong>
+            <SettingsText segments={[{ kind: 'copy', value: 'Currently shown as: ' }, { kind: 'fact', value: <strong className="text-text">{effectiveName}</strong> }]} />
           </p>
         </div>
       </SearchableRow>
@@ -154,9 +154,7 @@ export function AppIdentitySection({ isActive }: { isActive: boolean }): React.J
         <div>
           <h4 className="text-[13px] font-medium text-text"><SettingsText>App logo</SettingsText></h4>
           <p className="mt-1 text-[13px] leading-relaxed text-muted">
-            Changes the mark shown in the tab bar (and anywhere else it's used). This does not
-            change the packaged application icon (dock/taskbar/installer) — that is generated at
-            build time and re-packaging is required to change it; see docs/app-logo.md.
+            <SettingsText>Changes the mark shown in the tab bar (and anywhere else it's used). This does not change the packaged application icon (dock/taskbar/installer) — that is generated at build time and re-packaging is required to change it; see docs/app-logo.md.</SettingsText>
           </p>
 
           <div className="mt-3 flex flex-wrap gap-2" role="radiogroup" aria-label="Logo preset">
@@ -224,23 +222,22 @@ export function AppIdentitySection({ isActive }: { isActive: boolean }): React.J
           {processing && <p className="mt-2 text-[12px] text-muted"><SettingsText>Processing…</SettingsText></p>}
           {processError && (
             <p className="mt-2 text-[12px] text-[color:var(--danger)]">
-              {processError.message} The logo shown above is unchanged.
+              <SettingsText segments={[{ kind: 'fact', value: processError.message }, { kind: 'copy', value: ' The logo shown above is unchanged.' }]} />
             </p>
           )}
 
           {activeFile && appLogo.customImage && (
             <div className="mt-4 space-y-3 border-l border-border pl-4">
               <p className="text-[12px] text-muted">
-                Adjusting “{appLogo.customImage.sourceName}”. Crop is entered as a percentage of
-                the source image (keyboard-friendly numeric equivalent of a drag crop).
+                <SettingsText segments={[{ kind: 'copy', value: 'Adjusting “' }, { kind: 'fact', value: appLogo.customImage.sourceName }, { kind: 'copy', value: '”. Crop is entered as a percentage of the source image (keyboard-friendly numeric equivalent of a drag crop).' }]} />
               </p>
               <FieldRow
                 label="Fit"
                 control={
                   <Select value={fit} aria-label="Logo fit" onChange={(e) => onAdjust({ fit: e.target.value as typeof fit })}>
-                    <option value="contain">Contain</option>
-                    <option value="cover">Cover</option>
-                    <option value="fill">Fill (stretch)</option>
+                    <option value="contain"><SettingsText>Contain</SettingsText></option>
+                    <option value="cover"><SettingsText>Cover</SettingsText></option>
+                    <option value="fill"><SettingsText>Fill (stretch)</SettingsText></option>
                   </Select>
                 }
               />

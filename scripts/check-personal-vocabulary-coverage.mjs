@@ -133,7 +133,7 @@ const PRODUCTION_SURFACES = [
 // their ordinary rows, while SettingsText marks standalone inline prose and the shared primitives
 // cover labels/options. Keeping this list hand-written means deleting a section cannot make its
 // vocabulary audit disappear with it.
-const SETTINGS_SECTION_INVENTORY = [
+const SETTINGS_SECTION_BOUNDARY_MANIFEST = [
   ['settings-accounts', 'src/renderer/components/settings/sections/AccountsSection.tsx', 'accounts'],
   ['settings-adhd', 'src/renderer/components/settings/sections/AdhdModesSection.tsx', 'adhd-modes'],
   ['settings-agents', 'src/renderer/components/settings/sections/AgentsSection.tsx', 'agents'],
@@ -174,14 +174,15 @@ const SETTINGS_SECTION_INVENTORY = [
 const FOCUSED_TEST_INVENTORY = [
   ['settings-template-test', 'src/renderer/lib/personalVocabulary/apply.test.ts'],
   ['settings-field-boundary-test', 'src/renderer/components/settings/FieldRow.vocabulary.test.tsx'],
+  ['settings-sidebar-corpus-test', 'src/renderer/components/settings/vocabulary.test.ts'],
   ['settings-i18n-boundary-test', 'src/renderer/lib/i18n.test.tsx'],
   ['settings-control-intent-test', 'src/renderer/ui/personalVocabulary.test.tsx']
 ]
 const expectedSettingsSectionCount = 36
 if (dropSectionIndex >= 0 && scriptArgs[dropSectionIndex + 1]) {
   const dropped = scriptArgs[dropSectionIndex + 1]
-  const index = SETTINGS_SECTION_INVENTORY.findIndex(([id]) => id === dropped)
-  if (index >= 0) SETTINGS_SECTION_INVENTORY.splice(index, 1)
+  const index = SETTINGS_SECTION_BOUNDARY_MANIFEST.findIndex(([id]) => id === dropped)
+  if (index >= 0) SETTINGS_SECTION_BOUNDARY_MANIFEST.splice(index, 1)
 }
 let failures = 0
 let checked = 0
@@ -224,7 +225,7 @@ for (const [id, file, reason] of PRODUCTION_SURFACES) {
   check(id + ': classification reason is explicit', reason.length > 0)
   if (reason === 'mapped-callsite') check(id + ': mapper call is present', hasMarker(read(file), 'useVocabularyMapper()') || hasMarker(read(file), 'useLocalizedVocabularyText()'))
 }
-for (const [id, file, sectionId] of SETTINGS_SECTION_INVENTORY) {
+for (const [id, file, sectionId] of SETTINGS_SECTION_BOUNDARY_MANIFEST) {
   const source = read(file)
   check(id + ': exact settings section exists', source !== null)
   check(id + ': exact Material/settings audit row', (read(DOC) || '').includes('| ' + String.fromCharCode(96) + id + String.fromCharCode(96) + ' |'))
@@ -238,8 +239,8 @@ for (const [id, file, sectionId] of SETTINGS_SECTION_INVENTORY) {
   check(id + ': option-or-fact classification', /<option|options\s*[:=]|formatText|profileText|value\s*=|SettingsSection/.test(uncommented))
 }
 for (const [id, file] of FOCUSED_TEST_INVENTORY) check(id + ': focused test exists', read(file) !== null)
-check('settings section inventory is complete', SETTINGS_SECTION_INVENTORY.length === expectedSettingsSectionCount)
-check('settings section inventory has unique ids', new Set(SETTINGS_SECTION_INVENTORY.map(([id]) => id)).size === SETTINGS_SECTION_INVENTORY.length)
+check('settings section boundary manifest is complete', SETTINGS_SECTION_BOUNDARY_MANIFEST.length === expectedSettingsSectionCount)
+check('settings section boundary manifest has unique ids', new Set(SETTINGS_SECTION_BOUNDARY_MANIFEST.map(([id]) => id)).size === SETTINGS_SECTION_BOUNDARY_MANIFEST.length)
 const pendingProductionSurfaces = PRODUCTION_SURFACES.filter(([, , reason]) => reason === 'unmapped-callsite-pending')
 if (!fixtureRun) check('all listed production surfaces are mapper-covered', pendingProductionSurfaces.length === 0)
 if (!fixtureRun && pendingProductionSurfaces.length > 0) {
@@ -250,73 +251,73 @@ check('producer inventory has no duplicate identifiers', errors.length === 0)
 // Mutate a complete fixture and execute this checker against it, rather than only invoking one
 // predicate in memory. This catches a broken checker that accidentally passes its own miniature
 // assertion while the real inventory path would still accept a missing producer.
-const mutationRoot = mkdtempSync(join(tmpdir(), 'nodeterm-vocabulary-audit-'))
-try {
-  if (!fixtureRun) {
-    for (const [, file] of [...PRODUCERS, ...PRODUCTION_SURFACES, ...SETTINGS_SECTION_INVENTORY, ...FOCUSED_TEST_INVENTORY, ['audit-doc', DOC, '']]) {
-      const source = join(ROOT, file)
-      const target = join(mutationRoot, file)
-      mkdirSync(dirname(target), { recursive: true })
-      if (existsSync(source)) copyFileSync(source, target)
-    }
-    const baselineResult = spawnSync(process.execPath, [SCRIPT_PATH, '--root', mutationRoot, '--fixture-run'], {
+function copyCompleteFixture(fixtureRoot) {
+  for (const [, file] of [...PRODUCERS, ...PRODUCTION_SURFACES, ...SETTINGS_SECTION_BOUNDARY_MANIFEST, ...FOCUSED_TEST_INVENTORY, ['audit-doc', DOC, '']]) {
+    const source = join(ROOT, file)
+    const target = join(fixtureRoot, file)
+    mkdirSync(dirname(target), { recursive: true })
+    if (existsSync(source)) copyFileSync(source, target)
+  }
+}
+
+function runFreshFixtureMutation(label, mutate, args = []) {
+  const fixtureRoot = mkdtempSync(join(tmpdir(), 'nodeterm-vocabulary-audit-'))
+  try {
+    copyCompleteFixture(fixtureRoot)
+    mutate(fixtureRoot)
+    const result = spawnSync(process.execPath, [SCRIPT_PATH, '--root', fixtureRoot, '--fixture-run', ...args], {
       encoding: 'utf8'
     })
+    check(label, result.status !== 0)
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true })
+  }
+}
+
+if (!fixtureRun) {
+  const baselineRoot = mkdtempSync(join(tmpdir(), 'nodeterm-vocabulary-audit-baseline-'))
+  try {
+    copyCompleteFixture(baselineRoot)
+    const baselineResult = spawnSync(process.execPath, [SCRIPT_PATH, '--root', baselineRoot, '--fixture-run'], { encoding: 'utf8' })
     if (baselineResult.status !== 0) {
       console.error('Fixture baseline output:\n' + baselineResult.stdout + baselineResult.stderr)
     }
     check('complete fixture passes before mutation', baselineResult.status === 0)
-    const target = PRODUCERS.find(([id]) => id === 'tooltip')
-    if (target) {
-      const sourcePath = join(mutationRoot, target[1])
-      writeFileSync(sourcePath, readFileSync(sourcePath, 'utf8').replace(target[2], ''), 'utf8')
-      const result = spawnSync(process.execPath, [SCRIPT_PATH, '--root', mutationRoot, '--fixture-run'], {
-        encoding: 'utf8'
-      })
-      check('full checker rejects a removed mapper call', result.status !== 0)
-    }
-    const inlineTarget = PRODUCERS.find(([id]) => id === 'settings-inline-copy')
-    if (inlineTarget) {
-      const inlinePath = join(mutationRoot, inlineTarget[1])
-      writeFileSync(inlinePath, readFileSync(inlinePath, 'utf8').replace(inlineTarget[2], ''), 'utf8')
-      const inlineResult = spawnSync(process.execPath, [SCRIPT_PATH, '--root', mutationRoot, '--fixture-run'], {
-        encoding: 'utf8'
-      })
-      check('full checker rejects a removed SettingsText mapper', inlineResult.status !== 0)
-    }
-    for (const id of ['settings-page-registration', 'settings-sidebar-registration']) {
-      const registrationTarget = PRODUCERS.find((row) => row[0] === id)
-      if (!registrationTarget) continue
-      const registrationPath = join(mutationRoot, registrationTarget[1])
-      writeFileSync(registrationPath, readFileSync(registrationPath, 'utf8').replace(registrationTarget[2], ''), 'utf8')
-      const registrationResult = spawnSync(process.execPath, [SCRIPT_PATH, '--root', mutationRoot, '--fixture-run'], {
-        encoding: 'utf8'
-      })
-      check('full checker rejects removed ' + id, registrationResult.status !== 0)
-      const original = readFileSync(join(ROOT, registrationTarget[1]), 'utf8')
-      writeFileSync(registrationPath, original, 'utf8')
-    }
-    const sectionResult = spawnSync(process.execPath, [SCRIPT_PATH, '--root', mutationRoot, '--fixture-run', '--drop-section', 'settings-accounts'], {
-      encoding: 'utf8'
-    })
-    check('full checker rejects a removed settings section registration', sectionResult.status !== 0)
-    const templateTestPath = join(mutationRoot, 'src/renderer/lib/personalVocabulary/apply.test.ts')
-    rmSync(templateTestPath)
-    const templateResult = spawnSync(process.execPath, [SCRIPT_PATH, '--root', mutationRoot, '--fixture-run'], {
-      encoding: 'utf8'
-    })
-    check('full checker rejects a removed fact-template test', templateResult.status !== 0)
-    const docPath = join(mutationRoot, DOC)
-    const quote = String.fromCharCode(96)
-    const docLines = readFileSync(docPath, 'utf8').split(/\r?\n/)
-    writeFileSync(docPath, docLines.filter((line) => !line.startsWith('| ' + quote + 'tooltip' + quote + ' |')).join('\n'), 'utf8')
-    const docResult = spawnSync(process.execPath, [SCRIPT_PATH, '--root', mutationRoot, '--fixture-run'], {
-      encoding: 'utf8'
-    })
-    check('full checker rejects a removed audit row', docResult.status !== 0)
+  } finally {
+    rmSync(baselineRoot, { recursive: true, force: true })
   }
-} finally {
-  rmSync(mutationRoot, { recursive: true, force: true })
+
+  const target = PRODUCERS.find(([id]) => id === 'tooltip')
+  if (target) runFreshFixtureMutation('full checker rejects a removed mapper call', (root) => {
+    const path = join(root, target[1])
+    writeFileSync(path, readFileSync(path, 'utf8').replace(target[2], ''), 'utf8')
+  })
+
+  const inlineTarget = PRODUCERS.find(([id]) => id === 'settings-inline-copy')
+  if (inlineTarget) runFreshFixtureMutation('full checker rejects a removed SettingsText mapper', (root) => {
+    const path = join(root, inlineTarget[1])
+    writeFileSync(path, readFileSync(path, 'utf8').replace(inlineTarget[2], ''), 'utf8')
+  })
+
+  for (const id of ['settings-page-registration', 'settings-sidebar-registration']) {
+    const registrationTarget = PRODUCERS.find((row) => row[0] === id)
+    if (!registrationTarget) continue
+    runFreshFixtureMutation('full checker rejects removed ' + id, (root) => {
+      const path = join(root, registrationTarget[1])
+      writeFileSync(path, readFileSync(path, 'utf8').replace(registrationTarget[2], ''), 'utf8')
+    })
+  }
+
+  runFreshFixtureMutation('full checker rejects a removed settings section registration', () => {}, ['--drop-section', 'settings-accounts'])
+  runFreshFixtureMutation('full checker rejects a removed fact-template test', (root) => {
+    rmSync(join(root, 'src/renderer/lib/personalVocabulary/apply.test.ts'))
+  })
+  runFreshFixtureMutation('full checker rejects a removed audit row', (root) => {
+    const path = join(root, DOC)
+    const quote = String.fromCharCode(96)
+    const lines = readFileSync(path, 'utf8').split(/\r?\n/)
+    writeFileSync(path, lines.filter((line) => !line.includes('| ' + quote + 'tooltip' + quote + ' |')).join('\n'), 'utf8')
+  })
 }
 
 console.log('check-personal-vocabulary-coverage.mjs: ' + checked + ' assertions checked.')

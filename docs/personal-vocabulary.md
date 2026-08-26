@@ -169,8 +169,10 @@ the substitution without anyone remembering to opt in:
   error text, counts, and other runtime facts are never mapped accidentally.
 - ✅ Settings producer ownership is explicit. `SettingsVocabularyResolution.fields` is `section`,
   `row`, or `all`; a section-level resolution does not suppress row mapping, and an already-mapped
-  sidebar title is never mapped a second time. The checker records each section's exact registered
-  `SettingsSection` id, not a broad component substring.
+  sidebar title is never mapped a second time. `searchEntries: 'mapped'` is required before a
+  section may skip its search metadata mapping. The checker records each section's exact registered
+  `SettingsSection` id in an explicit boundary manifest, not a broad component substring, and each
+  mutation runs against a fresh complete fixture.
 - ✅ The coverage Chut also inventories the focused template, field, localization, and control
   intent tests. Its fixture mutations remove a mapper, `SettingsText`, a section registration, an
   audit row, and the fact-template test, then execute the complete checker against the mutation.

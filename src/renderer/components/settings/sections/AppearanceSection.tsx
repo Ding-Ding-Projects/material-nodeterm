@@ -6,7 +6,7 @@ import { RAINBOW_SPEED_MAX, RAINBOW_SPEED_MIN, rainbowDurationSeconds } from '..
 import { NODE_COLORS } from '../../../state/workspace'
 import { SettingsSection } from '../SettingsSection'
 import { SettingsText } from '../SettingsText'
-import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
+import { useVocabularyMapper, useVocabularyTemplate } from '../../../lib/personalVocabulary/useVocabularyText'
 import { SearchableRow } from '../SearchableRow'
 import { FieldRow } from '../FieldRow'
 import { Switch } from '@renderer/ui/Switch'
@@ -105,6 +105,10 @@ export function AppearanceSection({ isActive }: { isActive: boolean }): React.JS
   const hiddenNodeMenuItems = useSettings((s) => s.base.hiddenNodeMenuItems)
   const hiddenHeaderButtons = useSettings((s) => s.base.hiddenHeaderButtons)
   const rainbowSpeed = useSettings((s) => s.base.rainbowSpeed)
+  const rainbowValueText = useVocabularyTemplate(
+    'Level {level} of {max}, one cycle every {seconds} seconds',
+    { level: String(rainbowSpeed), max: String(RAINBOW_SPEED_MAX), seconds: String(rainbowDurationSeconds(rainbowSpeed)) }
+  )
   const update = useSettings((s) => s.update)
 
   const lockRecords = useToyLocks((s) => s.records)
@@ -154,13 +158,12 @@ export function AppearanceSection({ isActive }: { isActive: boolean }): React.JS
       <SearchableRow {...ROWS.rainbowSpeed}>
         <div className="flex items-center justify-between gap-4 py-2.5">
           <span className="text-[13px] text-text">
-            Rainbow speed
+            <SettingsText>Rainbow speed</SettingsText>
             {/* Says what the control governs AND what overrides it. A user who has reduced
                 motion on would otherwise drag this and see nothing change, and conclude the
                 setting is broken rather than deferring to them. */}
             <span className="block text-[11px] text-text-secondary">
-              How fast a rainbow node colour cycles. Held at one colour while the system asks for
-              reduced motion.
+              <SettingsText>How fast a rainbow node colour cycles. Held at one colour while the system asks for reduced motion.</SettingsText>
             </span>
           </span>
           <Slider
@@ -169,7 +172,7 @@ export function AppearanceSection({ isActive }: { isActive: boolean }): React.JS
             step={1}
             value={rainbowSpeed}
             aria-label="Rainbow speed"
-            aria-valuetext={`Level ${rainbowSpeed} of ${RAINBOW_SPEED_MAX}, one cycle every ${rainbowDurationSeconds(rainbowSpeed)} seconds`}
+            aria-valuetext={rainbowValueText}
             onChange={(e) => update({ rainbowSpeed: Number(e.target.value) })}
           />
         </div>
@@ -242,9 +245,7 @@ export function AppearanceSection({ isActive }: { isActive: boolean }): React.JS
         <div>
           <h4 className="text-[13px] font-medium text-text"><SettingsText>Node menu items</SettingsText></h4>
           <p className="mt-1 text-[13px] leading-relaxed text-muted">
-            Which rows the node right-click menu offers (and, for Colors, the group frame's colour
-            strip too) — it applies to the next right-click. Destructive and recovery actions
-            (Delete, Restart agent) are never hidden here.
+            <SettingsText>Which rows the node right-click menu offers (and, for Colors, the group frame's colour strip too) — it applies to the next right-click. Destructive and recovery actions (Delete, Restart agent) are never hidden here.</SettingsText>
           </p>
           <VisibilityToggles
             rows={HIDEABLE_MENU_ITEMS}
@@ -258,9 +259,7 @@ export function AppearanceSection({ isActive }: { isActive: boolean }): React.JS
         <div>
           <h4 className="text-[13px] font-medium text-text"><SettingsText>Terminal header buttons</SettingsText></h4>
           <p className="mt-1 text-[13px] leading-relaxed text-muted">
-            Which icon buttons the terminal node header shows. Close and the terminal Search
-            button are always shown, as are the right-click menu's destructive and recovery
-            actions (Delete, Restart agent).
+            <SettingsText>Which icon buttons the terminal node header shows. Close and the terminal Search button are always shown, as are the right-click menu's destructive and recovery actions (Delete, Restart agent).</SettingsText>
           </p>
           <VisibilityToggles
             rows={HIDEABLE_HEADER_BUTTONS}

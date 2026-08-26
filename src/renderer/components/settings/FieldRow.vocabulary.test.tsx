@@ -93,4 +93,27 @@ describe('FieldRow personal vocabulary boundary', () => {
 
     expect(screen.getByText('Work folder: C:/user-project')).toBeTruthy()
   })
+
+  it('interpolates facts while School mode suppresses vocabulary', () => {
+    usePersonalVocabulary.setState({
+      entries: { Hello: 'Howdy' },
+      status: 'loaded',
+      entryCount: 1,
+      loadedAt: Date.now(),
+      lastError: null
+    })
+    useSchoolMode.setState({ enabled: true, hydrated: true, name: 'School mode' })
+
+    render(
+      <FieldRow
+        label="Label"
+        description="Hello {person}"
+        descriptionParams={{ person: 'Alice' }}
+        control={<button type="button">Save</button>}
+      />
+    )
+
+    expect(screen.getByText('Hello Alice')).toBeTruthy()
+    expect(screen.queryByText('Howdy Alice')).toBeNull()
+  })
 })

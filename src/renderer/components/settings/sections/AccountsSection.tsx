@@ -850,16 +850,12 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
         <div className="space-y-4">
           {versionWarning ? (
             <div className="flex items-start justify-between gap-3 rounded-md border border-[color:var(--danger)]/40 bg-[color:var(--danger)]/10 px-3 py-2 text-[13px] leading-relaxed text-[color:var(--danger)]">
-              <span>
-                Your installed Claude CLI is older than the version that scopes credentials per
-                config dir. Accounts still isolate their config, but on macOS logins may collide in
-                the shared keychain. Update the Claude CLI to keep them fully separate.
-              </span>
+              <span><SettingsText>Your installed Claude CLI is older than the version that scopes credentials per config dir. Accounts still isolate their config, but on macOS logins may collide in the shared keychain. Update the Claude CLI to keep them fully separate.</SettingsText></span>
               <button
                 className="shrink-0 cursor-pointer text-muted hover:text-text"
                 onClick={() => setVersionWarning(false)}
               >
-                Dismiss
+                <SettingsText>Dismiss</SettingsText>
               </button>
             </div>
           ) : null}
@@ -1156,10 +1152,7 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
                 <p className="text-[12px] leading-relaxed text-[color:var(--danger)]">{removeError}</p>
               ) : null}
 
-          <p className="text-[12px] leading-relaxed text-muted">
-            Each login has its own credentials. Remote logins stay on their SSH machine. Codex nodes
-            on the same machine and account reuse one shared app-server.
-          </p>
+          <p className="text-[12px] leading-relaxed text-muted"><SettingsText>Each login has its own credentials. Remote logins stay on their SSH machine. Codex nodes on the same machine and account reuse one shared app-server.</SettingsText></p>
         </div>
       </SearchableRow>
 

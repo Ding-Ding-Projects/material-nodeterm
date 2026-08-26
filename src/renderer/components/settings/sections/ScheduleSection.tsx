@@ -373,11 +373,11 @@ function SourceEditor({
                   })
                 }}
               >
-                Save
+                <SettingsText>Save</SettingsText>
               </Button>
               {(hasToken || tokenStatusUnknown) && (
                 <Button variant="ghost" onClick={() => void onSetToken(null)}>
-                  Clear
+                  <SettingsText>Clear</SettingsText>
                 </Button>
               )}
             </div>
@@ -404,9 +404,9 @@ const VALUE_FIELDS: {
     label: 'App appearance',
     render: (v, onChange) => (
       <Select className="w-40" value={(v as string) ?? 'auto'} onChange={(e) => onChange(e.target.value)}>
-        <option value="auto">Auto</option>
-        <option value="dark">Dark</option>
-        <option value="light">Light</option>
+        <option value="auto"><SettingsText>Auto</SettingsText></option>
+        <option value="dark"><SettingsText>Dark</SettingsText></option>
+        <option value="light"><SettingsText>Light</SettingsText></option>
       </Select>
     )
   },
@@ -838,10 +838,7 @@ export function ScheduleSection({ isActive }: { isActive: boolean }): React.JSX.
             </p>
           )}
           {file.rules.length === 0 && (
-            <p className="text-[13px] text-muted">
-              No rules yet. Add one to switch appearance settings automatically for a time of day,
-              a date range, or a Home Assistant entity.
-            </p>
+          <p className="text-[13px] text-muted"><SettingsText>No rules yet. Add one to switch appearance settings automatically for a time of day, a date range, or a Home Assistant entity.</SettingsText></p>
           )}
           {file.rules.map((rule, index) => (
             <RuleCard
@@ -861,7 +858,7 @@ export function ScheduleSection({ isActive }: { isActive: boolean }): React.JSX.
               onRetry={() => void refreshRule(rule.id)}
             />
           ))}
-          <Button onClick={addRule}>Add rule</Button>
+          <Button onClick={addRule}><SettingsText>Add rule</SettingsText></Button>
         </div>
       </SearchableRow>
     </SettingsSection>

@@ -2,6 +2,7 @@ import { useCallback, useMemo } from 'react'
 import { usePersonalVocabulary } from '../../state/personalVocabulary'
 import { useSchoolMode } from '../../state/schoolMode'
 import { applyVocabulary, applyVocabularyToTemplate } from './apply'
+import type { PersonalVocabularyEntries } from './schema'
 import { schoolModeAllowsOptionalFeatures } from '../schoolModePolicy'
 
 /** Declares whether a shared control string is product-authored prose or an exact fact. */
@@ -69,7 +70,9 @@ export function useVocabularyTemplate(
     hydrated: schoolModeHydrated
   })
   return useMemo(() => {
-    if (text == null || !vocabularyAllowed) return text
-    return applyVocabularyToTemplate(text, entries, params)
+    if (text == null) return text
+    // School mode suppresses personal replacements, but facts still need interpolation. Passing an
+    // empty entry set preserves the shipped prose while replacing only named placeholders.
+    return applyVocabularyToTemplate(text, vocabularyAllowed ? entries : ({} as PersonalVocabularyEntries), params)
   }, [entries, params, text, vocabularyAllowed])
 }

@@ -37,13 +37,13 @@ export function SettingsSection({
   // the shipped aliases beside visible replacements, so a rename never breaks existing lookup.
   const mappedTitle = useVocabularyText(title)
   const sectionAlreadyApplied = resolutionIncludes(resolvedVocabulary, 'section')
-  const rowsAlreadyApplied = resolutionIncludes(resolvedVocabulary, 'row')
+  const searchEntriesAlreadyApplied = resolvedVocabulary?.searchEntries === 'mapped'
   const vocabTitle = sectionAlreadyApplied ? title : mappedTitle
   const mappedDescription = useVocabularyText(description)
   const vocabDescription = sectionAlreadyApplied ? description : mappedDescription
   const vocab = useVocabularyMapper()
   const visibleEntries = searchEntries?.map((entry) =>
-    rowsAlreadyApplied ? entry : settingsSearchEntryWithVocabulary(entry, vocab)
+    searchEntriesAlreadyApplied ? entry : settingsSearchEntryWithVocabulary(entry, vocab)
   )
   if (hasQuery) {
     const anyMatch = !visibleEntries || visibleEntries.some((e) => matchesEntry(search, e))

@@ -485,7 +485,7 @@ export function ShellSection({ isActive }: { isActive: boolean }): React.JSX.Ele
   return (
     <SettingsSection
       id="shell"
-      resolvedVocabulary={{ source: 'localized-vocabulary', fields: 'all' }}
+      resolvedVocabulary={{ source: 'localized-vocabulary', fields: 'all', searchEntries: 'mapped' }}
       title={profileText('terminalProfiles.settings.sectionTitle', 'Shell')}
       description={
         profileSupport

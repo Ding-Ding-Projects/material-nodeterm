@@ -76,8 +76,7 @@ export function SchoolModeSection({ isActive }: { isActive: boolean }): React.JS
                   Turn off
                 </Button>
                 <p className="max-w-[22rem] text-right text-[12px] text-muted">
-                  No PIN was ever set on this machine, so none is needed to turn {name} off. Set
-                  one when you turn it back on if you want it to stay on.
+                  <SettingsText segments={[{ kind: 'copy', value: 'No PIN was ever set on this machine, so none is needed to turn ' }, { kind: 'fact', value: name }, { kind: 'copy', value: ' off. Set one when you turn it back on if you want it to stay on.' }]} />
                 </p>
               </div>
             ) : enabled ? (
