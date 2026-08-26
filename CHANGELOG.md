@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add the shared automatic node-dependency foundation: an explicit manifest, canonical HTTPS
+  sources, SHA-256 verification, reusable machine-local cache, bounded download and extraction,
+  atomic user-scoped publication, health probes, cancellation, repair, restart reconciliation, and
+  typed desktop/Server Edition IPC. Node Catalog `Install and continue` resume wiring and focused
+  verification remain the next integration points.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

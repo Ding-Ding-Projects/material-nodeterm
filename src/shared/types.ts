@@ -3794,6 +3794,8 @@ export interface NodeTerminalApi {
   speech: SpeechApi
   /** Universal file converter — docs/file-converter.md. */
   converter: import('./converter').ConverterApi
+  /** Shared automatic dependency lifecycle for node-feature installers. */
+  nodeDependencies: import('./node-dependencies').NodeDependenciesApi
   /** Local Ollama suite manager — docs/ollama-manager.md. */
   ollama: import('./ollama').OllamaApi
   /** Local Minecraft server create-and-manage — docs/minecraft-server-manager.md. */

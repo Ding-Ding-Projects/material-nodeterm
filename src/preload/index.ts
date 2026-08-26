@@ -26,6 +26,7 @@ import type { ClientId, PeerDiff, PeerIdentity, PeerState } from '../shared/pres
 import type { ConvertQueueItem, ConverterQueueState } from '../shared/converter'
 import type { PullQueueItem, PullQueueState } from '../shared/ollama'
 import type { MinecraftEvent } from '../shared/minecraft'
+import type { NodeDependencyAvailability, NodeDependencyProgress, NodeDependencyInstallResult } from '../shared/node-dependencies'
 
 // Fan a single ipcRenderer listener per channel out to many renderer subscribers. Without
 // this, every node that subscribes (e.g. Cmd+M markdown toggle on each terminal/editor) adds
@@ -70,6 +71,8 @@ const subscribeOllamaChatStream = subscribe<
   [{ sessionId: string; kind: 'token' | 'done' | 'error' | 'stopped'; delta?: string; error?: string }]
 >(IPC.ollamaChatStream)
 const subscribeMinecraftEvent = subscribe<[MinecraftEvent]>(IPC.minecraftEvent)
+const subscribeNodeDependencyState = subscribe<[NodeDependencyAvailability]>(IPC.nodeDependencyState)
+const subscribeNodeDependencyProgress = subscribe<[NodeDependencyProgress]>(IPC.nodeDependencyProgress)
 const subscribeWidgetState = subscribe<[CanvasWidgetLiveState]>(IPC.widgetStateChanged)
 
 const subscribeRelayPeerPending = subscribe<[RelayPeerPending]>(IPC.relayHostPeerPending)
@@ -893,6 +896,16 @@ const api: NodeTerminalApi = {
     setConcurrency: (n) => ipcRenderer.invoke(IPC.converterSetConcurrency, n),
     onItem: (listener) => subscribeConverterItem(listener),
     onSummary: (listener) => subscribeConverterSummary(listener)
+  },
+  nodeDependencies: {
+    catalog: () => ipcRenderer.invoke(IPC.nodeDependencyCatalog),
+    status: (id) => ipcRenderer.invoke(IPC.nodeDependencyStatus, id),
+    install: (id) => ipcRenderer.invoke(IPC.nodeDependencyInstall, id) as Promise<NodeDependencyInstallResult>,
+    cancel: (operationId) => ipcRenderer.invoke(IPC.nodeDependencyCancel, operationId),
+    repair: (id) => ipcRenderer.invoke(IPC.nodeDependencyRepair, id) as Promise<NodeDependencyInstallResult>,
+    reconcile: () => ipcRenderer.invoke(IPC.nodeDependencyReconcile),
+    onState: (listener) => subscribeNodeDependencyState(listener),
+    onProgress: (listener) => subscribeNodeDependencyProgress(listener)
   },
   ollama: {
     status: () => ipcRenderer.invoke(IPC.ollamaStatus),

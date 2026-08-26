@@ -220,6 +220,11 @@ Identical on desktop and in the browser.
   audio, video, archives, structured data, code/text, binary encodings) reachable from the nav
   rail's Tools destination or the command palette. See
   [`docs/file-converter.md`](./docs/file-converter.md).
+- **Automatic node dependency installation** — a shared manifest and privileged, machine-local
+  lifecycle for canonical HTTPS downloads, SHA-256 verification, portable user-scoped installs,
+  cache reuse, repair, cancellation, and restart reconciliation. Node Catalog `Install and
+  continue` wiring and focused verification remain in progress. See
+  [`docs/features/dependencies/automatic-node-dependencies.md`](./docs/features/dependencies/automatic-node-dependencies.md).
 - **Local Ollama suite manager** — a local manager for [Ollama](https://ollama.com) that talks
   only to its documented local HTTP API, never a cloud service. See
   [`docs/ollama-manager.md`](./docs/ollama-manager.md).

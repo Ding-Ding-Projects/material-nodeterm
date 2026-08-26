@@ -42,6 +42,7 @@ import { NodeTermBrowserUseBackend } from './browser-use-backend'
 import { matchesShortcut } from '../shared/shortcut'
 import { registerFsHandlers } from '../core/fs-handlers'
 import { registerConverterIpc } from '../core/converter/register-ipc'
+import { registerNodeDependencyIpc } from '../core/node-dependencies/register-ipc'
 import { registerOllamaIpc } from '../core/ollama/register-ipc'
 import { registerMinecraftIpc } from '../core/minecraft/register-ipc'
 import { registerVsCodeHandlers } from '../core/vscode-handlers'
@@ -1467,6 +1468,7 @@ app.whenReady().then(async () => {
   // Server Edition gets the identical engine via src/server/handlers/index.ts's own call to these
   // same functions.
   registerConverterIpc(corePlatform)
+  registerNodeDependencyIpc(corePlatform)
   registerOllamaIpc(corePlatform)
   minecraftServers = registerMinecraftIpc(corePlatform).manager
 

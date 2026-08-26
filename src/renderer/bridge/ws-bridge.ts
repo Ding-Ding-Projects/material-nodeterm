@@ -18,6 +18,7 @@ import type { GitHubControlApi, GitHubIssuesApi } from '../../shared/github-issu
 import type { ConverterApi } from '../../shared/converter'
 import type { OllamaApi } from '../../shared/ollama'
 import type { MinecraftApi } from '../../shared/minecraft'
+import type { NodeDependenciesApi } from '../../shared/node-dependencies'
 import {
   UNKNOWN_CLAUDE_CLI_CAPS,
   type BoardLogApi,
@@ -922,6 +923,22 @@ export function buildOllamaApi(client: RpcClient): Pick<NodeTerminalApi, 'ollama
   return { ollama }
 }
 
+/** Automatic node-feature dependency lifecycle over the authenticated server RPC. Downloads and
+ * installation remain on the server host, so the browser never uses its own PATH as proof. */
+export function buildNodeDependenciesApi(client: RpcClient): Pick<NodeTerminalApi, 'nodeDependencies'> {
+  const nodeDependencies: NodeDependenciesApi = {
+    catalog: () => client.request(IPC.nodeDependencyCatalog) as ReturnType<NodeDependenciesApi['catalog']>,
+    status: (id) => client.request(IPC.nodeDependencyStatus, id) as ReturnType<NodeDependenciesApi['status']>,
+    install: (id) => client.request(IPC.nodeDependencyInstall, id) as ReturnType<NodeDependenciesApi['install']>,
+    cancel: (operationId) => client.request(IPC.nodeDependencyCancel, operationId) as ReturnType<NodeDependenciesApi['cancel']>,
+    repair: (id) => client.request(IPC.nodeDependencyRepair, id) as ReturnType<NodeDependenciesApi['repair']>,
+    reconcile: () => client.request(IPC.nodeDependencyReconcile) as ReturnType<NodeDependenciesApi['reconcile']>,
+    onState: (listener) => client.subscribe(IPC.nodeDependencyState, listener as Listener),
+    onProgress: (listener) => client.subscribe(IPC.nodeDependencyProgress, listener as Listener)
+  }
+  return { nodeDependencies }
+}
+
 /** Local Minecraft server create-and-manage (docs/minecraft-server-manager.md) — same core engine
  *  as desktop; the server process is the one downloading, spawning and owning `java`, exactly as
  *  main does. */
@@ -1373,6 +1390,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildPresenceApi(client),
     ...buildSpeechApi(client),
     ...buildConverterApi(client),
+    ...buildNodeDependenciesApi(client),
     ...buildOllamaApi(client),
     ...buildMinecraftApi(client),
     ...buildUsageApi(client),

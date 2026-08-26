@@ -234,10 +234,14 @@ metadata. Shared foundations land before dependent lanes.
 2. Portable canvas projection for root, Multiverse, AWS Universe, portal, and Shop data.
 3. Portable media assets and Include, Omit, Locate Later flow.
 4. Atomic import and destination-computer binding wizard.
-5. Unified Node Catalog registry and creation coordinator.
-6. Special-universe Shop node and scope enforcement.
-7. Shared provider account, credential-vault, OAuth callback, and local-binding services.
-8. Docker host manager for local and SSH contexts, including typed container, image, volume,
+5. Automatic dependency installation foundation: manifest, verified cache, bounded lifecycle,
+   user-scoped publication, repair, cancellation, and resume metadata. Dependent catalog and
+   hosting lanes must not make their own downloader or PATH probe.
+6. Unified Node Catalog registry and creation coordinator, including dependency identifiers and
+   `Install and continue` resume wiring.
+7. Special-universe Shop node and scope enforcement.
+8. Shared provider account, credential-vault, OAuth callback, and local-binding services.
+9. Docker host manager for local and SSH contexts, including typed container, image, volume,
    network, Compose profile, lifecycle, stats, logs, and typed exec controls.
 
 ### Wave B, media, files, torrents, and virtual machines

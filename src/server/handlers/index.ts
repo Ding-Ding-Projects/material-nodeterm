@@ -7,6 +7,7 @@ import { GitService } from '../../core/git-service'
 import { generateCommitMessage } from '../../core/commit-message'
 import { registerFsHandlers } from '../../core/fs-handlers'
 import { registerConverterIpc } from '../../core/converter/register-ipc'
+import { registerNodeDependencyIpc } from '../../core/node-dependencies/register-ipc'
 import { registerOllamaIpc } from '../../core/ollama/register-ipc'
 import { registerMinecraftIpc } from '../../core/minecraft/register-ipc'
 import type { MinecraftServerManager } from '../../core/minecraft/server-manager'
@@ -69,6 +70,7 @@ export function registerCoreHandlers(
   // the engine cannot drift between desktop and the browser. See docs/file-converter.md,
   // docs/ollama-manager.md and docs/minecraft-server-manager.md.
   registerConverterIpc(platform)
+  registerNodeDependencyIpc(platform)
   registerOllamaIpc(platform)
   const { manager: minecraftServers } = registerMinecraftIpc(platform)
   // "Open in Visual Studio Code" + local settings history — same registrars the desktop shell

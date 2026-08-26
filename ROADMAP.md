@@ -140,6 +140,10 @@ intentionally unchecked because this task publishes the plan only.
 - [ ] Ship schema 3 portable project export with manifest, hashes, omissions, and migration. Core
   platform-free validator and documentation landed, but export wiring and required verification
   remain outstanding.
+- [ ] Automatic node dependency installation foundation: the typed manifest, verified cache,
+  bounded lifecycle, user-scoped publication, cancellation, repair, and restart reconciliation are
+  implemented in `src/core/node-dependencies/`; focused verification and Node Catalog resume wiring
+  remain outstanding.
 - [ ] Import schema 3 archives atomically without external side effects.
 - [ ] Preserve root, Multiverse, AWS Universe, portal, Shop, node, relationship, and appearance data.
 - [ ] Bundle project-owned media and provide Include, Omit, and Locate Later decisions.

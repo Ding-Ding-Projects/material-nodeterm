@@ -533,6 +533,17 @@ export const IPC = {
   converterSetConcurrency: 'converter:set-concurrency',
   converterItem: 'converter:item',
   converterSummary: 'converter:summary',
+  // Automatic installation foundation for node-feature dependencies. These calls are handled only
+  // by the privileged core host; the renderer receives machine-local paths only as explicit
+  // readiness metadata and never writes them into projects.
+  nodeDependencyCatalog: 'node-dependency:catalog',
+  nodeDependencyStatus: 'node-dependency:status',
+  nodeDependencyInstall: 'node-dependency:install',
+  nodeDependencyCancel: 'node-dependency:cancel',
+  nodeDependencyRepair: 'node-dependency:repair',
+  nodeDependencyReconcile: 'node-dependency:reconcile',
+  nodeDependencyState: 'node-dependency:state',
+  nodeDependencyProgress: 'node-dependency:progress',
   /** Electron only: a multi-file picker (dialog:select-file only returns one path). Browser (Server
    *  Edition) uses a plain `<input type="file" multiple>` + files.saveUpload instead — see
    *  FileConverterPanel.tsx. */

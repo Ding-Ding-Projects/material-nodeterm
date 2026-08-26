@@ -540,6 +540,16 @@ export function buildStubApi(): Omit<
       onItem: noopUnsub,
       onSummary: noopUnsub
     },
+    nodeDependencies: {
+      catalog: U('nodeDependencies.catalog'),
+      status: U('nodeDependencies.status'),
+      install: U('nodeDependencies.install'),
+      cancel: U('nodeDependencies.cancel'),
+      repair: U('nodeDependencies.repair'),
+      reconcile: U('nodeDependencies.reconcile'),
+      onState: noopUnsub,
+      onProgress: noopUnsub
+    },
     ollama: {
       status: U('ollama.status'),
       models: U('ollama.models'),

@@ -1,5 +1,29 @@
 # Handoff
 
+## 2026-08-26, automatic node dependency foundation
+
+Implemented the shared node-feature dependency foundation in `src/shared/node-dependencies.ts` and
+`src/core/node-dependencies/`. The typed manifest captures id, version, platform, architecture,
+canonical HTTPS source, SHA-256, bundled-source slot, archive format, expected files, unpacked size,
+license/redistribution state, install mode, health probe, and repair strategy. The lifecycle service
+uses a machine-local app-data cache and install root, canonical-origin HTTPS redirects, bounded
+bytes/time, digest verification before extraction, safe ZIP traversal checks, unique staging, atomic
+publication with rollback, absolute-path health probes, cancellation, repair, and restart
+reconciliation. It never treats PATH as readiness and never accepts renderer-provided URLs or shell
+commands.
+
+Typed channels are registered on both Electron and Server Edition CorePlatform hosts, with preload
+and authenticated WebSocket bridge APIs carrying catalog, exact disabled reasons, progress, state,
+repair, cancellation, and resume metadata. The Node Catalog itself is intentionally not implemented
+in this lane. Added the categorized dependency article and index, updated the public program plan,
+ROADMAP, and CHANGELOG. `src/shared/docs-data.ts` was deliberately not regenerated per lane scope,
+so the offline bundle remains an explicit integration point.
+
+This lane did not run tests, type checking, lint, security checks, builds, packaging, installer
+execution, runtime interaction, or captures, and made no commit or dew. Remaining integration work
+includes focused lifecycle/IPC verification, generated offline docs refresh, catalog
+`Install and continue` wiring, and packaged-bundle proof for any future bundled dependency.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

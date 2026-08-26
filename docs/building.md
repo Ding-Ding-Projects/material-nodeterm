@@ -168,6 +168,13 @@ portable archives, both Python architectures, and the Visual Studio Build Tools 
 independently verifies packages against its own manifest hashes. Nothing the script downloads is
 ever committed to the repository itself.
 
+Node features use the stricter `nodeFeatures` entries in the same manifest and the shared
+`src/core/node-dependencies/` lifecycle. That service is the future Node Catalog's only installation
+route: it verifies canonical sources before extraction, keeps cache and install records below
+application data, and never treats an unrelated `PATH` executable as readiness. See
+[`features/dependencies/automatic-node-dependencies.md`](features/dependencies/automatic-node-dependencies.md)
+for the state and recovery contract.
+
 ## `build.bat` / `.sh`
 
 Takes a checkout with nothing installed to a built, runnable program:
