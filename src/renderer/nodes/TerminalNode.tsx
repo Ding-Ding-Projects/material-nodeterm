@@ -176,6 +176,7 @@ import { UnlockPrompt } from '../components/toylocks/UnlockPrompt'
 import { isNodeLockEngaged, nodeLockTeardownMode } from '@shared/toylock'
 import {
   accountChipLabel,
+  agentLaunchOverride,
   COLLAPSED_HEIGHT,
   NODE_COLORS,
   type CanvasNode
@@ -3512,7 +3513,8 @@ export function TerminalNode({
                 agentId,
                 priorSessionId: priorId,
                 customLaunchCmd,
-                  sharedIdentity: shared
+                sharedIdentity: shared,
+                launchOverride: agentLaunchOverride(agentId)
               })
               if (!relaunch.reconstructable) {
                 // The shell exists, but executing the opaque custom id would cross the execution trust
@@ -3614,6 +3616,12 @@ export function TerminalNode({
         // in acceptEdits/plan would come back from a restart in the default mode, silently.
         // Re-resolved at call time for the same reason as there: the mode is a property of how a
         // session is launched, not of the node.
+        // The launch-command override rides this restart the same way it rides cold restore — a
+        // property of how the agent is launched, read fresh here rather than persisted on the
+        // node. It is skipped on the SSH-codex managed-launcher branch: that path types the
+        // remote host's own launcher path, not a program on this machine's PATH, and a local
+        // wrapper override has no meaning there.
+        const restartOverride = agentLaunchOverride(agentId)
         const base = resumeCommand(
           agentId,
           agentSessionId,
@@ -3621,7 +3629,7 @@ export function TerminalNode({
             ? {
                 codexProgram: useSshConn.getState().getCodexRuntime(sshProjectId).codexLauncherPath
               }
-            : false
+            : { base: restartOverride }
         )
         const command = base
           ? commandForAgentLaunch(
@@ -3723,7 +3731,7 @@ export function TerminalNode({
         // not carry its directory on PATH — naming it there would be `command not found` where a
         // plain `codex resume` works. A restarted codex node therefore rejoins as a plain client
         // until its next cold start. Fail open, same rule as everywhere else in this feature.
-        const base = resumeCommand(agentId, agentSessionId)
+        const base = resumeCommand(agentId, agentSessionId, { base: agentLaunchOverride(agentId) })
         // Refused BEFORE anything is written. `performResumePhase` gates on this same bare command
         // and would refuse too — but the KILL_LINE below is ours, so leaving this check to it
         // meant an unusable session id erased the pane's line (three times, once per wake trigger)

@@ -527,6 +527,7 @@ import {
   createCodexAccountLoginNode,
   isAccountLoginNode,
   isCodexAccountLoginNode,
+  agentLaunchOverride,
   claudeLaunchCommand,
   createAgentNode,
   createCanvasControlTerminalNode,
@@ -8892,7 +8893,7 @@ export function Canvas() {
         return
       }
       // No live node — open a resume node in the active project, using the transcript's cwd.
-      const cmd = resumeCommand('claude', hit.sessionId)
+      const cmd = resumeCommand('claude', hit.sessionId, { base: agentLaunchOverride('claude') })
       if (!cmd) return
       const activeId = useProjects.getState().activeProjectId
       const project = useProjects.getState().getProject(activeId)
@@ -9938,11 +9939,10 @@ export function Canvas() {
                 terminalCreationOptionsFor(projStore.activeProjectId)
               )
               if (args.resume) {
-                const resume = resumeCommand(
-                  agentId,
-                  args.resume,
-                  codexSharedIdentity(node.data.ssh || node.data.sshRemoteTmux)
-                )
+                const resume = resumeCommand(agentId, args.resume, {
+                  sharedIdentity: codexSharedIdentity(node.data.ssh || node.data.sshRemoteTmux),
+                  base: agentLaunchOverride(agentId)
+                })
                 if (!resume) throw new Error('Agent does not support session resume')
                 node.data = {
                   ...node.data,
@@ -11182,41 +11182,83 @@ export function Canvas() {
     (e: React.MouseEvent, projectId: string, id: string) => {
       e.preventDefault()
       e.stopPropagation()
+      const goToAndRename: MenuItem[] = [
+        { label: 'Go to', icon: <IconJump />, onClick: () => focusNodeById(id) },
+        {
+          label: 'Rename',
+          icon: <IconEditor />,
+          onClick: () => {
+            void promptDialog({ message: 'Rename session' }).then((t) => {
+              if (t && t.trim()) renameSession(projectId, id, t.trim())
+            })
+          }
+        }
+      ]
+      const closeRow: MenuItem = {
+        label: 'Close',
+        icon: <IconTrash />,
+        danger: true,
+        onClick: () => closeSession(projectId, id)
+      }
+      // Parity with the canvas node menu (`selectionItems`) for the ACTIVE project only: that
+      // builder reads the live React Flow nodes + per-node closures (agent state, transfer
+      // targets, restart, lock…), which simply don't exist for a background project's serialized
+      // nodes. So the active project gets the full single-node menu — Color, Group, Duplicate,
+      // Branch, Collapse, Markdown view, Refresh terminal, Restart agent, Transfer, Lock — with
+      // Go to/Rename prepended and the canvas's destructive Delete swapped for the
+      // non-destructive Close (closing a session from the sidebar list should never be the
+      // "permanently delete" action). A background project keeps the narrow historical set.
+      if (projectId === activeProjectId) {
+        const nodeMenu = selectionItems([id])
+        // selectionItems always ends with `{separator}, {Delete}` (see its own trailing block) —
+        // strip exactly that tail rather than filtering by label everywhere else in the list,
+        // so a future row that happens to be named "Delete" elsewhere in the menu is untouched.
+        const last = nodeMenu[nodeMenu.length - 1]
+        const secondLast = nodeMenu[nodeMenu.length - 2]
+        const isDeleteRow =
+          !!last && 'onClick' in last && last.label === 'Delete' && !!last.danger
+        const withoutDelete = isDeleteRow
+          ? nodeMenu.slice(0, secondLast?.type === 'separator' ? -2 : -1)
+          : nodeMenu
+        setMenu({
+          x: e.clientX,
+          y: e.clientY,
+          items: tidySeparators<MenuItem>([
+            ...goToAndRename,
+            { type: 'separator' },
+            ...withoutDelete,
+            { type: 'separator' },
+            closeRow
+          ])
+        })
+        return
+      }
       setMenu({
         x: e.clientX,
         y: e.clientY,
         items: [
-          { label: 'Go to', icon: <IconJump />, onClick: () => focusNodeById(id) },
-          {
-            label: 'Rename',
-            icon: <IconEditor />,
-            onClick: () => {
-              void promptDialog({ message: 'Rename session' }).then((t) => {
-                if (t && t.trim()) renameSession(projectId, id, t.trim())
-              })
-            }
-          },
+          ...goToAndRename,
           {
             label: 'Duplicate',
             icon: <IconDuplicate />,
             onClick: () => {
-              if (projectId === activeProjectId) duplicateNodes([id])
-              else {
-                useProjects.getState().duplicateNode(projectId, id)
-                void writeDisk()
-              }
+              useProjects.getState().duplicateNode(projectId, id)
+              void writeDisk()
             }
           },
-          {
-            label: 'Close',
-            icon: <IconTrash />,
-            danger: true,
-            onClick: () => closeSession(projectId, id)
-          }
+          closeRow
         ]
       })
     },
-    [activeProjectId, focusNodeById, renameSession, duplicateNodes, closeSession, writeDisk]
+    [
+      activeProjectId,
+      focusNodeById,
+      renameSession,
+      duplicateNodes,
+      closeSession,
+      writeDisk,
+      selectionItems
+    ]
   )
 
   // Stream live subagent transcript chunks into the agent-nodes store.
