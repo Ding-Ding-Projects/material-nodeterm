@@ -30,7 +30,7 @@
 //
 // The gallery is written between two markers, so everything else in the body is left alone:
 //
-//     <!-- huishots:start -->   ... generated ...   <!-- huishots:end -->
+//     <!-- captures:start -->   ... generated ...   <!-- captures:end -->
 //
 // A body with no markers gets them appended once, at the end.
 
@@ -41,8 +41,8 @@ import { fileURLToPath } from 'node:url'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const SHOTS_DIR = join(ROOT, 'docs', 'assets', 'shots')
-const START = '<!-- huishots:start -->'
-const END = '<!-- huishots:end -->'
+const START = '<!-- captures:start -->'
+const END = '<!-- captures:end -->'
 
 /**
  * The gallery, as content rather than as markup. Captions live here so a re-run regenerates the
@@ -130,12 +130,12 @@ const url = (id) => `https://raw.githubusercontent.com/${slug}/${sha}/docs/asset
 function block(g) {
   const width = g.featured ? 900 : 820
   const lines = [
-    `<!-- huishot:${g.id}:start -->`,
+    `<!-- capture:${g.id}:start -->`,
     '',
     `<img src="${url(g.id)}" alt="${g.alt}" width="${width}">`
   ]
   if (g.caption) lines.push('', `<sub>${g.caption}</sub>`)
-  lines.push('', `<!-- huishot:${g.id}:end -->`)
+  lines.push('', `<!-- capture:${g.id}:end -->`)
   return lines.join('\n')
 }
 
@@ -153,11 +153,22 @@ const orphaned = []
 // An entry removed from GALLERY must take its picture with it. Otherwise a capture that was
 // pulled for being stale simply stays in the body forever, which is the exact failure the whole
 // script exists to prevent.
+// Migration: an earlier version of this script wrote its markers under a different prefix, and
+// those blocks would otherwise sit in the body forever because nothing recognises them any more.
+for (const legacy of [...body.matchAll(/<!-- huishot:([\w.-]+):start -->/g)].map((x) => x[1])) {
+  const a = body.indexOf(`<!-- huishot:${legacy}:start -->`)
+  const endTag = `<!-- huishot:${legacy}:end -->`
+  const b = body.indexOf(endTag)
+  if (a === -1 || b === -1) continue
+  body = body.slice(0, a) + body.slice(b + endTag.length)
+  console.log(`  migrated away a legacy block for ${legacy}`)
+}
+
 const known = new Set(GALLERY.map((g) => g.id))
-for (const m of [...body.matchAll(/<!-- huishot:([\w.-]+):start -->/g)].map((x) => x[1])) {
+for (const m of [...body.matchAll(/<!-- capture:([\w.-]+):start -->/g)].map((x) => x[1])) {
   if (known.has(m)) continue
-  const a = body.indexOf(`<!-- huishot:${m}:start -->`)
-  const endTag = `<!-- huishot:${m}:end -->`
+  const a = body.indexOf(`<!-- capture:${m}:start -->`)
+  const endTag = `<!-- capture:${m}:end -->`
   const b = body.indexOf(endTag)
   if (a === -1 || b === -1) continue
   body = body.slice(0, a) + body.slice(b + endTag.length)
@@ -165,8 +176,8 @@ for (const m of [...body.matchAll(/<!-- huishot:([\w.-]+):start -->/g)].map((x) 
 }
 
 for (const g of GALLERY) {
-  const start = `<!-- huishot:${g.id}:start -->`
-  const end = `<!-- huishot:${g.id}:end -->`
+  const start = `<!-- capture:${g.id}:start -->`
+  const end = `<!-- capture:${g.id}:end -->`
 
   // Already placed once: re-pin in situ, wherever the author has since moved it to.
   if (body.includes(start) && body.includes(end)) {
@@ -194,8 +205,8 @@ for (const g of GALLERY) {
 // Anything whose section does not exist goes in one collapsed block at the end rather than being
 // dropped. A silently missing image is indistinguishable from one nobody wanted.
 if (orphaned.length) {
-  const start = '<!-- huishots:orphans:start -->'
-  const end = '<!-- huishots:orphans:end -->'
+  const start = '<!-- captures:orphans:start -->'
+  const end = '<!-- captures:orphans:end -->'
   const chunk = [
     start,
     '',
