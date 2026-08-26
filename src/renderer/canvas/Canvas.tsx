@@ -370,6 +370,8 @@ import {
   type AgentMessage,
   type AgentMessageEndpoint
 } from '../state/agentMailbox'
+import { resolveDeliveryScope } from '../state/agentMessageScope'
+import { checkFlow, noteNewTurn, noteSent } from '../state/agentMessageFlow'
 import { useTeamAccessEvents } from '../state/teamAccess'
 import { useAgentNodes } from '../state/agentNodes'
 import { SubagentNode } from '../nodes/SubagentNode'
@@ -9041,6 +9043,11 @@ export function Canvas() {
   )
   const flushMailbox = useCallback(
     async (nodeId?: string): Promise<void> => {
+      // Expire anything that has sat queued past its TTL BEFORE attempting delivery, so a stale
+      // message never gets one last delivery attempt right as it ages out — and so `status`
+      // reflects `expired` (a visible, checkable fact) rather than the recipient re-attempting a
+      // send that would otherwise still read `queued` forever.
+      agentMailbox().expireStale()
       const projectId = useProjects.getState().activeProjectId
       for (const message of agentMailbox().queued(projectId)) {
         if (!nodeId || message.recipient.nodeId === nodeId) await deliverMailboxMessage(message)
@@ -9268,6 +9275,23 @@ export function Canvas() {
           agentId: (node.data.agentId as AgentId | undefined) ?? status?.agentId,
           sessionId: status?.sessionId
         }
+      }
+      // Refuse an outgoing agent message BEFORE it is created: self-send / cross-project (resolved
+      // off the serialized project store, never off nodesRef — see agentMessageScope.ts) and the
+      // per-pair rate limit / per-turn fan-out cap (agentMessageFlow.ts). Both are pre-probe: a
+      // refusal here costs nothing but a Map lookup, well before a message is even constructed.
+      // Returns an error string to report verbatim, or null when the send may proceed.
+      const messageSendRefusal = (targetNodeId: string): string | null => {
+        const scope = resolveDeliveryScope(
+          useProjects.getState().projects,
+          ctlProject?.id ?? useProjects.getState().activeProjectId,
+          sourceNodeId,
+          targetNodeId
+        )
+        if (scope.kind === 'refused') return `refused (${scope.reason})`
+        const flow = checkFlow(sourceNodeId, targetNodeId, Date.now())
+        if (!flow.ok) return `rate limited, retry after ${flow.retryAfterMs}ms`
+        return null
       }
       const ctlSsh = ctlProject?.ssh
       const sshFor = (cwd?: string) => nodeSshFor(ctlSsh, cwd)
@@ -10605,6 +10629,11 @@ export function Canvas() {
               })
               return
             }
+            const sendRefusal = messageSendRefusal(target.id)
+            if (sendRefusal) {
+              reply({ ok: false, error: `send: ${sendRefusal}` })
+              return
+            }
             try {
               const message = agentMailbox().create({
                 id: `msg-${crypto.randomUUID()}`,
@@ -10613,6 +10642,7 @@ export function Canvas() {
                 subject: args.subject ?? '',
                 body: args.text ?? ''
               })
+              noteSent(sourceNodeId, target.id, Date.now())
               const delivered = await deliverMailboxMessage(message)
               reply({
                 ok: true,
@@ -10655,6 +10685,11 @@ export function Canvas() {
               })
               return
             }
+            const replyRefusal = messageSendRefusal(target.id)
+            if (replyRefusal) {
+              reply({ ok: false, error: `reply: ${replyRefusal}` })
+              return
+            }
             try {
               const message = agentMailbox().create({
                 id: `msg-${crypto.randomUUID()}`,
@@ -10665,6 +10700,7 @@ export function Canvas() {
                 subject: `RE: ${original.subject}`,
                 body: args.text ?? ''
               })
+              noteSent(sourceNodeId, target.id, Date.now())
               const delivered = await deliverMailboxMessage(message)
               reply({
                 ok: true,
@@ -11312,7 +11348,10 @@ export function Canvas() {
           // it was in scope here and dropped on the floor before the store had a field for it.
           if (e.state && !stuckRescueSkip)
             cs.setState(e.nodeId, e.state, e.agentId, e.newTurn, e.pendingId, e.verified)
-          if (e.newTurn) an.clearForParent(e.nodeId) // genuine new turn → drop the previous fan-out
+          if (e.newTurn) {
+            an.clearForParent(e.nodeId) // genuine new turn → drop the previous fan-out
+            noteNewTurn(e.nodeId) // …and this node's agent-message fan-out budget too
+          }
           if (e.newTurn && e.task) {
             // Prompt-prefix fallback for /loop|/schedule|/cron when the natural-language
             // phrasing doesn't trigger the tool-based (recurring) detection.
