@@ -142,7 +142,10 @@ intentionally unchecked because this task publishes the plan only.
   remain outstanding.
 - [ ] Import schema 3 archives atomically without external side effects.
 - [ ] Preserve root, Multiverse, AWS Universe, portal, Shop, node, relationship, and appearance data.
-- [ ] Bundle project-owned media and provide Include, Omit, and Locate Later decisions.
+- [ ] Bundle project-owned media and provide Include, Omit, and Locate Later decisions. Core
+  content-addressing, signature validation, omission records, schema 3 projection support, and a
+  guided decision component are implemented but remain unverified until archive wiring and the
+  required built-artifact checks land.
 - [ ] Separate portable blueprints from machine-local bindings and credential references.
 - [ ] Ship the unified Node Catalog and one creation coordinator.
 - [ ] Add one non-deletable Shop node to every Multiverse and AWS Universe child canvas.
