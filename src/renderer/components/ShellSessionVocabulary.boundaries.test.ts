@@ -94,13 +94,22 @@ describe('shell and session vocabulary boundaries', () => {
 
   it('keeps changelog and release-note row text raw in both rendering and search', () => {
     const card = releaseGate(
-      [{
-        version: '0.4.119',
-        date: '2026-08-26',
-        dateMs: Date.parse('2026-08-26T00:00:00.000Z'),
-        commits: [],
-        items: [{ category: 'Fixed', text: 'Release note terminal wording' }]
-      }],
+      [
+        {
+          version: 'Unreleased',
+          date: null,
+          dateMs: null,
+          commits: [],
+          items: [{ category: 'Fixed', text: 'Release note terminal wording' }]
+        },
+        {
+          version: '0.4.119',
+          date: '2026-08-26',
+          dateMs: Date.parse('2026-08-26T00:00:00.000Z'),
+          commits: [],
+          items: []
+        }
+      ],
       '0.4.119'
     )
     const mapper = (text: string): string => text.replace('terminal', 'shell box').replace('Release note', 'Mapped note')
