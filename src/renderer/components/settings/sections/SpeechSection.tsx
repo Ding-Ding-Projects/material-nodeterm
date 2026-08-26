@@ -7,6 +7,8 @@ import { SettingsSection } from '../SettingsSection'
 import { SearchableRow } from '../SearchableRow'
 import { FieldRow } from '../FieldRow'
 import { Select } from '@renderer/ui/Select'
+import { Radio } from '@renderer/ui/md3'
+import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
 import { SegmentedPill } from '@renderer/ui/SegmentedPill'
 import { Button } from '@renderer/ui/Button'
 import { formatShortcut, isHoldChord } from '@shared/shortcut'
@@ -76,6 +78,7 @@ function modelLabel(id: string): string {
 }
 
 export function SpeechSection({ isActive }: { isActive: boolean }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   const settings = useSettings((s) => s.settings)
   const update = useSettings((s) => s.update)
 
@@ -188,7 +191,7 @@ export function SpeechSection({ isActive }: { isActive: boolean }): React.JSX.El
   return (
     <SettingsSection
       id="speech"
-      title="Speech"
+      title={vocab('Speech')}
       description="Dictate into any terminal or chat node. Local Whisper runs fully on-device — nothing leaves this machine."
       isActive={isActive}
       searchEntries={ENTRIES}
@@ -247,8 +250,7 @@ export function SpeechSection({ isActive }: { isActive: boolean }): React.JSX.El
                     className="flex items-center justify-between gap-3 rounded-md border border-border p-3"
                   >
                     <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3">
-                      <input
-                        type="radio"
+                      <Radio
                         name="speech-model"
                         className="shrink-0"
                         checked={settings.speech.model === m.id}

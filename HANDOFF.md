@@ -1,5 +1,44 @@
 # Handoff
 
+## 2026-08-26, desktop Material Design 3 and personal vocabulary reconciliation
+
+This source-only lane is on feat/full-app-material3-reconciliation at the current integration tip.
+It adds a hand-written rendered-surface inventory in docs/features/appearance/material-3-audit.md
+and scripts/check-material-audit.mjs, expanded with onboarding, the floating action menu, password
+manager, converter adapter catalog, Minecraft backups/players/properties, dim sum surprise, publish
+dialog, find bar, remote picker, and browser profile picker. The inventory has 212 explicit rows
+across shell, nodes, destinations, settings, overlays, status, state, and site categories. It uses
+exact selector boundaries and radius-owner checks rather than corpus-wide substring evidence.
+
+Shared NumberField, Radio, Progress, and Tabs primitives were added, native radio groups received
+stable names, Tooltip now supports keyboard focus, child association, viewport clamping and
+above-anchor placement, Dialog now labels its title, traps focus, and makes the background inert
+while open, and compact controls use shared token geometry. The vendored Outfit and Roboto Mono
+stacks remain the source of the global Material Design 3 font aliases.
+
+Personal vocabulary coverage is recorded in a separate hand-written inventory with 34 mapped
+producer rows plus 34 explicitly classified production surfaces. The newly classified surfaces
+include onboarding, the dim sum notice, publish/find/remote picker surfaces, browser profiles,
+password management, conversion, Minecraft panels, authenticator and speech settings, toy-lock
+setup, history, docs, appearance, regex, status, update, resume, and node surfaces. The validated
+upload/cache mapper remains the only replacement path; commands, URLs, paths, identifiers, code,
+external records, provider values, filenames, hashes, and user-supplied values stay byte-exact.
+Thirty-one production surfaces remain open for direct call-site mapping, and the coverage check
+is therefore intentionally red.
+
+Verification run in this lane:
+
+- node scripts/check-material-audit.mjs passed with 1762 base assertions and 2006 assertions
+  including the unique-inventory-row pass, required-row, source-marker, exact style-owner,
+  localized-string, documentation-row, and mapper-call negative regressions.
+- node scripts/check-personal-vocabulary-coverage.mjs ran 183 assertions, including
+  removed-producer, removed-mapper, removed-documentation-row, and real-file mutations, and is red
+  because 31 listed production surfaces still need direct mapper call-site coverage.
+- node --check passed for both audit scripts.
+- No general tests, type checks, builds, packaging, runtime launches, or captures were run, by the
+  source-only lane boundary. Current-main preservation remains required during integration, with
+  p79 WSL, p80 picker, p82 clipping, dependency foundation, and the current docs bundle kept intact.
+
 ## 2026-08-26, desktop layout safety sweep
 
 Implemented a source-driven clipping repair for the Windows desktop renderer on
@@ -71,7 +110,7 @@ The new flex constraints and `.bind-existing__list` overflow region keep the row
 dialog surface.
 
 This lane did not run tests, type checking, linting, builds, packaging, installer execution,
-runtime interaction, captures, reviews, or audits, and made no commit or dew. Integration must
+runtime interaction, captures, reviews, or audits, and made no commit or push. Integration must
 independently inspect the final diff and verify the built desktop picker with a long list, narrow
 widths, high display scales, keyboard traversal, and screen-reader list count/state before this
 roadmap item can be ticked.
@@ -96,7 +135,7 @@ ROADMAP, and CHANGELOG. `src/shared/docs-data.ts` was deliberately not regenerat
 so the offline bundle remains an explicit integration point.
 
 This lane did not run tests, type checking, lint, security checks, builds, packaging, installer
-execution, runtime interaction, or captures, and made no commit or dew. Remaining integration work
+execution, runtime interaction, or captures, and made no commit or push. Remaining integration work
 includes focused lifecycle/IPC verification, generated offline docs refresh, catalog
 `Install and continue` wiring, and packaged-bundle proof for any future bundled dependency.
 
@@ -114,7 +153,7 @@ hydrating or starting anything.
 This lane deliberately did not run tests, type checking, linting, security checks, builds,
 packaging, installer execution, UI interaction, or captures. Archive writing, atomic import,
 media, catalog, Shop, portals, providers, and UI remain unimplemented risks for later lanes. No
-commit or dew was made by this lane.
+commit or push was made by this lane.
 
 ## 2026-08-26, projection validation tightening
 
@@ -126,7 +165,7 @@ Node membership is unique and complete, node parents are validated, and relation
 are unique without case collisions. HTTP(S) URLs are normalized without embedded credentials or
 control characters, while empty content remains valid and required labels remain non-empty. Tag
 and browser-tab counts are bounded. No tests, type checks, lint, builds, packaging, UI interaction,
-or captures were run, and no commit or dew was made by this lane.
+or captures were run, and no commit or push was made by this lane.
 
 ## 2026-08-26, normalized projection boundary
 
@@ -135,7 +174,7 @@ URLs and omitted empty URLs. It explicitly validates every optional field and ne
 allowlists, numeric and collection bounds, canvas hierarchy and membership invariants, and converts
 malformed input into `PortableProjectV3Error`. This lane keeps only strict global appearance fields;
 per-element appearance is postponed until a typed schema exists. No tests, type checks, lint, builds,
-packaging, UI interaction, or captures were run, and no commit or dew was made by this lane.
+packaging, UI interaction, or captures were run, and no commit or push was made by this lane.
 
 ## 2026-08-26, portable schema 3 envelope implementation
 
@@ -160,7 +199,7 @@ article and projects documentation index entry.
 
 This lane deliberately did not run tests, type checking, linting, reviews, security checks, builds,
 packaging, installer execution, UI interaction, or captures. The roadmap item remains unchecked
-until archive production/import wiring and those verification activities land. No commit or dew was
+until archive production/import wiring and those verification activities land. No commit or push was
 made by this lane.
 
 ## 2026-08-26, portable Node Universes and hosting program plan
@@ -266,7 +305,7 @@ planting a dynamic electron import in core goes red.
 ## 2026-08-20 — six branches integrated, and the stale-failure list retracted
 
 `main` moved `289fcb47 -> baf67860`. Six of the eight open branches are merged and **proven
-ancestors of the dewed `main`** with `git merge-base --is-ancestor`, not assumed:
+ancestors of the pushed `main`** with `git merge-base --is-ancestor`, not assumed:
 `feat/suites-a`, `feat/suites-b`, `feat/openrows`, `feat/uh-feature-inventory`,
 `fix/pairing-no-qr-dead-end`, `feat/project-single-file`. All six merged with zero conflicts.
 
@@ -322,7 +361,7 @@ and `289fcb47` fixed them; the document was simply never updated. The named `.mc
 
 ### Three delegated lanes, landed
 
-Run as isolated workers in their own Gerk Tong Huis, each reviewed and independently re-verified
+Run as isolated workers in their own isolated checkouts, each reviewed and independently re-verified
 here rather than accepted on its own report.
 
 **Converter defects** (`913bffe9`). `README.md` was detected as `xml` because the file opens with
@@ -418,7 +457,7 @@ record anyway, because the honest version of “it passes now” includes the ru
 
 This was investigated properly rather than guessed at, and the answer is more useful than
 “still pending”. Everything upstream of the last step is ready, verified by running commands:
-the tree is clean, `HEAD` is byte-identical to the hui's `main` tip, the immutable icon is
+the tree is clean, `HEAD` is byte-identical to the remote's `main` tip, the immutable icon is
 publicly fetchable at that SHA (HTTP 200, 15633 bytes matching the committed blob), the
 Spectre-mitigated MSVC libraries are installed, no process from this checkout holds a native
 addon, and the cheap headless executable is exactly where the orchestrator demands it. A

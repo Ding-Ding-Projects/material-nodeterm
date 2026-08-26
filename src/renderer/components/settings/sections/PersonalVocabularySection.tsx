@@ -6,6 +6,7 @@ import { SettingsSection } from '../SettingsSection'
 import { SearchableRow } from '../SearchableRow'
 import { FieldRow } from '../FieldRow'
 import { Button } from '@renderer/ui/Button'
+import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
 import {
   VOCAB_MAX_ENTRIES,
   VOCAB_MAX_FILE_BYTES,
@@ -40,6 +41,9 @@ export function PersonalVocabularySection({ isActive }: { isActive: boolean }): 
   const lastError = usePersonalVocabulary((s) => s.lastError)
   const upload = usePersonalVocabulary((s) => s.upload)
   const clear = usePersonalVocabulary((s) => s.clear)
+  const reject = usePersonalVocabulary((s) => s.reject)
+  const beginRead = usePersonalVocabulary((s) => s.beginRead)
+  const vocab = useVocabularyMapper()
   const inputRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
 
@@ -52,6 +56,11 @@ export function PersonalVocabularySection({ isActive }: { isActive: boolean }): 
     return null
 
   const handleFile = (file: File): void => {
+    if (file.size > VOCAB_MAX_FILE_BYTES) {
+      reject('The selected file is too large. Maximum size is 256 KB.')
+      return
+    }
+    beginRead()
     setBusy(true)
     const reader = new FileReader()
     reader.onload = () => {
@@ -62,6 +71,7 @@ export function PersonalVocabularySection({ isActive }: { isActive: boolean }): 
     }
     reader.onerror = () => {
       setBusy(false)
+      reject('The selected vocabulary file could not be read.')
       if (inputRef.current) inputRef.current.value = ''
     }
     reader.readAsText(file)
@@ -74,19 +84,21 @@ export function PersonalVocabularySection({ isActive }: { isActive: boolean }): 
   // honesty reason: this is how many rows of the uploaded file became substitutions (a dictionary
   // export's prose/documentation rows are skipped, see schema.ts), not how many hits occurred.
   const statusLine =
-    status === 'loaded'
+    status === 'reading'
+      ? 'Reading the selected vocabulary file…'
+      : status === 'loaded'
       ? `Loaded — ${entryCount} usable ${entryCount === 1 ? 'pair' : 'pairs'} applied to the app's own wording: Settings, dialogs and prompts, tooltips, notifications, the command palette, and the board and source-control menus.`
       : status === 'invalid'
         ? `Rejected: ${lastError ?? 'the file did not match the expected format.'}`
         : 'No file loaded — original wording is shown everywhere.'
 
   return (
-    <SettingsSection id="vocabulary" title="Personal vocabulary" isActive={isActive} searchEntries={ENTRIES}>
+    <SettingsSection id="vocabulary" title={vocab('Personal vocabulary')} isActive={isActive} searchEntries={ENTRIES}>
       <SearchableRow {...ROWS.upload}>
         <FieldRow
-          label="Local vocabulary file"
+          label={vocab('Local vocabulary file')}
           description={`Upload a small JSON file of your own term → replacement pairs; they apply to the app's own wording only — never to your file paths, commands, terminal output, branch or commit names, or anything saved to disk. Nothing leaves this machine. Up to ${VOCAB_MAX_ENTRIES.toLocaleString()} entries, ${VOCAB_MAX_KEY_LENGTH}/${VOCAB_MAX_VALUE_LENGTH}-character keys/values, ${humanBytes(VOCAB_MAX_FILE_BYTES)} file size. See docs/personal-vocabulary.md for the exact JSON shape.`}
-          note={status === 'invalid' ? statusLine : undefined}
+          note={status === 'invalid' ? vocab(statusLine) : undefined}
           htmlFor="personal-vocabulary-file"
           control={
             <div className="flex flex-col items-end gap-2">
@@ -101,7 +113,7 @@ export function PersonalVocabularySection({ isActive }: { isActive: boolean }): 
                 id="personal-vocabulary-file"
                 type="file"
                 accept="application/json,.json"
-                aria-label="Choose a personal vocabulary JSON file"
+                aria-label={vocab('Choose a personal vocabulary JSON file')}
                 disabled={busy}
                 className="sr-only"
                 onChange={(e) => {
@@ -114,7 +126,7 @@ export function PersonalVocabularySection({ isActive }: { isActive: boolean }): 
                 disabled={busy}
                 onClick={() => inputRef.current?.click()}
               >
-                Choose file
+                {vocab(status === 'reading' ? 'Reading file…' : status === 'loaded' ? 'Replace file' : 'Choose file')}
               </Button>
               {status === 'loaded' ? (
                 <Button
@@ -122,13 +134,13 @@ export function PersonalVocabularySection({ isActive }: { isActive: boolean }): 
                     clear()
                   }}
                 >
-                  Clear
+                  {vocab('Clear')}
                 </Button>
               ) : null}
             </div>
           }
         />
-        {status !== 'invalid' ? <p className="text-[12px] leading-relaxed text-muted-2">{statusLine}</p> : null}
+        {status !== 'invalid' ? <p className="text-[12px] leading-relaxed text-muted-2">{vocab(statusLine)}</p> : null}
       </SearchableRow>
     </SettingsSection>
   )

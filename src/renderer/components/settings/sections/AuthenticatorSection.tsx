@@ -18,6 +18,8 @@ import type { DestructiveAuthorization } from '../../../lib/destructiveAuthoriza
 import { SettingsSection } from '../SettingsSection'
 import { SearchableRow } from '../SearchableRow'
 import { Select } from '@renderer/ui/Select'
+import { Radio } from '@renderer/ui/md3'
+import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
 
 const ROW = {
   title: 'Authenticator',
@@ -68,10 +70,10 @@ function AddEntryForm({ onAdded }: { onAdded: (entry: AuthenticatorEntry) => voi
     <div className="toylock-add-entry">
       <div className="toylock-radio-row">
         <label>
-          <input type="radio" checked={mode === 'uri'} onChange={() => setMode('uri')} /> Paste a URI
+          <Radio name="authenticator-entry-mode" checked={mode === 'uri'} onChange={() => setMode('uri')} /> Paste a URI
         </label>
         <label>
-          <input type="radio" checked={mode === 'manual'} onChange={() => setMode('manual')} /> Enter manually
+          <Radio name="authenticator-entry-mode" checked={mode === 'manual'} onChange={() => setMode('manual')} /> Enter manually
         </label>
       </div>
       {mode === 'uri' ? (
@@ -349,6 +351,7 @@ function EntryRow({
 }
 
 export function AuthenticatorSection({ isActive }: { isActive: boolean }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   const [entries, setEntries] = useState<AuthenticatorEntry[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
   const [mutationError, setMutationError] = useState<string | null>(null)
@@ -420,8 +423,8 @@ export function AuthenticatorSection({ isActive }: { isActive: boolean }): React
   return (
     <SettingsSection
       id="authenticator"
-      title="Authenticator"
-      description="A local, offline place for arbitrary TOTP secrets — nothing here syncs, phones home, or leaves this machine except through the export below, which you have to unlock on purpose."
+      title={vocab('Authenticator')}
+      description={vocab('A local, offline place for arbitrary TOTP secrets — nothing here syncs, phones home, or leaves this machine except through the export below, which you have to unlock on purpose.')}
       isActive={isActive}
       searchEntries={[ROW]}
     >

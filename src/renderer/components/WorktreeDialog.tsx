@@ -6,6 +6,7 @@ import { AnchoredRegexBuilder } from './regex/AnchoredRegexBuilder'
 import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
 import { isValidGitRef, type WorktreeCreateValue, type WorktreeEntry } from '@shared/worktree'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { Radio } from '../ui/md3'
 
 interface Props {
   /** 'create' = the pane/palette entry point (a new group frame); 'bind' = an existing group's
@@ -218,11 +219,11 @@ export function WorktreeDialog({
 
         <div className="bind-mode">
           <label>
-            <input type="radio" checked={mode === 'new'} onChange={() => setMode('new')} /> {vocabulary('New branch')}
+            <Radio name="worktree-mode" checked={mode === 'new'} onChange={() => setMode('new')} /> {vocabulary('New branch')}
           </label>
           <label>
-            <input
-              type="radio"
+            <Radio
+              name="worktree-mode"
               checked={mode === 'existing'}
               onChange={() => setMode('existing')}
             />{' '}

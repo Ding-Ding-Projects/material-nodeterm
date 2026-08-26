@@ -5,6 +5,7 @@ import {
   type ConverterAdapterDescriptor,
   type ConverterCategoryId
 } from '@shared/converter'
+import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 
 export interface AdapterCatalogProps {
   catalog: ConverterAdapterDescriptor[]
@@ -21,6 +22,7 @@ export interface AdapterCatalogProps {
  *  in bundled coverage is visible rather than silently hidden. Each category has its own plain-text
  *  search box (not the full anchored regex builder — see the panel's own doc note on that gap). */
 export function AdapterCatalog({ catalog, selectedId, onSelect, suggestedIds }: AdapterCatalogProps) {
+  const vocab = useVocabularyMapper()
   const [openCategory, setOpenCategory] = useState<ConverterCategoryId | null>('data')
   const [queries, setQueries] = useState<Record<string, string>>({})
   const suggested = useMemo(() => new Set(suggestedIds ?? []), [suggestedIds])
@@ -33,7 +35,7 @@ export function AdapterCatalog({ catalog, selectedId, onSelect, suggestedIds }: 
   }, [catalog])
 
   return (
-    <div className="cv-catalog" role="tree" aria-label="Conversion catalog by category">
+    <div className="cv-catalog" role="tree" aria-label={vocab('Conversion catalog by category')}>
       {CONVERTER_CATEGORY_ORDER.map((cat) => {
         const rows = byCategory[cat]
         const query = (queries[cat] ?? '').toLowerCase()
@@ -56,7 +58,7 @@ export function AdapterCatalog({ catalog, selectedId, onSelect, suggestedIds }: 
               <span className="cv-cat__chevron" aria-hidden>
                 {open ? '▾' : '▸'}
               </span>
-              <span className="cv-cat__label">{CONVERTER_CATEGORY_LABELS[cat]}</span>
+              <span className="cv-cat__label">{vocab(CONVERTER_CATEGORY_LABELS[cat])}</span>
               <span className="cv-cat__count">
                 {bundledCount}/{rows.length} available
               </span>

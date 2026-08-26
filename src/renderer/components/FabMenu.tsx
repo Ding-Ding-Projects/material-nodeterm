@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { AGENT_CONFIG, BUILTIN_AGENT_IDS, type AgentId } from '@shared/agents/config'
 import { AgentIcon } from '../lib/agentIcons'
 import { useSettings } from '../state/settings'
@@ -6,8 +6,11 @@ import { useProjects } from '../state/projects'
 import { accountsForProject, sshAccountsHint } from '../state/workspace'
 import type { TerminalProfileChoice } from '../lib/terminal-profile-actions'
 import { useLocalizedVocabularyText } from '../lib/personalVocabulary/useLocalizedVocabularyText'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { IconLock } from './icons'
 import { writeAuthenticatorDrag } from '../lib/explorerNodeDrag'
+import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
+import { AnchoredRegexBuilder } from './regex/AnchoredRegexBuilder'
 
 export interface FabMenuProps {
   onAddTerminal: () => void
@@ -54,6 +57,9 @@ export function FabMenu({
   onConnectRemote
 }: FabMenuProps) {
   const profileText = useLocalizedVocabularyText()
+  const vocab = useVocabularyMapper()
+  const menuSearch = useRegexSearchField()
+  const menuInputRef = useRef<HTMLInputElement>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const customAgents = useSettings((s) => s.settings.customAgents)
@@ -107,9 +113,23 @@ export function FabMenu({
             aria-label={
               profileMenuOpen
                 ? profileText('terminalProfiles.create.chooseProfileAria', 'Choose terminal profile')
-                : 'Add node'
+                : vocab('Add node')
             }
           >
+            <div className="menu-filter" onMouseDown={(e) => e.stopPropagation()}>
+              <div className="menu-filter__row">
+                <input
+                  ref={menuInputRef}
+                  className="menu-filter__input"
+                  value={menuSearch.value}
+                  placeholder={menuSearch.mode === 'regex' ? vocab('Filter new nodes… (regex)') : vocab('Filter new nodes…')}
+                  aria-label={vocab('Filter new nodes')}
+                  onChange={(e) => menuSearch.setValue(e.target.value)}
+                />
+                <AnchoredRegexBuilder search={menuSearch} fieldRef={menuInputRef} label={vocab('Regex — new nodes')} zIndex={90} />
+              </div>
+              {menuSearch.error && <div className="menu-filter__error">{menuSearch.error}</div>}
+            </div>
             {profileMenuOpen ? (
               <>
                 <button role="menuitem" onClick={() => setProfileMenuOpen(false)}>
@@ -184,7 +204,7 @@ export function FabMenu({
               <>
                 <button role="menuitem" onClick={pick(onAddTerminal)}>
                   <TerminalIcon />
-                  <span>Terminal</span>
+                  <span>{vocab('Terminal')}</span>
                 </button>
                 {offersTerminalProfiles ? (
                   <button role="menuitem" onClick={() => setProfileMenuOpen(true)}>
@@ -199,7 +219,7 @@ export function FabMenu({
                 ) : null}
                 <button role="menuitem" onClick={pick(onAddRemote)}>
                   <TerminalIcon />
-                  <span>Remote…</span>
+                  <span>{vocab('Remote…')}</span>
                 </button>
                 {BUILTIN_AGENT_IDS.filter((aid) => !disabledAgents.includes(aid)).flatMap((aid) => {
                   const base = (

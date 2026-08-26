@@ -20,6 +20,14 @@ every label reads exactly as shipped. Supply one, and the substitution takes ove
 the app forgets your vocabulary ever existed, as if it had never had an opinion to override in the
 first place.
 
+The renderer keeps a hand-written producer inventory in
+scripts/check-personal-vocabulary-coverage.mjs. It covers settings fields and sections, menus,
+dialogs, prompts, notifications, tooltips, canvas and board surfaces, source control, onboarding,
+the dim sum notice, publish/find/remote pickers, browser profiles, password management, conversion,
+Minecraft panels, authenticator and speech settings, and toy-lock setup. The checker requires an
+exact local mapper boundary and an audit row for each producer. It also runs deliberate in-memory
+negative regressions for a removed producer row, mapper call, and documentation row.
+
 None of this leaves your machine. The file is read, checked, and applied entirely where it sits —
 never uploaded, logged, exported, or synced, not even alongside the rest of your app settings. If
 your private dictionary is a joke, a translation, a coping mechanism, or a small act of rebellion

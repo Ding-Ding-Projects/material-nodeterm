@@ -57,6 +57,12 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## In progress / partially landed
 
+- [ ] Desktop Material Design 3 and personal vocabulary reconciliation: the source audit and focused
+  Material Design 3 fixes are present in the audit scripts and shared primitives. The Material Design 3 audit is green
+  with deliberate negative regressions. Personal-vocabulary coverage is intentionally red with
+  31 listed production surfaces still requiring direct mapper call-site wiring. Built-artifact
+  verification, general tests, and captures remain pending.
+
 - [ ] **Desktop layout safety sweep** — viewport-bounded menus, flyouts, anchored popovers, dialogs,
       settings, onboarding, command palette, and documentation surfaces are repaired in
       `src/renderer/styles.clipping.css`, `src/renderer/ui/AnchoredPopover.tsx`, and

@@ -8,6 +8,7 @@ import { resolveAppDisplayName } from '@shared/appIdentity'
 import { useSettings } from '../../state/settings'
 import { Switch } from '@renderer/ui/Switch'
 import { AgentIcon } from '../../lib/agentIcons'
+import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 import {
   OnbBrandMark,
   OnbCheck,
@@ -57,6 +58,7 @@ const STEP_COUNT = STEPS.length
  * launch; rerunnable via the ⌘K "Setup tour" command.
  */
 export function OnboardingFlow({ onClose }: { onClose: () => void }) {
+  const vocab = useVocabularyMapper()
   const settings = useSettings((s) => s.settings)
   const update = useSettings((s) => s.update)
   const [step, setStep] = useState(0)
@@ -161,7 +163,7 @@ export function OnboardingFlow({ onClose }: { onClose: () => void }) {
     <div className="onb">
       {stepId === 'cover' && <OnbGhostCanvas />}
       <button className="onb-skip" onClick={onClose}>
-        Skip setup
+        {vocab('Skip setup')}
       </button>
 
       {stepId === 'cover' ? (

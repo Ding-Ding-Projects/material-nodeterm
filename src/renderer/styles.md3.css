@@ -3256,8 +3256,10 @@ button.term-node__title-text:focus-visible {
 
 @media (prefers-reduced-motion: reduce) {
   :root {
-    --md3-motion-spatial: 1ms linear;
-    --md3-motion-effect: 1ms linear;
+    --md-motion-spatial: 0ms linear;
+    --md-motion-effect: 0ms linear;
+    --md3-motion-spatial: 0ms linear;
+    --md3-motion-effect: 0ms linear;
   }
 }
 
@@ -5759,9 +5761,9 @@ button.term-node__title-text:focus-visible {
      design lg 28px  -> --md-shape-large       (--radius-xxl, 28px)
      design full     -> --md-shape-full        (999px, same name in both)
    Motion + font tokens (--md-motion-spatial/--md-motion-effect, --md-font-ui/--md-font-mono) do
-   not exist yet in styles.css, so they are defined once here, with the exact values
-   design/v2/md3/tokens.css specifies for motion, and the app's OWN existing system-font stacks for
-   type (never a Google Fonts / CDN icon link — the renderer's CSP is `font-src 'self' data:` and
+   are defined in styles.css, so this sheet reuses those exact global values for motion and the
+   app's vendored font stacks for type (never a Google Fonts / CDN icon link — the renderer's CSP is
+   `font-src 'self' data:` and
    scripts/check-app-contract.mjs fails the build on any such link anywhere under src/renderer).
    Any later canonical token pass that defines these same names globally simply takes over, since
    custom properties are looked up by name, not by which file happened to declare them first.
@@ -5773,8 +5775,8 @@ button.term-node__title-text:focus-visible {
 :root {
   --md-motion-spatial: 500ms cubic-bezier(0.38, 1.21, 0.22, 1);
   --md-motion-effect: 200ms cubic-bezier(0.34, 0.8, 0.34, 1);
-  --md-font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro', 'Helvetica Neue', Arial, sans-serif;
-  --md-font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --md-font-ui: var(--font-ui);
+  --md-font-mono: var(--font-mono);
 }
 
 /* --------------------------------------------------------------------------------------------
@@ -8691,15 +8693,10 @@ button.term-node__title-text:focus-visible {
  *   .md3-export-menu      -- ExportMenu's root (already exclusive via `.export-menu`, kept scoped
  *                            for symmetry with the rest of this file)
  *
- * Typography note: the design tokens name `--md-font-ui`/`--md-font-mono`, but this app already
- * self-hosts its three families under different variable names that ALSO carry the CJK fallback
- * stack the Cantonese language mode needs (`--font-ui`, `--font-mono` -- see fonts.css). Using the
- * design doc's own `--md-font-ui` value here would silently drop the bundled "Outfit Variable"
- * face (it isn't registered under the bare name "Outfit") and lose the CJK fallback outright, so
- * this file deliberately spells typography through the app's real `--font-ui`/`--font-mono` while
- * every colour still comes only from the `--md-*` token contract, per the design's own instruction
- * that its font tokens are meant to be "the same names the app already speaks" -- they aren't,
- * quite, and this is the reconciliation.
+ * Typography note: the vendored Outfit and Roboto Mono stacks in fonts.css are the source of truth,
+ * including their CJK-safe fallbacks. The Material Design 3 aliases above deliberately point at those
+ * stacks, so a later imported surface cannot silently replace the bundled faces with a stale
+ * system-only declaration.
  * ================================================================================================= */
 
 /* -------------------------------------------------------------------------------------------------
@@ -11445,4 +11442,53 @@ button.term-node__title-text:focus-visible {
 }
 .icon-menu__reset-btn {
   align-self: flex-start;
+}
+
+/* Canonical live chrome geometry. These final owners keep every audited surface on named Material Design 3
+   shape tokens even where older feature blocks retain their historical selector declarations. */
+.term-node,
+.service-node,
+.dino-node,
+.kanban-col {
+  border-radius: var(--md-shape-node);
+}
+.sticky-node,
+.loop-node,
+.native-loop-node,
+.destgate__complete,
+.destgate__exit,
+.notif-center__row {
+  border-radius: var(--md-shape-section);
+}
+.palette,
+.palette--full,
+.ctx-menu,
+.ctx-submenu,
+.anchored-pop,
+.confirm {
+  border-radius: var(--md-shape-extra-large);
+}
+.palette__item,
+.ctx-item,
+.confirm__option,
+.md3-settings-card > *,
+.icon-menu__preview {
+  border-radius: var(--md-shape-medium);
+}
+.md3-status-badge,
+.md3-status-badge--small {
+  border-radius: var(--md-shape-compact);
+}
+.md3-kids-home__avatar-bubble,
+.md3-kids-tile {
+  border-radius: var(--md-shape-extra-large);
+}
+.mdx-menu {
+  border-radius: var(--md-shape-large);
+}
+.palette__icon {
+  border-radius: var(--md-shape-medium);
+}
+.mdx-row {
+  border-radius: var(--md-shape-small);
 }

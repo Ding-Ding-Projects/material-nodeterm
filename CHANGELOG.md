@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add a source-only desktop Material Design 3 audit with a hand-written inventory of 212 rendered
+  surfaces, including onboarding, profile picking, conversion, password management, Minecraft
+  management, dialogs, find bars, and notifications. Shared NumberField, Radio, Progress, and Tabs
+  primitives now carry tokenized focus, reduced-motion, sizing, orientation, and state behavior.
+  Personal vocabulary producer coverage is inventoried across 34 mapped renderer boundaries plus
+  34 classified production surfaces, with 31 direct call-site mappings still open. Local-only
+  replacements keep commands, paths, identifiers, external records, and user input exact. No
+  general tests, builds, packaging, runtime launches, or captures were run in this source-only lane.
+
 - Fix desktop renderer layout overflow across menus, flyouts, anchored popovers, dialogs, settings,
   onboarding, command palette, and documentation surfaces. Long localized and user-renamed values
   now wrap, dynamic collections scroll inside viewport-bounded surfaces, submenu flyouts are

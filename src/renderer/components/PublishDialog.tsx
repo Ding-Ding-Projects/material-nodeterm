@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { createPortal } from 'react-dom'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { Dialog } from '../ui/md3/Dialog'
 
 /**
  * VS Code-style "Publish to GitHub" picker: an editable repository name plus a
@@ -19,24 +20,19 @@ export function PublishDialog({
   onCancel: () => void
   onPublish: (name: string, isPrivate: boolean) => void
 }) {
+  const vocab = useVocabularyMapper()
   const [name, setName] = useState(defaultName)
   const trimmed = name.trim()
   const hint = (vis: string) => `${owner ? `${owner}/` : ''}${trimmed || 'repo'} · ${vis}`
 
-  return createPortal(
-    <div className="pubdlg-overlay" onClick={onCancel}>
-      <div
-        className="pubdlg"
-        role="dialog"
-        aria-label="Publish to GitHub"
-        onClick={(e) => e.stopPropagation()}
-      >
+  return (
+    <Dialog open onClose={onCancel} title={vocab('Publish to GitHub')} className="pubdlg">
         <input
           className="pubdlg__name"
           autoFocus
           spellCheck={false}
           value={name}
-          placeholder="Repository name"
+          placeholder={vocab('Repository name')}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Escape') onCancel()
@@ -49,7 +45,7 @@ export function PublishDialog({
           onClick={() => onPublish(trimmed, true)}
         >
           <LockIcon />
-          <span className="pubdlg__opt-label">Publish to GitHub private repository</span>
+          <span className="pubdlg__opt-label">{vocab('Publish to GitHub private repository')}</span>
           <span className="pubdlg__opt-hint">{hint('private')}</span>
         </button>
         <button
@@ -58,12 +54,10 @@ export function PublishDialog({
           onClick={() => onPublish(trimmed, false)}
         >
           <GlobeIcon />
-          <span className="pubdlg__opt-label">Publish to GitHub public repository</span>
+          <span className="pubdlg__opt-label">{vocab('Publish to GitHub public repository')}</span>
           <span className="pubdlg__opt-hint">{hint('public')}</span>
         </button>
-      </div>
-    </div>,
-    document.body
+    </Dialog>
   )
 }
 

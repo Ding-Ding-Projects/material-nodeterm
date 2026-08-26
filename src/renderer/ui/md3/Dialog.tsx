@@ -1,4 +1,4 @@
-import { useEffect, useRef, type HTMLAttributes, type ReactNode } from 'react'
+import { useEffect, useId, useRef, type HTMLAttributes, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '../cn'
 
@@ -46,12 +46,26 @@ export function Dialog({
 }: DialogProps): React.JSX.Element | null {
   const returnFocusRef = useRef<HTMLElement | null>(null)
   const panelRef = useRef<HTMLDivElement>(null)
+  const titleId = useId()
 
   useEffect(() => {
     if (!open) return
     returnFocusRef.current = document.activeElement as HTMLElement | null
     panelRef.current?.focus()
+    const scrim = panelRef.current?.parentElement
+    const hidden: Array<{ element: HTMLElement; ariaHidden: string | null; inert: boolean }> = []
+    for (const node of Array.from(document.body.children)) {
+      if (!(node instanceof HTMLElement) || node === scrim) continue
+      hidden.push({ element: node, ariaHidden: node.getAttribute('aria-hidden'), inert: node.inert })
+      node.setAttribute('aria-hidden', 'true')
+      node.inert = true
+    }
     return () => {
+      for (const item of hidden) {
+        if (item.ariaHidden === null) item.element.removeAttribute('aria-hidden')
+        else item.element.setAttribute('aria-hidden', item.ariaHidden)
+        item.element.inert = item.inert
+      }
       returnFocusRef.current?.focus?.()
     }
   }, [open])
@@ -68,6 +82,40 @@ export function Dialog({
     return () => document.removeEventListener('keydown', onKeyDown, true)
   }, [open, closeOnEscape, onClose])
 
+  useEffect(() => {
+    if (!open) return
+    const onKeyDown = (e: KeyboardEvent): void => {
+      if (e.key !== 'Tab') return
+      const panel = panelRef.current
+      if (!panel) return
+      const focusable = Array.from(
+        panel.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )
+      )
+      if (focusable.length === 0) {
+        e.preventDefault()
+        panel.focus()
+        return
+      }
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (e.shiftKey && (document.activeElement === first || document.activeElement === panel)) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault()
+        first.focus()
+      }
+    }
+    document.addEventListener('keydown', onKeyDown, true)
+    return () => document.removeEventListener('keydown', onKeyDown, true)
+  }, [open])
+
+  if (open && !title && !rest['aria-label']) {
+    throw new Error('Dialog requires a title or an explicit aria-label')
+  }
+
   if (!open) return null
 
   return createPortal(
@@ -81,13 +129,14 @@ export function Dialog({
         ref={panelRef}
         role="dialog"
         aria-modal="true"
-        aria-label={typeof title === 'string' ? title : undefined}
         tabIndex={-1}
         className={cn('mdx-dialog', className)}
         {...rest}
+        aria-labelledby={title ? titleId : undefined}
+        aria-label={!title ? rest['aria-label'] : undefined}
       >
         {icon}
-        {title && <div className="mdx-dialog__title">{title}</div>}
+        {title && <div id={titleId} className="mdx-dialog__title">{title}</div>}
         {children}
         {actions && <div className="mdx-dialog__actions">{actions}</div>}
       </div>

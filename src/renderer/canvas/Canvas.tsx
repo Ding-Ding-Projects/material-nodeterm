@@ -353,6 +353,7 @@ import {
 } from '../lib/terminal-creation-surfaces'
 import { armedTerminalLaunchIntent } from '../terminal/armed-launch-intent'
 import { useLocalizedVocabularyText } from '../lib/personalVocabulary/useLocalizedVocabularyText'
+import { usePersonalVocabulary } from '../state/personalVocabulary'
 import { prepareQuickOpenFiles, type QuickOpenIndexedFile } from '../lib/quickOpenSearch'
 import { isSafeQuickOpenRelPath } from '@shared/quick-open-filter'
 
@@ -13172,6 +13173,32 @@ export function Canvas() {
         label: 'Open notification centre',
         icon: <IconBellFilled />,
         run: () => setNotifCenterOpen(true)
+      },
+      {
+        id: 'open-personal-vocabulary',
+        label: usePersonalVocabulary.getState().status === 'loaded'
+          ? 'Replace personal vocabulary file'
+          : 'Upload personal vocabulary file',
+        section: 'Settings',
+        icon: <IconGear />,
+        run: () => openSettingsTo('vocabulary')
+      },
+      {
+        id: 'personal-vocabulary-status',
+        label: 'Personal vocabulary status',
+        hint: `${usePersonalVocabulary.getState().entryCount} entries loaded locally`,
+        section: 'Settings',
+        icon: <IconGear />,
+        run: () => openSettingsTo('vocabulary')
+      },
+      {
+        id: 'clear-personal-vocabulary',
+        label: 'Clear personal vocabulary',
+        section: 'Settings',
+        icon: <IconGear />,
+        disabled: usePersonalVocabulary.getState().status !== 'loaded',
+        note: 'No personal vocabulary file is loaded.',
+        run: () => usePersonalVocabulary.getState().clear()
       },
       {
         id: 'setting-notify-done',

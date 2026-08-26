@@ -9,5 +9,7 @@ migration toward Material Design 3.
 - [Desktop layout safety inventory](./desktop-clipping-inventory.md) — the source-driven inventory
   of viewport, overflow, wrapping, focus, menu, dialog, settings, onboarding, and documentation
   browser repairs for the Windows desktop renderer.
+- [Desktop Material Design 3 audit](./material-3-audit.md) — the hand-written per-surface audit,
+  exact source and style evidence, and the boundary between source review and built-artifact proof.
 
 See also [Canvas](../canvas/README.md), whose node chrome consumes most of these tokens.

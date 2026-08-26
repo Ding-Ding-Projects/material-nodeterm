@@ -25,6 +25,7 @@ import captureManifestRaw from '../../../docs/assets/shots/capture-manifest.json
 import packageJsonRaw from '../../../package.json?raw'
 import { AnchoredRegexBuilder } from './regex/AnchoredRegexBuilder'
 import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import {
   GATE_STATE_META,
   GATE_STATE_ORDER,
@@ -121,6 +122,7 @@ function StatusCard({
 }
 
 export function StatusSurface(): JSX.Element {
+  const vocab = useVocabularyMapper()
   // Bundled, committed evidence — computed once; nothing here changes while the app runs.
   const model = useMemo(
     () =>
@@ -175,7 +177,7 @@ export function StatusSurface(): JSX.Element {
     <div className="md3-status-screen" data-screen-label="Status">
       <div className="md3-status-screen__head">
         <div className="md3-status-screen__heading">
-          <h2 className="md3-status-screen__title">Status</h2>
+          <h2 className="md3-status-screen__title">{vocab('Status')}</h2>
           <div className="md3-status-screen__subtitle">
             What this build can prove about its own gates — recorded evidence only, bundled at
             build time. A check that has not run is unrun, not passed.
@@ -218,7 +220,7 @@ export function StatusSurface(): JSX.Element {
             value={search.value}
             spellCheck={false}
             onChange={(e) => search.setValue(e.target.value)}
-            aria-label="Filter status gates"
+            aria-label={vocab('Filter status checks')}
           />
           <AnchoredRegexBuilder search={search} fieldRef={searchInputRef} label="Regex — status gate filter" />
         </div>
@@ -227,7 +229,7 @@ export function StatusSurface(): JSX.Element {
             {search.error}
           </div>
         )}
-        <div className="md3-status-filters" role="group" aria-label="Filter gates by state">
+        <div className="md3-status-filters" role="group" aria-label={vocab('Filter status checks by state')}>
           <button
             type="button"
             className={`status-filter-chip${stateFilter === 'all' ? ' status-filter-chip--on' : ''}`}

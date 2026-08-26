@@ -1,4 +1,4 @@
-import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react'
+import { Children, forwardRef, isValidElement, type ButtonHTMLAttributes, type ReactNode } from 'react'
 import { cn } from '../cn'
 
 export interface ListRowProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -10,6 +10,8 @@ export interface ListRowProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   /** Trailing content — a `kbd` shortcut chip is common enough to get its own convenience prop;
    *  anything else (a switch, a chevron, a count) goes through `trailing`. */
   kbd?: string
+  /** Non-interactive trailing decoration only. Interactive actions must be rendered as siblings
+   *  by the caller because a button cannot contain another button, input, or link. */
   trailing?: ReactNode
   /** The row's one destructive action (a delete/remove entry in a context menu) — error-tinted
    *  icon tile and text, per the Overlays prototype's "destructive row in error red" contract. */
@@ -25,6 +27,15 @@ export const ListRow = forwardRef<HTMLButtonElement, ListRowProps>(function List
   { icon, label, sub, kbd, trailing, danger = false, className, type = 'button', ...rest },
   ref
 ) {
+  const trailingIsInteractive = Children.toArray(trailing).some((child) => {
+    if (!isValidElement(child)) return false
+    if (typeof child.type === 'string' && ['a', 'button', 'input', 'select', 'textarea'].includes(child.type)) return true
+    const props = child.props as { onClick?: unknown; tabIndex?: number; role?: string }
+    return Boolean(props.onClick || props.tabIndex != null || props.role === 'button')
+  })
+  if (trailingIsInteractive) {
+    throw new Error('ListRow trailing content must be non-interactive; render actions beside the row button')
+  }
   return (
     <button
       ref={ref}

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { MinecraftBackupSummary } from '@shared/minecraft'
 import { useSession } from '../../session/session'
 import { openDestructiveGate } from '../../state/destructiveGate'
+import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 
 /** Create/restore both refuse while the server is running — copying or replacing world files a
  *  live process still has open cannot be trusted. Same reason `writeProperties` refuses while
@@ -22,6 +23,7 @@ function formatWhen(at: number): string {
 }
 
 export function MinecraftBackupsPanel({ nodeId, phase }: { nodeId: string; phase: string }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   const { api } = useSession()
   const [backups, setBackups] = useState<MinecraftBackupSummary[] | null>(null)
   const [busy, setBusy] = useState(false)
@@ -82,7 +84,7 @@ export function MinecraftBackupsPanel({ nodeId, phase }: { nodeId: string; phase
     })
   }
 
-  if (!backups) return <p className="service-node__note">Loading backups…</p>
+  if (!backups) return <p className="service-node__note">{vocab('Loading backups…')}</p>
 
   return (
     <div className="mc-players nodrag">

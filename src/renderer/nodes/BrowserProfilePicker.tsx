@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import type { BrowserProfile } from '@shared/types'
 import { findBrowserProfile } from '@shared/browser-profiles'
 import { IconButton } from '../ui/md3/IconButton'
@@ -8,6 +8,9 @@ import { ListRow } from '../ui/md3/ListRow'
 import { TextField } from '../ui/md3/TextField'
 import { MaterialSymbol } from '../components/MaterialSymbol'
 import { openDestructiveGate } from '../state/destructiveGate'
+import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
+import { AnchoredRegexBuilder } from '../components/regex/AnchoredRegexBuilder'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 /** Same palette used by `groupSelectedNodes`/`createTerminalNode` for new-object color defaults —
  *  a browser profile is just another named, colored object on the project. */
@@ -51,9 +54,21 @@ export function BrowserProfilePicker({
   const [newName, setNewName] = useState('')
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
+  const search = useRegexSearchField()
+  const searchRef = useRef<HTMLInputElement>(null)
+  const vocab = useVocabularyMapper()
 
   const current = findBrowserProfile(profiles, selectedId)
   const label = selectedId ? (current?.name ?? 'Unknown profile') : 'Default'
+  const visibleProfiles = useMemo(
+    () =>
+      (profiles ?? []).filter((profile) =>
+        search.mode === 'regex'
+          ? search.test(profile.name)
+          : profile.name.toLocaleLowerCase().includes(search.query.toLocaleLowerCase())
+      ),
+    [profiles, search.mode, search.pattern, search.flags, search.query]
+  )
 
   const startCreate = (): void => {
     setCreating(true)
@@ -118,7 +133,21 @@ export function BrowserProfilePicker({
         <span className="browser-profile-trigger__label">{label}</span>
       </button>
       <AnchoredPopover anchorRef={anchorRef} open={open} onClose={() => setOpen(false)} width={260}>
-        <Menu role="menu" aria-label="Browser profile">
+        <Menu role="menu" aria-label={vocab('Browser profile')}>
+          <div className="menu-filter" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="menu-filter__row">
+              <input
+                ref={searchRef}
+                className="menu-filter__input"
+                value={search.value}
+                placeholder={search.mode === 'regex' ? vocab('Filter profiles… (regex)') : vocab('Filter profiles…')}
+                aria-label={vocab('Filter browser profiles')}
+                onChange={(e) => search.setValue(e.target.value)}
+              />
+              <AnchoredRegexBuilder search={search} fieldRef={searchRef} label={vocab('Regex — browser profiles')} />
+            </div>
+            {search.error && <div className="menu-filter__error">{search.error}</div>}
+          </div>
           <ListRow
             role="menuitemradio"
             aria-checked={!selectedId}
@@ -131,7 +160,7 @@ export function BrowserProfilePicker({
               setOpen(false)
             }}
           />
-          {(profiles ?? []).map((p) =>
+          {visibleProfiles.map((p) =>
             renamingId === p.id ? (
               <div key={p.id} className="browser-profile-picker__rename" role="none">
                 <TextField
@@ -198,6 +227,9 @@ export function BrowserProfilePicker({
                 </span>
               </div>
             )
+          )}
+          {visibleProfiles.length === 0 && (
+            <ListRow label={vocab('No browser profiles match this filter.')} disabled />
           )}
           {creating ? (
             <div className="browser-profile-picker__rename" role="none">

@@ -23,6 +23,13 @@ nodes on a single pan/zoom canvas, built on Electron with a React renderer. It s
 ways from one codebase — a desktop app, a self-hosted browser edition, and a mobile companion
 that attaches to the same live sessions.
 
+Every rendered element in the Windows desktop application uses Material Design 3 primitives and project tokens,
+including states, overlays, dialogs, menus, settings, nodes, destinations, and notifications. Every
+eligible user-facing text producer passes through the local personal-vocabulary upload boundary,
+while commands, paths, identifiers, external records, and user-supplied values remain literal.
+The documentation and landing site runs in Kids mode by default. Site changes are limited to stale facts, data, releases, links, features, accessibility, and broken behavior; this desktop audit does
+not restyle site files.
+
 ## Process boundaries are enforced, not advisory
 
 The codebase is split by responsibility, and the split is checked by tests, not just
