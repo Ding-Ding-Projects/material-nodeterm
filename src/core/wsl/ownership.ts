@@ -17,7 +17,7 @@
 
 import { promises as fs } from 'fs'
 import path from 'path'
-import crypto from 'crypto'
+import { writeFileAtomic } from '../fs-atomic'
 
 /** One durable record of a distribution nodeterm itself created. */
 export interface WslOwnershipRecord {
@@ -97,11 +97,15 @@ function parseLedger(raw: string): LedgerFileShapeV1 | null {
 }
 
 async function writeAtomic(filePath: string, contents: string): Promise<void> {
-  const dir = path.dirname(filePath)
-  await fs.mkdir(dir, { recursive: true })
-  const tempPath = path.join(dir, `.${path.basename(filePath)}.${crypto.randomUUID()}.tmp`)
-  await fs.writeFile(tempPath, contents, 'utf8')
-  await fs.rename(tempPath, filePath)
+  // `writeFileAtomic` rather than a hand-rolled temp-then-rename. The hand-rolled version was
+  // correct on POSIX and silently lossy on Windows: MoveFileEx fails with EPERM whenever the
+  // destination is open by anyone at that instant, and what opens a file you just wrote is the
+  // antivirus scanner or the search indexer. Losing this particular write means losing the record
+  // of which distributions the app owns, and the ownership check fails CLOSED, so the user's own
+  // distributions stay safe but ours become unmanageable. The repository's scanning guard caught
+  // this, which is exactly what it is for.
+  await fs.mkdir(path.dirname(filePath), { recursive: true })
+  await writeFileAtomic(filePath, contents)
 }
 
 /**
