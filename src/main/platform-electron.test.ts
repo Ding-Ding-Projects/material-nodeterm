@@ -211,6 +211,39 @@ describe('electronPlatform + relay peers', () => {
     expect(entered).toBe(true)
   })
 
+  // WSL distribution management is machine-global in exactly the sense authenticator:* and
+  // password-manager:* already are (CLAUDE.md, "Relay RPC authorization is an exact allowlist"):
+  // a mutually-approved relay peer gets shell-equivalent access to the JOINED project, never to
+  // this desktop's own machine-level state. Prove the refusal happens BEFORE the registered
+  // handler is entered -- i.e. before wsl.exe is ever touched -- not merely before it answers.
+  it('denies every wsl:* method to a relay peer before the handler is entered', async () => {
+    const p = electronPlatform()
+    const reached: string[] = []
+    const wslMethods = [
+      IPC.wslList,
+      IPC.wslCatalogue,
+      IPC.wslCreate,
+      IPC.wslSleep,
+      IPC.wslWake,
+      IPC.wslDelete
+    ]
+    for (const method of wslMethods) p.handle(method, () => reached.push(method))
+
+    for (let i = 0; i < wslMethods.length; i++) {
+      await expect(p.dispatch(PEER, {
+        t: 'req', id: 200 + i, method: wslMethods[i]!, args: []
+      })).resolves.toMatchObject({
+        t: 'res', id: 200 + i, ok: false, error: { code: 'E_FORBIDDEN' }
+      })
+    }
+    expect(reached).toEqual([])
+
+    // The local renderer still reaches the same registration through Electron IPC -- the
+    // allowlist governs only the raw relay dispatch path.
+    await h.handlers[IPC.wslList]!({ sender: { id: 1 } })
+    expect(reached).toEqual([IPC.wslList])
+  })
+
   it('clientIds = webContents ids ++ peer ids', () => {
     const p = electronPlatform()
     h.clientIds = [5]

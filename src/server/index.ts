@@ -62,6 +62,7 @@ import { createGrantsAccessor } from '../core/push-grants'
 import { createAckSweeper } from '../core/ack-sweep'
 import { createSessionReaper } from '../core/session-budget'
 import { startSessionMemoryService, sshScopePredicate } from '../core/session-memory-service'
+import { startWslService, defaultWslRuntime, fileWslOwnershipStore } from '../core/wsl'
 import { startToyLockService } from '../core/toylocks/toylock-service'
 import { startAuthenticatorService } from '../core/toylocks/authenticator-service'
 import { createMemoryPressureMonitor } from '../core/memory-pressure'
@@ -615,6 +616,15 @@ export async function startServer(
     remote: {
       isRemoteProject: sshScopePredicate({ sshProjectIds: () => workspaceStore.sshProjectIds() })
     }
+  })
+
+  // WSL distribution management (docs pending) — src/core/wsl/service.ts. `wsl.exe` simply is
+  // not found on a Linux host, so every call honestly rejects ("WSL is not installed on this
+  // machine") rather than resolving to a silent empty list — the same core service Desktop
+  // registers, with no server-specific branch needed to produce that degrade.
+  startWslService({
+    runtime: defaultWslRuntime(),
+    ownership: fileWslOwnershipStore(path.join(config.dataDir, 'wsl-owned-distributions.json'))
   })
 
   // Toy locks + the built-in authenticator (docs/toy-locks.md, docs/authenticator.md). No

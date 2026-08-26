@@ -532,6 +532,16 @@ const api: NodeTerminalApi = {
     read: (q?: SessionMemoryQuery) => ipcRenderer.invoke(IPC.sessionMemory, q),
     host: (q?: SessionMemoryQuery) => ipcRenderer.invoke(IPC.sessionMemoryHost, q)
   },
+  // WSL distribution management — Windows-only in practice (wsl.exe simply is not found
+  // elsewhere); every call rejects honestly rather than resolving to a fabricated empty result.
+  wsl: {
+    list: () => ipcRenderer.invoke(IPC.wslList),
+    catalogue: () => ipcRenderer.invoke(IPC.wslCatalogue),
+    create: (input: { catalogueId: string; name: string }) => ipcRenderer.invoke(IPC.wslCreate, input),
+    sleep: (name: string) => ipcRenderer.invoke(IPC.wslSleep, name),
+    wake: (name: string) => ipcRenderer.invoke(IPC.wslWake, name),
+    delete: (name: string) => ipcRenderer.invoke(IPC.wslDelete, name)
+  },
   vscode: {
     detect: () => ipcRenderer.invoke(IPC.vscodeDetect),
     open: (path: string) => ipcRenderer.invoke(IPC.vscodeOpen, path)

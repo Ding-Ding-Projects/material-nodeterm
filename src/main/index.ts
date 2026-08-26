@@ -139,6 +139,7 @@ import { createRemoteGrantsCache } from '../core/remote-push-grants'
 import { createAckSweeper } from '../core/ack-sweep'
 import { createSessionReaper } from '../core/session-budget'
 import { startSessionMemoryService, sshScopePredicate } from '../core/session-memory-service'
+import { startWslService, defaultWslRuntime, fileWslOwnershipStore } from '../core/wsl'
 import { startToyLockService } from '../core/toylocks/toylock-service'
 import { startAuthenticatorService } from '../core/toylocks/authenticator-service'
 import { createMemoryPressureMonitor } from '../core/memory-pressure'
@@ -2566,6 +2567,16 @@ app.whenReady().then(async () => {
         }
       }
     }
+  })
+
+  // WSL distribution management (docs pending) — src/core/wsl/service.ts. Windows-only in
+  // practice (wsl.exe simply is not found elsewhere); every handler degrades to a real, honest
+  // rejection rather than a silent empty list. The ownership ledger is a small machine-local
+  // JSON file, exactly the shape session-memory/toylock stores use, under this app's own
+  // userData directory — never inside a project's shared `.nodeterm/`.
+  startWslService({
+    runtime: defaultWslRuntime(),
+    ownership: fileWslOwnershipStore(join(app.getPath('userData'), 'wsl-owned-distributions.json'))
   })
 
   // Toy locks + the built-in authenticator (docs/toy-locks.md, docs/authenticator.md). Pure
