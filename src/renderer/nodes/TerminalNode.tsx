@@ -867,6 +867,18 @@ const restartSubs = new Map<string, () => void>()
 type PendingLaunchExecutor = (pending: PendingLaunch) => Promise<LaunchIntentExecutionResult>
 
 /**
+ * A pending launch error is a factual result from the execution coordinator. It can contain a
+ * host, command, path, code, or provider diagnostic, so it must remain verbatim. The surrounding
+ * retry/status chrome is app-authored and is mapped separately at render time.
+ */
+interface PendingLaunchErrorDisplay {
+  ownership: 'external-factual' | 'authored'
+  text: string
+}
+
+const PENDING_LAUNCH_UNKNOWN_ERROR = 'The queued launch delivery result is unknown. Retry to check it safely.'
+
+/**
  * Exact-live-session executors for armed launches. Canvas decides WHEN dependencies are ready;
  * the mounted terminal owns WHICH PTY generation receives the launch. Keying this registry by the
  * renderer session scope plus node id prevents an old delayed request from crossing a recycle or
@@ -1042,7 +1054,10 @@ export function TerminalNode({
           'This custom agent is no longer configured. Restore its launch command, then try again. No agent was launched in the replacement shell.'
         )
       case 'launch-intent-failed':
-        return error.detail || 'The trusted agent launch could not be completed.'
+        return error.detail || profileText(
+          'terminalProfiles.error.trustedLaunchFailed',
+          'The trusted agent launch could not be completed.'
+        )
       case 'confirmed-recycle-unavailable':
         return profileText(
           'terminalProfiles.error.agentRecycleUnavailable',
@@ -1833,6 +1848,12 @@ export function TerminalNode({
     : ''
   const pendingLaunchError =
     typeof data.pendingLaunchError === 'string' ? data.pendingLaunchError : undefined
+  const pendingLaunchErrorDisplay: PendingLaunchErrorDisplay | null = pendingLaunchError
+    ? {
+        ownership: pendingLaunchError === PENDING_LAUNCH_UNKNOWN_ERROR ? 'authored' : 'external-factual',
+        text: pendingLaunchError
+      }
+    : null
   const pendingLaunchErrorKind =
     data.pendingLaunchErrorKind === 'confirmed' || data.pendingLaunchErrorKind === 'unknown'
       ? data.pendingLaunchErrorKind
@@ -1894,8 +1915,7 @@ export function TerminalNode({
         // state and show fixed recovery copy instead.
         updateNodeData(id, {
           pendingLaunch: dispatchedLaunch,
-          pendingLaunchError:
-            'The queued launch delivery result is unknown. Retry to check it safely.',
+          pendingLaunchError: PENDING_LAUNCH_UNKNOWN_ERROR,
           pendingLaunchErrorKind: 'unknown'
         })
       })
@@ -5057,8 +5077,11 @@ export function TerminalNode({
             <span
               className="term-node__status term-node__status--queued nodrag"
               title={
-                pendingLaunchError ??
-                `${vocab('Waiting for')} ${pendingWaitingOn || vocab('the selected stations')} ${vocab('to finish, then')} ${pendingLaunchSummary}.`
+                pendingLaunchErrorDisplay
+                  ? pendingLaunchErrorDisplay.ownership === 'authored'
+                    ? vocab(pendingLaunchErrorDisplay.text)
+                    : pendingLaunchErrorDisplay.text
+                  : `${vocab('Waiting for')} ${pendingWaitingOn || vocab('the selected stations')} ${vocab('to finish, then')} ${pendingLaunchSummary}.`
               }
             >
               <span className="term-node__status-dot" />
@@ -5428,9 +5451,13 @@ export function TerminalNode({
               </button>
             </div>
           )}
-          {!co.closed && !co.ended && pendingLaunch && pendingLaunchError && (
+          {!co.closed && !co.ended && pendingLaunch && pendingLaunchErrorDisplay && (
             <div className="term-node__closed nodrag" role="alert">
-              <span>{pendingLaunchError}</span>
+              <span data-vocabulary-ownership={pendingLaunchErrorDisplay.ownership}>
+                {pendingLaunchErrorDisplay.ownership === 'authored'
+                  ? vocab(pendingLaunchErrorDisplay.text)
+                  : pendingLaunchErrorDisplay.text}
+              </span>
               <button
                 className="term-node__reopen"
                 disabled={pendingLaunchExecuting}

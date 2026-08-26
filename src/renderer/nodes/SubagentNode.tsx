@@ -32,6 +32,7 @@ export function SubagentNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const activity = useAgentNodes((s) => s.activityById[id]) || ''
   const body = activity || result
   const expanded = !!data.ephExpanded
+  const typeLabel = typeof data.subagentType === 'string' && data.subagentType ? data.subagentType : vocab('subagent')
   const bodyRef = useRef<HTMLDivElement>(null)
   const toggle = () => useAgentNodes.getState().toggleExpanded(id)
 
@@ -75,7 +76,7 @@ export function SubagentNode({ id, data, selected }: NodeProps<CanvasNode>) {
           {expanded ? '▾' : '▸'}
         </button>
         <span className="subagent-node__dot" />
-        <span className="subagent-node__type">{(data.subagentType as string) || 'subagent'}</span>
+        <span className="subagent-node__type">{typeLabel}</span>
         <span className="subagent-node__state">{vocab(working ? 'working' : 'done')}</span>
       </div>
       {data.title && !expanded && <div className="subagent-node__task">{data.title as string}</div>}

@@ -71,7 +71,8 @@ export function EditorNode({ id, data, selected }: NodeProps<CanvasNode>) {
   // ControlMaster; otherwise the session's fs.
   const activeProjectId = useProjects((s) => s.activeProjectId)
   const fs = data.sshFs && activeProjectId ? sshFs(activeProjectId) : api.fs
-  const fileName = filePath.split('/').pop() || 'untitled'
+  const fileName = filePath.split('/').pop() || ''
+  const displayFileName = fileName || vocab('untitled')
   const ext = fileName.includes('.') ? fileName.split('.').pop()!.toLowerCase() : ''
   const isImage = ext in IMAGE_MIME
   // PDFs go to the platform's own viewer (zoom / search / pages / print all come for free)
@@ -267,7 +268,7 @@ export function EditorNode({ id, data, selected }: NodeProps<CanvasNode>) {
         style={headerFill.style}
       >
         <span className="term-node__title-text" title={filePath}>
-          {fileName}
+          {displayFileName}
           {!isImage && !isPdf && dirty ? ' ●' : ''}
         </span>
         <span className="term-node__spacer" />
@@ -313,7 +314,7 @@ export function EditorNode({ id, data, selected }: NodeProps<CanvasNode>) {
             {imageSrc ? (
               <img
                 src={imageSrc}
-                alt={fileName}
+                alt={displayFileName}
                 onLoad={(e) => {
                   const img = e.currentTarget
                   if (img.naturalWidth) setImageDims(`${img.naturalWidth} × ${img.naturalHeight}`)
@@ -329,7 +330,7 @@ export function EditorNode({ id, data, selected }: NodeProps<CanvasNode>) {
           // Server Edition) — no bundled PDF engine of ours to keep patched.
           <div className="editor-node__pdf nodrag nowheel">
             {pdfSrc ? (
-              <iframe src={pdfSrc} title={fileName} />
+              <iframe src={pdfSrc} title={displayFileName} />
             ) : (
               <span className="editor-node__loading">{pdfError ? vocab(pdfError) : vocab('Loading…')}</span>
             )}
@@ -345,7 +346,7 @@ export function EditorNode({ id, data, selected }: NodeProps<CanvasNode>) {
               <div className="term-md nodrag nowheel">
                 <div className="term-md__bar">
                   <span>{vocab('Preview')}</span>
-                  <span className="term-md__hint">{hintLabel('⌘M to edit')}</span>
+                  <span className="term-md__hint">{hintLabel(`⌘M ${vocab('to edit')}`)}</span>
                 </div>
                 <div
                   className="term-md__content"

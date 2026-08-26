@@ -223,7 +223,7 @@ export default function BrowserNode({ id, data, selected }: NodeProps<CanvasNode
               role="tab"
               aria-selected={tab.id === activeTabId}
               className={`browser-node__tab${tab.id === activeTabId ? ' browser-node__tab--active' : ''}`}
-              title={tab.url || tab.title}
+              title={tab.url || tab.title || vocab('New Tab')}
               onClick={() => selectTab(tab.id)}
             >
               <span className="browser-node__tab-title">{tab.title || tab.url || vocab('New Tab')}</span>

@@ -70,6 +70,7 @@ export function BrowserSurface({
   const [canBack, setCanBack] = useState(false)
   const [canFwd, setCanFwd] = useState(false)
   const [failed, setFailed] = useState('')
+  const [failedExternal, setFailedExternal] = useState(false)
   const [showExtensions, setShowExtensions] = useState(false)
   // Memory saver (see `useDiscardWhenHidden`): the page is released while hidden and rebuilt on
   // reveal. `loadingRef` mirrors the `loading` state because the hook reads it at fire time, from
@@ -144,7 +145,13 @@ export function BrowserSurface({
       if (ev.isMainFrame && ev.errorCode !== -3) {
         // A restore that never landed has no echo to swallow — disarm, or the next navigation pays.
         restoringNavRef.current = null
-        setFailed(ev.errorDescription || vocab('Failed to load'))
+        if (ev.errorDescription) {
+          setFailed(ev.errorDescription)
+          setFailedExternal(true)
+        } else {
+          setFailed('Failed to load')
+          setFailedExternal(false)
+        }
       }
     }
     wv.addEventListener('did-start-loading', onStart)
@@ -232,11 +239,13 @@ export function BrowserSurface({
   const go = (): void => {
     const safe = searchOrUrl(address)
     if (!safe) {
-      setFailed(vocab('Enter a URL or search term'))
+      setFailed('Enter a URL or search term')
+      setFailedExternal(false)
       return
     }
     setAddress(safe)
     setFailed('')
+    setFailedExternal(false)
     // A navigation with an initiator: whatever it navigates to is not a restore echo.
     restoringNavRef.current = null
     locationRef.current = safe
@@ -311,7 +320,7 @@ export function BrowserSurface({
           />
         )}
         {discarded && <DiscardedPlate />}
-        {failed && <div className="browser-node__error">{failed}</div>}
+        {failed && <div className="browser-node__error">{failedExternal ? failed : vocab(failed)}</div>}
       </div>
     </div>
   )
