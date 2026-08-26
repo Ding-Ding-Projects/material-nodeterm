@@ -6,6 +6,7 @@ import WebSocket from 'ws'
 import { startServer } from '../../src/server/index'
 import { IPC } from '../../src/shared/ipc'
 import type { MemInfo, SessionMemoryReport } from '../../src/shared/types'
+import { removeFixtureDir } from './fixture-cleanup'
 
 /**
  * The Server Edition's session-memory refusal, end to end.
@@ -76,7 +77,7 @@ describe('server e2e: session memory refuses an SSH scope', () => {
 
   afterAll(async () => {
     await close?.()
-    fs.rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+    await removeFixtureDir(dataDir, 'session-memory-e2e')
   })
 
   /** One WS connection, several RPC calls, results keyed by request id. */

@@ -9,39 +9,10 @@ import { SESSION_COOKIE } from '../../src/server/http'
 import { decodePtyData } from '../../src/shared/rpc'
 import { IPC } from '../../src/shared/ipc'
 import { TMUX_SOCKET, sessionName } from '../../src/core/tmux-naming'
+import { removeFixtureDir } from './fixture-cleanup'
 
 const hasTmux = (() => { try { execSync('tmux -V'); return true } catch { return false } })()
 
-async function removeFixtureDir(dataDir: string): Promise<void> {
-  // Teardown must not decide this test's verdict. The subject is shutdown ORDERING — that the
-  // upgraded websocket is terminated before the HTTP server closes — and by the time this runs
-  // every assertion proving it has already passed.
-  //
-  // This used to fail on Windows with EPERM on the directory itself: about one run in four with a
-  // 1 s bounded retry, still one in six at 5 s. The comment here correctly concluded that a holder
-  // surviving five seconds is not transient lag and that buying more time was the wrong fix. The
-  // owner is now known, and it was never going to yield to a longer wait.
-  //
-  // `fs.rmSync`'s retries are SYNCHRONOUS. They block the event loop, so they cannot let in-flight
-  // async work in this same process finish and release what it holds — the retry loop waits for
-  // the thing it is itself preventing. The holder is a mirror publication: it opens
-  // `agent-status.json.publication.sqlite3` under this very dataDir inside a BEGIN IMMEDIATE
-  // transaction, and nothing awaits that flush. Diagnosed in src/server/handlers/index.test.ts,
-  // where the same symptom went from 2-4 failures per 6 runs to 8 of 8 on this one change.
-  //
-  // So: await. Same options, same retry count, one keyword. The warning below stays as a net,
-  // because a teardown must still never fail a passing test — but it should now be silent.
-  try {
-    await fs.promises.rm(dataDir, { recursive: true, force: true, maxRetries: 20, retryDelay: 50 })
-  } catch (error) {
-    console.warn(
-      `[server-e2e] fixture directory outlived the run and could not be removed: ${dataDir}\n` +
-        `  ${String(error)}\n` +
-        '  The shutdown assertions above still passed; this is a resource-release signal, not a ' +
-        'failure of the behaviour under test.'
-    )
-  }
-}
 
 // Unique per run so a leftover `nt-<persistKey>` tmux session (e.g. from a crashed prior run)
 // can never make the fresh-check below return false — the test asserts fresh === true, which
@@ -84,7 +55,7 @@ describe.skipIf(!hasTmux)('server e2e: login → ws → pty echo round-trip', ()
     } catch {
       // session already gone / no server — fine
     }
-    await removeFixtureDir(dataDir)
+    await removeFixtureDir(dataDir, 'server-e2e')
   })
 
   it('creates a real pty, echoes output over binary frames, destroys it', async () => {
@@ -174,7 +145,7 @@ describe('server shutdown with a live websocket', () => {
     } finally {
       if (closeTimer) clearTimeout(closeTimer)
       ws.terminate()
-      await removeFixtureDir(dataDir)
+      await removeFixtureDir(dataDir, 'server-e2e')
     }
   }, 10_000)
 })

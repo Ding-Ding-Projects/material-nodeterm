@@ -7,6 +7,7 @@ import { startServer } from '../../src/server/index'
 import { SESSION_COOKIE } from '../../src/server/http'
 import { IPC } from '../../src/shared/ipc'
 import { PRESENCE_COLORS, type PeerDiff, type PeerState } from '../../src/shared/presence'
+import { removeFixtureDir } from './fixture-cleanup'
 
 interface Ev {
   t: 'ev' | 'res'
@@ -76,7 +77,7 @@ describe('server e2e: presence with two clients', () => {
 
   afterAll(async () => {
     await close?.()
-    fs.rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+    await removeFixtureDir(dataDir, 'presence-e2e')
   })
 
   it('hello → own id + snapshot; cursor fans out to the other client; disconnect → leave', async () => {

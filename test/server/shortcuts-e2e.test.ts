@@ -8,6 +8,7 @@ import { SESSION_COOKIE } from '../../src/server/http'
 import { IPC } from '../../src/shared/ipc'
 import { DEFAULT_SETTINGS } from '../../src/shared/types'
 import { DEFAULT_SHORTCUTS, type ShortcutMap } from '../../src/shared/shortcuts'
+import { removeFixtureDir } from './fixture-cleanup'
 
 /**
  * End-to-end: the Keyboard Shortcuts feature through the REAL Server Edition stack — HTTP
@@ -65,7 +66,7 @@ describe('server e2e: keyboard shortcuts settings round-trip', () => {
 
   afterAll(async () => {
     await close?.()
-    fs.rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+    await removeFixtureDir(dataDir, 'shortcuts-e2e')
   })
 
   /** Open a WS with the session cookie; resolve once the socket is live. */

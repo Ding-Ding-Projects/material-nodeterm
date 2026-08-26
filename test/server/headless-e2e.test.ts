@@ -5,6 +5,7 @@ import path from 'path'
 import net from 'net'
 import { startServer } from '../../src/server/index'
 import { ScheduledSettingsService } from '../../src/core/scheduled-settings-service'
+import { removeFixtureDir } from './fixture-cleanup'
 
 // Headless notification-host boot smoke: every core service (incl. the loopback hook server) boots,
 // but NO public HTTP/WS listener is bound. Follows the same startServer harness as server-e2e, minus
@@ -75,7 +76,7 @@ describe('server headless mode: boots core services, binds no public listener', 
         await new Promise<void>((resolve) => sentinel.close(() => resolve()))
       }
       scheduledStop.mockRestore()
-      fs.rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+      await removeFixtureDir(dataDir, 'headless-e2e')
     }
   }, 30_000)
 })

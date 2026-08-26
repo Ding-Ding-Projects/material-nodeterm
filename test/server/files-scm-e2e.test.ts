@@ -7,6 +7,7 @@ import WebSocket from 'ws'
 import { startServer } from '../../src/server/index'
 import { SESSION_COOKIE } from '../../src/server/http'
 import { IPC } from '../../src/shared/ipc'
+import { removeFixtureDir } from './fixture-cleanup'
 
 describe('files/scm e2e: fs.read + git over ws', () => {
   let dataDir: string, repo: string, close: () => Promise<void>, port: number, cookie: string
@@ -39,8 +40,8 @@ describe('files/scm e2e: fs.read + git over ws', () => {
 
   afterAll(async () => {
     await close?.()
-    fs.rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
-    fs.rmSync(repo, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+    await removeFixtureDir(dataDir, 'files-scm-e2e')
+    await removeFixtureDir(repo, 'files-scm-e2e')
   })
 
   it('reads a file and gets git status over ws', async () => {

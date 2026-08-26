@@ -7,6 +7,7 @@ import { startServer } from '../../src/server/index'
 import { SESSION_COOKIE } from '../../src/server/http'
 import { hookServer } from '../../src/core/agents/hook-server'
 import { IPC } from '../../src/shared/ipc'
+import { removeFixtureDir } from './fixture-cleanup'
 
 // End-to-end proof of the Phase-3b agent-status chain, exercised over real sockets:
 //
@@ -56,7 +57,7 @@ describe('agent-status e2e: hook POST → agent:status over ws', () => {
 
   afterAll(async () => {
     await close?.()
-    fs.rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+    await removeFixtureDir(dataDir, 'agent-status-e2e')
   })
 
   it('a posted hook event is broadcast to the ws client as agent:status', async () => {

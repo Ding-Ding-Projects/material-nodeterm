@@ -35,6 +35,7 @@ import { Auth } from "../../src/server/auth";
 import { SESSION_COOKIE } from "../../src/server/http";
 import { ServerPlatform } from "../../src/server/platform-server";
 import { attachWsServer } from "../../src/server/ws";
+import { removeFixtureDir } from './fixture-cleanup'
 
 const PROJECT = "live-ws-project";
 const BARRIER = "test:canvas-sync-barrier";
@@ -305,7 +306,7 @@ afterEach(async () => {
   server = null;
   resetPlatformForTests();
   platform = null;
-  if (tempDir) fs.rmSync(tempDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
+  await removeFixtureDir(tempDir, 'canvas-sync-live-ws');
   tempDir = "";
 });
 
