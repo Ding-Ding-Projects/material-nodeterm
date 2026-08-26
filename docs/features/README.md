@@ -24,6 +24,7 @@ the deep architecture reference these articles are distilled from.
 | [Packaging](./packaging/README.md) | How builds are produced, distributed, and kept up to date. |
 | [Global and project settings](./global-and-project-settings.md) | Durable app defaults and complete sparse per-project overlays. |
 | [Help](./help/README.md) | The in-app offline documentation browser these articles are read in. |
+| [Calendar](./calendar/README.md) | Local, ICS, CalDAV, Google Calendar, and Microsoft 365 calendar nodes with offline cache and guided provider binding. |
 
 ## How these articles are organized
 

@@ -26,6 +26,7 @@ import type { ClientId, PeerDiff, PeerIdentity, PeerState } from '../shared/pres
 import type { ConvertQueueItem, ConverterQueueState } from '../shared/converter'
 import type { PullQueueItem, PullQueueState } from '../shared/ollama'
 import type { MinecraftEvent } from '../shared/minecraft'
+import type { CalendarProvider } from '../shared/calendar'
 
 // Fan a single ipcRenderer listener per channel out to many renderer subscribers. Without
 // this, every node that subscribes (e.g. Cmd+M markdown toggle on each terminal/editor) adds
@@ -942,6 +943,18 @@ const api: NodeTerminalApi = {
     restoreBackup: (id, backupId) => ipcRenderer.invoke(IPC.minecraftBackupRestore, id, backupId),
     deleteBackup: (id, backupId) => ipcRenderer.invoke(IPC.minecraftBackupDelete, id, backupId),
     onEvent: (listener) => subscribeMinecraftEvent(listener)
+  },
+  calendar: {
+    status: (id, config) => ipcRenderer.invoke(IPC.calendarStatus, id, config),
+    accounts: () => ipcRenderer.invoke(IPC.calendarAccounts),
+    calendars: (accountId, provider) => ipcRenderer.invoke(IPC.calendarCalendars, accountId, provider),
+    events: (id, config) => ipcRenderer.invoke(IPC.calendarEvents, id, config),
+    importIcs: (id, text, name) => ipcRenderer.invoke(IPC.calendarImportIcs, id, text, name),
+    refresh: (id, config) => ipcRenderer.invoke(IPC.calendarRefresh, id, config),
+    beginOAuth: (provider: Exclude<CalendarProvider, 'local' | 'ics'>) => ipcRenderer.invoke(IPC.calendarBeginOAuth, provider),
+    create: (input) => ipcRenderer.invoke(IPC.calendarCreate, input),
+    update: (input) => ipcRenderer.invoke(IPC.calendarUpdate, input),
+    remove: (id, eventId) => ipcRenderer.invoke(IPC.calendarRemove, id, eventId)
   }
 }
 

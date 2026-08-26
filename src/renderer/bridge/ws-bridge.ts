@@ -18,6 +18,7 @@ import type { GitHubControlApi, GitHubIssuesApi } from '../../shared/github-issu
 import type { ConverterApi } from '../../shared/converter'
 import type { OllamaApi } from '../../shared/ollama'
 import type { MinecraftApi } from '../../shared/minecraft'
+import type { CalendarApi, CalendarProvider } from '../../shared/calendar'
 import {
   UNKNOWN_CLAUDE_CLI_CAPS,
   type BoardLogApi,
@@ -956,6 +957,23 @@ export function buildMinecraftApi(client: RpcClient): Pick<NodeTerminalApi, 'min
   return { minecraft }
 }
 
+/** Calendar nodes use the same host-owned CorePlatform in the desktop and Server Edition. */
+export function buildCalendarApi(client: RpcClient): Pick<NodeTerminalApi, 'calendar'> {
+  const calendar: CalendarApi = {
+    status: (id, config) => client.request(IPC.calendarStatus, id, config) as ReturnType<CalendarApi['status']>,
+    accounts: () => client.request(IPC.calendarAccounts) as ReturnType<CalendarApi['accounts']>,
+    calendars: (accountId, provider) => client.request(IPC.calendarCalendars, accountId, provider) as ReturnType<CalendarApi['calendars']>,
+    events: (id, config) => client.request(IPC.calendarEvents, id, config) as ReturnType<CalendarApi['events']>,
+    importIcs: (id, text, name) => client.request(IPC.calendarImportIcs, id, text, name) as ReturnType<CalendarApi['importIcs']>,
+    refresh: (id, config) => client.request(IPC.calendarRefresh, id, config) as ReturnType<CalendarApi['refresh']>,
+    beginOAuth: (provider: Exclude<CalendarProvider, 'local' | 'ics'>) => client.request(IPC.calendarBeginOAuth, provider) as ReturnType<CalendarApi['beginOAuth']>,
+    create: (input) => client.request(IPC.calendarCreate, input) as ReturnType<CalendarApi['create']>,
+    update: (input) => client.request(IPC.calendarUpdate, input) as ReturnType<CalendarApi['update']>,
+    remove: (id, eventId) => client.request(IPC.calendarRemove, id, eventId) as ReturnType<CalendarApi['remove']>
+  }
+  return { calendar }
+}
+
 /**
  * Build the `usage` namespace over an RpcClient. The server shell runs the same core usage
  * service the desktop does, so this is real end to end — including `onUpdate`, which subscribes
@@ -1375,6 +1393,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildConverterApi(client),
     ...buildOllamaApi(client),
     ...buildMinecraftApi(client),
+    ...buildCalendarApi(client),
     ...buildUsageApi(client),
     ...buildSessionMemoryApi(client),
     ...buildVsCodeApi(client),

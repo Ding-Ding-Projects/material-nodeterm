@@ -16,6 +16,7 @@ import { DEFAULT_SHORTCUTS } from './shortcuts'
 import type { FunnyLevel, LanguageMode } from './i18n/types'
 import type { VsCodeInstall, VsCodeOpenResult } from './vscode'
 import type { HistoryFilters, HistoryListResult, HistoryRestoreResult } from './local-history'
+import type { CalendarApi, CalendarNodeConfig } from './calendar'
 import type {
   ToyLockBeginTotpInput,
   ToyLockBeginTotpResult,
@@ -352,6 +353,9 @@ export type NodeKind =
   // persists a title and a colour and nothing else, because an entry id names a credential in
   // this machine's OS vault while project.json is git-shared. See AuthenticatorNode.tsx.
   | 'authenticator'
+  // A portable calendar view. Provider credentials and event cache stay in the core vault/local
+  // data, while this node carries only safe selection intent.
+  | 'calendar'
   // The SERVICE family: one node per external thing this canvas can manage. They are ordinary
   // nodes — dragged, resized, coloured, grouped, persisted and deleted exactly like a terminal —
   // because a managed service is a thing you arrange on a canvas beside the terminals working on
@@ -527,6 +531,9 @@ export interface CanvasNodeState {
    * identical reason (an absolute path is one person's disk layout). See `@shared/node-exec`.
    */
   nsisLocalPaths?: NsisLocalPaths
+  /** calendar-only, GIT-SHARED safe intent. Tokens, provider sessions, paths and event cache stay
+   * in the machine-local calendar service. */
+  calendarConfig?: CalendarNodeConfig
   // editor / diff
   filePath?: string
   /**

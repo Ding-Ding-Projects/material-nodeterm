@@ -13,6 +13,7 @@ import {
   createDiffNode,
   createStickyNode,
   createDinoNode,
+  createCalendarNode,
   isAccountLoginNode
 } from '@renderer/state/workspace'
 import { absolutePosition, type FocusableNode } from './nodeFocus'
@@ -175,6 +176,8 @@ function buildBase(snapshot: ReopenNodeSnapshot, ctx: RecreateContext): CanvasNo
       return createBrowserNode(0, d.url ?? '', undefined, undefined, d.browserProfileId)
     case 'dino':
       return createDinoNode(0, undefined, d.highScore ?? 0)
+    case 'calendar':
+      return createCalendarNode(0)
     default:
       return null
   }

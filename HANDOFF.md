@@ -1,5 +1,39 @@
 # Handoff
 
+## 2026-08-26, Calendar nodes lane #30
+
+Implemented the Calendar node surface on `feat/program-19`: local calendars and ICS import, plus
+guided CalDAV, Google Calendar, and Microsoft 365 account/calendar choices. Added the portable
+`calendarConfig` node shape, calendar IPC/API seam for Desktop and Server Edition, bounded ICS
+parser, machine-local event cache, Agenda/Week/Month views, timezone and weekend controls,
+anchored event regex builder, create/edit preview, and two-key delete confirmation.
+
+Changed files include `src/shared/calendar.ts`, `src/core/calendar/service.ts`,
+`src/core/calendar/register-ipc.ts`, `src/renderer/nodes/CalendarNode.tsx`, node-kind registration
+in `src/shared/types.ts` and `src/renderer/state/workspace.ts`, bridge wiring in `src/preload/index.ts`,
+`src/renderer/bridge/stubs.ts`, `src/renderer/bridge/ws-bridge.ts`, and `src/renderer/bridge/relay-api.ts`,
+the Canvas menu and registration, and calendar styling in `src/renderer/styles.css`.
+
+Security boundary: project state contains no source paths, provider sessions, host identifiers,
+OAuth state, access tokens, refresh tokens, or event cache. Provider status is conservative and
+CalDAV remains explicitly unavailable until a trusted adapter supplies vault-backed credentials.
+No secret export or arbitrary URL entry point was added.
+
+This ultra-speed lane deliberately ran no tests, type checks, lint, security/accessibility review,
+build, packaging, installer execution, runtime interaction, or captures. The docs bundle generator
+could not run because `esbuild` is absent in this Gerk Tong Hui, so the new article was recorded in
+the existing Canvas node-kind article and the categorized feature index instead. No commit or dew
+was made by this lane.
+
+Refuter repair: remote provider catalogs no longer synthesize connected accounts, primary calendars,
+or writable CRUD. All remote provider actions remain disabled with an explicit unavailable reason
+until a real OAuth PKCE, pagination, validator, and OS-vault adapter is installed. Core node ids are
+validated before cache paths are formed. ICS import now uses UTF-8 byte limits, strict date/range
+validation, UID deduplication, TZID validation, and source-identity-aware durable cache records.
+Import runs through the core service rather than saving a renderer-only cache. The node now uses the
+shared anchored regex builder for event, source, and timezone searches, real period navigation and
+tabpanel ARIA wiring, event selection/export, and local undo. No verification commands were run.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

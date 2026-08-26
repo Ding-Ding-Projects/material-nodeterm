@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add Calendar nodes for local calendars and ICS import, with guided CalDAV, Google Calendar, and
+  Microsoft 365 provider/account/calendar selection, recurrence and timezone views, offline cache,
+  create/edit previews, and destructive delete confirmation. Provider credentials stay behind the
+  trusted shell's vault boundary. This ultra-speed lane deliberately ran no tests, type checks,
+  builds, packaging, runtime interaction, or captures.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.
