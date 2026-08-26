@@ -26,6 +26,47 @@ interface WslDialogError {
   ownership: 'authored' | 'external-factual'
   text: string
   facts?: readonly string[]
+  authoredPrefix?: string
+}
+
+const WSL_COPY_IDS: Record<string, string> = {
+  'New WSL instance': 'wsl.create.title',
+  'Cancelling…': 'wsl.create.actions.cancelling',
+  Cancel: 'wsl.create.actions.cancel',
+  'Creating…': 'wsl.create.actions.creating',
+  Create: 'wsl.create.actions.create',
+  'Choose a distribution from the live WSL catalogue, then give this machine-local instance a unique name.': 'wsl.create.description',
+  'Filter distributions': 'wsl.create.filter.label',
+  'Regex for WSL distributions': 'wsl.create.filter.regex',
+  'Available WSL distributions': 'wsl.create.list.aria',
+  'Loading available distributions…': 'wsl.create.status.loading',
+  'Could not load available distributions:': 'wsl.create.error.cataloguePrefix',
+  'No distributions available.': 'wsl.create.empty.none',
+  'No distributions match that filter.': 'wsl.create.empty.noMatch',
+  'Instance name': 'wsl.create.field.name',
+  'WSL instance name': 'wsl.create.field.nameAria',
+  'my-project': 'wsl.create.field.placeholder',
+  'Letters, numbers, spaces, dots, hyphens, and underscores are accepted.': 'wsl.create.field.support',
+  'The WSL operation reported an error:': 'wsl.create.error.prefix',
+  'Starting WSL creation…': 'wsl.create.progress.starting',
+  'Cancelling WSL creation…': 'wsl.create.progress.cancelling',
+  'Validating the selected distribution and name.': 'wsl.create.progress.validating',
+  Step: 'wsl.create.progress.step',
+  of: 'wsl.create.progress.of',
+  'WSL creation phase progress': 'wsl.create.progress.aria',
+  'Elapsed time:': 'wsl.create.progress.elapsed',
+  'seconds.': 'wsl.create.progress.seconds',
+  'Installation progress is reported by phase because wsl.exe provides no byte or percentage telemetry.': 'wsl.create.progress.installing',
+  'The operation is bounded and can be cancelled.': 'wsl.create.progress.cancellable',
+  'Cancellation could not be sent because there is no active WSL operation.': 'wsl.create.error.noActive',
+  'Cancellation was not accepted because the WSL operation is no longer active. You can retry or close this dialog.': 'wsl.create.error.cancelRejected',
+  'Could not cancel WSL creation:': 'wsl.create.error.cancelPrefix',
+  'Name is required.': 'wsl.create.validation.required',
+  'Name cannot start or end with whitespace.': 'wsl.create.validation.whitespace',
+  'Name must be 64 characters or fewer.': 'wsl.create.validation.length',
+  'Name contains characters that are not allowed.': 'wsl.create.validation.characters',
+  'Use letters, numbers, spaces, dots, hyphens, or underscores, starting and ending with a letter or number.': 'wsl.create.validation.shape',
+  'A WSL instance with this name already exists.': 'wsl.create.validation.duplicate'
 }
 
 /**
@@ -68,13 +109,13 @@ export function WslCreateDialog({
   // The fallback is both localized through the shared catalog and then passed through the local
   // personal-vocabulary boundary. Keys are derived only from fixed shipped copy, never from a
   // distribution name, user name, path, operation id, or external error.
-  const vocab = (fallback: string): string => ts(`wsl.create.${fallback}`, fallback)
+  const vocab = (fallback: string): string => ts(WSL_COPY_IDS[fallback] ?? `wsl.create.runtime.${fallback}`, fallback)
   const copy = (fallback: string, facts: readonly string[] = []): string =>
     mapAroundExactFacts(vocab(fallback), facts, mapVocabulary)
 
   const renderError = (value: WslDialogError): string =>
     value.ownership === 'external-factual'
-      ? mapAroundExactFacts(value.text, value.facts ?? [], (part) => copy(part))
+      ? `${value.authoredPrefix ? `${copy(value.authoredPrefix, ['WSL'])} ` : ''}${mapAroundExactFacts(value.text, value.facts ?? [], mapVocabulary)}`
       : copy(value.text, ['WSL', 'wsl.exe'])
 
   const cancel = async (): Promise<void> => {
@@ -102,8 +143,9 @@ export function WslCreateDialog({
       const detail = e instanceof Error ? e.message : String(e)
       setCancelError({
         ownership: 'external-factual',
-        text: `Could not cancel WSL creation: ${detail}`,
-        facts: [detail]
+        text: detail,
+        facts: [detail],
+        authoredPrefix: 'Could not cancel WSL creation:'
       })
     }
   }

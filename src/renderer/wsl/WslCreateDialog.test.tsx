@@ -7,6 +7,9 @@ import { resetDialogStack } from '../components/dialog-stack'
 import type { WslCatalogueEntry } from './wslCoreApi'
 import { usePersonalVocabulary } from '../state/personalVocabulary'
 import { useSchoolMode } from '../state/schoolMode'
+import { useSettings } from '../state/settings'
+import { DEFAULT_SETTINGS } from '@shared/types'
+import { CATALOG } from '@shared/i18n'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -23,6 +26,7 @@ describe('WslCreateDialog', () => {
   beforeEach(() => {
     resetDialogStack()
     useSchoolMode.setState({ enabled: false, hydrated: true })
+    useSettings.setState({ settings: DEFAULT_SETTINGS, base: DEFAULT_SETTINGS, hydrated: true })
     usePersonalVocabulary.setState({ entries: {}, status: 'no-file', entryCount: 0, loadedAt: null, lastError: null })
     host = document.createElement('div')
     document.body.appendChild(host)
@@ -34,6 +38,7 @@ describe('WslCreateDialog', () => {
     host.remove()
     usePersonalVocabulary.setState({ entries: {}, status: 'no-file', entryCount: 0, loadedAt: null, lastError: null })
     useSchoolMode.setState({ enabled: false, hydrated: true })
+    useSettings.setState({ settings: DEFAULT_SETTINGS, base: DEFAULT_SETTINGS, hydrated: true })
   })
 
 
@@ -154,11 +159,127 @@ describe('WslCreateDialog', () => {
       loadedAt: Date.now(),
       lastError: null
     })
+    render()
+    expect(document.body.textContent).toContain('Secret workspace')
+    act(() => root?.unmount())
+    root = undefined
     useSchoolMode.setState({ enabled: true, hydrated: true })
     render()
     expect(document.body.textContent).toContain('New WSL instance')
     expect(document.body.textContent).not.toContain('Secret workspace')
     expect(document.querySelector('input[aria-label="Filter distributions"]')).not.toBeNull()
     expect(document.body.textContent).toContain('Ubuntu 24.04 LTS')
+  })
+
+  it('ships five English and Cantonese variants for every WSL dialog copy entry', () => {
+    const ids = [
+      'wsl.create.title',
+      'wsl.create.actions.cancel',
+      'wsl.create.actions.create',
+      'wsl.create.actions.cancelling',
+      'wsl.create.actions.creating',
+      'wsl.create.description',
+      'wsl.create.filter.label',
+      'wsl.create.filter.regex',
+      'wsl.create.list.aria',
+      'wsl.create.status.loading',
+      'wsl.create.error.cataloguePrefix',
+      'wsl.create.empty.none',
+      'wsl.create.empty.noMatch',
+      'wsl.create.field.name',
+      'wsl.create.field.nameAria',
+      'wsl.create.field.placeholder',
+      'wsl.create.field.support',
+      'wsl.create.error.prefix',
+      'wsl.create.progress.starting',
+      'wsl.create.progress.cancelling',
+      'wsl.create.progress.validating',
+      'wsl.create.progress.step',
+      'wsl.create.progress.of',
+      'wsl.create.progress.aria',
+      'wsl.create.progress.elapsed',
+      'wsl.create.progress.seconds',
+      'wsl.create.progress.installing',
+      'wsl.create.progress.cancellable',
+      'wsl.create.error.noActive',
+      'wsl.create.error.cancelRejected',
+      'wsl.create.error.cancelPrefix',
+      'wsl.create.validation.required',
+      'wsl.create.validation.whitespace',
+      'wsl.create.validation.length',
+      'wsl.create.validation.characters',
+      'wsl.create.validation.shape',
+      'wsl.create.validation.duplicate'
+    ]
+    for (const id of ids) {
+      expect(CATALOG[id]?.en, id).toHaveLength(5)
+      expect(CATALOG[id]?.yue, id).toHaveLength(5)
+    }
+  })
+
+  it('renders the dialog copy in English, Cantonese, and bilingual modes at both funny levels', () => {
+    const modes = ['en', 'yue', 'bilingual'] as const
+    for (const mode of modes) {
+      for (const level of [1, 5] as const) {
+        useSettings.setState({
+          settings: { ...DEFAULT_SETTINGS, languageMode: mode, funnyLevelEn: level, funnyLevelYue: level },
+          base: { ...DEFAULT_SETTINGS, languageMode: mode, funnyLevelEn: level, funnyLevelYue: level },
+          hydrated: true
+        })
+        render()
+        const description = document.querySelector('.wsl-create-dialog__description')?.textContent ?? ''
+        expect(description.length, `${mode}/${level}`).toBeGreaterThan(0)
+        if (mode === 'en' && level === 1) expect(description).toContain('Choose a distribution')
+        if (mode === 'yue' && level === 1) expect(description).toContain('喺即時 WSL')
+        if (mode === 'bilingual') expect(description).toContain(' · ')
+        act(() => root?.unmount())
+        root = undefined
+      }
+    }
+  })
+
+  it('renders live phase progress while preserving raw distribution, name, and operation facts', () => {
+    let onProgress: ((progress: {
+      operationId: string
+      stage: 'validating' | 'checking' | 'installing' | 'recording' | 'completed' | 'failed' | 'cancelled'
+      step: number
+      steps: number
+      determinate: boolean
+      elapsedMs: number
+      message: string
+    }) => void) | null = null
+    ;(window as unknown as { nodeTerminal: unknown }).nodeTerminal = {
+      wsl: {
+        onCreateProgress: (listener: typeof onProgress) => {
+          onProgress = listener
+          return () => {
+            onProgress = null
+          }
+        }
+      }
+    }
+    render()
+    const option = Array.from(document.querySelectorAll('button')).find((button) => button.textContent === 'Ubuntu 24.04 LTS')!
+    act(() => option.click())
+    const nameInput = document.querySelector('input[aria-label="WSL instance name"]') as HTMLInputElement
+    act(() => setInputValue(nameInput, 'my-project'))
+    const create = Array.from(document.querySelectorAll('button')).find((button) => button.textContent === 'Create')!
+    act(() => create.click())
+    expect(document.querySelector('[role="progressbar"]')).not.toBeNull()
+    act(() => {
+      onProgress?.({
+        operationId: 'op-123',
+        stage: 'installing',
+        step: 3,
+        steps: 4,
+        determinate: false,
+        elapsedMs: 2500,
+        message: 'Installing Ubuntu 24.04 LTS for my-project, operation op-123.'
+      })
+    })
+    expect(document.body.textContent).toContain('Ubuntu 24.04 LTS')
+    expect(document.body.textContent).toContain('my-project')
+    expect(document.body.textContent).toContain('op-123')
+    expect(document.querySelector('[aria-label="WSL creation phase progress"]')).not.toBeNull()
   })
 })
