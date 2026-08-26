@@ -7,6 +7,7 @@
 // querySelector). This keeps the test hermetic without adding a DOM dependency.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { showReconnectOverlay, isOverlayMounted } from './ws-bridge'
+import { setHostVocabularySchoolState } from '../lib/personalVocabulary/hostMessage'
 
 interface StubEl {
   id: string
@@ -57,6 +58,8 @@ beforeEach(() => {
 
 afterEach(() => {
   delete (globalThis as Record<string, unknown>).document
+  delete (globalThis as Record<string, unknown>).localStorage
+  setHostVocabularySchoolState({ enabled: false, hydrated: false })
 })
 
 describe('reconnect overlay', () => {
@@ -76,5 +79,22 @@ describe('reconnect overlay', () => {
     showReconnectOverlay()
     showReconnectOverlay()
     expect(children.filter((c) => c.getAttribute('data-nt-reconnect') !== null).length).toBe(1)
+  })
+
+  it('maps only the authored reconnect copy while retaining the original fallback', () => {
+    ;(globalThis as Record<string, unknown>).localStorage = {
+      getItem: () => JSON.stringify({
+        version: 1,
+        entries: { reconnecting: 'tea reconnecting' },
+        entryCount: 1,
+        savedAt: Date.now()
+      })
+    }
+    setHostVocabularySchoolState({ enabled: false, hydrated: true })
+    showReconnectOverlay()
+    const el = (globalThis.document as unknown as { querySelector(s: string): StubEl | null }).querySelector(
+      '[data-nt-reconnect]'
+    )
+    expect(el?.textContent).toBe('Connection lost — tea reconnecting…')
   })
 })

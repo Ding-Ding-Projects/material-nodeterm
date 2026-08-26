@@ -27,6 +27,11 @@ function badgeFor(state, id) {
 }
 function copy(state, text) { return esc(shapeCopy(state, text)) }
 function copyAttr(state, text) { return attr(shapeCopy(state, text)) }
+// Provider, command, brand, legal and version facts deliberately bypass the personal
+// vocabulary mapper. Keeping this boundary named in the template makes it reviewable and
+// prevents a future convenience refactor from translating a value that must remain exact.
+function fact(text) { return esc(text) }
+function factAttr(text) { return attr(text) }
 function visibleSections(state) { return SECTIONS }
 function visibleDocs(state) { return state.school ? DOCS.filter((d) => d[2] !== 'personal-vocabulary') : DOCS }
 function visibleCoverage(state) { return state.school ? COVERAGE.filter((c) => !String(c[0]).toLowerCase().includes('vocabulary')) : COVERAGE }
@@ -59,11 +64,11 @@ function renderHall(store) {
     <header class="hall__header" data-menu-kind="header" data-menu-label="${copyAttr(s, 'the top bar')}">
       <a class="brand" href="./index.html" data-no-room>
         <span class="brand__mark" style="background-image:url('${attr(s.logo || './assets/mark.svg')}')"></span>
-        <span class="brand__name">nodeterm school</span>
+        <span class="brand__name">${fact('nodeterm school')}</span>
       </a>
       ${searchBar({ id: 'qGlobal', value: s.qGlobal, placeholder: 'Which room are you looking for?', ariaLabel: 'the whole school', rxKey: 'global', state: s, cls: 'header-search' })}
       <div class="header-actions">
-        <button type="button" class="round-btn round-btn--jump" data-action="open-palette" data-menu-kind="generic" data-menu-label="this button" title="Magic jump box — Ctrl+Shift+F">✨ Jump</button>
+        <button type="button" class="round-btn round-btn--jump" data-action="open-palette" data-menu-kind="generic" data-menu-label="${copyAttr(s, 'this button')}" title="${factAttr('Magic jump box — Ctrl+Shift+F')}">✨ ${fact('Jump')}</button>
         <button type="button" class="round-btn round-btn--theme" data-action="toggle-theme" data-menu-kind="generic" data-menu-label="${copyAttr(s, 'this button')}" aria-label="${copyAttr(s, 'Day or night')}">${s.theme === 'night' ? '🌙' : '☀️'}</button>
         <button type="button" class="round-btn round-btn--bell" data-action="go-room" data-id="notes" data-menu-kind="generic" data-menu-label="${copyAttr(s, 'this button')}" aria-label="${copyAttr(s, 'Message box')}">🔔${s.notes.length ? `<span class="bell-count">${s.notes.length}</span>` : ''}</button>
       </div>
@@ -92,9 +97,9 @@ function renderHall(store) {
             <h2>${copy(s, 'Your terminals are')}<br />${copy(s, 'blocks on a giant canvas.')}</h2>
             <p>${copy(s, 'Every terminal is a block you can drag around. Robot helpers get their own blocks too, and they raise a hand when they need you. Nothing disappears when you close the lid.')}</p>
             <div class="cta-row">
-              <a class="btn" style="background:var(--green)" href="${REPO_RELEASES}" target="_blank" rel="noopener">⬇ Get nodeterm</a>
-              <a class="btn" href="${REPO_URL}" target="_blank" rel="noopener">👀 ${copy(s, 'Peek at the code')}</a>
-              <span class="brew-pill">brew install --cask nodeterm</span>
+              <a class="btn" style="background:var(--green)" href="${factAttr(REPO_RELEASES)}" target="_blank" rel="noopener">⬇ ${fact('Get nodeterm')}</a>
+              <a class="btn" href="${factAttr(REPO_URL)}" target="_blank" rel="noopener">👀 ${copy(s, 'Peek at the code')}</a>
+              <span class="brew-pill">${fact('brew install --cask nodeterm')}</span>
             </div>
           </div>
         </div>
@@ -138,8 +143,8 @@ function renderHall(store) {
           <h3>${copy(s, 'Stop hunting through tabs.')}</h3>
           <p>${copy(s, 'Free, open source, and it works offline. macOS 12+ and Linux x64.')}</p>
           <div class="cta-row" style="justify-content:center">
-            <a class="btn" style="background:var(--card);height:56px;font-size:18px" href="${REPO_RELEASES}" target="_blank" rel="noopener">⬇ Download nodeterm</a>
-            <button type="button" class="btn" style="background:var(--card);height:56px;font-family:var(--mono);font-size:14px" data-action="copy-brew">📋 brew install --cask nodeterm</button>
+            <a class="btn" style="background:var(--card);height:56px;font-size:18px" href="${factAttr(REPO_RELEASES)}" target="_blank" rel="noopener">⬇ ${fact('Download nodeterm')}</a>
+            <button type="button" class="btn" style="background:var(--card);height:56px;font-family:var(--mono);font-size:14px" data-action="copy-brew">📋 ${fact('brew install --cask nodeterm')}</button>
           </div>
         </div>
       </div>
@@ -193,13 +198,13 @@ function renderRoom(store) {
     <header class="room__header" data-menu-kind="header" data-menu-label="${copyAttr(s, 'the top bar')}">
       <a class="brand" href="./index.html" data-no-room>
         <img class="brand__mark" src="./assets/mark.svg" alt="" width="34" height="34" style="padding:3px;background:var(--yellow)" />
-        <span class="brand__name">nodeterm</span>
-        <span class="brand__ver">v0.3.0</span>
+        <span class="brand__name">${fact('nodeterm')}</span>
+        <span class="brand__ver">${fact('v0.3.0')}</span>
       </a>
       ${searchBar({ id: 'qGlobal', value: s.qGlobal, placeholder: 'Search the whole playground…', ariaLabel: 'the big search', rxKey: 'global', state: s, cls: 'header-search' })}
       <div class="header-actions">
-        <button type="button" class="round-btn round-btn--jump" data-action="open-palette" data-menu-kind="generic" data-menu-label="${copyAttr(s, 'this button')}" title="Magic jump box — Ctrl+Shift+F">✨ Jump</button>
-        <button type="button" class="round-btn round-btn--theme" data-action="toggle-theme" data-menu-kind="generic" data-menu-label="this button" aria-label="${copyAttr(s, 'Switch between day and night')}">${s.theme === 'night' ? '🌙' : '☀️'}</button>
+        <button type="button" class="round-btn round-btn--jump" data-action="open-palette" data-menu-kind="generic" data-menu-label="${copyAttr(s, 'this button')}" title="${factAttr('Magic jump box — Ctrl+Shift+F')}">✨ ${fact('Jump')}</button>
+        <button type="button" class="round-btn round-btn--theme" data-action="toggle-theme" data-menu-kind="generic" data-menu-label="${copyAttr(s, 'this button')}" aria-label="${copyAttr(s, 'Switch between day and night')}">${s.theme === 'night' ? '🌙' : '☀️'}</button>
         <button type="button" class="round-btn round-btn--bell" data-action="go-room" data-id="notes" data-menu-kind="generic" data-menu-label="${copyAttr(s, 'this button')}" aria-label="${copyAttr(s, 'Open the message box')}">🔔${s.notes.length ? `<span class="bell-count">${s.notes.length}</span>` : ''}</button>
       </div>
     </header>
@@ -213,7 +218,7 @@ function renderRoom(store) {
           ${navItems.length
             ? navItems
                 .map(
-                  (x) => `<button type="button" role="tab" aria-selected="${s.sec === x.id}" aria-label="${copyAttr(s, x.label + (badgeFor(s, x.id) ? ', ' + badgeFor(s, x.id) + ' items' : ''))}" class="nav-btn ${s.sec === x.id ? 'is-active' : ''}" data-action="go-room" data-id="${x.id}" data-menu-kind="room" data-menu-label="${copyAttr(s, x.label)}" data-menu-extra="${attr(x.id)}" style="${s.sec === x.id ? 'background:' + s.accent : ''}">
+                  (x) => `<button type="button" role="tab" aria-selected="${s.sec === x.id}" aria-label="${copyAttr(s, x.label)}${badgeFor(s, x.id) ? ', ' + badgeFor(s, x.id) + ' ' + copyAttr(s, 'items') : ''}" class="nav-btn ${s.sec === x.id ? 'is-active' : ''}" data-action="go-room" data-id="${factAttr(x.id)}" data-menu-kind="room" data-menu-label="${copyAttr(s, x.label)}" data-menu-extra="${factAttr(x.id)}" style="${s.sec === x.id ? 'background:' + factAttr(s.accent) : ''}">
               <span class="nav-btn__icon" aria-hidden="true">${x.icon}</span>
               <span class="nav-btn__label" aria-hidden="true">${copy(s, x.label)}</span>
               ${badgeFor(s, x.id) ? `<span class="chip" aria-hidden="true">${badgeFor(s, x.id)}</span>` : ''}
@@ -245,12 +250,12 @@ function renderRoom(store) {
     </div>
 
     <footer class="site-footer room-footer">
-      <span>BUSL-1.1 licensed · fork of <a href="${UPSTREAM_URL}" target="_blank" rel="noopener">eneskirca/nodeterm</a></span>
-      <a href="${REPO_URL}" target="_blank" rel="noopener">GitHub</a>
-      <a href="${REPO_URL}/blob/main/CHANGELOG.md" target="_blank" rel="noopener">${copy(s, 'Changelog')}</a>
-      <a href="${REPO_URL}/issues" target="_blank" rel="noopener">Help</a>
+      <span>${fact('BUSL-1.1 licensed · fork of')} <a href="${factAttr(UPSTREAM_URL)}" target="_blank" rel="noopener">${fact('eneskirca/nodeterm')}</a></span>
+      <a href="${factAttr(REPO_URL)}" target="_blank" rel="noopener">${fact('GitHub')}</a>
+      <a href="${factAttr(REPO_URL + '/blob/main/CHANGELOG.md')}" target="_blank" rel="noopener">${copy(s, 'Changelog')}</a>
+      <a href="${factAttr(REPO_URL + '/issues')}" target="_blank" rel="noopener">${copy(s, 'Help')}</a>
       <div class="spacer"></div>
-      <span>“Claude” and “Claude Code” are trademarks of Anthropic. nodeterm is not affiliated with or endorsed by Anthropic.</span>
+      <span>${fact('“Claude” and “Claude Code” are trademarks of Anthropic. nodeterm is not affiliated with or endorsed by Anthropic.')}</span>
     </footer>
   </div>`
 }
@@ -354,7 +359,7 @@ function renderListRoom(store, room) {
       <button type="button" class="btn-plain" data-action="select-all">${copy(s, allPicked ? 'Unpick all' : 'Pick all')} ${rawRows.length}</button>
       <button type="button" class="btn-plain" data-action="invert-picks">${copy(s, 'Flip picks')}</button>
       <button type="button" class="btn-plain" style="background:var(--red);opacity:${pickedIds.length ? 1 : 0.45};cursor:${pickedIds.length ? 'pointer' : 'not-allowed'}" data-action="bulk-remove">🗑 ${copy(s, pickedIds.length ? 'Throw away' : 'Throw away')}${pickedIds.length ? ' ' + pickedIds.length : ''}</button>
-      ${panelActions.map((a, i) => `<button type="button" class="btn-plain" style="background:var(--yellow)" data-action="panel-action" data-id="${i}">${esc(a.label)}</button>`).join('')}
+      ${panelActions.map((a, i) => `<button type="button" class="btn-plain" style="background:var(--yellow)" data-action="panel-action" data-id="${i}">${copy(s, a.label)}</button>`).join('')}
       <div class="spacer"></div>
       <span class="list-meta">${rawRows.length} ${copy(s, 'shown')} · ${pickedIds.length} ${copy(s, 'picked')}</span>
     </div>

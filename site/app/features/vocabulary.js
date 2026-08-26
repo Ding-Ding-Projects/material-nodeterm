@@ -18,6 +18,28 @@ export function readVocabularyFile(file) {
   return file.text()
 }
 
+export function handleVocabularyFileChange(input, handlers) {
+  const file = input.files && input.files[0]
+  if (!file) return Promise.resolve('empty')
+  if (file.size > VOCAB_MAX_FILE_BYTES) {
+    handlers.onTooLarge(file.size)
+    input.value = ''
+    return Promise.resolve('too-large')
+  }
+  return readVocabularyFile(file).then(
+    (text) => {
+      handlers.onText(text)
+      input.value = ''
+      return 'loaded'
+    },
+    () => {
+      handlers.onReadError()
+      input.value = ''
+      return 'read-error'
+    },
+  )
+}
+
 export function registerVocabulary(store, deps, registerAction, registerBinding) {
   registerBinding('vocab-file', (s, id, text, h) => {
     const result = validateVocabularyJson(text)

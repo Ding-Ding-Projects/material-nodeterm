@@ -4,7 +4,7 @@ import { isFreshVocabularyCache, validateVocabularyCacheJson, validateVocabulary
 import { shapeCopy, shapeTitle } from './i18n.js'
 import { createStore } from '../core/store.js'
 import { render } from '../core/render.js'
-import { readVocabularyFile, registerVocabulary } from '../features/vocabulary.js'
+import { handleVocabularyFileChange, readVocabularyFile, registerVocabulary } from '../features/vocabulary.js'
 
 function storageFixture(initial = {}) {
   const values = new Map(Object.entries(initial))
@@ -218,4 +218,92 @@ test('file handler exposes a rejected read instead of claiming an upload', async
     readVocabularyFile({ text: () => Promise.reject(new Error('read failed')) }),
     /read failed/
   )
+})
+
+test('delegated file change resets the picker, reports size/read errors, and rerenders a valid upload', async () => {
+  const original = globalThis.localStorage
+  const storage = storageFixture()
+  globalThis.localStorage = storage
+  try {
+    const store = createStore()
+    let binding
+    registerVocabulary(store, {}, () => {}, (id, handler) => { if (id === 'vocab-file') binding = handler })
+    const save = (patch) => store.setState(patch, { persist: false })
+    const h = { save, toast: () => {} }
+    const events = []
+    const oversized = { files: [{ size: 999999, text: async () => '{}' }], value: 'oversized.json' }
+    assert.equal(await handleVocabularyFileChange(oversized, {
+      onTooLarge: (size) => events.push(['too-large', size]),
+      onText: () => events.push(['text']),
+      onReadError: () => events.push(['read-error'])
+    }), 'too-large')
+    assert.equal(oversized.value, '')
+    assert.deepEqual(events, [['too-large', 999999]])
+
+    const unreadable = { files: [{ size: 3, text: () => Promise.reject(new Error('read failed')) }], value: 'broken.json' }
+    assert.equal(await handleVocabularyFileChange(unreadable, {
+      onTooLarge: () => events.push(['too-large-again']),
+      onText: () => events.push(['text-again']),
+      onReadError: () => events.push(['read-error'])
+    }), 'read-error')
+    assert.equal(unreadable.value, '')
+    assert.deepEqual(events, [['too-large', 999999], ['read-error']])
+
+    const valid = { files: [{ size: 40, text: async () => '{"version":1,"entries":{"terminal":"shell box"}}' }], value: 'valid.json' }
+    assert.equal(await handleVocabularyFileChange(valid, {
+      onTooLarge: () => events.push(['too-large-valid']),
+      onText: (text) => binding(store.state, '', text, h),
+      onReadError: () => events.push(['read-error-valid'])
+    }), 'loaded')
+    assert.equal(valid.value, '')
+    assert.equal(store.state.vocabEntries.terminal, 'shell box')
+    store.state.view = 'room'
+    store.state.sec = 'home'
+    assert.match(render(store), /shell box/)
+  } finally {
+    if (original === undefined) delete globalThis.localStorage
+    else globalThis.localStorage = original
+  }
+})
+
+test('the real renderer maps authored strings and preserves exact facts', () => {
+  const original = globalThis.localStorage
+  globalThis.localStorage = storageFixture()
+  try {
+    const store = createStore()
+    store.state.vocabEntries = {
+      Jump: 'JUMPED',
+      Changelog: 'CHANGES',
+      items: 'THINGS',
+      nodeterm: 'WRONG BRAND',
+      GitHub: 'WRONG FORGE',
+      'BUSL-1.1 licensed · fork of': 'WRONG LICENSE',
+      'Magic jump box — Ctrl+Shift+F': 'WRONG SHORTCUT',
+      'brew install --cask nodeterm': 'WRONG COMMAND'
+    }
+    store.state.vocabStatus = 'loaded'
+    store.state.view = 'hall'
+    const hall = render(store)
+    // Authored labels are intentionally replaceable in the user-visible renderer.
+    assert.match(hall, />✨ Jump</)
+    // Brand, command, shortcut and URL-adjacent facts stay byte-identical.
+    assert.match(hall, />nodeterm school</)
+    assert.match(hall, /Magic jump box — Ctrl\+Shift\+F/)
+    assert.match(hall, /brew install --cask nodeterm/)
+    assert.match(hall, /<span class="brand__name">nodeterm school<\/span>/)
+    assert.match(hall, /title="Magic jump box — Ctrl\+Shift\+F"/)
+    assert.match(hall, /brew install --cask nodeterm/)
+
+    store.state.view = 'room'
+    store.state.sec = 'notes'
+    const room = render(store)
+    assert.match(room, />CHANGES</)
+    assert.match(room, /BUSL-1\.1 licensed · fork of/)
+    assert.match(room, />GitHub</)
+    assert.match(room, /BUSL-1\.1 licensed · fork of/)
+    assert.match(room, />GitHub</)
+  } finally {
+    if (original === undefined) delete globalThis.localStorage
+    else globalThis.localStorage = original
+  }
 })

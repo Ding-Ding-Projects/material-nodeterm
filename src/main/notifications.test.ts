@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import {
   composeNativeNotification,
+  isPreparedNativeNotification,
   retainUntilDismissed,
   retainedNotificationCount,
   clearRetainedNotifications,
@@ -26,10 +27,20 @@ function fakeNotification(): NotificationLike & { emit(event: string): void } {
 describe('composeNativeNotification', () => {
   it('keeps authored title and fact body as separate exact fields', () => {
     const body = 'fatal: C:/workspace/project could not be read'
-    expect(composeNativeNotification({ title: 'Open failed', body, bodyKind: 'fact' })).toEqual({
+    expect(composeNativeNotification({ title: 'Open failed', body, titleKind: 'authored', bodyKind: 'fact' })).toEqual({
       title: 'Open failed',
       body
     })
+  })
+
+  it('rejects native payloads without explicit title and body ownership', () => {
+    expect(isPreparedNativeNotification({ title: 'Open failed', body: 'details' })).toBe(false)
+    expect(isPreparedNativeNotification({ title: 'Open failed', body: 'details', titleKind: 'authored', bodyKind: 'fact' })).toBe(true)
+  })
+
+  it('requires both ownership tags to be one of the two known boundaries', () => {
+    expect(isPreparedNativeNotification({ title: 'Open failed', body: 'details', titleKind: 'authored' })).toBe(false)
+    expect(isPreparedNativeNotification({ title: 'Open failed', body: 'details', titleKind: 'fact', bodyKind: 'unknown' })).toBe(false)
   })
 })
 

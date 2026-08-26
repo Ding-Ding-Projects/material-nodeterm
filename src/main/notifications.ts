@@ -13,14 +13,30 @@ export interface NativeNotificationCopy {
   body: string
 }
 
-/** Native notifications receive already-classified copy from the renderer. Keep title and body
- * separate, and never concatenate or map the body here: provider/host facts must survive exactly. */
-export function composeNativeNotification(payload: {
+export type PreparedNativeNotification = {
   title: string
   body: string
-  titleKind?: 'authored' | 'fact'
-  bodyKind?: 'authored' | 'fact'
-}): NativeNotificationCopy {
+  titleKind: 'authored' | 'fact'
+  bodyKind: 'authored' | 'fact'
+}
+
+export function isPreparedNativeNotification(payload: {
+  title?: unknown
+  body?: unknown
+  titleKind?: unknown
+  bodyKind?: unknown
+}): payload is PreparedNativeNotification {
+  return (
+    typeof payload.title === 'string' &&
+    typeof payload.body === 'string' &&
+    (payload.titleKind === 'authored' || payload.titleKind === 'fact') &&
+    (payload.bodyKind === 'authored' || payload.bodyKind === 'fact')
+  )
+}
+
+/** Native notifications receive already-classified copy from the renderer. Keep title and body
+ * separate, and never concatenate or map the body here: provider/host facts must survive exactly. */
+export function composeNativeNotification(payload: PreparedNativeNotification): NativeNotificationCopy {
   return { title: payload.title, body: payload.body }
 }
 

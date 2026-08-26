@@ -377,6 +377,8 @@ manifest with file-backed removal mutations. Runtime facts such as paths, IDs, m
 provider errors, visible commands, brand names, license text, and shortcut text remain outside the
 authored-copy mapper. Canvas notifications classify every direct body as authored or fact, and the
 landing-page file reader keeps rejected reads visible instead of treating them as successful input.
+The per-string checker parses the arguments of each copy call, while the delegated file-change
+tests exercise size rejection, read failure, picker reset, valid binding, and the resulting render.
 
 ## Verification
 
