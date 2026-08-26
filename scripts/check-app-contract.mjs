@@ -476,6 +476,65 @@ const FEATURES = [
     docs: ['docs/features/global-and-project-settings.md'],
   },
   {
+    // Ownership is the whole feature. The canvas gate and the core gate are deliberately separate
+    // implementations of one refusal, because the first can be bypassed and the second is what
+    // holds when it is -- so both are asserted here rather than one standing in for the other.
+    id: 'wsl-instances',
+    label: 'WSL instances bound to canvas frames',
+    files: [
+      'src/core/wsl/ownership.ts',
+      'src/core/wsl/lifecycle.ts',
+      'src/core/wsl/service.ts',
+      'src/shared/wsl-binding.ts',
+      'src/shared/wsl.ts',
+    ],
+    contentChecks: [
+      ['src/core/wsl/ownership.ts', 'export function fileWslOwnershipStore('],
+      // The refusal itself, by its reason string: a rename of the check would not carry this.
+      ['src/core/wsl/lifecycle.ts', "reason: 'not-owned-by-app'"],
+      ['src/core/wsl/service.ts', 'export function startWslService('],
+      ['src/shared/wsl-binding.ts', 'export function canManageWslDistro('],
+      // A failed enumeration must reach the renderer as a rejection, never as an empty machine.
+      ['src/core/wsl/service.ts', 'if (!enumeration.ok) throw new Error('],
+    ],
+    docs: ['docs/features/wsl/wsl-instances.md'],
+  },
+  {
+    id: 'nsis-installer-node',
+    label: 'NSIS installer authoring node',
+    files: [
+      'src/renderer/nodes/NsisInstallerNode.tsx',
+      'src/shared/nsis/render.ts',
+      'src/shared/node-exec.ts',
+    ],
+    contentChecks: [
+      ['src/shared/nsis/render.ts', 'export function renderNsis('],
+      // Reachability: the row that makes the node creatable at all. It shipped registered and
+      // unreachable once, which is indistinguishable from working until somebody looks for it.
+      ['src/renderer/canvas/Canvas.tsx', "label: 'New NSIS installer…'"],
+      ['src/renderer/state/workspace.ts', 'export function createNsisNode('],
+      // The machine-local half must be stripped before the shared project file is written.
+      ['src/shared/node-exec.ts', /^\s*delete out\.nsisLocalPaths\s*$/m],
+    ],
+    docs: ['docs/features/packaging/nsis-installer-node.md'],
+  },
+  {
+    id: 'approved-relay-peers',
+    label: 'Approved relay peers (list and revoke)',
+    files: ['src/main/remote/approved-devices.ts', 'src/renderer/components/settings/sections/PhoneSection.tsx'],
+    contentChecks: [
+      ['src/main/remote/approved-devices.ts', 'export function mutateApprovedDevices('],
+      ['src/preload/index.ts', /^\s*relayPeers: \{/m],
+      // Local-only, both ways: a peer may neither read nor edit the list of who can reach here.
+      // Anchored with the trailing comma: a bare name is satisfied by any rename that merely
+      // APPENDS to it (`IPC.remoteRevokePeerV2` contains `IPC.remoteRevokePeer`), which is one of
+      // the standard ways a guard reports green while the thing it guards has gone.
+      ['src/main/platform-electron.ts', /^\s*IPC\.remoteRevokePeer,?\s*$/m],
+      ['src/main/platform-electron.ts', /^\s*IPC\.remoteListApprovedPeers,?\s*$/m],
+    ],
+    docs: ['docs/features/remote/approved-relay-peers.md'],
+  },
+  {
     id: 'project-history-archives',
     label: 'Project history and single-file archives',
     files: ['src/core/project-archive.ts', 'src/core/project-archive-container.ts'],
@@ -483,7 +542,12 @@ const FEATURES = [
       ['src/core/project-archive.ts', 'export class ProjectArchiveService'],
       ['src/core/project-archive-container.ts', 'export function packContainer('],
     ],
-    docs: ['docs/features/projects/project-history-and-archives.md'],
+    docs: [
+      'docs/features/projects/project-history-and-archives.md',
+      // The password half of the same container: a protected `.nodeterm-project` is still the
+      // single-file save this row covers, so it belongs here rather than in a row of its own.
+      'docs/protected-project-files.md',
+    ],
   },
   {
     // The sessions-sidebar project-header right-click menu and the project switcher's per-row
@@ -1800,6 +1864,13 @@ if (stylesText.includes('data-md-theme')) {
 // either, but this project documents features as it ships them, so a doc is the earliest artifact
 // a scan can catch.
 const NON_FEATURE_DOCS = new Map([
+  ['downstream-fork-report.md', 'a point-in-time comparison against upstream, not a shipped surface'],
+  ['fork-vs-upstream.md', 'a point-in-time comparison against upstream, not a shipped surface'],
+  [
+    'paste-frame-vendoring.md',
+    'why one file is a deliberate vendored duplicate of a sibling repository — an internals note ' +
+      'behind the terminal row, with its own drift guard, not a surface of its own',
+  ],
   ['agent-working-conventions.md', 'contributor session-discipline guide (session-finishing passes, cleanup order), not a user-facing app surface'],
   ['app-contract.md', 'this guard\'s own documentation'],
   ['app-design-tokens.md', 'design-token reference, not a user-facing surface'],

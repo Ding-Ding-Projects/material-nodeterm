@@ -1194,6 +1194,13 @@ const CHECKS = [
       // It was registered in the canvas node map for a while with no way to reach it, which is
       // indistinguishable from working until somebody looks for the menu row. So: open the pane
       // menu the way a person does, find the row by its label, click it, and require a real node.
+      //
+      // A project first: a fresh profile opens on the welcome screen, and a canvas with no project
+      // behind it has nowhere to persist a node to -- which surfaces as an empty workspace and
+      // reads as "the node did not save" rather than "there was nothing to save it into".
+      const project = await ensureProject()
+      if (!project.ok) return project
+
       const before = await evaluate(`document.querySelectorAll('.react-flow__node').length`)
       const opened = await evaluate(`(function(){
         var pane = document.querySelector('.react-flow__pane');
@@ -1208,41 +1215,62 @@ const CHECKS = [
       const menu = await until(`!!document.querySelector('[class*="context-menu" i], [class*="ctx-menu" i]')`)
       if (!menu) return { ok: false, why: 'the pane context menu did not open' }
 
-      // The row may sit inside a submenu (the pane menu groups itself), so hover every trigger
-      // whose label could contain it before giving up.
-      const clicked = await evaluate(`(function(){
-        function rows() {
-          return Array.from(document.querySelectorAll('[class*="menu" i] button, [class*="menu" i] [role="menuitem"]'));
-        }
-        function find() {
-          return rows().find(function (b) { return /nsis/i.test(b.textContent || '') });
-        }
-        var hit = find();
-        if (!hit) {
-          rows().forEach(function (b) {
-            b.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
-            b.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
-          });
-          hit = find();
-        }
-        if (!hit) return { ok: false, labels: rows().map(function (b) { return (b.textContent || '').trim() }).slice(0, 40) };
+      // The row sits inside a submenu, and the flyout renders on a later tick -- so hovering and
+      // re-querying inside one evaluate finds nothing and reports the app as broken. The first
+      // version of this check did exactly that. Open each trigger, wait, then look.
+      const rowLabels = `Array.from(document.querySelectorAll('[class*="menu" i] button, [class*="menu" i] [role="menuitem"]')).map(function (b) { return (b.textContent || '').trim() })`
+      const findAndClick = `(function(){
+        var rows = Array.from(document.querySelectorAll('[class*="menu" i] button, [class*="menu" i] [role="menuitem"]'));
+        var hit = rows.find(function (b) { return /nsis/i.test(b.textContent || '') });
+        if (!hit) return { ok: false };
         hit.click();
         return { ok: true, label: (hit.textContent || '').trim() };
-      })()`)
+      })()`
+      let clicked = await evaluate(findAndClick)
       if (!clicked || !clicked.ok) {
-        return { ok: false, why: `no NSIS row in the pane menu; saw: ${JSON.stringify((clicked || {}).labels || [])}` }
+        const triggers = await evaluate(rowLabels)
+        for (const label of triggers || []) {
+          await evaluate(`(function(){
+            var rows = Array.from(document.querySelectorAll('[class*="menu" i] button, [class*="menu" i] [role="menuitem"]'));
+            var t = rows.find(function (b) { return (b.textContent || '').trim() === ${JSON.stringify(label)} });
+            if (!t) return false;
+            t.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+            t.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+            return true;
+          })()`)
+          await sleep(250)
+          clicked = await evaluate(findAndClick)
+          if (clicked && clicked.ok) break
+        }
       }
-
+      if (!clicked || !clicked.ok) {
+        const labels = await evaluate(rowLabels)
+        return { ok: false, why: `no NSIS row anywhere in the pane menu; saw: ${JSON.stringify(labels || [])}` }
+      }
       const grew = await until(`document.querySelectorAll('.react-flow__node').length > ${before} ? document.querySelectorAll('.react-flow__node').length : null`)
       if (!grew) return { ok: false, why: `clicking “${clicked.label}” created no node` }
 
       // And it must be the NSIS node rather than merely A node: read main's own workspace back,
       // which is also the proof the kind persisted rather than living only in the renderer.
-      const loaded = await settle('__wiredNsisWorkspace', 'window.nodeTerminal.workspace.load()')
-      if (!loaded.ok) return { ok: false, why: `workspace.load() → ${loaded.error}` }
-      const kinds = ((loaded.value || {}).projects || []).flatMap((p) => p.nodes || []).map((n) => n.kind)
-      if (!kinds.includes('nsis')) {
-        return { ok: false, why: `a node appeared but main's workspace has no nsis node (kinds: ${[...new Set(kinds)].join(', ')})` }
+      //
+      // Polled rather than read once, because the canvas save is debounced. The first version
+      // asked immediately and got an empty node list, which reads exactly like "the node did not
+      // persist" when the truth was "nobody has written yet" -- the same class of mistake this
+      // whole harness exists to catch, made by the harness.
+      const deadline = Date.now() + 15000
+      let kinds = []
+      for (;;) {
+        const loaded = await settle('__wiredNsisWorkspace', 'window.nodeTerminal.workspace.load()')
+        if (!loaded.ok) return { ok: false, why: `workspace.load() → ${loaded.error}` }
+        kinds = ((loaded.value || {}).projects || []).flatMap((p) => p.nodes || []).map((n) => n.kind)
+        if (kinds.includes('nsis')) break
+        if (Date.now() > deadline) {
+          return {
+            ok: false,
+            why: `a node appeared but main's workspace never recorded an nsis node (kinds seen: ${JSON.stringify([...new Set(kinds)])})`,
+          }
+        }
+        await sleep(500)
       }
       return { ok: true, detail: `“${clicked.label}” created a real nsis node and main's workspace agrees` }
     },
