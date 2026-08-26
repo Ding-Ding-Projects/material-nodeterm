@@ -1105,11 +1105,16 @@ describe('duplicateNode across every node kind', () => {
     freepbx: 'freepbx',
     // A GUI for authoring an NSIS installer script for another project (never this app's own
     // installer, which stays Squirrel.Windows).
-    nsis: 'nsis'
+    nsis: 'nsis',
+    shop: 'shop'
   }
   const ALL_KINDS = Object.keys(EXPECTED_PREFIX) as NodeKind[]
 
   it.each(ALL_KINDS)('keeps a %s a %s, with a matching id prefix', (kind) => {
+    if (kind === 'shop') {
+      expect(() => duplicateNode(nodeOf(kind))).toThrow('Shop nodes are permanent')
+      return
+    }
     // The prefix half is the regression: `kind` used to collapse everything except sticky/group/
     // annotation to `terminal`, so an editor/diff/video/web/browser/dino/Loop copy was minted a
     // `term-…` id — the exact shape `SAFE_NODE_ID` (core/project-node-append) accepts as a

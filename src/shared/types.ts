@@ -344,6 +344,10 @@ export type NodeKind =
   | 'scheduler'
   | 'dino'
   | 'annotation'
+  // A permanent catalog surface owned by each Multiverse or AWS Universe child canvas. Shop is
+  // intentionally a distinct kind so the canvas can refuse deletion, duplication, grouping, and
+  // cross-universe movement at every mutation boundary.
+  | 'shop'
   // A GUI for authoring a Windows NSIS installer script for ANOTHER project (not this app's
   // own installer, which stays Squirrel.Windows — see CLAUDE.md's Packaging section). See
   // `NsisSpec`/`NsisLocalPaths` in `./nsis-form-types` for the shared-vs-machine-local split.
@@ -428,6 +432,8 @@ export interface PendingLaunch {
 export interface CanvasNodeState {
   id: string
   kind: NodeKind
+  /** Immutable creation event key used to deduplicate retries and peer insertion. */
+  creationEventId?: string
   position: { x: number; y: number }
   size: { width: number; height: number }
   title: string
@@ -439,6 +445,16 @@ export interface CanvasNodeState {
   titleAuto?: boolean
   color: string
   group: string | null
+  /** Universe ownership for special-universe nodes. Safe display intent only, never credentials. */
+  universeCanvasId?: string
+  /** Scope of the owning universe canvas. The root canvas is never a Shop scope. */
+  universeScope?: 'multiverse' | 'aws-universe'
+  /** Real persisted depth of the owning universe canvas, with its root at depth 0. */
+  universeDepth?: number
+  /** True for the deterministic Shop node. Persisted as an invariant marker, not a security claim. */
+  nonDeletable?: boolean
+  /** Last safe catalog selection shown by a Shop, never a provider or execution binding. */
+  shopSelection?: string
   /** Labels for organizing/filtering terminals. */
   tags?: string[]
   /** When true the node body is hidden (header-only). */

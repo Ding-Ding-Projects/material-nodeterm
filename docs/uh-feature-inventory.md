@@ -101,6 +101,7 @@ and then never edited this file.
 | Feature | What is missing | Closes when | Notes |
 | --- | --- | --- | --- |
 | Status Hub | The registration half only. | `manual:the shared Hub is an external service; nothing in this repository can observe whether registration happened` | **Narrowed 2026-08-20, and the app half is now in the Shipped table above as its own contract row.** The surface shipped in `3e96ad78` — `src/renderer/components/StatusSurface.tsx`, `src/shared/project-status.ts`, `docs/status-surface.md`, 31 tests in `src/shared/project-status.test.ts`, and a `status-surface` row in `scripts/check-app-contract.mjs`. What remains is reporting *into* the shared Hub, which is a service outside this tree — hence the `manual:` predicate rather than a machine-checkable one. |
+| Special-universe Shop nodes | Implementation and documentation are present, but the lane's explicit boundary leaves tests, builds, runtime interaction, and captures unrun. The p05 unified catalog provider remains an integration dependency. | `manual:issue #17 verification boundary is lifted and focused evidence is recorded` | `src/core/universe-shop.ts`, `src/renderer/nodes/ShopNode.tsx`, and `docs/features/integrations/aws-universe-shop.md` provide deterministic collision-safe identity, scope/depth validation, import repair, idempotence, mutation refusal, and the accessible Shop surface. |
 
 ---
 

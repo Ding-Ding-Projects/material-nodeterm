@@ -118,6 +118,14 @@ backend reattaches to the live session; reboot the machine and cold restore rebu
 replays saved scrollback and resumes a supported agent CLI — it does not preserve the original OS
 process, and says so.
 
+Each Multiverse and AWS Universe child canvas also owns one fixed **Shop** node. It opens the
+scope-bound catalog, keeps a deterministic identity across import, hydration, undo and peer replay,
+and refuses deletion, duplication, grouping, or movement. Live choices are handed to the unified
+Node Catalog creation coordinator with immutable event ids and collision-free placement. The root
+canvas has no Shop. See the
+[special-universe Shop article](./docs/features/integrations/aws-universe-shop.md) for the
+portable metadata, repair records, disabled AWS entries, and verification boundary.
+
 ### Agent support — Claude Code, Codex, Gemini, opencode, Grok, or your own
 
 An **agent** node is a terminal preset that launches an agent CLI as its first command. Status

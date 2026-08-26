@@ -101,6 +101,7 @@ import type { ProjectIcon } from '@shared/project-icon'
 import BrowserNode from '../nodes/BrowserNode'
 import { ServiceNode } from '../nodes/ServiceNode'
 import NsisInstallerNode from '../nodes/NsisInstallerNode'
+import ShopNode from '../nodes/ShopNode'
 import { normalizeAddress } from '../nodes/browserUrl'
 import VideoNode from '../nodes/VideoNode'
 import WebNode from '../nodes/WebNode'
@@ -1806,6 +1807,7 @@ export function Canvas() {
       // they behave as canvas objects, and React Flow hands each its own `type` so the component can
       // tell them apart without six registrations of six near-identical files.
       nsis: withNodeBoundary(NsisInstallerNode),
+      shop: withNodeBoundary(ShopNode),
       minecraft: withNodeBoundary(ServiceNode),
       dockerhost: withNodeBoundary(ServiceNode),
       proxmox: withNodeBoundary(ServiceNode),
@@ -3341,6 +3343,13 @@ export function Canvas() {
           else if (c.type === 'select' && !c.selected && store.selectedId === c.id) store.select(null)
           else if (c.type === 'dimensions' && c.dimensions && c.resizing) store.setSize(c.id, c.dimensions)
           return false
+        }
+        // Shop nodes are permanent, top-level catalog anchors. React Flow can still emit a
+        // position or dimension change when a drag gesture races a state update, so refuse those
+        // changes at the canvas boundary rather than relying only on `draggable: false`.
+        if ('id' in c) {
+          const target = nodesRef.current.find((node) => node.id === c.id)
+          if (target && (target.type === 'shop' || target.data.nonDeletable === true) && (c.type === 'position' || c.type === 'dimensions')) return false
         }
         return true
       })
@@ -5492,6 +5501,11 @@ export function Canvas() {
         options.onStale?.()
         return false
       }
+      if (disclosedTargets.some((target) => target.type === 'shop')) {
+        options.onRejected?.()
+        setNotice({ kind: 'error', text: 'The Shop is permanent for its universe and cannot be deleted.' })
+        return false
+      }
       const titles = options.titles ?? disclosedTargets.map((target) => target.title || target.id)
       const plan = planNodeDeletion({
         surface: options.surface ?? 'canvas',
@@ -6649,6 +6663,10 @@ export function Canvas() {
       setNodes((ns) => {
         const sources = ns.filter((n) => set.has(n.id))
         if (!sources.length) return ns
+        if (sources.some((n) => n.type === 'shop' || n.data.nonDeletable === true)) {
+          setNotice({ kind: 'error', text: 'The Shop is the one fixed catalog for its universe and cannot be duplicated.' })
+          return ns
+        }
         const all = ns as FocusableNode[]
         const abs = sources.map((n) => absolutePosition(n as FocusableNode, all))
         const dx = at ? at.x - Math.min(...abs.map((p) => p.x)) : DUPLICATE_NUDGE
@@ -6660,7 +6678,7 @@ export function Canvas() {
       })
       markDirty()
     },
-    [setNodes, markDirty, placeSpawned]
+    [setNodes, markDirty, placeSpawned, setNotice]
   )
 
   // Reload a terminal in place: bump `respawnNonce`, which re-runs TerminalNode's lifecycle
@@ -11639,6 +11657,10 @@ export function Canvas() {
   const renameSession = useCallback(
     (projectId: string, id: string, title: string) => {
       if (projectId === activeProjectId) {
+        if (nodesRef.current.some((node) => node.id === id && (node.type === 'shop' || node.data.nonDeletable === true))) {
+          setNotice({ kind: 'error', text: 'The Shop title is fixed because it is the permanent catalog anchor for its universe.' })
+          return
+        }
         // An explicit rename takes ownership of the name → stop auto-tracking the session.
         setNodes((ns) =>
           ns.map((n) => (n.id === id ? { ...n, data: { ...n.data, title, titleAuto: false } } : n))
@@ -11661,7 +11683,7 @@ export function Canvas() {
         void pushSessionRename(api.pty, id, name)
       }
     },
-    [activeProjectId, setNodes, markDirty, writeDisk]
+    [activeProjectId, setNodes, markDirty, writeDisk, setNotice]
   )
 
   // Stable identity for the memoized KanbanView — an inline arrow would re-render the whole

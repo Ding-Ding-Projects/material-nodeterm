@@ -82,9 +82,10 @@ export function isCanvasMutation(value: unknown): value is CanvasMutation {
     return withinSizeLimit(m)
   }
   if (m.op !== 'upsert') return false
-  const node = m.node as { id?: unknown; position?: { x?: unknown; y?: unknown } } | undefined
+  const node = m.node as { id?: unknown; creationEventId?: unknown; position?: { x?: unknown; y?: unknown } } | undefined
   if (!node || typeof node !== 'object') return false
   if (!isRefId(node.id)) return false
+  if ('creationEventId' in node && node.creationEventId !== undefined && !isRefId(node.creationEventId)) return false
   const pos = node.position
   if (!pos || typeof pos !== 'object') return false
   if (!Number.isFinite(pos.x) || !Number.isFinite(pos.y)) return false
@@ -202,7 +203,26 @@ export function applyCanvasMutation(
   // every caller here is applying something that came off the wire, and a silent no-op is the only
   // safe reading of "this list is not what that mutation is about".
   if (isEdgeMutation(m)) return states
-  if (m.op === 'remove') return states.filter((n) => n.id !== m.id)
+  if (m.op === 'remove') {
+    // A peer may remove ordinary nodes, but the deterministic Shop belongs to its universe and
+    // must survive every mirrored remove. Import/hydration repair remains the recovery path when a
+    // malformed peer snapshot omitted it.
+    if (states.some((n) => n.id === m.id && n.kind === 'shop')) return states
+    return states.filter((n) => n.id !== m.id)
+  }
+  if (m.node.kind === 'shop') {
+    // A repeated peer upsert must not move or rewrite an existing Shop. A genuinely missing Shop
+    // can enter once, after which the deterministic universe coordinator repairs its ownership and
+    // top-level placement. This keeps peer delivery idempotent without granting peer mutations the
+    // ability to delete, duplicate, group, or move the catalog anchor.
+    if (states.some((n) => n.id === m.node.id)) return states
+    const accepted = acceptNewInboundNode(m.node, options?.defaultTerminalProfileId)
+    return [...states, { ...accepted, title: 'Shop', group: null, nonDeletable: true }]
+  }
+  // One immutable creation event may be retried by a peer or IPC transport. The first node wins,
+  // even if a buggy retry arrives with a different node id, so a repeated event cannot duplicate
+  // an ordinary catalog result either.
+  if (m.node.creationEventId && states.some((n) => n.creationEventId === m.node.creationEventId)) return states
   const idx = states.findIndex((n) => n.id === m.node.id)
   if (idx === -1)
     return [...states, acceptNewInboundNode(m.node, options?.defaultTerminalProfileId)]

@@ -968,5 +968,90 @@ export const CATALOG: Catalog = {
   'announce.dismiss': {
     en: flat('Dismiss'),
     yue: flat('關閉')
+  },
+
+  // ---------------------------------------------------------------------------------------
+  // Special-universe Shop node. Scope and catalog counts are caller-owned facts; the catalogue
+  // only styles the surrounding copy for the selected language and funny level.
+  // ---------------------------------------------------------------------------------------
+  'universeShop.title': {
+    en: flat('Shop'),
+    yue: flat('商店')
+  },
+  'universeShop.scope': {
+    en: flat('{scope} catalog'),
+    yue: flat('{scope} 目錄')
+  },
+  'universeShop.description': {
+    en: [
+      'Choose a node to create in this universe. The catalog is scoped and stays local to this Shop.',
+      'Pick something for this universe. This Shop keeps the catalog in its lane.',
+      'Choose a node here; the catalog knows which universe it belongs to.',
+      'Pick a node for this universe, with the catalog politely staying in bounds.',
+      'Choose a node and let this Shop do the shopping, without wandering into another universe.'
+    ],
+    yue: [
+      '揀一個節點喺呢個宇宙建立。目錄有範圍，留喺呢間商店入面。',
+      '揀啱呢個宇宙用嘅嘢，間商店會守好自己條界線。',
+      '喺呢度揀節點，目錄會認得自己屬於邊個宇宙。',
+      '揀個節點畀呢個宇宙，目錄乖乖留返喺範圍內。',
+      '揀個節點，等間商店幫你買，唔好行錯去第二個宇宙。'
+    ]
+  },
+  'universeShop.search.label': {
+    en: flat('Search catalog'),
+    yue: flat('搜尋目錄')
+  },
+  'universeShop.search.placeholder': {
+    en: flat('Search nodes'),
+    yue: flat('搜尋節點')
+  },
+  'universeShop.search.regex': {
+    en: flat('Open regex builder for this catalog'),
+    yue: flat('開啟呢個目錄嘅正則建立器')
+  },
+  'universeShop.search.error': {
+    en: flat('Pattern is invalid. Showing all scoped entries.'),
+    yue: flat('模式無效，依家顯示全部範圍內項目。')
+  },
+  'universeShop.search.count': {
+    en: flat('{count} scoped entries'),
+    yue: flat('{count} 個範圍內項目')
+  },
+  'universeShop.empty': {
+    en: flat('No catalog entries match this search.'),
+    yue: flat('冇目錄項目符合呢個搜尋。')
+  },
+  'universeShop.catalogUnavailable': {
+    en: flat('The unified Node Catalog is unavailable in this build. Enable the catalog dependency before creating nodes.'),
+    yue: flat('呢個版本未有共用節點目錄。請先啟用目錄功能，之後先可以建立節點。')
+  },
+  'universeShop.invalidScope': {
+    en: flat('This Shop has incomplete universe scope metadata, so catalog creation is unavailable.'),
+    yue: flat('呢間商店嘅宇宙範圍資料唔完整，所以暫時未可以建立目錄項目。')
+  },
+  'universeShop.entryUnavailable': {
+    en: flat('This catalog entry is unavailable until its executor is available.'),
+    yue: flat('呢個目錄項目要等執行功能可用先可以使用。')
+  },
+  'universeShop.entries.aria': {
+    en: flat('Available catalog entries'),
+    yue: flat('可用目錄項目')
+  },
+  'universeShop.selected': {
+    en: flat('{entry} selected. Use the shared creation action to continue.'),
+    yue: flat('已揀 {entry}，用共用建立動作繼續。')
+  },
+  'universeShop.hint': {
+    en: flat('This Shop stays available as the one catalog entry point for this universe.'),
+    yue: flat('呢間商店會一直做呢個宇宙唯一嘅目錄入口。')
+  },
+  'universeShop.aria.label': {
+    en: flat('Shop for {scope}'),
+    yue: flat('{scope} 商店')
+  },
+  'universeShop.fixed.title': {
+    en: flat('This Shop belongs to its universe and cannot be moved or deleted.'),
+    yue: flat('呢間商店屬於自己嘅宇宙，唔可以移動或者刪除。')
   }
 }

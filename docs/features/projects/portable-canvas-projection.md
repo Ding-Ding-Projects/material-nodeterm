@@ -9,7 +9,8 @@ not open files, start processes, hydrate sessions, or contact a provider.
 
 The projection contains a stable schema identifier and version, project name, colour and safe icon,
 canvas identifiers and scope, node geometry, kind, title, colour, group, collapse state, tags,
-safe text and browser tab presentation, service labels, bridge and rope relationships, and an
+safe text and browser tab presentation, service labels, deterministic universe Shop metadata,
+bridge and rope relationships, and an
 optional bounded global appearance record. Per-element appearance is postponed until its typed
 schema exists. Child canvases are represented now so later universe and portal
 features can add their own records without changing the root contract. A universe scope is either
@@ -36,7 +37,10 @@ the project, icon, canvas, viewport, node, geometry, browser-tab, relationship, 
 records. Canvas parent cycles, duplicate membership, duplicate relationship identifiers, and
 out-of-range numeric values are rejected. HTTP and HTTPS URLs are normalized and accepted without
 credentials; local-file, executable, credential-bearing, and control-character URLs are refused.
-Empty user content, such as a sticky note or browser-tab title, remains valid while required
+Universe Shop records are repaired after import through `src/core/universe-shop.ts`: each special
+child canvas gets exactly one `shop-<canvas-id>` record, while root canvases receive none. The
+repair is pure and records missing, duplicate, normalized, and invalid-scope cases without network
+or provider side effects. Empty user content, such as a sticky note or browser-tab title, remains valid while required
 identifiers and labels stay non-empty. Empty URLs are omitted, and per-element appearance records
 are not accepted in this lane.
 
