@@ -78,7 +78,7 @@ function Labeled({
       <span className="block text-[12px] font-medium text-muted">{vocab(label)}</span>
       {children}
       {error ? (
-        <p className="text-[11px] leading-snug text-[color:var(--warn)]">{error}</p>
+        <p className="text-[11px] leading-snug text-[color:var(--warn)]"><SettingsText segments={[{ kind: 'fact', value: error }]} /></p>
       ) : hint ? (
         <p className="text-[11px] leading-snug text-muted-2">{vocab(hint)}</p>
       ) : null}
@@ -240,17 +240,20 @@ function StatusRow({
       <div className="min-w-0 text-[12px] leading-snug">
         {status?.error ? (
           <p className="text-[color:var(--warn)]">
-            {label} error: {status.error}
-            {lastSuccess
-              ? ` Still applying the value synced ${lastSuccess}.`
-              : ' Nothing has synced yet, so this rule cannot apply.'}
+            <SettingsText segments={[
+              { kind: 'copy', value: `${label} error: ` },
+              { kind: 'fact', value: status.error },
+              ...(lastSuccess
+                ? [{ kind: 'copy' as const, value: ' Still applying the value synced ' }, { kind: 'fact' as const, value: lastSuccess }, { kind: 'copy' as const, value: '.' }]
+                : [{ kind: 'copy' as const, value: ' Nothing has synced yet, so this rule cannot apply.' }])
+            ]} />
           </p>
         ) : status?.ok ? (
           <p className="text-muted">
-            {label} last synced {lastSuccess}.
+            <SettingsText segments={[{ kind: 'copy', value: `${label} last synced ` }, { kind: 'fact', value: lastSuccess ?? 'unknown' }, { kind: 'copy', value: '.' }]} />
           </p>
         ) : (
-          <p className="text-muted">{label} has not been checked yet.</p>
+          <p className="text-muted"><SettingsText>{label} has not been checked yet.</SettingsText></p>
         )}
       </div>
       <Button onClick={onRetry}>Retry</Button>
@@ -291,9 +294,9 @@ function SourceEditor({
             else onChange({ kind: 'local' })
           }}
         >
-          <option value="local">Local — apply the settings below whenever the window matches</option>
-          <option value="api">HTTPS API — fetch the settings to apply from a URL</option>
-          <option value="home-assistant">Home Assistant — gate this rule on a boolean entity</option>
+          <option value="local"><SettingsText>Local — apply the settings below whenever the window matches</SettingsText></option>
+          <option value="api"><SettingsText>HTTPS API — fetch the settings to apply from a URL</SettingsText></option>
+          <option value="home-assistant"><SettingsText>Home Assistant — gate this rule on a boolean entity</SettingsText></option>
         </Select>
       </Labeled>
 
@@ -718,7 +721,7 @@ function RuleCard({
 
       <div>
         <p className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-muted-2">
-          {rule.source.kind === 'api' ? 'Local fallback (before the first fetch)' : 'Apply while active'}
+          <SettingsText>{rule.source.kind === 'api' ? 'Local fallback (before the first fetch)' : 'Apply while active'}</SettingsText>
         </p>
         <ValuesEditor values={rule.values} onChange={(values) => onPatch({ values })} />
       </div>
@@ -786,14 +789,19 @@ export function ScheduleSection({ isActive }: { isActive: boolean }): React.JSX.
           className="space-y-2 rounded-md border border-[color:var(--warn)] bg-[color:var(--warn)]/10 px-3 py-3 text-[13px] text-[color:var(--warn)]"
         >
           <p>
-            Scheduled settings are off because the saved file is {loadError.kind === 'corrupt'
-              ? 'not valid JSON'
-              : 'unreadable'}{loadError.code ? ` (${loadError.code})` : ''}.
+            <SettingsText segments={[
+              { kind: 'copy', value: 'Scheduled settings are off because the saved file is ' },
+              { kind: 'copy', value: loadError.kind === 'corrupt' ? 'not valid JSON' : 'unreadable' },
+              ...(loadError.code ? [{ kind: 'fact' as const, value: ` (${loadError.code})` }] : []),
+              { kind: 'copy', value: '.' }
+            ]} />
           </p>
           <p>
-            The original evidence was left untouched at <code>{loadError.path}</code>. Repair or
-            move that file, then restart nodeterm. Editing stays locked so this recovery copy
-            cannot be overwritten.
+            <SettingsText segments={[
+              { kind: 'copy', value: 'The original evidence was left untouched at ' },
+              { kind: 'fact', value: <code>{loadError.path}</code> },
+              { kind: 'copy', value: '. Repair or move that file, then restart nodeterm. Editing stays locked so this recovery copy cannot be overwritten.' }
+            ]} />
           </p>
         </div>
       </SettingsSection>

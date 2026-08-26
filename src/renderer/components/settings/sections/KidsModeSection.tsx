@@ -9,6 +9,7 @@ import { FieldRow } from '../FieldRow'
 import { SearchableRow } from '../SearchableRow'
 import { SettingsSection } from '../SettingsSection'
 import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
+import { SettingsText } from '../SettingsText'
 
 const ROWS = {
   toggle: {
@@ -176,11 +177,12 @@ export function KidsModeSection({ isActive }: { isActive: boolean }): React.JSX.
             )
           }
         />
-        {error ? <p className="text-[12px] leading-relaxed text-[color:var(--warn)]">{error}</p> : null}
-        <p className="text-[12px] leading-relaxed text-muted-2">
-          Forgot the PIN? There is no reset flow — delete this machine&apos;s{' '}
-          <code>~/.nodeterm/shared</code> folder to turn the mode off and clear it.
-        </p>
+        {error ? <p className="text-[12px] leading-relaxed text-[color:var(--warn)]"><SettingsText segments={[{ kind: 'fact', value: error }]} /></p> : null}
+        <p className="text-[12px] leading-relaxed text-muted-2"><SettingsText segments={[
+          { kind: 'copy', value: "Forgot the PIN? There is no reset flow — delete this machine's " },
+          { kind: 'fact', value: <code>~/.nodeterm/shared</code> },
+          { kind: 'copy', value: ' folder to turn the mode off and clear it.' }
+        ]} /></p>
       </SearchableRow>
 
       <SearchableRow {...ROWS.limits}>
@@ -188,16 +190,13 @@ export function KidsModeSection({ isActive }: { isActive: boolean }): React.JSX.
             `.md3-kids-disclosure` class as the Home screen and the rail's enable dialog, so the
             one sentence this app makes no promise beyond looks identical everywhere it appears. */}
         <p className="md3-kids-disclosure md3-kids-disclosure--settings">{KIDS_DISCLOSURE}</p>
-        <p className="mt-3 text-[12px] leading-relaxed text-muted">
-          While it is on, an agent cannot be started in these modes:
-        </p>
+        <p className="mt-3 text-[12px] leading-relaxed text-muted"><SettingsText>While it is on, an agent cannot be started in these modes:</SettingsText></p>
         <ul className="mt-1 space-y-1 text-[12px] leading-relaxed text-muted">
           {Object.entries(KIDS_REFUSED_PERMISSION_MODES).map(([mode, why]) => (
             <li key={mode}>
               <strong className="text-text">
                 {PERMISSION_MODE_LABELS[mode as keyof typeof PERMISSION_MODE_LABELS] ?? mode}
-              </strong>{' '}
-              — {why}. It falls back to asking every time.
+              </strong>{' '}<SettingsText segments={[{ kind: 'copy', value: ' — ' }, { kind: 'fact', value: why }, { kind: 'copy', value: '. It falls back to asking every time.' }]} />
             </li>
           ))}
         </ul>
@@ -225,7 +224,7 @@ export function KidsModeSection({ isActive }: { isActive: boolean }): React.JSX.
                   setRenameSaved(true)
                 }}
               >
-                {renameSaved ? 'Saved' : 'Save'}
+                <SettingsText>{renameSaved ? 'Saved' : 'Save'}</SettingsText>
               </Button>
             </div>
           }

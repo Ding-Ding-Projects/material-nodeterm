@@ -134,42 +134,42 @@ const PRODUCTION_SURFACES = [
 // cover labels/options. Keeping this list hand-written means deleting a section cannot make its
 // vocabulary audit disappear with it.
 const SETTINGS_SECTION_INVENTORY = [
-  ['settings-accounts', 'src/renderer/components/settings/sections/AccountsSection.tsx'],
-  ['settings-adhd', 'src/renderer/components/settings/sections/AdhdModesSection.tsx'],
-  ['settings-agents', 'src/renderer/components/settings/sections/AgentsSection.tsx'],
-  ['settings-appearance', 'src/renderer/components/settings/sections/AppearanceSection.tsx'],
-  ['settings-appearance-editor', 'src/renderer/components/settings/sections/AppearanceEditorSection.tsx'],
-  ['settings-authenticator', 'src/renderer/components/settings/sections/AuthenticatorSection.tsx'],
-  ['settings-behavior', 'src/renderer/components/settings/sections/BehaviorSection.tsx'],
-  ['settings-commit', 'src/renderer/components/settings/sections/CommitSection.tsx'],
-  ['settings-custom-agents', 'src/renderer/components/settings/sections/CustomAgentsSection.tsx'],
-  ['settings-github-issues', 'src/renderer/components/settings/sections/GitHubIssuesSection.tsx'],
-  ['settings-kids', 'src/renderer/components/settings/sections/KidsModeSection.tsx'],
-  ['settings-language', 'src/renderer/components/settings/sections/LanguageSection.tsx'],
-  ['settings-license', 'src/renderer/components/settings/sections/LicenseSection.tsx'],
-  ['settings-local-history', 'src/renderer/components/settings/sections/LocalHistorySection.tsx'],
-  ['settings-narrator', 'src/renderer/components/settings/sections/NarratorSection.tsx'],
-  ['settings-notch', 'src/renderer/components/settings/sections/NotchSection.tsx'],
-  ['settings-notifications', 'src/renderer/components/settings/sections/NotificationsSection.tsx'],
-  ['settings-personal-vocabulary', 'src/renderer/components/settings/sections/PersonalVocabularySection.tsx'],
-  ['settings-phone', 'src/renderer/components/settings/sections/PhoneSection.tsx'],
-  ['settings-presence', 'src/renderer/components/settings/sections/PresenceIdentitySection.tsx'],
-  ['settings-privacy', 'src/renderer/components/settings/sections/PrivacySection.tsx'],
-  ['settings-remote', 'src/renderer/components/settings/sections/RemoteSection.tsx'],
-  ['settings-schedule', 'src/renderer/components/settings/sections/ScheduleSection.tsx'],
-  ['settings-school', 'src/renderer/components/settings/sections/SchoolModeSection.tsx'],
-  ['settings-shell', 'src/renderer/components/settings/sections/ShellSection.tsx'],
-  ['settings-shortcuts', 'src/renderer/components/settings/sections/ShortcutsSection.tsx'],
-  ['settings-speech', 'src/renderer/components/settings/sections/SpeechSection.tsx'],
-  ['settings-ssh', 'src/renderer/components/settings/sections/SshSection.tsx'],
-  ['settings-support', 'src/renderer/components/settings/sections/SupportTicketsSection.tsx'],
-  ['settings-team', 'src/renderer/components/settings/sections/TeamAccessSection.tsx'],
-  ['settings-terminal', 'src/renderer/components/settings/sections/TerminalSection.tsx'],
-  ['settings-tmux', 'src/renderer/components/settings/sections/TmuxSection.tsx'],
-  ['settings-toy-locks', 'src/renderer/components/settings/sections/ToyLocksSection.tsx'],
-  ['settings-updates', 'src/renderer/components/settings/sections/UpdatesSection.tsx'],
-  ['settings-usage', 'src/renderer/components/settings/sections/UsageSection.tsx'],
-  ['settings-workspace', 'src/renderer/components/settings/sections/WorkspaceStorageSection.tsx']
+  ['settings-accounts', 'src/renderer/components/settings/sections/AccountsSection.tsx', 'accounts'],
+  ['settings-adhd', 'src/renderer/components/settings/sections/AdhdModesSection.tsx', 'adhd-modes'],
+  ['settings-agents', 'src/renderer/components/settings/sections/AgentsSection.tsx', 'agents'],
+  ['settings-appearance', 'src/renderer/components/settings/sections/AppearanceSection.tsx', 'appearance'],
+  ['settings-appearance-editor', 'src/renderer/components/settings/sections/AppearanceEditorSection.tsx', 'appearance-editor'],
+  ['settings-authenticator', 'src/renderer/components/settings/sections/AuthenticatorSection.tsx', 'authenticator'],
+  ['settings-behavior', 'src/renderer/components/settings/sections/BehaviorSection.tsx', 'behavior'],
+  ['settings-commit', 'src/renderer/components/settings/sections/CommitSection.tsx', 'commit'],
+  ['settings-custom-agents', 'src/renderer/components/settings/sections/CustomAgentsSection.tsx', 'custom-agents'],
+  ['settings-github-issues', 'src/renderer/components/settings/sections/GitHubIssuesSection.tsx', 'github-issues'],
+  ['settings-kids', 'src/renderer/components/settings/sections/KidsModeSection.tsx', 'kids-mode'],
+  ['settings-language', 'src/renderer/components/settings/sections/LanguageSection.tsx', 'language'],
+  ['settings-license', 'src/renderer/components/settings/sections/LicenseSection.tsx', 'license'],
+  ['settings-local-history', 'src/renderer/components/settings/sections/LocalHistorySection.tsx', 'history'],
+  ['settings-narrator', 'src/renderer/components/settings/sections/NarratorSection.tsx', 'narrator'],
+  ['settings-notch', 'src/renderer/components/settings/sections/NotchSection.tsx', 'notch'],
+  ['settings-notifications', 'src/renderer/components/settings/sections/NotificationsSection.tsx', 'notifications'],
+  ['settings-personal-vocabulary', 'src/renderer/components/settings/sections/PersonalVocabularySection.tsx', 'vocabulary'],
+  ['settings-phone', 'src/renderer/components/settings/sections/PhoneSection.tsx', 'phone'],
+  ['settings-presence', 'src/renderer/components/settings/sections/PresenceIdentitySection.tsx', 'presence'],
+  ['settings-privacy', 'src/renderer/components/settings/sections/PrivacySection.tsx', 'privacy'],
+  ['settings-remote', 'src/renderer/components/settings/sections/RemoteSection.tsx', 'remote'],
+  ['settings-schedule', 'src/renderer/components/settings/sections/ScheduleSection.tsx', 'schedule'],
+  ['settings-school', 'src/renderer/components/settings/sections/SchoolModeSection.tsx', 'school-mode'],
+  ['settings-shell', 'src/renderer/components/settings/sections/ShellSection.tsx', 'shell'],
+  ['settings-shortcuts', 'src/renderer/components/settings/sections/ShortcutsSection.tsx', 'shortcuts'],
+  ['settings-speech', 'src/renderer/components/settings/sections/SpeechSection.tsx', 'speech'],
+  ['settings-ssh', 'src/renderer/components/settings/sections/SshSection.tsx', 'ssh'],
+  ['settings-support', 'src/renderer/components/settings/sections/SupportTicketsSection.tsx', 'support'],
+  ['settings-team', 'src/renderer/components/settings/sections/TeamAccessSection.tsx', 'team-access'],
+  ['settings-terminal', 'src/renderer/components/settings/sections/TerminalSection.tsx', 'terminal'],
+  ['settings-tmux', 'src/renderer/components/settings/sections/TmuxSection.tsx', 'tmux'],
+  ['settings-toy-locks', 'src/renderer/components/settings/sections/ToyLocksSection.tsx', 'toylocks'],
+  ['settings-updates', 'src/renderer/components/settings/sections/UpdatesSection.tsx', 'updates'],
+  ['settings-usage', 'src/renderer/components/settings/sections/UsageSection.tsx', 'usage'],
+  ['settings-workspace', 'src/renderer/components/settings/sections/WorkspaceStorageSection.tsx', 'workspace-storage']
 ]
 const FOCUSED_TEST_INVENTORY = [
   ['settings-template-test', 'src/renderer/lib/personalVocabulary/apply.test.ts'],
@@ -224,15 +224,18 @@ for (const [id, file, reason] of PRODUCTION_SURFACES) {
   check(id + ': classification reason is explicit', reason.length > 0)
   if (reason === 'mapped-callsite') check(id + ': mapper call is present', hasMarker(read(file), 'useVocabularyMapper()') || hasMarker(read(file), 'useLocalizedVocabularyText()'))
 }
-for (const [id, file] of SETTINGS_SECTION_INVENTORY) {
+for (const [id, file, sectionId] of SETTINGS_SECTION_INVENTORY) {
   const source = read(file)
   check(id + ': exact settings section exists', source !== null)
   check(id + ': exact Material/settings audit row', (read(DOC) || '').includes('| ' + String.fromCharCode(96) + id + String.fromCharCode(96) + ' |'))
-  check(id + ': section registration boundary', hasMarker(source, '<SettingsSection'))
+  check(id + ': section registration boundary', hasMarker(source, `id="${sectionId}"`))
   check(id + ': active-state boundary', (source || '').includes('isActive'))
-  check(id + ': authored prose boundary', /FieldRow|SettingsText|SettingsSection/.test(source || ''))
-  check(id + ': accessible-control classification', /aria-label|ariaLabel|htmlFor|placeholder|SettingsSection/.test(source || ''))
-  check(id + ': option-or-fact classification', /<option|options\s*[:=]|formatText|profileText|value\s*=|SettingsSection/.test(source || ''))
+  const uncommented = noComments(source || '')
+  // These are classification notes, not existence checks. The exact required boundary above is
+  // the registered section id, while these clauses record which shared funnel the section owns.
+  check(id + ': authored prose boundary', /FieldRow|SettingsText|SettingsSection/.test(uncommented))
+  check(id + ': accessible-control classification', /aria-label|ariaLabel|htmlFor|placeholder|SettingsSection/.test(uncommented))
+  check(id + ': option-or-fact classification', /<option|options\s*[:=]|formatText|profileText|value\s*=|SettingsSection/.test(uncommented))
 }
 for (const [id, file] of FOCUSED_TEST_INVENTORY) check(id + ': focused test exists', read(file) !== null)
 check('settings section inventory is complete', SETTINGS_SECTION_INVENTORY.length === expectedSettingsSectionCount)

@@ -117,8 +117,7 @@ export function SettingsSidebar({
               //     "School mode" cannot light up a row the user has renamed away from it.
               const isSchoolMode = s.id === 'school-mode'
               const sectionTitle = isSchoolMode ? label : ts(`settings.section.${s.id}`, s.title)
-              const searchTitle = isSchoolMode ? label : s.title
-              const dimmed = hasQuery && !matchesEntry(search, settingsSidebarSearchEntry(s, schoolModeName, vocab, sectionTitle))
+              const dimmed = hasQuery && !matchesEntry(search, settingsSidebarSearchEntry(s, schoolModeName, vocab, sectionTitle, true))
               return (
                 <button
                   key={s.id}

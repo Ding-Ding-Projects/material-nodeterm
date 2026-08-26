@@ -1,5 +1,5 @@
 import type React from 'react'
-import { SettingsVocabularyContext, useSettingsSearchState, type SettingsVocabularyResolution } from './context'
+import { SettingsVocabularyContext, resolutionIncludes, useSettingsSearchState, type SettingsVocabularyResolution } from './context'
 import { matchesEntry, type SettingsSearchEntry } from './search'
 import { useVocabularyMapper, useVocabularyText } from '../../lib/personalVocabulary/useVocabularyText'
 import { settingsSearchEntryWithVocabulary } from './vocabulary'
@@ -36,13 +36,14 @@ export function SettingsSection({
   // Personal-vocabulary boundary for section chrome (unconditional). Search matching below keeps
   // the shipped aliases beside visible replacements, so a rename never breaks existing lookup.
   const mappedTitle = useVocabularyText(title)
-  const vocabularyApplied = resolvedVocabulary !== undefined
-  const vocabTitle = vocabularyApplied ? title : mappedTitle
+  const sectionAlreadyApplied = resolutionIncludes(resolvedVocabulary, 'section')
+  const rowsAlreadyApplied = resolutionIncludes(resolvedVocabulary, 'row')
+  const vocabTitle = sectionAlreadyApplied ? title : mappedTitle
   const mappedDescription = useVocabularyText(description)
-  const vocabDescription = vocabularyApplied ? description : mappedDescription
+  const vocabDescription = sectionAlreadyApplied ? description : mappedDescription
   const vocab = useVocabularyMapper()
   const visibleEntries = searchEntries?.map((entry) =>
-    vocabularyApplied ? entry : settingsSearchEntryWithVocabulary(entry, vocab)
+    rowsAlreadyApplied ? entry : settingsSearchEntryWithVocabulary(entry, vocab)
   )
   if (hasQuery) {
     const anyMatch = !visibleEntries || visibleEntries.some((e) => matchesEntry(search, e))

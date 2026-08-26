@@ -10,6 +10,14 @@ export interface SettingsVocabularyResolution {
   fields: 'section' | 'row' | 'all'
 }
 
+/** A resolution only suppresses the producer boundary it explicitly covers. */
+export function resolutionIncludes(
+  resolution: SettingsVocabularyResolution | null | undefined,
+  field: 'section' | 'row'
+): boolean {
+  return resolution?.fields === 'all' || resolution?.fields === field
+}
+
 export const SettingsVocabularyContext = createContext<SettingsVocabularyResolution | null>(null)
 
 /** Back-compat convenience: the plain-text query (what most callers actually want — "is there an

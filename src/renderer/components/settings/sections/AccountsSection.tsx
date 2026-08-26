@@ -258,6 +258,7 @@ function countNodesUsing(accountId: string): number {
 }
 
 export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   const accounts = useSettings((s) => s.settings.claudeAccounts)
   const codexAccounts = useSettings((s) => s.settings.codexAccounts)
   const systemLabelSetting = useSettings((s) => s.settings.systemAccountLabel)
@@ -1097,12 +1098,10 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
               }
               details={
                 <label className="mt-2 flex max-w-lg items-center gap-2 text-[11px] text-muted">
-                  <span className="shrink-0 font-medium uppercase tracking-wide">
-                    Working directory
-                  </span>
+                  <span className="shrink-0 font-medium uppercase tracking-wide"><SettingsText>Working directory</SettingsText></span>
                   <Input
                     className="min-w-0 flex-1 font-mono"
-                    aria-label={`Remote working directory for ${account.label}`}
+                    aria-label={`${vocab('Remote working directory for ')}${account.label}`}
                     vocabularyMode="factual"
                     placeholder="~/nf-management"
                     value={account.remoteCwd ?? '~'}

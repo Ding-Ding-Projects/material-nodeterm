@@ -164,7 +164,13 @@ the substitution without anyone remembering to opt in:
 - ✅ Standalone Settings prose uses the explicit `SettingsText` boundary, including section reset
   feedback, font and theme pickers, status/empty states, and inline headings. The hand-written
   inventory names every production Settings section and its audit row, so removing a section does
-  not silently remove its vocabulary review.
+  not silently remove its vocabulary review. `SettingsText` accepts typed `copy` and `fact`
+  segments, plus prose templates with named fact values, so provider names, paths, account labels,
+  error text, counts, and other runtime facts are never mapped accidentally.
+- ✅ Settings producer ownership is explicit. `SettingsVocabularyResolution.fields` is `section`,
+  `row`, or `all`; a section-level resolution does not suppress row mapping, and an already-mapped
+  sidebar title is never mapped a second time. The checker records each section's exact registered
+  `SettingsSection` id, not a broad component substring.
 - ✅ The coverage Chut also inventories the focused template, field, localization, and control
   intent tests. Its fixture mutations remove a mapper, `SettingsText`, a section registration, an
   audit row, and the fact-template test, then execute the complete checker against the mutation.

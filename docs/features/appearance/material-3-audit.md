@@ -274,6 +274,8 @@ Every listed renderer producer has an explicit local mapper boundary. Commands, 
 | `settings-font-picker` | Font picker labels and states | `src/renderer/components/settings/FontPicker.tsx` | `useVocabularyMapper()` |
 | `settings-theme-picker` | Theme picker labels | `src/renderer/components/settings/ThemeSelect.tsx` | `useVocabularyMapper()` |
 | `settings-section-inline-copy` | Standalone settings prose boundary | `src/renderer/components/settings/SettingsText.tsx` | `export function SettingsText` |
+| `settings-copy-facts` | Typed copy/fact segments and template facts | `src/renderer/components/settings/SettingsText.tsx`, `FieldRow.tsx` | `SettingsTextSegment`, `labelSegments` |
+| `settings-resolution-ownership` | Section versus row vocabulary ownership | `src/renderer/components/settings/context.ts`, `SettingsSection.tsx`, `FieldRow.tsx`, `SearchableRow.tsx` | `resolutionIncludes` |
 | `settings-search-policy` | Settings visible/shipped search and School-mode rename policy | `src/renderer/components/settings/vocabulary.ts` | `export function settingsSidebarSearchEntry` |
 | `school-mode-settings` | School-mode placeholders and settings prose | `src/renderer/components/settings/sections/SchoolModeSection.tsx` | `useVocabularyMapper()` |
 | `kids-mode-settings` | Kids-mode placeholders and settings prose | `src/renderer/components/settings/sections/KidsModeSection.tsx` | `useVocabularyMapper()` |

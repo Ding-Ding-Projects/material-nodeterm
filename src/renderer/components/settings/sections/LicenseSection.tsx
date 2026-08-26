@@ -5,6 +5,7 @@ import { SettingsSection } from '../SettingsSection'
 import { SearchableRow } from '../SearchableRow'
 import { FieldRow } from '../FieldRow'
 import { Switch } from '@renderer/ui/Switch'
+import { SettingsText } from '../SettingsText'
 
 const ROWS = {
   free: {
@@ -93,21 +94,16 @@ export function LicenseSection({ isActive }: { isActive: boolean }): React.JSX.E
       <SearchableRow {...ROWS.free}>
         <div className="space-y-3 rounded-md border border-border p-4">
           <p className="text-[13px] font-medium text-text">
-            No payment is required to use nodeterm — ever.
+            <SettingsText>No payment is required to use nodeterm — ever.</SettingsText>
           </p>
           <p className="text-[12px] text-muted">
-            Every capability is available to everyone who runs the app. There is no purchase, no
-            licence, no subscription, no trial that runs out, and no feature held back until you
-            pay. You will never be asked for a card, and nothing here will stop working.
+            <SettingsText>Every capability is available to everyone who runs the app. There is no purchase, no licence, no subscription, no trial that runs out, and no feature held back until you pay. You will never be asked for a card, and nothing here will stop working.</SettingsText>
           </p>
           <p className="text-[13px] font-medium" style={{ color: '#ff9f0a' }}>
-            If anyone asks you to pay for nodeterm, it is not real.
+            <SettingsText>If anyone asks you to pay for nodeterm, it is not real.</SettingsText>
           </p>
           <p className="text-[12px] text-muted">
-            That includes any website, email, message, pop-up, app store listing, or person
-            offering a &ldquo;licence key&rdquo;, &ldquo;Pro upgrade&rdquo;, subscription or
-            activation for this app — none of it comes from us, and paying it gets you nothing you
-            do not already have. Do not send anyone money or card details for this software.
+            <SettingsText>That includes any website, email, message, pop-up, app store listing, or person offering a “licence key”, “Pro upgrade”, subscription or activation for this app — none of it comes from us, and paying it gets you nothing you do not already have. Do not send anyone money or card details for this software.</SettingsText>
           </p>
         </div>
       </SearchableRow>

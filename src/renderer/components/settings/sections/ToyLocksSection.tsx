@@ -132,9 +132,9 @@ export function ToyLocksSection({ isActive }: { isActive: boolean }): React.JSX.
             <p className="text-[13px] text-muted"><SettingsText>Loading…</SettingsText></p>
           ) : loadError ? null : filtered.length === 0 ? (
             <p className="text-[13px] text-muted">
-              {records.length === 0
-                ? "Nothing is locked yet. Right-click a tab, a node, or the Accent setting and choose “Lock this…”."
-                : 'No locks match that filter.'}
+              <SettingsText>{records.length === 0
+                ? 'Nothing is locked yet. Right-click a tab, a node, or the Accent setting and choose “Lock this…”.'
+                : 'No locks match that filter.'}</SettingsText>
             </p>
           ) : (
             <ul className="divide-y divide-border/60">
@@ -151,8 +151,13 @@ export function ToyLocksSection({ isActive }: { isActive: boolean }): React.JSX.
                       <span className="font-normal text-muted">({targetKindLabel(r.target.kind)})</span>
                     </div>
                     <div className="text-[12px] text-muted">
-                      {CREDENTIAL_KIND_LABELS[r.credentialKind]} ·{' '}
-                      {durationLabel(r)} · {r.lockedOnLaunch ? 'locked on launch' : 'stays as unlocked as you left it'}
+                      <SettingsText segments={[
+                        { kind: 'copy', value: CREDENTIAL_KIND_LABELS[r.credentialKind] },
+                        { kind: 'copy', value: ' · ' },
+                        { kind: 'fact', value: durationLabel(r) },
+                        { kind: 'copy', value: ' · ' },
+                        { kind: 'copy', value: r.lockedOnLaunch ? 'locked on launch' : 'stays as unlocked as you left it' }
+                      ]} />
                     </div>
                   </div>
                   <button

@@ -1,10 +1,12 @@
 import type React from 'react'
 import { useVocabularyTemplate, useVocabularyText } from '../../lib/personalVocabulary/useVocabularyText'
-import { useSettingsVocabularyResolution, type SettingsVocabularyResolution } from './context'
+import { resolutionIncludes, useSettingsVocabularyResolution, type SettingsVocabularyResolution } from './context'
+import { SettingsText, type SettingsTextSegment } from './SettingsText'
 
 /** label (+ optional description, + optional highlighted note) on the left, a control on the right. */
 export function FieldRow({
   label,
+  labelSegments,
   description,
   descriptionParams,
   resolvedVocabulary,
@@ -13,6 +15,7 @@ export function FieldRow({
   htmlFor
 }: {
   label: string
+  labelSegments?: readonly SettingsTextSegment[]
   description?: string
   /** Dynamic facts are interpolated only after the local prose vocabulary is applied. */
   descriptionParams?: Record<string, string>
@@ -29,7 +32,7 @@ export function FieldRow({
   // applied to `control` — that's live form widgets, not prose.
   const mappedLabel = useVocabularyText(label)
   const inheritedVocabularyResolution = useSettingsVocabularyResolution()
-  const alreadyApplied = resolvedVocabulary !== undefined || inheritedVocabularyResolution !== null
+  const alreadyApplied = resolutionIncludes(resolvedVocabulary, 'row') || resolutionIncludes(inheritedVocabularyResolution, 'row')
   const vocabLabel = alreadyApplied ? label : mappedLabel
   const mappedDescription = useVocabularyTemplate(description, descriptionParams)
   const vocabDescription = alreadyApplied ? description : mappedDescription
@@ -39,7 +42,7 @@ export function FieldRow({
     <div className="md3-settings-row">
       <div className="md3-settings-row__body">
         <label htmlFor={htmlFor} className="md3-settings-row__label">
-          {vocabLabel}
+          {labelSegments ? <SettingsText segments={labelSegments} /> : vocabLabel}
         </label>
         {vocabDescription ? <p className="md3-settings-row__desc">{vocabDescription}</p> : null}
         {vocabNote ? <p className="md3-settings-row__note">{vocabNote}</p> : null}

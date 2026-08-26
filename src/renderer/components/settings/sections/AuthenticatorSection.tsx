@@ -115,7 +115,7 @@ function AddEntryForm({ onAdded }: { onAdded: (entry: AuthenticatorEntry) => voi
           />
         </div>
       )}
-      {error && <div className="toylock-error">{error}</div>}
+      {error && <div className="toylock-error"><SettingsText segments={[{ kind: 'fact', value: error }]} /></div>}
       <button className="toylock-btn toylock-btn--primary" disabled={busy} onClick={() => void submit()}>
         <SettingsText>{busy ? 'Adding…' : 'Add'}</SettingsText>
       </button>
@@ -327,7 +327,12 @@ function EntryRow({
       </div>
       {revealed && (
         <div className="toylock-manual-secret">
-          <span className="toylock-field__label"><SettingsText>Secret for</SettingsText>{' '}{entry.issuer} — {entry.account}</span>
+          <span className="toylock-field__label"><SettingsText segments={[
+            { kind: 'copy', value: 'Secret for ' },
+            { kind: 'fact', value: entry.issuer },
+            { kind: 'copy', value: ' — ' },
+            { kind: 'fact', value: entry.account }
+          ]} /></span>
           <code className="toylock-secret-text">{revealed.secretBase32.replace(/(.{4})/g, '$1 ').trim()}</code>
           <button className="toylock-btn toylock-btn--sm" onClick={() => setRevealed(null)}>
             <SettingsText>Hide</SettingsText>
@@ -440,7 +445,7 @@ export function AuthenticatorSection({ isActive }: { isActive: boolean }): React
           )}
           {mutationError && (
             <div role="alert" className="toylock-error">
-              {mutationError}
+              <SettingsText segments={[{ kind: 'fact', value: mutationError }]} />
             </div>
           )}
           <AddEntryForm onAdded={(e) => setEntries((cur) => [...cur, e])} />

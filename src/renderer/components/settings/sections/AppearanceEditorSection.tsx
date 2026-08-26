@@ -43,7 +43,7 @@ function RowAnchorButton({
   id: string
   label: string
   kind: string
-  children: React.ReactNode
+  children: string
 }): React.JSX.Element {
   const ref = useRef<HTMLButtonElement>(null)
   return (
@@ -53,7 +53,7 @@ function RowAnchorButton({
         if (ref.current) openAppearanceEditor(id, label, kind, ref.current)
       }}
     >
-      {children}
+      <SettingsText>{children}</SettingsText>
     </Button>
   )
 }
@@ -137,7 +137,7 @@ export function AppearanceEditorSection({ isActive }: { isActive: boolean }): Re
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     <RowAnchorButton id={id} label={entries[id].label} kind={entries[id].kind}>
-                      Edit…
+              Edit…
                     </RowAnchorButton>
                     <Button onClick={() => resetElement(id)}>Reset</Button>
                   </div>
@@ -152,8 +152,7 @@ export function AppearanceEditorSection({ isActive }: { isActive: boolean }): Re
         <div>
           <h4 className="text-[13px] font-medium text-text"><SettingsText>Presets</SettingsText></h4>
           <p className="mt-1 text-[13px] leading-relaxed text-muted">
-            Saved from any element's appearance editor. Export them to a file to share or back up,
-            import a file someone sent you.
+            <SettingsText>Saved from any element's appearance editor. Export them to a file to share or back up, import a file someone sent you.</SettingsText>
           </p>
           {presets.length > 0 && (
             <div className="mt-3 divide-y divide-border/60">
@@ -216,8 +215,7 @@ export function AppearanceEditorSection({ isActive }: { isActive: boolean }): Re
         <div>
           <h4 className="text-[13px] font-medium text-text"><SettingsText>Reset all appearance edits</SettingsText></h4>
           <p className="mt-1 text-[13px] leading-relaxed text-muted">
-            Puts every tab, node and app-chrome element that was customized back to the platform
-            default. Saved presets are kept.
+            <SettingsText>Puts every tab, node and app-chrome element that was customized back to the platform default. Saved presets are kept.</SettingsText>
           </p>
           <div className="mt-3">
             <Button

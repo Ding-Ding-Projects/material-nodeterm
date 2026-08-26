@@ -21,13 +21,18 @@ export function settingsSidebarSearchEntry(
   section: SettingsSectionRef,
   schoolModeName: string,
   map: SettingsVocabularyMap,
-  localizedTitle?: string
+  localizedTitle?: string,
+  alreadyMapped = false
 ): SettingsSearchEntry {
   const isSchool = section.id === 'school-mode'
-  const title = isSchool ? schoolModeName : localizedTitle ?? map(section.title) ?? section.title
+  const title = isSchool
+    ? schoolModeName
+    : localizedTitle ?? (alreadyMapped ? section.title : map(section.title) ?? section.title)
   const shippedAlias = isSchool ? undefined : section.title
   return {
     title,
-    keywords: shippedAlias ? [shippedAlias, title, map(title) ?? title] : [title]
+    keywords: shippedAlias
+      ? [shippedAlias, title, ...(alreadyMapped ? [] : [map(title) ?? title])]
+      : [title]
   }
 }

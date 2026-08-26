@@ -7,6 +7,7 @@ import { Input } from '@renderer/ui/Input'
 import { Button } from '@renderer/ui/Button'
 import { DEFAULT_SCHOOL_MODE_NAME } from '../../../lib/schoolModeName'
 import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
+import { SettingsText } from '../SettingsText'
 
 const ROWS = {
   toggle: {
@@ -153,13 +154,12 @@ export function SchoolModeSection({ isActive }: { isActive: boolean }): React.JS
             )
           }
         />
-        {error ? <p className="text-[12px] leading-relaxed text-[color:var(--warn)]">{error}</p> : null}
-        <p className="text-[12px] leading-relaxed text-muted-2">
-          Forgot the PIN? There is no reset flow — delete this machine's{' '}
-          <code>~/.nodeterm/shared</code> folder to turn the mode off and clear it (your other
-          per-app settings are untouched, and any of your prior language/funny-level/dim-sum
-          preferences return once the mode is off).
-        </p>
+        {error ? <p className="text-[12px] leading-relaxed text-[color:var(--warn)]"><SettingsText segments={[{ kind: 'fact', value: error }]} /></p> : null}
+        <p className="text-[12px] leading-relaxed text-muted-2"><SettingsText segments={[
+          { kind: 'copy', value: "Forgot the PIN? There is no reset flow — delete this machine's " },
+          { kind: 'fact', value: <code>~/.nodeterm/shared</code> },
+          { kind: 'copy', value: ' folder to turn the mode off and clear it (your other per-app settings are untouched, and any of your prior language/funny-level/dim-sum preferences return once the mode is off).' }
+        ]} /></p>
       </SearchableRow>
 
       <SearchableRow {...ROWS.rename}>
@@ -185,7 +185,7 @@ export function SchoolModeSection({ isActive }: { isActive: boolean }): React.JS
                   setRenameSaved(true)
                 }}
               >
-                {renameSaved ? 'Saved' : 'Save'}
+                <SettingsText>{renameSaved ? 'Saved' : 'Save'}</SettingsText>
               </Button>
             </div>
           }
@@ -228,7 +228,7 @@ export function SchoolModeSection({ isActive }: { isActive: boolean }): React.JS
                       }
                     }}
                   >
-                    Save
+                    <SettingsText>Save</SettingsText>
                   </Button>
                 </div>
               ) : (

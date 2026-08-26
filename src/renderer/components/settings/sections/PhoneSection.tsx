@@ -392,7 +392,7 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
 
           {error ? (
             <p className="text-sm" style={{ color: '#ff9f0a' }}>
-              {error}
+              <SettingsText segments={[{ kind: 'fact', value: error }]} />
             </p>
           ) : null}
         </div>
