@@ -490,6 +490,53 @@ let activeRemote: { cwd: string; ref: GitRemoteRef } | null = null
 // True from the first before-quit on: lets window close-events through (see hide-on-close).
 let quitting = false
 
+// Confirm-before-quit gate. Only fires when something would actually be lost: a plain-shell
+// terminal (no tmux/session-host underneath it) that would be killed for real, per
+// ptyManager.hasSessionsAtRiskOnQuit() / quit-risk.ts. A canvas where every terminal is
+// tmux-backed — the common case — quits silently, because nothing there dies from quitting.
+// `quitConfirmed` remembers a "Quit" answer so the re-issued app.quit() below (and the second
+// before-quit pass) is never re-prompted; `skipQuitConfirmation` is set for app-initiated quits
+// (auto-update restart) that are not a decision the user needs to re-make; `quitConfirmationPending`
+// dedupes concurrent triggers (native close + menu Quit + Cmd/Ctrl+Q landing in the same tick)
+// into a single dialog.
+let quitConfirmed = false
+let skipQuitConfirmation = false
+let quitConfirmationPending = false
+
+/** Whether the confirm dialog is owed at all: not already answered, not an app-initiated quit
+ *  (auto-update restart) that skips it by design, and — the actual gate — ptyManager reports live
+ *  work with no persistent backend behind it. Checked at every call site BEFORE preventDefault, so
+ *  a risk-free quit never touches the dialog machinery and never re-enters before-quit in a loop. */
+function shouldConfirmQuit(): boolean {
+  return !quitConfirmed && !skipQuitConfirmation && ptyManager.hasSessionsAtRiskOnQuit()
+}
+
+/** Shows the native confirm dialog (all platforms) and resolves once the user answers. Only ever
+ *  called after `shouldConfirmQuit()` is true. A "Quit" answer is remembered (`quitConfirmed`) so
+ *  the re-issued app.quit() below is not re-prompted. */
+function confirmQuit(parentWin: BrowserWindow | null): Promise<boolean> {
+  if (quitConfirmationPending) return Promise.resolve(false)
+  quitConfirmationPending = true
+  const opts = {
+    type: 'question' as const,
+    buttons: ['Cancel', 'Quit'],
+    defaultId: 0,
+    cancelId: 0,
+    title: 'Quit nodeterm?',
+    message: 'Quit nodeterm?',
+    detail:
+      "One or more terminals here aren't using a persistent session, so quitting will end whatever is running in them right now. Terminals using tmux or the session host will still be here next time you open nodeterm."
+  }
+  const p =
+    parentWin && !parentWin.isDestroyed() ? dialog.showMessageBox(parentWin, opts) : dialog.showMessageBox(opts)
+  return p.then(({ response }) => {
+    quitConfirmationPending = false
+    const confirmed = response === 1
+    if (confirmed) quitConfirmed = true
+    return confirmed
+  })
+}
+
 // Keep-awake tracker (created in whenReady next to the notch HUD, disposed in before-quit).
 let keepAwake: KeepAwakeTracker | undefined
 
@@ -674,6 +721,17 @@ function createWindow(): BrowserWindow {
     if (shouldHideOnClose(process.platform, quitting)) {
       e.preventDefault()
       win.hide()
+      return
+    }
+    // The real close: on win32/linux the native title-bar × reaches this directly with no
+    // app.quit() first (see window-all-closed below), so the confirm gate has to sit here too —
+    // not only in before-quit, where the window (the only place left to show a dialog) would
+    // already be destroyed by the time we asked.
+    if (shouldConfirmQuit()) {
+      e.preventDefault()
+      void confirmQuit(win).then((ok) => {
+        if (ok) app.quit()
+      })
     }
   })
 
@@ -1752,8 +1810,12 @@ app.whenReady().then(async () => {
   if (NT_MULTI && process.platform === 'darwin') app.dock?.setBadge('TEST')
   // Flip `quitting` before quitAndInstall so the window's close-event actually closes (not hides);
   // quitAndInstall closes all windows then calls app.quit(), which our hide-on-close would block.
+  // Also skip the confirm dialog: this is a restart-to-update the user already asked for via the
+  // "Restart to update" card, not a fresh decision to re-confirm, and a modal here would only
+  // block the install.
   initUpdater(() => {
     quitting = true
+    skipQuitConfirmation = true
   })
   // Mirror live agent status to <userData>/agent-status.json for the external mobile host agent.
   initAgentStatusMirror()
@@ -3196,6 +3258,16 @@ app.on('window-all-closed', () => {
 // the quit just long enough for them to land, capped so a hung tmux can never block quit.
 let quitFlushed = false
 app.on('before-quit', (e) => {
+  // Menu Quit / Cmd+Q / Ctrl+Q reach here directly (no window-close event first), so the confirm
+  // gate is repeated here for that path. `quitConfirmed` short-circuits this on the re-issued
+  // app.quit() below once the user has answered, or on the win.close() gate's own re-issue.
+  if (shouldConfirmQuit()) {
+    e.preventDefault()
+    void confirmQuit(getMainWindow() as unknown as BrowserWindow | null).then((ok) => {
+      if (ok) app.quit()
+    })
+    return
+  }
   quitting = true // from here on, window close-events must NOT be turned into hide
   // Destroy every open widget window (never the sessions they were co-attached to — see
   // canvas-widget-window.ts's module doc; PtyManager.killAll() below detaches every client the
