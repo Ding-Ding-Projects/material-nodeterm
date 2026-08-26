@@ -43,6 +43,9 @@ import { fileToProject, projectToFile, serializeProjectFile, type ProjectFileV1 
 import { LocalHistoryStore } from './local-history'
 import { looksLikeContainer, openContainer, packContainer, type ContainerEntry } from './project-archive-container'
 
+// Schema 3 is exposed from the established archive seam while its validation remains platform-free.
+export * from './portable-project-v3'
+
 /** V1 JSON-text archives keep their historical cap. */
 const MAX_ARCHIVE_BYTES_V1 = 180 * 1024 * 1024
 /** The V2 container file itself. Raised from V1's 180 MB because a save file that carries the

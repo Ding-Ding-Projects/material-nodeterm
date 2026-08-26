@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add the platform-free schema 3 portable-project manifest validator with canonical required
+  entries, bounded raw and compressed budgets, deterministic SHA-256 metadata, safe path and
+  collision refusal, omission reporting, and pure V1/V2 migration filtering. Verification is
+  intentionally pending in this implementation lane.
 - Publish the decision-complete plan for portable schema 3 project saves, universe Shop nodes,
   interactive AWS and Cloudflare managers, one-click hosted services, and the upstream parity
   program. This entry records planning only; no product implementation or release was made.

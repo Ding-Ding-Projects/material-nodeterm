@@ -132,7 +132,9 @@ intentionally unchecked because this task publishes the plan only.
 
 ### Portability and shared foundations
 
-- [ ] Ship schema 3 portable project export with manifest, hashes, omissions, and migration.
+- [ ] Ship schema 3 portable project export with manifest, hashes, omissions, and migration. Core
+  platform-free validator and documentation landed, but export wiring and required verification
+  remain outstanding.
 - [ ] Import schema 3 archives atomically without external side effects.
 - [ ] Preserve root, Multiverse, AWS Universe, portal, Shop, node, relationship, and appearance data.
 - [ ] Bundle project-owned media and provide Include, Omit, and Locate Later decisions.

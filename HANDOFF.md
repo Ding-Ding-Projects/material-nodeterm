@@ -1,5 +1,31 @@
 # Handoff
 
+## 2026-08-26, portable schema 3 envelope implementation
+
+Follow-up repair keeps `manifest.json` as required archive framing outside the hashed payload
+inventory, removes vault material from optional entries, validates recorded raw and compressed
+sizes, applies all count and byte limits during manifest creation, validates user omissions, and
+uses fatal UTF-8 decoding. V1/V2 migration is now bounded and recursively strips nested credential,
+token, password, path, account, session, SSH, machine-local, and exact identity keys such as `id`
+while preserving unrelated keys that merely contain those letters. It rejects unsafe object keys
+and values. Project colours, non-empty bounded names, omission counts, duplicate omission paths,
+case collisions, and omission contradictions are validated as well. Parsed manifest metadata is
+checked against per-entry and aggregate byte ceilings before payload handling.
+
+Implemented `src/core/portable-project-v3.ts`, a platform-free schema 3 contract and validator,
+and re-exported it from `src/core/project-archive.ts`. The module provides the
+`nodeterm-portable-project` identifier, schema version 3, canonical required and optional entry
+inventory, bounded manifest and omission types, safe relative path validation, duplicate and
+case-collision refusal, SHA-256 payload metadata that excludes the required manifest framing,
+raw and compressed byte ceilings, and bounded recursive V1/V2 migration filtering that excludes
+machine-local and credential material. Vault material is not an optional entry. Added the feature
+article and projects documentation index entry.
+
+This lane deliberately did not run tests, type checking, linting, reviews, security checks, builds,
+packaging, installer execution, UI interaction, or captures. The roadmap item remains unchecked
+until archive production/import wiring and those verification activities land. No commit or dew was
+made by this lane.
+
 ## 2026-08-26, portable Node Universes and hosting program plan
 
 Plan-only lane status. The public implementation plan is recorded in
