@@ -4,7 +4,7 @@ import { useVocabularyMapper } from '@renderer/lib/personalVocabulary/useVocabul
 import { useSettings } from '../state/settings'
 import { resolveAppDisplayName } from '@shared/appIdentity'
 import { resolveLogoPreset } from './appearance/BrandMark'
-import { buildProvenanceLine, readBuildProvenance } from '@shared/build-provenance'
+import { formatBuildTime, readBuildProvenance } from '@shared/build-provenance'
 import { ProjectGlyph } from './ProjectGlyph'
 
 /**
@@ -86,6 +86,20 @@ function VocabularyLocalized({
       </span>
     </Tag>
   )
+}
+
+/** Keep the stamped version, commit-adjacent facts, and timestamp untouched while mapping only
+ * the authored provenance words around them. */
+export function vocabularyProvenanceLine(
+  version: string,
+  stamp: unknown,
+  vocab: (text: string) => string
+): string {
+  const provenance = readBuildProvenance(version, stamp)
+  if (!provenance.available) {
+    return `v${provenance.version} · ${vocab('build time')} ${vocab(provenance.reason)}`
+  }
+  return `v${provenance.version} · ${vocab('built')} ${formatBuildTime(provenance.builtAt)}`
 }
 
 /** Start screen with quick actions — shown when there are no projects, or on demand via "+". */
@@ -410,11 +424,13 @@ export function WelcomeScreen({
             named: two builds a minute apart are routine while bisecting, and a bare local time is
             ambiguous the moment this line is pasted into an issue. An unstamped build (a dev
             server) says so plainly rather than showing a plausible wrong time. */}
-        <p className="md3-welcome__build" title="The build this window is running">
+        <p className="md3-welcome__build" title={text('welcome.build.title', 'The build this window is running')}>
           {version === null
             ? ''
-            : buildProvenanceLine(
-                readBuildProvenance(version, typeof __APP_BUILD__ === 'undefined' ? undefined : __APP_BUILD__)
+            : vocabularyProvenanceLine(
+                version,
+                typeof __APP_BUILD__ === 'undefined' ? undefined : __APP_BUILD__,
+                vocab
               )}
         </p>
       </div>

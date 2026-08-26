@@ -33,6 +33,26 @@ type Status =
 
 const RELEASES_URL = 'https://github.com/Ding-Ding-Projects/material-nodeterm/releases'
 
+/** Map only the authored template text. Values supplied by the updater remain factual and are
+ * inserted untouched, so a vocabulary entry can never rewrite a version or progress number. */
+export function mapTemplate(
+  template: string,
+  params: Record<string, string>,
+  vocab: (text: string) => string
+): string {
+  const parts: string[] = []
+  let cursor = 0
+  const marker = /\{([A-Za-z][A-Za-z0-9_]*)\}/g
+  let match: RegExpExecArray | null
+  while ((match = marker.exec(template)) !== null) {
+    parts.push(vocab(template.slice(cursor, match.index)))
+    parts.push(params[match[1]] ?? match[0])
+    cursor = match.index + match[0].length
+  }
+  parts.push(vocab(template.slice(cursor)))
+  return parts.join('')
+}
+
 export function UpdateCard(): JSX.Element | null {
   const [status, setStatus] = useState<Status>({ kind: 'idle' })
   const [minimized, setMinimized] = useState(false)
@@ -164,14 +184,16 @@ export function UpdateCard(): JSX.Element | null {
 
   const minSupportedClause =
     status.kind === 'required' && status.minSupported
-      ? vocab(t('update.minSupportedClause', ' (minimum {minSupported})', {
-          minSupported: status.minSupported
-        }).primary)
+      ? mapTemplate(
+          t('update.minSupportedClause', ' (minimum {minSupported})').primary,
+          { minSupported: status.minSupported },
+          vocab
+        )
       : ''
 
   const localizedUpdateBody = (kind: UpdateBodyKind, version?: string): string => {
     const copy = updateBodyCopy(kind, version)
-    return vocab(t(copy.id, copy.fallback, copy.params).primary)
+    return mapTemplate(t(copy.id, copy.fallback).primary, copy.params ?? {}, vocab)
   }
 
   return (
@@ -221,9 +243,11 @@ export function UpdateCard(): JSX.Element | null {
           {status.percent !== null && (
             <p className="update-card__pct">
               {
-                vocab(t('update.downloadingPct', 'Downloading… {percent}%', {
-                  percent: String(Math.round(status.percent))
-                }).primary)
+                mapTemplate(
+                  t('update.downloadingPct', 'Downloading… {percent}%').primary,
+                  { percent: String(Math.round(status.percent)) },
+                  vocab
+                )
               }
             </p>
           )}
@@ -267,11 +291,14 @@ export function UpdateCard(): JSX.Element | null {
         <>
           <p className="update-card__body">
             {
-              vocab(t(
-                'update.body.required',
-                'This version is no longer supported{minSupportedClause}. Please update to continue.',
-                { minSupportedClause }
-              ).primary)
+              mapTemplate(
+                t(
+                  'update.body.required',
+                  'This version is no longer supported{minSupportedClause}. Please update to continue.'
+                ).primary,
+                { minSupportedClause },
+                vocab
+              )
             }
           </p>
           {status.error && (

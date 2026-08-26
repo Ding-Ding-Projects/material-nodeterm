@@ -34,7 +34,8 @@ import {
   shortCommit,
   stateCounts,
   type GateState,
-  type StatusGateCard
+  type StatusGateCard,
+  type StatusSummaryPart
 } from '../../shared/project-status'
 
 function readVersion(raw: string): string | null {
@@ -48,6 +49,26 @@ function readVersion(raw: string): string | null {
 
 /** How often the "viewing at" heartbeat and the relative ages refresh in place. */
 const HEARTBEAT_MS = 30_000
+
+export function statusSummaryParts(card: StatusGateCard): readonly StatusSummaryPart[] {
+  return card.summaryParts ?? [{ kind: 'factual', text: card.summary }]
+}
+
+export function renderStatusSummary(card: StatusGateCard, vocab: (text: string) => string): string {
+  return statusSummaryParts(card)
+    .map((part) => (part.kind === 'authored' ? vocab(part.text) : part.text))
+    .join('')
+}
+
+export function statusSearchCorpus(card: StatusGateCard, meta: { label: string }, vocab: (text: string) => string): string {
+  return [
+    vocab(card.title),
+    renderStatusSummary(card, vocab),
+    vocab(meta.label),
+    ...card.evidence.flatMap((e) => [vocab(e.label), e.value]),
+    ...card.rows.flatMap((row) => [vocab(row.label), row.note])
+  ].join(' ')
+}
 
 function StatusCard({
   card,
@@ -64,13 +85,13 @@ function StatusCard({
   const vocab = useVocabularyMapper()
   const detailCount = card.evidence.length + card.rows.length
   return (
-    <section className={`status-card status-card--${card.state}`} aria-label={`${card.title}: ${meta.label}`}>
+    <section className={`status-card status-card--${card.state}`} aria-label={`${vocab(card.title)}: ${vocab(meta.label)}`}>
       <div className="status-card__head">
         <span className="status-card__emoji" aria-hidden="true">
           {meta.emoji}
         </span>
         <div className="status-card__titles">
-          <h3 className="status-card__title">{card.title}</h3>
+          <h3 className="status-card__title">{vocab(card.title)}</h3>
           <div className="status-card__stateline">
             <span className={`status-chip status-chip--${card.state}`}>{vocab(meta.label)}</span>
             <span className="status-card__age">{vocab('evidence')}: {describeRecordedAt(card.recordedAt, nowMs)}</span>
@@ -86,13 +107,13 @@ function StatusCard({
           {open ? vocab('Hide evidence') : `${vocab('Evidence')} (${detailCount})`}
         </button>
       </div>
-      <p className="status-card__summary">{card.summary}</p>
+      <p className="status-card__summary">{renderStatusSummary(card, vocab)}</p>
       {open && (
         <div id={`status-evidence-${card.id}`} className="status-card__detail">
           <dl className="status-card__facts">
             {card.evidence.map((e, i) => (
               <div className="status-card__fact" key={`${e.label}-${i}`}>
-                <dt>{e.label}</dt>
+                <dt>{vocab(e.label)}</dt>
                 <dd>
                   {e.href ? (
                     <a href={e.href} target="_blank" rel="noreferrer">
@@ -110,7 +131,7 @@ function StatusCard({
               {card.rows.map((r) => (
                 <li key={r.id} className={`status-row status-row--${r.state}`}>
                   <span aria-hidden="true">{GATE_STATE_META[r.state].emoji}</span>
-                  <span className="status-row__label">{r.label}</span>
+                  <span className="status-row__label">{vocab(r.label)}</span>
                   <span className="status-row__note">{r.note}</span>
                 </li>
               ))}
@@ -161,7 +182,7 @@ export function StatusSurface(): JSX.Element {
   const visible = ordered.filter(
     (c) =>
       (stateFilter === 'all' || c.state === stateFilter) &&
-      search.test(`${c.title} ${c.summary}`)
+      search.test(statusSearchCorpus(c, GATE_STATE_META[c.state], vocab))
   )
 
   const toggleCard = (id: string) =>

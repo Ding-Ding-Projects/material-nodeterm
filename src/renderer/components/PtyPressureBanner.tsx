@@ -16,6 +16,8 @@ import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText
 export interface PtyPressureCopy {
   title: string
   body: string
+  /** Body segments keep the live numeric measurement separate from translatable prose. */
+  bodyParts: readonly { kind: 'authored' | 'factual'; text: string }[]
   /** Drives the banner's severity styling (`announce-banner--<tone>`). */
   tone: 'warning' | 'danger'
 }
@@ -34,18 +36,32 @@ export function ptyPressureCopy(p: PtyPressure): PtyPressureCopy | null {
   const counts = `(${p.usage} of ${p.ceiling} pty devices)`
   const recover = 'Deleting sessions from Recently closed returns them.'
   if (p.level === 'critical') {
+    const body =
+      `This machine has run out of terminal capacity ${counts}. New terminals will fail to ` +
+      `open until some are returned. ${recover}`
     return {
       tone: 'danger',
       title: 'Out of terminal capacity',
-      body:
-        `This machine has run out of terminal capacity ${counts}. New terminals will fail to ` +
-        `open until some are returned. ${recover}`
+      body,
+      bodyParts: [
+        { kind: 'authored', text: 'This machine has run out of terminal capacity ' },
+        { kind: 'factual', text: counts },
+        { kind: 'authored', text: '. New terminals will fail to open until some are returned. ' },
+        { kind: 'authored', text: recover }
+      ]
     }
   }
+  const body = `This machine is close to its terminal limit ${counts}. ${recover}`
   return {
     tone: 'warning',
     title: 'Close to this machine’s terminal limit',
-    body: `This machine is close to its terminal limit ${counts}. ${recover}`
+    body,
+    bodyParts: [
+      { kind: 'authored', text: 'This machine is close to its terminal limit ' },
+      { kind: 'factual', text: counts },
+      { kind: 'authored', text: '. ' },
+      { kind: 'authored', text: recover }
+    ]
   }
 }
 
@@ -114,7 +130,11 @@ export function PtyPressureBanner({
       <span className="announce-banner__dot" />
       <div className="announce-banner__content">
         <span className="announce-banner__title">{vocab(copy.title)}</span>
-        <span className="announce-banner__body">{vocab(copy.body)}</span>
+        <span className="announce-banner__body">
+          {copy.bodyParts.map((part, index) => (
+            <span key={`${part.kind}-${index}`}>{part.kind === 'authored' ? vocab(part.text) : part.text}</span>
+          ))}
+        </span>
       </div>
       {isMac && (
         <button

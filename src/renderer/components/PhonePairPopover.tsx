@@ -5,6 +5,12 @@ import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText
 
 type DeploymentState = 'starting' | 'ready' | 'docker-restart-required' | 'failed'
 
+/** Map the authored accessibility prefix without ever passing the live access code through the
+ * vocabulary table. */
+export function phonePairCodeLabel(code: string, vocab: (text: string) => string): string {
+  return `${vocab('Current TOTP code')} ${code}`
+}
+
 /** One human-readable line per stage, in the order they can occur (not every deployment passes
  *  through every one — see the doc comment on `ServerDeploymentStage`). This is what turns the
  *  popover from a spinner (indistinguishable from a hang) into real progress: the user sees WHICH
@@ -139,8 +145,8 @@ export function PhonePairPopover({
             <div className="phone-pair__hint">{vocab('Use the site from this PC now. Mobile access will appear here only after its protected TOTP transport is configured.')}</div>
             {totpCode ? (
               <div className="phone-pair__row">
-                <div className="phone-pair__title" aria-label={`Current TOTP code ${totpCode}`}>{totpCode}</div>
-                <CopyButton value={totpCode} label={vocab('Access code')} />
+                <div className="phone-pair__title" aria-label={phonePairCodeLabel(totpCode, vocab)}>{totpCode}</div>
+                <CopyButton value={totpCode} label="Access code" />
               </div>
             ) : null}
             <div className="phone-pair__hint">{vocab("Enter the current six-digit access code in the site's password field. It changes every 30 seconds.")}</div>
@@ -149,7 +155,7 @@ export function PhonePairPopover({
             </button>
             <div className="phone-pair__row">
               <div className="phone-pair__hint">{url}</div>
-              <CopyButton value={url} label={vocab('Server address')} />
+              <CopyButton value={url} label="Server address" />
             </div>
           </>
         ) : (
