@@ -16,6 +16,7 @@ import { ModalTerminal } from './ModalTerminal'
 import { BrowserSurface } from '../../nodes/BrowserSurface'
 import type { KanbanTerminalProfilePresentation } from './terminal-profile-ui'
 import { useLocalizedVocabularyText } from '../../lib/personalVocabulary/useLocalizedVocabularyText'
+import { TextArea } from '@renderer/ui/md3'
 
 interface CardModalProps {
   session: KanbanSession
@@ -256,7 +257,7 @@ export function CardModal({
           {/* Body is a flex row: the card's own pane (2/3) + the board-log panel (1/3, all kinds). */}
           <div className="kanban-modal__main">
             {session.kind === 'sticky' ? (
-              <textarea
+              <TextArea
                 className="kanban-modal__sticky"
                 value={session.text ?? ''}
                 placeholder="Write a note…"

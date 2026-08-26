@@ -5,6 +5,7 @@ import { useSession } from '../session/session'
 import type { ChatMessage } from '@shared/types'
 import { hintLabel } from '@shared/platform-utils'
 import { E_UNSUPPORTED } from '@shared/rpc'
+import { TextArea } from '@renderer/ui/md3'
 
 // Memoized bubble: marked+DOMPurify re-ran for EVERY message on each ChatPanel render (each
 // turn-finish reload, each keystroke re-render). Text is stable per message, so cache per text.
@@ -160,7 +161,7 @@ export function ChatPanel({ nodeId, sessionId, cwd, accountId }: ChatPanelProps)
         ))}
       </div>
       <div className="term-chat__compose">
-        <textarea
+        <TextArea
           className="term-chat__input"
           value={input}
           onChange={(e) => setInput(e.target.value)}

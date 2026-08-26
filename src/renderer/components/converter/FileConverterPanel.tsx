@@ -18,6 +18,7 @@ import { bytesToBase64 } from '../../lib/browserBytes'
 import { useActiveSessionApi } from '../../session/session'
 import { MaterialSymbol, type MaterialSymbolName } from '../MaterialSymbol'
 import { AdapterCatalog } from './AdapterCatalog'
+import { Checkbox } from '@renderer/ui/md3'
 
 export interface FileConverterPanelProps {
   onClose: () => void
@@ -592,7 +593,7 @@ function FileConverterPanelForApi({
                   ))}
                 </ul>
                 <label className="cv-lossy__ack">
-                  <input type="checkbox" checked={lossyAck} onChange={(e) => setLossyAck(e.target.checked)} />
+                  <Checkbox checked={lossyAck} onChange={(e) => setLossyAck(e.target.checked)} />
                   I understand — convert anyway
                 </label>
               </div>

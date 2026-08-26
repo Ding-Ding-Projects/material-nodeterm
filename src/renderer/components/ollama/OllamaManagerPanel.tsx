@@ -34,6 +34,7 @@ import {
   type CatalogView
 } from './catalogView'
 import { troubleshootSteps } from './troubleshoot'
+import { TextArea } from '@renderer/ui/md3'
 
 /** How often the panel re-asks for the catalog while the core reports a refresh in flight. The
  *  catalog rides an argument-less request/response channel (see core/ollama/register-ipc.ts), so
@@ -1258,7 +1259,7 @@ function ChatTab({
           </div>
           <details>
             <summary>System prompt</summary>
-            <textarea
+            <TextArea
               value={active.systemPrompt}
               onChange={(e) => setActive((a) => (a ? { ...a, systemPrompt: e.target.value } : a))}
               style={{ width: '100%', minHeight: 60 }}
@@ -1295,7 +1296,7 @@ function ChatTab({
           </div>
 
           <div className="om-chat__composer">
-            <textarea
+            <TextArea
               value={composer}
               placeholder="Message…"
               onChange={(e) => setComposer(e.target.value)}

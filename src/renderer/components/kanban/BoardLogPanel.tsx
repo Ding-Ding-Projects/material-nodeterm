@@ -5,6 +5,7 @@ import { useSession } from '../../session/session'
 import { useProjects } from '../../state/projects'
 import { useBoardLog } from '../../state/boardLog'
 import type { KanbanSession } from './KanbanView'
+import { TextArea } from '@renderer/ui/md3'
 
 interface BoardLogPanelProps {
   /** The card/node whose activity this panel shows — feed + composer are scoped to `card.id`.
@@ -94,7 +95,7 @@ export function BoardLogPanel({ card }: BoardLogPanelProps) {
       {unsupported ? (
         <div className="board-log__hint">Board history needs a project folder</div>
       ) : (
-        <textarea
+        <TextArea
           className="board-log__composer"
           value={draft}
           placeholder="Write a comment…"

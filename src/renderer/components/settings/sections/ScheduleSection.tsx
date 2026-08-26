@@ -23,6 +23,7 @@ import { Switch } from '@renderer/ui/Switch'
 import { ThemeSelect } from '../ThemeSelect'
 import { uuid } from '@renderer/lib/uuid'
 import { cn } from '@renderer/ui/cn'
+import { Checkbox } from '@renderer/ui/md3'
 
 const ROWS = {
   timezone: { title: 'Timezone', keywords: ['timezone', 'zone', 'clock', 'dst', 'daylight'] },
@@ -583,8 +584,7 @@ function ValuesEditor({
         const included = key in untyped
         return (
           <div key={key} className="flex items-center gap-3">
-            <input
-              type="checkbox"
+            <Checkbox
               className="size-4 shrink-0"
               checked={included}
               onChange={(e) => {

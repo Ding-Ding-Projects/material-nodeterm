@@ -13,6 +13,7 @@ import { useToyLocks } from '../../state/toylocks'
 import { QrCode } from './QrCode'
 import { PasswordField } from './PasswordField'
 import { RecoveryNotice } from './RecoveryNotice'
+import { Checkbox } from '@renderer/ui/md3'
 
 type Step = 'setup' | 'password' | 'totp' | 'done'
 
@@ -270,8 +271,7 @@ export function LockWizard({
               )}
             </div>
             <label className="toylock-checkbox-row">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={lockedOnLaunch}
                 onChange={(e) => setLockedOnLaunch(e.target.checked)}
               />
@@ -389,8 +389,7 @@ export function LockWizard({
               />
             </div>
             <label className="toylock-checkbox-row">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={alsoSaveToAuthenticator}
                 onChange={(e) => setAlsoSaveToAuthenticator(e.target.checked)}
               />

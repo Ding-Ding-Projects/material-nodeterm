@@ -1,6 +1,7 @@
 import { Handle, NodeResizer, Position, useReactFlow, type NodeProps } from '@xyflow/react'
 import { LOOP_DEFAULT_INTERVAL_MS, validLoopInterval } from '../lib/nativeLoop'
 import type { CanvasNode } from '../state/workspace'
+import { TextArea } from '@renderer/ui/md3'
 
 let runNativeLoop: (nodeId: string) => void = () => {}
 
@@ -75,7 +76,7 @@ export function NativeLoopNode({ id, data, selected }: NodeProps<CanvasNode>) {
         </button>
       </div>
 
-      <textarea
+      <TextArea
         className="native-loop-node__task nodrag nowheel"
         value={data.loopTask ?? ''}
         placeholder="Task sent to every connected agent…"

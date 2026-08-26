@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { MANAGED_PROPERTY_FIELDS, type MinecraftPropertyFieldSpec as PropertyFieldSpec } from '@shared/minecraft'
 import { useSession } from '../../session/session'
+import { Checkbox } from '@renderer/ui/md3'
 
 /** True while the server is running — server.properties is only read at startup, so editing it
  *  live would silently do nothing until a restart. The manager itself refuses the write for the
@@ -26,8 +27,7 @@ function FieldControl({
   if (spec.kind === 'boolean') {
     return (
       <label className="mc-checkbox nodrag">
-        <input
-          type="checkbox"
+        <Checkbox
           id={id}
           checked={value === 'true'}
           disabled={disabled}

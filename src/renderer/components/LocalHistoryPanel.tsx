@@ -39,6 +39,7 @@ import {
   toggleOne,
   type BulkSelectionState
 } from '../lib/bulkSelection'
+import { Checkbox } from '@renderer/ui/md3'
 
 export interface LocalHistoryPanelProps {
   domain: string
@@ -279,8 +280,7 @@ export function LocalHistoryPanel({ domain, title }: LocalHistoryPanelProps): JS
                 key={action}
                 className={`local-history__action-chip md3-history-action-toggle${activeActions.has(action) ? ' md3-history-action-toggle--on' : ''}`}
               >
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={activeActions.has(action)}
                   onChange={() => toggleAction(action)}
                 />
@@ -326,8 +326,7 @@ export function LocalHistoryPanel({ domain, title }: LocalHistoryPanelProps): JS
               const isCurrent = e.sha === currentSha
               return (
                 <li key={e.sha} className="local-history__row md3-history-row">
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     aria-label={`Select revision ${e.sha.slice(0, 7)}`}
                     checked={isSelected(selection, e.sha)}
                     onClick={(ev) => {

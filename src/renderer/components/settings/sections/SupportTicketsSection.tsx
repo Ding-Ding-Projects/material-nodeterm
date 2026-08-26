@@ -7,6 +7,7 @@ import { useSupportTickets, type SupportTicket, type TicketStatus } from '../../
 import { isBrowserRuntime } from '../../../bridge/runtime'
 import { SettingsSection } from '../SettingsSection'
 import { SearchableRow } from '../SearchableRow'
+import { TextArea } from '@renderer/ui/md3'
 
 const ROW = {
   title: 'Support Tickets',
@@ -159,7 +160,7 @@ export function SupportTicketsSection({ isActive }: { isActive: boolean }): Reac
                 </option>
               ))}
             </select>
-            <textarea
+            <TextArea
               className="toylock-textarea"
               placeholder="Describe your issue (optional — we're not going to read it either way)"
               value={description}
