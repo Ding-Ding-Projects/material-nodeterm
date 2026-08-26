@@ -30,6 +30,18 @@ worktree's directory is deleted outside the app, its group is marked stale (noth
 into the dead path, and unbinding is the only action offered) rather than silently continuing
 to hand out a path that no longer exists.
 
+The existing-worktree picker keeps its title, repository context, branch/path fields, and actions
+in the dialog surface. The potentially long adoption list is a separate bounded region with its
+own vertical scrolling, an accessible available-item count, and keyboard-reachable rows. Its
+search field is plain-text-first, filters visible branch and path text, and has an adjacent
+anchored full regex builder with synchronized mode, pattern, flags, and validation state. Invalid
+patterns remain non-destructive and report their error without hiding entries. The dialog paints
+an opaque Material surface and clips overflow so a row cannot paint outside the card or viewport.
+Branch and path values remain fully readable and wrap within each row rather than being replaced by
+ellipses. At narrow widths the card uses the available viewport width while preserving the same
+scroll region and action area; if the fixed controls themselves exceed an exceptionally short
+viewport, the card provides a bounded fallback scroll so they remain reachable.
+
 **Merging** always asks for confirmation and merges into the base branch's own working tree
 (never force-pushing); pushing the merge to the remote is a separate, explicitly opt-in choice
 disclosed in the same dialog, defaulting to off, because a push to a shared remote can't be
@@ -86,6 +98,10 @@ politely undone the way a local merge can.
   `pwd` — it should print the worktree's path, not the main checkout's.
 - Delete a bound worktree's directory outside the app, then reopen nodeterm and confirm the
   group is marked stale rather than silently accepting new nodes into the dead path.
+- **Pending visual verification:** open the picker with enough existing worktrees to exceed the
+  available height, then verify from the built desktop app that the title and actions stay inside
+  the painted card, only the list scrolls, and the layout remains usable at narrow widths and
+  high display scales. The source repair exists, but this evidence has not been collected yet.
 
 ## Suggested articles
 

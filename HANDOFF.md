@@ -1,5 +1,31 @@
 # Handoff
 
+## 2026-08-26, existing-worktree picker viewport repair
+
+Repaired the existing-worktree section in `src/renderer/components/WorktreeDialog.tsx` and its
+styles in `src/renderer/styles.css` and `src/renderer/styles.md3.css`. The picker now marks the
+long adoption collection as an accessible counted list inside a dedicated scroll region. The
+dialog has a scoped opaque Material surface with overflow containment, while the title, repository
+context, branch/path controls, and actions remain outside the scrolling list. Rows keep visible
+focus, Material Design 3 token styling, adequate targets, full branch/path values that wrap rather
+than ellipsize, and responsive sizing at narrow widths. Normal layouts scroll only the collection;
+an exceptionally short viewport gets a bounded card-scroll fallback so fixed controls remain
+reachable.
+The picker now filters visible branch and path text with a plain-text-first search and an adjacent
+anchored full regex builder, retaining synchronized pattern, flags, validation, and mode state.
+The WSL creator and other dialogs are not changed.
+
+The exact cause was an unbounded direct row list inside a flex dialog. The shell's `max-height`
+alone did not make that child shrink, so rows continued painting beyond the card and viewport.
+The new flex constraints and `.bind-existing__list` overflow region keep the rows inside the
+dialog surface.
+
+This lane did not run tests, type checking, linting, builds, packaging, installer execution,
+runtime interaction, captures, reviews, or audits, and made no commit or dew. Integration must
+independently inspect the final diff and verify the built desktop picker with a long list, narrow
+widths, high display scales, keyboard traversal, and screen-reader list count/state before this
+roadmap item can be ticked.
+
 ## 2026-08-26, automatic node dependency foundation
 
 Implemented the shared node-feature dependency foundation in `src/shared/node-dependencies.ts` and

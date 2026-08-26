@@ -4490,6 +4490,32 @@ body,
   width: 420px;
 }
 
+/* The existing-worktree collection is unbounded. Keep it inside the dialog's painted surface,
+   while leaving the branch/path fields and actions in the normal flow below it. */
+.confirm.worktree-dialog {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  /* Normal layouts scroll only .bind-existing__list. If fixed controls exceed an exceptionally
+     short viewport, the card itself becomes the bounded fallback so the footer remains reachable. */
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.worktree-dialog > .confirm__msg,
+.worktree-dialog > .bind-repo,
+.worktree-dialog > .bind-existing__search,
+.worktree-dialog > .bind-mode,
+.worktree-dialog > .bind-field,
+.worktree-dialog > .bind-error,
+.worktree-dialog > .confirm__actions {
+  flex: 0 0 auto;
+}
+
+.worktree-dialog > .confirm__msg {
+  overflow: visible;
+}
+
 .bind-field {
   display: flex;
   flex-direction: column;
@@ -4563,10 +4589,15 @@ body,
 }
 
 .bind-existing {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
   margin: 0 0 12px;
 }
 
 .bind-existing__title {
+  flex: none;
   margin: 0 0 6px;
   font-size: 11px;
   text-transform: uppercase;
@@ -4574,11 +4605,44 @@ body,
   color: var(--muted);
 }
 
+.bind-existing__count {
+  font-variant-numeric: tabular-nums;
+}
+
+.bind-existing__search {
+  flex: none;
+}
+
+.bind-existing__list {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0 4px 0 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  list-style: none;
+  scrollbar-gutter: stable;
+}
+
+.bind-existing__item {
+  margin: 0;
+  padding: 0;
+}
+
+.bind-existing__empty {
+  padding: 12px 8px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
 .bind-existing__row {
   display: flex;
-  align-items: baseline;
+  align-items: flex-start;
   gap: 8px;
   width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   padding: 6px 8px;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -4588,6 +4652,11 @@ body,
   font-size: 12px;
   text-align: left;
   cursor: pointer;
+}
+
+.bind-existing__row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .bind-existing__row:hover:not(:disabled) {
@@ -4601,7 +4670,10 @@ body,
 }
 
 .bind-existing__branch {
-  flex: none;
+  flex: 0 1 55%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .bind-existing__path {
@@ -4609,9 +4681,12 @@ body,
   min-width: 0;
   color: var(--muted);
   font-size: 11px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.worktree-dialog > .confirm__actions {
+  flex: none;
 }
 
 /* Inline creation error (same red as .scm-error) — worktree paths never use window.alert. */
