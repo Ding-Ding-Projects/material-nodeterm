@@ -13,6 +13,8 @@ import {
 } from '@renderer/lib/adhdModes'
 import type { AdhdModes } from '@shared/types'
 import { Slider } from '@renderer/ui/md3'
+import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
+import { settingsSearchEntryWithVocabulary } from '../vocabulary'
 
 /**
  * The ADHD modes settings surface.
@@ -63,6 +65,14 @@ const ENTRIES = Object.values(ROWS)
 
 export function AdhdModesSection({ isActive }: { isActive: boolean }): React.JSX.Element {
   const { t } = useI18n()
+  const vocab = useVocabularyMapper()
+  const mappedRows = {
+    focus: settingsSearchEntryWithVocabulary(ROWS.focus, vocab),
+    lowStimulation: settingsSearchEntryWithVocabulary(ROWS.lowStimulation, vocab),
+    timeAwareness: settingsSearchEntryWithVocabulary(ROWS.timeAwareness, vocab),
+    oneThing: settingsSearchEntryWithVocabulary(ROWS.oneThing, vocab),
+    momentum: settingsSearchEntryWithVocabulary(ROWS.momentum, vocab)
+  }
   const settings = useSettings((s) => s.settings)
   const update = useSettings((s) => s.update)
   const modes = normalizeAdhdModes(settings.adhdModes)
@@ -80,7 +90,7 @@ export function AdhdModesSection({ isActive }: { isActive: boolean }): React.JSX
   return (
     <SettingsSection
       id="adhd-modes"
-      resolvedVocabulary={{ source: 'i18n', fields: 'all' }}
+      resolvedVocabulary={{ source: 'i18n', fields: 'all', searchEntries: 'mapped' }}
       title={title.primary}
       description={
         description.secondary
@@ -88,9 +98,9 @@ export function AdhdModesSection({ isActive }: { isActive: boolean }): React.JSX
           : description.primary
       }
       isActive={isActive}
-      searchEntries={ENTRIES}
+      searchEntries={Object.values(mappedRows)}
     >
-      <SearchableRow {...ROWS.focus}>
+      <SearchableRow {...mappedRows.focus} resolvedVocabulary={{ source: 'i18n', fields: 'all' }}>
         <FieldRow
           label={t('settings.adhdModes.focus.label', 'Focus').primary}
           description={
@@ -131,7 +141,7 @@ export function AdhdModesSection({ isActive }: { isActive: boolean }): React.JSX
         ) : null}
       </SearchableRow>
 
-      <SearchableRow {...ROWS.lowStimulation}>
+      <SearchableRow {...mappedRows.lowStimulation} resolvedVocabulary={{ source: 'i18n', fields: 'all' }}>
         <FieldRow
           label={t('settings.adhdModes.lowStimulation.label', 'Low stimulation').primary}
           description={
@@ -150,7 +160,7 @@ export function AdhdModesSection({ isActive }: { isActive: boolean }): React.JSX
         />
       </SearchableRow>
 
-      <SearchableRow {...ROWS.timeAwareness}>
+      <SearchableRow {...mappedRows.timeAwareness} resolvedVocabulary={{ source: 'i18n', fields: 'all' }}>
         <FieldRow
           label={t('settings.adhdModes.timeAwareness.label', 'Time awareness').primary}
           description={
@@ -169,7 +179,7 @@ export function AdhdModesSection({ isActive }: { isActive: boolean }): React.JSX
         />
       </SearchableRow>
 
-      <SearchableRow {...ROWS.oneThing}>
+      <SearchableRow {...mappedRows.oneThing} resolvedVocabulary={{ source: 'i18n', fields: 'all' }}>
         <FieldRow
           label={t('settings.adhdModes.oneThing.label', 'One thing at a time').primary}
           description={
@@ -204,7 +214,7 @@ export function AdhdModesSection({ isActive }: { isActive: boolean }): React.JSX
         ) : null}
       </SearchableRow>
 
-      <SearchableRow {...ROWS.momentum}>
+      <SearchableRow {...mappedRows.momentum} resolvedVocabulary={{ source: 'i18n', fields: 'all' }}>
         <FieldRow
           label={t('settings.adhdModes.momentum.label', 'Momentum').primary}
           description={

@@ -131,8 +131,13 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
 
 export const FIRST_SECTION_ID: SettingsSectionId = 'agents'
 
+/** Single source of truth for section identity, shared by navigation and SettingsPage routing. */
+export const SETTINGS_SECTION_REGISTRY: readonly SettingsSectionRef[] = SETTINGS_GROUPS.flatMap(
+  (group) => group.sections
+)
+
 export function allSectionIds(): SettingsSectionId[] {
-  return SETTINGS_GROUPS.flatMap((g) => g.sections.map((s) => s.id))
+  return SETTINGS_SECTION_REGISTRY.map((section) => section.id)
 }
 
 /**

@@ -4,7 +4,7 @@ import { useEntitlement } from '../../state/entitlement'
 import { useRegexSearchField } from '../../lib/regex/useRegexSearchField'
 import { SettingsSearchContext } from './context'
 import { SettingsSidebar } from './SettingsSidebar'
-import { FIRST_SECTION_ID, type SettingsSectionId } from './nav'
+import { FIRST_SECTION_ID, SETTINGS_SECTION_REGISTRY, type SettingsSectionId } from './nav'
 import { TerminalSection } from './sections/TerminalSection'
 import { ShellSection } from './sections/ShellSection'
 import { BehaviorSection } from './sections/BehaviorSection'
@@ -84,7 +84,11 @@ export function SettingsPage({
   })
   const profileText = useLocalizedVocabularyText()
   const safeSection = (section: SettingsSectionId | undefined): SettingsSectionId =>
-    section === 'language' && !languageFeaturesAllowed ? 'school-mode' : section ?? FIRST_SECTION_ID
+    section === 'language' && !languageFeaturesAllowed
+      ? 'school-mode'
+      : section && SETTINGS_SECTION_REGISTRY.some((entry) => entry.id === section)
+        ? section
+        : FIRST_SECTION_ID
   const [active, setActive] = useState<SettingsSectionId>(() => safeSection(initialSection))
   // Seeded, not a separate state: the palette's "Open in Settings" teleport pre-fills the same
   // field the user then types in, so the regex field owns the value and there is no second

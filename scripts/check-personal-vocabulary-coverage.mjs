@@ -23,6 +23,7 @@ const PRODUCERS = [
   ['settings-page-registration', 'src/renderer/components/settings/SettingsPage.tsx', '<PersonalVocabularySection'],
   ['settings-sidebar', 'src/renderer/components/settings/SettingsSidebar.tsx', 'useI18n()'],
   ['settings-sidebar-registration', 'src/renderer/components/settings/SettingsSidebar.tsx', 'visibleSettingsGroups('],
+  ['settings-section-registry', 'src/renderer/components/settings/nav.ts', 'SETTINGS_SECTION_REGISTRY'],
   ['settings-search-corpus', 'src/renderer/components/settings/SearchableRow.tsx', 'useVocabularyMapper()'],
   ['settings-inline-copy', 'src/renderer/components/settings/SettingsText.tsx', 'useVocabularyMapper()'],
   ['settings-reset', 'src/renderer/components/settings/SectionReset.tsx', 'useVocabularyMapper()'],
@@ -332,6 +333,12 @@ if (!fixtureRun) {
       writeFileSync(path, readFileSync(path, 'utf8').replace(registrationTarget[2], ''), 'utf8')
     })
   }
+
+  const registryTarget = PRODUCERS.find(([id]) => id === 'settings-section-registry')
+  if (registryTarget) runFreshFixtureMutation('full checker rejects a removed shared section registry', (root) => {
+    const path = join(root, registryTarget[1])
+    writeFileSync(path, readFileSync(path, 'utf8').replace(registryTarget[2], ''), 'utf8')
+  })
 
   runFreshFixtureMutation('full checker rejects a removed settings section registration', () => {}, ['--drop-section', 'settings-accounts'])
   runFreshFixtureMutation('full checker rejects a removed fact-template test', (root) => {
