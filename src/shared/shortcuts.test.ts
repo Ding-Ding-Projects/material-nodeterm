@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  conflictBucket,
   DEFAULT_SHORTCUTS,
   findShortcutConflicts,
+  resolveShortcutAction,
   shortcutGroups,
   shortcutLabel,
   SHORTCUT_DEFS
@@ -143,4 +145,133 @@ describe('shortcuts registry', () => {
       })
     })
   }
+})
+describe('conflictBucket + scoped conflict detection', () => {
+  it('app and canvas share the global bucket; terminal and scm are their own', () => {
+    expect(conflictBucket('app')).toBe('global')
+    expect(conflictBucket('canvas')).toBe('global')
+    expect(conflictBucket('terminal')).toBe('terminal')
+    expect(conflictBucket('scm')).toBe('scm')
+  })
+
+  it('a shared chord across buckets is NOT reported (different focus contexts never collide)', () => {
+    // findInTerminal (terminal bucket) rebound onto commitStaged's chord (scm bucket) — neither
+    // action's dispatch surface can ever see the other's keydown, so this must be silent.
+    const map = { ...DEFAULT_SHORTCUTS, findInTerminal: 'Ctrl+Enter' }
+    const pairs = findShortcutConflicts(map).map(([a, b]) => [a, b].sort().join(','))
+    expect(pairs).not.toContain('commitStaged,findInTerminal')
+  })
+
+  it('a shared chord within the SAME bucket is still reported', () => {
+    // toggleExplorer (app) and undo (canvas) are both in the 'global' bucket.
+    const map = { ...DEFAULT_SHORTCUTS, toggleExplorer: DEFAULT_SHORTCUTS.undo }
+    const pairs = findShortcutConflicts(map).map(([a, b]) => [a, b].sort().join(','))
+    expect(pairs).toContain('toggleExplorer,undo')
+  })
+
+  it('every def declares a scope', () => {
+    for (const d of SHORTCUT_DEFS) {
+      expect(['app', 'canvas', 'terminal', 'scm']).toContain(d.scope)
+    }
+  })
+})
+
+describe('resolveShortcutAction (pure dispatch core)', () => {
+  const evtFor = (id: (typeof SHORTCUT_DEFS)[number]['id'], isMac: boolean) => {
+    const p = parseShortcut(DEFAULT_SHORTCUTS[id])
+    return {
+      metaKey: isMac && p.cmd,
+      ctrlKey: !isMac && p.cmd,
+      shiftKey: p.shift,
+      altKey: p.alt,
+      key: p.key ?? ''
+    }
+  }
+  const noCtx = { typing: false, terminal: false, kanbanOpen: false }
+
+  it('resolves a plain app-scope action in the default (untyped, non-terminal) context', () => {
+    expect(
+      resolveShortcutAction(evtFor('commandPalette', false), noCtx, DEFAULT_SHORTCUTS, false)
+    ).toBe('commandPalette')
+  })
+
+  it('blocks a canvas-scope action while typing (allowWhileTyping is unset)', () => {
+    expect(
+      resolveShortcutAction(
+        evtFor('undo', false),
+        { ...noCtx, typing: true },
+        DEFAULT_SHORTCUTS,
+        false
+      )
+    ).toBeNull()
+  })
+
+  it('still resolves an allowWhileTyping action (closeNode) while typing', () => {
+    expect(
+      resolveShortcutAction(
+        evtFor('closeNode', false),
+        { ...noCtx, typing: true },
+        DEFAULT_SHORTCUTS,
+        false
+      )
+    ).toBe('closeNode')
+  })
+
+  it('blocks a canvas-scope action while a terminal has focus', () => {
+    expect(
+      resolveShortcutAction(
+        evtFor('newTerminal', false),
+        { ...noCtx, terminal: true },
+        DEFAULT_SHORTCUTS,
+        false
+      )
+    ).toBeNull()
+  })
+
+  it('still resolves an allowInTerminal app-scope action while a terminal has focus', () => {
+    expect(
+      resolveShortcutAction(
+        evtFor('commandPalette', false),
+        { ...noCtx, terminal: true },
+        DEFAULT_SHORTCUTS,
+        false
+      )
+    ).toBe('commandPalette')
+  })
+
+  it('resolves a terminal-scope action only while a terminal has focus', () => {
+    expect(
+      resolveShortcutAction(
+        evtFor('findInTerminal', false),
+        { ...noCtx, terminal: true },
+        DEFAULT_SHORTCUTS,
+        false
+      )
+    ).toBe('findInTerminal')
+    expect(
+      resolveShortcutAction(evtFor('findInTerminal', false), noCtx, DEFAULT_SHORTCUTS, false)
+    ).toBeNull()
+  })
+
+  it('blocks a canvas-scope action while the kanban board is open', () => {
+    expect(
+      resolveShortcutAction(
+        evtFor('undo', false),
+        { ...noCtx, kanbanOpen: true },
+        DEFAULT_SHORTCUTS,
+        false
+      )
+    ).toBeNull()
+  })
+
+  it('never resolves an scm-scope action (it dispatches from its own composer)', () => {
+    expect(
+      resolveShortcutAction(evtFor('commitStaged', false), noCtx, DEFAULT_SHORTCUTS, false)
+    ).toBeNull()
+  })
+
+  it('returns null when no default matches the event', () => {
+    const evt = { metaKey: false, ctrlKey: false, shiftKey: false, altKey: false, key: 'x' }
+    expect(resolveShortcutAction(evt, noCtx, DEFAULT_SHORTCUTS, false)).toBeNull()
+  })
 })

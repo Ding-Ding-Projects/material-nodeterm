@@ -13,7 +13,8 @@
  * automatically from SHORTCUT_DEFS.
  */
 
-import { parseShortcut } from './shortcut'
+import { matchesShortcut, parseShortcut } from './shortcut'
+import type { ShortcutKeyEvent } from './shortcut'
 
 /** Stable ids — one per configurable hotkey. Mouse gestures (right-click, drags,
  *  double-click, wheel zoom) are NOT here: they have no combo string to configure and
@@ -43,6 +44,17 @@ export type ShortcutMap = Record<ShortcutAction, string>
 /** Group titles for the settings section + ShortcutsPanel (same ordering). */
 export type ShortcutGroup = 'General' | 'Canvas' | 'Terminal' | 'Source Control'
 
+/**
+ * The focus context a bound chord actually dispatches from. `app` and `canvas` share one
+ * window-level keydown listener (Canvas.tsx) and therefore compete for the same keys even
+ * though their labels differ; `terminal` fires only while an xterm view owns the key, and
+ * `scm` fires only from the Source Control commit composer's own onKeyDown. Two actions in
+ * DIFFERENT dispatch contexts can safely share a chord — a Ctrl+F bound to `findInTerminal`
+ * never contends with a canvas-scoped Ctrl+F, because only one of them can ever see the
+ * keydown for a given focus state. See `conflictBucket` and `resolveShortcutAction` below.
+ */
+export type ShortcutScope = 'app' | 'canvas' | 'terminal' | 'scm'
+
 export interface ShortcutDef {
   id: ShortcutAction
   group: ShortcutGroup
@@ -52,6 +64,17 @@ export interface ShortcutDef {
   default: string
   /** Settings-search keywords. */
   keywords: string[]
+  /** Which focus context actually dispatches this action — see `ShortcutScope`. */
+  scope: ShortcutScope
+  /** May fire while a real input/textarea/contentEditable has focus. Defaults to false: a
+   *  bound chord always requires the primary modifier (captureToShortcut enforces this), so
+   *  this is about intent, not accidental text-mangling — most actions still have no business
+   *  firing mid-edit. */
+  allowWhileTyping?: boolean
+  /** May fire while an xterm terminal view has focus. `scope: 'terminal'` implies this; state
+   *  it explicitly for an `app`-scope action that is meant to reach through a terminal (e.g.
+   *  the command palette). Defaults to false. */
+  allowInTerminal?: boolean
 }
 
 // Defaults are stored in the canonical `Ctrl+…` notation (see shared/shortcut.ts): `Ctrl` still
@@ -59,23 +82,23 @@ export interface ShortcutDef {
 // Mac), so these are the same chords as the pre-rewire `Cmd+…` strings — only the canonical
 // spelling changed. Pre-rewire settings.json values keep working through the parse-only alias.
 export const SHORTCUT_DEFS: ShortcutDef[] = [
-  { id: 'commandPalette', group: 'General', label: 'Command palette', default: 'Ctrl+K', keywords: ['command', 'palette', 'quick', 'open'] },
-  { id: 'settings', group: 'General', label: 'Settings', default: 'Ctrl+,', keywords: ['settings', 'preferences', 'open'] },
-  { id: 'shortcutsPanel', group: 'General', label: 'Shortcuts panel', default: 'Ctrl+/', keywords: ['shortcuts', 'panel', 'help', 'reference'] },
-  { id: 'undo', group: 'General', label: 'Undo', default: 'Ctrl+Z', keywords: ['undo', 'revert'] },
-  { id: 'redo', group: 'General', label: 'Redo', default: 'Ctrl+Shift+Z', keywords: ['redo', 'forward', 'y'] },
-  { id: 'newTerminal', group: 'Canvas', label: 'New terminal', default: 'Ctrl+T', keywords: ['terminal', 'new', 'create', 'node'] },
-  { id: 'newAgent', group: 'Canvas', label: 'New agent', default: 'Ctrl+Shift+C', keywords: ['agent', 'claude', 'codex', 'gemini', 'new', 'add'] },
-  { id: 'closeNode', group: 'Canvas', label: 'Close selected node', default: 'Ctrl+W', keywords: ['close', 'node', 'window'] },
-  { id: 'toggleExplorer', group: 'Canvas', label: 'Toggle explorer', default: 'Ctrl+Shift+E', keywords: ['explorer', 'files', 'sidebar'] },
-  { id: 'toggleSourceControl', group: 'Source Control', label: 'Open Source Control', default: 'Ctrl+Shift+G', keywords: ['source', 'control', 'git', 'scm'] },
-  { id: 'toggleViewMode', group: 'Canvas', label: 'Toggle view mode', default: 'Ctrl+Shift+B', keywords: ['view', 'mode', 'canvas', 'kanban', 'board'] },
-  { id: 'toggleSessionsPin', group: 'Canvas', label: 'Pin sessions sidebar', default: 'Ctrl+Shift+L', keywords: ['sessions', 'pin', 'sidebar', 'collapse'] },
-  { id: 'toggleFocusMode', group: 'Canvas', label: 'Toggle focus mode', default: 'Ctrl+Shift+F', keywords: ['focus', 'mode', 'fullscreen', 'zen', 'zoom'] },
-  { id: 'toggleMarkdown', group: 'Terminal', label: 'Toggle markdown view', default: 'Ctrl+M', keywords: ['markdown', 'md', 'toggle', 'view'] },
-  { id: 'findInTerminal', group: 'Terminal', label: 'Find in terminal', default: 'Ctrl+F', keywords: ['find', 'search', 'terminal'] },
-  { id: 'commitStaged', group: 'Source Control', label: 'Commit staged changes', default: 'Ctrl+Enter', keywords: ['commit', 'staged', 'push', 'enter'] },
-  { id: 'copySelection', group: 'Terminal', label: 'Copy selection (markdown view)', default: 'Ctrl+C', keywords: ['copy', 'selection', 'markdown', 'clipboard'] }
+  { id: 'commandPalette', group: 'General', label: 'Command palette', default: 'Ctrl+K', keywords: ['command', 'palette', 'quick', 'open'], scope: 'app', allowInTerminal: true },
+  { id: 'settings', group: 'General', label: 'Settings', default: 'Ctrl+,', keywords: ['settings', 'preferences', 'open'], scope: 'app', allowInTerminal: true },
+  { id: 'shortcutsPanel', group: 'General', label: 'Shortcuts panel', default: 'Ctrl+/', keywords: ['shortcuts', 'panel', 'help', 'reference'], scope: 'app', allowInTerminal: true },
+  { id: 'undo', group: 'General', label: 'Undo', default: 'Ctrl+Z', keywords: ['undo', 'revert'], scope: 'canvas' },
+  { id: 'redo', group: 'General', label: 'Redo', default: 'Ctrl+Shift+Z', keywords: ['redo', 'forward', 'y'], scope: 'canvas' },
+  { id: 'newTerminal', group: 'Canvas', label: 'New terminal', default: 'Ctrl+T', keywords: ['terminal', 'new', 'create', 'node'], scope: 'canvas' },
+  { id: 'newAgent', group: 'Canvas', label: 'New agent', default: 'Ctrl+Shift+C', keywords: ['agent', 'claude', 'codex', 'gemini', 'new', 'add'], scope: 'canvas' },
+  { id: 'closeNode', group: 'Canvas', label: 'Close selected node', default: 'Ctrl+W', keywords: ['close', 'node', 'window'], scope: 'app', allowInTerminal: true, allowWhileTyping: true },
+  { id: 'toggleExplorer', group: 'Canvas', label: 'Toggle explorer', default: 'Ctrl+Shift+E', keywords: ['explorer', 'files', 'sidebar'], scope: 'app', allowInTerminal: true },
+  { id: 'toggleSourceControl', group: 'Source Control', label: 'Open Source Control', default: 'Ctrl+Shift+G', keywords: ['source', 'control', 'git', 'scm'], scope: 'app', allowInTerminal: true },
+  { id: 'toggleViewMode', group: 'Canvas', label: 'Toggle view mode', default: 'Ctrl+Shift+B', keywords: ['view', 'mode', 'canvas', 'kanban', 'board'], scope: 'app', allowInTerminal: true },
+  { id: 'toggleSessionsPin', group: 'Canvas', label: 'Pin sessions sidebar', default: 'Ctrl+Shift+L', keywords: ['sessions', 'pin', 'sidebar', 'collapse'], scope: 'app', allowInTerminal: true },
+  { id: 'toggleFocusMode', group: 'Canvas', label: 'Toggle focus mode', default: 'Ctrl+Shift+F', keywords: ['focus', 'mode', 'fullscreen', 'zen', 'zoom'], scope: 'canvas' },
+  { id: 'toggleMarkdown', group: 'Terminal', label: 'Toggle markdown view', default: 'Ctrl+M', keywords: ['markdown', 'md', 'toggle', 'view'], scope: 'app', allowInTerminal: true, allowWhileTyping: true },
+  { id: 'findInTerminal', group: 'Terminal', label: 'Find in terminal', default: 'Ctrl+F', keywords: ['find', 'search', 'terminal'], scope: 'terminal', allowInTerminal: true },
+  { id: 'commitStaged', group: 'Source Control', label: 'Commit staged changes', default: 'Ctrl+Enter', keywords: ['commit', 'staged', 'push', 'enter'], scope: 'scm', allowWhileTyping: true },
+  { id: 'copySelection', group: 'Terminal', label: 'Copy selection (markdown view)', default: 'Ctrl+C', keywords: ['copy', 'selection', 'markdown', 'clipboard'], scope: 'canvas' },
 ]
 
 /** The shipped map — seeds `DEFAULT_SETTINGS.shortcuts` and the section's Reset buttons. */
@@ -105,23 +128,83 @@ export function shortcutGroups(): { title: ShortcutGroup; defs: ShortcutDef[] }[
  * and those are the same chord at match time. Raw-string grouping would call that pair
  * conflict-free while both actions fight over one keydown.
  */
+
+/** `'app'`/`'canvas'` share the single window-level keydown listener (one physical
+ *  dispatch surface), so they collapse into one `'global'` bucket; `'terminal'` and `'scm'`
+ *  each dispatch from their own focused surface and never see a keydown the others do. Two
+ *  actions in different buckets can share a chord with no real ambiguity — only same-bucket
+ *  collisions are reachable from one keypress. */
+export function conflictBucket(scope: ShortcutScope): 'global' | 'terminal' | 'scm' {
+  return scope === 'app' || scope === 'canvas' ? 'global' : scope
+}
+
+function shortcutScope(id: ShortcutAction): ShortcutScope {
+  return SHORTCUT_DEFS.find((d) => d.id === id)?.scope ?? 'app'
+}
+
 export function findShortcutConflicts(map: ShortcutMap): [ShortcutAction, ShortcutAction][] {
   const chordKey = (combo: string): string => {
     const p = parseShortcut(combo)
     return `${p.cmd ? 'C' : ''}${p.alt ? 'A' : ''}${p.shift ? 'S' : ''}+${p.key ?? ''}`
   }
-  const byCombo = new Map<string, ShortcutAction[]>()
+  // Bucketed: two actions with the same chord only conflict when their dispatch contexts can
+  // actually collide (see `conflictBucket`). Grouping by chord alone would flag e.g. a
+  // terminal-only find combo against an unrelated canvas combo that share no focus state.
+  const byBucketAndCombo = new Map<string, ShortcutAction[]>()
   for (const [id, combo] of Object.entries(map) as [ShortcutAction, string][]) {
-    const key = chordKey(combo)
-    const list = byCombo.get(key) ?? []
+    const key = `${conflictBucket(shortcutScope(id))} ${chordKey(combo)}`
+    const list = byBucketAndCombo.get(key) ?? []
     list.push(id)
-    byCombo.set(key, list)
+    byBucketAndCombo.set(key, list)
   }
   const conflicts: [ShortcutAction, ShortcutAction][] = []
-  for (const list of byCombo.values()) {
+  for (const list of byBucketAndCombo.values()) {
     for (let i = 0; i < list.length; i++) {
       for (let j = i + 1; j < list.length; j++) conflicts.push([list[i], list[j]])
     }
   }
   return conflicts
+}
+
+/** `typing` and `terminal` are expected to be DISJOINT — xterm's own input surface is a
+ *  terminal, not a typing surface, so a caller classifying focus must not report both. If one
+ *  does anyway, `typing` is checked first and every terminal-scope action becomes unreachable. */
+export interface ShortcutDispatchContext {
+  /** A real input/textarea/contentEditable has focus (an xterm view excluded). */
+  typing: boolean
+  /** An xterm terminal view has focus. */
+  terminal: boolean
+  /** The kanban board is open for the active project (canvas-scope actions are inert there). */
+  kanbanOpen: boolean
+}
+
+/**
+ * Pure dispatch core: the first action (registry source order) whose bound chord in `map`
+ * matches `e` and whose scope/flags permit `ctx`. Mirrors what Canvas.tsx's window listener,
+ * TerminalNode's find-bar listener, and SourceControlPanel's commit composer already do by
+ * hand at each call site (see `shortcuts-dispatch-wiring.test.ts`) — this is the SAME decision
+ * expressed once, for a future single dispatcher or for a caller that wants to ask "what would
+ * fire here" without re-deriving the per-site guards. It does not replace any of those wired
+ * call sites in this change; each keeps its own `matchesShortcut(e, shortcuts.<id>, isMac)`
+ * check today.
+ *
+ * `scm`-scope actions are never returned here: they dispatch from their own focused composer's
+ * local onKeyDown, never from a window-level listener — resolving `commitStaged` here would
+ * fire a commit with no composer focused.
+ */
+export function resolveShortcutAction(
+  e: ShortcutKeyEvent,
+  ctx: ShortcutDispatchContext,
+  map: ShortcutMap,
+  isMac: boolean
+): ShortcutAction | null {
+  for (const def of SHORTCUT_DEFS) {
+    if (def.scope === 'scm') continue
+    if (ctx.typing && !def.allowWhileTyping) continue
+    if (ctx.terminal && !(def.scope === 'terminal' || def.allowInTerminal)) continue
+    if (!ctx.terminal && def.scope === 'terminal') continue
+    if (ctx.kanbanOpen && def.scope === 'canvas') continue
+    if (matchesShortcut(e, map[def.id], isMac)) return def.id
+  }
+  return null
 }
