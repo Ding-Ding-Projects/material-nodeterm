@@ -1,5 +1,6 @@
 import type { Node } from '@xyflow/react'
 import type { AgentLaunchIntent, BrowserTab, CanvasMutation, CanvasNodeState, ClaudeAccount, NodeKind, PendingLaunch, Project, ServiceNodeKind } from '@shared/types'
+import type { AlarmOccurrence, AlarmRecurrence } from '@shared/alarm-clock'
 import type { ServiceConnection } from '@shared/node-exec'
 import type { NsisLocalPaths, NsisSpec } from '@shared/nsis-form-types'
 import { defaultNsisLocalPaths, defaultNsisSpec } from '@shared/nsis-form-types'
@@ -57,6 +58,7 @@ const VIDEO_SIZE = { width: 640, height: 420 }
 const WEB_SIZE = { width: 720, height: 520 }
 const BROWSER_SIZE = { width: 800, height: 560 }
 const NATIVE_LOOP_SIZE = { width: 340, height: 280 }
+const ALARM_SIZE = { width: 380, height: 360 }
 /** Fallback bounding box `flowToNodeStates` uses if an annotation node somehow has no live
  *  width/height at all (every production creation path draws a real rect — see createAnnotationNode
  *  — so this is a defensive floor, matching how every other kind gets a fallback in `sizeFor`). */
@@ -107,6 +109,15 @@ export interface NodeData {
   loopNextRunAt?: number
   loopLastRunAt?: number
   loopTargetIds?: string[]
+  /** Alarm Clock node intent and machine-local planner projection. */
+  alarmSchedule?: { recurrence: AlarmRecurrence; date?: string; time: string; weekdays?: number[]; monthDay?: number }
+  alarmTimeZone?: string
+  alarmEnabled?: boolean
+  alarmSnoozeMinutes?: number
+  alarmSoundEnabled?: boolean
+  alarmNarratorEnabled?: boolean
+  alarmNextOccurrenceAt?: number
+  alarmHistory?: AlarmOccurrence[]
   /** Expanded height to restore when un-collapsing (kept out of the persisted size). */
   expandedHeight?: number
   /** One-shot command run once when the terminal first opens (not persisted). */
@@ -1079,6 +1090,32 @@ export function createNativeLoopNode(index: number, center?: { x: number; y: num
   }
 }
 
+/** Creates a durable Alarm Clock node. Recurring values are wall-clock intent, never fixed offsets. */
+export function createAlarmClockNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  const now = new Date()
+  const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  return {
+    id: nextId('alarm'),
+    type: 'alarm',
+    position: placeAt(center, index, ALARM_SIZE.width, ALARM_SIZE.height),
+    width: ALARM_SIZE.width,
+    height: ALARM_SIZE.height,
+    style: { width: ALARM_SIZE.width, height: ALARM_SIZE.height },
+    data: {
+      title: 'Alarm Clock',
+      color: '#ef9a9a',
+      group: null,
+      alarmSchedule: { recurrence: 'once', date, time: '09:00' },
+      alarmTimeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+      alarmEnabled: false,
+      alarmSnoozeMinutes: 10,
+      alarmSoundEnabled: true,
+      alarmNarratorEnabled: true,
+      alarmHistory: []
+    }
+  }
+}
+
 /** Creates a new dino (T-Rex Runner) game node, seeded with the project's record. */
 export function createDinoNode(
   index: number,
@@ -1448,6 +1485,7 @@ export function groupSelectedNodes(
 const NODE_KIND_TABLE: Record<NodeKind, true> = {
   terminal: true,
   authenticator: true,
+  alarm: true,
   sticky: true,
   group: true,
   editor: true,
@@ -1485,6 +1523,7 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
 const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   terminal: TERMINAL_SIZE,
   authenticator: AUTHENTICATOR_SIZE,
+  alarm: ALARM_SIZE,
   sticky: STICKY_SIZE,
   group: GROUP_SIZE,
   editor: EDITOR_SIZE,
@@ -1910,6 +1949,14 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         loopNextRunAt: n.loopNextRunAt,
         loopLastRunAt: n.loopLastRunAt,
         loopTargetIds: n.loopTargetIds,
+        alarmSchedule: n.alarmSchedule,
+        alarmTimeZone: n.alarmTimeZone,
+        alarmEnabled: n.alarmEnabled,
+        alarmSnoozeMinutes: n.alarmSnoozeMinutes,
+        alarmSoundEnabled: n.alarmSoundEnabled,
+        alarmNarratorEnabled: n.alarmNarratorEnabled,
+        alarmNextOccurrenceAt: n.alarmNextOccurrenceAt,
+        alarmHistory: n.alarmHistory,
         shell: n.shell,
         terminalProfileId: n.ssh ? undefined : n.terminalProfileId,
         cwd: n.cwd,
@@ -1984,6 +2031,14 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         loopNextRunAt: n.data.loopNextRunAt,
         loopLastRunAt: n.data.loopLastRunAt,
         loopTargetIds: n.data.loopTargetIds,
+        alarmSchedule: n.data.alarmSchedule,
+        alarmTimeZone: n.data.alarmTimeZone,
+        alarmEnabled: n.data.alarmEnabled,
+        alarmSnoozeMinutes: n.data.alarmSnoozeMinutes,
+        alarmSoundEnabled: n.data.alarmSoundEnabled,
+        alarmNarratorEnabled: n.data.alarmNarratorEnabled,
+        alarmNextOccurrenceAt: n.data.alarmNextOccurrenceAt,
+        alarmHistory: n.data.alarmHistory,
         parentId: n.parentId,
         shell: n.data.shell,
         terminalProfileId: n.data.ssh ? undefined : n.data.terminalProfileId,

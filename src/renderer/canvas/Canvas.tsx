@@ -105,6 +105,7 @@ import { normalizeAddress } from '../nodes/browserUrl'
 import VideoNode from '../nodes/VideoNode'
 import WebNode from '../nodes/WebNode'
 import { NativeLoopNode, setNativeLoopRunHandler } from '../nodes/NativeLoopNode'
+import AlarmClockNode from '../nodes/AlarmClockNode'
 import {
   loopMessageId,
   loopRunDue,
@@ -572,6 +573,7 @@ import {
   createEditorNode,
   createGroupNode,
   createNativeLoopNode,
+  createAlarmClockNode,
   WORKTREE_GROUP_SIZE,
   createSshTerminalNode,
   createAuthenticatorNode,
@@ -1798,6 +1800,7 @@ export function Canvas() {
       subagent: withNodeBoundary(SubagentNode),
       loop: withNodeBoundary(LoopNode),
       scheduler: withNodeBoundary(NativeLoopNode),
+      alarm: withNodeBoundary(AlarmClockNode),
       dino: withNodeBoundary(DinoNode),
       video: withNodeBoundary(VideoNode),
       web: withNodeBoundary(WebNode),
@@ -4604,6 +4607,17 @@ export function Canvas() {
     (center?: { x: number; y: number }, groupId?: string) => {
       setNodes((ns) => {
         const node = createNativeLoopNode(ns.length, center ?? emptyNodePos())
+        return [...ns, groupId ? parentInto(node, groupId) : node]
+      })
+      markDirty()
+    },
+    [setNodes, markDirty, emptyNodePos, parentInto]
+  )
+
+  const addAlarmClock = useCallback(
+    (center?: { x: number; y: number }, groupId?: string) => {
+      setNodes((ns) => {
+        const node = createAlarmClockNode(ns.length, center ?? emptyNodePos())
         return [...ns, groupId ? parentInto(node, groupId) : node]
       })
       markDirty()
@@ -8744,6 +8758,11 @@ export function Canvas() {
           onClick: () => addNativeLoop(at, groupId)
         },
         {
+          label: 'New Alarm Clock',
+          icon: <IconBellFilled />,
+          onClick: () => addAlarmClock(at, groupId)
+        },
+        {
           label: 'New authenticator',
           icon: <IconLock />,
           onClick: () => addAuthenticator(at, groupId)
@@ -8806,6 +8825,7 @@ export function Canvas() {
       addSticky,
       addAuthenticator,
       addNativeLoop,
+      addAlarmClock,
       addToExistingGroup,
       groupSelection
     ]
@@ -8912,11 +8932,16 @@ export function Canvas() {
               icon: <IconNote />,
               onClick: () => addSticky(at)
             },
-            {
-              label: 'New Loop',
-              icon: <IconReload />,
-              onClick: () => addNativeLoop(at)
-            },
+        {
+          label: 'New Loop',
+          icon: <IconReload />,
+          onClick: () => addNativeLoop(at)
+        },
+        {
+          label: 'New Alarm Clock',
+          icon: <IconBellFilled />,
+          onClick: () => addAlarmClock(at)
+        },
             {
               label: 'New authenticator',
               icon: <IconLock />,
@@ -9047,6 +9072,7 @@ export function Canvas() {
       addAuthenticator,
       addNsis,
       addNativeLoop,
+      addAlarmClock,
       addDino,
       addBrowser,
       openFileDialog,
@@ -13016,6 +13042,13 @@ export function Canvas() {
             run: () => addNativeLoop()
           },
           {
+            id: 'new-alarm-clock',
+            label: 'New Alarm Clock',
+            hint: 'one shot recurring timezone snooze dismiss missed history powered off',
+            icon: <IconBellFilled />,
+            run: () => addAlarmClock()
+          },
+          {
             id: 'new-authenticator',
             label: 'New authenticator',
             icon: <IconLock />,
@@ -13377,6 +13410,7 @@ export function Canvas() {
     addSticky,
     addNsis,
     addNativeLoop,
+    addAlarmClock,
     addDino,
     addWebView,
     addBrowser,
@@ -13961,6 +13995,7 @@ export function Canvas() {
             onAddSticky={addSticky}
             onAddAuthenticator={() => addAuthenticator()}
             onAddLoop={addNativeLoop}
+            onAddAlarmClock={addAlarmClock}
             onAddDino={addDino}
             onAddAgent={(aid, accountId) => addAgentNode(aid, undefined, undefined, accountId)}
             onOpenFile={() => void openFileDialog()}

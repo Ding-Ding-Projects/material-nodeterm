@@ -12828,6 +12828,43 @@ body,
   opacity: 0.42;
   cursor: default;
 }
+
+/* Alarm Clock node: the form stays compact enough for the canvas while keeping every value
+   editable, including the wall-clock timezone and occurrence history. */
+.alarm-clock-node {
+  min-width: 340px;
+  min-height: 300px;
+  overflow: hidden;
+}
+.alarm-clock-node__glyph { font-size: 17px; margin-right: 5px; }
+.alarm-clock-node__body { display: flex; flex-direction: column; gap: 8px; padding: 10px; overflow: auto; }
+.alarm-clock-node__body label { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; }
+.alarm-clock-node__body input, .alarm-clock-node__body select { min-height: 30px; min-width: 0; flex: 1; border: 1px solid var(--md-outline); border-radius: 8px; padding: 4px 7px; background: var(--md-surface-container); color: var(--md-on-surface); }
+.alarm-clock-node__body fieldset { border: 1px solid var(--md-outline-variant); border-radius: 8px; padding: 5px 7px; }
+.alarm-clock-node__body fieldset label { justify-content: flex-start; }
+.alarm-clock-node__days { display: flex; flex-wrap: wrap; gap: 5px; }
+.alarm-clock-node__days input, .alarm-clock-node__options input { flex: none; min-height: 18px; width: 18px; }
+.alarm-clock-node__options { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.alarm-clock-node__options label { justify-content: flex-start; }
+.alarm-clock-node__options label:first-child { flex: 1 1 130px; }
+.alarm-clock-node__honesty { margin: 0; color: var(--md-on-surface-variant); font-size: 11px; line-height: 1.35; }
+.alarm-clock-node__error { margin: 0; color: var(--md-error); font-size: 11px; }
+.alarm-clock-node__status { display: flex; flex-wrap: wrap; gap: 6px 10px; color: var(--md-on-surface-variant); font-size: 11px; }
+.alarm-clock-node__status strong { color: var(--md-primary); }
+.alarm-clock-node__actions button, .alarm-clock-node__history button { min-height: 30px; border: 0; border-radius: 8px; padding: 5px 10px; background: var(--md-primary); color: var(--md-on-primary); cursor: pointer; }
+.alarm-clock-node__actions button:disabled { opacity: .5; cursor: not-allowed; }
+.alarm-clock-node__actions button.active { background: var(--md-secondary); color: var(--md-on-secondary); }
+.alarm-clock-node__history { border-top: 1px solid var(--md-outline-variant); padding-top: 7px; }
+.alarm-clock-node__history-head, .alarm-clock-node__search, .alarm-clock-node__history li { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.alarm-clock-node__search { margin-top: 5px; }
+.alarm-clock-node__search input { width: 100%; }
+.alarm-clock-node__search button { flex: none; font-family: monospace; padding: 5px 7px; }
+.alarm-clock-node__regex { display: grid; gap: 4px; margin-top: 5px; padding: 7px; border: 1px solid var(--md-outline); border-radius: 8px; background: var(--md-surface-container-high); }
+.alarm-clock-node__regex span { font-size: 11px; color: var(--md-on-surface-variant); }
+.alarm-clock-node__history ul { list-style: none; margin: 5px 0 0; padding: 0; display: grid; gap: 4px; font-size: 11px; }
+.alarm-clock-node__history li { border-bottom: 1px solid var(--md-outline-variant); padding: 4px 0; }
+.alarm-clock-node__history li button { background: var(--md-secondary-container); color: var(--md-on-secondary-container); font-size: 10px; padding: 3px 6px; }
+.alarm-clock-node__empty { color: var(--md-on-surface-variant); font-size: 11px; margin: 6px 0 0; }
 .schedule-handle {
   width: 12px;
   height: 12px;

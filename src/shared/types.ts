@@ -66,6 +66,7 @@ import type {
   VaultStatus,
   VaultUnlockResult
 } from './password-manager'
+import type { AlarmOccurrence, AlarmRecurrence } from './alarm-clock'
 
 /** Profile-switch replacement intent. The trusted core validates and re-resolves it before teardown. */
 export interface PtyRecycleTarget {
@@ -352,6 +353,9 @@ export type NodeKind =
   // persists a title and a colour and nothing else, because an entry id names a credential in
   // this machine's OS vault while project.json is git-shared. See AuthenticatorNode.tsx.
   | 'authenticator'
+  // Alarm Clock nodes persist wall-clock intent and occurrence history. Runtime timers and
+  // notification handles stay machine-local; a shared project never claims powered-off wake.
+  | 'alarm'
   // The SERVICE family: one node per external thing this canvas can manage. They are ordinary
   // nodes — dragged, resized, coloured, grouped, persisted and deleted exactly like a terminal —
   // because a managed service is a thing you arrange on a canvas beside the terminals working on
@@ -454,6 +458,15 @@ export interface CanvasNodeState {
   loopLastRunAt?: number
   /** scheduler-only: exact agent node ids receiving each fire. */
   loopTargetIds?: string[]
+  /** alarm-only: local wall-clock schedule, timezone, and durable occurrence history. */
+  alarmSchedule?: { recurrence: AlarmRecurrence; date?: string; time: string; weekdays?: number[]; monthDay?: number }
+  alarmTimeZone?: string
+  alarmEnabled?: boolean
+  alarmSnoozeMinutes?: number
+  alarmSoundEnabled?: boolean
+  alarmNarratorEnabled?: boolean
+  alarmNextOccurrenceAt?: number
+  alarmHistory?: AlarmOccurrence[]
   /** Parent group node id, if this node belongs to a group frame. */
   parentId?: string
   // terminal-only

@@ -38,6 +38,13 @@ export interface PortableCanvasNodeV3 {
   url?: string
   browserTabs?: Array<{ id: string; url?: string; title: string }>
   serviceLabel?: string
+  alarmSchedule?: { recurrence: string; date?: string; time: string; weekdays?: number[]; monthDay?: number }
+  alarmTimeZone?: string
+  alarmEnabled?: boolean
+  alarmSnoozeMinutes?: number
+  alarmSoundEnabled?: boolean
+  alarmNarratorEnabled?: boolean
+  alarmHistory?: Array<{ id: string; alarmId: string; scheduledAt: number; status: string; createdAt: number; resolvedAt?: number; snoozedUntil?: number; timeZone: string }>
 }
 
 export interface PortableRelationshipV3 {
@@ -86,10 +93,12 @@ const ALLOWED_PROJECT = new Set(['name', 'color', 'icon'])
 const ALLOWED_ICON = new Set(['type', 'name'])
 const ALLOWED_CANVAS = new Set(['id', 'scope', 'parentCanvasId', 'title', 'order', 'viewport', 'nodeIds'])
 const ALLOWED_VIEWPORT = new Set(['x', 'y', 'zoom'])
-const ALLOWED_NODE = new Set(['id', 'kind', 'position', 'size', 'title', 'color', 'group', 'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel'])
+const ALLOWED_NODE = new Set(['id', 'kind', 'position', 'size', 'title', 'color', 'group', 'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel', 'alarmSchedule', 'alarmTimeZone', 'alarmEnabled', 'alarmSnoozeMinutes', 'alarmSoundEnabled', 'alarmNarratorEnabled', 'alarmHistory'])
 const ALLOWED_POSITION = new Set(['x', 'y'])
 const ALLOWED_SIZE = new Set(['width', 'height'])
 const ALLOWED_TAB = new Set(['id', 'url', 'title'])
+const ALLOWED_ALARM_SCHEDULE = new Set(['recurrence', 'date', 'time', 'weekdays', 'monthDay'])
+const ALLOWED_ALARM_OCCURRENCE = new Set(['id', 'alarmId', 'scheduledAt', 'status', 'createdAt', 'resolvedAt', 'snoozedUntil', 'timeZone'])
 const ALLOWED_RELATIONSHIP = new Set(['id', 'kind', 'source', 'target', 'order'])
 const ALLOWED_APPEARANCE = new Set(['theme', 'density', 'seedColor', 'fontFamily', 'fontSize', 'fontWeight', 'motion'])
 
@@ -166,6 +175,28 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
   if (node.text !== undefined) out.text = content(node.text, 'node text')
   if (node.url !== undefined) { const url = safeUrl(node.url, 'node URL'); if (url) out.url = url }
   if (node.serviceLabel !== undefined) out.serviceLabel = text(node.serviceLabel, 'service label')
+  if (node.alarmSchedule !== undefined) {
+    if (!record(node.alarmSchedule)) throw new PortableProjectV3Error('manifest', 'Portable alarm schedule is invalid.')
+    exactKeys(node.alarmSchedule, ALLOWED_ALARM_SCHEDULE, 'alarm schedule')
+    if (!['once', 'daily', 'weekdays', 'weekly', 'monthly'].includes(node.alarmSchedule.recurrence as string) || typeof node.alarmSchedule.time !== 'string') throw new PortableProjectV3Error('manifest', 'Portable alarm schedule recurrence or time is invalid.')
+    const schedule = { recurrence: text(node.alarmSchedule.recurrence, 'alarm recurrence'), time: text(node.alarmSchedule.time, 'alarm time'), ...(node.alarmSchedule.date === undefined ? {} : { date: text(node.alarmSchedule.date, 'alarm date') }), ...(node.alarmSchedule.weekdays === undefined ? {} : { weekdays: node.alarmSchedule.weekdays.map((day) => finite(day, 'alarm weekday')) }), ...(node.alarmSchedule.monthDay === undefined ? {} : { monthDay: finite(node.alarmSchedule.monthDay, 'alarm month day') }) }
+    out.alarmSchedule = schedule
+  }
+  if (node.alarmTimeZone !== undefined) out.alarmTimeZone = text(node.alarmTimeZone, 'alarm timezone')
+  for (const key of ['alarmEnabled', 'alarmSoundEnabled', 'alarmNarratorEnabled'] as const) {
+    if (node[key] !== undefined && typeof node[key] !== 'boolean') throw new PortableProjectV3Error('manifest', `Portable ${key} must be boolean.`)
+    if (node[key] !== undefined) out[key] = node[key]
+  }
+  if (node.alarmSnoozeMinutes !== undefined) out.alarmSnoozeMinutes = finite(node.alarmSnoozeMinutes, 'alarm snooze minutes')
+  if (node.alarmHistory !== undefined) {
+    if (!Array.isArray(node.alarmHistory) || node.alarmHistory.length > 1000) throw new PortableProjectV3Error('entry-limit', 'Portable alarm history exceeds its bound.')
+    out.alarmHistory = node.alarmHistory.map((occurrence) => {
+      if (!record(occurrence)) throw new PortableProjectV3Error('manifest', 'Portable alarm occurrence is invalid.')
+      exactKeys(occurrence, ALLOWED_ALARM_OCCURRENCE, 'alarm occurrence')
+      const value = { id: text(occurrence.id, 'alarm occurrence id'), alarmId: text(occurrence.alarmId, 'alarm id'), scheduledAt: finite(occurrence.scheduledAt, 'alarm scheduled time'), status: text(occurrence.status, 'alarm occurrence status'), createdAt: finite(occurrence.createdAt, 'alarm occurrence creation time'), timeZone: text(occurrence.timeZone, 'alarm occurrence timezone'), ...(occurrence.resolvedAt === undefined ? {} : { resolvedAt: finite(occurrence.resolvedAt, 'alarm resolved time') }), ...(occurrence.snoozedUntil === undefined ? {} : { snoozedUntil: finite(occurrence.snoozedUntil, 'alarm snooze time') }) }
+      return value
+    })
+  }
   if (node.browserTabs !== undefined) {
     if (node.browserTabs.length > 1024) throw new PortableProjectV3Error('entry-limit', 'Portable browser tab count exceeds its bound.')
     out.browserTabs = node.browserTabs.map((tab) => { if (!record(tab)) throw new PortableProjectV3Error('manifest', 'Portable browser tab is invalid.'); exactKeys(tab, ALLOWED_TAB, 'browser tab'); const url = safeUrl(tab.url, 'browser tab URL'); return { id: text(tab.id, 'browser tab id'), ...(url ? { url } : {}), title: content(tab.title, 'browser tab title') } })

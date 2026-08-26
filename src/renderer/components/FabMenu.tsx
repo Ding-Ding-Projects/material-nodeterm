@@ -20,6 +20,7 @@ export interface FabMenuProps {
   onAddTerminalWithProfile?: (profileId: string) => void
   onAddSticky: () => void
   onAddLoop: () => void
+  onAddAlarmClock?: () => void
   /** Create a TOTP code displayer. The row is also DRAGGABLE onto the canvas, which is what
    *  lets it land where the pointer is rather than at the default placement. */
   onAddAuthenticator: () => void
@@ -46,6 +47,7 @@ export function FabMenu({
   onAddTerminalWithProfile,
   onAddSticky,
   onAddLoop,
+  onAddAlarmClock = () => {},
   onAddAuthenticator,
   onAddDino,
   onAddAgent,
@@ -255,6 +257,11 @@ export function FabMenu({
                 <button role="menuitem" onClick={pick(onAddLoop)}>
                   <LoopIcon />
                   <span>Loop</span>
+                </button>
+                <button role="menuitem" onClick={pick(onAddAlarmClock)}>
+                  <AlarmIcon />
+                  <span>Alarm Clock</span>
+                </button>
                 <button
                   role="menuitem"
                   draggable
@@ -266,7 +273,6 @@ export function FabMenu({
                 >
                   <IconLock />
                   <span>Authenticator</span>
-                </button>
                 </button>
                 <button role="menuitem" onClick={pick(onAddDino)}>
                   <DinoIcon />
@@ -335,6 +341,14 @@ function LoopIcon() {
     <svg {...S}>
       <path d="M20 7v5h-5M4 17v-5h5" />
       <path d="M6.1 9a7 7 0 0 1 11.8-2L20 12M4 12l2.1 5a7 7 0 0 0 11.8-2" />
+    </svg>
+  )
+}
+function AlarmIcon() {
+  return (
+    <svg {...S}>
+      <circle cx="12" cy="13" r="7" />
+      <path d="M12 9v4l3 2M5 5 3.5 3.5M19 5l1.5-1.5M12 3v2M4 13H2M22 13h-2" />
     </svg>
   )
 }

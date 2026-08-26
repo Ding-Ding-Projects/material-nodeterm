@@ -4,6 +4,8 @@ The pan/zoom surface nodeterm is built around, and everything that lives on it.
 
 - [Node kinds](./node-kinds.md) — terminal, agent, sticky, group, editor, and diff nodes, and
   what each one is for.
+- [Alarm Clock nodes](../../alarm-clock.md) — one-shot and recurring reminders with timezone,
+  daylight-saving, snooze, dismiss, and missed-occurrence handling.
 - [Canvas & node lifecycle](./canvas-and-lifecycle.md) — how nodes mount, unmount, park, and
   release memory as you pan around a large canvas; context menus, undo/redo, and selection.
 - [Terminal sharpness under pan and zoom](./terminal-sharpness.md) — why terminal text goes soft on

@@ -16,12 +16,16 @@ way, while each contributes its own body content and header actions.
 | **Group** | A real container node — other nodes can live *inside* it, and groups can nest inside groups. A group can optionally be bound to a git worktree, so every node created inside it inherits that worktree's directory. See [Source control & worktrees](../source-control/source-control-and-worktrees.md). |
 | **Editor** | A Monaco-based code editor bound to a file path, with save, dirty-state tracking, and a markdown preview toggle for `.md` files. Image files render as an `<img>` preview instead of source text. |
 | **Diff** | A read-only Monaco diff view comparing HEAD↔index (staged) or index↔working tree (unstaged) for a single file. |
+| **Alarm Clock** | A one-shot or recurring wall-clock reminder with an explicit timezone, DST-safe planning, snooze, dismiss, and missed-occurrence history. See [Alarm Clock nodes](../../alarm-clock.md). |
 
 Two other things render *on* the canvas but are not persisted node kinds: **subagent cards**
 (ephemeral cards showing an agent's spawned subagents, connected by an edge to the parent
 agent node — cleared on the next turn) and **loop/schedule/cron cards** (showing a recurring
 agent invocation, which can outlive a session or even an app restart if it's a cron/schedule
 rather than an in-session loop).
+
+Alarm Clock nodes are persisted node kinds. Their schedule intent and redacted occurrence history
+travel with the project; notification handles and any machine-specific runtime state do not.
 
 ## Configuration
 
@@ -32,6 +36,9 @@ rather than an in-session loop).
   node's selected shell profile is snapshotted separately in this machine's `LocalNodeExec`
   overlay; it is not written to the shared project file. See
   [Windows shell profiles](../terminals/windows-shell-profiles.md).
+- Alarm Clock nodes additionally persist the recurrence, local wall-clock time, selected IANA
+  timezone, snooze interval, sound and narrator choices, and bounded occurrence history. They never
+  persist a claim or mechanism for waking a powered-off computer.
 
 ## Failure modes
 
