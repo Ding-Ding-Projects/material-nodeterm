@@ -11,9 +11,12 @@ import type {
   Workspace
 } from '@shared/types'
 import type { ProjectIcon } from '@shared/project-icon'
+import type { ProjectCapability } from '@shared/project-capabilities'
+import { recordCapabilityAck, type CapabilityAnswer } from '@shared/project-capability-consent'
 import { applyEdgeMutation } from '@shared/canvas-mutations'
 import { collisionSeed, derivedProjectId } from '@shared/project-id'
 import { applyCanvasMutation, createProject, reorderGroupWithinParent } from './workspace'
+import { markWorkspaceDirty } from './workspaceDirty'
 
 interface ProjectsState {
   projects: Project[]
@@ -71,6 +74,15 @@ interface ProjectsState {
    *  permission mode for new Claude terminal (CLI) sessions. Chat nodes are not covered. */
   setProjectDefaultPermissionMode(id: string, mode: AgentPermissionMode | undefined): void
   setProjectSettingsOverrides(id: string, overrides: Project['settingsOverrides']): void
+  /** The one strict setter: literal `true` written when `on`, the field deleted (and a
+   *  machine-local 'declined' recorded) when off. See @shared/project-capabilities and
+   *  @shared/project-capability-consent for why this must never write a stored `false`. */
+  setProjectCapability(id: string, cap: ProjectCapability, on: boolean): void
+  /**
+   * MACHINE-LOCAL by construction: `Project.capabilityAck` rides `IndexEntryV3.capabilityAck`
+   * and is never serialized into the shared project file. Records the clone notice's answer.
+   */
+  recordProjectCapabilityAck(id: string, cap: ProjectCapability, answer: CapabilityAnswer): void
   /** Raises the project's dino high score (never lowers it). */
   setDinoHighScore(id: string, score: number): void
   /** Replaces the project's kanban board (the UI computes the next board via lib/kanban). */
@@ -359,6 +371,33 @@ export const useProjects = create<ProjectsState>((set, get) => ({
     set((s) => ({
       projects: s.projects.map((p) => (p.id === id ? { ...p, defaultPermissionMode: mode } : p))
     }))
+  },
+
+  setProjectCapability(id, cap, on) {
+    set((s) => ({
+      projects: s.projects.map((p) => {
+        if (p.id !== id) return p
+        if (on) return recordCapabilityAck({ ...p, [cap]: true }, cap, 'kept')
+        const next = { ...p }
+        delete next[cap]
+        // 'declined', not silence: the deletion lives only in this working copy, so a re-arriving
+        // `true` (teammate commit, git checkout) must re-notice instead of meeting a bare ack.
+        return recordCapabilityAck(next, cap, 'declined')
+      })
+    }))
+    // The setter owns the persist: its call sites (the AgentsSection toggle, the clone notice's
+    // decline) schedule no save of their own, so without this the choice would be lost on
+    // restart unless an unrelated canvas edit happened to dirty the workspace afterwards.
+    markWorkspaceDirty()
+  },
+
+  recordProjectCapabilityAck(id, cap, answer) {
+    set((s) => ({
+      projects: s.projects.map((p) => (p.id === id ? recordCapabilityAck(p, cap, answer) : p))
+    }))
+    // Same persistence gap as setProjectCapability: the notice's 'kept' answer rides
+    // IndexEntryV3.capabilityAck on the next save — which must actually be scheduled.
+    markWorkspaceDirty()
   },
 
   setProjectSettingsOverrides(id, settingsOverrides) {

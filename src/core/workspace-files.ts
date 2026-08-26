@@ -16,6 +16,8 @@ import type {
   Viewport,
   Workspace
 } from '../shared/types'
+import { projectCapabilityFields, readProjectCapabilities } from '../shared/project-capabilities'
+import type { CapabilityAckMap } from '../shared/project-capability-consent'
 import { sanitizeProjectIcon, type ProjectIcon } from '../shared/project-icon'
 
 export const PROJECT_DIR = '.nodeterm'
@@ -79,6 +81,12 @@ export interface ProjectFileV1 {
    */
   defaultAccountId?: string
   defaultPermissionMode?: AgentPermissionMode
+  /**
+   * Per-project capability switch (see @shared/project-capabilities): deliberately IN the
+   * git-shared file — the team shares the policy — which is exactly why reads are strict
+   * (`readProjectCapabilities`, literal `true` only) and why the switch alone grants nothing.
+   */
+  agentBrowserControl?: boolean
   dinoHighScore?: number
   kanban?: ProjectKanban
   /** Named browser profiles — see `BrowserProfile` in `../shared/types` and
@@ -108,6 +116,13 @@ export interface IndexEntryV3 {
   /** MACHINE-LOCAL default managed Claude account for a ref'd project: the id names a credential
    *  dir in THIS machine's userData, so it is meaningless in anyone else's checkout. */
   defaultAccountId?: string
+  /**
+   * MACHINE-LOCAL record that this machine's user has answered each capability switch for THIS
+   * entry (the one-time clone notice, @shared/project-capability-consent). Never copied into
+   * the shared project file — a repo must not be able to carry its own consent — and keyed to
+   * the entry, so a second worktree of the same repo (a second entry) notifies again, on purpose.
+   */
+  capabilityAck?: CapabilityAckMap
   /** Sparse machine-local project settings overlay. Never serialized into ProjectFileV1. */
   settingsOverrides?: Project['settingsOverrides']
   cwd?: string
@@ -202,6 +217,10 @@ export function projectToFile(
     ...(p.bridges ? { bridges: p.bridges } : {}),
     ...(p.ropes ? { ropes: p.ropes } : {}),
     ...(p.defaultPermissionMode ? { defaultPermissionMode: p.defaultPermissionMode } : {}),
+    // Strict-normalised (literal true only, known keys only) and omitted when off — an off
+    // capability adds no bytes to the committed file. `capabilityAck` is deliberately NOT here:
+    // the acknowledgment is machine-local (IndexEntryV3.capabilityAck) and must never travel.
+    ...projectCapabilityFields(p),
     ...(p.dinoHighScore ? { dinoHighScore: p.dinoHighScore } : {}),
     ...(p.kanban ? { kanban: p.kanban } : {}),
     ...(p.browserProfiles && p.browserProfiles.length > 0 ? { browserProfiles: p.browserProfiles } : {})
@@ -258,6 +277,8 @@ export function fileToProject(
     viewport?: Viewport
     /** This machine's default managed account; falls back to the file's legacy value. */
     defaultAccountId?: string
+    /** This machine's clone-notice answers for this entry (never from the file). */
+    capabilityAck?: CapabilityAckMap
     settingsOverrides?: Project['settingsOverrides']
     /** This machine's own exec values for these nodes (from the local index entry). A file read
      *  WITHOUT them — an adopted/cloned folder, a probe — gets the safe defaults, never the file's
@@ -282,12 +303,18 @@ export function fileToProject(
     ...(defaultAccountId ? { defaultAccountId } : {}),
     ...(base.settingsOverrides ? { settingsOverrides: base.settingsOverrides } : {}),
     ...(f.defaultPermissionMode ? { defaultPermissionMode: f.defaultPermissionMode } : {}),
+    // The file is hostile input: only a literal `true` under a known key survives the read
+    // (readProjectCapabilities). `"true"`, 1, {} et al. vanish here, at the boundary.
+    ...readProjectCapabilities(f),
     ...(f.dinoHighScore ? { dinoHighScore: f.dinoHighScore } : {}),
     ...(validKanban(f.kanban) ? { kanban: f.kanban } : {}),
     ...(browserProfiles ? { browserProfiles } : {}),
     ...(base.cwd ? { cwd: base.cwd } : {}),
     ...(base.ssh ? { ssh: base.ssh } : {}),
-    ...(base.closed ? { closed: true } : {})
+    ...(base.closed ? { closed: true } : {}),
+    // Machine-local, from the index entry ONLY: a file field named `capabilityAck` is a forgery
+    // attempt (the shared file cannot carry this machine's consent) and is simply never read.
+    ...(base.capabilityAck ? { capabilityAck: base.capabilityAck } : {})
   }
 }
 
@@ -374,6 +401,9 @@ export function splitWorkspace(
     const localState = {
       ...(p.viewport ? { viewport: p.viewport } : {}),
       ...(p.defaultAccountId ? { defaultAccountId: p.defaultAccountId } : {}),
+      // The clone-notice answer rides the machine-local entry, never the shared file
+      // (projectToFile does not emit it — pinned by project-capability-consent.test.ts).
+      ...(p.capabilityAck ? { capabilityAck: p.capabilityAck } : {}),
       ...(p.settingsOverrides ? { settingsOverrides: p.settingsOverrides } : {})
     }
     if (p.unavailable) {

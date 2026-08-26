@@ -806,6 +806,22 @@ export interface Project {
   settingsOverrides?: Partial<Settings>
   /** Best dino-game score in this project — new dino nodes seed from it, so the record survives closing the node. */
   dinoHighScore?: number
+  /**
+   * Per-project capability switch: e.g. agents may drive browser nodes THEY opened in this
+   * project. GIT-SHARED (rides .nodeterm/project.json) and therefore hostile input — read it
+   * ONLY through `projectCapabilityGrantedFor` (@shared/project-capability-consent); the raw
+   * flag (`projectCapabilityFlagInFile`, @shared/project-capabilities) is a display-only read
+   * and is NEVER a grant by itself — see that module's header for why.
+   */
+  agentBrowserControl?: boolean
+  /**
+   * MACHINE-LOCAL record of what this machine's user answered when told about a git-shared
+   * capability switch (the one-time clone notice, @shared/project-capability-consent) — keyed
+   * by capability, valued 'kept' | 'declined'. Persisted on `IndexEntryV3.capabilityAck`,
+   * NEVER written into the shared project file (workspace-files.test.ts pins that the file
+   * bytes stay unchanged even when this is set).
+   */
+  capabilityAck?: import('./project-capability-consent').CapabilityAckMap
   /** Kanban task board — shared via .nodeterm/project.json like nodes. */
   kanban?: ProjectKanban
   /**
