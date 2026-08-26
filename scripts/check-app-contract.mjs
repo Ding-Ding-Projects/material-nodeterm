@@ -1140,6 +1140,38 @@ const FEATURES = [
     docs: ['docs/minecraft-server-manager.md'],
   },
   {
+    id: 'linux-iso-vm',
+    label: 'Linux ISO VM node',
+    files: [
+      'src/shared/virtual-machine.ts',
+      'src/core/virtual-machine/manager.ts',
+      'src/core/virtual-machine/register-ipc.ts',
+      'src/renderer/nodes/VirtualMachineNode.tsx'
+    ],
+    contentChecks: [
+      ['src/core/virtual-machine/manager.ts', 'export class VirtualMachineManager'],
+      ['src/core/virtual-machine/manager.ts', "shell: false"],
+      ['src/core/virtual-machine/manager.ts', "127.0.0.1"],
+      ['src/core/virtual-machine/manager.ts', 'function probeWhpx('],
+      ['src/core/virtual-machine/manager.ts', 'function detectDiskFormat('],
+      ['src/core/virtual-machine/manager.ts', 'async function sha256File('],
+      ['src/core/virtual-machine/manager.ts', 'function waitForPort('],
+      ['src/core/virtual-machine/manager.ts', 'reconcileOrphans()'],
+      ['src/core/virtual-machine/manager.ts', 'async createDisk('],
+      ['src/core/virtual-machine/manager.ts', 'openDisplay(id: string)'],
+      ['src/core/virtual-machine/manager.ts', "'-nic'"],
+      ['dependencies.manifest.json', '"qemu"'],
+      ['package.json', '"from": "resources/qemu"'],
+      ['package.json', '"prepare:qemu"'],
+      ['scripts/ensure-qemu-resources.mjs', 'createHash(\'sha512\')'],
+      ['src/renderer/nodes/VirtualMachineNode.tsx', 'Persistent install'],
+      ['src/renderer/nodes/VirtualMachineNode.tsx', 'Disposable live']
+    ],
+    wired: { file: 'src/renderer/canvas/Canvas.tsx', symbol: 'VirtualMachineNode' },
+    tests: [['src/core/virtual-machine/manager.test.ts', "describe('VirtualMachineManager'"]],
+    docs: ['docs/features/integrations/linux-iso-vm.md']
+  },
+  {
     id: 'adhd-modes',
     label: 'ADHD modes',
     docs: ['docs/adhd-modes.md'],

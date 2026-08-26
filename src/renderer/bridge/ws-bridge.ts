@@ -18,6 +18,7 @@ import type { GitHubControlApi, GitHubIssuesApi } from '../../shared/github-issu
 import type { ConverterApi } from '../../shared/converter'
 import type { OllamaApi } from '../../shared/ollama'
 import type { MinecraftApi } from '../../shared/minecraft'
+import type { VirtualMachineApi } from '../../shared/virtual-machine'
 import {
   UNKNOWN_CLAUDE_CLI_CAPS,
   type BoardLogApi,
@@ -956,6 +957,24 @@ export function buildMinecraftApi(client: RpcClient): Pick<NodeTerminalApi, 'min
   return { minecraft }
 }
 
+/** Linux ISO VM manager. The server process owns QEMU and exposes only the bounded lifecycle API. */
+export function buildVirtualMachineApi(client: RpcClient): Pick<NodeTerminalApi, 'virtualMachine'> {
+  const virtualMachine: VirtualMachineApi = {
+    tools: () => client.request(IPC.virtualMachineTools) as ReturnType<VirtualMachineApi['tools']>,
+    status: (id) => client.request(IPC.virtualMachineStatus, id) as ReturnType<VirtualMachineApi['status']>,
+    configure: (id, config, local) => client.request(IPC.virtualMachineConfigure, id, config, local) as ReturnType<VirtualMachineApi['configure']>,
+    createDisk: (id, folder) => client.request(IPC.virtualMachineCreateDisk, id, folder) as ReturnType<VirtualMachineApi['createDisk']>,
+    start: (id) => client.request(IPC.virtualMachineStart, id) as ReturnType<VirtualMachineApi['start']>,
+    stop: (id) => client.request(IPC.virtualMachineStop, id) as ReturnType<VirtualMachineApi['stop']>,
+    snapshot: (id, name) => client.request(IPC.virtualMachineSnapshot, id, name) as ReturnType<VirtualMachineApi['snapshot']>,
+    restore: (id, name) => client.request(IPC.virtualMachineRestore, id, name) as ReturnType<VirtualMachineApi['restore']>,
+    openDisplay: (id) => client.request(IPC.virtualMachineOpenDisplay, id) as ReturnType<VirtualMachineApi['openDisplay']>,
+    reset: (id) => client.request(IPC.virtualMachineReset, id) as ReturnType<VirtualMachineApi['reset']>,
+    onEvent: (listener) => client.subscribe(IPC.virtualMachineEvent, listener as Listener)
+  }
+  return { virtualMachine }
+}
+
 /**
  * Build the `usage` namespace over an RpcClient. The server shell runs the same core usage
  * service the desktop does, so this is real end to end — including `onUpdate`, which subscribes
@@ -1375,6 +1394,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildConverterApi(client),
     ...buildOllamaApi(client),
     ...buildMinecraftApi(client),
+    ...buildVirtualMachineApi(client),
     ...buildUsageApi(client),
     ...buildSessionMemoryApi(client),
     ...buildVsCodeApi(client),

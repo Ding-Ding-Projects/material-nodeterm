@@ -968,5 +968,29 @@ export const CATALOG: Catalog = {
   'announce.dismiss': {
     en: flat('Dismiss'),
     yue: flat('關閉')
+  },
+
+  // Linux ISO VM node. These labels are flat because they identify controls, while operation
+  // details and digest values remain facts supplied by the VM manager.
+  'virtualMachine.title': { en: flat('Linux ISO VM'), yue: flat('Linux ISO 虛擬機') },
+  'virtualMachine.iso': { en: flat('Linux ISO'), yue: flat('Linux ISO 映像') },
+  'virtualMachine.disk': { en: flat('Persistent disk'), yue: flat('持久磁碟') },
+  'virtualMachine.mode': { en: flat('Mode'), yue: flat('模式') },
+  'virtualMachine.mode.disposable': { en: flat('Disposable live, changes are discarded'), yue: flat('即用即棄，變更會丟棄') },
+  'virtualMachine.mode.persistent': { en: flat('Persistent install, keep the selected disk'), yue: flat('持久安裝，保留所選磁碟') },
+  'virtualMachine.expectedHash': { en: flat('Expected ISO SHA-256 (optional)'), yue: flat('預期 ISO SHA-256（可選）') },
+  'virtualMachine.memory': { en: flat('Memory (MiB)'), yue: flat('記憶體（MiB）') },
+  'virtualMachine.cpus': { en: flat('CPUs'), yue: flat('CPU 數量') },
+  'virtualMachine.network': { en: flat('Enable user-mode network'), yue: flat('啟用使用者模式網絡') },
+  'virtualMachine.whpx': { en: flat('Prefer WHPX acceleration'), yue: flat('優先使用 WHPX 加速') },
+  'virtualMachine.save': { en: flat('Save configuration'), yue: flat('儲存設定') },
+  'virtualMachine.start': { en: flat('Start'), yue: flat('啟動') },
+  'virtualMachine.stop': { en: flat('Stop'), yue: flat('停止') },
+  'virtualMachine.snapshot': { en: flat('Snapshot'), yue: flat('快照') },
+  'virtualMachine.restore': { en: flat('Restore'), yue: flat('還原') },
+  'virtualMachine.openDisplay': { en: flat('Open display'), yue: flat('開啟顯示畫面') },
+  'virtualMachine.createDisk': { en: flat('Create disk'), yue: flat('建立磁碟') },
+  'virtualMachine.browse': { en: flat('Browse'), yue: flat('瀏覽') },
+  'virtualMachine.note': { en: flat('Linux ISO VM is separate from WSL. It runs one isolated QEMU machine with a loopback-only display.'), yue: flat('Linux ISO 虛擬機同 WSL 分開，會用只限本機回環顯示嘅 QEMU 隔離機器。') }
   }
 }

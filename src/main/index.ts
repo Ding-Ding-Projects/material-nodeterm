@@ -44,6 +44,7 @@ import { registerFsHandlers } from '../core/fs-handlers'
 import { registerConverterIpc } from '../core/converter/register-ipc'
 import { registerOllamaIpc } from '../core/ollama/register-ipc'
 import { registerMinecraftIpc } from '../core/minecraft/register-ipc'
+import { registerVirtualMachineIpc } from '../core/virtual-machine/register-ipc'
 import { registerVsCodeHandlers } from '../core/vscode-handlers'
 import { LocalHistoryStore } from '../core/local-history'
 import { ProjectArchiveService } from '../core/project-archive'
@@ -316,6 +317,7 @@ initPlatform(corePlatform)
 // live managed server to shut down gracefully. See requestGracefulStopAll's own doc comment for
 // why that call is synchronous and unawaited rather than joining the flush Promise.allSettled below.
 let minecraftServers: ReturnType<typeof registerMinecraftIpc>['manager'] | undefined
+let virtualMachineManager: ReturnType<typeof registerVirtualMachineIpc>['manager'] | undefined
 
 // Only hand the OS a URL with a vetted scheme. Blocks file://, smb://, and custom
 // protocol-handler schemes that could be smuggled in via remote announcement feeds or
@@ -1469,6 +1471,7 @@ app.whenReady().then(async () => {
   registerConverterIpc(corePlatform)
   registerOllamaIpc(corePlatform)
   minecraftServers = registerMinecraftIpc(corePlatform).manager
+  virtualMachineManager = registerVirtualMachineIpc(corePlatform).manager
 
   const githubSecret = new ElectronGitHubSecretStore(app.getPath('userData'), safeStorage)
   const github = registerGitHubIntegration({
@@ -3296,6 +3299,7 @@ app.on('before-quit', (e) => {
   // — writing "stop" now is enough for it to shut down gracefully on its own schedule. Called on
   // BOTH passes; the method itself no-ops for an instance already asked.
   minecraftServers?.requestGracefulStopAll()
+  void virtualMachineManager?.dispose()
   destroyNotchHud()
   const scheduledSettingsStop = scheduledSettingsRuntime.stop()
   // Electron releases power assertions at exit anyway; disposing keeps the hold/release log honest.

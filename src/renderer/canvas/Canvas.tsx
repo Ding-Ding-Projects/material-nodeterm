@@ -97,9 +97,11 @@ import { annotationEndpoints } from '../lib/annotation'
 import { LazyEditorNode, LazyDiffNode } from '../nodes/lazyMonacoNodes'
 import { DinoNode } from '../nodes/DinoNode'
 import { SERVICE_NODE_KINDS, type ServiceNodeKind, type ProjectArchiveContents } from '@shared/types'
+import { VIRTUAL_MACHINE_NODE_CATALOG } from '@shared/virtual-machine'
 import type { ProjectIcon } from '@shared/project-icon'
 import BrowserNode from '../nodes/BrowserNode'
 import { ServiceNode } from '../nodes/ServiceNode'
+import VirtualMachineNode from '../nodes/VirtualMachineNode'
 import NsisInstallerNode from '../nodes/NsisInstallerNode'
 import { normalizeAddress } from '../nodes/browserUrl'
 import VideoNode from '../nodes/VideoNode'
@@ -580,6 +582,7 @@ import {
   createTerminalNode,
   nodeSshFor,
   createServiceNode,
+  createVirtualMachineNode,
   SERVICE_NODE_LABELS,
   createVideoNode,
   createWebNode,
@@ -1811,7 +1814,8 @@ export function Canvas() {
       proxmox: withNodeBoundary(ServiceNode),
       gitlab: withNodeBoundary(ServiceNode),
       homeassistant: withNodeBoundary(ServiceNode),
-      freepbx: withNodeBoundary(ServiceNode)
+      freepbx: withNodeBoundary(ServiceNode),
+      'linux-vm': withNodeBoundary(VirtualMachineNode)
     }),
     []
   )
@@ -4570,6 +4574,17 @@ export function Canvas() {
     (kind: ServiceNodeKind, center?: { x: number; y: number }, groupId?: string) => {
       setNodes((ns) => {
         const node = createServiceNode(kind, ns.length, center ?? emptyNodePos())
+        return [...ns, groupId ? parentInto(node, groupId) : node]
+      })
+      markDirty()
+    },
+    [setNodes, markDirty, emptyNodePos, parentInto]
+  )
+
+  const addVirtualMachine = useCallback(
+    (center?: { x: number; y: number }, groupId?: string) => {
+      setNodes((ns) => {
+        const node = createVirtualMachineNode(ns.length, center ?? emptyNodePos())
         return [...ns, groupId ? parentInto(node, groupId) : node]
       })
       markDirty()
@@ -8895,10 +8910,13 @@ export function Canvas() {
               type: 'submenu' as const,
               label: 'New manager…',
               icon: <IconRemote />,
-              children: SERVICE_NODE_KINDS.map((kind) => ({
-                label: SERVICE_NODE_LABELS[kind],
-                onClick: () => addService(kind, at)
-              }))
+              children: [
+                { label: VIRTUAL_MACHINE_NODE_CATALOG[0].label, onClick: () => addVirtualMachine(at) },
+                ...SERVICE_NODE_KINDS.map((kind) => ({
+                  label: SERVICE_NODE_LABELS[kind],
+                  onClick: () => addService(kind, at)
+                }))
+              ]
             }
           ]),
           ...paneMenuGroup('Canvas objects', <IconShapes />, [

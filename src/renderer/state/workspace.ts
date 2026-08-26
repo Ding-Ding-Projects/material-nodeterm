@@ -25,6 +25,7 @@ import { useSettings } from './settings'
 import type { SessionSource } from '../session/session'
 import { supportsWindowsTerminalProfiles } from './terminal-profiles'
 import type { AnnotationRect, AnnotationVariant } from '../lib/annotation'
+import { DEFAULT_VIRTUAL_MACHINE_CONFIG } from '@shared/virtual-machine'
 
 // Re-exported so Canvas (and anything else in the renderer) keeps importing it from here, while the
 // single implementation lives in src/shared and is shared with the relay host + the canvas-sync
@@ -57,6 +58,7 @@ const VIDEO_SIZE = { width: 640, height: 420 }
 const WEB_SIZE = { width: 720, height: 520 }
 const BROWSER_SIZE = { width: 800, height: 560 }
 const NATIVE_LOOP_SIZE = { width: 340, height: 280 }
+const LINUX_VM_SIZE = { width: 760, height: 560 }
 /** Fallback bounding box `flowToNodeStates` uses if an annotation node somehow has no live
  *  width/height at all (every production creation path draws a real rect — see createAnnotationNode
  *  — so this is a defensive floor, matching how every other kind gets a fallback in `sizeFor`). */
@@ -169,6 +171,9 @@ export interface NodeData {
   highScore?: number
   /** service-kinds only: the display name the user gave this manager. See `CanvasNodeState`. */
   serviceLabel?: string
+  /** Portable Linux ISO VM intent and machine-local asset bindings. */
+  virtualMachineConfig?: import('@shared/virtual-machine').VirtualMachineConfig
+  virtualMachineLocalPaths?: import('@shared/virtual-machine').VirtualMachineLocalPaths
   /** service-kinds only, MACHINE-LOCAL: where this node reaches its service. Stripped from the
    *  shared document and from inbound peers; see shared/node-exec.ts. */
   serviceConnection?: ServiceConnection
@@ -1029,6 +1034,25 @@ export function createServiceNode(
   }
 }
 
+/** Creates a Linux ISO VM node. The node is a canvas object, not a WSL terminal profile. */
+export function createVirtualMachineNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  return {
+    id: nextId('linux-vm'),
+    type: 'linux-vm',
+    position: placeAt(center, index, LINUX_VM_SIZE.width, LINUX_VM_SIZE.height),
+    width: LINUX_VM_SIZE.width,
+    height: LINUX_VM_SIZE.height,
+    style: { width: LINUX_VM_SIZE.width, height: LINUX_VM_SIZE.height },
+    data: {
+      title: 'Linux ISO VM',
+      color: NODE_COLORS[index % NODE_COLORS.length],
+      group: null,
+      virtualMachineConfig: { ...DEFAULT_VIRTUAL_MACHINE_CONFIG },
+      virtualMachineLocalPaths: {}
+    }
+  }
+}
+
 /**
  * Creates an NSIS installer-builder node — a GUI for authoring a Windows NSIS installer script for
  * ANOTHER project. Not this app's own installer, which stays Squirrel.Windows (see CLAUDE.md's
@@ -1466,7 +1490,8 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   gitlab: true,
   homeassistant: true,
   freepbx: true,
-  nsis: true
+  nsis: true,
+  'linux-vm': true
 }
 
 /**
@@ -1505,7 +1530,8 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   gitlab: SERVICE_SUMMARY_SIZE,
   homeassistant: SERVICE_SUMMARY_SIZE,
   freepbx: SERVICE_SUMMARY_SIZE,
-  nsis: NSIS_SIZE
+  nsis: NSIS_SIZE,
+  'linux-vm': LINUX_VM_SIZE
 }
 
 /** A `Set`, not `type in NODE_KIND_TABLE`: `in` walks the prototype, so `'constructor'` and
@@ -1591,7 +1617,9 @@ export function duplicateNode(node: CanvasNode, offset = 28): CanvasNode {
       // config, so they go with it.
       loopEnabled: undefined,
       loopNextRunAt: undefined,
-      loopLastRunAt: undefined
+      loopLastRunAt: undefined,
+      // A duplicate owns a fresh VM identity and must never inherit another VM's ISO or disk.
+      virtualMachineLocalPaths: undefined
     }
   }
 }
@@ -1918,6 +1946,8 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         serviceConnection: n.serviceConnection,
         nsisSpec: n.nsisSpec,
         nsisLocalPaths: n.nsisLocalPaths,
+        virtualMachineConfig: n.virtualMachineConfig,
+        virtualMachineLocalPaths: n.virtualMachineLocalPaths,
         filePath: n.filePath,
         fileMissing: n.fileMissing,
         url: n.url,
@@ -1993,6 +2023,8 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         serviceConnection: n.data.serviceConnection,
         nsisSpec: n.data.nsisSpec,
         nsisLocalPaths: n.data.nsisLocalPaths,
+        virtualMachineConfig: n.data.virtualMachineConfig,
+        virtualMachineLocalPaths: n.data.virtualMachineLocalPaths,
         filePath: n.data.filePath,
         fileMissing: n.data.fileMissing,
         url: n.data.url,
