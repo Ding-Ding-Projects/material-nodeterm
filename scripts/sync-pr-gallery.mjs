@@ -53,19 +53,17 @@ const END = '<!-- huishots:end -->'
  */
 const GALLERY = [
   { id: 'app-04-canvas', anchor: 'Exhibit A: the damage', featured: true, title: 'The canvas, which is the part you would recognise', alt: 'The canvas rendered in Material Design 3', caption: 'Same idea. Different wardrobe. Every button on that screen is a real Material Design 3 button with a state layer, which we mention because until recently they were not and nobody had noticed for months.' },
-  { id: 'app-02-settings', anchor: 'The regex builder', featured: true, title: 'Settings, all thirty five sections of it', alt: 'The settings surface', caption: 'There is a search field at the top and a regex builder anchored to it. There is one anchored to every search field in the application, because the rule here is that every list gets a search and every search gets a builder.' },
+  { id: 'app-02-settings', anchor: 'Exhibit C: why ours is better', featured: true, title: 'Settings, all thirty five sections of it', alt: 'The settings surface', caption: 'There is a search field at the top and a regex builder anchored to it. There is one anchored to every search field in the application, because the rule here is that every list gets a search and every search gets a builder.' },
   { id: 'app-settings-language', anchor: 'The two funny level sliders', featured: true, title: 'The one that should actually make you jealous', alt: 'Language modes and the two funny level sliders', caption: 'Two sliders, one per language, controlling how funny the software is permitted to be, from 1 to 5. They ship at 5. This pull request was written at 5.' },
   { id: 'app-settings-narrator', anchor: 'The narrator', featured: true, title: 'The narrator, which talks', alt: 'Narrator settings with language, voice, rate and pitch', caption: 'Out loud. In your room. A voice picker per language, with an honest line underneath when the voice you chose is not installed on this machine, rather than silently substituting one.' },
   { id: 'app-adhd-modes', anchor: 'The five ADHD modes', featured: true, title: 'Five ADHD modes that were previously five promises', alt: 'The five ADHD modes', caption: 'Focus, low stimulation, time awareness, one thing at a time, momentum. All off by default, all independent, none of them keeping score of you.' },
   { id: 'app-kids-home', anchor: 'Kids mode', featured: true, title: 'Kids mode, which is a second application wearing a hat', alt: 'Kids mode home screen', caption: 'The canvas stops rendering when this is on. Not hidden behind a class. Stops.' },
   { id: 'app-settings-appearance-editor', anchor: 'The appearance editor', featured: true, title: 'The appearance editor, for one element, forever', alt: 'The per element appearance editor', caption: 'Word processor depth typography, plus opacity, sixteen blend modes, an eight filter stack, backdrop blur and transforms. Every field unset by default, so an untouched element renders byte identical CSS to before this existed.' },
   { id: 'app-windows-terminal-profiles', anchor: 'The Windows session host', featured: true, title: 'Windows terminal profiles, from the part that took longest', alt: 'Windows terminal profile picker', caption: 'Behind this picker is a from scratch tmux equivalent with real PTYs and server side screen reconstruction, so a Windows user closing the app still has their terminals tomorrow. This one is not a joke.' },
-  { id: 'app-03-palette', anchor: 'Exhibit C: why ours is better', featured: false, title: 'The command palette', alt: 'The command palette' },
+  { id: 'app-03-palette', anchor: 'The regex builder', featured: false, title: 'The command palette', alt: 'The command palette' },
   { id: 'app-05-kanban', anchor: 'The dinosaur', featured: false, title: 'The board', alt: 'The kanban board of sessions' },
   { id: 'app-status-surface', anchor: 'The documentation browser', featured: false, title: 'The status surface', alt: 'The status surface' },
   { id: 'app-settings-schedule', anchor: 'Scheduled settings', featured: false, title: 'Scheduled settings', alt: 'The scheduled settings editor' },
-  { id: 'site-toy-locks', anchor: 'Toy locks, and the ladder out of them', featured: false, title: 'Toy locks, on the documentation site, which has all of this too', alt: 'Toy locks on the documentation site' },
-  { id: 'site-search-regex-builder', anchor: 'The infinite colour picker', featured: false, title: 'The anchored regex builder', alt: 'The anchored regex builder' }
 ]
 
 function git(...args) {
@@ -147,6 +145,20 @@ let body = execFileSync('gh', view, { encoding: 'utf8' })
 
 const placed = []
 const orphaned = []
+
+// An entry removed from GALLERY must take its picture with it. Otherwise a capture that was
+// pulled for being stale simply stays in the body forever, which is the exact failure the whole
+// script exists to prevent.
+const known = new Set(GALLERY.map((g) => g.id))
+for (const m of [...body.matchAll(/<!-- huishot:([\w.-]+):start -->/g)].map((x) => x[1])) {
+  if (known.has(m)) continue
+  const a = body.indexOf(`<!-- huishot:${m}:start -->`)
+  const endTag = `<!-- huishot:${m}:end -->`
+  const b = body.indexOf(endTag)
+  if (a === -1 || b === -1) continue
+  body = body.slice(0, a) + body.slice(b + endTag.length)
+  console.log(`  removed a stale block for ${m}, which is no longer in the gallery`)
+}
 
 for (const g of GALLERY) {
   const start = `<!-- huishot:${g.id}:start -->`
