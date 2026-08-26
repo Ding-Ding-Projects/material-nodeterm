@@ -2,6 +2,7 @@ import { Handle, NodeResizer, Position, useReactFlow, type NodeProps } from '@xy
 import { LOOP_DEFAULT_INTERVAL_MS, validLoopInterval } from '../lib/nativeLoop'
 import type { CanvasNode } from '../state/workspace'
 import { TextArea } from '@renderer/ui/md3'
+import { Select } from '@renderer/ui/Select'
 
 let runNativeLoop: (nodeId: string) => void = () => {}
 
@@ -93,7 +94,7 @@ export function NativeLoopNode({ id, data, selected }: NodeProps<CanvasNode>) {
           aria-label="Loop interval"
           onChange={(event) => setInterval(Number(event.target.value), interval.unit)}
         />
-        <select
+        <Select
           value={interval.unit}
           aria-label="Loop interval unit"
           onChange={(event) => setInterval(interval.value, Number(event.target.value))}
@@ -101,7 +102,7 @@ export function NativeLoopNode({ id, data, selected }: NodeProps<CanvasNode>) {
           <option value={60_000}>minutes</option>
           <option value={3_600_000}>hours</option>
           <option value={86_400_000}>days</option>
-        </select>
+        </Select>
       </div>
 
       <div className="native-loop-node__meta">

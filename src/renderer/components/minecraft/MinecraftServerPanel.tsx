@@ -17,6 +17,7 @@ import { MinecraftPropertiesEditor } from './MinecraftPropertiesEditor'
 import { MinecraftPlayersPanel } from './MinecraftPlayersPanel'
 import { MinecraftBackupsPanel } from './MinecraftBackupsPanel'
 import { Checkbox } from '@renderer/ui/md3'
+import { Select } from '@renderer/ui/Select'
 
 const CONSOLE_CAP = 400
 
@@ -69,7 +70,7 @@ function VersionPicker({
     <>
       <label className="service-node__field" htmlFor={`${idPrefix}-version`}>
         <span className="service-node__field-label">Version</span>
-        <select
+        <Select
           id={`${idPrefix}-version`}
           className="service-node__input nodrag"
           value={selected}
@@ -81,7 +82,7 @@ function VersionPicker({
               {v.type !== 'release' ? ` (${v.type})` : ''}
             </option>
           ))}
-        </select>
+        </Select>
       </label>
       <label className="mc-checkbox nodrag">
         <Checkbox checked={showAll} onChange={(e) => onShowAllChange(e.target.checked)} />

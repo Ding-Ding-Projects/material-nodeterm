@@ -14,6 +14,7 @@ import { QrCode } from './QrCode'
 import { PasswordField } from './PasswordField'
 import { RecoveryNotice } from './RecoveryNotice'
 import { Checkbox } from '@renderer/ui/md3'
+import { Select } from '@renderer/ui/Select'
 
 type Step = 'setup' | 'password' | 'totp' | 'done'
 
@@ -249,7 +250,7 @@ export function LockWizard({
             </div>
             <div className="toylock-field">
               <span className="toylock-field__label">Stay unlocked</span>
-              <select
+              <Select
                 className="toylock-select"
                 value={duration}
                 onChange={(e) => setDuration(e.target.value as ToyLockDurationMode)}
@@ -257,7 +258,7 @@ export function LockWizard({
                 <option value="session">Just while you're on this surface</option>
                 <option value="minutes">For a number of minutes</option>
                 <option value="until-close">Until nodeterm quits</option>
-              </select>
+              </Select>
               {duration === 'minutes' && (
                 <input
                   type="number"

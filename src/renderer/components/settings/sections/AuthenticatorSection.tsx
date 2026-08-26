@@ -17,6 +17,7 @@ import {
 import type { DestructiveAuthorization } from '../../../lib/destructiveAuthorization'
 import { SettingsSection } from '../SettingsSection'
 import { SearchableRow } from '../SearchableRow'
+import { Select } from '@renderer/ui/Select'
 
 const ROW = {
   title: 'Authenticator',
@@ -86,20 +87,20 @@ function AddEntryForm({ onAdded }: { onAdded: (entry: AuthenticatorEntry) => voi
           <input type="text" className="toylock-input" placeholder="Issuer (e.g. GitHub)" value={issuer} onChange={(e) => setIssuer(e.target.value)} />
           <input type="text" className="toylock-input" placeholder="Account (e.g. you@example.com)" value={account} onChange={(e) => setAccount(e.target.value)} />
           <input type="text" className="toylock-input" placeholder="Secret (base32)" value={secret} onChange={(e) => setSecret(e.target.value)} />
-          <select className="toylock-select" value={algorithm} onChange={(e) => setAlgorithm(e.target.value as OtpAlgorithm)}>
+          <Select className="toylock-select" value={algorithm} onChange={(e) => setAlgorithm(e.target.value as OtpAlgorithm)}>
             {OTP_ALGORITHMS.map((a) => (
               <option key={a} value={a}>
                 {a}
               </option>
             ))}
-          </select>
-          <select className="toylock-select" value={digits} onChange={(e) => setDigits(Number(e.target.value))}>
+          </Select>
+          <Select className="toylock-select" value={digits} onChange={(e) => setDigits(Number(e.target.value))}>
             {[6, 7, 8].map((d) => (
               <option key={d} value={d}>
                 {d} digits
               </option>
             ))}
-          </select>
+          </Select>
           <input
             type="number"
             className="toylock-number"

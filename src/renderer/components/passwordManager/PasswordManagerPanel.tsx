@@ -32,6 +32,7 @@ import { IconLock, IconUnlock } from '../icons'
 import { MaterialSymbol } from '../MaterialSymbol'
 import { Button } from '@renderer/ui/Button'
 import { Input } from '@renderer/ui/Input'
+import { Select } from '@renderer/ui/Select'
 
 export interface PasswordManagerGroupOption {
   id: string
@@ -655,7 +656,7 @@ function ManagerCard({
               Rename
             </Button>
           )}
-          <select
+          <Select
             className="pwm-select"
             aria-label={`Bind "${manager.name}" to a group`}
             value={manager.groupId ?? ''}
@@ -668,7 +669,7 @@ function ManagerCard({
                 {g.title}
               </option>
             ))}
-          </select>
+          </Select>
           <Button variant="default" danger
             onClick={(e) => {
               e.stopPropagation()
@@ -986,14 +987,14 @@ function CreateManagerForm({
         onKeyDown={(e) => e.key === 'Enter' && void submit()}
         aria-label="New manager name"
       />
-      <select className="pwm-select" value={groupId} onChange={(e) => setGroupId(e.target.value)} aria-label="Bind to group">
+      <Select className="pwm-select" value={groupId} onChange={(e) => setGroupId(e.target.value)} aria-label="Bind to group">
         <option value="">Project-scoped (no group)</option>
         {groups.map((g) => (
           <option key={g.id} value={g.id}>
             {g.title}
           </option>
         ))}
-      </select>
+      </Select>
       {error && (
         <div className="pwm-warn" role="alert">
           {error}
