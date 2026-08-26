@@ -25,8 +25,10 @@ scripts/check-personal-vocabulary-coverage.mjs. It covers settings fields and se
 dialogs, prompts, notifications, tooltips, canvas and board surfaces, source control, onboarding,
 the dim sum notice, publish/find/remote pickers, browser profiles, password management, conversion,
 Minecraft panels, authenticator and speech settings, and toy-lock setup. The checker requires an
-exact local mapper boundary and an audit row for each producer. It also runs deliberate in-memory
-negative regressions for a removed producer row, mapper call, and documentation row.
+exact local mapper boundary and an audit row for each producer. Its negative regression copies a
+complete producer and documentation fixture, removes a real mapper call and a real audit row, then
+executes the checker against that mutated fixture so a toothless in-memory assertion cannot report
+a false pass.
 
 None of this leaves your machine. The file is read, checked, and applied entirely where it sits —
 never uploaded, logged, exported, or synced, not even alongside the rest of your app settings. If
@@ -151,9 +153,9 @@ the substitution without anyone remembering to opt in:
   card menu (including its "Move to" column titles) and the source-control ⋯ menu
 - ✅ Shared localized copy (`useI18n()` and `Localized`) and the shared controls used by Settings:
   `Input`, `Button`, `Switch`, `Select`, `NumberField`, `TextArea`, `TextField`, `Fab`,
-  `IconButton`, `SegmentedButton`, `Tabs`, `Dialog`, and `ListRow`. Their prose props are mapped
-  before dynamic interpolation, while option values, ids, paths, provider/account/user facts, and
-  external errors remain exact.
+  `IconButton`, `SegmentedButton`, `Tabs`, `Dialog`, and `ListRow`. Their prose props, including
+  native option and option-group labels, are mapped before dynamic interpolation, while option
+  values, ids, paths, provider/account/user facts, and external errors remain exact.
 - ✅ The settings field boundary has focused coverage in
   `src/renderer/components/settings/FieldRow.vocabulary.test.tsx`, including the unknown-School
   hydration fail-closed state and protection for interpolated facts.
@@ -172,9 +174,9 @@ Named exclusions worth knowing, each for a reason above:
 - **A notification's `body`.** Push sites hand it raw machine text — `error.message`, a core
   `assessment.reason`, a git failure line, a clipped agent transcript line. The title and the
   action labels are ours; the body is quoted output.
-- **`DestructiveConfirmGate`.** Its own contract already says the funny-level/localization rules
-  apply to copy elsewhere and never to that sentence, and its `affected` list names the exact
-  items being destroyed.
+- **`DestructiveConfirmGate`.** Its `title` and `description` prose are mapped through the shared
+  template boundary, while the optional `titleParams` and `descriptionParams` values are inserted
+  verbatim. Its `affected` list remains an exact list of the items being destroyed.
 - **The source-control branch picker and commit menu.** A branch row's label IS the branch name
   handed to `git.merge/rebase/deleteBranch`, and commit rows carry commit identity. A string that
   is both displayed and executed is never translated.

@@ -1,7 +1,7 @@
 import type React from 'react'
 import { useSettingsSearchState } from './context'
 import { matchesEntry, type SettingsSearchEntry } from './search'
-import { useVocabularyText } from '../../lib/personalVocabulary/useVocabularyText'
+import { useVocabularyMapper, useVocabularyText } from '../../lib/personalVocabulary/useVocabularyText'
 
 /** Section shell: header + card body. Renders only when it is the active section
  *  (no query) or when at least one of its searchEntries matches (query present). */
@@ -34,8 +34,15 @@ export function SettingsSection({
   // runs against the ORIGINAL title/searchEntries, so a rename never breaks ⌘K-style lookup).
   const vocabTitle = useVocabularyText(title)
   const vocabDescription = useVocabularyText(description)
+  const vocab = useVocabularyMapper()
+  const visibleEntries = searchEntries?.map((entry) => ({
+    ...entry,
+    title: vocab(entry.title),
+    description: vocab(entry.description),
+    keywords: entry.keywords?.flatMap((keyword) => [keyword, vocab(keyword)])
+  }))
   if (hasQuery) {
-    const anyMatch = !searchEntries || searchEntries.some((e) => matchesEntry(search, e))
+    const anyMatch = !visibleEntries || visibleEntries.some((e) => matchesEntry(search, e))
     if (!anyMatch) {
       return null
     }

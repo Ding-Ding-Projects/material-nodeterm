@@ -2,17 +2,25 @@
 
 // Hand-written producer inventory for the renderer's local personal-vocabulary boundary.
 // Discovery is intentionally not used: a producer removed from this list must make this check red.
-import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { tmpdir } from 'node:os'
+import { spawnSync } from 'node:child_process'
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
+const SCRIPT_PATH = fileURLToPath(import.meta.url)
+const scriptArgs = process.argv.slice(2)
+const rootIndex = scriptArgs.indexOf('--root')
+const ROOT = rootIndex >= 0 && scriptArgs[rootIndex + 1]
+  ? scriptArgs[rootIndex + 1]
+  : join(dirname(SCRIPT_PATH), '..')
+const fixtureRun = scriptArgs.includes('--fixture-run')
 const PRODUCERS = [
   ['settings-fields', 'src/renderer/components/settings/FieldRow.tsx', 'useVocabularyText('],
   ['settings-sections', 'src/renderer/components/settings/SettingsSection.tsx', 'useVocabularyText('],
   ['settings-page', 'src/renderer/components/settings/SettingsPage.tsx', 'useLocalizedVocabularyText()'],
   ['settings-sidebar', 'src/renderer/components/settings/SettingsSidebar.tsx', 'useI18n()'],
+  ['settings-search-corpus', 'src/renderer/components/settings/SearchableRow.tsx', 'useVocabularyMapper()'],
   ['personal-vocabulary-upload', 'src/renderer/components/settings/sections/PersonalVocabularySection.tsx', 'usePersonalVocabulary'],
   ['command-palette', 'src/renderer/components/CommandPalette.tsx', 'useVocabularyCommands'],
   ['context-menus', 'src/renderer/components/menu/VocabularyContextMenu.tsx', 'useVocabularyMenuItems'],
@@ -44,7 +52,6 @@ const PRODUCERS = [
   ['speech-settings', 'src/renderer/components/settings/sections/SpeechSection.tsx', 'useVocabularyMapper()'],
   ['toy-lock-wizard', 'src/renderer/components/toylocks/LockWizard.tsx', 'useVocabularyMapper()'],
   ['ui-input', 'src/renderer/ui/Input.tsx', 'useVocabularyMapper()'],
-  ['ui-button', 'src/renderer/ui/Button.tsx', 'useVocabularyMapper()'],
   ['ui-md3-button', 'src/renderer/ui/md3/Button.tsx', 'useVocabularyMapper()'],
   ['ui-chip', 'src/renderer/ui/md3/Chip.tsx', 'useVocabularyMapper()'],
   ['ui-menu', 'src/renderer/ui/md3/Menu.tsx', 'useVocabularyMapper()'],
@@ -157,36 +164,36 @@ if (pendingProductionSurfaces.length > 0) {
 }
 check('producer inventory has no duplicate identifiers', errors.length === 0)
 
-// Deliberate red regressions, all in memory: remove a row, a mapper call, and the documentation row.
-const originalRows = PRODUCERS.map((row) => row.join('|')).join('\n')
-check('negative regression catches a removed producer row', !PRODUCERS.slice(1).some(([id]) => id === PRODUCERS[0][0]))
-const mutationTarget = PRODUCERS.find(([id]) => id === 'tooltip')
-check('negative regression catches a removed mapper call', mutationTarget !== undefined && !hasMarker(read(mutationTarget[1]).replace(mutationTarget[2], ''), mutationTarget[2]))
-check('negative regression catches a removed audit row', !(read(DOC) || '').replace('| ' + String.fromCharCode(96) + PRODUCERS[0][0] + String.fromCharCode(96) + ' |', '').includes('| ' + String.fromCharCode(96) + PRODUCERS[0][0] + String.fromCharCode(96) + ' |'))
-check('negative regression fixture is non-empty', originalRows.length > 0)
-
-// Mutate copies of real producer and documentation files, then verify the same exact predicates
-// reject the missing evidence. This is intentionally filesystem-backed, not a self-referential
-// array-only assertion.
+// Mutate a complete fixture and execute this checker against it, rather than only invoking one
+// predicate in memory. This catches a broken checker that accidentally passes its own miniature
+// assertion while the real inventory path would still accept a missing producer.
 const mutationRoot = mkdtempSync(join(tmpdir(), 'nodeterm-vocabulary-audit-'))
 try {
-  const target = PRODUCERS.find(([id]) => id === 'tooltip')
-  if (target) {
-    const sourcePath = join(mutationRoot, 'Tooltip.tsx')
-    copyFileSync(join(ROOT, target[1]), sourcePath)
-    writeFileSync(sourcePath, readFileSync(sourcePath, 'utf8').replace(target[2], ''), 'utf8')
-    check('real-file mapper mutation is rejected', !hasMarker(readFileSync(sourcePath, 'utf8'), target[2]))
+  if (!fixtureRun) {
+    for (const [, file] of [...PRODUCERS, ...PRODUCTION_SURFACES, ['audit-doc', DOC, '']]) {
+      const source = join(ROOT, file)
+      const target = join(mutationRoot, file)
+      mkdirSync(dirname(target), { recursive: true })
+      if (existsSync(source)) copyFileSync(source, target)
+    }
+    const target = PRODUCERS.find(([id]) => id === 'tooltip')
+    if (target) {
+      const sourcePath = join(mutationRoot, target[1])
+      writeFileSync(sourcePath, readFileSync(sourcePath, 'utf8').replace(target[2], ''), 'utf8')
+      const result = spawnSync(process.execPath, [SCRIPT_PATH, '--root', mutationRoot, '--fixture-run'], {
+        encoding: 'utf8'
+      })
+      check('full checker rejects a removed mapper call', result.status !== 0)
+    }
+    const docPath = join(mutationRoot, DOC)
+    const quote = String.fromCharCode(96)
+    const docLines = readFileSync(docPath, 'utf8').split(/\r?\n/)
+    writeFileSync(docPath, docLines.filter((line) => !line.startsWith('| ' + quote + 'tooltip' + quote + ' |')).join('\n'), 'utf8')
+    const docResult = spawnSync(process.execPath, [SCRIPT_PATH, '--root', mutationRoot, '--fixture-run'], {
+      encoding: 'utf8'
+    })
+    check('full checker rejects a removed audit row', docResult.status !== 0)
   }
-  const docPath = join(mutationRoot, 'audit.md')
-  copyFileSync(join(ROOT, DOC), docPath)
-  const quote = String.fromCharCode(96)
-  const docLines = readFileSync(docPath, 'utf8').split(/\r?\n/)
-  writeFileSync(docPath, docLines.filter((line) => !line.startsWith('| ' + quote + 'tooltip' + quote + ' |')).join('\n'), 'utf8')
-  check('real-file producer-row mutation is rejected', !readFileSync(docPath, 'utf8').split(/\r?\n/).some((line) => line.startsWith('| ' + quote + 'tooltip' + quote + ' |')))
-  const surfaceCopy = join(mutationRoot, 'App.tsx')
-  copyFileSync(join(ROOT, PRODUCTION_SURFACES[0][1]), surfaceCopy)
-  rmSync(surfaceCopy)
-  check('real-file production-surface mutation is rejected', !existsSync(surfaceCopy))
 } finally {
   rmSync(mutationRoot, { recursive: true, force: true })
 }

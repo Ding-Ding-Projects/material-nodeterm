@@ -3,20 +3,24 @@ import { createPortal } from 'react-dom'
 import { useMenuFlip } from '../ui/useMenuFlip'
 import { isTopDialog, nextDialogId, popDialog, pushDialog } from './dialog-stack'
 import { Slider } from '@renderer/ui/md3'
-import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { useVocabularyMapper, useVocabularyTemplate } from '../lib/personalVocabulary/useVocabularyText'
 
 export interface DestructiveConfirmGateProps {
   /** The exact destructive action, in plain words — "Delete 3 nodes", "Delete project
    *  permanently". Never a euphemism; the funny-level/localization rules apply to copy
    *  ELSEWHERE in the app, never to this sentence. */
   title: string
+  /** Optional substitutions for title prose. Values are displayed exactly and never mapped. */
+  titleParams?: Record<string, string>
   /** What will be affected and why it cannot be undone. Kept as plain, unambiguous prose —
    *  animation and styling below this line may not obscure what it says. */
   description: string
+  /** Optional substitutions for description prose. Values are displayed exactly and never mapped. */
+  descriptionParams?: Record<string, string>
   /** Optional named list of the exact items affected (node titles, a project name, …) — so the
    *  user approves what they were actually shown, not whichever item a race condition left
    *  behind. */
-  affected?: string[]
+  affected?: readonly string[]
   confirmLabel?: string
   /** Screen coordinates of the control that triggered this — renders an ANCHORED card beside
    *  it (via useMenuFlip) instead of a dead-center modal, per the "prefer anchored" rule. Omit
@@ -40,7 +44,9 @@ function prefersReducedMotion(): boolean {
  */
 export function DestructiveConfirmGate({
   title,
+  titleParams,
   description,
+  descriptionParams,
   affected,
   confirmLabel = 'Delete',
   anchor,
@@ -50,6 +56,8 @@ export function DestructiveConfirmGate({
 }: DestructiveConfirmGateProps): React.JSX.Element {
   const vocab = useVocabularyMapper()
   const visibleConfirmLabel = vocab(confirmLabel)
+  const visibleTitle = useVocabularyTemplate(title, titleParams) ?? title
+  const visibleDescription = useVocabularyTemplate(description, descriptionParams) ?? description
   const idRef = useRef<string>()
   if (!idRef.current) idRef.current = nextDialogId()
   const id = idRef.current
@@ -141,10 +149,10 @@ export function DestructiveConfirmGate({
         </span>
         <div>
           <div className="destgate__title" id={titleId}>
-            {title}
+            {visibleTitle}
           </div>
           <div className="destgate__desc" id={descId}>
-            {description}
+            {visibleDescription}
           </div>
         </div>
       </div>
@@ -199,7 +207,7 @@ export function DestructiveConfirmGate({
               step={1}
               value={value}
               disabled={!bothArmed}
-              aria-label={`${vocab('Slide fully across to confirm')}: ${title}`}
+              aria-label={`${vocab('Slide fully across to confirm')}: ${visibleTitle}`}
               aria-valuetext={`${value} percent${bothArmed ? '' : ` — ${vocab('both keys required first')}`}`}
               onChange={(e) => armAndMaybeFire(Number(e.target.value))}
               onKeyUp={(e) => {

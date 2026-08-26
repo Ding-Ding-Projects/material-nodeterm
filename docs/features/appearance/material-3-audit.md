@@ -266,6 +266,7 @@ Every listed renderer producer has an explicit local mapper boundary. Commands, 
 | `settings-sections` | SettingsSection | `src/renderer/components/settings/SettingsSection.tsx` | `useVocabularyMapper()` |
 | `settings-page` | Settings scope and every production section host | `src/renderer/components/settings/SettingsPage.tsx` | `useLocalizedVocabularyText()` |
 | `settings-sidebar` | Settings group and section navigation | `src/renderer/components/settings/SettingsSidebar.tsx` | `useI18n()` shared vocabulary boundary |
+| `settings-search-corpus` | Settings search matches visible replacements and shipped aliases | `src/renderer/components/settings/SearchableRow.tsx` | `useVocabularyMapper()` |
 | `shared-prose-primitives` | Shared controls carrying prose props | `src/renderer/ui/` | `useVocabularyMapper()` in each primitive |
 | `shared-input-controls` | Shared range, checkbox and radio accessible copy | `src/renderer/ui/md3/Slider.tsx`, `Checkbox.tsx`, `Radio.tsx` | `useVocabularyMapper()` |
 | `personal-vocabulary-upload` | Upload settings | `src/renderer/components/settings/sections/PersonalVocabularySection.tsx` | `usePersonalVocabulary` |

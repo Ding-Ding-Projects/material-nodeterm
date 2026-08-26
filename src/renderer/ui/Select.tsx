@@ -1,7 +1,25 @@
-import type { SelectHTMLAttributes } from 'react'
+import { Children, cloneElement, isValidElement, type ReactNode, type SelectHTMLAttributes } from 'react'
 import './md3/primitives.css'
 import { cn } from './cn'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+
+function mapOptionChildren(children: ReactNode, map: ReturnType<typeof useVocabularyMapper>): ReactNode {
+  return Children.map(children, (child) => {
+    if (!isValidElement(child)) return child
+    const props = child.props as { children?: ReactNode; label?: unknown }
+    if (child.type === 'option') {
+      const label = props.children
+      return typeof label === 'string' ? cloneElement(child, undefined, map(label)) : child
+    }
+    if (child.type === 'optgroup') {
+      const label = props.label
+      return cloneElement(child, {
+        label: typeof label === 'string' ? map(label) : label
+      }, mapOptionChildren(props.children, map))
+    }
+    return child
+  })
+}
 
 /**
  * The app's dense select, on the same Material Design 3 outlined-field anatomy as `ui/Input`
@@ -18,7 +36,7 @@ export function Select({
   return (
     <span className="mdx-select__wrap">
       <select className={cn('mdx-select', className)} {...rest} aria-label={vocab(rest['aria-label'])} title={vocab(rest.title)}>
-        {children}
+        {mapOptionChildren(children, vocab)}
       </select>
       <svg
         aria-hidden="true"

@@ -116,6 +116,23 @@ describe('School mode at the renderer localization boundary', () => {
     expect(host.querySelector('[data-param-copy]')?.textContent).toBe('Hello Alice')
   })
 
+  it('keeps exact parameter interpolation while School mode suppresses vocabulary', () => {
+    usePersonalVocabulary.setState({
+      entries: { Hello: 'Howdy', Alice: 'Do-not-rewrite' },
+      status: 'loaded',
+      entryCount: 2,
+      loadedAt: Date.now(),
+      lastError: null
+    })
+    useSchoolMode.setState({ enabled: true, hydrated: true })
+    function SchoolHarness(): React.JSX.Element {
+      const { t } = useI18n()
+      return <span data-school-copy>{t('test.dynamic', 'Hello {person}', { person: 'Alice' }).primary}</span>
+    }
+    act(() => root.render(<SchoolHarness />))
+    expect(host.querySelector('[data-school-copy]')?.textContent).toBe('Hello Alice')
+  })
+
   it('omits the Language controls while hydration is unknown or mode is ON', () => {
     act(() => root.render(<LanguageSection isActive />))
     expect(host.querySelector('[data-settings-section="language"]')).toBeNull()

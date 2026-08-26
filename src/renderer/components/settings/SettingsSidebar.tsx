@@ -114,7 +114,11 @@ export function SettingsSidebar({
               const isSchoolMode = s.id === 'school-mode'
               const sectionTitle = isSchoolMode ? label : ts(`settings.section.${s.id}`, s.title)
               const searchTitle = isSchoolMode ? label : s.title
-              const dimmed = hasQuery && !matchesEntry(search, { title: searchTitle })
+              const visibleAndShippedTitles = [searchTitle, sectionTitle]
+              const dimmed = hasQuery && !matchesEntry(search, {
+                title: sectionTitle,
+                keywords: visibleAndShippedTitles
+              })
               return (
                 <button
                   key={s.id}

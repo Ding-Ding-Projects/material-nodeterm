@@ -138,7 +138,7 @@ export function Dialog({
         aria-label={!title ? vocab(rest['aria-label']) : undefined}
       >
         {icon}
-        {title && <div id={titleId} className="mdx-dialog__title">{title}</div>}
+        {title && <div id={titleId} className="mdx-dialog__title">{typeof title === 'string' ? vocab(title) : title}</div>}
         {children}
         {actions && <div className="mdx-dialog__actions">{actions}</div>}
       </div>

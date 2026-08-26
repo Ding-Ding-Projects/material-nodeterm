@@ -22,6 +22,8 @@ import { applyVocabularyToTemplate } from './personalVocabulary/apply'
  * `t(id, fallback)` returns `{ primary, secondary }` for surfaces that can render a stacked
  * primary + compact secondary line (bilingual mode). `ts(id, fallback)` joins the two into one
  * line ("English · 廣東話") for a button label, aria-label, or window title that can't stack.
+ * Both functions apply the local vocabulary to prose before any supplied dynamic facts are
+ * interpolated. School mode suppresses that optional mapping while preserving exact facts.
  * `emoji(char)` returns the given emoji when the user has opted into dialog decoration, else ''
  * — never call it for a button/label/control string (see docs/language-modes.md).
  */

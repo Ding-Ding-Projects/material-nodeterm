@@ -8,7 +8,6 @@ import { SearchableRow } from '../SearchableRow'
 import { FieldRow } from '../FieldRow'
 import { Select } from '@renderer/ui/Select'
 import { Radio } from '@renderer/ui/md3'
-import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
 import { SegmentedPill } from '@renderer/ui/SegmentedPill'
 import { Button } from '@renderer/ui/Button'
 import { formatShortcut, isHoldChord } from '@shared/shortcut'
@@ -78,7 +77,6 @@ function modelLabel(id: string): string {
 }
 
 export function SpeechSection({ isActive }: { isActive: boolean }): React.JSX.Element {
-  const vocab = useVocabularyMapper()
   const settings = useSettings((s) => s.settings)
   const update = useSettings((s) => s.update)
 
@@ -191,7 +189,7 @@ export function SpeechSection({ isActive }: { isActive: boolean }): React.JSX.El
   return (
     <SettingsSection
       id="speech"
-      title={vocab('Speech')}
+      title="Speech"
       description="Dictate into any terminal or chat node. Local Whisper runs fully on-device — nothing leaves this machine."
       isActive={isActive}
       searchEntries={ENTRIES}

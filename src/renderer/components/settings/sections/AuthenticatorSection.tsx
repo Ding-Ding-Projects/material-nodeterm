@@ -19,7 +19,6 @@ import { SettingsSection } from '../SettingsSection'
 import { SearchableRow } from '../SearchableRow'
 import { Select } from '@renderer/ui/Select'
 import { Radio } from '@renderer/ui/md3'
-import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
 
 const ROW = {
   title: 'Authenticator',
@@ -351,7 +350,6 @@ function EntryRow({
 }
 
 export function AuthenticatorSection({ isActive }: { isActive: boolean }): React.JSX.Element {
-  const vocab = useVocabularyMapper()
   const [entries, setEntries] = useState<AuthenticatorEntry[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
   const [mutationError, setMutationError] = useState<string | null>(null)
@@ -423,8 +421,8 @@ export function AuthenticatorSection({ isActive }: { isActive: boolean }): React
   return (
     <SettingsSection
       id="authenticator"
-      title={vocab('Authenticator')}
-      description={vocab('A local, offline place for arbitrary TOTP secrets — nothing here syncs, phones home, or leaves this machine except through the export below, which you have to unlock on purpose.')}
+      title="Authenticator"
+      description="A local, offline place for arbitrary TOTP secrets — nothing here syncs, phones home, or leaves this machine except through the export below, which you have to unlock on purpose."
       isActive={isActive}
       searchEntries={[ROW]}
     >
