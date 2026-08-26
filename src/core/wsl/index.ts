@@ -37,3 +37,6 @@ export { detectWsl, installWsl } from './install'
 
 export type { WslDistributionMemory, WslMemoryReport } from './memory'
 export { readWslDistributionMemory } from './memory'
+
+export type { WslServiceOptions } from './service'
+export { startWslService } from './service'

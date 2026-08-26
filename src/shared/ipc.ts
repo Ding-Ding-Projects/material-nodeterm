@@ -185,6 +185,16 @@ export const IPC = {
   /** The scoped machine's RAM (available/total) — the cheap read behind the system-resource
    *  pill. Safe to poll locally; NOT polled for an SSH scope. */
   sessionMemoryHost: 'session-memory:host',
+  /** WSL distribution management (docs pending) — src/core/wsl/service.ts. Windows-only in
+   *  practice: `wsl.exe` simply is not found elsewhere, and every handler degrades to a real,
+   *  honest error rather than a silent no-op. Local-only over relay — see
+   *  src/main/relay-rpc-policy.ts's header for why (same reasoning as `authenticator:*`). */
+  wslList: 'wsl:list',
+  wslCatalogue: 'wsl:catalogue',
+  wslCreate: 'wsl:create',
+  wslSleep: 'wsl:sleep',
+  wslWake: 'wsl:wake',
+  wslDelete: 'wsl:delete',
   contextUpdate: 'context:update',
   contextEnsure: 'context:ensure',
   // Team presence (docs/team-presence.md). `presence:hello` is a REQUEST: its response tells the

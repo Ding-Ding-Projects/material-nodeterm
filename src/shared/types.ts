@@ -3772,6 +3772,12 @@ export interface NodeTerminalApi {
   usage: UsageApi
   sessionMemory: SessionMemoryApi
   vscode: VsCodeApi
+  /** Windows-only WSL distribution management (docs pending) — src/core/wsl/service.ts.
+   *  Optional: a Linux Server Edition host and every non-Windows/mobile bridge simply omit
+   *  it, exactly like `terminalProfiles` above. Where it IS present, every method still
+   *  degrades honestly rather than silently: `wsl.exe` missing/unreachable rejects with a
+   *  real error, never a fabricated empty list. */
+  wsl?: import('./wsl').WslApi
   export: ExportApi
   history: LocalHistoryApi
   context: ContextApi

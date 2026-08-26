@@ -1003,6 +1003,34 @@ export function buildSessionMemoryApi(client: RpcClient): Pick<NodeTerminalApi, 
 /** Real, not a stub: `registerVsCodeHandlers` runs in the server shell too (server/handlers/
  *  index.ts), so `detect`/`open` act on the machine actually running the Server Edition — the
  *  same machine the browser is talking to. */
+/**
+ * Real, not a stub: `startWslService` registers these channels in the server shell too (the same
+ * core service Desktop uses), so the browser gets genuine WSL management for the machine it is
+ * served from. `wsl.exe` simply is not found on a non-Windows host, so `list()`/`catalogue()`
+ * reject with a real, honest error there -- never a silently fabricated empty array.
+ *
+ * `client.request` already rejects on a handler-thrown error (see RpcClient.request), which is
+ * exactly the "reject on failure, never resolve to []" contract `state/wsl.ts`'s `refresh()`
+ * depends on -- nothing extra to do here to preserve it.
+ */
+export function buildWslApi(client: RpcClient): Pick<NodeTerminalApi, 'wsl'> {
+  return {
+    wsl: {
+      list: () => client.request(IPC.wslList) as ReturnType<import('@shared/wsl').WslApi['list']>,
+      catalogue: () =>
+        client.request(IPC.wslCatalogue) as ReturnType<import('@shared/wsl').WslApi['catalogue']>,
+      create: (input) =>
+        client.request(IPC.wslCreate, input) as ReturnType<import('@shared/wsl').WslApi['create']>,
+      sleep: (name) =>
+        client.request(IPC.wslSleep, name) as ReturnType<import('@shared/wsl').WslApi['sleep']>,
+      wake: (name) =>
+        client.request(IPC.wslWake, name) as ReturnType<import('@shared/wsl').WslApi['wake']>,
+      delete: (name) =>
+        client.request(IPC.wslDelete, name) as ReturnType<import('@shared/wsl').WslApi['delete']>
+    }
+  }
+}
+
 export function buildVsCodeApi(client: RpcClient): Pick<NodeTerminalApi, 'vscode'> {
   return {
     vscode: {
@@ -1336,6 +1364,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildUsageApi(client),
     ...buildSessionMemoryApi(client),
     ...buildVsCodeApi(client),
+    ...buildWslApi(client),
     ...buildLocalHistoryApi(client),
     ...buildToylockApi(client),
     ...buildAuthenticatorApi(client),
