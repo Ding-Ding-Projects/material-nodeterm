@@ -1147,6 +1147,106 @@ const CHECKS = [
       }
     },
   },
+  {
+    id: 'wsl-bridge',
+    title: 'The WSL bridge answers from the real machine, and never invents an empty one',
+    async run() {
+      // READ-ONLY on purpose. Creating, sleeping or deleting a distribution here would touch this
+      // machine's real WSL, and the whole safety property of the feature is that nodeterm never
+      // touches one it did not create. Enumeration is the honest thing to exercise.
+      const present = await evaluate(`!!(window.nodeTerminal && window.nodeTerminal.wsl)`)
+      if (!present) return { ok: false, why: 'window.nodeTerminal.wsl is absent — the bridge is unwired' }
+
+      const listed = await settle('__wiredWslList', 'window.nodeTerminal.wsl.list()')
+
+      // A REJECTION is a pass, and this is the point of the check. On a machine where WSL cannot
+      // be enumerated the honest answer is a refusal carrying a reason; an empty array would be
+      // the app claiming this machine has no distributions, which is a different and much worse
+      // sentence. Either shape proves the round trip reached main and came back truthfully.
+      if (!listed.ok) {
+        const why = String(listed.error || '')
+        if (!why.trim()) return { ok: false, why: 'the bridge rejected with no reason at all' }
+        return { ok: true, detail: `refused with a reason rather than faking an empty machine: ${why}` }
+      }
+
+      if (!Array.isArray(listed.value)) {
+        return { ok: false, why: `list() resolved with ${typeof listed.value}, not an array` }
+      }
+      const rows = listed.value
+      // Ownership must come from the app's own ledger, so on a machine nodeterm has never created
+      // a distribution on, every row must say "not ours" — including any whose NAME looks like it
+      // could be ours. A prefix is not provenance.
+      const claimed = rows.filter((r) => r && r.ownedByApp === true).map((r) => r.name)
+      const shaped = rows.every((r) => r && typeof r.name === 'string' && typeof r.ownedByApp === 'boolean')
+      if (!shaped) return { ok: false, why: 'a row arrived without a name or an ownership verdict' }
+      return {
+        ok: true,
+        detail:
+          `enumerated ${rows.length} real distribution(s); ` +
+          (claimed.length ? `app-owned per the ledger: ${claimed.join(', ')}` : 'none claimed as app-owned'),
+      }
+    },
+  },
+  {
+    id: 'nsis-node',
+    title: 'The NSIS installer node can actually be created from the canvas',
+    async run() {
+      // It was registered in the canvas node map for a while with no way to reach it, which is
+      // indistinguishable from working until somebody looks for the menu row. So: open the pane
+      // menu the way a person does, find the row by its label, click it, and require a real node.
+      const before = await evaluate(`document.querySelectorAll('.react-flow__node').length`)
+      const opened = await evaluate(`(function(){
+        var pane = document.querySelector('.react-flow__pane');
+        if (!pane) return false;
+        var r = pane.getBoundingClientRect();
+        pane.dispatchEvent(new MouseEvent('contextmenu', {
+          bubbles: true, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2
+        }));
+        return true;
+      })()`)
+      if (!opened) return { ok: false, why: 'no canvas pane to right-click' }
+      const menu = await until(`!!document.querySelector('[class*="context-menu" i], [class*="ctx-menu" i]')`)
+      if (!menu) return { ok: false, why: 'the pane context menu did not open' }
+
+      // The row may sit inside a submenu (the pane menu groups itself), so hover every trigger
+      // whose label could contain it before giving up.
+      const clicked = await evaluate(`(function(){
+        function rows() {
+          return Array.from(document.querySelectorAll('[class*="menu" i] button, [class*="menu" i] [role="menuitem"]'));
+        }
+        function find() {
+          return rows().find(function (b) { return /nsis/i.test(b.textContent || '') });
+        }
+        var hit = find();
+        if (!hit) {
+          rows().forEach(function (b) {
+            b.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+            b.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+          });
+          hit = find();
+        }
+        if (!hit) return { ok: false, labels: rows().map(function (b) { return (b.textContent || '').trim() }).slice(0, 40) };
+        hit.click();
+        return { ok: true, label: (hit.textContent || '').trim() };
+      })()`)
+      if (!clicked || !clicked.ok) {
+        return { ok: false, why: `no NSIS row in the pane menu; saw: ${JSON.stringify((clicked || {}).labels || [])}` }
+      }
+
+      const grew = await until(`document.querySelectorAll('.react-flow__node').length > ${before} ? document.querySelectorAll('.react-flow__node').length : null`)
+      if (!grew) return { ok: false, why: `clicking “${clicked.label}” created no node` }
+
+      // And it must be the NSIS node rather than merely A node: read main's own workspace back,
+      // which is also the proof the kind persisted rather than living only in the renderer.
+      const loaded = await settle('__wiredNsisWorkspace', 'window.nodeTerminal.workspace.load()')
+      if (!loaded.ok) return { ok: false, why: `workspace.load() → ${loaded.error}` }
+      const kinds = ((loaded.value || {}).projects || []).flatMap((p) => p.nodes || []).map((n) => n.kind)
+      if (!kinds.includes('nsis')) {
+        return { ok: false, why: `a node appeared but main's workspace has no nsis node (kinds: ${[...new Set(kinds)].join(', ')})` }
+      }
+      return { ok: true, detail: `“${clicked.label}” created a real nsis node and main's workspace agrees` }
+    },
+  },
 ]
 
 selected = only ? CHECKS.filter((c) => only.includes(c.id)) : CHECKS
