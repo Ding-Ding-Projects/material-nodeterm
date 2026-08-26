@@ -22,6 +22,16 @@ export interface PtyPressureCopy {
   tone: 'warning' | 'danger'
 }
 
+function countParts(usage: number, ceiling: number): readonly { kind: 'authored' | 'factual'; text: string }[] {
+  return [
+    { kind: 'authored', text: '(' },
+    { kind: 'factual', text: String(usage) },
+    { kind: 'authored', text: ' of ' },
+    { kind: 'factual', text: String(ceiling) },
+    { kind: 'authored', text: ' pty devices)' }
+  ]
+}
+
 /**
  * What the strip says, or `null` for "say nothing".
  *
@@ -45,7 +55,7 @@ export function ptyPressureCopy(p: PtyPressure): PtyPressureCopy | null {
       body,
       bodyParts: [
         { kind: 'authored', text: 'This machine has run out of terminal capacity ' },
-        { kind: 'factual', text: counts },
+        ...countParts(p.usage, p.ceiling),
         { kind: 'authored', text: '. New terminals will fail to open until some are returned. ' },
         { kind: 'authored', text: recover }
       ]
@@ -58,7 +68,7 @@ export function ptyPressureCopy(p: PtyPressure): PtyPressureCopy | null {
     body,
     bodyParts: [
       { kind: 'authored', text: 'This machine is close to its terminal limit ' },
-      { kind: 'factual', text: counts },
+      ...countParts(p.usage, p.ceiling),
       { kind: 'authored', text: '. ' },
       { kind: 'authored', text: recover }
     ]
