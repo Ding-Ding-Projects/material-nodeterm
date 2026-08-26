@@ -822,3 +822,94 @@
 .mdx-slider:focus-visible::-moz-range-thumb {
   box-shadow: 0 0 0 10px color-mix(in srgb, var(--md-primary) 24%, transparent);
 }
+
+/* ---------------------------------------------------------------------------
+ * Checkbox -- MD3 paint over the native input (see ui/md3/Checkbox.tsx for why
+ * the native element is kept). The tick and the indeterminate dash are drawn as
+ * masked pseudo-content so they inherit the checked colour rather than being a
+ * second image that has to be re-themed.
+ * ------------------------------------------------------------------------ */
+.mdx-checkbox {
+  appearance: none;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  border: 2px solid var(--md-on-surface-variant);
+  border-radius: 2px;
+  background: transparent;
+  cursor: pointer;
+  position: relative;
+  transition:
+    background var(--md-motion-effect),
+    border-color var(--md-motion-effect);
+}
+.mdx-checkbox:checked,
+.mdx-checkbox--indeterminate {
+  background: var(--md-primary);
+  border-color: var(--md-primary);
+}
+.mdx-checkbox:checked::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 0;
+  width: 5px;
+  height: 10px;
+  border: solid var(--md-on-primary);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.mdx-checkbox--indeterminate::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 6px;
+  width: 10px;
+  height: 2px;
+  background: var(--md-on-primary);
+}
+.mdx-checkbox:hover:not(:disabled) {
+  box-shadow: 0 0 0 8px color-mix(in srgb, var(--md-primary) 12%, transparent);
+}
+.mdx-checkbox:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+.mdx-checkbox:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+/* ---------------------------------------------------------------------------
+ * TextArea -- the same outlined field anatomy as .mdx-input, sized for prose.
+ * ------------------------------------------------------------------------ */
+.mdx-textarea {
+  width: 100%;
+  min-height: 72px;
+  padding: 10px 12px;
+  border: 1px solid var(--md-outline);
+  border-radius: var(--md-shape-extra-small);
+  background: transparent;
+  color: var(--md-on-surface);
+  font-family: var(--md-font-ui);
+  font-size: 13px;
+  line-height: 1.5;
+  outline: none;
+  resize: vertical;
+  transition: border-color var(--md-motion-effect);
+}
+.mdx-textarea::placeholder {
+  color: var(--md-on-surface-variant);
+}
+.mdx-textarea:hover:not(:disabled) {
+  border-color: var(--md-on-surface);
+}
+.mdx-textarea:focus {
+  border-color: var(--md-primary);
+  box-shadow: inset 0 0 0 1px var(--md-primary);
+}
+.mdx-textarea:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}

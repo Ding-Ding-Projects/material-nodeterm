@@ -47,6 +47,12 @@ export type { BadgeProps } from './Badge'
 export { SegmentedButton } from './SegmentedButton'
 export type { SegmentedButtonProps } from './SegmentedButton'
 
+export { Checkbox } from './Checkbox'
+export type { CheckboxProps } from './Checkbox'
+
+export { TextArea } from './TextArea'
+export type { TextAreaProps } from './TextArea'
+
 export { Slider } from './Slider'
 export type { SliderProps } from './Slider'
 
