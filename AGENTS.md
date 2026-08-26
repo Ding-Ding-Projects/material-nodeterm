@@ -59,6 +59,12 @@ Anything the UI reaches through the preload bridge needs a **real** implementati
 browser edition, or a deliberate, visibly-documented degrade — a stub that compiles but does
 nothing is worse than an explicit "not supported here," because it looks finished.
 
+## Material Design 3 surface policy
+
+Every rendered element in the Windows desktop application uses Material Design 3 primitives and project tokens for color, typography, shape, elevation, state layers, focus, motion, density, scaling, and accessibility. No screen, node, dialog, panel, menu, dropdown, picker, tab, settings section, overlay, status surface, empty state, or error state is exempt. Legacy controls and custom lookalikes are defects to repair, not surfaces to preserve.
+
+The documentation and landing site runs in Kids mode by default. Its current visual style is preserved. Site changes are limited to stale facts, data, releases, links, features, accessibility, and broken behavior. Restyling the site is outside the desktop audit scope.
+
 ## House rules that come up in review
 
 These exist because their absence caused a real, shipped bug — they are not stylistic

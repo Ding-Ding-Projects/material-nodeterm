@@ -18,6 +18,7 @@ import type { DestructiveAuthorization } from '../../../lib/destructiveAuthoriza
 import { SettingsSection } from '../SettingsSection'
 import { SearchableRow } from '../SearchableRow'
 import { Select } from '@renderer/ui/Select'
+import { Radio } from '@renderer/ui/md3'
 
 const ROW = {
   title: 'Authenticator',
@@ -68,10 +69,10 @@ function AddEntryForm({ onAdded }: { onAdded: (entry: AuthenticatorEntry) => voi
     <div className="toylock-add-entry">
       <div className="toylock-radio-row">
         <label>
-          <input type="radio" checked={mode === 'uri'} onChange={() => setMode('uri')} /> Paste a URI
+          <Radio checked={mode === 'uri'} onChange={() => setMode('uri')} /> Paste a URI
         </label>
         <label>
-          <input type="radio" checked={mode === 'manual'} onChange={() => setMode('manual')} /> Enter manually
+          <Radio checked={mode === 'manual'} onChange={() => setMode('manual')} /> Enter manually
         </label>
       </div>
       {mode === 'uri' ? (

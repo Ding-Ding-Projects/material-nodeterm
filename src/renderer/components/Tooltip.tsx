@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode, type SyntheticEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
@@ -13,10 +13,11 @@ export function Tooltip({ label, children, delay = 350 }: TooltipProps) {
   // Personal-vocabulary boundary: a tooltip is pure explanatory prose, and every caller of this
   // component gets the substitution from here rather than wrapping its own label.
   const vocab = useVocabularyMapper()
+  const tooltipId = useId()
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const show = (e: React.MouseEvent) => {
+  const show = (e: SyntheticEvent<HTMLElement>) => {
     const el = e.currentTarget as HTMLElement
     if (timer.current) clearTimeout(timer.current)
     timer.current = setTimeout(() => {
@@ -30,12 +31,28 @@ export function Tooltip({ label, children, delay = 350 }: TooltipProps) {
     setPos(null)
   }
 
+  useEffect(() => () => {
+    if (timer.current) clearTimeout(timer.current)
+  }, [])
+
   return (
-    <span className="tooltip-trigger nodrag" onMouseEnter={show} onMouseLeave={hide} onMouseDown={hide}>
+    <span
+      className="tooltip-trigger nodrag"
+      onMouseEnter={show}
+      onMouseLeave={hide}
+      onFocus={show}
+      onBlur={hide}
+      onMouseDown={hide}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') hide()
+      }}
+      aria-describedby={pos ? tooltipId : undefined}
+      tabIndex={typeof children === 'string' || typeof children === 'number' ? 0 : undefined}
+    >
       {children}
       {pos &&
         createPortal(
-          <div className="tooltip" style={{ left: pos.x, top: pos.y }}>
+          <div id={tooltipId} className="tooltip" role="tooltip" style={{ left: pos.x, top: pos.y }}>
             {vocab(label)}
           </div>,
           document.body

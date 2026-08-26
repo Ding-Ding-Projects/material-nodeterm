@@ -482,6 +482,24 @@ requireFileExists('site/content/changelog.json', 'Generated changelog content')
       } else {
         pass(`site/content/changelog.json: ${json.entries.length} changelog entries present`)
       }
+      checkedCount += 1
+      const current = json.currentRelease
+      if (
+        !current ||
+        current.version !== '0.4.117' ||
+        current.date !== '2026-08-26' ||
+        current.commit !== '727287b8eddd5c30f98306ea442a2584945668d0' ||
+        current.published !== true ||
+        !Array.isArray(current.assets) ||
+        current.assets.length !== 3 ||
+        !current.assets.includes('nodeterm-Setup-0.4.117.exe') ||
+        !current.assets.includes('RELEASES') ||
+        !current.assets.includes('node-terminal-0.4.117-full.nupkg')
+      ) {
+        fail('site/content/changelog.json: currentRelease must describe the verified v0.4.117 stable release and its three published assets')
+      } else {
+        pass('site/content/changelog.json: verified v0.4.117 currentRelease overlay is complete')
+      }
     } catch (err) {
       fail(`site/content/changelog.json: invalid JSON (${err.message})`)
     }

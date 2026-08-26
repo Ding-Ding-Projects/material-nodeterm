@@ -18,7 +18,7 @@ import { bytesToBase64 } from '../../lib/browserBytes'
 import { useActiveSessionApi } from '../../session/session'
 import { MaterialSymbol, type MaterialSymbolName } from '../MaterialSymbol'
 import { AdapterCatalog } from './AdapterCatalog'
-import { Checkbox } from '@renderer/ui/md3'
+import { Checkbox, Progress } from '@renderer/ui/md3'
 
 export interface FileConverterPanelProps {
   onClose: () => void
@@ -140,9 +140,12 @@ function QueueRow({
         <span className="cv-item__status">{item.status.replace('-', ' ')}</span>
       </div>
       {item.status === 'running' && (
-        <div className="cv-progress" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
-          <div className="cv-progress__bar" style={{ width: `${pct}%` }} />
-        </div>
+        <Progress
+          value={pct}
+          label={`Conversion progress for ${item.sourceName}`}
+          className="cv-progress"
+          barClassName="cv-progress__bar"
+        />
       )}
       {item.status === 'needs-confirm' && (
         <div className="cv-confirm">

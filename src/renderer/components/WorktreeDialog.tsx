@@ -4,6 +4,7 @@ import { useDialogStack } from './dialog-stack'
 import { BranchSelect } from './BranchSelect'
 import { isValidGitRef, type WorktreeCreateValue, type WorktreeEntry } from '@shared/worktree'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { Radio } from '@renderer/ui/md3'
 
 interface Props {
   /** 'create' = the pane/palette entry point (a new group frame); 'bind' = an existing group's
@@ -136,11 +137,10 @@ export function WorktreeDialog({
 
         <div className="bind-mode">
           <label>
-            <input type="radio" checked={mode === 'new'} onChange={() => setMode('new')} /> {vocabulary('New branch')}
+            <Radio checked={mode === 'new'} onChange={() => setMode('new')} /> {vocabulary('New branch')}
           </label>
           <label>
-            <input
-              type="radio"
+            <Radio
               checked={mode === 'existing'}
               onChange={() => setMode('existing')}
             />{' '}

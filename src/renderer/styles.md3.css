@@ -819,7 +819,7 @@
   border: 1px solid var(--md-outline-variant);
   border-top-width: 1px; /* was a 3px inline-coloured accent border; the header dot now carries
                              the user's colour choice, so the whole ring stays one weight */
-  border-radius: 24px;
+  border-radius: var(--md-shape-node);
   box-shadow: none;
   transition:
     border-color var(--md-motion-effect),
@@ -2026,7 +2026,7 @@ button.term-node__title-text:focus-visible {
    alphaTint, a per-note user choice, not a role token) — only shape/elevation change here.
    --------------------------------------------------------------------------------------------- */
 .sticky-node {
-  border-radius: 20px;
+  border-radius: var(--md-shape-section);
   box-shadow: none;
 }
 /* `outline`, not `box-shadow`: the border is already carrying the note's OWN colour (inline
@@ -2123,7 +2123,7 @@ button.term-node__title-text:focus-visible {
 .loop-node {
   background: var(--md-surface-container-low);
   border: 1px dashed var(--md-outline-variant);
-  border-radius: 20px;
+  border-radius: var(--md-shape-section);
   box-shadow: none;
 }
 .subagent-node {
@@ -2186,7 +2186,7 @@ button.term-node__title-text:focus-visible {
 /* Native (cron-scheduled) loop node — same shape recipe, warning token in place of raw amber. */
 .native-loop-node {
   border: 1px solid color-mix(in srgb, var(--md-warning) 55%, transparent);
-  border-radius: 20px;
+  border-radius: var(--md-shape-section);
   background: color-mix(in srgb, var(--md-surface-container-low) 92%, var(--md-warning) 8%);
   color: var(--md-on-surface);
   box-shadow: none;
@@ -2245,7 +2245,7 @@ button.term-node__title-text:focus-visible {
    already re-tints it; this file bumps its shape to match the rest of the canvas.
    --------------------------------------------------------------------------------------------- */
 .service-node {
-  border-radius: 24px;
+  border-radius: var(--md-shape-node);
 }
 /* `outline`, not `box-shadow`: the root border is already user-coloured (nodeBorderStyle ->
    inline `borderColor: data.color`), so an outline sits outside it without erasing that choice. */
@@ -2269,7 +2269,7 @@ button.term-node__title-text:focus-visible {
    Dino node (mini-game) — same card recipe, one flat radius.
    --------------------------------------------------------------------------------------------- */
 .dino-node {
-  border-radius: 24px;
+  border-radius: var(--md-shape-node);
 }
 /* Outline again: `borderColor: data.color` on the root carries the user's own choice. */
 .dino-node.selected {
@@ -2387,7 +2387,7 @@ button.term-node__title-text:focus-visible {
 .kanban-col {
   background: var(--md-surface-container-low);
   border: none;
-  border-radius: 24px;
+  border-radius: var(--md-shape-node);
   transition: background var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
   display: flex;
   flex-direction: column;
@@ -3299,7 +3299,7 @@ button.term-node__title-text:focus-visible {
 .palette {
   background: var(--md-surface-container-high);
   border: none;
-  border-radius: 28px;
+  border-radius: var(--md-shape-extra-large);
   box-shadow: none;
   animation: md3-pop-in var(--md3-motion-spatial);
   width: 560px;
@@ -3311,7 +3311,7 @@ button.term-node__title-text:focus-visible {
 }
 .palette--full {
   /* The expanded state keeps the same tonal surface + radius; only its size is special-cased. */
-  border-radius: 28px !important;
+  border-radius: var(--md-shape-extra-large) !important;
   width: min(1040px, calc(100vw - 40px)) !important;
   height: calc(100vh - 80px) !important;
   max-height: none !important;
@@ -3364,7 +3364,7 @@ button.term-node__title-text:focus-visible {
   min-height: 58px;
   padding: 8px 16px;
   gap: 16px;
-  border-radius: 20px;
+  border-radius: var(--md-shape-large);
   font-family: var(--md3-font-ui);
   transition: background var(--md3-motion-effect);
   display: flex;
@@ -3387,7 +3387,7 @@ button.term-node__title-text:focus-visible {
 .palette__icon {
   width: 40px;
   height: 40px;
-  border-radius: 14px;
+  border-radius: var(--md-shape-medium);
   background: var(--md-secondary-container);
   color: var(--md-on-secondary-container);
   flex: none;
@@ -3513,7 +3513,7 @@ button.term-node__title-text:focus-visible {
 .ctx-menu {
   background: var(--md-surface-container-high);
   border: none;
-  border-radius: 20px;
+  border-radius: var(--md-shape-large);
   padding: 8px;
   gap: 1px;
   box-shadow: none;
@@ -3524,13 +3524,13 @@ button.term-node__title-text:focus-visible {
 .ctx-submenu {
   background: var(--md-surface-container-high);
   border: none;
-  border-radius: 20px;
+  border-radius: var(--md-shape-large);
   padding: 8px;
   box-shadow: none;
   animation: md3-fade-in var(--md3-motion-effect);
 }
 .ctx-item {
-  border-radius: 14px;
+  border-radius: var(--md-shape-medium);
   padding: 10px 14px;
   gap: 13px;
   font-family: var(--md3-font-ui);
@@ -3665,7 +3665,7 @@ button.term-node__title-text:focus-visible {
   display: flex;
   flex-direction: column;
   background: var(--md-surface-container-high);
-  border-radius: 20px;
+  border-radius: var(--md-shape-large);
   padding: 12px;
   gap: 8px;
   animation: md3-pop-in var(--md3-motion-spatial);
@@ -3691,7 +3691,7 @@ button.term-node__title-text:focus-visible {
   gap: 10px;
   width: 100%;
   border: none;
-  border-radius: 14px;
+  border-radius: var(--md-shape-medium);
   padding: 9px 12px;
   background: transparent;
   color: var(--md-on-surface);
@@ -3770,7 +3770,7 @@ button.term-node__title-text:focus-visible {
 .anchored-pop {
   background: var(--md-surface-container-high);
   border: none;
-  border-radius: 24px;
+  border-radius: var(--md-shape-extra-large);
   box-shadow: none;
   animation: md3-pop-in var(--md3-motion-spatial);
 }
@@ -3784,11 +3784,14 @@ button.term-node__title-text:focus-visible {
   background: var(--md-surface-container-highest);
   color: var(--md-on-surface);
   border: 1px solid var(--md-outline-variant);
-  border-radius: 8px;
+  border-radius: var(--md-shape-extra-small);
   box-shadow: none;
   font-family: var(--md3-font-ui);
   font-size: 11.5px;
   padding: 6px 10px;
+  max-width: min(360px, calc(100vw - 24px));
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 /* ---- MD3: Confirm / input dialog shell (ConfirmDialog, InputDialog, and every reuser of the
@@ -4070,13 +4073,13 @@ button.term-node__title-text:focus-visible {
      (40px) PLUS the flex gap between them (8px, from .destgate__slider-wrap) — get this wrong
      by the gap amount and the fill floats a few px below the track it's meant to sit inside. */
   margin-top: -48px;
-  border-radius: 999px 0 0 999px;
+  border-radius: var(--md-shape-full) 0 0 var(--md-shape-full);
   background: linear-gradient(90deg, color-mix(in srgb, var(--md-error) 55%, transparent), var(--md-error));
 }
 .destgate__complete {
   background: var(--md-success-container);
   color: var(--md-on-success-container);
-  border-radius: 20px;
+  border-radius: var(--md-shape-section);
   font-family: var(--md3-font-ui);
 }
 .destgate__exit {
@@ -4107,7 +4110,7 @@ button.term-node__title-text:focus-visible {
   background: var(--md-surface-container-high);
   border: none;
   border-left: 4px solid var(--md-primary);
-  border-radius: 20px;
+  border-radius: var(--md-shape-section);
   box-shadow: none;
   padding: 14px 14px 14px 16px;
   animation: md3-pop-in var(--md3-motion-spatial);
@@ -4232,7 +4235,7 @@ button.term-node__title-text:focus-visible {
   border-color: var(--md-error);
 }
 .notif-center__row {
-  border-radius: 20px;
+  border-radius: var(--md-shape-section);
   transition: background var(--md3-motion-effect);
 }
 .notif-center__row:hover {
@@ -4948,7 +4951,7 @@ button.term-node__title-text:focus-visible {
   flex: 0 0 auto;
   height: 17px;
   padding: 0 6px;
-  border-radius: 5px;
+  border-radius: var(--md-shape-compact);
   background: var(--md-tertiary-container);
   color: var(--md-on-tertiary-container);
   font-family: var(--md-font-mono, ui-monospace, monospace);
@@ -5257,7 +5260,7 @@ button.term-node__title-text:focus-visible {
    selector just to undo it for THIS one case — simpler to only own what every child actually
    shares (padding, radius, hover) and leave `display` to whichever child needs it. */
 .md3-settings-card > * {
-  border-radius: 20px;
+  border-radius: var(--md-shape-section);
   padding: 12px 18px;
   min-height: 64px;
   box-sizing: border-box;
@@ -5388,7 +5391,7 @@ button.term-node__title-text:focus-visible {
   gap: 8px;
   padding: 8px 10px;
   border: none;
-  border-radius: 14px;
+  border-radius: var(--md-shape-medium);
   background: transparent;
   color: var(--md-on-surface);
   font-size: 13.5px;
@@ -7049,7 +7052,7 @@ button.term-node__title-text:focus-visible {
 .md3-kids-home__avatar-bubble {
   width: 110px;
   height: 110px;
-  border-radius: 38px;
+  border-radius: var(--md-shape-extra-large);
   background: var(--md-primary-container);
   color: var(--md-on-primary-container);
   display: flex;
@@ -7092,7 +7095,7 @@ button.term-node__title-text:focus-visible {
 .md3-kids-tile {
   position: relative;
   border: none;
-  border-radius: 32px;
+  border-radius: var(--md-shape-extra-large);
   padding: 26px 26px 22px;
   display: flex;
   flex-direction: column;
@@ -7752,8 +7755,7 @@ button.term-node__title-text:focus-visible {
   flex-shrink: 0;
   width: 20px;
   height: 20px;
-  border-radius: 7px; /* no exact --md-shape step between extra-small(6)/small(8) — the design's
-    own literal, same authoring convention already used elsewhere in styles.css */
+  border-radius: var(--md-shape-extra-small);
   font-family: var(--font-mono);
   font-size: 10.5px;
   font-weight: 700;
@@ -7764,7 +7766,7 @@ button.term-node__title-text:focus-visible {
   width: 15px;
   height: 15px;
   font-size: 9px;
-  border-radius: 5px;
+  border-radius: var(--md-shape-extra-small);
 }
 
 .md3-status--m {
@@ -11229,4 +11231,75 @@ button.term-node__title-text:focus-visible {
 }
 .icon-menu__reset-btn {
   align-self: flex-start;
+}
+
+/* ============================================================================================
+   Desktop legacy-control remediation
+   ============================================================================================
+   Several older feature lanes still keep their domain class names (`sc-btn`, `mc-button`, and
+   `toylock-btn`) because those names are part of their behavior and test selectors. Their chrome
+   is nevertheless one shared Material Design 3 recipe. This final layer gives those controls the
+   same token colors, full shape, state layer, focus ring, and disabled treatment as the extracted
+   primitives without changing their event wiring or data semantics. More-specific surface rules
+   above remain free to choose a compact size or a destructive tone. */
+.sc-btn,
+.mc-button,
+.toylock-btn:not(.toylock-btn--link) {
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--md-outline);
+  border-radius: var(--md-shape-full);
+  background: transparent;
+  color: var(--md-on-surface);
+  font-family: var(--md-font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background var(--md-motion-effect),
+    border-color var(--md-motion-effect),
+    color var(--md-motion-effect);
+}
+.sc-btn:hover:not(:disabled),
+.mc-button:hover:not(:disabled),
+.toylock-btn:not(.toylock-btn--link):hover:not(:disabled) {
+  background: color-mix(in srgb, var(--md-on-surface) 8%, transparent);
+}
+.sc-btn:focus-visible,
+.mc-button:focus-visible,
+.toylock-btn:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+.sc-btn:disabled,
+.mc-button:disabled,
+.toylock-btn:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+.sc-btn.primary,
+.mc-button--primary,
+.toylock-btn--primary {
+  border-color: transparent;
+  background: var(--md-primary);
+  color: var(--md-on-primary);
+}
+.sc-btn.primary:hover:not(:disabled),
+.mc-button--primary:hover:not(:disabled),
+.toylock-btn--primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--md-primary) 92%, var(--md-on-primary) 8%);
+}
+.mc-link,
+.toylock-btn--link {
+  color: var(--md-primary);
+  font-family: var(--md-font-ui);
+}
+.mc-link:focus-visible,
+.toylock-btn--link:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+  border-radius: var(--md-shape-extra-small);
+}
+.mc-link--danger {
+  color: var(--md-error);
 }

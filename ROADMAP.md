@@ -57,6 +57,15 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## In progress / partially landed
 
+- [ ] **Full Material Design 3 surface audit (#91)**: source-level inventory and remediation are
+      recorded in `docs/features/appearance/material-3-audit.md` and checked by
+      `scripts/check-material-audit.mjs` (201 rows, including every desktop shell, node,
+      destination, settings section, overlay, status state, empty/error state, and checked-in
+      documentation page). Shared numeric, radio, progress, tooltip, and one-off shape defects were
+      repaired. Built-artifact clipping and pixel verification remain pending. The Comments &
+      Activity panel is retained for p80, the existing-worktree picker for p81, and the WSL creator
+      clipping finding for p79.
+
 - [ ] **Portable canvas projection**: schema 3 root and future universe canvas payloads now have
       a deterministic, bounded, platform-free projection and validator in
       `src/core/portable-canvas-projection.ts`; archive export/import wiring and verification

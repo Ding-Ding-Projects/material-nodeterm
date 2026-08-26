@@ -13,7 +13,7 @@ import { useToyLocks } from '../../state/toylocks'
 import { QrCode } from './QrCode'
 import { PasswordField } from './PasswordField'
 import { RecoveryNotice } from './RecoveryNotice'
-import { Checkbox } from '@renderer/ui/md3'
+import { Checkbox, Radio } from '@renderer/ui/md3'
 import { Select } from '@renderer/ui/Select'
 
 type Step = 'setup' | 'password' | 'totp' | 'done'
@@ -203,8 +203,7 @@ export function LockWizard({
               <span className="toylock-field__label">Unlock with</span>
               <div className="toylock-radio-row">
                 <label>
-                  <input
-                    type="radio"
+                  <Radio
                     name="credentialKind"
                     checked={credentialKind === 'password'}
                     onChange={() => setCredentialKind('password')}
@@ -213,8 +212,7 @@ export function LockWizard({
                   Password
                 </label>
                 <label>
-                  <input
-                    type="radio"
+                  <Radio
                     name="credentialKind"
                     checked={credentialKind === 'totp'}
                     onChange={() => setCredentialKind('totp')}
@@ -222,8 +220,7 @@ export function LockWizard({
                   Authenticator code (TOTP)
                 </label>
                 <label>
-                  <input
-                    type="radio"
+                  <Radio
                     name="credentialKind"
                     checked={credentialKind === 'password-totp'}
                     onChange={() => setCredentialKind('password-totp')}
@@ -231,8 +228,7 @@ export function LockWizard({
                   Password + code (both required)
                 </label>
                 <label title={isWindows ? undefined : 'Windows only'}>
-                  <input
-                    type="radio"
+                  <Radio
                     name="credentialKind"
                     checked={credentialKind === 'windows-pin'}
                     disabled={!isWindows}

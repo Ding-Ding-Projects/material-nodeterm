@@ -10,8 +10,8 @@
 //      app/core/render.js's room footer.
 //   2. CHANGELOG is NOT the design's tiny 5-entry sample — the "What
 //      changed" room reads the real, generated site/content/changelog.json
-//      instead (20 real entries with real commit SHAs). See
-//      app/features/changelog.js.
+//      instead (20 historical entries with real commit SHAs plus one verified
+//      current-release overlay). See app/features/changelog.js.
 
 export const REPO_URL = 'https://github.com/Ding-Ding-Projects/material-nodeterm'
 export const UPSTREAM_URL = 'https://github.com/eneskirca/nodeterm'

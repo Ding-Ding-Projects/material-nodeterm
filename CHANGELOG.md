@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add a hand-written Material Design 3 audit for every Windows desktop surface and every checked-in
+  documentation page, with a fail-closed source checker and shared numeric, radio, progress,
+  keyboard-roving tabs, tooltip, and shape-token remediation. Built-artifact clipping and pixel evidence remain pending;
+  the documentation and landing site stays in its existing Kids-mode visual style.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

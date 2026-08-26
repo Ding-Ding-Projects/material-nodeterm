@@ -103,6 +103,11 @@
   --md-shape-large: var(--radius-xl); /* 16px */
   --md-shape-extra-large: var(--radius-xxl); /* 28px */
   --md-shape-full: var(--radius-full); /* pill / circular */
+  /* Component-specific geometry remains a token rather than a one-off declaration. These values
+     are the measured node, section, and compact badge shapes in the checked-in desktop design. */
+  --md-shape-node: 24px;
+  --md-shape-section: 20px;
+  --md-shape-compact: 4px;
 
   /* ---- Motion — MD3 expressive springs, approximated for CSS ------------------------------
      Theme-independent, declared once. Apply --md-motion-spatial to movement/scale on entrances

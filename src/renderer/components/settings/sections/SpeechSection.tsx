@@ -11,6 +11,7 @@ import { SegmentedPill } from '@renderer/ui/SegmentedPill'
 import { Button } from '@renderer/ui/Button'
 import { formatShortcut, isHoldChord } from '@shared/shortcut'
 import { ShortcutCaptureField } from '../ShortcutCaptureField'
+import { Radio } from '@renderer/ui/md3'
 import type { SettingsSectionId } from '../nav'
 
 const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
@@ -247,10 +248,8 @@ export function SpeechSection({ isActive }: { isActive: boolean }): React.JSX.El
                     className="flex items-center justify-between gap-3 rounded-md border border-border p-3"
                   >
                     <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3">
-                      <input
-                        type="radio"
+                      <Radio
                         name="speech-model"
-                        className="shrink-0"
                         checked={settings.speech.model === m.id}
                         onChange={() => selectModel(m)}
                       />

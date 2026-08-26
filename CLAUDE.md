@@ -2165,6 +2165,17 @@ worktree list`: a worktree deleted outside the app makes its group **stale** (ch
   `MaterialSymbol` (`components/MaterialSymbol.tsx`, names typed against the generated
   `materialSymbols.generated.ts` codepoint map — an unknown name is a compile error, not tofu)
   renders each glyph's raw private-use-area codepoint directly, never the ligature name as text.
+- **Every rendered Windows desktop element is covered by the Material Design 3 audit.** The
+  hand-written inventory is `docs/features/appearance/material-3-audit.md`, and the executable
+  source check is `scripts/check-material-audit.mjs`. It names every screen, node, dialog, panel,
+  menu, dropdown, picker, tab, settings section, overlay, status, empty state, and error state.
+  Each one uses the shared Material Design 3 primitives and project tokens for color, typography,
+  shape, tonal elevation, state layers, focus, motion, density, scaling, and accessibility. Legacy
+  controls and custom lookalikes are defects. Built-artifact launch and capture remain separate
+  evidence and are not claimed by the source-only audit.
+- **The documentation and landing site is Kids mode by default.** Preserve its current visual
+  style. Site edits are limited to stale facts, data, releases, links, features, accessibility,
+  and broken behavior. A desktop Material Design 3 audit must not restyle the site.
 - **Theme**: M3 dark is the default; light lives under `:root[data-theme='light']`. `--accent`
   now resolves to `var(--md-primary)` rather than a literal systemBlue (see the accent-default
   migration below). Canvas background is black with dot grid. A runtime accent is expanded by

@@ -710,6 +710,14 @@
 .mdx-input {
   padding: 0 12px;
 }
+.mdx-number-field {
+  width: 6rem;
+  font-variant-numeric: tabular-nums;
+}
+.mdx-number-field::-webkit-inner-spin-button,
+.mdx-number-field::-webkit-outer-spin-button {
+  opacity: 0.72;
+}
 .mdx-select {
   padding: 0 28px 0 12px;
   appearance: none;
@@ -882,6 +890,120 @@
 }
 
 /* ---------------------------------------------------------------------------
+ * Radio -- native grouping and keyboard behavior with a tokenized M3 surface.
+ * ------------------------------------------------------------------------ */
+.mdx-radio {
+  appearance: none;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  border: 2px solid var(--md-on-surface-variant);
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  position: relative;
+  transition:
+    border-color var(--md-motion-effect),
+    background var(--md-motion-effect);
+}
+.mdx-radio::after {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  background: var(--md-on-primary);
+  transform: scale(0);
+  transition: transform var(--md-motion-effect);
+}
+.mdx-radio:checked {
+  border-color: var(--md-primary);
+  background: var(--md-primary);
+}
+.mdx-radio:checked::after {
+  transform: scale(1);
+}
+.mdx-radio:hover:not(:disabled) {
+  box-shadow: 0 0 0 8px color-mix(in srgb, var(--md-primary) 12%, transparent);
+}
+.mdx-radio:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+.mdx-radio:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+/* ---------------------------------------------------------------------------
+ * Progress -- determinate and indeterminate linear indicators for long operations.
+ * ------------------------------------------------------------------------ */
+.mdx-progress {
+  position: relative;
+  width: 100%;
+  height: 4px;
+  overflow: hidden;
+  border-radius: var(--md-shape-full);
+  background: var(--md-surface-container-highest);
+}
+.mdx-progress__bar {
+  height: 100%;
+  min-width: 0;
+  border-radius: inherit;
+  background: var(--md-primary);
+  transition: width var(--md-motion-effect);
+}
+.mdx-progress--indeterminate .mdx-progress__bar {
+  width: 40%;
+  animation: mdx-progress-indeterminate 1.2s cubic-bezier(0.34, 0.80, 0.34, 1) infinite;
+}
+@keyframes mdx-progress-indeterminate {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(250%); }
+}
+
+/* ---------------------------------------------------------------------------
+ * Tabs -- browser-style tablist with a shared selected state and focus ring.
+ * ------------------------------------------------------------------------ */
+.mdx-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.mdx-tabs > [role='tab'] {
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-radius: var(--md-shape-full);
+  background: transparent;
+  color: var(--md-on-surface-variant);
+  font-family: var(--md-font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background var(--md-motion-effect),
+    color var(--md-motion-effect),
+    border-color var(--md-motion-effect);
+}
+.mdx-tabs > [role='tab']:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--md-on-surface) 8%, transparent);
+  color: var(--md-on-surface);
+}
+.mdx-tabs > [role='tab'][aria-selected='true'] {
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+.mdx-tabs > [role='tab']:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+.mdx-tabs > [role='tab']:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+/* ---------------------------------------------------------------------------
  * TextArea -- the same outlined field anatomy as .mdx-input, sized for prose.
  * ------------------------------------------------------------------------ */
 .mdx-textarea {
@@ -912,4 +1034,15 @@
 .mdx-textarea:disabled {
   opacity: 0.38;
   cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mdx-radio::after,
+  .mdx-progress__bar {
+    transition: none;
+  }
+  .mdx-progress--indeterminate .mdx-progress__bar {
+    animation: none;
+    width: 100%;
+  }
 }
