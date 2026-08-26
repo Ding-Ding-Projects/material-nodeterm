@@ -417,6 +417,7 @@ import {
 import { WslCreateDialog } from '../wsl/WslCreateDialog'
 import { useWsl } from '../state/wsl'
 import { resolveWslApi } from '../wsl/wslCoreApi'
+import type { WslExternalFactError } from '../wsl/wslCopy'
 import { boundGroups, scmScopes, defaultScmScope, selectedScmGroupId } from '@shared/scm-scope'
 import { hintLabel } from '@shared/platform-utils'
 import {
@@ -1391,7 +1392,7 @@ export function Canvas() {
     projectId: string
   } | null>(null)
   const [wslBusy, setWslBusy] = useState(false)
-  const [wslError, setWslError] = useState<string | null>(null)
+  const [wslError, setWslError] = useState<WslExternalFactError | null>(null)
   const wslCatalogue = useWsl((s) => s.catalogue)
   const wslCatalogueLoading = useWsl((s) => s.catalogueLoading)
   const wslCatalogueError = useWsl((s) => s.catalogueError)
@@ -5852,11 +5853,17 @@ export function Canvas() {
         .create({ operationId: v.operationId, catalogueId: v.catalogueId, name: v.name })
         .catch((e: unknown) => ({
           ok: false as const,
-          error: `Could not create the WSL instance: ${e instanceof Error ? e.message : String(e)}`
+          error: e instanceof Error ? e.message : String(e)
         }))
       setWslBusy(false)
       if (!res.ok) {
-        setWslError(res.error)
+        const selectedCatalogueLabel = wslCatalogue.find((entry) => entry.id === v.catalogueId)?.label
+        setWslError({
+          ownership: 'external-factual',
+          text: res.error,
+          facts: ['wsl.exe', v.name, selectedCatalogueLabel ?? ''],
+          authoredPrefix: 'operationErrorPrefix'
+        })
         return
       }
       // Refresh BEFORE deciding anything else, so the frame's chip and the ownership gate start

@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { resolveWslApi, type WslCatalogueEntry, type WslInstanceSummary } from '../wsl/wslCoreApi'
+import type { WslExternalFactError } from '../wsl/wslCopy'
 
 /**
  * The live WSL facts a canvas frame's chip and the create dialog need: which distributions
@@ -15,7 +16,7 @@ interface WslState {
   loaded: boolean
   catalogue: WslCatalogueEntry[]
   catalogueLoading: boolean
-  catalogueError: string | null
+  catalogueError: WslExternalFactError | null
   refresh: () => Promise<void>
   loadCatalogue: () => Promise<void>
   /** Every currently enumerated distro name — the exact set `revalidateWslBinding` and
@@ -57,7 +58,12 @@ export const useWsl = create<WslState>((set, get) => ({
     } catch (e) {
       set({
         catalogueLoading: false,
-        catalogueError: e instanceof Error ? e.message : String(e)
+        catalogueError: {
+          ownership: 'external-factual',
+          text: e instanceof Error ? e.message : String(e),
+          facts: [e instanceof Error ? e.message : String(e)],
+          authoredPrefix: 'catalogueErrorPrefix'
+        }
       })
     }
   },

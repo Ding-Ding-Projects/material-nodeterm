@@ -12,7 +12,9 @@ export interface WslCreateFormState {
   /** Every distro name currently registered on this machine — WSL itself requires uniqueness. */
   existingNames: ReadonlySet<string>
   catalogueLoading: boolean
-  catalogueError: string | null
+  /** Presence of a typed catalogue failure blocks creation; its diagnostic is rendered by the
+   * dialog as an external fact rather than being interpreted by this pure validator. */
+  catalogueError: unknown
   busy: boolean
 }
 
