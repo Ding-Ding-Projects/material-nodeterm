@@ -1867,6 +1867,17 @@ export interface Settings {
   /** Minutes a terminal may sit fully offscreen before its xterm+PTY client is torn down in
    *  place (tmux keeps the session; re-approach reattaches and redraws). 0 = never. */
   offscreenTerminalMinutes: number
+  /** When true, a LOCAL project's `.nodeterm/project.json` is saved as sized parts + a manifest
+   *  (see src/core/project-parts.ts) instead of one growing file. This governs future saves only:
+   *  an already-split project keeps saving as parts even if this is later turned off, and an
+   *  already-single-file project stays single-file until explicitly split. Turning this on does
+   *  not retroactively split an existing project — see WorkspaceStore's split/join operations. */
+  projectPartsEnabled: boolean
+  /** User-chosen part size, paired with `projectPartSizeUnit`. Clamped to a sane floor/ceiling by
+   *  `partSizeBytesFromSetting` wherever it is consumed — this field itself may hold anything a
+   *  hand-edited settings.json contains. */
+  projectPartSizeValue: number
+  projectPartSizeUnit: 'KB' | 'MB' | 'GB'
   /** AI commit message agent: a local coding-agent CLI run read-only. */
   commitAgent: 'claude' | 'codex' | 'custom'
   /** For commitAgent='custom': command template; {prompt} placeholder optional (else stdin). */
@@ -2170,6 +2181,9 @@ export const DEFAULT_SETTINGS: Settings = {
   tmuxScrollback: 50000,
   terminalWordSeparators: DEFAULT_WORD_SEPARATORS,
   offscreenTerminalMinutes: 10,
+  projectPartsEnabled: false,
+  projectPartSizeValue: 256,
+  projectPartSizeUnit: 'KB',
   commitAgent: 'claude',
   commitAgentCommand: '',
   commitExtraPrompt: '',

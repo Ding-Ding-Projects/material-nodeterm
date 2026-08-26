@@ -24,6 +24,27 @@ import {
 import { collisionSeed, derivedProjectId, freshProjectId } from '../shared/project-id'
 import { describeProjectChange, type ProjectChangeDescription } from '../shared/project-diff'
 import { appendProjectNode, type RemoteNodeInput } from './project-node-append'
+import {
+  hasPartsManifest,
+  joinPartsToSingleFile,
+  lastPartSizeBytes,
+  manifestFilePath,
+  partSizeBytesFromSetting,
+  readProjectParts,
+  splitSingleFileToParts,
+  writeProjectParts,
+  type PartSizeUnit
+} from './project-parts'
+
+/** Default target part size used when a project already stored as parts is saved again without an
+ *  explicit new size (see `lastPartSizeBytes`) and, unusually, its manifest cannot be re-read for
+ *  one. Chosen to match `DEFAULT_SETTINGS.projectPartSizeValue`/`projectPartSizeUnit` in
+ *  shared/types.ts — kept as a literal here rather than importing it, so this core file never
+ *  depends on the full settings surface for one fallback number. */
+const FALLBACK_PART_SIZE_BYTES = partSizeBytesFromSetting(256, 'KB')
+
+/** Result of an explicit split/join, mirroring the reasons `project-parts.ts` can fail with. */
+export type PartsConversionResult = { ok: true } | { ok: false; reason: string }
 
 /** Checked remote read: `absent` (no file — safe to push our cache) is NOT `error` (connection
  *  down / ssh failure — a failed read is never evidence of absence, so nothing may be pushed). */
@@ -406,8 +427,46 @@ export class WorkspaceStore {
    * Edition — and the watcher's readLocalRef*) pass false: a probe must never mutate the disk, and a
    * git-conflict-marked project.json mid-merge must be left in place so the user can hand-resolve it.
    */
+  /**
+   * Reads + parses one project file — either the classic single `.nodeterm/project.json` or, when
+   * the project was split, its `.nodeterm/project.parts.json` manifest + parts (see
+   * src/core/project-parts.ts). The parts reader fully verifies every part's size and hash and
+   * the whole-content hash before returning anything, so a truncated/missing/tampered part never
+   * reaches this far as usable content — see that module's header for why that verification is
+   * the entire point of the format.
+   *
+   * Only the authoritative loadV3 path passes `sideline: true`, which sidelines an unparsable/
+   * wrong-shape SINGLE file to `.corrupt-<ts>` (unchanged behavior) and, for a parts project that
+   * fails verification, sidelines the MANIFEST the same way — so a later save can never publish a
+   * fresh manifest that quietly resumes pointing at a broken parts set, and the broken parts
+   * directory itself is left exactly as found for manual recovery. Read-only callers (probeFolder,
+   * the watcher's readLocalRef*) pass false: a probe must never mutate the disk, and a git-conflict
+   * mid-merge (on either the single file or the manifest) must be left in place so the user can
+   * hand-resolve it.
+   */
   private async readProjectFile(cwd: string, sideline: boolean): Promise<ProjectFileRead | null> {
     const file = projectFilePath(cwd)
+    if (await hasPartsManifest(cwd)) {
+      const read = await readProjectParts(cwd)
+      if (read.ok) {
+        try {
+          const parsed = JSON.parse(read.raw) as ProjectFileV1
+          if (parsed?.version === 1 && Array.isArray(parsed.nodes)) return { file: parsed, raw: read.raw }
+        } catch { /* falls through to the sideline below, same as a corrupt single file */ }
+      }
+      // A parts project that failed to reassemble (missing/mismatched part, bad manifest, or
+      // reassembled to something that isn't a valid ProjectFileV1) is corrupt in exactly the sense
+      // a mangled single project.json is corrupt. THE PARTS ARE NEVER TOUCHED — only the manifest
+      // is sidelined, so the raw part files remain on disk for manual recovery rather than being
+      // silently overwritten by a fresh empty save. See the module header on project-parts.ts:
+      // this is the "never silently load a truncated canvas and save over the original" contract.
+      if (sideline) {
+        try {
+          await renameAtomic(manifestFilePath(cwd), `${manifestFilePath(cwd)}.corrupt-${Date.now()}`)
+        } catch { /* best effort — never destroy data */ }
+      }
+      return null
+    }
     let raw: string
     try {
       raw = await fs.readFile(file, 'utf-8')
@@ -434,8 +493,23 @@ export class WorkspaceStore {
 
   /** True when writing an empty canvas to `file` destroys nothing: the file is absent (fresh
    *  folder) or already an empty-nodes project file. Populated AND unparsable both answer false —
-   *  a corrupt file is left for readProjectFile's sideline instead of being overwritten. */
-  private async emptyOrAbsentOnDisk(file: string): Promise<boolean> {
+   *  a corrupt file is left for readProjectFile's sideline instead of being overwritten.
+   *
+   *  A parts-mode project (see `hasPartsManifest`) is checked through the SAME verified reader
+   *  `readProjectFile` uses: a parts set that fails to reassemble answers `false` here too — a
+   *  verification failure is never treated as "safe to overwrite with an empty canvas", it is
+   *  treated exactly like a corrupt single file. */
+  private async emptyOrAbsentOnDisk(file: string, cwd: string): Promise<boolean> {
+    if (await hasPartsManifest(cwd)) {
+      const read = await readProjectParts(cwd)
+      if (!read.ok) return false
+      try {
+        const parsed = JSON.parse(read.raw) as ProjectFileV1
+        return parsed?.version === 1 && Array.isArray(parsed.nodes) && parsed.nodes.length === 0
+      } catch {
+        return false
+      }
+    }
     let raw: string
     try {
       raw = await fs.readFile(file, 'utf-8')
@@ -528,7 +602,7 @@ export class WorkspaceStore {
       const prev = this.lastWritten.get(file)
       const prevParsed = prev ? (JSON.parse(prev) as ProjectFileV1) : null
       if (prevParsed && sameProjectContent(prevParsed, candidate)) continue
-      if (!prevParsed && candidate.nodes.length === 0 && !(await this.emptyOrAbsentOnDisk(file))) {
+      if (!prevParsed && candidate.nodes.length === 0 && !(await this.emptyOrAbsentOnDisk(file, cwd))) {
         // The local twin of the SSH "never blind-write a file we have not read" rule: an empty
         // canvas from a store that never read this file (setProjectFolder, migration, a hydrate
         // race) must not overwrite the populated — or corrupt-but-recoverable — only copy. The
@@ -539,10 +613,25 @@ export class WorkspaceStore {
       const content = serializeProjectFile(next)
       try {
         await fs.mkdir(path.dirname(file), { recursive: true })
-        await writeAtomic(file, content)
+        // Storage encoding follows whatever is ALREADY on disk for this project, never the global
+        // setting — a project stays single-file until it is explicitly split, and stays split even
+        // if the global "save new projects as parts" setting is later turned off (see
+        // Settings.projectPartsEnabled's doc comment in shared/types.ts). The chosen part size is
+        // re-read from the existing manifest so repeated saves do not need the size threaded
+        // through every call; `splitProjectIntoParts` is the explicit place a new/changed size is
+        // supplied.
+        if (await hasPartsManifest(cwd)) {
+          const size = (await lastPartSizeBytes(cwd)) ?? FALLBACK_PART_SIZE_BYTES
+          const result = await writeProjectParts(cwd, content, size, next.rev, next.savedAt)
+          if (!result.ok) throw new Error(`${result.reason}: ${result.detail}`)
+        } else {
+          await writeAtomic(file, content)
+        }
         this.lastWritten.set(file, content)
         this.revs.set(projectId, next.rev)
-      } catch { /* folder gone (unmounted disk): the entry simply stays stale → unavailable next load */ }
+      } catch { /* folder gone (unmounted disk), or a parts write failed verification: the entry
+                   simply stays stale → the PREVIOUS complete save (single file or parts manifest,
+                   whichever this project used) is untouched, and the next load returns its truth. */ }
     }
 
     // ssh caches: bump rev on change so a later remote write can win; mirror write in Task 8.
@@ -645,6 +734,59 @@ export class WorkspaceStore {
     // anywhere), so its nodes come up with no custom shell and no extra ssh args — the safe
     // defaults. Only values this machine typed itself are ever restored (@shared/node-exec).
     return read ? fileToProject(read.file, { id: freshProjectId(), cwd: folder }) : null
+  }
+
+  /**
+   * Explicitly converts a LOCAL project's `.nodeterm/project.json` into sized parts + a manifest
+   * (`writeProjectParts`'s all-or-nothing publish — see project-parts.ts), or re-splits an
+   * already-split project at a new size.
+   *
+   * This is the ONE place a size is chosen; `saveNow` reuses whatever size the manifest already
+   * records on every later save (see `lastPartSizeBytes`), so turning the global "save as parts"
+   * setting on/off never resizes or reformats a project on its own — only an explicit call here
+   * (or `joinProjectParts` below) changes a project's storage encoding.
+   *
+   * Reads the CURRENT on-disk content (whichever encoding it is currently in) through the same
+   * verified `readProjectFile` every load uses, so re-splitting an already-split project is
+   * exactly as safe as splitting a fresh single file: a project that fails verification is refused
+   * rather than silently reformatted from a truncated read.
+   */
+  async splitProjectIntoParts(cwd: string, sizeValue: number, sizeUnit: PartSizeUnit): Promise<PartsConversionResult> {
+    const read = await this.readProjectFile(cwd, false)
+    if (!read) return { ok: false, reason: 'project file is unreadable or missing' }
+    const bytes = partSizeBytesFromSetting(sizeValue, sizeUnit)
+    // This is the PARTS MANIFEST's own bookkeeping rev, independent of the project content's own
+    // `rev` field inside the JSON (unaffected by a storage-encoding change — the content itself is
+    // untouched, so nothing about `this.revs`/the content's internal rev needs to move here).
+    const savedAt = new Date().toISOString()
+    const manifestRev = read.file.rev
+    const singleFile = projectFilePath(cwd)
+    const alreadyParts = await hasPartsManifest(cwd)
+    const result = alreadyParts
+      // Already split at a different size: writeProjectParts alone is the whole operation — its
+      // own all-or-nothing publish replaces the manifest/generation, and there is no single file
+      // to remove.
+      ? await writeProjectParts(cwd, read.raw, bytes, manifestRev, savedAt)
+      : await splitSingleFileToParts(cwd, singleFile, read.raw, bytes, manifestRev, savedAt)
+    if (!result.ok) return { ok: false, reason: `${result.reason}: ${result.detail}` }
+    this.lastWritten.set(singleFile, read.raw)
+    return { ok: true }
+  }
+
+  /**
+   * Reverses a split: reads the current parts (fully verified — a broken parts set is refused, not
+   * silently joined from partial data), writes the classic single `.nodeterm/project.json`, and
+   * only then removes the manifest and parts directory. See `joinPartsToSingleFile`'s doc comment
+   * for the exact ordering that keeps this safe across a crash mid-join.
+   */
+  async joinProjectParts(cwd: string): Promise<PartsConversionResult> {
+    if (!(await hasPartsManifest(cwd))) return { ok: false, reason: 'project is not stored as parts' }
+    const singleFile = projectFilePath(cwd)
+    const result = await joinPartsToSingleFile(cwd, singleFile)
+    if (!result.ok) return { ok: false, reason: result.detail ?? 'join failed' }
+    const read = await this.readProjectFile(cwd, false)
+    if (read) this.lastWritten.set(singleFile, read.raw)
+    return { ok: true }
   }
 
   localRefPaths(): string[] {
