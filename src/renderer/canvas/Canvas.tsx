@@ -202,6 +202,7 @@ import { viewportAtZoom1 } from '../lib/zoomReset'
 import { isSpaceRelease, spacePanKeydown } from '../lib/spacePan'
 import { UpdateCard } from '../components/UpdateCard'
 import { AnnouncementBanner } from '../components/AnnouncementBanner'
+import { ResumeCard } from '../components/ResumeCard'
 import { TmuxBanner } from '../components/TmuxBanner'
 import { PtyPressureBanner } from '../components/PtyPressureBanner'
 import { ConflictBar } from '../components/ConflictBar'
@@ -292,6 +293,15 @@ import {
   viewportForRect,
   type FocusableNode
 } from '../lib/nodeFocus'
+import {
+  recordBreadcrumb,
+  stepBreadcrumb,
+  type BreadcrumbState,
+  type BreadcrumbTarget
+} from '../lib/breadcrumbs'
+import { useReopenHistory } from '../state/reopenHistory'
+import { snapshotNode, recreateNodeFromSnapshot } from '../lib/reopenNode'
+import { planReopen } from '../lib/reopenPlan'
 import {
   captureProjectEndRequest,
   destroySessionForScope,
@@ -460,6 +470,7 @@ import { useScheduledSettings } from '../state/scheduledSettings'
 import {
   activeAgentLaunchPlan,
   activePermissionMode,
+  agentLaunchPlanForProject,
   commandForAgentLaunch
 } from '../state/permissionMode'
 import { useContextWindow } from '../state/contextWindow'
@@ -793,6 +804,14 @@ const offsetFrom = (
 // waiting for — so a refused delivery is retried a few times instead of vanishing.
 const LAUNCH_DELIVERY_ATTEMPTS = 5
 const LAUNCH_RETRY_MS = 400
+
+/**
+ * Which projects have already shown their resume card THIS APP RUN. Module-level so it survives
+ * Canvas re-renders and project switches, and IN-MEMORY on purpose: persisting it would leave one
+ * localStorage entry per project forever, while forgetting on reload is exactly what "the resume
+ * card comes back next launch" means.
+ */
+const resumeCardShown = new Set<string>()
 
 // A canvas-control request whose source node lives in another project switches that project in
 // first, and the active-project effect hydrates React Flow ASYNCHRONOUSLY — so the handler waits
@@ -1489,6 +1508,11 @@ export function Canvas() {
   const pastRef = useRef<CanvasNode[][]>([])
   const futureRef = useRef<CanvasNode[][]>([])
   const committedRef = useRef<CanvasNode[]>([])
+  // Camera navigation history — a SEPARATE stack from pastRef/futureRef (those replay node-array
+  // state; this replays camera position only). NOT persisted itself: only navRef.current.list
+  // rides IndexEntryV3.breadcrumbs; the cursor resets to the tip on every project activation
+  // (see the active-project effect below), same as pastRef/futureRef resetting there.
+  const navRef = useRef<BreadcrumbState>({ list: [], index: -1 })
   const draggingRef = useRef(false)
   // Canvas sync (emitting side) — see the publish effect below.
   const publisherRef = useRef<CanvasPublisher | null>(null)
@@ -1503,6 +1527,20 @@ export function Canvas() {
    */
   const hasPeersRef = useRef(false)
   const [, bumpHist] = useState(0)
+  // Same trick as bumpHist, for the breadcrumb cursor: the go-back/go-forward buttons read
+  // navRef during render, and a ref mutation is invisible to React — so every write to
+  // navRef.current is followed by a bump, or the buttons stay disabled until some unrelated
+  // re-render happens to notice. Its own counter rather than bumpHist's: the two stacks are
+  // separate facts (node-array history vs camera history) and move at different times.
+  const [, bumpNav] = useState(0)
+  /**
+   * The project whose resume card is currently up, or null for "no card". A SNAPSHOT of the project
+   * as it was at activation (the card offers where you left off, so its rows must not re-shuffle
+   * under the user as new breadcrumbs are recorded), and holding the project itself rather than a
+   * boolean keeps Canvas off a `useProjects` subscription for the active project object — that
+   * object is rebuilt on every node serialization and would re-render the whole canvas per edit.
+   */
+  const [resumeProject, setResumeProject] = useState<Project | null>(null)
   const {
     setViewport,
     getViewport,
@@ -2450,6 +2488,11 @@ export function Canvas() {
     pastRef.current = []
     futureRef.current = []
     bumpHist((v) => v + 1)
+    // Camera navigation history is per-project; reset the cursor to the tip on every activation
+    // (a project reactivated after being away starts "at the end" of its own trail).
+    const bc = project.breadcrumbs ?? []
+    navRef.current = { list: bc, index: bc.length - 1 }
+    bumpNav((v) => v + 1)
     if (preserveViewportRef.current) {
       // In-place reload (external change / SSH reconcile): keep the user's current camera —
       // the file's viewport is where another machine last saved, not where this user looks.
@@ -2477,6 +2520,19 @@ export function Canvas() {
       // without phone access on, the serialize itself is the waste (main would drop the payload).
       if (useSettings.getState().settings.phoneAccessEnabled) {
         window.nodeTerminal.remoteHost.sendCanvasState({ nodes: flowToNodeStates(nodesRef.current) })
+      }
+      // Offer the resume card once per project per app run. "Once" is only spent on a card that
+      // could actually render: a project whose breadcrumbs ALL point at nodes deleted since must
+      // not burn its one-shot slot on an empty card the user never saw — and neither must a
+      // project that activates ON the kanban board, where the card would sit invisible under the
+      // opaque overlay.
+      const liveIds = new Set(flow.map((n) => n.id))
+      const hasLiveStop = (project.breadcrumbs ?? []).some((b) => liveIds.has(b.nodeId))
+      if (!resumeCardShown.has(project.id) && hasLiveStop && !isKanbanOpen(project.id)) {
+        resumeCardShown.add(project.id)
+        setResumeProject(project)
+      } else {
+        setResumeProject(null)
       }
       // Consume a cross-project focus request (notification click on a background node).
       const pending = pendingFocusRef.current
@@ -5089,13 +5145,32 @@ export function Canvas() {
     async (
       ids: string[],
       captured?: DeleteRequestEpoch,
-      terminationScope: SessionTerminationScope = 'node'
+      terminationScope: SessionTerminationScope = 'node',
+      opts?: { record?: boolean }
     ) => {
       const requested = new Set(ids)
       const projectId = captured?.projectId ?? useProjects.getState().activeProjectId ?? ''
       const projectScope = captured?.scope ?? projectSessionScope(projectId)
       const targets =
         captured?.targets ?? nodesRef.current.filter((node) => requested.has(node.id))
+      // Reopen history (Cmd+Shift+T): snapshot BEFORE anything is torn down, against the full
+      // live tree (nodesRef.current) so a snapshotted child's parent chain is still walkable.
+      // `opts?.record === false` is the one deliberate exception — a login node force-deleted
+      // alongside its removed account must never come back as a "claude /login" node for a
+      // credential that no longer exists (see the account/codex-account removal effects below).
+      if (opts?.record !== false) {
+        const snapshots = targets
+          .map((n) => snapshotNode(n, nodesRef.current))
+          .filter((snap): snap is NonNullable<typeof snap> => snap !== null)
+        if (snapshots.length) {
+          useReopenHistory.getState().push({
+            kind: 'nodes',
+            projectId,
+            closedAt: Date.now(),
+            nodes: snapshots
+          })
+        }
+      }
       const terminalIds = targets.filter((node) => node.type === 'terminal').map((node) => node.id)
       const projectSession = projectScope.session
       const projectSessionId = projectSession.id
@@ -5405,7 +5480,10 @@ export function Canvas() {
       handleAccountRemovalTeardown(detail, nodesRef.current, {
         isLoginNode: (node) => isAccountLoginNode(node.data),
         requestDeleteNodes,
-        deleteNodes
+        // Adapts the 2-arg AccountRemovalTeardownDeps shape onto Canvas's real 4-arg deleteNodes
+        // (ids, captured epoch, termination scope, record opts) — `opts` must land in the FOURTH
+        // position, never get passed through positionally as the epoch.
+        deleteNodes: (ids, opts) => deleteNodes(ids, undefined, 'node', opts)
       })
     }
     window.addEventListener(ACCOUNT_REMOVAL_TEARDOWN_EVENT, onAccountRemovalApproved)
@@ -5445,7 +5523,9 @@ export function Canvas() {
       const loginIds = nodesRef.current
         .filter((n) => n.data.codexAccountId === accountId && isCodexAccountLoginNode(n.data))
         .map((n) => n.id)
-      if (loginIds.length) deleteNodes(loginIds)
+      // Never reopenable: bringing this node back would recreate a "codex /login" node for a
+      // credential that no longer exists.
+      if (loginIds.length) deleteNodes(loginIds, undefined, 'node', { record: false })
       setNodes((ns) =>
         ns.some((n) => n.data.codexAccountId === accountId)
           ? ns.map((n) =>
@@ -7177,32 +7257,36 @@ export function Canvas() {
     [setNodes, markDirty]
   )
 
-  const goToNode = useCallback(
+  /**
+   * The ONE framing implementation behind both deliberate focus (`goToNode`) and breadcrumb
+   * back/forward (`stepAndFrame`) — a single copy so the origin-jump invariant below has one
+   * place to regress. Fit the node in view instead of centering at a fixed zoom — `zoom:
+   * max(current, 1)` overshot large terminals (their body never fit the viewport). fitView sizes
+   * the zoom to the node and resolves group-relative positions itself; the clamp keeps a small
+   * node from filling the whole screen and a huge one from being fit microscopic.
+   *
+   * …but ONLY once React Flow has MEASURED the node. Its fit set is filtered by `measured`
+   * (no width/height fallback in there), so an unmeasured node leaves the set EMPTY, the
+   * bounds collapse to {0,0,0,0} and the camera flies to the canvas ORIGIN at max zoom —
+   * empty canvas, node off-screen. That is precisely the state a node is in for the first
+   * tick after its project loads, i.e. on every CROSS-PROJECT focus (OS-notification click,
+   * sessions sidebar, ⌘K jump, presence travel): the load and the focus happen in the same
+   * tick, so measuring can lose the race and only a second attempt would work. In that
+   * window we frame the node ourselves from its persisted size — see lib/nodeFocus.
+   *
+   * The measured check must read React Flow's OWN store (`getInternalNode`), not our node
+   * object: `measured` only reaches our state one render later, when `onNodesChange` applies
+   * the dimensions change, so our copy says "unmeasured" for nodes the store has long sized.
+   *
+   * The framing itself is solved against the CURRENT chrome layout, exactly like `fitAll`:
+   * a flat 20% ratio has to reserve enough slack for the dock/minimap on EVERY side, which
+   * is what kept a big node (a group frame most of all) further away than it needed to be.
+   * The free-rect solver reclaims the space the chrome does not actually occupy, so the node
+   * is framed tighter without sliding underneath anything. Falls back to the flat ratio when
+   * there is nothing sensible to solve — the same ratio the unmeasured branch uses.
+   */
+  const frameNode = useCallback(
     (node: Node) => {
-      // Fit the node in view instead of centering at a fixed zoom — `zoom: max(current, 1)`
-      // overshot large terminals (their body never fit the viewport). fitView sizes the zoom
-      // to the node and resolves group-relative positions itself; the clamp keeps a small
-      // node from filling the whole screen and a huge one from being fit microscopic.
-      //
-      // …but ONLY once React Flow has MEASURED the node. Its fit set is filtered by `measured`
-      // (no width/height fallback in there), so an unmeasured node leaves the set EMPTY, the
-      // bounds collapse to {0,0,0,0} and the camera flies to the canvas ORIGIN at max zoom —
-      // empty canvas, node off-screen. That is precisely the state a node is in for the first
-      // tick after its project loads, i.e. on every CROSS-PROJECT focus (OS-notification click,
-      // sessions sidebar, ⌘K jump, presence travel): the load and the focus happen in the same
-      // tick, so measuring can lose the race and only a second attempt would work. In that
-      // window we frame the node ourselves from its persisted size — see lib/nodeFocus.
-      //
-      // The measured check must read React Flow's OWN store (`getInternalNode`), not our node
-      // object: `measured` only reaches our state one render later, when `onNodesChange` applies
-      // the dimensions change, so our copy says "unmeasured" for nodes the store has long sized.
-      //
-      // The framing itself is solved against the CURRENT chrome layout, exactly like `fitAll`:
-      // a flat 20% ratio has to reserve enough slack for the dock/minimap on EVERY side, which
-      // is what kept a big node (a group frame most of all) further away than it needed to be.
-      // The free-rect solver reclaims the space the chrome does not actually occupy, so the node
-      // is framed tighter without sliding underneath anything. Falls back to the flat ratio when
-      // there is nothing sensible to solve — the same ratio the unmeasured branch below uses.
       const internal = getInternalNode(node.id)
       if (isMeasured(internal)) {
         const wrap = flowWrapRef.current
@@ -7226,6 +7310,90 @@ export function Canvas() {
     },
     [fitView, setViewport, getInternalNode]
   )
+
+  const goToNode = useCallback(
+    (node: Node) => {
+      // Record the landing FIRST, and unconditionally: this is the one funnel every deliberate
+      // node focus goes through (notification click, sessions sidebar, ⌘K jump, presence travel,
+      // minimap double-click), and recording is independent of which framing branch runs below —
+      // including the branch that deliberately leaves the camera where it is.
+      const activeId = useProjects.getState().activeProjectId
+      // …with ONE exclusion: the ephemeral `subagent`/`loop` viz nodes. They are merged into the
+      // <ReactFlow nodes> prop but NEVER persisted — they are cleared on the next turn — and both
+      // double-click focus and the minimap's double-click land here. A breadcrumb for one is a
+      // permanently unresolvable id burning one of the 20 slots, so it is never recorded.
+      if (activeId && node.type !== 'subagent' && node.type !== 'loop') {
+        const target: BreadcrumbTarget = {
+          id: node.id,
+          kind: node.type as BreadcrumbTarget['kind'],
+          title: (node.data as { title?: string } | undefined)?.title ?? node.id,
+          agentId: (node.data as { agentId?: BreadcrumbTarget['agentId'] } | undefined)?.agentId
+        }
+        const status = useAgentStatus.getState().byId[node.id]
+        const next = recordBreadcrumb(navRef.current, target, status, Date.now())
+        // recordBreadcrumb returns the SAME object on a dedupe no-op, so identity is the skip test.
+        if (next !== navRef.current) {
+          navRef.current = next
+          bumpNav((v) => v + 1)
+          useProjects.getState().setProjectBreadcrumbs(activeId, next.list)
+          markDirty()
+        }
+      }
+      frameNode(node)
+    },
+    [frameNode, markDirty]
+  )
+
+  /**
+   * Walks the breadcrumb cursor one stop and flies the camera there. Browser back/forward for the
+   * canvas: this is the ONE path that must NOT record a stop — calling goToNode would append the
+   * landing and turn every step into a new tip — so it shares `frameNode` (the single framing
+   * implementation) and never goToNode itself.
+   *
+   * stepBreadcrumb skips stops whose node is gone, so a deleted node is walked THROUGH silently.
+   */
+  const stepAndFrame = useCallback(
+    (direction: 'back' | 'forward') => {
+      const activeId = useProjects.getState().activeProjectId
+      if (!activeId || isKanbanOpen(activeId)) return
+      const next = stepBreadcrumb(navRef.current, direction, (nodeId) =>
+        nodesRef.current.some((n) => n.id === nodeId)
+      )
+      if (!next) return
+      // Cursor only: it is machine-local and NOT persisted (only `list` rides the index entry),
+      // so a step records no breadcrumb and rewrites no project.json — the only persistence it
+      // triggers is the ordinary onMove viewport persist, same as any other camera move.
+      navRef.current = next
+      bumpNav((v) => v + 1)
+      const target = nodesRef.current.find((n) => n.id === next.list[next.index].nodeId)
+      if (!target) return
+      frameNode(target)
+    },
+    [frameNode]
+  )
+  const goBack = useCallback(() => stepAndFrame('back'), [stepAndFrame])
+  const goForward = useCallback(() => stepAndFrame('forward'), [stepAndFrame])
+
+  // Breadcrumb trail back/forward via the configured shortcuts (defaults Ctrl+[ / Ctrl+]). Same
+  // shape as the undo/redo effect above: a canvas-scope chord dispatched from one window-level
+  // listener, refused while the kanban board is open or while a plain text field is focused.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (isKanbanOpen(useProjects.getState().activeProjectId)) return
+      if (!(e.metaKey || e.ctrlKey)) return
+      const shortcuts = useSettings.getState().settings.shortcuts
+      const isBack = matchesShortcut(e, shortcuts.goBack, isMac)
+      const isForward = matchesShortcut(e, shortcuts.goForward, isMac)
+      if (!isBack && !isForward) return
+      const tag = (document.activeElement?.tagName || '').toLowerCase()
+      if (tag === 'input' || tag === 'textarea') return
+      e.preventDefault()
+      if (isForward) goForward()
+      else goBack()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [goBack, goForward])
 
   // Focus mode (issue #78): one terminal fills the window (reparented into the always-mounted
   // focus surface below); the chrome hides behind it and reveals on pointer proximity.
@@ -7314,10 +7482,96 @@ export function Canvas() {
     },
     [commitActiveToStore, writeDisk]
   )
+
+  /**
+   * `app.reopenLastClosed` (Ctrl+Shift+T): pops the shared close-history stack and reopens a
+   * project tab or recreates a deleted node batch — whichever was closed more recently. Skips
+   * stale entries (already reopened another way, or the project was permanently deleted since)
+   * and keeps walking back until it finds a usable one or the stack empties. The DECISION (which
+   * branch, staleness, active-vs-stored) is the pure `planReopen` (`lib/reopenPlan.ts`,
+   * unit-tested there); this loop only pops the real stack and executes whichever `ReopenPlan`
+   * comes back — the side-effecting parts that need live Canvas state.
+   */
+  const reopenLastClosedCommand = useCallback((): boolean => {
+    for (;;) {
+      const entry = useReopenHistory.getState().popNext()
+      if (!entry) return false
+
+      const { projects, activeProjectId } = useProjects.getState()
+      const project = projects.find((p) => p.id === entry.projectId)
+      const accounts = useSettings.getState().settings.claudeAccounts
+      const plan = planReopen(
+        entry,
+        projects,
+        activeProjectId,
+        new Set(nodesRef.current.map((n) => n.id)),
+        (snap, liveIds) =>
+          recreateNodeFromSnapshot(snap, {
+            liveNodeIds: liveIds,
+            project,
+            resolveAccountId: (id) => resolveNewNodeAccount(id, project, accounts),
+            // The TARGET project's own branded launch plan, not the caller's active one — a
+            // node restored into project B must start under B's permission-mode override,
+            // never whichever project is currently on screen.
+            permissionModeFor: (agentId) =>
+              agentLaunchPlanForProject('reopen-last-closed', project, agentId)
+          })
+      )
+
+      switch (plan.action) {
+        case 'skip':
+          continue
+        case 'reopenProject':
+          // A project switch — commit the live canvas back to the store first, or whatever the
+          // user was looking at is silently lost (the same invariant every other project
+          // switch/add/delete in this file honors via commitActiveToStore()).
+          commitActiveToStore()
+          useProjects.getState().reopenProject(plan.projectId)
+          setWelcomeOpen(false)
+          void writeDisk()
+          return true
+        case 'insertActive':
+          setNodes((ns) => [...ns, ...plan.nodes])
+          markDirty()
+          return true
+        case 'insertStored':
+          // Not on screen: write straight into the project's SERIALIZED nodes (the store, not
+          // React Flow) — the same mechanism canvas-control uses to create a node in a
+          // non-active project. The switch/reopen below then loads them through the ordinary
+          // active-project effect; there is no live array to race. `flowToNodeStates` drops
+          // `initialCommand` (never serialized, by design), but that is the SAME state every
+          // freshly-created agent node in a background project is already in today — the
+          // node's own cold-restore/resume path (RESUMABLE_AGENTS + agentSessionId, which IS
+          // serialized) picks it up from there, exactly as a normal reload would.
+          for (const node of plan.nodes) {
+            useProjects
+              .getState()
+              .applyNodeMutation(plan.projectId, {
+                op: 'upsert',
+                node: flowToNodeStates([node])[0]
+              })
+          }
+          void writeDisk()
+          if (plan.reopenProjectAfter) {
+            commitActiveToStore()
+            useProjects.getState().reopenProject(plan.projectId)
+            setWelcomeOpen(false)
+            void writeDisk()
+          } else {
+            switchProject(plan.projectId)
+          }
+          return true
+      }
+    }
+  }, [switchProject, setNodes, markDirty, writeDisk, commitActiveToStore])
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const shortcuts = useSettings.getState().settings.shortcuts
-      if (matchesShortcut(e, shortcuts.commandPalette, isMac)) {
+      if (matchesShortcut(e, shortcuts.reopenLastClosed, isMac)) {
+        e.preventDefault()
+        reopenLastClosedCommand()
+      } else if (matchesShortcut(e, shortcuts.commandPalette, isMac)) {
         e.preventDefault()
         setPaletteOpen((v) => !v)
       } else if (matchesShortcut(e, shortcuts.settings, isMac)) {
@@ -7412,7 +7666,7 @@ export function Canvas() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [toggleSessionsPin, switchProject, fitAll, zoomTo100, toggleFocusMode])
+  }, [toggleSessionsPin, switchProject, fitAll, zoomTo100, toggleFocusMode, reopenLastClosedCommand])
 
   // ⌘/Ctrl+0 on the DESKTOP never reaches the keydown handler above: Electron's default View menu
   // binds the accelerator to `resetZoom`, and a menu accelerator is handled before the page sees
@@ -11824,6 +12078,9 @@ export function Canvas() {
     (id: string) => {
       const store = useProjects.getState()
       if (id === store.activeProjectId) commitActiveToStore()
+      // Reopen history (Cmd+Shift+T): a plain 'project' entry — the closed project keeps its
+      // nodes and sessions on disk (see the comment above), so reopening it is just un-closing.
+      useReopenHistory.getState().push({ kind: 'project', projectId: id, closedAt: Date.now() })
       disposeRelayTabForProject(id)
       store.closeProject(id)
       void writeDisk()
@@ -13495,6 +13752,32 @@ export function Canvas() {
             </svg>
           </button>
           <span className="md3-canvas-actions__sep" />
+          {/* Breadcrumb trail camera back/forward. Enabled state derives from stepBreadcrumb
+              itself (not a raw index comparison): it skips deleted stops, so a click is never
+              enabled when it would do nothing. */}
+          <button
+            title={hintLabel('Go back (⌘[)')}
+            disabled={
+              !stepBreadcrumb(navRef.current, 'back', (id) => nodesRef.current.some((n) => n.id === id))
+            }
+            onClick={goBack}
+          >
+            <svg width={17} height={17} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M19 12H5M11 6l-6 6 6 6" />
+            </svg>
+          </button>
+          <button
+            title={hintLabel('Go forward (⌘])')}
+            disabled={
+              !stepBreadcrumb(navRef.current, 'forward', (id) => nodesRef.current.some((n) => n.id === id))
+            }
+            onClick={goForward}
+          >
+            <svg width={17} height={17} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M5 12h14M13 6l6 6-6 6" />
+            </svg>
+          </button>
+          <span className="md3-canvas-actions__sep" />
           <button title="Save" onClick={persist}>
             <IconSave />
             <span className={`md3-canvas-actions__dirty${dirty ? ' dirty' : ''}`} />
@@ -13523,6 +13806,25 @@ export function Canvas() {
           <UsageIndicator overBoard={kanbanOpen} />
           <ServerDeploymentPill overBoard={kanbanOpen} />
         </CanvasPills>
+
+        {/* Canvas-mounted, deliberately NOT in the .top-banners column: this is about THIS canvas,
+            not an app-wide message. Opening a row records a new breadcrumb through goToNode —
+            which is correct, it is a deliberate landing like any other. */}
+        {resumeProject && (
+          <ResumeCard
+            // Keyed by project: switching from a project whose card was DISMISSED straight to one
+            // that qualifies never passes through null, so without a key React would reuse the
+            // instance and the new project's card would inherit the old one's dismissal.
+            key={resumeProject.id}
+            project={resumeProject}
+            nodes={nodesRef.current}
+            onOpen={(nodeId) => {
+              const node = nodesRef.current.find((n) => n.id === nodeId)
+              if (node) goToNode(node)
+              setResumeProject(null)
+            }}
+          />
+        )}
 
         <PresenceNamePrompt />
 

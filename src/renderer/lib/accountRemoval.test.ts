@@ -174,7 +174,7 @@ describe('account-removal transaction gate', () => {
 
     captured?.request.perform()
     expect(deleteNodes).toHaveBeenCalledOnce()
-    expect(deleteNodes).toHaveBeenCalledWith(['login'])
+    expect(deleteNodes).toHaveBeenCalledWith(['login'], { record: false })
     await vi.waitFor(() => expect(continueRemoval).toHaveBeenCalledOnce())
 
     // A buggy/duplicate close acknowledgement cannot re-run an irreversible account transaction.

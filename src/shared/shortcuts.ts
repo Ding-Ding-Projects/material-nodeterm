@@ -25,9 +25,12 @@ export type ShortcutAction =
   | 'shortcutsPanel' // Ctrl+/
   | 'undo' // Ctrl+Z
   | 'redo' // Ctrl+Shift+Z (Ctrl+Y kept as a legacy alias in the handler)
+  | 'goBack' // Ctrl+[ — breadcrumb trail camera back
+  | 'goForward' // Ctrl+] — breadcrumb trail camera forward
   | 'newTerminal' // Ctrl+T
   | 'newAgent' // Ctrl+Shift+C
   | 'closeNode' // Ctrl+W — intercepted in main, forwarded to the renderer
+  | 'reopenLastClosed' // Ctrl+Shift+T — the last closed project tab or deleted node batch
   | 'toggleMarkdown' // Ctrl+M — intercepted in main (the default menu's minimize is repurposed)
   | 'toggleExplorer' // Ctrl+Shift+E
   | 'toggleSourceControl' // Ctrl+Shift+G
@@ -87,9 +90,16 @@ export const SHORTCUT_DEFS: ShortcutDef[] = [
   { id: 'shortcutsPanel', group: 'General', label: 'Shortcuts panel', default: 'Ctrl+/', keywords: ['shortcuts', 'panel', 'help', 'reference'], scope: 'app', allowInTerminal: true },
   { id: 'undo', group: 'General', label: 'Undo', default: 'Ctrl+Z', keywords: ['undo', 'revert'], scope: 'canvas' },
   { id: 'redo', group: 'General', label: 'Redo', default: 'Ctrl+Shift+Z', keywords: ['redo', 'forward', 'y'], scope: 'canvas' },
+  // Camera history (breadcrumb trail), not node-array history. `[`/`]` are the literal keys
+  // `e.key` reports on every layout tested — a canonical word-form spelling does not exist for
+  // brackets (shortcut.ts's KEY_ALIASES only covers Comma/Slash/Period), so the combo string
+  // spells the character itself, exactly like the existing Ctrl+, and Ctrl+/ defaults above.
+  { id: 'goBack', group: 'Canvas', label: 'Go back', default: 'Ctrl+[', keywords: ['back', 'breadcrumb', 'navigate', 'history'], scope: 'canvas' },
+  { id: 'goForward', group: 'Canvas', label: 'Go forward', default: 'Ctrl+]', keywords: ['forward', 'breadcrumb', 'navigate', 'history'], scope: 'canvas' },
   { id: 'newTerminal', group: 'Canvas', label: 'New terminal', default: 'Ctrl+T', keywords: ['terminal', 'new', 'create', 'node'], scope: 'canvas' },
   { id: 'newAgent', group: 'Canvas', label: 'New agent', default: 'Ctrl+Shift+C', keywords: ['agent', 'claude', 'codex', 'gemini', 'new', 'add'], scope: 'canvas' },
   { id: 'closeNode', group: 'Canvas', label: 'Close selected node', default: 'Ctrl+W', keywords: ['close', 'node', 'window'], scope: 'app', allowInTerminal: true, allowWhileTyping: true },
+  { id: 'reopenLastClosed', group: 'General', label: 'Reopen last closed', default: 'Ctrl+Shift+T', keywords: ['reopen', 'undo', 'closed', 'restore', 'tab'], scope: 'app', allowInTerminal: true },
   { id: 'toggleExplorer', group: 'Canvas', label: 'Toggle explorer', default: 'Ctrl+Shift+E', keywords: ['explorer', 'files', 'sidebar'], scope: 'app', allowInTerminal: true },
   { id: 'toggleSourceControl', group: 'Source Control', label: 'Open Source Control', default: 'Ctrl+Shift+G', keywords: ['source', 'control', 'git', 'scm'], scope: 'app', allowInTerminal: true },
   { id: 'toggleViewMode', group: 'Canvas', label: 'Toggle view mode', default: 'Ctrl+Shift+B', keywords: ['view', 'mode', 'canvas', 'kanban', 'board'], scope: 'app', allowInTerminal: true },

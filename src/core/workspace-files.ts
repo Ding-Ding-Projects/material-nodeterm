@@ -11,6 +11,7 @@ import type {
   BridgeLink,
   BrowserProfile,
   CanvasNodeState,
+  NavStop,
   Project,
   ProjectKanban,
   Viewport,
@@ -108,6 +109,9 @@ export interface IndexEntryV3 {
   /** MACHINE-LOCAL default managed Claude account for a ref'd project: the id names a credential
    *  dir in THIS machine's userData, so it is meaningless in anyone else's checkout. */
   defaultAccountId?: string
+  /** MACHINE-LOCAL camera navigation history for a ref'd project. Same rule as `viewport`: this
+   *  user's "where was I" is not something a repo shares. See NavStop. */
+  breadcrumbs?: NavStop[]
   /** Sparse machine-local project settings overlay. Never serialized into ProjectFileV1. */
   settingsOverrides?: Project['settingsOverrides']
   cwd?: string
@@ -258,6 +262,8 @@ export function fileToProject(
     viewport?: Viewport
     /** This machine's default managed account; falls back to the file's legacy value. */
     defaultAccountId?: string
+    /** This machine's navigation history for this entry (never from the file). */
+    breadcrumbs?: NavStop[]
     settingsOverrides?: Project['settingsOverrides']
     /** This machine's own exec values for these nodes (from the local index entry). A file read
      *  WITHOUT them — an adopted/cloned folder, a probe — gets the safe defaults, never the file's
@@ -281,6 +287,9 @@ export function fileToProject(
     ...(f.ropes ? { ropes: f.ropes } : {}),
     ...(defaultAccountId ? { defaultAccountId } : {}),
     ...(base.settingsOverrides ? { settingsOverrides: base.settingsOverrides } : {}),
+    // Machine-local, from the index entry ONLY: a file field named `breadcrumbs` is a forgery
+    // attempt (the shared file cannot carry this machine's navigation history) and is never read.
+    ...(base.breadcrumbs?.length ? { breadcrumbs: base.breadcrumbs } : {}),
     ...(f.defaultPermissionMode ? { defaultPermissionMode: f.defaultPermissionMode } : {}),
     ...(f.dinoHighScore ? { dinoHighScore: f.dinoHighScore } : {}),
     ...(validKanban(f.kanban) ? { kanban: f.kanban } : {}),
@@ -374,6 +383,7 @@ export function splitWorkspace(
     const localState = {
       ...(p.viewport ? { viewport: p.viewport } : {}),
       ...(p.defaultAccountId ? { defaultAccountId: p.defaultAccountId } : {}),
+      ...(p.breadcrumbs?.length ? { breadcrumbs: p.breadcrumbs } : {}),
       ...(p.settingsOverrides ? { settingsOverrides: p.settingsOverrides } : {})
     }
     if (p.unavailable) {

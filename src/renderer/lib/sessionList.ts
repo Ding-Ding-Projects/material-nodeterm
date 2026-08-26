@@ -28,7 +28,7 @@ export interface ProjectInput {
 
 export type StatusKind = 'working' | 'attention' | 'done' | 'idle'
 
-const STATE_LABEL: Record<StatusKind, string> = {
+export const STATE_LABEL: Record<StatusKind, string> = {
   working: 'Running',
   attention: 'Needs you',
   done: 'Done',

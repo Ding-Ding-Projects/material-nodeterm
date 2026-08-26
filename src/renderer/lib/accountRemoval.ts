@@ -203,7 +203,7 @@ export interface AuthorizedAccountLoginDeletion {
 export interface AccountRemovalTeardownDeps {
   isLoginNode(node: AccountRemovalCanvasNode): boolean
   requestDeleteNodes(ids: string[], request: AuthorizedAccountLoginDeletion): boolean
-  deleteNodes(ids: string[]): Promise<{
+  deleteNodes(ids: string[], opts?: { record?: boolean }): Promise<{
     confirmed: string[]
     failed: Array<{ nodeId: string; message: string }>
   }>
@@ -251,8 +251,10 @@ export function handleAccountRemovalTeardown(
       // Account credentials may be removed only after every disclosed login session has a
       // confirmed backing-host acknowledgement. A disconnected kill is an unknown outcome, not
       // permission to delete the account from under a possibly still-running login process.
+      // Never reopenable: bringing this node back would recreate a "claude /login" node for a
+      // credential that no longer exists.
       void deps
-        .deleteNodes(loginIds)
+        .deleteNodes(loginIds, { record: false })
         .then((outcome) => {
           if (
             outcome.failed.length > 0 ||

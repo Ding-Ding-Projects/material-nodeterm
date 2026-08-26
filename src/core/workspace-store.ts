@@ -268,6 +268,7 @@ export class WorkspaceStore {
               closed: e.closed,
               viewport: e.viewport,
               defaultAccountId: e.defaultAccountId,
+              breadcrumbs: e.breadcrumbs,
               settingsOverrides: e.settingsOverrides,
               localExec: this.execOverlay(e)
             })
@@ -292,6 +293,7 @@ export class WorkspaceStore {
               closed: e.closed,
               viewport: e.viewport,
               defaultAccountId: e.defaultAccountId,
+              breadcrumbs: e.breadcrumbs,
               settingsOverrides: e.settingsOverrides,
               localExec: this.execOverlay(e)
             })
@@ -504,6 +506,7 @@ export class WorkspaceStore {
         // moment a folder is briefly unmounted.
         if (old?.viewport) e.viewport = old.viewport
         if (old?.defaultAccountId) e.defaultAccountId = old.defaultAccountId
+        if (old?.breadcrumbs) e.breadcrumbs = old.breadcrumbs
       }
     }
 
@@ -663,6 +666,7 @@ export class WorkspaceStore {
       closed: e.closed,
       viewport: e.viewport,
       defaultAccountId: e.defaultAccountId,
+      breadcrumbs: e.breadcrumbs,
       localExec: e.localExec
     })
   }
@@ -1058,6 +1062,7 @@ export class WorkspaceStore {
           closed: e.closed,
           viewport: e.viewport,
           defaultAccountId: e.defaultAccountId,
+          breadcrumbs: e.breadcrumbs,
           localExec: e.localExec
         })
       )
@@ -1132,7 +1137,8 @@ export class WorkspaceStore {
       else this.unmirrored.delete(e.id) // pure adopt: the server copy IS the truth now — nothing owed
       return fileToProject(adopted, {
         id: e.id, ssh: e.ssh, closed: e.closed,
-        viewport: e.viewport, defaultAccountId: e.defaultAccountId, localExec: e.localExec
+        viewport: e.viewport, defaultAccountId: e.defaultAccountId, breadcrumbs: e.breadcrumbs,
+        localExec: e.localExec
       })
     }
     // Our cache stood. Before it clobbers the server, merge in any remote-only session nodes (the
@@ -1146,7 +1152,8 @@ export class WorkspaceStore {
         this.unmirrored.add(e.id) // the merged set must land on the server
         merged = fileToProject(e.cache, {
           id: e.id, ssh: e.ssh, closed: e.closed,
-          viewport: e.viewport, defaultAccountId: e.defaultAccountId, localExec: e.localExec
+          viewport: e.viewport, defaultAccountId: e.defaultAccountId, breadcrumbs: e.breadcrumbs,
+          localExec: e.localExec
         })
       }
     }

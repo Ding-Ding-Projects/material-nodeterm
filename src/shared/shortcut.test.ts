@@ -238,6 +238,15 @@ describe('matchesShortcut', () => {
     ).toBe(true)
   })
 
+  it('matches the bracket chords from the KEY the DOM reports (breadcrumb trail)', () => {
+    // The registry spells these `Ctrl+[` / `Ctrl+]` because this resolver compares against
+    // `e.key`. Spelled as the `e.code` values (`BracketLeft`/`BracketRight`) they would
+    // normalize to 'BRACKETLEFT' and match no keydown at all — a silently dead chord.
+    expect(matchesShortcut({ ...base, metaKey: true, key: '[' }, 'Ctrl+[', true)).toBe(true)
+    expect(matchesShortcut({ ...base, metaKey: true, key: ']' }, 'Ctrl+]', true)).toBe(true)
+    expect(matchesShortcut({ ...base, metaKey: true, key: '[' }, 'Ctrl+]', true)).toBe(false)
+  })
+
   it('never matches a modifier-only chord — that shape has no key to check', () => {
     // Even a keydown of a real key while the exact modifiers are held must not match: a
     // modifier-only shortcut is handled by chordHeld, not matchesShortcut.
