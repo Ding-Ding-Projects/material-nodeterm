@@ -6,6 +6,7 @@ import {
   buildCanvasControlInstructions,
   buildCanvasSkillBody
 } from './canvas-control-core'
+import { STRICT_CONTROL_VERBS } from '../core/agents/node-identity-policy'
 
 describe('parseControlRequest', () => {
   it('accepts known verbs', () => {
@@ -296,5 +297,49 @@ describe('parseControlRequest', () => {
     for (const v of ['group', 'arrange', 'align', 'spawn-team'] as const) {
       expect(isDestructiveVerb(v)).toBe(false)
     }
+  })
+})
+
+/**
+ * `browser` is a real ControlVerb: its own deep shape (exactly one action, `--node`, the per-flag
+ * value rules, the timeout clamp) is decided ONCE by the pure `parseBrowserArgs`
+ * (src/core/browser-verb.ts) — this file only surfaces that verdict through the same { error }
+ * shape every other verb uses. `STRICT_CONTROL_VERBS` (src/core/agents/node-identity-policy.ts)
+ * is the SEPARATE, independently-tested gate that refuses an unverified caller before this
+ * function ever runs (hook-server.ts) — this file does not re-implement that check, it only
+ * documents that the bucket actually names the verb this file now recognizes, so the two halves
+ * of the boundary cannot silently drift apart (one naming a verb the other has never heard of).
+ */
+describe('the `browser` verb', () => {
+  it('is a real verb, and its shape is decided by parseBrowserArgs', () => {
+    expect(parseControlRequest('browser', {})).toEqual({ error: 'browser: --node <id> is required' })
+    expect(parseControlRequest('browser', { node: 'browser-1', read: 'title' })).toEqual({
+      verb: 'browser',
+      args: { node: 'browser-1', read: 'title' }
+    })
+    expect(parseControlRequest('browser', { node: 'browser-1', nav: 'javascript:alert(1)' })).toEqual({
+      error: 'browser: --nav needs an http(s) URL'
+    })
+    expect(parseControlRequest('browser', { node: 'browser-1' })).toEqual({
+      error:
+        'browser: pass exactly one action (--nav, --read, --click, --type, --press, --scroll, --wait, --screenshot or --cookies)'
+    })
+  })
+
+  it('is not destructive (it never deletes anything a confirmation dialog would guard)', () => {
+    expect(isDestructiveVerb('browser')).toBe(false)
+  })
+
+  it('is in the verified-only STRICT_CONTROL_VERBS bucket — the two halves of the boundary agree', () => {
+    expect(STRICT_CONTROL_VERBS.has('browser')).toBe(true)
+  })
+
+  it('is NOT yet documented to any agent (no drive session exists to execute it)', () => {
+    // There is no execution path for `browser` yet: no drive session, no renderer executor case
+    // in Canvas.tsx, so a call from an agent following the skill/AGENTS.md instructions would
+    // always fail. Advertising an always-failing verb is worse than omitting it; this pins that
+    // the docs stay silent about `browser` until the drive path lands.
+    expect(buildCanvasSkillBody('/x/shim.sh')).not.toContain('`browser ')
+    expect(buildCanvasControlInstructions('/tmp/nodeterm.sh')).not.toContain('`browser ')
   })
 })

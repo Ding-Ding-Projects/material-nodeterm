@@ -4,6 +4,7 @@
 import { HOOK_CURL_HEADERS_SH } from '../core/agents/hook-curl-config-sh'
 import { CODEX_THREAD_IDENTITY_RESOLVER_SH } from '../core/codex-thread-identity-sh'
 import { explicitCodexResumeSession } from '../shared/agents/config'
+import { parseBrowserArgs } from '../core/browser-verb'
 
 export type ControlVerb =
   | 'list'
@@ -40,6 +41,7 @@ export type ControlVerb =
   | 'close'
   | 'board'
   | 'assign'
+  | 'browser'
 
 export interface ControlCommand {
   verb: ControlVerb
@@ -80,7 +82,8 @@ const VERBS: ControlVerb[] = [
   'write',
   'close',
   'board',
-  'assign'
+  'assign',
+  'browser'
 ]
 
 /**
@@ -169,6 +172,19 @@ export function parseControlRequest(
   if (v === 'branch' && !args.node) return { error: 'branch requires --node <id>' }
   if (v === 'rename' && !args.node) return { error: 'rename requires --node <id>' }
   if (v === 'rename' && !args.title) return { error: 'rename requires --title' }
+  // `browser` drives a real webview through the CDP allowlist (browser-cdp-allowlist.ts) under a
+  // debugger lease (browser-lease.ts) — the most security-sensitive verb in this file, so its
+  // deep shape is decided ONCE, in the pure `parseBrowserArgs` (src/core/browser-verb.ts), which
+  // both shells compile and which validates `--node` (safe-id-checked before it can index
+  // anything), exactly-one-action, the per-action value rules and the timeout clamp. This gate
+  // only surfaces that verdict as the same { error } shape every other verb uses; it trusts no
+  // caller field and attaches nothing itself. `browser` is also in STRICT_CONTROL_VERBS
+  // (src/core/agents/node-identity-policy.ts), so hook-server refuses an unverified caller
+  // BEFORE this function ever runs — this check is the belt, not the buckle.
+  if (v === 'browser') {
+    const parsed = parseBrowserArgs(args)
+    if ('error' in parsed) return parsed
+  }
   return { verb: v, args }
 }
 
