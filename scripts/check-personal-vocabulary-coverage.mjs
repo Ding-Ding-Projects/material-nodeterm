@@ -35,6 +35,7 @@ const PRODUCERS = [
   ['browser-profile-picker', 'src/renderer/nodes/BrowserProfilePicker.tsx', 'useVocabularyMapper()'],
   ['password-manager', 'src/renderer/components/passwordManager/PasswordManagerPanel.tsx', 'const vocab = useVocabularyMapper()'],
   ['converter-adapter-catalog', 'src/renderer/components/converter/AdapterCatalog.tsx', 'useVocabularyMapper()'],
+  ['converter-upload-limit', 'src/renderer/components/converter/FileConverterPanel.tsx', 'mapLocalVocabularyText('],
   ['minecraft-backups', 'src/renderer/components/minecraft/MinecraftBackupsPanel.tsx', 'useVocabularyMapper()'],
   ['minecraft-players', 'src/renderer/components/minecraft/MinecraftPlayersPanel.tsx', 'useVocabularyMapper()'],
   ['minecraft-properties', 'src/renderer/components/minecraft/MinecraftPropertiesEditor.tsx', 'useVocabularyMapper()'],
@@ -51,7 +52,10 @@ const PRODUCERS = [
   ['browser-bridge-stubs', 'src/renderer/bridge/stubs.ts', 'formatHostMessage('],
   ['notification-body-classification', 'src/renderer/state/notifications.ts', 'bodyKind'],
   ['site-vocabulary-json', 'site/app/features/vocabulary.js', 'validateVocabularyJson('],
-  ['site-vocabulary-cache', 'site/app/shared/vocabulary-state.js', 'validateVocabularyCacheJson(']
+  ['site-vocabulary-cache', 'site/app/shared/vocabulary-state.js', 'validateVocabularyCacheJson('],
+  ['native-notification-canvas', 'src/renderer/canvas/Canvas.tsx', 'mapNativeNotification('],
+  ['native-notification-onboarding', 'src/renderer/components/onboarding/OnboardingFlow.tsx', 'mapNativeNotification('],
+  ['native-notification-settings', 'src/renderer/components/settings/sections/NotificationsSection.tsx', 'mapNativeNotification(']
 ]
 
 const DOC = 'docs/features/appearance/material-3-audit.md'
@@ -100,7 +104,7 @@ const PRODUCTION_SURFACES = [
 
 // Independent hand-written manifests. The mutable rows above are implementation evidence; these
 // lists are the required universe, so deleting a row cannot delete its own requirement too.
-const CANONICAL_PRODUCER_IDS = `settings-fields settings-sections personal-vocabulary-upload command-palette context-menus confirm-dialog input-dialog notifications tooltip conflict-banner canvas-prose fab-menu kanban-view kanban-column kanban-session-card kanban-card-modal source-control worktree-dialog onboarding dim-sum-surprise publish-dialog find-bar remote-picker browser-profile-picker password-manager converter-adapter-catalog minecraft-backups minecraft-players minecraft-properties authenticator-settings speech-settings toy-lock-wizard personal-vocabulary-surface-mapper personal-vocabulary-application personal-vocabulary-host-message widget-entrypoint hud-entrypoint dialog-picker-root ws-reconnect-overlay browser-bridge-stubs notification-body-classification site-vocabulary-json site-vocabulary-cache`.split(/\s+/)
+const CANONICAL_PRODUCER_IDS = `settings-fields settings-sections personal-vocabulary-upload command-palette context-menus confirm-dialog input-dialog notifications tooltip conflict-banner canvas-prose fab-menu kanban-view kanban-column kanban-session-card kanban-card-modal source-control worktree-dialog onboarding dim-sum-surprise publish-dialog find-bar remote-picker browser-profile-picker password-manager converter-adapter-catalog converter-upload-limit minecraft-backups minecraft-players minecraft-properties authenticator-settings speech-settings toy-lock-wizard personal-vocabulary-surface-mapper personal-vocabulary-application personal-vocabulary-host-message widget-entrypoint hud-entrypoint dialog-picker-root ws-reconnect-overlay browser-bridge-stubs notification-body-classification site-vocabulary-json site-vocabulary-cache native-notification-canvas native-notification-onboarding native-notification-settings`.split(/\s+/)
 const CANONICAL_SURFACE_IDS = `app-shell welcome top-app-bar status-surface sessions-sidebar session-row terminal-node sticky-node group-node editor-node diff-node browser-node web-node video-node loop-node service-node wsl-dialog regex-builder anchored-regex-builder notification-center notification-toasts changelog-panel release-card local-history docs-browser docs-article appearance-editor color-field color-menu color-picker branch-select bulk-action-bar pty-pressure update-card resume-card widget-entrypoint hud-entrypoint dialog-picker-root ws-reconnect-overlay browser-bridge-stubs`.split(/\s+/)
 let failures = 0
 let checked = 0
@@ -136,8 +140,11 @@ const errors = []
 const ids = new Set()
 const producerIds = PRODUCERS.map(([id]) => id)
 const surfaceIds = PRODUCTION_SURFACES.map(([id]) => id)
-check('canonical producer manifest matches implementation rows', producerIds.length === CANONICAL_PRODUCER_IDS.length && CANONICAL_PRODUCER_IDS.every((id, i) => producerIds[i] === id))
-check('canonical surface manifest matches implementation rows', surfaceIds.length === CANONICAL_SURFACE_IDS.length && CANONICAL_SURFACE_IDS.every((id, i) => surfaceIds[i] === id))
+function inventoryMatchesCanonical(ids, canonical) {
+  return ids.length === canonical.length && canonical.every((id, i) => ids[i] === id)
+}
+check('canonical producer manifest matches implementation rows', inventoryMatchesCanonical(producerIds, CANONICAL_PRODUCER_IDS))
+check('canonical surface manifest matches implementation rows', inventoryMatchesCanonical(surfaceIds, CANONICAL_SURFACE_IDS))
 for (const [id, file, marker] of PRODUCERS) {
   if (ids.has(id)) errors.push('duplicate producer id ' + id)
   ids.add(id)
@@ -171,8 +178,12 @@ check('producer inventory has no duplicate identifiers', errors.length === 0)
 // calls, while codeOnly prevents a comment or quoted fixture from satisfying the predicate.
 const originalRows = PRODUCERS.map((row) => row.join('|')).join('\n')
 check('negative regression fixture is non-empty', originalRows.length > 0)
-check('negative regression catches a removed canonical producer row', !PRODUCERS.filter(([id]) => id !== CANONICAL_PRODUCER_IDS[0]).some(([id]) => id === CANONICAL_PRODUCER_IDS[0]))
-check('negative regression catches a removed canonical surface row', !PRODUCTION_SURFACES.filter(([id]) => id !== CANONICAL_SURFACE_IDS[0]).some(([id]) => id === CANONICAL_SURFACE_IDS[0]))
+const producerRowsWithoutFirst = PRODUCERS.slice()
+producerRowsWithoutFirst.splice(0, 1)
+const surfaceRowsWithoutFirst = PRODUCTION_SURFACES.slice()
+surfaceRowsWithoutFirst.splice(0, 1)
+check('negative regression catches a removed canonical producer row', !inventoryMatchesCanonical(producerRowsWithoutFirst.map(([id]) => id), CANONICAL_PRODUCER_IDS))
+check('negative regression catches a removed canonical surface row', !inventoryMatchesCanonical(surfaceRowsWithoutFirst.map(([id]) => id), CANONICAL_SURFACE_IDS))
 for (const [id, file, marker] of PRODUCERS) {
   const source = read(file)
   check(`${id}: removed boundary is rejected`, source !== null && !hasMarker(source.split(marker).join(''), marker))
@@ -199,8 +210,8 @@ try {
   check('real-file producer-row mutation is rejected', !readFileSync(docPath, 'utf8').split(/\r?\n/).some((line) => line.startsWith('| ' + quote + 'tooltip' + quote + ' |')))
   const surfaceCopy = join(mutationRoot, 'App.tsx')
   copyFileSync(join(ROOT, PRODUCTION_SURFACES[0][1]), surfaceCopy)
-  rmSync(surfaceCopy)
-  check('real-file production-surface mutation is rejected', !existsSync(surfaceCopy))
+  writeFileSync(surfaceCopy, '', 'utf8')
+  check('real-file missing-source predicate is rejected', !hasMarker(readFileSync(surfaceCopy, 'utf8'), 'export default function App'))
 } finally {
   rmSync(mutationRoot, { recursive: true, force: true })
 }

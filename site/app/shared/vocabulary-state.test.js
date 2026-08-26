@@ -3,6 +3,22 @@ import assert from 'node:assert/strict'
 import { isFreshVocabularyCache, validateVocabularyCacheJson, validateVocabularyJson, VOCAB_CACHE_MAX_AGE_MS } from './vocabulary-state.js'
 import { shapeCopy, shapeTitle } from './i18n.js'
 import { createStore } from '../core/store.js'
+import { render } from '../core/render.js'
+import { registerVocabulary } from '../features/vocabulary.js'
+
+function storageFixture(initial = {}) {
+  const values = new Map(Object.entries(initial))
+  return {
+    values,
+    getItem(key) { return values.has(key) ? values.get(key) : null },
+    setItem(key, value) { values.set(key, String(value)) },
+    removeItem(key) { values.delete(key) }
+  }
+}
+
+function cacheJson(entries, savedAt = Date.now()) {
+  return JSON.stringify({ version: 1, entries, entryCount: Object.keys(entries).length, savedAt })
+}
 
 test('accepts the shared versioned JSON shape', () => {
   const result = validateVocabularyJson('{"version":1,"entries":{"terminal":"shell box"}}')
@@ -67,6 +83,94 @@ test('store reloads a valid cache and fails closed for blocked storage', () => {
     globalThis.localStorage = { getItem: () => { throw new Error('blocked') }, setItem: () => {}, removeItem: () => {} }
     const blocked = createStore()
     assert.equal(blocked.state.vocabStatus, 'no-file')
+  } finally {
+    if (original === undefined) delete globalThis.localStorage
+    else globalThis.localStorage = original
+  }
+})
+
+test('store cache state reaches the real home renderer and survives recreation', () => {
+  const original = globalThis.localStorage
+  const storage = storageFixture({
+    'nodeterm-playground.vocabulary.v1': cacheJson({ 'Your terminals are': 'Your shell boxes are' })
+  })
+  globalThis.localStorage = storage
+  try {
+    const first = createStore()
+    first.state.view = 'room'
+    first.state.sec = 'home'
+    const mapped = render(first)
+    assert.match(mapped, /Your shell boxes are/)
+    assert.doesNotMatch(mapped, />Your terminals are<br \/>/)
+
+    const recreated = createStore()
+    recreated.state.view = 'room'
+    recreated.state.sec = 'home'
+    assert.match(render(recreated), /Your shell boxes are/)
+  } finally {
+    if (original === undefined) delete globalThis.localStorage
+    else globalThis.localStorage = original
+  }
+})
+
+test('invalid and stale cache removal restores original rendered copy', () => {
+  const original = globalThis.localStorage
+  const storage = storageFixture({
+    'nodeterm-playground.vocabulary.v1': cacheJson({ 'Your terminals are': 'Your shell boxes are' })
+  })
+  globalThis.localStorage = storage
+  try {
+    const loaded = createStore()
+    loaded.state.view = 'room'
+    loaded.state.sec = 'home'
+    assert.match(render(loaded), /Your shell boxes are/)
+
+    storage.setItem('nodeterm-playground.vocabulary.v1', '{"version":1,"entries":{"Your terminals are":"broken"},"entryCount":2,"savedAt":1}')
+    const invalid = createStore()
+    invalid.state.view = 'room'
+    invalid.state.sec = 'home'
+    assert.equal(invalid.state.vocabStatus, 'invalid')
+    assert.doesNotMatch(render(invalid), /Your shell boxes are/)
+    assert.match(render(invalid), />Your terminals are<br \/>/)
+
+    storage.setItem('nodeterm-playground.vocabulary.v1', cacheJson({ 'Your terminals are': 'stale boxes' }, Date.now() - VOCAB_CACHE_MAX_AGE_MS - 1))
+    const stale = createStore()
+    stale.state.view = 'room'
+    stale.state.sec = 'home'
+    assert.equal(stale.state.vocabStatus, 'invalid')
+    assert.doesNotMatch(render(stale), /stale boxes/)
+
+    storage.removeItem('nodeterm-playground.vocabulary.v1')
+    const removed = createStore()
+    removed.state.view = 'room'
+    removed.state.sec = 'home'
+    assert.equal(removed.state.vocabStatus, 'no-file')
+    assert.doesNotMatch(render(removed), /Your shell boxes are/)
+  } finally {
+    if (original === undefined) delete globalThis.localStorage
+    else globalThis.localStorage = original
+  }
+})
+
+test('School mode suppresses the mapped copy and the vocabulary settings card in full render', () => {
+  const original = globalThis.localStorage
+  globalThis.localStorage = storageFixture({
+    'nodeterm-playground.vocabulary.v1': cacheJson({ 'Your terminals are': 'Your shell boxes are' })
+  })
+  try {
+    const store = createStore()
+    registerVocabulary(store, {}, () => {}, () => {})
+    store.state.view = 'room'
+    store.state.sec = 'settings'
+    store.state.school = true
+    store.state.schoolHydrated = true
+    const schoolSettings = render(store)
+    assert.doesNotMatch(schoolSettings, /Your shell boxes are/)
+    assert.doesNotMatch(schoolSettings, /Vocabulary JSON file/)
+
+    store.state.school = false
+    const normalSettings = render(store)
+    assert.match(normalSettings, /Vocabulary JSON file/)
   } finally {
     if (original === undefined) delete globalThis.localStorage
     else globalThis.localStorage = original

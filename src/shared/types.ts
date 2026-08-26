@@ -2881,6 +2881,8 @@ export interface AnnouncementsApi {
 export interface NotifyPayload {
   title: string
   body: string
+  /** Title ownership, used by renderer-side vocabulary mapping before native delivery. */
+  titleKind?: 'authored' | 'fact'
   /** Whether the body is app-authored copy or an exact host/provider fact. Native composition
    *  never rewrites either kind. Omitted remains a fact for backwards compatibility. */
   bodyKind?: 'authored' | 'fact'

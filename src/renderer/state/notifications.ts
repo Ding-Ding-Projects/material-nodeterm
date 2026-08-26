@@ -31,6 +31,7 @@ export interface AppNotification {
   id: string
   kind: NotificationKind
   title: string
+  titleKind?: NonNullable<NotifyPayload['titleKind']>
   body?: string
   bodyKind?: NotificationBodyKind
   createdAt: number
@@ -50,7 +51,7 @@ export interface AppNotification {
 
 export type PushNotificationInput = Omit<
   AppNotification,
-  'id' | 'createdAt' | 'dismissedAt' | 'read' | 'deliveredSilently' | 'bodyKind'
+  'id' | 'createdAt' | 'dismissedAt' | 'read' | 'deliveredSilently' | 'titleKind' | 'bodyKind'
 > & {
   id?: string
   /** Land in history without ever appearing as a toast — pushed already dismissed, still unread,
@@ -58,6 +59,8 @@ export type PushNotificationInput = Omit<
    *  interruption without removing the information. Set at construction rather than by pushing and
    *  then dismissing, so the item is never briefly a live toast in any render. */
   silent?: boolean
+  /** Defaults to `authored` for the app's existing titles; host/provider titles opt into `fact`. */
+  titleKind?: NonNullable<NotifyPayload['titleKind']>
   /** Defaults to `fact` so existing host/provider errors stay verbatim unless a producer opts into
    * authored copy explicitly. */
   bodyKind?: NotificationBodyKind
@@ -123,6 +126,7 @@ export const useNotifications = create<NotificationsState>((set) => ({
       id,
       kind: input.kind,
       title: input.title,
+      titleKind: input.titleKind ?? 'authored',
       body: input.body,
       bodyKind: input.bodyKind ?? 'fact',
       actions: input.actions,

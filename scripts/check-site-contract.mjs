@@ -359,6 +359,21 @@ const FEATURES = [
   },
 ]
 
+const SITE_RENDER_COPY_FUNNELS = [
+  ['hall', 'site/app/core/render.js', 'function renderHall'],
+  ['room', 'site/app/core/render.js', 'function renderRoom'],
+  ['list-room', 'site/app/core/render.js', 'function renderListRoom'],
+  ['row-item', 'site/app/core/render.js', 'function rowItem'],
+  ['menu', 'site/app/core/render.js', 'function renderMenu'],
+  ['regex-dialog', 'site/app/core/render.js', 'function renderRx'],
+  ['command-palette', 'site/app/core/render.js', 'function renderPalette'],
+  ['settings-card', 'site/app/core/render.js', 'function settingsCardHtml'],
+  ['home-room', 'site/app/core/render.js', 'function renderHomeRoom'],
+  ['door-tile', 'site/app/core/render.js', 'function doorTile'],
+  ['feature-card', 'site/app/core/render.js', 'function featureCard']
+]
+const CANONICAL_SITE_RENDER_FUNNEL_IDS = `hall room list-room row-item menu regex-dialog command-palette settings-card home-room door-tile feature-card`.split(/\s+/)
+
 for (const feature of FEATURES) {
   const fileOk = requireFileExists(feature.file, feature.label)
   if (fileOk) requireExportedFunction(feature.file, feature.exportName, feature.label)
@@ -791,6 +806,51 @@ if (cdnHits.length > 0) {
 const NON_FEATURE_MODULES = new Map([
   ['index.js', 'the registrar barrel (FEATURE_REGISTRARS) — it wires features rather than being one'],
 ])
+
+function renderFunnelBody(source, marker) {
+  if (!source) return null
+  const start = source.indexOf(marker)
+  if (start < 0) return null
+  const next = source.indexOf('\nfunction ', start + marker.length)
+  return source.slice(start, next < 0 ? source.length : next)
+}
+
+function hasAuthoredCopyFunnel(body) {
+  return !!body && (body.includes('copy(') || body.includes('copyAttr('))
+}
+
+{
+  const ids = SITE_RENDER_COPY_FUNNELS.map(([id]) => id)
+  checkedCount += 1
+  if (ids.length !== CANONICAL_SITE_RENDER_FUNNEL_IDS.length || ids.some((id, i) => id !== CANONICAL_SITE_RENDER_FUNNEL_IDS[i])) {
+    fail('Site renderer funnel inventory does not match its independent canonical list')
+  } else {
+    pass('Site renderer funnel inventory matches its independent canonical list')
+  }
+  for (const [id, file, marker] of SITE_RENDER_COPY_FUNNELS) {
+    const body = renderFunnelBody(readText(file), marker)
+    checkedCount += 1
+    if (!hasAuthoredCopyFunnel(body)) fail(`${id}: authored-copy funnel is missing`)
+    else pass(`${id}: authored-copy funnel is present`)
+
+    const mutatedBody = renderFunnelBody(body.split('copy(').join('').split('copyAttr(').join(''), marker)
+    checkedCount += 1
+    if (hasAuthoredCopyFunnel(mutatedBody)) fail(`${id}: authored-copy funnel mutation was not rejected`)
+    else pass(`${id}: authored-copy funnel mutation is rejected`)
+  }
+  const renderSource = readText('site/app/core/render.js') || ''
+  const copyStart = renderSource.indexOf('function copy(')
+  const copyEnd = renderSource.indexOf('function copyAttr(', copyStart)
+  const copyHelper = copyStart >= 0 && copyEnd > copyStart ? renderSource.slice(copyStart, copyEnd) : ''
+  checkedCount += 1
+  if (!copyHelper.includes('shapeCopy(')) fail('shared site copy helper does not call shapeCopy')
+  else pass('shared site copy helper calls shapeCopy')
+  const mutated = renderSource.split('copy(').join('').split('copyAttr(').join('')
+  checkedCount += 1
+  const body = renderFunnelBody(mutated, 'function renderHall')
+  if (hasAuthoredCopyFunnel(body)) fail('Site renderer funnel mutation was not rejected')
+  else pass('Site renderer funnel mutation is rejected')
+}
 
 {
   const FEATURES_DIR = join(SITE_DIR, 'app', 'features')

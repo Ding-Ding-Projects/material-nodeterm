@@ -18,6 +18,7 @@ export interface NativeNotificationCopy {
 export function composeNativeNotification(payload: {
   title: string
   body: string
+  titleKind?: 'authored' | 'fact'
   bodyKind?: 'authored' | 'fact'
 }): NativeNotificationCopy {
   return { title: payload.title, body: payload.body }

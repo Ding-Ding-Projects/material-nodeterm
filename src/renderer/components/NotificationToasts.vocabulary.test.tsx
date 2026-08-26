@@ -96,4 +96,24 @@ describe('NotificationToasts personal vocabulary', () => {
     render()
     expect(document.body.querySelector('.toast__text')?.textContent).toBe('Open the shell box now')
   })
+
+  it('keeps an explicitly factual title exact', () => {
+    usePersonalVocabulary.setState({
+      status: 'loaded',
+      entries: { terminal: 'shell box' },
+      entryCount: 1
+    })
+    useSchoolMode.setState({ enabled: false, hydrated: true })
+    act(() => {
+      useNotifications.getState().push({
+        kind: 'error',
+        title: 'terminal process exited with code 1',
+        titleKind: 'fact',
+        body: 'terminal output',
+        autoDismissMs: null
+      })
+    })
+    render()
+    expect(document.body.querySelector('.toast__title')?.textContent).toBe('terminal process exited with code 1')
+  })
 })

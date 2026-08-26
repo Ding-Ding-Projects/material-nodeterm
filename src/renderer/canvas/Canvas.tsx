@@ -353,6 +353,8 @@ import {
 } from '../lib/terminal-creation-surfaces'
 import { armedTerminalLaunchIntent } from '../terminal/armed-launch-intent'
 import { useLocalizedVocabularyText } from '../lib/personalVocabulary/useLocalizedVocabularyText'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { mapNativeNotification } from '../lib/personalVocabulary/hostMessage'
 import { usePersonalVocabulary } from '../state/personalVocabulary'
 import { prepareQuickOpenFiles, type QuickOpenIndexedFile } from '../lib/quickOpenSearch'
 import { isSafeQuickOpenRelPath } from '@shared/quick-open-filter'
@@ -1035,6 +1037,7 @@ export function Canvas() {
   // working regardless of which component renders the project switcher.
   useSessionRelock()
   const profileText = useLocalizedVocabularyText()
+  const vocab = useVocabularyMapper()
   const terminalProfiles = useTerminalProfiles((state) => state.profiles)
   const terminalProfilesError = useTerminalProfiles((state) => state.error)
   const terminalProfilesLoading = useTerminalProfiles((state) => state.loading)
@@ -11981,6 +11984,8 @@ export function Canvas() {
         void window.nodeTerminal.notify({
           title: `${contextFor(e.nodeId)} — ${agentLabel} ${statusText}`,
           body: clip(e.lastMessage) || fallbackBody,
+          titleKind: 'fact',
+          bodyKind: 'fact',
           nodeId: e.nodeId
         })
       }
@@ -14808,12 +14813,14 @@ export function Canvas() {
             // their own click a moment ago (and `force: true` for the same reason). A permission
             // switch that silently proves nothing when flipped reads as broken, and the mode is
             // about unsolicited interruptions — this is the opposite of one.
-            void window.nodeTerminal.notify({
+            void window.nodeTerminal.notify(mapNativeNotification({
               title: 'Notifications enabled',
               body: "You'll be told when Claude Code finishes in the background.",
+              titleKind: 'authored',
+              bodyKind: 'authored',
               nodeId: '',
               force: true
-            })
+            }, vocab))
             setConsentOpen(false)
           }}
           onDismiss={() => setConsentOpen(false)}

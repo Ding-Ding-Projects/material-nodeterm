@@ -201,7 +201,7 @@ export async function saveUploadBlobOverHttp(
   // Blob.size is cheap browser metadata. The authenticated receiver still counts untrusted bytes
   // again, because this renderer-side guard is an allocation optimization, not a trust boundary.
   if (data.size === 0) return null
-  if (data.size > UPLOAD_MAX_BYTES) throw new Error(UPLOAD_TOO_LARGE_MESSAGE)
+  if (data.size > UPLOAD_MAX_BYTES) throw new Error(mapLocalVocabularyText(UPLOAD_TOO_LARGE_MESSAGE))
   return postUploadOverHttp(name, data, fetchImpl)
 }
 

@@ -1,6 +1,6 @@
 # Material Design 3 desktop surface audit
 
-Status: source audit and remediation completed against the current `origin/main` baseline `c6820730`. This lane's edits are uncommitted on `feat/full-app-material3-reconciliation`, so no lane commit SHA exists yet. Built-artifact launch, pixel measurement, test execution, and capture were not run because this task is limited to source inspection and edits.
+Status: this is the shared source inventory for the current Material Design 3 reconciliation. Its rows are maintained by the owning linked lanes; lane-specific commit SHAs and runtime evidence belong in each lane's handoff. Built-artifact launch, pixel measurement, test execution, and capture remain separate evidence and are not claimed by this inventory.
 
 This document is the hand-written surface inventory required by issue #91. The executable companion is `scripts/check-material-audit.mjs`; its required identifier list is intentionally independent from the rows it validates, so deleting a row turns the check red rather than shrinking the inventory and the check together.
 
@@ -288,6 +288,7 @@ Every listed renderer producer has an explicit local mapper boundary. Commands, 
 | `browser-profile-picker` | Browser profile picker | `src/renderer/nodes/BrowserProfilePicker.tsx` | `useVocabularyMapper()` |
 | `password-manager` | Password manager | `src/renderer/components/passwordManager/PasswordManagerPanel.tsx` | `useVocabularyMapper()` |
 | `converter-adapter-catalog` | Adapter catalog | `src/renderer/components/converter/AdapterCatalog.tsx` | `useVocabularyMapper()` |
+| `converter-upload-limit` | Converter upload limit message | `src/renderer/components/converter/FileConverterPanel.tsx` | `mapLocalVocabularyText(` |
 | `minecraft-backups` | Minecraft backups | `src/renderer/components/minecraft/MinecraftBackupsPanel.tsx` | `useVocabularyMapper()` |
 | `minecraft-players` | Minecraft players | `src/renderer/components/minecraft/MinecraftPlayersPanel.tsx` | `useVocabularyMapper()` |
 | `minecraft-properties` | Minecraft properties | `src/renderer/components/minecraft/MinecraftPropertiesEditor.tsx` | `useVocabularyMapper()` |
@@ -305,6 +306,9 @@ Every listed renderer producer has an explicit local mapper boundary. Commands, 
 | `notification-body-classification` | Typed authored versus fact notification body | `src/renderer/state/notifications.ts` | `bodyKind` |
 | `site-vocabulary-json` | Landing-page JSON upload | `site/app/features/vocabulary.js` | `validateVocabularyJson(` |
 | `site-vocabulary-cache` | Landing-page cache envelope | `site/app/shared/vocabulary-state.js` | `validateVocabularyCacheJson(` |
+| `native-notification-canvas` | Native notification fact route | `src/renderer/canvas/Canvas.tsx` | `mapNativeNotification(` |
+| `native-notification-onboarding` | Native authored notification route | `src/renderer/components/onboarding/OnboardingFlow.tsx` | `mapNativeNotification(` |
+| `native-notification-settings` | Native authored notification route | `src/renderer/components/settings/sections/NotificationsSection.tsx` | `mapNativeNotification(` |
 
 ## Complete production surface classification
 
@@ -364,11 +368,12 @@ The site stylesheet was not changed by this audit. The stale packaging article w
 
 The personal-vocabulary inventory now has independent canonical producer and surface manifests in
 `scripts/check-personal-vocabulary-coverage.mjs`. The manifests are separate from mutable evidence
-rows, and the executable check mutates copied real files to prove that removing a mapper, producer
-row, or audit row is rejected. The host-entrypoint lane covers the detached widget, HUD, browser
-picker, reconnect overlay, bridge stubs, notification body classification, and landing-page
-JSON/cache validators. Runtime facts such as paths, IDs, model names, and provider errors remain
-outside the authored-copy mapper.
+rows, and the executable check mutates copied real files and copied inventory arrays to prove that
+removing a mapper, producer row, surface row, or audit row is rejected. The host-entrypoint lane
+covers the detached widget, HUD, browser picker, reconnect overlay, bridge stubs, notification
+body classification, native notification producers, converter upload limit messages, and
+landing-page JSON/cache validators. Runtime facts such as paths, IDs, model names, provider errors,
+visible commands, and brand names remain outside the authored-copy mapper.
 
 ## Verification
 

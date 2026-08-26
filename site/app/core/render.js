@@ -59,7 +59,7 @@ function renderHall(store) {
     <header class="hall__header" data-menu-kind="header" data-menu-label="the top bar">
       <a class="brand" href="./index.html" data-no-room>
         <span class="brand__mark" style="background-image:url('${attr(s.logo || './assets/mark.svg')}')"></span>
-        <span class="brand__name">${copy(s, 'nodeterm school')}</span>
+        <span class="brand__name">nodeterm school</span>
       </a>
       ${searchBar({ id: 'qGlobal', value: s.qGlobal, placeholder: 'Which room are you looking for?', ariaLabel: 'the whole school', rxKey: 'global', state: s, cls: 'header-search' })}
       <div class="header-actions">
@@ -81,7 +81,7 @@ function renderHall(store) {
 
     <div class="doors" data-menu-kind="rail" data-menu-label="the room list">
       <div class="doors__grid">
-        ${doors.length ? doors.map((x, i) => doorTile(s, x, i)).join('') : `<div class="empty" style="grid-column:1/-1">No door has that name. Try the <strong>.*</strong> button next to the filter! 🔎</div>`}
+        ${doors.length ? doors.map((x, i) => doorTile(s, x, i)).join('') : `<div class="empty" style="grid-column:1/-1">${copy(s, 'No door has that name. Try the')} <strong>.*</strong> ${copy(s, 'button next to the filter!')} 🔎</div>`}
       </div>
 
       <div class="hall__sections">
@@ -92,7 +92,7 @@ function renderHall(store) {
             <h2>${copy(s, 'Your terminals are')}<br />${copy(s, 'blocks on a giant canvas.')}</h2>
             <p>${copy(s, 'Every terminal is a block you can drag around. Robot helpers get their own blocks too, and they raise a hand when they need you. Nothing disappears when you close the lid.')}</p>
             <div class="cta-row">
-              <a class="btn" style="background:var(--green)" href="${REPO_RELEASES}" target="_blank" rel="noopener">⬇ ${copy(s, 'Get nodeterm')}</a>
+              <a class="btn" style="background:var(--green)" href="${REPO_RELEASES}" target="_blank" rel="noopener">⬇ Get nodeterm</a>
               <a class="btn" href="${REPO_URL}" target="_blank" rel="noopener">👀 ${copy(s, 'Peek at the code')}</a>
               <span class="brew-pill">brew install --cask nodeterm</span>
             </div>
@@ -138,7 +138,7 @@ function renderHall(store) {
           <h3>${copy(s, 'Stop hunting through tabs.')}</h3>
           <p>${copy(s, 'Free, open source, and it works offline. macOS 12+ and Linux x64.')}</p>
           <div class="cta-row" style="justify-content:center">
-            <a class="btn" style="background:var(--card);height:56px;font-size:18px" href="${REPO_RELEASES}" target="_blank" rel="noopener">⬇ ${copy(s, 'Download nodeterm')}</a>
+            <a class="btn" style="background:var(--card);height:56px;font-size:18px" href="${REPO_RELEASES}" target="_blank" rel="noopener">⬇ Download nodeterm</a>
             <button type="button" class="btn" style="background:var(--card);height:56px;font-family:var(--mono);font-size:14px" data-action="copy-brew">📋 brew install --cask nodeterm</button>
           </div>
         </div>
@@ -193,7 +193,7 @@ function renderRoom(store) {
     <header class="room__header" data-menu-kind="header" data-menu-label="the top bar">
       <a class="brand" href="./index.html" data-no-room>
         <img class="brand__mark" src="./assets/mark.svg" alt="" width="34" height="34" style="padding:3px;background:var(--yellow)" />
-        <span class="brand__name">${copy(s, 'nodeterm')}</span>
+        <span class="brand__name">nodeterm</span>
         <span class="brand__ver">v0.3.0</span>
       </a>
       ${searchBar({ id: 'qGlobal', value: s.qGlobal, placeholder: 'Search the whole playground…', ariaLabel: 'the big search', rxKey: 'global', state: s, cls: 'header-search' })}
@@ -250,7 +250,7 @@ function renderRoom(store) {
       <a href="${REPO_URL}/blob/main/CHANGELOG.md" target="_blank" rel="noopener">${copy(s, 'Changelog')}</a>
       <a href="${REPO_URL}/issues" target="_blank" rel="noopener">Help</a>
       <div class="spacer"></div>
-      <span>${copy(s, '“Claude” and “Claude Code” are trademarks of Anthropic. nodeterm is not affiliated with or endorsed by Anthropic.')}</span>
+      <span>“Claude” and “Claude Code” are trademarks of Anthropic. nodeterm is not affiliated with or endorsed by Anthropic.</span>
     </footer>
   </div>`
 }
@@ -282,19 +282,19 @@ function renderHomeRoom(store) {
       <div class="card card--lg" style="grid-column:1/-1;position:relative;overflow:hidden">
         <div class="hero-panel__blob" aria-hidden="true"></div>
         <div style="position:relative">
-          <div class="pill" style="background:var(--pink)">a playground for your computer</div>
-          <h2 style="font-size:clamp(30px,5.4vw,52px);line-height:1.03;margin:10px 0 8px">Your terminals are<br />blocks on a giant canvas.</h2>
-          <p style="margin:0 0 16px;max-width:600px;font-size:16px;color:var(--ink2)">Every terminal is a block you can drag around. Robot helpers get their own blocks too, and they raise a hand when they need you. Nothing disappears when you close the lid.</p>
+          <div class="pill" style="background:var(--pink)">${copy(s, 'a playground for your computer')}</div>
+          <h2 style="font-size:clamp(30px,5.4vw,52px);line-height:1.03;margin:10px 0 8px">${copy(s, 'Your terminals are')}<br />${copy(s, 'blocks on a giant canvas.')}</h2>
+          <p style="margin:0 0 16px;max-width:600px;font-size:16px;color:var(--ink2)">${copy(s, 'Every terminal is a block you can drag around. Robot helpers get their own blocks too, and they raise a hand when they need you. Nothing disappears when you close the lid.')}</p>
           <div class="cta-row">
             <a class="btn" style="background:var(--green)" href="${REPO_RELEASES}" target="_blank" rel="noopener">⬇ Get nodeterm</a>
-            <a class="btn" href="${REPO_URL}" target="_blank" rel="noopener">👀 Peek at the code</a>
+            <a class="btn" href="${REPO_URL}" target="_blank" rel="noopener">👀 ${copy(s, 'Peek at the code')}</a>
           </div>
         </div>
       </div>
-      ${statCards.map((c) => `<div class="card stat-card" data-menu-kind="stat" data-menu-label="${attr(c.note)}"><div class="stat-card__icon" aria-hidden="true">${c.icon}</div><div class="stat-card__value">${c.value}</div><div class="stat-card__note">${esc(c.note)}</div></div>`).join('')}
+      ${statCards.map((c) => `<div class="card stat-card" data-menu-kind="stat" data-menu-label="${copyAttr(s, c.note)}"><div class="stat-card__icon" aria-hidden="true">${c.icon}</div><div class="stat-card__value">${c.value}</div><div class="stat-card__note">${copy(s, c.note)}</div></div>`).join('')}
     </section>
     <section>
-      <h3 style="margin-bottom:10px">What's inside the box? <span style="font-size:14px;font-weight:600;color:var(--ink2)">${features.length} of ${FEATURES.length} showing</span></h3>
+      <h3 style="margin-bottom:10px">${copy(s, "What's inside the box?")} <span style="font-size:14px;font-weight:600;color:var(--ink2)">${features.length} of ${FEATURES.length} ${copy(s, 'showing')}</span></h3>
       <div class="feature-grid">
         ${features.length ? features.map((f) => featureCard(f, s)).join('') : `<div class="empty" style="grid-column:1/-1">${copy(s, 'Nothing matched that search.')} 🐛</div>`}
       </div>
@@ -362,9 +362,9 @@ function renderListRoom(store, room) {
       room.hasDateFilter
         ? `<div class="date-filter">
       <span style="font-weight:700">📅 ${copy(s, 'Between')}</span>
-      <input type="date" data-bind="dateFrom" value="${attr(s.dateFrom)}" aria-label="From date" />
-      <span style="font-weight:700">and</span>
-      <input type="date" data-bind="dateTo" value="${attr(s.dateTo)}" aria-label="To date" />
+      <input type="date" data-bind="dateFrom" value="${attr(s.dateFrom)}" aria-label="${copyAttr(s, 'From date')}" />
+      <span style="font-weight:700">${copy(s, 'and')}</span>
+      <input type="date" data-bind="dateTo" value="${attr(s.dateTo)}" aria-label="${copyAttr(s, 'To date')}" />
       <button type="button" class="btn-plain" data-action="date-range" data-id="30">${copy(s, '30 days')}</button>
       <button type="button" class="btn-plain" data-action="date-range" data-id="90">${copy(s, '90 days')}</button>
       <button type="button" class="btn-plain" data-action="date-range" data-id="all">${copy(s, 'Everything')}</button>
@@ -432,9 +432,9 @@ function settingsCardHtml(store, c) {
     ${
       gate.locked
         ? `<div class="lock-gate">
-        <span style="font-weight:700;font-size:13px">🔒 This box has its own password.</span>
-        <input type="password" data-bind-unlock="${attr(c.id)}" value="${attr(s.unlockVals[c.id] || '')}" aria-label="Unlock password" />
-        <button type="button" class="btn-plain" style="background:var(--green)" data-action="unlock-panel" data-id="${attr(c.id)}">Open</button>
+        <span style="font-weight:700;font-size:13px">🔒 ${copy(s, 'This box has its own password.')}</span>
+        <input type="password" data-bind-unlock="${attr(c.id)}" value="${attr(s.unlockVals[c.id] || '')}" aria-label="${copyAttr(s, 'Unlock password')}" />
+        <button type="button" class="btn-plain" style="background:var(--green)" data-action="unlock-panel" data-id="${attr(c.id)}">${copy(s, 'Open')}</button>
       </div>`
         : `<div style="display:flex;flex-direction:column;gap:12px">
         ${controls.map((ctl) => ctlHtml(c.id, ctl, s)).join('')}
@@ -492,14 +492,14 @@ function renderRx(store) {
       <div class="note-box ${rx.bad ? 'is-bad' : rx.groups.length ? 'is-ok' : ''}">${esc(rx.result)}</div>
       ${
         rx.groups.length
-          ? `<div class="rx-groups"><div style="font-weight:700;margin-bottom:2px">Things it caught</div>${rx.groups.map((g) => `<div class="rx-group-row"><span class="n">${g.n}</span><span class="v">${esc(g.v)}</span></div>`).join('')}</div>`
+          ? `<div class="rx-groups"><div style="font-weight:700;margin-bottom:2px">${copy(s, 'Things it caught')}</div>${rx.groups.map((g) => `<div class="rx-group-row"><span class="n">${g.n}</span><span class="v">${esc(g.v)}</span></div>`).join('')}</div>`
           : ''
       }
       <div class="rx-actions">
         <button type="button" class="btn" style="background:var(--green)" data-action="rx-apply">${copy(s, 'Use this pattern')}</button>
         <button type="button" class="btn-plain" data-action="rx-plain">${copy(s, 'Back to plain words')}</button>
       </div>
-      <p class="rx-footnote">The pattern and the sample are both length-capped and every test is wrapped, so a broken pattern tells you instead of freezing. That makes runaway patterns unlikely, not impossible — a real guarantee needs a worker with a stop-watch, which a page like this doesn't have.</p>
+      <p class="rx-footnote">${copy(s, "The pattern and the sample are both length-capped and every test is wrapped, so a broken pattern tells you instead of freezing. That makes runaway patterns unlikely, not impossible — a real guarantee needs a worker with a stop-watch, which a page like this doesn't have.")}</p>
     </div>
   </div>`
 }
@@ -533,11 +533,11 @@ function renderConfirm(store) {
       <h3>🛑 ${esc(s.confirm.title)}</h3>
       <p>${esc(s.confirm.body)}</p>
       <pre class="confirm-preview">${esc(store.confirmPreviewCache || '')}</pre>
-      <label>Type <strong class="confirm-word">${esc(s.confirm.word)}</strong> to unlock the button</label>
-      <input data-bind="confirmTyped" data-focus-id="confirmTyped" value="${attr(s.confirmTyped)}" aria-label="Confirmation word" />
+      <label>${copy(s, 'Type')} <strong class="confirm-word">${esc(s.confirm.word)}</strong> ${copy(s, 'to unlock the button')}</label>
+      <input data-bind="confirmTyped" data-focus-id="confirmTyped" value="${attr(s.confirmTyped)}" aria-label="${copyAttr(s, 'Confirmation word')}" />
       <div class="confirm-actions">
-        <button type="button" class="btn-plain" data-action="confirm-cancel">Keep it</button>
-        <button type="button" class="confirm-run ${ready ? 'is-ready' : ''}" data-action="confirm-run">${ready ? 'Yes, do it' : 'Type “' + esc(s.confirm.word) + '” first'}</button>
+        <button type="button" class="btn-plain" data-action="confirm-cancel">${copy(s, 'Keep it')}</button>
+        <button type="button" class="confirm-run ${ready ? 'is-ready' : ''}" data-action="confirm-run">${ready ? copy(s, 'Yes, do it') : copy(s, 'Type “') + esc(s.confirm.word) + copy(s, '” first')}</button>
       </div>
     </div>
   </div>`

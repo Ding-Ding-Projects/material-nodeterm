@@ -36,7 +36,7 @@ function Toast({ n }: { n: AppNotification }): React.JSX.Element {
   // agent transcript line. A producer that owns the body may opt into `bodyKind: 'authored'`; the
   // type is carried with the notification so a broad string replacement cannot rewrite host facts.
   const vocab = useVocabularyMapper()
-  const title = vocab(n.title)
+  const title = n.titleKind === 'authored' ? vocab(n.title) : n.title
   const body = n.bodyKind === 'authored' && n.body ? vocab(n.body) : n.body
   // One source for the visible × and its accessible name, so a screen reader and the screen never
   // announce two different words for the same button.

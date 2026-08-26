@@ -16,6 +16,7 @@ import { isBrowserRuntime } from '../../bridge/runtime'
 import { formatBytes } from '../../lib/bytesFormat'
 import { bytesToBase64 } from '../../lib/browserBytes'
 import { useActiveSessionApi } from '../../session/session'
+import { mapLocalVocabularyText } from '../../lib/personalVocabulary/hostMessage'
 import { MaterialSymbol, type MaterialSymbolName } from '../MaterialSymbol'
 import { AdapterCatalog } from './AdapterCatalog'
 import { Checkbox } from '@renderer/ui/md3'
@@ -68,7 +69,7 @@ async function uploadBrowserFiles(filesApi: NodeTerminalApi['files'], files: Fil
   for (const file of Array.from(files)) {
     // File.size is browser-owned metadata. Refuse before either carrier reads the file; the
     // receiver still enforces the same shared ceiling against untrusted bytes.
-    if (file.size > UPLOAD_MAX_BYTES) throw new Error(UPLOAD_TOO_LARGE_MESSAGE)
+    if (file.size > UPLOAD_MAX_BYTES) throw new Error(mapLocalVocabularyText(UPLOAD_TOO_LARGE_MESSAGE))
     const path = filesApi.saveUploadBlob
       ? // Server Edition owns this same-origin capability. Passing the File by identity lets fetch
         // stream its backing store without ArrayBuffer + base64 + atob + Uint8Array copies.

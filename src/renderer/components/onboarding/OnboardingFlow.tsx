@@ -9,6 +9,7 @@ import { useSettings } from '../../state/settings'
 import { Switch } from '@renderer/ui/Switch'
 import { AgentIcon } from '../../lib/agentIcons'
 import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
+import { mapNativeNotification } from '../../lib/personalVocabulary/hostMessage'
 import {
   OnbBrandMark,
   OnbCheck,
@@ -137,12 +138,14 @@ export function OnboardingFlow({ onClose }: { onClose: () => void }) {
   const chooseNotifications = (enable: boolean): void => {
     update({ notifyOnClaudeDone: enable, notifyConsentAsked: true })
     if (enable) {
-      void window.nodeTerminal.notify({
+      void window.nodeTerminal.notify(mapNativeNotification({
         title: 'Notifications enabled',
         body: "You'll be told when an agent finishes in the background.",
         nodeId: '',
-        force: true
-      })
+        force: true,
+        titleKind: 'authored',
+        bodyKind: 'authored'
+      }, vocab))
     }
     setStep((s) => Math.min(s + 1, STEP_COUNT - 1))
   }
