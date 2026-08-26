@@ -14,6 +14,37 @@ interface AnchoredPopoverProps {
   zIndex?: number
 }
 
+export interface AnchoredPopoverAnchorRect {
+  top: number
+  bottom: number
+  left: number
+}
+
+export interface AnchoredPopoverPosition {
+  top: number
+  left: number
+  maxHeight: number
+}
+
+/** Calculate a viewport-safe anchored position without requiring a browser layout pass. */
+export function anchoredPopoverPosition(
+  rect: AnchoredPopoverAnchorRect,
+  popoverWidth: number,
+  popoverHeight: number,
+  viewport: { width: number; height: number },
+): AnchoredPopoverPosition {
+  const M = 8
+  const spaceBelow = Math.max(0, viewport.height - rect.bottom - M)
+  const spaceAbove = Math.max(0, rect.top - M)
+  const openAbove =
+    spaceAbove > spaceBelow && (spaceBelow < Math.min(popoverHeight || 240, 240) || spaceBelow < 120)
+  const available = openAbove ? spaceAbove : spaceBelow
+  const top = openAbove ? Math.max(M, rect.top - popoverHeight - 6) : rect.bottom + 6
+  const maxHeight = Math.max(1, Math.min(available, viewport.height - M * 2))
+  const left = Math.max(M, Math.min(rect.left, viewport.width - popoverWidth - M))
+  return { top, left, maxHeight }
+}
+
 /**
  * A popover that stays visually attached to the field/button that opened it — never a detached
  * global dialog. Paints its OWN background/border/elevation (an overlay this project has shipped
@@ -46,15 +77,17 @@ export function AnchoredPopover({
       const anchor = anchorRef.current
       if (!anchor) return
       const rect = anchor.getBoundingClientRect()
-      const M = 8
       const popH = popRef.current?.offsetHeight ?? 0
       const popW = popRef.current?.offsetWidth ?? width
-      const spaceBelow = window.innerHeight - rect.bottom - M
-      const spaceAbove = rect.top - M
-      const openAbove = spaceBelow < Math.min(popH, 240) && spaceAbove > spaceBelow
-      const top = openAbove ? Math.max(M, rect.top - popH - 6) : rect.bottom + 6
-      const maxHeight = openAbove ? Math.max(120, spaceAbove) : Math.max(120, spaceBelow)
-      const left = Math.max(M, Math.min(rect.left, window.innerWidth - popW - M))
+      // A fixed 120px floor looks helpful but sends a popover off-screen when its anchor is
+      // close to an edge. The pure geometry helper keeps this decision testable and uses the
+      // actual available viewport space when neither side can fit the preferred minimum.
+      const { top, left, maxHeight } = anchoredPopoverPosition(
+        rect,
+        popW,
+        popH,
+        { width: window.innerWidth, height: window.innerHeight },
+      )
       setPos((p) => (p && p.top === top && p.left === left && p.maxHeight === maxHeight ? p : { top, left, maxHeight }))
     }
     measure()

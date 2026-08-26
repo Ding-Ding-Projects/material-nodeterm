@@ -57,6 +57,12 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## In progress / partially landed
 
+- [ ] **Desktop layout safety sweep** — viewport-bounded menus, flyouts, anchored popovers, dialogs,
+      settings, onboarding, command palette, and documentation surfaces are repaired in
+      `src/renderer/styles.clipping.css`, `src/renderer/ui/AnchoredPopover.tsx`, and
+      `src/renderer/components/ContextMenu.tsx`. Source implementation is present; packaged
+      Windows captures at narrow widths and 100/125/150/200% display scale remain pending.
+
 - [ ] **Portable canvas projection**: schema 3 root and future universe canvas payloads now have
       a deterministic, bounded, platform-free projection and validator in
       `src/core/portable-canvas-projection.ts`; archive export/import wiring and verification

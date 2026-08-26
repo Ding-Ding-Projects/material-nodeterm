@@ -2,7 +2,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } f
 import { createPortal } from 'react-dom'
 import { NODE_COLORS } from '../state/workspace'
 import { useMenuFlip } from '../ui/useMenuFlip'
-import { fitFlyout, type FlyoutFit } from '../ui/flyoutFit'
+import { fitFlyout, FLYOUT_MARGIN, type FlyoutFit } from '../ui/flyoutFit'
 import { ColorPicker } from './color/ColorPicker'
 import { RAINBOW_COLOR, isRainbowColor } from '../lib/nodeColor'
 import { useMenuFilter, type MenuFilterItem } from './menu/useMenuFilter'
@@ -110,7 +110,7 @@ interface ContextMenuProps {
  * A right-click menu rendered in a body portal at fixed coordinates, so it is never
  * clipped or hidden behind the canvas. Closes on backdrop click.
  */
-export function ContextMenu({ x, y, items, onClose, zIndex, scroll }: ContextMenuProps) {
+export function ContextMenu({ x, y, items, onClose, zIndex }: ContextMenuProps) {
   // Keep the menu one above its backdrop (matches the default 46/45 CSS ordering).
   const backdropStyle = zIndex != null ? { zIndex } : undefined
   // Flip away from the viewport edges: a right-click near the bottom (or right) edge used to
@@ -137,34 +137,75 @@ export function ContextMenu({ x, y, items, onClose, zIndex, scroll }: ContextMen
   // so the correction is never a visible jump, and re-measured on resize because the flyout is
   // built from an async profile probe and GROWS while it is open.
   const flyoutRef = useRef<HTMLDivElement>(null)
+  const flyoutTriggerRef = useRef<HTMLButtonElement>(null)
   const [flyoutFit, setFlyoutFit] = useState<FlyoutFit>({ shiftY: 0, flipX: false })
+  const [flyoutPosition, setFlyoutPosition] = useState({ top: -9999, left: -9999 })
+  const flyoutCloseTimer = useRef<number | null>(null)
+  const flyoutPointerInside = useRef(false)
+  const cancelFlyoutClose = (): void => {
+    if (flyoutCloseTimer.current !== null) {
+      window.clearTimeout(flyoutCloseTimer.current)
+      flyoutCloseTimer.current = null
+    }
+  }
+  const scheduleFlyoutClose = (): void => {
+    cancelFlyoutClose()
+    flyoutCloseTimer.current = window.setTimeout(() => {
+      flyoutCloseTimer.current = null
+      if (!flyoutPointerInside.current) setOpenSub(null)
+    }, 120)
+  }
   useLayoutEffect(() => {
     if (openSub == null) {
       // Reset when it closes, or the next flyout opens wearing the last one's correction.
       setFlyoutFit((cur) => (cur.shiftY === 0 && !cur.flipX ? cur : { shiftY: 0, flipX: false }))
+      setFlyoutPosition((cur) => (cur.top === -9999 && cur.left === -9999 ? cur : { top: -9999, left: -9999 }))
       return
     }
     const el = flyoutRef.current
-    const host = el?.parentElement
-    if (!el || !host) return
+    const trigger = flyoutTriggerRef.current
+    if (!el || !trigger) return
     const measure = (): void => {
-      // Measure the UNCORRECTED box: reading a rect we have already shifted would fold the
-      // previous correction into the next one and walk the flyout up the screen a frame at a time.
-      const raw = el.getBoundingClientRect()
+      const triggerRect = trigger.getBoundingClientRect()
+      const measured = el.getBoundingClientRect()
+      // The flyout is portaled to document.body, so the root menu's scroll container cannot clip
+      // it. Its natural position is still the same four-pixel overlap used by the old anchored
+      // layout, then the pure fit helper keeps the tail inside the viewport.
+      const raw = {
+        top: triggerRect.top - 6,
+        left: triggerRect.right - 4,
+        width: measured.width,
+        height: measured.height
+      }
       const next = fitFlyout(
-        { top: raw.top + flyoutFit.shiftY, left: raw.left, width: raw.width, height: raw.height },
-        host.getBoundingClientRect(),
+        raw,
+        { left: triggerRect.left, right: triggerRect.right },
         { width: window.innerWidth, height: window.innerHeight },
       )
       // Identity-guarded, exactly like useMenuFlip: an unguarded set here is an infinite loop,
       // because applying the correction resizes the element and re-fires the observer.
       setFlyoutFit((cur) => (cur.shiftY === next.shiftY && cur.flipX === next.flipX ? cur : next))
+      const naturalLeft = next.flipX ? triggerRect.left - measured.width + 4 : triggerRect.right - 4
+      const left = Math.max(
+        FLYOUT_MARGIN,
+        Math.min(naturalLeft, window.innerWidth - measured.width - FLYOUT_MARGIN),
+      )
+      const top = Math.max(FLYOUT_MARGIN, raw.top - next.shiftY)
+      setFlyoutPosition((cur) => (cur.top === top && cur.left === left ? cur : { top, left }))
     }
     measure()
     const ro = new ResizeObserver(measure)
     ro.observe(el)
-    return () => ro.disconnect()
-  }, [openSub, flyoutFit.shiftY])
+    window.addEventListener('resize', measure)
+    menuRef.current?.addEventListener('scroll', measure)
+    return () => {
+      ro.disconnect()
+      window.removeEventListener('resize', measure)
+      menuRef.current?.removeEventListener('scroll', measure)
+    }
+  }, [openSub, flyoutFit.shiftY, menuRef])
+
+  useEffect(() => () => cancelFlyoutClose(), [])
 
   // A keyboard-opened flyout must move focus into the flyout after React has mounted it.
   // Disabled menu items remain focusable by design, so the first row is a valid target even
@@ -179,6 +220,10 @@ export function ContextMenu({ x, y, items, onClose, zIndex, scroll }: ContextMen
   }, [menuId, openSub])
 
   const filterable = isFilterableMenu(items)
+  // Every root menu gets its own bounded scroll body. Flyouts are portaled to document.body below,
+  // so the root scroll container cannot clip a child surface. Keep the legacy `scroll` prop in the
+  // public API for callers, but no longer let its omission leave a dynamic menu unbounded.
+  const shouldScroll = true
   // Hooks run every render regardless of `filterable` — only what we DO with the results differs —
   // so the rules of hooks hold even though filtering is conditionally rendered below.
   const search = useRegexSearchField()
@@ -217,6 +262,102 @@ export function ContextMenu({ x, y, items, onClose, zIndex, scroll }: ContextMen
     onEmptyEscape: onClose
   })
 
+  const openSubmenu = openSub == null ? undefined : items[openSub]
+  const flyoutPortal = openSubmenu?.type === 'submenu'
+    ? createPortal(
+        <div
+          ref={flyoutRef}
+          id={`${menuId}-submenu-${openSub}`}
+          role="menu"
+          aria-labelledby={`${menuId}-submenu-trigger-${openSub}`}
+          className="ctx-menu ctx-submenu"
+          style={{
+            top: flyoutPosition.top,
+            left: flyoutPosition.left,
+            zIndex: (zIndex ?? 46) + 2,
+            visibility: flyoutPosition.top < 0 ? 'hidden' : 'visible'
+          }}
+          onMouseEnter={() => {
+            cancelFlyoutClose()
+            flyoutPointerInside.current = true
+          }}
+          onMouseLeave={() => {
+            flyoutPointerInside.current = false
+            scheduleFlyoutClose()
+          }}
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(event) => {
+            if (event.key !== 'ArrowLeft' && event.key !== 'Escape') return
+            event.preventDefault()
+            event.stopPropagation()
+            setOpenSub(null)
+            flyoutPointerInside.current = false
+            cancelFlyoutClose()
+            document.getElementById(`${menuId}-submenu-trigger-${openSub}`)?.focus()
+          }}
+        >
+          {openSubmenu.children.map((child, j) => {
+            if (child.type === 'separator')
+              return <div key={j} className="ctx-sep" role="separator" />
+            if (child.type === 'label')
+              return (
+                <div key={j} className="ctx-label">
+                  {child.label}
+                </div>
+              )
+            if (child.type === 'colors' || child.type === 'submenu') return null
+            const reasonId = child.disabled && child.hint
+              ? `${menuId}-submenu-${openSub}-reason-${j}`
+              : undefined
+            return (
+              <button
+                key={j}
+                type="button"
+                role="menuitem"
+                className={`ctx-item${child.danger ? ' danger' : ''}`}
+                aria-disabled={child.disabled || undefined}
+                aria-label={reasonId ? child.label : undefined}
+                aria-describedby={reasonId}
+                title={child.hint}
+                aria-keyshortcuts={
+                  child.shortcut ? ariaKeyShortcuts(child.shortcut, isMacPlatform) : undefined
+                }
+                onClick={(event) => {
+                  if (child.disabled) {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    return
+                  }
+                  child.onClick()
+                  onClose()
+                }}
+              >
+                <span className="ctx-icon">{child.icon}</span>
+                <span className="ctx-item__copy">
+                  <MenuItemLabel item={child} />
+                  {reasonId && (
+                    <span id={reasonId} className="ctx-item__hint">
+                      {child.hint}
+                    </span>
+                  )}
+                </span>
+                {child.shortcut && child.shortcut.length > 0 && (
+                  <span className="ctx-item__shortcut" aria-hidden>
+                    {child.shortcut.map((k, ki) => (
+                      <kbd key={ki} className="kbd">
+                        {keyLabel(k, isMacPlatform)}
+                      </kbd>
+                    ))}
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>,
+        document.body
+      )
+    : null
+
   return createPortal(
     <>
       <div
@@ -229,7 +370,7 @@ export function ContextMenu({ x, y, items, onClose, zIndex, scroll }: ContextMen
         ref={menuRef}
         role="menu"
         data-appearance-id="app:context-menu"
-        className={`ctx-menu${scroll ? ' ctx-menu--scroll' : ''}`}
+        className={`ctx-menu${shouldScroll ? ' ctx-menu--scroll' : ''}`}
         style={menuStyle}
         onClick={(e) => e.stopPropagation()}
       >
@@ -319,15 +460,21 @@ export function ContextMenu({ x, y, items, onClose, zIndex, scroll }: ContextMen
                 className="ctx-submenu-host"
                 role="none"
                 onMouseEnter={() => {
+                  cancelFlyoutClose()
+                  flyoutPointerInside.current = true
                   setOpenSub(i)
                   if (filterable)
                     menuFilter.setActiveIndex(
                       menuFilter.filtered.findIndex((fi) => fi.id === String(i))
                     )
                 }}
-                onMouseLeave={() => setOpenSub((cur) => (cur === i ? null : cur))}
+                onMouseLeave={() => {
+                  flyoutPointerInside.current = false
+                  scheduleFlyoutClose()
+                }}
               >
                 <button
+                  ref={openSub === i ? flyoutTriggerRef : undefined}
                   id={triggerId}
                   type="button"
                   role="menuitem"
@@ -335,7 +482,11 @@ export function ContextMenu({ x, y, items, onClose, zIndex, scroll }: ContextMen
                   aria-haspopup="menu"
                   aria-expanded={openSub === i}
                   aria-controls={submenuId}
-                  onClick={() => setOpenSub((cur) => (cur === i ? null : i))}
+                  onClick={() => {
+                    cancelFlyoutClose()
+                    flyoutPointerInside.current = true
+                    setOpenSub((cur) => (cur === i ? null : i))
+                  }}
                   onKeyDown={(event) => {
                     if (
                       event.key === 'ArrowRight' ||
@@ -344,93 +495,21 @@ export function ContextMenu({ x, y, items, onClose, zIndex, scroll }: ContextMen
                       event.key === ' '
                     ) {
                       event.preventDefault()
+                      cancelFlyoutClose()
+                      flyoutPointerInside.current = true
                       keyboardOpenedSub.current = i
                       setOpenSub(i)
                     } else if (event.key === 'ArrowLeft' || event.key === 'Escape') {
                       event.preventDefault()
                       setOpenSub(null)
+                      flyoutPointerInside.current = false
+                      cancelFlyoutClose()
                     }
                   }}
                 >
                   <span className="ctx-icon">{item.icon}</span>
                   <MenuItemLabel item={item} />
                 </button>
-                {openSub === i && (
-                  <div
-                    ref={flyoutRef}
-                    id={submenuId}
-                    role="menu"
-                    aria-labelledby={triggerId}
-                    className={`ctx-menu ctx-submenu${flyoutFit.flipX ? ' ctx-submenu--left' : ''}`}
-                    style={flyoutFit.shiftY ? { marginTop: -flyoutFit.shiftY } : undefined}
-                    onClick={(e) => e.stopPropagation()}
-                    onKeyDown={(event) => {
-                      if (event.key !== 'ArrowLeft' && event.key !== 'Escape') return
-                      event.preventDefault()
-                      event.stopPropagation()
-                      setOpenSub(null)
-                      document.getElementById(triggerId)?.focus()
-                    }}
-                  >
-                    {item.children.map((child, j) => {
-                      if (child.type === 'separator')
-                        return <div key={j} className="ctx-sep" role="separator" />
-                      if (child.type === 'label')
-                        return (
-                          <div key={j} className="ctx-label">
-                            {child.label}
-                          </div>
-                        )
-                      if (child.type === 'colors' || child.type === 'submenu') return null
-                      const reasonId = child.disabled && child.hint
-                        ? `${submenuId}-reason-${j}`
-                        : undefined
-                      return (
-                        <button
-                          key={j}
-                          type="button"
-                          role="menuitem"
-                          className={`ctx-item${child.danger ? ' danger' : ''}`}
-                          aria-disabled={child.disabled || undefined}
-                          aria-label={reasonId ? child.label : undefined}
-                          aria-describedby={reasonId}
-                          title={child.hint}
-                          aria-keyshortcuts={
-                            child.shortcut ? ariaKeyShortcuts(child.shortcut, isMacPlatform) : undefined
-                          }
-                          onClick={(event) => {
-                            if (child.disabled) {
-                              event.preventDefault()
-                              event.stopPropagation()
-                              return
-                            }
-                            child.onClick()
-                            onClose()
-                          }}
-                        >
-                          <span className="ctx-icon">{child.icon}</span>
-                          <span className="ctx-item__copy">
-                            <MenuItemLabel item={child} />
-                            {reasonId && (
-                              <span id={reasonId} className="ctx-item__hint">
-                                {child.hint}
-                              </span>
-                            )}
-                          </span>
-                          {child.shortcut && child.shortcut.length > 0 && (
-                            <span className="ctx-item__shortcut" aria-hidden>
-                              {child.shortcut.map((k, ki) => (
-                                <kbd key={ki} className="kbd">
-                                  {keyLabel(k, isMacPlatform)}
-                                </kbd>
-                              ))}
-                            </span>
-                          )}
-                        </button>
-                      )
-                    })}
-                  </div>
-                )}
               </div>
             )
           }
@@ -483,6 +562,7 @@ export function ContextMenu({ x, y, items, onClose, zIndex, scroll }: ContextMen
           )
         })}
       </div>
+      {flyoutPortal}
     </>,
     document.body
   )

@@ -1,5 +1,28 @@
 # Handoff
 
+## 2026-08-26, desktop layout safety sweep
+
+Implemented a source-driven clipping repair for the Windows desktop renderer on
+`fix/desktop-clipping-sweep` at `3b7a846902bd762cf50a61c36a795af3a0f032ba`. `ContextMenu` now
+automatically bounds every root dynamic menu, including roots that contain submenus. Open flyouts
+are portaled to `document.body` and positioned from their trigger, so root scrolling cannot clip
+the child surface. The anchored popover geometry no longer enforces a 120px height when the anchor
+has less space, so it uses the actual available viewport space and scrolls its inner content. A new
+`src/renderer/styles.clipping.css` layer bounds menus, flyouts, dialogs, settings, onboarding,
+command palette, and documentation content, and wraps long localized or user-renamed values.
+Narrow settings rows stack, focus remains visible, and reduced-motion transitions are disabled.
+`src/renderer/components/ContextMenu.viewport.test.tsx` adds source coverage for a long root menu
+with a submenu and a taller-than-viewport anchored surface. Root and flyout overflow are separated
+so the WSL lane can add fixed title and action regions without a later global `.mdx-dialog` rule
+overriding them. Those tests were added but not run in this lane.
+
+This lane updated `docs/features/appearance/desktop-clipping-inventory.md`, the appearance index,
+`CHANGELOG.md`, and `ROADMAP.md`. It did not edit the WSL creator, worktree picker, Source Control,
+or landing page surfaces. It did not run tests, type checks, builds, packaging, captures, reviews,
+or audits, per the lane boundary. Parent integration must independently run the cheap headless
+route against the built Windows artifact at narrow and high-scale tuples, then resolve any overlap
+with the WSL creator, worktree picker, comment attachments, or Material Design 3 audit lanes.
+
 ## 2026-08-26, automatic node dependency foundation
 
 Implemented the shared node-feature dependency foundation in `src/shared/node-dependencies.ts` and

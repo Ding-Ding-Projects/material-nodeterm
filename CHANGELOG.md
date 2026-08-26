@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Fix desktop renderer layout overflow across menus, flyouts, anchored popovers, dialogs, settings,
+  onboarding, command palette, and documentation surfaces. Long localized and user-renamed values
+  now wrap, dynamic collections scroll inside viewport-bounded surfaces, submenu flyouts are
+  portaled outside the root scroll body, anchors remain reachable, and narrow settings rows stack
+  without horizontal clipping. Source regression coverage was added for long roots with submenus
+  and taller-than-viewport anchored surfaces. Built-artifact capture verification remains pending
+  in the integration lane.
+
 - Add the shared automatic node-dependency foundation: an explicit manifest, canonical HTTPS
   sources, SHA-256 verification, reusable machine-local cache, bounded download and extraction,
   atomic user-scoped publication, health probes, cancellation, repair, restart reconciliation, and
