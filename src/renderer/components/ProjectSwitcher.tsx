@@ -963,10 +963,11 @@ export function ProjectSwitcher({
         })()}
       {storageConfirm && (
         <ConfirmDialog
-          message={
+          message=""
+          messageSegments={
             storageConfirm.action === 'split'
-              ? mapOwnedSentence(vocab, [copy('Split "'), fact(projects.find((p) => p.id === storageConfirm.projectId)?.name ?? 'this project'), copy('" into '), fact(String(partSizeValue)), copy(' '), fact(partSizeUnit), copy(' parts?')])
-              : mapOwnedSentence(vocab, [copy('Join "'), fact(projects.find((p) => p.id === storageConfirm.projectId)?.name ?? 'this project'), copy('" back into a single '), fact('project.json'), copy('?')])
+              ? [copy('Split "'), fact(projects.find((p) => p.id === storageConfirm.projectId)?.name ?? 'this project'), copy('" into '), fact(String(partSizeValue)), copy(' '), fact(partSizeUnit), copy(' parts?')]
+              : [copy('Join "'), fact(projects.find((p) => p.id === storageConfirm.projectId)?.name ?? 'this project'), copy('" back into a single '), fact('project.json'), copy('?')]
           }
           body={
             <p>

@@ -37,8 +37,8 @@ export function BulkActionPreview<T>({
   const hiddenCount = items.length - listed.length
 
   const messageSegments = totalSelected === willChange
-    ? [copy(`${title}: `), fact(String(willChange)), copy(` item${willChange === 1 ? '' : 's'}.`)]
-    : [copy(`${title}: `), fact(String(willChange)), copy(' of '), fact(String(totalSelected)), copy(' selected will change.')]
+    ? [copy(title), copy(': '), fact(String(willChange)), copy(` item${willChange === 1 ? '' : 's'}.`)]
+    : [copy(title), copy(': '), fact(String(willChange)), copy(' of '), fact(String(totalSelected)), copy(' selected will change.')]
 
   return (
     <ConfirmDialog

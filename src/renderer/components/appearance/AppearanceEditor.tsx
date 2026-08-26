@@ -286,15 +286,14 @@ function FontTab({
             />
             {missing && (
               <p className="appearance-editor__note">
-                “{primary}” isn’t installed on this machine — the next font in the stack renders
-                instead. The value is kept, in case this same style is applied elsewhere.
+                {mapOwnedSentence(vocab, [copy('“'), fact(primary), copy('” isn’t installed on this machine — the next font in the stack renders instead. The value is kept, in case this same style is applied elsewhere.')])}
               </p>
             )}
             <span
               className="appearance-editor__font-preview"
               style={style.fontFamily ? { fontFamily: style.fontFamily } : undefined}
             >
-              {quoteFamily(primary || 'sans-serif')} — Live preview 0123
+              {quoteFamily(primary || 'sans-serif')} — {vocab('Live preview')} 0123
             </span>
           </div>
         }
@@ -354,21 +353,18 @@ function FontTab({
           aria-expanded={showAxes}
           onClick={() => setShowAxes((s) => !s)}
         >
-          {showAxes ? '▾' : '▸'} Variable font axes (advanced)
+          {showAxes ? '▾' : '▸'} {vocab('Variable font axes (advanced)')}
         </button>
       </div>
       {showAxes && (
         <div className="appearance-editor__fields appearance-editor__fields--nested">
           {!axesOk && (
             <p className="appearance-editor__note appearance-editor__note--warn">
-              This platform's text renderer doesn't apply CSS font-variation-settings — these
-              values are kept and will take effect if that changes, but nothing changes on screen
-              here right now.
+              {vocab("This platform's text renderer doesn't apply CSS font-variation-settings — these values are kept and will take effect if that changes, but nothing changes on screen here right now.")}
             </p>
           )}
           <p className="appearance-editor__note">
-            Not every installed font defines every axis below; an axis a font doesn't have is
-            simply ignored, per the CSS spec — your value is kept either way.
+            {vocab("Not every installed font defines every axis below; an axis a font doesn't have is simply ignored, per the CSS spec — your value is kept either way.")}
           </p>
           {(['wght', 'wdth', 'slnt', 'ital', 'opsz'] as const).map((axis) => {
             function setAxis(v: number | undefined): void {
@@ -387,7 +383,7 @@ function FontTab({
                     value={style.fontAxes?.[axis] ?? (axis === 'wght' ? 400 : 0)}
                     min={axis === 'wght' ? 1 : -100}
                     max={axis === 'wght' ? 1000 : 1000}
-                    ariaLabel={`Font axis ${axis}`}
+                    ariaLabel={mapOwnedSentence(vocab, [copy('Font axis '), fact(axis)])}
                     onChange={(v) => setAxis(v)}
                     className="w-20"
                   />
@@ -566,8 +562,7 @@ function ColorTab({
 
       <div className="appearance-editor__subhead">{vocab('Transform')}</div>
       <p className="appearance-editor__note">
-        Composed as translate, rotate, scale, then skew. The order is fixed so a saved entry means
-        exactly one thing whichever control wrote it last.
+        {vocab('Composed as translate, rotate, scale, then skew. The order is fixed so a saved entry means exactly one thing whichever control wrote it last.')}
       </p>
       <Row label="Move X" onReset={style.translateXPx != null ? () => clear('translateXPx') : undefined} control={<NumberField value={style.translateXPx ?? 0} min={-200} max={200} ariaLabel={vocab('Translate X (px)')} onChange={(v) => patch({ translateXPx: v })} className="w-16" />} />
       <Row label="Move Y" onReset={style.translateYPx != null ? () => clear('translateYPx') : undefined} control={<NumberField value={style.translateYPx ?? 0} min={-200} max={200} ariaLabel={vocab('Translate Y (px)')} onChange={(v) => patch({ translateYPx: v })} className="w-16" />} />

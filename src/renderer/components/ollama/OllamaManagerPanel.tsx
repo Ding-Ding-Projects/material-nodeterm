@@ -25,10 +25,9 @@ import { copy, fact, mapOwnedSentence } from '../../lib/personalVocabulary/owned
 import {
   catalogPollDelayMs,
   catalogPollShouldContinue,
-  completenessHeadline,
+  formatAge,
   parseCatalogPayload,
   selectCatalogPage,
-  stalenessSentence,
   type CatalogFilter,
   type CatalogPage,
   type CatalogRow,
@@ -159,7 +158,7 @@ function FitDetail({ fit }: { fit: FitEvaluation | undefined }) {
     <div className="om-fit-detail">
       <ul>
         {fit.evidence.map((e, i) => (
-          <li key={i}>{e}</li>
+          <li key={i}>{vocab('Evidence:')} {e}</li>
         ))}
         {fit.assumptions.map((a, i) => (
           <li key={`a-${i}`}>{vocab('Assumption:')} {a}</li>
@@ -761,6 +760,61 @@ function CatalogSize({ row }: { row: CatalogRow }) {
   )
 }
 
+function catalogHeadlineText(
+  vocab: (text: string) => string,
+  view: CatalogView
+): string {
+  switch (view.completeness.state) {
+    case 'complete':
+      return mapOwnedSentence(vocab, [
+        copy('Complete first-party library: all '),
+        fact(String(view.completeness.modelsKnown)),
+        copy(' models and all '),
+        fact(String(view.completeness.tagsKnown)),
+        copy(' tags on ollama.com/library. Community models aren\'t enumerable — add one by exact reference.')
+      ])
+    case 'partial':
+      return mapOwnedSentence(vocab, [
+        copy('Partial catalog: '),
+        fact(String(view.completeness.tagsKnown)),
+        copy(' tags across '),
+        fact(String(view.completeness.modelsKnown)),
+        copy(' models fetched so far — this is not yet the whole catalog.')
+      ])
+    case 'unavailable':
+      return vocab('The published catalog could not be loaded. This is a load failure, not an empty catalog — the exact-reference field below still reaches any model.')
+    default:
+      return view.source === 'legacy'
+        ? vocab('Short model list from this session — completeness unknown.')
+        : vocab('Catalog state is unknown for this session.')
+  }
+}
+
+function catalogStalenessText(
+  vocab: (text: string) => string,
+  view: CatalogView,
+  now: number
+): string | null {
+  switch (view.staleness) {
+    case 'never':
+      return view.registryEnabled ? vocab('The catalog has never been fetched on this machine.') : null
+    case 'stale':
+      return view.indexFetchedAt === null
+        ? vocab('The cached catalog is out of date and is being refreshed.')
+        : mapOwnedSentence(vocab, [
+            copy('The cached catalog is out of date (last fetched '),
+            fact(formatAge(now - view.indexFetchedAt)),
+            copy(' ago) and is being refreshed.')
+          ])
+    case 'fresh':
+      return view.indexFetchedAt === null
+        ? null
+        : mapOwnedSentence(vocab, [copy('Catalog fetched '), fact(formatAge(now - view.indexFetchedAt)), copy(' ago.')])
+    default:
+      return null
+  }
+}
+
 function StoreTab({
   ollama,
   status,
@@ -826,14 +880,14 @@ function StoreTab({
             role="status"
             aria-live="polite"
           >
-              <p>{vocab(completenessHeadline(catalog))}</p>
+              <p>{catalogHeadlineText(vocab, catalog)}</p>
             {catalog.refreshing && (
               <p>
-              {vocab(`Still fetching: ${catalog.pendingTagFetches} model tag lists, ${catalog.pendingFactFetches} exact sizes.`)}
+              {mapOwnedSentence(vocab, [copy('Still fetching: '), fact(String(catalog.pendingTagFetches)), copy(' model tag lists, '), fact(String(catalog.pendingFactFetches)), copy(' exact sizes.')])}
               </p>
             )}
             {(() => {
-              const staleness = stalenessSentence(catalog, Date.now())
+              const staleness = catalogStalenessText(vocab, catalog, Date.now())
               return staleness ? <p>{vocab(staleness)}</p> : null
             })()}
             {catalog.completeness.reasons.map((reason, i) => (
@@ -928,8 +982,8 @@ function StoreTab({
               {row.tag === null && (
                 <p className="om-empty-note">
                   {row.tagsState === 'error'
-                    ? <>{vocab("This model's tag list could not be fetched")} ({row.tagsError ?? vocab('unknown error')}) — {vocab('its other tags are not listed. The bare name pulls :latest.')}</>
-                    : vocab("This model's published tag list has not been fetched yet — its other tags are not listed. The bare name pulls :latest.")}
+                    ? mapOwnedSentence(vocab, [copy("This model's tag list could not be fetched ("), fact(row.tagsError ?? 'unknown error'), copy(") — its other tags are not listed. The bare name pulls "), fact(':latest'), copy('.')])
+                    : mapOwnedSentence(vocab, [copy("This model's published tag list has not been fetched yet — its other tags are not listed. The bare name pulls "), fact(':latest'), copy('.')])}
                 </p>
               )}
             </li>
@@ -1015,7 +1069,7 @@ function StoreTab({
                       {item.completedBytes !== null ? formatBytes(item.completedBytes) : '—'}
                       {item.totalBytes !== null && ` / ${formatBytes(item.totalBytes)}`}
                     </span>
-                    <span className="cv-item__status">{item.digestPhase ?? item.status}</span>
+                    <span className="cv-item__status">{item.digestPhase ?? vocab(item.status)}</span>
                   </div>
                   {pct !== null && (
                     <div className="cv-progress">
