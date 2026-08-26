@@ -63,7 +63,7 @@ function renderHall(store) {
       </a>
       ${searchBar({ id: 'qGlobal', value: s.qGlobal, placeholder: 'Which room are you looking for?', ariaLabel: 'the whole school', rxKey: 'global', state: s, cls: 'header-search' })}
       <div class="header-actions">
-        <button type="button" class="round-btn round-btn--jump" data-action="open-palette" data-menu-kind="generic" data-menu-label="this button" title="Magic jump box — Ctrl+Shift+F">✨ Jump</button>
+        <button type="button" class="round-btn round-btn--jump" data-action="open-palette" data-menu-kind="generic" data-menu-label="${copyAttr(s, 'this button')}" title="Magic jump box — Ctrl+Shift+F">✨ Jump</button>
         <button type="button" class="round-btn round-btn--theme" data-action="toggle-theme" data-menu-kind="generic" data-menu-label="${copyAttr(s, 'this button')}" aria-label="${copyAttr(s, 'Day or night')}">${s.theme === 'night' ? '🌙' : '☀️'}</button>
         <button type="button" class="round-btn round-btn--bell" data-action="go-room" data-id="notes" data-menu-kind="generic" data-menu-label="${copyAttr(s, 'this button')}" aria-label="${copyAttr(s, 'Message box')}">🔔${s.notes.length ? `<span class="bell-count">${s.notes.length}</span>` : ''}</button>
       </div>
@@ -199,7 +199,7 @@ function renderRoom(store) {
       ${searchBar({ id: 'qGlobal', value: s.qGlobal, placeholder: 'Search the whole playground…', ariaLabel: 'the big search', rxKey: 'global', state: s, cls: 'header-search' })}
       <div class="header-actions">
         <button type="button" class="round-btn round-btn--jump" data-action="open-palette" data-menu-kind="generic" data-menu-label="${copyAttr(s, 'this button')}" title="Magic jump box — Ctrl+Shift+F">✨ Jump</button>
-        <button type="button" class="round-btn round-btn--theme" data-action="toggle-theme" data-menu-kind="generic" data-menu-label="this button" aria-label="${copyAttr(s, 'Switch between day and night')}">${s.theme === 'night' ? '🌙' : '☀️'}</button>
+        <button type="button" class="round-btn round-btn--theme" data-action="toggle-theme" data-menu-kind="generic" data-menu-label="${copyAttr(s, 'this button')}" aria-label="${copyAttr(s, 'Switch between day and night')}">${s.theme === 'night' ? '🌙' : '☀️'}</button>
         <button type="button" class="round-btn round-btn--bell" data-action="go-room" data-id="notes" data-menu-kind="generic" data-menu-label="${copyAttr(s, 'this button')}" aria-label="${copyAttr(s, 'Open the message box')}">🔔${s.notes.length ? `<span class="bell-count">${s.notes.length}</span>` : ''}</button>
       </div>
     </header>
@@ -248,7 +248,7 @@ function renderRoom(store) {
       <span>BUSL-1.1 licensed · fork of <a href="${UPSTREAM_URL}" target="_blank" rel="noopener">eneskirca/nodeterm</a></span>
       <a href="${REPO_URL}" target="_blank" rel="noopener">GitHub</a>
       <a href="${REPO_URL}/blob/main/CHANGELOG.md" target="_blank" rel="noopener">${copy(s, 'Changelog')}</a>
-      <a href="${REPO_URL}/issues" target="_blank" rel="noopener">Help</a>
+      <a href="${REPO_URL}/issues" target="_blank" rel="noopener">${copy(s, 'Help')}</a>
       <div class="spacer"></div>
       <span>“Claude” and “Claude Code” are trademarks of Anthropic. nodeterm is not affiliated with or endorsed by Anthropic.</span>
     </footer>
@@ -354,7 +354,7 @@ function renderListRoom(store, room) {
       <button type="button" class="btn-plain" data-action="select-all">${copy(s, allPicked ? 'Unpick all' : 'Pick all')} ${rawRows.length}</button>
       <button type="button" class="btn-plain" data-action="invert-picks">${copy(s, 'Flip picks')}</button>
       <button type="button" class="btn-plain" style="background:var(--red);opacity:${pickedIds.length ? 1 : 0.45};cursor:${pickedIds.length ? 'pointer' : 'not-allowed'}" data-action="bulk-remove">🗑 ${copy(s, pickedIds.length ? 'Throw away' : 'Throw away')}${pickedIds.length ? ' ' + pickedIds.length : ''}</button>
-      ${panelActions.map((a, i) => `<button type="button" class="btn-plain" style="background:var(--yellow)" data-action="panel-action" data-id="${i}">${esc(a.label)}</button>`).join('')}
+      ${panelActions.map((a, i) => `<button type="button" class="btn-plain" style="background:var(--yellow)" data-action="panel-action" data-id="${i}">${copy(s, a.label)}</button>`).join('')}
       <div class="spacer"></div>
       <span class="list-meta">${rawRows.length} ${copy(s, 'shown')} · ${pickedIds.length} ${copy(s, 'picked')}</span>
     </div>

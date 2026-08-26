@@ -389,6 +389,8 @@ const SITE_RENDER_STRING_OWNERSHIP = [
   ['room-day-night', 'Switch between day and night', 'authored', 'function renderRoom'],
   ['room-message-box', 'Open the message box', 'authored', 'function renderRoom'],
   ['room-nav-items', 'items', 'authored', 'function renderRoom'],
+  ['room-changelog', 'Changelog', 'authored', 'function renderRoom'],
+  ['room-help', 'Help', 'authored', 'function renderRoom'],
   ['list-from-date', 'From date', 'authored', 'function renderListRoom'],
   ['list-and', 'and', 'authored', 'function renderListRoom'],
   ['list-to-date', 'To date', 'authored', 'function renderListRoom'],
@@ -425,8 +427,12 @@ const SITE_RENDER_STRING_OWNERSHIP = [
   ['room-legal-notice', '“Claude” and “Claude Code” are trademarks of Anthropic. nodeterm is not affiliated with or endorsed by Anthropic.', 'fact', 'function renderRoom'],
   ['hall-jump-tooltip', 'Magic jump box — Ctrl+Shift+F', 'fact', 'function renderHall'],
   ['room-jump-tooltip', 'Magic jump box — Ctrl+Shift+F', 'fact', 'function renderRoom'],
+  ['hall-releases-url', 'REPO_RELEASES', 'fact', 'function renderHall'],
+  ['hall-repository-url', 'REPO_URL', 'fact', 'function renderHall'],
+  ['room-repository-url', 'REPO_URL', 'fact', 'function renderRoom'],
+  ['room-upstream-url', 'UPSTREAM_URL', 'fact', 'function renderRoom'],
 ]
-const CANONICAL_SITE_RENDER_STRING_IDS = SITE_RENDER_STRING_OWNERSHIP.map(([id]) => id)
+const CANONICAL_SITE_RENDER_STRING_IDS = `hall-top-bar hall-menu-button hall-day-night hall-message-box hall-hello hall-pick-door hall-empty-prefix hall-empty-suffix hall-peek-code room-top-bar room-rail room-day-night room-message-box room-nav-items room-changelog room-help list-from-date list-and list-to-date settings-lock-copy settings-unlock settings-open regex-groups regex-builder-label regex-pattern regex-flags regex-sample palette-label palette-placeholder palette-search palette-regex confirm-question confirm-type confirm-unlock confirm-word-label confirm-keep confirm-yes confirm-first toast-close hall-brand hall-jump-command hall-download-command hall-download-command-2 hall-brew-command room-brand room-version room-license room-upstream-brand room-forge-brand room-legal-notice hall-jump-tooltip room-jump-tooltip hall-releases-url hall-repository-url room-repository-url room-upstream-url`.split(/\s+/)
 
 for (const feature of FEATURES) {
   const fileOk = requireFileExists(feature.file, feature.label)
@@ -873,14 +879,45 @@ function hasAuthoredCopyFunnel(body) {
   return !!body && (body.includes('copy(') || body.includes('copyAttr('))
 }
 
+function copyCallArguments(source, name) {
+  const calls = []
+  const needle = name + '('
+  let searchFrom = 0
+  while (searchFrom < source.length) {
+    const start = source.indexOf(needle, searchFrom)
+    if (start < 0) break
+    let depth = 1
+    let quote = ''
+    let escaped = false
+    let end = start + needle.length
+    for (; end < source.length; end += 1) {
+      const ch = source[end]
+      if (quote) {
+        if (escaped) escaped = false
+        else if (ch === '\\') escaped = true
+        else if (ch === quote) quote = ''
+        continue
+      }
+      if (ch === "'" || ch === '"' || ch === '`') {
+        quote = ch
+      } else if (ch === '(') {
+        depth += 1
+      } else if (ch === ')' && --depth === 0) {
+        calls.push(source.slice(start + needle.length, end))
+        break
+      }
+    }
+    searchFrom = end + 1
+  }
+  return calls
+}
+
 function hasOwnedRenderString(body, text, owner) {
-  if (!body) return false
-  const lines = body.split(/\r?\n/).filter((line) => line.includes(text))
-  if (!lines.length) return false
-  const escaped = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const copiedExactly = new RegExp(`copy(?:Attr)?\\(s,\\s*['"]${escaped}['"]\\)`).test(body)
-  if (owner === 'fact') return !copiedExactly
-  return lines.some((line) => /copy(?:Attr)?\(/.test(line))
+  if (!body || !body.includes(text)) return false
+  const calls = [...copyCallArguments(body, 'copy'), ...copyCallArguments(body, 'copyAttr')]
+  const copied = calls.some((args) => args.includes(text))
+  if (owner === 'fact') return !copied
+  return copied
 }
 
 {

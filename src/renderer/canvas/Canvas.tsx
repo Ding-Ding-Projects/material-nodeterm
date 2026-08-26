@@ -3949,6 +3949,7 @@ export function Canvas() {
       ) {
         notify({
           kind: 'error',
+          titleKind: 'authored',
           title: profileText(
             'terminalProfiles.common.unavailableHereTitle',
             'Windows profile unavailable here'
@@ -4841,6 +4842,7 @@ export function Canvas() {
       if (projects.activeProjectId !== drop.projectId) {
         notify({
           kind: 'warning',
+          titleKind: 'authored',
           title: 'Folder drop cancelled',
           body: 'The active project changed before the drop completed.',
           bodyKind: 'authored'
@@ -4853,6 +4855,7 @@ export function Canvas() {
       if (!project || !source || !agentId) {
         notify({
           kind: 'warning',
+          titleKind: 'authored',
           title: 'Agent drop cancelled',
           body: 'The source agent is no longer available.',
           bodyKind: 'authored'
@@ -4894,6 +4897,7 @@ export function Canvas() {
       if (projects.activeProjectId !== folder.projectId) {
         notify({
           kind: 'warning',
+          titleKind: 'authored',
           title: 'Folder drop cancelled',
           body: 'The active project changed before the drop completed.',
           bodyKind: 'authored'
@@ -6899,6 +6903,7 @@ export function Canvas() {
       if (assessment.disabled) {
         notify({
           kind: 'error',
+          titleKind: 'authored',
           title: profileText(
             'terminalProfiles.restart.failedTitle',
             'Restart with profile failed'
@@ -6943,6 +6948,7 @@ export function Canvas() {
           ).catch((error: unknown) => {
             notify({
               kind: 'error',
+              titleKind: 'authored',
               title: profileText(
                 'terminalProfiles.restart.failedTitle',
                 'Restart with profile failed'
@@ -7355,7 +7361,7 @@ export function Canvas() {
           // A non-blocking toast, not a modal: there is nothing to decide here, only to report.
           // Agent-CLI calls get the error in the reply instead (opts.interactive === false).
           if (opts?.interactive !== false) {
-            notify({ kind: 'error', title: 'Branch failed', body: error, bodyKind: 'fact' })
+            notify({ kind: 'error', titleKind: 'authored', title: 'Branch failed', body: error, bodyKind: 'fact' })
           }
           return { ok: false, error }
         }
@@ -7404,7 +7410,7 @@ export function Canvas() {
       const sourceAgentId = source.data.agentId
       const sessionId = useAgentStatus.getState().byId[sourceNodeId]?.sessionId
       if (!sourceAgentId || !sessionId) {
-        notify({ kind: 'warning', title: 'Conversation not ready to transfer yet.' })
+        notify({ kind: 'warning', titleKind: 'authored', title: 'Conversation not ready to transfer yet.' })
         return
       }
       // `build` is expected to RESOLVE `{ filePath } | { error }`, but a bridge that has no
@@ -7422,7 +7428,7 @@ export function Canvas() {
         )
       )
       if ('error' in res) {
-        notify({ kind: 'error', title: 'Transfer failed', body: res.error, bodyKind: 'fact' })
+        notify({ kind: 'error', titleKind: 'authored', title: 'Transfer failed', body: res.error, bodyKind: 'fact' })
         return
       }
       // The file is context-budgeted by buildHandoff (long sessions: digest + verbatim tail,
@@ -9358,6 +9364,7 @@ export function Canvas() {
       ) {
         notify({
           kind: 'error',
+          titleKind: 'authored',
           title: profileText(
             'terminalProfiles.common.unavailableHereTitle',
             'Windows profile unavailable here'
@@ -12542,7 +12549,7 @@ export function Canvas() {
   const exportProjectArchive = useCallback(
     async (projectId: string, password?: string) => {
       if (projectArchiveBusyRef.current) {
-        notify({ kind: 'info', title: 'Project save already running', body: 'Wait for the current save or open to finish.', bodyKind: 'authored' })
+        notify({ kind: 'info', titleKind: 'authored', title: 'Project save already running', body: 'Wait for the current save or open to finish.', bodyKind: 'authored' })
         return
       }
       projectArchiveBusyRef.current = true
@@ -12555,6 +12562,7 @@ export function Canvas() {
         // byte-progress channel — so the copy is honestly indeterminate, never a fabricated %.
         notify({
           kind: 'info',
+          titleKind: 'authored',
           title: 'Saving project…',
           body: `Packing "${project.name}" — canvas, history, repository and working files. A large repository can take a moment.`,
           bodyKind: 'fact'
@@ -12582,6 +12590,7 @@ export function Canvas() {
               : ''
           notify({
             kind: vaultKind !== 'uninitialized' ? 'warning' : 'success',
+            titleKind: 'authored',
             title: result.encrypted ? 'Protected project saved as one file' : 'Project saved as one file',
             body:
               [result.path, archiveContentsSummary(result.contents)].filter(Boolean).join(' — ') +
@@ -12594,8 +12603,8 @@ export function Canvas() {
         } else {
           notify(
             result.canceled
-              ? { kind: 'info', title: 'Project save cancelled' }
-              : { kind: 'error', title: 'Project save failed', body: result.error, bodyKind: 'fact' }
+              ? { kind: 'info', titleKind: 'authored', title: 'Project save cancelled' }
+              : { kind: 'error', titleKind: 'authored', title: 'Project save failed', body: result.error, bodyKind: 'fact' }
           )
         }
       } finally {
@@ -12636,6 +12645,7 @@ export function Canvas() {
         if (again !== password) {
           notify({
             kind: 'error',
+            titleKind: 'authored',
             title: 'The passwords did not match',
             body: 'Nothing was saved. Try again — a mistyped password here cannot be recovered later.',
             bodyKind: 'authored'
@@ -12650,7 +12660,7 @@ export function Canvas() {
 
   const importProjectArchive = useCallback(async () => {
     if (projectArchiveBusyRef.current) {
-      notify({ kind: 'info', title: 'Project open already running', body: 'Wait for the current save or open to finish.', bodyKind: 'authored' })
+      notify({ kind: 'info', titleKind: 'authored', title: 'Project open already running', body: 'Wait for the current save or open to finish.', bodyKind: 'authored' })
       return
     }
     projectArchiveBusyRef.current = true
@@ -12673,13 +12683,13 @@ export function Canvas() {
           ...(result.ladderAvailable ? { ladderAvailable: true } : {})
         })
         if (password === null) {
-          notify({ kind: 'info', title: 'Project open cancelled' })
+          notify({ kind: 'info', titleKind: 'authored', title: 'Project open cancelled' })
           return
         }
         // Deriving the key deliberately costs 128 MiB of scrypt and a few hundred ms — the same
         // price an attacker pays per guess — so say something before the UI goes quiet.
         if (attempt === 1) {
-          notify({ kind: 'info', title: 'Unlocking project file…', body: 'Checking the password.', bodyKind: 'authored' })
+          notify({ kind: 'info', titleKind: 'authored', title: 'Unlocking project file…', body: 'Checking the password.', bodyKind: 'authored' })
         }
         result = await api.workspace.importProject({ path: result.path, password })
       }
@@ -12689,12 +12699,13 @@ export function Canvas() {
         const where = result.restoredTo ? `Repository and files restored to ${result.restoredTo}. ` : ''
         notify({
           kind: 'success',
+          titleKind: 'authored',
           title: 'Project opened from file',
           body: `${where}${archiveContentsSummary(result.contents)}`.trim() || 'The project and its complete local history are ready.',
           bodyKind: 'fact'
         })
       } else if (!result.canceled) {
-        notify({ kind: 'error', title: 'Project open failed', body: result.error, bodyKind: 'fact' })
+        notify({ kind: 'error', titleKind: 'authored', title: 'Project open failed', body: result.error, bodyKind: 'fact' })
       }
     } finally {
       projectArchiveBusyRef.current = false
@@ -13138,6 +13149,7 @@ export function Canvas() {
         run: () =>
           notify({
             kind: 'info',
+            titleKind: 'authored',
             title: 'Test notification',
             body: 'This is what a notification looks like — useful while you tune Settings → Notifications.',
             bodyKind: 'authored'

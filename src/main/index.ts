@@ -51,7 +51,7 @@ import { ProjectArchiveService } from '../core/project-archive'
 import { ServerDeploymentService, resolveServerDeploymentRoot } from './server-deployment'
 import { registerLocalHistoryHandlers } from '../core/local-history-handlers'
 import { describeSettingsChange } from '../shared/settings-diff'
-import type { RemoteLoginHelp, Settings } from '../shared/types'
+import type { NotifyPayload, RemoteLoginHelp, Settings } from '../shared/types'
 import {
   registerBrowserGuestRequest,
   type BrowserGuest
@@ -153,7 +153,7 @@ import { getDeviceId } from '../core/device-id'
 import { initRemoteStatusPush } from './remote-ssh/remote-status-push'
 import { runGitRemoteOp } from '../core/git-remote-proxy'
 import { initCanvasSync } from '../core/canvas-sync'
-import { composeNativeNotification, retainUntilDismissed } from './notifications'
+import { composeNativeNotification, isPreparedNativeNotification, retainUntilDismissed } from './notifications'
 import { installManagedAgentHooks } from '../core/agents/hooks'
 import { createSubagentTail } from '../core/subagent-tail'
 import { createContextTail, type TaskNotification } from '../core/context-tail'
@@ -1318,12 +1318,13 @@ app.whenReady().then(async () => {
   // once already after an Electron upgrade invalidated the ncprefs signature record.
   ipcMain.handle(
     IPC.appNotify,
-    async (_e, payload: { title: string; body: string; nodeId: string; force?: boolean }) => {
+    async (_e, payload: NotifyPayload) => {
       const win = getMainWindow()
       if (!win || !Notification.isSupported()) return 'skipped'
       // `force` (permission request / confirmation) shows even when focused; normal
       // completion notifications only show when the window is in the background.
       if (!payload.force && win.isFocused()) return 'skipped'
+      if (!isPreparedNativeNotification(payload)) return 'failed'
       const copy = composeNativeNotification(payload)
       const n = new Notification(copy)
       n.on('click', () => {

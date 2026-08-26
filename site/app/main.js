@@ -16,7 +16,7 @@ import {
   getRoom, allSettingsCards, registerListRoom, fmtWhen,
 } from './core/engine.js'
 import { registerFeatures } from './features/index.js'
-import { readVocabularyFile } from './features/vocabulary.js'
+import { handleVocabularyFileChange } from './features/vocabulary.js'
 import { SECTIONS, FEATURES, DOCS, COVERAGE, RX_TOKENS, DISHES } from './shared/data.js'
 import { listVoices, findVoice } from './shared/narrator-state.js'
 import { createBulkList } from './shared/bulkList.js'
@@ -341,13 +341,11 @@ root.addEventListener('change', (e) => {
   if (t.dataset && t.dataset.bindFile) {
     const file = t.files && t.files[0]
     if (!file) return
-    if (file.size > VOCAB_MAX_FILE_BYTES) {
-      toastX('❌', 'That did not fit', `The selected file is over the ${VOCAB_MAX_FILE_BYTES}-byte limit.`)
-      t.value = ''
-      return
-    }
-    readVocabularyFile(file).then((text) => runFeatureBind(t.dataset.bindFile, t.dataset.id, text)).catch(() => toastX('❌', 'Could not read file', 'The selected JSON file could not be read.'))
-    t.value = ''
+    void handleVocabularyFileChange(t, {
+      onTooLarge: (size) => toastX('❌', 'That did not fit', `The selected file is over the ${VOCAB_MAX_FILE_BYTES}-byte limit.`),
+      onText: (text) => runFeatureBind(t.dataset.bindFile, t.dataset.id, text),
+      onReadError: () => toastX('❌', 'Could not read file', 'The selected JSON file could not be read.')
+    })
   } else if (t.dataset && t.dataset.bindSelect) runFeatureBind(t.dataset.bindSelect, t.dataset.id, t.value)
   else if (t.dataset && t.dataset.bindTextChange) runFeatureBind(t.dataset.bindTextChange, t.dataset.id, t.value)
   else if (t.dataset && t.dataset.bindRangeChange) runFeatureBind(t.dataset.bindRangeChange, t.dataset.id, t.value)
