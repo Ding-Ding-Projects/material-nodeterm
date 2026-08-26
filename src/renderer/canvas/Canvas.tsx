@@ -89,7 +89,7 @@ import {
   WEBGL_GESTURE_SETTLE_MS
 } from '../terminal/webgl-budget'
 import { StickyNode } from '../nodes/StickyNode'
-import { GroupNode, setWorktreeActionHandler } from '../nodes/GroupNode'
+import { GroupNode, setWorktreeActionHandler, setWslActionHandler } from '../nodes/GroupNode'
 import { AnnotationNode } from '../nodes/AnnotationNode'
 import AuthenticatorNode from '../nodes/AuthenticatorNode'
 import { useAnnotationDrawTool } from './useAnnotationDrawTool'
@@ -403,6 +403,18 @@ import {
   type WorktreeEntry
 } from '@shared/worktree'
 import { normWorktreePath, type BoundGroup } from '@shared/worktree-reconcile'
+import {
+  canManageWslDistro,
+  revalidateWslBinding,
+  sanitizeGroupWsl,
+  wslProfileIdFor,
+  WSL_NOT_OWNED_HINT,
+  WSL_GONE_HINT,
+  type GroupWsl
+} from '@shared/wsl-binding'
+import { WslCreateDialog } from '../wsl/WslCreateDialog'
+import { useWsl } from '../state/wsl'
+import { resolveWslApi } from '../wsl/wslCoreApi'
 import { boundGroups, scmScopes, defaultScmScope, selectedScmGroupId } from '@shared/scm-scope'
 import { hintLabel } from '@shared/platform-utils'
 import {
@@ -735,6 +747,10 @@ interface PendingPeerState {
  */
 const WORKTREE_SSH_HINT = 'Not supported in SSH projects yet'
 const WORKTREE_SSH_NOTICE = 'Worktrees are not supported in SSH projects yet.'
+/** WSL is a local-Windows-only concept; there is nothing to bind on the remote host of an SSH
+ *  project (same reasoning as WORKTREE_SSH_HINT just above). */
+const WSL_SSH_HINT = 'Not supported in SSH projects'
+const WSL_SSH_NOTICE = 'WSL instances are not supported in SSH projects.'
 const FOCUS_NO_TARGET_NOTICE = 'Select a terminal or agent node to focus.'
 
 const archiveBytesLabel = (n: number): string => {
@@ -1364,6 +1380,19 @@ export function Canvas() {
   // dialog opens (a branch created in a terminal since the last store refresh should still show), so
   // it is dialog-local state rather than a store fact.
   const [worktreeBranches, setWorktreeBranches] = useState<string[]>([])
+  // Drives WslCreateDialog ("New WSL instance…" on empty-canvas right click / palette). Same
+  // project-guard shape as worktreeDialog: the create call is awaited, and a project switch in
+  // the meantime must not bind the new instance's frame onto another project's canvas.
+  const [wslDialog, setWslDialog] = useState<{
+    at?: { x: number; y: number }
+    projectId: string
+  } | null>(null)
+  const [wslBusy, setWslBusy] = useState(false)
+  const [wslError, setWslError] = useState<string | null>(null)
+  const wslCatalogue = useWsl((s) => s.catalogue)
+  const wslCatalogueLoading = useWsl((s) => s.catalogueLoading)
+  const wslCatalogueError = useWsl((s) => s.catalogueError)
+  const wslInstances = useWsl((s) => s.instances)
   // The store is filled asynchronously by the active-project effect, so the dialog subscribes
   // (rather than reading getState() once) — the repo may resolve after it's already open.
   const worktreeRepoRoot = useWorktrees((s) => s.repoRoot)
@@ -3784,6 +3813,44 @@ export function Canvas() {
     [isSshProject]
   )
 
+  /**
+   * The stable `wsl:<distribution>` terminal-profile id for a node being created inside a
+   * WSL-bound frame — same "the frame IS the binding" shape as `cwdForNewNodeIn`, but for the
+   * profile a new terminal launches with instead of its cwd (WSL frames carry no cwd of their
+   * own; a terminal inside one still opens at the project's cwd, just under a different shell).
+   *
+   * `data.wsl` may have arrived from a shared, hand-edited, or peer-mutated project file, so it is
+   * NEVER trusted directly (@shared/wsl-binding's whole point). It is re-validated here against
+   * `useTerminalProfiles`' own live `wsl -l` enumeration — the same real, fresh, per-machine truth
+   * the profile picker already shows the user — before it can become a launch argument. A binding
+   * that fails that check (renamed/unregistered/never-real distro) yields no profile at all, so
+   * the node falls back to the ordinary default shell rather than failing to launch.
+   */
+  const wslProfileForNewNodeIn = useCallback(
+    (parentId: string | undefined): string | undefined => {
+      const seen = new Set<string>()
+      let currentId = parentId
+      while (currentId && !seen.has(currentId)) {
+        seen.add(currentId)
+        const parent = nodesRef.current.find((n) => n.id === currentId)
+        const wsl = sanitizeGroupWsl(parent?.data.wsl)
+        if (wsl) {
+          const enumerated = new Set(
+            useTerminalProfiles
+              .getState()
+              .profiles.filter((p) => p.kind === 'wsl' && p.available)
+              .map((p) => p.id.slice('wsl:'.length))
+          )
+          const revalidated = revalidateWslBinding(wsl, enumerated)
+          return revalidated ? wslProfileIdFor(revalidated.distroName) : undefined
+        }
+        currentId = parent?.parentId
+      }
+      return undefined
+    },
+    []
+  )
+
   /** The nearest ancestor frame (from `parentId` upward) that is bound to a git worktree. */
   const worktreeForGroupChain = useCallback(
     (parentId: string | undefined): { groupId: string; path: string } | undefined => {
@@ -3887,6 +3954,14 @@ export function Canvas() {
         return
       }
       const cwd = cwdOverride ?? cwdForNewNodeIn(groupId) ?? project?.cwd
+      // No explicit profile requested, but the node is being created inside a WSL-bound frame on
+      // a LOCAL session: auto-inherit the frame's distribution, the same way `cwdForNewNodeIn`
+      // auto-inherits a worktree's path. The early SSH/remote refusal above only fires for an
+      // EXPLICIT profile pick, so this stays additive rather than reusing that error path.
+      const isLocalSession =
+        !project?.ssh && !project?.remote && sessionForProject(activeProjectId ?? '').source === 'local'
+      const effectiveProfileId =
+        terminalProfileId ?? (isLocalSession ? wslProfileForNewNodeIn(groupId) : undefined)
       setNodes((ns) => {
         // In an SSH project the node is stamped remote (runs over the project's master); the
         // factory takes the project's ssh and roots the terminal at its remoteCwd.
@@ -3896,13 +3971,22 @@ export function Canvas() {
           center ?? emptyNodePos(),
           initialCommand,
           project?.ssh,
-          terminalCreationOptionsFor(activeProjectId, terminalProfileId)
+          terminalCreationOptionsFor(activeProjectId, effectiveProfileId)
         )
         return [...ns, groupId ? parentInto(node, groupId) : node]
       })
       markDirty()
     },
-    [setNodes, markDirty, activeProjectId, emptyNodePos, cwdForNewNodeIn, parentInto, profileText]
+    [
+      setNodes,
+      markDirty,
+      activeProjectId,
+      emptyNodePos,
+      cwdForNewNodeIn,
+      parentInto,
+      profileText,
+      wslProfileForNewNodeIn
+    ]
   )
 
   /** Profile-explicit sibling of the ordinary "New terminal" action. The direct action keeps
@@ -5713,6 +5797,156 @@ export function Canvas() {
     (groupId: string) => !!nodesRef.current.find((n) => n.id === groupId)?.data.worktree,
     []
   )
+
+  // ---- WSL instances -------------------------------------------------------------------------
+  //
+  // Same "the frame IS the binding" shape as worktrees, with one deliberate difference: binding
+  // (data.wsl) is content only, never authority (see @shared/wsl-binding's header). Sleep, wake
+  // and delete are gated on `canManageWslDistro`, which is fail-closed by construction — a real,
+  // pre-existing user distribution (docker-desktop, or anything else already on this machine) can
+  // be bound to a frame (read-only: opening terminals "in" it) but never touched destructively,
+  // because the app's own durable ownership record — never the binding, never a name prefix —
+  // is the only thing that can say otherwise.
+
+  const openWslDialog = useCallback((at?: { x: number; y: number }) => {
+    const projectId = useProjects.getState().activeProjectId
+    if (!projectId) return
+    if (useProjects.getState().getProject(projectId)?.ssh) {
+      setNotice({ kind: 'error', text: WSL_SSH_NOTICE })
+      return
+    }
+    setWslError(null)
+    setWslDialog({ at, projectId })
+    void useWsl.getState().refresh()
+    void useWsl.getState().loadCatalogue()
+  }, [])
+
+  const createWslInstanceAndGroup = useCallback(
+    async (v: { catalogueId: string; name: string }) => {
+      const target = wslDialog
+      if (!target) return
+      setWslBusy(true)
+      setWslError(null)
+      const res = await resolveWslApi()
+        .create({ catalogueId: v.catalogueId, name: v.name })
+        .catch((e: unknown) => ({
+          ok: false as const,
+          error: `Could not create the WSL instance: ${e instanceof Error ? e.message : String(e)}`
+        }))
+      setWslBusy(false)
+      if (!res.ok) {
+        setWslError(res.error)
+        return
+      }
+      // Refresh BEFORE deciding anything else, so the frame's chip and the ownership gate start
+      // from the real, freshly-enumerated state rather than an assumption about what create() did.
+      await useWsl.getState().refresh()
+      if (useProjects.getState().activeProjectId !== target.projectId) {
+        setWslDialog(null)
+        setNotice({
+          kind: 'info',
+          text: `Created WSL instance ${res.name}. The project changed, so no frame was bound to it.`
+        })
+        return
+      }
+      const binding: GroupWsl = { bindingId: crypto.randomUUID(), distroName: res.name }
+      const group = createGroupNode(target.at ?? viewCenter() ?? { x: 0, y: 0 }, WORKTREE_GROUP_SIZE, nodesRef.current.length)
+      group.data = { ...group.data, title: res.name, wsl: binding }
+      setNodes((ns) => [group, ...(ns as CanvasNode[])])
+      markDirty()
+      setWslDialog(null)
+    },
+    [wslDialog, setNodes, markDirty, viewCenter]
+  )
+
+  /** Unbind never touches the distribution — dropping `data.wsl` is always safe, on any binding,
+   *  owned or not (mirrors the worktree Unbind's "keeps the worktree on disk" contract). Sleep,
+   *  wake and delete are re-gated at click time (never trusted from whatever the button's disabled
+   *  state was computed from when it rendered), against a FRESH enumeration + the live ownership
+   *  record, exactly as `canManageWslDistro` requires. */
+  const onWslAction = useCallback(
+    (groupId: string, action: 'sleep' | 'wake' | 'delete' | 'unbind') => {
+      const group = nodesRef.current.find((n) => n.id === groupId)
+      const wsl = sanitizeGroupWsl(group?.data.wsl)
+      if (action === 'unbind') {
+        setNodes((ns) =>
+          ns.map((n) => {
+            if (n.id !== groupId) return n
+            const { wsl: _drop, ...rest } = n.data
+            return { ...n, data: rest }
+          })
+        )
+        markDirty()
+        return
+      }
+      if (!wsl) return
+      const store = useWsl.getState()
+      const allowed = canManageWslDistro(wsl, store.enumeratedNames(), store.ownedByApp)
+      if (!allowed) {
+        setNotice({
+          kind: 'error',
+          text: store.enumeratedNames().has(wsl.distroName) ? WSL_NOT_OWNED_HINT : WSL_GONE_HINT
+        })
+        return
+      }
+      const { distroName } = wsl
+      if (action === 'sleep') {
+        void resolveWslApi()
+          .sleep(distroName)
+          .then((res) => {
+            if (!res.ok) setNotice({ kind: 'error', text: res.error })
+            void useWsl.getState().refresh()
+          })
+        return
+      }
+      if (action === 'wake') {
+        void resolveWslApi()
+          .wake(distroName)
+          .then((res) => {
+            if (!res.ok) setNotice({ kind: 'error', text: res.error })
+            void useWsl.getState().refresh()
+          })
+        return
+      }
+      // delete — irreversible (the distribution's entire filesystem), so it goes through the
+      // two-key destructive gate and names exactly what is lost, per docs/CLAUDE.md's
+      // "Super confirmation for destructive actions".
+      openDestructiveGate({
+        title: `Unregister WSL instance "${distroName}"`,
+        description:
+          'This permanently deletes the WSL instance and everything inside its filesystem. This cannot be undone.',
+        affected: [distroName],
+        confirmLabel: 'Unregister',
+        onConfirm: () => {
+          void resolveWslApi()
+            .delete(distroName)
+            .then((res) => {
+              if (!res.ok) {
+                setNotice({ kind: 'error', text: res.error })
+                return
+              }
+              // The distribution is gone; drop the binding too so the chip doesn't keep offering
+              // actions against a name that no longer resolves to anything.
+              setNodes((ns) =>
+                ns.map((n) => {
+                  if (n.id !== groupId) return n
+                  const { wsl: _drop, ...rest } = n.data
+                  return { ...n, data: rest }
+                })
+              )
+              markDirty()
+              void useWsl.getState().refresh()
+            })
+        }
+      })
+    },
+    [setNodes, markDirty]
+  )
+
+  useEffect(() => {
+    setWslActionHandler(onWslAction)
+    return () => setWslActionHandler(null)
+  }, [onWslAction])
 
   const openWorktreeDialog = useCallback(
     (groupId: string | null, at?: { x: number; y: number }) => {
@@ -8706,6 +8940,19 @@ export function Canvas() {
             }
           ]),
           // One row, so `paneMenuGroup` keeps it top level (same shape as Worktree just above).
+          // Opens the guided form (distro picker + required name field); the created instance
+          // lands as a group frame bound to it, and terminals created inside inherit the
+          // distribution the same way a worktree frame's children inherit its path.
+          ...paneMenuGroup('WSL', <IconTerminal />, [
+            {
+              label: 'New WSL instance…',
+              icon: <IconTerminal />,
+              disabled: isSshProject,
+              hint: isSshProject ? WSL_SSH_HINT : undefined,
+              onClick: () => openWslDialog(at)
+            }
+          ]),
+          // One row, so `paneMenuGroup` keeps it top level (same shape as Worktree just above).
           // Opens the drawer already unlocked-and-into-"add credential" mode when a vault exists,
           // or the create-vault form when it doesn't — the panel itself decides which, from its
           // own status() read; this row only has to say WHICH intent it wants.
@@ -8784,6 +9031,7 @@ export function Canvas() {
       newProjectFile,
       openRemotePicker,
       openWorktreeDialog,
+      openWslDialog,
       isSshProject,
       selectAll,
       fitView,
@@ -14385,6 +14633,22 @@ export function Canvas() {
           onCancel={() => {
             setWorktreeDialog(null)
             setWorktreeError(null)
+          }}
+        />
+      )}
+
+      {wslDialog && (
+        <WslCreateDialog
+          catalogue={wslCatalogue}
+          catalogueLoading={wslCatalogueLoading}
+          catalogueError={wslCatalogueError}
+          existingNames={new Set(Object.keys(wslInstances))}
+          busy={wslBusy}
+          error={wslError}
+          onCreate={createWslInstanceAndGroup}
+          onCancel={() => {
+            setWslDialog(null)
+            setWslError(null)
           }}
         />
       )}

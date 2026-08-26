@@ -84,6 +84,7 @@ describe('the restructured pane menu still filters', () => {
         item('Open file…')
       ]),
       ...paneMenuGroup('Worktree', ICON, [item('New worktree…')]),
+      ...paneMenuGroup('WSL', ICON, [item('New WSL instance…')]),
       ...paneMenuGroup('Drawing', ICON, [
         item('Draw colored area'),
         item('Draw line'),

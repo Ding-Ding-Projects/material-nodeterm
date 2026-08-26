@@ -5,10 +5,13 @@ import { useToyLocks } from '../state/toylocks'
 import { UnlockPrompt } from '../components/toylocks/UnlockPrompt'
 import { useProjects } from '../state/projects'
 import { useWorktrees, WORKTREE_STATUS_POLL_MS } from '../state/worktrees'
+import { useWsl } from '../state/wsl'
+import { canManageWslDistro, sanitizeGroupWsl, WSL_NOT_OWNED_HINT } from '@shared/wsl-binding'
 import { ColorMenu } from '../components/color/ColorMenu'
 import { alphaTint } from '../components/color/tint'
 
 export type WorktreeAction = 'merge' | 'remove' | 'unbind'
+export type WslAction = 'sleep' | 'wake' | 'delete' | 'unbind'
 
 /**
  * Worktree-action handler bridge. React Flow instantiates custom nodes itself, so we can't
@@ -21,6 +24,12 @@ export function setWorktreeActionHandler(
   fn: ((groupId: string, action: WorktreeAction) => void) | null
 ): void {
   worktreeActionHandler = fn
+}
+
+/** Same bridge shape, for the WSL chip's sleep/wake/unregister/unbind buttons. */
+let wslActionHandler: ((groupId: string, action: WslAction) => void) | null = null
+export function setWslActionHandler(fn: ((groupId: string, action: WslAction) => void) | null): void {
+  wslActionHandler = fn
 }
 
 /**
@@ -41,6 +50,20 @@ export function GroupNode({ id, data, selected }: NodeProps<CanvasNode>) {
   // (WORKTREE_STATUS_THROTTLE_MS) and is epoch-guarded, so asking often is free.
   const status = useWorktrees((s) => (wt ? s.statusByPath[wt.path] : undefined))
   const stale = useWorktrees((s) => (wt ? s.staleGroupIds.includes(id) : false))
+
+  // `data.wsl` is content, never authority — see @shared/wsl-binding's header. Tolerant read
+  // (`sanitizeGroupWsl`) so a hostile/hand-edited project file cannot render past shape
+  // validation, and everything the chip shows or enables is re-derived from the WSL STORE's own
+  // live, freshly-enumerated facts — never from this record directly. A distribution this app did
+  // not create (the machine's own real docker-desktop / etc.) renders read-only: the chip shows
+  // its name and Unbind, and sleep/wake/unregister are DISABLED with the exact reason rather than
+  // silently absent — a control that looks like it works and does not is worse than no control.
+  const wsl = sanitizeGroupWsl(data.wsl)
+  const wslInstance = useWsl((s) => (wsl ? s.instances[wsl.distroName] : undefined))
+  const wslEnumerated = useWsl((s) => s.enumeratedNames())
+  const wslOwnedByApp = useWsl((s) => s.ownedByApp)
+  const wslGone = !!wsl && !wslEnumerated.has(wsl.distroName)
+  const wslCanManage = canManageWslDistro(wsl, wslEnumerated, wslOwnedByApp)
 
   // On an SSH project the poll is OFF, not merely useless: `git status <path>` would be answered by
   // the LOCAL filesystem for a project whose checkout lives on the host (remote git routing is
@@ -281,6 +304,59 @@ export function GroupNode({ id, data, selected }: NodeProps<CanvasNode>) {
                 className="group-node__wt-btn"
                 title="Remove worktree"
                 onClick={() => worktreeActionHandler?.(id, 'remove')}
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        )}
+        {wsl && (
+          <div className="group-node__wt group-node__wsl nodrag">
+            <span
+              className="group-node__branch"
+              title={wslGone ? `${wsl.distroName} — no longer registered on this machine` : wsl.distroName}
+            >
+              ⌂ {wsl.distroName}
+              {!wslGone && wslInstance && (
+                <em className="group-node__wt-dirty" title={wslInstance.state}>
+                  {' '}
+                  · {wslInstance.state}
+                  {typeof wslInstance.memoryMb === 'number' ? ` · ${Math.round(wslInstance.memoryMb)} MB` : ''}
+                </em>
+              )}
+              {wslGone && <em className="group-node__branch--stale"> · missing</em>}
+            </span>
+            {!wslGone && (
+              <button
+                className="group-node__wt-btn"
+                title={
+                  wslCanManage
+                    ? wslInstance?.state === 'running'
+                      ? 'Sleep this WSL instance'
+                      : 'Wake this WSL instance'
+                    : WSL_NOT_OWNED_HINT
+                }
+                disabled={!wslCanManage}
+                onClick={() =>
+                  wslActionHandler?.(id, wslInstance?.state === 'running' ? 'sleep' : 'wake')
+                }
+              >
+                {wslInstance?.state === 'running' ? '⏾' : '▶'}
+              </button>
+            )}
+            <button
+              className="group-node__wt-btn"
+              title="Unbind (does not touch the WSL instance)"
+              onClick={() => wslActionHandler?.(id, 'unbind')}
+            >
+              Unbind
+            </button>
+            {!wslGone && (
+              <button
+                className="group-node__wt-btn"
+                title={wslCanManage ? 'Unregister (deletes the instance permanently)' : WSL_NOT_OWNED_HINT}
+                disabled={!wslCanManage}
+                onClick={() => wslActionHandler?.(id, 'delete')}
               >
                 ✕
               </button>
