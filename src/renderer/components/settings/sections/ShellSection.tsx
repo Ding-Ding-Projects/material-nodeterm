@@ -48,26 +48,32 @@ const UNAVAILABLE_PROFILE_OPTION = '__configured-profile-unavailable__'
 type ProfileText = ReturnType<typeof useLocalizedVocabularyText>
 
 function localizedRows(profileText: ProfileText): typeof BASE_ROWS {
+  const localizeKeywords = (id: string, keywords: readonly string[]): string[] =>
+    keywords.map((keyword, index) => profileText(`terminalProfiles.settings.${id}.keyword.${index}`, keyword))
   return {
     ...BASE_ROWS,
     profile: {
       ...BASE_ROWS.profile,
-      title: profileText('terminalProfiles.settings.defaultLabel', 'Default terminal profile')
+      title: profileText('terminalProfiles.settings.defaultLabel', 'Default terminal profile'),
+      keywords: localizeKeywords('profile', BASE_ROWS.profile.keywords)
     },
     availability: {
       ...BASE_ROWS.availability,
       title: profileText(
         'terminalProfiles.settings.availabilityRowTitle',
         'Detected profile availability'
-      )
+      ),
+      keywords: localizeKeywords('availability', BASE_ROWS.availability.keywords)
     },
     custom: {
       ...BASE_ROWS.custom,
-      title: profileText('terminalProfiles.settings.customLabel', 'Custom executable')
+      title: profileText('terminalProfiles.settings.customLabel', 'Custom executable'),
+      keywords: localizeKeywords('custom', BASE_ROWS.custom.keywords)
     },
     legacyShell: {
       ...BASE_ROWS.legacyShell,
-      title: profileText('terminalProfiles.settings.legacyDefaultLabel', 'Default shell')
+      title: profileText('terminalProfiles.settings.legacyDefaultLabel', 'Default shell'),
+      keywords: localizeKeywords('legacyShell', BASE_ROWS.legacyShell.keywords)
     }
   }
 }

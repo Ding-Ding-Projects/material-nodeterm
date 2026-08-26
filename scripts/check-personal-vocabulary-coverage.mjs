@@ -232,11 +232,12 @@ for (const [id, file, sectionId] of SETTINGS_SECTION_BOUNDARY_MANIFEST) {
   check(id + ': section registration boundary', hasMarker(source, `id="${sectionId}"`))
   check(id + ': active-state boundary', (source || '').includes('isActive'))
   const uncommented = noComments(source || '')
-  // These are classification notes, not existence checks. The exact required boundary above is
-  // the registered section id, while these clauses record which shared funnel the section owns.
-  check(id + ': authored prose boundary', /FieldRow|SettingsText|SettingsSection/.test(uncommented))
-  check(id + ': accessible-control classification', /aria-label|ariaLabel|htmlFor|placeholder|SettingsSection/.test(uncommented))
-  check(id + ': option-or-fact classification', /<option|options\s*[:=]|formatText|profileText|value\s*=|SettingsSection/.test(uncommented))
+  // Classification is deliberately marker-exact. The registered section id above is the
+  // existence boundary, while these exact callsite markers record the shared funnels in use.
+  const hasExact = (markers) => markers.some((marker) => uncommented.includes(marker))
+  check(id + ': authored prose boundary', hasExact(['SettingsText', '<FieldRow', '<SettingsSection']))
+  check(id + ': accessible-control classification', hasExact(['aria-label=', 'ariaLabel=', 'htmlFor=', 'placeholder=', '<SettingsSection']))
+  check(id + ': option-or-fact classification', hasExact(['<option', 'options=', 'formatText', 'profileText', 'value=', `id="${sectionId}"`]))
 }
 for (const [id, file] of FOCUSED_TEST_INVENTORY) check(id + ': focused test exists', read(file) !== null)
 check('settings section boundary manifest is complete', SETTINGS_SECTION_BOUNDARY_MANIFEST.length === expectedSettingsSectionCount)
