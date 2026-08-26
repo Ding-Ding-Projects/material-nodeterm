@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { PtyPressure } from '@shared/types'
 import { isMacPlatform } from '../../shared/platform-utils'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 // The warning that was missing on 2026-08-11: the machine filled up its pty devices
 // (`kern.tty.ptmx_max`) and the first thing anyone learned about it was terminals refusing to
@@ -63,6 +64,7 @@ export function PtyPressureBanner({
     null
   )
   const [busy, setBusy] = useState(false)
+  const vocab = useVocabularyMapper()
 
   useEffect(() => {
     // Optional-called: the Server Edition bridge declares this a documented no-op.
@@ -111,22 +113,22 @@ export function PtyPressureBanner({
     <div className={`announce-banner announce-banner--${copy.tone}`}>
       <span className="announce-banner__dot" />
       <div className="announce-banner__content">
-        <span className="announce-banner__title">{copy.title}</span>
-        <span className="announce-banner__body">{copy.body}</span>
+        <span className="announce-banner__title">{vocab(copy.title)}</span>
+        <span className="announce-banner__body">{vocab(copy.body)}</span>
       </div>
       {isMac && (
         <button
           className="announce-banner__btn"
-          title="Raises this Mac’s pty-device limit (kern.tty.ptmx_max) now and after every restart. macOS will ask for your password."
+          title={vocab('Raises this Mac’s pty-device limit (kern.tty.ptmx_max) now and after every restart. macOS will ask for your password.')}
           disabled={busy}
           onClick={fix}
         >
-          {busy ? 'Fixing…' : 'Fix automatically…'}
+          {busy ? vocab('Fixing…') : vocab('Fix automatically…')}
         </button>
       )}
       <button
         className="announce-banner__close"
-        title="Dismiss"
+        title={vocab('Dismiss')}
         onClick={() => setDismissed({ level: reading.level, seq: state!.seq })}
       >
         ✕

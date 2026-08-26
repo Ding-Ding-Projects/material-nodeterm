@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { ServerDeploymentStage } from '@shared/types'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 type DeploymentState = 'starting' | 'ready' | 'docker-restart-required' | 'failed'
 
@@ -32,6 +33,8 @@ const STAGE_ORDER: ServerDeploymentStage[] = [
  *  as `MinecraftConnectBanner`'s `AddressChip` and `SystemResourcePill`'s copy affordance. */
 function CopyButton({ value, label }: { value: string; label: string }): React.JSX.Element {
   const [copied, setCopied] = useState(false)
+  const vocab = useVocabularyMapper()
+  const visibleLabel = vocab(label)
   const copy = async (): Promise<void> => {
     const ok = await window.nodeTerminal.clipboard.writeText(value)
     if (ok) {
@@ -44,10 +47,10 @@ function CopyButton({ value, label }: { value: string; label: string }): React.J
       type="button"
       className="phone-pair__copy"
       onClick={() => void copy()}
-      title={`Copy ${label.toLowerCase()}`}
+      title={`${vocab('Copy')} ${visibleLabel.toLowerCase()}`}
     >
       <span aria-hidden="true">{copied ? '✓' : '⧉'}</span>
-      <span className="sr-only">{copied ? `${label} copied` : `Copy ${label.toLowerCase()}`}</span>
+      <span className="sr-only">{copied ? `${visibleLabel} ${vocab('copied')}` : `${vocab('Copy')} ${visibleLabel.toLowerCase()}`}</span>
     </button>
   )
 }
@@ -69,6 +72,7 @@ export function PhonePairPopover({
   const [url, setUrl] = useState('')
   const [error, setError] = useState('')
   const [totpCode, setTotpCode] = useState('')
+  const vocab = useVocabularyMapper()
 
   const start = async (): Promise<void> => {
     setState('starting')
@@ -112,9 +116,9 @@ export function PhonePairPopover({
         className="phone-pair"
         style={{ top: anchor.bottom + 8, right: Math.max(8, window.innerWidth - anchor.right) }}
         role="dialog"
-        aria-label="Server Edition deployment"
+        aria-label={vocab('Server Edition deployment')}
       >
-        <div className="phone-pair__title">Open nodeterm on another device</div>
+        <div className="phone-pair__title">{vocab('Open nodeterm on another device')}</div>
 
         {state === 'starting' ? (
           <>
@@ -124,43 +128,43 @@ export function PhonePairPopover({
             <ul className="phone-pair__progress" aria-live="polite">
               {STAGE_ORDER.slice(0, Math.max(stageIndex, 0) + 1).map((s, i) => (
                 <li key={s} className={i < stageIndex ? 'phone-pair__progress-done' : 'phone-pair__progress-active'}>
-                  <span aria-hidden="true">{i < stageIndex ? '✓' : '…'}</span> {STAGE_LABEL[s]}
+                  <span aria-hidden="true">{i < stageIndex ? '✓' : '…'}</span> {vocab(STAGE_LABEL[s])}
                 </li>
               ))}
             </ul>
           </>
         ) : state === 'ready' ? (
           <>
-            <div className="phone-pair__ok">✓ Server Edition is healthy and ready.</div>
-            <div className="phone-pair__hint">Use the site from this PC now. Mobile access will appear here only after its protected TOTP transport is configured.</div>
+            <div className="phone-pair__ok">✓ {vocab('Server Edition is healthy and ready.')}</div>
+            <div className="phone-pair__hint">{vocab('Use the site from this PC now. Mobile access will appear here only after its protected TOTP transport is configured.')}</div>
             {totpCode ? (
               <div className="phone-pair__row">
                 <div className="phone-pair__title" aria-label={`Current TOTP code ${totpCode}`}>{totpCode}</div>
-                <CopyButton value={totpCode} label="Access code" />
+                <CopyButton value={totpCode} label={vocab('Access code')} />
               </div>
             ) : null}
-            <div className="phone-pair__hint">Enter the current six-digit access code in the site's password field. It changes every 30 seconds.</div>
+            <div className="phone-pair__hint">{vocab("Enter the current six-digit access code in the site's password field. It changes every 30 seconds.")}</div>
             <button className="phone-pair__btn" onClick={() => void window.nodeTerminal.shell.openExternal(url)}>
-              Open Server Edition
+              {vocab('Open Server Edition')}
             </button>
             <div className="phone-pair__row">
               <div className="phone-pair__hint">{url}</div>
-              <CopyButton value={url} label="Server address" />
+              <CopyButton value={url} label={vocab('Server address')} />
             </div>
           </>
         ) : (
           <>
-            <div className="phone-pair__warn">{error}</div>
+            <div className="phone-pair__warn">{error === 'Server Edition could not be started.' ? vocab(error) : error}</div>
             <button className="phone-pair__btn" onClick={() => void start()}>
-              {state === 'docker-restart-required' ? 'Check Docker and continue' : 'Try deployment again'}
+              {state === 'docker-restart-required' ? vocab('Check Docker and continue') : vocab('Try deployment again')}
             </button>
           </>
         )}
 
         <div className="phone-pair__divider" />
-        <div className="phone-pair__hint">No Pro plan, paid seat, subscription, or purchase is required.</div>
+        <div className="phone-pair__hint">{vocab('No Pro plan, paid seat, subscription, or purchase is required.')}</div>
         <button className="phone-pair__link phone-pair__footer" onClick={onOpenSettings}>
-          All device settings…
+          {vocab('All device settings…')}
         </button>
       </div>
     </>,

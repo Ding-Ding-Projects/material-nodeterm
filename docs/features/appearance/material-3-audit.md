@@ -306,12 +306,12 @@ single React element cannot reach the descendants produced by a component.
 
 | Surface | Source | Boundary |
 | --- | --- | --- |
-| app-shell | src/renderer/App.tsx | unmapped-callsite-pending |
-| welcome | src/renderer/components/WelcomeScreen.tsx | unmapped-callsite-pending |
-| top-app-bar | src/renderer/components/TopAppBar.tsx | unmapped-callsite-pending |
+| app-shell | src/renderer/App.tsx | shell-only-no-copy |
+| welcome | src/renderer/components/WelcomeScreen.tsx | mapped-callsite |
+| top-app-bar | src/renderer/components/TopAppBar.tsx | user-display-only |
 | status-surface | src/renderer/components/StatusSurface.tsx | mapped-callsite |
-| sessions-sidebar | src/renderer/components/SessionsSidebar.tsx | unmapped-callsite-pending |
-| session-row | src/renderer/components/SessionRow.tsx | unmapped-callsite-pending |
+| sessions-sidebar | src/renderer/components/SessionsSidebar.tsx | mapped-callsite |
+| session-row | src/renderer/components/SessionRow.tsx | mapped-callsite |
 | terminal-node | src/renderer/nodes/TerminalNode.tsx | mapped-callsite |
 | sticky-node | src/renderer/nodes/StickyNode.tsx | unmapped-callsite-pending |
 | group-node | src/renderer/nodes/GroupNode.tsx | unmapped-callsite-pending |
@@ -338,9 +338,15 @@ single React element cannot reach the descendants produced by a component.
 | color-picker | src/renderer/components/color/ColorPicker.tsx | unmapped-callsite-pending |
 | branch-select | src/renderer/components/BranchSelect.tsx | literal-provider-boundary |
 | bulk-action-bar | src/renderer/components/BulkActionBar.tsx | unmapped-callsite-pending |
-| pty-pressure | src/renderer/components/PtyPressureBanner.tsx | unmapped-callsite-pending |
-| update-card | src/renderer/components/UpdateCard.tsx | unmapped-callsite-pending |
-| resume-card | src/renderer/components/ResumeCard.tsx | unmapped-callsite-pending |
+| pty-pressure | src/renderer/components/PtyPressureBanner.tsx | mapped-callsite |
+| update-card | src/renderer/components/UpdateCard.tsx | mapped-callsite |
+| resume-card | src/renderer/components/ResumeCard.tsx | mapped-callsite |
+| announcement-banner | src/renderer/components/AnnouncementBanner.tsx | mapped-callsite |
+| session-memory | src/renderer/components/SessionMemoryPanel.tsx | mapped-callsite |
+| remote-access-dialog | src/renderer/components/RemoteAccessDialog.tsx | mapped-callsite |
+| ssh-project-dialog | src/renderer/components/SshProjectDialog.tsx | mapped-callsite |
+| phone-pair-popover | src/renderer/components/PhonePairPopover.tsx | mapped-callsite |
+| dictation-overlay | src/renderer/components/DictationOverlay.tsx | mapped-callsite |
 
 ## Documentation site data refresh
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useI18n } from '@renderer/lib/i18n'
-import { Localized } from '@renderer/ui/Localized'
+import { useVocabularyMapper } from '@renderer/lib/personalVocabulary/useVocabularyText'
 import { useSettings } from '../state/settings'
 import { resolveAppDisplayName } from '@shared/appIdentity'
 import { resolveLogoPreset } from './appearance/BrandMark'
@@ -60,6 +60,34 @@ interface WelcomeScreenProps {
   overBoard?: boolean
 }
 
+/** Resolve catalogue copy and apply the user's local vocabulary at the final text boundary. */
+function VocabularyLocalized({
+  id,
+  fallback,
+  as: Tag = 'span',
+  className,
+  secondaryClassName
+}: {
+  id: string
+  fallback: string
+  as?: keyof React.JSX.IntrinsicElements
+  className?: string
+  secondaryClassName?: string
+}): JSX.Element {
+  const { t } = useI18n()
+  const vocab = useVocabularyMapper()
+  const resolved = t(id, fallback)
+  if (!resolved.secondary) return <Tag className={className}>{vocab(resolved.primary)}</Tag>
+  return (
+    <Tag className={className}>
+      <span>{vocab(resolved.primary)}</span>
+      <span className={secondaryClassName ?? 'mt-0.5 block text-[12px] text-muted-2'}>
+        {vocab(resolved.secondary)}
+      </span>
+    </Tag>
+  )
+}
+
 /** Start screen with quick actions — shown when there are no projects, or on demand via "+". */
 export function WelcomeScreen({
   onNewProject,
@@ -74,6 +102,8 @@ export function WelcomeScreen({
   overBoard
 }: WelcomeScreenProps) {
   const { ts } = useI18n()
+  const vocab = useVocabularyMapper()
+  const text = (id: string, fallback: string): string => vocab(ts(id, fallback))
   const appLogo = useSettings((s) => s.settings.appLogo)
   const displayName = useSettings((s) => resolveAppDisplayName(s.settings.appDisplayName))
   // Which build is running, on the FRONT screen rather than four levels into Settings. It is the
@@ -122,7 +152,7 @@ export function WelcomeScreen({
             <button
               className="md3-welcome__back"
               onClick={onClose}
-              title={ts('welcome.back', 'Back to your projects')}
+              title={text('welcome.back', 'Back to your projects')}
             >
               <svg
                 viewBox="0 0 24 24"
@@ -137,10 +167,10 @@ export function WelcomeScreen({
               >
                 <path d="M15 6l-6 6 6 6" />
               </svg>
-              <span>{ts('welcome.back', 'Back to your projects')}</span>
+              <span>{text('welcome.back', 'Back to your projects')}</span>
             </button>
             <span className="md3-welcome__back-note">
-              {ts('welcome.back.note', "They're untouched — nothing here changes them.")}
+              {text('welcome.back.note', "They're untouched — nothing here changes them.")}
             </span>
           </div>
           {/* Secondary, conventional corner close — kept for anyone who already reaches for it by
@@ -148,8 +178,8 @@ export function WelcomeScreen({
           <button
             className="md3-welcome__close"
             onClick={onClose}
-            title={ts('welcome.close', 'Close')}
-            aria-label={ts('welcome.close', 'Close')}
+            title={text('welcome.close', 'Close')}
+            aria-label={text('welcome.close', 'Close')}
           >
             ×
           </button>
@@ -174,14 +204,14 @@ export function WelcomeScreen({
           <span className="md3-welcome__brand-name">{displayName}</span>
         </div>
 
-        <Localized
+        <VocabularyLocalized
           id="welcome.tagline"
           fallback="A canvas of terminals. Start a project to begin."
           as="h1"
           className="md3-welcome__title"
           secondaryClassName="md3-welcome__title-secondary"
         />
-        <Localized
+        <VocabularyLocalized
           id="welcome.subtitle"
           fallback="Open a project to place shells, agents and notes on one canvas — every project is also a board of its live sessions."
           as="p"
@@ -205,8 +235,8 @@ export function WelcomeScreen({
               <path d="M12 11v5M9.5 13.5h5" />
             </svg>
             <span className="md3-welcome__card-body">
-              <span className="md3-welcome__card-title">{ts('welcome.card.newProject', 'New project')}</span>
-              <span className="md3-welcome__card-desc">{ts('welcome.card.newProject.desc', 'An empty canvas')}</span>
+              <span className="md3-welcome__card-title">{text('welcome.card.newProject', 'New project')}</span>
+              <span className="md3-welcome__card-desc">{text('welcome.card.newProject.desc', 'An empty canvas')}</span>
             </span>
           </button>
 
@@ -224,8 +254,8 @@ export function WelcomeScreen({
               <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
             </svg>
             <span className="md3-welcome__card-body">
-              <span className="md3-welcome__card-title">{ts('welcome.card.openFolder', 'Open folder…')}</span>
-              <span className="md3-welcome__card-desc">{ts('welcome.card.openFolder.desc', 'Point at a repo')}</span>
+              <span className="md3-welcome__card-title">{text('welcome.card.openFolder', 'Open folder…')}</span>
+              <span className="md3-welcome__card-desc">{text('welcome.card.openFolder.desc', 'Point at a repo')}</span>
             </span>
           </button>
 
@@ -244,8 +274,8 @@ export function WelcomeScreen({
               <path d="M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" />
             </svg>
             <span className="md3-welcome__card-body">
-              <span className="md3-welcome__card-title">{ts('welcome.card.cloneRepo', 'Clone repo…')}</span>
-              <span className="md3-welcome__card-desc">{ts('welcome.card.cloneRepo.desc', 'From GitHub or a URL')}</span>
+              <span className="md3-welcome__card-title">{text('welcome.card.cloneRepo', 'Clone repo…')}</span>
+              <span className="md3-welcome__card-desc">{text('welcome.card.cloneRepo.desc', 'From GitHub or a URL')}</span>
             </span>
           </button>
 
@@ -266,10 +296,10 @@ export function WelcomeScreen({
             </svg>
             <span className="md3-welcome__card-body">
               <span className="md3-welcome__card-title">
-                {ts('welcome.card.openProjectFile', 'Open project file…')}
+                {text('welcome.card.openProjectFile', 'Open project file…')}
               </span>
               <span className="md3-welcome__card-desc">
-                {ts('welcome.card.openProjectFile.desc', 'A saved .nodeterm-project')}
+                {text('welcome.card.openProjectFile.desc', 'A saved .nodeterm-project')}
               </span>
             </span>
           </button>
@@ -289,8 +319,8 @@ export function WelcomeScreen({
               <path d="M7 10l3 2-3 2M13 14h4" />
             </svg>
             <span className="md3-welcome__card-body">
-              <span className="md3-welcome__card-title">{ts('welcome.card.connectSsh', 'Connect over SSH…')}</span>
-              <span className="md3-welcome__card-desc">{ts('welcome.card.connectSsh.desc', 'Work on a remote host')}</span>
+              <span className="md3-welcome__card-title">{text('welcome.card.connectSsh', 'Connect over SSH…')}</span>
+              <span className="md3-welcome__card-desc">{text('welcome.card.connectSsh.desc', 'Work on a remote host')}</span>
             </span>
           </button>
         </div>
@@ -298,7 +328,7 @@ export function WelcomeScreen({
         {closedProjects.length > 0 && (
           <div className="md3-welcome__recent">
             <div className="md3-welcome__recent-title">
-              {ts('welcome.recent.title', 'Recently closed')}
+              {text('welcome.recent.title', 'Recently closed')}
             </div>
             <div className="md3-welcome__recent-list">
               {closedProjects.map((p) => (
@@ -343,11 +373,11 @@ export function WelcomeScreen({
                   {onDeleteClosed && (
                     <button
                       className="md3-welcome__recent-del"
-                      title={ts('welcome.recent.deleteTitle', 'Delete permanently (ends its sessions)')}
+                      title={text('welcome.recent.deleteTitle', 'Delete permanently (ends its sessions)')}
                       // The accessible name NAMES THE PROJECT: a screen-reader user moving down a
                       // list of recent projects hears this button once per row, and an identical
                       // label on every one of them says nothing about which project it destroys.
-                      aria-label={`${ts('welcome.recent.deleteAria', 'Delete permanently')} — ${p.name}`}
+                      aria-label={`${text('welcome.recent.deleteAria', 'Delete permanently')} — ${p.name}`}
                       onClick={(e) => {
                         e.stopPropagation()
                         onDeleteClosed(p.id, p.name, e.currentTarget)
