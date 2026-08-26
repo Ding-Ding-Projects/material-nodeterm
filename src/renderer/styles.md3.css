@@ -1683,6 +1683,111 @@ button.term-node__title-text:focus-visible {
   color: var(--md-on-surface-variant);
 }
 
+/* ---------------------------------------------------------------------------------------------
+   NSIS installer-builder node (shares `.term-node` chrome above).
+   --------------------------------------------------------------------------------------------- */
+.nsis-node__body {
+  overflow-y: auto;
+  padding: 10px 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--md-surface);
+  color: var(--md-on-surface);
+  font-size: 12.5px;
+}
+.nsis-node__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.nsis-node__field > span:first-child {
+  color: var(--md-on-surface-variant);
+  font-size: 11px;
+}
+.nsis-node__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.nsis-node__path-row {
+  display: flex;
+  gap: 6px;
+}
+.nsis-node__path-row .mdx-input {
+  flex: 1;
+}
+.nsis-node__browse {
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-xs);
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+  padding: 4px 10px;
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+.nsis-node__browse:hover:not(:disabled) {
+  background: var(--md-surface-container-highest);
+}
+.nsis-node__browse:disabled {
+  opacity: 0.6;
+}
+.nsis-node__hint {
+  color: var(--md-on-surface-variant);
+  font-size: 11px;
+  margin: 0;
+}
+.nsis-node__incomplete {
+  color: var(--md-tertiary, var(--md-on-surface-variant));
+  font-style: normal;
+}
+.nsis-node__search {
+  margin-top: 2px;
+}
+.nsis-node__source-list {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+.nsis-node__source-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px;
+  border-radius: var(--md-shape-xs);
+  background: var(--md-surface-container-low);
+}
+.nsis-node__source-row:hover {
+  background: var(--md-surface-container-high);
+}
+.nsis-node__source-path {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.nsis-node__preview {
+  width: 100%;
+  min-height: 160px;
+  resize: vertical;
+  background: var(--md-surface-container-lowest);
+  color: var(--md-on-surface);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-xs);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 8px;
+  white-space: pre;
+}
+
 .diff-node__tag {
   background: var(--md-surface-container-highest);
   color: var(--md-on-surface-variant);

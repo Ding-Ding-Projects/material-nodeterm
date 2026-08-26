@@ -29,6 +29,7 @@
 import { BUILTIN_AGENT_IDS, isPermissionMode } from './agents/config'
 import { sshExtraArgsEnableLocalExec } from './ssh'
 import type { AgentLaunchIntent, CanvasNodeState, PendingLaunch } from './types'
+import type { NsisLocalPaths } from './nsis-form-types'
 
 /** Per-node exec values the LOCAL machine typed. Persisted only in the machine-local index. */
 export interface LocalNodeExec {
@@ -58,6 +59,13 @@ export interface LocalNodeExec {
    * endpoint with a password embedded in it is refused rather than stored.
    */
   serviceConnection?: ServiceConnection
+  /**
+   * `NodeState.nsisLocalPaths` — the NSIS installer-builder node's source/license/icon paths on
+   * this machine. Belongs on this boundary for the same reason `serviceConnection` does: it is
+   * one person's filesystem layout, and a shared project file that could set it would be one
+   * person's disk paths appearing (or worse, being read) in everybody else's checkout.
+   */
+  nsisLocalPaths?: NsisLocalPaths
 }
 
 /**
@@ -140,6 +148,40 @@ export function safeServiceConnection(value: unknown): ServiceConnection | undef
   const out: ServiceConnection = { endpoint: raw.endpoint }
   if (typeof raw.credentialKey === 'string' && SAFE_CREDENTIAL_KEY.test(raw.credentialKey)) {
     out.credentialKey = raw.credentialKey
+  }
+  return out
+}
+
+/** Bounds for `nsisLocalPaths`, so a hostile/hand-edited index entry cannot bloat the store or
+ *  smuggle a control character through a path string. */
+const MAX_NSIS_SOURCE_PATHS = 512
+const MAX_NSIS_PATH_LENGTH = 4096
+
+function safePathString(value: unknown): value is string {
+  if (typeof value !== 'string' || value === '' || value.length > MAX_NSIS_PATH_LENGTH) return false
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i)
+    if (code < 0x20 || code === 0x7f) return false
+  }
+  return true
+}
+
+/** Keeps only an `nsisLocalPaths` record we are prepared to write down. Tolerant, like
+ *  `validKanban`: a malformed or hostile value degrades to a safe default (undefined, or an
+ *  entry with the bad bits dropped) rather than throwing — this reads a machine-local index file
+ *  that can still be hand-edited or written by an older/foreign build. */
+export function safeNsisLocalPaths(value: unknown): NsisLocalPaths | undefined {
+  if (typeof value !== 'object' || value === null) return undefined
+  const raw = value as Record<string, unknown>
+  const sourcePaths = Array.isArray(raw.sourcePaths)
+    ? raw.sourcePaths.filter(safePathString).slice(0, MAX_NSIS_SOURCE_PATHS)
+    : []
+  const out: NsisLocalPaths = { sourcePaths }
+  if (safePathString(raw.licensePath)) out.licensePath = raw.licensePath
+  if (safePathString(raw.iconPath)) out.iconPath = raw.iconPath
+  // An empty, otherwise-empty record carries no information worth persisting.
+  if (sourcePaths.length === 0 && out.licensePath === undefined && out.iconPath === undefined) {
+    return undefined
   }
   return out
 }
@@ -273,6 +315,7 @@ function stripNodeExec(n: CanvasNodeState): CanvasNodeState {
     n.terminalProfileId === undefined &&
     n.pendingLaunch === undefined &&
     n.serviceConnection === undefined &&
+    n.nsisLocalPaths === undefined &&
     n.ssh?.extraArgs === undefined &&
     n.ssh?.execTrusted === undefined
   )
@@ -282,6 +325,7 @@ function stripNodeExec(n: CanvasNodeState): CanvasNodeState {
   delete out.terminalProfileId
   delete out.pendingLaunch
   delete out.serviceConnection
+  delete out.nsisLocalPaths
   if (out.ssh) {
     // `execTrusted` goes with the value it vouches for. It is a MACHINE-LOCAL provenance marker:
     // if it could ride a document or a wire frame, a hostile one would simply set it to true.
@@ -367,11 +411,13 @@ export function carryLocalNodeExec(
   if (!prev) return next
   const extraArgs = prev.ssh?.extraArgs
   const pendingLaunch = next.kind === 'terminal' ? clonePendingLaunch(prev.pendingLaunch) : undefined
+  const nsisPaths = safeNsisLocalPaths(prev.nsisLocalPaths)
   if (
     prev.shell === undefined &&
     prev.terminalProfileId === undefined &&
     extraArgs === undefined &&
-    pendingLaunch === undefined
+    pendingLaunch === undefined &&
+    nsisPaths === undefined
   )
     return next
   const out: CanvasNodeState = { ...next }
@@ -380,6 +426,7 @@ export function carryLocalNodeExec(
   if (extraArgs !== undefined && out.ssh)
     out.ssh = { ...out.ssh, extraArgs, execTrusted: prev.ssh?.execTrusted }
   if (pendingLaunch !== undefined) out.pendingLaunch = pendingLaunch
+  if (nsisPaths !== undefined) out.nsisLocalPaths = nsisPaths
   return out
 }
 
@@ -424,12 +471,15 @@ export function localNodeExec(nodes: CanvasNodeState[]): LocalNodeExecMap | unde
     // endpoint into the trusted store — the exact laundering `sanitizeInboundNode` exists to stop.
     const conn = safeServiceConnection(n.serviceConnection)
     if (conn) entry.serviceConnection = conn
+    const nsisPaths = safeNsisLocalPaths(n.nsisLocalPaths)
+    if (nsisPaths) entry.nsisLocalPaths = nsisPaths
     if (
       entry.shell ||
       entry.terminalProfileId !== undefined ||
       entry.sshExtraArgs ||
       entry.pendingLaunch ||
-      entry.serviceConnection
+      entry.serviceConnection ||
+      entry.nsisLocalPaths
     )
       map[n.id] = entry
   }
@@ -466,6 +516,8 @@ export function applyLocalNodeExec(
     // that would be refused today must not be honoured merely because it is already on disk.
     const conn = safeServiceConnection(mine?.serviceConnection)
     if (conn) out.serviceConnection = conn
+    const nsisPaths = safeNsisLocalPaths(mine?.nsisLocalPaths)
+    if (nsisPaths) out.nsisLocalPaths = nsisPaths
     return out
   })
 }

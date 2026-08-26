@@ -12,6 +12,7 @@ import {
   createCanvasControlTerminalNode,
   createDinoNode,
   createGroupNode,
+  createNsisNode,
   defaultBrowserTabs,
   duplicateNode,
   fitGroupToChildren,
@@ -1101,7 +1102,10 @@ describe('duplicateNode across every node kind', () => {
     proxmox: 'proxmox',
     gitlab: 'gitlab',
     homeassistant: 'homeassistant',
-    freepbx: 'freepbx'
+    freepbx: 'freepbx',
+    // A GUI for authoring an NSIS installer script for another project (never this app's own
+    // installer, which stays Squirrel.Windows).
+    nsis: 'nsis'
   }
   const ALL_KINDS = Object.keys(EXPECTED_PREFIX) as NodeKind[]
 
@@ -1417,5 +1421,87 @@ describe('flowToNodeStates — temporary nodes', () => {
     // "Keep" clears the flag; the same node then persists like any other.
     const promoted = { ...popup, data: { ...popup.data, temporary: undefined } }
     expect(flowToNodeStates([kept, promoted]).map((n) => n.id)).toEqual([kept.id, popup.id])
+  })
+})
+
+describe('createNsisNode', () => {
+  it('seeds a real installRoot/compression default rather than an empty form', () => {
+    const n = createNsisNode(0)
+    expect(n.type).toBe('nsis')
+    expect(n.id.startsWith('nsis-')).toBe(true)
+    expect(n.data.nsisSpec).toMatchObject({
+      appName: '',
+      version: '1.0.0',
+      installRoot: 'per-user-program-files',
+      compression: 'lzma',
+      createDesktopShortcut: true,
+      createStartMenuShortcut: true,
+      includeUninstaller: true
+    })
+    // No safe default for "which files on this machine" — starts genuinely empty.
+    expect(n.data.nsisLocalPaths).toEqual({ sourcePaths: [] })
+  })
+})
+
+describe('nsis node serialization (nodeStatesToFlow / flowToNodeStates)', () => {
+  const spec = {
+    appName: 'Acme Tool',
+    version: '2.0.0',
+    publisher: 'Acme Corp',
+    outputFileName: 'Acme-Setup.exe',
+    installRoot: 'program-files-64' as const,
+    compression: 'bzip2' as const,
+    perMachine: true,
+    createDesktopShortcut: false,
+    createStartMenuShortcut: true,
+    includeUninstaller: true
+  }
+  const localPaths = {
+    sourcePaths: ['C:\build\out\Acme'],
+    licensePath: 'C:\src\LICENSE.txt',
+    iconPath: 'C:\src\app.ico'
+  }
+
+  it('round-trips nsisSpec and nsisLocalPaths through the disk<->React Flow boundary', () => {
+    const disk = [
+      {
+        id: 'nsis-1',
+        kind: 'nsis' as const,
+        position: { x: 0, y: 0 },
+        size: { width: 460, height: 520 },
+        title: 'Installer builder',
+        color: '#888',
+        group: null,
+        nsisSpec: spec,
+        nsisLocalPaths: localPaths
+      }
+    ]
+    const flow = nodeStatesToFlow(disk)
+    expect(flow[0].data.nsisSpec).toEqual(spec)
+    expect(flow[0].data.nsisLocalPaths).toEqual(localPaths)
+
+    const back = flowToNodeStates(flow)
+    expect(back[0].nsisSpec).toEqual(spec)
+    expect(back[0].nsisLocalPaths).toEqual(localPaths)
+  })
+
+  it('a node with no nsis data at all round-trips as undefined, not a crash', () => {
+    const disk = [
+      {
+        id: 'nsis-2',
+        kind: 'nsis' as const,
+        position: { x: 0, y: 0 },
+        size: { width: 460, height: 520 },
+        title: 'Installer builder',
+        color: '#888',
+        group: null
+      }
+    ]
+    const flow = nodeStatesToFlow(disk)
+    expect(flow[0].data.nsisSpec).toBeUndefined()
+    expect(flow[0].data.nsisLocalPaths).toBeUndefined()
+    const back = flowToNodeStates(flow)
+    expect(back[0].nsisSpec).toBeUndefined()
+    expect(back[0].nsisLocalPaths).toBeUndefined()
   })
 })

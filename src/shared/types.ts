@@ -1,5 +1,6 @@
 import { DEFAULT_WORD_SEPARATORS } from './word-separators'
 import type { ServiceConnection } from './node-exec'
+import type { NsisSpec, NsisLocalPaths } from './nsis-form-types'
 // Types shared across the main, preload, and renderer processes.
 
 import type { CloneProgress } from './clone-url'
@@ -343,6 +344,10 @@ export type NodeKind =
   | 'scheduler'
   | 'dino'
   | 'annotation'
+  // A GUI for authoring a Windows NSIS installer script for ANOTHER project (not this app's
+  // own installer, which stays Squirrel.Windows — see CLAUDE.md's Packaging section). See
+  // `NsisSpec`/`NsisLocalPaths` in `./nsis-form-types` for the shared-vs-machine-local split.
+  | 'nsis'
   // The built-in authenticator, as a node. A VIEW of this machine's own TOTP generators: it
   // persists a title and a colour and nothing else, because an entry id names a credential in
   // this machine's OS vault while project.json is git-shared. See AuthenticatorNode.tsx.
@@ -509,6 +514,19 @@ export interface CanvasNodeState {
    * reasons. It never carries a secret; see `ServiceConnection` in shared/node-exec.ts.
    */
   serviceConnection?: ServiceConnection
+  /**
+   * nsis-only, GIT-SHARED: the installer's description (app name, version, publisher, output
+   * filename, install root, shortcut/uninstaller/compression choices). Nothing here names a
+   * location on the local disk — see `NsisSpec`'s own doc comment for the shared/local split.
+   */
+  nsisSpec?: NsisSpec
+  /**
+   * nsis-only, MACHINE-LOCAL: absolute source/license/icon paths on THIS machine. Stripped from
+   * every project file we write and from every node arriving over the wire, then restored from
+   * the machine-local index — the identical round trip `serviceConnection` takes, for the
+   * identical reason (an absolute path is one person's disk layout). See `@shared/node-exec`.
+   */
+  nsisLocalPaths?: NsisLocalPaths
   // editor / diff
   filePath?: string
   /**
