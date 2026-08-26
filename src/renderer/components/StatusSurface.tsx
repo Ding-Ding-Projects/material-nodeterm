@@ -66,7 +66,7 @@ export function statusSearchCorpus(card: StatusGateCard, meta: { label: string }
     renderStatusSummary(card, vocab),
     vocab(meta.label),
     ...card.evidence.flatMap((e) => [vocab(e.label), e.value]),
-    ...card.rows.flatMap((row) => [vocab(row.label), row.note])
+    ...card.rows.flatMap((row) => [row.labelOwnership === 'authored' ? vocab(row.label) : row.label, row.note])
   ].join(' ')
 }
 
@@ -131,7 +131,7 @@ function StatusCard({
               {card.rows.map((r) => (
                 <li key={r.id} className={`status-row status-row--${r.state}`}>
                   <span aria-hidden="true">{GATE_STATE_META[r.state].emoji}</span>
-                  <span className="status-row__label">{vocab(r.label)}</span>
+                  <span className="status-row__label">{r.labelOwnership === 'authored' ? vocab(r.label) : r.label}</span>
                   <span className="status-row__note">{r.note}</span>
                 </li>
               ))}

@@ -63,6 +63,8 @@ export interface StatusEvidence {
 export interface StatusGateRow {
   id: string
   label: string
+  /** Capture labels are authored UI copy; changelog and release-note labels are external data. */
+  labelOwnership: 'authored' | 'factual'
   state: GateState
   note: string
 }
@@ -185,18 +187,21 @@ export function captureGate(manifest: CaptureManifest | null): StatusGateCard {
     ...manifest.captured.map((c) => ({
       id: `captured-${c.id}`,
       label: c.title,
+      labelOwnership: 'authored' as const,
       state: 'verified' as GateState,
       note: `${c.id} · ${c.bytes} bytes`
     })),
     ...manifest.skipped.map((s) => ({
       id: `skipped-${s.id}`,
       label: s.id,
+      labelOwnership: 'factual' as const,
       state: 'unrun' as GateState,
       note: `skipped — ${s.why}`
     })),
     ...manifest.failures.map((f) => ({
       id: `failed-${f.id}`,
       label: f.id,
+      labelOwnership: 'factual' as const,
       state: 'failed' as GateState,
       note: f.why
     }))
@@ -344,6 +349,7 @@ export function releaseGate(
   const rows: StatusGateRow[] = (unreleased?.items ?? []).map((item, i) => ({
     id: `unreleased-${i}`,
     label: changelogItemLabel(item.text),
+    labelOwnership: 'factual',
     state: 'waiting' as GateState,
     note: item.category
   }))

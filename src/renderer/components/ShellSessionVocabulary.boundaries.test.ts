@@ -13,9 +13,21 @@ import { StatusSurface } from './StatusSurface'
 import { PhonePairPopover } from './PhonePairPopover'
 import { PtyPressureBanner } from './PtyPressureBanner'
 import { WelcomeScreen } from './WelcomeScreen'
+import { AnnouncementBanner } from './AnnouncementBanner'
+import { ResumeCard } from './ResumeCard'
+import { SessionMemoryPanel } from './SessionMemoryPanel'
+import { RemoteAccessDialog } from './RemoteAccessDialog'
+import { SshProjectDialog } from './SshProjectDialog'
+import { DictationOverlay } from './DictationOverlay'
+import { SessionsSidebar } from './SessionsSidebar'
+import { SessionContext } from '../session/session'
 import { usePersonalVocabulary } from '../state/personalVocabulary'
 import { useSchoolMode } from '../state/schoolMode'
 import { useSettings } from '../state/settings'
+import { useProjects } from '../state/projects'
+import { useSshServers } from '../state/sshServers'
+import { useSessionMemory } from '../state/sessionMemory'
+import { releaseGate } from '../../../shared/project-status'
 
 const mapAuthored = (text: string): string =>
   text.replace('Update', 'Refresh').replace('Built', 'Assembled').replace('built', 'assembled').replace('terminal', 'shell box')
@@ -78,6 +90,24 @@ describe('shell and session vocabulary boundaries', () => {
     const corpus = statusSearchCorpus(card, { label: 'Verified' }, mapper)
     expect(corpus).toContain('Assembled shell box captures')
     expect(corpus).toContain('abc12345')
+  })
+
+  it('keeps changelog and release-note row text raw in both rendering and search', () => {
+    const card = releaseGate(
+      [{
+        version: '0.4.119',
+        date: '2026-08-26',
+        dateMs: Date.parse('2026-08-26T00:00:00.000Z'),
+        commits: [],
+        items: [{ category: 'Fixed', text: 'Release note terminal wording' }]
+      }],
+      '0.4.119'
+    )
+    const mapper = (text: string): string => text.replace('terminal', 'shell box').replace('Release note', 'Mapped note')
+    const corpus = statusSearchCorpus(card, { label: 'Verified' }, mapper)
+    expect(card.rows[0].labelOwnership).toBe('factual')
+    expect(corpus).toContain('Release note terminal wording')
+    expect(corpus).not.toContain('Mapped note shell box wording')
   })
 
   it('maps authored provenance words while retaining the stamped version and date facts', () => {
@@ -152,11 +182,11 @@ describe('shell and session vocabulary boundaries', () => {
     }
     usePersonalVocabulary.setState({ entries: { 'Open nodeterm on another device': 'Open elsewhere', 'Current TOTP code': 'Code now' }, status: 'loaded', entryCount: 2 })
     await act(async () => mount(<PhonePairPopover anchor={{ right: 100, bottom: 100 }} onClose={() => {}} onOpenSettings={() => {}} />))
-    expect(host?.querySelector('.phone-pair__title')?.textContent).toContain('Open elsewhere')
-    expect(host?.querySelector('[aria-label="Code now 123456"]')).not.toBeNull()
+    expect(document.body.querySelector('.phone-pair__title')?.textContent).toContain('Open elsewhere')
+    expect(document.body.querySelector('[aria-label="Code now 123456"]')).not.toBeNull()
     act(() => useSchoolMode.setState({ enabled: true, hydrated: true, name: 'School mode' }))
-    expect(host?.querySelector('.phone-pair__title')?.textContent).toContain('Open nodeterm on another device')
-    expect(host?.textContent).toContain('123456')
+    expect(document.body.querySelector('.phone-pair__title')?.textContent).toContain('Open nodeterm on another device')
+    expect(document.body.textContent).toContain('123456')
   })
 
   it('maps PTY authored copy while keeping the measured numbers unchanged', () => {
@@ -190,5 +220,107 @@ describe('shell and session vocabulary boundaries', () => {
     expect(host?.textContent).toContain('New project')
     expect(host?.textContent).toContain('terminals')
     expect(host?.textContent).not.toContain('Fresh mission')
+  })
+
+  it('keeps remote announcement text raw while mapping its own dismiss action', async () => {
+    ;(window as any).nodeTerminal = {
+      announcements: { fetch: async () => [{ id: 'a1', title: 'Security notice from provider', body: 'Provider exact message', level: 'warning' }] }
+    }
+    usePersonalVocabulary.setState({ entries: { Dismiss: 'Hide notice', provider: 'mapped provider' }, status: 'loaded', entryCount: 2 })
+    await act(async () => mount(<AnnouncementBanner />))
+    expect(document.body.textContent).toContain('Security notice from provider')
+    expect(document.body.textContent).toContain('Provider exact message')
+    expect(document.body.querySelector('.announce-banner__close')?.getAttribute('title')).toBe('Hide notice')
+    act(() => useSchoolMode.setState({ enabled: true, hydrated: true, name: 'School mode' }))
+    expect(document.body.textContent).toContain('Security notice from provider')
+    expect(document.body.textContent).not.toContain('Hide notice')
+  })
+
+  it('maps ResumeCard chrome while preserving user breadcrumb text', () => {
+    const project = {
+      id: 'p1', name: 'user project', color: '#6750a4', viewport: { x: 0, y: 0, zoom: 1 }, nodes: [],
+      breadcrumbs: [{ nodeId: 'n1', at: 1000, note: 'user note terminal' }]
+    } as any
+    usePersonalVocabulary.setState({ entries: { 'Resume where you left off': 'Continue here', Dismiss: 'Hide card' }, status: 'loaded', entryCount: 2 })
+    mount(<ResumeCard project={project} nodes={[{ id: 'n1' }]} onOpen={() => {}} />)
+    expect(host?.textContent).toContain('Continue here')
+    expect(host?.textContent).toContain('user note terminal')
+    act(() => useSchoolMode.setState({ enabled: true, hydrated: true, name: 'School mode' }))
+    expect(host?.textContent).toContain('Resume where you left off')
+  })
+
+  it('maps SessionMemoryPanel empty-state copy and follows a live School change', () => {
+    useSessionMemory.setState({ ok: false, rows: [], mem: null, loading: false, loadedScope: null })
+    usePersonalVocabulary.setState({ entries: { 'Could not measure sessions on this machine.': 'Memory reading unavailable' }, status: 'loaded', entryCount: 1 })
+    mount(<SessionMemoryPanel onGoToNode={() => {}} onKillSession={() => {}} onClose={() => {}} />)
+    expect(host?.textContent).toContain('Memory reading unavailable')
+    act(() => useSchoolMode.setState({ enabled: true, hydrated: true, name: 'School mode' }))
+    expect(host?.textContent).toContain('Could not measure sessions on this machine.')
+  })
+
+  it('maps RemoteAccessDialog chrome while preserving provider status details', async () => {
+    ;(window as any).nodeTerminal = {
+      relayHost: { dockerContexts: async () => [], start: async () => ({ offer: '' }), stop: async () => {} }
+    }
+    usePersonalVocabulary.setState({ entries: { 'Remote access': 'Remote doorway', 'Checking Docker…': 'Checking runtime…' }, status: 'loaded', entryCount: 2 })
+    await act(async () => mount(<RemoteAccessDialog onClose={() => {}} />))
+    expect(document.body.textContent).toContain('Remote doorway')
+    expect(document.body.textContent).toContain('No Docker context was found')
+    act(() => useSchoolMode.setState({ enabled: true, hydrated: true, name: 'School mode' }))
+    expect(document.body.textContent).toContain('Remote access')
+    expect(document.body.textContent).not.toContain('Remote doorway')
+  })
+
+  it('maps SshProjectDialog empty-state copy and restores it under School mode', () => {
+    useSshServers.setState({ servers: [] })
+    usePersonalVocabulary.setState({ entries: { 'No saved servers yet.': 'No saved boxes yet' }, status: 'loaded', entryCount: 1 })
+    mount(<SshProjectDialog onCreate={() => {}} onManage={() => {}} onClose={() => {}} />)
+    expect(document.body.textContent).toContain('No saved boxes yet')
+    act(() => useSchoolMode.setState({ enabled: true, hydrated: true, name: 'School mode' }))
+    expect(document.body.textContent).toContain('No saved servers yet.')
+  })
+
+  it('maps DictationOverlay warning copy through the session provider boundary', () => {
+    usePersonalVocabulary.setState({ entries: { 'Select a terminal node first.': 'Choose a shell box first' }, status: 'loaded', entryCount: 1 })
+    mount(
+      <SessionContext.Provider value={{ id: 'test', source: 'local', label: 'test', api: {} as any, status: 'connected' }}>
+        <DictationOverlay target={null} stopSignal={0} onClose={() => {}} onOpenLicense={() => {}} />
+      </SessionContext.Provider>
+    )
+    expect(document.body.textContent).toContain('Choose a shell box first')
+    act(() => useSchoolMode.setState({ enabled: true, hydrated: true, name: 'School mode' }))
+    expect(document.body.textContent).toContain('Select a terminal node first.')
+  })
+
+  it('maps SessionsSidebar empty state and follows a live School change', () => {
+    useProjects.setState({ projects: [], activeProjectId: '', reloadNonce: 0 })
+    usePersonalVocabulary.setState({ entries: { 'No sessions yet.': 'No shell boxes yet' }, status: 'loaded', entryCount: 1 })
+    mount(
+      <SessionContext.Provider value={{ id: 'test', source: 'local', label: 'test', api: { git: { status: async () => null } } as any, status: 'connected' }}>
+        <SessionsSidebar
+          open
+          pinned={false}
+          liveActiveNodes={null}
+          onTogglePin={() => {}}
+          onClose={() => {}}
+          onFocusNode={() => {}}
+          onCloseSession={() => {}}
+          onRenameSession={() => {}}
+          onAiNameSession={() => {}}
+          onRowContextMenu={() => {}}
+          onProjectContextMenu={() => {}}
+          onSwitchProject={() => {}}
+          onAddToProject={() => {}}
+          onMoveToGroup={() => {}}
+          onAiNameGroup={() => {}}
+          onReorder={() => {}}
+          onReorderGroup={() => {}}
+          onReorderProject={() => {}}
+        />
+      </SessionContext.Provider>
+    )
+    expect(host?.textContent).toContain('No shell boxes yet')
+    act(() => useSchoolMode.setState({ enabled: true, hydrated: true, name: 'School mode' }))
+    expect(host?.textContent).toContain('No sessions yet.')
   })
 })
