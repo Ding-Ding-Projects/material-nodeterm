@@ -10,12 +10,14 @@ import { useSession } from '../session/session'
 import type { CanvasNode } from '../state/workspace'
 import { tooLargeSize, formatBytes } from '@shared/fsLimits'
 import { nodeHeaderFillStyle } from '../lib/nodeColor'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 /**
  * A Monaco diff editor node for a changed file. Staged diff = HEAD vs index;
  * unstaged diff = index vs working tree. Read-only.
  */
 export function DiffNode({ id, data, selected }: NodeProps<CanvasNode>) {
+  const vocab = useVocabularyMapper()
   const { deleteElements } = useReactFlow()
   // This node's core api (a stable context read). Captured by the mount effect's CLOSURE below —
   // deliberately NOT in its dep array: that effect creates/tears down Monaco models, and the
@@ -95,7 +97,7 @@ export function DiffNode({ id, data, selected }: NodeProps<CanvasNode>) {
       // sentinel — surface that instead of diffing the sentinel text as file content.
       const tooBig = tooLargeSize(orig) ?? tooLargeSize(mod)
       if (tooBig != null) {
-        setLoadError(`File too large to diff here (${formatBytes(tooBig)}).`)
+        setLoadError(vocab('File too large to diff here') + ` (${formatBytes(tooBig)}).`)
         return
       }
       const base = monaco.Uri.file(abs)
@@ -153,7 +155,7 @@ export function DiffNode({ id, data, selected }: NodeProps<CanvasNode>) {
         <span className="term-node__spacer" />
         <button
           className="term-node__close"
-          title="Close"
+          title={vocab('Close')}
           onClick={() => deleteElements({ nodes: [{ id }] })}
         >
           ×
@@ -164,7 +166,7 @@ export function DiffNode({ id, data, selected }: NodeProps<CanvasNode>) {
         <div className="editor-node__body nodrag">
           <div className="editor-node__image">
             <span className="editor-node__loading">
-              This file’s worktree was removed — it no longer exists.
+              {vocab('This file’s worktree was removed — it no longer exists.')}
             </span>
           </div>
         </div>

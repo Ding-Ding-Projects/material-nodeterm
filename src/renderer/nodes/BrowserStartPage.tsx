@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { searchOrUrl } from './browserUrl'
 import { SHORTCUTS, SiteIcon } from './browserIcons'
 import { useBrowserHistory } from '../state/browserHistory'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 function hostLabel(url: string): string {
   try {
@@ -13,6 +14,7 @@ function hostLabel(url: string): string {
 
 /** The Chrome-like new-tab page shown inside a blank browser node. */
 export function BrowserStartPage({ onNavigate }: { onNavigate: (url: string) => void }): JSX.Element {
+  const vocab = useVocabularyMapper()
   const [q, setQ] = useState('')
   const recent = useBrowserHistory((s) => s.recent(8))
   const submit = (): void => {
@@ -28,7 +30,7 @@ export function BrowserStartPage({ onNavigate }: { onNavigate: (url: string) => 
             className="startpage__search"
             spellCheck={false}
             value={q}
-            placeholder="Search Google or type a URL"
+            placeholder={vocab('Search Google or type a URL')}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') submit()
@@ -41,18 +43,18 @@ export function BrowserStartPage({ onNavigate }: { onNavigate: (url: string) => 
             <button
               key={s.url}
               className="startpage__tile"
-              title={s.label}
+              title={vocab(s.label)}
               onClick={() => onNavigate(s.url)}
             >
               <SiteIcon url={s.url} label={s.label} />
-              <span className="startpage__tile-label">{s.label}</span>
+              <span className="startpage__tile-label">{vocab(s.label)}</span>
             </button>
           ))}
         </div>
 
         {recent.length > 0 && (
           <div className="startpage__recent">
-            <div className="startpage__recent-title">Recent</div>
+            <div className="startpage__recent-title">{vocab('Recent')}</div>
             {recent.map((e) => (
               <button
                 key={`${e.url}-${e.ts}`}

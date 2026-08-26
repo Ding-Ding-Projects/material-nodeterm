@@ -8,6 +8,7 @@ import { nodeHeaderFillStyle } from '../lib/nodeColor'
 import { useProjects } from '../state/projects'
 import { BrowserSurface } from './BrowserSurface'
 import { BrowserProfilePicker } from './BrowserProfilePicker'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 /** Debounce for persisting a tab's live URL/title while the user navigates — matches the SSH
  *  mirror's 5s write-throttle intent (this repo's established pattern for "don't rewrite the
@@ -35,6 +36,7 @@ const NAV_PERSIST_DEBOUNCE_MS = 800
  * `shared/browser-profiles.ts` for the partition derivation this is built on.
  */
 export default function BrowserNode({ id, data, selected }: NodeProps<CanvasNode>) {
+  const vocab = useVocabularyMapper()
   const { deleteElements, updateNodeData } = useReactFlow()
   const headerFill = nodeHeaderFillStyle(data.color)
   const activeProjectId = useProjects((s) => s.activeProjectId)
@@ -168,20 +170,20 @@ export default function BrowserNode({ id, data, selected }: NodeProps<CanvasNode
         style={headerFill.style}
       >
         <span className="term-node__title-text" title={activeTab?.url || ''}>
-          {(data.title as string) || 'Browser'}
+          {(data.title as string) || vocab('Browser')}
         </span>
         <span className="term-node__spacer" />
         {isTemporary && (
           <button
             className="browser-node__keep"
-            title="This popup is temporary — it is not saved with the project. Keep it?"
+            title={vocab('This popup is temporary — it is not saved with the project. Keep it?')}
             onClick={(e) => {
               e.stopPropagation()
               updateNodeData(id, { temporary: undefined })
               markWorkspaceDirty()
             }}
           >
-            Temporary · Keep
+            {vocab('Temporary · Keep')}
           </button>
         )}
         <BrowserProfilePicker
@@ -208,12 +210,12 @@ export default function BrowserNode({ id, data, selected }: NodeProps<CanvasNode
             // silently merging into the default session.
           }}
         />
-        <button className="term-node__close" title="Close" onClick={() => deleteElements({ nodes: [{ id }] })}>
+        <button className="term-node__close" title={vocab('Close')} onClick={() => deleteElements({ nodes: [{ id }] })}>
           ×
         </button>
       </div>
 
-      <div className="browser-node__tabs nodrag" role="tablist" aria-label="Browser tabs">
+      <div className="browser-node__tabs nodrag" role="tablist" aria-label={vocab('Browser tabs')}>
         {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -224,11 +226,11 @@ export default function BrowserNode({ id, data, selected }: NodeProps<CanvasNode
               title={tab.url || tab.title}
               onClick={() => selectTab(tab.id)}
             >
-              <span className="browser-node__tab-title">{tab.title || tab.url || 'New Tab'}</span>
+              <span className="browser-node__tab-title">{tab.title || tab.url || vocab('New Tab')}</span>
               <span
                 role="button"
                 tabIndex={0}
-                aria-label={`Close tab ${tab.title || 'New Tab'}`}
+                aria-label={`${vocab('Close tab')} ${tab.title || vocab('New Tab')}`}
                 className="browser-node__tab-close"
                 onClick={(e) => closeTab(tab.id, e)}
                 onKeyDown={(e) => {
@@ -245,8 +247,8 @@ export default function BrowserNode({ id, data, selected }: NodeProps<CanvasNode
         <button
           type="button"
           className="browser-node__tab-new"
-          title="New tab"
-          aria-label="New tab"
+          title={vocab('New tab')}
+          aria-label={vocab('New tab')}
           onClick={newTab}
         >
           +

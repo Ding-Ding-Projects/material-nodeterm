@@ -6,6 +6,7 @@ import type { ChatMessage } from '@shared/types'
 import { hintLabel } from '@shared/platform-utils'
 import { E_UNSUPPORTED } from '@shared/rpc'
 import { TextArea } from '@renderer/ui/md3'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 // Memoized bubble: marked+DOMPurify re-ran for EVERY message on each ChatPanel render (each
 // turn-finish reload, each keystroke re-render). Text is stable per message, so cache per text.
@@ -58,6 +59,7 @@ const EMPTY_TEXT: Record<LoadState, { title: string; detail?: string }> = {
  * (working -> idle); live streaming is a later phase. Replaces the markdown-of-output overlay.
  */
 export function ChatPanel({ nodeId, sessionId, cwd, accountId }: ChatPanelProps) {
+  const vocab = useVocabularyMapper()
   // This node's core api (stable for the session — the chat transcript and the tmux session
   // both live on the core this panel's project belongs to).
   const { api } = useSession()
@@ -125,19 +127,19 @@ export function ChatPanel({ nodeId, sessionId, cwd, accountId }: ChatPanelProps)
   return (
     <div className="term-chat nodrag nowheel">
       <div className="term-chat__bar">
-        <span>Chat</span>
-        <span className="term-chat__hint">{hintLabel('⌘M to exit')}</span>
+        <span>{vocab('Chat')}</span>
+        <span className="term-chat__hint">{vocab(hintLabel('⌘M to exit'))}</span>
       </div>
       <div className="term-chat__msgs" ref={msgsRef}>
         {messages.length === 0 && loadState !== 'loading' && (
           <div className="term-chat__empty">
-            <div>{EMPTY_TEXT[loadState].title}</div>
+            <div>{vocab(EMPTY_TEXT[loadState].title)}</div>
             {EMPTY_TEXT[loadState].detail && (
-              <div className="term-chat__empty-detail">{EMPTY_TEXT[loadState].detail}</div>
+              <div className="term-chat__empty-detail">{vocab(EMPTY_TEXT[loadState].detail)}</div>
             )}
             {loadState !== 'unsupported' && loadState !== 'ok' && (
               <button className="term-chat__retry" onClick={load}>
-                Retry
+                {vocab('Retry')}
               </button>
             )}
           </div>
@@ -168,10 +170,10 @@ export function ChatPanel({ nodeId, sessionId, cwd, accountId }: ChatPanelProps)
           onKeyDown={onKeyDown}
           placeholder={
             readonly
-              ? "Can't write to this session"
+              ? vocab("Can't write to this session")
               : working
-                ? 'Claude is working…'
-                : 'Message Claude…  (Enter to send)'
+                ? vocab('Claude is working…')
+                : vocab('Message Claude…  (Enter to send)')
           }
           disabled={readonly || working}
           rows={2}

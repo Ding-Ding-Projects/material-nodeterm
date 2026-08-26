@@ -7,12 +7,14 @@ import { alphaTint } from '../components/color/tint'
 import { EditableNodeTitle } from '../components/EditableNodeTitle'
 import { nodeHeaderFillStyle } from '../lib/nodeColor'
 import { TextArea } from '@renderer/ui/md3'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 /**
  * A sticky note node: a colored, resizable card with free-text content.
  * No PTY — purely a visual note for organizing the canvas (handy for ADHD users).
  */
 export function StickyNode({ id, data, selected }: NodeProps<CanvasNode>) {
+  const vocab = useVocabularyMapper()
   const { updateNodeData, deleteElements, setNodes } = useReactFlow()
   /** Viewport anchor for the colour surface, or null when it is closed. Coordinates rather than a
    *  boolean because the surface is a body portal (see ColorMenu). */
@@ -73,27 +75,27 @@ export function StickyNode({ id, data, selected }: NodeProps<CanvasNode>) {
         type="source"
         position={Position.Right}
         className="bridge-handle bridge-handle--out"
-        data-tip="Link out — drag to a terminal to attach this note as context"
+        data-tip={vocab('Link out — drag to a terminal to attach this note as context')}
       />
       <Handle
         id="link-in"
         type="target"
         position={Position.Left}
         className="bridge-handle bridge-handle--in"
-        data-tip="Link in — drop a link here to attach this note as context"
+        data-tip={vocab('Link in — drop a link here to attach this note as context')}
       />
 
       <div
         className={`sticky-node__header${headerFill?.filled ? ' sticky-node__header--filled' : ''}`}
         style={headerFill?.filled ? headerFill.style : { background: alphaTint(data.color, 51 / 255) }}
       >
-        <button className="term-node__collapse" title={collapsed ? 'Expand' : 'Collapse'} onClick={toggleCollapse}>
+        <button className="term-node__collapse" title={vocab(collapsed ? 'Expand' : 'Collapse')} onClick={toggleCollapse}>
           {collapsed ? '▸' : '▾'}
         </button>
         <button
           className="term-node__color"
           style={{ background: data.color }}
-          title="Color"
+          title={vocab('Color')}
           onClick={(e) => {
             // Anchor to the chip's own box, not the pointer: the surface is a body portal, and a
             // colour applied live re-renders this node — an anchor derived from the click point
@@ -116,8 +118,8 @@ export function StickyNode({ id, data, selected }: NodeProps<CanvasNode>) {
         <EditableNodeTitle
           value={(data.title as string) ?? ''}
           onChange={(next) => updateNodeData(id, { title: next })}
-          emptyLabel="Note"
-          ariaLabel="Note name"
+          emptyLabel={vocab('Note')}
+          ariaLabel={vocab('Note name')}
           rejectEmpty={false}
           onEditingChange={setEditingTitle}
         />
@@ -128,7 +130,7 @@ export function StickyNode({ id, data, selected }: NodeProps<CanvasNode>) {
         {!editingTitle && <span className="term-node__spacer" />}
         <button
           className="term-node__close"
-          title="Close"
+          title={vocab('Close')}
           onClick={() => deleteElements({ nodes: [{ id }] })}
         >
           ×
@@ -138,7 +140,7 @@ export function StickyNode({ id, data, selected }: NodeProps<CanvasNode>) {
       <TextArea
         className="sticky-node__body nodrag nowheel"
         value={data.text ?? ''}
-        placeholder="Write a note…"
+        placeholder={vocab('Write a note…')}
         spellCheck={false}
         onChange={(e) => updateNodeData(id, { text: e.target.value })}
       />

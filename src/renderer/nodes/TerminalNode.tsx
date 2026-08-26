@@ -218,6 +218,7 @@ import {
 } from '../terminal/agent-cold-relaunch'
 import { sameTerminalCoState } from '../terminal/co-state-equality'
 import { useLocalizedVocabularyText } from '../lib/personalVocabulary/useLocalizedVocabularyText'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { ColumnPill } from '../components/kanban/ColumnPill'
 import { BoardLogPanel } from '../components/kanban/BoardLogPanel'
 import { AgentMascot } from './AgentMascot'
@@ -1030,6 +1031,7 @@ export function TerminalNode({
   positionAbsoluteY
 }: NodeProps<CanvasNode>) {
   const profileText = useLocalizedVocabularyText()
+  const vocab = useVocabularyMapper()
   const agentRelaunchRecoveryText = (error: AgentColdRelaunchRecoveryError): string => {
     switch (error.code) {
       case 'custom-agent-not-configured':
@@ -4836,9 +4838,11 @@ export function TerminalNode({
           position={Position.Right}
           className="bridge-handle bridge-handle--out"
           data-tip={
-            contextLinkCapable
-              ? "Link out — drag to another Claude node so they can read each other's context"
-              : 'Link out — drag to a sticky note to attach it as context'
+            vocab(
+              contextLinkCapable
+                ? "Link out — drag to another Claude node so they can read each other's context"
+                : 'Link out — drag to a sticky note to attach it as context'
+            )
           }
         />
         <Handle
@@ -4847,9 +4851,11 @@ export function TerminalNode({
           position={Position.Left}
           className="bridge-handle bridge-handle--in"
           data-tip={
-            contextLinkCapable
-              ? 'Link in — drop a link here to share context with this Claude session'
-              : 'Link in — drop a sticky note link here to attach it as context'
+            vocab(
+              contextLinkCapable
+                ? 'Link in — drop a link here to share context with this Claude session'
+                : 'Link in — drop a sticky note link here to attach it as context'
+            )
           }
         />
 
@@ -4861,7 +4867,7 @@ export function TerminalNode({
         >
           <button
             className="term-node__collapse"
-            title={collapsed ? 'Expand' : 'Collapse'}
+            title={vocab(collapsed ? 'Expand' : 'Collapse')}
             onClick={toggleCollapse}
           >
             {collapsed ? '▸' : '▾'}
@@ -4869,7 +4875,7 @@ export function TerminalNode({
           <button
             className="term-node__color"
             style={{ background: data.color }}
-            title="Color"
+            title={vocab('Color')}
             onClick={(e) => {
               const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
               setColorAnchor((a) => (a ? null : { x: r.left, y: r.bottom }))
@@ -4888,8 +4894,8 @@ export function TerminalNode({
             <button
               className="term-node__folder-drag nodrag"
               draggable
-              title={`Drag to an Explorer folder to open a new ${data.title} there`}
-              aria-label={`Choose an Explorer folder for a new ${data.title} agent`}
+              title={`${vocab('Drag to an Explorer folder to open a new')} ${data.title} ${vocab('there')}`}
+              aria-label={`${vocab('Choose an Explorer folder for a new')} ${data.title} ${vocab('agent')}`}
               onDragStart={(event) => {
                 event.stopPropagation()
                 event.dataTransfer.effectAllowed = 'copy'
@@ -4937,7 +4943,7 @@ export function TerminalNode({
             <span
               className="term-node__title-text nodrag"
               data-appearance-id={appearanceId('node', id)}
-              title="Click to rename"
+              title={vocab('Click to rename')}
               onClick={() => {
                 titleEditStartRef.current = data.title as string
                 setEditingTitle(true)
@@ -4992,10 +4998,10 @@ export function TerminalNode({
           {status?.state === 'working' && (
             <span
               className="term-node__status term-node__status--busy"
-              title={`${agentLabel} is working`}
+              title={`${agentLabel} ${vocab('is working')}`}
             >
               <AgentMascot agentId={agentId} />
-              RUNNING
+              {vocab('RUNNING')}
             </span>
           )}
           {/* Eco: this node's CLI was exited to reclaim its RAM while nobody was looking. The tmux
@@ -5006,14 +5012,14 @@ export function TerminalNode({
           {status?.hibernated && (
             <button
               className="term-node__status term-node__status--sleeping nodrag"
-              title="Agent hibernated to save memory — click to resume"
+              title={vocab('Agent hibernated to save memory — click to resume')}
               onClick={(e) => {
                 e.stopPropagation()
                 wakeRef.current()
               }}
             >
               <span className="term-node__status-dot" />
-              SLEEPING
+              {vocab('SLEEPING')}
             </button>
           )}
           {/* Dismissed (cron/schedule) entries are retained as a fact but hidden everywhere they
@@ -5022,7 +5028,7 @@ export function TerminalNode({
           {showLoop && status?.loop && !status.loop.dismissed && (
             <span
               className="term-node__status term-node__status--loop"
-              title={`Running /${status.loop.kind}`}
+              title={`${vocab('Running')} /${status.loop.kind}`}
             >
               <span className="term-node__status-dot" />
               {status.loop.kind.toUpperCase()}
@@ -5039,15 +5045,15 @@ export function TerminalNode({
               className="term-node__status term-node__status--queued nodrag"
               title={
                 pendingLaunchError ??
-                `Waiting for ${pendingWaitingOn || 'the selected stations'} to finish, then ${pendingLaunchSummary}.`
+                `${vocab('Waiting for')} ${pendingWaitingOn || vocab('the selected stations')} ${vocab('to finish, then')} ${pendingLaunchSummary}.`
               }
             >
               <span className="term-node__status-dot" />
-              {pendingLaunchExecuting ? 'LAUNCHING' : pendingLaunchError ? 'FAILED' : 'QUEUED'}
+              {vocab(pendingLaunchExecuting ? 'LAUNCHING' : pendingLaunchError ? 'FAILED' : 'QUEUED')}
               <button
                 className="term-node__queued-run"
                 disabled={pendingLaunchExecuting}
-                title={pendingLaunchError ? 'Retry queued launch' : 'Run now without waiting'}
+                title={vocab(pendingLaunchError ? 'Retry queued launch' : 'Run now without waiting')}
                 onClick={(e) => {
                   e.stopPropagation()
                   runPendingLaunchNow()
@@ -5060,10 +5066,10 @@ export function TerminalNode({
           {(status?.state === 'waiting' || status?.state === 'blocked') && (
             <span
               className="term-node__status term-node__status--attention"
-              title={`${agentLabel} needs your input`}
+              title={`${agentLabel} ${vocab('needs your input')}`}
             >
               <span className="term-node__status-dot" />
-              NEEDS YOU
+              {vocab('NEEDS YOU')}
             </span>
           )}
           {/* Deterministic hook-reply approvals (docs/hook-reply-approvals.md): when the node is
@@ -5074,7 +5080,7 @@ export function TerminalNode({
             <span className="term-node__approve nodrag">
               <button
                 className="term-node__approve-btn term-node__approve-btn--allow"
-                title="Approve this permission request"
+                title={vocab('Approve this permission request')}
                 onClick={() =>
                   void window.nodeTerminal.answerPermission({
                     nodeId: id,
@@ -5083,11 +5089,11 @@ export function TerminalNode({
                   })
                 }
               >
-                ✓ Approve
+                ✓ {vocab('Approve')}
               </button>
               <button
                 className="term-node__approve-btn term-node__approve-btn--deny"
-                title="Deny this permission request"
+                title={vocab('Deny this permission request')}
                 onClick={() =>
                   void window.nodeTerminal.answerPermission({
                     nodeId: id,
@@ -5096,22 +5102,22 @@ export function TerminalNode({
                   })
                 }
               >
-                ✕ Deny
+                ✕ {vocab('Deny')}
               </button>
             </span>
           )}
           {isUnread && (
             <span
               className="term-node__status term-node__status--unread"
-              title="Finished — click to mark read"
+              title={vocab('Finished — click to mark read')}
             >
               <span className="term-node__status-dot" />
-              unread
+              {vocab('unread')}
             </span>
           )}
           {!editingTitle && <span className="term-node__spacer" />}
           {canMoveIntoWorktree && (
-            <Tooltip label="Move this terminal into the group's worktree">
+            <Tooltip label={vocab("Move this terminal into the group's worktree")}>
               <button
                 className="term-node__move-worktree nodrag"
                 onClick={() => moveIntoWorktreeHandler?.(id)}
@@ -5127,7 +5133,7 @@ export function TerminalNode({
             view is the last thing a user wants to hunt for. Distinct from "Restart agent",
             which quits the CLI itself; this touches nothing but the viewer. */}
           {!isHidden('refresh', hiddenHeaderButtons) && (
-            <Tooltip label="Refresh — rebuild this view; the session keeps running">
+            <Tooltip label={vocab('Refresh — rebuild this view; the session keeps running')}>
               <button
                 className="term-node__refresh nodrag"
                 onClick={(e) => {
@@ -5155,7 +5161,7 @@ export function TerminalNode({
             relay/server tab, whose core is another machine entirely and which `data.remote`
             does not report (nothing sets that field). */}
           {canEscapeToWidget({ browserRuntime: isBrowserRuntime(), remoteSession, sessionSource: session.source }) && (
-            <Tooltip label="Escape to widget — always-on-top window, same live session">
+            <Tooltip label={vocab('Escape to widget — always-on-top window, same live session')}>
               <button
                 className="term-node__widget-escape nodrag"
                 onClick={(e) => {
@@ -5171,7 +5177,7 @@ export function TerminalNode({
             claude-transcript fact (see the `useTerminalSearch` call above), so keying the label on
             the meter promised a codex/gemini node a conversation search it does not run. */}
           <Tooltip
-            label={claudeTranscript ? 'Search terminal + conversation' : 'Search this terminal'}
+            label={vocab(claudeTranscript ? 'Search terminal + conversation' : 'Search this terminal')}
           >
             <button
               className="term-node__search nodrag"
@@ -5182,7 +5188,7 @@ export function TerminalNode({
             </button>
           </Tooltip>
           {!isHidden('mic', hiddenHeaderButtons) && (
-            <Tooltip label="Dictate into this terminal">
+            <Tooltip label={vocab('Dictate into this terminal')}>
               <button
                 className="term-node__mic nodrag"
                 onClick={(e) => {
@@ -5199,14 +5205,14 @@ export function TerminalNode({
             </Tooltip>
           )}
           {!isHidden('ai-name', hiddenHeaderButtons) && (
-            <Tooltip label="Name with AI (from terminal output)">
+            <Tooltip label={vocab('Name with AI (from terminal output)')}>
               <button className="term-node__ai nodrag" disabled={naming} onClick={nameWithAi}>
                 {naming ? '…' : '✦'}
               </button>
             </Tooltip>
           )}
           {!isHidden('comments', hiddenHeaderButtons) && (
-            <Tooltip label="Comments & activity">
+            <Tooltip label={vocab('Comments & activity')}>
               <button
                 className="term-node__chat nodrag"
                 aria-pressed={commentsOpen}
@@ -5218,7 +5224,7 @@ export function TerminalNode({
           )}
           <button
             className="term-node__close"
-            title="Close (ends the session)"
+            title={vocab('Close (ends the session)')}
             // React Flow's onBeforeDelete boundary asks first; Canvas.deleteNodes ends the session
             // only after authorization. Destroying here would make the confirmation cosmetic.
             onClick={() => deleteElements({ nodes: [{ id }] })}
@@ -5300,7 +5306,7 @@ export function TerminalNode({
             has always treated it as hidden too; this feature only agrees with it. Not a bug. */}
           {offscreenDown && !nodeLocked && (
             <div className="term-node__offscreen nodrag">
-              <span>Session running — reattaches on view</span>
+              <span>{vocab('Session running — reattaches on view')}</span>
             </div>
           )}
           {/* Toy-lock enforcement (docs/toy-locks.md) — the fix for "a locked node does not
@@ -5326,7 +5332,7 @@ export function TerminalNode({
                 }
               }}
             >
-              <span>🔒 Locked — click to unlock</span>
+              <span>🔒 {vocab('Locked — click to unlock')}</span>
             </div>
           )}
           {nodeUnlockPromptAnchor &&
@@ -5350,14 +5356,14 @@ export function TerminalNode({
             })()}
           {co.closed && (
             <div className="term-node__closed nodrag">
-              Closed by {closedName} — this session was ended.
+              {vocab('Closed by')} {closedName} — {vocab('this session was ended.')}
             </div>
           )}
           {!co.closed && co.ended && (
             <div className="term-node__closed nodrag">
-              <span>Session ended — the node was moved and never came back.</span>
+              <span>{vocab('Session ended — the node was moved and never came back.')}</span>
               <button className="term-node__reopen" onClick={reopenEnded}>
-                Reopen
+                {vocab('Reopen')}
               </button>
             </div>
           )}
@@ -5417,21 +5423,21 @@ export function TerminalNode({
                 disabled={pendingLaunchExecuting}
                 onClick={runPendingLaunchNow}
               >
-                {pendingLaunchExecuting ? 'Launching…' : 'Retry queued launch'}
+                {pendingLaunchExecuting ? vocab('Launching…') : vocab('Retry queued launch')}
               </button>
             </div>
           )}
           {!co.closed && !co.ended && !co.spawnError && !co.agentRelaunchError && co.offline && (
             <div className="term-node__closed nodrag">
               <span>
-                Not connected to{' '}
+                {vocab('Not connected to')}{' '}
                 {data.ssh
                   ? `${(data.ssh as SshConnection).user}@${(data.ssh as SshConnection).host}`
-                  : 'the host'}{' '}
-                — this session was not started locally.
+                  : vocab('the host')}{' '}
+                — {vocab('this session was not started locally.')}
               </span>
               <button className="term-node__reopen" onClick={reconnectOffline}>
-                Reconnect
+                {vocab('Reconnect')}
               </button>
             </div>
           )}
@@ -5460,7 +5466,7 @@ export function TerminalNode({
                   })
                 )
               }}
-              title="Click to type · drag to move · scroll terminal"
+              title={vocab('Click to type · drag to move · scroll terminal')}
             />
           )}
           {mdMode &&
@@ -5476,7 +5482,7 @@ export function TerminalNode({
             ) : (
               <div className="term-md nodrag nowheel">
                 <div className="term-md__bar">
-                  <span>Markdown</span>
+                  <span>{vocab('Markdown')}</span>
                   <span className="term-md__hint">{hintLabel('⌘M to exit')}</span>
                 </div>
                 <div className="term-md__content" dangerouslySetInnerHTML={{ __html: mdHtml }} />

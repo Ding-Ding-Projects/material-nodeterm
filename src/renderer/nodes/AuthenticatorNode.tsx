@@ -6,6 +6,7 @@ import type { CredentialCode } from '@shared/password-manager'
 import { useProjects } from '../state/projects'
 import { nodeHeaderFillStyle } from '../lib/nodeColor'
 import { EditableNodeTitle } from '../components/EditableNodeTitle'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 /**
  * The built-in authenticator, on the canvas.
@@ -60,6 +61,7 @@ interface VaultTotpRow {
 }
 
 export default function AuthenticatorNode({ id, data, selected }: NodeProps<CanvasNode>) {
+  const vocab = useVocabularyMapper()
   const { deleteElements, updateNodeData } = useReactFlow()
   const [entries, setEntries] = useState<AuthenticatorEntry[]>([])
   const [codes, setCodes] = useState<Record<string, AuthenticatorCode>>({})
@@ -92,7 +94,7 @@ export default function AuthenticatorNode({ id, data, selected }: NodeProps<Canv
         // Not "no codes": the vault has some and this process cannot read them yet. Saying so is
         // the whole difference between a locked door and an empty room.
         setVaultRows([])
-        setVaultNote('This project’s password manager is locked, so its codes are hidden.')
+        setVaultNote(vocab('This project’s password manager is locked, so its codes are hidden.'))
         return
       }
       setVaultNote(null)
@@ -115,7 +117,7 @@ export default function AuthenticatorNode({ id, data, selected }: NodeProps<Canv
       setVaultRows(rows)
     } catch {
       setVaultRows([])
-      setVaultNote('Could not read this project’s password manager.')
+      setVaultNote(vocab('Could not read this project’s password manager.'))
     }
   }, [projectId])
 
@@ -143,7 +145,7 @@ export default function AuthenticatorNode({ id, data, selected }: NodeProps<Canv
     } catch {
       // A read failure is reported as a read failure. An empty list here would say "you have no
       // generators", which is a different and much worse thing to tell somebody who has several.
-      setLoadError('Could not read this computer’s authenticator store.')
+      setLoadError(vocab('Could not read this computer’s authenticator store.'))
     }
   }, [])
 
@@ -208,18 +210,18 @@ export default function AuthenticatorNode({ id, data, selected }: NodeProps<Canv
         <EditableNodeTitle
           value={(data.title as string) ?? ''}
           onChange={(next) => updateNodeData(id, { title: next })}
-          emptyLabel="Authenticator"
-          title="Click to rename"
-          ariaLabel="Authenticator node name"
+          emptyLabel={vocab('Authenticator')}
+          title={vocab('Click to rename')}
+          ariaLabel={vocab('Authenticator node name')}
           rejectEmpty={false}
         />
         <span className="term-node__spacer" />
-        <button className="term-node__close" title="Refresh the list" onClick={() => void load()}>
+        <button className="term-node__close" title={vocab('Refresh the list')} onClick={() => void load()}>
           ⟳
         </button>
         <button
           className="term-node__close"
-          title="Close"
+          title={vocab('Close')}
           onClick={() => void deleteElements({ nodes: [{ id }] })}
         >
           ×
@@ -234,7 +236,7 @@ export default function AuthenticatorNode({ id, data, selected }: NodeProps<Canv
         ) : rows.length === 0 && vaultRows.length === 0 ? (
           <p className="authenticator-node__empty">
             {vaultNote ??
-              'No generators yet. Add one in Settings under Authenticator, or add a credential with a TOTP secret to this project’s password manager.'}
+              vocab('No generators yet. Add one in Settings under Authenticator, or add a credential with a TOTP secret to this project’s password manager.')}
           </p>
         ) : (
           <ul className="authenticator-node__list">
@@ -250,19 +252,19 @@ export default function AuthenticatorNode({ id, data, selected }: NodeProps<Canv
                     className="authenticator-node__code"
                     // The code IS the button: it is the one thing anybody wants from this row, and
                     // a separate copy icon beside it is a smaller target for the same action.
-                    title={code ? 'Copy this code' : 'Waiting for a code'}
+                    title={vocab(code ? 'Copy this code' : 'Waiting for a code')}
                     disabled={!code}
                     onClick={() => code && void copy(entry.id, code)}
                   >
-                    {copied === entry.id ? 'Copied' : (code ?? '••••••')}
+                    {copied === entry.id ? vocab('Copied') : (code ?? '••••••')}
                   </button>
                   {/* Seconds as TEXT beside the bar: a bar alone is colour and length only, which
                       is unreadable to somebody who cannot see it and ambiguous to everybody at a
                       glance. */}
                   <span
                     className="authenticator-node__countdown"
-                    title={`New code in ${secondsLeft}s`}
-                    aria-label={`New code in ${secondsLeft} seconds`}
+                    title={`${vocab('New code in')} ${secondsLeft}s`}
+                    aria-label={`${vocab('New code in')} ${secondsLeft} ${vocab('seconds')}`}
                   >
                     <span
                       className="authenticator-node__countdown-bar"
@@ -283,15 +285,15 @@ export default function AuthenticatorNode({ id, data, selected }: NodeProps<Canv
                 </div>
                 <button
                   className="authenticator-node__code"
-                  title="Copy this code"
+                  title={vocab('Copy this code')}
                   onClick={() => void copy(`${row.managerId}/${row.credentialId}`, row.code.code)}
                 >
-                  {copied === `${row.managerId}/${row.credentialId}` ? 'Copied' : row.code.code}
+                  {copied === `${row.managerId}/${row.credentialId}` ? vocab('Copied') : row.code.code}
                 </button>
                 <span
                   className="authenticator-node__countdown"
-                  title={`New code in ${vaultSecondsLeft(row.code, now)}s`}
-                  aria-label={`New code in ${vaultSecondsLeft(row.code, now)} seconds`}
+                  title={`${vocab('New code in')} ${vaultSecondsLeft(row.code, now)}s`}
+                  aria-label={`${vocab('New code in')} ${vaultSecondsLeft(row.code, now)} ${vocab('seconds')}`}
                 >
                   <span
                     className="authenticator-node__countdown-bar"

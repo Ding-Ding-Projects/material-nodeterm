@@ -3,6 +3,7 @@ import { Handle, NodeResizer, Position, useReactFlow, type NodeProps } from '@xy
 import type { CanvasNode } from '../state/workspace'
 import { useProjects } from '../state/projects'
 import { nodeHeaderFillStyle } from '../lib/nodeColor'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 /**
  * A video player node. A local file is served over the `nt-media://` protocol (allowlisted on
@@ -13,6 +14,7 @@ import { nodeHeaderFillStyle } from '../lib/nodeColor'
  * frame/header mirror {@link EditorNode} for consistent drag/resize/close behavior.
  */
 export default function VideoNode({ id, data, selected }: NodeProps<CanvasNode>) {
+  const vocab = useVocabularyMapper()
   const { deleteElements } = useReactFlow()
   const [src, setSrc] = useState('')
   const [error, setError] = useState('')
@@ -28,7 +30,7 @@ export default function VideoNode({ id, data, selected }: NodeProps<CanvasNode>)
       // Remote fetch can take a while for a large file — say what the wait is.
       const projectId = useProjects.getState().activeProjectId
       if (!projectId) {
-        setError('Couldn’t load this video.')
+        setError(vocab('Couldn’t load this video.'))
         return
       }
       setFetching(true)
@@ -43,7 +45,7 @@ export default function VideoNode({ id, data, selected }: NodeProps<CanvasNode>)
         .catch(() => {
           if (!alive) return
           setFetching(false)
-          setError('Couldn’t load this video.')
+          setError(vocab('Couldn’t load this video.'))
         })
       return () => {
         alive = false
@@ -55,7 +57,7 @@ export default function VideoNode({ id, data, selected }: NodeProps<CanvasNode>)
         if (alive) setSrc(url)
       })
       .catch(() => {
-        if (alive) setError('Couldn’t load this video.')
+        if (alive) setError(vocab('Couldn’t load this video.'))
       })
     return () => {
       alive = false
@@ -94,7 +96,7 @@ export default function VideoNode({ id, data, selected }: NodeProps<CanvasNode>)
         <span className="term-node__spacer" />
         <button
           className="term-node__close"
-          title="Close"
+          title={vocab('Close')}
           onClick={() => deleteElements({ nodes: [{ id }] })}
         >
           ×
@@ -112,7 +114,7 @@ export default function VideoNode({ id, data, selected }: NodeProps<CanvasNode>)
             />
           ) : (
             <span className="editor-node__loading">
-              {error || (fetching ? 'Fetching from the host…' : 'Loading…')}
+              {error || (fetching ? vocab('Fetching from the host…') : vocab('Loading…'))}
             </span>
           )}
         </div>

@@ -20,6 +20,7 @@ import { Switch } from '../ui/Switch'
 import { AnchoredRegexBuilder } from '../components/regex/AnchoredRegexBuilder'
 import { useRegexSearchField } from '@renderer/lib/regex/useRegexSearchField'
 import { MaterialSymbol } from '../components/MaterialSymbol'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 /**
  * A GUI for authoring a Windows NSIS installer script for ANOTHER project.
@@ -44,6 +45,7 @@ import { MaterialSymbol } from '../components/MaterialSymbol'
  * still missing -- rather than an empty box.
  */
 export default function NsisInstallerNode({ id, data, selected }: NodeProps<CanvasNode>) {
+  const vocab = useVocabularyMapper()
   const { deleteElements, updateNodeData } = useReactFlow()
   const spec: NsisSpec = (data.nsisSpec as NsisSpec | undefined) ?? defaultNsisSpec()
   const local: NsisLocalPaths =
@@ -131,15 +133,15 @@ export default function NsisInstallerNode({ id, data, selected }: NodeProps<Canv
         <EditableNodeTitle
           value={(data.title as string) ?? ''}
           onChange={(next) => updateNodeData(id, { title: next })}
-          emptyLabel="Installer builder"
-          title="Click to rename"
-          ariaLabel="Installer builder name"
+          emptyLabel={vocab('Installer builder')}
+          title={vocab('Click to rename')}
+          ariaLabel={vocab('Installer builder name')}
           rejectEmpty={false}
         />
         <span className="term-node__spacer" />
         <button
           className="term-node__close"
-          title="Close"
+          title={vocab('Close')}
           onClick={() => deleteElements({ nodes: [{ id }] })}
         >
           ×
@@ -148,177 +150,176 @@ export default function NsisInstallerNode({ id, data, selected }: NodeProps<Canv
 
       <div className="nsis-node__body nodrag nowheel">
         <label className="nsis-node__field">
-          <span>App name</span>
+          <span>{vocab('App name')}</span>
           <Input
             value={spec.appName}
             onChange={(e) => patchSpec({ appName: e.target.value })}
-            placeholder="Your App"
-            aria-label="App name"
+            placeholder={vocab('Your App')}
+            aria-label={vocab('App name')}
           />
         </label>
 
         <label className="nsis-node__field">
-          <span>Version</span>
+          <span>{vocab('Version')}</span>
           <Input
             value={spec.version}
             onChange={(e) => patchSpec({ version: e.target.value })}
             placeholder="1.0.0"
-            aria-label="Version"
+            aria-label={vocab('Version')}
           />
         </label>
 
         <label className="nsis-node__field">
-          <span>Publisher</span>
+          <span>{vocab('Publisher')}</span>
           <Input
             value={spec.publisher}
             onChange={(e) => patchSpec({ publisher: e.target.value })}
-            placeholder="Your company (optional)"
-            aria-label="Publisher"
+            placeholder={vocab('Your company (optional)')}
+            aria-label={vocab('Publisher')}
           />
         </label>
 
         <label className="nsis-node__field">
-          <span>Output filename</span>
+          <span>{vocab('Output filename')}</span>
           <Input
             value={spec.outputFileName}
             onChange={(e) => patchSpec({ outputFileName: e.target.value })}
-            placeholder={(spec.appName.trim() || 'App') + '-Setup.exe'}
-            aria-label="Output filename"
+            placeholder={(spec.appName.trim() || vocab('App')) + '-Setup.exe'}
+            aria-label={vocab('Output filename')}
           />
         </label>
 
         <label className="nsis-node__field">
-          <span>Install to</span>
+          <span>{vocab('Install to')}</span>
           <Select
             value={spec.installRoot}
             onChange={(e) => patchSpec({ installRoot: e.target.value as NsisSpec['installRoot'] })}
-            aria-label="Install location"
+            aria-label={vocab('Install location')}
           >
             {NSIS_INSTALL_ROOTS.map((root) => (
               <option key={root} value={root}>
-                {NSIS_INSTALL_ROOT_LABELS[root]}
+                {vocab(NSIS_INSTALL_ROOT_LABELS[root])}
               </option>
             ))}
           </Select>
         </label>
 
         <label className="nsis-node__field">
-          <span>Compression</span>
+          <span>{vocab('Compression')}</span>
           <Select
             value={spec.compression}
             onChange={(e) => patchSpec({ compression: e.target.value as NsisSpec['compression'] })}
-            aria-label="Compression"
+            aria-label={vocab('Compression')}
           >
             {NSIS_COMPRESSIONS.map((c) => (
               <option key={c} value={c}>
-                {NSIS_COMPRESSION_LABELS[c]}
+                {vocab(NSIS_COMPRESSION_LABELS[c])}
               </option>
             ))}
           </Select>
         </label>
 
         <div className="nsis-node__row">
-          <span>Install for every account (needs elevation)</span>
+          <span>{vocab('Install for every account (needs elevation)')}</span>
           <Switch
             checked={spec.perMachine}
             onChange={(v) => patchSpec({ perMachine: v })}
-            ariaLabel="Install for every account"
+            ariaLabel={vocab('Install for every account')}
           />
         </div>
         <div className="nsis-node__row">
-          <span>Create desktop shortcut</span>
+          <span>{vocab('Create desktop shortcut')}</span>
           <Switch
             checked={spec.createDesktopShortcut}
             onChange={(v) => patchSpec({ createDesktopShortcut: v })}
-            ariaLabel="Create desktop shortcut"
+            ariaLabel={vocab('Create desktop shortcut')}
           />
         </div>
         <div className="nsis-node__row">
-          <span>Create Start Menu shortcut</span>
+          <span>{vocab('Create Start Menu shortcut')}</span>
           <Switch
             checked={spec.createStartMenuShortcut}
             onChange={(v) => patchSpec({ createStartMenuShortcut: v })}
-            ariaLabel="Create Start Menu shortcut"
+            ariaLabel={vocab('Create Start Menu shortcut')}
           />
         </div>
         <div className="nsis-node__row">
-          <span>Include an uninstaller</span>
+          <span>{vocab('Include an uninstaller')}</span>
           <Switch
             checked={spec.includeUninstaller}
             onChange={(v) => patchSpec({ includeUninstaller: v })}
-            ariaLabel="Include an uninstaller"
+            ariaLabel={vocab('Include an uninstaller')}
           />
         </div>
 
         <div className="nsis-node__field">
-          <span>License file (optional)</span>
+          <span>{vocab('License file (optional)')}</span>
           <div className="nsis-node__path-row">
             <Input
               value={local.licensePath ?? ''}
               onChange={(e) => patchLocal({ licensePath: e.target.value || undefined })}
-              placeholder="Not set -- install skips the license page"
-              aria-label="License file path"
+              placeholder={vocab('Not set -- install skips the license page')}
+              aria-label={vocab('License file path')}
             />
             <button
               type="button"
               className="nsis-node__browse"
               onClick={browseLicense}
               disabled={browseBusy === 'license'}
-              title="Browse for a license file"
+              title={vocab('Browse for a license file')}
             >
-              Browse…
+              {vocab('Browse…')}
             </button>
           </div>
         </div>
 
         <div className="nsis-node__field">
-          <span>Icon file (optional)</span>
+          <span>{vocab('Icon file (optional)')}</span>
           <div className="nsis-node__path-row">
             <Input
               value={local.iconPath ?? ''}
               onChange={(e) => patchLocal({ iconPath: e.target.value || undefined })}
-              placeholder="Not set -- uses NSIS's default icon"
-              aria-label="Icon file path"
+              placeholder={vocab("Not set -- uses NSIS's default icon")}
+              aria-label={vocab('Icon file path')}
             />
             <button
               type="button"
               className="nsis-node__browse"
               onClick={browseIcon}
               disabled={browseBusy === 'icon'}
-              title="Browse for a .ico file"
+              title={vocab('Browse for a .ico file')}
             >
-              Browse…
+              {vocab('Browse…')}
             </button>
           </div>
         </div>
 
         <div className="nsis-node__field">
-          <span>Files &amp; folders to install</span>
+          <span>{vocab('Files & folders to install')}</span>
           <div className="nsis-node__path-row">
             <button
               type="button"
               className="nsis-node__browse"
               onClick={addSourceFolder}
               disabled={browseBusy === 'source'}
-              title="Add a folder"
+              title={vocab('Add a folder')}
             >
-              Add folder…
+              {vocab('Add folder…')}
             </button>
             <button
               type="button"
               className="nsis-node__browse"
               onClick={addSourceFiles}
               disabled={browseBusy === 'source'}
-              title="Add files"
+              title={vocab('Add files')}
             >
-              Add files…
+              {vocab('Add files…')}
             </button>
           </div>
 
           {local.sourcePaths.length === 0 ? (
             <p className="nsis-node__hint">
-              Nothing added yet. The preview below will show a placeholder until you add at least
-              one file or folder -- the Add buttons above open a real folder/file picker.
+              {vocab('Nothing added yet. The preview below will show a placeholder until you add at least one file or folder -- the Add buttons above open a real folder/file picker.')}
             </p>
           ) : (
             <>
@@ -329,22 +330,22 @@ export default function NsisInstallerNode({ id, data, selected }: NodeProps<Canv
                     className="menu-filter__input"
                     value={search.value}
                     spellCheck={false}
-                    placeholder={search.mode === 'regex' ? 'Filter paths… (regex)' : 'Filter paths…'}
-                    aria-label="Filter source paths"
+                    placeholder={search.mode === 'regex' ? vocab('Filter paths… (regex)') : vocab('Filter paths…')}
+                    aria-label={vocab('Filter source paths')}
                     onChange={(e) => search.setValue(e.target.value)}
                   />
                   <AnchoredRegexBuilder
                     search={search}
                     fieldRef={inputRef}
-                    label="Regex — installer source paths"
+                    label={vocab('Regex — installer source paths')}
                     zIndex={40}
                   />
                 </div>
                 {search.error && <div className="menu-filter__error">{search.error}</div>}
               </div>
-              <ul className="nsis-node__source-list" role="list" aria-label="Source paths">
+              <ul className="nsis-node__source-list" role="list" aria-label={vocab('Source paths')}>
                 {filteredSources.length === 0 ? (
-                  <li className="nsis-node__hint">No path matches that filter.</li>
+                  <li className="nsis-node__hint">{vocab('No path matches that filter.')}</li>
                 ) : (
                   filteredSources.map((p) => (
                     <li key={p} className="nsis-node__source-row" title={p}>
@@ -352,8 +353,8 @@ export default function NsisInstallerNode({ id, data, selected }: NodeProps<Canv
                       <button
                         type="button"
                         className="term-node__close"
-                        title="Remove"
-                        aria-label={'Remove ' + p}
+                        title={vocab('Remove')}
+                        aria-label={`${vocab('Remove')} ${p}`}
                         onClick={() => removeSource(p)}
                       >
                         ×
@@ -368,16 +369,16 @@ export default function NsisInstallerNode({ id, data, selected }: NodeProps<Canv
 
         <div className="nsis-node__field">
           <span>
-            Preview
+            {vocab('Preview')}
             {complete ? null : (
-              <em className="nsis-node__incomplete"> — fill in the fields above for a full script</em>
+              <em className="nsis-node__incomplete">{vocab(' — fill in the fields above for a full script')}</em>
             )}
           </span>
           <textarea
             className="nsis-node__preview"
             readOnly
             value={preview}
-            aria-label="Generated NSIS script preview"
+            aria-label={vocab('Generated NSIS script preview')}
             spellCheck={false}
             wrap="off"
           />

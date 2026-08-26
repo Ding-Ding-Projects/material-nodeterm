@@ -6,6 +6,7 @@ import { useDiscardWhenHidden, webviewAudible, type AudibleWebview } from './use
 import { DiscardedPlate } from './DiscardedPlate'
 import { nodeHeaderFillStyle } from '../lib/nodeColor'
 import { EditableNodeTitle } from '../components/EditableNodeTitle'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 /**
  * A web view node. When `data.url` is set it loads that live URL; otherwise it serves the
@@ -14,6 +15,7 @@ import { EditableNodeTitle } from '../components/EditableNodeTitle'
  * The frame/header mirror {@link VideoNode}/EditorNode for consistent drag/resize/close behavior.
  */
 export default function WebNode({ id, data, selected }: NodeProps<CanvasNode>) {
+  const vocab = useVocabularyMapper()
   const { deleteElements, updateNodeData } = useReactFlow()
   const [src, setSrc] = useState('')
   const [error, setError] = useState('')
@@ -50,7 +52,7 @@ export default function WebNode({ id, data, selected }: NodeProps<CanvasNode>) {
         setSrc(safe)
         srcRef.current = safe
       } else {
-        setError('Unsupported URL scheme — only http/https')
+        setError(vocab('Unsupported URL scheme — only http/https'))
       }
       settled()
     } else if (filePath) {
@@ -67,7 +69,7 @@ export default function WebNode({ id, data, selected }: NodeProps<CanvasNode>) {
         })
         .catch(() => {
           grantingRef.current = false
-          if (alive) setError('Couldn’t load this page.')
+          if (alive) setError(vocab('Couldn’t load this page.'))
           settled()
         })
     } else {
@@ -125,15 +127,15 @@ export default function WebNode({ id, data, selected }: NodeProps<CanvasNode>) {
           value={(data.title as string) ?? ''}
           onChange={(next) => updateNodeData(id, { title: next })}
           emptyLabel={title}
-          title={url || filePath || 'Click to rename'}
-          ariaLabel="Web page name"
+          title={url || filePath || vocab('Click to rename')}
+          ariaLabel={vocab('Web page name')}
           rejectEmpty={false}
         />
         <span className="term-node__spacer" />
         {url && (
           <button
             className="term-node__close"
-            title="Open in browser"
+            title={vocab('Open in browser')}
             onClick={() => {
               const safe = httpUrl(url)
               if (safe) window.nodeTerminal.shell.openExternal(safe)
@@ -144,7 +146,7 @@ export default function WebNode({ id, data, selected }: NodeProps<CanvasNode>) {
         )}
         <button
           className="term-node__close"
-          title="Close"
+          title={vocab('Close')}
           onClick={() => deleteElements({ nodes: [{ id }] })}
         >
           ×
@@ -165,7 +167,7 @@ export default function WebNode({ id, data, selected }: NodeProps<CanvasNode>) {
               style={{ width: '100%', height: '100%' }}
             />
           ) : (
-            <span className="editor-node__loading">{error || 'No source'}</span>
+            <span className="editor-node__loading">{error || vocab('No source')}</span>
           )}
         </div>
       </div>

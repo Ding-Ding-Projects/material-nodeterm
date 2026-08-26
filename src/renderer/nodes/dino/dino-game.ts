@@ -29,6 +29,8 @@ export function createDinoGame(
     initialHighScore: number
     onHighScore: (score: number) => void
     onSnapshot?: (snap: DinoSnapshot | null) => void
+    /** Maps only the game's own instructional/status copy. Scores and peer facts stay exact. */
+    text?: (value: string) => string
   }
 ): {
   destroy: () => void
@@ -40,6 +42,7 @@ export function createDinoGame(
   canvas.className = 'dino-canvas'
   host.appendChild(canvas)
   const ctx = canvas.getContext('2d')!
+  const text = opts.text ?? ((value: string) => value)
 
   // Palette (dark theme — light marks on a near-black field).
   const COLOR_FG = '#e6e6ea'
@@ -352,17 +355,17 @@ export function createDinoGame(
       ctx.fillStyle = COLOR_DIM
       ctx.font = '13px ui-sans-serif, system-ui, sans-serif'
       ctx.textAlign = 'center'
-      ctx.fillText(focused ? 'Press Space to start' : 'Click, then Space to play', W / 2, H / 2 - 6)
+      ctx.fillText(text(focused ? 'Press Space to start' : 'Click, then Space to play'), W / 2, H / 2 - 6)
       ctx.textAlign = 'left'
     }
     if (crashed) {
       ctx.fillStyle = COLOR_FG
       ctx.font = 'bold 14px ui-sans-serif, system-ui, sans-serif'
       ctx.textAlign = 'center'
-      ctx.fillText('G A M E   O V E R', W / 2, H / 2 - 6)
+      ctx.fillText(text('G A M E   O V E R'), W / 2, H / 2 - 6)
       ctx.font = '12px ui-sans-serif, system-ui, sans-serif'
       ctx.fillStyle = COLOR_DIM
-      ctx.fillText('Space to retry', W / 2, H / 2 + 14)
+      ctx.fillText(text('Space to retry'), W / 2, H / 2 + 14)
       ctx.textAlign = 'left'
     }
   }
