@@ -40,9 +40,10 @@
 // the redesign's own divergences from the imported design and its removed
 // design-tool scaffolding.
 
-import { readFileSync, existsSync, readdirSync } from 'node:fs'
+import { copyFileSync, mkdtempSync, readFileSync, existsSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, relative } from 'node:path'
+import { tmpdir } from 'node:os'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -373,6 +374,59 @@ const SITE_RENDER_COPY_FUNNELS = [
   ['feature-card', 'site/app/core/render.js', 'function featureCard']
 ]
 const CANONICAL_SITE_RENDER_FUNNEL_IDS = `hall room list-room row-item menu regex-dialog command-palette settings-card home-room door-tile feature-card`.split(/\s+/)
+const SITE_RENDER_STRING_OWNERSHIP = [
+  ['hall-top-bar', 'the top bar', 'authored', 'function renderHall'],
+  ['hall-menu-button', 'this button', 'authored', 'function renderHall'],
+  ['hall-day-night', 'Day or night', 'authored', 'function renderHall'],
+  ['hall-message-box', 'Message box', 'authored', 'function renderHall'],
+  ['hall-hello', 'Hello,', 'authored', 'function renderHall'],
+  ['hall-pick-door', 'Pick a door.', 'authored', 'function renderHall'],
+  ['hall-empty-prefix', 'No door has that name. Try the', 'authored', 'function renderHall'],
+  ['hall-empty-suffix', 'button next to the filter!', 'authored', 'function renderHall'],
+  ['hall-peek-code', 'Peek at the code', 'authored', 'function renderHall'],
+  ['room-top-bar', 'the top bar', 'authored', 'function renderRoom'],
+  ['room-rail', 'the room list', 'authored', 'function renderRoom'],
+  ['room-day-night', 'Switch between day and night', 'authored', 'function renderRoom'],
+  ['room-message-box', 'Open the message box', 'authored', 'function renderRoom'],
+  ['room-nav-items', 'items', 'authored', 'function renderRoom'],
+  ['list-from-date', 'From date', 'authored', 'function renderListRoom'],
+  ['list-and', 'and', 'authored', 'function renderListRoom'],
+  ['list-to-date', 'To date', 'authored', 'function renderListRoom'],
+  ['settings-lock-copy', 'This box has its own password.', 'authored', 'function settingsCardHtml'],
+  ['settings-unlock', 'Unlock password', 'authored', 'function settingsCardHtml'],
+  ['settings-open', 'Open', 'authored', 'function settingsCardHtml'],
+  ['regex-groups', 'Things it caught', 'authored', 'function renderRx'],
+  ['regex-builder-label', 'Regex builder', 'authored', 'function renderRx'],
+  ['regex-pattern', 'Pattern', 'authored', 'function renderRx'],
+  ['regex-flags', 'Flags', 'authored', 'function renderRx'],
+  ['regex-sample', 'Sample text', 'authored', 'function renderRx'],
+  ['palette-label', 'Magic jump box', 'authored', 'function renderPalette'],
+  ['palette-placeholder', 'Where do you want to go?', 'authored', 'function renderPalette'],
+  ['palette-search', 'Magic jump box search', 'authored', 'function renderPalette'],
+  ['palette-regex', 'Regex builder for the jump box', 'authored', 'function renderPalette'],
+  ['confirm-question', 'Are you sure?', 'authored', 'function renderConfirm'],
+  ['confirm-type', 'Type', 'authored', 'function renderConfirm'],
+  ['confirm-unlock', 'to unlock the button', 'authored', 'function renderConfirm'],
+  ['confirm-word-label', 'Confirmation word', 'authored', 'function renderConfirm'],
+  ['confirm-keep', 'Keep it', 'authored', 'function renderConfirm'],
+  ['confirm-yes', 'Yes, do it', 'authored', 'function renderConfirm'],
+  ['confirm-first', '” first', 'authored', 'function renderConfirm'],
+  ['toast-close', 'Close this message', 'authored', 'function renderToasts'],
+  ['hall-brand', 'nodeterm school', 'fact', 'function renderHall'],
+  ['hall-jump-command', 'Jump', 'fact', 'function renderHall'],
+  ['hall-download-command', 'Get nodeterm', 'fact', 'function renderHall'],
+  ['hall-download-command-2', 'Download nodeterm', 'fact', 'function renderHall'],
+  ['hall-brew-command', 'brew install --cask nodeterm', 'fact', 'function renderHall'],
+  ['room-brand', 'nodeterm', 'fact', 'function renderRoom'],
+  ['room-version', 'v0.3.0', 'fact', 'function renderRoom'],
+  ['room-license', 'BUSL-1.1 licensed · fork of', 'fact', 'function renderRoom'],
+  ['room-upstream-brand', 'eneskirca/nodeterm', 'fact', 'function renderRoom'],
+  ['room-forge-brand', 'GitHub', 'fact', 'function renderRoom'],
+  ['room-legal-notice', '“Claude” and “Claude Code” are trademarks of Anthropic. nodeterm is not affiliated with or endorsed by Anthropic.', 'fact', 'function renderRoom'],
+  ['hall-jump-tooltip', 'Magic jump box — Ctrl+Shift+F', 'fact', 'function renderHall'],
+  ['room-jump-tooltip', 'Magic jump box — Ctrl+Shift+F', 'fact', 'function renderRoom'],
+]
+const CANONICAL_SITE_RENDER_STRING_IDS = SITE_RENDER_STRING_OWNERSHIP.map(([id]) => id)
 
 for (const feature of FEATURES) {
   const fileOk = requireFileExists(feature.file, feature.label)
@@ -819,6 +873,16 @@ function hasAuthoredCopyFunnel(body) {
   return !!body && (body.includes('copy(') || body.includes('copyAttr('))
 }
 
+function hasOwnedRenderString(body, text, owner) {
+  if (!body) return false
+  const lines = body.split(/\r?\n/).filter((line) => line.includes(text))
+  if (!lines.length) return false
+  const escaped = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const copiedExactly = new RegExp(`copy(?:Attr)?\\(s,\\s*['"]${escaped}['"]\\)`).test(body)
+  if (owner === 'fact') return !copiedExactly
+  return lines.some((line) => /copy(?:Attr)?\(/.test(line))
+}
+
 {
   const ids = SITE_RENDER_COPY_FUNNELS.map(([id]) => id)
   checkedCount += 1
@@ -850,6 +914,44 @@ function hasAuthoredCopyFunnel(body) {
   const body = renderFunnelBody(mutated, 'function renderHall')
   if (hasAuthoredCopyFunnel(body)) fail('Site renderer funnel mutation was not rejected')
   else pass('Site renderer funnel mutation is rejected')
+}
+
+{
+  checkedCount += 1
+  if (new Set(CANONICAL_SITE_RENDER_STRING_IDS).size !== CANONICAL_SITE_RENDER_STRING_IDS.length) {
+    fail('Site renderer string ownership inventory contains duplicate identifiers')
+  } else {
+    pass('Site renderer string ownership inventory has unique identifiers')
+  }
+  for (const [id, text, owner, marker] of SITE_RENDER_STRING_OWNERSHIP) {
+    const body = renderFunnelBody(readText('site/app/core/render.js'), marker)
+    checkedCount += 1
+    if (hasOwnedRenderString(body, text, owner)) pass(`${id}: ${owner} ownership is explicit`)
+    else fail(`${id}: ${owner} ownership is missing or ambiguous`)
+
+    const mutatedBody = body ? body.split(text).join('') : null
+    checkedCount += 1
+    if (hasOwnedRenderString(mutatedBody, text, owner)) fail(`${id}: string-removal mutation was not rejected`)
+    else pass(`${id}: string-removal mutation is rejected`)
+  }
+
+  const mutationRoot = mkdtempSync(join(tmpdir(), 'nodeterm-site-render-audit-'))
+  const renderCopy = join(mutationRoot, 'render.js')
+  try {
+    copyFileSync(join(REPO_ROOT, 'site/app/core/render.js'), renderCopy)
+    const original = readFileSync(renderCopy, 'utf8')
+    for (const [id, text, owner, marker] of SITE_RENDER_STRING_OWNERSHIP) {
+      writeFileSync(renderCopy, original.split(text).join(''), 'utf8')
+      const copiedSource = readFileSync(renderCopy, 'utf8')
+      const copiedBody = renderFunnelBody(copiedSource, marker)
+      checkedCount += 1
+      if (hasOwnedRenderString(copiedBody, text, owner)) fail(`${id}: file-backed string mutation was not rejected`)
+      else pass(`${id}: file-backed string mutation is rejected`)
+      writeFileSync(renderCopy, original, 'utf8')
+    }
+  } finally {
+    rmSync(mutationRoot, { recursive: true, force: true })
+  }
 }
 
 {

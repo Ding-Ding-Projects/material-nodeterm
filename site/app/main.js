@@ -16,6 +16,7 @@ import {
   getRoom, allSettingsCards, registerListRoom, fmtWhen,
 } from './core/engine.js'
 import { registerFeatures } from './features/index.js'
+import { readVocabularyFile } from './features/vocabulary.js'
 import { SECTIONS, FEATURES, DOCS, COVERAGE, RX_TOKENS, DISHES } from './shared/data.js'
 import { listVoices, findVoice } from './shared/narrator-state.js'
 import { createBulkList } from './shared/bulkList.js'
@@ -345,7 +346,7 @@ root.addEventListener('change', (e) => {
       t.value = ''
       return
     }
-    file.text().then((text) => runFeatureBind(t.dataset.bindFile, t.dataset.id, text)).catch(() => toastX('❌', 'Could not read file', 'The selected JSON file could not be read.'))
+    readVocabularyFile(file).then((text) => runFeatureBind(t.dataset.bindFile, t.dataset.id, text)).catch(() => toastX('❌', 'Could not read file', 'The selected JSON file could not be read.'))
     t.value = ''
   } else if (t.dataset && t.dataset.bindSelect) runFeatureBind(t.dataset.bindSelect, t.dataset.id, t.value)
   else if (t.dataset && t.dataset.bindTextChange) runFeatureBind(t.dataset.bindTextChange, t.dataset.id, t.value)

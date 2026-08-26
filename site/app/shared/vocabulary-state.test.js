@@ -4,7 +4,7 @@ import { isFreshVocabularyCache, validateVocabularyCacheJson, validateVocabulary
 import { shapeCopy, shapeTitle } from './i18n.js'
 import { createStore } from '../core/store.js'
 import { render } from '../core/render.js'
-import { registerVocabulary } from '../features/vocabulary.js'
+import { readVocabularyFile, registerVocabulary } from '../features/vocabulary.js'
 
 function storageFixture(initial = {}) {
   const values = new Map(Object.entries(initial))
@@ -175,4 +175,47 @@ test('School mode suppresses the mapped copy and the vocabulary settings card in
     if (original === undefined) delete globalThis.localStorage
     else globalThis.localStorage = original
   }
+})
+
+test('rejected replacement preserves the active memory and cache and exposes storage failure', () => {
+  const original = globalThis.localStorage
+  const storage = storageFixture({
+    'nodeterm-playground.vocabulary.v1': cacheJson({ terminal: 'shell box' })
+  })
+  globalThis.localStorage = storage
+  try {
+    const store = createStore()
+    let binding
+    registerVocabulary(store, {}, () => {}, (id, handler) => { if (id === 'vocab-file') binding = handler })
+    const save = (patch) => store.setState(patch, { persist: false })
+    const h = { save, toast: () => {} }
+    assert.equal(typeof binding, 'function')
+    const previousCache = storage.getItem('nodeterm-playground.vocabulary.v1')
+    binding(store.state, '', '{"version":1,"entries":{"terminal":"new box"},"entryCount":2,"savedAt":1}', h)
+    assert.equal(store.state.vocabEntries.terminal, 'shell box')
+    assert.equal(storage.getItem('nodeterm-playground.vocabulary.v1'), previousCache)
+    store.state.view = 'room'
+    store.state.sec = 'settings'
+    assert.match(render(store), /currently loaded file remains active/)
+
+    globalThis.localStorage = {
+      getItem: storage.getItem,
+      setItem() { throw new Error('quota exceeded') },
+      removeItem: storage.removeItem
+    }
+    binding(store.state, '', '{"version":1,"entries":{"terminal":"new box"}}', h)
+    assert.equal(store.state.vocabEntries.terminal, 'new box')
+    assert.match(store.state.vocabError, /storage could not save/)
+    assert.match(render(store), /storage could not save/)
+  } finally {
+    if (original === undefined) delete globalThis.localStorage
+    else globalThis.localStorage = original
+  }
+})
+
+test('file handler exposes a rejected read instead of claiming an upload', async () => {
+  await assert.rejects(
+    readVocabularyFile({ text: () => Promise.reject(new Error('read failed')) }),
+    /read failed/
+  )
 })

@@ -3956,7 +3956,8 @@ export function Canvas() {
           body: profileText(
             'terminalProfiles.common.unavailableHereBody',
             'Local Windows profiles cannot be applied to an SSH or relay terminal.'
-          )
+          ),
+          bodyKind: 'authored'
         })
         return
       }
@@ -4841,7 +4842,8 @@ export function Canvas() {
         notify({
           kind: 'warning',
           title: 'Folder drop cancelled',
-          body: 'The active project changed before the drop completed.'
+          body: 'The active project changed before the drop completed.',
+          bodyKind: 'authored'
         })
         return
       }
@@ -4852,7 +4854,8 @@ export function Canvas() {
         notify({
           kind: 'warning',
           title: 'Agent drop cancelled',
-          body: 'The source agent is no longer available.'
+          body: 'The source agent is no longer available.',
+          bodyKind: 'authored'
         })
         return
       }
@@ -4892,7 +4895,8 @@ export function Canvas() {
         notify({
           kind: 'warning',
           title: 'Folder drop cancelled',
-          body: 'The active project changed before the drop completed.'
+          body: 'The active project changed before the drop completed.',
+          bodyKind: 'authored'
         })
         return
       }
@@ -6904,7 +6908,8 @@ export function Canvas() {
             profileText(
               'terminalProfiles.restart.noLongerLocal',
               'This node is no longer a local Windows terminal.'
-            )
+            ),
+          bodyKind: 'fact'
         })
         return
       }
@@ -6942,7 +6947,8 @@ export function Canvas() {
                 'terminalProfiles.restart.failedTitle',
                 'Restart with profile failed'
               ),
-              body: error instanceof Error ? error.message : String(error)
+              body: error instanceof Error ? error.message : String(error),
+              bodyKind: 'fact'
             })
           })
         }
@@ -7349,7 +7355,7 @@ export function Canvas() {
           // A non-blocking toast, not a modal: there is nothing to decide here, only to report.
           // Agent-CLI calls get the error in the reply instead (opts.interactive === false).
           if (opts?.interactive !== false) {
-            notify({ kind: 'error', title: 'Branch failed', body: error })
+            notify({ kind: 'error', title: 'Branch failed', body: error, bodyKind: 'fact' })
           }
           return { ok: false, error }
         }
@@ -7416,7 +7422,7 @@ export function Canvas() {
         )
       )
       if ('error' in res) {
-        notify({ kind: 'error', title: 'Transfer failed', body: res.error })
+        notify({ kind: 'error', title: 'Transfer failed', body: res.error, bodyKind: 'fact' })
         return
       }
       // The file is context-budgeted by buildHandoff (long sessions: digest + verbatim tail,
@@ -9359,7 +9365,8 @@ export function Canvas() {
           body: profileText(
             'terminalProfiles.common.unavailableHereBody',
             'Local Windows profiles cannot be applied to an SSH or relay terminal.'
-          )
+          ),
+          bodyKind: 'authored'
         })
         return
       }
@@ -12535,7 +12542,7 @@ export function Canvas() {
   const exportProjectArchive = useCallback(
     async (projectId: string, password?: string) => {
       if (projectArchiveBusyRef.current) {
-        notify({ kind: 'info', title: 'Project save already running', body: 'Wait for the current save or open to finish.' })
+        notify({ kind: 'info', title: 'Project save already running', body: 'Wait for the current save or open to finish.', bodyKind: 'authored' })
         return
       }
       projectArchiveBusyRef.current = true
@@ -12549,7 +12556,8 @@ export function Canvas() {
         notify({
           kind: 'info',
           title: 'Saving project…',
-          body: `Packing "${project.name}" — canvas, history, repository and working files. A large repository can take a moment.`
+          body: `Packing "${project.name}" — canvas, history, repository and working files. A large repository can take a moment.`,
+          bodyKind: 'fact'
         })
         const result = await api.workspace.exportProject(project, password)
         if (result.ok) {
@@ -12580,13 +12588,14 @@ export function Canvas() {
               (result.encrypted
                 ? ' The file is encrypted: without this password nobody can open it, and there is no way to recover it.'
                 : '') +
-              vaultWarning
+              vaultWarning,
+            bodyKind: 'fact'
           })
         } else {
           notify(
             result.canceled
               ? { kind: 'info', title: 'Project save cancelled' }
-              : { kind: 'error', title: 'Project save failed', body: result.error }
+              : { kind: 'error', title: 'Project save failed', body: result.error, bodyKind: 'fact' }
           )
         }
       } finally {
@@ -12628,7 +12637,8 @@ export function Canvas() {
           notify({
             kind: 'error',
             title: 'The passwords did not match',
-            body: 'Nothing was saved. Try again — a mistyped password here cannot be recovered later.'
+            body: 'Nothing was saved. Try again — a mistyped password here cannot be recovered later.',
+            bodyKind: 'authored'
           })
           return
         }
@@ -12640,7 +12650,7 @@ export function Canvas() {
 
   const importProjectArchive = useCallback(async () => {
     if (projectArchiveBusyRef.current) {
-      notify({ kind: 'info', title: 'Project open already running', body: 'Wait for the current save or open to finish.' })
+      notify({ kind: 'info', title: 'Project open already running', body: 'Wait for the current save or open to finish.', bodyKind: 'authored' })
       return
     }
     projectArchiveBusyRef.current = true
@@ -12669,7 +12679,7 @@ export function Canvas() {
         // Deriving the key deliberately costs 128 MiB of scrypt and a few hundred ms — the same
         // price an attacker pays per guess — so say something before the UI goes quiet.
         if (attempt === 1) {
-          notify({ kind: 'info', title: 'Unlocking project file…', body: 'Checking the password.' })
+          notify({ kind: 'info', title: 'Unlocking project file…', body: 'Checking the password.', bodyKind: 'authored' })
         }
         result = await api.workspace.importProject({ path: result.path, password })
       }
@@ -12680,10 +12690,11 @@ export function Canvas() {
         notify({
           kind: 'success',
           title: 'Project opened from file',
-          body: `${where}${archiveContentsSummary(result.contents)}`.trim() || 'The project and its complete local history are ready.'
+          body: `${where}${archiveContentsSummary(result.contents)}`.trim() || 'The project and its complete local history are ready.',
+          bodyKind: 'fact'
         })
       } else if (!result.canceled) {
-        notify({ kind: 'error', title: 'Project open failed', body: result.error })
+        notify({ kind: 'error', title: 'Project open failed', body: result.error, bodyKind: 'fact' })
       }
     } finally {
       projectArchiveBusyRef.current = false
@@ -13128,7 +13139,8 @@ export function Canvas() {
           notify({
             kind: 'info',
             title: 'Test notification',
-            body: 'This is what a notification looks like — useful while you tune Settings → Notifications.'
+            body: 'This is what a notification looks like — useful while you tune Settings → Notifications.',
+            bodyKind: 'authored'
           })
       },
       // Hidden below 2 top-level nodes — see arrangeAllNodes.

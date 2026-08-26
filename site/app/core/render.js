@@ -56,7 +56,7 @@ function renderHall(store) {
   const greeting = (s.nick ? 'Hello, ' + esc(s.nick) + '!' : 'Hello!') + ' Pick a door.'
 
   return `<div class="hall" data-view="hall">
-    <header class="hall__header" data-menu-kind="header" data-menu-label="the top bar">
+    <header class="hall__header" data-menu-kind="header" data-menu-label="${copyAttr(s, 'the top bar')}">
       <a class="brand" href="./index.html" data-no-room>
         <span class="brand__mark" style="background-image:url('${attr(s.logo || './assets/mark.svg')}')"></span>
         <span class="brand__name">nodeterm school</span>
@@ -64,15 +64,15 @@ function renderHall(store) {
       ${searchBar({ id: 'qGlobal', value: s.qGlobal, placeholder: 'Which room are you looking for?', ariaLabel: 'the whole school', rxKey: 'global', state: s, cls: 'header-search' })}
       <div class="header-actions">
         <button type="button" class="round-btn round-btn--jump" data-action="open-palette" data-menu-kind="generic" data-menu-label="this button" title="Magic jump box — Ctrl+Shift+F">✨ Jump</button>
-        <button type="button" class="round-btn round-btn--theme" data-action="toggle-theme" data-menu-kind="generic" data-menu-label="this button" aria-label="Day or night">${s.theme === 'night' ? '🌙' : '☀️'}</button>
-        <button type="button" class="round-btn round-btn--bell" data-action="go-room" data-id="notes" data-menu-kind="generic" data-menu-label="this button" aria-label="Message box">🔔${s.notes.length ? `<span class="bell-count">${s.notes.length}</span>` : ''}</button>
+        <button type="button" class="round-btn round-btn--theme" data-action="toggle-theme" data-menu-kind="generic" data-menu-label="${copyAttr(s, 'this button')}" aria-label="${copyAttr(s, 'Day or night')}">${s.theme === 'night' ? '🌙' : '☀️'}</button>
+        <button type="button" class="round-btn round-btn--bell" data-action="go-room" data-id="notes" data-menu-kind="generic" data-menu-label="${copyAttr(s, 'this button')}" aria-label="${copyAttr(s, 'Message box')}">🔔${s.notes.length ? `<span class="bell-count">${s.notes.length}</span>` : ''}</button>
       </div>
     </header>
 
     <div class="hall__intro">
       <div class="hall__mascot" aria-hidden="true">${mascot}</div>
       <div style="flex:1 1 240px">
-        <h1 class="hall__greeting">${greeting}</h1>
+        <h1 class="hall__greeting">${s.nick ? `${copy(s, 'Hello,')} ${esc(s.nick)}! ` : ''}${copy(s, 'Pick a door.')}</h1>
         <div class="pill" style="margin-top:4px">${copy(s, 'the whole home page is right here — the doors are extra rooms')}</div>
         <p style="margin:2px 0 0;font-size:15px;color:var(--ink2)">${esc(shapeVoice(s, 'Every door opens a different room. Some rooms you can lock with your own password, and every single one has a search box and a right-click menu.'))}</p>
       </div>
@@ -190,7 +190,7 @@ function renderRoom(store) {
   const storageLine = `${s.notes.length} ${copy(s, 'messages')} · ${s.history.length} ${copy(s, 'log entries')} · ${s.auth.length} ${copy(s, 'codes')} · ${Object.keys(s.locks).length} ${copy(s, 'toy locks')}. ${copy(s, 'All of it in this browser only.')}`
 
   return `<div class="room" data-view="room">
-    <header class="room__header" data-menu-kind="header" data-menu-label="the top bar">
+    <header class="room__header" data-menu-kind="header" data-menu-label="${copyAttr(s, 'the top bar')}">
       <a class="brand" href="./index.html" data-no-room>
         <img class="brand__mark" src="./assets/mark.svg" alt="" width="34" height="34" style="padding:3px;background:var(--yellow)" />
         <span class="brand__name">nodeterm</span>
@@ -198,14 +198,14 @@ function renderRoom(store) {
       </a>
       ${searchBar({ id: 'qGlobal', value: s.qGlobal, placeholder: 'Search the whole playground…', ariaLabel: 'the big search', rxKey: 'global', state: s, cls: 'header-search' })}
       <div class="header-actions">
-        <button type="button" class="round-btn round-btn--jump" data-action="open-palette" data-menu-kind="generic" data-menu-label="this button" title="${copyAttr(s, 'Magic jump box — Ctrl+Shift+F')}">✨ ${copy(s, 'Jump')}</button>
+        <button type="button" class="round-btn round-btn--jump" data-action="open-palette" data-menu-kind="generic" data-menu-label="${copyAttr(s, 'this button')}" title="Magic jump box — Ctrl+Shift+F">✨ Jump</button>
         <button type="button" class="round-btn round-btn--theme" data-action="toggle-theme" data-menu-kind="generic" data-menu-label="this button" aria-label="${copyAttr(s, 'Switch between day and night')}">${s.theme === 'night' ? '🌙' : '☀️'}</button>
-        <button type="button" class="round-btn round-btn--bell" data-action="go-room" data-id="notes" data-menu-kind="generic" data-menu-label="this button" aria-label="${copyAttr(s, 'Open the message box')}">🔔${s.notes.length ? `<span class="bell-count">${s.notes.length}</span>` : ''}</button>
+        <button type="button" class="round-btn round-btn--bell" data-action="go-room" data-id="notes" data-menu-kind="generic" data-menu-label="${copyAttr(s, 'this button')}" aria-label="${copyAttr(s, 'Open the message box')}">🔔${s.notes.length ? `<span class="bell-count">${s.notes.length}</span>` : ''}</button>
       </div>
     </header>
 
     <div class="room__body">
-      <aside class="room-rail" data-menu-kind="rail" data-menu-label="the room list">
+      <aside class="room-rail" data-menu-kind="rail" data-menu-label="${copyAttr(s, 'the room list')}">
         <button type="button" class="room-rail__leave" data-action="leave-room">🚪 ${copy(s, 'Back to the hallway')}</button>
         <button type="button" class="room-rail__lock" data-action="lock-room">${s.locks['room:' + s.sec] ? '🔓 ' + copy(s, 'Unlock this door for everyone') : '🔒 ' + copy(s, 'Lock this door behind me')}</button>
         ${searchBar({ id: 'qNav', value: s.qNav, placeholder: 'Find a room…', ariaLabel: 'the room list', rxKey: 'nav', state: s, cls: 'room-rail__search' })}
@@ -213,7 +213,7 @@ function renderRoom(store) {
           ${navItems.length
             ? navItems
                 .map(
-                  (x) => `<button type="button" role="tab" aria-selected="${s.sec === x.id}" aria-label="${copyAttr(s, x.label)}${badgeFor(s, x.id) ? ', ' + badgeFor(s, x.id) + ' items' : ''}" class="nav-btn ${s.sec === x.id ? 'is-active' : ''}" data-action="go-room" data-id="${x.id}" data-menu-kind="room" data-menu-label="${copyAttr(s, x.label)}" data-menu-extra="${attr(x.id)}" style="${s.sec === x.id ? 'background:' + s.accent : ''}">
+                  (x) => `<button type="button" role="tab" aria-selected="${s.sec === x.id}" aria-label="${copyAttr(s, x.label + (badgeFor(s, x.id) ? ', ' + badgeFor(s, x.id) + ' items' : ''))}" class="nav-btn ${s.sec === x.id ? 'is-active' : ''}" data-action="go-room" data-id="${x.id}" data-menu-kind="room" data-menu-label="${copyAttr(s, x.label)}" data-menu-extra="${attr(x.id)}" style="${s.sec === x.id ? 'background:' + s.accent : ''}">
               <span class="nav-btn__icon" aria-hidden="true">${x.icon}</span>
               <span class="nav-btn__label" aria-hidden="true">${copy(s, x.label)}</span>
               ${badgeFor(s, x.id) ? `<span class="chip" aria-hidden="true">${badgeFor(s, x.id)}</span>` : ''}
@@ -245,7 +245,7 @@ function renderRoom(store) {
     </div>
 
     <footer class="site-footer room-footer">
-      <span>${copy(s, 'BUSL-1.1 licensed · fork of')} <a href="${UPSTREAM_URL}" target="_blank" rel="noopener">eneskirca/nodeterm</a></span>
+      <span>BUSL-1.1 licensed · fork of <a href="${UPSTREAM_URL}" target="_blank" rel="noopener">eneskirca/nodeterm</a></span>
       <a href="${REPO_URL}" target="_blank" rel="noopener">GitHub</a>
       <a href="${REPO_URL}/blob/main/CHANGELOG.md" target="_blank" rel="noopener">${copy(s, 'Changelog')}</a>
       <a href="${REPO_URL}/issues" target="_blank" rel="noopener">Help</a>
@@ -452,7 +452,7 @@ function renderMenu(store) {
   const items = (store.menuItemsCache || []).filter((m) => mm(shapeCopy(s, m.label) + ' ' + shapeCopy(s, m.hint || '')))
   return `<div class="menu-scrim" data-action="close-menu"></div>
   <div class="menu-panel" role="menu" style="left:${s.menuX}px;top:${s.menuY}px;max-height:calc(100dvh - ${s.menuY}px - 8px)" data-stop-menu-close="1">
-    <div class="menu-panel__title">${copy(s, 'Menu for ')}${esc(s.menuLabel || 'this')}</div>
+    <div class="menu-panel__title">${copy(s, 'Menu for ')}${s.menuLabel ? esc(s.menuLabel) : copy(s, 'this')}</div>
     <div class="menu-panel__search">
       <span aria-hidden="true" style="padding:0 4px 0 10px">🔍</span>
       <input data-bind="menuQuery" data-focus-id="menuQuery" value="${attr(s.menuQuery)}" placeholder="${copyAttr(s, 'Filter this menu…')}" aria-label="${copyAttr(s, 'Filter this right-click menu')}" />
@@ -470,7 +470,7 @@ function renderRx(store) {
   const rx = computeRx(s)
   const { RX_TOKENS } = store.dataTables
   return `<div class="dialog-scrim" data-action="close-rx">
-    <div class="rx-dialog" role="dialog" aria-label="Regex builder" data-stop-menu-close="1">
+    <div class="rx-dialog" role="dialog" aria-label="${copyAttr(s, 'Regex builder')}" data-stop-menu-close="1">
       <div class="rx-dialog__head">
         <span aria-hidden="true" style="font-size:22px">🧩</span>
         <strong style="font-family:var(--fun);font-size:19px">${copy(s, 'Pattern builder')}</strong>
@@ -481,14 +481,14 @@ function renderRx(store) {
       </div>
       <label>${copy(s, 'Your pattern')} <span style="color:var(--faint);font-weight:600">${copy(s, '(up to 200 letters)')}</span></label>
       <div class="rx-fields">
-        <input data-bind-rx="pattern" data-focus-id="rxPattern" spellcheck="false" aria-label="Pattern" value="${attr(rx.pattern)}" />
-        <input data-bind-rx="flags" data-focus-id="rxFlags" aria-label="Flags" value="${attr(rx.flags)}" />
+        <input data-bind-rx="pattern" data-focus-id="rxPattern" spellcheck="false" aria-label="${copyAttr(s, 'Pattern')}" value="${attr(rx.pattern)}" />
+        <input data-bind-rx="flags" data-focus-id="rxFlags" aria-label="${copyAttr(s, 'Flags')}" value="${attr(rx.flags)}" />
       </div>
       <div class="rx-tokens">
         ${RX_TOKENS.map((t, i) => `<button type="button" class="rx-token" style="background:${t[2]}" title="${attr(t[3])}" data-action="rx-insert" data-id="${i}">${esc(t[0])}</button>`).join('')}
       </div>
       <label>${copy(s, 'Try it on some words')}</label>
-      <textarea class="rx-sample" data-bind="rxSample" spellcheck="false" aria-label="Sample text">${esc(s.rxSample)}</textarea>
+      <textarea class="rx-sample" data-bind="rxSample" spellcheck="false" aria-label="${copyAttr(s, 'Sample text')}">${esc(s.rxSample)}</textarea>
       <div class="note-box ${rx.bad ? 'is-bad' : rx.groups.length ? 'is-ok' : ''}">${esc(rx.result)}</div>
       ${
         rx.groups.length
@@ -510,11 +510,11 @@ function renderPalette(store) {
   const mm = makeMatcher(s, 'palette', s.paletteQuery)
   const items = (store.paletteItemsCache || []).filter((p) => mm(shapeCopy(s, p.label) + ' ' + shapeCopy(s, p.hint))).slice(0, 50)
   return `<div class="dialog-scrim" data-action="close-palette">
-    <div class="palette-dialog" role="dialog" aria-label="Magic jump box" data-stop-menu-close="1">
+    <div class="palette-dialog" role="dialog" aria-label="${copyAttr(s, 'Magic jump box')}" data-stop-menu-close="1">
       <div class="palette-dialog__search">
         <span aria-hidden="true" style="padding:0 12px;font-size:22px">✨</span>
-        <input data-bind="paletteQuery" data-focus-id="paletteQuery" value="${attr(s.paletteQuery)}" placeholder="Where do you want to go?" aria-label="Magic jump box search" data-palette-input="1" />
-        <button type="button" class="rx-btn is-on" style="height:40px" data-action="open-rx" data-id="palette" data-arg="the jump box" title="Regex builder for the jump box">.*</button>
+        <input data-bind="paletteQuery" data-focus-id="paletteQuery" value="${attr(s.paletteQuery)}" placeholder="${copyAttr(s, 'Where do you want to go?')}" aria-label="${copyAttr(s, 'Magic jump box search')}" data-palette-input="1" />
+        <button type="button" class="rx-btn is-on" style="height:40px" data-action="open-rx" data-id="palette" data-arg="the jump box" title="${copyAttr(s, 'Regex builder for the jump box')}">.*</button>
       </div>
       <div class="palette-dialog__list">
         ${items.length ? items.map((p, i) => `<button type="button" class="palette-item" data-action="run-palette-item" data-id="${i}"><span class="palette-item__icon" aria-hidden="true">${p.icon}</span><span class="palette-item__label">${copy(s, p.label)}</span><span class="palette-item__hint">${copy(s, p.hint)}</span></button>`).join('') : `<div style="padding:26px;text-align:center;color:var(--faint)">${copy(s, 'Nothing found — try fewer letters, or the')} <strong>.*</strong> ${copy(s, 'button.')}</div>`}
@@ -529,7 +529,7 @@ function renderConfirm(store) {
   const pickedIds = Object.keys(s.picked)
   const ready = s.confirmTyped.trim().toLowerCase() === s.confirm.word.toLowerCase()
   return `<div class="dialog-scrim is-center">
-    <div class="confirm-dialog" role="alertdialog" aria-label="Are you sure?" data-stop-menu-close="1">
+    <div class="confirm-dialog" role="alertdialog" aria-label="${copyAttr(s, 'Are you sure?')}" data-stop-menu-close="1">
       <h3>🛑 ${esc(s.confirm.title)}</h3>
       <p>${esc(s.confirm.body)}</p>
       <pre class="confirm-preview">${esc(store.confirmPreviewCache || '')}</pre>
@@ -557,7 +557,7 @@ function renderToasts(store) {
           <div class="toast__body">${esc(t.body)}</div>
           ${t.sub ? `<div class="toast__sub">${esc(t.sub)}</div>` : ''}
         </div>
-        <button type="button" class="toast__close" data-action="dismiss-toast" data-id="${attr(t.id)}" aria-label="Close this message">✕</button>
+        <button type="button" class="toast__close" data-action="dismiss-toast" data-id="${attr(t.id)}" aria-label="${copyAttr(s, 'Close this message')}">✕</button>
       </div>
     </div>`,
       )

@@ -372,8 +372,11 @@ rows, and the executable check mutates copied real files and copied inventory ar
 removing a mapper, producer row, surface row, or audit row is rejected. The host-entrypoint lane
 covers the detached widget, HUD, browser picker, reconnect overlay, bridge stubs, notification
 body classification, native notification producers, converter upload limit messages, and
-landing-page JSON/cache validators. Runtime facts such as paths, IDs, model names, provider errors,
-visible commands, and brand names remain outside the authored-copy mapper.
+landing-page JSON/cache validators. The site renderer also has an independent per-string ownership
+manifest with file-backed removal mutations. Runtime facts such as paths, IDs, model names,
+provider errors, visible commands, brand names, license text, and shortcut text remain outside the
+authored-copy mapper. Canvas notifications classify every direct body as authored or fact, and the
+landing-page file reader keeps rejected reads visible instead of treating them as successful input.
 
 ## Verification
 

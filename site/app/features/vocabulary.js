@@ -14,6 +14,10 @@ import {
 
 const CACHE_KEY = 'nodeterm-playground.vocabulary.v1'
 
+export function readVocabularyFile(file) {
+  return file.text()
+}
+
 export function registerVocabulary(store, deps, registerAction, registerBinding) {
   registerBinding('vocab-file', (s, id, text, h) => {
     const result = validateVocabularyJson(text)
@@ -23,12 +27,15 @@ export function registerVocabulary(store, deps, registerAction, registerBinding)
       return
     }
     const savedAt = Date.now()
+    let persistenceError = ''
     try {
       localStorage.setItem(CACHE_KEY, JSON.stringify({ version: 1, entries: result.entries, entryCount: result.entryCount, savedAt }))
     } catch (_err) {
-      // The in-memory page state still applies; the status remains honest about this visit.
+      // The in-memory page state still applies, but persistence failure must be visible so a
+      // reload cannot be mistaken for a successful durable save.
+      persistenceError = 'Vocabulary loaded for this visit, but browser storage could not save it.'
     }
-    h.save({ vocabEntries: result.entries, vocabSavedAt: savedAt, vocabStatus: 'loaded', vocabError: '', vocab: '' }, 'Vocabulary file changed')
+    h.save({ vocabEntries: result.entries, vocabSavedAt: savedAt, vocabStatus: 'loaded', vocabError: persistenceError, vocab: '' }, 'Vocabulary file changed')
   })
   registerAction('vocab-clear', (s, id, el, h) => {
     try { localStorage.removeItem(CACHE_KEY) } catch (_err) {}
@@ -41,7 +48,7 @@ export function registerVocabulary(store, deps, registerAction, registerBinding)
     title: 'My own words',
     desc: 'Choose a local JSON file with the same versioned word pairs used by the desktop app.',
     note: (s) => s.vocabError
-      ? `${s.vocabError}${s.vocabStatus === 'loaded' ? ' The previous valid file remains active.' : ''}`
+      ? `${s.vocabError}${s.vocabStatus === 'loaded' ? ' The currently loaded file remains active for this visit.' : ''}`
       : s.vocabStatus === 'loaded'
         ? `${Object.keys(s.vocabEntries || {}).length} usable pair(s) loaded locally. Nothing leaves this browser.`
         : 'No file loaded. Original wording is shown everywhere.',

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { beforeEach, describe, expect, it } from 'vitest'
-import { formatHostMessage, hostFact, hostText, mapLocalVocabularyText, readLocalVocabularyEntries, setHostVocabularySchoolState } from './hostMessage'
+import { formatHostMessage, hostFact, hostText, mapLocalVocabularyText, mapNativeNotification, readLocalVocabularyEntries, setHostVocabularySchoolState } from './hostMessage'
 import { useSchoolMode } from '../../state/schoolMode'
 import { widgetTerminalMarker } from '../../widget/widgetVocabulary'
 
@@ -19,6 +19,37 @@ describe('host-authored vocabulary boundaries', () => {
     )
 
     expect(out).toBe('Could not open C:/workspace/project in the shell box.')
+  })
+
+  it('maps only authored native notification fields and preserves payload metadata', () => {
+    const map = (text: string): string => text.replace('terminal', 'shell box')
+    const authored = mapNativeNotification({
+      title: 'Open terminal',
+      body: 'Retry terminal now',
+      titleKind: 'authored' as const,
+      bodyKind: 'authored' as const,
+      nodeId: 'node-7',
+      force: true
+    }, map)
+    expect(authored).toEqual({
+      title: 'Open shell box',
+      body: 'Retry shell box now',
+      titleKind: 'authored',
+      bodyKind: 'authored',
+      nodeId: 'node-7',
+      force: true
+    })
+
+    const fact = mapNativeNotification({
+      title: 'terminal exited with code 1',
+      body: 'C:/workspace/terminal',
+      titleKind: 'fact' as const,
+      bodyKind: 'fact' as const,
+      nodeId: 'node-7'
+    }, map)
+    expect(fact.title).toBe('terminal exited with code 1')
+    expect(fact.body).toBe('C:/workspace/terminal')
+    expect(fact.nodeId).toBe('node-7')
   })
 
   it('reads only a validated, fresh cache for non-React entrypoints', () => {
