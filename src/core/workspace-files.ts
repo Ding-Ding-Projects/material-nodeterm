@@ -16,6 +16,7 @@ import type {
   Viewport,
   Workspace
 } from '../shared/types'
+import { sanitizeProjectIcon, type ProjectIcon } from '../shared/project-icon'
 
 export const PROJECT_DIR = '.nodeterm'
 export const PROJECT_FILE = 'project.json'
@@ -49,6 +50,10 @@ export interface ProjectFileV1 {
   id?: string
   name: string
   color: string
+  /** Sanitized on the way in (`fileToProject`) and only ever emitted when valid
+   *  (`projectToFile`) — see `sanitizeProjectIcon`. An off/invalid icon adds no bytes to the
+   *  committed file. */
+  icon?: ProjectIcon
   /**
    * NOT a camera any more — a SUGGESTED one, derived from where the canvas's own nodes sit
    * (`framingViewport`).
@@ -183,6 +188,7 @@ export function projectToFile(
   // (`shell`, `ssh.extraArgs`) never leave this machine in it — they ride the machine-local index
   // entry instead (`localNodeExec` / `IndexEntryV3.localExec`). See @shared/node-exec.
   const nodes = stripSharedNodeExec(p.cwd ? toPortableNodes(p.nodes, p.cwd) : p.nodes)
+  const icon = sanitizeProjectIcon(p.icon)
   return {
     version: 1,
     rev,
@@ -192,6 +198,7 @@ export function projectToFile(
     color: p.color,
     viewport: framingViewport(nodes),
     nodes,
+    ...(icon ? { icon } : {}),
     ...(p.bridges ? { bridges: p.bridges } : {}),
     ...(p.ropes ? { ropes: p.ropes } : {}),
     ...(p.defaultPermissionMode ? { defaultPermissionMode: p.defaultPermissionMode } : {}),
@@ -260,10 +267,12 @@ export function fileToProject(
 ): Project {
   const defaultAccountId = base.defaultAccountId ?? f.defaultAccountId
   const browserProfiles = validBrowserProfiles(f.browserProfiles)
+  const icon = sanitizeProjectIcon(f.icon)
   return {
     id: base.id,
     name: f.name,
     color: f.color,
+    ...(icon ? { icon } : {}),
     viewport: base.viewport ?? f.viewport ?? framingViewport(f.nodes),
     // applyLocalNodeExec DROPS whatever the file carried in the exec fields (it is not ours) and
     // re-attaches only what this machine typed. See @shared/node-exec.

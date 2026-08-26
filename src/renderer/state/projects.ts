@@ -10,6 +10,7 @@ import type {
   Viewport,
   Workspace
 } from '@shared/types'
+import type { ProjectIcon } from '@shared/project-icon'
 import { applyEdgeMutation } from '@shared/canvas-mutations'
 import { collisionSeed, derivedProjectId } from '@shared/project-id'
 import { applyCanvasMutation, createProject, reorderGroupWithinParent } from './workspace'
@@ -58,6 +59,7 @@ interface ProjectsState {
   renameProject(id: string, name: string): void
   /** Sets a project's sidebar/monogram accent color. No-op for an unknown id. */
   setProjectColor(id: string, color: string): void
+  setProjectIcon(id: string, icon: ProjectIcon | undefined): void
   setProjectCwd(id: string, cwd: string): void
   /** Grey (or un-grey) a project tab as "unavailable" WITHOUT dropping it — runtime-only, never
    *  persisted (see the toWorkspace tripwire). Set true when a relay tab's socket drops (Stage 4
@@ -325,6 +327,13 @@ export const useProjects = create<ProjectsState>((set, get) => ({
   setProjectColor(id, color) {
     set((s) => ({
       projects: s.projects.map((p) => (p.id === id ? { ...p, color } : p))
+    }))
+  },
+  setProjectIcon(id, icon) {
+    set((s) => ({
+      projects: s.projects.map((p) =>
+        p.id === id ? { ...p, icon } : p
+      )
     }))
   },
 

@@ -575,3 +575,29 @@ describe('framingViewport', () => {
     expect(framingViewport(many)).toEqual({ x: 75, y: 71, zoom: 1 })
   })
 })
+
+describe('project icon: emitted only when valid, sanitized on the hostile load path', () => {
+  it('a valid icon round-trips projectToFile -> fileToProject', () => {
+    const p = project({ icon: { type: 'material-symbol', name: 'terminal' } })
+    const f = projectToFile(p, 1, 'now')
+    expect(f.icon).toEqual({ type: 'material-symbol', name: 'terminal' })
+    const back = fileToProject(f, { id: p.id })
+    expect(back.icon).toEqual({ type: 'material-symbol', name: 'terminal' })
+  })
+
+  it('an invalid in-memory icon is never written to the file (no bytes)', () => {
+    const p = project({ icon: { type: 'material-symbol', name: 'not-a-real-icon' } as any })
+    const f = projectToFile(p, 1, 'now')
+    expect(f.icon).toBeUndefined()
+  })
+
+  it('an absent icon adds no bytes to the file', () => {
+    const f = projectToFile(project(), 1, 'now')
+    expect(f.icon).toBeUndefined()
+  })
+
+  it('a hand-edited hostile icon shape on disk is dropped on load', () => {
+    const f = { ...projectToFile(project(), 1, 'now'), icon: { type: 'material-symbol', name: 'not-real' } } as any
+    expect(fileToProject(f, { id: 'p1' }).icon).toBeUndefined()
+  })
+})

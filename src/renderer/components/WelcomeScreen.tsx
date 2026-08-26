@@ -5,6 +5,7 @@ import { useSettings } from '../state/settings'
 import { resolveAppDisplayName } from '@shared/appIdentity'
 import { resolveLogoPreset } from './appearance/BrandMark'
 import { buildProvenanceLine, readBuildProvenance } from '@shared/build-provenance'
+import { ProjectGlyph } from './ProjectGlyph'
 
 /**
  * Whether the start screen may be dismissed back to whatever is behind it. `hasOpenProjects` is
@@ -34,7 +35,7 @@ interface WelcomeScreenProps {
    */
   onOpenProjectFile: () => void
   /** Closed projects that can be reopened (id + display name + folder). */
-  closedProjects?: { id: string; name: string; cwd?: string }[]
+  closedProjects?: { id: string; name: string; cwd?: string; color?: string; icon?: import('@shared/project-icon').ProjectIcon }[]
   /** Reopen a closed project (restores its nodes + sessions). */
   onReopen?: (id: string) => void
   /**
@@ -306,20 +307,30 @@ export function WelcomeScreen({
                     if (e.key === 'Enter' || e.key === ' ') onReopen?.(p.id)
                   }}
                 >
-                  <svg
-                    className="md3-welcome__recent-icon"
-                    viewBox="0 0 24 24"
-                    width="15"
-                    height="15"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                  </svg>
+                  {p.icon ? (
+                    <ProjectGlyph
+                      className="md3-welcome__recent-icon"
+                      icon={p.icon}
+                      color={p.color}
+                      name={p.name}
+                      size={15}
+                    />
+                  ) : (
+                    <svg
+                      className="md3-welcome__recent-icon"
+                      viewBox="0 0 24 24"
+                      width="15"
+                      height="15"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                    </svg>
+                  )}
                   <span className="md3-welcome__recent-name">{p.name}</span>
                   {p.cwd && <span className="md3-welcome__recent-path">{p.cwd}</span>}
                   <span className="md3-welcome__recent-spacer" />

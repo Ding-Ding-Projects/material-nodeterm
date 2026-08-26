@@ -1,6 +1,7 @@
 import type { AgentNodeStatus } from '../state/agentStatus'
 import type { AgentId } from '@shared/agents/config'
 import type { NodeKind } from '@shared/types'
+import type { ProjectIcon } from '@shared/project-icon'
 import { hasUsage } from '@shared/agents/config'
 import type { SshConnection } from '@shared/ssh'
 
@@ -20,6 +21,7 @@ export interface ProjectInput {
   id: string
   name: string
   color: string
+  icon?: ProjectIcon
   cwd?: string
   nodes: SessionNodeInput[]
 }
@@ -192,6 +194,7 @@ export interface SessionGroup {
   projectId: string
   projectName: string
   projectColor: string
+  projectIcon?: ProjectIcon
   cwd?: string
   isActive: boolean
   /** Canvas group frames in this project, each with its member sessions. */
@@ -307,6 +310,7 @@ export function buildSessionList(
       projectId: p.id,
       projectName: p.name,
       projectColor: p.color,
+      projectIcon: p.icon,
       cwd: p.cwd,
       isActive,
       groups: buckets,
