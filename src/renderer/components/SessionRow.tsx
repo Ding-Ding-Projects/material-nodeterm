@@ -3,6 +3,7 @@ import { IconBellFilled, IconCircleCheck } from './icons'
 import type { SessionRowVM } from '../lib/sessionList'
 import { useContextWindow } from '../state/contextWindow'
 import { useSessionNaming } from '../state/sessionNaming'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 export interface SessionRowProps {
   row: SessionRowVM
@@ -43,6 +44,7 @@ export function SessionRow({
   // unmounting (sidebar close / hover-peek collapse) while the name is still generating.
   const naming = useSessionNaming((s) => !!s.byId[row.id])
   const usage = useContextWindow((s) => (row.sessionId ? s.bySessionId[row.sessionId] : undefined))
+  const vocab = useVocabularyMapper()
 
   const commit = (): void => {
     const t = draft.trim()
@@ -72,23 +74,23 @@ export function SessionRow({
     >
       {row.statusKind === 'attention' ? (
         // Needs-you rings a bell — louder than one more colored dot.
-        <span className="ss-bell" title={row.stateLabel}>
+        <span className="ss-bell" title={vocab(row.stateLabel)}>
           <IconBellFilled />
         </span>
       ) : row.statusKind !== 'working' && row.unread ? (
         // Finished (or reset to idle) while the user wasn't looking: the SAME check glyph,
         // but accent-blue and pulsing until they visit the node. Working/attention win —
         // a new turn or a permission prompt is more urgent than an old unread mark.
-        <span className="ss-check ss-check--unread" title="Finished — new for you">
+        <span className="ss-check ss-check--unread" title={vocab('Finished — new for you')}>
           <IconCircleCheck />
         </span>
       ) : row.statusKind === 'done' ? (
         // Completion glyph: a check icon scans better than one more dot.
-        <span className="ss-check" title={row.stateLabel}>
+        <span className="ss-check" title={vocab(row.stateLabel)}>
           <IconCircleCheck />
         </span>
       ) : (
-        <span className={`ss-dot ss-dot--${row.statusKind}`} title={row.stateLabel} />
+        <span className={`ss-dot ss-dot--${row.statusKind}`} title={vocab(row.stateLabel)} />
       )}
       <div className="ss-row__body">
         <div className="ss-row__titleline">
@@ -131,7 +133,7 @@ export function SessionRow({
           )}
           <button
             className="ss-row__ai"
-            title="Name with AI (from terminal output)"
+            title={vocab('Name with AI (from terminal output)')}
             disabled={naming}
             onClick={aiName}
           >
@@ -139,7 +141,7 @@ export function SessionRow({
           </button>
           <button
             className="ss-row__close"
-            title="Close session"
+            title={vocab('Close session')}
             onClick={(e) => {
               e.stopPropagation()
               onClose()

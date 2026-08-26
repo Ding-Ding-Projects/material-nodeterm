@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { NavStop, Project } from '@shared/types'
 import { relativeTime } from '../lib/relativeTime'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 /** How many stops the card offers. Small on purpose: this is "where was I?", not the whole trail. */
 const RESUME_CARD_COUNT = 3
@@ -32,6 +33,7 @@ interface ResumeCardProps {
  */
 export function ResumeCard({ project, nodes, onOpen }: ResumeCardProps): JSX.Element | null {
   const [dismissed, setDismissed] = useState(false)
+  const vocab = useVocabularyMapper()
   const liveIds = useMemo(() => new Set(nodes.map((n) => n.id)), [nodes])
   const rows = useMemo(() => {
     const all = project.breadcrumbs ?? []
@@ -55,11 +57,11 @@ export function ResumeCard({ project, nodes, onOpen }: ResumeCardProps): JSX.Ele
     // underneath it.
     <div className="resume-card" data-canvas-chrome>
       <div className="resume-card__header">
-        <span className="resume-card__title">Resume where you left off</span>
+        <span className="resume-card__title">{vocab('Resume where you left off')}</span>
         <button
           className="resume-card__close"
-          title="Dismiss"
-          aria-label="Dismiss"
+          title={vocab('Dismiss')}
+          aria-label={vocab('Dismiss')}
           onClick={() => setDismissed(true)}
         >
           ✕

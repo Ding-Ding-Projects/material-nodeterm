@@ -10,6 +10,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_SETTINGS } from '@shared/types'
 import { useSchoolMode } from '../state/schoolMode'
+import { usePersonalVocabulary } from '../state/personalVocabulary'
 import { useSettings } from '../state/settings'
 import { WelcomeScreen, canDismissWelcomeScreen } from './WelcomeScreen'
 
@@ -44,6 +45,7 @@ describe('WelcomeScreen dismiss control', () => {
     act(() => root.unmount())
     host.remove()
     vi.restoreAllMocks()
+    usePersonalVocabulary.setState({ entries: {}, status: 'no-file', entryCount: 0, loadedAt: null, lastError: null })
   })
 
   const noop = () => {}
@@ -108,5 +110,24 @@ describe('WelcomeScreen dismiss control', () => {
     expect(() =>
       act(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })))
     ).not.toThrow()
+  })
+
+  it('maps catalogue prose at the final render boundary after a vocabulary upload', () => {
+    usePersonalVocabulary.setState({
+      entries: { terminals: 'shell boxes', 'New project': 'Fresh mission' },
+      status: 'loaded',
+      entryCount: 2
+    })
+    renderScreen()
+    expect(host.textContent).toContain('shell boxes')
+    expect(host.textContent).toContain('Fresh mission')
+  })
+
+  it('keeps the shipped wording while School mode is enabled', () => {
+    usePersonalVocabulary.setState({ entries: { terminals: 'shell boxes' }, status: 'loaded', entryCount: 1 })
+    useSchoolMode.setState({ enabled: true, hydrated: true, name: 'School mode' })
+    renderScreen()
+    expect(host.textContent).toContain('terminals')
+    expect(host.textContent).not.toContain('shell boxes')
   })
 })
