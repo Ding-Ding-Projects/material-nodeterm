@@ -1,5 +1,6 @@
 import type React from 'react'
 import { useVocabularyTemplate, useVocabularyText } from '../../lib/personalVocabulary/useVocabularyText'
+import { useSettingsVocabularyApplied } from './context'
 
 /** label (+ optional description, + optional highlighted note) on the left, a control on the right. */
 export function FieldRow({
@@ -27,11 +28,13 @@ export function FieldRow({
   // through this one component, so this is where the substitution actually reaches users. Never
   // applied to `control` — that's live form widgets, not prose.
   const mappedLabel = useVocabularyText(label)
-  const vocabLabel = vocabularyApplied ? label : mappedLabel
+  const inheritedVocabularyApplied = useSettingsVocabularyApplied()
+  const alreadyApplied = vocabularyApplied || inheritedVocabularyApplied
+  const vocabLabel = alreadyApplied ? label : mappedLabel
   const mappedDescription = useVocabularyTemplate(description, descriptionParams)
-  const vocabDescription = vocabularyApplied ? description : mappedDescription
+  const vocabDescription = alreadyApplied ? description : mappedDescription
   const mappedNote = useVocabularyText(note)
-  const vocabNote = vocabularyApplied ? note : mappedNote
+  const vocabNote = alreadyApplied ? note : mappedNote
   return (
     <div className="md3-settings-row">
       <div className="md3-settings-row__body">

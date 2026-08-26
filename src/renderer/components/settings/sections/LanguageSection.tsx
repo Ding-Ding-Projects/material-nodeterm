@@ -111,6 +111,7 @@ export function LanguageSection({ isActive }: { isActive: boolean }): React.JSX.
   return (
     <SettingsSection
       id="language"
+      vocabularyApplied
       title={title.primary}
       description={description.secondary ? `${description.primary} ${description.secondary}` : description.primary}
       isActive={isActive}

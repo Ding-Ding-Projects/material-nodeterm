@@ -1,5 +1,5 @@
 import type React from 'react'
-import { useSettingsSearchState } from './context'
+import { SettingsVocabularyContext, useSettingsSearchState } from './context'
 import { matchesEntry, type SettingsSearchEntry } from './search'
 import { useVocabularyMapper, useVocabularyText } from '../../lib/personalVocabulary/useVocabularyText'
 import { settingsSearchEntryWithVocabulary } from './vocabulary'
@@ -33,8 +33,8 @@ export function SettingsSection({
   // own real rows, which is what SearchableRow was faithfully filtering all along.
   const search = useSettingsSearchState()
   const hasQuery = (search.mode === 'text' ? search.query : search.pattern).trim() !== ''
-  // Personal-vocabulary boundary for section chrome (unconditional — search matching below still
-  // runs against the ORIGINAL title/searchEntries, so a rename never breaks ⌘K-style lookup).
+  // Personal-vocabulary boundary for section chrome (unconditional). Search matching below keeps
+  // the shipped aliases beside visible replacements, so a rename never breaks existing lookup.
   const mappedTitle = useVocabularyText(title)
   const vocabTitle = vocabularyApplied ? title : mappedTitle
   const mappedDescription = useVocabularyText(description)
@@ -52,12 +52,14 @@ export function SettingsSection({
     return null
   }
   return (
-    <section id={id} data-settings-section={id} className="space-y-5">
+    <SettingsVocabularyContext.Provider value={vocabularyApplied}>
+      <section id={id} data-settings-section={id} className="space-y-5">
       <div className="md3-settings-header">
         <h2 className="md3-settings-header__title">{vocabTitle}</h2>
         {vocabDescription ? <p className="md3-settings-header__desc">{vocabDescription}</p> : null}
       </div>
       <div className="md3-settings-card">{children}</div>
-    </section>
+      </section>
+    </SettingsVocabularyContext.Provider>
   )
 }

@@ -48,16 +48,8 @@ export function PersonalVocabularySection({ isActive }: { isActive: boolean }): 
     `Loaded — {count} usable ${entryCount === 1 ? 'pair' : 'pairs'} applied to the app's own wording: Settings, dialogs and prompts, tooltips, notifications, the command palette, and the board and source-control menus.`,
     { count: String(entryCount) }
   )
-  const description = useVocabularyTemplate(
-    "Upload a small JSON file of your own term → replacement pairs; they apply to the app's own wording only — never to your file paths, commands, terminal output, branch or commit names, or anything saved to disk. Nothing leaves this machine. Up to {maxEntries} entries, {keyLength}/{valueLength}-character keys/values, {fileSize} file size. See {docs} for the exact JSON shape.",
-    {
-      maxEntries: VOCAB_MAX_ENTRIES.toLocaleString(),
-      keyLength: String(VOCAB_MAX_KEY_LENGTH),
-      valueLength: String(VOCAB_MAX_VALUE_LENGTH),
-      fileSize: humanBytes(VOCAB_MAX_FILE_BYTES),
-      docs: 'docs/personal-vocabulary.md'
-    }
-  )
+  const description =
+    "Upload a small JSON file of your own term → replacement pairs; they apply to the app's own wording only — never to your file paths, commands, terminal output, branch or commit names, or anything saved to disk. Nothing leaves this machine. Up to {maxEntries} entries, {keyLength}/{valueLength}-character keys/values, {fileSize} file size. See {docs} for the exact JSON shape."
   const inputRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
 
@@ -113,6 +105,13 @@ export function PersonalVocabularySection({ isActive }: { isActive: boolean }): 
         <FieldRow
           label="Local vocabulary file"
           description={description}
+          descriptionParams={{
+            maxEntries: VOCAB_MAX_ENTRIES.toLocaleString(),
+            keyLength: String(VOCAB_MAX_KEY_LENGTH),
+            valueLength: String(VOCAB_MAX_VALUE_LENGTH),
+            fileSize: humanBytes(VOCAB_MAX_FILE_BYTES),
+            docs: 'docs/personal-vocabulary.md'
+          }}
           htmlFor="personal-vocabulary-file"
           control={
             <div className="flex flex-col items-end gap-2">

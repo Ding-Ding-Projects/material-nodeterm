@@ -121,6 +121,7 @@ export function AppIdentitySection({ isActive }: { isActive: boolean }): React.J
                 <Input
                   value={nameDraft}
                   placeholder={SHIPPED_APP_NAME}
+                  vocabularyMode="factual"
                   aria-label="App display name"
                   className="w-56"
                   onChange={(e) => setNameDraft(e.target.value)}

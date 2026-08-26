@@ -90,6 +90,7 @@ function LegacyShellControl({ rows }: { rows: typeof BASE_ROWS }): React.JSX.Ele
               'terminalProfiles.settings.systemDefaultPlaceholder',
               'system default'
             )}
+            vocabularyMode="factual"
             value={defaultShell}
             onChange={(event) => update({ defaultShell: event.target.value })}
           />
@@ -443,6 +444,7 @@ function WindowsProfileControls({ rows }: { rows: typeof BASE_ROWS }): React.JSX
                 id="custom-shell-executable"
                 className="w-72 font-mono"
                 placeholder="C:\\Program Files\\PowerShell\\7\\pwsh.exe"
+                vocabularyMode="factual"
                 value={defaultShell}
                 spellCheck={false}
                 autoComplete="off"

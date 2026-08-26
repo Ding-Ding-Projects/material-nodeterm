@@ -45,7 +45,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
       )}
     >
       <label className="mdx-field__label" htmlFor={inputId}>
-        {vocab(label)}
+        {vocabularyMode === 'authored' ? vocab(label) : label}
       </label>
       <div className="mdx-field__control">
         {leadingIcon}
@@ -66,10 +66,11 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
           {...rest}
           aria-label={vocabularyMode === 'authored' ? vocab(rest['aria-label']) : rest['aria-label']}
           title={vocabularyMode === 'authored' ? vocab(rest.title) : rest.title}
+          placeholder={vocabularyMode === 'authored' ? vocab(rest.placeholder) : rest.placeholder}
         />
         {trailingSlot && <div className="mdx-field__trailing">{trailingSlot}</div>}
       </div>
-      {supportText && <div className="mdx-field__support">{vocab(supportText)}</div>}
+      {supportText && <div className="mdx-field__support">{vocabularyMode === 'authored' ? vocab(supportText) : supportText}</div>}
     </div>
   )
 })

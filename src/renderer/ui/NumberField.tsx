@@ -25,11 +25,12 @@ export const NumberField = forwardRef<HTMLInputElement, {
         max={max}
         step={step}
         disabled={disabled}
-        aria-label={vocabularyMode === 'authored' ? vocab(ariaLabel) : ariaLabel}
-        title={vocabularyMode === 'authored' ? vocab(rest.title) : rest.title}
         onChange={(e) => onChange(Number(e.target.value))}
         className={cn('mdx-input mdx-number-field', className)}
         {...rest}
+        aria-label={vocabularyMode === 'authored' ? vocab(ariaLabel) : ariaLabel}
+        title={vocabularyMode === 'authored' ? vocab(rest.title) : rest.title}
+        placeholder={vocabularyMode === 'authored' ? vocab(rest.placeholder) : rest.placeholder}
       />
     )
   }

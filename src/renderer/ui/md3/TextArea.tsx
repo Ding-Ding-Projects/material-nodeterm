@@ -41,6 +41,7 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(function 
       {...rest}
       aria-label={vocabularyMode === 'authored' ? vocab(rest['aria-label']) : rest['aria-label']}
       title={vocabularyMode === 'authored' ? vocab(rest.title) : rest.title}
+      placeholder={vocabularyMode === 'authored' ? vocab(rest.placeholder) : rest.placeholder}
     />
   )
 })

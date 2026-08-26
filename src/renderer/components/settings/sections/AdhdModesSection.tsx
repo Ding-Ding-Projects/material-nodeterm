@@ -80,6 +80,7 @@ export function AdhdModesSection({ isActive }: { isActive: boolean }): React.JSX
   return (
     <SettingsSection
       id="adhd-modes"
+      vocabularyApplied
       title={title.primary}
       description={
         description.secondary

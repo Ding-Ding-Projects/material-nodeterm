@@ -231,6 +231,7 @@ export function GitHubIssuesSection({ isActive }: { isActive: boolean }): React.
             className="w-56"
             value={token}
             placeholder={view?.auth.tokenPresent ? 'Token saved' : 'github_pat_…'}
+            vocabularyMode="factual"
             onChange={(event) => setToken(event.target.value)}
           />
           <Button
@@ -321,6 +322,7 @@ export function GitHubIssuesSection({ isActive }: { isActive: boolean }): React.
                       className="w-56"
                       value={repositoryDraft}
                       placeholder={view?.project?.detectedRepository ?? 'owner/repository'}
+                      vocabularyMode="factual"
                       onChange={(event) => setRepositoryDraft(event.target.value)}
                     />
                     <Button
@@ -466,6 +468,7 @@ export function GitHubIssuesSection({ isActive }: { isActive: boolean }): React.
                       value={mappings.get(column.id) ?? ''}
                       maxLength={50}
                       placeholder={`status:${column.title.toLocaleLowerCase('en-US')}`}
+                      vocabularyMode="factual"
                       onChange={(event) => {
                         const label = event.target.value
                         const next = githubConfig.columnMappings

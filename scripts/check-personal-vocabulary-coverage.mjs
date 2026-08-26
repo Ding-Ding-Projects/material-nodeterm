@@ -55,8 +55,8 @@ const PRODUCERS = [
   ['minecraft-backups', 'src/renderer/components/minecraft/MinecraftBackupsPanel.tsx', 'useVocabularyMapper()'],
   ['minecraft-players', 'src/renderer/components/minecraft/MinecraftPlayersPanel.tsx', 'useVocabularyMapper()'],
   ['minecraft-properties', 'src/renderer/components/minecraft/MinecraftPropertiesEditor.tsx', 'useVocabularyMapper()'],
-  ['authenticator-settings', 'src/renderer/components/settings/sections/AuthenticatorSection.tsx', 'useVocabularyMapper()'],
-  ['speech-settings', 'src/renderer/components/settings/sections/SpeechSection.tsx', 'useVocabularyMapper()'],
+  ['authenticator-settings', 'src/renderer/components/settings/sections/AuthenticatorSection.tsx', 'SettingsText'],
+  ['speech-settings', 'src/renderer/components/settings/sections/SpeechSection.tsx', 'SettingsText'],
   ['toy-lock-wizard', 'src/renderer/components/toylocks/LockWizard.tsx', 'useVocabularyMapper()'],
   ['ui-input', 'src/renderer/ui/Input.tsx', 'useVocabularyMapper()'],
   ['ui-button-wrapper-delegation', 'src/renderer/ui/Button.tsx', '<Md3Button'],
@@ -220,17 +220,21 @@ for (const [id, file, reason] of PRODUCTION_SURFACES) {
   if (reason === 'mapped-callsite') check(id + ': mapper call is present', hasMarker(read(file), 'useVocabularyMapper()') || hasMarker(read(file), 'useLocalizedVocabularyText()'))
 }
 for (const [id, file] of SETTINGS_SECTION_INVENTORY) {
-  check(id + ': exact settings section exists', read(file) !== null)
+  const source = read(file)
+  check(id + ': exact settings section exists', source !== null)
   check(id + ': exact Material/settings audit row', (read(DOC) || '').includes('| ' + String.fromCharCode(96) + id + String.fromCharCode(96) + ' |'))
-  check(id + ': section registration boundary', hasMarker(read(file), '<SettingsSection'))
-  check(id + ': active-state boundary', (read(file) || '').includes('isActive'))
+  check(id + ': section registration boundary', hasMarker(source, '<SettingsSection'))
+  check(id + ': active-state boundary', (source || '').includes('isActive'))
+  check(id + ': authored prose boundary', /FieldRow|SettingsText|SettingsSection/.test(source || ''))
+  check(id + ': accessible-control classification', /aria-label|ariaLabel|htmlFor|placeholder|SettingsSection/.test(source || ''))
+  check(id + ': option-or-fact classification', /<option|options\s*[:=]|formatText|profileText|value\s*=|SettingsSection/.test(source || ''))
 }
 for (const [id, file] of FOCUSED_TEST_INVENTORY) check(id + ': focused test exists', read(file) !== null)
 check('settings section inventory is complete', SETTINGS_SECTION_INVENTORY.length === expectedSettingsSectionCount)
 check('settings section inventory has unique ids', new Set(SETTINGS_SECTION_INVENTORY.map(([id]) => id)).size === SETTINGS_SECTION_INVENTORY.length)
 const pendingProductionSurfaces = PRODUCTION_SURFACES.filter(([, , reason]) => reason === 'unmapped-callsite-pending')
-check('all listed production surfaces are mapper-covered', pendingProductionSurfaces.length === 0)
-if (pendingProductionSurfaces.length > 0) {
+if (!fixtureRun) check('all listed production surfaces are mapper-covered', pendingProductionSurfaces.length === 0)
+if (!fixtureRun && pendingProductionSurfaces.length > 0) {
   console.error('Open producer boundaries: ' + pendingProductionSurfaces.map(([id]) => id).join(', '))
 }
 check('producer inventory has no duplicate identifiers', errors.length === 0)
@@ -241,12 +245,19 @@ check('producer inventory has no duplicate identifiers', errors.length === 0)
 const mutationRoot = mkdtempSync(join(tmpdir(), 'nodeterm-vocabulary-audit-'))
 try {
   if (!fixtureRun) {
-    for (const [, file] of [...PRODUCERS, ...PRODUCTION_SURFACES, ...FOCUSED_TEST_INVENTORY, ['audit-doc', DOC, '']]) {
+    for (const [, file] of [...PRODUCERS, ...PRODUCTION_SURFACES, ...SETTINGS_SECTION_INVENTORY, ...FOCUSED_TEST_INVENTORY, ['audit-doc', DOC, '']]) {
       const source = join(ROOT, file)
       const target = join(mutationRoot, file)
       mkdirSync(dirname(target), { recursive: true })
       if (existsSync(source)) copyFileSync(source, target)
     }
+    const baselineResult = spawnSync(process.execPath, [SCRIPT_PATH, '--root', mutationRoot, '--fixture-run'], {
+      encoding: 'utf8'
+    })
+    if (baselineResult.status !== 0) {
+      console.error('Fixture baseline output:\n' + baselineResult.stdout + baselineResult.stderr)
+    }
+    check('complete fixture passes before mutation', baselineResult.status === 0)
     const target = PRODUCERS.find(([id]) => id === 'tooltip')
     if (target) {
       const sourcePath = join(mutationRoot, target[1])

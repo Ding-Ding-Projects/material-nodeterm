@@ -304,6 +304,7 @@ function SourceEditor({
             <Input
               className="w-full"
               placeholder="https://example.com/nodeterm-schedule.json"
+              vocabularyMode="factual"
               value={source.url}
               onChange={(e) => onChange({ ...source, url: e.target.value })}
             />
@@ -318,6 +319,7 @@ function SourceEditor({
             <Input
               className="w-full"
               placeholder="https://homeassistant.example.com"
+              vocabularyMode="factual"
               value={source.baseUrl}
               onChange={(e) => onChange({ ...source, baseUrl: e.target.value })}
             />
@@ -329,6 +331,7 @@ function SourceEditor({
             <Input
               className="w-full"
               placeholder="input_boolean.evening_mode"
+              vocabularyMode="factual"
               value={source.entityId}
               onChange={(e) => onChange({ ...source, entityId: e.target.value })}
             />
@@ -349,6 +352,7 @@ function SourceEditor({
                 type="password"
                 className="w-full"
                 placeholder={hasToken ? '••••••••••••' : 'Paste a Home Assistant long-lived access token'}
+                vocabularyMode="factual"
                 value={tokenDraft}
                 onChange={(e) => setTokenDraft(e.target.value)}
                 autoComplete="off"

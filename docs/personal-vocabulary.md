@@ -209,6 +209,11 @@ because the substitution happens inside `CommandPalette` itself; the canvas cont
 **not** — closing that gap is a one-line swap of `ContextMenu` for `VocabularyContextMenu` at
 `Canvas.tsx`'s single render site, deliberately left out of the change that widened the rest.
 
+The Settings surface is complete at its own boundaries, but the project-wide audit intentionally
+keeps non-Settings producers that belong to other implementation lanes listed as open until their
+own real mapper, tests, documentation, and built-artifact evidence land. A green Settings section
+inventory must not be read as a claim that those unrelated surfaces are complete.
+
 ## School mode
 
 While [School mode](school-mode.md) is on, this whole capability behaves as if it were not

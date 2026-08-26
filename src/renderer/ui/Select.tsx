@@ -38,7 +38,7 @@ export function Select({
   return (
     <span className="mdx-select__wrap">
       <select className={cn('mdx-select', className)} {...rest} aria-label={vocabularyMode === 'authored' ? vocab(rest['aria-label']) : rest['aria-label']} title={vocabularyMode === 'authored' ? vocab(rest.title) : rest.title}>
-        {vocabularyOptions ? mapOptionChildren(children, vocab) : children}
+        {vocabularyOptions && vocabularyMode === 'authored' ? mapOptionChildren(children, vocab) : children}
       </select>
       <svg
         aria-hidden="true"

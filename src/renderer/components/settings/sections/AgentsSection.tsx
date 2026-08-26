@@ -316,6 +316,7 @@ export function AgentsSection({ isActive }: { isActive: boolean }): React.JSX.El
               <Input
                 className="w-72"
                 placeholder={AGENT_CONFIG[id].launchCmd}
+                vocabularyMode="factual"
                 aria-label={`${AGENT_CONFIG[id].label} launch command`}
                 value={settings.agentLaunchCommands[id] ?? ''}
                 onChange={(e) => {

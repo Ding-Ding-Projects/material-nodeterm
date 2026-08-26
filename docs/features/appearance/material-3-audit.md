@@ -275,6 +275,28 @@ Every listed renderer producer has an explicit local mapper boundary. Commands, 
 | `settings-search-policy` | Settings visible/shipped search and School-mode rename policy | `src/renderer/components/settings/vocabulary.ts` | `export function settingsSidebarSearchEntry` |
 | `shared-prose-primitives` | Shared controls carrying prose props | `src/renderer/ui/` | `useVocabularyMapper()` in each primitive |
 | `ui-button-wrapper-delegation` | Compatibility button delegates prose mapping to MD3 button | `src/renderer/ui/Button.tsx` | `<Md3Button` |
+| `ui-input` | Input accessible labels and placeholders | `src/renderer/ui/Input.tsx` | `useVocabularyMapper()` |
+| `ui-md3-button` | MD3 button authored/factual labels | `src/renderer/ui/md3/Button.tsx` | `useVocabularyMapper()` |
+| `ui-chip` | Chip authored/factual text | `src/renderer/ui/md3/Chip.tsx` | `useVocabularyMapper()` |
+| `ui-menu` | Menu authored/factual accessible text | `src/renderer/ui/md3/Menu.tsx` | `useVocabularyMapper()` |
+| `ui-status-chip` | Status chip authored/factual text | `src/renderer/ui/md3/StatusChip.tsx` | `useVocabularyMapper()` |
+| `ui-switch` | Switch accessible label intent | `src/renderer/ui/Switch.tsx` | `useVocabularyMapper()` |
+| `ui-select` | Select labels and option groups | `src/renderer/ui/Select.tsx` | `useVocabularyMapper()` |
+| `ui-number-field` | Number field labels and placeholders | `src/renderer/ui/NumberField.tsx` | `useVocabularyMapper()` |
+| `ui-text-area` | Text area labels and placeholders | `src/renderer/ui/md3/TextArea.tsx` | `useVocabularyMapper()` |
+| `ui-text-field` | Text field labels and support text | `src/renderer/ui/md3/TextField.tsx` | `useVocabularyMapper()` |
+| `ui-fab` | Floating action button labels | `src/renderer/ui/md3/Fab.tsx` | `useVocabularyMapper()` |
+| `ui-icon-button` | Icon button labels | `src/renderer/ui/md3/IconButton.tsx` | `useVocabularyMapper()` |
+| `ui-segmented-button` | Segmented option labels | `src/renderer/ui/md3/SegmentedButton.tsx` | `useVocabularyMapper()` |
+| `ui-dialog` | Dialog title and accessible label | `src/renderer/ui/md3/Dialog.tsx` | `useVocabularyMapper()` |
+| `ui-list-row` | List-row authored/factual labels | `src/renderer/ui/md3/ListRow.tsx` | `useVocabularyMapper()` |
+| `ui-tabs` | Tab labels and accessible name | `src/renderer/ui/md3/Tabs.tsx` | `useVocabularyMapper()` |
+| `ui-slider` | Slider accessible labels | `src/renderer/ui/md3/Slider.tsx` | `useVocabularyMapper()` |
+| `ui-checkbox` | Checkbox accessible labels | `src/renderer/ui/md3/Checkbox.tsx` | `useVocabularyMapper()` |
+| `ui-radio` | Radio accessible labels | `src/renderer/ui/md3/Radio.tsx` | `useVocabularyMapper()` |
+| `filterable-menu` | Filter field prose | `src/renderer/components/menu/FilterableMenu.tsx` | `useVocabularyMapper()` |
+| `editable-node-title` | Editable title copy | `src/renderer/components/EditableNodeTitle.tsx` | `useVocabularyMapper()` |
+| `destructive-confirm-gate` | Destructive confirmation prose | `src/renderer/components/DestructiveConfirmGate.tsx` | `useVocabularyMapper()` |
 | `shared-input-controls` | Shared range, checkbox and radio accessible copy | `src/renderer/ui/md3/Slider.tsx`, `Checkbox.tsx`, `Radio.tsx` | `useVocabularyMapper()` |
 | `personal-vocabulary-upload` | Upload settings | `src/renderer/components/settings/sections/PersonalVocabularySection.tsx` | `usePersonalVocabulary` |
 | `command-palette` | Command palette | `src/renderer/components/CommandPalette.tsx` | `useVocabularyCommands` |

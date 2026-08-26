@@ -35,8 +35,6 @@ export const Fab = forwardRef<HTMLButtonElement, FabProps>(function Fab(
       {...rest}
       aria-label={vocabularyMode === 'authored' ? vocab(rest['aria-label']) : rest['aria-label']}
       title={vocabularyMode === 'authored' ? vocab(rest.title) : rest.title}
-      aria-label={vocab(rest['aria-label'])}
-      title={vocab(rest.title)}
     >
       {icon ? <MaterialSymbol name={icon} size={size === 'small' ? 20 : 26} /> : vocabularyMode === 'authored' && typeof children === 'string' ? vocab(children) : children}
     </button>
