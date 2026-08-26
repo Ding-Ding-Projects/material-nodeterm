@@ -3,9 +3,15 @@ import { cn } from '../cn'
 
 export type ButtonVariant = 'filled' | 'tonal' | 'outlined' | 'text'
 
+/** M3 Expressive button sizes. `small` (32px) exists for dense rows -- settings controls,
+ *  toolbars -- where the 40px default would break an existing row height. */
+export type ButtonSize = 'medium' | 'small'
+
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   /** @default 'filled' */
   variant?: ButtonVariant
+  /** @default 'medium' */
+  size?: ButtonSize
   /** Layers the error tone onto whichever `variant` is chosen — the design's convention for the
    *  one dangerous action in an otherwise neutral action row. */
   danger?: boolean
@@ -22,7 +28,7 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
  * forwards everything else.
  */
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { variant = 'filled', danger = false, leadingIcon, trailingIcon, className, children, type = 'button', ...rest },
+  { variant = 'filled', size = 'medium', danger = false, leadingIcon, trailingIcon, className, children, type = 'button', ...rest },
   ref
 ) {
   return (
@@ -32,6 +38,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       className={cn(
         'mdx-btn',
         `mdx-btn--${variant}`,
+        size === 'small' && 'mdx-btn--small',
         danger && 'mdx-btn--danger',
         Boolean(leadingIcon) && 'mdx-btn--has-leading-icon',
         Boolean(trailingIcon) && 'mdx-btn--has-trailing-icon',

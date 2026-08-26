@@ -2,7 +2,7 @@ import { cn } from '../cn'
 
 export interface SegmentedButtonProps<T extends string> {
   value: T
-  options: { value: T; label: string }[]
+  options: { value: T; label: string; disabled?: boolean }[]
   onChange: (v: T) => void
   ariaLabel?: string
   className?: string
@@ -33,6 +33,7 @@ export function SegmentedButton<T extends string>({
           type="button"
           role="radio"
           aria-checked={opt.value === value}
+          disabled={opt.disabled}
           className={cn('mdx-seg__opt', opt.value === value && 'mdx-seg__opt--active')}
           onClick={() => {
             if (opt.value !== value) onChange(opt.value)

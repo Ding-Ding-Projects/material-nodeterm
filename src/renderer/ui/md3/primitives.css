@@ -55,6 +55,17 @@
   outline-offset: 2px;
 }
 /* An icon (leading or trailing) shrinks the horizontal padding on that side, per M3 spec. */
+.mdx-btn--small {
+  height: 32px;
+  padding: 0 16px;
+  font-size: 13px;
+}
+.mdx-btn--small.mdx-btn--has-leading-icon {
+  padding-left: 12px;
+}
+.mdx-btn--small.mdx-btn--has-trailing-icon {
+  padding-right: 12px;
+}
 .mdx-btn--has-leading-icon {
   padding-left: 16px;
 }
@@ -667,4 +678,78 @@
   width: 1px;
   align-self: stretch;
   margin: 0 4px;
+}
+
+/* ---------------------------------------------------------------------------
+ * Dense form controls -- the compact M3 outlined field used by settings rows,
+ * toolbars and inline editors. The full 56px floating-label `TextField` above is
+ * the right control for a standalone form (a dialog); these rows are dense by
+ * design and were built around a 32px control, so this is M3's outlined field
+ * anatomy -- outline, on-surface text, on-surface-variant placeholder, a 2px
+ * primary focus indicator, 0.38 disabled -- at the smaller size.
+ *
+ * They replace the pre-MD3 `border-border` / `bg-bg` literals the app's
+ * `ui/Input.tsx` and `ui/Select.tsx` used, which is why fields looked generic
+ * beside the buttons.
+ * ------------------------------------------------------------------------ */
+.mdx-input,
+.mdx-select {
+  height: 32px;
+  border: 1px solid var(--md-outline);
+  border-radius: var(--md-shape-extra-small);
+  background: transparent;
+  color: var(--md-on-surface);
+  font-family: var(--md-font-ui);
+  font-size: 13px;
+  line-height: 1;
+  outline: none;
+  transition:
+    border-color var(--md-motion-effect),
+    background var(--md-motion-effect);
+}
+.mdx-input {
+  padding: 0 12px;
+}
+.mdx-select {
+  padding: 0 28px 0 12px;
+  appearance: none;
+  cursor: pointer;
+}
+.mdx-input::placeholder {
+  color: var(--md-on-surface-variant);
+}
+.mdx-input:hover:not(:disabled),
+.mdx-select:hover:not(:disabled) {
+  border-color: var(--md-on-surface);
+}
+.mdx-input:focus-visible,
+.mdx-select:focus-visible,
+.mdx-input:focus,
+.mdx-select:focus {
+  border-color: var(--md-primary);
+  box-shadow: inset 0 0 0 1px var(--md-primary);
+}
+.mdx-input:disabled,
+.mdx-select:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+.mdx-select__wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.mdx-select__arrow {
+  position: absolute;
+  right: 10px;
+  pointer-events: none;
+  color: var(--md-on-surface-variant);
+}
+
+/* A segment that cannot be chosen right now (e.g. Project mode with no project open).
+ * Disabled rather than hidden: the mode still exists, and a control that vanishes teaches
+ * nothing about why. */
+.mdx-seg__opt:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
 }

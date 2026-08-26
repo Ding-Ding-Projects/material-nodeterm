@@ -90,6 +90,12 @@ export function PersonalVocabularySection({ isActive }: { isActive: boolean }): 
           htmlFor="personal-vocabulary-file"
           control={
             <div className="flex flex-col items-end gap-2">
+              {/* The input itself is visually hidden and driven by a real MD3 button. A native
+                  `<input type="file">` renders the browser's own "Choose File / No file chosen"
+                  control, which no amount of `file:` styling makes part of the design system --
+                  it was the one element on this screen drawn entirely by Chromium. The input
+                  keeps its id and label so the FieldRow's `htmlFor` and screen readers are
+                  unchanged. */}
               <input
                 ref={inputRef}
                 id="personal-vocabulary-file"
@@ -97,12 +103,19 @@ export function PersonalVocabularySection({ isActive }: { isActive: boolean }): 
                 accept="application/json,.json"
                 aria-label="Choose a personal vocabulary JSON file"
                 disabled={busy}
-                className="w-56 text-[13px] text-muted file:mr-2 file:cursor-pointer file:rounded-md file:border file:border-border file:bg-panel-header file:px-2.5 file:py-1 file:text-[13px] file:text-text"
+                className="sr-only"
                 onChange={(e) => {
                   const file = e.target.files?.[0]
                   if (file) handleFile(file)
                 }}
               />
+              <Button
+                variant="default"
+                disabled={busy}
+                onClick={() => inputRef.current?.click()}
+              >
+                Choose file
+              </Button>
               {status === 'loaded' ? (
                 <Button
                   onClick={() => {

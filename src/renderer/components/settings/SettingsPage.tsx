@@ -46,6 +46,7 @@ import { schoolModeAllowsOptionalFeatures } from '../../lib/schoolModePolicy'
 import { useSettings } from '../../state/settings'
 import { useProjects } from '../../state/projects'
 import { Button } from '@renderer/ui/Button'
+import { SegmentedButton } from '@renderer/ui/md3'
 
 const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
 
@@ -141,10 +142,29 @@ export function SettingsPage({
                     Global mode stores durable app-wide defaults. Project mode edits a complete sparse overlay for <strong>{activeProject?.name ?? 'the active project'}</strong>; every unset value inherits Global mode.
                   </p>
                 </div>
-                <div className="flex items-center gap-2" role="group" aria-label="Choose settings mode">
-                  <Button aria-pressed={scope === 'global'} onClick={() => setScope('global')}>Global mode</Button>
-                  <Button aria-pressed={scope === 'project'} disabled={!activeProjectId} onClick={() => setScope('project')}>Project mode</Button>
-                  {scope === 'project' ? <Button disabled={Object.keys(projectOverrides).length === 0} onClick={resetProjectAll}>Reset all to Global</Button> : null}
+                <div className="flex items-center gap-3">
+                  {/* A segmented button, not two plain buttons: this is one choice between two
+                      mutually exclusive modes, which is exactly the MD3 control for it. The old
+                      pair carried `aria-pressed` with no visual for it, so neither button looked
+                      selected and the panel could not tell you which mode you were editing. */}
+                  <SegmentedButton
+                    value={scope}
+                    ariaLabel="Choose settings mode"
+                    onChange={(next) => setScope(next)}
+                    options={[
+                      { value: 'global', label: 'Global mode' },
+                      { value: 'project', label: 'Project mode', disabled: !activeProjectId }
+                    ]}
+                  />
+                  {scope === 'project' ? (
+                    <Button
+                      variant="ghost"
+                      disabled={Object.keys(projectOverrides).length === 0}
+                      onClick={resetProjectAll}
+                    >
+                      Reset all to Global
+                    </Button>
+                  ) : null}
                 </div>
               </div>
               <p className="mt-3 text-xs text-text-muted" role="status">
