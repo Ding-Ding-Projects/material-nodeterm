@@ -151,3 +151,83 @@ describe('AgentMailbox', () => {
     expect(agentEndpointAddress({ ...sender, title: 'Renamed' })).toBe('nodeterm:project-a/term-sender')
   })
 })
+
+describe('bounded queue, TTL expiry, and refusal invariants', () => {
+  it('refuses a self-send at create() as a backstop', () => {
+    const mailbox = new AgentMailbox(memoryStorage())
+    expect(() =>
+      mailbox.create({ id: 'msg-self', sender, recipient: sender, subject: 'x', body: 'y' })
+    ).toThrow(/self-send/)
+  })
+
+  it('refuses a cross-project send at create() as a backstop', () => {
+    const mailbox = new AgentMailbox(memoryStorage())
+    const otherProject: AgentMessageEndpoint = { ...recipient, projectId: 'project-b' }
+    expect(() =>
+      mailbox.create({ id: 'msg-cross', sender, recipient: otherProject, subject: 'x', body: 'y' })
+    ).toThrow(/cross-project/)
+  })
+
+  it('reports the queued depth for a recipient and refuses once it is full', () => {
+    const mailbox = new AgentMailbox(memoryStorage())
+    const cap = 3
+    for (let i = 0; i < cap; i++) {
+      mailbox.create({ id: `msg-${i}`, sender, recipient, subject: 's', body: 'b' })
+    }
+    expect(mailbox.queuedCountFor(recipient.nodeId)).toBe(cap)
+    expect(mailbox.wouldOverflowQueue(recipient.nodeId, cap)).toBe(true)
+    expect(() =>
+      mailbox.create({ id: 'msg-overflow', sender, recipient, subject: 's', body: 'b' })
+    ).not.toThrow() // default cap (AGENT_MAILBOX_QUEUE_CAP) is far above 3
+    expect(mailbox.wouldOverflowQueue(recipient.nodeId, cap)).toBe(true)
+  })
+
+  it('delivering a queued message frees a slot in its recipient queue depth', () => {
+    const mailbox = new AgentMailbox(memoryStorage())
+    const message = mailbox.create({ id: 'msg-a', sender, recipient, subject: 's', body: 'b' })
+    expect(mailbox.queuedCountFor(recipient.nodeId)).toBe(1)
+    mailbox.markDelivered(message.id)
+    expect(mailbox.queuedCountFor(recipient.nodeId)).toBe(0)
+  })
+
+  it('expireStale transitions a stale queued message to expired, never deletes it', () => {
+    const mailbox = new AgentMailbox(memoryStorage())
+    const created = new Date('2026-01-01T00:00:00.000Z')
+    const message = mailbox.create({ id: 'msg-stale', sender, recipient, subject: 's', body: 'b', now: created })
+    const past = new Date(created.getTime() + 16 * 60_000)
+    const expired = mailbox.expireStale(past, 15 * 60_000)
+    expect(expired.map((m) => m.id)).toEqual([message.id])
+    const stored = mailbox.get(message.id)
+    expect(stored?.status).toBe('expired')
+    expect(stored?.expiredAt).toBe(past.toISOString())
+  })
+
+  it('expireStale leaves a fresh queued message untouched', () => {
+    const mailbox = new AgentMailbox(memoryStorage())
+    const created = new Date('2026-01-01T00:00:00.000Z')
+    const message = mailbox.create({ id: 'msg-fresh', sender, recipient, subject: 's', body: 'b', now: created })
+    const soon = new Date(created.getTime() + 60_000)
+    expect(mailbox.expireStale(soon, 15 * 60_000)).toEqual([])
+    expect(mailbox.get(message.id)?.status).toBe('queued')
+  })
+
+  it('expireStale never touches an already-delivered message', () => {
+    const mailbox = new AgentMailbox(memoryStorage())
+    const created = new Date('2026-01-01T00:00:00.000Z')
+    const message = mailbox.create({ id: 'msg-done', sender, recipient, subject: 's', body: 'b', now: created })
+    mailbox.markDelivered(message.id, created)
+    const past = new Date(created.getTime() + 16 * 60_000)
+    expect(mailbox.expireStale(past, 15 * 60_000)).toEqual([])
+    expect(mailbox.get(message.id)?.status).toBe('delivered')
+  })
+
+  it('an expired message round-trips through storage as a valid status', () => {
+    const storage = memoryStorage()
+    const mailbox = new AgentMailbox(storage)
+    const created = new Date('2026-01-01T00:00:00.000Z')
+    mailbox.create({ id: 'msg-rt', sender, recipient, subject: 's', body: 'b', now: created })
+    mailbox.expireStale(new Date(created.getTime() + 16 * 60_000), 15 * 60_000)
+    const reloaded = new AgentMailbox(storage)
+    expect(reloaded.get('msg-rt')?.status).toBe('expired')
+  })
+})

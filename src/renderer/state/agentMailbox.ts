@@ -2,8 +2,16 @@ import type { AgentId } from '@shared/agents/config'
 
 export const AGENT_MAILBOX_KEY = 'nodeterm.agentMailbox.v1'
 export const AGENT_MAILBOX_CAP = 500
+/** How long a QUEUED message may sit before it is expired rather than silently dropped. Ported
+ *  from upstream's deliver-on-idle design ('feat/messaging-bounded-queue'): a message the recipient
+ *  never went idle for (busy forever, node gone, app restarted and never reopened) must eventually
+ *  become a visible, checkable fact instead of aging out of the AGENT_MAILBOX_CAP ring unseen. */
+export const AGENT_MESSAGE_TTL_MS = 15 * 60_000
+/** Bounded per-recipient queue depth — the fan-in half of the bound. Without this a single stuck
+ *  recipient could accept an unlimited number of queued sends before the TTL sweep ever runs. */
+export const AGENT_MAILBOX_QUEUE_CAP = 20
 
-export type AgentMessageStatus = 'queued' | 'delivered'
+export type AgentMessageStatus = 'queued' | 'delivered' | 'expired'
 
 export interface AgentMessageEndpoint {
   projectId: string
@@ -25,6 +33,7 @@ export interface AgentMessage {
   body: string
   status: AgentMessageStatus
   deliveredAt?: string
+  expiredAt?: string
 }
 
 interface StorageLike {
@@ -76,7 +85,7 @@ function validMessage(value: unknown): value is AgentMessage {
     validEndpoint(message.recipient) &&
     typeof message.subject === 'string' &&
     typeof message.body === 'string' &&
-    (message.status === 'queued' || message.status === 'delivered')
+    (message.status === 'queued' || message.status === 'delivered' || message.status === 'expired')
   )
 }
 
@@ -150,10 +159,48 @@ export class AgentMailbox {
     this.storage.setItem(AGENT_MAILBOX_KEY, JSON.stringify(this.messages))
   }
 
+  /** Queued (not yet delivered/expired) messages addressed to this node, regardless of project —
+   *  the bound `create()` enforces before ever accepting a new one. */
+  queuedCountFor(nodeId: string): number {
+    return this.messages.filter((message) => message.status === 'queued' && message.recipient.nodeId === nodeId).length
+  }
+
+  /** Would accepting one more queued message for `nodeId` exceed the bounded queue? Pure query —
+   *  callers (the decider) use this BEFORE create() so a refusal never has to unwind a create. */
+  wouldOverflowQueue(nodeId: string, cap = AGENT_MAILBOX_QUEUE_CAP): boolean {
+    return this.queuedCountFor(nodeId) >= cap
+  }
+
+  /**
+   * Transition every QUEUED message older than `ttlMs` (default AGENT_MESSAGE_TTL_MS) into
+   * `expired`, at `now`. Never deletes — an expired message stays a checkable fact via `status()`
+   * / `get()`, which is the whole point of a TTL that replaces a silent drop. Returns the messages
+   * that expired in this call, for a caller that wants to notify a sender.
+   */
+  expireStale(now = new Date(), ttlMs = AGENT_MESSAGE_TTL_MS): AgentMessage[] {
+    const cutoff = now.getTime() - ttlMs
+    const expired: AgentMessage[] = []
+    this.messages = this.messages.map((message) => {
+      if (message.status !== 'queued') return message
+      const createdAt = Date.parse(message.createdAt)
+      if (!Number.isFinite(createdAt) || createdAt > cutoff) return message
+      const next: AgentMessage = { ...message, status: 'expired', expiredAt: now.toISOString() }
+      expired.push(next)
+      return next
+    })
+    if (expired.length > 0) this.save()
+    return expired
+  }
+
   create(input: CreateAgentMessageInput): AgentMessage {
     if (!SAFE_ID.test(input.id)) throw new Error('invalid message id')
     if (this.messages.some((message) => message.id === input.id)) throw new Error('duplicate message id')
     if (!validEndpoint(input.sender) || !validEndpoint(input.recipient)) throw new Error('invalid message endpoint')
+    if (input.sender.projectId === input.recipient.projectId && input.sender.nodeId === input.recipient.nodeId) {
+      throw new Error('self-send refused')
+    }
+    if (input.sender.projectId !== input.recipient.projectId) throw new Error('cross-project send refused')
+    if (this.wouldOverflowQueue(input.recipient.nodeId)) throw new Error('recipient queue is full')
     const subject = oneLine(input.subject)
     const body = input.body.trim()
     if (!subject || subject.length > 200) throw new Error('subject must contain 1-200 characters')
