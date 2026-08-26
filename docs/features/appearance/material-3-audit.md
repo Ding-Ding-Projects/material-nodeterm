@@ -288,6 +288,20 @@ Every listed renderer producer has an explicit local mapper boundary. Commands, 
 | `browser-profile-picker` | Browser profile picker | `src/renderer/nodes/BrowserProfilePicker.tsx` | `useVocabularyMapper()` |
 | `password-manager` | Password manager | `src/renderer/components/passwordManager/PasswordManagerPanel.tsx` | `useVocabularyMapper()` |
 | `converter-adapter-catalog` | Adapter catalog | `src/renderer/components/converter/AdapterCatalog.tsx` | `useVocabularyMapper()` |
+| `converter-panel` | File converter panel and queue | `src/renderer/components/converter/FileConverterPanel.tsx` | `useVocabularyMapper()` |
+| `ollama-manager` | Local model manager | `src/renderer/components/ollama/OllamaManagerPanel.tsx` | `useVocabularyMapper()` |
+| `explorer-panel` | Explorer panel | `src/renderer/components/ExplorerPanel.tsx` | `useVocabularyMapper()` |
+| `project-switcher` | Project switcher | `src/renderer/components/ProjectSwitcher.tsx` | `useVocabularyMapper()` |
+| `regex-builder` | Regex builder | `src/renderer/components/regex/RegexBuilder.tsx` | `useVocabularyMapper()` |
+| `anchored-regex-builder` | Anchored regex trigger | `src/renderer/components/regex/AnchoredRegexBuilder.tsx` | `useVocabularyMapper()` |
+| `changelog-panel` | Changelog panel | `src/renderer/components/changelog/ChangelogPanel.tsx` | `useVocabularyMapper()` |
+| `release-card` | Release card | `src/renderer/components/changelog/ReleaseCard.tsx` | `useVocabularyMapper()` |
+| `local-history-panel` | Local history panel | `src/renderer/components/LocalHistoryPanel.tsx` | `useVocabularyMapper()` |
+| `docs-browser` | Offline documentation browser | `src/renderer/components/DocsBrowser.tsx` | `useVocabularyMapper()` |
+| `docs-article-view` | Documentation article chrome | `src/renderer/components/docs/DocsArticleView.tsx` | `useVocabularyMapper()` |
+| `appearance-editor` | Appearance editor | `src/renderer/components/appearance/AppearanceEditor.tsx` | `useVocabularyMapper()` |
+| `color-field` | Colour field | `src/renderer/components/color/ColorField.tsx` | `useVocabularyMapper()` |
+| `color-picker` | Colour picker | `src/renderer/components/color/ColorPicker.tsx` | `useVocabularyMapper()` |
 | `minecraft-backups` | Minecraft backups | `src/renderer/components/minecraft/MinecraftBackupsPanel.tsx` | `useVocabularyMapper()` |
 | `minecraft-players` | Minecraft players | `src/renderer/components/minecraft/MinecraftPlayersPanel.tsx` | `useVocabularyMapper()` |
 | `minecraft-properties` | Minecraft properties | `src/renderer/components/minecraft/MinecraftPropertiesEditor.tsx` | `useVocabularyMapper()` |
