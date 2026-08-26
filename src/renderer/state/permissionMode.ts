@@ -35,7 +35,8 @@ export const AGENT_LAUNCH_SURFACES = [
   'canvas-control-spawn-team',
   'terminal-cold-restore',
   'terminal-restart-resume',
-  'terminal-hibernation-resume'
+  'terminal-hibernation-resume',
+  'reopen-last-closed'
 ] as const
 
 export type AgentLaunchSurface = (typeof AGENT_LAUNCH_SURFACES)[number]
@@ -141,9 +142,22 @@ function autoSupportedFor(project: Project | undefined): boolean {
  * (createProject) — importing the projects store from workspace.ts would close that cycle.
  */
 export function activePermissionMode(agentId: AgentId = 'claude'): AgentPermissionMode {
-  const { settings } = useSettings.getState()
   const { getProject, activeProjectId } = useProjects.getState()
-  const project = getProject(activeProjectId)
+  return permissionModeForProject(getProject(activeProjectId), agentId)
+}
+
+/**
+ * Same resolution as `activePermissionMode`, but for an EXPLICIT project rather than the active
+ * one — for a launch that targets a project the user is not currently looking at (e.g. restoring
+ * a node into a project reopened by `app.reopenLastClosed`). Using `activePermissionMode` there
+ * would apply the CALLER's project's override to the TARGET project's node, which is exactly the
+ * kind of cross-project leak `resolvePermissionMode` exists to prevent everywhere else.
+ */
+export function permissionModeForProject(
+  project: Project | undefined,
+  agentId: AgentId = 'claude'
+): AgentPermissionMode {
+  const { settings } = useSettings.getState()
   const mode = resolvePermissionMode(project, settings)
   // The version gate is CLAUDE-specific BY CONSTRUCTION: it exists because Claude Code < 2.1.71
   // exits 1 on `--permission-mode auto`, and it is fed by a `claude --version` probe (local, or the
@@ -225,6 +239,28 @@ export function activeAgentLaunchPlan(
     surface,
     agentId,
     mode: activePermissionMode(agentId),
+    [ACTIVE_AGENT_LAUNCH_PLAN]: true as const
+  })
+}
+
+/**
+ * Same branded proof as `activeAgentLaunchPlan`, but for an EXPLICIT project — for a launch that
+ * targets a project the user is not currently looking at (e.g. restoring a node into a project
+ * reopened by `app.reopenLastClosed`). `activeAgentLaunchPlan` always resolves against
+ * `activeProjectId`; using it for a background project would apply the CALLER's project's override
+ * to the TARGET project's node, which is exactly the cross-project leak `resolvePermissionMode`
+ * exists to prevent everywhere else. This is the only other place a branded plan can be minted —
+ * the brand symbol stays module-private on purpose.
+ */
+export function agentLaunchPlanForProject(
+  surface: AgentLaunchSurface,
+  project: Project | undefined,
+  agentId: AgentId = 'claude'
+): ActiveAgentLaunchPlan {
+  return Object.freeze({
+    surface,
+    agentId,
+    mode: permissionModeForProject(project, agentId),
     [ACTIVE_AGENT_LAUNCH_PLAN]: true as const
   })
 }

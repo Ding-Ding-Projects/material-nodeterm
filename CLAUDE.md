@@ -1890,6 +1890,40 @@ multiply-linked inode whose other name may be outside the staging tree.
   (`getInternalNode`), not our node object — `measured` reaches our state one render later (via
   `onNodesChange`), so our copy lies about nodes the store has long sized. Unknowable size ⇒ the
   camera **stands still**; never fall back to a bare `fitView` there, that IS the origin jump.
+- **Breadcrumb trail** (`renderer/lib/breadcrumbs.ts` — all the pure logic lives there) — every
+  deliberate `goToNode` landing records a `NavStop` ({nodeId, at, note}) for the ACTIVE project, and
+  **Ctrl+[ / Ctrl+]** (`shortcuts.goBack` / `shortcuts.goForward`, bound in `shared/shortcuts.ts`)
+  plus two buttons in the `.md3-canvas-actions` pill walk that trail; on a project activation a
+  once-per-app-run **`ResumeCard`** offers the last few distinct stops ("resume where you left
+  off"). Load-bearing facts:
+  - **The trail is MACHINE-LOCAL and rides `IndexEntryV3.breadcrumbs`, never `.nodeterm/project.json`** —
+    the same tier as `viewport` / `defaultAccountId`, for the same reason: a repo must not carry one
+    person's camera history to everyone who clones it. `fileToProject` therefore ignores a
+    `breadcrumbs` field found in the shared file (a forgery), and `projectToFile`/`splitWorkspace`
+    never write one there.
+  - **The cursor is not persisted either.** Only `list` rides the entry; `BreadcrumbState.index` is
+    renderer-only (`navRef` in Canvas.tsx) and resets to the tip on activation. A step records no
+    breadcrumb and rewrites no `project.json` — the only persistence it triggers is the ordinary
+    `onMove` viewport persist, same as any other camera move.
+  - **Cap 20** (`BREADCRUMB_CAP`, oldest dropped) and a **3 s dedupe** (`BREADCRUMB_DEDUPE_MS`, so a
+    re-triggered focus on the already-current node is a no-op — `recordBreadcrumb` returns the SAME
+    object, which is the caller's skip test). Recording past a back-step drops the forward tail,
+    exactly like a browser tab.
+  - **`stepBreadcrumb` skips stops whose node is gone** (never lands on a dead entry; no reachable
+    stop ⇒ `null` ⇒ the camera stands still), and `goToNode` **refuses to record ephemeral `subagent`
+    / `loop` nodes**: they are merged into the `<ReactFlow nodes>` prop but never persisted (cleared
+    on the next turn), so a breadcrumb for one is an id nothing can ever resolve, burning a slot
+    forever.
+  - **One framing implementation** (`frameNode`) is shared by `goToNode` (record + frame) and
+    `stepAndFrame` (step + frame, and ONLY that — never calls `goToNode`, or every back-step would
+    append a new tip). The origin-jump invariant above therefore has one copy to regress, not two.
+  - The `note` is a **snapshot** taken at record time (agent nodes reuse the sessions sidebar's own
+    `sessionStatusKind` + `STATE_LABEL` phrasing, preferring session name → node title → agent
+    label), so a later state change never retroactively rewrites history.
+  - **Surfaces:** Server Edition works as-is (shared renderer code + `WorkspaceStore`, which both
+    shells boot — no new bridge member); mobile is N/A (no canvas, no camera); the kanban board is
+    likewise N/A, and a project that activates ON the board neither shows nor spends its
+    once-per-run resume card (it would sit invisible under the opaque overlay).
 - **Command palette** (`CommandPalette.tsx`): ⌘/Ctrl+K; `Canvas.buildCommands` (create,
   switch project, jump to node by title/tag, open file…).
 - **Explorer** (`ExplorerPanel.tsx`, 🗂 / ⌘⇧E): lazy file tree of the active project `cwd`

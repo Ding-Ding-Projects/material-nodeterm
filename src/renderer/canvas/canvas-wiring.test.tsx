@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 
+import fs from 'fs'
+import path from 'path'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -162,5 +164,94 @@ describe('the end-session confirm describes both things it does', () => {
       removesNode: false
     })
     expect(plan.description).not.toMatch(/canvas node/i)
+  })
+})
+
+// Canvas.tsx has no render harness for its own body (see agent-status-rescue.test.ts's header
+// for why), so the load-bearing breadcrumb-trail rules that CLAUDE.md calls out are pinned over
+// the source itself, the same discipline as the dispatch-map pins above.
+const CANVAS_SRC = fs.readFileSync(path.resolve(__dirname, 'Canvas.tsx'), 'utf8')
+
+describe('breadcrumb wiring the CLAUDE.md bullet calls load-bearing', () => {
+  it('goToNode refuses to record the ephemeral subagent/loop viz nodes', () => {
+    // A breadcrumb for one is an id nothing can ever resolve (they are cleared on the next turn),
+    // permanently burning one of the 20 slots.
+    expect(CANVAS_SRC).toContain("node.type !== 'subagent' && node.type !== 'loop'")
+  })
+
+  it('stepAndFrame never records — it frames through the shared frameNode, not goToNode', () => {
+    const step = CANVAS_SRC.slice(
+      CANVAS_SRC.indexOf('const stepAndFrame = useCallback'),
+      CANVAS_SRC.indexOf("const goBack = useCallback")
+    )
+    expect(step.length).toBeGreaterThan(0)
+    // Recording inside a step would turn every back-step into a new tip.
+    expect(step).not.toContain('recordBreadcrumb')
+    expect(step).not.toContain('goToNode(')
+    // The single framing implementation — the "Go to node" origin-jump invariant has ONE copy.
+    expect(step).toContain('frameNode(target)')
+  })
+
+  it('there is exactly ONE framing implementation (frameNode) shared by focus and steps', () => {
+    // The measured-check-reads-the-store rule regresses through a second copy first.
+    expect(CANVAS_SRC.match(/isMeasured\(internal\)/g) ?? []).toHaveLength(1)
+  })
+
+  it('the resume card slot is spent only on a card that can render', () => {
+    // Once per app run, only with a live stop, and never under the opaque kanban overlay.
+    expect(CANVAS_SRC).toContain(
+      '!resumeCardShown.has(project.id) && hasLiveStop && !isKanbanOpen(project.id)'
+    )
+  })
+
+  it('the breadcrumb cursor is reset to the tip on every project activation', () => {
+    expect(CANVAS_SRC).toContain('navRef.current = { list: bc, index: bc.length - 1 }')
+  })
+
+  it('the Dock/pill enabled state derives from stepBreadcrumb, never a raw index comparison', () => {
+    // A raw `navRef.current.index > 0` renders an enabled arrow that clicks into doing nothing
+    // once every earlier stop has been deleted — stepBreadcrumb is the only thing that knows.
+    const cluster = CANVAS_SRC.slice(
+      CANVAS_SRC.indexOf('md3-canvas-actions__sep'),
+      CANVAS_SRC.lastIndexOf('md3-canvas-actions__sep')
+    )
+    expect(cluster).toContain("stepBreadcrumb(navRef.current, 'back'")
+    expect(cluster).toContain("stepBreadcrumb(navRef.current, 'forward'")
+  })
+})
+
+describe('reopen-last-closed records and dispatches through the shared history stack', () => {
+  it('records a project close before hiding it', () => {
+    expect(CANVAS_SRC).toContain("useReopenHistory.getState().push({ kind: 'project'")
+  })
+
+  it('records a node-delete batch by default, opting the account-removal cleanups out', () => {
+    expect(CANVAS_SRC).toContain("kind: 'nodes'")
+    // Codex login-node cleanup (Canvas.tsx) and the Claude account teardown adapter
+    // (accountRemoval.ts, asserted separately) both refuse a reopen slot.
+    expect(CANVAS_SRC).toContain("deleteNodes(loginIds, undefined, 'node', { record: false })")
+  })
+
+  it('binds the chord through the configured shortcut, not a hardcoded combo', () => {
+    expect(CANVAS_SRC).toContain('matchesShortcut(e, shortcuts.reopenLastClosed, isMac)')
+    expect(CANVAS_SRC).toContain('reopenLastClosedCommand()')
+  })
+
+  it('never live-inserts into a non-active project -- routes through applyNodeMutation instead', () => {
+    // The bug this pins: a synchronous setNodes() right after switchProject()/reopenProject()
+    // races the active-project load effect and silently loses the recreated nodes.
+    const start = CANVAS_SRC.indexOf("case 'insertStored':")
+    const end = CANVAS_SRC.indexOf("case 'skip':", start)
+    const insertStored = CANVAS_SRC.slice(start, end === -1 ? start + 2000 : end)
+    expect(insertStored).toContain('.applyNodeMutation(plan.projectId,')
+    expect(insertStored).toContain("op: 'upsert'")
+    expect(insertStored).toContain('flowToNodeStates([node])[0]')
+    expect(insertStored).not.toContain('setNodes(')
+  })
+
+  it('resolves the TARGET project permission plan, never the caller-active one', () => {
+    expect(CANVAS_SRC).toContain(
+      "agentLaunchPlanForProject('reopen-last-closed', project, agentId)"
+    )
   })
 })

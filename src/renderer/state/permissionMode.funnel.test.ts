@@ -234,11 +234,22 @@ describe('every launch resolves its permission mode through the one funnel', () 
       readFileSync(join(RENDERER, 'state', 'permissionMode.ts'), 'utf8')
     )
     expect(resolver).toMatch(/gateKidsPermissionMode\(/)
-    // Last, so it can only narrow what the earlier gates produced — never re-widen.
-    const body = /export function activePermissionMode[\s\S]*?\n}/.exec(resolver)?.[0] ?? ''
+    // The narrowing logic lives in `permissionModeForProject` -- `activePermissionMode` is a
+    // thin wrapper over it for the active project, so an explicit-project launch (e.g.
+    // restoring a node into a background project via app.reopenLastClosed) narrows through
+    // the identical gate rather than a second, divergent copy.
+    const body =
+      /export function permissionModeForProject[\s\S]*?\n}/.exec(resolver)?.[0] ?? ''
     expect(body, 'the kids gate must be on the RETURNED value').toMatch(
       /return gateKidsPermissionMode\(/
     )
+    // Last, so it can only narrow what the earlier gates produced -- never re-widen.
+    const activeBody =
+      /export function activePermissionMode[\s\S]*?\n}/.exec(resolver)?.[0] ?? ''
+    expect(
+      activeBody,
+      'activePermissionMode must delegate to the same gated resolver, not re-derive its own'
+    ).toMatch(/return permissionModeForProject\(/)
   })
 
   it('Canvas builds agent commands from the resolver, at every site', () => {

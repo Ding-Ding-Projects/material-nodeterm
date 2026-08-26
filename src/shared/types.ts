@@ -770,6 +770,15 @@ export interface BoardLogReadResult {
 /** The board-log surface on `window.nodeTerminal`. Project-routed: the main/server side resolves
  *  the project to a local cwd, a desktop SSH connection, or unsupported. `append` is
  *  fire-and-forget-safe (resolves `false` on any failure, never throws). */
+/** One recorded "deliberate landing" on a node -- the breadcrumb trail's unit. Frozen at record
+ *  time (nodeId only, no live pointer): a deleted node is filtered at render, a renamed one shows
+ *  its current title (read live), but the `note` stays a snapshot of what was happening then. */
+export interface NavStop {
+  nodeId: string
+  at: number
+  note: string
+}
+
 export interface BoardLogApi {
   /** Append one entry. Resolves `false` on any failure (unsupported project, fs/exec error). */
   append(projectId: string, entry: BoardLogEntry): Promise<boolean>
@@ -839,6 +848,10 @@ export interface Project {
    * lineage survives restarts; deletable like any selected edge.
    */
   ropes?: BridgeLink[]
+  /** Camera navigation history -- deliberate node landings, newest last. MACHINE-LOCAL: rides
+   *  `IndexEntryV3.breadcrumbs`, never emitted into the shared project file (a repo must not carry
+   *  one person's wandering camera history). */
+  breadcrumbs?: NavStop[]
   /**
    * Closed projects are hidden from the tab bar but kept on disk with all their nodes (and their
    * tmux sessions left running) so they can be reopened from the start screen's "Recently closed"

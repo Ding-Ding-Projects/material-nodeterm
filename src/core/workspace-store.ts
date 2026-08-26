@@ -269,6 +269,7 @@ export class WorkspaceStore {
               viewport: e.viewport,
               defaultAccountId: e.defaultAccountId,
               capabilityAck: e.capabilityAck,
+              breadcrumbs: e.breadcrumbs,
               settingsOverrides: e.settingsOverrides,
               localExec: this.execOverlay(e)
             })
@@ -294,6 +295,7 @@ export class WorkspaceStore {
               viewport: e.viewport,
               defaultAccountId: e.defaultAccountId,
               capabilityAck: e.capabilityAck,
+              breadcrumbs: e.breadcrumbs,
               settingsOverrides: e.settingsOverrides,
               localExec: this.execOverlay(e)
             })
@@ -509,6 +511,7 @@ export class WorkspaceStore {
         // The clone-notice answer must also survive an unavailable window: forgetting it
         // would re-raise a notice the user already answered the moment the folder remounts.
         if (old?.capabilityAck) e.capabilityAck = old.capabilityAck
+        if (old?.breadcrumbs) e.breadcrumbs = old.breadcrumbs
       }
     }
 
@@ -669,6 +672,7 @@ export class WorkspaceStore {
       viewport: e.viewport,
       defaultAccountId: e.defaultAccountId,
       capabilityAck: e.capabilityAck,
+      breadcrumbs: e.breadcrumbs,
       localExec: e.localExec
     })
   }
@@ -1065,6 +1069,7 @@ export class WorkspaceStore {
           viewport: e.viewport,
           defaultAccountId: e.defaultAccountId,
           capabilityAck: e.capabilityAck,
+          breadcrumbs: e.breadcrumbs,
           localExec: e.localExec
         })
       )
@@ -1140,7 +1145,7 @@ export class WorkspaceStore {
       return fileToProject(adopted, {
         id: e.id, ssh: e.ssh, closed: e.closed,
         viewport: e.viewport, defaultAccountId: e.defaultAccountId,
-        capabilityAck: e.capabilityAck, localExec: e.localExec
+        capabilityAck: e.capabilityAck, breadcrumbs: e.breadcrumbs, localExec: e.localExec
       })
     }
     // Our cache stood. Before it clobbers the server, merge in any remote-only session nodes (the
@@ -1155,7 +1160,7 @@ export class WorkspaceStore {
         merged = fileToProject(e.cache, {
           id: e.id, ssh: e.ssh, closed: e.closed,
           viewport: e.viewport, defaultAccountId: e.defaultAccountId,
-          capabilityAck: e.capabilityAck, localExec: e.localExec
+          capabilityAck: e.capabilityAck, breadcrumbs: e.breadcrumbs, localExec: e.localExec
         })
       }
     }
