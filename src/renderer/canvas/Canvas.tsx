@@ -575,6 +575,7 @@ import {
   WORKTREE_GROUP_SIZE,
   createSshTerminalNode,
   createAuthenticatorNode,
+  createNsisNode,
   createStickyNode,
   createTerminalNode,
   nodeSshFor,
@@ -4603,6 +4604,19 @@ export function Canvas() {
     (center?: { x: number; y: number }, groupId?: string) => {
       setNodes((ns) => {
         const node = createNativeLoopNode(ns.length, center ?? emptyNodePos())
+        return [...ns, groupId ? parentInto(node, groupId) : node]
+      })
+      markDirty()
+    },
+    [setNodes, markDirty, emptyNodePos, parentInto]
+  )
+
+  /** A canvas-object tool for authoring a Windows NSIS installer script. See NsisInstallerNode.tsx
+   *  for the git-shared/machine-local persistence split this node relies on. */
+  const addNsis = useCallback(
+    (center?: { x: number; y: number }, groupId?: string) => {
+      setNodes((ns) => {
+        const node = createNsisNode(ns.length, center ?? emptyNodePos())
         return [...ns, groupId ? parentInto(node, groupId) : node]
       })
       markDirty()
@@ -8909,6 +8923,11 @@ export function Canvas() {
               onClick: () => addAuthenticator(at)
             },
             {
+              label: 'New NSIS installer…',
+              icon: <IconEditor />,
+              onClick: () => addNsis(at)
+            },
+            {
               label: 'New dino game',
               icon: <IconDino />,
               onClick: () => addDino(at)
@@ -9026,6 +9045,7 @@ export function Canvas() {
       agentCreationItems,
       addSticky,
       addAuthenticator,
+      addNsis,
       addNativeLoop,
       addDino,
       addBrowser,
@@ -13002,6 +13022,12 @@ export function Canvas() {
             run: () => addAuthenticator()
           },
           {
+            id: 'new-nsis',
+            label: 'New NSIS installer…',
+            icon: <IconEditor />,
+            run: () => addNsis()
+          },
+          {
             id: 'new-dino',
             label: 'New dino game',
             icon: <IconDino />,
@@ -13349,6 +13375,7 @@ export function Canvas() {
     terminalProfileMenuChoices,
     addAgentNode,
     addSticky,
+    addNsis,
     addNativeLoop,
     addDino,
     addWebView,
