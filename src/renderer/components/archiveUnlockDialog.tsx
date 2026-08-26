@@ -16,6 +16,7 @@ import { create } from 'zustand'
 import { useDialogStack } from './dialog-stack'
 import { UnlockLadderPanel, type LadderTransport } from './toylocks/UnlockLadder'
 import type { LadderAnswer } from '@shared/unlock-ladder-types'
+import { activeSessionApi } from '../session/session'
 
 export interface ArchiveUnlockRequest {
   /** The file being opened. Shown so the user knows WHICH protected file is asking. */
@@ -50,15 +51,24 @@ export function requestArchivePassword(request: ArchiveUnlockRequest): Promise<s
   })
 }
 
-/** The transport half of the ladder for one file. The rules are core's; this only carries. */
+/**
+ * The transport half of the ladder for one file. The rules are core's; this only carries.
+ *
+ * Through `activeSessionApi()` rather than `window.nodeTerminal`, because this dialog is mounted
+ * at the app root and is therefore OUTSIDE the project-keyed `SessionProvider`. The global bridge
+ * there is always the viewer's own, so on a relay tab the lockout being climbed would be settled
+ * against the wrong machine entirely -- the wait belongs to whichever core is holding the file.
+ * The relay API deliberately does not carry these methods, so that case now REFUSES rather than
+ * quietly answering from the viewer, which is why the panel had to learn to survive a rejection.
+ */
 function archiveLadderTransport(path: string): LadderTransport {
   return {
     issue: async () => {
-      const state = await window.nodeTerminal.workspace.archiveLadderIssue(path)
+      const state = await activeSessionApi().workspace.archiveLadderIssue(path)
       return { challenge: state.challenge, budgetLeft: state.budgetLeft }
     },
     verify: async (answer: LadderAnswer) => {
-      const verdict = await window.nodeTerminal.workspace.archiveLadderVerify({ path, answer })
+      const verdict = await activeSessionApi().workspace.archiveLadderVerify({ path, answer })
       return {
         cleared: verdict.cleared,
         budgetLeft: verdict.budgetLeft,

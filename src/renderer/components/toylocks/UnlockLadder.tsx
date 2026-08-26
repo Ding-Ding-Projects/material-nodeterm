@@ -69,12 +69,25 @@ export function UnlockLadderPanel({
 
   useEffect(() => {
     let alive = true
-    void link.issue().then((state) => {
-      if (!alive) return
-      setChallenge(state.challenge)
-      setBudgetLeft(state.budgetLeft)
-      setLoaded(true)
-    })
+    void link
+      .issue()
+      .then((state) => {
+        if (!alive) return
+        setChallenge(state.challenge)
+        setBudgetLeft(state.budgetLeft)
+        setLoaded(true)
+      })
+      // A transport can legitimately refuse -- a relay tab has no carrier for the archive ladder,
+      // so it answers E_FORBIDDEN rather than settling somebody else's lockout from the viewer.
+      // Without this the rejection went unhandled and the panel sat on its loading state forever,
+      // which reads as a hang. Mark it loaded and say nothing is on offer: the wait is still the
+      // wait, and the ladder never shortened it here anyway.
+      .catch(() => {
+        if (!alive) return
+        setChallenge(null)
+        setBudgetLeft(0)
+        setLoaded(true)
+      })
     return () => {
       alive = false
     }

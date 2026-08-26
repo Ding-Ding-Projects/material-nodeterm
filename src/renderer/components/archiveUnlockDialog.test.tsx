@@ -14,6 +14,19 @@ import { ArchiveUnlockDialogHost, requestArchivePassword } from './archiveUnlock
 const issue = vi.fn()
 const verify = vi.fn()
 
+// The SESSION's transport, and separately the viewer's own global bridge. Two distinct spies,
+// because a test with only one cannot prove which machine an action reached -- and this dialog is
+// mounted at the app root, outside the project-keyed provider, which is exactly where that
+// distinction is easiest to get wrong and impossible to see.
+const globalIssue = vi.fn()
+const globalVerify = vi.fn()
+
+vi.mock('../session/session', () => ({
+  activeSessionApi: () => ({
+    workspace: { archiveLadderIssue: issue, archiveLadderVerify: verify }
+  })
+}))
+
 let host: HTMLDivElement
 let root: Root
 
@@ -59,8 +72,11 @@ async function settle(): Promise<void> {
 beforeEach(() => {
   issue.mockReset()
   verify.mockReset()
+  globalIssue.mockReset()
+  globalVerify.mockReset()
+  // Deliberately wired to spies the dialog must never call.
   ;(window as unknown as { nodeTerminal: unknown }).nodeTerminal = {
-    workspace: { archiveLadderIssue: issue, archiveLadderVerify: verify }
+    workspace: { archiveLadderIssue: globalIssue, archiveLadderVerify: globalVerify }
   }
   host = document.createElement('div')
   document.body.appendChild(host)
@@ -71,6 +87,9 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  // Every test: the viewer's own bridge was never the one that answered.
+  expect(globalIssue).not.toHaveBeenCalled()
+  expect(globalVerify).not.toHaveBeenCalled()
   act(() => root.unmount())
   host.remove()
   document.body.innerHTML = ''

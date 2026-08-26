@@ -81,8 +81,14 @@ export function WelcomeScreen({
   const [version, setVersion] = useState<string | null>(null)
   useEffect(() => {
     let alive = true
-    void window.nodeTerminal.updates
-      .getVersion()
+    // Optional-chained through the namespace, not just the call. This screen is the FIRST thing
+    // rendered, so a throw here is a blank application rather than a missing line, and the whole
+    // point of a version string is to be readable when something else has already gone wrong.
+    // The degrade was already designed for below: `version === null` renders nothing at all, so
+    // an absent namespace and a failed read land in exactly the same honest place, and neither
+    // invents a version it cannot prove.
+    void window.nodeTerminal?.updates
+      ?.getVersion()
       .then((v) => alive && setVersion(v))
       .catch(() => alive && setVersion(null))
     return () => {
