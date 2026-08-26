@@ -54,6 +54,7 @@ const PRODUCERS = [
   ['dino-node', 'src/renderer/nodes/DinoNode.tsx', 'useVocabularyMapper()'],
   ['subagent-node', 'src/renderer/nodes/SubagentNode.tsx', 'useVocabularyMapper()'],
   ['chat-panel', 'src/renderer/nodes/ChatPanel.tsx', 'useVocabularyMapper()'],
+  ['node-fact-preserving-mapper', 'src/renderer/nodes/nodeVocabulary.ts', 'export function mapAroundExactFacts'],
   ['password-manager', 'src/renderer/components/passwordManager/PasswordManagerPanel.tsx', 'useVocabularyMapper()'],
   ['converter-adapter-catalog', 'src/renderer/components/converter/AdapterCatalog.tsx', 'useVocabularyMapper()'],
   ['minecraft-backups', 'src/renderer/components/minecraft/MinecraftBackupsPanel.tsx', 'useVocabularyMapper()'],

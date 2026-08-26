@@ -307,6 +307,7 @@ Every listed renderer producer has an explicit local mapper boundary. Commands, 
 | `dino-node` | Dino peer status and chrome | `src/renderer/nodes/DinoNode.tsx` | `useVocabularyMapper()` |
 | `subagent-node` | Subagent status card | `src/renderer/nodes/SubagentNode.tsx` | `useVocabularyMapper()` |
 | `chat-panel` | Agent chat panel states and composer | `src/renderer/nodes/ChatPanel.tsx` | `useVocabularyMapper()` |
+| `node-fact-preserving-mapper` | Node copy mapper that preserves provider and runtime facts | `src/renderer/nodes/nodeVocabulary.ts` | `export function mapAroundExactFacts` |
 | `password-manager` | Password manager | `src/renderer/components/passwordManager/PasswordManagerPanel.tsx` | `useVocabularyMapper()` |
 | `converter-adapter-catalog` | Adapter catalog | `src/renderer/components/converter/AdapterCatalog.tsx` | `useVocabularyMapper()` |
 | `minecraft-backups` | Minecraft backups | `src/renderer/components/minecraft/MinecraftBackupsPanel.tsx` | `useVocabularyMapper()` |

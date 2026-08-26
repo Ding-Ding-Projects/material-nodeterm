@@ -20,11 +20,11 @@ export function LoopNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const active = !!data.loopActive
   const schedule = (data.loopSchedule as string) || ''
   const task = (data.loopTask as string) || ''
-  // The provider label is authored chrome and may be renamed by the user's vocabulary file.
-  // The loop kind is a runtime/provider value and stays byte-for-byte as received.
+  // The provider label and loop kind are exact provider/runtime facts, not app-authored prose.
+  // The surrounding controls and empty-state copy below remain vocabulary-mappable.
   const kind = typeof data.loopKind === 'string' && data.loopKind ? data.loopKind : 'loop'
   const kindLabel = `${kind.charAt(0).toUpperCase()}${kind.slice(1)}`
-  const label = `${vocab('Claude')} ${kindLabel}`
+  const label = `Claude ${kindLabel}`
   const expanded = !!data.ephExpanded
   const bodyRef = useRef<HTMLDivElement>(null)
   const toggle = () => useAgentNodes.getState().toggleExpanded(id)

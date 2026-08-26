@@ -7,6 +7,7 @@ import { hintLabel } from '@shared/platform-utils'
 import { E_UNSUPPORTED } from '@shared/rpc'
 import { TextArea } from '@renderer/ui/md3'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { mapAroundExactFacts } from './nodeVocabulary'
 
 // Memoized bubble: marked+DOMPurify re-ran for EVERY message on each ChatPanel render (each
 // turn-finish reload, each keystroke re-render). Text is stable per message, so cache per text.
@@ -172,8 +173,8 @@ export function ChatPanel({ nodeId, sessionId, cwd, accountId }: ChatPanelProps)
             readonly
               ? vocab("Can't write to this session")
               : working
-                ? vocab('Claude is working…')
-                : vocab('Message Claude…  (Enter to send)')
+                ? mapAroundExactFacts('Claude is working…', ['Claude'], vocab)
+                : mapAroundExactFacts('Message Claude…  (Enter to send)', ['Claude', 'Enter'], vocab)
           }
           disabled={readonly || working}
           rows={2}

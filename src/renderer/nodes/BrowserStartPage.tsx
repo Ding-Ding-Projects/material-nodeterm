@@ -3,6 +3,7 @@ import { searchOrUrl } from './browserUrl'
 import { SHORTCUTS, SiteIcon } from './browserIcons'
 import { useBrowserHistory } from '../state/browserHistory'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { mapAroundExactFacts } from './nodeVocabulary'
 
 function hostLabel(url: string): string {
   try {
@@ -30,7 +31,7 @@ export function BrowserStartPage({ onNavigate }: { onNavigate: (url: string) => 
             className="startpage__search"
             spellCheck={false}
             value={q}
-            placeholder={vocab('Search Google or type a URL')}
+            placeholder={mapAroundExactFacts('Search Google or type a URL', ['Google'], vocab)}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') submit()
@@ -43,11 +44,11 @@ export function BrowserStartPage({ onNavigate }: { onNavigate: (url: string) => 
             <button
               key={s.url}
               className="startpage__tile"
-              title={vocab(s.label)}
+              title={s.label}
               onClick={() => onNavigate(s.url)}
             >
               <SiteIcon url={s.url} label={s.label} />
-              <span className="startpage__tile-label">{vocab(s.label)}</span>
+              <span className="startpage__tile-label">{s.label}</span>
             </button>
           ))}
         </div>

@@ -219,6 +219,7 @@ import {
 import { sameTerminalCoState } from '../terminal/co-state-equality'
 import { useLocalizedVocabularyText } from '../lib/personalVocabulary/useLocalizedVocabularyText'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { mapAroundExactFacts } from './nodeVocabulary'
 import { ColumnPill } from '../components/kanban/ColumnPill'
 import { BoardLogPanel } from '../components/kanban/BoardLogPanel'
 import { AgentMascot } from './AgentMascot'
@@ -1979,12 +1980,11 @@ export function TerminalNode({
   // local tab (active presence IS the default).
   const closedName = co.closed ? closedByLabel(co.closed.by, presence.store.getState().peers) : ''
   const codexFallback = codexIdentity?.mode === 'plain' ? codexFallbackText(codexIdentity.reason) : ''
-  const codexFallbackDisplay = (() => {
-    const marker = ' codex — '
-    const markerAt = codexFallback.indexOf(marker)
-    if (markerAt < 0) return codexFallback ? vocab(codexFallback) : ''
-    return `${vocab(codexFallback.slice(0, markerAt))}${marker}${vocab(codexFallback.slice(markerAt + marker.length))}`
-  })()
+  const codexFallbackDisplay = mapAroundExactFacts(
+    codexFallback,
+    ['codex', 'CLI', 'npm', 'snap'],
+    vocab
+  )
 
   // "Session ended" (a recycle whose replacement never came — see CoState.ended): the user asks for
   // a shell explicitly. Only now do we spawn, in THIS client's cwd — no silent stale-cwd respawn.
@@ -4871,10 +4871,12 @@ export function TerminalNode({
           position={Position.Right}
           className="bridge-handle bridge-handle--out"
           data-tip={
-            vocab(
+            mapAroundExactFacts(
               contextLinkCapable
                 ? "Link out — drag to another Claude node so they can read each other's context"
-                : 'Link out — drag to a sticky note to attach it as context'
+                : 'Link out — drag to a sticky note to attach it as context',
+              ['Claude'],
+              vocab
             )
           }
         />
@@ -4884,10 +4886,12 @@ export function TerminalNode({
           position={Position.Left}
           className="bridge-handle bridge-handle--in"
           data-tip={
-            vocab(
+            mapAroundExactFacts(
               contextLinkCapable
                 ? 'Link in — drop a link here to share context with this Claude session'
-                : 'Link in — drop a sticky note link here to attach it as context'
+                : 'Link in — drop a sticky note link here to attach it as context',
+              ['Claude'],
+              vocab
             )
           }
         />

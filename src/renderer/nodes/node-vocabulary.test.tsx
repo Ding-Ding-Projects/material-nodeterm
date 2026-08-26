@@ -7,6 +7,7 @@ import { useSchoolMode } from '../state/schoolMode'
 import { BrowserStartPage } from './BrowserStartPage'
 import { SHORTCUTS } from './browserIcons'
 import { DiscardedPlate } from './DiscardedPlate'
+import { mapAroundExactFacts } from './nodeVocabulary'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -27,21 +28,82 @@ afterEach(() => {
 })
 
 describe('node renderer personal vocabulary boundaries', () => {
+  const nodeFacts: Array<[string, string, string[]]> = [
+    ['TerminalNode', 'Link out to Claude', ['Claude']],
+    ['StickyNode', 'Write a note', []],
+    ['GroupNode', 'Merge to main', []],
+    ['EditorNode', 'Ctrl+M to edit', ['Ctrl+M']],
+    ['DiffNode', 'staged changes', ['staged']],
+    ['BrowserNode', 'Google', ['Google']],
+    ['BrowserSurface', 'Enter a URL', ['URL']],
+    ['BrowserStartPage', 'Search Google', ['Google']],
+    ['BrowserExtensionsPanel', 'Extensions', []],
+    ['VideoNode', 'Loading video', []],
+    ['WebNode', 'Open in browser', []],
+    ['LoopNode', 'Claude scheduler', ['Claude', 'scheduler']],
+    ['NativeLoopNode', 'Loop interval', []],
+    ['NsisInstallerNode', 'Generated NSIS script', ['NSIS']],
+    ['ServiceNode', 'Address for Docker', ['Docker']],
+    ['AuthenticatorNode', 'Copy this code', []],
+    ['AnnotationNode', 'Arrowhead on', []],
+    ['DinoNode', 'HI 00042', ['HI']],
+    ['SubagentNode', 'Open output', []],
+    ['ChatPanel', 'Message Claude', ['Claude']]
+  ]
+
+  it.each(nodeFacts)('keeps %s provider, shortcut, status, or brand facts intact', (_node, value, facts) => {
+    const mapped = mapAroundExactFacts(value, facts, (text) => text.replace('Search', 'Find').replace('Message', 'Send'))
+    for (const fact of facts) expect(mapped).toContain(fact)
+  })
+
+  it('maps authored text around exact provider and brand facts', () => {
+    const mapped = mapAroundExactFacts(
+      'Message Claude in Google Chrome',
+      ['Claude', 'Google Chrome'],
+      (value) => value.replace('Message', 'Send')
+    )
+    expect(mapped).toBe('Send Claude in Google Chrome')
+  })
+
+  it.each([
+    ['loop provider', 'Claude scheduler', ['Claude']],
+    ['chat provider', 'Message Claude', ['Claude']],
+    ['browser shortcut', 'Google', ['Google']],
+    ['browser shortcut', 'YouTube', ['YouTube']],
+    ['browser shortcut', 'GitHub', ['GitHub']],
+    ['browser shortcut', 'Gmail', ['Gmail']],
+    ['browser shortcut', 'X', ['X']],
+    ['browser shortcut', 'ChatGPT', ['ChatGPT']],
+    ['browser shortcut', 'Reddit', ['Reddit']],
+    ['browser shortcut', 'Wikipedia', ['Wikipedia']],
+    ['service brand', 'Connect Docker host', ['Docker']],
+    ['service brand', 'Open Proxmox', ['Proxmox']],
+    ['service brand', 'Open GitLab', ['GitLab']],
+    ['service brand', 'Open Home Assistant', ['Home Assistant']],
+    ['service brand', 'Open FreePBX', ['FreePBX']],
+    ['service brand', 'Open Minecraft', ['Minecraft']],
+    ['terminal runtime', 'Running plain codex', ['codex']]
+  ] as Array<[string, string, string[]]>)('keeps the %s fact exact while mapping nearby copy', (_label, value, facts) => {
+    const mapped = mapAroundExactFacts(value, facts, (text) => text.replace('Running', 'Launching').replace('Connect', 'Reach'))
+    expect(mapped).toContain(facts[0])
+    if (value.startsWith('Running')) expect(mapped).toBe('Launching plain codex')
+    if (value.startsWith('Connect')) expect(mapped).toBe('Reach Docker host')
+  })
+
   it('maps BrowserStartPage prose while preserving the navigated URL', () => {
     usePersonalVocabulary.setState({
       entries: {
-        'Search Google or type a URL': 'Find something or enter a URL',
-        Google: 'Search giant'
+        'or type a URL': 'or enter a link'
       },
       status: 'loaded',
-      entryCount: 2,
+      entryCount: 1,
       loadedAt: Date.now(),
       lastError: null
     })
     let navigated = ''
     act(() => root.render(<BrowserStartPage onNavigate={(url) => { navigated = url }} />))
-    expect(host.querySelector('input')?.getAttribute('placeholder')).toBe('Find something or enter a URL')
-    expect(host.querySelector('.startpage__tile-label')?.textContent).toBe('Search giant')
+    expect(host.querySelector('input')?.getAttribute('placeholder')).toBe('Search Google or enter a link')
+    expect(host.querySelector('.startpage__tile-label')?.textContent).toBe('Google')
     act(() => host.querySelector<HTMLButtonElement>('.startpage__tile')?.click())
     expect(navigated).toBe(SHORTCUTS[0].url)
   })

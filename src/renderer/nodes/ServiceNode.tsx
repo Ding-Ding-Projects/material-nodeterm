@@ -9,6 +9,7 @@ import { ColorMenu } from '../components/color/ColorMenu'
 import { MinecraftServerPanel } from '../components/minecraft/MinecraftServerPanel'
 import { EditableNodeTitle } from '../components/EditableNodeTitle'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { mapAroundExactFacts } from './nodeVocabulary'
 
 /**
  * One component for the whole service family — Minecraft, Docker, Proxmox, GitLab, Home Assistant
@@ -149,7 +150,7 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
   const rootBorder = nodeBorderStyle(data.color)
   const headerTint = nodeColorStyle(data.color, 0.2)
   const productName = kind ? SERVICE_NODE_LABELS[kind] : data.title || 'Service'
-  const displayProductName = kind ? vocab(productName) : data.title ? productName : vocab('Service')
+  const displayProductName = kind ? productName : data.title ? productName : vocab('Service')
   const label = data.serviceLabel ?? ''
 
   const toggleCollapse = () =>
@@ -240,7 +241,7 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
                   className="service-node__input nodrag"
                   type="text"
                   spellCheck={false}
-                  placeholder={vocab(ENDPOINT_PLACEHOLDER[kind ?? 'proxmox'])}
+                  placeholder={ENDPOINT_PLACEHOLDER[kind ?? 'proxmox']}
                   value={endpointDraft}
                   aria-invalid={endpointDraft !== '' && !endpointOk}
                   aria-describedby={`${id}-endpoint-note`}
@@ -269,8 +270,8 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
                     disabled={isLocalEndpointSet}
                     title={
                       isLocalEndpointSet
-                        ? vocab('Address is already set to the local Docker host')
-                        : vocab('Fill the address with the local Docker host, reached over SSH')
+                        ? mapAroundExactFacts('Address is already set to the local Docker host', ['Docker'], vocab)
+                        : mapAroundExactFacts('Fill the address with the local Docker host, reached over SSH', ['Docker', 'SSH'], vocab)
                     }
                     onClick={() => commitEndpoint(localEndpoint)}
                   >
@@ -286,7 +287,7 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
                 know that rather than assume the field is broken. */}
             <p id={`${id}-endpoint-note`} className="service-node__note">
               {endpointDraft === '' ? (
-                <>{vocab('Not connected. Enter the address of your')} {displayProductName.toLowerCase()}.</>
+                <>{mapAroundExactFacts(`Not connected. Enter the address of your ${productName.toLowerCase()}.`, [productName], vocab)}</>
               ) : endpointOk ? (
                 <>
                   {vocab('Saved on this machine only — an address is never written into the shared canvas file, so it does not travel to anyone who clones the repository.')}
@@ -297,7 +298,11 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
             </p>
 
             <p className="service-node__hint">
-              {vocab('Talking to a real')} {displayProductName} {vocab('is not built yet, so this node stores where it would connect and nothing more. There is deliberately no button here that looks like it would connect.')}
+              {mapAroundExactFacts(
+                `Talking to a real ${productName} is not built yet, so this node stores where it would connect and nothing more. There is deliberately no button here that looks like it would connect.`,
+                [productName],
+                vocab
+              )}
             </p>
           </div>
         )}
