@@ -309,6 +309,8 @@ Every listed renderer producer has an explicit local mapper boundary. Commands, 
 | `native-notification-canvas` | Native notification fact route | `src/renderer/canvas/Canvas.tsx` | `mapNativeNotification(` |
 | `native-notification-onboarding` | Native authored notification route | `src/renderer/components/onboarding/OnboardingFlow.tsx` | `mapNativeNotification(` |
 | `native-notification-settings` | Native authored notification route | `src/renderer/components/settings/sections/NotificationsSection.tsx` | `mapNativeNotification(` |
+| `native-notification-browser` | Browser notification ownership route | `src/renderer/bridge/stubs.ts` | `mapNativeNotification(` |
+| `native-notification-main` | Main notification admission route | `src/main/notifications.ts` | `prepareNativeNotification(` |
 
 ## Complete production surface classification
 

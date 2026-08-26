@@ -957,6 +957,21 @@ function hasOwnedRenderString(body, text, owner) {
   const body = renderFunnelBody(mutated, 'function renderHall')
   if (hasAuthoredCopyFunnel(body)) fail('Site renderer funnel mutation was not rejected')
   else pass('Site renderer funnel mutation is rejected')
+
+  // Every user-visible menu, accessibility, and regex-token label must declare its ownership
+  // helper at the callsite. A raw `attr(...)` or `esc(...)` can accidentally bypass the mapper,
+  // while a broad substring check would miss a renamed or commented-out helper call.
+  const untypedLabels = renderSource.split(/\r?\n/).filter((line) => {
+    if (!/(data-menu-label=|aria-label=|<button[^>]*title=)/.test(line)) return false
+    return !/(copyAttr|factAttr)/.test(line)
+  })
+  checkedCount += 1
+  if (untypedLabels.length) {
+    fail(`Site renderer has ${untypedLabels.length} user-visible label line(s) without copyAttr/factAttr ownership`)
+    for (const line of untypedLabels) console.error(`    - ${line.trim()}`)
+  } else {
+    pass('Site renderer menu, aria, and title labels carry explicit copyAttr/factAttr ownership')
+  }
 }
 
 {
@@ -965,6 +980,13 @@ function hasOwnedRenderString(body, text, owner) {
     fail('Site renderer string ownership inventory contains duplicate identifiers')
   } else {
     pass('Site renderer string ownership inventory has unique identifiers')
+  }
+  const ownershipIds = SITE_RENDER_STRING_OWNERSHIP.map(([id]) => id)
+  checkedCount += 1
+  if (ownershipIds.length !== CANONICAL_SITE_RENDER_STRING_IDS.length || ownershipIds.some((id, i) => id !== CANONICAL_SITE_RENDER_STRING_IDS[i])) {
+    fail('Site renderer string ownership inventory does not exactly match its independent canonical list')
+  } else {
+    pass('Site renderer string ownership inventory exactly matches its independent canonical list')
   }
   for (const [id, text, owner, marker] of SITE_RENDER_STRING_OWNERSHIP) {
     const body = renderFunnelBody(readText('site/app/core/render.js'), marker)
@@ -991,6 +1013,13 @@ function hasOwnedRenderString(body, text, owner) {
       if (hasOwnedRenderString(copiedBody, text, owner)) fail(`${id}: file-backed string mutation was not rejected`)
       else pass(`${id}: file-backed string mutation is rejected`)
       writeFileSync(renderCopy, original, 'utf8')
+    }
+    const ownershipWithoutFirst = SITE_RENDER_STRING_OWNERSHIP.slice(1).map(([id]) => id)
+    checkedCount += 1
+    if (ownershipWithoutFirst.length === CANONICAL_SITE_RENDER_STRING_IDS.length && ownershipWithoutFirst.every((id, i) => id === CANONICAL_SITE_RENDER_STRING_IDS[i])) {
+      fail('Site renderer canonical ownership deletion mutation was not rejected')
+    } else {
+      pass('Site renderer canonical ownership deletion mutation is rejected')
     }
   } finally {
     rmSync(mutationRoot, { recursive: true, force: true })

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { buildStubApi, unsupported } from './stubs'
 import { E_UNSUPPORTED } from '../../shared/rpc'
+import { setHostVocabularySchoolState } from '../lib/personalVocabulary/hostMessage'
 
 describe('bridge stubs', () => {
   it('unsupported rejects with a coded error', async () => {
@@ -94,6 +95,41 @@ describe('bridge stubs', () => {
       s.contextLink.setLinks({} as never)
       s.sendAgentControlResult({} as never)
     }).not.toThrow()
+  })
+
+  it('enforces notification ownership and maps authored browser copy only', async () => {
+    const shown: Array<{ title: string; body?: string }> = []
+    class FakeNotification {
+      static permission = 'granted'
+      constructor(title: string, options?: { body?: string }) {
+        shown.push({ title, body: options?.body })
+      }
+    }
+    vi.stubGlobal('Notification', FakeNotification)
+    vi.stubGlobal('localStorage', {
+      getItem: () => JSON.stringify({
+        version: 1,
+        entries: { terminal: 'shell box' },
+        entryCount: 1,
+        savedAt: Date.now()
+      })
+    })
+    setHostVocabularySchoolState({ enabled: false, hydrated: true })
+    try {
+      await expect(buildStubApi().notify({
+        title: 'Open terminal',
+        body: 'fatal: C:/workspace/terminal',
+        titleKind: 'authored',
+        bodyKind: 'fact',
+        nodeId: ''
+      })).resolves.toBe('shown')
+      expect(shown).toEqual([{ title: 'Open shell box', body: 'fatal: C:/workspace/terminal' }])
+      await expect(buildStubApi().notify({ title: 'Open terminal', body: 'details', nodeId: '' })).resolves.toBe('failed')
+      expect(shown).toHaveLength(1)
+    } finally {
+      vi.unstubAllGlobals()
+      setHostVocabularySchoolState({ enabled: false, hydrated: false })
+    }
   })
 })
 

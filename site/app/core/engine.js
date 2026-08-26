@@ -94,10 +94,18 @@ export function blip(state, kind) {
 // ---------------------------------------------------------------------
 // Toasts + Messages room (notifications-state)
 // ---------------------------------------------------------------------
-export function toast(store, icon, title, body, sub, speakFn) {
+/** Copy ownership for each visible toast field. Authored values may use local vocabulary;
+ * facts such as a dish name, path, provider value, or user-supplied identifier stay exact. */
+export function toast(store, icon, title, body, sub, speakFn, ownership = {}) {
   const id = 't' + Date.now() + Math.random().toString(36).slice(2, 6)
+  const titleKind = ownership.titleKind || 'authored'
+  const bodyKind = ownership.bodyKind || 'authored'
+  const subKind = ownership.subKind || 'authored'
+  if (!['authored', 'fact'].includes(titleKind) || !['authored', 'fact'].includes(bodyKind) || !['authored', 'fact'].includes(subKind)) {
+    throw new TypeError('Toast copy ownership must be authored or fact.')
+  }
   store.setState((s) => ({ toasts: s.state ? s.state.toasts : s.toasts }))
-  store.setState((s) => ({ toasts: (s.toasts || []).concat([{ id, icon, title, body, sub: sub || '' }]).slice(-3) }))
+  store.setState((s) => ({ toasts: (s.toasts || []).concat([{ id, icon, title, body, sub: sub || '', titleKind, bodyKind, subKind }]).slice(-3) }))
   blip(store.state, icon === '❌' ? 'bad' : 'ok')
   if (typeof speakFn === 'function') speakFn(title + '. ' + body)
   setTimeout(() => {

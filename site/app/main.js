@@ -44,8 +44,8 @@ function speak(text) {
     /* speechSynthesis unavailable */
   }
 }
-function toastX(icon, title, body, sub) {
-  toast(store, icon, title, body, sub, speak)
+function toastX(icon, title, body, sub, ownership) {
+  toast(store, icon, title, body, sub, speak, ownership)
 }
 
 function enterDoor(id) {

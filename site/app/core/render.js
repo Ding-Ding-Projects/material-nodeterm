@@ -37,10 +37,10 @@ function visibleDocs(state) { return state.school ? DOCS.filter((d) => d[2] !== 
 function visibleCoverage(state) { return state.school ? COVERAGE.filter((c) => !String(c[0]).toLowerCase().includes('vocabulary')) : COVERAGE }
 function searchBar({ id, value, placeholder, ariaLabel, rxKey, state, cls, autoIconSize }) {
   const on = !!state.rxOn[rxKey]
-  return `<div class="searchbar ${cls || ''}" data-menu-kind="search" data-menu-label="${attr(ariaLabel)}">
+  return `<div class="searchbar ${cls || ''}" data-menu-kind="search" data-menu-label="${copyAttr(state, ariaLabel)}">
     <span class="searchbar__icon" aria-hidden="true">🔎</span>
     <input type="search" data-bind="${id}" data-focus-id="${id}" value="${attr(value)}" placeholder="${copyAttr(state, placeholder)}" aria-label="${copyAttr(state, ariaLabel)}" />
-    <button type="button" class="rx-btn ${on ? 'is-on' : ''}" data-action="open-rx" data-id="${rxKey}" data-arg="${attr(ariaLabel)}" title="${copyAttr(state, 'Build a pattern for this search box')}" aria-label="${copyAttr(state, 'Regex builder for ' + ariaLabel)}">.*</button>
+    <button type="button" class="rx-btn ${on ? 'is-on' : ''}" data-action="open-rx" data-id="${rxKey}" data-arg="${factAttr(ariaLabel)}" title="${copyAttr(state, 'Build a pattern for this search box')}" aria-label="${copyAttr(state, 'Regex builder for ' + ariaLabel)}">.*</button>
   </div>`
 }
 
@@ -84,7 +84,7 @@ function renderHall(store) {
       ${searchBar({ id: 'qNav', value: s.qNav, placeholder: 'Filter the doors…', ariaLabel: 'the room list', rxKey: 'nav', state: s, cls: 'hall__nav-search' })}
     </div>
 
-    <div class="doors" data-menu-kind="rail" data-menu-label="the room list">
+    <div class="doors" data-menu-kind="rail" data-menu-label="${copyAttr(s, 'the room list')}">
       <div class="doors__grid">
         ${doors.length ? doors.map((x, i) => doorTile(s, x, i)).join('') : `<div class="empty" style="grid-column:1/-1">${copy(s, 'No door has that name. Try the')} <strong>.*</strong> ${copy(s, 'button next to the filter!')} 🔎</div>`}
       </div>
@@ -164,7 +164,7 @@ function doorTile(state, x, i) {
   const opening = state.opening === x.id ? 'is-opening' : ''
   const knocking = state.knock === x.id ? 'is-knocking' : ''
   return `<div class="door-slot" data-menu-kind="room" data-menu-label="${copyAttr(state, x.label)}" data-menu-extra="${attr(x.id)}">
-    <button type="button" class="door-frame" data-action="enter-door" data-id="${x.id}" aria-label="${copyAttr(state, locked ? 'Locked door: ' : 'Open the door to ')}${attr(shapeTitle(state, x.label))}">
+    <button type="button" class="door-frame" data-action="enter-door" data-id="${factAttr(x.id)}" aria-label="${copyAttr(state, locked ? 'Locked door: ' : 'Open the door to ')}${factAttr(shapeTitle(state, x.label))}">
       <span class="door-frame__peek">${x.icon}</span>
       <span class="door-frame__door ${opening} ${knocking}" style="background:${doorColor(i)}">
         <span class="door-frame__plaque">${x.icon}</span>
@@ -178,7 +178,7 @@ function doorTile(state, x, i) {
   </div>`
 }
 function featureCard(f, state) {
-  return `<article class="card feature-card" data-menu-kind="card" data-menu-label="${attr(f.title)}">
+  return `<article class="card feature-card" data-menu-kind="card" data-menu-label="${copyAttr(state, f.title)}">
     <div class="feature-card__icon" style="background:${f.color}">${f.icon}</div>
     <h4>${copy(state, f.title)}</h4>
     <p>${copy(state, f.body)}</p>
@@ -234,7 +234,7 @@ function renderRoom(store) {
         </div>
       </aside>
 
-      <main class="room-main" data-menu-kind="generic" data-menu-label="${attr(shapeTitle(s, section.title))}">
+      <main class="room-main" data-menu-kind="generic" data-menu-label="${factAttr(shapeTitle(s, section.title))}">
         <div class="room-main__head">
           <div class="room-main__titlewrap">
             <div class="pill">${copy(s, section.kicker)}</div>
@@ -310,7 +310,7 @@ function renderHomeRoom(store) {
 function rowItem(state, row) {
   const picked = !!state.picked[row.id]
   const name = row.title + (picked ? ', picked' : '') + (row.tag ? ', ' + row.tag : '') + (row.body ? '. ' + row.body : '')
-  const btn = `<button type="button" class="row-item" aria-pressed="${picked}" aria-label="${attr(name)}" data-action="toggle-pick" data-id="${attr(row.id)}" data-menu-kind="row" data-menu-label="${attr(row.title)}" data-menu-extra='${attr(JSON.stringify({ id: row.id, title: row.title, body: row.body, url: row.url || '', canUndo: !!row.canUndo }))}'>
+  const btn = `<button type="button" class="row-item" aria-pressed="${picked}" aria-label="${factAttr(name)}" data-action="toggle-pick" data-id="${factAttr(row.id)}" data-menu-kind="row" data-menu-label="${factAttr(row.title)}" data-menu-extra='${factAttr(JSON.stringify({ id: row.id, title: row.title, body: row.body, url: row.url || '', canUndo: !!row.canUndo }))}'>
     <span class="row-item__check ${picked ? 'is-picked' : ''}" aria-hidden="true">${picked ? '✔' : ''}</span>
     ${row.img ? `<img src="${attr(row.img)}" alt="" width="44" height="44" aria-hidden="true" style="flex:0 0 auto;border:3px solid var(--line);border-radius:12px;background:var(--paper2)" />` : ''}
     <span class="row-item__body" aria-hidden="true">
@@ -338,7 +338,7 @@ function rowItem(state, row) {
   if (!row.docHref) return btn
   return `<span class="row-item-wrap">
     ${btn}
-    <a class="row-item__open" href="${attr(row.docHref)}" aria-label="${copyAttr(state, 'Read the')} ${attr(row.title)} ${copyAttr(state, 'guide page')}">
+    <a class="row-item__open" href="${factAttr(row.docHref)}" aria-label="${copyAttr(state, 'Read the')} ${factAttr(row.title)} ${copyAttr(state, 'guide page')}">
       <span aria-hidden="true">${esc(row.right || '→')}</span>
     </a>
   </span>`
@@ -405,7 +405,7 @@ function ctlHtml(cardId, ctl, state) {
     return `<div class="ctl-row"><label>${copy(state, ctl.label)}</label><input data-bind-file="${attr(ctl.action)}" data-id="${attr(cardId)}" data-focus-id="ctl-${attr(cardId)}-${attr(ctl.action)}" type="file" accept="${attr(ctl.accept || 'application/json,.json')}" aria-label="${copyAttr(state, ctl.label)}" /><span class="ctl-file-status">${copy(state, ctl.status || 'No file selected')}</span></div>`
   }
   if (ctl.isColor) {
-    return `<div class="ctl-row">${label}<div class="swatch-row">${(ctl.swatches || []).map((sw) => `<button type="button" class="swatch ${sw.picked ? 'is-picked' : ''}" style="background:${sw.hex}" title="${attr(sw.name)}" aria-label="${attr(sw.name)}" data-action="pick-accent" data-id="${attr(sw.hex)}"></button>`).join('')}</div></div>`
+    return `<div class="ctl-row">${label}<div class="swatch-row">${(ctl.swatches || []).map((sw) => `<button type="button" class="swatch ${sw.picked ? 'is-picked' : ''}" style="background:${factAttr(sw.hex)}" title="${copyAttr(state, sw.name)}" aria-label="${copyAttr(state, sw.name)}" data-action="pick-accent" data-id="${factAttr(sw.hex)}"></button>`).join('')}</div></div>`
   }
   if (ctl.isButton) {
     return `<div class="ctl-row">${label}<button type="button" class="btn-set" data-action="${attr(ctl.action)}" data-id="${attr(cardId)}">${copy(state, ctl.toggleLabel)}</button></div>`
@@ -427,11 +427,11 @@ function settingsCardHtml(store, c) {
   if (s.school && c.id === 'vocab') return ''
   const gate = guardPanel(s, c.id)
   const controls = typeof c.controls === 'function' ? c.controls(s) : []
-  return `<section class="card" data-menu-kind="setting" data-menu-label="${attr(c.title)}" data-menu-extra="${attr(c.id)}">
+  return `<section class="card" data-menu-kind="setting" data-menu-label="${copyAttr(s, c.title)}" data-menu-extra="${factAttr(c.id)}">
     <div class="settings-card__head">
       <span aria-hidden="true" style="font-size:24px">${c.icon}</span>
       <h3>${copy(s, c.title)}</h3>
-      <button type="button" class="settings-card__lock" data-action="toggle-lock" data-id="${attr(c.id)}" title="Put a toy lock on this box">${gate.hasLock ? (gate.locked ? '🔒' : '🔓') : '➕'}</button>
+      <button type="button" class="settings-card__lock" data-action="toggle-lock" data-id="${factAttr(c.id)}" title="${copyAttr(s, 'Put a toy lock on this box')}">${gate.hasLock ? (gate.locked ? '🔒' : '🔓') : '➕'}</button>
     </div>
     <p class="settings-card__desc">${copy(s, c.desc)}</p>
     ${
@@ -490,7 +490,7 @@ function renderRx(store) {
         <input data-bind-rx="flags" data-focus-id="rxFlags" aria-label="${copyAttr(s, 'Flags')}" value="${attr(rx.flags)}" />
       </div>
       <div class="rx-tokens">
-        ${RX_TOKENS.map((t, i) => `<button type="button" class="rx-token" style="background:${t[2]}" title="${attr(t[3])}" data-action="rx-insert" data-id="${i}">${esc(t[0])}</button>`).join('')}
+        ${RX_TOKENS.map((t, i) => `<button type="button" class="rx-token" style="background:${t[2]}" title="${copyAttr(s, t[3])}" data-action="rx-insert" data-id="${i}">${copy(s, t[0])}</button>`).join('')}
       </div>
       <label>${copy(s, 'Try it on some words')}</label>
       <textarea class="rx-sample" data-bind="rxSample" spellcheck="false" aria-label="${copyAttr(s, 'Sample text')}">${esc(s.rxSample)}</textarea>
@@ -558,9 +558,9 @@ function renderToasts(store) {
       <div class="toast__row">
         <span class="toast__icon" aria-hidden="true">${t.icon}</span>
         <div style="flex:1;min-width:0">
-          <div class="toast__title">${esc(t.title)}</div>
-          <div class="toast__body">${esc(t.body)}</div>
-          ${t.sub ? `<div class="toast__sub">${esc(t.sub)}</div>` : ''}
+          <div class="toast__title">${t.titleKind === 'fact' ? fact(t.title) : copy(s, t.title)}</div>
+          <div class="toast__body">${t.bodyKind === 'fact' ? fact(t.body) : copy(s, t.body)}</div>
+          ${t.sub ? `<div class="toast__sub">${t.subKind === 'fact' ? fact(t.sub) : copy(s, t.sub)}</div>` : ''}
         </div>
         <button type="button" class="toast__close" data-action="dismiss-toast" data-id="${attr(t.id)}" aria-label="${copyAttr(s, 'Close this message')}">✕</button>
       </div>

@@ -4,6 +4,7 @@ import { isFreshVocabularyCache, validateVocabularyCacheJson, validateVocabulary
 import { shapeCopy, shapeTitle } from './i18n.js'
 import { createStore } from '../core/store.js'
 import { render } from '../core/render.js'
+import { toast } from '../core/engine.js'
 import { handleVocabularyFileChange, readVocabularyFile, registerVocabulary } from '../features/vocabulary.js'
 
 function storageFixture(initial = {}) {
@@ -302,6 +303,30 @@ test('the real renderer maps authored strings and preserves exact facts', () => 
     assert.match(room, />GitHub</)
     assert.match(room, /BUSL-1\.1 licensed · fork of/)
     assert.match(room, />GitHub</)
+  } finally {
+    if (original === undefined) delete globalThis.localStorage
+    else globalThis.localStorage = original
+  }
+})
+
+test('Day Teet Hui toasts map authored title, body, and sub fields while facts stay exact', () => {
+  const original = globalThis.localStorage
+  globalThis.localStorage = storageFixture()
+  try {
+    const store = createStore()
+    store.state.vocabEntries = { 'friendly title': 'mapped title', 'friendly body': 'mapped body', 'friendly sub': 'mapped sub', 'provider body': 'wrong fact' }
+    toast(store, 'ℹ️', 'friendly title', 'provider body', 'friendly sub', undefined, {
+      titleKind: 'authored',
+      bodyKind: 'fact',
+      subKind: 'authored'
+    })
+    store.state.view = 'hall'
+    const output = render(store)
+    assert.match(output, /mapped title/)
+    assert.match(output, /provider body/)
+    assert.match(output, /mapped sub/)
+    assert.doesNotMatch(output, /wrong fact/)
+    assert.throws(() => toast(store, 'ℹ️', 'title', 'body', '', undefined, { titleKind: 'unknown' }), /ownership/)
   } finally {
     if (original === undefined) delete globalThis.localStorage
     else globalThis.localStorage = original

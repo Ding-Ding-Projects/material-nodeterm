@@ -153,7 +153,7 @@ import { getDeviceId } from '../core/device-id'
 import { initRemoteStatusPush } from './remote-ssh/remote-status-push'
 import { runGitRemoteOp } from '../core/git-remote-proxy'
 import { initCanvasSync } from '../core/canvas-sync'
-import { composeNativeNotification, isPreparedNativeNotification, retainUntilDismissed } from './notifications'
+import { composeNativeNotification, prepareNativeNotification, retainUntilDismissed } from './notifications'
 import { installManagedAgentHooks } from '../core/agents/hooks'
 import { createSubagentTail } from '../core/subagent-tail'
 import { createContextTail, type TaskNotification } from '../core/context-tail'
@@ -1323,13 +1323,14 @@ app.whenReady().then(async () => {
       // it impossible to tell whether a personal vocabulary replacement is safe, so reject it
       // before window focus or notification support checks can turn the malformed request into a
       // misleading `skipped` result.
-      if (!isPreparedNativeNotification(payload)) return 'failed'
+      const prepared = prepareNativeNotification(payload)
+      if (!prepared) return 'failed'
       const win = getMainWindow()
       if (!win || !Notification.isSupported()) return 'skipped'
       // `force` (permission request / confirmation) shows even when focused; normal
       // completion notifications only show when the window is in the background.
       if (!payload.force && win.isFocused()) return 'skipped'
-      const copy = composeNativeNotification(payload)
+      const copy = composeNativeNotification(prepared)
       const n = new Notification(copy)
       n.on('click', () => {
         // Re-resolve at click time — the window may have been hidden/recreated since.
