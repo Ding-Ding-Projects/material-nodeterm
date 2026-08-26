@@ -6,6 +6,11 @@
   cancellation, duplicate-submit refusal, and stale-progress fencing. Replace the legacy WSL
   prompt chrome with a guided Material Design 3 dialog that keeps WSL creation separate from the
   Linux ISO VM installer. Focused implementation verification remains pending in this lane.
+- Contain the existing-worktree picker inside its Material surface: the adoption list now scrolls
+  within its own bounded region, filters visible branch and path text through a plain-text-first
+  search with an adjacent anchored regex builder, retains its title and actions, and clips row
+  overflow at narrow viewports while wrapping full branch and path values. Source-only repair is
+  present; built-artifact verification remains pending.
 
 - Add the shared automatic node-dependency foundation: an explicit manifest, canonical HTTPS
   sources, SHA-256 verification, reusable machine-local cache, bounded download and extraction,

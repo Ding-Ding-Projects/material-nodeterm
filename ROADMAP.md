@@ -89,6 +89,11 @@ later commit, since this file will not be kept in lockstep with every merge).
       section; subagent visualization and Context Link remain claude-only/unbuilt for Grok
       specifically (`SUBAGENT_CAPABLE`/`CONTEXT_LINK_CAPABLE` exclude Grok — its
       `updates.jsonl` parser is unbuilt).
+- [ ] **Existing-worktree picker viewport containment** — the adoption list now has a bounded,
+      internally scrollable region, a plain-text-first branch/path search with an adjacent full
+      regex builder, full wrapping branch/path values, and clipped row overflow inside a responsive
+      Material surface. Built-artifact interaction at long-list, narrow-width, and high-display-
+      scale states remains unverified.
 
 ## Known open defects (filed, unfixed)
 
