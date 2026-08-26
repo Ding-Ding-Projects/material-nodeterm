@@ -310,8 +310,13 @@ export function ProjectSwitcher({
   // refreshed explicitly by the action itself, never silently re-fetched underneath them.
   const queryPartsStatus = (projectId: string, cwd: string) => {
     if (partsStatus[projectId] !== undefined) return
-    void window.nodeTerminal.workspace
-      .hasPartsManifest(cwd)
+    // Through THAT project's session, not the global bridge. A switcher row can belong to a
+    // project that is not the active one, and on a relay tab the global bridge is always the
+    // viewer's own -- so asking it would answer about the wrong machine's filesystem entirely,
+    // which for a question shaped "is this file split into parts?" is an answer that looks
+    // perfectly plausible and is about somebody else's disk.
+    void sessionForProject(projectId)
+      .api.workspace.hasPartsManifest(cwd)
       .then((v) => setPartsStatus((cur) => ({ ...cur, [projectId]: v })))
       .catch(() => setPartsStatus((cur) => ({ ...cur, [projectId]: 'error' })))
   }
@@ -978,17 +983,21 @@ export function ProjectSwitcher({
             setStorageBusy(true)
             setStorageError(null)
             try {
+              // Resolved once, before the await, and reused for the re-read below: a tab switch
+              // mid-operation must not let the confirmation land on one machine and the
+              // verification come back from another.
+              const api = sessionForProject(projectId).api.workspace
               const result =
                 action === 'split'
-                  ? await window.nodeTerminal.workspace.splitIntoParts(cwd, partSizeValue, partSizeUnit)
-                  : await window.nodeTerminal.workspace.joinParts(cwd)
+                  ? await api.splitIntoParts(cwd, partSizeValue, partSizeUnit)
+                  : await api.joinParts(cwd)
               if (!result.ok) {
                 setStorageError(result.reason)
                 setStorageBusy(false)
                 return
               }
               // Re-read the true state rather than assuming the requested action landed.
-              const now = await window.nodeTerminal.workspace.hasPartsManifest(cwd)
+              const now = await api.hasPartsManifest(cwd)
               setPartsStatus((cur) => ({ ...cur, [projectId]: now }))
               setStorageConfirm(null)
               setStorageBusy(false)

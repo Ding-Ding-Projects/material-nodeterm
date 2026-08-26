@@ -574,6 +574,34 @@ AppData, temp, XDG, and agent config set before spawn, verify `userDataDir()` fr
 process, and sentinel the exact real-home targets before and after. Likewise, process cleanup must
 pass paths as data and compare them literally—never put a checkout path into a shell wildcard.
 
+### Never write a backslash through a shell heredoc
+
+Every layer between an edit and the file on disk eats one backslash, and the damage is silent in
+both directions. This bit three separate edits in a single session, all of them small:
+
+- `\\b` written into a regex through a heredoc arrived as a **literal backspace byte**, so the
+  pattern could never match anything. Visible only in `od -c`.
+- `\r\n` in a fixture arrived as two real newlines, so a CRLF fixture was quietly testing LF.
+- A multi-line regex written that way ended up with a real newline inside the pattern.
+
+The rule is not "escape more carefully", because counting layers is exactly what fails. Write the
+file with the editor tools, or from a script file rather than an inline heredoc, and then **read
+the result back** before trusting it. A `grep` for the needle is not enough -- it prints
+`\.` and a backspace identically. `od -c` is what tells you.
+
+Where a value can avoid a backslash entirely, prefer that: build a CRLF from
+`String.fromCharCode(13, 10)`, match a literal dot with `[.]`, and split rather than pattern-match.
+
+### Break a guard before you trust it -- and break it by REMOVING, not appending
+
+A guard nobody has watched fail is a comment. But the break has to be a real one: renaming
+`IPC.remoteRevokePeer` to `IPC.remoteRevokePeerV2` does **not** break a check that looks for
+`IPC.remoteRevokePeer`, because the new name still contains the old one. Three checks were
+declared toothless on exactly that mistake and were fine.
+
+So: delete the thing, watch red, restore, watch green. And anchor the needle to a whole line or a
+trailing delimiter, so a rename that merely appends cannot satisfy it either.
+
 ## Pull requests
 
 - Branch from `main`. **GitHub Actions runs no tests, no type-check, and no lint** — see
