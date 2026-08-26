@@ -4,8 +4,9 @@
  * while shipping `styles.md3.css`. Importing anything from this barrel pulls in its stylesheet
  * (`primitives.css`) too, so a consumer needs no separate CSS import to use these.
  *
- * Nothing in this app has been migrated onto these yet — see docs/md3-primitives.md for what
- * that would mean and why it was deliberately left out of the lane that shipped this file.
+ * The app's shared controls (`ui/Button`, `ui/Input`, `ui/Select`, `ui/SegmentedPill`) now
+ * DELEGATE to these, so most call sites render the design system without importing this barrel
+ * directly. What is not migrated is the raw `<button>` population — see docs/md3-primitives.md.
  */
 import './primitives.css'
 
