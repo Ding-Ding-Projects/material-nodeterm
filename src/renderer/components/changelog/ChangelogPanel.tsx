@@ -41,6 +41,7 @@ import {
 } from '../../lib/bulkSelection'
 import { ReleaseCard } from './ReleaseCard'
 import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
+import { copy, fact, mapOwnedSentence } from '../../lib/personalVocabulary/ownedCopy'
 
 const PRESETS: DateRangePreset[] = ['30d', '90d', 'all']
 
@@ -241,8 +242,8 @@ export function ChangelogPanel(): JSX.Element {
             actions={bulkActions}
             onActionComplete={(_id, result) => {
               const parts: string[] = []
-              if (result.succeeded.length > 0) parts.push(vocab(`${result.succeeded.length} exported`))
-              if (result.failed.length > 0) parts.push(vocab(`${result.failed.length} failed`))
+              if (result.succeeded.length > 0) parts.push(mapOwnedSentence(vocab, [fact(String(result.succeeded.length)), copy(' exported')]))
+              if (result.failed.length > 0) parts.push(mapOwnedSentence(vocab, [fact(String(result.failed.length)), copy(' failed')]))
               setExportResult(parts.length > 0 ? parts.join(', ') : null)
               if (parts.length > 0) setTimeout(() => setExportResult(null), 6000)
             }}

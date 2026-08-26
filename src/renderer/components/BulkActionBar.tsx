@@ -7,6 +7,7 @@
 import { useState } from 'react'
 import { BulkActionPreview } from './BulkActionPreview'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { copy, fact, mapOwnedSentence } from '../lib/personalVocabulary/ownedCopy'
 
 export interface BulkAction<T> {
   id: string
@@ -108,7 +109,7 @@ export function BulkActionBar<T>({
           onClick={onSelectAll}
           disabled={visible.length === 0}
         >
-          {vocab(`Select all (${visible.length} matching)`)}
+          {mapOwnedSentence(vocab, [copy('Select all ('), fact(String(visible.length)), copy(' matching)')])}
         </button>
         <button type="button" className="bulk-bar__invert" onClick={onInvert} disabled={visible.length === 0}>
           {vocab('Invert')}
@@ -119,7 +120,7 @@ export function BulkActionBar<T>({
           </button>
         )}
         <span className="bulk-bar__count" aria-live="polite">
-          {vocab(`${count} selected`)}
+          {mapOwnedSentence(vocab, [fact(String(count)), copy(' selected')])}
         </span>
       </div>
       {count > 0 && (

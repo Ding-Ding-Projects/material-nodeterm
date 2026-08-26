@@ -702,9 +702,10 @@ function PresetsTab({
           appearancePresets: [...useSettings.getState().settings.appearancePresets, p]
         })
       }
-      setImportMsg(
-        vocab(`Imported ${result.imported.length}. Skipped ${result.skippedInvalid} invalid, ${result.skippedDuplicateNames} duplicate name(s).`)
-      )
+      setImportMsg(mapOwnedSentence(vocab, [
+        copy('Imported '), fact(String(result.imported.length)), copy('. Skipped '), fact(String(result.skippedInvalid)),
+        copy(' invalid, '), fact(String(result.skippedDuplicateNames)), copy(' duplicate name(s).')
+      ]))
     }
     reader.readAsText(file)
   }
