@@ -19,6 +19,11 @@ export const WHISPER_MODELS: WhisperModelInfo[] = [
   { id: 'large-v3-turbo', file: 'ggml-large-v3-turbo.bin', approxMB: 1600 },
 ]
 
+/** The model a session falls back to when none is chosen, or when the chosen one is not a model
+ *  this build knows. `tiny` is the smallest and the one that is free, so it is the only safe
+ *  automatic choice: falling back to a larger one would download 1.6 GB nobody asked for. */
+export const DEFAULT_WHISPER_MODEL = 'tiny'
+
 export const WHISPER_DOWNLOAD_BASE = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/'
 
 export function whisperModel(id: string): WhisperModelInfo | undefined {

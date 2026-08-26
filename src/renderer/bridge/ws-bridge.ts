@@ -822,8 +822,8 @@ export function buildPresenceApi(client: RpcClient): Pick<NodeTerminalApi, 'pres
  */
 export function buildSpeechApi(client: RpcClient): Pick<NodeTerminalApi, 'speech'> {
   const speech: SpeechApi = {
-    transcribe: (pcm, language) =>
-      client.request(IPC.speechTranscribe, { pcm: encodePcmForWire(pcm), language }) as Promise<{
+    transcribe: (pcm, language, model) =>
+      client.request(IPC.speechTranscribe, { pcm: encodePcmForWire(pcm), language, model }) as Promise<{
         text: string
       }>,
     models: () => client.request(IPC.speechModels) as Promise<SpeechModelInfo[]>,

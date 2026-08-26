@@ -20,7 +20,7 @@ export function registerSpeechIpc(deps: {
   apiBase: string
   fetchFn?: typeof fetch
 }): void {
-  deps.handle(IPC.speechTranscribe, async (payload: { pcm: ArrayBuffer | string; language?: string }) => {
+  deps.handle(IPC.speechTranscribe, async (payload: { pcm: ArrayBuffer | string; language?: string; model?: string }) => {
     const speech = deps.settings().speech
     const pcm = decodePcmPayload(payload.pcm)
     const language = payload.language ?? speech.language
@@ -31,7 +31,10 @@ export function registerSpeechIpc(deps: {
           token: deps.licenseToken(),
           fetchFn: deps.fetchFn,
         })
-      : await deps.service.transcribe(pcm, { model: speech.model, language })
+      // The caller's model wins over the store's. `deps.settings()` is the GLOBAL settings
+      // store, and project overrides are resolved in the renderer, so reading only the store
+      // here made a per-project speech model settable and then ignored.
+      : await deps.service.transcribe(pcm, { model: payload.model ?? speech.model, language })
     return { text }
   })
 

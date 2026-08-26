@@ -2357,7 +2357,10 @@ export interface SpeechModelInfo extends WhisperModelInfo {
 export interface SpeechApi {
   /** Transcribe a chunk of mono PCM audio (16kHz Float32 samples) to text.
    *  `language` is a BCP-47-ish hint or 'auto'; defaults to the user's speech settings. */
-  transcribe(pcm: Float32Array, language?: string): Promise<{ text: string }>
+  /** `model` carries the PROJECT-RESOLVED choice. Without it the core reads the global
+   *  settings store, so a per-project speech model would be settable in the UI and then
+   *  silently ignored at transcription time. */
+  transcribe(pcm: Float32Array, language?: string, model?: string): Promise<{ text: string }>
   /** List the known whisper models with their download/pro status. */
   models(): Promise<SpeechModelInfo[]>
   /** Download a whisper model to disk (progress via `onProgress`). */
