@@ -1,10 +1,11 @@
 import { forwardRef, type InputHTMLAttributes } from 'react'
 import { cn } from '../cn'
-import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
+import { useVocabularyMapper, type VocabularyTextMode } from '../../lib/personalVocabulary/useVocabularyText'
 
 export interface SliderProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> {
   /** Renders the active track up to the thumb. Pass the same value/min/max you give the input. */
   fill?: boolean
+  vocabularyMode?: VocabularyTextMode
 }
 
 /**
@@ -20,7 +21,7 @@ export interface SliderProps extends Omit<InputHTMLAttributes<HTMLInputElement>,
  * `::-webkit-slider-runnable-track` cannot see the thumb position on its own.
  */
 export const Slider = forwardRef<HTMLInputElement, SliderProps>(function Slider(
-  { fill = true, className, style, value, min = 0, max = 100, ...rest },
+  { fill = true, className, style, value, min = 0, max = 100, vocabularyMode = 'authored', ...rest },
   ref
 ) {
   const vocab = useVocabularyMapper()
@@ -39,8 +40,8 @@ export const Slider = forwardRef<HTMLInputElement, SliderProps>(function Slider(
       className={cn('mdx-slider', className)}
       style={pct === null ? style : { ...style, ['--mdx-slider-pct' as string]: `${pct}%` }}
       {...rest}
-      aria-label={vocab(rest['aria-label'])}
-      title={vocab(rest.title)}
+      aria-label={vocabularyMode === 'authored' ? vocab(rest['aria-label']) : rest['aria-label']}
+      title={vocabularyMode === 'authored' ? vocab(rest.title) : rest.title}
     />
   )
 })

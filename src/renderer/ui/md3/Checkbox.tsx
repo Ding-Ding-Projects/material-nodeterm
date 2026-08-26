@@ -1,12 +1,13 @@
 import { forwardRef, type InputHTMLAttributes } from 'react'
 import { cn } from '../cn'
-import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
+import { useVocabularyMapper, type VocabularyTextMode } from '../../lib/personalVocabulary/useVocabularyText'
 
 export interface CheckboxProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> {
   /** Renders the indeterminate ("some but not all") state. Native `indeterminate` is a DOM
    *  property rather than an attribute, so React cannot set it from JSX; this drives the visual
    *  and sets `aria-checked="mixed"`, which is what assistive technology actually reads. */
   indeterminate?: boolean
+  vocabularyMode?: VocabularyTextMode
 }
 
 /**
@@ -21,7 +22,7 @@ export interface CheckboxProps extends Omit<InputHTMLAttributes<HTMLInputElement
  * primitive for one -- there was nothing to adopt.
  */
 export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Checkbox(
-  { indeterminate = false, className, ...rest },
+  { indeterminate = false, className, vocabularyMode = 'authored', ...rest },
   ref
 ) {
   const vocab = useVocabularyMapper()
@@ -32,8 +33,8 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
       aria-checked={indeterminate ? 'mixed' : undefined}
       className={cn('mdx-checkbox', indeterminate && 'mdx-checkbox--indeterminate', className)}
       {...rest}
-      aria-label={vocab(rest['aria-label'])}
-      title={vocab(rest.title)}
+      aria-label={vocabularyMode === 'authored' ? vocab(rest['aria-label']) : rest['aria-label']}
+      title={vocabularyMode === 'authored' ? vocab(rest.title) : rest.title}
     />
   )
 })

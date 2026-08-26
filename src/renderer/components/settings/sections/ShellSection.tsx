@@ -77,8 +77,9 @@ function LegacyShellControl({ rows }: { rows: typeof BASE_ROWS }): React.JSX.Ele
   const defaultShell = useSettings((state) => state.settings.defaultShell)
   const update = useSettings((state) => state.update)
   return (
-    <SearchableRow {...rows.legacyShell}>
+    <SearchableRow {...rows.legacyShell} vocabularyApplied>
       <FieldRow
+        vocabularyApplied
         label={profileText('terminalProfiles.settings.legacyDefaultLabel', 'Default shell')}
         htmlFor="settings-default-shell"
         control={
@@ -287,8 +288,9 @@ function WindowsProfileControls({ rows }: { rows: typeof BASE_ROWS }): React.JSX
 
   return (
     <>
-      <SearchableRow {...rows.profile}>
+      <SearchableRow {...rows.profile} vocabularyApplied>
         <FieldRow
+          vocabularyApplied
           label={profileText(
             'terminalProfiles.settings.defaultLabel',
             'Default terminal profile'
@@ -425,8 +427,9 @@ function WindowsProfileControls({ rows }: { rows: typeof BASE_ROWS }): React.JSX
         </div>
       </SearchableRow>
 
-      <SearchableRow {...rows.custom}>
+      <SearchableRow {...rows.custom} vocabularyApplied>
         <FieldRow
+          vocabularyApplied
           label={profileText('terminalProfiles.settings.customLabel', 'Custom executable')}
           description={profileText(
             'terminalProfiles.settings.customDescription',
@@ -480,6 +483,7 @@ export function ShellSection({ isActive }: { isActive: boolean }): React.JSX.Ele
   return (
     <SettingsSection
       id="shell"
+      vocabularyApplied
       title={profileText('terminalProfiles.settings.sectionTitle', 'Shell')}
       description={
         profileSupport

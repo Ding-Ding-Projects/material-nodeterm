@@ -1,6 +1,6 @@
 import { forwardRef, useId, useState, type InputHTMLAttributes, type ReactNode } from 'react'
 import { cn } from '../cn'
-import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
+import { useVocabularyMapper, type VocabularyTextMode } from '../../lib/personalVocabulary/useVocabularyText'
 
 export interface TextFieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'className'> {
   /** Floating label — sits notched into the outline's top edge (measured off the Clone dialog
@@ -17,6 +17,8 @@ export interface TextFieldProps extends Omit<InputHTMLAttributes<HTMLInputElemen
   /** Wrapper className — the input itself has no class escape hatch, since its layout is fixed
    *  by the outline it sits inside. */
   className?: string
+  /** Marks standard accessible/title strings as authored prose or exact facts. */
+  vocabularyMode?: VocabularyTextMode
 }
 
 /**
@@ -25,7 +27,7 @@ export interface TextFieldProps extends Omit<InputHTMLAttributes<HTMLInputElemen
  * the field's ambient surface rather than guessed).
  */
 export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function TextField(
-  { label, leadingIcon, trailingSlot, supportText, invalid = false, className, id, disabled, onFocus, onBlur, ...rest },
+  { label, leadingIcon, trailingSlot, supportText, invalid = false, className, id, disabled, onFocus, onBlur, vocabularyMode = 'authored', ...rest },
   ref
 ) {
   const vocab = useVocabularyMapper()
@@ -62,8 +64,8 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
             onBlur?.(e)
           }}
           {...rest}
-          aria-label={vocab(rest['aria-label'])}
-          title={vocab(rest.title)}
+          aria-label={vocabularyMode === 'authored' ? vocab(rest['aria-label']) : rest['aria-label']}
+          title={vocabularyMode === 'authored' ? vocab(rest.title) : rest.title}
         />
         {trailingSlot && <div className="mdx-field__trailing">{trailingSlot}</div>}
       </div>

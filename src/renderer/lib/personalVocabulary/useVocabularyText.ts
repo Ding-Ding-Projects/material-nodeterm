@@ -4,6 +4,9 @@ import { useSchoolMode } from '../../state/schoolMode'
 import { applyVocabulary, applyVocabularyToTemplate } from './apply'
 import { schoolModeAllowsOptionalFeatures } from '../schoolModePolicy'
 
+/** Declares whether a shared control string is product-authored prose or an exact fact. */
+export type VocabularyTextMode = 'authored' | 'factual'
+
 /**
  * The mapper behind every personal-vocabulary boundary in the renderer: one stable callback that
  * rewrites a single user-facing string, or returns it untouched when the capability is not in

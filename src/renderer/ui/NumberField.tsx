@@ -1,7 +1,7 @@
 import { forwardRef, type InputHTMLAttributes } from 'react'
 import './md3/primitives.css'
 import { cn } from './cn'
-import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { useVocabularyMapper, type VocabularyTextMode } from '../lib/personalVocabulary/useVocabularyText'
 
 export const NumberField = forwardRef<HTMLInputElement, {
   value: number
@@ -12,8 +12,9 @@ export const NumberField = forwardRef<HTMLInputElement, {
   className?: string
   disabled?: boolean
   ariaLabel?: string
+  vocabularyMode?: VocabularyTextMode
 } & Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'type' | 'className'>>(
-  function NumberField({ value, onChange, min, max, step, className, disabled, ariaLabel, ...rest }, ref) {
+  function NumberField({ value, onChange, min, max, step, className, disabled, ariaLabel, vocabularyMode = 'authored', ...rest }, ref) {
     const vocab = useVocabularyMapper()
     return (
       <input
@@ -24,8 +25,8 @@ export const NumberField = forwardRef<HTMLInputElement, {
         max={max}
         step={step}
         disabled={disabled}
-        aria-label={vocab(ariaLabel)}
-        title={vocab(rest.title)}
+        aria-label={vocabularyMode === 'authored' ? vocab(ariaLabel) : ariaLabel}
+        title={vocabularyMode === 'authored' ? vocab(rest.title) : rest.title}
         onChange={(e) => onChange(Number(e.target.value))}
         className={cn('mdx-input mdx-number-field', className)}
         {...rest}

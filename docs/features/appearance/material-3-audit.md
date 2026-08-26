@@ -272,7 +272,9 @@ Every listed renderer producer has an explicit local mapper boundary. Commands, 
 | `settings-font-picker` | Font picker labels and states | `src/renderer/components/settings/FontPicker.tsx` | `useVocabularyMapper()` |
 | `settings-theme-picker` | Theme picker labels | `src/renderer/components/settings/ThemeSelect.tsx` | `useVocabularyMapper()` |
 | `settings-section-inline-copy` | Standalone settings prose boundary | `src/renderer/components/settings/SettingsText.tsx` | `export function SettingsText` |
+| `settings-search-policy` | Settings visible/shipped search and School-mode rename policy | `src/renderer/components/settings/vocabulary.ts` | `export function settingsSidebarSearchEntry` |
 | `shared-prose-primitives` | Shared controls carrying prose props | `src/renderer/ui/` | `useVocabularyMapper()` in each primitive |
+| `ui-button-wrapper-delegation` | Compatibility button delegates prose mapping to MD3 button | `src/renderer/ui/Button.tsx` | `<Md3Button` |
 | `shared-input-controls` | Shared range, checkbox and radio accessible copy | `src/renderer/ui/md3/Slider.tsx`, `Checkbox.tsx`, `Radio.tsx` | `useVocabularyMapper()` |
 | `personal-vocabulary-upload` | Upload settings | `src/renderer/components/settings/sections/PersonalVocabularySection.tsx` | `usePersonalVocabulary` |
 | `command-palette` | Command palette | `src/renderer/components/CommandPalette.tsx` | `useVocabularyCommands` |

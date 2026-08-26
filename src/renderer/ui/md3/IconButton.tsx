@@ -2,6 +2,7 @@ import { forwardRef, type ButtonHTMLAttributes } from 'react'
 import { MaterialSymbol, type MaterialSymbolName } from '../../components/MaterialSymbol'
 import { cn } from '../cn'
 import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
+import type { VocabularyTextMode } from '../../lib/personalVocabulary/useVocabularyText'
 
 export interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'> {
   /** Required — an icon-only control's accessible name has nowhere else to come from. */
@@ -18,6 +19,7 @@ export interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonEle
   /** @default 'standard' — 44px, the shared `.md3-icon-btn` recipe ("every app-bar action").
    *  `'dense'` is 40px, for a tighter row. */
   size?: 'standard' | 'dense'
+  vocabularyMode?: VocabularyTextMode
 }
 
 /**
@@ -26,7 +28,7 @@ export interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonEle
  * than duplicating it under a new name.
  */
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
-  { icon, filled = false, active = false, size = 'standard', className, children, type = 'button', ...rest },
+  { icon, filled = false, active = false, size = 'standard', className, children, type = 'button', vocabularyMode = 'authored', ...rest },
   ref
 ) {
   const vocab = useVocabularyMapper()
@@ -36,6 +38,8 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
       type={type}
       className={cn('md3-icon-btn', size === 'dense' && 'mdx-icon-btn--dense', active && 'is-active', className)}
       {...rest}
+      aria-label={vocabularyMode === 'authored' ? vocab(rest['aria-label']) : rest['aria-label']}
+      title={vocabularyMode === 'authored' ? vocab(rest.title) : rest.title}
       aria-label={vocab(rest['aria-label'])}
       title={vocab(rest.title)}
     >

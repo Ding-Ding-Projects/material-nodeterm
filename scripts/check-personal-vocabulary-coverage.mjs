@@ -15,6 +15,7 @@ const ROOT = rootIndex >= 0 && scriptArgs[rootIndex + 1]
   ? scriptArgs[rootIndex + 1]
   : join(dirname(SCRIPT_PATH), '..')
 const fixtureRun = scriptArgs.includes('--fixture-run')
+const dropSectionIndex = scriptArgs.indexOf('--drop-section')
 const PRODUCERS = [
   ['settings-fields', 'src/renderer/components/settings/FieldRow.tsx', 'useVocabularyText('],
   ['settings-sections', 'src/renderer/components/settings/SettingsSection.tsx', 'useVocabularyText('],
@@ -26,6 +27,7 @@ const PRODUCERS = [
   ['settings-font-picker', 'src/renderer/components/settings/FontPicker.tsx', 'useVocabularyMapper()'],
   ['settings-theme-picker', 'src/renderer/components/settings/ThemeSelect.tsx', 'useVocabularyMapper()'],
   ['settings-section-inline-copy', 'src/renderer/components/settings/SettingsText.tsx', 'export function SettingsText'],
+  ['settings-search-policy', 'src/renderer/components/settings/vocabulary.ts', 'export function settingsSidebarSearchEntry'],
   ['personal-vocabulary-upload', 'src/renderer/components/settings/sections/PersonalVocabularySection.tsx', 'usePersonalVocabulary'],
   ['command-palette', 'src/renderer/components/CommandPalette.tsx', 'useVocabularyCommands'],
   ['context-menus', 'src/renderer/components/menu/VocabularyContextMenu.tsx', 'useVocabularyMenuItems'],
@@ -57,6 +59,7 @@ const PRODUCERS = [
   ['speech-settings', 'src/renderer/components/settings/sections/SpeechSection.tsx', 'useVocabularyMapper()'],
   ['toy-lock-wizard', 'src/renderer/components/toylocks/LockWizard.tsx', 'useVocabularyMapper()'],
   ['ui-input', 'src/renderer/ui/Input.tsx', 'useVocabularyMapper()'],
+  ['ui-button-wrapper-delegation', 'src/renderer/ui/Button.tsx', '<Md3Button'],
   ['ui-md3-button', 'src/renderer/ui/md3/Button.tsx', 'useVocabularyMapper()'],
   ['ui-chip', 'src/renderer/ui/md3/Chip.tsx', 'useVocabularyMapper()'],
   ['ui-menu', 'src/renderer/ui/md3/Menu.tsx', 'useVocabularyMapper()'],
@@ -163,6 +166,18 @@ const SETTINGS_SECTION_INVENTORY = [
   ['settings-usage', 'src/renderer/components/settings/sections/UsageSection.tsx'],
   ['settings-workspace', 'src/renderer/components/settings/sections/WorkspaceStorageSection.tsx']
 ]
+const FOCUSED_TEST_INVENTORY = [
+  ['settings-template-test', 'src/renderer/lib/personalVocabulary/apply.test.ts'],
+  ['settings-field-boundary-test', 'src/renderer/components/settings/FieldRow.vocabulary.test.tsx'],
+  ['settings-i18n-boundary-test', 'src/renderer/lib/i18n.test.tsx'],
+  ['settings-control-intent-test', 'src/renderer/ui/personalVocabulary.test.tsx']
+]
+const expectedSettingsSectionCount = 36
+if (dropSectionIndex >= 0 && scriptArgs[dropSectionIndex + 1]) {
+  const dropped = scriptArgs[dropSectionIndex + 1]
+  const index = SETTINGS_SECTION_INVENTORY.findIndex(([id]) => id === dropped)
+  if (index >= 0) SETTINGS_SECTION_INVENTORY.splice(index, 1)
+}
 let failures = 0
 let checked = 0
 const read = (file) => existsSync(join(ROOT, file)) ? readFileSync(join(ROOT, file), 'utf8') : null
@@ -207,7 +222,12 @@ for (const [id, file, reason] of PRODUCTION_SURFACES) {
 for (const [id, file] of SETTINGS_SECTION_INVENTORY) {
   check(id + ': exact settings section exists', read(file) !== null)
   check(id + ': exact Material/settings audit row', (read(DOC) || '').includes('| ' + String.fromCharCode(96) + id + String.fromCharCode(96) + ' |'))
+  check(id + ': section registration boundary', hasMarker(read(file), '<SettingsSection'))
+  check(id + ': active-state boundary', (read(file) || '').includes('isActive'))
 }
+for (const [id, file] of FOCUSED_TEST_INVENTORY) check(id + ': focused test exists', read(file) !== null)
+check('settings section inventory is complete', SETTINGS_SECTION_INVENTORY.length === expectedSettingsSectionCount)
+check('settings section inventory has unique ids', new Set(SETTINGS_SECTION_INVENTORY.map(([id]) => id)).size === SETTINGS_SECTION_INVENTORY.length)
 const pendingProductionSurfaces = PRODUCTION_SURFACES.filter(([, , reason]) => reason === 'unmapped-callsite-pending')
 check('all listed production surfaces are mapper-covered', pendingProductionSurfaces.length === 0)
 if (pendingProductionSurfaces.length > 0) {
@@ -221,7 +241,7 @@ check('producer inventory has no duplicate identifiers', errors.length === 0)
 const mutationRoot = mkdtempSync(join(tmpdir(), 'nodeterm-vocabulary-audit-'))
 try {
   if (!fixtureRun) {
-    for (const [, file] of [...PRODUCERS, ...PRODUCTION_SURFACES, ['audit-doc', DOC, '']]) {
+    for (const [, file] of [...PRODUCERS, ...PRODUCTION_SURFACES, ...FOCUSED_TEST_INVENTORY, ['audit-doc', DOC, '']]) {
       const source = join(ROOT, file)
       const target = join(mutationRoot, file)
       mkdirSync(dirname(target), { recursive: true })
@@ -236,6 +256,25 @@ try {
       })
       check('full checker rejects a removed mapper call', result.status !== 0)
     }
+    const inlineTarget = PRODUCERS.find(([id]) => id === 'settings-inline-copy')
+    if (inlineTarget) {
+      const inlinePath = join(mutationRoot, inlineTarget[1])
+      writeFileSync(inlinePath, readFileSync(inlinePath, 'utf8').replace(inlineTarget[2], ''), 'utf8')
+      const inlineResult = spawnSync(process.execPath, [SCRIPT_PATH, '--root', mutationRoot, '--fixture-run'], {
+        encoding: 'utf8'
+      })
+      check('full checker rejects a removed SettingsText mapper', inlineResult.status !== 0)
+    }
+    const sectionResult = spawnSync(process.execPath, [SCRIPT_PATH, '--root', mutationRoot, '--fixture-run', '--drop-section', 'settings-accounts'], {
+      encoding: 'utf8'
+    })
+    check('full checker rejects a removed settings section registration', sectionResult.status !== 0)
+    const templateTestPath = join(mutationRoot, 'src/renderer/lib/personalVocabulary/apply.test.ts')
+    rmSync(templateTestPath)
+    const templateResult = spawnSync(process.execPath, [SCRIPT_PATH, '--root', mutationRoot, '--fixture-run'], {
+      encoding: 'utf8'
+    })
+    check('full checker rejects a removed fact-template test', templateResult.status !== 0)
     const docPath = join(mutationRoot, DOC)
     const quote = String.fromCharCode(96)
     const docLines = readFileSync(docPath, 'utf8').split(/\r?\n/)

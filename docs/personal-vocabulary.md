@@ -156,6 +156,8 @@ the substitution without anyone remembering to opt in:
   `IconButton`, `SegmentedButton`, `Tabs`, `Dialog`, and `ListRow`. Their prose props, including
   native option and option-group labels, are mapped before dynamic interpolation, while option
   values, ids, paths, provider/account/user facts, and external errors remain exact.
+  Shared controls also expose a typed `vocabularyMode` prop so callers can mark a displayed value
+  as `factual` without disabling the authored-copy path for other controls.
 - ✅ The settings field boundary has focused coverage in
   `src/renderer/components/settings/FieldRow.vocabulary.test.tsx`, including the unknown-School
   hydration fail-closed state and protection for interpolated facts.
@@ -163,6 +165,9 @@ the substitution without anyone remembering to opt in:
   feedback, font and theme pickers, status/empty states, and inline headings. The hand-written
   inventory names every production Settings section and its audit row, so removing a section does
   not silently remove its vocabulary review.
+- ✅ The coverage Chut also inventories the focused template, field, localization, and control
+  intent tests. Its fixture mutations remove a mapper, `SettingsText`, a section registration, an
+  audit row, and the fact-template test, then execute the complete checker against the mutation.
 - ✅ Node header chrome, dock, kanban cards/columns and the card modal, via the separate
   `useLocalizedVocabularyText` helper (localized shipped prose → vocabulary → dynamic facts last)
 

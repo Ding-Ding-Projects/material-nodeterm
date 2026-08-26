@@ -1,12 +1,14 @@
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react'
 import { cn } from '../cn'
 import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
+import type { VocabularyTextMode } from '../../lib/personalVocabulary/useVocabularyText'
 
 export interface ChipProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   /** Filter-chip selected state — filled `secondary-container`, no border. Omit for a plain
    *  assist chip (outlined, never filled). */
   selected?: boolean
   icon?: ReactNode
+  vocabularyMode?: VocabularyTextMode
 }
 
 /**
@@ -15,7 +17,7 @@ export interface ChipProps extends ButtonHTMLAttributes<HTMLButtonElement> {
  * agent-status pill, see `StatusChip` instead — different shape, different job.
  */
 export const Chip = forwardRef<HTMLButtonElement, ChipProps>(function Chip(
-  { selected = false, icon, className, children, type = 'button', ...rest },
+  { selected = false, icon, className, children, type = 'button', vocabularyMode = 'authored', ...rest },
   ref
 ) {
   const vocab = useVocabularyMapper()
@@ -28,7 +30,7 @@ export const Chip = forwardRef<HTMLButtonElement, ChipProps>(function Chip(
       {...rest}
     >
       {icon && <span className="mdx-chip__icon">{icon}</span>}
-      {typeof children === 'string' ? vocab(children) : children}
+      {vocabularyMode === 'authored' && typeof children === 'string' ? vocab(children) : children}
     </button>
   )
 })

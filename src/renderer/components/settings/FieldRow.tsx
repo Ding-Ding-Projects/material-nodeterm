@@ -6,6 +6,7 @@ export function FieldRow({
   label,
   description,
   descriptionParams,
+  vocabularyApplied = false,
   note,
   control,
   htmlFor
@@ -14,6 +15,8 @@ export function FieldRow({
   description?: string
   /** Dynamic facts are interpolated only after the local prose vocabulary is applied. */
   descriptionParams?: Record<string, string>
+  /** Set when the caller already resolved this prose through the shared local boundary. */
+  vocabularyApplied?: boolean
   /** A caveat about the current value (e.g. "this setting can't take effect here") — same size as
    *  the description but in the warning accent, so it reads as a state, not as help text. */
   note?: string
@@ -23,9 +26,12 @@ export function FieldRow({
   // Personal-vocabulary boundary: every Settings label/description/note in the app funnels
   // through this one component, so this is where the substitution actually reaches users. Never
   // applied to `control` — that's live form widgets, not prose.
-  const vocabLabel = useVocabularyText(label)
-  const vocabDescription = useVocabularyTemplate(description, descriptionParams)
-  const vocabNote = useVocabularyText(note)
+  const mappedLabel = useVocabularyText(label)
+  const vocabLabel = vocabularyApplied ? label : mappedLabel
+  const mappedDescription = useVocabularyTemplate(description, descriptionParams)
+  const vocabDescription = vocabularyApplied ? description : mappedDescription
+  const mappedNote = useVocabularyText(note)
+  const vocabNote = vocabularyApplied ? note : mappedNote
   return (
     <div className="md3-settings-row">
       <div className="md3-settings-row__body">

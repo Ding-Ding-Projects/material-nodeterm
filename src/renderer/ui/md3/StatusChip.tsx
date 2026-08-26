@@ -1,6 +1,7 @@
 import type { HTMLAttributes, ReactNode } from 'react'
 import { cn } from '../cn'
 import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
+import type { VocabularyTextMode } from '../../lib/personalVocabulary/useVocabularyText'
 
 /** RUNNING → `running`, NEEDS YOU → `attention`, tmux/ok → `ok`, SLEEPING/idle → `idle`. */
 export type StatusTone = 'running' | 'attention' | 'ok' | 'idle'
@@ -13,6 +14,7 @@ export interface StatusChipProps extends HTMLAttributes<HTMLSpanElement> {
   /** Suppress the leading dot entirely (rare — most tones want it). */
   hideDot?: boolean
   children: ReactNode
+  vocabularyMode?: VocabularyTextMode
 }
 
 /**
@@ -23,7 +25,7 @@ export interface StatusChipProps extends HTMLAttributes<HTMLSpanElement> {
  * wake affordance) already wrap their own `<button>` around the equivalent chip; this primitive
  * is purely the chrome.
  */
-export function StatusChip({ tone, size = 'default', hideDot = false, className, children, ...rest }: StatusChipProps): React.JSX.Element {
+export function StatusChip({ tone, size = 'default', hideDot = false, className, children, vocabularyMode = 'authored', ...rest }: StatusChipProps): React.JSX.Element {
   const vocab = useVocabularyMapper()
   const pulse = tone === 'running' || tone === 'attention'
   return (
@@ -38,7 +40,7 @@ export function StatusChip({ tone, size = 'default', hideDot = false, className,
       {...rest}
     >
       {!hideDot && <span className="mdx-status-chip__dot" />}
-      {typeof children === 'string' ? vocab(children) : children}
+      {vocabularyMode === 'authored' && typeof children === 'string' ? vocab(children) : children}
     </span>
   )
 }

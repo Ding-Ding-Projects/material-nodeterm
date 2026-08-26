@@ -2,6 +2,7 @@ import type React from 'react'
 import { useSettingsSearchState } from './context'
 import { matchesEntry, type SettingsSearchEntry } from './search'
 import { useVocabularyMapper, useVocabularyText } from '../../lib/personalVocabulary/useVocabularyText'
+import { settingsSearchEntryWithVocabulary } from './vocabulary'
 
 /** Section shell: header + card body. Renders only when it is the active section
  *  (no query) or when at least one of its searchEntries matches (query present). */
@@ -11,6 +12,7 @@ export function SettingsSection({
   description,
   isActive,
   searchEntries,
+  vocabularyApplied = false,
   children
 }: {
   id: string
@@ -18,6 +20,7 @@ export function SettingsSection({
   description?: string
   isActive: boolean
   searchEntries?: SettingsSearchEntry[]
+  vocabularyApplied?: boolean
   children: React.ReactNode
 }): React.JSX.Element | null {
   // Mode-aware — the same state SearchableRow and the sidebar already match against. This used
@@ -32,15 +35,14 @@ export function SettingsSection({
   const hasQuery = (search.mode === 'text' ? search.query : search.pattern).trim() !== ''
   // Personal-vocabulary boundary for section chrome (unconditional — search matching below still
   // runs against the ORIGINAL title/searchEntries, so a rename never breaks ⌘K-style lookup).
-  const vocabTitle = useVocabularyText(title)
-  const vocabDescription = useVocabularyText(description)
+  const mappedTitle = useVocabularyText(title)
+  const vocabTitle = vocabularyApplied ? title : mappedTitle
+  const mappedDescription = useVocabularyText(description)
+  const vocabDescription = vocabularyApplied ? description : mappedDescription
   const vocab = useVocabularyMapper()
-  const visibleEntries = searchEntries?.map((entry) => ({
-    ...entry,
-    title: vocab(entry.title),
-    description: vocab(entry.description),
-    keywords: entry.keywords?.flatMap((keyword) => [keyword, vocab(keyword)])
-  }))
+  const visibleEntries = searchEntries?.map((entry) =>
+    vocabularyApplied ? entry : settingsSearchEntryWithVocabulary(entry, vocab)
+  )
   if (hasQuery) {
     const anyMatch = !visibleEntries || visibleEntries.some((e) => matchesEntry(search, e))
     if (!anyMatch) {
