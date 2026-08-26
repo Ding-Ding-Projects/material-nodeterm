@@ -6,6 +6,8 @@
 
 import { useState } from 'react'
 import { BulkActionPreview } from './BulkActionPreview'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { copy, fact, mapOwnedSentence } from '../lib/personalVocabulary/ownedCopy'
 
 export interface BulkAction<T> {
   id: string
@@ -54,6 +56,7 @@ export function BulkActionBar<T>({
   actions,
   onActionComplete
 }: BulkActionBarProps<T>): JSX.Element {
+  const vocab = useVocabularyMapper()
   const [pending, setPending] = useState<BulkAction<T> | null>(null)
   const [running, setRunning] = useState(false)
 
@@ -98,7 +101,7 @@ export function BulkActionBar<T>({
   const previewRunnable = selectedItems.filter((i) => !previewExcludedIds.has(idOf(i)))
 
   return (
-    <div className="bulk-bar" role="toolbar" aria-label="Bulk actions">
+    <div className="bulk-bar" role="toolbar" aria-label={vocab('Bulk actions')}>
       <div className="bulk-bar__selection">
         <button
           type="button"
@@ -106,18 +109,18 @@ export function BulkActionBar<T>({
           onClick={onSelectAll}
           disabled={visible.length === 0}
         >
-          Select all ({visible.length} matching)
+          {mapOwnedSentence(vocab, [copy('Select all ('), fact(String(visible.length)), copy(' matching)')])}
         </button>
         <button type="button" className="bulk-bar__invert" onClick={onInvert} disabled={visible.length === 0}>
-          Invert
+          {vocab('Invert')}
         </button>
         {count > 0 && (
           <button type="button" className="bulk-bar__clear" onClick={onClear}>
-            Clear
+            {vocab('Clear')}
           </button>
         )}
         <span className="bulk-bar__count" aria-live="polite">
-          {count} selected
+          {mapOwnedSentence(vocab, [fact(String(count)), copy(' selected')])}
         </span>
       </div>
       {count > 0 && (
@@ -134,7 +137,7 @@ export function BulkActionBar<T>({
                 aria-disabled={!!reason}
                 onClick={() => startAction(action)}
               >
-                {action.label}
+                {vocab(action.label)}
               </button>
             )
           })}
@@ -145,6 +148,7 @@ export function BulkActionBar<T>({
       {pending && (
         <BulkActionPreview
           title={pending.label}
+          titleSegments={[copy(pending.label)]}
           // The RUNNABLE set, not the whole selection: the preview adds excluded.length back on
           // to state the total, so passing everything counted each excluded row twice —
           // 3 selected with 1 excluded rendered "3 of 4 selected will change", one more of

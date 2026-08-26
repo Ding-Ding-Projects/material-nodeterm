@@ -310,6 +310,35 @@ Every listed renderer producer has an explicit local mapper boundary. Commands, 
 | `node-fact-preserving-mapper` | Node copy mapper that preserves provider and runtime facts | `src/renderer/nodes/nodeVocabulary.ts` | `export function mapAroundExactFacts` |
 | `password-manager` | Password manager | `src/renderer/components/passwordManager/PasswordManagerPanel.tsx` | `useVocabularyMapper()` |
 | `converter-adapter-catalog` | Adapter catalog | `src/renderer/components/converter/AdapterCatalog.tsx` | `useVocabularyMapper()` |
+| `converter-panel` | File converter panel and queue | `src/renderer/components/converter/FileConverterPanel.tsx` | `useVocabularyMapper()` |
+| `ollama-manager` | Local model manager | `src/renderer/components/ollama/OllamaManagerPanel.tsx` | `useVocabularyMapper()` |
+| `explorer-panel` | Explorer panel | `src/renderer/components/ExplorerPanel.tsx` | `useVocabularyMapper()` |
+| `project-switcher` | Project switcher | `src/renderer/components/ProjectSwitcher.tsx` | `useVocabularyMapper()` |
+| `regex-builder` | Regex builder | `src/renderer/components/regex/RegexBuilder.tsx` | `useVocabularyMapper()` |
+| `anchored-regex-builder` | Anchored regex trigger | `src/renderer/components/regex/AnchoredRegexBuilder.tsx` | `useVocabularyMapper()` |
+| `changelog-panel` | Changelog panel | `src/renderer/components/changelog/ChangelogPanel.tsx` | `useVocabularyMapper()` |
+| `release-card` | Release card | `src/renderer/components/changelog/ReleaseCard.tsx` | `useVocabularyMapper()` |
+| `local-history-panel` | Local history panel | `src/renderer/components/LocalHistoryPanel.tsx` | `useVocabularyMapper()` |
+| `docs-browser` | Offline documentation browser | `src/renderer/components/DocsBrowser.tsx` | `useVocabularyMapper()` |
+| `docs-article-view` | Documentation article chrome | `src/renderer/components/docs/DocsArticleView.tsx` | `useVocabularyMapper()` |
+| `appearance-editor` | Appearance editor | `src/renderer/components/appearance/AppearanceEditor.tsx` | `useVocabularyMapper()` |
+| `color-field` | Colour field | `src/renderer/components/color/ColorField.tsx` | `useVocabularyMapper()` |
+| `color-picker` | Colour picker | `src/renderer/components/color/ColorPicker.tsx` | `useVocabularyMapper()` |
+| `bulk-preview-segments` | Bulk preview typed copy and count fields | `src/renderer/components/BulkActionPreview.tsx` | `messageSegments={messageSegments}` |
+| `bulk-preview-single-title-map` | Bulk preview action-label boundary | `src/renderer/components/BulkActionBar.tsx` | `title={vocab(pending.label)}` |
+| `project-storage-segments` | Project storage confirmation facts | `src/renderer/components/ProjectSwitcher.tsx` | `messageSegments={` |
+| `project-other-unread-fact` | Other-project unread count fact | `src/renderer/components/ProjectSwitcher.tsx` | `mapOwnedSentence(vocab, [fact(String(otherUnread))` |
+| `converter-detection-note-fact` | Converter detection note fact | `src/renderer/components/converter/FileConverterPanel.tsx` | `f.detection.note` |
+| `converter-adapter-id-corpus` | Adapter id search corpus | `src/renderer/components/converter/AdapterCatalog.tsx` | `row.id} ${row.label}` |
+| `ollama-staleness-segments` | Model catalogue staleness facts | `src/renderer/components/ollama/OllamaManagerPanel.tsx` | `mapOwnedSentence(vocab, staleness)` |
+| `ollama-completeness-segments` | Model catalogue completeness facts | `src/renderer/components/ollama/OllamaManagerPanel.tsx` | `catalogHeadlineText(vocab, catalog)` |
+| `ollama-completeness-reason-fact` | Model catalogue reason facts | `src/renderer/components/ollama/OllamaManagerPanel.tsx` | `mapOwnedSentence(vocab, [fact(reason)]` |
+| `ollama-queue-phase-fact` | Pull queue phase ownership | `src/renderer/components/ollama/OllamaManagerPanel.tsx` | `item.digestPhase ?? vocab(item.status)` |
+| `ollama-fit-evidence-fact` | Hardware fit evidence ownership | `src/renderer/components/ollama/OllamaManagerPanel.tsx` | `vocab('Evidence:')` |
+| `appearance-weight-segments` | Font weight copy and numeric facts | `src/renderer/components/appearance/AppearanceEditor.tsx` | `w.label.indexOf` |
+| `appearance-font-preview-fact` | Font preview name ownership | `src/renderer/components/appearance/AppearanceEditor.tsx` | `quoteFamily(primary ||` |
+| `docs-section-copy` | Documentation section metadata | `src/renderer/components/DocsBrowser.tsx` | `vocab(section.label)` |
+| `history-restore-segments` | History restore target ownership | `src/renderer/components/LocalHistoryPanel.tsx` | `messageSegments={[` |
 | `minecraft-backups` | Minecraft backups | `src/renderer/components/minecraft/MinecraftBackupsPanel.tsx` | `useVocabularyMapper()` |
 | `minecraft-players` | Minecraft players | `src/renderer/components/minecraft/MinecraftPlayersPanel.tsx` | `useVocabularyMapper()` |
 | `minecraft-properties` | Minecraft properties | `src/renderer/components/minecraft/MinecraftPropertiesEditor.tsx` | `useVocabularyMapper()` |
@@ -318,6 +347,7 @@ Every listed renderer producer has an explicit local mapper boundary. Commands, 
 | `toy-lock-wizard` | Toy lock wizard | `src/renderer/components/toylocks/LockWizard.tsx` | `useVocabularyMapper` |
 | `personal-vocabulary-surface-mapper` | Structured surface mapper | `src/renderer/lib/personalVocabulary/surfaces.ts` | `applyVocabularyToMenuItems` |
 | `personal-vocabulary-application` | Replacement engine | `src/renderer/lib/personalVocabulary/apply.ts` | `export function applyVocabulary` |
+| `typed-copy-fact-boundary` | Typed application-copy versus exact-fact segments | `src/renderer/lib/personalVocabulary/ownedCopy.ts` | `mapOwnedSentence` |
 
 ## Complete production surface classification
 
@@ -356,21 +386,27 @@ single React element cannot reach the descendants produced by a component.
 | browser-extensions-panel | src/renderer/nodes/BrowserExtensionsPanel.tsx | mapped-callsite |
 | discarded-plate | src/renderer/nodes/DiscardedPlate.tsx | mapped-callsite |
 | wsl-dialog | src/renderer/wsl/WslCreateDialog.tsx | unmapped-callsite-pending |
-| regex-builder | src/renderer/components/regex/RegexBuilder.tsx | unmapped-callsite-pending |
-| anchored-regex-builder | src/renderer/components/regex/AnchoredRegexBuilder.tsx | unmapped-callsite-pending |
+| regex-builder | src/renderer/components/regex/RegexBuilder.tsx | mapped-callsite |
+| anchored-regex-builder | src/renderer/components/regex/AnchoredRegexBuilder.tsx | mapped-callsite |
 | notification-center | src/renderer/components/NotificationCenter.tsx | mapped-callsite |
 | notification-toasts | src/renderer/components/NotificationToasts.tsx | mapped-callsite |
-| changelog-panel | src/renderer/components/changelog/ChangelogPanel.tsx | unmapped-callsite-pending |
-| release-card | src/renderer/components/changelog/ReleaseCard.tsx | unmapped-callsite-pending |
-| local-history | src/renderer/components/LocalHistoryPanel.tsx | unmapped-callsite-pending |
-| docs-browser | src/renderer/components/DocsBrowser.tsx | unmapped-callsite-pending |
-| docs-article | src/renderer/components/docs/DocsArticleView.tsx | unmapped-callsite-pending |
-| appearance-editor | src/renderer/components/appearance/AppearanceEditor.tsx | unmapped-callsite-pending |
-| color-field | src/renderer/components/color/ColorField.tsx | unmapped-callsite-pending |
-| color-menu | src/renderer/components/color/ColorMenu.tsx | unmapped-callsite-pending |
-| color-picker | src/renderer/components/color/ColorPicker.tsx | unmapped-callsite-pending |
+| changelog-panel | src/renderer/components/changelog/ChangelogPanel.tsx | mapped-callsite |
+| release-card | src/renderer/components/changelog/ReleaseCard.tsx | mapped-callsite |
+| local-history | src/renderer/components/LocalHistoryPanel.tsx | mapped-callsite |
+| local-history-panel | src/renderer/components/LocalHistoryPanel.tsx | mapped-callsite |
+| docs-browser | src/renderer/components/DocsBrowser.tsx | mapped-callsite |
+| docs-article | src/renderer/components/docs/DocsArticleView.tsx | mapped-callsite |
+| docs-article-view | src/renderer/components/docs/DocsArticleView.tsx | mapped-callsite |
+| appearance-editor | src/renderer/components/appearance/AppearanceEditor.tsx | mapped-callsite |
+| color-field | src/renderer/components/color/ColorField.tsx | mapped-callsite |
+| color-menu | src/renderer/components/color/ColorMenu.tsx | colors-only-no-prose |
+| color-picker | src/renderer/components/color/ColorPicker.tsx | mapped-callsite |
 | branch-select | src/renderer/components/BranchSelect.tsx | literal-provider-boundary |
-| bulk-action-bar | src/renderer/components/BulkActionBar.tsx | unmapped-callsite-pending |
+| bulk-action-bar | src/renderer/components/BulkActionBar.tsx | mapped-callsite |
+| explorer-panel | src/renderer/components/ExplorerPanel.tsx | mapped-callsite |
+| project-switcher | src/renderer/components/ProjectSwitcher.tsx | mapped-callsite |
+| ollama-manager | src/renderer/components/ollama/OllamaManagerPanel.tsx | mapped-callsite |
+| converter-panel | src/renderer/components/converter/FileConverterPanel.tsx | mapped-callsite |
 | pty-pressure | src/renderer/components/PtyPressureBanner.tsx | mapped-callsite |
 | update-card | src/renderer/components/UpdateCard.tsx | mapped-callsite |
 | resume-card | src/renderer/components/ResumeCard.tsx | mapped-callsite |

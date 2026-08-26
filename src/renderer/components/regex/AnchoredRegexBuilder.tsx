@@ -2,6 +2,7 @@ import { useRef, useState, type RefObject } from 'react'
 import { AnchoredPopover } from '../../ui/AnchoredPopover'
 import { RegexBuilder } from './RegexBuilder'
 import type { RegexBuilderBinding } from '../../lib/regex/useRegexSearchField'
+import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 
 interface AnchoredRegexBuilderProps {
   search: RegexBuilderBinding
@@ -33,6 +34,7 @@ const BUILDER_POPOVER_WIDTH = 920
 export function AnchoredRegexBuilder({ search, fieldRef, label, zIndex }: AnchoredRegexBuilderProps): React.JSX.Element {
   const ownTriggerRef = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)
+  const vocab = useVocabularyMapper()
   const anchor = (fieldRef as RefObject<HTMLElement>) ?? ownTriggerRef
 
   return (
@@ -41,8 +43,8 @@ export function AnchoredRegexBuilder({ search, fieldRef, label, zIndex }: Anchor
         ref={ownTriggerRef}
         type="button"
         className={`md3-regex-trigger${search.mode === 'regex' ? ' md3-regex-trigger--active' : ''}`}
-        title={search.mode === 'regex' ? 'Regex mode — open the builder' : 'Switch to regex and open the builder'}
-        aria-label={label ?? 'Open regex builder'}
+        title={vocab(search.mode === 'regex' ? 'Regex mode — open the builder' : 'Switch to regex and open the builder')}
+        aria-label={vocab(label ?? 'Open regex builder')}
         aria-pressed={search.mode === 'regex'}
         onClick={() => {
           if (search.mode !== 'regex') search.setMode('regex')
