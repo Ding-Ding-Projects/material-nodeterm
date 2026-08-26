@@ -1,41 +1,73 @@
 /**
- * A pure, LOCAL renderer for a preview NSIS script from `NsisSpec` + `NsisLocalPaths`.
+ * Thin adapter: NSIS installer-builder node form state -> the canonical `renderNsis`.
  *
- * Deliberately not the sibling lane's `renderNsis` in `src/core/nsis` (which does not exist in
- * this worktree) -- this is this branch's own read-only preview generator, kept intentionally
- * small and pure (string in, string out, no fs/IPC) so it is trivial to test and to reconcile
- * later against the sibling's real spec/renderer.
+ * This USED to be a second, independent renderer, written because the UI lane was developed in a
+ * worktree where the canonical `src/core/nsis` implementation (typed spec + escape boundary +
+ * pure renderer) did not exist. That implementation has since moved to `src/shared/nsis/` (see
+ * that directory's `spec.ts` for why it lives here rather than in `src/core`: `src/shared` is
+ * imported by main, the renderer AND core, so the canonical implementation has to live at that
+ * lower layer for `src/core` to re-export it without inverting the dependency direction). There
+ * is now exactly ONE NSIS renderer in this repo -- this file only translates shapes and calls it.
+ *
+ * WHY TWO SHAPES, NOT ONE:
+ *  - `NsisSpec` (this module's sibling `nsis-form-types.ts`) is the GIT-SHARED half: app name,
+ *    version, publisher, output filename, install root, shortcut/uninstaller/compression choices.
+ *    None of it names anything on local disk, so it lives in `.nodeterm/project.json`.
+ *  - `NsisLocalPaths` is the MACHINE-LOCAL half: absolute source/license/icon paths on THIS
+ *    machine, round-tripped through `LocalNodeExec.nsisLocalPaths` instead, exactly like a
+ *    service node's `serviceConnection` -- see that file's doc comment for the full reasoning.
+ *  - The canonical `NsisInstallerSpec` (src/shared/nsis/spec.ts) has no such split; it is built
+ *    for the ACTUAL render step, where both halves need to be present at once. This adapter is
+ *    where they are combined -- only in memory, at render time -- and it is combined nowhere
+ *    else: neither half is ever persisted in the other's shape.
+ *
+ * WHY THE PREVIEW CAN LEGITIMATELY SHOW A REFUSAL, NOT A SCRIPT:
+ *  The canonical renderer REFUSES rather than sanitises anything it cannot make safe by escaping
+ *  (see `src/shared/nsis/escape.ts`): an empty app name, an invalid version, an install root
+ *  outside its closed vocabulary, and -- the one that matters most here -- any item/license/icon
+ *  path that is absolute or contains a `..` segment. `NsisLocalPaths` fields are, by design,
+ *  absolute paths a native file picker handed back. Passing them straight through as the
+ *  canonical spec's `sourcePath`/`licenseFile`/`iconFile` (which the real build step expects
+ *  relative to a project root it will pass as `cwd` to `buildLocal`) is therefore expected to
+ *  refuse until a later change threads that project root through this node. That refusal is a
+ *  FIRST-CLASS outcome, not an exception this module tries to route around: `renderNsisPreview`
+ *  catches `NsisSpecError` and returns a readable "why this can't render yet" block instead of
+ *  letting the error escape into a React render. It is deliberately NOT sanitised into a fake
+ *  relative path here either -- doing that would silently disagree with what a real build of this
+ *  spec would do, which is exactly the kind of drift the security boundary in escape.ts exists to
+ *  prevent.
  */
 
-import type { NsisCompression, NsisInstallRoot, NsisLocalPaths, NsisSpec } from './nsis-form-types'
+import { NsisSpecError } from './nsis/escape'
+import { renderNsis } from './nsis/render'
+import type {
+  NsisInstallerSpec,
+  NsisInstallItem,
+  NsisInstallRoot as CoreInstallRoot,
+  NsisCompression as CoreCompression,
+} from './nsis/spec'
+import type {
+  NsisCompression,
+  NsisInstallRoot,
+  NsisLocalPaths,
+  NsisSpec,
+} from './nsis-form-types'
 
-const INSTALL_ROOT_DIR: Record<NsisInstallRoot, string> = {
-  'program-files-64': '$PROGRAMFILES64',
-  'program-files-32': '$PROGRAMFILES',
-  'local-app-data': '$LOCALAPPDATA',
-  'per-user-program-files': '$LOCALAPPDATA\\Programs'
+const INSTALL_ROOT_MAP: Record<NsisInstallRoot, { root: CoreInstallRoot; subPrefix?: string }> = {
+  'program-files-64': { root: 'programFiles64' },
+  'program-files-32': { root: 'programFiles32' },
+  'local-app-data': { root: 'localAppData' },
+  // The canonical spec has no distinct "$LOCALAPPDATA\Programs" root -- it is a subfolder of
+  // localAppData, so it is expressed as an install sub-path prefix under that same root rather
+  // than inventing a fifth core root for one UI-side convenience option.
+  'per-user-program-files': { root: 'localAppData', subPrefix: 'Programs' },
 }
 
-const COMPRESSION_DIRECTIVE: Record<NsisCompression, string> = {
-  lzma: 'SetCompressor /SOLID lzma',
-  zlib: 'SetCompressor zlib',
-  bzip2: 'SetCompressor bzip2',
-  none: 'SetCompress off'
-}
-
-/** Quotes a value for an NSIS string literal: backslashes are literal in NSIS strings (no escape
- *  needed), so only the double-quote itself has to be neutralized. */
-function nsisQuote(value: string): string {
-  return '"' + value.split('"').join('$\\"') + '"'
-}
-
-/** NSIS's `VIProductVersion` requires exactly four dot-separated numeric parts. Pads or trims
- *  whatever the user typed rather than rejecting it -- this is a read-only preview, not a
- *  validator. */
-function fourPartVersion(version: string): string {
-  const parts = version.split('.').map((p) => p.trim() || '0')
-  while (parts.length < 4) parts.push('0')
-  return parts.slice(0, 4).join('.')
+const COMPRESSION_MAP: Record<NsisCompression, CoreCompression> = {
+  lzma: 'lzma',
+  zlib: 'zlib',
+  bzip2: 'bzip2',
+  none: 'off',
 }
 
 function safeOutputFileName(spec: NsisSpec): string {
@@ -45,94 +77,67 @@ function safeOutputFileName(spec: NsisSpec): string {
   return base.replace(/[^A-Za-z0-9._-]+/g, '-') + '-Setup.exe'
 }
 
+/** Map the node's form state onto the canonical spec. Deliberately does NOT try to make
+ *  `NsisLocalPaths`' absolute paths relative-safe -- see the file header for why that would be
+ *  the wrong fix here. */
+function toInstallerSpec(spec: NsisSpec, local: NsisLocalPaths): NsisInstallerSpec {
+  const appName = spec.appName.trim() || 'Your App'
+  const { root, subPrefix } = INSTALL_ROOT_MAP[spec.installRoot]
+  const installSubPath = subPrefix ? `${subPrefix}\\${appName}` : appName
+
+  const items: NsisInstallItem[] = local.sourcePaths.map((sourcePath) => ({
+    sourcePath,
+    // Every source path this adapter receives is opaque -- NsisLocalPaths carries no per-entry
+    // file/directory flag -- so this defaults to the recursive form the pre-unification preview
+    // always used. It is moot in practice today: absolute paths refuse before this distinction is
+    // ever reached (see renderInstallItem in src/shared/nsis/render.ts).
+    isDirectory: true,
+  }))
+
+  return {
+    appName,
+    version: spec.version.trim() || '0.0.0',
+    publisher: spec.publisher.trim(),
+    outFile: safeOutputFileName(spec),
+    installRoot: root,
+    installSubPath,
+    items,
+    licenseFile: local.licensePath,
+    iconFile: local.iconPath,
+    mainExecutable: `${appName}.exe`,
+    startMenuShortcut: spec.createStartMenuShortcut ? { enabled: true } : undefined,
+    desktopShortcut: spec.createDesktopShortcut ? { enabled: true } : undefined,
+    generateUninstaller: spec.includeUninstaller,
+    installScope: spec.perMachine ? 'perMachine' : 'perUser',
+    compression: COMPRESSION_MAP[spec.compression],
+  }
+}
+
+function refusalBlock(message: string): string {
+  return [
+    "; Can't render a full NSIS script yet:",
+    `;   ${message}`,
+    ';',
+    '; This is a real refusal from the NSIS renderer\'s security boundary (src/shared/nsis/escape.ts),',
+    '; not a bug in the preview -- it never silently substitutes or clips an unsafe value. Fix the',
+    '; field(s) named above and the preview will render the real script.',
+  ].join('\n')
+}
+
 /**
- * Renders a preview `.nsi` script. Always produces SOMETHING -- missing fields render as inline
- * `; TODO:` placeholders rather than an empty box, per the guided-form rule that a disabled/empty
- * state must say plainly what is missing rather than showing nothing.
- *
- * Built with plain string concatenation (`+`), not template-literal interpolation, for every line
- * that mixes an NSIS `$Variable` with a JS-interpolated value: `` `$SMPROGRAMS\${x}` `` is a real
- * trap (backslash-dollar escapes the `$`, so `${x}` renders as the literal text `${x}` instead of
- * interpolating) and `` `$INSTDIR\Uninstall.exe` `` is a second one (`\U` is not a recognized JS
- * escape, so the backslash is silently dropped). Both bit this file on the first pass and were
- * caught by the round-trip test below going red; concatenation has no escape sequence to get
- * wrong.
+ * Renders a preview `.nsi` script from the node's form state, via the canonical `renderNsis`.
+ * Always produces SOMETHING -- a real script, or (for anything the canonical renderer legitimately
+ * refuses) a readable explanation of exactly what to fix -- never an empty box and never an
+ * uncaught exception reaching the component that calls this.
  */
 export function renderNsisPreview(spec: NsisSpec, local: NsisLocalPaths): string {
-  const lines: string[] = []
-  const version = spec.version.trim() || '0.0.0'
-  const publisher = spec.publisher.trim()
-  const outFile = safeOutputFileName(spec)
-  const appDirName = spec.appName.trim() || 'YourApp'
-  const installDir = INSTALL_ROOT_DIR[spec.installRoot] + '\\' + appDirName
-
-  lines.push('; Generated by nodeterm\'s NSIS installer builder node -- preview only.')
-  lines.push('Name ' + nsisQuote(spec.appName.trim() || 'Your App'))
-  lines.push('OutFile ' + nsisQuote(outFile))
-  lines.push('InstallDir ' + nsisQuote(installDir))
-  lines.push('RequestExecutionLevel ' + (spec.perMachine ? 'admin' : 'user'))
-  lines.push(COMPRESSION_DIRECTIVE[spec.compression])
-  lines.push('')
-  lines.push('VIProductVersion ' + nsisQuote(fourPartVersion(version)))
-  lines.push('VIAddVersionKey "ProductName" ' + nsisQuote(spec.appName.trim() || 'App'))
-  lines.push('VIAddVersionKey "ProductVersion" ' + nsisQuote(version))
-  if (publisher) lines.push('VIAddVersionKey "CompanyName" ' + nsisQuote(publisher))
-  lines.push('')
-
-  if (local.licensePath) {
-    lines.push('Page license')
-    lines.push('LicenseData ' + nsisQuote(local.licensePath))
-  }
-  lines.push('Page directory')
-  lines.push('Page instfiles')
-  lines.push('')
-
-  if (local.iconPath) {
-    lines.push('Icon ' + nsisQuote(local.iconPath))
-    lines.push('UninstallIcon ' + nsisQuote(local.iconPath))
-    lines.push('')
-  }
-
-  lines.push('Section "Install"')
-  lines.push('  SetOutPath "$INSTDIR"')
-  if (local.sourcePaths.length === 0) {
-    lines.push('  ; TODO: add at least one source file or folder to package')
-  } else {
-    for (const p of local.sourcePaths) {
-      lines.push('  File /r ' + nsisQuote(p))
+  const mapped = toInstallerSpec(spec, local)
+  try {
+    return renderNsis(mapped)
+  } catch (err) {
+    if (err instanceof NsisSpecError) {
+      return refusalBlock(err.message)
     }
+    throw err
   }
-  if (spec.includeUninstaller) {
-    lines.push('  WriteUninstaller "$INSTDIR\\Uninstall.exe"')
-  }
-  if (spec.createStartMenuShortcut) {
-    const menuName = spec.appName.trim() || 'App'
-    lines.push('  CreateDirectory "$SMPROGRAMS\\' + menuName + '"')
-    lines.push(
-      '  CreateShortCut "$SMPROGRAMS\\' + menuName + '\\' + menuName + '.lnk" "$INSTDIR\\' + menuName + '.exe"'
-    )
-  }
-  if (spec.createDesktopShortcut) {
-    const appTitle = spec.appName.trim() || 'App'
-    lines.push('  CreateShortCut "$DESKTOP\\' + appTitle + '.lnk" "$INSTDIR\\' + appTitle + '.exe"')
-  }
-  lines.push('SectionEnd')
-
-  if (spec.includeUninstaller) {
-    lines.push('')
-    lines.push('Section "Uninstall"')
-    lines.push('  Delete "$INSTDIR\\Uninstall.exe"')
-    lines.push('  RMDir /r "$INSTDIR"')
-    if (spec.createStartMenuShortcut) {
-      const menuName = spec.appName.trim() || 'App'
-      lines.push('  RMDir /r "$SMPROGRAMS\\' + menuName + '"')
-    }
-    if (spec.createDesktopShortcut) {
-      const appTitle = spec.appName.trim() || 'App'
-      lines.push('  Delete "$DESKTOP\\' + appTitle + '.lnk"')
-    }
-    lines.push('SectionEnd')
-  }
-
-  return lines.join('\n')
 }
