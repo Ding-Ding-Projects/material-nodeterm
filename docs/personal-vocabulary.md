@@ -173,6 +173,11 @@ the substitution without anyone remembering to opt in:
   section may skip its search metadata mapping. The checker records each section's exact registered
   `SettingsSection` id in an explicit boundary manifest, not a broad component substring, and each
   mutation runs against a fresh complete fixture.
+- ✅ The Settings audit also carries an explicit mixed-string boundary manifest for the cited
+  Accounts, App Identity, Appearance, Narrator, Phone, Schedule, School, Kids, Speech, Terminal,
+  Workspace, Custom Agents, SSH, Shortcuts, and Support Tickets callsites. Each row names its
+  source file and exact shared boundary marker, so a section cannot pass merely because some other
+  text in the same file happens to be mapped.
 - ✅ The coverage Chut also inventories the focused template, field, localization, and control
   intent tests. Its fixture mutations remove a mapper, `SettingsText`, a section registration, an
   audit row, and the fact-template test, then execute the complete checker against the mutation.

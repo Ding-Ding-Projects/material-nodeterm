@@ -174,9 +174,29 @@ const SETTINGS_SECTION_BOUNDARY_MANIFEST = [
 const FOCUSED_TEST_INVENTORY = [
   ['settings-template-test', 'src/renderer/lib/personalVocabulary/apply.test.ts'],
   ['settings-field-boundary-test', 'src/renderer/components/settings/FieldRow.vocabulary.test.tsx'],
-  ['settings-sidebar-corpus-test', 'src/renderer/components/settings/vocabulary.test.ts'],
+  ['settings-sidebar-corpus-test', 'src/renderer/components/settings/vocabulary.test.tsx'],
   ['settings-i18n-boundary-test', 'src/renderer/lib/i18n.test.tsx'],
   ['settings-control-intent-test', 'src/renderer/ui/personalVocabulary.test.tsx']
+]
+// Explicit mixed-copy callsites called out by the Settings audit. These ids are intentionally
+// narrower than a file-level section row: each one names the exact shared boundary expected in the
+// cited surface, so moving or deleting that boundary turns this check red.
+const MIXED_STRING_BOUNDARY_MANIFEST = [
+  ['accounts-mixed-facts', 'src/renderer/components/settings/sections/AccountsSection.tsx', 'SettingsText'],
+  ['app-identity-mixed-facts', 'src/renderer/components/settings/sections/AppIdentitySection.tsx', 'SettingsText'],
+  ['appearance-mixed-facts', 'src/renderer/components/settings/sections/AppearanceSection.tsx', 'SettingsText'],
+  ['narrator-mixed-facts', 'src/renderer/components/settings/sections/NarratorSection.tsx', 'SettingsText'],
+  ['phone-mixed-facts', 'src/renderer/components/settings/sections/PhoneSection.tsx', 'SettingsText'],
+  ['schedule-mixed-facts', 'src/renderer/components/settings/sections/ScheduleSection.tsx', 'SettingsText'],
+  ['school-mixed-facts', 'src/renderer/components/settings/sections/SchoolModeSection.tsx', 'SettingsText'],
+  ['kids-mixed-facts', 'src/renderer/components/settings/sections/KidsModeSection.tsx', 'SettingsText'],
+  ['speech-mixed-facts', 'src/renderer/components/settings/sections/SpeechSection.tsx', 'SettingsText'],
+  ['terminal-mixed-facts', 'src/renderer/components/settings/sections/TerminalSection.tsx', 'SettingsText'],
+  ['workspace-mixed-facts', 'src/renderer/components/settings/sections/WorkspaceStorageSection.tsx', '<FieldRow'],
+  ['custom-agents-mixed-facts', 'src/renderer/components/settings/sections/CustomAgentsSection.tsx', '<FieldRow'],
+  ['ssh-mixed-facts', 'src/renderer/components/settings/sections/SshSection.tsx', '<FieldRow'],
+  ['shortcuts-mixed-facts', 'src/renderer/components/settings/sections/ShortcutsSection.tsx', '<FieldRow'],
+  ['support-mixed-facts', 'src/renderer/components/settings/sections/SupportTicketsSection.tsx', 'SettingsText']
 ]
 const expectedSettingsSectionCount = 36
 if (dropSectionIndex >= 0 && scriptArgs[dropSectionIndex + 1]) {
@@ -239,6 +259,10 @@ for (const [id, file, sectionId] of SETTINGS_SECTION_BOUNDARY_MANIFEST) {
   check(id + ': accessible-control classification', hasExact(['aria-label=', 'ariaLabel=', 'htmlFor=', 'placeholder=', '<SettingsSection']))
   check(id + ': option-or-fact classification', hasExact(['<option', 'options=', 'formatText', 'profileText', 'value=', `id="${sectionId}"`]))
 }
+for (const [id, file, marker] of MIXED_STRING_BOUNDARY_MANIFEST) {
+  check(id + ': exact source exists', read(file) !== null)
+  check(id + ': exact mixed-copy boundary', hasMarker(read(file), marker))
+}
 for (const [id, file] of FOCUSED_TEST_INVENTORY) check(id + ': focused test exists', read(file) !== null)
 check('settings section boundary manifest is complete', SETTINGS_SECTION_BOUNDARY_MANIFEST.length === expectedSettingsSectionCount)
 check('settings section boundary manifest has unique ids', new Set(SETTINGS_SECTION_BOUNDARY_MANIFEST.map(([id]) => id)).size === SETTINGS_SECTION_BOUNDARY_MANIFEST.length)
@@ -253,7 +277,7 @@ check('producer inventory has no duplicate identifiers', errors.length === 0)
 // predicate in memory. This catches a broken checker that accidentally passes its own miniature
 // assertion while the real inventory path would still accept a missing producer.
 function copyCompleteFixture(fixtureRoot) {
-  for (const [, file] of [...PRODUCERS, ...PRODUCTION_SURFACES, ...SETTINGS_SECTION_BOUNDARY_MANIFEST, ...FOCUSED_TEST_INVENTORY, ['audit-doc', DOC, '']]) {
+  for (const [, file] of [...PRODUCERS, ...PRODUCTION_SURFACES, ...SETTINGS_SECTION_BOUNDARY_MANIFEST, ...MIXED_STRING_BOUNDARY_MANIFEST, ...FOCUSED_TEST_INVENTORY, ['audit-doc', DOC, '']]) {
     const source = join(ROOT, file)
     const target = join(fixtureRoot, file)
     mkdirSync(dirname(target), { recursive: true })

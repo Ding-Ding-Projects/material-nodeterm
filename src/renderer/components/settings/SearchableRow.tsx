@@ -17,7 +17,10 @@ export function SearchableRow({
   const state = useSettingsSearchState()
   const vocab = useVocabularyMapper()
   const inheritedVocabularyResolution = useSettingsVocabularyResolution()
-  const alreadyApplied = resolutionIncludes(resolvedVocabulary, 'row') || resolutionIncludes(inheritedVocabularyResolution, 'row')
+  const alreadyApplied = resolutionIncludes(resolvedVocabulary, 'row') || (
+    resolutionIncludes(inheritedVocabularyResolution, 'row') &&
+    inheritedVocabularyResolution?.searchEntries === 'mapped'
+  )
   // Search both the shipped alias and the visible replacement. This keeps existing command
   // palette/teleport queries valid while allowing a user to find the wording they actually see.
   const visible = alreadyApplied ? { title, description, keywords } : settingsSearchEntryWithVocabulary({ title, description, keywords }, vocab)
