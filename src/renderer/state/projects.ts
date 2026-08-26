@@ -527,7 +527,8 @@ export const useProjects = create<ProjectsState>((set, get) => ({
           agentSessionId: undefined,
           pendingLaunch: undefined,
           pendingLaunchError: undefined,
-          pendingLaunchErrorKind: undefined
+          pendingLaunchErrorKind: undefined,
+          pendingLaunchErrorOwnership: undefined
         }
         return [...nodes, copy]
       })

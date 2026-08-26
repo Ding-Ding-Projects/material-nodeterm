@@ -1904,7 +1904,8 @@ export function Canvas() {
                         ...n.data,
                         pendingLaunch: undefined,
                         pendingLaunchError: undefined,
-                        pendingLaunchErrorKind: undefined
+                        pendingLaunchErrorKind: undefined,
+                        pendingLaunchErrorOwnership: undefined
                       }
                     }
                   : n
@@ -1923,7 +1924,9 @@ export function Canvas() {
                     data: {
                       ...n.data,
                       pendingLaunchError: result.message,
-                      pendingLaunchErrorKind: 'confirmed'
+                      pendingLaunchErrorKind: 'confirmed',
+                      pendingLaunchErrorOwnership:
+                        result.reason === 'session-unavailable' ? 'authored' : 'external-factual'
                     }
                   }
                 : n
@@ -1942,7 +1945,8 @@ export function Canvas() {
                       ...n.data,
                       pendingLaunchError:
                         'The queued launch delivery result is unknown. Retry to check it safely.',
-                      pendingLaunchErrorKind: 'unknown'
+                      pendingLaunchErrorKind: 'unknown',
+                      pendingLaunchErrorOwnership: 'authored'
                     }
                   }
                   : n

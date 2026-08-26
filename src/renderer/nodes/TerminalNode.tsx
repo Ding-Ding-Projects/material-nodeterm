@@ -219,7 +219,11 @@ import {
 import { sameTerminalCoState } from '../terminal/co-state-equality'
 import { useLocalizedVocabularyText } from '../lib/personalVocabulary/useLocalizedVocabularyText'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
-import { mapAroundExactFacts } from './nodeVocabulary'
+import {
+  mapAroundExactFacts,
+  pendingLaunchErrorOwnership,
+  pendingLaunchSummaryText
+} from './nodeVocabulary'
 import { ColumnPill } from '../components/kanban/ColumnPill'
 import { BoardLogPanel } from '../components/kanban/BoardLogPanel'
 import { AgentMascot } from './AgentMascot'
@@ -1841,17 +1845,16 @@ export function TerminalNode({
     .map((depId) => ((getNode(depId) as CanvasNode | undefined)?.data.title as string) || depId)
     .join(', ')
   const pendingLaunchSummary = pendingLaunch
-    ? pendingLaunch.launch.kind === 'shell-command'
-      ? 'the queued terminal command'
-      : pendingLaunch.launch.action === 'resume'
-        ? `resume ${pendingLaunch.launch.agentId}`
-        : `start ${pendingLaunch.launch.agentId}`
+    ? pendingLaunchSummaryText(pendingLaunch.launch, vocab)
     : ''
   const pendingLaunchError =
     typeof data.pendingLaunchError === 'string' ? data.pendingLaunchError : undefined
   const pendingLaunchErrorDisplay: PendingLaunchErrorDisplay | null = pendingLaunchError
     ? {
-        ownership: pendingLaunchError === PENDING_LAUNCH_UNKNOWN_ERROR ? 'authored' : 'external-factual',
+        ownership:
+          data.pendingLaunchErrorOwnership === 'authored' || data.pendingLaunchErrorOwnership === 'external-factual'
+            ? data.pendingLaunchErrorOwnership
+            : 'external-factual',
         text: pendingLaunchError
       }
     : null
@@ -1875,7 +1878,8 @@ export function TerminalNode({
         updateNodeData(id, {
           pendingLaunch: dispatchedLaunch,
           pendingLaunchError: undefined,
-          pendingLaunchErrorKind: undefined
+          pendingLaunchErrorKind: undefined,
+          pendingLaunchErrorOwnership: undefined
         })
       }
       const execution = executePendingLaunchForNode(session.id, id, dispatchedLaunch)
@@ -1886,20 +1890,30 @@ export function TerminalNode({
             reason: 'session-unavailable' as const,
             message: 'The terminal session is not ready for this queued launch.'
           },
-          accepted: false
+          accepted: false,
+          ownership: pendingLaunchErrorOwnership(
+            { ok: false, reason: 'session-unavailable' },
+            false
+          )
         }
       }
-      return { result: await execution, accepted: true }
+      const result = await execution
+      return {
+        result,
+        accepted: true,
+        ownership: pendingLaunchErrorOwnership(result, true)
+      }
     })
     if (!request) return
     setPendingLaunchExecuting(true)
     void request
-      .then(({ result, accepted }) => {
+      .then(({ result, accepted, ownership }) => {
         if (result.ok) {
           updateNodeData(id, {
             pendingLaunch: undefined,
             pendingLaunchError: undefined,
-            pendingLaunchErrorKind: undefined
+            pendingLaunchErrorKind: undefined,
+            pendingLaunchErrorOwnership: undefined
           })
         } else {
           updateNodeData(id, {
@@ -1907,7 +1921,8 @@ export function TerminalNode({
             pendingLaunchError: result.message,
             // No executor means nothing reached the host, so reusing the id is safe. An opaque
             // failure returned by the executor is final for that id and needs a new explicit retry.
-            pendingLaunchErrorKind: accepted ? 'confirmed' : 'unknown'
+            pendingLaunchErrorKind: accepted ? 'confirmed' : 'unknown',
+            pendingLaunchErrorOwnership: ownership
           })
         }
       })
@@ -1917,7 +1932,8 @@ export function TerminalNode({
         updateNodeData(id, {
           pendingLaunch: dispatchedLaunch,
           pendingLaunchError: PENDING_LAUNCH_UNKNOWN_ERROR,
-          pendingLaunchErrorKind: 'unknown'
+          pendingLaunchErrorKind: 'unknown',
+          pendingLaunchErrorOwnership: 'authored'
         })
       })
       .finally(() => setPendingLaunchExecuting(false))

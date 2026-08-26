@@ -127,6 +127,9 @@ export interface NodeData {
   pendingLaunchError?: string
   /** Whether a retry may mint a new id (`confirmed`) or must query the same host ledger (`unknown`). */
   pendingLaunchErrorKind?: 'confirmed' | 'unknown'
+  /** Ownership of the displayed pending-launch error, so authored recovery copy never gets
+   * accidentally treated as an external diagnostic merely because both are strings. */
+  pendingLaunchErrorOwnership?: 'authored' | 'external-factual'
   /**
    * Transient respawn trigger: bumping this number tears down a terminal node's session and
    * recreates it (used to move an existing terminal into a worktree cwd). Not persisted —
@@ -1572,6 +1575,7 @@ export function duplicateNode(node: CanvasNode, offset = 28): CanvasNode {
       pendingLaunch: undefined,
       pendingLaunchError: undefined,
       pendingLaunchErrorKind: undefined,
+      pendingLaunchErrorOwnership: undefined,
       agentSessionId: undefined,
       // One-shot respawn trigger, never serialized: the number means something only as a CHANGE,
       // so a copy born holding the source's counter is stale from birth.

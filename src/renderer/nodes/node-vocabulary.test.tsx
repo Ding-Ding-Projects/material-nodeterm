@@ -7,7 +7,11 @@ import { useSchoolMode } from '../state/schoolMode'
 import { BrowserStartPage } from './BrowserStartPage'
 import { SHORTCUTS } from './browserIcons'
 import { DiscardedPlate } from './DiscardedPlate'
-import { mapAroundExactFacts } from './nodeVocabulary'
+import {
+  mapAroundExactFacts,
+  pendingLaunchErrorOwnership,
+  pendingLaunchSummaryText
+} from './nodeVocabulary'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -63,6 +67,25 @@ describe('node renderer personal vocabulary boundaries', () => {
       (value) => value.replace('Message', 'Send')
     )
     expect(mapped).toBe('Send Claude in Google Chrome')
+  })
+
+  it('maps pending-launch prose while preserving the raw action and agent id', () => {
+    const map = (value: string) => value.replace('resume', 'continue').replace('start', 'begin')
+    expect(pendingLaunchSummaryText({ kind: 'agent', action: 'resume', agentId: 'codex' }, map)).toBe(
+      'continue codex'
+    )
+    expect(pendingLaunchSummaryText({ kind: 'agent', action: 'start', agentId: 'gemini' }, map)).toBe(
+      'begin gemini'
+    )
+    expect(pendingLaunchSummaryText({ kind: 'shell-command', command: 'echo exact' }, map)).toBe(
+      'the queued terminal command'
+    )
+  })
+
+  it('classifies pending-launch errors from result ownership, not matching strings', () => {
+    expect(pendingLaunchErrorOwnership({ ok: false, reason: 'session-unavailable' }, false)).toBe('authored')
+    expect(pendingLaunchErrorOwnership({ ok: false, reason: 'session-unavailable' }, true)).toBe('authored')
+    expect(pendingLaunchErrorOwnership({ ok: false, reason: 'delivery-failed' }, true)).toBe('external-factual')
   })
 
   it.each([

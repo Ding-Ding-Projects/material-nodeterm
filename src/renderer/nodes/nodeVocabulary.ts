@@ -29,3 +29,28 @@ export function mapAroundExactFacts(
   }
   return result
 }
+
+/** Build the pending-launch summary with authored prose mapped and the agent/action facts raw. */
+export function pendingLaunchSummaryText(
+  launch: { kind: string; action?: string; agentId?: string },
+  map: (value: string) => string
+): string {
+  if (launch.kind === 'shell-command') return map('the queued terminal command')
+  const action = launch.action === 'resume' ? map('resume') : map('start')
+  return `${action} ${launch.agentId ?? ''}`.trimEnd()
+}
+
+/**
+ * Classify pending-launch copy by the operation result, not by matching a human-readable error
+ * string. A missing renderer executor is an authored recovery state; a coordinator result is a
+ * factual diagnostic, except for the shared session-unavailable result whose wording is owned by
+ * the local executor.
+ */
+export function pendingLaunchErrorOwnership(
+  result: { ok: boolean; reason?: string } | null,
+  acceptedByExecutor: boolean
+): 'authored' | 'external-factual' {
+  if (!acceptedByExecutor) return 'authored'
+  if (result && !result.ok && result.reason === 'session-unavailable') return 'authored'
+  return 'external-factual'
+}
