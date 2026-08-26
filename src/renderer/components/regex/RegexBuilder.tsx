@@ -129,7 +129,7 @@ export function RegexBuilder({ value, onChange, onDone }: RegexBuilderProps): Re
             {REGEX_ENGINE_NAME}
           </span>
         </div>
-        <p className="md3-regex-builder__note">{vocab(REGEX_ENGINE_NOTE)}</p>
+        <p className="md3-regex-builder__note">{REGEX_ENGINE_NOTE}</p>
         <div className="md3-regex-builder__token-search">
           <IconSearch />
           <input
@@ -146,18 +146,18 @@ export function RegexBuilder({ value, onChange, onDone }: RegexBuilderProps): Re
           )}
           {filteredGroups.map((g) => (
             <section key={g.title} className="md3-regex-builder__token-section">
-              <h3 className="md3-regex-builder__section-title">{g.title}</h3>
+              <h3 className="md3-regex-builder__section-title">{vocab(g.title)}</h3>
               <div className="md3-regex-builder__token-list">
                 {g.tokens.map((t) => (
                   <button
                     key={t.label}
                     type="button"
                     className="md3-regex-builder__token"
-                    title={t.hint}
+                    title={vocab(t.hint)}
                     onClick={() => insertToken(t)}
                   >
                     <span className="md3-regex-builder__token-glyph">{t.label}</span>
-                    <span className="md3-regex-builder__token-desc">{t.hint}</span>
+                    <span className="md3-regex-builder__token-desc">{vocab(t.hint)}</span>
                   </button>
                 ))}
               </div>
@@ -168,7 +168,7 @@ export function RegexBuilder({ value, onChange, onDone }: RegexBuilderProps): Re
             <div className="md3-regex-builder__preset-list">
               {REGEX_PRESETS.map((p) => (
                 <button key={p.name} type="button" className="md3-regex-builder__preset" onClick={() => usePreset(p)}>
-                  <span className="md3-regex-builder__preset-name">{p.name}</span>
+                  <span className="md3-regex-builder__preset-name">{vocab(p.name)}</span>
                   <IconRegexArrowInsert />
                 </button>
               ))}
@@ -204,7 +204,7 @@ export function RegexBuilder({ value, onChange, onDone }: RegexBuilderProps): Re
             onClick={clearPattern}
           >
             <IconTrash />
-            Clear
+            {vocab('Clear')}
           </button>
         </div>
         <div className={`md3-regex-builder__pattern-pill${!compiled.ok && value.pattern ? ' md3-regex-builder__pattern-pill--error' : ''}`}>
@@ -214,7 +214,7 @@ export function RegexBuilder({ value, onChange, onDone }: RegexBuilderProps): Re
             className="md3-regex-builder__pattern-input"
             value={value.pattern}
             spellCheck={false}
-            placeholder="pattern"
+            placeholder={vocab('pattern')}
             maxLength={MAX_PATTERN_LENGTH}
             aria-label={vocab('Regex pattern')}
             onChange={(e) => onChange({ ...value, pattern: e.target.value })}
@@ -231,12 +231,12 @@ export function RegexBuilder({ value, onChange, onDone }: RegexBuilderProps): Re
                 key={f.flag}
                 type="button"
                 className={`md3-regex-builder__flag-chip${on ? ' md3-regex-builder__flag-chip--on' : ''}`}
-                title={f.description}
+                title={vocab(f.description)}
                 aria-pressed={on}
                 onClick={() => toggleFlag(f.flag)}
               >
                 <span className="md3-regex-builder__flag-letter">{f.flag}</span>
-                {f.label}
+                {vocab(f.label)}
               </button>
             )
           })}
@@ -269,7 +269,7 @@ export function RegexBuilder({ value, onChange, onDone }: RegexBuilderProps): Re
           className="md3-regex-builder__sample"
           rows={3}
           spellCheck={false}
-          placeholder="Paste text to test your pattern against — evaluated locally, never sent anywhere."
+          placeholder={vocab('Paste text to test your pattern against — evaluated locally, never sent anywhere.')}
           value={sample}
           maxLength={MAX_SAMPLE_LENGTH}
           aria-label={vocab('Sample text to test the pattern against')}
@@ -283,10 +283,10 @@ export function RegexBuilder({ value, onChange, onDone }: RegexBuilderProps): Re
               safe.status === 'ok' && safe.matches.length > 0 ? ' md3-regex-builder__match-badge--hit' : ''
             }`}
           >
-            {safe.status === 'ok' ? `${safe.matches.length} match${safe.matches.length === 1 ? '' : 'es'}` : '—'}
+            {safe.status === 'ok' ? vocab(`${safe.matches.length} match${safe.matches.length === 1 ? '' : 'es'}`) : '—'}
           </span>
           <span className="md3-regex-builder__hint">
-            capped at {MAX_MATCHES} · zero-width safe
+            {vocab(`capped at ${MAX_MATCHES} · zero-width safe`)}
           </span>
         </div>
         <div className="md3-regex-builder__highlight" aria-label={vocab('Sample text with matches highlighted')}>
@@ -314,7 +314,7 @@ export function RegexBuilder({ value, onChange, onDone }: RegexBuilderProps): Re
                 )
               : <span className="md3-regex-builder__muted">{vocab('Paste sample text above to preview matches.')}</span>)}
           {safe.status === 'ok' && safe.truncated && (
-            <div className="md3-regex-builder__truncated-note">Stopped at the display limit — more matches exist.</div>
+            <div className="md3-regex-builder__truncated-note">{vocab('Stopped at the display limit — more matches exist.')}</div>
           )}
         </div>
 
@@ -328,7 +328,7 @@ export function RegexBuilder({ value, onChange, onDone }: RegexBuilderProps): Re
           className="md3-regex-builder__replacement"
           value={replacement}
           spellCheck={false}
-          placeholder="Replacement…"
+          placeholder={vocab('Replacement…')}
           aria-label={vocab('Replacement text for substitution preview')}
           onChange={(e) => setReplacement(e.target.value)}
         />
@@ -341,7 +341,7 @@ export function RegexBuilder({ value, onChange, onDone }: RegexBuilderProps): Re
             )
           ) : (
             <span className="md3-regex-builder__muted">
-              {value.pattern.trim() ? 'Waiting on a valid pattern…' : 'Enter a pattern to preview a substitution.'}
+              {vocab(value.pattern.trim() ? 'Waiting on a valid pattern…' : 'Enter a pattern to preview a substitution.')}
             </span>
           )}
         </div>
@@ -378,7 +378,7 @@ export function RegexBuilder({ value, onChange, onDone }: RegexBuilderProps): Re
           )}
           {safe.status !== 'ok' && (
             <div className="md3-regex-builder__no-matches">
-              {value.pattern.trim() ? 'Waiting on a valid pattern and sample text.' : 'Enter a pattern to see matches here.'}
+              {vocab(value.pattern.trim() ? 'Waiting on a valid pattern and sample text.' : 'Enter a pattern to see matches here.')}
             </div>
           )}
         </div>
@@ -389,17 +389,15 @@ export function RegexBuilder({ value, onChange, onDone }: RegexBuilderProps): Re
           {explanation.map((e, i) => (
             <div key={i} className="md3-regex-builder__explain-row" style={{ paddingLeft: e.depth * 12 }}>
               <span className="md3-regex-builder__explain-tok">{e.tok}</span>
-              <span className="md3-regex-builder__explain-desc">{e.desc}</span>
+              <span className="md3-regex-builder__explain-desc">{vocab(e.desc)}</span>
             </div>
           ))}
         </div>
 
         <div className="md3-regex-builder__info-card">
-          <div className="md3-regex-builder__info-title">Where this field lives</div>
+          <div className="md3-regex-builder__info-title">{vocab('Where this field lives')}</div>
           <p className="md3-regex-builder__info-body">
-            Terminal find bar (drives xterm highlight) · command palette · Explorer tree filter (directories never
-            hide) · settings search · every flat menu past 6 items. Inline surfaces refuse catastrophic shapes and
-            fail open; this preview always runs in a Worker.
+            {vocab('Terminal find bar (drives xterm highlight) · command palette · Explorer tree filter (directories never hide) · settings search · every flat menu past 6 items. Inline surfaces refuse catastrophic shapes and fail open; this preview always runs in a Worker.')}
           </p>
         </div>
       </aside>
@@ -408,7 +406,7 @@ export function RegexBuilder({ value, onChange, onDone }: RegexBuilderProps): Re
       {onDone && (
         <div className="md3-regex-builder__footer">
           <button type="button" className="md3-regex-builder__done" onClick={onDone}>
-            Done
+            {vocab('Done')}
           </button>
         </div>
       )}

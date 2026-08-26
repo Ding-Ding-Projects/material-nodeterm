@@ -29,6 +29,7 @@ export function ColorField({
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const vocab = useVocabularyMapper()
+  const labelText = vocab(label)
   const anchorRef = useRef<HTMLButtonElement>(null)
   const pos = useAnchoredPosition(anchorRef.current, open)
 
@@ -59,14 +60,14 @@ export function ColorField({
 
   return (
     <div className="color-field">
-      <span className="color-field__label">{label}</span>
+      <span className="color-field__label">{labelText}</span>
       <div className="color-field__controls">
         <button
           ref={anchorRef}
           type="button"
           className="color-field__swatch"
           style={swatchBg ? { background: swatchBg } : undefined}
-          aria-label={vocab(`${label}: ${value ?? 'not set'} — open colour picker`)}
+          aria-label={`${labelText}: ${value ?? vocab('not set')} — ${vocab('open colour picker')}`}
           onClick={() => setOpen((o) => !o)}
         >
           {!swatchBg && <span className="color-field__unset" aria-hidden="true" />}
@@ -76,8 +77,8 @@ export function ColorField({
           <button
             type="button"
             className="color-field__reset"
-            title={vocab(`Reset ${label} to the platform default`)}
-            aria-label={vocab(`Reset ${label}`)}
+            title={`${vocab('Reset')} ${labelText} ${vocab('to the platform default')}`}
+            aria-label={`${vocab('Reset')} ${labelText}`}
             onClick={onClear}
           >
             ↺
@@ -91,7 +92,7 @@ export function ColorField({
             className="color-field__popover"
             style={{ top: pos.top, left: pos.left }}
             role="dialog"
-            aria-label={vocab(`${label} colour picker`)}
+            aria-label={`${labelText} ${vocab('colour picker')}`}
           >
             <ColorPicker
               label={label}

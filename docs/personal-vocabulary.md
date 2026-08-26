@@ -5,28 +5,33 @@ This feature is the appeal process, and the ruling is final in your favor.
 
 Upload a small local JSON file mapping any word the app currently shows you to a word you'd
 rather see — `"Settings": "Control Room"`, `"Notifications": "The Nag List"`, whatever you like —
-and from that point on the app makes the swap on its own prose — settings, dialogs, tooltips,
-notifications, menus, the command palette (see "Coverage" below) — quietly, indefinitely, and
+and from that point on the app makes the swap on mapped application prose — settings, dialogs, tooltips,
+notifications, menus, the command palette (see "Coverage" below) — quietly, while the upload or its
+bounded local cache remains valid, and
 without ever asking why. It has no
 opinion about your choices. It will not raise an eyebrow, question your judgment, or notice that
 it has just rendered your own settings screen unreadable to your future self, your co-worker
-leaning over your shoulder, or the poor soul writing your support ticket. It just does the swap,
-forever, with the flat loyalty of a machine that has never once been asked to have taste.
+leaning over your shoulder, or the poor soul writing your support ticket. It just does the swap
+within that bounded local lifetime, with the flat loyalty of a machine that has never once been
+asked to have taste.
 
 Settings → Personal vocabulary carries the control, and it is there before you have ever uploaded
 anything — there is no starter dictionary tucked inside the app, no sample file, nothing
 pre-loaded that could hint at what anyone else typed into theirs. Until you supply a valid file,
 every label reads exactly as shipped. Supply one, and the substitution takes over. Delete it, and
 the app forgets your vocabulary ever existed, as if it had never had an opinion to override in the
-first place.
+first place. The valid local cache is deliberately bounded by the documented cache age, so this is
+not an unbounded persistence promise.
 
 The renderer keeps a hand-written producer inventory in
 scripts/check-personal-vocabulary-coverage.mjs. It covers settings fields and sections, menus,
 dialogs, prompts, notifications, tooltips, canvas and board surfaces, source control, onboarding,
 the dim sum notice, publish/find/remote pickers, browser profiles, password management, conversion,
-Minecraft panels, authenticator and speech settings, and toy-lock setup. The checker requires an
-exact local mapper boundary and an audit row for each producer. It also runs deliberate in-memory
-negative regressions for a removed producer row, mapper call, and documentation row.
+Minecraft panels, authenticator and speech settings, toy-lock setup, regex builders, changelog and
+release cards, local history, offline documentation, appearance and colour editors, bulk actions,
+Explorer, project switching, and the local model manager. The checker requires an exact local mapper
+boundary and an audit row for each producer. It also runs deliberate in-memory negative regressions
+for a removed producer row, mapper call, and documentation row.
 
 None of this leaves your machine. The file is read, checked, and applied entirely where it sits —
 never uploaded, logged, exported, or synced, not even alongside the rest of your app settings. If

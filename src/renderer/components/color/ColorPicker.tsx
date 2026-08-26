@@ -123,6 +123,7 @@ export function ColorPicker({
   className
 }: ColorPickerProps): React.JSX.Element {
   const vocab = useVocabularyMapper()
+  const labelText = vocab(label)
   const lastEmitted = useRef<string | null>(null)
   const [rgba, setRgba] = useState<RGBA>(() => parseAnyColor(value) ?? { r: 0, g: 0, b: 0, a: 1 })
   const [invalid, setInvalid] = useState(false)
@@ -245,14 +246,14 @@ export function ColorPicker({
         onPointerDown={onFieldPointerDown}
         onPointerMove={onFieldPointerMove}
         role="application"
-        aria-label={vocab(`${label} — saturation and brightness field`)}
+        aria-label={`${labelText} — ${vocab('saturation and brightness field')}`}
       >
         <div
           className="color-picker__thumb"
           role="slider"
           tabIndex={0}
-          aria-label={vocab(`${label} saturation and brightness`)}
-          aria-valuetext={vocab(`Saturation ${Math.round(hsv.s * 100)}%, brightness ${Math.round(hsv.v * 100)}%`)}
+          aria-label={`${labelText} ${vocab('saturation and brightness')}`}
+          aria-valuetext={`${vocab('Saturation')} ${Math.round(hsv.s * 100)}%, ${vocab('brightness')} ${Math.round(hsv.v * 100)}%`}
           onKeyDown={onFieldKeyDown}
           style={{
             left: `${hsv.s * 100}%`,
@@ -276,7 +277,7 @@ export function ColorPicker({
           </div>
         </div>
         <div className="color-picker__sliders">
-          <label className="sr-only" htmlFor={`${label}-hue`}>{vocab(`${label} hue`)}</label>
+          <label className="sr-only" htmlFor={`${label}-hue`}>{labelText} {vocab('hue')}</label>
           <input
             id={`${label}-hue`}
             className="color-picker__slider color-picker__slider--hue"
@@ -289,7 +290,7 @@ export function ColorPicker({
           />
           {allowAlpha && (
             <>
-              <label className="sr-only" htmlFor={`${label}-alpha`}>{vocab(`${label} alpha`)}</label>
+              <label className="sr-only" htmlFor={`${label}-alpha`}>{labelText} {vocab('alpha')}</label>
               <input
                 id={`${label}-alpha`}
                 className="color-picker__slider color-picker__slider--alpha"
@@ -317,7 +318,7 @@ export function ColorPicker({
         )}
       </div>
 
-      <div className="color-picker__formats" role="tablist" aria-label={vocab(`${label} colour format`)}>
+      <div className="color-picker__formats" role="tablist" aria-label={`${labelText} ${vocab('colour format')}`}>
         {FORMATS.map((f) => (
           <button
             key={f.id}
@@ -336,7 +337,7 @@ export function ColorPicker({
         {format === 'hex' && (
           <input
             className={cn('color-picker__hex-input', invalid && 'is-invalid')}
-            aria-label={vocab(`${label} hex value`)}
+            aria-label={`${labelText} ${vocab('hex value')}`}
             defaultValue={toHex(rgba, rgba.a < 1)}
             key={toHex(rgba, rgba.a < 1)}
             onBlur={(e) => updateHex(e.target.value)}
@@ -367,7 +368,7 @@ export function ColorPicker({
           {vocab("That value is outside sRGB (the app's display gamut) and has been clipped to the nearest colour it can actually show.")}
         </p>
       )}
-      {namedColor && <p className="color-picker__note">CSS name: {namedColor}</p>}
+      {namedColor && <p className="color-picker__note">{vocab('CSS name:')} {namedColor}</p>}
 
       <div className="color-picker__contrast">
         <span>
@@ -389,7 +390,7 @@ export function ColorPicker({
             type="button"
             className="color-picker__swatch"
             style={{ background: c }}
-            aria-label={vocab(`Use ${c}`)}
+            aria-label={`${vocab('Use')} ${c}`}
             onClick={() => {
               const parsed = parseAnyColor(c)
               if (parsed) commit({ ...parsed, a: rgba.a }, format)
@@ -405,7 +406,7 @@ export function ColorPicker({
               type="button"
               className="color-picker__swatch"
               style={{ background: c }}
-              aria-label={vocab(`Use recently-used colour ${c}`)}
+              aria-label={`${vocab('Use recently-used colour')} ${c}`}
               onClick={() => {
                 const parsed = parseAnyColor(c)
                 if (parsed) commit({ ...parsed, a: rgba.a }, format)

@@ -223,8 +223,7 @@ export function DocsBrowser(): JSX.Element {
         <div className="md3-docs__heading">
           <div className="md3-docs__title">{vocab('Documentation')}</div>
           <div className="md3-docs__subtitle">
-            {articles.length} article{articles.length === 1 ? '' : 's'}, bundled with this build — no
-            {vocab('network needed')}
+            {vocab(`${articles.length} article${articles.length === 1 ? '' : 's'}, bundled with this build — no network needed`)}
           </div>
         </div>
         <div className="md3-docs__search md3-history-search">
@@ -261,7 +260,7 @@ export function DocsBrowser(): JSX.Element {
             if (visible.length === 0) return null
             return (
               <div className="md3-docs__section" key={section.label}>
-                <div className="md3-docs__section-label">{section.label}</div>
+                <div className="md3-docs__section-label">{vocab(section.label)}</div>
                 {visible.map((a) => (
                   <button
                     key={a.path}

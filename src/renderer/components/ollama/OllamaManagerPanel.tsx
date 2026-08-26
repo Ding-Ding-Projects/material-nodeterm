@@ -126,11 +126,12 @@ const FIT_ICON: Record<FitEvaluation['verdict'], MaterialSymbolName> = {
 }
 
 function FitBadge({ fit }: { fit: FitEvaluation | undefined }) {
+  const vocab = useVocabularyMapper()
   if (!fit)
     return (
       <span className="om-fit om-fit--unknown">
         <MaterialSymbol name="radio_button_unchecked" size={14} />
-        Unknown
+        {vocab('Unknown')}
       </span>
     )
   const label =
@@ -144,12 +145,13 @@ function FitBadge({ fit }: { fit: FitEvaluation | undefined }) {
   return (
     <span className={`om-fit om-fit--${fit.verdict}`}>
       <MaterialSymbol name={FIT_ICON[fit.verdict]} size={14} />
-      {label}
+      {vocab(label)}
     </span>
   )
 }
 
 function FitDetail({ fit }: { fit: FitEvaluation | undefined }) {
+  const vocab = useVocabularyMapper()
   if (!fit) return null
   return (
     <div className="om-fit-detail">
@@ -158,7 +160,7 @@ function FitDetail({ fit }: { fit: FitEvaluation | undefined }) {
           <li key={i}>{e}</li>
         ))}
         {fit.assumptions.map((a, i) => (
-          <li key={`a-${i}`}>Assumption: {a}</li>
+          <li key={`a-${i}`}>{vocab('Assumption:')} {a}</li>
         ))}
       </ul>
     </div>
@@ -609,7 +611,7 @@ function HealthTab({
             : !status
               ? vocab('Not checked yet')
               : status.health === 'ok'
-                ? vocab(`Running — Ollama ${status.version ?? 'unknown version'} at ${status.endpoint}`)
+                ? <>{vocab('Running')} — Ollama {status.version ?? vocab('unknown version')} {vocab('at')} {status.endpoint}</>
                 : status.health === 'not-installed'
                   ? vocab('Ollama does not appear to be installed')
                   : status.health === 'stopped'
@@ -625,9 +627,9 @@ function HealthTab({
 
       {hardware && (
         <p className="om-hardware">
-          {formatBytes(hardware.totalRamBytes)} RAM total ({formatBytes(hardware.freeRamBytes)} free) ·{' '}
-          {hardware.gpuName ? `GPU: ${hardware.gpuName}` : 'No GPU detected'}
-          {hardware.vramBytes !== null && ` (${formatBytes(hardware.vramBytes)} VRAM)`} · Free disk:{' '}
+          {formatBytes(hardware.totalRamBytes)} {vocab('RAM total')} ({formatBytes(hardware.freeRamBytes)} {vocab('free')}) ·{' '}
+          {hardware.gpuName ? <>{vocab('GPU:')} {hardware.gpuName}</> : vocab('No GPU detected')}
+          {hardware.vramBytes !== null && ` (${formatBytes(hardware.vramBytes)} VRAM)`} · {vocab('Free disk:')}{' '}
           {formatBytes(hardware.freeDiskBytes)} · {hardware.platform}/{hardware.arch}
         </p>
       )}
@@ -805,7 +807,7 @@ function StoreTab({
         {catalog === null ? (
           <p className="om-empty-note">
             {catalogError
-              ? `The catalog could not be loaded: ${catalogError}. This is a load failure, not an empty catalog — the exact-reference field below still reaches any model.`
+              ? <>{vocab('The catalog could not be loaded:')} {catalogError}. {vocab('This is a load failure, not an empty catalog — the exact-reference field below still reaches any model.')}</>
               : vocab('Loading the catalog…')}
           </p>
         ) : (
@@ -817,7 +819,7 @@ function StoreTab({
             role="status"
             aria-live="polite"
           >
-            <p>{completenessHeadline(catalog)}</p>
+              <p>{vocab(completenessHeadline(catalog))}</p>
             {catalog.refreshing && (
               <p>
               {vocab(`Still fetching: ${catalog.pendingTagFetches} model tag lists, ${catalog.pendingFactFetches} exact sizes.`)}
@@ -825,13 +827,13 @@ function StoreTab({
             )}
             {(() => {
               const staleness = stalenessSentence(catalog, Date.now())
-              return staleness ? <p>{staleness}</p> : null
+              return staleness ? <p>{vocab(staleness)}</p> : null
             })()}
             {catalog.completeness.reasons.map((reason, i) => (
               <p key={i}>{reason}</p>
             ))}
-            {catalog.refreshError && <p>Last refresh error: {catalog.refreshError}</p>}
-            {catalogError && <p>The most recent reload failed: {catalogError}. Showing the last list that loaded.</p>}
+            {catalog.refreshError && <p>{vocab('Last refresh error:')} {catalog.refreshError}</p>}
+            {catalogError && <p>{vocab('The most recent reload failed:')} {catalogError}. {vocab('Showing the last list that loaded.')}</p>}
             <button className="sc-btn" onClick={onReloadCatalog}>
               {vocab('Reload catalog')}
             </button>
@@ -896,8 +898,8 @@ function StoreTab({
                       // shown here complete: appending "…" to it would claim more digits exist
                       // than were ever fetched. (This used to be backwards — the truncated case
                       // had no ellipsis and the complete case had one.)
-                      `rev ${row.revision.replace(/^sha256:/, '').slice(0, 12)}${row.revisionExact ? '…' : ''}`
-                    : 'rev unknown'}
+                      <>{vocab('rev')} {row.revision.replace(/^sha256:/, '').slice(0, 12)}{row.revisionExact ? '…' : ''}</>
+                    : <>{vocab('rev')} {vocab('unknown')}</>}
                 </span>
                 <span className="om-model__meta">
                   {row.installed
@@ -907,20 +909,20 @@ function StoreTab({
                       // time). Labeling it "installed" says what it actually is; showing a bare date
                       // here implied a publish date this app has never had evidence for.
                       row.publishedAt
-                      ? `installed ${new Date(row.publishedAt).toLocaleDateString()}`
-                      : 'no timestamp'
-                    : 'no published date'}
+                      ? <>{vocab('installed')} {new Date(row.publishedAt).toLocaleDateString()}</>
+                      : vocab('no timestamp')
+                    : vocab('no published date')}
                 </span>
                 <FitBadge fit={fitMap[row.ref]} />
                 <button className="sc-btn" disabled={status?.health !== 'ok'} onClick={() => onAddToCart(row.ref)}>
-                  Add to cart
+                  {vocab('Add to cart')}
                 </button>
               </div>
               {row.tag === null && (
                 <p className="om-empty-note">
                   {row.tagsState === 'error'
-                    ? `This model's tag list could not be fetched (${row.tagsError ?? 'unknown error'}) — its other tags are not listed. The bare name pulls :latest.`
-                    : "This model's published tag list has not been fetched yet — its other tags are not listed. The bare name pulls :latest."}
+                    ? <>{vocab("This model's tag list could not be fetched")} ({row.tagsError ?? vocab('unknown error')}) — {vocab('its other tags are not listed. The bare name pulls :latest.')}</>
+                    : vocab("This model's published tag list has not been fetched yet — its other tags are not listed. The bare name pulls :latest.")}
                 </p>
               )}
             </li>
@@ -932,7 +934,7 @@ function StoreTab({
               {vocab('Previous')}
             </button>
             <span className="om-model__meta">
-              Page {page.page} of {page.pageCount}
+              {vocab('Page')} {page.page} {vocab('of')} {page.pageCount}
             </span>
             <button
               className="sc-btn"
@@ -962,9 +964,8 @@ function StoreTab({
       <section>
         <h3>{vocab('Pull queue (cart)')}</h3>
         <p className="om-empty-note">
-          Downloads only — there is no price, account, or purchase here. Estimated total for pending
-          items with a known size: {formatBytes(cartEstimate.known)}
-          {cartEstimate.unknownCount > 0 && ` (+${cartEstimate.unknownCount} of unknown size)`}.
+          {vocab('Downloads only — there is no price, account, or purchase here. Estimated total for pending items with a known size:')} {formatBytes(cartEstimate.known)}
+          {cartEstimate.unknownCount > 0 && ` (+${cartEstimate.unknownCount} ${vocab('of unknown size')})`}.
         </p>
         <div className="cv-queue-controls">
           <button
@@ -1293,7 +1294,7 @@ function ChatTab({
 
           <div className="om-actions">
             <button className="cv-item__link" disabled title={attachmentReason}>
-              {vocab(`Attach image (disabled — ${attachmentReason})`)}
+              {vocab('Attach image')} ({vocab('disabled')} — {attachmentReason})
             </button>
             {!capabilities && (
               <button className="cv-item__link" onClick={() => void handleVerifyCapabilities()} disabled={verifyingCaps}>

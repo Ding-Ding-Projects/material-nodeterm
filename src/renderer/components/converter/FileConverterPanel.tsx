@@ -557,7 +557,7 @@ function FileConverterPanelForApi({
                   <li key={f.path}>
                     <span className="cv-pending__name">{f.path.split(/[\\/]/).pop()}</span>
                     <span className="cv-pending__meta">
-                      {f.detection ? `${f.detection.note} (${f.detection.confidence})` : 'inspecting…'}
+                      {f.detection ? `${f.detection.note} (${f.detection.confidence})` : vocab('inspecting…')}
                       {f.detection ? ` · ${formatBytes(f.detection.sizeBytes)}` : ''}
                     </span>
                     <button
@@ -592,7 +592,7 @@ function FileConverterPanelForApi({
                 </p>
                 <ul>
                   {(selectedAdapter.lossyNotes ?? []).map((n) => (
-                    <li key={n}>{n}</li>
+                    <li key={n}>{vocab(n)}</li>
                   ))}
                 </ul>
                 <label className="cv-lossy__ack">
@@ -613,12 +613,12 @@ function FileConverterPanelForApi({
             </div>
             {preflight && (
               <p className="cv-preflight">
-                {preflight.destDirExists ? '' : 'Will be created. '}
-                {preflight.writable ? '' : 'Not writable — check permissions. '}
-                Free space:{' '}
-                {preflight.freeBytes === null ? 'unknown' : formatBytes(preflight.freeBytes)}. Estimated need:{' '}
+                {preflight.destDirExists ? '' : vocab('Will be created. ')}
+                {preflight.writable ? '' : vocab('Not writable — check permissions. ')}
+                {vocab('Free space:')}{' '}
+                {preflight.freeBytes === null ? vocab('unknown') : formatBytes(preflight.freeBytes)}{vocab('. Estimated need:')}{' '}
                 {formatBytes(preflight.estimatedNeededBytes)}.
-                {preflight.sufficient === false && ' This may not be enough free space.'}
+                {preflight.sufficient === false && vocab(' This may not be enough free space.')}
               </p>
             )}
             <button

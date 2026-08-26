@@ -132,7 +132,7 @@ export function BulkActionBar<T>({
                 type="button"
                 className={`bulk-bar__action${action.destructive ? ' bulk-bar__action--danger' : ''}`}
                 disabled={!!reason || running}
-                title={reason ? vocab(reason) : undefined}
+                title={reason ?? undefined}
                 aria-disabled={!!reason}
                 onClick={() => startAction(action)}
               >

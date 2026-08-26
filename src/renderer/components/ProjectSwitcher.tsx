@@ -375,7 +375,7 @@ export function ProjectSwitcher({
               ? activeProject.ssh
                 ? `${activeProject.ssh.server.user}@${activeProject.ssh.server.host}:${activeProject.ssh.remoteCwd}`
                 : activeProject.cwd || activeProject.name
-              : 'No project open'
+              : vocab('No project open')
           }
           onClick={() => (switcherOpen ? closeMenu() : openSwitcher())}
           onContextMenu={(e) => {
@@ -401,7 +401,7 @@ export function ProjectSwitcher({
             color={activeProject?.color}
             name={activeProject?.name ?? ''}
           />
-          <span className="md3-switcher__name">{activeProject?.name ?? 'No project'}</span>
+          <span className="md3-switcher__name">{activeProject?.name ?? vocab('No project')}</span>
           {activeUnread > 0 && (
             <span className="md3-switcher__badge" title={`${activeUnread} unread`}>
               {activeUnread}
@@ -577,7 +577,7 @@ export function ProjectSwitcher({
                           className="md3-switcher-row__ssh"
                           title={`${p.ssh.server.user}@${p.ssh.server.host}`}
                         >
-                          SSH
+              {vocab('SSH')}
                         </span>
                       )}
                       {lockForProject(p.id) && (
@@ -638,7 +638,7 @@ export function ProjectSwitcher({
                           <span className="tab-menu__check" aria-hidden>
                             <ProjectGlyph icon={p.icon} color={p.color} name={p.name} size={12} />
                           </span>
-                          Icon…
+                          {vocab('Icon…')}
                         </button>
                         <button
                           onClick={() => {
@@ -649,7 +649,7 @@ export function ProjectSwitcher({
                             }
                           }}
                         >
-                          {EDIT_TAB_APPEARANCE_ACTION.label}
+                          {vocab(EDIT_TAB_APPEARANCE_ACTION.label)}
                         </button>
                         <button
                           onClick={() => {
@@ -672,7 +672,7 @@ export function ProjectSwitcher({
                               }}
                             />
                           </span>
-                          Tab colour…
+                          {vocab('Tab colour…')}
                         </button>
                         <button
                           onClick={() => {
@@ -680,7 +680,7 @@ export function ProjectSwitcher({
                             closeMenu()
                           }}
                         >
-                          Set folder…
+                          {vocab('Set folder…')}
                         </button>
                         <button
                           disabled={archiveBusy()}
@@ -689,7 +689,7 @@ export function ProjectSwitcher({
                             onSaveArchive(p.id)
                           }}
                         >
-                          {SAVE_PROJECT_ARCHIVE_ACTION.label}
+                          {vocab(SAVE_PROJECT_ARCHIVE_ACTION.label)}
                         </button>
                         <button
                           disabled={archiveBusy()}
@@ -698,7 +698,7 @@ export function ProjectSwitcher({
                             onOpenArchive()
                           }}
                         >
-                          {OPEN_PROJECT_ARCHIVE_ACTION.label}
+                          {vocab(OPEN_PROJECT_ARCHIVE_ACTION.label)}
                         </button>
                         <button
                           onClick={() => {
@@ -706,7 +706,7 @@ export function ProjectSwitcher({
                             closeMenu()
                           }}
                         >
-                          Docker host…
+                          {vocab('Docker host…')}
                         </button>
                         {expandedAccounts.length > 0 && p.id === expandedId && (
                           <>
@@ -714,7 +714,7 @@ export function ProjectSwitcher({
                               className={`tab-menu__group${acctOpen ? ' open' : ''}`}
                               onClick={() => setAcctOpen((v) => !v)}
                             >
-                              Default Claude account
+                              {vocab('Default Claude account')}
                               <span className="tab-menu__caret">▸</span>
                             </button>
                             {acctOpen && (
@@ -752,7 +752,7 @@ export function ProjectSwitcher({
                                 {expandedAccountsHint && (
                                   <button disabled title={expandedAccountsHint}>
                                     <span className="tab-menu__check" />
-                                    No accounts on this host yet
+                                    {vocab('No accounts on this host yet')}
                                   </button>
                                 )}
                               </div>
@@ -763,7 +763,7 @@ export function ProjectSwitcher({
                           className={`tab-menu__group${modeOpen ? ' open' : ''}`}
                           onClick={() => setModeOpen((v) => !v)}
                         >
-                          Default permission mode
+                              {vocab('Default permission mode')}
                           <span className="tab-menu__caret">▸</span>
                         </button>
                         {modeOpen && (
@@ -782,7 +782,7 @@ export function ProjectSwitcher({
                               <span className="tab-menu__check">
                                 {p.defaultPermissionMode ? '' : '✓'}
                               </span>
-                              Use global ({PERMISSION_MODE_LABELS[globalMode]})
+                              {vocab('Use global')} ({vocab(PERMISSION_MODE_LABELS[globalMode])})
                               {globalMode === 'auto' && expandedAutoHint ? ' ⚠︎' : ''}
                             </button>
                             {ALL_PERMISSION_MODES.map((m) => (
@@ -810,19 +810,19 @@ export function ProjectSwitcher({
                                   {p.defaultPermissionMode === m ? '✓' : ''}
                                 </span>
                                 {m === 'bypassPermissions' || (m === 'auto' && expandedAutoHint)
-                                  ? `${PERMISSION_MODE_LABELS[m]} ⚠︎`
-                                  : PERMISSION_MODE_LABELS[m]}
+                                  ? `${vocab(PERMISSION_MODE_LABELS[m])} ⚠︎`
+                                  : vocab(PERMISSION_MODE_LABELS[m])}
                               </button>
                             ))}
                           </div>
                         )}
                         {p.ssh ? (
                           <button disabled title={vocab('Splitting a project into parts is local-only — not available for SSH projects yet.') }>
-                            Project storage: not available (SSH)
+                            {vocab('Project storage: not available (SSH)')}
                           </button>
                         ) : !p.cwd ? (
                           <button disabled title={vocab('This canvas has no folder on disk yet, so there is no project.json to split.') }>
-                            Project storage: no folder yet
+                            {vocab('Project storage: no folder yet')}
                           </button>
                         ) : (
                           <>
@@ -833,19 +833,19 @@ export function ProjectSwitcher({
                                 if (!storageOpen) queryPartsStatus(p.id, p.cwd!)
                               }}
                             >
-                              Project storage
+                              {vocab('Project storage')}
                               <span className="tab-menu__caret">▸</span>
                             </button>
                             {storageOpen && p.id === expandedId && (
                               <div className="tab-menu__sub">
                                 <button disabled>
                                   {partsStatus[p.id] === undefined
-                                    ? 'Checking…'
+                                    ? vocab('Checking…')
                                     : partsStatus[p.id] === 'error'
-                                      ? 'Could not check — see project.json directly'
+                                      ? vocab('Could not check — see project.json directly')
                                       : partsStatus[p.id]
-                                        ? 'Currently stored as parts + a manifest'
-                                        : 'Currently a single project.json'}
+                                        ? vocab('Currently stored as parts + a manifest')
+                                        : vocab('Currently a single project.json')}
                                 </button>
                                 {partsStatus[p.id] === true && (
                                   <button
@@ -853,7 +853,7 @@ export function ProjectSwitcher({
                                       setStorageConfirm({ projectId: p.id, cwd: p.cwd!, action: 'join' })
                                     }
                                   >
-                                    Join back into a single file…
+                                    {vocab('Join back into a single file…')}
                                   </button>
                                 )}
                                 {partsStatus[p.id] === false && (
@@ -862,7 +862,7 @@ export function ProjectSwitcher({
                                       setStorageConfirm({ projectId: p.id, cwd: p.cwd!, action: 'split' })
                                     }
                                   >
-                                    {`Split into ${partSizeValue} ${partSizeUnit} parts…`}
+                                    {vocab('Split into')} {partSizeValue} {partSizeUnit} {vocab('parts…')}
                                   </button>
                                 )}
                               </div>
@@ -880,7 +880,7 @@ export function ProjectSwitcher({
                             else setLockWizard({ projectId: p.id, x: r.left, y: r.bottom })
                           }}
                         >
-                          {lockForProject(p.id) ? 'Manage lock…' : 'Lock this tab…'}
+                          {vocab(lockForProject(p.id) ? 'Manage lock…' : 'Lock this tab…')}
                         </button>
                         <button
                           className="danger"
@@ -889,7 +889,7 @@ export function ProjectSwitcher({
                             closeMenu()
                           }}
                         >
-                          Close project
+                          {vocab('Close project')}
                         </button>
                       </div>
                     )}

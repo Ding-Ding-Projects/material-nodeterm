@@ -292,7 +292,7 @@ function TreeEntry({
         {onDownload && (
           <button
             className={`ex-dl${dl ? ` ${dl}` : ''}`}
-            title={vocab(dl ? DL_TITLE[dl] : entry.dir ? `Download ${entry.name} folder` : `Download ${entry.name}`)}
+            title={dl ? vocab(DL_TITLE[dl]) : entry.dir ? `${vocab('Download')} ${entry.name} ${vocab('folder')}` : `${vocab('Download')} ${entry.name}`}
             aria-label={vocab('Download')}
             aria-busy={dl === 'running'}
             // A second click while the first transfer is still running would start a duplicate
@@ -647,7 +647,7 @@ export function ExplorerPanel({
             <div
               className="drawer__body ex-body"
               role="tree"
-              aria-label={vocab(`${project?.name || 'Project'} folders and files`)}
+              aria-label={`${project?.name || vocab('Project')} ${vocab('folders and files')}`}
               onContextMenu={(e) => {
                 if (e.target !== e.currentTarget || !cwd) return
                 e.preventDefault()

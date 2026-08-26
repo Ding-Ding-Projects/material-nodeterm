@@ -109,6 +109,7 @@ export function AppearanceEditorHost(): React.JSX.Element | null {
 
   const style = resolveEffectiveStyle(target.id, entries)
   const entry = entries[target.id]
+  const targetLabel = vocab(target.label)
 
   function patch(p: Partial<AppearanceTextStyle>): void {
     setElementStyle(target!.id, target!.label, target!.kind, p)
@@ -124,7 +125,7 @@ export function AppearanceEditorHost(): React.JSX.Element | null {
       className="appearance-editor"
       style={{ top: pos.top, left: pos.left }}
       role="dialog"
-      aria-label={vocab(`Edit appearance — ${target.label}`)}
+      aria-label={`${vocab('Edit appearance')} — ${targetLabel}`}
       onKeyDown={(e) => {
         if (e.key === 'Escape') {
           e.stopPropagation()
@@ -134,7 +135,7 @@ export function AppearanceEditorHost(): React.JSX.Element | null {
     >
       <div className="appearance-editor__header">
         <div className="min-w-0">
-          <div className="appearance-editor__title">{target.label}</div>
+          <div className="appearance-editor__title">{targetLabel}</div>
           <div className="appearance-editor__kind">{vocab(kindLabel(target.kind))}</div>
         </div>
         <button
@@ -314,7 +315,7 @@ function FontTab({
               value={style.fontSizePx ?? 13}
               min={4}
               max={200}
-              ariaLabel="Font size (px)"
+              ariaLabel={vocab('Font size (px)')}
               onChange={(v) => patch({ fontSizePx: v })}
               className="w-16"
             />
@@ -342,7 +343,7 @@ function FontTab({
       <Row
         label="Italic"
         onReset={style.italic ? () => clear('italic') : undefined}
-        control={<Switch checked={!!style.italic} onChange={(v) => patch({ italic: v || undefined })} ariaLabel="Italic" />}
+        control={<Switch checked={!!style.italic} onChange={(v) => patch({ italic: v || undefined })} ariaLabel={vocab('Italic')} />}
       />
 
       <div className="appearance-editor__subhead">
@@ -416,9 +417,7 @@ function ColorTab({
 
       <div className="appearance-editor__subhead">{vocab('Decoration')}</div>
       <p className="appearance-editor__note">
-        The browser text renderer can only draw ONE style/colour for underline, overline and
-        strikethrough at once — when more than one line is on, they share the underline's style
-        and colour. Each choice below is still stored and reapplied individually.
+        {vocab("The browser text renderer can only draw ONE style/colour for underline, overline and strikethrough at once — when more than one line is on, they share the underline's style and colour. Each choice below is still stored and reapplied individually.")}
       </p>
       <Row
         label="Underline"
@@ -440,7 +439,7 @@ function ColorTab({
       <Row
         label="Overline"
         onReset={style.overline ? () => clear('overline') : undefined}
-        control={<Switch checked={!!style.overline} onChange={(v) => patch({ overline: v || undefined })} ariaLabel="Overline" />}
+        control={<Switch checked={!!style.overline} onChange={(v) => patch({ overline: v || undefined })} ariaLabel={vocab('Overline')} />}
       />
       <Row
         label="Strikethrough"
@@ -485,32 +484,30 @@ function ColorTab({
       <Row
         label="Outline width"
         onReset={style.outlineWidthPx != null ? () => clear('outlineWidthPx') : undefined}
-        control={<NumberField value={style.outlineWidthPx ?? 0} min={0} max={12} ariaLabel="Outline width (px)" onChange={(v) => patch({ outlineWidthPx: v })} className="w-16" />}
+        control={<NumberField value={style.outlineWidthPx ?? 0} min={0} max={12} ariaLabel={vocab('Outline width (px)')} onChange={(v) => patch({ outlineWidthPx: v })} className="w-16" />}
       />
       <ColorField label="Shadow colour" value={style.shadowColor} onChange={(v) => patch({ shadowColor: v })} onClear={() => clear('shadowColor')} />
-      <Row label="Shadow blur" control={<NumberField value={style.shadowBlurPx ?? 0} min={0} max={40} ariaLabel="Shadow blur (px)" onChange={(v) => patch({ shadowBlurPx: v })} className="w-16" />} />
-      <Row label="Shadow offset X" control={<NumberField value={style.shadowOffsetXPx ?? 0} min={-40} max={40} ariaLabel="Shadow offset X (px)" onChange={(v) => patch({ shadowOffsetXPx: v })} className="w-16" />} />
-      <Row label="Shadow offset Y" control={<NumberField value={style.shadowOffsetYPx ?? 0} min={-40} max={40} ariaLabel="Shadow offset Y (px)" onChange={(v) => patch({ shadowOffsetYPx: v })} className="w-16" />} />
+      <Row label="Shadow blur" control={<NumberField value={style.shadowBlurPx ?? 0} min={0} max={40} ariaLabel={vocab('Shadow blur (px)')} onChange={(v) => patch({ shadowBlurPx: v })} className="w-16" />} />
+      <Row label="Shadow offset X" control={<NumberField value={style.shadowOffsetXPx ?? 0} min={-40} max={40} ariaLabel={vocab('Shadow offset X (px)')} onChange={(v) => patch({ shadowOffsetXPx: v })} className="w-16" />} />
+      <Row label="Shadow offset Y" control={<NumberField value={style.shadowOffsetYPx ?? 0} min={-40} max={40} ariaLabel={vocab('Shadow offset Y (px)')} onChange={(v) => patch({ shadowOffsetYPx: v })} className="w-16" />} />
       <ColorField label="Glow colour" value={style.glowColor} onChange={(v) => patch({ glowColor: v })} onClear={() => clear('glowColor')} />
-      <Row label="Glow blur" control={<NumberField value={style.glowBlurPx ?? 8} min={0} max={60} ariaLabel="Glow blur (px)" onChange={(v) => patch({ glowBlurPx: v })} className="w-16" />} />
+      <Row label="Glow blur" control={<NumberField value={style.glowBlurPx ?? 8} min={0} max={60} ariaLabel={vocab('Glow blur (px)')} onChange={(v) => patch({ glowBlurPx: v })} className="w-16" />} />
 
       <div className="appearance-editor__subhead">{vocab('Surface')}</div>
       <ColorField label="Background" value={style.backgroundColor} onChange={(v) => patch({ backgroundColor: v })} onClear={() => clear('backgroundColor')} />
       <ColorField label="Border" value={style.borderColor} onChange={(v) => patch({ borderColor: v })} onClear={() => clear('borderColor')} />
-      <Row label="Corner radius" control={<NumberField value={style.borderRadiusPx ?? 0} min={0} max={40} ariaLabel="Border radius (px)" onChange={(v) => patch({ borderRadiusPx: v })} className="w-16" />} />
+      <Row label="Corner radius" control={<NumberField value={style.borderRadiusPx ?? 0} min={0} max={40} ariaLabel={vocab('Border radius (px)')} onChange={(v) => patch({ borderRadiusPx: v })} className="w-16" />} />
 
       <div className="appearance-editor__subhead">{vocab('Compositing')}</div>
       <p className="appearance-editor__note">
-        Every control below is unset by default and composes with whatever the element already
-        renders, so nothing here replaces the styling above it. Leaving a section untouched
-        produces exactly the CSS this editor produced before these existed.
+        {vocab('Every control below is unset by default and composes with whatever the element already renders, so nothing here replaces the styling above it. Leaving a section untouched produces exactly the CSS this editor produced before these existed.')}
       </p>
       <Row
         label="Opacity"
         onReset={style.opacity != null ? () => clear('opacity') : undefined}
         control={
           <Slider
-            aria-label="Opacity"
+            aria-label={vocab('Opacity')}
             min={0}
             max={1}
             step={0.01}
@@ -526,7 +523,7 @@ function ColorTab({
         control={
           <Select
             value={style.blendMode ?? 'normal'}
-            aria-label="Blend mode"
+            aria-label={vocab('Blend mode')}
             onChange={(e) => patch({ blendMode: e.target.value as AppearanceBlendMode })}
           >
             {APPEARANCE_BLEND_MODES.map((m) => (
@@ -540,8 +537,7 @@ function ColorTab({
 
       <div className="appearance-editor__subhead">{vocab('Filters')}</div>
       <p className="appearance-editor__note">
-        These compose into one CSS filter in a fixed order, so two of them can never clobber each
-        other. Blur is applied last.
+        {vocab('These compose into one CSS filter in a fixed order, so two of them can never clobber each other. Blur is applied last.')}
       </p>
       {FILTER_ROWS.map((f) => (
         <Row
@@ -550,7 +546,7 @@ function ColorTab({
           onReset={style[f.key] != null ? () => clear(f.key) : undefined}
           control={
             <Slider
-              aria-label={f.label}
+              aria-label={vocab(f.label)}
               min={f.min}
               max={f.max}
               step={f.step}
@@ -564,7 +560,7 @@ function ColorTab({
         label="Backdrop blur"
         hint="Blurs what is BEHIND this element rather than the element itself."
         onReset={style.backdropBlurPx != null ? () => clear('backdropBlurPx') : undefined}
-        control={<NumberField value={style.backdropBlurPx ?? 0} min={0} max={40} ariaLabel="Backdrop blur (px)" onChange={(v) => patch({ backdropBlurPx: v })} className="w-16" />}
+        control={<NumberField value={style.backdropBlurPx ?? 0} min={0} max={40} ariaLabel={vocab('Backdrop blur (px)')} onChange={(v) => patch({ backdropBlurPx: v })} className="w-16" />}
       />
 
       <div className="appearance-editor__subhead">{vocab('Transform')}</div>
@@ -572,23 +568,23 @@ function ColorTab({
         Composed as translate, rotate, scale, then skew. The order is fixed so a saved entry means
         exactly one thing whichever control wrote it last.
       </p>
-      <Row label="Move X" onReset={style.translateXPx != null ? () => clear('translateXPx') : undefined} control={<NumberField value={style.translateXPx ?? 0} min={-200} max={200} ariaLabel="Translate X (px)" onChange={(v) => patch({ translateXPx: v })} className="w-16" />} />
-      <Row label="Move Y" onReset={style.translateYPx != null ? () => clear('translateYPx') : undefined} control={<NumberField value={style.translateYPx ?? 0} min={-200} max={200} ariaLabel="Translate Y (px)" onChange={(v) => patch({ translateYPx: v })} className="w-16" />} />
+      <Row label="Move X" onReset={style.translateXPx != null ? () => clear('translateXPx') : undefined} control={<NumberField value={style.translateXPx ?? 0} min={-200} max={200} ariaLabel={vocab('Translate X (px)')} onChange={(v) => patch({ translateXPx: v })} className="w-16" />} />
+      <Row label="Move Y" onReset={style.translateYPx != null ? () => clear('translateYPx') : undefined} control={<NumberField value={style.translateYPx ?? 0} min={-200} max={200} ariaLabel={vocab('Translate Y (px)')} onChange={(v) => patch({ translateYPx: v })} className="w-16" />} />
       <Row
         label="Rotate"
         onReset={style.rotateDeg != null ? () => clear('rotateDeg') : undefined}
-        control={<Slider aria-label="Rotate (degrees)" min={-180} max={180} step={1} value={style.rotateDeg ?? 0} onChange={(e) => patch({ rotateDeg: Number(e.target.value) })} />}
+        control={<Slider aria-label={vocab('Rotate (degrees)')} min={-180} max={180} step={1} value={style.rotateDeg ?? 0} onChange={(e) => patch({ rotateDeg: Number(e.target.value) })} />}
       />
-      <Row label="Scale X" onReset={style.scaleX != null ? () => clear('scaleX') : undefined} control={<Slider aria-label="Scale X" min={0} max={3} step={0.01} value={style.scaleX ?? 1} onChange={(e) => patch({ scaleX: Number(e.target.value) })} />} />
-      <Row label="Scale Y" onReset={style.scaleY != null ? () => clear('scaleY') : undefined} control={<Slider aria-label="Scale Y" min={0} max={3} step={0.01} value={style.scaleY ?? 1} onChange={(e) => patch({ scaleY: Number(e.target.value) })} />} />
-      <Row label="Skew X" onReset={style.skewXDeg != null ? () => clear('skewXDeg') : undefined} control={<NumberField value={style.skewXDeg ?? 0} min={-89} max={89} ariaLabel="Skew X (degrees)" onChange={(v) => patch({ skewXDeg: v })} className="w-16" />} />
-      <Row label="Skew Y" onReset={style.skewYDeg != null ? () => clear('skewYDeg') : undefined} control={<NumberField value={style.skewYDeg ?? 0} min={-89} max={89} ariaLabel="Skew Y (degrees)" onChange={(v) => patch({ skewYDeg: v })} className="w-16" />} />
+      <Row label="Scale X" onReset={style.scaleX != null ? () => clear('scaleX') : undefined} control={<Slider aria-label={vocab('Scale X')} min={0} max={3} step={0.01} value={style.scaleX ?? 1} onChange={(e) => patch({ scaleX: Number(e.target.value) })} />} />
+      <Row label="Scale Y" onReset={style.scaleY != null ? () => clear('scaleY') : undefined} control={<Slider aria-label={vocab('Scale Y')} min={0} max={3} step={0.01} value={style.scaleY ?? 1} onChange={(e) => patch({ scaleY: Number(e.target.value) })} />} />
+      <Row label="Skew X" onReset={style.skewXDeg != null ? () => clear('skewXDeg') : undefined} control={<NumberField value={style.skewXDeg ?? 0} min={-89} max={89} ariaLabel={vocab('Skew X (degrees)')} onChange={(v) => patch({ skewXDeg: v })} className="w-16" />} />
+      <Row label="Skew Y" onReset={style.skewYDeg != null ? () => clear('skewYDeg') : undefined} control={<NumberField value={style.skewYDeg ?? 0} min={-89} max={89} ariaLabel={vocab('Skew Y (degrees)')} onChange={(v) => patch({ skewYDeg: v })} className="w-16" />} />
       <Row
         label="Origin"
         hint="The point a rotation or scale pivots around."
         onReset={style.transformOrigin ? () => clear('transformOrigin') : undefined}
         control={
-          <Select value={style.transformOrigin ?? 'center'} aria-label="Transform origin" onChange={(e) => patch({ transformOrigin: e.target.value })}>
+          <Select value={style.transformOrigin ?? 'center'} aria-label={vocab('Transform origin')} onChange={(e) => patch({ transformOrigin: e.target.value })}>
             {TRANSFORM_ORIGINS.map((o) => (
               <option key={o} value={o}>
                 {o}
@@ -645,10 +641,10 @@ function LayoutTab({
   const vocab = useVocabularyMapper()
   return (
     <div className="appearance-editor__fields">
-      <Row label="Letter spacing" onReset={style.letterSpacingPx != null ? () => clear('letterSpacingPx') : undefined} control={<NumberField value={style.letterSpacingPx ?? 0} min={-5} max={40} step={0.1} ariaLabel="Letter spacing (px)" onChange={(v) => patch({ letterSpacingPx: v })} className="w-20" />} />
-      <Row label="Word spacing" onReset={style.wordSpacingPx != null ? () => clear('wordSpacingPx') : undefined} control={<NumberField value={style.wordSpacingPx ?? 0} min={-10} max={60} step={0.5} ariaLabel="Word spacing (px)" onChange={(v) => patch({ wordSpacingPx: v })} className="w-20" />} />
-      <Row label="Line height" onReset={style.lineHeight != null ? () => clear('lineHeight') : undefined} control={<NumberField value={style.lineHeight ?? 1.4} min={0.5} max={4} step={0.05} ariaLabel="Line height" onChange={(v) => patch({ lineHeight: v })} className="w-20" />} />
-      <Row label="Baseline offset" onReset={style.baselineShiftPx != null ? () => clear('baselineShiftPx') : undefined} control={<NumberField value={style.baselineShiftPx ?? 0} min={-20} max={20} ariaLabel="Baseline offset (px)" onChange={(v) => patch({ baselineShiftPx: v })} className="w-20" />} />
+      <Row label="Letter spacing" onReset={style.letterSpacingPx != null ? () => clear('letterSpacingPx') : undefined} control={<NumberField value={style.letterSpacingPx ?? 0} min={-5} max={40} step={0.1} ariaLabel={vocab('Letter spacing (px)')} onChange={(v) => patch({ letterSpacingPx: v })} className="w-20" />} />
+      <Row label="Word spacing" onReset={style.wordSpacingPx != null ? () => clear('wordSpacingPx') : undefined} control={<NumberField value={style.wordSpacingPx ?? 0} min={-10} max={60} step={0.5} ariaLabel={vocab('Word spacing (px)')} onChange={(v) => patch({ wordSpacingPx: v })} className="w-20" />} />
+      <Row label="Line height" onReset={style.lineHeight != null ? () => clear('lineHeight') : undefined} control={<NumberField value={style.lineHeight ?? 1.4} min={0.5} max={4} step={0.05} ariaLabel={vocab('Line height')} onChange={(v) => patch({ lineHeight: v })} className="w-20" />} />
+      <Row label="Baseline offset" onReset={style.baselineShiftPx != null ? () => clear('baselineShiftPx') : undefined} control={<NumberField value={style.baselineShiftPx ?? 0} min={-20} max={20} ariaLabel={vocab('Baseline offset (px)')} onChange={(v) => patch({ baselineShiftPx: v })} className="w-20" />} />
       <Row label="Direction" onReset={style.direction ? () => clear('direction') : undefined} control={
           <Select value={style.direction ?? 'ltr'} aria-label={vocab('Text direction')} onChange={(e) => patch({ direction: e.target.value as AppearanceTextStyle['direction'] })}>
             <option value="ltr">{vocab('Left to right')}</option>
