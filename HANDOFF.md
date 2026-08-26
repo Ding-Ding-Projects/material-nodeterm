@@ -1,5 +1,35 @@
 # Handoff
 
+## 2026-08-26, unified Node Catalog implementation
+
+Implemented the typed Node Catalog registry in `src/shared/node-catalog.ts` and the renderer
+creation coordinator in `src/renderer/state/nodeCreationCoordinator.ts`. Registry rows carry stable
+ids, node kinds, categories, keywords, documentation paths, dependency ids, safe defaults, and
+availability reasons. The coordinator stamps immutable `creationEventId` values, deduplicates retry
+events, and chooses a deterministic collision-free rectangle. `CanvasNodeState` and live node data
+persist the event id while hydration only remembers it.
+
+Added `src/renderer/components/NodeCatalogDialog.tsx`, with category navigation, plain-text search,
+an anchored full regex builder, keyboard navigation, focus restoration, disabled-state explanations,
+accessible listbox state, and per-row documentation links. The FAB, pane context menu, group context
+menu, and command palette now expose the catalog route. Added localized catalog copy, Material Design
+3 styles, a categorized feature article, offline site article, roadmap state, and this handoff.
+
+This ultra-speed implementation pass intentionally did not run tests, type checks, lint, reviews,
+security or accessibility checks, builds, packaging, installer execution, runtime interaction, or
+UI captures. The generated offline documentation bundle was refreshed through the docs generator's
+equivalent TypeScript-strip route because the checkout has no installed `esbuild`; this was a docs
+generation step, not a product build. Build and packaging evidence therefore proves artifact
+production only. No commit or dew was made by this lane.
+
+The refuter repair adds an explicit current, ephemeral, and planned catalog completeness inventory;
+universe scope and depth metadata; configure-later versus required-for-creation states; disabled
+blueprints for every planned node family; strict remote-terminal picker refusal; sibling-coordinate
+placement; bounded placement refusal with a visible notification; fresh event ids for duplicates;
+append coordination across shortcut, drop, paste, board, source-control, login, profile,
+automation, and peer creation; personal-vocabulary localization with bilingual secondary copy;
+in-app documentation navigation; and catalog-driven terminal-profile and authenticator dragging.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

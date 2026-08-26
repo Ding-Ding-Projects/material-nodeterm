@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- Add the unified Node Catalog registry and creation coordinator. The FAB, pane context menu, and
+  command palette now expose a shared typed inventory with categories, safe defaults, availability
+  reasons, local regex search, documentation links, immutable creation-event idempotence, and
+  collision-free placement. This ultra-speed implementation pass intentionally did not run tests,
+  type checks, lint, reviews, security or accessibility checks, builds, packaging, installer
+  execution, runtime interaction, or UI captures. Build and packaging evidence proves artifact
+  production only.
+
+- Tighten Node Catalog creation semantics: append coordination now covers shortcut, profile, drop,
+  paste, board, source-control, login, automation, duplicate, and peer paths; grouped placement
+  compares siblings in one coordinate space; exhausted placement refuses visibly; remote terminals
+  wait for a concrete picker selection; duplicate nodes receive fresh event ids; planned Photo,
+  Gallery, Torrent, VM, Home Assistant, planner, universe, AWS, and hosting blueprints remain
+  explicit disabled rows; and the offline docs bundle includes the catalog article. Verification is
+  intentionally pending under the ultra-speed delivery boundary.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

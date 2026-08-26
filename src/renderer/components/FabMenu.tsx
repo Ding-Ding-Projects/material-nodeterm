@@ -1,15 +1,11 @@
 import { useState } from 'react'
-import { AGENT_CONFIG, BUILTIN_AGENT_IDS, type AgentId } from '@shared/agents/config'
-import { AgentIcon } from '../lib/agentIcons'
-import { useSettings } from '../state/settings'
-import { useProjects } from '../state/projects'
-import { accountsForProject, sshAccountsHint } from '../state/workspace'
+import type { AgentId } from '@shared/agents/config'
 import type { TerminalProfileChoice } from '../lib/terminal-profile-actions'
 import { useLocalizedVocabularyText } from '../lib/personalVocabulary/useLocalizedVocabularyText'
-import { IconLock } from './icons'
-import { writeAuthenticatorDrag } from '../lib/explorerNodeDrag'
 
 export interface FabMenuProps {
+  /** Opens the single typed registry used by every creation surface. */
+  onOpenCatalog: () => void
   onAddTerminal: () => void
   /** Desktop-local Windows capability. Keep false for SSH, relay, and Server Edition sessions. */
   offersTerminalProfiles?: boolean
@@ -39,6 +35,7 @@ export interface FabMenuProps {
  * behavior test can drive exactly this surface, the same way it drove the old `Dock`.
  */
 export function FabMenu({
+  onOpenCatalog,
   onAddTerminal,
   offersTerminalProfiles = false,
   terminalProfileChoices = [],
@@ -56,19 +53,6 @@ export function FabMenu({
   const profileText = useLocalizedVocabularyText()
   const [menuOpen, setMenuOpen] = useState(false)
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
-  const customAgents = useSettings((s) => s.settings.customAgents)
-  const disabledAgents = useSettings((s) => s.settings.disabledAgents)
-  const claudeAccounts = useSettings((s) => s.settings.claudeAccounts)
-  const activeProjectId = useProjects((s) => s.activeProjectId)
-  const activeProject = useProjects((s) => s.projects.find((p) => p.id === activeProjectId))
-  // Accounts usable in the active project (local for a local project, this host's for an SSH
-  // project). The flat FAB menu can't nest, so Claude gets one "New Claude — <label>" entry per
-  // account (plus the base "Claude" = project default).
-  const localAccounts = accountsForProject(claudeAccounts, activeProject)
-  // ✓ marks the project's default account entry (what the base "Claude" resolves to).
-  const defaultAccountId = localAccounts.some((a) => a.id === activeProject?.defaultAccountId)
-    ? activeProject?.defaultAccountId
-    : undefined
   const profileEmptyState = terminalProfileEmptyState ?? {
     label: profileText('terminalProfiles.common.profilesUnavailable', 'Profiles unavailable'),
     hint: profileText(
@@ -182,95 +166,9 @@ export function FabMenu({
               </>
             ) : (
               <>
-                <button role="menuitem" onClick={pick(onAddTerminal)}>
-                  <TerminalIcon />
-                  <span>Terminal</span>
-                </button>
-                {offersTerminalProfiles ? (
-                  <button role="menuitem" onClick={() => setProfileMenuOpen(true)}>
-                    <TerminalIcon />
-                    <span>
-                      {profileText(
-                        'terminalProfiles.create.menuLabel',
-                        'New terminal with profile…'
-                      )}
-                    </span>
-                  </button>
-                ) : null}
-                <button role="menuitem" onClick={pick(onAddRemote)}>
-                  <TerminalIcon />
-                  <span>Remote…</span>
-                </button>
-                {BUILTIN_AGENT_IDS.filter((aid) => !disabledAgents.includes(aid)).flatMap((aid) => {
-                  const base = (
-                    <button role="menuitem" key={aid} onClick={pick(() => onAddAgent(aid))}>
-                      <AgentIcon agentId={aid} size={18} />
-                      <span>{AGENT_CONFIG[aid].label}</span>
-                    </button>
-                  )
-                  if (aid !== 'claude') return [base]
-                  // SSH project with no accounts on its host: a disabled row saying where this
-                  // host's accounts come from (local accounts are correctly invisible here).
-                  const acctHint = sshAccountsHint(activeProject, localAccounts)
-                  if (acctHint) {
-                    return [
-                      base,
-                      <button role="menuitem" key={`${aid}-acct-hint`} disabled title={acctHint}>
-                        <AgentIcon agentId={aid} size={18} />
-                        <span>No accounts on this host yet</span>
-                      </button>
-                    ]
-                  }
-                  // Claude picks up one flat entry per logged-in local account.
-                  if (localAccounts.length === 0) return [base]
-                  return [
-                    base,
-                    ...localAccounts.map((a) => (
-                      <button
-                        role="menuitem"
-                        key={`${aid}-${a.id}`}
-                        onClick={pick(() => onAddAgent(aid, a.id))}
-                      >
-                        <AgentIcon agentId={aid} size={18} />
-                        <span>
-                          Claude — {a.label}
-                          {a.id === defaultAccountId ? ' ✓' : ''}
-                        </span>
-                      </button>
-                    ))
-                  ]
-                })}
-                {customAgents
-                  .filter((c) => !disabledAgents.includes(c.id))
-                  .map((c) => (
-                    <button role="menuitem" key={c.id} onClick={pick(() => onAddAgent(c.id))}>
-                      <AgentIcon agentId={c.id} size={18} />
-                      <span>{c.label}</span>
-                    </button>
-                  ))}
-                <button role="menuitem" onClick={pick(onAddSticky)}>
-                  <NoteIcon />
-                  <span>Sticky Note</span>
-                </button>
-                <button role="menuitem" onClick={pick(onAddLoop)}>
-                  <LoopIcon />
-                  <span>Loop</span>
-                <button
-                  role="menuitem"
-                  draggable
-                  onDragStart={(e) => {
-                    if (e.dataTransfer) writeAuthenticatorDrag(e.dataTransfer)
-                  }}
-                  onClick={pick(onAddAuthenticator)}
-                  title="Click to add, or drag onto the canvas to place it"
-                >
-                  <IconLock />
-                  <span>Authenticator</span>
-                </button>
-                </button>
-                <button role="menuitem" onClick={pick(onAddDino)}>
-                  <DinoIcon />
-                  <span>Dino Game</span>
+                <button role="menuitem" onClick={pick(onOpenCatalog)}>
+                  <CatalogIcon />
+                  <span>Browse node catalog…</span>
                 </button>
                 <button role="menuitem" onClick={pick(onOpenFile)}>
                   <EditorIcon />
@@ -304,6 +202,14 @@ function PlusIcon() {
   return (
     <svg {...S} width={26} height={26}>
       <path d="M12 5v14M5 12h14" />
+    </svg>
+  )
+}
+function CatalogIcon() {
+  return (
+    <svg {...S}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M3.5 12h17M12 3.5c2.4 2.2 3.3 5 3.3 8.5s-.9 6.3-3.3 8.5c-2.4-2.2-3.3-5-3.3-8.5S9.6 5.7 12 3.5Z" />
     </svg>
   )
 }

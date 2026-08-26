@@ -144,7 +144,10 @@ intentionally unchecked because this task publishes the plan only.
 - [ ] Preserve root, Multiverse, AWS Universe, portal, Shop, node, relationship, and appearance data.
 - [ ] Bundle project-owned media and provide Include, Omit, and Locate Later decisions.
 - [ ] Separate portable blueprints from machine-local bindings and credential references.
-- [ ] Ship the unified Node Catalog and one creation coordinator.
+- [ ] Ship the unified Node Catalog and one creation coordinator. The typed registry,
+      availability-aware dialog, immutable creation-event coordinator, collision-free placement,
+      FAB, pane context menu, and command-palette routes landed in this implementation pass; the
+      row remains unchecked until the required verification and packaged interaction evidence run.
 - [ ] Add one non-deletable Shop node to every Multiverse and AWS Universe child canvas.
 - [ ] Add shared account, credential-vault, OAuth callback, and provider-binding services.
 - [ ] Add guided Docker host management for local and SSH contexts.
