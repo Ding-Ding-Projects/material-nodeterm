@@ -4,6 +4,7 @@
 import type { ChangelogRelease } from '@shared/changelog'
 import { renderMarkdown } from '../../lib/markdown'
 import { Checkbox } from '@renderer/ui/md3'
+import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 
 /**
  * A small, deterministic color class per category — cycled by NAME (a stable hash), not by
@@ -32,6 +33,7 @@ export interface ReleaseCardProps {
 }
 
 export function ReleaseCard({ release, selected, onToggleSelect }: ReleaseCardProps): JSX.Element {
+  const vocab = useVocabularyMapper()
   const dateLabel = formatReleaseDate(release.dateMs)
   const isUnreleased = release.version === 'Unreleased'
 
@@ -40,7 +42,7 @@ export function ReleaseCard({ release, selected, onToggleSelect }: ReleaseCardPr
       <div className="md3-changelog-release__head">
         <Checkbox
           className="md3-changelog-release__select"
-          aria-label={`Select release ${release.version}`}
+          aria-label={vocab(`Select release ${release.version}`)}
           checked={selected}
           onClick={(e) => {
             e.preventDefault()
@@ -49,7 +51,7 @@ export function ReleaseCard({ release, selected, onToggleSelect }: ReleaseCardPr
           onChange={() => {}}
         />
         <span className={`md3-changelog-version${isUnreleased ? ' md3-changelog-version--unreleased' : ''}`}>
-          {isUnreleased ? 'Unreleased' : `v${release.version}`}
+          {isUnreleased ? vocab('Unreleased') : `v${release.version}`}
         </span>
         {dateLabel && <span className="md3-changelog-date">{dateLabel}</span>}
         <div className="md3-changelog-commits">
@@ -58,14 +60,14 @@ export function ReleaseCard({ release, selected, onToggleSelect }: ReleaseCardPr
               key={c.sha}
               type="button"
               className="md3-changelog-commit"
-              title={`Open commit ${c.sha} on GitHub`}
+              title={vocab('Open commit on GitHub')}
               onClick={() => window.nodeTerminal.shell.openExternal(c.url)}
             >
               {c.label.slice(0, 8)}
             </button>
           ))}
           {release.commits.length === 0 && (
-            <span className="md3-changelog-commit md3-changelog-commit--none" title="No commit link recorded for this release">
+            <span className="md3-changelog-commit md3-changelog-commit--none" title={vocab('No commit link recorded for this release')}>
               —
             </span>
           )}
@@ -73,7 +75,7 @@ export function ReleaseCard({ release, selected, onToggleSelect }: ReleaseCardPr
       </div>
 
       {release.items.length === 0 ? (
-        <div className="md3-changelog-empty">No changes recorded for this release.</div>
+        <div className="md3-changelog-empty">{vocab('No changes recorded for this release.')}</div>
       ) : (
         <ul className="md3-changelog-items">
           {release.items.map((item, i) => (

@@ -40,6 +40,7 @@ import {
   type BulkSelectionState
 } from '../lib/bulkSelection'
 import { Checkbox } from '@renderer/ui/md3'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 export interface LocalHistoryPanelProps {
   domain: string
@@ -48,15 +49,15 @@ export interface LocalHistoryPanelProps {
 
 const PRESETS: DateRangePreset[] = ['today', '7d', '30d', '90d', 'all']
 
-function toExportTable(entries: HistoryEntry[]): ExportTable {
+function toExportTable(entries: HistoryEntry[], map: (text: string) => string = (text) => text): ExportTable {
   return {
     name: 'history',
     columns: [
-      { key: 'timestamp', label: 'When' },
-      { key: 'action', label: 'Action' },
-      { key: 'label', label: 'What changed' },
-      { key: 'sha', label: 'Revision' },
-      { key: 'filename', label: 'File' }
+      { key: 'timestamp', label: map('When') },
+      { key: 'action', label: map('Action') },
+      { key: 'label', label: map('What changed') },
+      { key: 'sha', label: map('Revision') },
+      { key: 'filename', label: map('File') }
     ],
     rows: entries.map((e) => ({
       timestamp: new Date(e.timestamp).toISOString(),
@@ -71,11 +72,12 @@ function toExportTable(entries: HistoryEntry[]): ExportTable {
 /** A small, colored assist-chip label for one action word — never a hard-coded switch over the
  *  closed set `HistoryAction` claims to be: an unrecognized future action still renders (neutral
  *  tone), it just doesn't get a themed color yet. */
-function ActionChip({ action }: { action: HistoryAction }): JSX.Element {
-  return <span className={`md3-history-chip md3-history-chip--${action}`}>{action}</span>
+function ActionChip({ action, map }: { action: HistoryAction; map: (text: string) => string }): JSX.Element {
+  return <span className={`md3-history-chip md3-history-chip--${action}`}>{map(action)}</span>
 }
 
 export function LocalHistoryPanel({ domain, title }: LocalHistoryPanelProps): JSX.Element {
+  const vocab = useVocabularyMapper()
   const [entries, setEntries] = useState<HistoryEntry[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -188,7 +190,7 @@ export function LocalHistoryPanel({ domain, title }: LocalHistoryPanelProps): JS
         label: 'Export selected',
         describe: (e) => `${new Date(e.timestamp).toLocaleString()} — ${e.label}`,
         run: async (items) => {
-          const built = buildTableExport(toExportTable(items), 'csv')
+          const built = buildTableExport(toExportTable(items, vocab), 'csv')
           const result = await window.nodeTerminal.export.saveText(built.filename, built.content, built.mimeType)
           if (!result.ok) {
             if (result.canceled) return { succeeded: [], failed: [] }
@@ -198,15 +200,15 @@ export function LocalHistoryPanel({ domain, title }: LocalHistoryPanelProps): JS
         }
       }
     ],
-    []
+    [vocab]
   )
 
   return (
-    <div className="local-history md3-history-panel" role="region" aria-label={`${title} history`}>
+    <div className="local-history md3-history-panel" role="region" aria-label={vocab(`${title} history`)}>
       <div className="local-history__toolbar md3-history-toolbar">
         <div className="local-history__dates md3-history-dates">
           <label className="md3-history-date-field">
-            From
+            {vocab('From')}
             <input
               type="date"
               value={fromInput}
@@ -218,7 +220,7 @@ export function LocalHistoryPanel({ domain, title }: LocalHistoryPanelProps): JS
             />
           </label>
           <label className="md3-history-date-field">
-            To
+            {vocab('To')}
             <input
               type="date"
               value={toInput}
@@ -229,7 +231,7 @@ export function LocalHistoryPanel({ domain, title }: LocalHistoryPanelProps): JS
               aria-invalid={!!to.error}
             />
           </label>
-          <div className="local-history__presets md3-history-presets" role="group" aria-label="Date range presets">
+          <div className="local-history__presets md3-history-presets" role="group" aria-label={vocab('Date range presets')}>
             {PRESETS.map((p) => (
               <button
                 key={p}
@@ -238,7 +240,7 @@ export function LocalHistoryPanel({ domain, title }: LocalHistoryPanelProps): JS
                 aria-pressed={activePreset === p}
                 onClick={() => applyPreset(p)}
               >
-                {DATE_RANGE_PRESET_LABELS[p]}
+                {vocab(DATE_RANGE_PRESET_LABELS[p])}
               </button>
             ))}
           </div>
@@ -259,11 +261,11 @@ export function LocalHistoryPanel({ domain, title }: LocalHistoryPanelProps): JS
             ref={searchInputRef}
             type="text"
             className="local-history__search md3-history-search__input"
-            placeholder={search.mode === 'regex' ? 'Search what changed (regex)…' : 'Search what changed…'}
+            placeholder={vocab(search.mode === 'regex' ? 'Search what changed (regex)…' : 'Search what changed…')}
             value={search.value}
             spellCheck={false}
             onChange={(e) => search.setValue(e.target.value)}
-            aria-label="Search history"
+            aria-label={vocab('Search history')}
           />
           <AnchoredRegexBuilder search={search} fieldRef={searchInputRef} label="Regex — Settings history search" />
         </div>
@@ -274,7 +276,7 @@ export function LocalHistoryPanel({ domain, title }: LocalHistoryPanelProps): JS
         )}
 
         {actionCounts.size > 0 && (
-          <div className="local-history__actions md3-history-action-filters" role="group" aria-label="Filter by action">
+          <div className="local-history__actions md3-history-action-filters" role="group" aria-label={vocab('Filter by action')}>
             {[...actionCounts.entries()].map(([action, n]) => (
               <label
                 key={action}
@@ -292,22 +294,22 @@ export function LocalHistoryPanel({ domain, title }: LocalHistoryPanelProps): JS
 
         <ExportMenu
           kind="tabular"
-          label={`${title} history`}
-          build={(format) => buildTableExport(toExportTable(filtered), format)}
+          label={vocab(`${title} history`)}
+          build={(format) => buildTableExport(toExportTable(filtered, vocab), format)}
         />
       </div>
 
-      {loading && <div className="local-history__note md3-history-note">Loading…</div>}
+      {loading && <div className="local-history__note md3-history-note">{vocab('Loading…')}</div>}
       {!loading && error && (
         <div className="local-history__note local-history__note--error md3-history-note md3-history-note--error">
           {error}
         </div>
       )}
       {!loading && !error && entries && entries.length === 0 && (
-        <div className="local-history__note md3-history-note">No history yet — it starts with the next change.</div>
+        <div className="local-history__note md3-history-note">{vocab('No history yet — it starts with the next change.')}</div>
       )}
       {!loading && !error && entries && entries.length > 0 && filtered.length === 0 && (
-        <div className="local-history__note md3-history-note">Nothing matches this filter.</div>
+        <div className="local-history__note md3-history-note">{vocab('Nothing matches this filter.')}</div>
       )}
 
       {filtered.length > 0 && (
@@ -327,7 +329,7 @@ export function LocalHistoryPanel({ domain, title }: LocalHistoryPanelProps): JS
               return (
                 <li key={e.sha} className="local-history__row md3-history-row">
                   <Checkbox
-                    aria-label={`Select revision ${e.sha.slice(0, 7)}`}
+                    aria-label={vocab(`Select revision ${e.sha.slice(0, 7)}`)}
                     checked={isSelected(selection, e.sha)}
                     onClick={(ev) => {
                       if (ev.shiftKey) setSelection((s) => selectRange(s, e.sha, visibleIds))
@@ -335,7 +337,7 @@ export function LocalHistoryPanel({ domain, title }: LocalHistoryPanelProps): JS
                     }}
                     onChange={() => {}}
                   />
-                  <ActionChip action={e.action} />
+                  <ActionChip action={e.action} map={vocab} />
                   <div className="md3-history-row__body">
                     <span className="local-history__label md3-history-row__label">{e.label}</span>
                     <span className="md3-history-row__meta">
@@ -347,10 +349,10 @@ export function LocalHistoryPanel({ domain, title }: LocalHistoryPanelProps): JS
                     </span>
                   </div>
                   {isCurrent ? (
-                    <span className="md3-history-current-chip">CURRENT</span>
+                    <span className="md3-history-current-chip">{vocab('CURRENT')}</span>
                   ) : (
                     <button type="button" className="local-history__restore md3-history-restore" onClick={() => setRestoring(e)}>
-                      Restore as new
+                      {vocab('Restore as new')}
                     </button>
                   )}
                 </li>

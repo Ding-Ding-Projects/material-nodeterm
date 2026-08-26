@@ -7,6 +7,7 @@ import { useExplorer } from '../state/explorer'
 import { sshFs } from '../terminal/ssh-fs'
 import { useSession } from '../session/session'
 import { promptDialog } from './promptDialog'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import {
   ancestorDirs,
   createTargetDir,
@@ -159,6 +160,7 @@ function TreeEntry({
    */
   filterTest?: (name: string) => boolean
 }) {
+  const vocab = useVocabularyMapper()
   const open = useExplorer((s) => (s.expandedByProject[projectId] ?? []).includes(path))
   const [children, setChildren] = useState<DirEntry[] | null>(null)
   const rowRef = useRef<HTMLDivElement>(null)
@@ -290,8 +292,8 @@ function TreeEntry({
         {onDownload && (
           <button
             className={`ex-dl${dl ? ` ${dl}` : ''}`}
-            title={dl ? DL_TITLE[dl] : entry.dir ? `Download ${entry.name} folder` : `Download ${entry.name}`}
-            aria-label="Download"
+            title={vocab(dl ? DL_TITLE[dl] : entry.dir ? `Download ${entry.name} folder` : `Download ${entry.name}`)}
+            aria-label={vocab('Download')}
             aria-busy={dl === 'running'}
             // A second click while the first transfer is still running would start a duplicate
             // download and land it beside the first as `name (2)`.
@@ -357,6 +359,7 @@ export function ExplorerPanel({
   pinned = false,
   onTogglePin
 }: ExplorerPanelProps) {
+  const vocab = useVocabularyMapper()
   // Filters visible FILE rows by name (plain text, or regex via the `.*` trigger). See the
   // `filterTest` doc comment on TreeEntry for why directories are never hidden by it.
   const filter = useRegexSearchField()
@@ -593,24 +596,24 @@ export function ExplorerPanel({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="drawer__head">
-          <h2>{project?.name || 'Explorer'}</h2>
+          <h2>{project?.name || vocab('Explorer')}</h2>
           <div className="ex-head-actions">
-            <button title="Refresh" aria-label="Refresh" onClick={() => setVersion((v) => v + 1)}>
+            <button title={vocab('Refresh')} aria-label={vocab('Refresh')} onClick={() => setVersion((v) => v + 1)}>
               <MaterialSymbol name="refresh" size={18} />
             </button>
             {onTogglePin && (
               <button
                 type="button"
                 className={pinned ? 'is-on' : ''}
-                title={pinned ? 'Unpin' : 'Pin'}
-                aria-label={pinned ? 'Unpin' : 'Pin'}
+                title={vocab(pinned ? 'Unpin' : 'Pin')}
+                aria-label={vocab(pinned ? 'Unpin' : 'Pin')}
                 aria-pressed={pinned}
                 onClick={onTogglePin}
               >
                 <IconPin />
               </button>
             )}
-            <button className="drawer__close" aria-label="Close" onClick={onClose}>
+            <button className="drawer__close" aria-label={vocab('Close')} onClick={onClose}>
               <MaterialSymbol name="close" size={19} />
             </button>
           </div>
@@ -618,7 +621,7 @@ export function ExplorerPanel({
 
         {!cwd && (
           <div className="drawer__body">
-            <p className="set-note">Set a folder for this project first (tab ⌄ → “Set folder…”).</p>
+            <p className="set-note">{vocab('Set a folder for this project first (tab ⌄ → “Set folder…”).')}</p>
           </div>
         )}
 
@@ -630,7 +633,7 @@ export function ExplorerPanel({
                 className="ex-filter-input"
                 value={filter.value}
                 spellCheck={false}
-                placeholder={filter.mode === 'regex' ? 'Filter files (regex)…' : 'Filter files…'}
+                placeholder={vocab(filter.mode === 'regex' ? 'Filter files (regex)…' : 'Filter files…')}
                 onChange={(e) => filter.setValue(e.target.value)}
               />
               <AnchoredRegexBuilder search={filter} fieldRef={filterInputRef} label="Regex — Explorer filter" />
@@ -638,20 +641,20 @@ export function ExplorerPanel({
             {filter.error && <p className="ex-filter-error">{filter.error}</p>}
             {filter.active && (
               <p className="ex-filter-note">
-                Showing files matching your filter. Expand folders to search inside them.
+                {vocab('Showing files matching your filter. Expand folders to search inside them.')}
               </p>
             )}
             <div
               className="drawer__body ex-body"
               role="tree"
-              aria-label={`${project?.name || 'Project'} folders and files`}
+              aria-label={vocab(`${project?.name || 'Project'} folders and files`)}
               onContextMenu={(e) => {
                 if (e.target !== e.currentTarget || !cwd) return
                 e.preventDefault()
                 setMenu({ x: e.clientX, y: e.clientY, path: cwd, dir: true })
               }}
             >
-              {roots?.length === 0 && <p className="set-note">Empty folder.</p>}
+              {roots?.length === 0 && <p className="set-note">{vocab('Empty folder.')}</p>}
               {roots?.map((e) => (
                 <TreeEntry
                   key={e.name}

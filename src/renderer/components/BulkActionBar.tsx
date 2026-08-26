@@ -6,6 +6,7 @@
 
 import { useState } from 'react'
 import { BulkActionPreview } from './BulkActionPreview'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 export interface BulkAction<T> {
   id: string
@@ -54,6 +55,7 @@ export function BulkActionBar<T>({
   actions,
   onActionComplete
 }: BulkActionBarProps<T>): JSX.Element {
+  const vocab = useVocabularyMapper()
   const [pending, setPending] = useState<BulkAction<T> | null>(null)
   const [running, setRunning] = useState(false)
 
@@ -98,7 +100,7 @@ export function BulkActionBar<T>({
   const previewRunnable = selectedItems.filter((i) => !previewExcludedIds.has(idOf(i)))
 
   return (
-    <div className="bulk-bar" role="toolbar" aria-label="Bulk actions">
+    <div className="bulk-bar" role="toolbar" aria-label={vocab('Bulk actions')}>
       <div className="bulk-bar__selection">
         <button
           type="button"
@@ -106,18 +108,18 @@ export function BulkActionBar<T>({
           onClick={onSelectAll}
           disabled={visible.length === 0}
         >
-          Select all ({visible.length} matching)
+          {vocab(`Select all (${visible.length} matching)`)}
         </button>
         <button type="button" className="bulk-bar__invert" onClick={onInvert} disabled={visible.length === 0}>
-          Invert
+          {vocab('Invert')}
         </button>
         {count > 0 && (
           <button type="button" className="bulk-bar__clear" onClick={onClear}>
-            Clear
+            {vocab('Clear')}
           </button>
         )}
         <span className="bulk-bar__count" aria-live="polite">
-          {count} selected
+          {vocab(`${count} selected`)}
         </span>
       </div>
       {count > 0 && (
@@ -130,11 +132,11 @@ export function BulkActionBar<T>({
                 type="button"
                 className={`bulk-bar__action${action.destructive ? ' bulk-bar__action--danger' : ''}`}
                 disabled={!!reason || running}
-                title={reason ?? undefined}
+                title={reason ? vocab(reason) : undefined}
                 aria-disabled={!!reason}
                 onClick={() => startAction(action)}
               >
-                {action.label}
+                {vocab(action.label)}
               </button>
             )
           })}
@@ -144,7 +146,7 @@ export function BulkActionBar<T>({
           promises and what the action actually touches cannot drift apart. */}
       {pending && (
         <BulkActionPreview
-          title={pending.label}
+          title={vocab(pending.label)}
           // The RUNNABLE set, not the whole selection: the preview adds excluded.length back on
           // to state the total, so passing everything counted each excluded row twice —
           // 3 selected with 1 excluded rendered "3 of 4 selected will change", one more of

@@ -10,6 +10,7 @@ import { sshAutoModeHint } from '../state/permissionMode'
 import { useSystemAccount } from '../state/systemAccount'
 import { sessionCount, sessionForProject, useProjectSession } from '../session/session'
 import { tabClickAction } from '../session/relay-tab'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { useMenuFlip } from '../ui/useMenuFlip'
 import { IconCanvasView, IconKanban } from './icons'
 import { appearanceId } from '../lib/appearance/registry'
@@ -82,9 +83,10 @@ interface ProjectSwitcherProps {
  * than one session exists — same rule the old tab strip used.
  */
 function ProjectSessionLabel({ projectId }: { projectId: string }) {
+  const vocab = useVocabularyMapper()
   const session = useProjectSession(projectId)
   return (
-    <span className="tab__session" title={`Session: ${session.label} (${session.status})`}>
+    <span className="tab__session" title={vocab(`Session: ${session.label} (${session.status})`)}>
       {session.label}
     </span>
   )
@@ -116,6 +118,7 @@ export function ProjectSwitcher({
   onOpenArchive,
   archiveBusy
 }: ProjectSwitcherProps) {
+  const vocab = useVocabularyMapper()
   // Select the raw array and filter in a memo, a `.filter()` inside the selector returns a fresh
   // array every store snapshot, which would re-render on EVERY projects change.
   const allProjects = useProjects((s) => s.projects)
@@ -409,7 +412,7 @@ export function ProjectSwitcher({
         {activeProject && (
           <button
             className="tab__board-toggle"
-            title={kanbanActive ? 'Canvas view (⌘⇧B)' : 'Kanban view (⌘⇧B)'}
+            title={vocab(kanbanActive ? 'Canvas view (⌘⇧B)' : 'Kanban view (⌘⇧B)')}
             onClick={() => useViewMode.getState().toggle(activeProject.id)}
           >
             {kanbanActive ? <IconCanvasView /> : <IconKanban />}
@@ -419,7 +422,7 @@ export function ProjectSwitcher({
         {otherUnread > 0 && (
           <span
             className="md3-switcher__more-badge"
-            title={`${otherUnread} unread in other projects`}
+            title={vocab(`${otherUnread} unread in other projects`)}
           >
             +{otherUnread}
           </span>
@@ -436,7 +439,7 @@ export function ProjectSwitcher({
 
         <button
           className="md3-switcher__caret"
-          aria-label="Switch project"
+          aria-label={vocab('Switch project')}
           aria-haspopup="menu"
           aria-expanded={switcherOpen}
           onClick={() => (switcherOpen ? closeMenu() : openSwitcher())}
@@ -580,7 +583,7 @@ export function ProjectSwitcher({
                       {lockForProject(p.id) && (
                         <span
                           className="md3-switcher-row__lock"
-                          title="This project is locked. Click to unlock."
+                          title={vocab('This project is locked. Click to unlock.')}
                         >
                           🔒
                         </span>
@@ -613,7 +616,7 @@ export function ProjectSwitcher({
 
                       <button
                         className="md3-switcher-row__more"
-                        title="Project options"
+                        title={vocab('Project options')}
                         onClick={(e) => {
                           e.stopPropagation()
                           toggleActions(p.id)
@@ -625,7 +628,7 @@ export function ProjectSwitcher({
 
                     {expanded && (
                       <div className="md3-switcher-actions" onClick={(e) => e.stopPropagation()}>
-                        <button onClick={() => startRename(p.id, p.name)}>Rename</button>
+                        <button onClick={() => startRename(p.id, p.name)}>{vocab('Rename')}</button>
                         <button
                           onClick={() => {
                             closeMenu()
@@ -814,11 +817,11 @@ export function ProjectSwitcher({
                           </div>
                         )}
                         {p.ssh ? (
-                          <button disabled title="Splitting a project into parts is local-only — not available for SSH projects yet.">
+                          <button disabled title={vocab('Splitting a project into parts is local-only — not available for SSH projects yet.') }>
                             Project storage: not available (SSH)
                           </button>
                         ) : !p.cwd ? (
-                          <button disabled title="This canvas has no folder on disk yet, so there is no project.json to split.">
+                          <button disabled title={vocab('This canvas has no folder on disk yet, so there is no project.json to split.') }>
                             Project storage: no folder yet
                           </button>
                         ) : (
@@ -895,7 +898,7 @@ export function ProjectSwitcher({
               })}
             </div>
             <button className="md3-switcher-menu__add" onClick={onOpenWelcome}>
-              <span aria-hidden>+</span> New project
+              <span aria-hidden>+</span> {vocab('New project')}
             </button>
           </div>,
           document.body

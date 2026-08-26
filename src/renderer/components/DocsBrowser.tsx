@@ -24,6 +24,7 @@ import { REPO_URL } from '../lib/bugReport'
 import { IconExternal } from './icons'
 import { DocsArticleView } from './docs/DocsArticleView'
 import { useDocsBundle } from './docs/useDocsBundle'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 /** Re-running a ~25k-line scan on every keystroke is the difference between instant and janky, so
  *  the search settles first. Short enough that it still reads as live typing. */
@@ -48,6 +49,7 @@ interface ScrollRequest {
 }
 
 export function DocsBrowser(): JSX.Element {
+  const vocab = useVocabularyMapper()
   const { state, retry } = useDocsBundle()
   const articles = state.status === 'ready' ? state.articles : EMPTY_ARTICLES
 
@@ -187,7 +189,7 @@ export function DocsBrowser(): JSX.Element {
   if (state.status === 'loading') {
     return (
       <div className="md3-docs" data-screen-label="Documentation">
-        <div className="md3-docs__pending">Loading documentation…</div>
+        <div className="md3-docs__pending">{vocab('Loading documentation…')}</div>
       </div>
     )
   }
@@ -196,18 +198,18 @@ export function DocsBrowser(): JSX.Element {
     return (
       <div className="md3-docs" data-screen-label="Documentation">
         <div className="md3-docs__pending md3-docs__pending--error" role="alert">
-          <div>The documentation bundle failed to load.</div>
+          <div>{vocab('The documentation bundle failed to load.')}</div>
           <div className="md3-docs__pending-detail">{state.error}</div>
           <div className="md3-docs__pending-actions">
             <button type="button" className="md3-docs__button" onClick={retry}>
-              Try again
+              {vocab('Try again')}
             </button>
             <button
               type="button"
               className="md3-docs__button"
               onClick={() => window.nodeTerminal.shell.openExternal(`${REPO_URL}/tree/main/docs`)}
             >
-              Read it on GitHub
+              {vocab('Read it on GitHub')}
             </button>
           </div>
         </div>
@@ -219,10 +221,10 @@ export function DocsBrowser(): JSX.Element {
     <div className="md3-docs" data-screen-label="Documentation">
       <div className="md3-docs__head">
         <div className="md3-docs__heading">
-          <div className="md3-docs__title">Documentation</div>
+          <div className="md3-docs__title">{vocab('Documentation')}</div>
           <div className="md3-docs__subtitle">
             {articles.length} article{articles.length === 1 ? '' : 's'}, bundled with this build — no
-            network needed
+            {vocab('network needed')}
           </div>
         </div>
         <div className="md3-docs__search md3-history-search">
@@ -230,13 +232,13 @@ export function DocsBrowser(): JSX.Element {
             ref={searchInputRef}
             type="text"
             className="md3-history-search__input"
-            placeholder={
+            placeholder={vocab(
               search.mode === 'regex' ? 'Search titles and content (regex)…' : 'Search titles and content…'
-            }
+            )}
             value={search.value}
             spellCheck={false}
             onChange={(e) => search.setValue(e.target.value)}
-            aria-label="Search documentation"
+            aria-label={vocab('Search documentation')}
           />
           <AnchoredRegexBuilder
             search={search}
@@ -252,7 +254,7 @@ export function DocsBrowser(): JSX.Element {
       )}
 
       <div className="md3-docs__body">
-        <nav className="md3-docs__nav" aria-label="Documentation contents">
+        <nav className="md3-docs__nav" aria-label={vocab('Documentation contents')}>
           {sections.map((section) => {
             const visible =
               matchedPaths === null ? section.articles : section.articles.filter((a) => matchedPaths.has(a.path))
@@ -277,7 +279,7 @@ export function DocsBrowser(): JSX.Element {
             )
           })}
           {matchedPaths !== null && matchedPaths.size === 0 && (
-            <div className="md3-docs__nav-empty">No article matches this search.</div>
+            <div className="md3-docs__nav-empty">{vocab('No article matches this search.')}</div>
           )}
         </nav>
 
@@ -288,19 +290,19 @@ export function DocsBrowser(): JSX.Element {
               className="md3-docs__button md3-docs__button--quiet"
               disabled={trail.length === 0}
               onClick={goBack}
-              title={trail.length === 0 ? 'Nothing to go back to yet' : 'Back to the previous article'}
+            title={vocab(trail.length === 0 ? 'Nothing to go back to yet' : 'Back to the previous article')}
             >
-              ← Back
+              ← {vocab('Back')}
             </button>
             {article && (
               <button
                 type="button"
                 className="md3-docs__button md3-docs__button--quiet"
                 onClick={() => window.nodeTerminal.shell.openExternal(repoBlobUrl(article.path))}
-                title="Open this article on GitHub"
+                title={vocab('Open this article on GitHub')}
               >
                 <IconExternal />
-                View source
+                {vocab('View source')}
               </button>
             )}
           </div>
@@ -316,14 +318,14 @@ export function DocsBrowser(): JSX.Element {
                 className="md3-docs__button"
                 onClick={() => window.nodeTerminal.shell.openExternal(repoBlobUrl(outside))}
               >
-                Open on GitHub
+                {vocab('Open on GitHub')}
               </button>
               <button
                 type="button"
                 className="md3-docs__button md3-docs__button--quiet"
                 onClick={() => setOutside(null)}
               >
-                Dismiss
+                {vocab('Dismiss')}
               </button>
             </div>
           )}
@@ -336,7 +338,7 @@ export function DocsBrowser(): JSX.Element {
           ) : article ? (
             <DocsArticleView article={article} known={known} scrollTo={scroll} onNavigate={follow} />
           ) : (
-            <div className="md3-docs__pending">This build bundled no documentation.</div>
+            <div className="md3-docs__pending">{vocab('This build bundled no documentation.')}</div>
           )}
         </div>
       </div>
@@ -351,15 +353,16 @@ function DocsResults({
   results: DocSearchHit[] | null
   onOpen: (hit: DocSearchHit) => void
 }): JSX.Element {
+  const vocab = useVocabularyMapper()
   // `null` is "the scan has not settled yet", which is a different fact from "nothing matched" —
   // reporting the second while the first is true is how a search reads as broken.
-  if (results === null) return <div className="md3-docs__pending">Searching…</div>
-  if (results.length === 0) return <div className="md3-docs__pending">Nothing matches this search.</div>
+  if (results === null) return <div className="md3-docs__pending">{vocab('Searching…')}</div>
+  if (results.length === 0) return <div className="md3-docs__pending">{vocab('Nothing matches this search.')}</div>
 
   return (
     <div className="md3-docs__results">
       <div className="md3-docs__results-count">
-        {results.length} article{results.length === 1 ? '' : 's'} match
+        {vocab(`${results.length} article${results.length === 1 ? '' : 's'} match`)}
       </div>
       {results.map((hit) => (
         <button key={hit.path} type="button" className="md3-docs__result" onClick={() => onOpen(hit)}>
@@ -380,7 +383,7 @@ function DocsResults({
             </div>
           ))}
           {hit.snippets.length === 0 && (
-            <div className="md3-docs__snippet md3-docs__snippet--title">Title match</div>
+            <div className="md3-docs__snippet md3-docs__snippet--title">{vocab('Title match')}</div>
           )}
         </button>
       ))}

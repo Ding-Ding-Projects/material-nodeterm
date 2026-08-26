@@ -18,6 +18,7 @@ import { REGEX_TOKEN_GROUPS, filterTokenGroups, type RegexToken } from './insert
 import { IconDuplicate, IconSearch, IconTrash } from '../icons'
 import { IconRegexArrowInsert, IconRegexError, IconRegexQuote, IconRegexWarning } from './regexIcons'
 import { TextArea } from '@renderer/ui/md3'
+import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 
 export interface RegexBuilderValue {
   pattern: string
@@ -63,6 +64,7 @@ const MATCH_PALETTE: Array<[string, string]> = [
 ]
 
 export function RegexBuilder({ value, onChange, onDone }: RegexBuilderProps): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   const patternRef = useRef<HTMLInputElement>(null)
   const [sample, setSample] = useState('')
   const [replacement, setReplacement] = useState('')
@@ -122,25 +124,25 @@ export function RegexBuilder({ value, onChange, onDone }: RegexBuilderProps): Re
       {/* ---- token palette + preset library ---- */}
       <aside className="md3-regex-builder__palette">
         <div className="md3-regex-builder__head">
-          <span className="md3-regex-builder__title">Regex Builder</span>
+          <span className="md3-regex-builder__title">{vocab('Regex Builder')}</span>
           <span className="md3-regex-builder__engine-chip" title={REGEX_ENGINE_NOTE}>
             {REGEX_ENGINE_NAME}
           </span>
         </div>
-        <p className="md3-regex-builder__note">{REGEX_ENGINE_NOTE}</p>
+        <p className="md3-regex-builder__note">{vocab(REGEX_ENGINE_NOTE)}</p>
         <div className="md3-regex-builder__token-search">
           <IconSearch />
           <input
             value={tokQuery}
             onChange={(e) => setTokQuery(e.target.value)}
-            placeholder="Filter tokens…"
+            placeholder={vocab('Filter tokens…')}
             spellCheck={false}
-            aria-label="Filter regex tokens by name or description"
+            aria-label={vocab('Filter regex tokens by name or description')}
           />
         </div>
         <div className="md3-regex-builder__palette-scroll">
           {filteredGroups.length === 0 && (
-            <p className="md3-regex-builder__empty-note">No tokens match &ldquo;{tokQuery}&rdquo;.</p>
+            <p className="md3-regex-builder__empty-note">{vocab('No tokens match')} &ldquo;{tokQuery}&rdquo;.</p>
           )}
           {filteredGroups.map((g) => (
             <section key={g.title} className="md3-regex-builder__token-section">
@@ -162,7 +164,7 @@ export function RegexBuilder({ value, onChange, onDone }: RegexBuilderProps): Re
             </section>
           ))}
           <section className="md3-regex-builder__token-section">
-            <h3 className="md3-regex-builder__section-title">Preset library</h3>
+            <h3 className="md3-regex-builder__section-title">{vocab('Preset library')}</h3>
             <div className="md3-regex-builder__preset-list">
               {REGEX_PRESETS.map((p) => (
                 <button key={p.name} type="button" className="md3-regex-builder__preset" onClick={() => usePreset(p)}>
@@ -178,23 +180,23 @@ export function RegexBuilder({ value, onChange, onDone }: RegexBuilderProps): Re
       {/* ---- pattern / sample / live highlight / substitution ---- */}
       <section className="md3-regex-builder__main">
         <div className="md3-regex-builder__row-head">
-          <span className="md3-regex-builder__label">Pattern</span>
+          <span className="md3-regex-builder__label">{vocab('Pattern')}</span>
           <span className="md3-regex-builder__spacer" />
           <span className="md3-regex-builder__count">
             {value.pattern.length} / {MAX_PATTERN_LENGTH}
           </span>
           <button type="button" className="md3-regex-builder__chip-btn" onClick={copyLiteral}>
             <IconDuplicate />
-            {copied ? 'Copied' : 'Copy /literal/'}
+            {vocab(copied ? 'Copied' : 'Copy /literal/')}
           </button>
           <button
             type="button"
             className="md3-regex-builder__chip-btn"
-            title="Escape the whole pattern so it matches itself as literal text"
+            title={vocab('Escape the whole pattern so it matches itself as literal text')}
             onClick={escapeLiteral}
           >
             <IconRegexQuote />
-            Escape literal
+            {vocab('Escape literal')}
           </button>
           <button
             type="button"
@@ -214,14 +216,14 @@ export function RegexBuilder({ value, onChange, onDone }: RegexBuilderProps): Re
             spellCheck={false}
             placeholder="pattern"
             maxLength={MAX_PATTERN_LENGTH}
-            aria-label="Regex pattern"
+            aria-label={vocab('Regex pattern')}
             onChange={(e) => onChange({ ...value, pattern: e.target.value })}
           />
           <span className="md3-regex-builder__slash">/</span>
           <span className="md3-regex-builder__flag-string">{value.flags}</span>
         </div>
 
-        <div className="md3-regex-builder__flag-row" role="group" aria-label="Regex flags">
+        <div className="md3-regex-builder__flag-row" role="group" aria-label={vocab('Regex flags')}>
           {REGEX_FLAGS.map((f) => {
             const on = value.flags.includes(f.flag)
             return (
@@ -256,7 +258,7 @@ export function RegexBuilder({ value, onChange, onDone }: RegexBuilderProps): Re
         )}
 
         <div className="md3-regex-builder__row-head md3-regex-builder__row-head--mt">
-          <span className="md3-regex-builder__label">Sample text</span>
+          <span className="md3-regex-builder__label">{vocab('Sample text')}</span>
           <span className="md3-regex-builder__spacer" />
           <span className="md3-regex-builder__count">
             {sample.length} / {MAX_SAMPLE_LENGTH}
@@ -270,12 +272,12 @@ export function RegexBuilder({ value, onChange, onDone }: RegexBuilderProps): Re
           placeholder="Paste text to test your pattern against — evaluated locally, never sent anywhere."
           value={sample}
           maxLength={MAX_SAMPLE_LENGTH}
-          aria-label="Sample text to test the pattern against"
+          aria-label={vocab('Sample text to test the pattern against')}
           onChange={(e) => setSample(e.target.value)}
         />
 
         <div className="md3-regex-builder__row-head md3-regex-builder__row-head--mt">
-          <span className="md3-regex-builder__label">Live highlight</span>
+          <span className="md3-regex-builder__label">{vocab('Live highlight')}</span>
           <span
             className={`md3-regex-builder__match-badge${
               safe.status === 'ok' && safe.matches.length > 0 ? ' md3-regex-builder__match-badge--hit' : ''
@@ -287,9 +289,9 @@ export function RegexBuilder({ value, onChange, onDone }: RegexBuilderProps): Re
             capped at {MAX_MATCHES} · zero-width safe
           </span>
         </div>
-        <div className="md3-regex-builder__highlight" aria-label="Sample text with matches highlighted">
-          {!value.pattern.trim() && <span className="md3-regex-builder__muted">Enter a pattern to see matches.</span>}
-          {value.pattern.trim() && safe.status === 'running' && <span className="md3-regex-builder__muted">Matching…</span>}
+        <div className="md3-regex-builder__highlight" aria-label={vocab('Sample text with matches highlighted')}>
+          {!value.pattern.trim() && <span className="md3-regex-builder__muted">{vocab('Enter a pattern to see matches.')}</span>}
+          {value.pattern.trim() && safe.status === 'running' && <span className="md3-regex-builder__muted">{vocab('Matching…')}</span>}
           {safe.status === 'timeout' && <span className="md3-regex-builder__error-text">{safe.error}</span>}
           {safe.status === 'error' && <span className="md3-regex-builder__error-text">{safe.error}</span>}
           {safe.status === 'ok' &&
@@ -310,14 +312,14 @@ export function RegexBuilder({ value, onChange, onDone }: RegexBuilderProps): Re
                     <span key={i}>{seg.text}</span>
                   )
                 )
-              : <span className="md3-regex-builder__muted">Paste sample text above to preview matches.</span>)}
+              : <span className="md3-regex-builder__muted">{vocab('Paste sample text above to preview matches.')}</span>)}
           {safe.status === 'ok' && safe.truncated && (
             <div className="md3-regex-builder__truncated-note">Stopped at the display limit — more matches exist.</div>
           )}
         </div>
 
         <div className="md3-regex-builder__row-head md3-regex-builder__row-head--mt">
-          <span className="md3-regex-builder__label">Substitution</span>
+          <span className="md3-regex-builder__label">{vocab('Substitution')}</span>
           <span className="md3-regex-builder__hint md3-regex-builder__hint--mono">
             $1 · $&lt;name&gt; · $&amp; · $` · $&apos;
           </span>
@@ -327,7 +329,7 @@ export function RegexBuilder({ value, onChange, onDone }: RegexBuilderProps): Re
           value={replacement}
           spellCheck={false}
           placeholder="Replacement…"
-          aria-label="Replacement text for substitution preview"
+          aria-label={vocab('Replacement text for substitution preview')}
           onChange={(e) => setReplacement(e.target.value)}
         />
         <div className="md3-regex-builder__substituted">
@@ -335,7 +337,7 @@ export function RegexBuilder({ value, onChange, onDone }: RegexBuilderProps): Re
             sample ? (
               safe.substituted
             ) : (
-              <span className="md3-regex-builder__muted">Paste sample text above to preview the substitution.</span>
+              <span className="md3-regex-builder__muted">{vocab('Paste sample text above to preview the substitution.')}</span>
             )
           ) : (
             <span className="md3-regex-builder__muted">
@@ -347,7 +349,7 @@ export function RegexBuilder({ value, onChange, onDone }: RegexBuilderProps): Re
 
       {/* ---- matches & capture groups + explanation ---- */}
       <aside className="md3-regex-builder__side">
-        <h3 className="md3-regex-builder__section-title">Matches &amp; capture groups</h3>
+        <h3 className="md3-regex-builder__section-title">{vocab('Matches & capture groups')}</h3>
         <div className="md3-regex-builder__match-cards">
           {safe.status === 'ok' &&
             safe.matches.slice(0, 12).map((m, i) => (
@@ -372,7 +374,7 @@ export function RegexBuilder({ value, onChange, onDone }: RegexBuilderProps): Re
               </div>
             ))}
           {safe.status === 'ok' && safe.matches.length === 0 && (
-            <div className="md3-regex-builder__no-matches">No matches in the sample.</div>
+            <div className="md3-regex-builder__no-matches">{vocab('No matches in the sample.')}</div>
           )}
           {safe.status !== 'ok' && (
             <div className="md3-regex-builder__no-matches">
@@ -381,9 +383,9 @@ export function RegexBuilder({ value, onChange, onDone }: RegexBuilderProps): Re
           )}
         </div>
 
-        <h3 className="md3-regex-builder__section-title md3-regex-builder__section-title--mt">Explanation</h3>
+        <h3 className="md3-regex-builder__section-title md3-regex-builder__section-title--mt">{vocab('Explanation')}</h3>
         <div className="md3-regex-builder__explain-rows">
-          {explanation.length === 0 && <p className="md3-regex-builder__empty-note">Nothing to explain yet.</p>}
+          {explanation.length === 0 && <p className="md3-regex-builder__empty-note">{vocab('Nothing to explain yet.')}</p>}
           {explanation.map((e, i) => (
             <div key={i} className="md3-regex-builder__explain-row" style={{ paddingLeft: e.depth * 12 }}>
               <span className="md3-regex-builder__explain-tok">{e.tok}</span>
