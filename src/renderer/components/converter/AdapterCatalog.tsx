@@ -49,6 +49,10 @@ export function AdapterCatalog({ catalog, selectedId, onSelect, suggestedIds }: 
   )
 }
 
+export function adapterSearchCorpus(row: ConverterAdapterDescriptor): string {
+  return `${row.id} ${row.label} ${row.unavailableReason ?? ''}`
+}
+
 function AdapterCategory({
   category,
   rows,
@@ -71,7 +75,7 @@ function AdapterCategory({
   const search = useRegexSearchField()
   const searchInputRef = useRef<HTMLInputElement>(null)
   const categoryLabel = vocab(CONVERTER_CATEGORY_LABELS[category])
-  const visible = rows.filter((row) => search.test(`${row.id} ${row.label} ${row.unavailableReason ?? ''}`))
+  const visible = rows.filter((row) => search.test(adapterSearchCorpus(row)))
   const bundledCount = rows.filter((row) => row.available).length
   return (
     <section className="cv-cat">

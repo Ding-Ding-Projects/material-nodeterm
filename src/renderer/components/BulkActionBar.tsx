@@ -147,8 +147,8 @@ export function BulkActionBar<T>({
           promises and what the action actually touches cannot drift apart. */}
       {pending && (
         <BulkActionPreview
-          title={vocab(pending.label)}
-          titleAlreadyMapped
+          title={pending.label}
+          titleSegments={[copy(pending.label)]}
           // The RUNNABLE set, not the whole selection: the preview adds excluded.length back on
           // to state the total, so passing everything counted each excluded row twice —
           // 3 selected with 1 excluded rendered "3 of 4 selected will change", one more of

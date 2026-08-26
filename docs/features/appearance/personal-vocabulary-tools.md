@@ -49,10 +49,11 @@ Mixed sentences use the typed segment helper in `src/renderer/lib/personalVocabu
 | `fact` | Concatenates byte-for-byte without mapping | Paths, model names, colours, patterns, revisions, counts, diagnostics |
 
 `ConfirmDialog.messageSegments` and the bulk preview use the same contract for confirmation sentences.
-The focused
-`ownedCopy.test.ts` test proves both that application copy changes and that a fact containing mapped
-terms remains unchanged. This is evidence of the field-level boundary, not a claim of packaged or
-runtime verification.
+The focused `ownedCopy.test.ts` test proves the primitive boundary, while
+`productionConsumers.test.ts` exercises the production formatting consumers for bulk previews,
+appearance imports, converter detection, adapter search, model catalogue and staleness, project
+switching, documentation counts, history restore, and changelog outcomes. These are source and
+component-consumer evidence, not a claim of packaged or runtime verification.
 
 The School mode policy still suppresses the mapper until its shared record has been read successfully.
 No file loaded means the shipped wording is returned unchanged. A rejected, malformed, stale, or

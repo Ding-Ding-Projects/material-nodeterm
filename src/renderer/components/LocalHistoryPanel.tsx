@@ -43,6 +43,13 @@ import { Checkbox } from '@renderer/ui/md3'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { copy, fact } from '../lib/personalVocabulary/ownedCopy'
 
+export function historyRestoreMessageSegments(label: string, sha: string) {
+  return [
+    copy('Restore to "'), fact(label), copy('" ('), fact(sha.slice(0, 7)),
+    copy(')? This applies that old revision as a NEW save — it does not delete anything from the history, and you can restore forward again afterward.')
+  ]
+}
+
 export interface LocalHistoryPanelProps {
   domain: string
   title: string
@@ -366,13 +373,7 @@ export function LocalHistoryPanel({ domain, title }: LocalHistoryPanelProps): JS
       {restoring && (
         <ConfirmDialog
           message=""
-          messageSegments={[
-            copy('Restore to "'),
-            fact(restoring.label),
-            copy('" ('),
-            fact(restoring.sha.slice(0, 7)),
-            copy(')? This applies that old revision as a NEW save — it does not delete anything from the history, and you can restore forward again afterward.')
-          ]}
+          messageSegments={historyRestoreMessageSegments(restoring.label, restoring.sha)}
           confirmLabel={restoreBusy ? 'Restoring…' : 'Restore'}
           onConfirm={() => void restore()}
           onCancel={() => setRestoring(null)}

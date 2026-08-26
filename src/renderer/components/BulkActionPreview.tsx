@@ -7,10 +7,15 @@ import { ConfirmDialog } from './ConfirmDialog'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { copy, fact } from '../lib/personalVocabulary/ownedCopy'
 
+export function bulkPreviewMessageSegments(title: string, willChange: number, totalSelected: number) {
+  return totalSelected === willChange
+    ? [copy(title), copy(': '), fact(String(willChange)), copy(` item${willChange === 1 ? '' : 's'}.`)]
+    : [copy(title), copy(': '), fact(String(willChange)), copy(' of '), fact(String(totalSelected)), copy(' selected will change.')]
+}
+
 export interface BulkActionPreviewProps<T> {
   title: string
-  /** Set when the caller already mapped this application-owned action label. */
-  titleAlreadyMapped?: boolean
+  titleSegments?: readonly ReturnType<typeof copy>[]
   items: T[]
   describe: (item: T) => string
   excluded: { item: T; reason: string }[]
@@ -24,7 +29,7 @@ const MAX_LISTED = 12
 
 export function BulkActionPreview<T>({
   title,
-  titleAlreadyMapped = false,
+  titleSegments,
   items,
   describe,
   excluded,
@@ -39,16 +44,16 @@ export function BulkActionPreview<T>({
   const listed = items.slice(0, MAX_LISTED)
   const hiddenCount = items.length - listed.length
 
+  const titleCopy = titleSegments ?? [copy(title)]
   const messageSegments = totalSelected === willChange
-    ? [titleAlreadyMapped ? fact(title) : copy(title), copy(': '), fact(String(willChange)), copy(` item${willChange === 1 ? '' : 's'}.`)]
-    : [titleAlreadyMapped ? fact(title) : copy(title), copy(': '), fact(String(willChange)), copy(' of '), fact(String(totalSelected)), copy(' selected will change.')]
+    ? [...titleCopy, copy(': '), fact(String(willChange)), copy(` item${willChange === 1 ? '' : 's'}.`)]
+    : [...titleCopy, copy(': '), fact(String(willChange)), copy(' of '), fact(String(totalSelected)), copy(' selected will change.')]
 
   return (
     <ConfirmDialog
       message=""
       messageSegments={messageSegments}
       confirmLabel={busy ? 'Working…' : title}
-      confirmLabelAlreadyMapped={titleAlreadyMapped && !busy}
       // The label alone never stopped a second submit — pass it through so the button disables.
       busy={busy}
       cancelLabel="Cancel"

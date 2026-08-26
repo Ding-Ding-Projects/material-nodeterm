@@ -790,7 +790,7 @@ function catalogHeadlineText(
   }
 }
 
-function catalogStalenessSegments(
+export function catalogStalenessSegments(
   view: CatalogView,
   now: number
 ): readonly DisplaySegment[] | null {
@@ -812,6 +812,14 @@ function catalogStalenessSegments(
     default:
       return null
   }
+}
+
+export function ollamaPageSummarySegments(page: CatalogPage) {
+  return [
+    copy('Showing '), fact(String(page.from)), copy('–'), fact(String(page.to)), copy(' of '),
+    fact(String(page.total)), copy(' matching references (page '), fact(String(page.page)), copy(' of '),
+    fact(String(page.pageCount)), copy(').')
+  ]
 }
 
 function StoreTab({
@@ -941,11 +949,7 @@ function StoreTab({
             ? catalog && catalog.rows.length > 0
               ? vocab('No catalog row matches this search or filter.')
               : vocab('No rows are listed. See the catalog state above for whether that is a load failure or a catalog that is genuinely still being fetched.')
-            : mapOwnedSentence(vocab, [
-              copy('Showing '), fact(String(page.from)), copy('–'), fact(String(page.to)), copy(' of '),
-              fact(String(page.total)), copy(' matching references (page '), fact(String(page.page)), copy(' of '),
-              fact(String(page.pageCount)), copy(').')
-            ])}
+            : mapOwnedSentence(vocab, ollamaPageSummarySegments(page))}
         </p>
         <ul className="om-model-list">
           {page.rows.map((row) => (

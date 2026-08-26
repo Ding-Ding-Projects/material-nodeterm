@@ -27,6 +27,10 @@ import { useDocsBundle } from './docs/useDocsBundle'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { copy, fact, mapOwnedSentence } from '../lib/personalVocabulary/ownedCopy'
 
+export function docsArticleCountSegments(count: number, suffix: string) {
+  return [fact(String(count)), copy(` ${suffix}`)]
+}
+
 /** Re-running a ~25k-line scan on every keystroke is the difference between instant and janky, so
  *  the search settles first. Short enough that it still reads as live typing. */
 const SEARCH_DEBOUNCE_MS = 180
@@ -224,7 +228,7 @@ export function DocsBrowser(): JSX.Element {
         <div className="md3-docs__heading">
           <div className="md3-docs__title">{vocab('Documentation')}</div>
           <div className="md3-docs__subtitle">
-            {mapOwnedSentence(vocab, [fact(String(articles.length)), copy(` article${articles.length === 1 ? '' : 's'}, bundled with this build — no network needed`)])}
+            {mapOwnedSentence(vocab, docsArticleCountSegments(articles.length, `article${articles.length === 1 ? '' : 's'}, bundled with this build — no network needed`))}
           </div>
         </div>
         <div className="md3-docs__search md3-history-search">
@@ -362,7 +366,7 @@ function DocsResults({
   return (
     <div className="md3-docs__results">
       <div className="md3-docs__results-count">
-        {mapOwnedSentence(vocab, [fact(String(results.length)), copy(` article${results.length === 1 ? '' : 's'} match`)])}
+        {mapOwnedSentence(vocab, docsArticleCountSegments(results.length, `article${results.length === 1 ? '' : 's'} match`))}
       </div>
       {results.map((hit) => (
         <button key={hit.path} type="button" className="md3-docs__result" onClick={() => onOpen(hit)}>

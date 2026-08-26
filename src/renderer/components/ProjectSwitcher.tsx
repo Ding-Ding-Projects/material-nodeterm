@@ -39,6 +39,16 @@ import { LockWizard } from './toylocks/LockWizard'
 import { UnlockPrompt } from './toylocks/UnlockPrompt'
 import { ConfirmDialog } from './ConfirmDialog'
 
+export function unreadCountSegments(count: number, suffix = ' unread') {
+  return [fact(String(count)), copy(suffix)]
+}
+
+export function projectStorageMessageSegments(action: 'split' | 'join', name: string, size: number, unit: string) {
+  return action === 'split'
+    ? [copy('Split "'), fact(name), copy('" into '), fact(String(size)), copy(' '), fact(unit), copy(' parts?')]
+    : [copy('Join "'), fact(name), copy('" back into a single '), fact('project.json'), copy('?')]
+}
+
 interface ProjectSwitcherProps {
   onSwitch: (id: string) => void
   /** Reconnect an offline (dropped) relay tab in place (Stage 4 Task 7). Called when an
@@ -404,7 +414,7 @@ export function ProjectSwitcher({
           />
           <span className="md3-switcher__name">{activeProject?.name ?? vocab('No project')}</span>
           {activeUnread > 0 && (
-            <span className="md3-switcher__badge" title={mapOwnedSentence(vocab, [fact(String(activeUnread)), copy(' unread')])}>
+            <span className="md3-switcher__badge" title={mapOwnedSentence(vocab, unreadCountSegments(activeUnread))}>
               {activeUnread}
             </span>
           )}
@@ -423,7 +433,7 @@ export function ProjectSwitcher({
         {otherUnread > 0 && (
           <span
             className="md3-switcher__more-badge"
-            title={mapOwnedSentence(vocab, [fact(String(otherUnread)), copy(' unread in other projects')])}
+            title={mapOwnedSentence(vocab, unreadCountSegments(otherUnread, ' unread in other projects'))}
           >
             +{otherUnread}
           </span>
@@ -610,7 +620,7 @@ export function ProjectSwitcher({
                       {multiSession && <ProjectSessionLabel projectId={p.id} />}
 
                       {unreadCount > 0 && (
-                        <span className="md3-switcher-row__badge" title={mapOwnedSentence(vocab, [fact(String(unreadCount)), copy(' unread')])}>
+                        <span className="md3-switcher-row__badge" title={mapOwnedSentence(vocab, unreadCountSegments(unreadCount))}>
                           {unreadCount}
                         </span>
                       )}
@@ -966,8 +976,8 @@ export function ProjectSwitcher({
           message=""
           messageSegments={
             storageConfirm.action === 'split'
-              ? [copy('Split "'), fact(projects.find((p) => p.id === storageConfirm.projectId)?.name ?? 'this project'), copy('" into '), fact(String(partSizeValue)), copy(' '), fact(partSizeUnit), copy(' parts?')]
-              : [copy('Join "'), fact(projects.find((p) => p.id === storageConfirm.projectId)?.name ?? 'this project'), copy('" back into a single '), fact('project.json'), copy('?')]
+              ? projectStorageMessageSegments('split', projects.find((p) => p.id === storageConfirm.projectId)?.name ?? 'this project', partSizeValue, partSizeUnit)
+              : projectStorageMessageSegments('join', projects.find((p) => p.id === storageConfirm.projectId)?.name ?? 'this project', partSizeValue, partSizeUnit)
           }
           body={
             <p>

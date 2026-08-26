@@ -22,6 +22,10 @@ import { Checkbox } from '@renderer/ui/md3'
 import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 import { copy, fact, mapOwnedSentence } from '../../lib/personalVocabulary/ownedCopy'
 
+export function detectionSummarySegments(note: string, confidence: 'high' | 'medium' | 'low') {
+  return [copy('Detection: '), fact(note), copy(' (confidence: '), fact(confidence), copy(')')]
+}
+
 export interface FileConverterPanelProps {
   onClose: () => void
 }
@@ -559,7 +563,7 @@ function FileConverterPanelForApi({
                     <span className="cv-pending__name">{f.path.split(/[\\/]/).pop()}</span>
                     <span className="cv-pending__meta">
                       {f.detection
-                        ? <>{vocab('Detection:')} {f.detection.note} ({vocab('confidence:')} {f.detection.confidence})</>
+                        ? mapOwnedSentence(vocab, detectionSummarySegments(f.detection.note, f.detection.confidence))
                         : vocab('inspecting…')}
                       {f.detection ? ` · ${formatBytes(f.detection.sizeBytes)}` : ''}
                     </span>

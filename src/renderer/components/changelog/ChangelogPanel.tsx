@@ -43,6 +43,10 @@ import { ReleaseCard } from './ReleaseCard'
 import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 import { copy, fact, mapOwnedSentence } from '../../lib/personalVocabulary/ownedCopy'
 
+export function changelogExportOutcomeSegments(kind: 'exported' | 'failed', count: number) {
+  return [fact(String(count)), copy(` ${kind}`)]
+}
+
 const PRESETS: DateRangePreset[] = ['30d', '90d', 'all']
 
 function releaseId(r: ChangelogRelease): string {
@@ -242,8 +246,8 @@ export function ChangelogPanel(): JSX.Element {
             actions={bulkActions}
             onActionComplete={(_id, result) => {
               const parts: string[] = []
-              if (result.succeeded.length > 0) parts.push(mapOwnedSentence(vocab, [fact(String(result.succeeded.length)), copy(' exported')]))
-              if (result.failed.length > 0) parts.push(mapOwnedSentence(vocab, [fact(String(result.failed.length)), copy(' failed')]))
+              if (result.succeeded.length > 0) parts.push(mapOwnedSentence(vocab, changelogExportOutcomeSegments('exported', result.succeeded.length)))
+              if (result.failed.length > 0) parts.push(mapOwnedSentence(vocab, changelogExportOutcomeSegments('failed', result.failed.length)))
               setExportResult(parts.length > 0 ? parts.join(', ') : null)
               if (parts.length > 0) setTimeout(() => setExportResult(null), 6000)
             }}

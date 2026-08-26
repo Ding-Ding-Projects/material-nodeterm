@@ -60,6 +60,13 @@ const WEIGHTS = [
   { v: 900, label: '900 — Black' }
 ]
 
+export function appearanceImportSummarySegments(imported: number, invalid: number, duplicates: number) {
+  return [
+    copy('Imported '), fact(String(imported)), copy('. Skipped '), fact(String(invalid)),
+    copy(' invalid, '), fact(String(duplicates)), copy(' duplicate name(s).')
+  ]
+}
+
 /**
  * The non-modal, anchored per-element appearance editor (docs/appearance.md). One instance is
  * mounted by `AppearanceEditorHost`; it opens beside whatever element `openAppearanceEditor(...)`
@@ -702,10 +709,7 @@ function PresetsTab({
           appearancePresets: [...useSettings.getState().settings.appearancePresets, p]
         })
       }
-      setImportMsg(mapOwnedSentence(vocab, [
-        copy('Imported '), fact(String(result.imported.length)), copy('. Skipped '), fact(String(result.skippedInvalid)),
-        copy(' invalid, '), fact(String(result.skippedDuplicateNames)), copy(' duplicate name(s).')
-      ]))
+      setImportMsg(mapOwnedSentence(vocab, appearanceImportSummarySegments(result.imported.length, result.skippedInvalid, result.skippedDuplicateNames)))
     }
     reader.readAsText(file)
   }
