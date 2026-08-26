@@ -757,6 +757,14 @@ const api: NodeTerminalApi = {
     listDevices: () => ipcRenderer.invoke(IPC.pairingListDevices),
     revokeDevice: (id) => ipcRenderer.invoke(IPC.pairingRevokeDevice, id)
   },
+  // Mutually-approved relay peers (a phone, or another desktop) that can reach this machine's
+  // terminals. Both channels are raw-ipcMain, host-security control plane — never reachable by a
+  // relay peer itself (see RELAY_LOCAL_ONLY_METHODS in platform-electron.ts).
+  relayPeers: {
+    supported: true,
+    list: () => ipcRenderer.invoke(IPC.remoteListApprovedPeers),
+    revoke: (peerKeyB64) => ipcRenderer.invoke(IPC.remoteRevokePeer, peerKeyB64)
+  },
   // Team presence. `hello` is the only request (its response is how this client learns its OWN
   // ClientId, without which it would draw its own cursor as a peer's); the publishers are
   // fire-and-forget sends, and the two event channels are subscriptions. Nothing is persisted.

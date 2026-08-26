@@ -131,7 +131,8 @@ export const GUARDED_ACTIONS = [
   'remove-worktree',
   'remove-account',
   'remove-authenticator',
-  'revoke-device'
+  'revoke-device',
+  'revoke-relay-peer'
 ] as const
 
 export type GuardedAction = (typeof GUARDED_ACTIONS)[number]

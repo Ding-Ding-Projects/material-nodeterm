@@ -27,7 +27,13 @@ const RELAY_LOCAL_ONLY_METHODS = new Set<string>([
   IPC.terminalProfilesRefresh,
   IPC.ptyRecycleConfirmed,
   IPC.ptyExecuteLaunchIntent,
-  IPC.workspaceSave
+  IPC.workspaceSave,
+  // Host-security control plane (registered on raw ipcMain, never on this CorePlatform table, so
+  // dispatch's handler lookup already misses them) — listed here too as defense in depth and as
+  // the explicit, reviewable statement that a relay peer must never revoke anyone or enumerate who
+  // else is trusted.
+  IPC.remoteRevokePeer,
+  IPC.remoteListApprovedPeers
 ])
 
 /** Sanitize only the copy crossing into a relay sink; the local window keeps its live overlay. */

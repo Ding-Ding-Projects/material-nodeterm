@@ -1430,6 +1430,13 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC.remoteRevokePeer, (_e, peerKeyB64: string) =>
     peerRevoker.revoke(String(peerKeyB64))
   )
+  // Read-only companion to the revoker: who is currently pinned. Same host-security control plane
+  // as the revoke handler above, so it stays on raw ipcMain — a remote peer must never learn the
+  // full trust list either.
+  ipcMain.handle(IPC.remoteListApprovedPeers, async () => {
+    const store = await loadApprovedDevices()
+    return store.pubkeys
+  })
 
   ipcMain.on(IPC.shellReveal, (_e, p: string) => {
     if (p) shell.showItemInFolder(p)

@@ -74,7 +74,8 @@ describe('every GuardedAction is actually wired to something', () => {
       'destructive-gate',
     'remove-authenticator': () =>
       planAuthenticatorRemoval(entry, true).confirmation === 'destructive-gate',
-    'revoke-device': () => requiresDestructiveGate('revoke-device', true).required
+    'revoke-device': () => requiresDestructiveGate('revoke-device', true).required,
+    'revoke-relay-peer': () => requiresDestructiveGate('revoke-relay-peer', true).required
   }
 
   it('has one executable planner for every runtime registry member, in both directions', () => {
