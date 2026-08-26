@@ -594,6 +594,24 @@ export const IPC = {
   // Shell → renderer: one multiplexed status/console stream, like ollama:chat-stream above.
   // Payload: MinecraftEvent. A listener filters to the instance id it owns.
   minecraftEvent: 'minecraft:event',
+  // Local WebTorrent downloader. Task state remains machine-local; only explicit task events cross
+  // the shell bridge. See shared/torrent.ts and core/torrent/.
+  torrentRuntime: 'torrent:runtime',
+  torrentList: 'torrent:list',
+  torrentInspect: 'torrent:inspect',
+  torrentAdd: 'torrent:add',
+  torrentChooseFiles: 'torrent:choose-files',
+  torrentSetDestination: 'torrent:set-destination',
+  torrentPreflight: 'torrent:preflight',
+  torrentStart: 'torrent:start',
+  torrentPause: 'torrent:pause',
+  torrentResume: 'torrent:resume',
+  torrentCancel: 'torrent:cancel',
+  torrentRetry: 'torrent:retry',
+  torrentRemove: 'torrent:remove',
+  torrentSetSeedPolicy: 'torrent:set-seed-policy',
+  torrentReconcile: 'torrent:reconcile',
+  torrentTask: 'torrent:task',
   // "Open in Visual Studio Code" (src/core/vscode-detect.ts, src/core/vscode-handlers.ts).
   // Registered on BOTH shells via the generic `platform.handle` seam, so it opens VS Code on
   // whichever machine is actually running the shell (this desktop, or the Server Edition host).

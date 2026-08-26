@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add the Torrent Downloader canvas node with packaged or pinned user-scoped WebTorrent runtime
+  discovery, magnet and `.torrent` intake, metadata/file selection, safe destination preflight,
+  progress/speed/peer/ETA reporting, pause/resume/cancel/retry, restart reconciliation, bounded
+  per-task seeding, and machine-local task persistence. The ultra-speed lane intentionally did not
+  run tests, builds, packaging, installer execution, runtime interaction checks, or captures.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

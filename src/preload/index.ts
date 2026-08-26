@@ -26,6 +26,7 @@ import type { ClientId, PeerDiff, PeerIdentity, PeerState } from '../shared/pres
 import type { ConvertQueueItem, ConverterQueueState } from '../shared/converter'
 import type { PullQueueItem, PullQueueState } from '../shared/ollama'
 import type { MinecraftEvent } from '../shared/minecraft'
+import type { TorrentTaskState } from '../shared/torrent'
 
 // Fan a single ipcRenderer listener per channel out to many renderer subscribers. Without
 // this, every node that subscribes (e.g. Cmd+M markdown toggle on each terminal/editor) adds
@@ -70,6 +71,7 @@ const subscribeOllamaChatStream = subscribe<
   [{ sessionId: string; kind: 'token' | 'done' | 'error' | 'stopped'; delta?: string; error?: string }]
 >(IPC.ollamaChatStream)
 const subscribeMinecraftEvent = subscribe<[MinecraftEvent]>(IPC.minecraftEvent)
+const subscribeTorrentTask = subscribe<[TorrentTaskState]>(IPC.torrentTask)
 const subscribeWidgetState = subscribe<[CanvasWidgetLiveState]>(IPC.widgetStateChanged)
 
 const subscribeRelayPeerPending = subscribe<[RelayPeerPending]>(IPC.relayHostPeerPending)
@@ -942,6 +944,24 @@ const api: NodeTerminalApi = {
     restoreBackup: (id, backupId) => ipcRenderer.invoke(IPC.minecraftBackupRestore, id, backupId),
     deleteBackup: (id, backupId) => ipcRenderer.invoke(IPC.minecraftBackupDelete, id, backupId),
     onEvent: (listener) => subscribeMinecraftEvent(listener)
+  },
+  torrent: {
+    runtime: () => ipcRenderer.invoke(IPC.torrentRuntime),
+    list: (nodeId) => ipcRenderer.invoke(IPC.torrentList, nodeId),
+    inspect: (input) => ipcRenderer.invoke(IPC.torrentInspect, input),
+    add: (input) => ipcRenderer.invoke(IPC.torrentAdd, input),
+    chooseFiles: (id, paths) => ipcRenderer.invoke(IPC.torrentChooseFiles, id, paths),
+    setDestination: (id, destination) => ipcRenderer.invoke(IPC.torrentSetDestination, id, destination),
+    preflight: (id) => ipcRenderer.invoke(IPC.torrentPreflight, id),
+    start: (id) => ipcRenderer.invoke(IPC.torrentStart, id),
+    pause: (id) => ipcRenderer.invoke(IPC.torrentPause, id),
+    resume: (id) => ipcRenderer.invoke(IPC.torrentResume, id),
+    cancel: (id) => ipcRenderer.invoke(IPC.torrentCancel, id),
+    retry: (id) => ipcRenderer.invoke(IPC.torrentRetry, id),
+    remove: (id) => ipcRenderer.invoke(IPC.torrentRemove, id),
+    setSeedPolicy: (id, policy) => ipcRenderer.invoke(IPC.torrentSetSeedPolicy, id, policy),
+    reconcile: () => ipcRenderer.invoke(IPC.torrentReconcile),
+    onTask: (listener) => subscribeTorrentTask(listener)
   }
 }
 

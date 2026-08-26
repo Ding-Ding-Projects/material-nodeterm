@@ -25,6 +25,7 @@ import { useSettings } from './settings'
 import type { SessionSource } from '../session/session'
 import { supportsWindowsTerminalProfiles } from './terminal-profiles'
 import type { AnnotationRect, AnnotationVariant } from '../lib/annotation'
+import { TORRENT_NODE_CATALOG_ENTRY } from '@shared/torrent'
 
 // Re-exported so Canvas (and anything else in the renderer) keeps importing it from here, while the
 // single implementation lives in src/shared and is shared with the relay host + the canvas-sync
@@ -57,6 +58,7 @@ const VIDEO_SIZE = { width: 640, height: 420 }
 const WEB_SIZE = { width: 720, height: 520 }
 const BROWSER_SIZE = { width: 800, height: 560 }
 const NATIVE_LOOP_SIZE = { width: 340, height: 280 }
+export const TORRENT_SIZE = { width: 620, height: 520 }
 /** Fallback bounding box `flowToNodeStates` uses if an annotation node somehow has no live
  *  width/height at all (every production creation path draws a real rect — see createAnnotationNode
  *  — so this is a defensive floor, matching how every other kind gets a fallback in `sizeFor`). */
@@ -172,6 +174,8 @@ export interface NodeData {
   /** service-kinds only, MACHINE-LOCAL: where this node reaches its service. Stripped from the
    *  shared document and from inbound peers; see shared/node-exec.ts. */
   serviceConnection?: ServiceConnection
+  /** Safe torrent magnet intent shared with the canvas. */
+  torrentMagnet?: string
   /** nsis-only, GIT-SHARED: the installer's description. See `NsisSpec`. */
   nsisSpec?: NsisSpec
   /** nsis-only, MACHINE-LOCAL: absolute source/license/icon paths on this machine. Stripped
@@ -962,6 +966,25 @@ export function createAuthenticatorNode(index: number, center?: { x: number; y: 
   }
 }
 
+/** Creates a torrent downloader node. Magnet intent is safe project content; task state, source
+ * file paths, destinations and runtime handles remain on the owning machine. */
+export function createTorrentNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  return {
+    id: nextId('torrent'),
+    type: 'torrent',
+    position: placeAt(center, index, TORRENT_SIZE.width, TORRENT_SIZE.height),
+    width: TORRENT_SIZE.width,
+    height: TORRENT_SIZE.height,
+    style: { width: TORRENT_SIZE.width, height: TORRENT_SIZE.height },
+    data: {
+      title: TORRENT_NODE_CATALOG_ENTRY.label,
+      color: NODE_COLORS[(index + 2) % NODE_COLORS.length],
+      group: null,
+      torrentMagnet: ''
+    }
+  }
+}
+
 export function createStickyNode(index: number, center?: { x: number; y: number }): CanvasNode {
   return {
     id: nextId('sticky'),
@@ -1466,7 +1489,8 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   gitlab: true,
   homeassistant: true,
   freepbx: true,
-  nsis: true
+  nsis: true,
+  torrent: true
 }
 
 /**
@@ -1505,7 +1529,8 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   gitlab: SERVICE_SUMMARY_SIZE,
   homeassistant: SERVICE_SUMMARY_SIZE,
   freepbx: SERVICE_SUMMARY_SIZE,
-  nsis: NSIS_SIZE
+  nsis: NSIS_SIZE,
+  torrent: TORRENT_SIZE
 }
 
 /** A `Set`, not `type in NODE_KIND_TABLE`: `in` walks the prototype, so `'constructor'` and
@@ -1915,6 +1940,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         cwd: n.cwd,
         text: n.text,
         serviceLabel: n.serviceLabel,
+        torrentMagnet: n.torrentMagnet,
         serviceConnection: n.serviceConnection,
         nsisSpec: n.nsisSpec,
         nsisLocalPaths: n.nsisLocalPaths,
@@ -1990,6 +2016,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         cwd: n.data.cwd,
         text: n.data.text,
         serviceLabel: n.data.serviceLabel,
+        torrentMagnet: n.data.torrentMagnet,
         serviceConnection: n.data.serviceConnection,
         nsisSpec: n.data.nsisSpec,
         nsisLocalPaths: n.data.nsisLocalPaths,

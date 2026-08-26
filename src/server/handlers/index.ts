@@ -9,6 +9,7 @@ import { registerFsHandlers } from '../../core/fs-handlers'
 import { registerConverterIpc } from '../../core/converter/register-ipc'
 import { registerOllamaIpc } from '../../core/ollama/register-ipc'
 import { registerMinecraftIpc } from '../../core/minecraft/register-ipc'
+import { registerTorrentIpc } from '../../core/torrent/register-ipc'
 import type { MinecraftServerManager } from '../../core/minecraft/server-manager'
 import { registerVsCodeHandlers } from '../../core/vscode-handlers'
 import { LocalHistoryStore } from '../../core/local-history'
@@ -65,12 +66,14 @@ export function registerCoreHandlers(
   })
 
   // Universal file converter + local Ollama suite manager + local Minecraft server create-and-
-  // manage — the SAME registrars main/index.ts calls, over the SAME CorePlatform.handle seam, so
+  // manage + local Torrent Downloader — the SAME registrars main/index.ts calls, over the SAME
+  // CorePlatform.handle seam, so
   // the engine cannot drift between desktop and the browser. See docs/file-converter.md,
   // docs/ollama-manager.md and docs/minecraft-server-manager.md.
   registerConverterIpc(platform)
   registerOllamaIpc(platform)
   const { manager: minecraftServers } = registerMinecraftIpc(platform)
+  registerTorrentIpc(platform)
   // "Open in Visual Studio Code" + local settings history — same registrars the desktop shell
   // uses (src/main/index.ts), over the generic platform.handle seam, so the browser gets the
   // identical feature acting on the SERVER's own machine (docs/exports.md, docs/local-history.md).

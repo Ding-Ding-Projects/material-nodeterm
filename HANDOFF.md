@@ -1,5 +1,25 @@
 # Handoff
 
+## 2026-08-26, Torrent Downloader implementation lane
+
+Added the dedicated `torrent` canvas node, shared downloader contract, CorePlatform-backed service,
+IPC registration for Desktop and Server Edition, preload and WebSocket bridges, and the relay
+unsupported degrade. The service prefers the declared or packaged WebTorrent runtime and attempts a
+pinned user-scoped `webtorrent@2.8.1` install when it is absent. It keeps queue state under the
+application data directory, reconciles in-flight tasks after restart, reports metadata and selected
+files, validates destination containment and free space, and supports pause, resume, cancel, retry,
+progress, peer count, speed, ETA, and bounded seeding policies.
+
+The canvas record carries only safe display intent (`torrentMagnet`); local source paths,
+destinations, runtime handles, peer state, and task snapshots never enter the portable project
+file. Added the categorized torrent documentation and inventory entry. `package.json` and
+`package-lock.json` declare `webtorrent` 2.8.1.
+
+This ultra-speed implementation lane intentionally did not run tests, type checks, lint, builds,
+packaging, installer execution, runtime interaction, UI captures, commits, or dews. The docs bundle
+generation, focused tests, built-artifact interaction proof, release packaging, integration, and
+remote verification remain for the owning integration pass.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

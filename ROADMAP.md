@@ -153,7 +153,10 @@ intentionally unchecked because this task publishes the plan only.
 
 - [ ] Add Photo, Video, mixed-media Gallery, and wild Dim Sum nodes.
 - [ ] Add the categorized local file-converter and advanced media, archive, PDF, and OCR pipelines.
-- [ ] Add the bundled WebTorrent downloader with resumable per-task lifecycle.
+- [ ] Add the bundled WebTorrent downloader with resumable per-task lifecycle. The implementation
+      lane now contains the local runtime, guided intake, metadata selection, progress controls,
+      restart reconciliation, bounded seeding, and machine-local state; focused verification and
+      release evidence remain pending.
 - [ ] Add the bundled QEMU Linux ISO VM with persistent and disposable modes.
 - [ ] Add Home Assistant multi-instance controls and sensor displays.
 - [ ] Add Calendar, Timer, Alarm Clock, and planner occurrence services.

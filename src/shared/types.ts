@@ -373,6 +373,7 @@ export type NodeKind =
   | 'gitlab'
   | 'homeassistant'
   | 'freepbx'
+  | 'torrent'
 
 /**
  * The service kinds, as a runtime list. Exported because both the renderer (menu rows, one shared
@@ -507,6 +508,8 @@ export interface CanvasNodeState {
    * `localExec` on the index entry, exactly where the shell and Windows profile already live.
    */
   serviceLabel?: string
+  /** torrent-only: safe display intent shared with the canvas; task state and paths stay local. */
+  torrentMagnet?: string
   /**
    * service-kinds only, and MACHINE-LOCAL: where this node reaches its service. Stripped from
    * every project file we write and from every node arriving over the wire, then restored from the
@@ -3796,6 +3799,8 @@ export interface NodeTerminalApi {
   converter: import('./converter').ConverterApi
   /** Local Ollama suite manager — docs/ollama-manager.md. */
   ollama: import('./ollama').OllamaApi
+  /** Local WebTorrent downloader — docs/torrent-downloader.md. */
+  torrent: import('./torrent').TorrentApi
   /** Local Minecraft server create-and-manage — docs/minecraft-server-manager.md. */
   minecraft: import('./minecraft').MinecraftApi
   ssh: SshApi

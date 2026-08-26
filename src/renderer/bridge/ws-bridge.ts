@@ -18,6 +18,7 @@ import type { GitHubControlApi, GitHubIssuesApi } from '../../shared/github-issu
 import type { ConverterApi } from '../../shared/converter'
 import type { OllamaApi } from '../../shared/ollama'
 import type { MinecraftApi } from '../../shared/minecraft'
+import type { TorrentApi, TorrentTaskState } from '../../shared/torrent'
 import {
   UNKNOWN_CLAUDE_CLI_CAPS,
   type BoardLogApi,
@@ -956,6 +957,29 @@ export function buildMinecraftApi(client: RpcClient): Pick<NodeTerminalApi, 'min
   return { minecraft }
 }
 
+/** Local WebTorrent downloader, routed to the machine that owns this session. */
+export function buildTorrentApi(client: RpcClient): Pick<NodeTerminalApi, 'torrent'> {
+  const torrent: TorrentApi = {
+    runtime: () => client.request(IPC.torrentRuntime) as ReturnType<TorrentApi['runtime']>,
+    list: (nodeId) => client.request(IPC.torrentList, nodeId) as ReturnType<TorrentApi['list']>,
+    inspect: (input) => client.request(IPC.torrentInspect, input) as ReturnType<TorrentApi['inspect']>,
+    add: (input) => client.request(IPC.torrentAdd, input) as ReturnType<TorrentApi['add']>,
+    chooseFiles: (id, paths) => client.request(IPC.torrentChooseFiles, id, paths) as ReturnType<TorrentApi['chooseFiles']>,
+    setDestination: (id, destination) => client.request(IPC.torrentSetDestination, id, destination) as ReturnType<TorrentApi['setDestination']>,
+    preflight: (id) => client.request(IPC.torrentPreflight, id) as ReturnType<TorrentApi['preflight']>,
+    start: (id) => client.request(IPC.torrentStart, id) as ReturnType<TorrentApi['start']>,
+    pause: (id) => client.request(IPC.torrentPause, id) as ReturnType<TorrentApi['pause']>,
+    resume: (id) => client.request(IPC.torrentResume, id) as ReturnType<TorrentApi['resume']>,
+    cancel: (id) => client.request(IPC.torrentCancel, id) as ReturnType<TorrentApi['cancel']>,
+    retry: (id) => client.request(IPC.torrentRetry, id) as ReturnType<TorrentApi['retry']>,
+    remove: (id) => client.request(IPC.torrentRemove, id) as ReturnType<TorrentApi['remove']>,
+    setSeedPolicy: (id, policy) => client.request(IPC.torrentSetSeedPolicy, id, policy) as ReturnType<TorrentApi['setSeedPolicy']>,
+    reconcile: () => client.request(IPC.torrentReconcile) as ReturnType<TorrentApi['reconcile']>,
+    onTask: (listener) => client.subscribe(IPC.torrentTask, listener as (payload: TorrentTaskState) => void)
+  }
+  return { torrent }
+}
+
 /**
  * Build the `usage` namespace over an RpcClient. The server shell runs the same core usage
  * service the desktop does, so this is real end to end — including `onUpdate`, which subscribes
@@ -1375,6 +1399,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildConverterApi(client),
     ...buildOllamaApi(client),
     ...buildMinecraftApi(client),
+    ...buildTorrentApi(client),
     ...buildUsageApi(client),
     ...buildSessionMemoryApi(client),
     ...buildVsCodeApi(client),

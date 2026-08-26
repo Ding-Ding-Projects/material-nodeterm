@@ -101,6 +101,7 @@ and then never edited this file.
 | Feature | What is missing | Closes when | Notes |
 | --- | --- | --- | --- |
 | Status Hub | The registration half only. | `manual:the shared Hub is an external service; nothing in this repository can observe whether registration happened` | **Narrowed 2026-08-20, and the app half is now in the Shipped table above as its own contract row.** The surface shipped in `3e96ad78` — `src/renderer/components/StatusSurface.tsx`, `src/shared/project-status.ts`, `docs/status-surface.md`, 31 tests in `src/shared/project-status.test.ts`, and a `status-surface` row in `scripts/check-app-contract.mjs`. What remains is reporting *into* the shared Hub, which is a service outside this tree — hence the `manual:` predicate rather than a machine-checkable one. |
+| Torrent Downloader | Focused tests, built-artifact interaction, and captures remain pending for this ultra-speed implementation lane. | `manual:run the focused downloader tests and built-artifact capture before release` | `src/core/torrent/service.ts`, `src/renderer/nodes/TorrentNode.tsx`, `docs/features/torrents/torrent-downloader.md` are the implementation and documentation evidence. |
 
 ---
 
