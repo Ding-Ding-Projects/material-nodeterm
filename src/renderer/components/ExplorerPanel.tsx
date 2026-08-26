@@ -15,10 +15,12 @@ import {
   revealTargets
 } from '../lib/explorerCreate'
 import { canRevealLocally, downloadRoute, triggerBrowserDownload } from '../lib/download'
+import { explorerOverlayClickCloses } from '../lib/explorerPin'
 import { isBrowserRuntime } from '../bridge/runtime'
 import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
 import { AnchoredRegexBuilder } from './regex/AnchoredRegexBuilder'
 import { MaterialSymbol, type MaterialSymbolName } from './MaterialSymbol'
+import { IconPin } from './icons'
 import {
   AGENT_NODE_DRAG_MIME,
   hasDragType,
@@ -51,6 +53,12 @@ export interface ExplorerPanelProps {
   /** File to reveal (expand ancestors + select + scroll). `path` is relative to the active project
    *  cwd; `nonce` increments per request so revealing the same file twice still re-fires. */
   reveal?: { path: string; nonce: number } | null
+  /**
+   * Docked: no scrim close, pointer-events pass through to the canvas. Default false so an
+   * omitted prop stays the historical overlay. Toggle lives here; persistence lives in Canvas.
+   */
+  pinned?: boolean
+  onTogglePin?: () => void
 }
 
 type ContextFn = (x: number, y: number, path: string, isDir: boolean, ignored?: boolean) => void
@@ -345,7 +353,9 @@ export function ExplorerPanel({
   onAgentNodeDrop,
   onOpenTerminalAtFolder,
   keyboardAgentNodeId,
-  reveal
+  reveal,
+  pinned = false,
+  onTogglePin
 }: ExplorerPanelProps) {
   // Filters visible FILE rows by name (plain text, or regex via the `.*` trigger). See the
   // `filterTest` doc comment on TreeEntry for why directories are never hidden by it.
@@ -569,14 +579,37 @@ export function ExplorerPanel({
   )
 
   return createPortal(
-    <div className="drawer-overlay explorer-overlay">
-      <aside className="drawer md3-explorer" onClick={(e) => e.stopPropagation()}>
+    <div
+      className={pinned ? 'drawer-overlay explorer-overlay drawer-overlay--pinned' : 'drawer-overlay explorer-overlay'}
+      // Pinned: no handler, so a CSS miss still cannot dismiss the docked tree. `explorer-overlay`
+      // is already non-blocking (pointer-events pass through so an agent node/folder can be
+      // dragged between the canvas and the tree) — the click-outside-closes case below only
+      // reaches this handler through the aside's own stopPropagation bubble, never a raw canvas
+      // click.
+      onClick={explorerOverlayClickCloses(pinned) ? onClose : undefined}
+    >
+      <aside
+        className={pinned ? 'drawer md3-explorer drawer--pinned' : 'drawer md3-explorer'}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="drawer__head">
           <h2>{project?.name || 'Explorer'}</h2>
           <div className="ex-head-actions">
             <button title="Refresh" aria-label="Refresh" onClick={() => setVersion((v) => v + 1)}>
               <MaterialSymbol name="refresh" size={18} />
             </button>
+            {onTogglePin && (
+              <button
+                type="button"
+                className={pinned ? 'is-on' : ''}
+                title={pinned ? 'Unpin' : 'Pin'}
+                aria-label={pinned ? 'Unpin' : 'Pin'}
+                aria-pressed={pinned}
+                onClick={onTogglePin}
+              >
+                <IconPin />
+              </button>
+            )}
             <button className="drawer__close" aria-label="Close" onClick={onClose}>
               <MaterialSymbol name="close" size={19} />
             </button>
