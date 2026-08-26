@@ -336,6 +336,8 @@ export type NodeKind =
   | 'group'
   | 'editor'
   | 'diff'
+  | 'photo'
+  | 'gallery'
   | 'video'
   | 'web'
   | 'browser'
@@ -529,6 +531,10 @@ export interface CanvasNodeState {
   nsisLocalPaths?: NsisLocalPaths
   // editor / diff
   filePath?: string
+  /** Photo/video/gallery media is represented by a portable content reference, never an absolute path. */
+  mediaAssets?: import('./media-catalog').MediaAssetReference[]
+  /** Gallery selection is an ordered list of asset ids. */
+  mediaActiveAssetId?: string
   /**
    * editor/diff-only: true once `filePath` was confirmed gone (e.g. its worktree was removed —
    * see `displacedByWorktree` in `./worktree.ts`). There is nothing to re-point the node at, so

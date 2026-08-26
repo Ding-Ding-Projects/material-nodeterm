@@ -103,6 +103,8 @@ import { ServiceNode } from '../nodes/ServiceNode'
 import NsisInstallerNode from '../nodes/NsisInstallerNode'
 import { normalizeAddress } from '../nodes/browserUrl'
 import VideoNode from '../nodes/VideoNode'
+import PhotoNode from '../nodes/PhotoNode'
+import GalleryNode from '../nodes/GalleryNode'
 import WebNode from '../nodes/WebNode'
 import { NativeLoopNode, setNativeLoopRunHandler } from '../nodes/NativeLoopNode'
 import {
@@ -582,6 +584,8 @@ import {
   createServiceNode,
   SERVICE_NODE_LABELS,
   createVideoNode,
+  createPhotoNode,
+  createGalleryNode,
   createWebNode,
   isVideoFile,
   duplicateNode,
@@ -1799,6 +1803,8 @@ export function Canvas() {
       loop: withNodeBoundary(LoopNode),
       scheduler: withNodeBoundary(NativeLoopNode),
       dino: withNodeBoundary(DinoNode),
+      photo: withNodeBoundary(PhotoNode),
+      gallery: withNodeBoundary(GalleryNode),
       video: withNodeBoundary(VideoNode),
       web: withNodeBoundary(WebNode),
       browser: withNodeBoundary(BrowserNode),
@@ -4202,7 +4208,7 @@ export function Canvas() {
   const openFile = useCallback(
     (filePath: string, center?: { x: number; y: number }, sshFs?: boolean) => {
       const existing = nodesRef.current.find(
-        (n) => (n.type === 'editor' || n.type === 'video') && n.data?.filePath === filePath
+        (n) => (n.type === 'editor' || n.type === 'video' || n.type === 'photo') && n.data?.filePath === filePath
       )
       if (existing) {
         focusNodeRef.current(existing.id)
@@ -4213,7 +4219,9 @@ export function Canvas() {
         {
           ...(isVideoFile(filePath)
             ? createVideoNode(ns.length, filePath, center ?? viewCenter(), sshFs)
-            : createEditorNode(ns.length, filePath, center ?? viewCenter(), sshFs)),
+            : /\.(png|jpe?g|gif|webp|bmp)$/i.test(filePath)
+              ? createPhotoNode(ns.length, filePath, center ?? viewCenter(), sshFs)
+              : createEditorNode(ns.length, filePath, center ?? viewCenter(), sshFs)),
           selected: true
         }
       ])
@@ -4581,6 +4589,17 @@ export function Canvas() {
     (center?: { x: number; y: number }, groupId?: string) => {
       setNodes((ns) => {
         const node = createStickyNode(ns.length, center ?? emptyNodePos())
+        return [...ns, groupId ? parentInto(node, groupId) : node]
+      })
+      markDirty()
+    },
+    [setNodes, markDirty, emptyNodePos, parentInto]
+  )
+
+  const addGallery = useCallback(
+    (center?: { x: number; y: number }, groupId?: string) => {
+      setNodes((ns) => {
+        const node = createGalleryNode(ns.length, [], center ?? emptyNodePos())
         return [...ns, groupId ? parentInto(node, groupId) : node]
       })
       markDirty()
@@ -8804,6 +8823,7 @@ export function Canvas() {
       terminalProfileCreationItems,
       agentCreationItems,
       addSticky,
+      addGallery,
       addAuthenticator,
       addNativeLoop,
       addToExistingGroup,
@@ -8911,6 +8931,11 @@ export function Canvas() {
               label: 'New sticky note',
               icon: <IconNote />,
               onClick: () => addSticky(at)
+            },
+            {
+              label: 'New media gallery',
+              icon: <IconEditor />,
+              onClick: () => addGallery(at)
             },
             {
               label: 'New Loop',
@@ -13009,6 +13034,7 @@ export function Canvas() {
             icon: <IconNote />,
             run: () => addSticky()
           },
+          { id: 'new-gallery', label: 'New media gallery', icon: <IconEditor />, run: () => addGallery() },
           {
             id: 'new-loop',
             label: 'New Loop',
@@ -13375,6 +13401,7 @@ export function Canvas() {
     terminalProfileMenuChoices,
     addAgentNode,
     addSticky,
+    addGallery,
     addNsis,
     addNativeLoop,
     addDino,

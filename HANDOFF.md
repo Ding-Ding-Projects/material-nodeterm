@@ -1,5 +1,20 @@
 # Handoff
 
+## 2026-08-26, issue #20 media node implementation
+
+Added `src/shared/media-catalog.ts` with Photo, Video, and mixed Gallery catalogue registration,
+portable content-addressed reference validation, and bounded byte-signature checks. Added
+`PhotoNode.tsx` and `GalleryNode.tsx`, wired the new node kinds, factories, serialization fields,
+open-file routing, palette/context creation, and responsive media styling. Shared project saves
+strip transient absolute `sourcePath` hints while retaining portable metadata and explicit missing
+asset states. Added the feature article at
+`docs/features/canvas/media-gallery.md` and recorded the unfinished verification state in the
+roadmap and changelog.
+
+This lane deliberately did not run tests, type checking, builds, packaging, UI interaction, or
+captures, and made no commit or dew. The parent integration lane must run those checks and inspect
+the built artifact before treating issue #20 as verified.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

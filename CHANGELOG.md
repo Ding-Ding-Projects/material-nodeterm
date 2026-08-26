@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add the issue #20 media catalogue and Photo, Video, and mixed-media Gallery canvas node kinds.
+  Local media is routed through the existing allowlisted protocol, gallery references carry bounded
+  portable metadata, and missing assets remain visible instead of disappearing. Verification is
+  pending in the parent integration lane.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

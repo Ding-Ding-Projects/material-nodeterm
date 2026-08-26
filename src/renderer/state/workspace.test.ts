@@ -1085,6 +1085,8 @@ describe('duplicateNode across every node kind', () => {
     group: 'group',
     editor: 'editor',
     diff: 'diff',
+    photo: 'photo',
+    gallery: 'gallery',
     video: 'video',
     web: 'web',
     browser: 'browser',
