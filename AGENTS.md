@@ -66,6 +66,28 @@ Anything the UI reaches through the preload bridge needs a **real** implementati
 browser edition, or a deliberate, visibly-documented degrade — a stub that compiles but does
 nothing is worse than an explicit "not supported here," because it looks finished.
 
+## Material Design 3 is a strict whole-interface requirement
+
+Every user-facing element on every nodeterm surface must conform to Material Design 3. This
+includes application chrome, canvas nodes, node interiors, dialogs, menus, popovers, pickers,
+fields, buttons, tabs, status surfaces, notifications, settings, documentation pages, empty
+states, errors, progress states, accessibility-only labels, hover and focus states, and every
+nested control. A shared theme, a Material-looking container, or a nearby compliant component
+does not exempt an individual element.
+
+Every new or changed user-facing element must use the shared Material Design 3 tokens and
+primitives for colour roles, typography, shape, elevation, state layers, motion, focus, target
+size, responsive containment, and reduced-motion behavior. Legacy or unstyled controls are
+release blockers. When a platform limitation prevents literal component parity, document the
+exact limitation and implement the closest accessible, testable Material Design 3 equivalent
+instead of silently falling back.
+
+The completeness inventory and its negative regression must list every user-facing surface and
+fail when an element, implementation marker, documentation row, focused test, built-artifact
+interaction record, or required visual evidence is missing or stale. A check that merely finds
+one Material Design 3 marker somewhere in a file is not sufficient evidence that every rendered
+element in that file conforms.
+
 ## House rules that come up in review
 
 These exist because their absence caused a real, shipped bug — they are not stylistic
