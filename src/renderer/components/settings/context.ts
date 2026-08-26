@@ -5,7 +5,12 @@ const DEFAULT_STATE: SettingsSearchState = { mode: 'text', query: '', pattern: '
 
 /** Current settings search state, provided by SettingsPage to all descendant rows. */
 export const SettingsSearchContext = createContext<SettingsSearchState>(DEFAULT_STATE)
-export const SettingsVocabularyContext = createContext(false)
+export interface SettingsVocabularyResolution {
+  source: 'i18n' | 'localized-vocabulary'
+  fields: 'section' | 'row' | 'all'
+}
+
+export const SettingsVocabularyContext = createContext<SettingsVocabularyResolution | null>(null)
 
 /** Back-compat convenience: the plain-text query (what most callers actually want — "is there an
  *  active search, and what's its text"). Reflects the pattern source while in regex mode too, so
@@ -22,5 +27,9 @@ export function useSettingsSearchState(): SettingsSearchState {
 }
 
 export function useSettingsVocabularyApplied(): boolean {
+  return useContext(SettingsVocabularyContext) !== null
+}
+
+export function useSettingsVocabularyResolution(): SettingsVocabularyResolution | null {
   return useContext(SettingsVocabularyContext)
 }

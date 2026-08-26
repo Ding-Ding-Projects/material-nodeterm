@@ -6,6 +6,7 @@ import { FieldRow } from '../FieldRow'
 import { Input } from '@renderer/ui/Input'
 import { Button } from '@renderer/ui/Button'
 import { DEFAULT_SCHOOL_MODE_NAME } from '../../../lib/schoolModeName'
+import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
 
 const ROWS = {
   toggle: {
@@ -22,6 +23,7 @@ const ENTRIES = Object.values(ROWS)
  * self-imposed, user-experience lock, never a security boundary, and the copy says so plainly.
  */
 export function SchoolModeSection({ isActive }: { isActive: boolean }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   const enabled = useSchoolMode((s) => s.enabled)
   const name = useSchoolMode((s) => s.name)
   const hasCredential = useSchoolMode((s) => s.hasCredential)
@@ -86,9 +88,9 @@ export function SchoolModeSection({ isActive }: { isActive: boolean }): React.JS
                     setUnlockPin(e.target.value)
                     setError(null)
                   }}
-                  placeholder="PIN to turn off"
+                  placeholder={vocab('PIN to turn off')}
                   className="w-40"
-                  aria-label={`PIN to turn ${name} off`}
+                  aria-label={`${vocab('PIN to turn')} ${name} ${vocab('off')}`}
                 />
                 <Button
                   disabled={busy || unlockPin.length === 0}
@@ -115,7 +117,7 @@ export function SchoolModeSection({ isActive }: { isActive: boolean }): React.JS
                       type="password"
                       value={pin}
                       onChange={(e) => setPin(e.target.value)}
-                      placeholder="Choose a PIN"
+                      placeholder={vocab('Choose a PIN')}
                       className="w-32"
                       aria-label="Choose a PIN"
                     />
@@ -123,7 +125,7 @@ export function SchoolModeSection({ isActive }: { isActive: boolean }): React.JS
                       type="password"
                       value={pinConfirm}
                       onChange={(e) => setPinConfirm(e.target.value)}
-                      placeholder="Confirm PIN"
+                      placeholder={vocab('Confirm PIN')}
                       className="w-32"
                       aria-label="Confirm PIN"
                     />
@@ -202,7 +204,7 @@ export function SchoolModeSection({ isActive }: { isActive: boolean }): React.JS
                     type="password"
                     value={currentPinDraft}
                     onChange={(e) => setCurrentPinDraft(e.target.value)}
-                    placeholder="Current PIN"
+                placeholder={vocab('Current PIN')}
                     className="w-32"
                     aria-label="Current PIN"
                   />
@@ -210,7 +212,7 @@ export function SchoolModeSection({ isActive }: { isActive: boolean }): React.JS
                     type="password"
                     value={nextPinDraft}
                     onChange={(e) => setNextPinDraft(e.target.value)}
-                    placeholder="New PIN"
+                placeholder={vocab('New PIN')}
                     className="w-32"
                     aria-label="New PIN"
                   />

@@ -80,7 +80,7 @@ export function AdhdModesSection({ isActive }: { isActive: boolean }): React.JSX
   return (
     <SettingsSection
       id="adhd-modes"
-      vocabularyApplied
+      resolvedVocabulary={{ source: 'i18n', fields: 'all' }}
       title={title.primary}
       description={
         description.secondary

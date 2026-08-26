@@ -145,6 +145,7 @@ export function LicenseSection({ isActive }: { isActive: boolean }): React.JSX.E
                   checked={own}
                   onChange={(v) => update({ [key]: v })}
                   ariaLabel={feature.title}
+                  vocabularyMode="factual"
                 />
               }
             />

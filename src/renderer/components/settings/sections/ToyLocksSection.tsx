@@ -8,6 +8,7 @@ import { useToyLocks } from '../../../state/toylocks'
 import { ConfirmDialog } from '../../ConfirmDialog'
 import { SettingsSection } from '../SettingsSection'
 import { SettingsText } from '../SettingsText'
+import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
 import { SearchableRow } from '../SearchableRow'
 import { Checkbox } from '@renderer/ui/md3'
 
@@ -52,6 +53,7 @@ function durationLabel(record: ToyLockRecord): string {
 }
 
 export function ToyLocksSection({ isActive }: { isActive: boolean }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   const records = useToyLocks((s) => s.records)
   const loaded = useToyLocks((s) => s.loaded)
   const loadError = useToyLocks((s) => s.loadError)
@@ -110,7 +112,7 @@ export function ToyLocksSection({ isActive }: { isActive: boolean }): React.JSX.
           <div className="flex items-center gap-2">
             <input
               type="text"
-              placeholder="Filter locks…"
+              placeholder={vocab('Filter locks…')}
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               className="min-w-0 flex-1 rounded-lg border border-border bg-transparent px-3 py-1.5 text-[13px] text-text placeholder:text-muted"
@@ -141,7 +143,7 @@ export function ToyLocksSection({ isActive }: { isActive: boolean }): React.JSX.
                   <Checkbox
                     checked={selected.has(r.id)}
                     onChange={() => toggle(r.id)}
-                    aria-label={`Select ${r.target.label} lock`}
+                    aria-label={`${vocab('Select')} ${r.target.label} ${vocab('lock')}`}
                   />
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-[13px] font-medium text-text">

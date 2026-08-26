@@ -20,7 +20,9 @@ const PRODUCERS = [
   ['settings-fields', 'src/renderer/components/settings/FieldRow.tsx', 'useVocabularyText('],
   ['settings-sections', 'src/renderer/components/settings/SettingsSection.tsx', 'useVocabularyText('],
   ['settings-page', 'src/renderer/components/settings/SettingsPage.tsx', 'useLocalizedVocabularyText()'],
+  ['settings-page-registration', 'src/renderer/components/settings/SettingsPage.tsx', '<PersonalVocabularySection'],
   ['settings-sidebar', 'src/renderer/components/settings/SettingsSidebar.tsx', 'useI18n()'],
+  ['settings-sidebar-registration', 'src/renderer/components/settings/SettingsSidebar.tsx', 'visibleSettingsGroups('],
   ['settings-search-corpus', 'src/renderer/components/settings/SearchableRow.tsx', 'useVocabularyMapper()'],
   ['settings-inline-copy', 'src/renderer/components/settings/SettingsText.tsx', 'useVocabularyMapper()'],
   ['settings-reset', 'src/renderer/components/settings/SectionReset.tsx', 'useVocabularyMapper()'],
@@ -57,6 +59,9 @@ const PRODUCERS = [
   ['minecraft-properties', 'src/renderer/components/minecraft/MinecraftPropertiesEditor.tsx', 'useVocabularyMapper()'],
   ['authenticator-settings', 'src/renderer/components/settings/sections/AuthenticatorSection.tsx', 'SettingsText'],
   ['speech-settings', 'src/renderer/components/settings/sections/SpeechSection.tsx', 'SettingsText'],
+  ['school-mode-settings', 'src/renderer/components/settings/sections/SchoolModeSection.tsx', 'useVocabularyMapper()'],
+  ['kids-mode-settings', 'src/renderer/components/settings/sections/KidsModeSection.tsx', 'useVocabularyMapper()'],
+  ['usage-settings', 'src/renderer/components/settings/sections/UsageSection.tsx', 'useVocabularyMapper()'],
   ['toy-lock-wizard', 'src/renderer/components/toylocks/LockWizard.tsx', 'useVocabularyMapper()'],
   ['ui-input', 'src/renderer/ui/Input.tsx', 'useVocabularyMapper()'],
   ['ui-button-wrapper-delegation', 'src/renderer/ui/Button.tsx', '<Md3Button'],
@@ -64,7 +69,7 @@ const PRODUCERS = [
   ['ui-chip', 'src/renderer/ui/md3/Chip.tsx', 'useVocabularyMapper()'],
   ['ui-menu', 'src/renderer/ui/md3/Menu.tsx', 'useVocabularyMapper()'],
   ['ui-status-chip', 'src/renderer/ui/md3/StatusChip.tsx', 'useVocabularyMapper()'],
-  ['ui-switch', 'src/renderer/ui/Switch.tsx', 'useVocabularyMapper()'],
+  ['ui-switch', 'src/renderer/ui/Switch.tsx', 'useVocabularyTemplate('],
   ['ui-select', 'src/renderer/ui/Select.tsx', 'useVocabularyMapper()'],
   ['ui-number-field', 'src/renderer/ui/NumberField.tsx', 'useVocabularyMapper()'],
   ['ui-text-area', 'src/renderer/ui/md3/TextArea.tsx', 'useVocabularyMapper()'],
@@ -275,6 +280,18 @@ try {
         encoding: 'utf8'
       })
       check('full checker rejects a removed SettingsText mapper', inlineResult.status !== 0)
+    }
+    for (const id of ['settings-page-registration', 'settings-sidebar-registration']) {
+      const registrationTarget = PRODUCERS.find((row) => row[0] === id)
+      if (!registrationTarget) continue
+      const registrationPath = join(mutationRoot, registrationTarget[1])
+      writeFileSync(registrationPath, readFileSync(registrationPath, 'utf8').replace(registrationTarget[2], ''), 'utf8')
+      const registrationResult = spawnSync(process.execPath, [SCRIPT_PATH, '--root', mutationRoot, '--fixture-run'], {
+        encoding: 'utf8'
+      })
+      check('full checker rejects removed ' + id, registrationResult.status !== 0)
+      const original = readFileSync(join(ROOT, registrationTarget[1]), 'utf8')
+      writeFileSync(registrationPath, original, 'utf8')
     }
     const sectionResult = spawnSync(process.execPath, [SCRIPT_PATH, '--root', mutationRoot, '--fixture-run', '--drop-section', 'settings-accounts'], {
       encoding: 'utf8'

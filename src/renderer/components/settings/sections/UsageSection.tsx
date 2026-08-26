@@ -8,6 +8,7 @@ import { Button } from '@renderer/ui/Button'
 import { SegmentedPill } from '@renderer/ui/SegmentedPill'
 import { USAGE_PROVIDER_IDS, providerLabel } from '@shared/usage-limits'
 import { AGENT_CONFIG } from '@shared/agents/config'
+import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
 
 const ROWS = {
   percentMode: {
@@ -133,7 +134,7 @@ function CookieProviderRow({
             <input
               type="password"
               className="input w-64"
-              placeholder={stored ? '•••••••• stored' : placeholder}
+              placeholder={stored ? vocab('•••••••• stored') : vocab(placeholder)}
               value={value}
               onChange={(e) => setValue(e.target.value)}
               autoComplete="off"
@@ -156,6 +157,7 @@ function CookieProviderRow({
 }
 
 export function UsageSection({ isActive }: { isActive: boolean }): React.JSX.Element | null {
+  const vocab = useVocabularyMapper()
   const settings = useSettings((s) => s.settings)
   const update = useSettings((s) => s.update)
 
@@ -229,7 +231,8 @@ export function UsageSection({ isActive }: { isActive: boolean }): React.JSX.Ele
                 <Switch
                   checked={!hidden.has(id)}
                   onChange={(v) => setShown(id, v)}
-                  ariaLabel={`Show ${labelFor(id)} usage`}
+                  ariaLabel="Show {provider} usage"
+                  ariaLabelParams={{ provider: labelFor(id) }}
                 />
               }
             />

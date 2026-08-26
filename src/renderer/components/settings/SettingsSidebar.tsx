@@ -84,6 +84,7 @@ export function SettingsSidebar({
                 ? ts('settings.nav.searchRegex', 'Search settings (regex)')
                 : ts('settings.nav.search', 'Search settings')
             }
+            vocabularyMode="factual"
             aria-label={ts('settings.nav.search', 'Search settings')}
           />
           <AnchoredRegexBuilder

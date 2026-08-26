@@ -1,5 +1,5 @@
 import type React from 'react'
-import { SettingsVocabularyContext, useSettingsSearchState } from './context'
+import { SettingsVocabularyContext, useSettingsSearchState, type SettingsVocabularyResolution } from './context'
 import { matchesEntry, type SettingsSearchEntry } from './search'
 import { useVocabularyMapper, useVocabularyText } from '../../lib/personalVocabulary/useVocabularyText'
 import { settingsSearchEntryWithVocabulary } from './vocabulary'
@@ -12,7 +12,7 @@ export function SettingsSection({
   description,
   isActive,
   searchEntries,
-  vocabularyApplied = false,
+  resolvedVocabulary,
   children
 }: {
   id: string
@@ -20,7 +20,7 @@ export function SettingsSection({
   description?: string
   isActive: boolean
   searchEntries?: SettingsSearchEntry[]
-  vocabularyApplied?: boolean
+  resolvedVocabulary?: SettingsVocabularyResolution
   children: React.ReactNode
 }): React.JSX.Element | null {
   // Mode-aware — the same state SearchableRow and the sidebar already match against. This used
@@ -36,6 +36,7 @@ export function SettingsSection({
   // Personal-vocabulary boundary for section chrome (unconditional). Search matching below keeps
   // the shipped aliases beside visible replacements, so a rename never breaks existing lookup.
   const mappedTitle = useVocabularyText(title)
+  const vocabularyApplied = resolvedVocabulary !== undefined
   const vocabTitle = vocabularyApplied ? title : mappedTitle
   const mappedDescription = useVocabularyText(description)
   const vocabDescription = vocabularyApplied ? description : mappedDescription
@@ -52,7 +53,7 @@ export function SettingsSection({
     return null
   }
   return (
-    <SettingsVocabularyContext.Provider value={vocabularyApplied}>
+    <SettingsVocabularyContext.Provider value={resolvedVocabulary ?? null}>
       <section id={id} data-settings-section={id} className="space-y-5">
       <div className="md3-settings-header">
         <h2 className="md3-settings-header__title">{vocabTitle}</h2>

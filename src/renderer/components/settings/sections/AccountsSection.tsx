@@ -36,6 +36,7 @@ import { Button } from '@renderer/ui/Button'
 import { Input } from '@renderer/ui/Input'
 import { presentAccount, type AccountPresentation } from '../../../lib/accountPresentation'
 import { AccountIdentityPills } from '../../AccountIdentityPills'
+import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
 
 const ROWS = {
   accounts: {
@@ -65,10 +66,11 @@ interface PendingAccountRemoval {
 }
 /** Spinner + label for an Add button that is mid-setup. */
 function AddingLabel({ where }: { where: string }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   return (
     <span className="inline-flex items-center gap-2">
       <span className="ui-spinner" aria-hidden />
-      Setting up on {where}…
+      <>{vocab('Setting up on')} {where}…</>
     </span>
   )
 }
@@ -86,13 +88,14 @@ function MachinePanel({
   connected?: boolean
   children: React.ReactNode
 }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   return (
     <section className="overflow-hidden rounded-lg border border-border bg-fill-weak/20">
       <header className="flex items-center justify-between gap-3 border-b border-border bg-fill-weak/40 px-3 py-2.5">
         <div className="flex min-w-0 items-center gap-2">
           <span
             className={`h-2 w-2 shrink-0 rounded-full ${connected ? 'bg-[color:var(--success)]' : 'bg-muted'}`}
-            aria-label={connected ? 'Connected' : 'Not connected'}
+            aria-label={vocab(connected ? 'Connected' : 'Not connected')}
           />
           <div className="min-w-0">
             <div className="flex items-center gap-2">
@@ -996,7 +999,8 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
               labelControl={
                 <Input
                   className="w-56"
-                  aria-label={`Claude account display name on ${server.label || server.host}`}
+                      aria-label={`Claude account display name on ${server.label || server.host}`}
+                      vocabularyMode="factual"
                   placeholder="Display name (optional)"
                   value={remoteSystemAccountLabels[host] ?? ''}
                   onChange={(event) =>
@@ -1066,6 +1070,7 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
             <Input
               className="w-56"
               aria-label={`Codex account display name on ${server.label || server.host}`}
+              vocabularyMode="factual"
               placeholder="Display name (optional)"
               value={remoteSystemCodexAccountLabels[host] ?? ''}
               onChange={(event) =>
@@ -1098,6 +1103,7 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
                   <Input
                     className="min-w-0 flex-1 font-mono"
                     aria-label={`Remote working directory for ${account.label}`}
+                    vocabularyMode="factual"
                     placeholder="~/nf-management"
                     value={account.remoteCwd ?? '~'}
                     onChange={(event) =>

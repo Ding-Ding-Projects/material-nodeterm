@@ -265,7 +265,9 @@ Every listed renderer producer has an explicit local mapper boundary. Commands, 
 | `settings-fields` | FieldRow | `src/renderer/components/settings/FieldRow.tsx` | `useVocabularyMapper()` |
 | `settings-sections` | SettingsSection | `src/renderer/components/settings/SettingsSection.tsx` | `useVocabularyMapper()` |
 | `settings-page` | Settings scope and every production section host | `src/renderer/components/settings/SettingsPage.tsx` | `useLocalizedVocabularyText()` |
+| `settings-page-registration` | Settings page vocabulary section registration | `src/renderer/components/settings/SettingsPage.tsx` | `<PersonalVocabularySection` |
 | `settings-sidebar` | Settings group and section navigation | `src/renderer/components/settings/SettingsSidebar.tsx` | `useI18n()` shared vocabulary boundary |
+| `settings-sidebar-registration` | Settings sidebar section registry | `src/renderer/components/settings/SettingsSidebar.tsx` | `visibleSettingsGroups(` |
 | `settings-search-corpus` | Settings search matches visible replacements and shipped aliases | `src/renderer/components/settings/SearchableRow.tsx` | `useVocabularyMapper()` |
 | `settings-inline-copy` | Explicit prose boundary for settings inline text | `src/renderer/components/settings/SettingsText.tsx` | `useVocabularyMapper()` |
 | `settings-reset` | Section reset copy | `src/renderer/components/settings/SectionReset.tsx` | `useVocabularyMapper()` |
@@ -273,6 +275,9 @@ Every listed renderer producer has an explicit local mapper boundary. Commands, 
 | `settings-theme-picker` | Theme picker labels | `src/renderer/components/settings/ThemeSelect.tsx` | `useVocabularyMapper()` |
 | `settings-section-inline-copy` | Standalone settings prose boundary | `src/renderer/components/settings/SettingsText.tsx` | `export function SettingsText` |
 | `settings-search-policy` | Settings visible/shipped search and School-mode rename policy | `src/renderer/components/settings/vocabulary.ts` | `export function settingsSidebarSearchEntry` |
+| `school-mode-settings` | School-mode placeholders and settings prose | `src/renderer/components/settings/sections/SchoolModeSection.tsx` | `useVocabularyMapper()` |
+| `kids-mode-settings` | Kids-mode placeholders and settings prose | `src/renderer/components/settings/sections/KidsModeSection.tsx` | `useVocabularyMapper()` |
+| `usage-settings` | Usage credential placeholder copy | `src/renderer/components/settings/sections/UsageSection.tsx` | `useVocabularyMapper()` |
 | `shared-prose-primitives` | Shared controls carrying prose props | `src/renderer/ui/` | `useVocabularyMapper()` in each primitive |
 | `ui-button-wrapper-delegation` | Compatibility button delegates prose mapping to MD3 button | `src/renderer/ui/Button.tsx` | `<Md3Button` |
 | `ui-input` | Input accessible labels and placeholders | `src/renderer/ui/Input.tsx` | `useVocabularyMapper()` |
@@ -280,7 +285,7 @@ Every listed renderer producer has an explicit local mapper boundary. Commands, 
 | `ui-chip` | Chip authored/factual text | `src/renderer/ui/md3/Chip.tsx` | `useVocabularyMapper()` |
 | `ui-menu` | Menu authored/factual accessible text | `src/renderer/ui/md3/Menu.tsx` | `useVocabularyMapper()` |
 | `ui-status-chip` | Status chip authored/factual text | `src/renderer/ui/md3/StatusChip.tsx` | `useVocabularyMapper()` |
-| `ui-switch` | Switch accessible label intent | `src/renderer/ui/Switch.tsx` | `useVocabularyMapper()` |
+| `ui-switch` | Switch accessible label intent | `src/renderer/ui/Switch.tsx` | `useVocabularyTemplate(` |
 | `ui-select` | Select labels and option groups | `src/renderer/ui/Select.tsx` | `useVocabularyMapper()` |
 | `ui-number-field` | Number field labels and placeholders | `src/renderer/ui/NumberField.tsx` | `useVocabularyMapper()` |
 | `ui-text-area` | Text area labels and placeholders | `src/renderer/ui/md3/TextArea.tsx` | `useVocabularyMapper()` |

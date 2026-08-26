@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useSettings } from '../../../state/settings'
 import { SettingsSection } from '../SettingsSection'
 import { SettingsText } from '../SettingsText'
+import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
 import { SearchableRow } from '../SearchableRow'
 import { FieldRow } from '../FieldRow'
 import { Input } from '@renderer/ui/Input'
@@ -22,6 +23,7 @@ const ROWS = {
 const ENTRIES = Object.values(ROWS)
 
 export function AppIdentitySection({ isActive }: { isActive: boolean }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   const appDisplayName = useSettings((s) => s.settings.appDisplayName)
   const appLogo = useSettings((s) => s.settings.appLogo)
   const update = useSettings((s) => s.update)
@@ -165,7 +167,7 @@ export function AppIdentitySection({ isActive }: { isActive: boolean }): React.J
                 role="radio"
                 aria-checked={appLogo.selection === p.id}
                 title={p.label}
-                aria-label={`Use the ${p.label} logo`}
+                aria-label={`${vocab('Use the')} ${p.label} ${vocab('logo')}`}
                 onClick={() => choosePreset(p.id)}
                 className={`app-logo__preset${appLogo.selection === p.id ? ' is-active' : ''}`}
               >

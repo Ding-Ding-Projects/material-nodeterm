@@ -8,6 +8,7 @@ import { useKidsMode } from '../../../state/kidsMode'
 import { FieldRow } from '../FieldRow'
 import { SearchableRow } from '../SearchableRow'
 import { SettingsSection } from '../SettingsSection'
+import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
 
 const ROWS = {
   toggle: {
@@ -44,6 +45,7 @@ function onlyDigits4(value: string): string {
  * a test asserts — a second copy would be one edit away from promising more than the mode does.
  */
 export function KidsModeSection({ isActive }: { isActive: boolean }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   const enabled = useKidsMode((s) => s.enabled)
   const name = useKidsMode((s) => s.name)
   const hasCredential = useKidsMode((s) => s.hasCredential)
@@ -107,9 +109,9 @@ export function KidsModeSection({ isActive }: { isActive: boolean }): React.JSX.
                     setUnlockPin(e.target.value)
                     setError(null)
                   }}
-                  placeholder="Grown-up PIN"
+                  placeholder={vocab('Grown-up PIN')}
                   className="w-40"
-                  aria-label={`Grown-up PIN to turn ${name} off`}
+                  aria-label={`${vocab('Grown-up PIN to turn')} ${name} ${vocab('off')}`}
                 />
                 <Button
                   disabled={busy || unlockPin.length === 0}
@@ -137,7 +139,7 @@ export function KidsModeSection({ isActive }: { isActive: boolean }): React.JSX.
                       inputMode="numeric"
                       value={pin}
                       onChange={(e) => setPin(onlyDigits4(e.target.value))}
-                      placeholder="Choose a 4-digit PIN"
+                      placeholder={vocab('Choose a 4-digit PIN')}
                       className="w-32"
                       aria-label="Choose a grown-up PIN"
                     />
@@ -146,7 +148,7 @@ export function KidsModeSection({ isActive }: { isActive: boolean }): React.JSX.
                       inputMode="numeric"
                       value={pinConfirm}
                       onChange={(e) => setPinConfirm(onlyDigits4(e.target.value))}
-                      placeholder="Confirm PIN"
+                    placeholder={vocab('Confirm PIN')}
                       className="w-32"
                       aria-label="Confirm the grown-up PIN"
                     />
@@ -243,7 +245,7 @@ export function KidsModeSection({ isActive }: { isActive: boolean }): React.JSX.
                   setCurrentPinDraft(e.target.value)
                   setPinChangeMsg(null)
                 }}
-                placeholder="Current"
+                placeholder={vocab('Current')}
                 className="w-32"
                 aria-label="Current grown-up PIN"
               />
@@ -255,7 +257,7 @@ export function KidsModeSection({ isActive }: { isActive: boolean }): React.JSX.
                   setNextPinDraft(onlyDigits4(e.target.value))
                   setPinChangeMsg(null)
                 }}
-                placeholder="New (4 digits)"
+                placeholder={vocab('New (4 digits)')}
                 className="w-32"
                 aria-label="New grown-up PIN"
               />

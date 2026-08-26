@@ -111,7 +111,7 @@ export function LanguageSection({ isActive }: { isActive: boolean }): React.JSX.
   return (
     <SettingsSection
       id="language"
-      vocabularyApplied
+      resolvedVocabulary={{ source: 'i18n', fields: 'all' }}
       title={title.primary}
       description={description.secondary ? `${description.primary} ${description.secondary}` : description.primary}
       isActive={isActive}
@@ -123,6 +123,7 @@ export function LanguageSection({ isActive }: { isActive: boolean }): React.JSX.
           control={
             <SegmentedPill<LanguageMode>
               value={normalizeLanguageMode(languageMode)}
+              vocabularyMode="factual"
               ariaLabel="Language mode"
               onChange={(v) => updateIfAllowed({ languageMode: v })}
               options={[

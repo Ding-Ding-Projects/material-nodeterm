@@ -77,9 +77,9 @@ function LegacyShellControl({ rows }: { rows: typeof BASE_ROWS }): React.JSX.Ele
   const defaultShell = useSettings((state) => state.settings.defaultShell)
   const update = useSettings((state) => state.update)
   return (
-    <SearchableRow {...rows.legacyShell} vocabularyApplied>
+    <SearchableRow {...rows.legacyShell} resolvedVocabulary={{ source: 'localized-vocabulary', fields: 'all' }}>
       <FieldRow
-        vocabularyApplied
+        resolvedVocabulary={{ source: 'localized-vocabulary', fields: 'all' }}
         label={profileText('terminalProfiles.settings.legacyDefaultLabel', 'Default shell')}
         htmlFor="settings-default-shell"
         control={
@@ -289,9 +289,9 @@ function WindowsProfileControls({ rows }: { rows: typeof BASE_ROWS }): React.JSX
 
   return (
     <>
-      <SearchableRow {...rows.profile} vocabularyApplied>
+      <SearchableRow {...rows.profile} resolvedVocabulary={{ source: 'localized-vocabulary', fields: 'all' }}>
         <FieldRow
-          vocabularyApplied
+          resolvedVocabulary={{ source: 'localized-vocabulary', fields: 'all' }}
           label={profileText(
             'terminalProfiles.settings.defaultLabel',
             'Default terminal profile'
@@ -428,9 +428,9 @@ function WindowsProfileControls({ rows }: { rows: typeof BASE_ROWS }): React.JSX
         </div>
       </SearchableRow>
 
-      <SearchableRow {...rows.custom} vocabularyApplied>
+      <SearchableRow {...rows.custom} resolvedVocabulary={{ source: 'localized-vocabulary', fields: 'all' }}>
         <FieldRow
-          vocabularyApplied
+          resolvedVocabulary={{ source: 'localized-vocabulary', fields: 'all' }}
           label={profileText('terminalProfiles.settings.customLabel', 'Custom executable')}
           description={profileText(
             'terminalProfiles.settings.customDescription',
@@ -485,7 +485,7 @@ export function ShellSection({ isActive }: { isActive: boolean }): React.JSX.Ele
   return (
     <SettingsSection
       id="shell"
-      vocabularyApplied
+      resolvedVocabulary={{ source: 'localized-vocabulary', fields: 'all' }}
       title={profileText('terminalProfiles.settings.sectionTitle', 'Shell')}
       description={
         profileSupport

@@ -6,6 +6,7 @@ import { RAINBOW_SPEED_MAX, RAINBOW_SPEED_MIN, rainbowDurationSeconds } from '..
 import { NODE_COLORS } from '../../../state/workspace'
 import { SettingsSection } from '../SettingsSection'
 import { SettingsText } from '../SettingsText'
+import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
 import { SearchableRow } from '../SearchableRow'
 import { FieldRow } from '../FieldRow'
 import { Switch } from '@renderer/ui/Switch'
@@ -81,7 +82,8 @@ function VisibilityToggles({
             <Switch
               checked={!isHidden(row.id, hidden)}
               onChange={(shown) => onChange(withShown(hidden, row.id, shown))}
-              ariaLabel={`Show ${row.label} ${where}`}
+              ariaLabel="Show {label} {where}"
+              ariaLabelParams={{ label: row.label, where }}
             />
           }
         />
@@ -95,6 +97,7 @@ function VisibilityToggles({
 const ACCENT_TARGET = { kind: 'appearance' as const, id: 'accent', label: 'Accent colour' }
 
 export function AppearanceSection({ isActive }: { isActive: boolean }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   // `base`, not the effective `settings` — see TerminalSection's identical note; this section
   // edits the saved preference, never the currently-applied scheduled override.
   const appTheme = useSettings((s) => s.base.appTheme)
@@ -189,7 +192,7 @@ export function AppearanceSection({ isActive }: { isActive: boolean }): React.JS
                   key={c}
                   type="button"
                   aria-pressed={accent === c}
-                  aria-label={`Accent ${c}`}
+                  aria-label={`${vocab('Accent')} ${c}`}
                   onClick={() => update({ accent: c })}
                   style={{ background: c }}
                   className={cn('md3-accent-swatch', accent === c && 'md3-accent-swatch--selected')}

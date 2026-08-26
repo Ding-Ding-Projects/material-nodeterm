@@ -107,6 +107,7 @@ function WeekdayPicker({
   days: 'every-day' | Weekday[]
   onChange: (days: 'every-day' | Weekday[]) => void
 }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   const everyDay = days === 'every-day'
   // Narrows directly off `days` (not off the `everyDay` alias) so this doesn't depend on
   // TypeScript's aliased-condition narrowing — a plain, unambiguous discriminant check.
@@ -119,11 +120,11 @@ function WeekdayPicker({
           onChange={(v) => onChange(v ? 'every-day' : [1, 2, 3, 4, 5])}
           ariaLabel="Every day"
         />
-        Every day
+        <SettingsText>Every day</SettingsText>
       </label>
       {!everyDay && (
         <>
-          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Weekdays">
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label={vocab('Weekdays')}>
             {WEEKDAY_SHORT.map((label, idx) => {
               const day = idx as Weekday
               const checked = selected.includes(day)
@@ -133,7 +134,7 @@ function WeekdayPicker({
                   type="button"
                   role="checkbox"
                   aria-checked={checked}
-                  aria-label={WEEKDAY_FULL[day]}
+                  aria-label={vocab(WEEKDAY_FULL[day])}
                   onClick={() =>
                     onChange(
                       checked
@@ -171,6 +172,7 @@ function WindowEditor({
   window: ScheduleWindow
   onChange: (w: ScheduleWindow) => void
 }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   const errors = validateScheduleWindow(window)
   return (
     <div className="space-y-3">
@@ -667,7 +669,7 @@ function RuleCard({
         />
         {isActive && (
           <span className="shrink-0 rounded-full bg-accent/15 px-2 py-0.5 text-[11px] font-medium text-accent">
-            Active now
+            <SettingsText>Active now</SettingsText>
           </span>
         )}
         <div className="flex shrink-0 items-center gap-1">
@@ -689,8 +691,8 @@ function RuleCard({
           >
             ↓
           </Button>
-          <Button variant="ghost" onClick={onRemove} aria-label={`Remove ${rule.label || 'rule'}`}>
-            Remove
+          <Button variant="ghost" onClick={onRemove} aria-label={`${vocab('Remove')} ${rule.label || vocab('rule')}`}>
+            <SettingsText>Remove</SettingsText>
           </Button>
         </div>
       </div>

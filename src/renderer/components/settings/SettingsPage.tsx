@@ -156,6 +156,7 @@ export function SettingsPage({
                       selected and the panel could not tell you which mode you were editing. */}
                   <SegmentedButton
                     value={scope}
+                    vocabularyMode="factual"
                     ariaLabel={profileText('settings.scope.chooseMode', 'Choose settings mode')}
                     onChange={(next) => setScope(next)}
                     options={[
@@ -166,6 +167,7 @@ export function SettingsPage({
                   {scope === 'project' ? (
                     <Button
                       variant="ghost"
+                      vocabularyMode="factual"
                       disabled={Object.keys(projectOverrides).length === 0}
                       onClick={resetProjectAll}
                     >

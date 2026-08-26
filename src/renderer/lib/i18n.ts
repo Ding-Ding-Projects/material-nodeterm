@@ -65,19 +65,25 @@ export function useI18n(): {
   const t = useCallback(
     (id: string, fallback: string, params?: Record<string, string>): LocalizedText => {
       const resolved = resolveText(id, fallback, mode, levels)
+      if (!languageFeaturesAllowed) {
+        // School mode suppresses the optional vocabulary and bilingual variant, but it does not
+        // erase factual placeholders. The same dynamic values still need to render exactly.
+        return params
+          ? {
+              primary: formatText(resolved.primary, params),
+              secondary: resolved.secondary ? formatText(resolved.secondary, params) : null
+            }
+          : resolved
+      }
       // Apply the private local vocabulary while the value is still a prose template. Dynamic
       // facts are interpolated afterwards, so paths, ids, detected names and tool errors remain
       // exact even when a user term happens to match part of one.
-      const localized: LocalizedText = languageFeaturesAllowed
-        ? {
-            primary: applyVocabularyToTemplate(resolved.primary, vocabularyEntries, params),
-            secondary: resolved.secondary
-              ? applyVocabularyToTemplate(resolved.secondary, vocabularyEntries, params)
-              : null
-          }
-        : resolved
-      if (!params) return localized
-      return localized
+      return {
+        primary: applyVocabularyToTemplate(resolved.primary, vocabularyEntries, params),
+        secondary: resolved.secondary
+          ? applyVocabularyToTemplate(resolved.secondary, vocabularyEntries, params)
+          : null
+      }
     },
     [mode, levels, languageFeaturesAllowed, vocabularyEntries]
   )
