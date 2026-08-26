@@ -47,5 +47,8 @@ export type { BadgeProps } from './Badge'
 export { SegmentedButton } from './SegmentedButton'
 export type { SegmentedButtonProps } from './SegmentedButton'
 
+export { Slider } from './Slider'
+export type { SliderProps } from './Slider'
+
 export { Divider } from './Divider'
 export type { DividerProps } from './Divider'

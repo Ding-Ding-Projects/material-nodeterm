@@ -753,3 +753,72 @@
   opacity: 0.38;
   cursor: not-allowed;
 }
+
+/* ---------------------------------------------------------------------------
+ * Slider -- MD3 paint over the native range input (see ui/md3/Slider.tsx for why
+ * the native element is kept). Replaces the browser's default slider, which was
+ * the most obviously non-design-system control left in the app: a platform blue
+ * thumb on a grey rail, identical in every OS theme and matching none of ours.
+ * ------------------------------------------------------------------------ */
+.mdx-slider {
+  --mdx-slider-pct: 0%;
+  appearance: none;
+  width: 100%;
+  height: 20px;
+  background: transparent;
+  cursor: pointer;
+}
+.mdx-slider:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+.mdx-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: var(--md-shape-full);
+  background: linear-gradient(
+    to right,
+    var(--md-primary) 0 var(--mdx-slider-pct),
+    var(--md-surface-container-highest) var(--mdx-slider-pct) 100%
+  );
+}
+.mdx-slider::-moz-range-track {
+  height: 4px;
+  border-radius: var(--md-shape-full);
+  background: var(--md-surface-container-highest);
+}
+.mdx-slider::-moz-range-progress {
+  height: 4px;
+  border-radius: var(--md-shape-full);
+  background: var(--md-primary);
+}
+.mdx-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -6px;
+  border: none;
+  border-radius: var(--md-shape-full);
+  background: var(--md-primary);
+  transition: box-shadow var(--md-motion-effect);
+}
+.mdx-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: none;
+  border-radius: var(--md-shape-full);
+  background: var(--md-primary);
+}
+/* M3 state layer: a translucent halo around the handle, not a size change --
+ * growing the thumb on hover shifts the value under the pointer. */
+.mdx-slider:hover::-webkit-slider-thumb {
+  box-shadow: 0 0 0 8px color-mix(in srgb, var(--md-primary) 16%, transparent);
+}
+.mdx-slider:focus-visible {
+  outline: none;
+}
+.mdx-slider:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 10px color-mix(in srgb, var(--md-primary) 24%, transparent);
+}
+.mdx-slider:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 10px color-mix(in srgb, var(--md-primary) 24%, transparent);
+}
