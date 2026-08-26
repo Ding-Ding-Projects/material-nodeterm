@@ -31,6 +31,7 @@
     "server:dev": "npm run build && npm run server:build && node out/server/main.cjs",
     "host:build": "esbuild src/session-host/host.ts --bundle --platform=node --format=cjs --outfile=out/session-host/host.cjs --external:node-pty --tsconfig=tsconfig.node.json",
     "shots": "node scripts/capture-shots.mjs",
+    "shots:sync": "node scripts/sync-pr-gallery.mjs",
     "check:wired": "node scripts/check-app-wired.mjs",
     "make-social-card": "node scripts/make-social-card.mjs",
     "record-app": "node scripts/record-app.mjs",
