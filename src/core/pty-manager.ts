@@ -61,6 +61,7 @@ import { presenceHub } from './presence/hub'
 import { codexLauncherDir, forgetCodexThreadIdentitiesForNode, installCodexLauncher } from './codex-identity-proxy'
 import { ensureNodeToken, ensureRemoteNodeToken, sweepNodeToken } from './agents/node-token-service'
 import { hasSharedIdentity, type AgentId } from '../shared/agents/config'
+import { quitWouldLoseWork } from './quit-risk'
 // Third persistence backend, selected when no local tmux was found (primarily Windows, where
 // tmux does not exist at all) — see docs/windows-session-host.md. Deliberately a thin, separate
 // module rather than inline here: this is the one narrow seam this file needed to grow for a
@@ -4423,6 +4424,13 @@ export class PtyManager {
    * On quit, detach all clients (do NOT kill tmux sessions — that's the whole point
    * of persistence). The tmux server keeps the sessions alive for next launch.
    */
+  /** Would quitting right now kill a live process for real (a plain-shell session with no
+   *  tmux/session-host backend), rather than merely detaching a client tmux will keep running?
+   *  Feeds the confirm-before-quit gate in index.ts — see quit-risk.ts for the reasoning. */
+  hasSessionsAtRiskOnQuit(): boolean {
+    return quitWouldLoseWork(this.sessions.values())
+  }
+
   /** Returns a promise of the final scrollback snapshots: the capture + write are async, so
    *  the quit path must hold `before-quit` briefly (see index.ts) or the process exits before
    *  they land and the last ≤15s of output is missing from a post-reboot cold restore. */
