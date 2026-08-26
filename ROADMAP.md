@@ -57,10 +57,12 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## In progress / partially landed
 
-- [ ] **Portable canvas projection**: schema 3 root and future universe canvas payloads now have
-      a deterministic, bounded, platform-free projection and validator in
-      `src/core/portable-canvas-projection.ts`; archive export/import wiring and verification
-      remain outstanding.
+- [ ] **Portable project import and destination binding**: schema 3 export/import now validates
+      complete entry hashes, migrates legacy payloads in memory, stages collision-free destinations
+      atomically, and keeps bindings in `portable-node-bindings.json`. The guided
+      Configure/Rebind/Adopt/Deploy/Locate Asset/Leave Unbound surface is wired for Desktop with
+      an honest Server Edition boundary. Tests, build/package evidence, generated docs bundle,
+      runtime interaction, and captures remain outstanding.
 
 - [ ] **ADHD modes** — Focus, Low stimulation, Time awareness, One thing at a time, and Momentum
       are all specced in `docs/adhd-modes.md`. Time awareness, Momentum, and the

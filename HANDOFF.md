@@ -1,5 +1,26 @@
 # Handoff
 
+## 2026-08-26, atomic schema 3 import and destination binding wizard
+
+Implemented schema 3 archive production and import wiring. `src/core/portable-project-import.ts`
+validates complete archive inventory and SHA-256 metadata, migrates legacy snapshots in memory,
+stages a destination beside the final path, refuses collisions, publishes with an atomic rename,
+and removes only its own staging directory on cancellation or failure. Schema 3 exports carry the
+validated canvas projection and history bundle plus safe omission records; credentials, vaults,
+machine paths, provider sessions, processes, and caches remain out of the portable file.
+
+Added `src/core/portable-bindings.ts` for versioned portable blueprints, private local binding
+records, explicit Configure/Rebind/Adopt/Deploy/Locate Asset/Leave Unbound action state, bounded
+progress and cancellation, atomic persistence, and rollback snapshots. Desktop IPC and preload
+handlers persist only opaque local references and credential key names. The anchored renderer
+wizard is `src/renderer/components/PortableBindingWizard.tsx`; Server Edition returns an explicit
+desktop-only boundary and keeps imported projects unbound.
+
+Updated `docs/features/projects/portable-bindings.md`, the projects index, `ROADMAP.md`, and this
+handoff. The generated offline docs bundle still needs regeneration. No tests, type checks, lint,
+security checks, builds, packaging, installer execution, runtime interaction, captures, commit,
+dew, or publication were performed in this lane.
+
 ## 2026-08-26, portable canvas projection implementation
 
 Implemented `src/core/portable-canvas-projection.ts`, re-exported through

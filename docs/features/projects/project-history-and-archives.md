@@ -6,8 +6,14 @@ that history feature. Identical autosaves do not create empty revisions.
 
 ## One-file project saves (`.nodeterm-project`)
 
+New saves use schema 3. The portable file contains only safe project intent and the app-owned
+history bundle, with a manifest that records every payload hash and every omission. Legacy V1 and
+V2 files remain readable, but they are never reproduced on export. In particular, vaults,
+credentials, machine paths, provider sessions, process state, repository working files, and caches
+stay on the source machine and must be configured again at the destination.
+
 The project context menu provides **Save project as one file…** and **Open project from file…**.
-A V2 save file carries the WHOLE project, the way a `.docx` carries a whole document — it is a
+A legacy V2 save file carries the WHOLE project, the way a `.docx` carries a whole document — it is a
 genuine ZIP container (rename it to `.zip` and any archive tool opens it):
 
 | Entry | Contents |
@@ -46,6 +52,15 @@ The inclusion rule is stated up front rather than implied:
 - V1 archives keep their historical 180 MB import cap.
 
 ### Import
+
+Schema 3 import reads and validates the complete container before writing. It checks the manifest,
+all relative paths, duplicate and case-colliding names, entry and aggregate byte budgets, and the
+SHA-256 recorded for every payload entry. Legacy snapshots are migrated in memory through the same
+authority-stripping boundary. A destination is built in a private sibling staging directory and
+published with one atomic rename; an existing destination is refused as a collision, and a failed
+or cancelled import removes only its own stage. No provider, deployment, process, download, or
+binding action runs during import. The imported project is intentionally left unbound until the
+destination binding wizard is chosen.
 
 Opening a V2 file that carries a repository asks for an **empty destination folder** — import can
 therefore never overwrite anything, which is why it needs no destructive-action confirmation. The

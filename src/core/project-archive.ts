@@ -1,5 +1,6 @@
-// One-file project save/restore (`.nodeterm-project`) — the whole project the way a .docx is the
-// whole document.
+// One-file project save/restore (`.nodeterm-project`). New writes use the schema 3 portable
+// projection: safe intent plus local-history bytes. The V1/V2 reader below remains for existing
+// files, while repository, vault, process, and machine-local binding data stay local on new saves.
 //
 // V2 (this module's writer) is a genuine ZIP container (`project-archive-container.ts`):
 //   mimetype                 application/x-nodeterm-project (identification aid, tolerated absent)
@@ -42,10 +43,19 @@ import { freshProjectId } from '../shared/project-id'
 import { fileToProject, projectToFile, serializeProjectFile, type ProjectFileV1 } from './workspace-files'
 import { LocalHistoryStore } from './local-history'
 import { looksLikeContainer, openContainer, packContainer, type ContainerEntry } from './project-archive-container'
+import {
+  exportPortableProjectV3,
+  importPortableProjectV3,
+  looksLikePortableProjectV3,
+  type PortableProjectV3ImportOptions
+} from './portable-project-import'
+import { projectToPortableCanvasV3, serializePortableCanvasProjectionV3 } from './portable-canvas-projection'
 
 // Schema 3 is exposed from the established archive seam while its validation remains platform-free.
 export * from './portable-project-v3'
 export * from './portable-canvas-projection'
+export * from './portable-project-import'
+export * from './portable-bindings'
 
 /** V1 JSON-text archives keep their historical cap. */
 const MAX_ARCHIVE_BYTES_V1 = 180 * 1024 * 1024
@@ -90,10 +100,11 @@ interface ArchiveManifestV2 {
 export interface ProjectArchiveExportResult {
   bytes: Buffer
   contents: ProjectArchiveContents
+  archiveVersion?: 3
 }
 
 export interface ProjectArchiveInspection {
-  archiveVersion: 1 | 2
+  archiveVersion: 1 | 2 | 3
   /** True when the archive carries working files / a repository and import therefore needs an
    *  empty destination folder before it can proceed. */
   needsDestination: boolean
@@ -102,7 +113,7 @@ export interface ProjectArchiveInspection {
 
 export interface ProjectArchiveImportResult {
   project: Project
-  archiveVersion: 1 | 2
+  archiveVersion: 1 | 2 | 3
   contents: ProjectArchiveContents
   restoredTo?: string
   /** The password-manager vault the archive carried for a FOLDER-LESS project, verbatim. The
@@ -313,6 +324,43 @@ export class ProjectArchiveService {
     project: Project,
     opts: ProjectArchiveExportOptions = {}
   ): Promise<ProjectArchiveExportResult> {
+    // New saves use the schema 3 portable projection. The legacy V2 writer remains below as a
+    // compatibility reference for older fixtures and readers, but is no longer the production
+    // export path: repository files, vaults, process state, and machine paths must not travel.
+    const snapshot = projectToPortableCanvasV3(project)
+    const snapshotText = Buffer.from(serializePortableCanvasProjectionV3(snapshot))
+    await this.history.record({
+      domain: `project_${project.id}`,
+      filename: 'project.json',
+      content: new TextDecoder().decode(snapshotText),
+      label: `Exported portable project ${project.name}`,
+      action: 'updated'
+    })
+    const historyBundle = await this.history.exportBundle(`project_${project.id}`)
+    if (!historyBundle) throw new Error('The project history repository could not be bundled.')
+    const omissions = [
+      { path: 'machine-local-settings', reason: 'machine-local' as const, detail: 'Machine-local settings are reconfigured on the destination.' },
+      { path: 'credentials', reason: 'credential' as const, detail: 'Credentials and provider sessions never enter a portable project.' },
+      { path: 'process-state', reason: 'unsupported' as const, detail: 'Running processes and session state are not portable project content.' },
+      { path: 'working-directory', reason: 'machine-local' as const, detail: 'Absolute paths are destination-specific and are not carried.' },
+      ...(opts.vault ? [{ path: 'vault', reason: 'credential' as const, detail: 'The local vault remains on this machine and must be configured again.' }] : [])
+    ]
+    const portable = await exportPortableProjectV3(project, { historyBundle, omissions })
+    return {
+      bytes: portable.bytes,
+      archiveVersion: 3,
+      contents: {
+        repository: 'portable-projection',
+        repositoryNote: 'Schema 3 carries safe project intent only. Local bindings, credentials, paths, processes, caches, and provider state remain on the source machine.',
+        workingFiles: 0,
+        workingBytes: 0,
+        excluded: portable.manifest.omissions.map((item) => ({ path: item.path, reason: item.reason, detail: item.detail })),
+        excludedFiles: portable.manifest.omissions.length,
+        excludedBytes: 0
+      }
+    }
+    /* istanbul ignore next: retained V2 writer for source-history documentation only */
+    /*
     const exportedAt = new Date().toISOString()
     const snapshot = projectToFile(project, 0, exportedAt)
     const snapshotText = serializeProjectFile(snapshot)
@@ -373,11 +421,17 @@ export class ProjectArchiveService {
       )
     }
     return { bytes, contents: capture.contents }
+    */
   }
 
   /** Cheap peek: which schema, and does import need a destination folder first? */
   inspect(bytes: Buffer): ProjectArchiveInspection {
     if (!looksLikeContainer(bytes)) return { archiveVersion: 1, needsDestination: false }
+    if (looksLikePortableProjectV3(bytes)) {
+      const entries = openContainer(bytes, READ_LIMITS)
+      const manifest = JSON.parse(entries.get('manifest.json')!.toString('utf8')) as { project?: { name?: unknown } }
+      return { archiveVersion: 3, needsDestination: false, ...(typeof manifest.project?.name === 'string' ? { projectName: manifest.project.name } : {}) }
+    }
     let hasPayload = false
     const picked = openContainer(bytes, READ_LIMITS, (name) => {
       if (name === 'repo/repository.bundle' || name.startsWith('files/')) hasPayload = true
@@ -394,7 +448,24 @@ export class ProjectArchiveService {
     }
   }
 
-  async import(bytes: Buffer, opts: { destination?: string } = {}): Promise<ProjectArchiveImportResult> {
+  async import(bytes: Buffer, opts: PortableProjectV3ImportOptions = {}): Promise<ProjectArchiveImportResult> {
+    if (looksLikePortableProjectV3(bytes)) {
+      const imported = await importPortableProjectV3(bytes, opts as PortableProjectV3ImportOptions)
+      return {
+        project: imported.project,
+        archiveVersion: 3,
+        contents: {
+          repository: imported.stagedPath ? 'portable-projection' : 'portable-projection',
+          repositoryNote: 'Schema 3 imported safe project intent only. No deployment, provider mutation, process launch, download, or local binding was performed.',
+          workingFiles: 0,
+          workingBytes: 0,
+          excluded: imported.omissions.map((item) => ({ path: item.path, reason: item.reason, detail: item.detail })),
+          excludedFiles: imported.omissions.length,
+          excludedBytes: 0
+        },
+        ...(imported.stagedPath ? { restoredTo: imported.stagedPath } : {})
+      }
+    }
     if (!looksLikeContainer(bytes)) {
       const project = await this.importV1(bytes.toString('utf-8'))
       return {
