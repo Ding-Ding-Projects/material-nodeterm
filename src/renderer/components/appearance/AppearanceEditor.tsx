@@ -31,7 +31,8 @@ import {
   quoteFamily
 } from '@renderer/lib/fontDetect'
 import { UI_FONT_CATALOG } from '@renderer/lib/appearance/uiFontDetect'
-import type { AppearancePreset, AppearanceTextStyle, ElementAppearanceEntry } from '@shared/types'
+import { APPEARANCE_BLEND_MODES } from '@shared/types'
+import type { AppearanceBlendMode, AppearancePreset, AppearanceTextStyle, ElementAppearanceEntry } from '@shared/types'
 import { saveBlobDownload } from '@renderer/lib/exportSave'
 import { Slider } from '@renderer/ui/md3'
 
@@ -492,9 +493,140 @@ function ColorTab({
       <ColorField label="Background" value={style.backgroundColor} onChange={(v) => patch({ backgroundColor: v })} onClear={() => clear('backgroundColor')} />
       <ColorField label="Border" value={style.borderColor} onChange={(v) => patch({ borderColor: v })} onClear={() => clear('borderColor')} />
       <Row label="Corner radius" control={<NumberField value={style.borderRadiusPx ?? 0} min={0} max={40} ariaLabel="Border radius (px)" onChange={(v) => patch({ borderRadiusPx: v })} className="w-16" />} />
+
+      <div className="appearance-editor__subhead">Compositing</div>
+      <p className="appearance-editor__note">
+        Every control below is unset by default and composes with whatever the element already
+        renders, so nothing here replaces the styling above it. Leaving a section untouched
+        produces exactly the CSS this editor produced before these existed.
+      </p>
+      <Row
+        label="Opacity"
+        onReset={style.opacity != null ? () => clear('opacity') : undefined}
+        control={
+          <Slider
+            aria-label="Opacity"
+            min={0}
+            max={1}
+            step={0.01}
+            value={style.opacity ?? 1}
+            onChange={(e) => patch({ opacity: Number(e.target.value) })}
+          />
+        }
+      />
+      <Row
+        label="Blend mode"
+        hint="How this element's pixels combine with what is painted behind it."
+        onReset={style.blendMode ? () => clear('blendMode') : undefined}
+        control={
+          <Select
+            value={style.blendMode ?? 'normal'}
+            aria-label="Blend mode"
+            onChange={(e) => patch({ blendMode: e.target.value as AppearanceBlendMode })}
+          >
+            {APPEARANCE_BLEND_MODES.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </Select>
+        }
+      />
+
+      <div className="appearance-editor__subhead">Filters</div>
+      <p className="appearance-editor__note">
+        These compose into one CSS filter in a fixed order, so two of them can never clobber each
+        other. Blur is applied last.
+      </p>
+      {FILTER_ROWS.map((f) => (
+        <Row
+          key={f.key}
+          label={f.label}
+          onReset={style[f.key] != null ? () => clear(f.key) : undefined}
+          control={
+            <Slider
+              aria-label={f.label}
+              min={f.min}
+              max={f.max}
+              step={f.step}
+              value={(style[f.key] as number | undefined) ?? f.neutral}
+              onChange={(e) => patch({ [f.key]: Number(e.target.value) })}
+            />
+          }
+        />
+      ))}
+      <Row
+        label="Backdrop blur"
+        hint="Blurs what is BEHIND this element rather than the element itself."
+        onReset={style.backdropBlurPx != null ? () => clear('backdropBlurPx') : undefined}
+        control={<NumberField value={style.backdropBlurPx ?? 0} min={0} max={40} ariaLabel="Backdrop blur (px)" onChange={(v) => patch({ backdropBlurPx: v })} className="w-16" />}
+      />
+
+      <div className="appearance-editor__subhead">Transform</div>
+      <p className="appearance-editor__note">
+        Composed as translate, rotate, scale, then skew. The order is fixed so a saved entry means
+        exactly one thing whichever control wrote it last.
+      </p>
+      <Row label="Move X" onReset={style.translateXPx != null ? () => clear('translateXPx') : undefined} control={<NumberField value={style.translateXPx ?? 0} min={-200} max={200} ariaLabel="Translate X (px)" onChange={(v) => patch({ translateXPx: v })} className="w-16" />} />
+      <Row label="Move Y" onReset={style.translateYPx != null ? () => clear('translateYPx') : undefined} control={<NumberField value={style.translateYPx ?? 0} min={-200} max={200} ariaLabel="Translate Y (px)" onChange={(v) => patch({ translateYPx: v })} className="w-16" />} />
+      <Row
+        label="Rotate"
+        onReset={style.rotateDeg != null ? () => clear('rotateDeg') : undefined}
+        control={<Slider aria-label="Rotate (degrees)" min={-180} max={180} step={1} value={style.rotateDeg ?? 0} onChange={(e) => patch({ rotateDeg: Number(e.target.value) })} />}
+      />
+      <Row label="Scale X" onReset={style.scaleX != null ? () => clear('scaleX') : undefined} control={<Slider aria-label="Scale X" min={0} max={3} step={0.01} value={style.scaleX ?? 1} onChange={(e) => patch({ scaleX: Number(e.target.value) })} />} />
+      <Row label="Scale Y" onReset={style.scaleY != null ? () => clear('scaleY') : undefined} control={<Slider aria-label="Scale Y" min={0} max={3} step={0.01} value={style.scaleY ?? 1} onChange={(e) => patch({ scaleY: Number(e.target.value) })} />} />
+      <Row label="Skew X" onReset={style.skewXDeg != null ? () => clear('skewXDeg') : undefined} control={<NumberField value={style.skewXDeg ?? 0} min={-89} max={89} ariaLabel="Skew X (degrees)" onChange={(v) => patch({ skewXDeg: v })} className="w-16" />} />
+      <Row label="Skew Y" onReset={style.skewYDeg != null ? () => clear('skewYDeg') : undefined} control={<NumberField value={style.skewYDeg ?? 0} min={-89} max={89} ariaLabel="Skew Y (degrees)" onChange={(v) => patch({ skewYDeg: v })} className="w-16" />} />
+      <Row
+        label="Origin"
+        hint="The point a rotation or scale pivots around."
+        onReset={style.transformOrigin ? () => clear('transformOrigin') : undefined}
+        control={
+          <Select value={style.transformOrigin ?? 'center'} aria-label="Transform origin" onChange={(e) => patch({ transformOrigin: e.target.value })}>
+            {TRANSFORM_ORIGINS.map((o) => (
+              <option key={o} value={o}>
+                {o}
+              </option>
+            ))}
+          </Select>
+        }
+      />
     </div>
   )
 }
+
+const TRANSFORM_ORIGINS = [
+  'center',
+  'top left',
+  'top',
+  'top right',
+  'left',
+  'right',
+  'bottom left',
+  'bottom',
+  'bottom right'
+] as const
+
+/** The filter stack rows. `neutral` is the value that means "no change", which is what an unset
+ *  control shows: 1 for the multiplicative filters, 0 for the additive ones. */
+const FILTER_ROWS: readonly {
+  key: keyof AppearanceTextStyle
+  label: string
+  min: number
+  max: number
+  step: number
+  neutral: number
+}[] = [
+  { key: 'filterBrightness', label: 'Brightness', min: 0, max: 3, step: 0.01, neutral: 1 },
+  { key: 'filterContrast', label: 'Contrast', min: 0, max: 3, step: 0.01, neutral: 1 },
+  { key: 'filterSaturate', label: 'Saturation', min: 0, max: 3, step: 0.01, neutral: 1 },
+  { key: 'filterHueRotateDeg', label: 'Hue rotate', min: -180, max: 180, step: 1, neutral: 0 },
+  { key: 'filterGrayscale', label: 'Grayscale', min: 0, max: 1, step: 0.01, neutral: 0 },
+  { key: 'filterInvert', label: 'Invert', min: 0, max: 1, step: 0.01, neutral: 0 },
+  { key: 'filterSepia', label: 'Sepia', min: 0, max: 1, step: 0.01, neutral: 0 },
+  { key: 'filterBlurPx', label: 'Blur', min: 0, max: 20, step: 0.5, neutral: 0 }
+]
 
 function LayoutTab({
   style,
