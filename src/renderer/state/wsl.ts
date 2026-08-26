@@ -1,6 +1,21 @@
 import { create } from 'zustand'
 import { resolveWslApi, type WslCatalogueEntry, type WslInstanceSummary } from '../wsl/wslCoreApi'
-import type { WslExternalFactError } from '../wsl/wslCopy'
+import type { WslCatalogueError } from '@shared/wsl'
+import type { WslExternalFactError, WslCopyKey } from '../wsl/wslCopy'
+
+function isWslCatalogueError(value: unknown): value is WslCatalogueError {
+  if (typeof value !== 'object' || value === null) return false
+  const candidate = value as Partial<WslCatalogueError>
+  return (candidate.code === 'not-installed' || candidate.code === 'command-failed' || candidate.code === 'parse-failed') &&
+    (candidate.messageId === 'catalogueNotInstalled' || candidate.messageId === 'catalogueCommandFailed' || candidate.messageId === 'catalogueParseFailed') &&
+    Array.isArray(candidate.facts)
+}
+
+function catalogueTemplateFor(error: WslCatalogueError['messageId']): WslCopyKey {
+  if (error === 'catalogueNotInstalled') return 'catalogueNotInstalled'
+  if (error === 'catalogueCommandFailed') return 'catalogueCommandFailed'
+  return 'catalogueParseFailed'
+}
 
 /**
  * The live WSL facts a canvas frame's chip and the create dialog need: which distributions
@@ -56,14 +71,22 @@ export const useWsl = create<WslState>((set, get) => ({
       const catalogue = await resolveWslApi().catalogue()
       set({ catalogue, catalogueLoading: false })
     } catch (e) {
+      const detail = isWslCatalogueError(e) ? e.detail ?? '' : e instanceof Error ? e.message : String(e)
       set({
         catalogueLoading: false,
-        catalogueError: {
+        catalogueError: isWslCatalogueError(e)
+          ? {
           ownership: 'external-factual',
-          text: e instanceof Error ? e.message : String(e),
-          facts: [e instanceof Error ? e.message : String(e)],
-          authoredPrefix: 'catalogueErrorPrefix'
-        }
+              text: detail,
+              facts: e.facts,
+              authoredTemplate: catalogueTemplateFor(e.messageId)
+            }
+          : {
+              ownership: 'external-factual',
+              text: detail,
+              facts: [detail],
+              authoredPrefix: 'catalogueErrorPrefix'
+            }
       })
     }
   },

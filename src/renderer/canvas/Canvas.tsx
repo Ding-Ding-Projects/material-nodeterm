@@ -5849,6 +5849,7 @@ export function Canvas() {
       if (!target) return
       setWslBusy(true)
       setWslError(null)
+      const selectedCatalogueLabel = wslCatalogue.find((entry) => entry.id === v.catalogueId)?.label ?? v.catalogueId
       const res = await resolveWslApi()
         .create({ operationId: v.operationId, catalogueId: v.catalogueId, name: v.name })
         .catch((e: unknown) => ({
@@ -5857,11 +5858,10 @@ export function Canvas() {
         }))
       setWslBusy(false)
       if (!res.ok) {
-        const selectedCatalogueLabel = wslCatalogue.find((entry) => entry.id === v.catalogueId)?.label
         setWslError({
           ownership: 'external-factual',
           text: res.error,
-          facts: ['wsl.exe', v.name, selectedCatalogueLabel ?? ''],
+          facts: ['wsl.exe', v.name, selectedCatalogueLabel],
           authoredPrefix: 'operationErrorPrefix'
         })
         return
@@ -5884,7 +5884,7 @@ export function Canvas() {
       markDirty()
       setWslDialog(null)
     },
-    [wslDialog, setNodes, markDirty, viewCenter]
+    [wslDialog, wslCatalogue, setNodes, markDirty, viewCenter]
   )
 
   const cancelWslCreation = useCallback(async (operationId: string): Promise<boolean> => {

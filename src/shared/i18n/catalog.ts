@@ -1001,6 +1001,54 @@ export const CATALOG: Catalog = {
   'wsl.create.list.aria': { en: flat('Available WSL distributions'), yue: flat('可用 WSL 發行版') },
   'wsl.create.status.loading': { en: flat('Loading available distributions…'), yue: flat('正在載入可用發行版…') },
   'wsl.create.error.cataloguePrefix': { en: flat('Could not load available distributions:'), yue: flat('無法載入可用發行版：') },
+  'wsl.create.error.catalogueNotInstalled': {
+    en: [
+      'WSL is not installed on this machine, so the online catalogue is unavailable.',
+      'WSL is not installed here, so the online catalogue cannot be shown.',
+      'This machine has no WSL installation to query for the online catalogue.',
+      'The catalogue has nowhere to look because WSL is not installed on this machine.',
+      'The catalogue went looking for WSL and found an empty cupboard: WSL is not installed here.'
+    ],
+    yue: [
+      '呢部電腦未安裝 WSL，所以無法使用線上目錄。',
+      '呢部機未有 WSL，所以睇唔到線上目錄。',
+      '呢部電腦冇 WSL 可以查詢線上目錄。',
+      'WSL 未安裝，目錄冇地方可以查喇。',
+      '目錄搵 WSL 搵到個空櫃：呢部機根本未裝 WSL。'
+    ]
+  },
+  'wsl.create.error.catalogueCommandFailed': {
+    en: [
+      'The WSL catalogue command could not be completed.',
+      'The WSL catalogue command did not finish successfully.',
+      'The WSL catalogue command stopped before it returned a list.',
+      'The WSL catalogue command stumbled before bringing back the list.',
+      'The WSL catalogue command tripped over its own shoelaces before the list arrived.'
+    ],
+    yue: [
+      'WSL 目錄指令無法完成。',
+      'WSL 目錄指令未能成功完成。',
+      'WSL 目錄指令未傳回清單就停止咗。',
+      'WSL 目錄指令未拎返清單就絆咗一跤。',
+      'WSL 目錄指令未拎返清單就自己踩親鞋帶喇。'
+    ]
+  },
+  'wsl.create.error.catalogueParseFailed': {
+    en: [
+      'The WSL catalogue response could not be parsed.',
+      'The WSL catalogue response was not in a readable shape.',
+      'The WSL catalogue response did not match the expected table.',
+      'The WSL catalogue response arrived, but its table shape went sideways.',
+      'The WSL catalogue response arrived wearing a table costume with none of the right pockets.'
+    ],
+    yue: [
+      '無法解析 WSL 目錄回應。',
+      'WSL 目錄回應唔係可讀嘅格式。',
+      'WSL 目錄回應唔符合預期表格。',
+      'WSL 目錄回應到咗，但表格形狀歪咗。',
+      'WSL 目錄回應著住表格衫到場，但啲袋全部唔啱位。'
+    ]
+  },
   'wsl.create.empty.none': { en: flat('No distributions available.'), yue: flat('沒有可用發行版。') },
   'wsl.create.empty.noMatch': { en: flat('No distributions match that filter.'), yue: flat('沒有發行版符合呢個篩選。') },
   'wsl.create.field.name': { en: flat('Instance name'), yue: flat('實例名稱') },
@@ -1014,12 +1062,56 @@ export const CATALOG: Catalog = {
   'wsl.create.progress.starting': { en: flat('Starting WSL creation…'), yue: flat('正在開始建立 WSL…') },
   'wsl.create.progress.cancelling': { en: flat('Cancelling WSL creation…'), yue: flat('正在取消建立 WSL…') },
   'wsl.create.progress.validating': { en: flat('Validating the selected distribution and name.'), yue: flat('正在驗證所選發行版同名稱。') },
+  'wsl.create.progress.checking': {
+    en: ['Checking WSL availability and the current distribution list.', 'Checking WSL and the current distribution list.', 'Checking WSL availability and the current list.', 'Checking whether WSL and the list are behaving.', 'Checking WSL and asking the list to keep its shoes on.'],
+    yue: ['正在檢查 WSL 可用狀態同目前發行版清單。', '正在檢查 WSL 同目前發行版清單。', '正在檢查 WSL 可用狀態同目前清單。', '睇吓 WSL 同清單係咪乖乖運作緊。', '檢查 WSL，同清單講聲唔好周街甩鞋。']
+  },
+  'wsl.create.progress.recording': {
+    en: ['Recording ownership for "{name}" so this app can manage the new instance.', 'Recording ownership for "{name}" so this app can manage it.', 'Saving ownership for "{name}" before management is enabled.', 'Writing down that "{name}" belongs to this app before the knobs appear.', 'Giving "{name}" an ownership note tidy enough for future housekeeping.'],
+    yue: ['正在記錄「{name}」嘅擁有權，等呢個程式可以管理新實例。', '正在記錄「{name}」嘅擁有權，等呢個程式可以管理佢。', '開啟管理之前，先儲存「{name}」嘅擁有權。', '先寫低「{name}」係呢個程式嘅，之後先拎出啲掣。', '幫「{name}」寫張整齊到未來都想收埋嘅擁有權紙仔。']
+  },
+  'wsl.create.progress.completed': {
+    en: ['WSL instance "{name}" was created and ownership was recorded.', 'WSL instance "{name}" was created and ownership is saved.', 'WSL instance "{name}" exists and its ownership record is saved.', 'WSL instance "{name}" is ready, with its ownership paperwork filed.', 'WSL instance "{name}" is ready, and its ownership paperwork has stopped doing cartwheels.'],
+    yue: ['WSL 實例「{name}」已建立，亦已記錄擁有權。', 'WSL 實例「{name}」已建立，擁有權亦已儲存。', 'WSL 實例「{name}」存在，擁有權紀錄亦已儲存。', 'WSL 實例「{name}」準備好喇，擁有權文件亦已入檔。', 'WSL 實例「{name}」準備好喇，擁有權文件終於唔再翻筋斗。']
+  },
+  'wsl.create.progress.failed': {
+    en: ['WSL instance creation failed: {error}', 'WSL instance creation did not finish: {error}', 'WSL could not create the instance: {error}', 'WSL creation hit a snag: {error}', 'WSL creation tripped over a very specific banana peel: {error}'],
+    yue: ['建立 WSL 實例失敗：{error}', '建立 WSL 實例未能完成：{error}', 'WSL 無法建立實例：{error}', '建立 WSL 實例撞到個小障礙：{error}', '建立 WSL 實例俾一塊好有針對性嘅香蕉皮跣親：{error}']
+  },
+  'wsl.create.progress.cancelled': {
+    en: ['WSL instance creation was cancelled.', 'WSL instance creation was stopped by cancellation.', 'WSL instance creation ended because it was cancelled.', 'WSL creation was politely asked to stop, and it did.', 'WSL creation has packed its little suitcase because cancellation won.'],
+    yue: ['建立 WSL 實例已取消。', '建立 WSL 實例因取消而停止。', '建立 WSL 實例因取消而結束。', 'WSL 建立收到取消通知，乖乖停低咗。', 'WSL 建立執好個細喼，因為取消贏咗。']
+  },
+  'wsl.create.progress.cancelledLate': {
+    en: ['WSL instance "{name}" was created before cancellation completed; no canvas frame was bound.', 'WSL instance "{name}" was created before cancellation finished, so no canvas frame was bound.', 'WSL instance "{name}" already existed when cancellation completed; no canvas frame was bound.', 'WSL instance "{name}" beat cancellation to the finish line, so no canvas frame was bound.', 'WSL instance "{name}" crossed the finish line before cancellation, and the canvas wisely kept its hands in its pockets.'],
+    yue: ['取消完成之前，WSL 實例「{name}」已建立；沒有綁定畫布框架。', '取消完成之前，WSL 實例「{name}」已建立，所以沒有綁定畫布框架。', '取消完成時 WSL 實例「{name}」已存在；沒有綁定畫布框架。', 'WSL 實例「{name}」跑贏取消先到終點，所以沒有綁定畫布框架。', 'WSL 實例「{name}」早過取消衝線，畫布就醒目咁冇伸手亂拎。']
+  },
   'wsl.create.progress.step': { en: flat('Step'), yue: flat('步驟') },
   'wsl.create.progress.of': { en: flat('of'), yue: flat('共') },
   'wsl.create.progress.aria': { en: flat('WSL creation phase progress'), yue: flat('WSL 建立階段進度') },
+  'wsl.create.progress.value': {
+    en: ['Step {step} of {steps}, {stage}. {detail}', 'Step {step} of {steps}, currently {stage}. {detail}', 'Phase {step} of {steps}: {stage}. {detail}', 'Phase {step} of {steps} is {stage}; {detail}', 'Step {step} of {steps}: {stage} is on duty. {detail}'],
+    yue: ['第 {step} 步，共 {steps} 步，{stage}。{detail}', '第 {step} 步，共 {steps} 步，而家係 {stage}。{detail}', '第 {step} 階段，共 {steps} 階段：{stage}。{detail}', '第 {step} 階段，共 {steps} 階段，狀態係 {stage}；{detail}', '第 {step} 步，共 {steps} 步：{stage} 當值中。{detail}']
+  },
   'wsl.create.progress.elapsed': { en: flat('Elapsed time:'), yue: flat('已用時間：') },
   'wsl.create.progress.seconds': { en: flat('seconds.'), yue: flat('秒。') },
   'wsl.create.progress.installing': {
+    en: [
+      'Installing "{catalogue}" as "{name}" for operation {operationId}. Installation progress is reported by phase because wsl.exe provides no byte or percentage telemetry.',
+      'Installing "{catalogue}" as "{name}" for operation {operationId}. Progress is reported by phase because wsl.exe provides no byte or percentage telemetry.',
+      'Installing "{catalogue}" as "{name}" for operation {operationId}; wsl.exe reports phases, not bytes or percentages.',
+      'Installing "{catalogue}" as "{name}" for operation {operationId}; wsl.exe is counting phases instead of bytes.',
+      'Installing "{catalogue}" as "{name}" for operation {operationId}; wsl.exe brought a phase counter and left the byte ruler at home.'
+    ],
+    yue: [
+      '正在用操作 {operationId} 將「{catalogue}」安裝成「{name}」。由於 wsl.exe 沒有提供位元組或百分比遙測，安裝進度會按階段報告。',
+      '正在用操作 {operationId} 將「{catalogue}」安裝成「{name}」。wsl.exe 只按階段報告，冇位元組或百分比。',
+      '正在用操作 {operationId} 安裝「{catalogue}」成為「{name}」；wsl.exe 報告階段，唔報位元組或百分比。',
+      '正在用操作 {operationId} 安裝「{catalogue}」成為「{name}」；wsl.exe 而家數階段，唔數位元組。',
+      '正在用操作 {operationId} 安裝「{catalogue}」成為「{name}」；wsl.exe 帶咗階段計數器，偏偏將位元組尺留咗喺屋企。'
+    ]
+  },
+  'wsl.create.progress.installingDetail': {
     en: flat('Installation progress is reported by phase because wsl.exe provides no byte or percentage telemetry.'),
     yue: flat('由於 wsl.exe 沒有提供位元組或百分比遙測，安裝進度會按階段報告。')
   },

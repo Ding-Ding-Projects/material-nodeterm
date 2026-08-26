@@ -69,9 +69,9 @@ export function WslCreateDialog({
   // The fallback is both localized through the shared catalog and then passed through the local
   // personal-vocabulary boundary. Keys are derived only from fixed shipped copy, never from a
   // distribution name, user name, path, operation id, or external error.
-  const copy = (key: WslCopyKey, facts: readonly string[] = []): string => {
+  const copy = (key: WslCopyKey, facts: readonly string[] = [], params?: Record<string, string>): string => {
     const entry = WSL_COPY[key]
-    return mapAroundExactFacts(ts(entry.id, entry.fallback), facts, mapVocabulary)
+    return mapAroundExactFacts(ts(entry.id, entry.fallback, params), facts, mapVocabulary)
   }
 
   const copyFromFallback = (fallback: string, facts: readonly string[] = []): string => {
@@ -79,10 +79,16 @@ export function WslCreateDialog({
     return key ? copy(key, facts) : mapAroundExactFacts(fallback, facts, mapVocabulary)
   }
 
-  const renderError = (value: WslDialogError): string =>
-    value.ownership === 'external-factual'
-      ? `${value.authoredPrefix ? `${copy(value.authoredPrefix)} ` : ''}${mapAroundExactFacts(value.text, value.facts, mapVocabulary)}`
-      : copy(value.copy)
+  const renderError = (value: WslDialogError): string => {
+    if (value.ownership === 'authored') return copy(value.copy)
+    const authored = value.authoredTemplate
+      ? copy(value.authoredTemplate)
+      : value.authoredPrefix
+        ? copy(value.authoredPrefix)
+        : ''
+    const factual = value.text ? mapAroundExactFacts(value.text, value.facts, mapVocabulary) : ''
+    return [authored, factual].filter(Boolean).join(' ')
+  }
 
   const cancel = async (): Promise<void> => {
     if (!busy && !operationIdRef.current) {
@@ -179,7 +185,15 @@ export function WslCreateDialog({
     setOperationId(nextOperationId)
     startedAtRef.current = Date.now()
     setElapsedMs(0)
-    setProgress({ operationId: nextOperationId, stage: 'validating', step: 1, steps: 4, determinate: false, elapsedMs: 0, message: WSL_COPY.validating.fallback })
+    setProgress({
+      operationId: nextOperationId,
+      stage: 'validating',
+      step: 1,
+      steps: 4,
+      determinate: false,
+      elapsedMs: 0,
+      message: { id: 'validating', params: {}, facts: [] }
+    })
     setCancelRequested(false)
     setCancelError(null)
     onCreate({ operationId: nextOperationId, catalogueId, name: name.trim() })
@@ -302,7 +316,7 @@ export function WslCreateDialog({
                 {cancelRequested
                   ? copy('cancellingProgress')
                   : progress
-                    ? mapAroundExactFacts(progress.message, ['WSL', 'wsl.exe', catalogue.find((c) => c.id === catalogueId)?.label ?? '', name, progress.operationId], mapVocabulary)
+                    ? copy(progress.message.id as WslCopyKey, progress.message.facts, progress.message.params)
                     : copy('starting')}
               </strong>
               <span>{copy('step')} {progress?.step ?? 1} {copy('of')} {progress?.steps ?? 4}</span>
@@ -313,10 +327,15 @@ export function WslCreateDialog({
               aria-valuemin={1}
               aria-valuemax={progress?.steps ?? 4}
               aria-valuenow={progress?.step ?? 1}
-              aria-valuetext={mapAroundExactFacts(
-                `Step ${progress?.step ?? 1} of ${progress?.steps ?? 4}, ${progress?.stage ?? 'validating'}${progress?.determinate ? '' : '; installation byte progress is unavailable'}`,
-                [progress?.stage ?? 'validating', 'WSL', 'wsl.exe'],
-                mapVocabulary
+              aria-valuetext={copy(
+                'progressValue',
+                [progress?.stage ?? 'validating', 'wsl.exe'],
+                {
+                  step: String(progress?.step ?? 1),
+                  steps: String(progress?.steps ?? 4),
+                  stage: progress?.stage ?? 'validating',
+                  detail: progress?.determinate ? '' : copy('installing', ['wsl.exe'])
+                }
               )}
               aria-label={copy('progressAria')}
             >
@@ -325,7 +344,7 @@ export function WslCreateDialog({
             <p className="wsl-create-dialog__progress-detail">
               {copy('elapsed')} {Math.floor((Math.max(elapsedMs, progress?.elapsedMs ?? 0)) / 1000)} {copy('seconds')}{' '}
               {progress?.stage === 'installing'
-                ? copy('installing', ['wsl.exe'])
+                ? copy('installingDetail', ['wsl.exe'])
                 : copy('cancellable')}
             </p>
           </div>

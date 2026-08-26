@@ -230,6 +230,21 @@ describe('WslCreateDialog', () => {
     }
   })
 
+  it('keeps operational, catalogue-error, and progress copy meaningfully different at levels 1 and 5', () => {
+    const expressive = WSL_COPY_INVENTORY.filter((entry) =>
+      entry.key === 'checking' || entry.key === 'installing' || entry.key === 'recording' ||
+      entry.key === 'completed' || entry.key === 'failed' || entry.key === 'cancelled' ||
+      entry.key === 'cancelledLate' || entry.key === 'catalogueNotInstalled' ||
+      entry.key === 'catalogueCommandFailed' || entry.key === 'catalogueParseFailed' ||
+      entry.key === 'progressValue'
+    )
+    expect(expressive.length).toBeGreaterThan(0)
+    for (const entry of expressive) {
+      expect(CATALOG[entry.id]?.en[0], `${entry.id} English`).not.toBe(CATALOG[entry.id]?.en[4])
+      expect(CATALOG[entry.id]?.yue[0], `${entry.id} Cantonese`).not.toBe(CATALOG[entry.id]?.yue[4])
+    }
+  })
+
   it('rejects a missing catalogue inventory row instead of letting the coverage check disappear', () => {
     const ids = WSL_COPY_INVENTORY.map((entry) => entry.id)
     const withoutOne = ids.slice(1)
@@ -269,7 +284,7 @@ describe('WslCreateDialog', () => {
       steps: number
       determinate: boolean
       elapsedMs: number
-      message: string
+      message: { id: 'installing'; params: Readonly<Record<string, string>>; facts: readonly string[] }
     }) => void) | null = null
     ;(window as unknown as { nodeTerminal: unknown }).nodeTerminal = {
       wsl: {
@@ -299,7 +314,11 @@ describe('WslCreateDialog', () => {
         steps: 4,
         determinate: false,
         elapsedMs: 2500,
-        message: `Installing Ubuntu 24.04 LTS for my-project, operation ${created!.operationId}.`
+        message: {
+          id: 'installing',
+          params: { name: 'my-project', catalogue: 'Ubuntu 24.04 LTS', operationId: created!.operationId },
+          facts: ['wsl.exe', 'my-project', 'Ubuntu 24.04 LTS', created!.operationId]
+        }
       })
     })
     expect(document.body.textContent).toContain('Ubuntu 24.04 LTS')

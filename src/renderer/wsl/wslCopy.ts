@@ -16,6 +16,9 @@ export const WSL_COPY = {
   listAria: { id: 'wsl.create.list.aria', fallback: 'Available WSL distributions' },
   loading: { id: 'wsl.create.status.loading', fallback: 'Loading available distributions…' },
   catalogueErrorPrefix: { id: 'wsl.create.error.cataloguePrefix', fallback: 'Could not load available distributions:' },
+  catalogueNotInstalled: { id: 'wsl.create.error.catalogueNotInstalled', fallback: 'WSL is not installed on this machine, so the online catalogue is unavailable.' },
+  catalogueCommandFailed: { id: 'wsl.create.error.catalogueCommandFailed', fallback: 'The WSL catalogue command could not be completed.' },
+  catalogueParseFailed: { id: 'wsl.create.error.catalogueParseFailed', fallback: 'The WSL catalogue response could not be parsed.' },
   emptyNone: { id: 'wsl.create.empty.none', fallback: 'No distributions available.' },
   emptyNoMatch: { id: 'wsl.create.empty.noMatch', fallback: 'No distributions match that filter.' },
   nameLabel: { id: 'wsl.create.field.name', fallback: 'Instance name' },
@@ -26,12 +29,20 @@ export const WSL_COPY = {
   starting: { id: 'wsl.create.progress.starting', fallback: 'Starting WSL creation…' },
   cancellingProgress: { id: 'wsl.create.progress.cancelling', fallback: 'Cancelling WSL creation…' },
   validating: { id: 'wsl.create.progress.validating', fallback: 'Validating the selected distribution and name.' },
+  checking: { id: 'wsl.create.progress.checking', fallback: 'Checking WSL availability and the current distribution list.' },
+  recording: { id: 'wsl.create.progress.recording', fallback: 'Recording ownership for "{name}" so this app can manage the new instance.' },
+  completed: { id: 'wsl.create.progress.completed', fallback: 'WSL instance "{name}" was created and ownership was recorded.' },
+  failed: { id: 'wsl.create.progress.failed', fallback: 'WSL instance creation failed: {error}' },
+  cancelled: { id: 'wsl.create.progress.cancelled', fallback: 'WSL instance creation was cancelled.' },
+  cancelledLate: { id: 'wsl.create.progress.cancelledLate', fallback: 'WSL instance "{name}" was created before cancellation completed; no canvas frame was bound.' },
   step: { id: 'wsl.create.progress.step', fallback: 'Step' },
   of: { id: 'wsl.create.progress.of', fallback: 'of' },
   progressAria: { id: 'wsl.create.progress.aria', fallback: 'WSL creation phase progress' },
+  progressValue: { id: 'wsl.create.progress.value', fallback: 'Step {step} of {steps}, {stage}. {detail}' },
   elapsed: { id: 'wsl.create.progress.elapsed', fallback: 'Elapsed time:' },
   seconds: { id: 'wsl.create.progress.seconds', fallback: 'seconds.' },
-  installing: { id: 'wsl.create.progress.installing', fallback: 'Installation progress is reported by phase because wsl.exe provides no byte or percentage telemetry.' },
+  installing: { id: 'wsl.create.progress.installing', fallback: 'Installing "{catalogue}" as "{name}" for operation {operationId}. Installation progress is reported by phase because wsl.exe provides no byte or percentage telemetry.' },
+  installingDetail: { id: 'wsl.create.progress.installingDetail', fallback: 'Installation progress is reported by phase because wsl.exe provides no byte or percentage telemetry.' },
   cancellable: { id: 'wsl.create.progress.cancellable', fallback: 'The operation is bounded and can be cancelled.' },
   noActive: { id: 'wsl.create.error.noActive', fallback: 'Cancellation could not be sent because there is no active WSL operation.' },
   cancelRejected: { id: 'wsl.create.error.cancelRejected', fallback: 'Cancellation was not accepted because the WSL operation is no longer active. You can retry or close this dialog.' },
@@ -72,6 +83,8 @@ export interface WslExternalFactError {
   facts: readonly string[]
   /** Optional authored catalogue prefix rendered before the preserved external text. */
   authoredPrefix?: WslCopyKey
+  /** Authored catalogue template used when the production error has a typed code. */
+  authoredTemplate?: WslCopyKey
 }
 
 export type WslDialogError = WslAuthoredError | WslExternalFactError
