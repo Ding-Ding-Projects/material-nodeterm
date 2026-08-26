@@ -790,26 +790,25 @@ function catalogHeadlineText(
   }
 }
 
-function catalogStalenessText(
-  vocab: (text: string) => string,
+function catalogStalenessSegments(
   view: CatalogView,
   now: number
-): string | null {
+): readonly ReturnType<typeof copy>[] | null {
   switch (view.staleness) {
     case 'never':
-      return view.registryEnabled ? vocab('The catalog has never been fetched on this machine.') : null
+      return view.registryEnabled ? [copy('The catalog has never been fetched on this machine.')] : null
     case 'stale':
       return view.indexFetchedAt === null
-        ? vocab('The cached catalog is out of date and is being refreshed.')
-        : mapOwnedSentence(vocab, [
+        ? [copy('The cached catalog is out of date and is being refreshed.')]
+        : [
             copy('The cached catalog is out of date (last fetched '),
             fact(formatAge(now - view.indexFetchedAt)),
             copy(' ago) and is being refreshed.')
-          ])
+          ]
     case 'fresh':
       return view.indexFetchedAt === null
         ? null
-        : mapOwnedSentence(vocab, [copy('Catalog fetched '), fact(formatAge(now - view.indexFetchedAt)), copy(' ago.')])
+        : [copy('Catalog fetched '), fact(formatAge(now - view.indexFetchedAt)), copy(' ago.')]
     default:
       return null
   }
@@ -887,11 +886,11 @@ function StoreTab({
               </p>
             )}
             {(() => {
-              const staleness = catalogStalenessText(vocab, catalog, Date.now())
-              return staleness ? <p>{vocab(staleness)}</p> : null
+              const staleness = catalogStalenessSegments(catalog, Date.now())
+              return staleness ? <p>{mapOwnedSentence(vocab, staleness)}</p> : null
             })()}
             {catalog.completeness.reasons.map((reason, i) => (
-              <p key={i}>{reason}</p>
+              <p key={i}>{mapOwnedSentence(vocab, [fact(reason)])}</p>
             ))}
             {catalog.refreshError && <p>{vocab('Last refresh error:')} {catalog.refreshError}</p>}
             {catalogError && <p>{vocab('The most recent reload failed:')} {catalogError}. {vocab('Showing the last list that loaded.')}</p>}

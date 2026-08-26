@@ -302,6 +302,21 @@ Every listed renderer producer has an explicit local mapper boundary. Commands, 
 | `appearance-editor` | Appearance editor | `src/renderer/components/appearance/AppearanceEditor.tsx` | `useVocabularyMapper()` |
 | `color-field` | Colour field | `src/renderer/components/color/ColorField.tsx` | `useVocabularyMapper()` |
 | `color-picker` | Colour picker | `src/renderer/components/color/ColorPicker.tsx` | `useVocabularyMapper()` |
+| `bulk-preview-segments` | Bulk preview typed copy and count fields | `src/renderer/components/BulkActionPreview.tsx` | `messageSegments={messageSegments}` |
+| `bulk-preview-single-title-map` | Bulk preview action-label boundary | `src/renderer/components/BulkActionBar.tsx` | `title={vocab(pending.label)}` |
+| `project-storage-segments` | Project storage confirmation facts | `src/renderer/components/ProjectSwitcher.tsx` | `messageSegments={` |
+| `project-other-unread-fact` | Other-project unread count fact | `src/renderer/components/ProjectSwitcher.tsx` | `mapOwnedSentence(vocab, [fact(String(otherUnread))` |
+| `converter-detection-note-fact` | Converter detection note fact | `src/renderer/components/converter/FileConverterPanel.tsx` | `f.detection.note` |
+| `converter-adapter-id-corpus` | Adapter id search corpus | `src/renderer/components/converter/AdapterCatalog.tsx` | `row.id} ${row.label}` |
+| `ollama-staleness-segments` | Model catalogue staleness facts | `src/renderer/components/ollama/OllamaManagerPanel.tsx` | `mapOwnedSentence(vocab, staleness)` |
+| `ollama-completeness-segments` | Model catalogue completeness facts | `src/renderer/components/ollama/OllamaManagerPanel.tsx` | `catalogHeadlineText(vocab, catalog)` |
+| `ollama-completeness-reason-fact` | Model catalogue reason facts | `src/renderer/components/ollama/OllamaManagerPanel.tsx` | `mapOwnedSentence(vocab, [fact(reason)]` |
+| `ollama-queue-phase-fact` | Pull queue phase ownership | `src/renderer/components/ollama/OllamaManagerPanel.tsx` | `item.digestPhase ?? vocab(item.status)` |
+| `ollama-fit-evidence-fact` | Hardware fit evidence ownership | `src/renderer/components/ollama/OllamaManagerPanel.tsx` | `vocab('Evidence:')` |
+| `appearance-weight-segments` | Font weight copy and numeric facts | `src/renderer/components/appearance/AppearanceEditor.tsx` | `w.label.indexOf` |
+| `appearance-font-preview-fact` | Font preview name ownership | `src/renderer/components/appearance/AppearanceEditor.tsx` | `quoteFamily(primary ||` |
+| `docs-section-copy` | Documentation section metadata | `src/renderer/components/DocsBrowser.tsx` | `vocab(section.label)` |
+| `history-restore-segments` | History restore target ownership | `src/renderer/components/LocalHistoryPanel.tsx` | `messageSegments={[` |
 | `minecraft-backups` | Minecraft backups | `src/renderer/components/minecraft/MinecraftBackupsPanel.tsx` | `useVocabularyMapper()` |
 | `minecraft-players` | Minecraft players | `src/renderer/components/minecraft/MinecraftPlayersPanel.tsx` | `useVocabularyMapper()` |
 | `minecraft-properties` | Minecraft properties | `src/renderer/components/minecraft/MinecraftPropertiesEditor.tsx` | `useVocabularyMapper()` |

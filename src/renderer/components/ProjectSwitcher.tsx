@@ -423,7 +423,7 @@ export function ProjectSwitcher({
         {otherUnread > 0 && (
           <span
             className="md3-switcher__more-badge"
-            title={vocab(`${otherUnread} unread in other projects`)}
+            title={mapOwnedSentence(vocab, [fact(String(otherUnread)), copy(' unread in other projects')])}
           >
             +{otherUnread}
           </span>

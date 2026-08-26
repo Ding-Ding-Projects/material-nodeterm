@@ -558,7 +558,7 @@ function FileConverterPanelForApi({
                     <span className="cv-pending__name">{f.path.split(/[\\/]/).pop()}</span>
                     <span className="cv-pending__meta">
                       {f.detection
-                        ? <>{vocab('Detection:')} {vocab(f.detection.note)} ({vocab('confidence:')} {f.detection.confidence})</>
+                        ? <>{vocab('Detection:')} {f.detection.note} ({vocab('confidence:')} {f.detection.confidence})</>
                         : vocab('inspecting…')}
                       {f.detection ? ` · ${formatBytes(f.detection.sizeBytes)}` : ''}
                     </span>

@@ -102,6 +102,23 @@ const PRODUCTION_SURFACES = [
   ['update-card', 'src/renderer/components/UpdateCard.tsx', 'unmapped-callsite-pending'],
   ['resume-card', 'src/renderer/components/ResumeCard.tsx', 'unmapped-callsite-pending']
 ]
+const FIELD_BOUNDARIES = [
+  ['bulk-preview-segments', 'src/renderer/components/BulkActionPreview.tsx', 'messageSegments={messageSegments}'],
+  ['bulk-preview-single-title-map', 'src/renderer/components/BulkActionBar.tsx', 'title={vocab(pending.label)}'],
+  ['project-storage-segments', 'src/renderer/components/ProjectSwitcher.tsx', 'messageSegments={'],
+  ['project-other-unread-fact', 'src/renderer/components/ProjectSwitcher.tsx', 'mapOwnedSentence(vocab, [fact(String(otherUnread))'],
+  ['converter-detection-note-fact', 'src/renderer/components/converter/FileConverterPanel.tsx', 'f.detection.note'],
+  ['converter-adapter-id-corpus', 'src/renderer/components/converter/AdapterCatalog.tsx', 'row.id} ${row.label}'],
+  ['ollama-staleness-segments', 'src/renderer/components/ollama/OllamaManagerPanel.tsx', 'mapOwnedSentence(vocab, staleness)'],
+  ['ollama-completeness-segments', 'src/renderer/components/ollama/OllamaManagerPanel.tsx', 'catalogHeadlineText(vocab, catalog)'],
+  ['ollama-completeness-reason-fact', 'src/renderer/components/ollama/OllamaManagerPanel.tsx', 'mapOwnedSentence(vocab, [fact(reason)]'],
+  ['ollama-queue-phase-fact', 'src/renderer/components/ollama/OllamaManagerPanel.tsx', 'item.digestPhase ?? vocab(item.status)'],
+  ['ollama-fit-evidence-fact', 'src/renderer/components/ollama/OllamaManagerPanel.tsx', "vocab('Evidence:')"],
+  ['appearance-weight-segments', 'src/renderer/components/appearance/AppearanceEditor.tsx', 'w.label.indexOf'],
+  ['appearance-font-preview-fact', 'src/renderer/components/appearance/AppearanceEditor.tsx', 'quoteFamily(primary ||'],
+  ['docs-section-copy', 'src/renderer/components/DocsBrowser.tsx', 'vocab(section.label)'],
+  ['history-restore-segments', 'src/renderer/components/LocalHistoryPanel.tsx', 'messageSegments={[']
+]
 let failures = 0
 let checked = 0
 const read = (file) => existsSync(join(ROOT, file)) ? readFileSync(join(ROOT, file), 'utf8') : null
@@ -142,6 +159,12 @@ for (const [id, file, reason] of PRODUCTION_SURFACES) {
   check(id + ': production surface exists', read(file) !== null)
   check(id + ': classification reason is explicit', reason.length > 0)
   if (reason === 'mapped-callsite') check(id + ': mapper call is present', hasMarker(read(file), 'useVocabularyMapper()') || hasMarker(read(file), 'useLocalizedVocabularyText()'))
+}
+for (const [id, file, marker] of FIELD_BOUNDARIES) {
+  check(id + ': field-level implementation exists', read(file) !== null)
+  check(id + ': exact production field boundary', hasMarker(read(file), marker))
+  const docText = read(DOC) || ''
+  check(id + ': field-level audit row', docText.includes('| ' + String.fromCharCode(96) + id + String.fromCharCode(96) + ' |'))
 }
 const pendingProductionSurfaces = PRODUCTION_SURFACES.filter(([, , reason]) => reason === 'unmapped-callsite-pending')
 check('all listed production surfaces are mapper-covered', pendingProductionSurfaces.length === 0)

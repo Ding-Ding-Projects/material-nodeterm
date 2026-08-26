@@ -22,6 +22,8 @@ interface ConfirmDialogProps {
    *  it, which is exactly how a bulk run could be fired twice over the same rows. */
   busy?: boolean
   confirmLabel?: string
+  /** True when the caller already applied the local vocabulary mapper to this label. */
+  confirmLabelAlreadyMapped?: boolean
   cancelLabel?: string
   danger?: boolean
   /** Nothing to decide — the dialog only REPORTS (an error, a "not ready yet"). Renders a single
@@ -70,6 +72,7 @@ export function ConfirmDialog({
   body,
   busy = false,
   confirmLabel,
+  confirmLabelAlreadyMapped = false,
   cancelLabel,
   danger: dangerProp,
   alert = false,
@@ -98,9 +101,9 @@ export function ConfirmDialog({
   // worktree") is that caller's copy and passes through untouched.
   const danger = dangerProp ?? !alert
   const cancelText = vocab(cancelLabel ?? ts('dialog.confirm.cancel', 'Cancel'))
-  const confirmText = vocab(
-    confirmLabel ?? (alert ? ts('dialog.confirm.ok', 'OK') : ts('dialog.confirm.delete', 'Delete'))
-  )
+  const confirmText = confirmLabelAlreadyMapped
+    ? (confirmLabel ?? '')
+    : vocab(confirmLabel ?? (alert ? ts('dialog.confirm.ok', 'OK') : ts('dialog.confirm.delete', 'Delete')))
   const messageText = messageSegments ? mapOwnedSentence(vocab, messageSegments) : vocab(message)
   const optionLabel = vocab(option?.label)
   // Non-semantic decoration only (Settings → Language → "Show emojis…"): purely visual, never

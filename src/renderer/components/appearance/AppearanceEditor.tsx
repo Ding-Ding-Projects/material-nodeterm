@@ -334,7 +334,7 @@ function FontTab({
             <option value="">{vocab('Inherit')}</option>
             {WEIGHTS.map((w) => (
               <option key={w.v} value={w.v}>
-                {w.label}
+                {mapOwnedSentence(vocab, [fact(String(w.v)), copy(' — '), copy(w.label.slice(w.label.indexOf('—') + 1).trim())])}
               </option>
             ))}
           </Select>

@@ -9,6 +9,8 @@ import { copy, fact } from '../lib/personalVocabulary/ownedCopy'
 
 export interface BulkActionPreviewProps<T> {
   title: string
+  /** Set when the caller already mapped this application-owned action label. */
+  titleAlreadyMapped?: boolean
   items: T[]
   describe: (item: T) => string
   excluded: { item: T; reason: string }[]
@@ -22,6 +24,7 @@ const MAX_LISTED = 12
 
 export function BulkActionPreview<T>({
   title,
+  titleAlreadyMapped = false,
   items,
   describe,
   excluded,
@@ -37,14 +40,15 @@ export function BulkActionPreview<T>({
   const hiddenCount = items.length - listed.length
 
   const messageSegments = totalSelected === willChange
-    ? [copy(title), copy(': '), fact(String(willChange)), copy(` item${willChange === 1 ? '' : 's'}.`)]
-    : [copy(title), copy(': '), fact(String(willChange)), copy(' of '), fact(String(totalSelected)), copy(' selected will change.')]
+    ? [titleAlreadyMapped ? fact(title) : copy(title), copy(': '), fact(String(willChange)), copy(` item${willChange === 1 ? '' : 's'}.`)]
+    : [titleAlreadyMapped ? fact(title) : copy(title), copy(': '), fact(String(willChange)), copy(' of '), fact(String(totalSelected)), copy(' selected will change.')]
 
   return (
     <ConfirmDialog
       message=""
       messageSegments={messageSegments}
       confirmLabel={busy ? 'Working…' : title}
+      confirmLabelAlreadyMapped={titleAlreadyMapped && !busy}
       // The label alone never stopped a second submit — pass it through so the button disables.
       busy={busy}
       cancelLabel="Cancel"
