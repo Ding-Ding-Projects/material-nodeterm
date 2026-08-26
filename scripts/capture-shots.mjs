@@ -398,6 +398,16 @@ const SURFACES = [
     // embedded them as current, so it published the old blue-accent interface. Required now so a
     // stale settings shot fails the run instead of quietly outliving the design it shows.
     {
+      // Docker hosted remote access. Required because it is one of the larger things this fork
+      // has that upstream does not, and a feature nobody has ever photographed is one nobody can
+      // check the design of.
+      id: 'app-settings-docker-host',
+      required: true,
+      title: 'Settings — Docker host',
+      open: { clicks: ['[title*="Settings" i],[aria-label*="Settings" i]', 'Docker host'] },
+      verify: '[class*="settings"]'
+    },
+    {
       id: 'app-settings-language',
       required: true,
       title: 'Settings — Language',

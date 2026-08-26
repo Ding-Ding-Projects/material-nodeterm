@@ -136,7 +136,15 @@ describe('electronPlatform + relay peers', () => {
     const passwordManagerMethods: string[] = Object.values(IPC).flatMap((method) =>
       typeof method === 'string' && method.startsWith('password-manager:') ? [method] : []
     )
-    expect(passwordManagerMethods).toHaveLength(16)
+    // 17 since `password-manager:list-credentials` (bc41b7aa). This count is a TRIPWIRE, not
+    // bookkeeping: a new method arriving here is meant to make somebody decide whether a relay
+    // peer may reach it. The decision for this one is NO. It returns credential labels and
+    // timestamps, which is the user's data even though it is not the secret itself, and the
+    // whole password-manager namespace stays on the viewing desktop.
+    //
+    // It had been failing since that commit and nobody saw it, because this repository's CI
+    // deliberately runs no tests, so a red suite never turns a build red.
+    expect(passwordManagerMethods).toHaveLength(17)
     const denied = [
       IPC.settingsLoad,
       IPC.schoolModeDisable,
