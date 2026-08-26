@@ -78,6 +78,7 @@ import { SettingsStore } from '../core/settings-store'
 import { SchoolModeStore } from '../core/school-mode'
 import { KidsModeStore } from '../core/kids-mode'
 import { ScheduledSettingsRuntime } from '../core/scheduled-settings-runtime'
+import { PlannerOccurrenceRuntime } from '../core/planner-occurrence-service'
 import { presenceHub } from '../core/presence/hub'
 import { SshStore } from './ssh-store'
 import { GitService } from '../core/git-service'
@@ -334,6 +335,22 @@ const settingsStore = new SettingsStore()
 const schoolModeStore = new SchoolModeStore()
 const kidsModeStore = new KidsModeStore()
 const scheduledSettingsRuntime = new ScheduledSettingsRuntime()
+const plannerRuntime = new PlannerOccurrenceRuntime({
+  notify: (occurrence) => {
+    const win = getMainWindow()
+    if (win && !win.isDestroyed() && win.isFocused()) return
+    if (!Notification.isSupported()) return
+    const notification = new Notification({ title: occurrence.title, body: occurrence.body })
+    notification.on('click', () => {
+      const current = getMainWindow()
+      if (!current || current.isDestroyed()) return
+      if (current.isMinimized()) current.restore()
+      current.show()
+      current.focus()
+    })
+    retainUntilDismissed(notification)
+  }
+})
 const sshStore = new SshStore()
 // One trusted catalog/resolver instance owns both public detection and private launch resolution.
 // The getter is evaluated at use time so a Settings save updates Custom availability immediately;
@@ -884,6 +901,9 @@ app.whenReady().then(async () => {
   // This one runtime is shared with the Server Edition. A corrupt/unreadable schedule file boots
   // into a disabled recovery state rather than aborting this app-ready sequence.
   scheduledSettingsRuntime.start()
+  // Planner occurrence evaluation stays in the host process. Closing the UI leaves this service
+  // alive, while a powered-off computer cannot evaluate time and is reported as missed on restart.
+  plannerRuntime.start()
   // Local, git-backed settings history (docs/local-history.md). One append-only revision per
   // save; the diff-based label lives in shared/settings-diff.ts so it is shared with any future
   // shell that saves settings, rather than re-derived per process.
@@ -3257,6 +3277,10 @@ app.on('window-all-closed', () => {
   // On macOS the app stays alive, so the async final snapshots inside killAll can complete
   // in the background; on other platforms quitting goes through before-quit below.
   if (process.platform !== 'darwin') {
+    // Keep the host alive when a local planner schedule is enabled. The window is allowed to be
+    // closed, but the host-owned occurrence service must continue while the computer is available.
+    // A later explicit Quit still follows before-quit and stops the service normally.
+    if (plannerRuntime.hasEnabledSchedules()) return
     app.quit()
   } else {
     void ptyManager.killAll()
@@ -3298,6 +3322,7 @@ app.on('before-quit', (e) => {
   minecraftServers?.requestGracefulStopAll()
   destroyNotchHud()
   const scheduledSettingsStop = scheduledSettingsRuntime.stop()
+  const plannerStop = plannerRuntime.stop()
   // Electron releases power assertions at exit anyway; disposing keeps the hold/release log honest.
   keepAwake?.dispose()
   workspaceWatcher.dispose()
@@ -3330,7 +3355,8 @@ app.on('before-quit', (e) => {
   const flush = Promise.allSettled([
     remoteWorkspaceIO.flush(),
     ptyManager.killAll(),
-    scheduledSettingsStop
+    scheduledSettingsStop,
+    plannerStop
   ])
   void Promise.race([flush, new Promise((r) => setTimeout(r, 1500))])
     // Then let whisper go. A dictation still transcribing when Electron tears down the main

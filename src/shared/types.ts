@@ -2440,6 +2440,16 @@ export interface ScheduledSettingsApi {
   ): () => void
 }
 
+/** Machine-local planner occurrence service. The host keeps its timer alive after the UI closes,
+ * while the schedule and bounded occurrence history remain durable in application data. */
+export interface PlannerApi {
+  load(): Promise<import('./planner-occurrences').PlannerLoadState>
+  save(file: import('./planner-occurrences').PlannerFile): Promise<{ ok: true } | { ok: false; error: string }>
+  history(): Promise<import('./planner-occurrences').PlannerOccurrence[]>
+  export(format: 'json' | 'csv'): Promise<{ filename: string; content: string }>
+  onOccurrence(listener: (occurrence: import('./planner-occurrences').PlannerOccurrence) => void): () => void
+}
+
 /** A downloadable whisper model plus its on-disk status, as returned by `speech.models()`. */
 export interface SpeechModelInfo extends WhisperModelInfo {
   downloaded: boolean
@@ -3791,6 +3801,7 @@ export interface NodeTerminalApi {
   schoolMode: SchoolModeApi
   kidsMode: KidsModeApi
   scheduledSettings: ScheduledSettingsApi
+  planner: PlannerApi
   speech: SpeechApi
   /** Universal file converter — docs/file-converter.md. */
   converter: import('./converter').ConverterApi

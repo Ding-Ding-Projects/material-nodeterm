@@ -16,6 +16,7 @@ import { SettingsStore } from '../core/settings-store'
 import { SchoolModeStore } from '../core/school-mode'
 import { KidsModeStore } from '../core/kids-mode'
 import { ScheduledSettingsRuntime } from '../core/scheduled-settings-runtime'
+import { PlannerOccurrenceRuntime } from '../core/planner-occurrence-service'
 import { WorkspaceStore } from '../core/workspace-store'
 import { PtyManager } from '../core/pty-manager'
 import { registerCoreHandlers } from './handlers'
@@ -173,6 +174,7 @@ export async function startServer(
   const schoolModeStore = new SchoolModeStore()
   const kidsModeStore = new KidsModeStore()
   const scheduledSettingsRuntime = new ScheduledSettingsRuntime()
+  const plannerRuntime = new PlannerOccurrenceRuntime()
   const ptyManager = new PtyManager()
   const workspaceStore = new WorkspaceStore()
 
@@ -192,6 +194,9 @@ export async function startServer(
   // Same runtime as Desktop: failed reads are surfaced over RPC while the shell keeps running with
   // an empty schedule. The on-disk evidence is left untouched and saves remain locked.
   scheduledSettingsRuntime.start()
+  // The planner remains host-owned after every browser tab closes. A machine that is powered off
+  // cannot evaluate time, so overdue entries are recorded as missed on the next startup.
+  plannerRuntime.start()
   ptyManager.init(() => settingsStore.get())
   ptyManager.registerIpc()
   workspaceStore.registerIpc()
@@ -655,6 +660,7 @@ export async function startServer(
         // scheduled-settings poller here. Missing this one line leaves its 30s interval and store
         // listener live after SIGTERM-driven teardown (including NODETERM_HEADLESS containers).
         await scheduledSettingsRuntime.stop()
+        await plannerRuntime.stop()
         ackSweeper.stop()
         pendingSweeper.stop()
         sessionReaper.stop()
@@ -715,6 +721,7 @@ export async function startServer(
     async close() {
       // Detach PTY clients — tmux sessions keep running (Phase 1 contract; never kill the server).
       await scheduledSettingsRuntime.stop()
+      await plannerRuntime.stop()
       ackSweeper.stop()
       pendingSweeper.stop()
       sessionReaper.stop()

@@ -215,6 +215,12 @@ const PATHS: Record<SettingsSectionId, React.JSX.Element> = {
       <path d="M8 8.4v2l1.4.9" />
     </>
   ),
+  planner: (
+    <>
+      <circle cx="8" cy="8" r="5.5" />
+      <path d="M8 4.5v3.8l2.4 1.4M4 2.8v2M12 2.8v2" />
+    </>
+  ),
   'school-mode': (
     <>
       <path d="M2.4 5.6 8 3l5.6 2.6L8 8.2 2.4 5.6Z" />

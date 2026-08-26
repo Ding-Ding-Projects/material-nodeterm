@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add a host-owned planner occurrence service with durable local schedules, recurrence choices,
+  timezone and DST semantics, cross-midnight descriptions, missed-occurrence history, JSON/CSV
+  export, Desktop IPC and Server Edition WS-RPC events, and a guided Planner settings surface.
+  This ultra-speed lane intentionally leaves tests, builds, packaging, runtime interaction, and
+  captures unrun.
+
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
   authority-bearing state. Archive integration and verification remain pending.

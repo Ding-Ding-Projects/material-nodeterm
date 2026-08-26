@@ -343,6 +343,13 @@ export const IPC = {
   /** main/server → renderer broadcast: the resolved schedule changed (a new rule became active, an
    *  external source's fetch completed, or none apply anymore). Payload: ScheduledSettingsActiveState. */
   scheduledSettingsActiveChange: 'scheduled-settings:active-change',
+  // Planner occurrences remain in the host process while the UI is closed. The service persists
+  // schedules and occurrence history locally, then broadcasts only bounded, non-secret event data.
+  plannerLoad: 'planner:load',
+  plannerSave: 'planner:save',
+  plannerHistory: 'planner:history',
+  plannerExport: 'planner:export',
+  plannerOccurrence: 'planner:occurrence',
   sshList: 'ssh:list',
   sshSave: 'ssh:save',
   sshDelete: 'ssh:delete',

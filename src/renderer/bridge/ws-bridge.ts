@@ -39,6 +39,7 @@ import {
   type PtyApi,
   type PtyCreateOptions,
   type ScheduledSettingsApi,
+  type PlannerApi,
   type SettingsApi,
   type KidsModeApi,
   type KidsModeSnapshot,
@@ -117,6 +118,7 @@ import type {
   ScheduledSettingsFile,
   ScheduledSettingsLoadState
 } from '../../shared/scheduled-settings'
+import type { PlannerFile, PlannerLoadState, PlannerOccurrence } from '../../shared/planner-occurrences'
 import type { VsCodeInstall, VsCodeOpenResult } from '../../shared/vscode'
 import type { HistoryFilters, HistoryListResult, HistoryRestoreResult } from '../../shared/local-history'
 import { buildStubApi } from './stubs'
@@ -352,7 +354,7 @@ export function buildRealApi(
   client: RpcClient
 ): Pick<
   NodeTerminalApi,
-  'pty' | 'workspace' | 'serverDeployment' | 'settings' | 'schoolMode' | 'kidsMode' | 'scheduledSettings' | 'userDataDir'
+  'pty' | 'workspace' | 'serverDeployment' | 'settings' | 'schoolMode' | 'kidsMode' | 'scheduledSettings' | 'planner' | 'userDataDir'
 > {
   const pty: PtyApi = {
     create: (options: PtyCreateOptions) =>
@@ -513,6 +515,13 @@ export function buildRealApi(
       client.request(IPC.scheduledSettingsActiveState) as Promise<ScheduledSettingsActiveState>,
     onActiveChange: (cb) => client.subscribe(IPC.scheduledSettingsActiveChange, cb as Listener)
   }
+  const planner: PlannerApi = {
+    load: () => client.request(IPC.plannerLoad) as Promise<PlannerLoadState>,
+    save: (file: PlannerFile) => client.request(IPC.plannerSave, file) as ReturnType<PlannerApi['save']>,
+    history: () => client.request(IPC.plannerHistory) as Promise<PlannerOccurrence[]>,
+    export: (format) => client.request(IPC.plannerExport, format) as ReturnType<PlannerApi['export']>,
+    onOccurrence: (cb) => client.subscribe(IPC.plannerOccurrence, cb as Listener)
+  }
 
   // The server's data dir, over the SAME channel the desktop preload uses. It is the writable base
   // the worktree dialog derives its default path from — a stub returning '' would suggest
@@ -529,7 +538,7 @@ export function buildRealApi(
     status: async () => ({ running: false }),
     onProgress: () => () => {}
   }
-  return { pty, workspace, serverDeployment, settings, schoolMode, kidsMode, scheduledSettings, userDataDir }
+  return { pty, workspace, serverDeployment, settings, schoolMode, kidsMode, scheduledSettings, planner, userDataDir }
 }
 
 export function buildGitHubApi(
