@@ -21,6 +21,7 @@ import type { MinecraftApi } from '../../shared/minecraft'
 import {
   UNKNOWN_CLAUDE_CLI_CAPS,
   type BoardLogApi,
+  type TimerApi,
   type BoardLogReadResult,
   type ChatTranscriptResult,
   type ClaudeApi,
@@ -469,6 +470,13 @@ export function buildRealApi(
     onExternalChange: () => () => {}
   }
 
+  const timer: TimerApi = {
+    occurrences: () => client.request(IPC.timerOccurrencesLoad) as Promise<import('../../shared/timer').TimerOccurrence[]>,
+    schedule: (timerId, scheduledAt) => client.request(IPC.timerOccurrenceSchedule, timerId, scheduledAt) as Promise<import('../../shared/timer').TimerOccurrence | null>,
+    transition: (id, state) => client.request(IPC.timerOccurrenceTransition, id, state) as Promise<import('../../shared/timer').TimerOccurrence | null>,
+    lap: (id, elapsedMs) => client.request(IPC.timerOccurrenceLap, id, elapsedMs) as Promise<number[] | null>
+  }
+
   const settings: SettingsApi = {
     load: () => client.request(IPC.settingsLoad) as Promise<Settings>,
     save: (s: Settings) => client.request(IPC.settingsSave, s) as Promise<void>
@@ -529,7 +537,7 @@ export function buildRealApi(
     status: async () => ({ running: false }),
     onProgress: () => () => {}
   }
-  return { pty, workspace, serverDeployment, settings, schoolMode, kidsMode, scheduledSettings, userDataDir }
+  return { pty, workspace, timer, serverDeployment, settings, schoolMode, kidsMode, scheduledSettings, userDataDir }
 }
 
 export function buildGitHubApi(

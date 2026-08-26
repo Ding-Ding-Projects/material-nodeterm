@@ -156,7 +156,8 @@ intentionally unchecked because this task publishes the plan only.
 - [ ] Add the bundled WebTorrent downloader with resumable per-task lifecycle.
 - [ ] Add the bundled QEMU Linux ISO VM with persistent and disposable modes.
 - [ ] Add Home Assistant multi-instance controls and sensor displays.
-- [ ] Add Calendar, Timer, Alarm Clock, and planner occurrence services.
+- [x] Add Timer nodes and persistent planner occurrence service. Calendar and Alarm Clock remain
+  separate follow-up surfaces.
 
 ### Multiverse and AWS
 

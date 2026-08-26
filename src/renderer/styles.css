@@ -13518,3 +13518,21 @@ body.focus-mode .dock:hover {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* ---- Timer nodes ---------------------------------------------------------- */
+.timer-node { min-width: 320px; min-height: 300px; padding: 12px; color: var(--md-on-surface); background: var(--md-surface-container); border: 1px solid var(--md-outline-variant); border-radius: 20px; box-shadow: var(--md-elevation-2); }
+.timer-node.selected { outline: 2px solid var(--md-primary); outline-offset: 2px; }
+.timer-node__header, .timer-node__actions, .timer-node__modes { display: flex; align-items: center; gap: 8px; }
+.timer-node__header { margin-bottom: 10px; font-weight: 650; }
+.timer-node__header input { min-width: 0; flex: 1; background: transparent; color: inherit; border: 0; font: inherit; }
+.timer-node__header button { min-width: 40px; min-height: 40px; }
+.timer-node__modes { flex-wrap: wrap; }
+.timer-node__modes button[aria-selected="true"] { background: var(--md-primary-container); color: var(--md-on-primary-container); }
+.timer-node__display { display: block; margin: 18px 0; text-align: center; font: 700 44px/1.1 ui-monospace, monospace; letter-spacing: .04em; }
+.timer-node__duration, .timer-node__repeat, .timer-node__alarm { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+.timer-node input[type="number"] { width: 76px; }
+.timer-node__sequence { margin: 12px 0; padding: 10px; border-radius: 14px; background: var(--md-surface-container-high); }
+.timer-node__sequence > div { display: flex; gap: 8px; margin-top: 6px; }
+.timer-node__sequence input { min-width: 0; flex: 1; }
+.timer-node__actions { margin-top: 14px; flex-wrap: wrap; }
+.timer-node__actions button { min-height: 40px; }
+.timer-node__meta { margin-top: 10px; color: var(--md-on-surface-variant); font-size: .82rem; }

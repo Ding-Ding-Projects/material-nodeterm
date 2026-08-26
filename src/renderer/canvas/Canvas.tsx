@@ -105,6 +105,7 @@ import { normalizeAddress } from '../nodes/browserUrl'
 import VideoNode from '../nodes/VideoNode'
 import WebNode from '../nodes/WebNode'
 import { NativeLoopNode, setNativeLoopRunHandler } from '../nodes/NativeLoopNode'
+import TimerNode from '../nodes/TimerNode'
 import {
   loopMessageId,
   loopRunDue,
@@ -572,6 +573,7 @@ import {
   createEditorNode,
   createGroupNode,
   createNativeLoopNode,
+  createTimerNode,
   WORKTREE_GROUP_SIZE,
   createSshTerminalNode,
   createAuthenticatorNode,
@@ -1798,6 +1800,7 @@ export function Canvas() {
       subagent: withNodeBoundary(SubagentNode),
       loop: withNodeBoundary(LoopNode),
       scheduler: withNodeBoundary(NativeLoopNode),
+      timer: withNodeBoundary(TimerNode),
       dino: withNodeBoundary(DinoNode),
       video: withNodeBoundary(VideoNode),
       web: withNodeBoundary(WebNode),
@@ -4604,6 +4607,17 @@ export function Canvas() {
     (center?: { x: number; y: number }, groupId?: string) => {
       setNodes((ns) => {
         const node = createNativeLoopNode(ns.length, center ?? emptyNodePos())
+        return [...ns, groupId ? parentInto(node, groupId) : node]
+      })
+      markDirty()
+    },
+    [setNodes, markDirty, emptyNodePos, parentInto]
+  )
+
+  const addTimer = useCallback(
+    (center?: { x: number; y: number }, groupId?: string) => {
+      setNodes((ns) => {
+        const node = createTimerNode(ns.length, center ?? emptyNodePos())
         return [...ns, groupId ? parentInto(node, groupId) : node]
       })
       markDirty()
@@ -8748,6 +8762,11 @@ export function Canvas() {
           icon: <IconLock />,
           onClick: () => addAuthenticator(at, groupId)
         },
+        {
+          label: 'New timer',
+          icon: <span aria-hidden="true">◷</span>,
+          onClick: () => addTimer(at, groupId)
+        },
         { type: 'separator' },
         ...(isHidden('colors', useSettings.getState().settings.hiddenNodeMenuItems)
           ? []
@@ -8806,6 +8825,7 @@ export function Canvas() {
       addSticky,
       addAuthenticator,
       addNativeLoop,
+      addTimer,
       addToExistingGroup,
       groupSelection
     ]
@@ -9047,6 +9067,7 @@ export function Canvas() {
       addAuthenticator,
       addNsis,
       addNativeLoop,
+      addTimer,
       addDino,
       addBrowser,
       openFileDialog,
@@ -13016,6 +13037,12 @@ export function Canvas() {
             run: () => addNativeLoop()
           },
           {
+            id: 'new-timer',
+            label: 'New timer',
+            icon: <span aria-hidden="true">◷</span>,
+            run: () => addTimer()
+          },
+          {
             id: 'new-authenticator',
             label: 'New authenticator',
             icon: <IconLock />,
@@ -13377,6 +13404,7 @@ export function Canvas() {
     addSticky,
     addNsis,
     addNativeLoop,
+    addTimer,
     addDino,
     addWebView,
     addBrowser,
@@ -13961,6 +13989,7 @@ export function Canvas() {
             onAddSticky={addSticky}
             onAddAuthenticator={() => addAuthenticator()}
             onAddLoop={addNativeLoop}
+            onAddTimer={() => addTimer()}
             onAddDino={addDino}
             onAddAgent={(aid, accountId) => addAgentNode(aid, undefined, undefined, accountId)}
             onOpenFile={() => void openFileDialog()}

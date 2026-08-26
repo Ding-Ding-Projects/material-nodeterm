@@ -78,6 +78,9 @@ import { initTranscriptIndex } from '../core/transcript-index'
 import { IPC } from '@shared/ipc'
 import { WhisperModelStore } from '../core/speech/whisper-models'
 import { SpeechService } from '../core/speech/speech-service'
+import { AtomicJsonArrayStore } from '../core/atomic-json-store'
+import { TimerOccurrenceService } from '../core/timer-service'
+import type { TimerOccurrence } from '../shared/timer'
 import { registerSpeechIpc } from '../core/speech/register-ipc'
 import { isPremium, getStoredEntitlement } from '../core/license'
 import { assertSupportedNodeRuntime } from '../core/node-runtime'
@@ -263,6 +266,17 @@ export async function startServer(
     settingsStore,
     workspaceStore
   })
+  const timerOccurrences = new TimerOccurrenceService(new AtomicJsonArrayStore<TimerOccurrence>(path.join(config.dataDir, 'timers', 'occurrences.json')))
+  await timerOccurrences.reconcileMissed()
+  platform.handle(IPC.timerOccurrencesLoad, () => timerOccurrences.list())
+  platform.handle(IPC.timerOccurrenceSchedule, (timerId: unknown, scheduledAt: unknown) =>
+    typeof timerId === 'string' && timerId.length <= 160 && typeof scheduledAt === 'number' && Number.isSafeInteger(scheduledAt)
+      ? timerOccurrences.schedule(timerId, scheduledAt)
+      : null)
+  platform.handle(IPC.timerOccurrenceTransition, (id: unknown, state: unknown) =>
+    typeof id === 'string' && typeof state === 'string' ? timerOccurrences.transition(id, state as TimerOccurrence['state']) : null)
+  platform.handle(IPC.timerOccurrenceLap, (id: unknown, elapsedMs: unknown) =>
+    typeof id === 'string' && typeof elapsedMs === 'number' && Number.isSafeInteger(elapsedMs) && elapsedMs >= 0 ? timerOccurrences.addLap(id, elapsedMs) : null)
   const github = registerGitHubIntegration({
     platform,
     userDataDir: config.dataDir,
