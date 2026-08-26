@@ -338,6 +338,17 @@ export interface ResumeCommandOptions {
   nativeCodex?: boolean
   /** Explicit trusted managed launcher path (for example `codexRemoteCommand()`). */
   codexProgram?: string
+  /**
+   * The user's launch-command override for this agent (`settings.agentLaunchCommands`, e.g. an
+   * account-switching wrapper), PASSED IN rather than read here: this module is imported by
+   * main/core/server and cannot reach the renderer's settings store, so the renderer resolves the
+   * override and threads it through (see `agentLaunchOverride` in state/workspace.ts). When set
+   * (non-blank) it replaces the program part outright, INCLUDING codex's `nativeCodex` /
+   * `codexProgram` / shared-identity routing above: an explicit override is the user saying
+   * "launch it exactly like this", and silently substituting a managed launcher would un-say it.
+   * Blank/absent = unchanged behavior.
+   */
+  base?: string
 }
 
 const SAFE_CODEX_PROGRAM =
@@ -363,15 +374,19 @@ export function resumeCommand(
   if (!canResume(id)) return null
   const sid = sessionId.trim()
   if (!sid || !SAFE_SESSION_ID.test(sid)) return null
+  // An explicit user override wins over every routing decision below (see the `base` doc comment
+  // on ResumeCommandOptions) — resolved once, up front, so it applies uniformly to every agent id
+  // rather than being threaded into each case's own program-resolution helper.
+  const override = typeof route === 'object' ? route.base?.trim() || undefined : undefined
   switch (id) {
     case 'codex':
-      return `${codexResumeProgram(route)} resume ${sid}`
+      return `${override ?? codexResumeProgram(route)} resume ${sid}`
     case 'opencode':
-      return `opencode --session ${sid}`
+      return `${override ?? 'opencode'} --session ${sid}`
     case 'claude':
     case 'gemini':
     case 'grok':
-      return `${id} --resume ${sid}`
+      return `${override ?? id} --resume ${sid}`
     default:
       return null
   }

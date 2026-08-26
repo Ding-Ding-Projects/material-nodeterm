@@ -4,7 +4,7 @@ import type { ServiceConnection } from './node-exec'
 
 import type { CloneProgress } from './clone-url'
 import type { NormalizedAgentEvent } from './agents/normalize'
-import type { AgentId, AgentPermissionMode, PromptInjectionMode } from './agents/config'
+import type { AgentId, AgentPermissionMode, BuiltinAgentId, PromptInjectionMode } from './agents/config'
 import type { GroupWorktree } from './worktree'
 import type { ClientId, DinoSnapshot, PeerDiff, PeerIdentity, PeerState } from './presence'
 import type { WhisperModelInfo } from './speech'
@@ -1865,6 +1865,15 @@ export interface Settings {
   soundVolume: number
   /** User-defined agents (BYO CLI) appended to the Add menus. */
   customAgents: CustomAgent[]
+  /** Per-builtin-agent launch command overrides (Settings → Agents → Launch commands). The value
+   *  replaces the bare CLI name everywhere a launch line is built — new sessions, cold-restore
+   *  relaunches, in-place restarts, hibernation wakes and the transcript-search resume — with the
+   *  usual flags (`--resume`, `--permission-mode`, the prompt) appended after it, so a wrapper
+   *  script that picks an account or sets env vars runs wherever the agent would. Empty/absent =
+   *  the builtin default, byte-identical to before this setting existed. Keyed by builtin id only
+   *  — custom agents already own their `launchCmd`. Local only: never present in the git-shared
+   *  `.nodeterm/project.json` (see `src/shared/node-exec.ts`). */
+  agentLaunchCommands: Partial<Record<BuiltinAgentId, string>>
   /** Managed Claude accounts (config-dir isolated). See ClaudeAccount. */
   claudeAccounts: ClaudeAccount[]
   /** Managed Codex accounts (CODEX_HOME/app-server isolated). See CodexAccount. */
@@ -2146,6 +2155,7 @@ export const DEFAULT_SETTINGS: Settings = {
   soundEffects: true,
   soundVolume: 0.5,
   customAgents: [],
+  agentLaunchCommands: {},
   claudeAccounts: [],
   codexAccounts: [],
   systemAccountLabel: '',

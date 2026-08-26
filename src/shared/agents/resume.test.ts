@@ -120,3 +120,56 @@ describe('resumeCommand — grok', () => {
     expect(resumeCommand('grok', 'abc-123')).toBe('grok --resume abc-123')
   })
 })
+
+/**
+ * `base` (ResumeCommandOptions.base) is the user's launch-command override
+ * (settings.agentLaunchCommands — e.g. an account-switching wrapper), threaded in from the
+ * renderer because this shared module cannot read the settings store. It replaces the PROGRAM
+ * part only; each agent's resume grammar (`--resume` / `resume` / `--session`) stays put after it.
+ */
+describe('resumeCommand — launch-command override (base)', () => {
+  it('replaces the program part for the --resume family', () => {
+    expect(resumeCommand('claude', 'abc-123', { base: 'my-claude work' })).toBe(
+      'my-claude work --resume abc-123'
+    )
+    expect(resumeCommand('gemini', 'abc-123', { base: 'gemini-wrap' })).toBe(
+      'gemini-wrap --resume abc-123'
+    )
+  })
+
+  it('keeps codex’s subcommand and opencode’s flag spelling', () => {
+    expect(resumeCommand('codex', 'abc-123', { base: '/opt/bin/codex-work' })).toBe(
+      '/opt/bin/codex-work resume abc-123'
+    )
+    expect(resumeCommand('opencode', 'ses_a1', { base: 'oc-wrap' })).toBe(
+      'oc-wrap --session ses_a1'
+    )
+  })
+
+  // An explicit override is the user saying "launch it exactly like this" — substituting the
+  // managed launcher, or codex's other routing options, back in would un-say it.
+  it('wins over codex’s shared-identity launcher and codexProgram routing', () => {
+    expect(
+      resumeCommand('codex', 'abc-123', { sharedIdentity: true, base: '/opt/bin/codex-work' })
+    ).toBe('/opt/bin/codex-work resume abc-123')
+    expect(
+      resumeCommand('codex', 'abc-123', {
+        codexProgram: '$HOME/.nodeterm/bin/nodeterm-codex',
+        base: '/opt/bin/codex-work'
+      })
+    ).toBe('/opt/bin/codex-work resume abc-123')
+  })
+
+  it('ignores a blank override — the bare command, byte-identical', () => {
+    expect(resumeCommand('claude', 'abc-123', { base: '   ' })).toBe('claude --resume abc-123')
+    expect(resumeCommand('claude', 'abc-123', { base: undefined })).toBe('claude --resume abc-123')
+    expect(resumeCommand('claude', 'abc-123')).toBe('claude --resume abc-123')
+  })
+
+  // SAFE_SESSION_ID is the gate whatever the caller passes — the override customizes the
+  // program, never the validation.
+  it('still refuses an unsafe session id, override or not', () => {
+    expect(resumeCommand('claude', 'a; rm -rf /', { base: 'wrapper' })).toBeNull()
+    expect(resumeCommand('claude', '', { base: 'wrapper' })).toBeNull()
+  })
+})

@@ -17,6 +17,10 @@ export interface AgentColdRelaunchInput {
   priorSessionId?: string | null
   customLaunchCmd?: string | null
   sharedIdentity?: boolean
+  /** The user's launch-command override for this builtin agent (Settings → Agents → Launch
+   *  commands), or undefined/null when unset. Wins over both the resumed and the fresh-start
+   *  program — see `agentLaunchOverride` in state/workspace.ts, the one place it is read. */
+  launchOverride?: string | null
 }
 
 export type AgentColdRelaunchRecoveryErrorCode =
@@ -62,16 +66,20 @@ export function agentColdRelaunchDecision({
   agentId,
   priorSessionId,
   customLaunchCmd,
-  sharedIdentity = false
+  sharedIdentity = false,
+  launchOverride
 }: AgentColdRelaunchInput): AgentColdRelaunchDecision {
   const builtin = agentConfig(agentId)
   if (builtin) {
-    const resume = priorSessionId ? resumeCommand(agentId, priorSessionId, sharedIdentity) : null
+    const override = typeof launchOverride === 'string' ? launchOverride.trim() || undefined : undefined
+    const resume = priorSessionId
+      ? resumeCommand(agentId, priorSessionId, { sharedIdentity, base: override })
+      : null
     if (resume) return { reconstructable: true, command: resume, continuity: 'resume' }
 
     return {
       reconstructable: true,
-      command: agentLaunchProgram(agentId, builtin.launchCmd, sharedIdentity),
+      command: override ?? agentLaunchProgram(agentId, builtin.launchCmd, sharedIdentity),
       continuity: 'fresh'
     }
   }
