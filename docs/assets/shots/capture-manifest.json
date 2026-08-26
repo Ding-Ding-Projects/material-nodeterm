@@ -1,6 +1,6 @@
 {
-  "commit": "74cdac7fb8b1e3031166295ab302011f3a0a2d58",
-  "capturedAt": "2026-08-20T17:13:18.513Z",
+  "commit": "95929ff88983ed7d9e3bfc96702ed7b1591e0003",
+  "capturedAt": "2026-08-26T03:23:08.710Z",
   "method": "Electron + CDP Page.captureScreenshot against the built out/ artifact, 1600x1000",
   "viewport": {
     "width": 1600,
@@ -11,37 +11,37 @@
     {
       "id": "app-01-launch",
       "title": "App at launch",
-      "bytes": 50482,
+      "bytes": 53776,
       "hadOpener": false
     },
     {
       "id": "app-02-settings",
       "title": "Settings",
-      "bytes": 112656,
+      "bytes": 112431,
       "hadOpener": true
     },
     {
       "id": "app-03-palette",
       "title": "Command palette",
-      "bytes": 73643,
+      "bytes": 75241,
       "hadOpener": true
     },
     {
       "id": "app-04-canvas",
       "title": "Canvas",
-      "bytes": 50482,
+      "bytes": 53776,
       "hadOpener": false
     },
     {
       "id": "app-05-kanban",
       "title": "Kanban board",
-      "bytes": 33546,
+      "bytes": 36622,
       "hadOpener": true
     },
     {
       "id": "app-settings-kids-mode",
       "title": "Settings — Kids mode",
-      "bytes": 103665,
+      "bytes": 104196,
       "hadOpener": true
     },
     {
@@ -53,61 +53,61 @@
     {
       "id": "app-status-surface",
       "title": "Status surface",
-      "bytes": 108730,
+      "bytes": 110333,
       "hadOpener": true
     },
     {
       "id": "app-settings-language",
       "title": "Settings — Language",
-      "bytes": 76226,
+      "bytes": 77815,
       "hadOpener": true
     },
     {
       "id": "app-settings-narrator",
       "title": "Settings — Narrator",
-      "bytes": 85133,
+      "bytes": 85821,
       "hadOpener": true
     },
     {
       "id": "app-settings-schedule",
       "title": "Settings — Schedule",
-      "bytes": 72903,
+      "bytes": 74616,
       "hadOpener": true
     },
     {
       "id": "app-settings-app-identity",
       "title": "Settings — App name & logo",
-      "bytes": 82542,
+      "bytes": 84670,
       "hadOpener": true
     },
     {
       "id": "app-settings-appearance-editor",
       "title": "Settings — Appearance editor",
-      "bytes": 87221,
+      "bytes": 95796,
       "hadOpener": true
     },
     {
       "id": "app-adhd-modes",
       "title": "Settings — ADHD modes",
-      "bytes": 84388,
+      "bytes": 85208,
       "hadOpener": true
     },
     {
       "id": "app-windows-terminal-profiles",
       "title": "Windows terminal profiles — the picker",
-      "bytes": 64112,
+      "bytes": 70920,
       "hadOpener": true
     },
     {
       "id": "app-windows-terminal-profile-availability",
       "title": "Windows terminal profiles — detected availability",
-      "bytes": 96344,
+      "bytes": 100402,
       "hadOpener": true
     },
     {
       "id": "app-kids-home",
       "title": "Kids mode — Home",
-      "bytes": 75880,
+      "bytes": 75570,
       "hadOpener": true
     },
     {
@@ -125,6 +125,10 @@
   ],
   "skipped": [
     {
+      "id": "app-adhd-momentum-note",
+      "why": "the momentum window has a real 5-minute floor that cannot be shortened from outside the app; run with NT_SHOTS_SLOW=1 to capture it (adds several real minutes to the run)"
+    },
+    {
       "id": "app-windows-terminal-profile-node",
       "why": "the spawned Windows session host outlives the app by design and holds the disposable capture sandbox open"
     },
@@ -137,5 +141,10 @@
       "why": "needs a reachable host and credentials"
     }
   ],
-  "failures": []
+  "failures": [
+    {
+      "id": "app-adhd-elapsed-chip",
+      "why": "scripted opener did not reach its surface (returned false)"
+    }
+  ]
 }
