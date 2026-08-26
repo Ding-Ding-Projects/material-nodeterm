@@ -1,5 +1,25 @@
 # Handoff
 
+## 2026-08-26, portable Node Universes and hosting program plan
+
+Plan-only lane status. The public implementation plan is recorded in
+[`docs/plans/2026-08-26-portable-node-universes-and-hosting-program.md`](docs/plans/2026-08-26-portable-node-universes-and-hosting-program.md)
+and indexed by [`docs/plans/README.md`](docs/plans/README.md).
+
+The plan source baseline is `27ecfa62e5b3180070abaa241f8bac6b1e079861`, which was an ancestor of
+`origin/main` when this lane started. It covers schema 3 portable project saves, portable
+blueprints and local bindings, the unified Node Catalog, universe Shop nodes, Material Design 3
+surfaces, media and file conversion, torrents, Linux ISO virtual machines, Home Assistant,
+calendar, timer and alarm tools, Multiverse portals, a complete interactive AWS CLI GUI, Docker
+host management, GitLab, Nextcloud, Open WebUI, Cloudflare managers and tunnels, clean-room
+WinForge-inspired nodes, upstream parity, public issue records, and the new upstream pull request.
+
+No product code was changed. No GitHub issue, discussion, project, pull request, release, tag,
+branch, or worktree was mutated. Tests, type checking, linting, reviews, security checks, builds,
+packaging, and captures were not run in this plan-only lane. The ultra-speed release boundary is
+retained for future implementation work: it intentionally skips those checks and captures while
+requiring exact artifact and release evidence.
+
 ## 2026-08-22 — vendored paste-frame duplicate + drift guard
 
 `src/core/paste-injection.ts` is a deliberate vendored duplicate of `agent-whip/packages/paste-frame/src/index.ts` (sibling repo, not a dependency — material-nodeterm is public, that package is unpublished, a `file:` dependency would dangle for anyone cloning this repo alone). `scripts/check-paste-frame-parity.mjs`, wired into `npm run typecheck`, fails loudly if the two drift and skips cleanly when the sibling checkout is absent. Full writeup: `docs/paste-frame-vendoring.md`. This is a mitigation, not the fix — the fix is publishing the package once registry rights exist.

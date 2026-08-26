@@ -125,6 +125,61 @@ Feature requests open on GitHub with no landed implementation yet, newest first:
 - [ ] **#78** — Owner's own tracked roadmap of 4 bug fixes + 4 features (grouped meta-issue;
       contents not itemized here — see the issue directly).
 
+## Portable Node Universes and Hosting Program, planned 2026-08-26
+
+Implementation source baseline: `27ecfa62e5b3180070abaa241f8bac6b1e079861`. These items are
+intentionally unchecked because this task publishes the plan only.
+
+### Portability and shared foundations
+
+- [ ] Ship schema 3 portable project export with manifest, hashes, omissions, and migration.
+- [ ] Import schema 3 archives atomically without external side effects.
+- [ ] Preserve root, Multiverse, AWS Universe, portal, Shop, node, relationship, and appearance data.
+- [ ] Bundle project-owned media and provide Include, Omit, and Locate Later decisions.
+- [ ] Separate portable blueprints from machine-local bindings and credential references.
+- [ ] Ship the unified Node Catalog and one creation coordinator.
+- [ ] Add one non-deletable Shop node to every Multiverse and AWS Universe child canvas.
+- [ ] Add shared account, credential-vault, OAuth callback, and provider-binding services.
+- [ ] Add guided Docker host management for local and SSH contexts.
+
+### Media, torrents, virtual machines, and planning
+
+- [ ] Add Photo, Video, mixed-media Gallery, and wild Dim Sum nodes.
+- [ ] Add the categorized local file-converter and advanced media, archive, PDF, and OCR pipelines.
+- [ ] Add the bundled WebTorrent downloader with resumable per-task lifecycle.
+- [ ] Add the bundled QEMU Linux ISO VM with persistent and disposable modes.
+- [ ] Add Home Assistant multi-instance controls and sensor displays.
+- [ ] Add Calendar, Timer, Alarm Clock, and planner occurrence services.
+
+### Multiverse and AWS
+
+- [ ] Add door-only Multiverse canvases to depth 8.
+- [ ] Add interactive door construction, numeric or passphrase entry, and recovery game.
+- [ ] Add unlimited AWS Universes with AWS-only scope and AWS Shop nodes.
+- [ ] Bundle AWS CLI v2 and maintain verified model and documentation indexing.
+- [ ] Generate interactive wizard forms for every AWS service, command, option, paginator, waiter,
+      skeleton, input, and output described by the installed CLI models.
+- [ ] Add AWS identity, SSO, role, MFA, Resource Explorer, Cloud Control, S3, EC2, IAM, STS,
+      Lambda, CloudWatch, Logs, CloudFormation, CDK, container, database, networking, and cost tools.
+- [ ] Add the generic all-service AWS GUI without a command textbox fallback.
+
+### Hosting and Cloudflare
+
+- [ ] Add GitLab Server CE and EE hosting profiles with backup and restore.
+- [ ] Add Nextcloud AIO and managed no-socket hosting profiles.
+- [ ] Add Open WebUI hosting with existing Ollama reuse and honest bootstrap states.
+- [ ] Add Cloudflare account, zone, DNS, security, Workers, Pages, storage, queue, Access, and
+      analytics managers.
+- [ ] Add one-click Cloudflare Tunnel setup with private-first routing and connector choices.
+
+### Clean-room features and upstream parity
+
+- [ ] Add clean-room browser, kiosk, PWA, proxy, and read-only diagnostics nodes.
+- [ ] Implement the outstanding upstream behavior from the planned issue and pull-request parity map.
+- [ ] Split the PR #422 behavior into independent link, endpoint, navigation, grouping, agent, and
+      account lanes.
+- [ ] Publish the new upstream pull request based on the final default branch with verified evidence.
+
 ## Deliberately not doing
 
 - Code signing for any installer or browser extension — permanent policy (`LICENSE`/CLAUDE.md);

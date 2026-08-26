@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Publish the decision-complete plan for portable schema 3 project saves, universe Shop nodes,
+  interactive AWS and Cloudflare managers, one-click hosted services, and the upstream parity
+  program. This entry records planning only; no product implementation or release was made.
 - Finalize published release notes with fail-closed workflow start/completion/duration evidence,
   link dim-sum photos at their public catalog release, and deploy Pages for every `main` push.
 - Rebuild the app's chrome on Material Design 3: a new top app bar and project switcher replace
