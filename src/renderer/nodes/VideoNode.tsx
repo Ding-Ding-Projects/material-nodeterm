@@ -3,6 +3,7 @@ import { Handle, NodeResizer, Position, useReactFlow, type NodeProps } from '@xy
 import type { CanvasNode } from '../state/workspace'
 import { useProjects } from '../state/projects'
 import { nodeHeaderFillStyle } from '../lib/nodeColor'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 /**
  * A video player node. A local file is served over the `nt-media://` protocol (allowlisted on
@@ -13,12 +14,15 @@ import { nodeHeaderFillStyle } from '../lib/nodeColor'
  * frame/header mirror {@link EditorNode} for consistent drag/resize/close behavior.
  */
 export default function VideoNode({ id, data, selected }: NodeProps<CanvasNode>) {
+  const vocab = useVocabularyMapper()
   const { deleteElements } = useReactFlow()
   const [src, setSrc] = useState('')
   const [error, setError] = useState('')
+  const [externalError, setExternalError] = useState(false)
   const [fetching, setFetching] = useState(false)
   const filePath = (data.filePath as string) ?? ''
-  const fileName = filePath.split('/').pop() || 'video'
+  const fileName = filePath.split('/').pop() || ''
+  const displayFileName = fileName || vocab('video')
   const remote = !!data.sshFs
 
   useEffect(() => {
@@ -29,6 +33,7 @@ export default function VideoNode({ id, data, selected }: NodeProps<CanvasNode>)
       const projectId = useProjects.getState().activeProjectId
       if (!projectId) {
         setError('Couldn’t load this video.')
+        setExternalError(false)
         return
       }
       setFetching(true)
@@ -38,12 +43,16 @@ export default function VideoNode({ id, data, selected }: NodeProps<CanvasNode>)
           if (!alive) return
           setFetching(false)
           if (r.ok) setSrc(r.url)
-          else setError(r.error)
+          else {
+            setError(r.error)
+            setExternalError(true)
+          }
         })
         .catch(() => {
           if (!alive) return
           setFetching(false)
           setError('Couldn’t load this video.')
+          setExternalError(false)
         })
       return () => {
         alive = false
@@ -55,7 +64,10 @@ export default function VideoNode({ id, data, selected }: NodeProps<CanvasNode>)
         if (alive) setSrc(url)
       })
       .catch(() => {
-        if (alive) setError('Couldn’t load this video.')
+        if (alive) {
+          setError('Couldn’t load this video.')
+          setExternalError(false)
+        }
       })
     return () => {
       alive = false
@@ -89,12 +101,12 @@ export default function VideoNode({ id, data, selected }: NodeProps<CanvasNode>)
         style={headerFill.style}
       >
         <span className="term-node__title-text" title={filePath}>
-          {fileName}
+          {displayFileName}
         </span>
         <span className="term-node__spacer" />
         <button
           className="term-node__close"
-          title="Close"
+          title={vocab('Close')}
           onClick={() => deleteElements({ nodes: [{ id }] })}
         >
           ×
@@ -112,7 +124,13 @@ export default function VideoNode({ id, data, selected }: NodeProps<CanvasNode>)
             />
           ) : (
             <span className="editor-node__loading">
-              {error || (fetching ? 'Fetching from the host…' : 'Loading…')}
+              {error
+                ? externalError
+                  ? error
+                  : vocab(error)
+                : fetching
+                  ? vocab('Fetching from the host…')
+                  : vocab('Loading…')}
             </span>
           )}
         </div>

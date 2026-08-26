@@ -59,7 +59,7 @@ export function BrowserProfilePicker({
   const vocab = useVocabularyMapper()
 
   const current = findBrowserProfile(profiles, selectedId)
-  const label = selectedId ? (current?.name ?? 'Unknown profile') : 'Default'
+  const label = selectedId ? (current?.name ?? vocab('Unknown profile')) : vocab('Default')
   const visibleProfiles = useMemo(
     () =>
       (profiles ?? []).filter((profile) =>
@@ -107,11 +107,11 @@ export function BrowserProfilePicker({
     e.stopPropagation()
     const rect = e.currentTarget.getBoundingClientRect()
     openDestructiveGate({
-      title: `Delete browser profile "${p.name}"`,
+      title: `${vocab('Delete browser profile')} "${p.name}"`,
       description:
-        'Its cookies, sign-ins and site storage are deleted from this machine. Any browser tab still using this profile falls back to the default (unpartitioned) session. This cannot be undone.',
+        vocab('Its cookies, sign-ins and site storage are deleted from this machine. Any browser tab still using this profile falls back to the default (unpartitioned) session. This cannot be undone.'),
       affected: [p.name],
-      confirmLabel: 'Delete profile',
+      confirmLabel: vocab('Delete profile'),
       anchor: { x: rect.left, y: rect.bottom },
       restoreFocusEl: anchorRef.current,
       onConfirm: () => onRemove(p.id)
@@ -126,7 +126,7 @@ export function BrowserProfilePicker({
         className="browser-profile-trigger"
         aria-haspopup="menu"
         aria-expanded={open}
-        title="Browser profile — isolated cookies/storage per profile"
+        title={vocab('Browser profile — isolated cookies/storage per profile')}
         onClick={() => setOpen((v) => !v)}
       >
         <MaterialSymbol name="account_circle" size={16} />
@@ -152,8 +152,8 @@ export function BrowserProfilePicker({
             role="menuitemradio"
             aria-checked={!selectedId}
             icon={<MaterialSymbol name="account_circle" size={18} />}
-            label="Default"
-            sub="Unpartitioned — the app's shared session"
+            label={vocab('Default')}
+            sub={vocab("Unpartitioned — the app's shared session")}
             trailing={!selectedId ? <MaterialSymbol name="check" size={16} /> : undefined}
             onClick={() => {
               onSelect(undefined)
@@ -164,7 +164,7 @@ export function BrowserProfilePicker({
             renamingId === p.id ? (
               <div key={p.id} className="browser-profile-picker__rename" role="none">
                 <TextField
-                  label="Profile name"
+                  label={vocab('Profile name')}
                   autoFocus
                   value={renameValue}
                   onChange={(e) => setRenameValue(e.target.value)}
@@ -210,7 +210,7 @@ export function BrowserProfilePicker({
                 <span className="mdx-row__trailing browser-profile-picker__row-actions">
                   {selectedId === p.id && <MaterialSymbol name="check" size={16} />}
                   <IconButton
-                    aria-label={`Rename “${p.name}”`}
+                    aria-label={`${vocab('Rename')} “${p.name}”`}
                     icon="edit_note"
                     size="dense"
                     onClick={(e) => {
@@ -219,7 +219,7 @@ export function BrowserProfilePicker({
                     }}
                   />
                   <IconButton
-                    aria-label={`Delete “${p.name}”`}
+                    aria-label={`${vocab('Delete')} “${p.name}”`}
                     icon="delete"
                     size="dense"
                     onClick={(e) => requestRemove(p, e)}
@@ -234,7 +234,7 @@ export function BrowserProfilePicker({
           {creating ? (
             <div className="browser-profile-picker__rename" role="none">
               <TextField
-                label="New profile name"
+                label={vocab('New profile name')}
                 autoFocus
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
@@ -246,7 +246,7 @@ export function BrowserProfilePicker({
               />
             </div>
           ) : (
-            <ListRow icon={<MaterialSymbol name="add" size={18} />} label="New profile…" onClick={startCreate} />
+            <ListRow icon={<MaterialSymbol name="add" size={18} />} label={vocab('New profile…')} onClick={startCreate} />
           )}
         </Menu>
       </AnchoredPopover>

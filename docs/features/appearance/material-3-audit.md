@@ -286,6 +286,28 @@ Every listed renderer producer has an explicit local mapper boundary. Commands, 
 | `find-bar` | Find bar | `src/renderer/components/FindBar.tsx` | `useVocabularyMapper()` |
 | `remote-picker` | Remote picker | `src/renderer/components/RemotePicker.tsx` | `useVocabularyMapper()` |
 | `browser-profile-picker` | Browser profile picker | `src/renderer/nodes/BrowserProfilePicker.tsx` | `useVocabularyMapper()` |
+| `terminal-node` | Terminal node chrome and status copy | `src/renderer/nodes/TerminalNode.tsx` | `useVocabularyMapper()` and `useLocalizedVocabularyText()` |
+| `sticky-node` | Sticky note node chrome | `src/renderer/nodes/StickyNode.tsx` | `useVocabularyMapper()` |
+| `group-node` | Group and WSL/worktree node chrome | `src/renderer/nodes/GroupNode.tsx` | `useVocabularyMapper()` |
+| `editor-node` | Editor and media preview node chrome | `src/renderer/nodes/EditorNode.tsx` | `useVocabularyMapper()` |
+| `diff-node` | Diff node chrome | `src/renderer/nodes/DiffNode.tsx` | `useVocabularyMapper()` |
+| `browser-node` | Browser node chrome and tabs | `src/renderer/nodes/BrowserNode.tsx` | `useVocabularyMapper()` |
+| `browser-surface` | Browser toolbar and navigation copy | `src/renderer/nodes/BrowserSurface.tsx` | `useVocabularyMapper()` |
+| `browser-start-page` | Browser new-tab surface | `src/renderer/nodes/BrowserStartPage.tsx` | `useVocabularyMapper()` |
+| `browser-extensions-panel` | Browser extension panel | `src/renderer/nodes/BrowserExtensionsPanel.tsx` | `useVocabularyMapper()` |
+| `discarded-plate` | Browser released/restoring status plate | `src/renderer/nodes/DiscardedPlate.tsx` | `useVocabularyMapper()` |
+| `video-node` | Video node loading and chrome | `src/renderer/nodes/VideoNode.tsx` | `useVocabularyMapper()` |
+| `web-node` | Web node loading and chrome | `src/renderer/nodes/WebNode.tsx` | `useVocabularyMapper()` |
+| `loop-node` | Hook-derived loop card | `src/renderer/nodes/LoopNode.tsx` | `useVocabularyMapper()` |
+| `native-loop-node` | User-created scheduler node | `src/renderer/nodes/NativeLoopNode.tsx` | `useVocabularyMapper()` |
+| `nsis-node` | Installer builder node | `src/renderer/nodes/NsisInstallerNode.tsx` | `useVocabularyMapper()` |
+| `service-node` | Service manager node chrome and guidance | `src/renderer/nodes/ServiceNode.tsx` | `useVocabularyMapper()` |
+| `authenticator-node` | Authenticator node chrome and states | `src/renderer/nodes/AuthenticatorNode.tsx` | `useVocabularyMapper()` |
+| `annotation-node` | Annotation toolbar | `src/renderer/nodes/AnnotationNode.tsx` | `useVocabularyMapper()` |
+| `dino-node` | Dino peer status and chrome | `src/renderer/nodes/DinoNode.tsx` | `useVocabularyMapper()` |
+| `subagent-node` | Subagent status card | `src/renderer/nodes/SubagentNode.tsx` | `useVocabularyMapper()` |
+| `chat-panel` | Agent chat panel states and composer | `src/renderer/nodes/ChatPanel.tsx` | `useVocabularyMapper()` |
+| `node-fact-preserving-mapper` | Node copy mapper that preserves provider and runtime facts | `src/renderer/nodes/nodeVocabulary.ts` | `export function mapAroundExactFacts` |
 | `password-manager` | Password manager | `src/renderer/components/passwordManager/PasswordManagerPanel.tsx` | `useVocabularyMapper()` |
 | `converter-adapter-catalog` | Adapter catalog | `src/renderer/components/converter/AdapterCatalog.tsx` | `useVocabularyMapper()` |
 | `minecraft-backups` | Minecraft backups | `src/renderer/components/minecraft/MinecraftBackupsPanel.tsx` | `useVocabularyMapper()` |
@@ -313,15 +335,26 @@ single React element cannot reach the descendants produced by a component.
 | sessions-sidebar | src/renderer/components/SessionsSidebar.tsx | mapped-callsite |
 | session-row | src/renderer/components/SessionRow.tsx | mapped-callsite |
 | terminal-node | src/renderer/nodes/TerminalNode.tsx | mapped-callsite |
-| sticky-node | src/renderer/nodes/StickyNode.tsx | unmapped-callsite-pending |
-| group-node | src/renderer/nodes/GroupNode.tsx | unmapped-callsite-pending |
-| editor-node | src/renderer/nodes/EditorNode.tsx | unmapped-callsite-pending |
-| diff-node | src/renderer/nodes/DiffNode.tsx | unmapped-callsite-pending |
-| browser-node | src/renderer/nodes/BrowserNode.tsx | unmapped-callsite-pending |
-| web-node | src/renderer/nodes/WebNode.tsx | unmapped-callsite-pending |
-| video-node | src/renderer/nodes/VideoNode.tsx | unmapped-callsite-pending |
-| loop-node | src/renderer/nodes/LoopNode.tsx | unmapped-callsite-pending |
-| service-node | src/renderer/nodes/ServiceNode.tsx | unmapped-callsite-pending |
+| sticky-node | src/renderer/nodes/StickyNode.tsx | mapped-callsite |
+| group-node | src/renderer/nodes/GroupNode.tsx | mapped-callsite |
+| editor-node | src/renderer/nodes/EditorNode.tsx | mapped-callsite |
+| diff-node | src/renderer/nodes/DiffNode.tsx | mapped-callsite |
+| browser-node | src/renderer/nodes/BrowserNode.tsx | mapped-callsite |
+| web-node | src/renderer/nodes/WebNode.tsx | mapped-callsite |
+| video-node | src/renderer/nodes/VideoNode.tsx | mapped-callsite |
+| loop-node | src/renderer/nodes/LoopNode.tsx | mapped-callsite |
+| service-node | src/renderer/nodes/ServiceNode.tsx | mapped-callsite |
+| native-loop-node | src/renderer/nodes/NativeLoopNode.tsx | mapped-callsite |
+| nsis-node | src/renderer/nodes/NsisInstallerNode.tsx | mapped-callsite |
+| authenticator-node | src/renderer/nodes/AuthenticatorNode.tsx | mapped-callsite |
+| annotation-node | src/renderer/nodes/AnnotationNode.tsx | mapped-callsite |
+| dino-node | src/renderer/nodes/DinoNode.tsx | mapped-callsite |
+| subagent-node | src/renderer/nodes/SubagentNode.tsx | mapped-callsite |
+| chat-panel | src/renderer/nodes/ChatPanel.tsx | mapped-callsite |
+| browser-surface | src/renderer/nodes/BrowserSurface.tsx | mapped-callsite |
+| browser-start-page | src/renderer/nodes/BrowserStartPage.tsx | mapped-callsite |
+| browser-extensions-panel | src/renderer/nodes/BrowserExtensionsPanel.tsx | mapped-callsite |
+| discarded-plate | src/renderer/nodes/DiscardedPlate.tsx | mapped-callsite |
 | wsl-dialog | src/renderer/wsl/WslCreateDialog.tsx | unmapped-callsite-pending |
 | regex-builder | src/renderer/components/regex/RegexBuilder.tsx | unmapped-callsite-pending |
 | anchored-regex-builder | src/renderer/components/regex/AnchoredRegexBuilder.tsx | unmapped-callsite-pending |
