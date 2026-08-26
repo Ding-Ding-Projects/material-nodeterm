@@ -2163,6 +2163,12 @@ worktree list`: a worktree deleted outside the app makes its group **stale** (ch
   The completeness check must fail when any one of those exact records is absent or stale; finding
   one design-system marker somewhere in a file is not proof that the file's whole rendered surface
   conforms.
+- **The existing Kids-mode-default documentation and landing site keeps its current visual style.**
+  It is the narrow appearance exception to the element-level Material Design 3 rule and must not
+  be restyled to resemble the desktop application. The exception does not cover stale facts,
+  broken links, missing controls, localization, personal-vocabulary behavior, accessibility,
+  clipping, responsiveness, or other functional contracts; those still have to be repaired and
+  kept current without changing the site's established look.
 - **Fonts and icons are bundled, never fetched.** Three local `@font-face`s in `fonts.css`:
   Outfit Variable (`--font-ui`), Roboto Mono (`--font-mono`, code/terminal), and Material Symbols
   Rounded (icons) — every one committed as woff2 under `src/renderer/assets/fonts/`, regenerated

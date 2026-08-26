@@ -82,6 +82,12 @@ release blockers. When a platform limitation prevents literal component parity, 
 exact limitation and implement the closest accessible, testable Material Design 3 equivalent
 instead of silently falling back.
 
+The existing Kids-mode-default documentation and landing site is the one visual-style exception.
+Preserve its current visual language and do not restyle it to match the desktop application.
+This exception covers appearance only. Its facts, links, releases, feature data, controls,
+language and personal-vocabulary behavior, accessibility, clipping, responsive behavior, and
+other functional contracts must still remain current and correct.
+
 The completeness inventory and its negative regression must list every user-facing surface and
 fail when an element, implementation marker, documentation row, focused test, built-artifact
 interaction record, or required visual evidence is missing or stale. A check that merely finds
