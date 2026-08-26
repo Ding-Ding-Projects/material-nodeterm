@@ -490,6 +490,15 @@ import { assignNode, assignedTo, defaultKanban, labelsForCard, migrateProjectTag
 import { registerWorkspaceDirty } from '../state/workspaceDirty'
 import { canClearDirty, commitActiveCanvas } from '../state/persistGuards'
 import { isHidden, tidySeparators } from '../lib/ui-visibility'
+import { ZONES, ZONE_ARROW_KEYS, zoneTargetRect, type ZoneId } from '../lib/nodeZones'
+import {
+  explorerIsOpen,
+  nextExplorerPin,
+  nextExplorerShow,
+  readExplorerPinned,
+  writeExplorerPinned,
+  type ExplorerShowAction
+} from '../lib/explorerPin'
 import { presentAccount, type AccountPresentation } from '../lib/accountPresentation'
 import { boardLogEvents } from '../lib/boardLogDiff'
 import { useBoardLog } from '../state/boardLog'
@@ -563,6 +572,7 @@ import {
   accountsForProject,
   sshAccountsHint,
   ungroupNodes,
+  placeNodeInRect,
   type CanvasNode,
   type TerminalNodeCreationOptions
 } from '../state/workspace'
@@ -1185,7 +1195,26 @@ export function Canvas() {
       .then((v) => setAppVersion(v))
       .catch(() => {})
   }, [])
-  const [explorerOpen, setExplorerOpen] = useState(false)
+  // Explorer visibility: pin is a persisted preference (default off — it is a modal today;
+  // flipping the default would dock it on every existing user's next launch). `dismissed` is
+  // the transient × hide and does NOT clear the pin, matching the sessions sidebar. `open` is
+  // the unpinned (modal) flag. See `lib/explorerPin.ts`.
+  const [explorer, setExplorer] = useState(() => ({
+    pinned: readExplorerPinned(),
+    dismissed: false,
+    open: false
+  }))
+  const explorerOpen = explorerIsOpen(explorer)
+  const showExplorer = useCallback((action: ExplorerShowAction) => {
+    setExplorer((s) => ({ ...s, ...nextExplorerShow(s, action) }))
+  }, [])
+  const toggleExplorerPin = useCallback(() => {
+    setExplorer((s) => {
+      const next = nextExplorerPin(s)
+      writeExplorerPinned(next.pinned)
+      return next
+    })
+  }, [])
   const [explorerAgentNodeId, setExplorerAgentNodeId] = useState<string | null>(null)
   const [explorerFolderDropActive, setExplorerFolderDropActive] = useState(false)
   useEffect(() => {
@@ -1206,7 +1235,7 @@ export function Canvas() {
   // host painted over a drawer that is still open hides it with no way to tell it is there.
   // Every setter here is a stable useState setter, so the empty dependency list is complete.
   const closeAllDrawers = useCallback(() => {
-    setExplorerOpen(false)
+    showExplorer('close')
     setScOpen(false)
     setConverterOpen(false)
     setOllamaOpen(false)
@@ -1626,7 +1655,7 @@ export function Canvas() {
       if (!source || !createdAgentId(source.data)) return
       setExplorerAgentNodeId(nodeId)
       closeAllDrawers()
-      setExplorerOpen(true)
+      showExplorer('open')
     }
     window.addEventListener(OPEN_EXPLORER_FOR_AGENT_EVENT, onPrepareAgentFolder)
     return () => window.removeEventListener(OPEN_EXPLORER_FOR_AGENT_EVENT, onPrepareAgentFolder)
@@ -4211,9 +4240,9 @@ export function Canvas() {
   /** Reveal a file in the Explorer drawer: open the drawer and hand it the (relative) path.
    *  Each call bumps a nonce so revealing the same file twice still re-fires the effect. */
   const revealProjectFile = useCallback((relPath: string) => {
-    setExplorerOpen(true)
+    showExplorer('reveal')
     setReveal((r) => ({ path: relPath, nonce: (r?.nonce ?? 0) + 1 }))
-  }, [])
+  }, [showExplorer])
 
   // Cmd+click file links inside terminal output (TerminalNode dispatches these — it has no
   // direct line to the canvas). Files open as editor nodes; directories reveal in Explorer.
@@ -7127,6 +7156,26 @@ export function Canvas() {
     [setNodes, markDirty]
   )
 
+  // Zone snap (issue #394 v1, ported): place a single node into a region of the visible
+  // viewport — halves and quarters. The gesture is viewport-relative ("left half of what I'm
+  // looking at"); the written result is plain absolute node geometry, same as a manual drag.
+  const canSnapToZone = useCallback((ids: string[]): boolean => {
+    if (ids.length !== 1) return false
+    const node = nodesRef.current.find((n) => n.id === ids[0])
+    return !!node && node.type !== 'group' && !node.data.collapsed
+  }, [])
+  const snapNodeToZone = useCallback(
+    (nodeId: string, zone: ZoneId) => {
+      const wrap = flowWrapRef.current?.getBoundingClientRect()
+      if (!wrap) return
+      const rect = zoneTargetRect(getViewport(), wrap.width, wrap.height, zone)
+      if (!rect) return
+      setNodes((ns) => placeNodeInRect(ns as CanvasNode[], nodeId, rect))
+      markDirty()
+    },
+    [setNodes, markDirty, getViewport]
+  )
+
   const selectAll = useCallback(() => {
     setNodes((ns) => ns.map((n) => ({ ...n, selected: true })))
   }, [setNodes])
@@ -7329,7 +7378,7 @@ export function Canvas() {
         setSettingsOpen(true)
       } else if (matchesShortcut(e, shortcuts.toggleExplorer, isMac)) {
         e.preventDefault()
-        setExplorerOpen((v) => !v)
+        showExplorer('toggle')
       } else if (matchesShortcut(e, shortcuts.toggleSourceControl, isMac)) {
         e.preventDefault()
         setScOpen((v) => !v)
@@ -7411,11 +7460,25 @@ export function Canvas() {
             )
           })
           .catch(() => setCopyError('Copy failed — the system clipboard is unavailable.'))
+      } else if (isMac && e.ctrlKey && e.altKey && !e.shiftKey && !e.metaKey && ZONE_ARROW_KEYS[e.key]) {
+        // Zone snap (issue #394 v1, ported): Ctrl+Alt+Arrow, the Rectangle/Magnet idiom — mac
+        // only. Off-mac this chord is deliberately unbound: Ctrl+Alt (≡ the AltGr some
+        // layouts synthesize) is too easy to trigger by accident there, and quarters/thirds
+        // stay reachable from the node context menu's "Snap to zone" submenu on every platform.
+        if (isKanbanOpen(useProjects.getState().activeProjectId)) return
+        const tag = (document.activeElement?.tagName || '').toLowerCase()
+        if (tag === 'input' || tag === 'textarea') return
+        const selected = nodesRef.current.filter((n) => n.selected)
+        if (selected.length !== 1) return
+        const target = selected[0]
+        if (target.type === 'group' || target.data.collapsed) return
+        e.preventDefault()
+        snapNodeToZone(target.id, ZONE_ARROW_KEYS[e.key])
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [toggleSessionsPin, switchProject, fitAll, zoomTo100, toggleFocusMode])
+  }, [toggleSessionsPin, switchProject, fitAll, zoomTo100, toggleFocusMode, snapNodeToZone])
 
   // ⌘/Ctrl+0 on the DESKTOP never reaches the keydown handler above: Electron's default View menu
   // binds the accelerator to `resetZoom`, and a menu accelerator is handled before the page sees
@@ -7528,6 +7591,21 @@ export function Canvas() {
         : ([
             { label: 'Duplicate', icon: <IconDuplicate />, onClick: () => duplicateNodes(ids, at) }
           ] as MenuItem[])),
+      // "Snap to zone" (issue #394 v1, ported): a single non-group, non-collapsed node only —
+      // a multi-node selection or a group frame has no single rect to snap.
+      ...(!isHidden('snap-zone', hidden) && canSnapToZone(ids)
+        ? ([
+            {
+              type: 'submenu',
+              label: 'Snap to zone',
+              icon: <IconGrid />,
+              children: ZONES.map((z) => ({
+                label: z.label,
+                onClick: () => snapNodeToZone(ids[0], z.id)
+              }))
+            }
+          ] as MenuItem[])
+        : []),
       // "Edit appearance…" — reachable from every rendered element per docs/appearance.md; wired
       // here for a single selected node whose title carries `data-appearance-id` (terminal/agent
       // nodes today — see TerminalNode.tsx). Absent when the node doesn't have one yet rather
@@ -13221,7 +13299,7 @@ export function Canvas() {
                   {
                     label: 'Explorer',
                     hint: hintLabel('⌘⇧E'),
-                    onClick: () => setExplorerOpen(true)
+                    onClick: () => showExplorer('open')
                   },
                   {
                     label: 'Source Control',
@@ -13846,12 +13924,14 @@ export function Canvas() {
 
       {explorerOpen && (
         <ExplorerPanel
-          onClose={() => setExplorerOpen(false)}
+          onClose={() => showExplorer('close')}
           onOpenFile={(path, isSsh) => openFile(path, undefined, isSsh)}
           onAgentNodeDrop={openAgentAtExplorerFolder}
           onOpenTerminalAtFolder={(folder) => openTerminalAtExplorerFolder(folder)}
           keyboardAgentNodeId={explorerAgentNodeId}
           reveal={reveal}
+          pinned={explorer.pinned}
+          onTogglePin={toggleExplorerPin}
         />
       )}
 

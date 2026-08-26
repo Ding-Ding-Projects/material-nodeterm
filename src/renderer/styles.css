@@ -3565,6 +3565,15 @@ body,
   pointer-events: auto;
 }
 
+/* Explorer pin (issue #297, ported): the header pin docks the drawer like the sessions sidebar
+   — a persisted preference (`nodeterm.explorerPinned`, see lib/explorerPin.ts) so it survives an
+   app restart. `.explorer-overlay` above is already non-blocking in both states (drag-and-drop
+   between the tree and the canvas needs that); the pin only changes whether the × clears the
+   preference or just hides the drawer for this session. */
+.ex-head-actions button.is-on {
+  color: var(--accent);
+}
+
 /* Overlays/menus that can overlap the macOS title-bar strip must opt out of window-drag,
    otherwise clicks on their top controls (×, ↻, …) drag the window instead. */
 .drawer-overlay,
