@@ -693,19 +693,19 @@ export function ExplorerPanel({
                 )}
                 <span className="ex-dls__name" title={d.detail || d.localPath || d.name}>
                   {d.name}
-                  {d.dir && d.status === 'running' ? ' (folder)' : ''}
+                  {d.dir && d.status === 'running' ? ` (${vocab('folder')})` : ''}
                 </span>
                 {d.status === 'done' && d.localPath && (
                   <button
                     className="ex-dls__act"
                     onClick={() => window.nodeTerminal.shell.reveal(d.localPath!)}
                   >
-                    Reveal
+                    {vocab('Reveal')}
                   </button>
                 )}
                 <button
                   className="ex-dls__act ex-dls__dismiss"
-                  aria-label="Dismiss"
+                  aria-label={vocab('Dismiss')}
                   onClick={() => setDownloads((list) => list.filter((x) => x.id !== d.id))}
                 >
                   <MaterialSymbol name="close" size={15} />
@@ -743,7 +743,7 @@ export function ExplorerPanel({
                   void createEntry(m.path, m.dir, 'file')
                 }}
               >
-                New File…
+                {vocab('New File…')}
               </button>
               <button
                 className="ctx-item"
@@ -753,7 +753,7 @@ export function ExplorerPanel({
                   void createEntry(m.path, m.dir, 'folder')
                 }}
               >
-                New Folder…
+                {vocab('New Folder…')}
               </button>
               {menu.dir && onOpenTerminalAtFolder && (
                 <>
@@ -766,7 +766,7 @@ export function ExplorerPanel({
                       onOpenTerminalAtFolder(folder)
                     }}
                   >
-                    Open terminal here
+                    {vocab('Open terminal here')}
                   </button>
                   {keyboardAgentNodeId && onAgentNodeDrop && (
                     <button
@@ -781,7 +781,7 @@ export function ExplorerPanel({
                         })
                       }}
                     >
-                      Open selected agent here
+                      {vocab('Open selected agent here')}
                     </button>
                   )}
                 </>
@@ -799,7 +799,7 @@ export function ExplorerPanel({
                   >
                     {/* scp -r brings a folder down AS a folder; the HTTP route has to archive it
                         on the fly, and the user should know what will land in Downloads. */}
-                    {menu.dir ? (route === 'http' ? 'Download Folder (.tar.gz)' : 'Download Folder') : 'Download'}
+                    {vocab(menu.dir ? (route === 'http' ? 'Download Folder (.tar.gz)' : 'Download Folder') : 'Download')}
                   </button>
                   {route === 'scp' && (
                     <button
@@ -810,7 +810,7 @@ export function ExplorerPanel({
                         void downloadTo(m.path, m.dir)
                       }}
                     >
-                      Download to…
+                      {vocab('Download to…')}
                     </button>
                   )}
                 </>
@@ -823,7 +823,7 @@ export function ExplorerPanel({
                   setMenu(null)
                 }}
               >
-                Copy Path
+                {vocab('Copy Path')}
               </button>
               <button
                 className="ctx-item"
@@ -832,7 +832,7 @@ export function ExplorerPanel({
                   setMenu(null)
                 }}
               >
-                Copy Relative Path
+                {vocab('Copy Relative Path')}
               </button>
               {/* Root itself (the empty-area menu) is not an ignorable entry. An entry ignored by
                   a broader PATTERN gets neither item: it cannot be "added" (already ignored) and
@@ -848,7 +848,7 @@ export function ExplorerPanel({
                       void toggleGitignore(m.path, !!m.ignored)
                     }}
                   >
-                    {menu.ignored ? 'Remove from .gitignore' : 'Add to .gitignore'}
+                    {vocab(menu.ignored ? 'Remove from .gitignore' : 'Add to .gitignore')}
                   </button>
                 </>
               )}
@@ -864,7 +864,7 @@ export function ExplorerPanel({
                       setMenu(null)
                     }}
                   >
-                    Reveal in Finder
+                    {vocab('Reveal in Finder')}
                   </button>
                 </>
               )}

@@ -19,6 +19,7 @@ import { IconDuplicate, IconSearch, IconTrash } from '../icons'
 import { IconRegexArrowInsert, IconRegexError, IconRegexQuote, IconRegexWarning } from './regexIcons'
 import { TextArea } from '@renderer/ui/md3'
 import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
+import { copy, fact, mapOwnedSentence } from '../../lib/personalVocabulary/ownedCopy'
 
 export interface RegexBuilderValue {
   pattern: string
@@ -183,7 +184,7 @@ export function RegexBuilder({ value, onChange, onDone }: RegexBuilderProps): Re
           <span className="md3-regex-builder__label">{vocab('Pattern')}</span>
           <span className="md3-regex-builder__spacer" />
           <span className="md3-regex-builder__count">
-            {value.pattern.length} / {MAX_PATTERN_LENGTH}
+            {mapOwnedSentence(vocab, [fact(String(value.pattern.length)), copy(' / '), fact(String(MAX_PATTERN_LENGTH))])}
           </span>
           <button type="button" className="md3-regex-builder__chip-btn" onClick={copyLiteral}>
             <IconDuplicate />
@@ -261,8 +262,7 @@ export function RegexBuilder({ value, onChange, onDone }: RegexBuilderProps): Re
           <span className="md3-regex-builder__label">{vocab('Sample text')}</span>
           <span className="md3-regex-builder__spacer" />
           <span className="md3-regex-builder__count">
-            {sample.length} / {MAX_SAMPLE_LENGTH}
-            {clampedSample.truncated ? ' (truncated for evaluation)' : ''}
+            {mapOwnedSentence(vocab, [fact(String(sample.length)), copy(' / '), fact(String(MAX_SAMPLE_LENGTH)), ...(clampedSample.truncated ? [copy(' (truncated for evaluation)')] : [])])}
           </span>
         </div>
         <TextArea
@@ -283,10 +283,12 @@ export function RegexBuilder({ value, onChange, onDone }: RegexBuilderProps): Re
               safe.status === 'ok' && safe.matches.length > 0 ? ' md3-regex-builder__match-badge--hit' : ''
             }`}
           >
-            {safe.status === 'ok' ? vocab(`${safe.matches.length} match${safe.matches.length === 1 ? '' : 'es'}`) : '—'}
+            {safe.status === 'ok'
+              ? mapOwnedSentence(vocab, [fact(String(safe.matches.length)), copy(` match${safe.matches.length === 1 ? '' : 'es'}`)])
+              : '—'}
           </span>
           <span className="md3-regex-builder__hint">
-            {vocab(`capped at ${MAX_MATCHES} · zero-width safe`)}
+            {mapOwnedSentence(vocab, [copy('capped at '), fact(String(MAX_MATCHES)), copy(' · zero-width safe')])}
           </span>
         </div>
         <div className="md3-regex-builder__highlight" aria-label={vocab('Sample text with matches highlighted')}>

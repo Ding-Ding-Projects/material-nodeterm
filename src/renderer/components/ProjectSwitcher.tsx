@@ -11,6 +11,7 @@ import { useSystemAccount } from '../state/systemAccount'
 import { sessionCount, sessionForProject, useProjectSession } from '../session/session'
 import { tabClickAction } from '../session/relay-tab'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { copy, fact, mapOwnedSentence } from '../lib/personalVocabulary/ownedCopy'
 import { useMenuFlip } from '../ui/useMenuFlip'
 import { IconCanvasView, IconKanban } from './icons'
 import { appearanceId } from '../lib/appearance/registry'
@@ -86,7 +87,7 @@ function ProjectSessionLabel({ projectId }: { projectId: string }) {
   const vocab = useVocabularyMapper()
   const session = useProjectSession(projectId)
   return (
-    <span className="tab__session" title={vocab(`Session: ${session.label} (${session.status})`)}>
+    <span className="tab__session" title={mapOwnedSentence(vocab, [copy('Session: '), fact(session.label), copy(' ('), fact(session.status), copy(')')])}>
       {session.label}
     </span>
   )
@@ -403,7 +404,7 @@ export function ProjectSwitcher({
           />
           <span className="md3-switcher__name">{activeProject?.name ?? vocab('No project')}</span>
           {activeUnread > 0 && (
-            <span className="md3-switcher__badge" title={`${activeUnread} unread`}>
+            <span className="md3-switcher__badge" title={mapOwnedSentence(vocab, [fact(String(activeUnread)), copy(' unread')])}>
               {activeUnread}
             </span>
           )}
@@ -555,8 +556,8 @@ export function ProjectSwitcher({
                       title={
                         p.unavailable
                           ? sessionForProject(p.id).source === 'local'
-                            ? `${p.cwd ?? 'project'} is unavailable (folder missing or unreachable)`
-                            : `${p.name} disconnected, click to reconnect`
+                            ? mapOwnedSentence(vocab, [fact(p.cwd ?? 'project'), copy(' is unavailable (folder missing or unreachable)')])
+                            : mapOwnedSentence(vocab, [fact(p.name), copy(' disconnected, click to reconnect')])
                           : p.ssh
                             ? `${p.ssh.server.user}@${p.ssh.server.host}:${p.ssh.remoteCwd}`
                             : p.cwd || undefined
@@ -609,7 +610,7 @@ export function ProjectSwitcher({
                       {multiSession && <ProjectSessionLabel projectId={p.id} />}
 
                       {unreadCount > 0 && (
-                        <span className="md3-switcher-row__badge" title={`${unreadCount} unread`}>
+                        <span className="md3-switcher-row__badge" title={mapOwnedSentence(vocab, [fact(String(unreadCount)), copy(' unread')])}>
                           {unreadCount}
                         </span>
                       )}
@@ -964,14 +965,14 @@ export function ProjectSwitcher({
         <ConfirmDialog
           message={
             storageConfirm.action === 'split'
-              ? `Split "${projects.find((p) => p.id === storageConfirm.projectId)?.name ?? 'this project'}" into ${partSizeValue} ${partSizeUnit} parts?`
-              : `Join "${projects.find((p) => p.id === storageConfirm.projectId)?.name ?? 'this project'}" back into a single project.json?`
+              ? mapOwnedSentence(vocab, [copy('Split "'), fact(projects.find((p) => p.id === storageConfirm.projectId)?.name ?? 'this project'), copy('" into '), fact(String(partSizeValue)), copy(' '), fact(partSizeUnit), copy(' parts?')])
+              : mapOwnedSentence(vocab, [copy('Join "'), fact(projects.find((p) => p.id === storageConfirm.projectId)?.name ?? 'this project'), copy('" back into a single '), fact('project.json'), copy('?')])
           }
           body={
             <p>
               {storageConfirm.action === 'split'
-                ? 'This rewrites .nodeterm/project.json into a manifest + numbered part files, at that folder\'s own path. It is git-shared: everyone who pulls this repo gets the new file layout too. An older nodeterm build cannot read a split project until it is joined back.'
-                : 'This rewrites the parts + manifest back into a single .nodeterm/project.json, at that folder\'s own path. It is git-shared: everyone who pulls this repo gets the new file layout too.'}
+                ? <>{vocab('This rewrites')} <code>.nodeterm/project.json</code> {vocab("into a manifest + numbered part files, at that folder's own path. It is git-shared: everyone who pulls this repo gets the new file layout too. An older nodeterm build cannot read a split project until it is joined back.")}</>
+                : <>{vocab('This rewrites the parts + manifest back into a single')} <code>.nodeterm/project.json</code>{vocab(", at that folder's own path. It is git-shared: everyone who pulls this repo gets the new file layout too.")}</>}
               {storageError && <><br /><strong>{storageError}</strong></>}
             </p>
           }

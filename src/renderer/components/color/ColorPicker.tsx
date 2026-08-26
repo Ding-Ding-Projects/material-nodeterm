@@ -631,6 +631,7 @@ function NumField({
   max: number
   step?: number
 }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   return (
     <label className="color-picker__channel">
       <span>{label}</span>
@@ -641,7 +642,7 @@ function NumField({
         min={min}
         max={max}
         step={step}
-        aria-label={label}
+        aria-label={`${vocab('Colour channel')} ${label}`}
         onBlur={(e) => onCommit(Number(e.target.value))}
         onKeyDown={(e) => {
           if (e.key === 'Enter') onCommit(Number((e.target as HTMLInputElement).value))

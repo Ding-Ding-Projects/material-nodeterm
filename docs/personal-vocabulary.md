@@ -187,6 +187,12 @@ single-string form built on it, and `useVocabularyMenuItems` / `useVocabularyCom
 surfaces built as data rather than JSX. Wrapping arbitrary application prose in one of these is a
 correct extension; wrapping any of the categories above would be a bug.
 
+Mixed sentences use `renderer/lib/personalVocabulary/ownedCopy.ts`. Typed `copy` segments are
+mapped, while typed `fact` segments are concatenated unchanged. `ConfirmDialog.messageSegments`
+uses the same boundary for confirmations that name a user record, path, model, or revision. The
+focused `ownedCopy.test.ts` suite proves this distinction with a replacement term inside an exact
+diagnostic.
+
 **Known gap, honestly stated:** the canvas's own right-click menus (node and pane) and the canvas
 command palette's *mount point* live in `Canvas.tsx` and `ContextMenu.tsx`. The palette is covered
 because the substitution happens inside `CommandPalette` itself; the canvas context menus are

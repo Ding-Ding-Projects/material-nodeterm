@@ -42,7 +42,7 @@ export function ReleaseCard({ release, selected, onToggleSelect }: ReleaseCardPr
       <div className="md3-changelog-release__head">
         <Checkbox
           className="md3-changelog-release__select"
-          aria-label={vocab(`Select release ${release.version}`)}
+          aria-label={`${vocab('Select release')} ${release.version}`}
           checked={selected}
           onClick={(e) => {
             e.preventDefault()

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { useAppearanceEditorHost } from '@renderer/state/appearanceEditorHost'
 import { useSettings } from '@renderer/state/settings'
 import { useVocabularyMapper } from '@renderer/lib/personalVocabulary/useVocabularyText'
+import { copy, fact, mapOwnedSentence } from '@renderer/lib/personalVocabulary/ownedCopy'
 import {
   applyPresetToElement,
   deletePreset,
@@ -109,7 +110,7 @@ export function AppearanceEditorHost(): React.JSX.Element | null {
 
   const style = resolveEffectiveStyle(target.id, entries)
   const entry = entries[target.id]
-  const targetLabel = vocab(target.label)
+  const targetLabel = target.label
 
   function patch(p: Partial<AppearanceTextStyle>): void {
     setElementStyle(target!.id, target!.label, target!.kind, p)
@@ -125,7 +126,7 @@ export function AppearanceEditorHost(): React.JSX.Element | null {
       className="appearance-editor"
       style={{ top: pos.top, left: pos.left }}
       role="dialog"
-      aria-label={`${vocab('Edit appearance')} — ${targetLabel}`}
+      aria-label={mapOwnedSentence(vocab, [copy('Edit appearance — '), fact(targetLabel)])}
       onKeyDown={(e) => {
         if (e.key === 'Escape') {
           e.stopPropagation()
@@ -726,7 +727,7 @@ function PresetsTab({
           <button
             type="button"
             className="appearance-editor__row-reset"
-            aria-label={vocab(`Delete preset ${p.name}`)}
+            aria-label={mapOwnedSentence(vocab, [copy('Delete preset '), fact(p.name)])}
             title={vocab('Delete preset')}
             onClick={() => deletePreset(p.id)}
           >

@@ -20,12 +20,31 @@ paths, identifiers, commands, or machine output.
 | Local model manager | Mapper on tabs, health states, controls, and app-owned guidance | Model references, provider metadata, hardware facts, and streamed chat content |
 | Explorer and project switcher | Mapper on navigation, status, and control chrome | Project names, paths, SSH endpoints, branch names, and session facts |
 
+The converter catalogue also gives every category its own search state and anchored builder. Adapter
+format labels and ids remain exact technical names, while category copy, counts, badges, empty states,
+and app-authored availability explanations use the mapper. Detection confidence, byte counts, model
+fit evidence, endpoint values, and diagnostics are facts and remain unchanged.
+
 ## Ownership rule
 
 Only text authored by this application is mapped. External or user-owned data remains byte-identical,
 including release notes, documentation article bodies, model names, filesystem paths, project names,
 session transcripts, detected adapter messages, revision ids, and network diagnostics. A template may
 be mapped only when its surrounding facts are app-authored and the dynamic values remain factual.
+
+## Field-level evidence
+
+Mixed sentences use the typed segment helper in `src/renderer/lib/personalVocabulary/ownedCopy.ts`:
+
+| Segment kind | Mapper behavior | Examples |
+| --- | --- | --- |
+| `copy` | Passes through the active local mapper | Labels, actions, status prose, accessibility descriptions |
+| `fact` | Concatenates byte-for-byte without mapping | Paths, model names, colours, patterns, revisions, counts, diagnostics |
+
+`ConfirmDialog.messageSegments` uses the same contract for confirmation sentences. The focused
+`ownedCopy.test.ts` test proves both that application copy changes and that a fact containing mapped
+terms remains unchanged. This is evidence of the field-level boundary, not a claim of packaged or
+runtime verification.
 
 The School mode policy still suppresses the mapper until its shared record has been read successfully.
 No file loaded means the shipped wording is returned unchanged. A rejected, malformed, stale, or

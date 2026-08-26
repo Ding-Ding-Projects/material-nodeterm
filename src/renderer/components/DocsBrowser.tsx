@@ -188,7 +188,7 @@ export function DocsBrowser(): JSX.Element {
   // --- render ---------------------------------------------------------------------------------
   if (state.status === 'loading') {
     return (
-      <div className="md3-docs" data-screen-label="Documentation">
+      <div className="md3-docs" data-screen-label="Documentation" aria-label={vocab('Documentation')}>
         <div className="md3-docs__pending">{vocab('Loading documentation…')}</div>
       </div>
     )
@@ -196,7 +196,7 @@ export function DocsBrowser(): JSX.Element {
 
   if (state.status === 'failed') {
     return (
-      <div className="md3-docs" data-screen-label="Documentation">
+      <div className="md3-docs" data-screen-label="Documentation" aria-label={vocab('Documentation')}>
         <div className="md3-docs__pending md3-docs__pending--error" role="alert">
           <div>{vocab('The documentation bundle failed to load.')}</div>
           <div className="md3-docs__pending-detail">{state.error}</div>
@@ -218,7 +218,7 @@ export function DocsBrowser(): JSX.Element {
   }
 
   return (
-    <div className="md3-docs" data-screen-label="Documentation">
+    <div className="md3-docs" data-screen-label="Documentation" aria-label={vocab('Documentation')}>
       <div className="md3-docs__head">
         <div className="md3-docs__heading">
           <div className="md3-docs__title">{vocab('Documentation')}</div>

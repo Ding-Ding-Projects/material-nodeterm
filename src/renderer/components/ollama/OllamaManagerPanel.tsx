@@ -21,6 +21,7 @@ import { ConfirmDialog } from '../ConfirmDialog'
 import { MaterialSymbol, type MaterialSymbolName } from '../MaterialSymbol'
 import { promptDialog } from '../promptDialog'
 import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
+import { copy, fact, mapOwnedSentence } from '../../lib/personalVocabulary/ownedCopy'
 import {
   catalogPollDelayMs,
   catalogPollShouldContinue,
@@ -64,7 +65,8 @@ function panelScopeKey(api: ActiveSessionApi): number {
 
 interface RouteError {
   code: string | null
-  message: string
+  copy: string
+  detail?: string
 }
 
 interface ModelDeleteTarget {
@@ -93,12 +95,12 @@ function routeError(error: unknown): RouteError {
   if (code === E_UNSUPPORTED) {
     return {
       code,
-      message:
+      copy:
         'Ollama is not available for this remote project session. The manager will not fall back to this computer.'
     }
   }
   const detail = error instanceof Error ? error.message : String(error)
-  return { code, message: `Could not load Ollama for this project session: ${detail}` }
+  return { code, copy: 'Could not load Ollama for this project session:', detail }
 }
 
 const toast = (message: string, kind: 'error' | 'info' = 'info'): void => {
@@ -492,7 +494,7 @@ function OllamaManagerPanelForApi({
         <div className="drawer__body om-body">
           {accessError ? (
             <section className="om-empty-note" role="alert">
-              <p>{accessError.message}</p>
+              <p>{vocab(accessError.copy)}{accessError.detail && <> {accessError.detail}</>}</p>
               {accessError.code && (
                 <p>
                   Refusal code: <code>{accessError.code}</code>
@@ -575,7 +577,12 @@ function OllamaManagerPanelForApi({
       </aside>
       {deleteTarget?.api === api && (
         <ConfirmDialog
-          message={vocab(`Delete the installed model "${deleteTarget.model}"? This removes its blobs from disk.`)}
+          message=""
+          messageSegments={[
+            copy('Delete the installed model "'),
+            fact(deleteTarget.model),
+            copy('"? This removes its blobs from disk.')
+          ]}
           onConfirm={() => void handleDelete()}
           onCancel={() => setDeleteTarget(null)}
         />
@@ -611,14 +618,14 @@ function HealthTab({
             : !status
               ? vocab('Not checked yet')
               : status.health === 'ok'
-                ? <>{vocab('Running')} — Ollama {status.version ?? vocab('unknown version')} {vocab('at')} {status.endpoint}</>
+                    ? <>{vocab('Running')} — Ollama {status.version ?? vocab('unknown version')} {vocab('at')} {status.endpoint}</>
                 : status.health === 'not-installed'
                   ? vocab('Ollama does not appear to be installed')
                   : status.health === 'stopped'
-                    ? vocab(`Ollama is not running at ${status.endpoint} (connection refused)`)
+                    ? <>{vocab('Ollama is not running at')} {status.endpoint} ({vocab('connection refused')})</>
                     : status.health === 'unreachable'
-                      ? vocab(`Could not reach Ollama at ${status.endpoint}`)
-                      : vocab(`Ollama answered but reported a problem: ${status.detail ?? 'unknown error'}`)}
+                      ? <>{vocab('Could not reach Ollama at')} {status.endpoint}</>
+                      : <>{vocab('Ollama answered but reported a problem:')} {status.detail ?? vocab('unknown error')}</>}
         </span>
         <button className="sc-btn" onClick={onRefresh} disabled={checking}>
           {vocab('Retry')}
@@ -642,7 +649,7 @@ function HealthTab({
           <ol>
             {troubleshootSteps(hardware?.platform ?? 'linux', status?.health).map((step, i) => (
               <li key={i}>
-                {step.label}
+                {vocab(step.label)}
                 {step.command && <pre>{step.command}</pre>}
               </li>
             ))}
@@ -1165,12 +1172,12 @@ function ChatTab({
 
   const hasVision = capabilities?.includes('vision') ?? false
   const attachmentReason = !active
-    ? 'Start a chat first'
+    ? vocab('Start a chat first')
     : capabilities === null
-      ? 'This model\'s capabilities have not been verified yet'
+      ? vocab("This model's capabilities have not been verified yet")
       : !hasVision
-        ? `"${active.model}" has no verified vision capability`
-        : 'Image attachments are not implemented in this build yet'
+        ? mapOwnedSentence(vocab, [copy('"'), fact(active.model), copy('" has no verified vision capability')])
+        : vocab('Image attachments are not implemented in this build yet')
 
   return (
     <section className="om-chat">
@@ -1329,7 +1336,12 @@ function ChatTab({
       )}
       {deleteConfirm && (
         <ConfirmDialog
-          message={`Delete the chat "${active?.title}"? This cannot be undone.`}
+          message=""
+          messageSegments={[
+            copy('Delete the chat "'),
+            fact(active?.title ?? ''),
+            copy('"? This cannot be undone.')
+          ]}
           onConfirm={() => void handleDelete()}
           onCancel={() => setDeleteConfirm(false)}
         />

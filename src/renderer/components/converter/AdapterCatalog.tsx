@@ -8,6 +8,7 @@ import {
 import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 import { useRegexSearchField } from '../../lib/regex/useRegexSearchField'
 import { AnchoredRegexBuilder } from '../regex/AnchoredRegexBuilder'
+import { copy, fact, mapOwnedSentence } from '../../lib/personalVocabulary/ownedCopy'
 
 export interface AdapterCatalogProps {
   catalog: ConverterAdapterDescriptor[]
@@ -70,14 +71,14 @@ function AdapterCategory({
   const search = useRegexSearchField()
   const searchInputRef = useRef<HTMLInputElement>(null)
   const categoryLabel = vocab(CONVERTER_CATEGORY_LABELS[category])
-  const visible = rows.filter((row) => search.test(`${row.label} ${row.unavailableReason ?? ''}`))
+  const visible = rows.filter((row) => search.test(`${row.id} ${row.label} ${row.unavailableReason ?? ''}`))
   const bundledCount = rows.filter((row) => row.available).length
   return (
     <section className="cv-cat">
       <button className="cv-cat__head" aria-expanded={open} onClick={onToggle}>
         <span className="cv-cat__chevron" aria-hidden>{open ? '▾' : '▸'}</span>
         <span className="cv-cat__label">{categoryLabel}</span>
-        <span className="cv-cat__count">{vocab(`${bundledCount}/${rows.length} available`)}</span>
+        <span className="cv-cat__count">{mapOwnedSentence(vocab, [fact(`${bundledCount}/${rows.length}`), copy(' available')])}</span>
       </button>
       {open && (
         <div className="cv-cat__body">
@@ -94,7 +95,7 @@ function AdapterCategory({
             <AnchoredRegexBuilder search={search} fieldRef={searchInputRef} label={`${categoryLabel} regex search`} />
           </div>
           {search.error && <p className="cv-empty-note" role="alert">{search.error}</p>}
-          {visible.length === 0 && <p className="cv-empty-note">{vocab('No conversions match')} "{search.value}".</p>}
+          {visible.length === 0 && <p className="cv-empty-note">{mapOwnedSentence(vocab, [copy('No conversions match "'), fact(search.value), copy('".')])}</p>}
           <ul className="cv-rows">
             {visible.map((row) => {
               const isSuggested = suggested.has(row.id)
@@ -105,10 +106,14 @@ function AdapterCategory({
                     className={`cv-row${row.available ? '' : ' cv-row--disabled'}${isSelected ? ' cv-row--selected' : ''}${isSuggested ? ' cv-row--suggested' : ''}`}
                     disabled={!row.available}
                     aria-pressed={isSelected}
-                    title={row.available ? (row.lossy ? vocab('Lossy conversion') : vocab(row.label)) : `${vocab('Not available')} — ${row.unavailableReason ?? ''}`}
+                    title={row.available
+                      ? (row.lossy
+                        ? mapOwnedSentence(vocab, [copy('Lossy conversion: '), fact(row.lossyNotes?.join(' ') ?? '')])
+                        : row.label)
+                      : mapOwnedSentence(vocab, [copy('Not available — '), fact(row.unavailableReason ?? '')])}
                     onClick={() => row.available && onSelect(row.id)}
                   >
-                    <span className="cv-row__label">{vocab(row.label)}</span>
+                    <span className="cv-row__label">{row.label}</span>
                     {row.lossy && row.available && <span className="cv-row__badge cv-row__badge--lossy">{vocab('lossy')}</span>}
                     {isSuggested && row.available && <span className="cv-row__badge cv-row__badge--suggested">{vocab('detected')}</span>}
                     {!row.available && <span className="cv-row__reason">{row.unavailableReason}</span>}

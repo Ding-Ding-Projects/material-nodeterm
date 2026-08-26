@@ -310,6 +310,7 @@ Every listed renderer producer has an explicit local mapper boundary. Commands, 
 | `toy-lock-wizard` | Toy lock wizard | `src/renderer/components/toylocks/LockWizard.tsx` | `useVocabularyMapper` |
 | `personal-vocabulary-surface-mapper` | Structured surface mapper | `src/renderer/lib/personalVocabulary/surfaces.ts` | `applyVocabularyToMenuItems` |
 | `personal-vocabulary-application` | Replacement engine | `src/renderer/lib/personalVocabulary/apply.ts` | `export function applyVocabulary` |
+| `typed-copy-fact-boundary` | Typed application-copy versus exact-fact segments | `src/renderer/lib/personalVocabulary/ownedCopy.ts` | `mapOwnedSentence` |
 
 ## Complete production surface classification
 

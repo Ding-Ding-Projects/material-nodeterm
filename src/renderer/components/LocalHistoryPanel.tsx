@@ -41,6 +41,7 @@ import {
 } from '../lib/bulkSelection'
 import { Checkbox } from '@renderer/ui/md3'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { copy, fact } from '../lib/personalVocabulary/ownedCopy'
 
 export interface LocalHistoryPanelProps {
   domain: string
@@ -329,7 +330,7 @@ export function LocalHistoryPanel({ domain, title }: LocalHistoryPanelProps): JS
               return (
                 <li key={e.sha} className="local-history__row md3-history-row">
                   <Checkbox
-                    aria-label={vocab(`Select revision ${e.sha.slice(0, 7)}`)}
+                    aria-label={`${vocab('Select revision')} ${e.sha.slice(0, 7)}`}
                     checked={isSelected(selection, e.sha)}
                     onClick={(ev) => {
                       if (ev.shiftKey) setSelection((s) => selectRange(s, e.sha, visibleIds))
@@ -364,7 +365,14 @@ export function LocalHistoryPanel({ domain, title }: LocalHistoryPanelProps): JS
 
       {restoring && (
         <ConfirmDialog
-          message={`Restore to "${restoring.label}" (${restoring.sha.slice(0, 7)})? This applies that old revision as a NEW save — it does not delete anything from the history, and you can restore forward again afterward.`}
+          message=""
+          messageSegments={[
+            copy('Restore to "'),
+            fact(restoring.label),
+            copy('" ('),
+            fact(restoring.sha.slice(0, 7)),
+            copy(')? This applies that old revision as a NEW save — it does not delete anything from the history, and you can restore forward again afterward.')
+          ]}
           confirmLabel={restoreBusy ? 'Restoring…' : 'Restore'}
           onConfirm={() => void restore()}
           onCancel={() => setRestoring(null)}
