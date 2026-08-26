@@ -1,9 +1,10 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useI18n } from '@renderer/lib/i18n'
 import { Localized } from '@renderer/ui/Localized'
 import { useSettings } from '../state/settings'
 import { resolveAppDisplayName } from '@shared/appIdentity'
 import { resolveLogoPreset } from './appearance/BrandMark'
+import { buildProvenanceLine, readBuildProvenance } from '@shared/build-provenance'
 
 /**
  * Whether the start screen may be dismissed back to whatever is behind it. `hasOpenProjects` is
@@ -74,6 +75,19 @@ export function WelcomeScreen({
   const { ts } = useI18n()
   const appLogo = useSettings((s) => s.settings.appLogo)
   const displayName = useSettings((s) => resolveAppDisplayName(s.settings.appDisplayName))
+  // Which build is running, on the FRONT screen rather than four levels into Settings. It is the
+  // first question in every bug report, and the app is the only thing that can answer it truthfully.
+  const [version, setVersion] = useState<string | null>(null)
+  useEffect(() => {
+    let alive = true
+    void window.nodeTerminal.updates
+      .getVersion()
+      .then((v) => alive && setVersion(v))
+      .catch(() => alive && setVersion(null))
+    return () => {
+      alive = false
+    }
+  }, [])
   useEffect(() => {
     if (!onClose) return
     const onKey = (e: KeyboardEvent) => {
@@ -344,6 +358,18 @@ export function WelcomeScreen({
             </div>
           </div>
         )}
+
+        {/* The version and the build time it was stamped with, to the second and with the timezone
+            named: two builds a minute apart are routine while bisecting, and a bare local time is
+            ambiguous the moment this line is pasted into an issue. An unstamped build (a dev
+            server) says so plainly rather than showing a plausible wrong time. */}
+        <p className="md3-welcome__build" title="The build this window is running">
+          {version === null
+            ? ''
+            : buildProvenanceLine(
+                readBuildProvenance(version, typeof __APP_BUILD__ === 'undefined' ? undefined : __APP_BUILD__)
+              )}
+        </p>
       </div>
     </div>
   )

@@ -11043,3 +11043,14 @@ button.term-node__title-text:focus-visible {
   line-height: 1;
   cursor: pointer;
 }
+
+/* The running build, on the front screen. Quiet by design: it is a fact somebody comes looking
+   for, never something competing with the actions above it. */
+.md3-welcome__build {
+  margin: 18px 0 0;
+  text-align: center;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--md-on-surface-variant);
+  opacity: 0.75;
+}

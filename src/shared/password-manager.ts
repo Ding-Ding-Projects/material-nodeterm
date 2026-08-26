@@ -97,6 +97,17 @@ export interface VaultStatus {
 
 export type CredentialSummary = Omit<CredentialRecord, 'secret'>
 
+/**
+ * What `listCredentials` answers: every credential in one manager as non-secret metadata.
+ *
+ * `uninitialized` and `not-found` are kept apart because they mean different things to a user - no
+ * vault at all, versus a manager id that no longer exists - and a caller that collapsed them would
+ * report a stale row as "set a password first".
+ */
+export type ListCredentialsResult =
+  | { ok: true; credentials: CredentialSummary[] }
+  | { ok: false; error: 'uninitialized' | 'not-found' | 'unsupported' }
+
 export type VaultCreateResult = { ok: true } | { ok: false; error: 'already-initialized' | 'unsupported' }
 
 export type VaultUnlockResult =

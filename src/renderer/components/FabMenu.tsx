@@ -6,6 +6,8 @@ import { useProjects } from '../state/projects'
 import { accountsForProject, sshAccountsHint } from '../state/workspace'
 import type { TerminalProfileChoice } from '../lib/terminal-profile-actions'
 import { useLocalizedVocabularyText } from '../lib/personalVocabulary/useLocalizedVocabularyText'
+import { IconLock } from './icons'
+import { writeAuthenticatorDrag } from '../lib/explorerNodeDrag'
 
 export interface FabMenuProps {
   onAddTerminal: () => void
@@ -18,6 +20,9 @@ export interface FabMenuProps {
   onAddTerminalWithProfile?: (profileId: string) => void
   onAddSticky: () => void
   onAddLoop: () => void
+  /** Create a TOTP code displayer. The row is also DRAGGABLE onto the canvas, which is what
+   *  lets it land where the pointer is rather than at the default placement. */
+  onAddAuthenticator: () => void
   onAddDino: () => void
   onAddAgent: (agentId: AgentId, accountId?: string) => void
   onOpenFile: () => void
@@ -41,6 +46,7 @@ export function FabMenu({
   onAddTerminalWithProfile,
   onAddSticky,
   onAddLoop,
+  onAddAuthenticator,
   onAddDino,
   onAddAgent,
   onOpenFile,
@@ -249,6 +255,18 @@ export function FabMenu({
                 <button role="menuitem" onClick={pick(onAddLoop)}>
                   <LoopIcon />
                   <span>Loop</span>
+                <button
+                  role="menuitem"
+                  draggable
+                  onDragStart={(e) => {
+                    if (e.dataTransfer) writeAuthenticatorDrag(e.dataTransfer)
+                  }}
+                  onClick={pick(onAddAuthenticator)}
+                  title="Click to add, or drag onto the canvas to place it"
+                >
+                  <IconLock />
+                  <span>Authenticator</span>
+                </button>
                 </button>
                 <button role="menuitem" onClick={pick(onAddDino)}>
                   <DinoIcon />

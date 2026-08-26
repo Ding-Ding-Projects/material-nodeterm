@@ -636,5 +636,8 @@ export const IPC = {
   passwordManagerUpdateCredentialSecret: 'password-manager:update-credential-secret',
   passwordManagerRemoveCredential: 'password-manager:remove-credential',
   passwordManagerRevealCredential: 'password-manager:reveal-credential',
-  passwordManagerCredentialCode: 'password-manager:credential-code'
+  passwordManagerCredentialCode: 'password-manager:credential-code',
+  /** Every credential in one manager as non-secret metadata. Closes the gap that left a
+   *  credential from an earlier session visible only as a number. */
+  passwordManagerListCredentials: 'password-manager:list-credentials'
 } as const

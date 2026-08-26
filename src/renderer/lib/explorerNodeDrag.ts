@@ -13,6 +13,26 @@ export const AGENT_NODE_DRAG_MIME = 'application/x-nodeterm-agent-node'
 export const EXPLORER_FOLDER_DRAG_MIME = 'application/x-nodeterm-folder'
 export const OPEN_EXPLORER_FOR_AGENT_EVENT = 'nodeterm:open-explorer-for-agent'
 
+/**
+ * Dragging a TOTP code displayer onto the canvas.
+ *
+ * The payload is a marker and nothing else, deliberately: the authenticator node shows whatever
+ * this machine's store holds and persists no entry ids, so there is nothing about WHICH code to
+ * carry. See AuthenticatorNode.tsx for why an id must not end up in a git-shared project file.
+ */
+export const AUTHENTICATOR_DRAG_MIME = 'application/x-nodeterm-authenticator'
+
+export function writeAuthenticatorDrag(transfer: Pick<DataTransfer, 'setData'>): void {
+  transfer.setData(AUTHENTICATOR_DRAG_MIME, '1')
+  // A plain-text fallback so dropping into a text field does something explicable rather than
+  // pasting nothing at all.
+  transfer.setData('text/plain', 'nodeterm authenticator')
+}
+
+export function readAuthenticatorDrag(transfer: Pick<DataTransfer, 'getData'> | null): boolean {
+  return transfer?.getData(AUTHENTICATOR_DRAG_MIME) === '1'
+}
+
 export interface AgentNodeDragPayload {
   version: 1
   nodeId: string

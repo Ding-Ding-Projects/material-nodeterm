@@ -97,6 +97,7 @@ import type {
   CreateManagerInput,
   CreateManagerResult,
   CredentialCodeResult,
+  ListCredentialsResult,
   ManagerMutationResult,
   ReleaseGroupBindingResult,
   RemoveCredentialInput,
@@ -1121,7 +1122,15 @@ export function buildPasswordManagerApi(client: RpcClient): Pick<NodeTerminalApi
         projectId,
         managerId,
         credentialId
-      ) as Promise<CredentialCodeResult>
+      ) as Promise<CredentialCodeResult>,
+    // REAL: registerPasswordManagerHandlers runs in the Server Edition too, so the browser gets
+    // the same list rather than a stub that would leave a manager showing a count and no rows.
+    listCredentials: (projectId: string, managerId: string) =>
+      client.request(
+        IPC.passwordManagerListCredentials,
+        projectId,
+        managerId
+      ) as Promise<ListCredentialsResult>
   }
   return { passwordManager }
 }

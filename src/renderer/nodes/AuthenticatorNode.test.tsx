@@ -15,6 +15,9 @@ import AuthenticatorNode from './AuthenticatorNode'
 const list = vi.fn()
 const codes = vi.fn()
 const writeText = vi.fn()
+const status = vi.fn()
+const listCredentials = vi.fn()
+const credentialCode = vi.fn()
 
 let host: HTMLDivElement
 let root: Root
@@ -22,6 +25,10 @@ let root: Root
 vi.mock('@xyflow/react', () => ({
   NodeResizer: () => null,
   useReactFlow: () => ({ deleteElements: vi.fn(), updateNodeData: vi.fn() })
+}))
+
+vi.mock('../state/projects', () => ({
+  useProjects: (selector: (s: { activeProjectId: string }) => unknown) => selector({ activeProjectId: 'p1' })
 }))
 
 vi.mock('../components/EditableNodeTitle', () => ({
@@ -70,8 +77,12 @@ beforeEach(() => {
   list.mockReset().mockResolvedValue([entry()])
   codes.mockReset().mockResolvedValue({ e1: { code: '123456', next: '654321', periodStart: 0, period: 30, digits: 6 } })
   writeText.mockReset().mockResolvedValue(true)
+  status.mockReset().mockResolvedValue({ state: { kind: 'uninitialized' }, managers: [] })
+  listCredentials.mockReset().mockResolvedValue({ ok: true, credentials: [] })
+  credentialCode.mockReset().mockResolvedValue({ ok: false, error: 'no-totp' })
   ;(window as unknown as { nodeTerminal: unknown }).nodeTerminal = {
     authenticator: { list, codes },
+    passwordManager: { status, listCredentials, credentialCode },
     clipboard: { writeText }
   }
   host = document.createElement('div')
@@ -165,6 +176,42 @@ describe('AuthenticatorNode', () => {
     const button = document.querySelector<HTMLButtonElement>('.authenticator-node__code')!
     expect(button.disabled).toBe(true)
     expect(button.textContent).toBe('••••••')
+  })
+
+  it('shows a password-manager credential that carries a TOTP secret', async () => {
+    // The reported defect: the generators somebody added lived in the project vault, and a node
+    // that read only the authenticator store told them they had none.
+    list.mockResolvedValue([])
+    status.mockResolvedValue({ state: { kind: 'unlocked' }, managers: [{ id: 'm1', name: 'Work' }] })
+    listCredentials.mockResolvedValue({ ok: true, credentials: [{ id: 'c1', label: 'Bank', createdAt: 0, updatedAt: 0 }] })
+    credentialCode.mockResolvedValue({
+      ok: true,
+      code: { code: '424242', next: 'z', periodStart: Math.floor(Date.now() / 1000), period: 30, digits: 6 }
+    })
+    render()
+    await settle()
+    expect(document.querySelector('.authenticator-node__issuer')?.textContent).toBe('Bank')
+    expect(document.querySelector('.authenticator-node__account')?.textContent).toBe('Work')
+    expect(document.querySelector('.authenticator-node__code')?.textContent).toBe('424242')
+  })
+
+  it('omits a credential with no TOTP secret rather than showing a blank row', async () => {
+    list.mockResolvedValue([])
+    status.mockResolvedValue({ state: { kind: 'unlocked' }, managers: [{ id: 'm1', name: 'Work' }] })
+    listCredentials.mockResolvedValue({ ok: true, credentials: [{ id: 'c1', label: 'Bank', createdAt: 0, updatedAt: 0 }] })
+    credentialCode.mockResolvedValue({ ok: false, error: 'no-totp' })
+    render()
+    await settle()
+    expect(document.querySelectorAll('.authenticator-node__row')).toHaveLength(0)
+  })
+
+  it('says a locked vault is locked, never that there are no codes', async () => {
+    // A locked door and an empty room are different, and only one of them is worth acting on.
+    list.mockResolvedValue([])
+    status.mockResolvedValue({ state: { kind: 'locked' }, managers: [] })
+    render()
+    await settle()
+    expect(document.querySelector('.authenticator-node__empty')?.textContent).toContain('locked')
   })
 
   it('states the seconds as text, not only as a bar', async () => {

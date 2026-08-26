@@ -65,6 +65,7 @@ function renderFabMenu(
         onAddTerminalWithProfile={onAddTerminalWithProfile}
         onAddSticky={() => {}}
         onAddLoop={() => {}}
+        onAddAuthenticator={() => {}}
         onAddDino={() => {}}
         onAddAgent={() => {}}
         onOpenFile={() => {}}

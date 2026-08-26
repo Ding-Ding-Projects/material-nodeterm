@@ -114,6 +114,23 @@ This exists because the codes were only readable from Settings -> Just for fun -
 which is four levels from anywhere and closes the moment you go back to work. A code you need every
 few minutes belongs beside the terminal you are about to paste it into.
 
+**It reads TWO stores**, because a TOTP secret in this app can live in either and a node that read
+only one told people with codes that they had none. The built-in authenticator is one; a
+password-manager **credential** can carry a TOTP seed too (`CredentialSecret.totpSecretBase32`),
+and those live in the active project's vault. Both appear, each labelled by where it came from - a
+vault row shows its credential label above its manager's name, so two credentials called "work" in
+different managers stay tellable apart.
+
+The vault half answers only while that vault is unlocked, and says so rather than appearing empty:
+a locked door and an empty room are different, and only one is worth acting on. Whether a
+credential even HAS a TOTP secret is part of its encrypted half, so the only way to know is to ask
+for a code and read the `no-totp` refusal - which is why a credential without one simply does not
+appear. Vault codes refresh exactly when their period rolls over rather than on a poll, because
+`credentialCode` has no batched sibling and a code does not change between boundaries.
+
+**Adding one:** the FAB menu's **Authenticator** row can be clicked, or **dragged onto the canvas**
+to place the node where you drop it.
+
 **What the node persists is a title and a colour, and deliberately nothing else.** A node's `data`
 is written into `.nodeterm/project.json`, which is git-shared and travels to every machine that
 clones the repository, so a list of which entries to show would be one person's credential store

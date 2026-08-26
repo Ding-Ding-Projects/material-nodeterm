@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { NodeResizer, useReactFlow, type NodeProps } from '@xyflow/react'
 import type { CanvasNode } from '../state/workspace'
 import type { AuthenticatorCode, AuthenticatorEntry } from '@shared/authenticator'
+import type { CredentialCode } from '@shared/password-manager'
+import { useProjects } from '../state/projects'
 import { nodeHeaderFillStyle } from '../lib/nodeColor'
 import { EditableNodeTitle } from '../components/EditableNodeTitle'
 
@@ -30,7 +32,33 @@ import { EditableNodeTitle } from '../components/EditableNodeTitle'
  * The secret itself never comes near this component. `authenticator.codes` returns the CURRENT
  * code and nothing else, computed in core against the vault; there is no path here that could
  * reveal a seed even by accident, and revealing one stays behind the settings section's own gate.
+ *
+ * TWO STORES, because a TOTP secret in this app can live in either and a node that read only one
+ * told people with codes that they had none. The built-in authenticator is one; a password-manager
+ * CREDENTIAL can carry a TOTP seed too (`CredentialSecret.totpSecretBase32`), and those live in
+ * the active project's vault. Both are listed here, labelled by where they came from.
+ *
+ * The vault half only answers while that vault is unlocked, and says so rather than appearing
+ * empty. Whether a credential even HAS a TOTP secret is part of its encrypted half, so the only
+ * way to know is to ask for a code and read the `no-totp` refusal - the same thing the settings
+ * panel's own viewer does, and the reason a credential without one simply does not appear.
  */
+/** Seconds until this vault code rolls over, from the period the core reported rather than a
+ *  local guess: the two clocks can differ, and the core's is the one that made the code. */
+function vaultSecondsLeft(code: CredentialCode, now: number): number {
+  const elapsed = Math.floor(now / 1000) - code.periodStart
+  return Math.max(0, code.period - Math.max(0, elapsed))
+}
+
+/** One TOTP-bearing credential from the active project's password-manager vault. */
+interface VaultTotpRow {
+  managerId: string
+  managerName: string
+  credentialId: string
+  label: string
+  code: CredentialCode
+}
+
 export default function AuthenticatorNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const { deleteElements, updateNodeData } = useReactFlow()
   const [entries, setEntries] = useState<AuthenticatorEntry[]>([])
@@ -40,6 +68,73 @@ export default function AuthenticatorNode({ id, data, selected }: NodeProps<Canv
   const [now, setNow] = useState(() => Date.now())
   const entriesRef = useRef(entries)
   entriesRef.current = entries
+
+  // The active project's vault codes, keyed by `${managerId}/${credentialId}`. Separate state from
+  // the authenticator store because the two have different lifetimes and different failure modes.
+  const projectId = useProjects((s) => s.activeProjectId)
+  const [vaultRows, setVaultRows] = useState<VaultTotpRow[]>([])
+  const [vaultNote, setVaultNote] = useState<string | null>(null)
+
+  const loadVault = useCallback(async (): Promise<void> => {
+    if (!projectId) {
+      setVaultRows([])
+      setVaultNote(null)
+      return
+    }
+    try {
+      const status = await window.nodeTerminal.passwordManager.status(projectId)
+      if (status.state.kind === 'unsupported' || status.state.kind === 'uninitialized') {
+        setVaultRows([])
+        setVaultNote(null)
+        return
+      }
+      if (status.state.kind === 'locked') {
+        // Not "no codes": the vault has some and this process cannot read them yet. Saying so is
+        // the whole difference between a locked door and an empty room.
+        setVaultRows([])
+        setVaultNote('This project’s password manager is locked, so its codes are hidden.')
+        return
+      }
+      setVaultNote(null)
+      const rows: VaultTotpRow[] = []
+      for (const manager of status.managers) {
+        const listed = await window.nodeTerminal.passwordManager.listCredentials(projectId, manager.id)
+        if (!listed.ok) continue
+        for (const credential of listed.credentials) {
+          // Whether a credential HAS a TOTP secret is inside its encrypted half, so asking for the
+          // code and reading the refusal is the only way to know. A `no-totp` credential simply
+          // does not appear, which is why this cannot be filtered before the call.
+          const res = await window.nodeTerminal.passwordManager.credentialCode(
+            projectId,
+            manager.id,
+            credential.id
+          )
+          if (res.ok) rows.push({ managerId: manager.id, managerName: manager.name, credentialId: credential.id, label: credential.label, code: res.code })
+        }
+      }
+      setVaultRows(rows)
+    } catch {
+      setVaultRows([])
+      setVaultNote('Could not read this project’s password manager.')
+    }
+  }, [projectId])
+
+  useEffect(() => {
+    void loadVault()
+  }, [loadVault])
+
+  // Refresh only the codes whose period has actually rolled over. `credentialCode` has no batched
+  // sibling, so polling every credential every second would be one round trip per credential per
+  // second for nothing: a TOTP code does not change between boundaries.
+  useEffect(() => {
+    if (vaultRows.length === 0) return
+    const t = setInterval(() => {
+      const nowSeconds = Math.floor(Date.now() / 1000)
+      const stale = vaultRows.some((r) => nowSeconds >= r.code.periodStart + r.code.period)
+      if (stale) void loadVault()
+    }, 1000)
+    return () => clearInterval(t)
+  }, [vaultRows, loadVault])
 
   const load = useCallback(async (): Promise<void> => {
     try {
@@ -136,9 +231,10 @@ export default function AuthenticatorNode({ id, data, selected }: NodeProps<Canv
           <p className="authenticator-node__empty" role="alert">
             {loadError}
           </p>
-        ) : rows.length === 0 ? (
+        ) : rows.length === 0 && vaultRows.length === 0 ? (
           <p className="authenticator-node__empty">
-            No generators yet. Add one in Settings, under Authenticator, and it appears here.
+            {vaultNote ??
+              'No generators yet. Add one in Settings under Authenticator, or add a credential with a TOTP secret to this project’s password manager.'}
           </p>
         ) : (
           <ul className="authenticator-node__list">
@@ -177,7 +273,40 @@ export default function AuthenticatorNode({ id, data, selected }: NodeProps<Canv
                 </li>
               )
             })}
+            {vaultRows.map((row) => (
+              <li key={`${row.managerId}/${row.credentialId}`} className="authenticator-node__row">
+                <div className="authenticator-node__who">
+                  <span className="authenticator-node__issuer">{row.label}</span>
+                  {/* Named by its manager, so two credentials called "work" in different managers
+                      are still tellable apart at a glance. */}
+                  <span className="authenticator-node__account">{row.managerName}</span>
+                </div>
+                <button
+                  className="authenticator-node__code"
+                  title="Copy this code"
+                  onClick={() => void copy(`${row.managerId}/${row.credentialId}`, row.code.code)}
+                >
+                  {copied === `${row.managerId}/${row.credentialId}` ? 'Copied' : row.code.code}
+                </button>
+                <span
+                  className="authenticator-node__countdown"
+                  title={`New code in ${vaultSecondsLeft(row.code, now)}s`}
+                  aria-label={`New code in ${vaultSecondsLeft(row.code, now)} seconds`}
+                >
+                  <span
+                    className="authenticator-node__countdown-bar"
+                    style={{ width: `${Math.round((vaultSecondsLeft(row.code, now) / row.code.period) * 100)}%` }}
+                  />
+                  <span className="authenticator-node__countdown-text">{vaultSecondsLeft(row.code, now)}s</span>
+                </span>
+              </li>
+            ))}
           </ul>
+        )}
+        {/* Shown beside real rows too: a locked vault while the authenticator store has entries is
+            exactly the case where an unexplained absence would look like a defect. */}
+        {vaultNote && (rows.length > 0 || vaultRows.length > 0) && (
+          <p className="authenticator-node__empty">{vaultNote}</p>
         )}
       </div>
     </div>

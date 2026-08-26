@@ -19,6 +19,7 @@ import {
   createManager,
   createVault,
   credentialCode,
+  listCredentials,
   deleteManager,
   releaseGroupBinding,
   removeCredential,
@@ -38,6 +39,7 @@ import type {
   CreateManagerInput,
   CreateManagerResult,
   CredentialCodeResult,
+  ListCredentialsResult,
   ManagerMutationResult,
   ReleaseGroupBindingResult,
   RemoveCredentialInput,
@@ -315,6 +317,22 @@ export function registerPasswordManagerHandlers(
         if (isLockedError(error)) return { ok: false, error: 'locked' }
         throw error
       }
+    }
+  )
+
+  // Non-secret metadata only, and therefore no key: the same rule `status` already follows for
+  // manager names and counts. See `listCredentials` in vault.ts for why gating labels here would
+  // protect nothing while leaving somebody unable to see what they own.
+  platform.handle(
+    IPC.passwordManagerListCredentials,
+    async (projectId: string, managerId: string): Promise<ListCredentialsResult> => {
+      const r = route(projectId)
+      if (r.kind !== 'local') return { ok: false, error: 'unsupported' }
+      const vault = await store.load(r.cwd)
+      if (!vault) return { ok: false, error: 'uninitialized' }
+      const credentials = listCredentials(vault, managerId)
+      if (!credentials) return { ok: false, error: 'not-found' }
+      return { ok: true, credentials }
     }
   )
 }

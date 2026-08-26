@@ -120,16 +120,23 @@ period length — the panel polls this while a credential row is open and render
 plus the next code so nobody starts typing a code with the period about to roll over. A credential
 with no configured seed answers `no-totp` and the panel shows that plainly rather than guessing.
 
-## Known gap: no `listCredentials`
+## Listing a manager's credentials
 
-The exposed API (`shared/password-manager.ts`) has no call that lists a manager's credentials.
-`status()` returns only a manager's `credentialCount`; individual credential rows are surfaced only
-by the create/rename/remove/reveal calls themselves. `PasswordManagerPanel.tsx` therefore keeps a
-**local echo** of the rows it has itself touched this session — a credential created, renamed, or
-edited in the current session shows up; one from an earlier session stays represented only by the
-count until something brings it into view. This is a stated v1 limitation, not a bug: the panel
-shows the credential count is higher than the rows it currently has, and adding a
-`listCredentials(managerId)` call is the natural follow-up if that proves annoying in practice.
+`listCredentials(projectId, managerId)` returns every credential in one manager as non-secret
+metadata (`CredentialSummary`: id, label, timestamps). No key is required, exactly as `status()`
+needs none for manager names and counts: labels, ids and timestamps are cleartext in the vault file,
+which is what makes committing it to git no more dangerous than committing `project.json`. Only the
+secret half needs unlocking.
+
+This replaced a real defect. Before it existed, credential rows reached the UI only through the
+create/rename/remove/reveal calls that produced them, so the panel kept a local echo of what the
+current session had touched and a credential from an earlier session existed only inside the
+manager's count: "2 credentials" above a list showing none of them, with no way to reach them. It
+was documented as a v1 limitation and it read, correctly, as the feature being broken.
+
+`uninitialized` and `not-found` stay apart in the result, because "there is no vault" and "that
+manager id is stale" are different things to tell somebody, and neither of them is "this manager is
+empty" - collapsing any of the three would reproduce the original defect.
 
 ## Relay refusal
 

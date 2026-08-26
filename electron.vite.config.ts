@@ -1,7 +1,35 @@
+import { execFileSync } from 'child_process'
+import { readFileSync } from 'fs'
 import { resolve } from 'path'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+
+/**
+ * Build provenance, stamped into the renderer bundle so the app can say WHICH build is running.
+ *
+ * Computed here, once, at build time. That is what makes it provenance rather than decoration:
+ * launch time or a file mtime would look identical on screen and change every run, and a
+ * hand-written constant would quietly describe a build nobody is running any more.
+ *
+ * The commit is best effort. A tarball with no .git is a legitimate way to build this, so a failed
+ * `git rev-parse` yields 'unknown' rather than failing the build: the TIME is the load-bearing
+ * half, and it is always available.
+ */
+function buildStamp(): { builtAt: string; commit: string; version: string } {
+  let commit = 'unknown'
+  try {
+    commit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim() || 'unknown'
+  } catch {
+    // No git, or no repository. Not an error: see above.
+  }
+  // The VERSION is stamped here too, from package.json, rather than read at runtime from
+  // `app.getVersion()`. Electron's `getVersion` returns ELECTRON's own version in an unpackaged
+  // run - measured: the front screen read "v42.8.1" instead of the app's version - so the runtime
+  // value is only correct in a packaged build. The stamp describes the artifact in both.
+  const version = JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf8')).version
+  return { builtAt: new Date().toISOString(), commit, version: typeof version === 'string' ? version : 'unknown' }
+}
 
 export default defineConfig({
   main: {
@@ -75,6 +103,11 @@ export default defineConfig({
       }
     },
     plugins: [react(), tailwindcss()],
+    // Read through `readBuildProvenance` (src/shared/build-provenance.ts), which answers an honest
+    // "unavailable" when this define is absent: a dev server never sets it.
+    define: {
+      __APP_BUILD__: JSON.stringify(buildStamp())
+    },
     build: {
       rollupOptions: {
         input: {

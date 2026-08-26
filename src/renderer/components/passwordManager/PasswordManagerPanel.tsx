@@ -517,19 +517,56 @@ function ManagerCard({
   onChanged: () => void
   onError: (message: string) => void
 }): React.JSX.Element {
-  // There's no `listCredentials` in the API (shared/password-manager.ts) -- credential ROWS are
-  // surfaced only by the create/rename/remove/reveal calls themselves; `status()` returns only a
-  // manager's `credentialCount`. So this card keeps its own local echo of the rows it has itself
-  // touched this session, rather than pretending to a full live list it cannot actually fetch. A
-  // pre-existing credential from an earlier session stays represented by the count alone until
-  // something (rename/edit/create) brings it into view here. This is a real, stated v1 gap, not a
-  // bug: adding a `listCredentials(managerId)` call is the natural follow-up if this proves
-  // annoying in practice.
+  // The credential ROWS, fetched from the vault rather than echoed from whatever this session
+  // happened to touch. Before `listCredentials` existed, a credential created in an earlier
+  // session showed up only inside the manager's COUNT: "2 credentials" above a list showing none
+  // of them, with no way to reach them. That was documented as a v1 gap and it read, correctly, as
+  // the feature being broken.
+  //
+  // No key is required to ask: labels, ids and timestamps are cleartext in the vault file, exactly
+  // as manager names and counts already are in `status()`. Only the secret half needs unlocking.
   const [credentials, setCredentials] = useState<CredentialSummary[]>([])
   const [expanded, setExpanded] = useState(autoAddCredential)
   const [renaming, setRenaming] = useState(false)
   const [name, setName] = useState(manager.name)
   const [showAdd, setShowAdd] = useState(autoAddCredential)
+  const [listError, setListError] = useState<string | null>(null)
+
+  // Re-read whenever the manager's own credential COUNT changes, which is what every mutation
+  // moves: create, remove, and a manager swapped under the same card. Keying on the count rather
+  // than a manual refresh flag means a row added elsewhere still lands here.
+  useEffect(() => {
+    let alive = true
+    void api.passwordManager
+      .listCredentials(projectId, manager.id)
+      .then((res) => {
+        if (!alive) return
+        if (res.ok) {
+          setCredentials(res.credentials)
+          setListError(null)
+          return
+        }
+        // A manager that no longer exists and a vault that was never created are different
+        // stories, and neither of them is "this manager is empty": showing an empty list for
+        // either would repeat the exact defect this call was added to fix.
+        setCredentials([])
+        setListError(
+          res.error === 'not-found'
+            ? 'This manager no longer exists. Refresh the panel.'
+            : res.error === 'uninitialized'
+              ? 'Set a project password first.'
+              : 'Credentials cannot be listed for this project.'
+        )
+      })
+      .catch(() => {
+        if (!alive) return
+        setCredentials([])
+        setListError('Could not read this project’s credentials.')
+      })
+    return () => {
+      alive = false
+    }
+  }, [api, projectId, manager.id, manager.credentialCount])
 
   const requestDelete = (e: React.MouseEvent<HTMLButtonElement>): void => {
     const rect = e.currentTarget.getBoundingClientRect()
@@ -665,11 +702,13 @@ function ManagerCard({
                 onError={onError}
               />
             ))}
-            {credentials.length === 0 && manager.credentialCount > 0 && (
-              <li className="pwm-hint pwm-manager-card__stale-note">
-                This manager already holds {manager.credentialCount} credential{manager.credentialCount === 1 ? '' : 's'} from an earlier
-                session. Add or edit one below to bring it into view here.
+            {listError && (
+              <li className="pwm-hint pwm-manager-card__stale-note" role="alert">
+                {listError}
               </li>
+            )}
+            {!listError && credentials.length === 0 && (
+              <li className="pwm-hint pwm-manager-card__stale-note">No credentials yet.</li>
             )}
           </ul>
           {showAdd ? (

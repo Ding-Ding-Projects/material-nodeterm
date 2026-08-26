@@ -53,11 +53,13 @@ import {
   isEmptyCanvasDropTarget
 } from './canvas-image-import'
 import {
+  AUTHENTICATOR_DRAG_MIME,
   EXPLORER_FOLDER_DRAG_MIME,
   OPEN_EXPLORER_FOR_AGENT_EVENT,
   createAgentNodeForExplorerFolder,
   createTerminalNodeForExplorerFolder,
   hasDragType,
+  readAuthenticatorDrag,
   readExplorerFolderDrag
 } from '../lib/explorerNodeDrag'
 import {
@@ -4753,6 +4755,33 @@ export function Canvas() {
       window.removeEventListener('drop', onDrop)
     }
   }, [openTerminalAtExplorerFolder, screenToFlowPosition])
+
+  // Dropping a TOTP code displayer where the pointer released it, rather than at the default
+  // placement. Same shape as the explorer-folder drop above: recognise our own MIME, refuse
+  // anything else, and convert the screen point once.
+  useEffect(() => {
+    const wrap = flowWrapRef.current
+    if (!wrap) return
+    const onDragOver = (event: DragEvent): void => {
+      if (!hasDragType(event.dataTransfer, AUTHENTICATOR_DRAG_MIME)) return
+      if (!isEmptyCanvasDropTarget(event.target, wrap)) return
+      event.preventDefault()
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
+    }
+    const onDrop = (event: DragEvent): void => {
+      if (!isEmptyCanvasDropTarget(event.target, wrap)) return
+      if (!readAuthenticatorDrag(event.dataTransfer)) return
+      event.preventDefault()
+      event.stopPropagation()
+      addAuthenticator(screenToFlowPosition({ x: event.clientX, y: event.clientY }))
+    }
+    window.addEventListener('dragover', onDragOver)
+    window.addEventListener('drop', onDrop)
+    return () => {
+      window.removeEventListener('dragover', onDragOver)
+      window.removeEventListener('drop', onDrop)
+    }
+  }, [addAuthenticator, screenToFlowPosition])
 
   // Open a terminal node that ssh's into a saved server. `screenPos` (a pane/dock cursor) is
   // converted to a flow position; otherwise the node lands at the view center. The new node is
@@ -13214,6 +13243,7 @@ export function Canvas() {
               profileTerminalCreationHandler(addTerminal, profileId)()
             }
             onAddSticky={addSticky}
+            onAddAuthenticator={() => addAuthenticator()}
             onAddLoop={addNativeLoop}
             onAddDino={addDino}
             onAddAgent={(aid, accountId) => addAgentNode(aid, undefined, undefined, accountId)}

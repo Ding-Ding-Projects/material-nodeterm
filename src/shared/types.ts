@@ -50,6 +50,7 @@ import type {
   CreateManagerInput,
   CreateManagerResult,
   CredentialCodeResult,
+  ListCredentialsResult,
   ManagerMutationResult,
   ReleaseGroupBindingResult,
   RemoveCredentialInput,
@@ -3619,6 +3620,9 @@ export interface PasswordManagerApi {
   removeCredential(projectId: string, input: RemoveCredentialInput): Promise<RemoveCredentialResult>
   revealCredential(projectId: string, managerId: string, credentialId: string): Promise<RevealCredentialResult>
   credentialCode(projectId: string, managerId: string, credentialId: string): Promise<CredentialCodeResult>
+  /** Every credential in one manager, as non-secret metadata. No key required, exactly as
+   *  `status` needs none for manager names and counts. */
+  listCredentials(projectId: string, managerId: string): Promise<ListCredentialsResult>
 }
 
 export interface NodeTerminalApi {

@@ -39,6 +39,7 @@ function passwordManagerApi(over: Partial<PasswordManagerApi> = {}): PasswordMan
     removeCredential: vi.fn(async () => ({ ok: true }) as const),
     revealCredential: vi.fn(async () => ({ ok: false, error: 'not-found' }) as const),
     credentialCode: vi.fn(async () => ({ ok: false, error: 'no-totp' }) as const),
+    listCredentials: vi.fn(async () => ({ ok: true as const, credentials: [] })),
     ...over
   }
 }

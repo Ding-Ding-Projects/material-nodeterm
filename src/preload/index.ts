@@ -601,7 +601,9 @@ const api: NodeTerminalApi = {
     revealCredential: (projectId, managerId, credentialId) =>
       ipcRenderer.invoke(IPC.passwordManagerRevealCredential, projectId, managerId, credentialId),
     credentialCode: (projectId, managerId, credentialId) =>
-      ipcRenderer.invoke(IPC.passwordManagerCredentialCode, projectId, managerId, credentialId)
+      ipcRenderer.invoke(IPC.passwordManagerCredentialCode, projectId, managerId, credentialId),
+    listCredentials: (projectId, managerId) =>
+      ipcRenderer.invoke(IPC.passwordManagerListCredentials, projectId, managerId)
   },
   context: {
     onUpdate: (listener) => {

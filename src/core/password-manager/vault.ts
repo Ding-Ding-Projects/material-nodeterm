@@ -14,6 +14,7 @@ import type {
   CredentialCode,
   CredentialRecord,
   CredentialSecret,
+  CredentialSummary,
   EncryptedPayload,
   PasswordManagerRecord,
   VaultFileV1,
@@ -295,6 +296,30 @@ export function removeCredential(vault: VaultFileV1, managerId: string, credenti
         : { ...m, updatedAt: Date.now(), credentials: m.credentials.filter((c) => c.id !== credentialId) }
     )
   }
+}
+
+/**
+ * Every credential in one manager, as non-secret metadata: id, label, timestamps. Never the
+ * envelope, and no key is required to ask.
+ *
+ * This closes the gap the panel was working around. Without it the only way a credential row
+ * reached the UI was the create/rename/update call that produced it, so the panel kept a local
+ * echo of what THIS session had touched and a credential from an earlier session existed only as
+ * a number: "2 credentials" above a list showing none of them, with no way to reach them.
+ *
+ * Requiring no key is deliberate and consistent with `statusOf`, which already returns manager
+ * names and counts to a locked caller. The same file states plainly that labels, ids and
+ * timestamps are cleartext - that is what makes committing a vault to git no more dangerous than
+ * committing project.json - so gating the labels here would protect nothing while leaving the
+ * user unable to see what they own.
+ *
+ * `null` distinguishes "no such manager" from "a manager with no credentials", which the caller
+ * needs: one is a stale id worth reporting, the other is an ordinary empty list.
+ */
+export function listCredentials(vault: VaultFileV1, managerId: string): CredentialSummary[] | null {
+  const manager = findManager(vault, managerId)
+  if (!manager) return null
+  return manager.credentials.map(({ secret: _secret, ...meta }) => meta)
 }
 
 export interface NewCredentialInput {
