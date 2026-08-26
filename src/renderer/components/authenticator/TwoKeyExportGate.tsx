@@ -5,6 +5,8 @@
 // one click away. See docs/authenticator.md.
 import { useState } from 'react'
 import { MaterialSymbol } from '../MaterialSymbol'
+import { Slider } from '@renderer/ui/md3'
+import { Checkbox } from '@renderer/ui/md3'
 
 export function TwoKeyExportGate({
   count,
@@ -40,16 +42,15 @@ export function TwoKeyExportGate({
         </span>
       </p>
       <label className="toylock-checkbox-row">
-        <input type="checkbox" checked={keyA} onChange={(e) => setKeyA(e.target.checked)} disabled={busy} />
+        <Checkbox checked={keyA} onChange={(e) => setKeyA(e.target.checked)} disabled={busy} />
         Key 1 — I understand this file will contain readable secrets, not codes
       </label>
       <label className="toylock-checkbox-row">
-        <input type="checkbox" checked={keyB} onChange={(e) => setKeyB(e.target.checked)} disabled={busy} />
+        <Checkbox checked={keyB} onChange={(e) => setKeyB(e.target.checked)} disabled={busy} />
         Key 2 — I'm exporting this somewhere private, not a shared or synced location
       </label>
       <div className="toylock-export-gate__slider-row">
-        <input
-          type="range"
+        <Slider
           min={0}
           max={100}
           value={slide}

@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { Button } from '@renderer/ui/Button'
+import { ColorField } from '../../color/ColorField'
 import { useSettings } from '../../../state/settings'
 import { RAINBOW_SPEED_MAX, RAINBOW_SPEED_MIN, rainbowDurationSeconds } from '../../../lib/nodeColor'
 import { NODE_COLORS } from '../../../state/workspace'
@@ -19,6 +21,7 @@ import {
 import { cn } from '@renderer/ui/cn'
 import { SectionReset } from '../SectionReset'
 import { APPEARANCE_RESET_KEYS } from '@renderer/lib/settingsReset'
+import { Slider } from '@renderer/ui/md3'
 
 const ROWS = {
   appTheme: {
@@ -156,8 +159,7 @@ export function AppearanceSection({ isActive }: { isActive: boolean }): React.JS
               reduced motion.
             </span>
           </span>
-          <input
-            type="range"
+          <Slider
             min={RAINBOW_SPEED_MIN}
             max={RAINBOW_SPEED_MAX}
             step={1}
@@ -209,13 +211,23 @@ export function AppearanceSection({ isActive }: { isActive: boolean }): React.JS
                   ) : null}
                 </button>
               ))}
-              <button
-                type="button"
-                className="toylock-btn toylock-btn--sm"
+              {/* The swatches above are a convenience layered ON the continuous picker, never a
+                  replacement for it -- this row used to be swatch-only, so any accent outside the
+                  seven node colours was unreachable from Settings even though the app already
+                  ships a full infinite picker (2-D saturation/value field, hue and alpha sliders,
+                  and a translator across ten formats). Only the canvas context menu was using it.
+                  See docs/colour-picker.md. */}
+              <ColorField
+                label="Custom"
+                value={accent}
+                allowAlpha={false}
+                onChange={(next) => update({ accent: next })}
+              />
+              <Button
                 onClick={(e) => (accentLock ? setUnlockAnchor({ x: e.clientX, y: e.clientY }) : setLockWizardAnchor({ x: e.clientX, y: e.clientY }))}
               >
                 {accentLock ? 'Manage lock…' : 'Lock this…'}
-              </button>
+              </Button>
             </div>
           )}
         </div>

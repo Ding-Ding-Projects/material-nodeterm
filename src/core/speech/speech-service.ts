@@ -1,5 +1,5 @@
 import { open } from 'node:fs/promises'
-import { whisperModel } from '../../shared/speech'
+import { DEFAULT_WHISPER_MODEL, whisperModel } from '../../shared/speech'
 import type { WhisperModelStore } from './whisper-models'
 
 export interface WhisperEngineHandle {
@@ -89,10 +89,27 @@ export class SpeechService {
   }
 
   private async transcribeNow(pcm: Float32Array, opts: { model: string; language: string }): Promise<string> {
-    const info = whisperModel(opts.model)
+    // An unset or unrecognised model falls back to the default rather than failing. A session
+    // that has never opened Settings has no model chosen, and refusing to transcribe because of
+    // that is a dead end: the user pressed dictate, so they have already said what they want.
+    const info = whisperModel(opts.model) ?? whisperModel(DEFAULT_WHISPER_MODEL)
     if (!info) throw new Error(`Unknown whisper model: ${opts.model}`)
+
+    // Fetch it on demand instead of telling the user to go and do it themselves. This used to
+    // throw "Download the tiny model in Settings → Speech first", which is a real instruction
+    // wearing an error's clothing: nothing was broken, the app simply declined to do the one
+    // step it was about to need. The store reports progress, so the download is visible.
     if (!(await this.models.has(info.id))) {
-      throw new Error(`Download the ${info.id} model in Settings → Speech first.`)
+      try {
+        await this.models.download(info.id)
+      } catch (err) {
+        throw new Error(
+          `Could not download the ${info.id} speech model: ${err instanceof Error ? err.message : String(err)}`
+        )
+      }
+      if (!(await this.models.has(info.id))) {
+        throw new Error(`The ${info.id} speech model did not finish downloading. Try again from Settings → Speech.`)
+      }
     }
     const path = this.models.modelPath(info.id)
     if (this.loaded && this.loaded.path !== path) {

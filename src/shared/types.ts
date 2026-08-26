@@ -1495,6 +1495,13 @@ export interface AppearanceFontAxes {
   opsz?: number
 }
 
+/** The CSS blend modes worth exposing: every one is a real `mix-blend-mode` value. */
+export const APPEARANCE_BLEND_MODES = [
+  'normal','multiply','screen','overlay','darken','lighten','color-dodge','color-burn',
+  'hard-light','soft-light','difference','exclusion','hue','saturation','color','luminosity'
+] as const
+export type AppearanceBlendMode = (typeof APPEARANCE_BLEND_MODES)[number]
+
 export interface AppearanceTextStyle {
   fontFamily?: string
   fontSizePx?: number
@@ -1526,6 +1533,29 @@ export interface AppearanceTextStyle {
   backgroundColor?: string
   borderColor?: string
   borderRadiusPx?: number
+  /** --- Compositing and effects. Non-destructive: every one of these is an unset-by-default
+   *  override that composes with, rather than replaces, whatever the element already renders. */
+  opacity?: number
+  blendMode?: AppearanceBlendMode
+  filterBrightness?: number
+  filterContrast?: number
+  filterSaturate?: number
+  filterHueRotateDeg?: number
+  filterBlurPx?: number
+  filterGrayscale?: number
+  filterInvert?: number
+  filterSepia?: number
+  backdropBlurPx?: number
+  /** --- Transform. Composed in a fixed order (translate, rotate, scale, skew) so two editors
+   *  cannot disagree about what a saved entry means. */
+  translateXPx?: number
+  translateYPx?: number
+  rotateDeg?: number
+  scaleX?: number
+  scaleY?: number
+  skewXDeg?: number
+  skewYDeg?: number
+  transformOrigin?: string
 }
 
 /** A themed element as persisted in `Settings.elementAppearance`, keyed by a stable id
@@ -2327,7 +2357,10 @@ export interface SpeechModelInfo extends WhisperModelInfo {
 export interface SpeechApi {
   /** Transcribe a chunk of mono PCM audio (16kHz Float32 samples) to text.
    *  `language` is a BCP-47-ish hint or 'auto'; defaults to the user's speech settings. */
-  transcribe(pcm: Float32Array, language?: string): Promise<{ text: string }>
+  /** `model` carries the PROJECT-RESOLVED choice. Without it the core reads the global
+   *  settings store, so a per-project speech model would be settable in the UI and then
+   *  silently ignored at transcription time. */
+  transcribe(pcm: Float32Array, language?: string, model?: string): Promise<{ text: string }>
   /** List the known whisper models with their download/pro status. */
   models(): Promise<SpeechModelInfo[]>
   /** Download a whisper model to disk (progress via `onProgress`). */

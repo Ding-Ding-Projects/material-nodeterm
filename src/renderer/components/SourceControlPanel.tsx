@@ -24,6 +24,7 @@ import { defaultScmScope, type ScmScope } from '@shared/scm-scope'
 import { hintLabel } from '@shared/platform-utils'
 import { MaterialSymbol } from './MaterialSymbol'
 import { gitStatusBadgeClass } from '../lib/gitStatusBadge'
+import { TextArea } from '@renderer/ui/md3'
 
 export interface SourceControlPanelProps {
   onClose: () => void
@@ -531,7 +532,7 @@ export function SourceControlPanel({
 
               <section className="scm-commit">
                 <div className="scm-compose">
-                  <textarea
+                  <TextArea
                     className="scm-message"
                     placeholder={hintLabel('Message (⌘↵ to commit)')}
                     value={message}

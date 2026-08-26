@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNotifications, type AppNotification, type NotificationKind } from '../state/notifications'
+import { Checkbox } from '@renderer/ui/md3'
 
 type FilterKind = 'all' | 'unread' | NotificationKind
 
@@ -215,8 +216,7 @@ export function NotificationCenter({
               role="option"
               aria-selected={selected.has(n.id)}
             >
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={selected.has(n.id)}
                 onChange={() => toggleOne(n.id)}
                 aria-label={`Select: ${n.title}`}

@@ -9,6 +9,7 @@
 import { useState } from 'react'
 import type { BuiltExport, ExportFormat, ExportKind } from '@shared/export'
 import { FORMAT_INFO, formatsForKind } from '@shared/export'
+import { Select } from '@renderer/ui/Select'
 
 export interface ExportMenuProps {
   kind: ExportKind
@@ -78,7 +79,7 @@ export function ExportMenu({ kind, build, label }: ExportMenuProps): JSX.Element
         <div className="export-menu__panel" role="group" aria-label={`Export ${label}`}>
           <label className="export-menu__format-label">
             Format
-            <select
+            <Select
               className="export-menu__format"
               value={format}
               onChange={(e) => {
@@ -92,7 +93,7 @@ export function ExportMenu({ kind, build, label }: ExportMenuProps): JSX.Element
                   {f.writeOnly ? ' (write-only)' : ''}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
 
           {preview && preview.lossy.length > 0 && (

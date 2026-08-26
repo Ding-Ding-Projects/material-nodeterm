@@ -17,6 +17,7 @@ import { REGEX_PRESETS, type RegexPreset } from '../../lib/regex/presets'
 import { REGEX_TOKEN_GROUPS, filterTokenGroups, type RegexToken } from './insertTokens'
 import { IconDuplicate, IconSearch, IconTrash } from '../icons'
 import { IconRegexArrowInsert, IconRegexError, IconRegexQuote, IconRegexWarning } from './regexIcons'
+import { TextArea } from '@renderer/ui/md3'
 
 export interface RegexBuilderValue {
   pattern: string
@@ -262,7 +263,7 @@ export function RegexBuilder({ value, onChange, onDone }: RegexBuilderProps): Re
             {clampedSample.truncated ? ' (truncated for evaluation)' : ''}
           </span>
         </div>
-        <textarea
+        <TextArea
           className="md3-regex-builder__sample"
           rows={3}
           spellCheck={false}

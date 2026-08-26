@@ -32,6 +32,7 @@ import {
 } from '../lib/bulkSelection'
 import { BulkActionBar, type BulkAction } from './BulkActionBar'
 import { ExportMenu } from './ExportMenu'
+import { Checkbox } from '@renderer/ui/md3'
 
 export interface SessionMemoryPanelProps {
   /** Travel to the node behind a row. Canvas passes `travelToNode`, so a CLOSED project's tab is
@@ -236,8 +237,7 @@ export function SessionMemoryPanel({
         {/* Every row, in core's order (already sorted by total, descending). */}
         {views.map((v) => (
           <li key={v.row.session} className="sessmem-row md3-sessmem-row">
-            <input
-              type="checkbox"
+            <Checkbox
               className="sessmem-row__select md3-sessmem-row__select"
               checked={isSelected(selection, v.row.nodeId)}
               aria-label={`Select ${v.title}`}

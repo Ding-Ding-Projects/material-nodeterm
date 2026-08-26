@@ -281,10 +281,10 @@ const api: NodeTerminalApi = {
     // span its whole underlying buffer (e.g. a slice of a pooled/recycled buffer upstream), so a
     // non-spanning view is copied first — sending pcm.buffer as-is would leak neighboring bytes
     // (or the wrong region) into the transcription.
-    transcribe: (pcm: Float32Array, language?: string) => {
+    transcribe: (pcm: Float32Array, language?: string, model?: string) => {
       const spansBuffer = pcm.byteOffset === 0 && pcm.byteLength === pcm.buffer.byteLength
       const buffer = spansBuffer ? pcm.buffer : pcm.slice().buffer
-      return ipcRenderer.invoke(IPC.speechTranscribe, { pcm: buffer, language })
+      return ipcRenderer.invoke(IPC.speechTranscribe, { pcm: buffer, language, model })
     },
     models: () => ipcRenderer.invoke(IPC.speechModels),
     downloadModel: (id: string) => ipcRenderer.invoke(IPC.speechModelDownload, { id }),

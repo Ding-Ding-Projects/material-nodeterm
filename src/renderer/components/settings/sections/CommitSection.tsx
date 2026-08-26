@@ -5,6 +5,7 @@ import { FieldRow } from '../FieldRow'
 import { Select } from '@renderer/ui/Select'
 import { Input } from '@renderer/ui/Input'
 import { Switch } from '@renderer/ui/Switch'
+import { TextArea } from '@renderer/ui/md3'
 
 const ROWS = {
   autoFetch: {
@@ -79,7 +80,7 @@ export function CommitSection({ isActive }: { isActive: boolean }): React.JSX.El
       <SearchableRow {...ROWS.extra}>
         <div className="py-2.5">
           <label className="block text-[13px] text-text">Extra prompt (optional)</label>
-          <textarea
+          <TextArea
             value={settings.commitExtraPrompt}
             placeholder="e.g. Use Conventional Commits with gitmoji"
             onChange={(e) => update({ commitExtraPrompt: e.target.value })}

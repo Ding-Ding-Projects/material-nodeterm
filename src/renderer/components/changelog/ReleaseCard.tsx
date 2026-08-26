@@ -3,6 +3,7 @@
 
 import type { ChangelogRelease } from '@shared/changelog'
 import { renderMarkdown } from '../../lib/markdown'
+import { Checkbox } from '@renderer/ui/md3'
 
 /**
  * A small, deterministic color class per category — cycled by NAME (a stable hash), not by
@@ -37,8 +38,7 @@ export function ReleaseCard({ release, selected, onToggleSelect }: ReleaseCardPr
   return (
     <li className="md3-changelog-release">
       <div className="md3-changelog-release__head">
-        <input
-          type="checkbox"
+        <Checkbox
           className="md3-changelog-release__select"
           aria-label={`Select release ${release.version}`}
           checked={selected}

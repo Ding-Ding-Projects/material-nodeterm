@@ -6,6 +6,7 @@ import { ColorMenu } from '../components/color/ColorMenu'
 import { alphaTint } from '../components/color/tint'
 import { EditableNodeTitle } from '../components/EditableNodeTitle'
 import { nodeHeaderFillStyle } from '../lib/nodeColor'
+import { TextArea } from '@renderer/ui/md3'
 
 /**
  * A sticky note node: a colored, resizable card with free-text content.
@@ -134,7 +135,7 @@ export function StickyNode({ id, data, selected }: NodeProps<CanvasNode>) {
         </button>
       </div>
 
-      <textarea
+      <TextArea
         className="sticky-node__body nodrag nowheel"
         value={data.text ?? ''}
         placeholder="Write a note…"

@@ -17,6 +17,7 @@ import { createPortal } from 'react-dom'
 import { equalizerBars } from '../lib/dictation-equalizer'
 import { PcmCapture } from '../lib/pcm-capture'
 import { useSession } from '../session/session'
+import { useSettings } from '../state/settings'
 
 export interface DictationTarget {
   kind: 'terminal'
@@ -132,7 +133,13 @@ export function DictationOverlay({ target, stopSignal, onClose, onOpenLicense }:
     const pcm = capture.stop()
     setPhase('transcribing')
     try {
-      const { text: transcribed } = await window.nodeTerminal.speech.transcribe(pcm)
+      // The project-resolved model, not the global one: `useSettings().settings` is the
+      // effective layer, so a canvas with its own speech override transcribes with it.
+      const { text: transcribed } = await window.nodeTerminal.speech.transcribe(
+        pcm,
+        undefined,
+        useSettings.getState().settings.speech.model
+      )
       if (!target) {
         // Defensive only — recording never starts without a target (see the mount effect below).
         // Guarded like the terminal-insert path below: a superseded (remounted-over) instance

@@ -3,6 +3,7 @@ import { SettingsSection } from '../SettingsSection'
 import { SearchableRow } from '../SearchableRow'
 import { FieldRow } from '../FieldRow'
 import { Switch } from '@renderer/ui/Switch'
+import { Slider } from '@renderer/ui/md3'
 
 /** Keep in sync with NOTCH_WIDTH_MIN/MAX in src/main/notch-hud.ts (which clamps anyway). */
 const WIDTH_MIN = 100
@@ -72,8 +73,7 @@ export function NotchSection({ isActive }: { isActive: boolean }): React.JSX.Ele
             description="macOS doesn't tell apps how wide the notch is, so the capsule assumes it. Nudge this until the capsule sits flush against the notch — larger moves it left, smaller moves it right."
             control={
               <div className="flex items-center gap-3">
-                <input
-                  type="range"
+                <Slider
                   min={WIDTH_MIN}
                   max={WIDTH_MAX}
                   step={2}

@@ -11,6 +11,7 @@ import type { FunnyLevel, LanguageMode } from '@shared/i18n'
 import { normalizeLanguageMode } from '@shared/i18n'
 import { useSchoolMode } from '../../../state/schoolMode'
 import { schoolModeAllowsOptionalFeatures } from '../../../lib/schoolModePolicy'
+import { Slider } from '@renderer/ui/md3'
 
 const ROWS = {
   mode: {
@@ -51,8 +52,7 @@ function FunnyLevelSlider({
       <span className="w-[132px] shrink-0 text-right text-[11px] leading-tight text-muted-2">
         {lowLabel}
       </span>
-      <input
-        type="range"
+      <Slider
         min={1}
         max={5}
         step={1}

@@ -30,6 +30,9 @@ import { useActiveSessionApi } from '../../session/session'
 import { openDestructiveGate } from '../../state/destructiveGate'
 import { IconLock, IconUnlock } from '../icons'
 import { MaterialSymbol } from '../MaterialSymbol'
+import { Button } from '@renderer/ui/Button'
+import { Input } from '@renderer/ui/Input'
+import { Select } from '@renderer/ui/Select'
 
 export interface PasswordManagerGroupOption {
   id: string
@@ -184,15 +187,14 @@ function RevealButton({ onReveal, label }: { onReveal: () => Promise<string | nu
     return (
       <span className="pwm-revealed">
         <code className="pwm-revealed__text">{value}</code>
-        <button className="pwm-btn pwm-btn--sm" onClick={() => setValue(null)}>
+        <Button variant="default" onClick={() => setValue(null)}>
           Hide
-        </button>
+        </Button>
       </span>
     )
   }
   return (
-    <button
-      className="pwm-btn pwm-btn--sm"
+    <Button variant="default"
       disabled={busy}
       onClick={async () => {
         setBusy(true)
@@ -205,7 +207,7 @@ function RevealButton({ onReveal, label }: { onReveal: () => Promise<string | nu
       }}
     >
       {label}
-    </button>
+    </Button>
   )
 }
 
@@ -320,8 +322,7 @@ function CredentialRow({ api, projectId, managerId, credential, onChanged, onErr
       <MaterialSymbol name="vpn_key" size={18} className="pwm-credential-row__icon" aria-hidden="true" />
       <div className="pwm-credential-row__id">
         {renaming ? (
-          <input
-            className="pwm-input"
+          <Input
             value={label}
             autoFocus
             onChange={(e) => setLabel(e.target.value)}
@@ -341,29 +342,27 @@ function CredentialRow({ api, projectId, managerId, credential, onChanged, onErr
 
       {editingSecret ? (
         <div className="pwm-secret-editor">
-          <input className="pwm-input" placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)} aria-label="Username" />
-          <input
-            className="pwm-input"
+          <Input placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)} aria-label="Username" />
+          <Input
             type="password"
             placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             aria-label="Password"
           />
-          <input
-            className="pwm-input"
+          <Input
             placeholder="TOTP secret (base32, optional)"
             value={totp}
             onChange={(e) => setTotp(e.target.value)}
             aria-label="TOTP secret"
           />
           <div className="pwm-row-actions">
-            <button className="pwm-btn pwm-btn--sm pwm-btn--primary" disabled={savingSecret} onClick={() => void saveSecret()}>
+            <Button variant="primary" disabled={savingSecret} onClick={() => void saveSecret()}>
               Save
-            </button>
-            <button className="pwm-btn pwm-btn--sm" onClick={() => setEditingSecret(false)}>
+            </Button>
+            <Button variant="default" onClick={() => setEditingSecret(false)}>
               Cancel
-            </button>
+            </Button>
           </div>
         </div>
       ) : (
@@ -389,21 +388,21 @@ function CredentialRow({ api, projectId, managerId, credential, onChanged, onErr
               }}
             />
             {!renaming && (
-              <button className="pwm-btn pwm-btn--sm" onClick={() => setRenaming(true)}>
+              <Button variant="default" onClick={() => setRenaming(true)}>
                 Rename
-              </button>
+              </Button>
             )}
             {renaming && (
-              <button className="pwm-btn pwm-btn--sm" onClick={() => void saveRename()}>
+              <Button variant="default" onClick={() => void saveRename()}>
                 Save
-              </button>
+              </Button>
             )}
-            <button className="pwm-btn pwm-btn--sm" onClick={() => void openSecretEditor()}>
+            <Button variant="default" onClick={() => void openSecretEditor()}>
               Edit
-            </button>
-            <button className="pwm-btn pwm-btn--sm pwm-btn--danger" onClick={requestRemove}>
+            </Button>
+            <Button variant="default" danger onClick={requestRemove}>
               Delete
-            </button>
+            </Button>
           </div>
         </>
       )}
@@ -469,33 +468,30 @@ function AddCredentialForm({
 
   return (
     <div className="pwm-add-credential">
-      <input
-        className="pwm-input"
+      <Input
         placeholder="Label (e.g. GitHub)"
         value={label}
         autoFocus={autoFocus}
         onChange={(e) => setLabel(e.target.value)}
         aria-label="New credential label"
       />
-      <input className="pwm-input" placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)} aria-label="Username" />
-      <input
-        className="pwm-input"
+      <Input placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)} aria-label="Username" />
+      <Input
         type="password"
         placeholder="Password"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
         aria-label="Password"
       />
-      <input
-        className="pwm-input"
+      <Input
         placeholder="TOTP secret (base32, optional)"
         value={totp}
         onChange={(e) => setTotp(e.target.value)}
         aria-label="TOTP secret"
       />
-      <button className="pwm-btn pwm-btn--primary" disabled={busy || !label.trim()} onClick={() => void submit()}>
+      <Button variant="primary" size="medium" disabled={busy || !label.trim()} onClick={() => void submit()}>
         Add credential
-      </button>
+      </Button>
     </div>
   )
 }
@@ -627,8 +623,7 @@ function ManagerCard({
         <button className="pwm-manager-card__toggle" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded}>
           <MaterialSymbol name={expanded ? 'lock_open' : 'vpn_key'} size={18} aria-hidden="true" />
           {renaming ? (
-            <input
-              className="pwm-input"
+            <Input
               value={name}
               autoFocus
               onClick={(e) => e.stopPropagation()}
@@ -652,17 +647,16 @@ function ManagerCard({
         </button>
         <div className="pwm-row-actions">
           {!renaming && (
-            <button
-              className="pwm-btn pwm-btn--sm"
+            <Button variant="default"
               onClick={(e) => {
                 e.stopPropagation()
                 setRenaming(true)
               }}
             >
               Rename
-            </button>
+            </Button>
           )}
-          <select
+          <Select
             className="pwm-select"
             aria-label={`Bind "${manager.name}" to a group`}
             value={manager.groupId ?? ''}
@@ -675,16 +669,15 @@ function ManagerCard({
                 {g.title}
               </option>
             ))}
-          </select>
-          <button
-            className="pwm-btn pwm-btn--sm pwm-btn--danger"
+          </Select>
+          <Button variant="default" danger
             onClick={(e) => {
               e.stopPropagation()
               requestDelete(e)
             }}
           >
             Delete
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -725,9 +718,9 @@ function ManagerCard({
               onError={onError}
             />
           ) : (
-            <button className="pwm-btn pwm-btn--sm" onClick={() => setShowAdd(true)}>
+            <Button variant="default" onClick={() => setShowAdd(true)}>
               + Add credential
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -779,8 +772,7 @@ function CreateVaultForm({ api, projectId, onCreated }: { api: NodeTerminalApi; 
         is encrypted with a key derived from this password. There is no recovery if it is lost.
       </p>
       <div className="pwm-vault-form">
-        <input
-          className="pwm-input"
+        <Input
           type="password"
           placeholder="Project password"
           value={password}
@@ -788,8 +780,7 @@ function CreateVaultForm({ api, projectId, onCreated }: { api: NodeTerminalApi; 
           onChange={(e) => setPassword(e.target.value)}
           aria-label="Project password"
         />
-        <input
-          className="pwm-input"
+        <Input
           type="password"
           placeholder="Confirm password"
           value={confirm}
@@ -802,9 +793,9 @@ function CreateVaultForm({ api, projectId, onCreated }: { api: NodeTerminalApi; 
             {error}
           </div>
         )}
-        <button className="pwm-btn pwm-btn--primary" disabled={busy || !password} onClick={() => void submit()}>
+        <Button variant="primary" size="medium" disabled={busy || !password} onClick={() => void submit()}>
           Create password manager
-        </button>
+        </Button>
       </div>
     </section>
   )
@@ -843,8 +834,7 @@ function UnlockForm({ api, projectId, onUnlocked }: { api: NodeTerminalApi; proj
       <h3>Locked</h3>
       <p className="pwm-hint">Enter this project's password to unlock its credentials.</p>
       <div className="pwm-vault-form">
-        <input
-          className="pwm-input"
+        <Input
           type="password"
           placeholder="Project password"
           value={password}
@@ -858,9 +848,9 @@ function UnlockForm({ api, projectId, onUnlocked }: { api: NodeTerminalApi; proj
             {error}
           </div>
         )}
-        <button className="pwm-btn pwm-btn--primary" disabled={busy || !password} onClick={() => void submit()}>
+        <Button variant="primary" size="medium" disabled={busy || !password} onClick={() => void submit()}>
           Unlock
-        </button>
+        </Button>
       </div>
     </section>
   )
@@ -876,9 +866,9 @@ function ChangePasswordForm({ api, projectId, onDone }: { api: NodeTerminalApi; 
 
   if (!open) {
     return (
-      <button className="pwm-btn pwm-btn--sm" onClick={() => setOpen(true)}>
+      <Button variant="default" onClick={() => setOpen(true)}>
         Change project password…
-      </button>
+      </Button>
     )
   }
 
@@ -910,24 +900,21 @@ function ChangePasswordForm({ api, projectId, onDone }: { api: NodeTerminalApi; 
 
   return (
     <div className="pwm-vault-form pwm-vault-form--inline">
-      <input
-        className="pwm-input"
+      <Input
         type="password"
         placeholder="Current password"
         value={current}
         onChange={(e) => setCurrent(e.target.value)}
         aria-label="Current password"
       />
-      <input
-        className="pwm-input"
+      <Input
         type="password"
         placeholder="New password"
         value={next}
         onChange={(e) => setNext(e.target.value)}
         aria-label="New password"
       />
-      <input
-        className="pwm-input"
+      <Input
         type="password"
         placeholder="Confirm new password"
         value={confirm}
@@ -940,12 +927,12 @@ function ChangePasswordForm({ api, projectId, onDone }: { api: NodeTerminalApi; 
         </div>
       )}
       <div className="pwm-row-actions">
-        <button className="pwm-btn pwm-btn--sm pwm-btn--primary" disabled={busy || !current || !next} onClick={() => void submit()}>
+        <Button variant="primary" disabled={busy || !current || !next} onClick={() => void submit()}>
           Save
-        </button>
-        <button className="pwm-btn pwm-btn--sm" onClick={() => setOpen(false)}>
+        </Button>
+        <Button variant="default" onClick={() => setOpen(false)}>
           Cancel
-        </button>
+        </Button>
       </div>
     </div>
   )
@@ -992,8 +979,7 @@ function CreateManagerForm({
 
   return (
     <div className="pwm-add-manager">
-      <input
-        className="pwm-input"
+      <Input
         placeholder="Manager name (e.g. Work accounts)"
         value={name}
         autoFocus={autoFocus}
@@ -1001,22 +987,22 @@ function CreateManagerForm({
         onKeyDown={(e) => e.key === 'Enter' && void submit()}
         aria-label="New manager name"
       />
-      <select className="pwm-select" value={groupId} onChange={(e) => setGroupId(e.target.value)} aria-label="Bind to group">
+      <Select className="pwm-select" value={groupId} onChange={(e) => setGroupId(e.target.value)} aria-label="Bind to group">
         <option value="">Project-scoped (no group)</option>
         {groups.map((g) => (
           <option key={g.id} value={g.id}>
             {g.title}
           </option>
         ))}
-      </select>
+      </Select>
       {error && (
         <div className="pwm-warn" role="alert">
           {error}
         </div>
       )}
-      <button className="pwm-btn pwm-btn--primary" disabled={busy || !name.trim()} onClick={() => void submit()}>
+      <Button variant="primary" size="medium" disabled={busy || !name.trim()} onClick={() => void submit()}>
         Create manager
-      </button>
+      </Button>
     </div>
   )
 }
@@ -1248,9 +1234,9 @@ function PasswordManagerPanelInner({
         <MaterialSymbol name="warning" size={28} aria-hidden="true" />
         <h3>Could not load</h3>
         <p className="pwm-hint">{error}</p>
-        <button className="pwm-btn" onClick={() => void refresh()}>
+        <Button variant="default" size="medium" onClick={() => void refresh()}>
           Retry
-        </button>
+        </Button>
       </section>
     )
   } else if (!status) {
@@ -1286,9 +1272,9 @@ function PasswordManagerPanelInner({
           </h2>
           <div className="pwm-row-actions">
             {unlocked && (
-              <button className="pwm-btn pwm-btn--sm" onClick={() => void lock()}>
+              <Button variant="default" onClick={() => void lock()}>
                 Lock
-              </button>
+              </Button>
             )}
             <button className="drawer__close" onClick={onClose} aria-label="Close">
               <MaterialSymbol name="close" size={18} />

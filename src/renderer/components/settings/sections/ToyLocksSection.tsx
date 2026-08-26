@@ -8,6 +8,7 @@ import { useToyLocks } from '../../../state/toylocks'
 import { ConfirmDialog } from '../../ConfirmDialog'
 import { SettingsSection } from '../SettingsSection'
 import { SearchableRow } from '../SearchableRow'
+import { Checkbox } from '@renderer/ui/md3'
 
 const ROW = {
   title: 'Toy locks',
@@ -136,8 +137,7 @@ export function ToyLocksSection({ isActive }: { isActive: boolean }): React.JSX.
             <ul className="divide-y divide-border/60">
               {filtered.map((r) => (
                 <li key={r.id} className="flex items-center gap-3 py-2.5">
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     checked={selected.has(r.id)}
                     onChange={() => toggle(r.id)}
                     aria-label={`Select ${r.target.label} lock`}

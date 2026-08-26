@@ -16,6 +16,8 @@ import {
 import { MinecraftPropertiesEditor } from './MinecraftPropertiesEditor'
 import { MinecraftPlayersPanel } from './MinecraftPlayersPanel'
 import { MinecraftBackupsPanel } from './MinecraftBackupsPanel'
+import { Checkbox } from '@renderer/ui/md3'
+import { Select } from '@renderer/ui/Select'
 
 const CONSOLE_CAP = 400
 
@@ -68,7 +70,7 @@ function VersionPicker({
     <>
       <label className="service-node__field" htmlFor={`${idPrefix}-version`}>
         <span className="service-node__field-label">Version</span>
-        <select
+        <Select
           id={`${idPrefix}-version`}
           className="service-node__input nodrag"
           value={selected}
@@ -80,10 +82,10 @@ function VersionPicker({
               {v.type !== 'release' ? ` (${v.type})` : ''}
             </option>
           ))}
-        </select>
+        </Select>
       </label>
       <label className="mc-checkbox nodrag">
-        <input type="checkbox" checked={showAll} onChange={(e) => onShowAllChange(e.target.checked)} />
+        <Checkbox checked={showAll} onChange={(e) => onShowAllChange(e.target.checked)} />
         Show snapshots and old versions
       </label>
     </>
@@ -327,7 +329,7 @@ export function MinecraftServerPanel({ nodeId }: { nodeId: string }): React.JSX.
             Read the Minecraft EULA ↗
           </button>
           <label className="mc-checkbox nodrag">
-            <input type="checkbox" checked={eulaChecked} onChange={(e) => setEulaChecked(e.target.checked)} />
+            <Checkbox checked={eulaChecked} onChange={(e) => setEulaChecked(e.target.checked)} />
             I have read and accept the Minecraft EULA
           </label>
           <button

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useMenuFlip } from '../ui/useMenuFlip'
 import { isTopDialog, nextDialogId, popDialog, pushDialog } from './dialog-stack'
+import { Slider } from '@renderer/ui/md3'
 
 export interface DestructiveConfirmGateProps {
   /** The exact destructive action, in plain words — "Delete 3 nodes", "Delete project
@@ -188,8 +189,7 @@ export function DestructiveConfirmGate({
               <span>Slide to confirm</span>
               <span>{value}%</span>
             </div>
-            <input
-              type="range"
+            <Slider
               className="destgate__slider"
               min={0}
               max={100}

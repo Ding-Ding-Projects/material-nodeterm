@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useDialogStack } from './dialog-stack'
 import { BODY_BUDGET, buildBugReportUrl, envBlock, type BugReportEnv } from '../lib/bugReport'
+import { TextArea } from '@renderer/ui/md3'
 
 export interface BugReportDialogProps {
   env: BugReportEnv
@@ -62,7 +63,7 @@ export function BugReportDialog({ env, onOpen, onClose }: BugReportDialogProps) 
             }
           }}
         />
-        <textarea
+        <TextArea
           className="confirm__input bug-report__desc"
           value={description}
           placeholder={'What did you do?\nWhat did you expect?\nWhat happened instead?'}

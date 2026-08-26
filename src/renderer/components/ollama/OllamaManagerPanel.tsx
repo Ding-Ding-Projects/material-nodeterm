@@ -34,6 +34,8 @@ import {
   type CatalogView
 } from './catalogView'
 import { troubleshootSteps } from './troubleshoot'
+import { TextArea } from '@renderer/ui/md3'
+import { Select } from '@renderer/ui/Select'
 
 /** How often the panel re-asks for the catalog while the core reports a refresh in flight. The
  *  catalog rides an argument-less request/response channel (see core/ollama/register-ipc.ts), so
@@ -842,7 +844,7 @@ function StoreTab({
           />
           <label>
             Show
-            <select
+            <Select
               aria-label="Filter the model catalog"
               value={storeFilter}
               onChange={(e) => setStoreFilter(e.target.value as CatalogFilter)}
@@ -851,11 +853,11 @@ function StoreTab({
               <option value="installed">Installed</option>
               <option value="not-installed">Not installed</option>
               <option value="with-size">Known size</option>
-            </select>
+            </Select>
           </label>
           <label>
             Sort
-            <select
+            <Select
               aria-label="Sort the model catalog"
               value={storeSort}
               onChange={(e) => setStoreSort(e.target.value as CatalogSort)}
@@ -864,7 +866,7 @@ function StoreTab({
               <option value="size-asc">Smallest first</option>
               <option value="size-desc">Largest first</option>
               <option value="installed-first">Installed first</option>
-            </select>
+            </Select>
           </label>
         </div>
         <p className="om-empty-note">
@@ -1204,7 +1206,7 @@ function ChatTab({
           <div className="om-actions">
             <label>
               Model:{' '}
-              <select
+              <Select
                 value={active.model}
                 onChange={async (e) => {
                   const model = e.target.value
@@ -1217,7 +1219,7 @@ function ChatTab({
                     {m.name}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
           </div>
           <div className="om-chat__params">
@@ -1258,7 +1260,7 @@ function ChatTab({
           </div>
           <details>
             <summary>System prompt</summary>
-            <textarea
+            <TextArea
               value={active.systemPrompt}
               onChange={(e) => setActive((a) => (a ? { ...a, systemPrompt: e.target.value } : a))}
               style={{ width: '100%', minHeight: 60 }}
@@ -1295,7 +1297,7 @@ function ChatTab({
           </div>
 
           <div className="om-chat__composer">
-            <textarea
+            <TextArea
               value={composer}
               placeholder="Message…"
               onChange={(e) => setComposer(e.target.value)}

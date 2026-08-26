@@ -86,6 +86,42 @@ export function styleToCssProperties(style: AppearanceTextStyle): Record<string,
   if (style.backgroundColor) out['background-color'] = style.backgroundColor
   if (style.borderColor) out['border-color'] = style.borderColor
   if (style.borderRadiusPx != null) out['border-radius'] = px(style.borderRadiusPx)!
+  // --- Compositing. Each is emitted only when set, so an entry that touches none of them
+  // produces byte-identical CSS to before this existed.
+  if (style.opacity != null) out['opacity'] = String(style.opacity)
+  if (style.blendMode && style.blendMode !== 'normal') out['mix-blend-mode'] = style.blendMode
+
+  // A filter STACK, composed in a fixed order. CSS filter is a single property, so two
+  // independent controls writing it would clobber each other -- this is the one place they meet.
+  const filters: string[] = []
+  if (style.filterBrightness != null) filters.push(`brightness(${style.filterBrightness})`)
+  if (style.filterContrast != null) filters.push(`contrast(${style.filterContrast})`)
+  if (style.filterSaturate != null) filters.push(`saturate(${style.filterSaturate})`)
+  if (style.filterHueRotateDeg != null) filters.push(`hue-rotate(${style.filterHueRotateDeg}deg)`)
+  if (style.filterGrayscale != null) filters.push(`grayscale(${style.filterGrayscale})`)
+  if (style.filterInvert != null) filters.push(`invert(${style.filterInvert})`)
+  if (style.filterSepia != null) filters.push(`sepia(${style.filterSepia})`)
+  if (style.filterBlurPx != null) filters.push(`blur(${style.filterBlurPx}px)`)
+  if (filters.length) out['filter'] = filters.join(' ')
+
+  if (style.backdropBlurPx != null) out['backdrop-filter'] = `blur(${style.backdropBlurPx}px)`
+
+  // --- Transform, same reasoning: one CSS property, fixed composition order, so a saved entry
+  // means exactly one thing. Order is translate, rotate, scale, skew.
+  const tf: string[] = []
+  if (style.translateXPx != null || style.translateYPx != null) {
+    tf.push(`translate(${style.translateXPx ?? 0}px, ${style.translateYPx ?? 0}px)`)
+  }
+  if (style.rotateDeg != null) tf.push(`rotate(${style.rotateDeg}deg)`)
+  if (style.scaleX != null || style.scaleY != null) {
+    tf.push(`scale(${style.scaleX ?? 1}, ${style.scaleY ?? 1})`)
+  }
+  if (style.skewXDeg != null || style.skewYDeg != null) {
+    tf.push(`skew(${style.skewXDeg ?? 0}deg, ${style.skewYDeg ?? 0}deg)`)
+  }
+  if (tf.length) out['transform'] = tf.join(' ')
+  if (style.transformOrigin) out['transform-origin'] = style.transformOrigin
+
   return out
 }
 

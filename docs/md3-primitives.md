@@ -1,7 +1,8 @@
 # MD3 shared primitives (`src/renderer/ui/md3/`)
 
-**Status:** primitives shipped and ready to import; no application call sites migrated onto them
-except `ui/SegmentedPill.tsx` (see [Migration status](#migration-status)).
+**Status:** primitives shipped, and the app's shared controls now render them. The three
+primitives that did not exist (`Checkbox`, `TextArea`, `Slider`) have been built and adopted.
+The large remainder is the raw `<button>` population — see [Migration status](#migration-status).
 
 ## Why this exists
 
@@ -118,15 +119,49 @@ not replace either today.
 
 ## Migration status
 
-**Nothing in the running app was migrated onto these primitives in this change**, by design — that
-is a separate job, working through 2,458 existing `className=` call sites, that would collide with
-every other MD3 lane touching the same files. The one exception, explicitly authorized: `ui/SegmentedPill.tsx`
-now re-exports `ui/md3/SegmentedButton`. Its prop shape (`{ value, options, onChange, ariaLabel }`,
-generic over `T extends string`) was already byte-identical to `SegmentedButton`'s, so there was no
-call site to migrate — every existing `<SegmentedPill/>` usage now renders the MD3 primitive (a
-40px pill, `--md-outline` border, `secondary-container` selected segment) instead of the component's
-old `.seg-pill` / `.seg-pill-opt` classes in `styles.css`, which were still on the app's pre-MD3
-`rgba(var(--tint-rgb), …)` palette rather than the `--md-*` token set the rest of the app moved onto.
+**The app's three shared controls now delegate to the primitives**, which moved roughly 68 files
+without touching a single call site:
+
+| Shared control | Renders | Files reached |
+| --- | --- | --- |
+| `ui/Button` | `md3/Button` (`primary` → filled, `default` → outlined, `ghost` → text) | ~30 |
+| `ui/Input` | the MD3 outlined field, dense | ~22 |
+| `ui/Select` | the same field anatomy, with a drawn chevron | ~16 |
+| `ui/SegmentedPill` | `md3/SegmentedButton` | (already delegated) |
+
+Delegating `ui/Button` also fixed the contrast defect this document recorded below and left open:
+`primary` painted `text-white` on `--md-primary`, which is `#D0BCFF` in the dark theme, so the
+app's most prominent button was white on light lavender. It now uses `--md-on-primary`.
+
+### Three primitives were built because nothing existed to adopt
+
+`Checkbox`, `TextArea` and `Slider` had no entry in the barrel, so every call site needing one was
+*forced* to hand-roll it. All three paint the native element rather than rebuilding it from a
+`div`: the native input carries label association, the keyboard model, the role and its state
+announcements, and form participation, and a rebuilt one has to reimplement each of those.
+
+Adoption after building them:
+
+| Raw control | Before | After |
+| --- | --- | --- |
+| `type="checkbox"` | 16 | 1 (the definition) |
+| `<textarea>` | 12 | 1 (the definition) |
+| `type="range"` | 14 | 4 (definition, plus two exempt) |
+| `<select>` | 18 | 3 (definition, plus two doc-comment mentions) |
+
+Two sliders are deliberately exempt: the colour picker's hue and alpha tracks paint a rainbow and
+a checkerboard, so there the track **is the data** rather than chrome, which the design rules
+exempt. Painting an MD3 track over them would destroy the picker to make it tidier.
+
+### What is still not migrated
+
+**546 raw `<button>` elements across 141 of 232 renderer components**, in 18 scoped class families
+(`toylock-btn` 58, `sc-btn` 23, `mc-button` 23, `onb-btn` 7, and a long tail) all describing the
+same handful of shapes. Delegation cannot reach these: each is an individual edit, and each will
+change how that surface looks, so it wants eyes on the built artifact rather than a sweep.
+
+`Radio`, `Tooltip`, `Tabs` and `Progress` still have no primitive, so their call sites remain
+forced to hand-roll in the same way the three above were.
 
 ## The one bug fixed outside this directory
 
@@ -140,7 +175,7 @@ tint (white in dark mode, `--md-on-surface`'s literal in light mode; see `styles
 the established idiom for exactly this kind of overlay elsewhere in the stylesheet. Same opacity,
 same visual weight in dark mode, now visible in light mode too.
 
-**Not fixed, and worth a follow-up look:** the same component's `primary` variant renders
+**Fixed since, when `ui/Button` was delegated to the primitive — kept here for the reasoning:** the same component's `primary` variant renders
 `text-white` unconditionally. In the dark theme, `bg-accent` resolves to `--md-primary`'s dark
 literal (`#D0BCFF`, a light lavender) with white text on top — low contrast, and not what
 `--md-on-primary` (`#381E72`) would give it. This wasn't in this lane's stated scope (the task

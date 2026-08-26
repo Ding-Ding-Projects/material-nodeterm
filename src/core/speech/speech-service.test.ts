@@ -39,10 +39,39 @@ describe('SpeechService', () => {
     }
   })
 
-  it('errors when the model is not downloaded', async () => {
+  it('downloads a missing model instead of refusing to transcribe', async () => {
+    // This used to reject with "Download the small model in Settings -> Speech first", which is
+    // an instruction wearing an error's clothing: nothing was broken, the app simply declined to
+    // take the one step it was about to need. The user already pressed dictate.
+    const download = vi.spyOn(models, 'download').mockImplementation(async (id: string) => {
+      writeFileSync(models.modelPath(id), 'x')
+    })
+    const svc = new SpeechService({ models, engineFactory: factory() })
+    await expect(svc.transcribe(pcm, { model: 'small', language: 'auto' })).resolves.toBe('hello world')
+    expect(download).toHaveBeenCalledWith('small')
+  })
+
+  it('reports a failed download as a download failure, not as a missing model', async () => {
+    vi.spyOn(models, 'download').mockRejectedValue(new Error('offline'))
     const svc = new SpeechService({ models, engineFactory: factory() })
     await expect(svc.transcribe(pcm, { model: 'small', language: 'auto' }))
-      .rejects.toThrow(/Download the/)
+      .rejects.toThrow(/Could not download the small speech model: offline/)
+  })
+
+  it('refuses when a download reports success but leaves nothing on disk', async () => {
+    // A download that resolves without producing the file would otherwise fall through to the
+    // engine and fail somewhere far less legible.
+    vi.spyOn(models, 'download').mockResolvedValue(undefined)
+    const svc = new SpeechService({ models, engineFactory: factory() })
+    await expect(svc.transcribe(pcm, { model: 'small', language: 'auto' }))
+      .rejects.toThrow(/did not finish downloading/)
+  })
+
+  it('falls back to the default model when none is chosen', async () => {
+    // A session that has never opened Settings has no model set; that is not a reason to refuse.
+    const svc = new SpeechService({ models, engineFactory: factory() })
+    await expect(svc.transcribe(pcm, { model: '', language: 'auto' })).resolves.toBe('hello world')
+    expect(loads[0]).toBe(models.modelPath('tiny'))
   })
 
   it('reuses one loaded engine and frees it on model switch', async () => {

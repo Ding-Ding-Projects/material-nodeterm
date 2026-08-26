@@ -4,6 +4,7 @@ import { confirmKeyAction } from './confirm-key'
 import { isTopDialog, nextDialogId, popDialog, pushDialog } from './dialog-stack'
 import { useI18n } from '@renderer/lib/i18n'
 import { useVocabularyMapper } from '@renderer/lib/personalVocabulary/useVocabularyText'
+import { Checkbox } from '@renderer/ui/md3'
 
 interface ConfirmDialogProps {
   message: string
@@ -133,8 +134,7 @@ export function ConfirmDialog({
         </p>
         {option && (
           <label className="confirm__option">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={option.checked}
               onChange={(e) => option.onChange(e.target.checked)}
             />

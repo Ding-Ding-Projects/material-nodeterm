@@ -4,13 +4,14 @@
  * while shipping `styles.md3.css`. Importing anything from this barrel pulls in its stylesheet
  * (`primitives.css`) too, so a consumer needs no separate CSS import to use these.
  *
- * Nothing in this app has been migrated onto these yet — see docs/md3-primitives.md for what
- * that would mean and why it was deliberately left out of the lane that shipped this file.
+ * The app's shared controls (`ui/Button`, `ui/Input`, `ui/Select`, `ui/SegmentedPill`) now
+ * DELEGATE to these, so most call sites render the design system without importing this barrel
+ * directly. What is not migrated is the raw `<button>` population — see docs/md3-primitives.md.
  */
 import './primitives.css'
 
 export { Button } from './Button'
-export type { ButtonProps, ButtonVariant } from './Button'
+export type { ButtonProps, ButtonVariant, ButtonSize } from './Button'
 
 export { IconButton } from './IconButton'
 export type { IconButtonProps } from './IconButton'
@@ -46,6 +47,15 @@ export type { BadgeProps } from './Badge'
 
 export { SegmentedButton } from './SegmentedButton'
 export type { SegmentedButtonProps } from './SegmentedButton'
+
+export { Checkbox } from './Checkbox'
+export type { CheckboxProps } from './Checkbox'
+
+export { TextArea } from './TextArea'
+export type { TextAreaProps } from './TextArea'
+
+export { Slider } from './Slider'
+export type { SliderProps } from './Slider'
 
 export { Divider } from './Divider'
 export type { DividerProps } from './Divider'

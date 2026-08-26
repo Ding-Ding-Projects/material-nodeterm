@@ -7,6 +7,8 @@ import { useSupportTickets, type SupportTicket, type TicketStatus } from '../../
 import { isBrowserRuntime } from '../../../bridge/runtime'
 import { SettingsSection } from '../SettingsSection'
 import { SearchableRow } from '../SearchableRow'
+import { TextArea } from '@renderer/ui/md3'
+import { Select } from '@renderer/ui/Select'
 
 const ROW = {
   title: 'Support Tickets',
@@ -152,20 +154,20 @@ export function SupportTicketsSection({ isActive }: { isActive: boolean }): Reac
           </div>
 
           <div className="toylock-add-entry">
-            <select className="toylock-select" value={category} onChange={(e) => setCategory(e.target.value)}>
+            <Select className="toylock-select" value={category} onChange={(e) => setCategory(e.target.value)}>
               {CATEGORIES.map((c) => (
                 <option key={c} value={c}>
                   {c}
                 </option>
               ))}
-            </select>
-            <textarea
+            </Select>
+            <TextArea
               className="toylock-textarea"
               placeholder="Describe your issue (optional — we're not going to read it either way)"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
             />
-            <select
+            <Select
               className="toylock-select"
               value={severity}
               onChange={(e) => setSeverity(e.target.value as SupportTicket['severity'])}
@@ -174,7 +176,7 @@ export function SupportTicketsSection({ isActive }: { isActive: boolean }): Reac
               <option value="medium">Medium</option>
               <option value="high">High</option>
               <option value="critical-but-not-really">Critical (nobody will honour this)</option>
-            </select>
+            </Select>
             <button className="toylock-btn toylock-btn--primary" onClick={submit}>
               Submit ticket
             </button>

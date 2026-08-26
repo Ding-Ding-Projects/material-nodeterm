@@ -1,6 +1,7 @@
 import { memo, useState } from 'react'
 import type { GitHubIssueCardView } from '@shared/github-issues'
 import type { KanbanColumn } from '@shared/types'
+import { Select } from '@renderer/ui/Select'
 
 function relativeTime(value: string): string {
   const milliseconds = Date.now() - Date.parse(value)
@@ -98,7 +99,7 @@ export const GitHubIssueCard = memo(function GitHubIssueCard({
         )}
         <label className="github-issue-move" onClick={(event) => event.stopPropagation()}>
           <span className="sr-only">Move issue #{issue.number}</span>
-          <select
+          <Select
             aria-label={`Move issue #${issue.number}`}
             value={issue.columnId ?? ''}
             disabled={moving || readOnly}
@@ -108,7 +109,7 @@ export const GitHubIssueCard = memo(function GitHubIssueCard({
             {columns.map((column) => (
               <option key={column.id} value={column.id}>{column.title}</option>
             ))}
-          </select>
+          </Select>
         </label>
       </div>
       {status && <div className="github-issue-card__status" role="status">{status}</div>}
