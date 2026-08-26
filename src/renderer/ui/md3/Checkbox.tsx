@@ -1,5 +1,6 @@
 import { forwardRef, type InputHTMLAttributes } from 'react'
 import { cn } from '../cn'
+import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 
 export interface CheckboxProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> {
   /** Renders the indeterminate ("some but not all") state. Native `indeterminate` is a DOM
@@ -23,6 +24,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
   { indeterminate = false, className, ...rest },
   ref
 ) {
+  const vocab = useVocabularyMapper()
   return (
     <input
       ref={ref}
@@ -30,6 +32,8 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
       aria-checked={indeterminate ? 'mixed' : undefined}
       className={cn('mdx-checkbox', indeterminate && 'mdx-checkbox--indeterminate', className)}
       {...rest}
+      aria-label={vocab(rest['aria-label'])}
+      title={vocab(rest.title)}
     />
   )
 })

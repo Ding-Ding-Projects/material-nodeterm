@@ -19,12 +19,13 @@ export function Switch({
    *  exist, e.g. a per-project capability while no project is open. */
   disabled?: boolean
 }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
-      aria-label={ariaLabel}
+      aria-label={vocab(ariaLabel)}
       disabled={disabled}
       aria-disabled={disabled || undefined}
       onClick={() => onChange(!checked)}
@@ -34,3 +35,4 @@ export function Switch({
     </button>
   )
 }
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'

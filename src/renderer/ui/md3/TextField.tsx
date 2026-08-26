@@ -1,5 +1,6 @@
 import { forwardRef, useId, useState, type InputHTMLAttributes, type ReactNode } from 'react'
 import { cn } from '../cn'
+import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 
 export interface TextFieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'className'> {
   /** Floating label — sits notched into the outline's top edge (measured off the Clone dialog
@@ -27,6 +28,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
   { label, leadingIcon, trailingSlot, supportText, invalid = false, className, id, disabled, onFocus, onBlur, ...rest },
   ref
 ) {
+  const vocab = useVocabularyMapper()
   const generatedId = useId()
   const inputId = id ?? generatedId
   const [focused, setFocused] = useState(false)
@@ -41,7 +43,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
       )}
     >
       <label className="mdx-field__label" htmlFor={inputId}>
-        {label}
+        {vocab(label)}
       </label>
       <div className="mdx-field__control">
         {leadingIcon}
@@ -60,10 +62,12 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
             onBlur?.(e)
           }}
           {...rest}
+          aria-label={vocab(rest['aria-label'])}
+          title={vocab(rest.title)}
         />
         {trailingSlot && <div className="mdx-field__trailing">{trailingSlot}</div>}
       </div>
-      {supportText && <div className="mdx-field__support">{supportText}</div>}
+      {supportText && <div className="mdx-field__support">{vocab(supportText)}</div>}
     </div>
   )
 })

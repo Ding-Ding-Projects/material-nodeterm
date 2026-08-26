@@ -11,6 +11,8 @@ import {
 } from '@shared/i18n'
 import { useSchoolMode } from '../state/schoolMode'
 import { schoolModeAllowsOptionalFeatures } from './schoolModePolicy'
+import { usePersonalVocabulary } from '../state/personalVocabulary'
+import { applyVocabularyToTemplate } from './personalVocabulary/apply'
 
 /**
  * Renderer-side binding of the pure `@shared/i18n` resolver to the live `languageMode` /
@@ -40,6 +42,7 @@ export function useI18n(): {
   const showEmojiInDialogs = useSettings((s) => s.settings.showEmojiInDialogs)
   const schoolModeHydrated = useSchoolMode((s) => s.hydrated)
   const schoolModeEnabled = useSchoolMode((s) => s.enabled)
+  const vocabularyEntries = usePersonalVocabulary((s) => s.entries)
   const languageFeaturesAllowed = schoolModeAllowsOptionalFeatures({
     hydrated: schoolModeHydrated,
     enabled: schoolModeEnabled
@@ -60,21 +63,33 @@ export function useI18n(): {
   const t = useCallback(
     (id: string, fallback: string, params?: Record<string, string>): LocalizedText => {
       const resolved = resolveText(id, fallback, mode, levels)
-      if (!params) return resolved
-      return {
-        primary: formatText(resolved.primary, params),
-        secondary: resolved.secondary ? formatText(resolved.secondary, params) : null
-      }
+      // Apply the private local vocabulary while the value is still a prose template. Dynamic
+      // facts are interpolated afterwards, so paths, ids, detected names and tool errors remain
+      // exact even when a user term happens to match part of one.
+      const localized: LocalizedText = languageFeaturesAllowed
+        ? {
+            primary: applyVocabularyToTemplate(resolved.primary, vocabularyEntries, params),
+            secondary: resolved.secondary
+              ? applyVocabularyToTemplate(resolved.secondary, vocabularyEntries, params)
+              : null
+          }
+        : resolved
+      if (!params) return localized
+      return localized
     },
-    [mode, levels]
+    [mode, levels, languageFeaturesAllowed, vocabularyEntries]
   )
 
   const ts = useCallback(
     (id: string, fallback: string, params?: Record<string, string>): string => {
       const resolved = resolveString(id, fallback, mode, levels)
-      return params ? formatText(resolved, params) : resolved
+      return languageFeaturesAllowed
+        ? applyVocabularyToTemplate(resolved, vocabularyEntries, params)
+        : params
+          ? formatText(resolved, params)
+          : resolved
     },
-    [mode, levels]
+    [mode, levels, languageFeaturesAllowed, vocabularyEntries]
   )
 
   const emoji = useCallback((e: string) => (showEmojiInDialogs ? e : ''), [showEmojiInDialogs])

@@ -1,5 +1,6 @@
 import { forwardRef, type TextareaHTMLAttributes } from 'react'
 import { cn } from '../cn'
+import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 
 export interface TextAreaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
   /** Grows with its content instead of scrolling, up to `maxRows`. Off by default because a box
@@ -20,6 +21,7 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(function 
   { autoGrow = false, maxRows = 12, className, onInput, style, ...rest },
   ref
 ) {
+  const vocab = useVocabularyMapper()
   return (
     <textarea
       ref={ref}
@@ -36,6 +38,8 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(function 
         onInput?.(e)
       }}
       {...rest}
+      aria-label={vocab(rest['aria-label'])}
+      title={vocab(rest.title)}
     />
   )
 })

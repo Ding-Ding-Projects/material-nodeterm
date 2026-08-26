@@ -1,4 +1,5 @@
 import { cn } from '../cn'
+import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 
 export interface SegmentedButtonProps<T extends string> {
   value: T
@@ -25,8 +26,9 @@ export function SegmentedButton<T extends string>({
   ariaLabel,
   className
 }: SegmentedButtonProps<T>): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   return (
-    <div className={cn('mdx-seg', className)} role="radiogroup" aria-label={ariaLabel}>
+    <div className={cn('mdx-seg', className)} role="radiogroup" aria-label={vocab(ariaLabel)}>
       {options.map((opt) => (
         <button
           key={opt.value}
@@ -39,7 +41,7 @@ export function SegmentedButton<T extends string>({
             if (opt.value !== value) onChange(opt.value)
           }}
         >
-          {opt.label}
+          {vocab(opt.label)}
         </button>
       ))}
     </div>

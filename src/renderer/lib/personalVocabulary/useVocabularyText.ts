@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from 'react'
 import { usePersonalVocabulary } from '../../state/personalVocabulary'
 import { useSchoolMode } from '../../state/schoolMode'
-import { applyVocabulary } from './apply'
+import { applyVocabulary, applyVocabularyToTemplate } from './apply'
 import { schoolModeAllowsOptionalFeatures } from '../schoolModePolicy'
 
 /**
@@ -51,4 +51,22 @@ export function useVocabularyMapper(): <T extends string | undefined | null>(tex
 export function useVocabularyText<T extends string | undefined>(text: T): T {
   const map = useVocabularyMapper()
   return useMemo(() => map(text), [map, text])
+}
+
+/** Map a prose template while inserting dynamic facts verbatim after mapping. */
+export function useVocabularyTemplate(
+  text: string | undefined,
+  params?: Record<string, string>
+): string | undefined {
+  const entries = usePersonalVocabulary((s) => s.entries)
+  const schoolModeEnabled = useSchoolMode((s) => s.enabled)
+  const schoolModeHydrated = useSchoolMode((s) => s.hydrated)
+  const vocabularyAllowed = schoolModeAllowsOptionalFeatures({
+    enabled: schoolModeEnabled,
+    hydrated: schoolModeHydrated
+  })
+  return useMemo(() => {
+    if (text == null || !vocabularyAllowed) return text
+    return applyVocabularyToTemplate(text, entries, params)
+  }, [entries, params, text, vocabularyAllowed])
 }

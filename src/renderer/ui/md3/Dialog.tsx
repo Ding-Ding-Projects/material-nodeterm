@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, type HTMLAttributes, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '../cn'
+import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 
 export interface DialogProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title'> {
   open: boolean
@@ -44,6 +45,7 @@ export function Dialog({
   className,
   ...rest
 }: DialogProps): React.JSX.Element | null {
+  const vocab = useVocabularyMapper()
   const returnFocusRef = useRef<HTMLElement | null>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const titleId = useId()
@@ -133,7 +135,7 @@ export function Dialog({
         className={cn('mdx-dialog', className)}
         {...rest}
         aria-labelledby={title ? titleId : undefined}
-        aria-label={!title ? rest['aria-label'] : undefined}
+        aria-label={!title ? vocab(rest['aria-label']) : undefined}
       >
         {icon}
         {title && <div id={titleId} className="mdx-dialog__title">{title}</div>}

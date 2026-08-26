@@ -264,6 +264,10 @@ Every listed renderer producer has an explicit local mapper boundary. Commands, 
 | --- | --- | --- | --- |
 | `settings-fields` | FieldRow | `src/renderer/components/settings/FieldRow.tsx` | `useVocabularyMapper()` |
 | `settings-sections` | SettingsSection | `src/renderer/components/settings/SettingsSection.tsx` | `useVocabularyMapper()` |
+| `settings-page` | Settings scope and every production section host | `src/renderer/components/settings/SettingsPage.tsx` | `useLocalizedVocabularyText()` |
+| `settings-sidebar` | Settings group and section navigation | `src/renderer/components/settings/SettingsSidebar.tsx` | `useI18n()` shared vocabulary boundary |
+| `shared-prose-primitives` | Shared controls carrying prose props | `src/renderer/ui/` | `useVocabularyMapper()` in each primitive |
+| `shared-input-controls` | Shared range, checkbox and radio accessible copy | `src/renderer/ui/md3/Slider.tsx`, `Checkbox.tsx`, `Radio.tsx` | `useVocabularyMapper()` |
 | `personal-vocabulary-upload` | Upload settings | `src/renderer/components/settings/sections/PersonalVocabularySection.tsx` | `usePersonalVocabulary` |
 | `command-palette` | Command palette | `src/renderer/components/CommandPalette.tsx` | `useVocabularyCommands` |
 | `context-menus` | Context menus | `src/renderer/components/menu/VocabularyContextMenu.tsx` | `useVocabularyMenuItems` |
@@ -296,6 +300,7 @@ Every listed renderer producer has an explicit local mapper boundary. Commands, 
 | `toy-lock-wizard` | Toy lock wizard | `src/renderer/components/toylocks/LockWizard.tsx` | `useVocabularyMapper` |
 | `personal-vocabulary-surface-mapper` | Structured surface mapper | `src/renderer/lib/personalVocabulary/surfaces.ts` | `applyVocabularyToMenuItems` |
 | `personal-vocabulary-application` | Replacement engine | `src/renderer/lib/personalVocabulary/apply.ts` | `export function applyVocabulary` |
+| `personal-vocabulary-template` | Safe prose-template interpolation | `src/renderer/lib/personalVocabulary/apply.ts` | `export function applyVocabularyToTemplate` |
 
 ## Complete production surface classification
 

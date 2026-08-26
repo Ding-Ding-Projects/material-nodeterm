@@ -48,6 +48,7 @@ import { useSettings } from '../../state/settings'
 import { useProjects } from '../../state/projects'
 import { Button } from '@renderer/ui/Button'
 import { SegmentedButton } from '@renderer/ui/md3'
+import { useLocalizedVocabularyText } from '../../lib/personalVocabulary/useLocalizedVocabularyText'
 
 const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
 
@@ -81,6 +82,7 @@ export function SettingsPage({
     enabled: schoolModeEnabled,
     hydrated: schoolModeHydrated
   })
+  const profileText = useLocalizedVocabularyText()
   const safeSection = (section: SettingsSectionId | undefined): SettingsSectionId =>
     section === 'language' && !languageFeaturesAllowed ? 'school-mode' : section ?? FIRST_SECTION_ID
   const [active, setActive] = useState<SettingsSectionId>(() => safeSection(initialSection))
@@ -135,12 +137,16 @@ export function SettingsPage({
       <SettingsSearchContext.Provider value={searchState}>
         <main className="min-w-0 flex-1 overflow-y-auto px-12 py-10">
           <div className="mx-auto max-w-[860px] space-y-10">
-            <section className="rounded-[20px] border border-outline/30 bg-surface-container p-4" aria-label="Settings scope">
+            <section className="rounded-[20px] border border-outline/30 bg-surface-container p-4" aria-label={profileText('settings.scope.ariaLabel', 'Settings scope')}>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h2 className="text-base font-semibold">Settings mode</h2>
+                  <h2 className="text-base font-semibold">{profileText('settings.scope.title', 'Settings mode')}</h2>
                   <p className="mt-1 text-sm text-text-muted">
-                    Global mode stores durable app-wide defaults. Project mode edits a complete sparse overlay for <strong>{activeProject?.name ?? 'the active project'}</strong>; every unset value inherits Global mode.
+                    {profileText(
+                      'settings.scope.description',
+                      'Global mode stores durable app-wide defaults. Project mode edits a complete sparse overlay for {project}; every unset value inherits Global mode.',
+                      { project: activeProject?.name ?? profileText('settings.scope.activeProject', 'the active project') }
+                    )}
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
@@ -150,11 +156,11 @@ export function SettingsPage({
                       selected and the panel could not tell you which mode you were editing. */}
                   <SegmentedButton
                     value={scope}
-                    ariaLabel="Choose settings mode"
+                    ariaLabel={profileText('settings.scope.chooseMode', 'Choose settings mode')}
                     onChange={(next) => setScope(next)}
                     options={[
-                      { value: 'global', label: 'Global mode' },
-                      { value: 'project', label: 'Project mode', disabled: !activeProjectId }
+                      { value: 'global', label: profileText('settings.scope.global', 'Global mode') },
+                      { value: 'project', label: profileText('settings.scope.project', 'Project mode'), disabled: !activeProjectId }
                     ]}
                   />
                   {scope === 'project' ? (
@@ -163,15 +169,22 @@ export function SettingsPage({
                       disabled={Object.keys(projectOverrides).length === 0}
                       onClick={resetProjectAll}
                     >
-                      Reset all to Global
+                      {profileText('settings.scope.reset', 'Reset all to Global')}
                     </Button>
                   ) : null}
                 </div>
               </div>
               <p className="mt-3 text-xs text-text-muted" role="status">
                 {scope === 'global'
-                  ? 'Editing Global defaults. Projects with overrides keep them.'
-                  : `${Object.keys(projectOverrides).length} project override${Object.keys(projectOverrides).length === 1 ? '' : 's'} active. All other values show their inherited Global value.`}
+                  ? profileText('settings.scope.globalStatus', 'Editing Global defaults. Projects with overrides keep them.')
+                  : profileText(
+                      'settings.scope.projectStatus',
+                      '{count} project override{plural} active. All other values show their inherited Global value.',
+                      {
+                        count: String(Object.keys(projectOverrides).length),
+                        plural: Object.keys(projectOverrides).length === 1 ? '' : 's'
+                      }
+                    )}
               </p>
             </section>
             <TerminalSection isActive={active === 'terminal'} />

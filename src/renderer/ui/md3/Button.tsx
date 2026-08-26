@@ -1,5 +1,6 @@
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react'
 import { cn } from '../cn'
+import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 
 export type ButtonVariant = 'filled' | 'tonal' | 'outlined' | 'text'
 
@@ -31,6 +32,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   { variant = 'filled', size = 'medium', danger = false, leadingIcon, trailingIcon, className, children, type = 'button', ...rest },
   ref
 ) {
+  const vocab = useVocabularyMapper()
   return (
     <button
       ref={ref}
@@ -47,7 +49,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       {...rest}
     >
       {leadingIcon}
-      {children}
+      {typeof children === 'string' ? vocab(children) : children}
       {trailingIcon}
     </button>
   )

@@ -94,10 +94,12 @@ export function ConfirmDialog({
   // Only the component's OWN defaults are localized here — a caller-supplied label (e.g. "Remove
   // worktree") is that caller's copy and passes through untouched.
   const danger = dangerProp ?? !alert
-  const cancelText = vocab(cancelLabel ?? ts('dialog.confirm.cancel', 'Cancel'))
-  const confirmText = vocab(
-    confirmLabel ?? (alert ? ts('dialog.confirm.ok', 'OK') : ts('dialog.confirm.delete', 'Delete'))
-  )
+  const cancelText = cancelLabel ? vocab(cancelLabel) : ts('dialog.confirm.cancel', 'Cancel')
+  const confirmText = confirmLabel
+    ? vocab(confirmLabel)
+    : alert
+      ? ts('dialog.confirm.ok', 'OK')
+      : ts('dialog.confirm.delete', 'Delete')
   const messageText = vocab(message)
   const optionLabel = vocab(option?.label)
   // Non-semantic decoration only (Settings → Language → "Show emojis…"): purely visual, never

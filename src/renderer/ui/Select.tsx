@@ -1,6 +1,7 @@
 import type { SelectHTMLAttributes } from 'react'
 import './md3/primitives.css'
 import { cn } from './cn'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 /**
  * The app's dense select, on the same Material Design 3 outlined-field anatomy as `ui/Input`
@@ -13,9 +14,10 @@ export function Select({
   children,
   ...rest
 }: SelectHTMLAttributes<HTMLSelectElement>): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   return (
     <span className="mdx-select__wrap">
-      <select className={cn('mdx-select', className)} {...rest}>
+      <select className={cn('mdx-select', className)} {...rest} aria-label={vocab(rest['aria-label'])} title={vocab(rest.title)}>
         {children}
       </select>
       <svg

@@ -1,5 +1,6 @@
 import { forwardRef, type HTMLAttributes } from 'react'
 import { cn } from '../cn'
+import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 
 export interface MenuProps extends HTMLAttributes<HTMLDivElement> {
   /** @default false — r28 `surface-container-high` (HANDOFF's "Menu surface r28
@@ -16,5 +17,6 @@ export interface MenuProps extends HTMLAttributes<HTMLDivElement> {
  * duplicating it.
  */
 export const Menu = forwardRef<HTMLDivElement, MenuProps>(function Menu({ compact = false, className, role = 'menu', ...rest }, ref) {
-  return <div ref={ref} role={role} className={cn('mdx-menu', compact && 'mdx-menu--compact', className)} {...rest} />
+  const vocab = useVocabularyMapper()
+  return <div ref={ref} role={role} className={cn('mdx-menu', compact && 'mdx-menu--compact', className)} {...rest} aria-label={vocab(rest['aria-label'])} title={vocab(rest.title)} />
 })

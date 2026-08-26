@@ -1,5 +1,6 @@
 import type { HTMLAttributes, ReactNode } from 'react'
 import { cn } from '../cn'
+import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 
 /** RUNNING → `running`, NEEDS YOU → `attention`, tmux/ok → `ok`, SLEEPING/idle → `idle`. */
 export type StatusTone = 'running' | 'attention' | 'ok' | 'idle'
@@ -23,6 +24,7 @@ export interface StatusChipProps extends HTMLAttributes<HTMLSpanElement> {
  * is purely the chrome.
  */
 export function StatusChip({ tone, size = 'default', hideDot = false, className, children, ...rest }: StatusChipProps): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   const pulse = tone === 'running' || tone === 'attention'
   return (
     <span
@@ -36,7 +38,7 @@ export function StatusChip({ tone, size = 'default', hideDot = false, className,
       {...rest}
     >
       {!hideDot && <span className="mdx-status-chip__dot" />}
-      {children}
+      {typeof children === 'string' ? vocab(children) : children}
     </span>
   )
 }

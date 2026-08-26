@@ -1,5 +1,6 @@
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react'
 import { cn } from '../cn'
+import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 
 export interface ChipProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   /** Filter-chip selected state — filled `secondary-container`, no border. Omit for a plain
@@ -17,6 +18,7 @@ export const Chip = forwardRef<HTMLButtonElement, ChipProps>(function Chip(
   { selected = false, icon, className, children, type = 'button', ...rest },
   ref
 ) {
+  const vocab = useVocabularyMapper()
   return (
     <button
       ref={ref}
@@ -26,7 +28,7 @@ export const Chip = forwardRef<HTMLButtonElement, ChipProps>(function Chip(
       {...rest}
     >
       {icon && <span className="mdx-chip__icon">{icon}</span>}
-      {children}
+      {typeof children === 'string' ? vocab(children) : children}
     </button>
   )
 })

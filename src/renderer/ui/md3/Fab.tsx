@@ -1,6 +1,7 @@
 import { forwardRef, type ButtonHTMLAttributes } from 'react'
 import { MaterialSymbol, type MaterialSymbolName } from '../../components/MaterialSymbol'
 import { cn } from '../cn'
+import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 
 export interface FabProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'> {
   'aria-label': string
@@ -23,12 +24,15 @@ export const Fab = forwardRef<HTMLButtonElement, FabProps>(function Fab(
   { icon, children, open = false, size = 'default', className, type = 'button', ...rest },
   ref
 ) {
+  const vocab = useVocabularyMapper()
   return (
     <button
       ref={ref}
       type={type}
       className={cn('md3-fab', size === 'small' && 'mdx-fab--small', open && 'is-open', className)}
       {...rest}
+      aria-label={vocab(rest['aria-label'])}
+      title={vocab(rest.title)}
     >
       {icon ? <MaterialSymbol name={icon} size={size === 'small' ? 20 : 26} /> : children}
     </button>

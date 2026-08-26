@@ -130,6 +130,8 @@ already passes through — rather than at individual call sites, so a new dialog
 the substitution without anyone remembering to opt in:
 
 - ✅ Every Settings section title and description (`SettingsSection.tsx`)
+- ✅ Every Settings sidebar group and section label (`SettingsSidebar.tsx`) and the scope chooser,
+  status text, and project/global controls (`SettingsPage.tsx`)
 - ✅ Every Settings field label, description, and note (`FieldRow.tsx` — the shared component
   nearly every Settings row in the app is built from, so wiring it there reaches broadly across
   the Settings surface with one boundary)
@@ -147,8 +149,16 @@ the substitution without anyone remembering to opt in:
   the query filter so a visible row can still be typed for)
 - ✅ Context menus whose rows are prose, through the `VocabularyContextMenu` wrapper: the kanban
   card menu (including its "Move to" column titles) and the source-control ⋯ menu
+- ✅ Shared localized copy (`useI18n()` and `Localized`) and the shared controls used by Settings:
+  `Input`, `Button`, `Switch`, `Select`, `NumberField`, `TextArea`, `TextField`, `Fab`,
+  `IconButton`, `SegmentedButton`, `Tabs`, `Dialog`, and `ListRow`. Their prose props are mapped
+  before dynamic interpolation, while option values, ids, paths, provider/account/user facts, and
+  external errors remain exact.
+- ✅ The settings field boundary has focused coverage in
+  `src/renderer/components/settings/FieldRow.vocabulary.test.tsx`, including the unknown-School
+  hydration fail-closed state and protection for interpolated facts.
 - ✅ Node header chrome, dock, kanban cards/columns and the card modal, via the separate
-  `useLocalizedVocabularyText` helper (shipped catalog prose → vocabulary → dynamic facts last)
+  `useLocalizedVocabularyText` helper (localized shipped prose → vocabulary → dynamic facts last)
 
 **Never** applied — these stay verbatim regardless of any uploaded file, by design:
 
@@ -201,9 +211,10 @@ installed:
   is never touched by entering or leaving School mode.
 
 The gate is `schoolModeAllowsOptionalFeatures`, so an **unknown** mode (the pre-hydration
-`enabled: false` placeholder, or a failed read) suppresses the substitution too. Note that
-`useLocalizedVocabularyText` still reads `enabled` alone and does not fail closed on an unhydrated
-record — a pre-existing inconsistency, not something this boundary introduced.
+  `enabled: false` placeholder, or a failed read) suppresses the substitution too. The shared
+  `useI18n()` boundary and `useLocalizedVocabularyText()` now use that same hydrated policy, so a
+  partially initialized surface cannot apply private substitutions while the mode record is still
+  unknown.
 
 ## Accessibility
 

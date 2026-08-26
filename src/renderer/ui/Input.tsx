@@ -1,6 +1,7 @@
 import { forwardRef, type InputHTMLAttributes } from 'react'
 import './md3/primitives.css'
 import { cn } from './cn'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 /**
  * The app's dense text input, on Material Design 3's outlined-field anatomy
@@ -13,6 +14,15 @@ import { cn } from './cn'
  */
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(
   function Input({ className, ...rest }, ref) {
-    return <input ref={ref} className={cn('mdx-input', className)} {...rest} />
+    const vocab = useVocabularyMapper()
+    return (
+      <input
+        ref={ref}
+        className={cn('mdx-input', className)}
+        {...rest}
+        aria-label={vocab(rest['aria-label'])}
+        title={vocab(rest.title)}
+      />
+    )
   }
 )

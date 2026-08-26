@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { cn } from '../cn'
+import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 
 export interface TabOption {
   id: string
@@ -43,6 +44,7 @@ export function Tabs({
   idPrefix = 'tab',
   panelIdPrefix
 }: TabsProps): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   const refs = useRef<Record<string, HTMLButtonElement | null>>({})
   const enabledItems = items.filter((item) => !item.disabled)
   const selected = enabledItems.find((item) => item.id === value) ?? enabledItems[0]
@@ -64,7 +66,7 @@ export function Tabs({
     <div
       className={cn('mdx-tabs', orientation === 'vertical' && 'mdx-tabs--vertical', className)}
       role="tablist"
-      aria-label={ariaLabel}
+      aria-label={vocab(ariaLabel)}
       aria-orientation={orientation}
     >
       {items.map((item) => {
@@ -102,7 +104,7 @@ export function Tabs({
               }
             }}
           >
-            {item.label}
+            {vocab(item.label)}
           </button>
         )
       })}

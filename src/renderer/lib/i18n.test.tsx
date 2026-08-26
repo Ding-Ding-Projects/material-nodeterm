@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_SETTINGS } from '@shared/types'
 import { useSettings } from '../state/settings'
 import { useSchoolMode } from '../state/schoolMode'
+import { usePersonalVocabulary } from '../state/personalVocabulary'
 import { LanguageSection } from '../components/settings/sections/LanguageSection'
 import { useI18n } from './i18n'
 
@@ -48,6 +49,7 @@ beforeEach(() => {
   }
   useSettings.setState({ settings: configured, base: configured, hydrated: true })
   useSchoolMode.setState({ enabled: false, hydrated: false, name: 'School mode' })
+  usePersonalVocabulary.setState({ entries: {}, status: 'no-file', entryCount: 0, loadedAt: null, lastError: null })
   host = document.createElement('div')
   document.body.appendChild(host)
   root = createRoot(host)
@@ -58,6 +60,7 @@ afterEach(() => {
   host.remove()
   useSettings.setState({ settings: DEFAULT_SETTINGS, base: DEFAULT_SETTINGS, hydrated: false })
   useSchoolMode.setState({ enabled: false, hydrated: false, name: 'School mode' })
+  usePersonalVocabulary.setState({ entries: {}, status: 'no-file', entryCount: 0, loadedAt: null, lastError: null })
 })
 
 describe('School mode at the renderer localization boundary', () => {
@@ -88,6 +91,29 @@ describe('School mode at the renderer localization boundary', () => {
       primary: 'Language',
       secondary: null
     })
+  })
+
+  it('maps localized prose before dynamic facts and restores the original copy when School mode is on', () => {
+    usePersonalVocabulary.setState({
+      entries: { Language: 'Control Room', Hello: 'Howdy', Alice: 'Not-Alice' },
+      status: 'loaded',
+      entryCount: 3,
+      loadedAt: Date.now(),
+      lastError: null
+    })
+    act(() => useSchoolMode.setState({ hydrated: true, enabled: false }))
+    act(() => root.render(<I18nHarness />))
+    expect(state().primary).toBe('Control Room')
+
+    function ParamHarness(): React.JSX.Element {
+      const { ts } = useI18n()
+      return <span data-param-copy>{ts('test.dynamic', 'Hello {name}', { name: 'Alice' })}</span>
+    }
+    act(() => root.render(<ParamHarness />))
+    expect(host.querySelector('[data-param-copy]')?.textContent).toBe('Howdy Alice')
+
+    act(() => useSchoolMode.setState({ enabled: true }))
+    expect(host.querySelector('[data-param-copy]')?.textContent).toBe('Hello Alice')
   })
 
   it('omits the Language controls while hydration is unknown or mode is ON', () => {

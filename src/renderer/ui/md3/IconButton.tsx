@@ -1,6 +1,7 @@
 import { forwardRef, type ButtonHTMLAttributes } from 'react'
 import { MaterialSymbol, type MaterialSymbolName } from '../../components/MaterialSymbol'
 import { cn } from '../cn'
+import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 
 export interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'> {
   /** Required — an icon-only control's accessible name has nowhere else to come from. */
@@ -28,12 +29,15 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
   { icon, filled = false, active = false, size = 'standard', className, children, type = 'button', ...rest },
   ref
 ) {
+  const vocab = useVocabularyMapper()
   return (
     <button
       ref={ref}
       type={type}
       className={cn('md3-icon-btn', size === 'dense' && 'mdx-icon-btn--dense', active && 'is-active', className)}
       {...rest}
+      aria-label={vocab(rest['aria-label'])}
+      title={vocab(rest.title)}
     >
       {icon ? <MaterialSymbol name={icon} size={size === 'dense' ? 18 : 20} fill={filled} /> : children}
     </button>
