@@ -270,7 +270,9 @@ Feature requests open on GitHub with no landed implementation yet, newest first:
 - [ ] **#291** — Node type icons alongside color coding. Source implementation is present in the
       Program 61 lane, while tests, build/package evidence, runtime interaction, and captures remain
       pending under the stated ultra-speed boundary.
-- [ ] **#290** — Source control for monorepos with multiple nested git repos.
+- [ ] **#290** — Source control for monorepos with multiple nested git repos. Implementation
+      landed in the Program 68 lane, but tests, builds, runtime interaction, and captures remain
+      unrun under the ultra-speed boundary.
 - [ ] **#289** — Custom sounds for agent alerts. Finished-agent and needs-attention events now
       accept bounded local audio with per-event preview, reset, persistence in app data, and
       built-in fallback. Tests, builds, packaging, runtime interaction, and captures remain unrun

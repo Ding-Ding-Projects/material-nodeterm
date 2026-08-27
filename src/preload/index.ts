@@ -587,6 +587,7 @@ const api: NodeTerminalApi = {
     branchAt: (cwd, name, oid) => ipcRenderer.invoke(IPC.gitBranchAt, cwd, name, oid),
     checkoutCommit: (cwd, oid) => ipcRenderer.invoke(IPC.gitCheckoutCommit, cwd, oid),
     repoRoot: (cwd) => ipcRenderer.invoke(IPC.gitRepoRoot, cwd),
+    discoverNestedRepos: (cwd) => ipcRenderer.invoke(IPC.gitDiscoverNestedRepos, cwd),
     worktreeList: (repoPath) => ipcRenderer.invoke(IPC.gitWorktreeList, repoPath),
     worktreeAdd: (repoPath, wtPath, branch, baseRef, isNew) =>
       ipcRenderer.invoke(IPC.gitWorktreeAdd, repoPath, wtPath, branch, baseRef, isNew),

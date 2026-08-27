@@ -107,7 +107,12 @@ import { annotationEndpoints } from '../lib/annotation'
 import { LazyEditorNode, LazyDiffNode } from '../nodes/lazyMonacoNodes'
 import { DinoNode } from '../nodes/DinoNode'
 import RecoveryGameNode from '../nodes/RecoveryGameNode'
-import { SERVICE_NODE_KINDS, type ServiceNodeKind, type ProjectArchiveContents } from '@shared/types'
+import {
+  SERVICE_NODE_KINDS,
+  type ServiceNodeKind,
+  type ProjectArchiveContents,
+  type GitNestedRepositoryDiscovery
+} from '@shared/types'
 import { VIRTUAL_MACHINE_NODE_CATALOG } from '@shared/virtual-machine'
 import type { ProjectIcon } from '@shared/project-icon'
 import type { PortableDoorConstructionV3 } from '@shared/door-construction'
@@ -1689,9 +1694,72 @@ export function Canvas() {
   const activeProjectName = useProjects(
     (s) => s.projects.find((p) => p.id === s.activeProjectId)?.name
   )
+  const activeProjectIsSsh = useProjects(
+    (s) => !!s.projects.find((p) => p.id === s.activeProjectId)?.ssh
+  )
+  const [nestedRepoDiscovery, setNestedRepoDiscovery] = useState<GitNestedRepositoryDiscovery | null>(null)
+  const refreshNestedRepoDiscovery = useCallback(() => {
+    if (!activeProjectCwd || activeProjectIsSsh) {
+      setNestedRepoDiscovery(null)
+      return
+    }
+    let cancelled = false
+    setNestedRepoDiscovery(null)
+    void (async () => {
+      let cursor: string | undefined
+      let pageCount = 0
+      let result: GitNestedRepositoryDiscovery | null = null
+      const repositories: GitNestedRepositoryDiscovery['repositories'] = []
+      do {
+        result = await api.git.discoverNestedRepos(activeProjectCwd, { cursor, limit: 64 })
+        repositories.push(...result.repositories)
+        cursor = result.ok ? result.nextCursor ?? undefined : undefined
+        pageCount += 1
+      } while (result.ok && cursor && pageCount < 8)
+      if (result && pageCount >= 8 && cursor) {
+        result = {
+          ...result,
+          limited: true,
+          nextCursor: cursor,
+          message: result.message ?? 'Nested repository discovery returned more pages than the UI can display.'
+        }
+      }
+      if (result) {
+        result = { ...result, repositories }
+      }
+      return result
+    })().then((result) => {
+      if (!cancelled && result) setNestedRepoDiscovery(result)
+    }).catch((error: unknown) => {
+      if (!cancelled) {
+        setNestedRepoDiscovery({
+          ok: false,
+          repositories: [],
+          scannedDirectories: 0,
+          limited: false,
+          nextCursor: null,
+          message: error instanceof Error ? error.message : 'Nested repositories could not be scanned.'
+        })
+      }
+    })
+    // The caller owns this one-shot scan. Cleanup only prevents a stale project result from
+    // replacing the current project's scopes after a fast project switch.
+    return () => {
+      cancelled = true
+    }
+  }, [activeProjectCwd, activeProjectIsSsh, api])
+  useEffect(() => {
+    if (!scOpen) return
+    const cleanup = refreshNestedRepoDiscovery()
+    return cleanup
+  }, [refreshNestedRepoDiscovery, scOpen])
   const scmScopeList = useMemo(
-    () => scmScopes({ cwd: activeProjectCwd, name: activeProjectName ?? 'repo' }, boundGroupList),
-    [activeProjectCwd, activeProjectName, boundGroupList]
+    () => scmScopes(
+      { cwd: activeProjectCwd, name: activeProjectName ?? 'repo' },
+      boundGroupList,
+      nestedRepoDiscovery?.repositories
+    ),
+    [activeProjectCwd, activeProjectName, boundGroupList, nestedRepoDiscovery]
   )
   // The group the selection points at (pure + tested in @shared/scm-scope). That group's scope is
   // what Source Control opens on (same selection source — `n.selected` — the context-menu/delete
@@ -18379,6 +18447,8 @@ export function Canvas() {
           onExplainCommit={explainCommit}
           scopes={scmScopeList}
           defaultScope={defaultScmScope(scmScopeList, selectedGroupIdForScm)}
+          nestedRepoDiscovery={nestedRepoDiscovery}
+          onRefreshNestedRepos={refreshNestedRepoDiscovery}
           onNewWorktree={() => openWorktreeDialog(null)}
         />
       )}

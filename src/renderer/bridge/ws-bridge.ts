@@ -861,6 +861,8 @@ export function buildFilesApi(
     checkoutCommit: (cwd, oid) =>
       client.request(IPC.gitCheckoutCommit, cwd, oid) as ReturnType<GitApi['checkoutCommit']>,
     repoRoot: (cwd) => client.request(IPC.gitRepoRoot, cwd) as Promise<string | null>,
+    discoverNestedRepos: (cwd) =>
+      client.request(IPC.gitDiscoverNestedRepos, cwd) as ReturnType<GitApi['discoverNestedRepos']>,
     worktreeList: (repoPath) =>
       client.request(IPC.gitWorktreeList, repoPath) as ReturnType<GitApi['worktreeList']>,
     worktreeAdd: (repoPath, wtPath, branch, baseRef, isNew) =>

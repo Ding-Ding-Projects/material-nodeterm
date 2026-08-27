@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import type { FsApi, GitFileChange, GitResult, GitStatus } from '@shared/types'
+import type { FsApi, GitFileChange, GitNestedRepositoryDiscovery, GitResult, GitStatus } from '@shared/types'
 import { gitignoreAdd } from '@shared/gitignore'
 import { sshFs } from '../terminal/ssh-fs'
 import type { GitHistoryItem, GitHistoryResult } from '@shared/git-history'
@@ -39,10 +39,14 @@ export interface SourceControlPanelProps {
   onOpenDiff: (relPath: string, staged: boolean, cwd: string) => void
   onOpenCommitDiff: (relPath: string, commitOid: string, cwd: string) => void
   onExplainCommit: (prompt: string, cwd: string) => void
-  /** The checkouts this panel can operate on: the main one, plus every bound worktree. */
+  /** The checkouts this panel can operate on: the main one, bound worktrees, and child repos. */
   scopes: ScmScope[]
   /** The scope to open on (derived from the canvas selection by the caller). */
   defaultScope?: ScmScope
+  /** Result of the bounded child-repository scan for a non-repository project folder. */
+  nestedRepoDiscovery?: GitNestedRepositoryDiscovery | null
+  /** Re-run child-repository discovery after an unreadable scan. */
+  onRefreshNestedRepos?: () => void
   onNewWorktree: () => void
 }
 
@@ -80,6 +84,8 @@ export function SourceControlPanel({
   onExplainCommit,
   scopes,
   defaultScope,
+  nestedRepoDiscovery,
+  onRefreshNestedRepos,
   onNewWorktree
 }: SourceControlPanelProps) {
   const project = useProjects((s) => s.projects.find((p) => p.id === s.activeProjectId))
@@ -469,6 +475,63 @@ export function SourceControlPanel({
         {cwd && status && !status.hasRepo && (
           <div className="drawer__body">
             <p className="set-note">No git repository in this folder.</p>
+            {scopes.length > 1 && (
+              <button
+                className="sc-btn"
+                disabled={busy}
+                onClick={(event) => {
+                  const rect = event.currentTarget.getBoundingClientRect()
+                  setScopeMenu({ top: rect.bottom + 4, left: rect.left })
+                }}
+              >
+                <MaterialSymbol name="account_tree" size={16} />
+                Choose repository scope
+              </button>
+            )}
+            {nestedRepoDiscovery?.repositories.length ? (
+              <section className="scm-section">
+                <div className="scm-section-head">
+                  <span>Nested repositories</span>
+                </div>
+                {(!nestedRepoDiscovery.ok || nestedRepoDiscovery.limited) && (
+                  <p className="set-note">
+                    {nestedRepoDiscovery.message ?? 'The scan was incomplete; these are only the repositories that were verified.'}{' '}
+                    Scanned {nestedRepoDiscovery.scannedDirectories} folders.
+                  </p>
+                )}
+                <p className="set-note">
+                  Choose a repository below to use Source Control without creating another project.
+                </p>
+                {nestedRepoDiscovery.repositories.map((repo) => {
+                  const nestedScope = scopes.find((candidate) => candidate.cwd === repo.path)
+                  if (!nestedScope) return null
+                  return (
+                    <button
+                      className="sc-btn"
+                      key={nestedScope.id}
+                      disabled={busy}
+                      title={nestedScope.cwd}
+                      onClick={() => setScopeId(nestedScope.id)}
+                    >
+                      <MaterialSymbol name="account_tree" size={16} />
+                      {repo.relativePath}
+                    </button>
+                  )
+                })}
+              </section>
+            ) : nestedRepoDiscovery && (!nestedRepoDiscovery.ok || nestedRepoDiscovery.limited) ? (
+              <section className="scm-section">
+                <p className="set-note">
+                  {nestedRepoDiscovery.message ?? 'Nested repositories could not be scanned.'}{' '}
+                  Scanned {nestedRepoDiscovery.scannedDirectories} folders.
+                </p>
+                {onRefreshNestedRepos && (
+                  <button className="sc-btn" disabled={busy} onClick={onRefreshNestedRepos}>
+                    Retry repository scan
+                  </button>
+                )}
+              </section>
+            ) : null}
             <button className="sc-btn" disabled={busy} onClick={() => act(() => git.init(cwd))}>
               Initialize repository
             </button>
@@ -636,44 +699,32 @@ export function SourceControlPanel({
           </>
         )}
 
-        {scopeMenu &&
-          createPortal(
-            <>
-              <div
-                className="tab-backdrop"
-                style={{ zIndex: 78 }}
-                onClick={() => setScopeMenu(null)}
-              />
-              <div
-                className="tab-menu"
-                style={{ top: scopeMenu.top, left: scopeMenu.left, zIndex: 80 }}
-              >
-                {scopes.map((s) => (
-                  <button
-                    key={s.id}
-                    title={s.cwd}
-                    onClick={() => {
-                      setScopeMenu(null)
-                      setScopeId(s.id)
-                    }}
-                  >
-                    {s.id === scope?.id ? '● ' : '   '}
-                    {s.label}
-                  </button>
-                ))}
-                <div className="ctx-sep" />
-                <button
-                  onClick={() => {
-                    setScopeMenu(null)
-                    onNewWorktree()
-                  }}
-                >
-                  New worktree…
-                </button>
-              </div>
-            </>,
-            document.body
-          )}
+        {scopeMenu && (
+          <ContextMenu
+            x={scopeMenu.left}
+            y={scopeMenu.top}
+            zIndex={80}
+            onClose={() => setScopeMenu(null)}
+            items={[
+              ...scopes.map((s) => ({
+                label: `${s.id === scope?.id ? '● ' : ''}${s.label}`,
+                hint: s.cwd,
+                onClick: () => {
+                  setScopeMenu(null)
+                  setScopeId(s.id)
+                }
+              })),
+              { type: 'separator' as const },
+              {
+                label: 'New worktree…',
+                onClick: () => {
+                  setScopeMenu(null)
+                  onNewWorktree()
+                }
+              }
+            ] as MenuItem[]}
+          />
+        )}
 
         {branchMenu &&
           status &&

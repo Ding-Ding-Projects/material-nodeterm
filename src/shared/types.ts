@@ -3429,6 +3429,35 @@ export interface GitStatus {
   changes: GitFileChange[]
 }
 
+/** A verified Git repository found below a project's configured folder. */
+export interface GitNestedRepository {
+  /** Absolute path used as the cwd for scoped Git operations. */
+  path: string
+  /** Project-root-relative display path, always using `/` separators. */
+  relativePath: string
+  /** Folder name used as the compact scope label. */
+  name: string
+}
+
+/** Bounded page request for child-repository discovery. Cursor values are opaque to the renderer. */
+export interface GitNestedRepositoryDiscoveryOptions {
+  cursor?: string
+  limit?: number
+}
+
+/** Result of the bounded nested-repository scan. A failed scan is never an empty success. */
+export interface GitNestedRepositoryDiscovery {
+  ok: boolean
+  repositories: GitNestedRepository[]
+  /** Number of directories examined before this page was produced. */
+  scannedDirectories: number
+  /** True when the safety cap stopped traversal before every directory could be examined. */
+  limited: boolean
+  /** Opaque cursor for another page, or null when this is the final page. */
+  nextCursor?: string | null
+  message?: string
+}
+
 /** Core-owned provenance for one exact physical worktree generation. */
 export interface GitWorktreeOwnership {
   /** Opaque machine-local ownership record id. Canvas JSON cannot mint or replace it. */
@@ -3559,6 +3588,11 @@ export interface GitApi {
   /** Checkout a commit (detached HEAD). */
   checkoutCommit(cwd: string, oid: string): Promise<GitResult>
   repoRoot(cwd: string): Promise<string | null>
+  /** Find verified child repositories below a project folder without mutating the filesystem. */
+  discoverNestedRepos(
+    cwd: string,
+    options?: GitNestedRepositoryDiscoveryOptions
+  ): Promise<GitNestedRepositoryDiscovery>
   /** `{ ok: false, entries: [] }` when git itself could not be read — which is NOT the same fact as
    *  "this repo has no worktrees", and no caller may treat it as one (see worktree-ops). */
   worktreeList(repoPath: string): Promise<import('./worktree').WorktreeListResult>

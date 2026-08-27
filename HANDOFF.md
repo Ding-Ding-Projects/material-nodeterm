@@ -420,7 +420,27 @@ This ultra-speed lane intentionally did not run tests, type checks, lint, review
 accessibility checks, builds, packaging, installer execution, runtime interaction, or UI captures.
 The feature branch was not integrated into `main`, no release was published, and no cleanup was
 performed in this lane.
+## 2026-08-27, nested Git repository discovery, issue #79
 
+The nested repository discovery lane is being reconciled with the exact `origin/main` tip
+`54164b84dce0b7e62787b1de2885405ff4ed821c`. The implementation from `4cefe4afd5a0eff695833f8e5d72c90a1c669b3b`
+adds a read-only, three-level scan for child Git checkouts, typed IPC and relay routing, and
+Source Control scopes for verified child paths. The reconciled update adds opaque paging, a 512
+directory traversal limit, explicit scan metadata, lexical containment checks, and a lstat plus
+realpath boundary that skips symbolic links, junctions, and other reparse-point paths before
+traversal. Discovery never initializes, mutates, deletes, or publishes a repository.
+
+The Source Control panel exposes the child scopes through the shared searchable picker and shows
+partial-read or safety-limit results separately from an empty scan. SSH projects retain an honest
+unsupported state because a local process cannot inspect the remote filesystem. Direct documentation
+is `docs/features/source-control/source-control-and-worktrees.md`, indexed from the Source Control
+category; `CHANGELOG.md` and `ROADMAP.md` carry the same scope and verification boundary.
+
+No tests, type checks, lint, builds, packaging, runtime interaction, reviews, audits, or screen captures
+were run in this ultra-speed lane. The generated `src/shared/docs-data.ts` bundle remains pending
+because `esbuild` is absent from this checkout and this lane does not install dependencies or run
+builds. The parent owns the final current-main integration, offline-bundle regeneration, release
+evidence, and any later verification.
 ## 2026-08-27, AWS core-service managers, issue #46 PR preparation
 
 The issue jer was reconciled with the exact `origin/main` tip `2472cf23b99559005476841d3db5e6bc4691ac06`.

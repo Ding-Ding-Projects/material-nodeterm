@@ -146,6 +146,14 @@
   built-in cues whenever a custom file is missing or cannot be decoded. This ultra-speed lane did
   not run tests, type checks, lint, reviews, security or accessibility checks, builds, packaging,
   installer execution, runtime interaction, or UI captures.
+- Add bounded nested Git repository discovery to Source Control. Projects whose configured folder
+  contains child checkouts can select each verified repository as an independent scope, while
+  unreadable scans remain distinct from an empty result and SSH projects retain their explicit
+  remote limitation. Results are paged with an opaque cursor, capped at 512 scanned directories,
+  and guarded against symbolic-link and Windows reparse-point traversal. This ultra-speed
+  implementation lane intentionally did not run tests, type checks, lint, reviews, security or
+  accessibility checks, builds, packaging, installer execution, runtime interaction, or UI
+  captures.
 
 - Mount the seven AWS core-service routes on the shared AWS manager: S3, EC2, IAM, STS, Lambda,
   CloudWatch, and CloudWatch Logs. Typed operation controls now cover bounded reads, selected writes,
