@@ -204,7 +204,9 @@ intentionally unchecked because this task publishes the plan only.
 
 - [ ] Add Photo, Video, mixed-media Gallery, and wild Dim Sum nodes. Photo, Video, and Gallery
       source implementation is present for issue #20; tests, builds, and packaged captures remain
-      pending in the parent integration lane.
+      pending in the parent integration lane. Wild Dim Sum source implementation is present for
+      issue #25 with public-catalog selection and portable schema 3 state; its required verification
+      and packaged interaction evidence remain pending, so the combined row stays unticked.
 - [ ] Add the categorized local file-converter and advanced media, archive, PDF, and OCR pipelines.
 - [ ] Add the bundled WebTorrent downloader with resumable per-task lifecycle. The implementation
       lane now contains the local runtime, guided intake, metadata selection, progress controls,

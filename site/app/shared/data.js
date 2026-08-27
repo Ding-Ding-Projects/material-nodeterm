@@ -42,6 +42,7 @@ export const DOCS = [
   ['Canvas & node lifecycle', 'how blocks are born and cleaned up', 'canvas-lifecycle'],
   ['Changelog viewer', 'the date picker and the commit links', 'changelog-viewer'],
   ['Dim sum surprise', 'the little treat that shows up one visit in ten', 'dim-sum-surprise'],
+  ['Wild dim sum node', 'public catalog browsing and portable dish selection', 'wild-dim-sum-node'],
   ['Exports, notifications & local history', 'ten shapes, one honest warning', 'exports-and-history'],
   ['Kanban board', 'live session cards', 'kanban-board'],
   ['Language modes, funny levels & emoji', 'English, Cantonese, or both', 'language-modes'],

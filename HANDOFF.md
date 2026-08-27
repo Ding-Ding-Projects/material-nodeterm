@@ -1909,3 +1909,21 @@ state, one-shot non-blocking alarms, and versioned JSON export data.
 
 Documentation is in `docs/features/canvas/timer-nodes.md`. Tests, builds, captures, commits, and dews
 were intentionally left to the parent integration lane.
+# Issue #25: Wild dim sum node source lane
+
+The `feat/program-14-wild-dim-sum-node` branch adds the `wild-dim-sum` node kind, Unified Node
+Catalog factory, renderer surface, localized control copy, bounded public-catalog loader, published
+release-photo resolver, schema 3 portable selection, close-and-reopen path, CSP allowances, Material
+Design 3 styling, feature documentation, offline docs page, changelog, and roadmap record.
+
+Portable state is limited to validated public dish identity and display copy. Catalog response
+bytes, image bytes, request state, browser cache, credentials, provider sessions, machine paths,
+process state, host identifiers, and generated URLs remain excluded. Import has no network,
+deployment, provider, process, or download side effect. Runtime photo availability depends on the
+canonical public catalog and its published GitHub release assets; the installer contains no copied
+photo.
+
+This ultra-speed lane intentionally ran no tests, type checks, lint, builds, packaging, runtime
+interaction, accessibility or security audits, reviews, or captures. The parent integration lane
+must supply every verification verdict and release evidence before describing the feature as
+verified.
