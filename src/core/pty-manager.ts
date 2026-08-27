@@ -4887,61 +4887,6 @@ export class PtyManager {
     persistKey: string,
     intent: EndIntent,
     everySocket = false,
-    /** The awaited confirmed-recycle path already received every backend acknowledgement. */
-    backendAlreadyEnded = false,
-    /** Trusted replacement identity; present only after confirmed profile preflight. */
-    replacementTarget?: PtyRecycleTarget
-  ): Promise<void> {
-    const current = this.ending.get(persistKey)
-    if (current) {
-      // Identical repeats share one acknowledgement only when the in-flight target scope covers
-      // this caller. An every-socket request, a pre-confirmed backend outcome, and an exact profile
-      // reservation are each stronger than their generic counterpart, so a stronger request waits
-      // for the narrow pass and then performs its own cleanup/reservation before it may resolve.
-      const targetCovered =
-        !replacementTarget ||
-        (current.replacementTarget?.profileId === replacementTarget.profileId &&
-          current.replacementTarget.cwd === replacementTarget.cwd)
-      const covered =
-        current.intent === intent &&
-        (!everySocket || current.everySocket) &&
-        (!backendAlreadyEnded || current.backendAlreadyEnded) &&
-        targetCovered
-      return covered
-        ? current.promise
-        : current.promise.then(() =>
-            this.endSession(
-              clientId,
-              persistKey,
-              intent,
-              everySocket,
-              backendAlreadyEnded,
-              replacementTarget
-            )
-          )
-    }
-    const promise = this.runEndSession(
-      clientId,
-      persistKey,
-      intent,
-      everySocket,
-      backendAlreadyEnded,
-      replacementTarget
-    )
-    const entry = { intent, everySocket, backendAlreadyEnded, replacementTarget, promise }
-    this.ending.set(persistKey, entry)
-    const clear = (): void => {
-      if (this.ending.get(persistKey) === entry) this.ending.delete(persistKey)
-    }
-    promise.then(clear, clear)
-    return promise
-  }
-
-  private async runEndSession(
-    clientId: ClientId | null,
-    persistKey: string,
-    intent: EndIntent,
-    everySocket = false,
     /** The awaited confirmed-recycle path already received a backend kill acknowledgement. */
     backendAlreadyEnded = false,
     /** Trusted replacement identity; present only after confirmed profile preflight. */

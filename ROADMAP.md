@@ -33,6 +33,10 @@ later commit, since this file will not be kept in lockstep with every merge).
       process entrypoint also removes stale duplicate imports, declarations, handlers, object keys,
       notification composition, quit conditions, and teardown while retaining the corrected SSH
       project argument order; its single-file esbuild transform also reports syntax-only success.
+      The residual duplicate pass now removes the stale recursive PTY end-session wrapper, keeps
+      the current Windows font fallback and explicit no-dictation speech default, and separates
+      the torrent callback field from its task subscription method. All three changed source files
+      report single-file esbuild syntax success; broader verification remains pending.
       The combined recovery remains unchecked until the parent integration
       lane records build, packaging, and release-workflow evidence. The ultra-speed pass
       intentionally omits tests, type checks, lint, reviews, accessibility and security checks,

@@ -1,5 +1,30 @@
 # Handoff
 
+## 2026-08-27, residual duplicate declarations
+
+The residual duplicate lane repaired three merge remnants in the exact task-owned source files.
+`src/core/pty-manager.ts` now retains one `runEndSession` implementation, the complete current
+teardown path that records backend acknowledgements, session ownership, tombstones, subscribers,
+scrollback, identity state, and platform-specific process cleanup. The removed declaration was a
+recursive copy of the `endSession` coordination wrapper and could never provide the real teardown.
+
+`src/shared/types.ts` now keeps the current Windows-friendly default font stack with Consolas and
+Cascadia Mono before Courier New, plus the explicit empty speech model that means no dictation is
+selected until the user chooses one. The stale duplicate font and earlier speech defaults are gone.
+`src/core/torrent/service.ts` keeps the callback supplied through `TorrentServiceOptions` under the
+distinct `taskCallback` field, while preserving the public `onTask(listener)` subscription method.
+This removes the class-member collision without changing either notification route.
+
+Direct records are `CHANGELOG.md`, `ROADMAP.md`, and this handoff. Single-file esbuild transforms
+reported `PARSE_OK` for all three changed source files, with zero warnings. No tests, type checks,
+lint, reviews, audits, builds, packaging, runtime interaction, or screen captures were run in this
+ultra-speed lane. The parent integration lane owns the combined pull request and all broader
+verification.
+
+Merge leftovers 清走晒：PTY 收返一份完整收尾流程，Windows 字型保留現行 fallback，speech 繼續
+明確停用 dictation，torrent callback 同 listener method 分開命名，唔再撞車。三個 source file
+都有 `PARSE_OK` syntax evidence；其餘 checks 留返 parent integration lane 處理。
+
 ## 2026-08-27, main process index merge-fragment repair
 
 The main process entrypoint `src/main/index.ts` retained stale fragments from several merged

@@ -2926,7 +2926,6 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   fontSize: 13,
   fontFamily: 'Menlo, Monaco, Consolas, "Cascadia Mono", "Courier New", monospace',
-  fontFamily: 'Menlo, Monaco, "Courier New", monospace',
   // Keep hyphens, underscores, slashes and dots inside words so identifiers and paths select whole.
   terminalWordSeparator: " ()[]{}',\"",
   cursorBlink: true,
@@ -3060,7 +3059,6 @@ export const DEFAULT_SETTINGS: Settings = {
   notchHud: true,
   notchWidth: 168,
   notchHoverExpand: true,
-  speech: { engine: 'whisper', model: 'tiny', language: 'auto', shortcut: 'Cmd+Alt' },
   languageMode: 'en',
   // New installations start at the maximum deliberate voice level. Existing saved values are
   // preserved by the versioned settings migration in core/settings-store.ts.
