@@ -20,7 +20,7 @@ Changed implementation and documentation paths include `src/renderer/canvas/Canv
 The canonical docs generator could not start because this isolated checkout has no `esbuild`
 installation. The offline bundle entry was reconciled manually. This ultra-speed lane intentionally
 did not run tests, type checks, lint, reviews, security checks, accessibility checks, builds,
-packaging, installer execution, runtime interaction, or UI captures. The feature jer was not
+packaging, installer execution, runtime interaction, or UI captures. The feature branch was not
 merged into `main` and no cleanup was performed in this lane.
 
 ## 2026-08-27, AWS core-service managers, issue #46 PR preparation
