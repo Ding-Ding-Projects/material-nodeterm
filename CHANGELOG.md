@@ -341,6 +341,11 @@
   54164b84dce0b7e62787b1de2885405ff4ed821c and recorded in commit 95e8eb8e19e4a568bf7286b35a9cdf789a6983ac.
   Tests, lint, type checks, builds, packaging, runtime interaction, reviews, accessibility checks,
   security audits, and UI captures were intentionally not run.
+- Restore one coherent managed Codex account lifecycle and same-machine switching implementation.
+  Duplicate account handlers, app-server readers, and rollout-link publication paths were removed;
+  account-id validation, owner-bound reservations, no-overwrite hardlinks, rollback, and credential
+  boundaries remain intact. This lane intentionally did not run tests, lint, type checks, builds,
+  packaging, runtime interaction, reviews, audits, or UI captures.
 
 - Add the bundled AWS CLI v2 dependency lane. Windows packaging now stages the pinned official
   `2.36.32` MSI, verifies its SHA-256, falls back through a verified local cache or canonical
