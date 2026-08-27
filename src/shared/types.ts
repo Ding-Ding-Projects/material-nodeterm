@@ -424,6 +424,8 @@ export type NodeKind =
   | 'torrent'
   /** One-shot Linux ISO virtual machine, distinct from the WSL terminal profile. */
   | 'linux-vm'
+  /** Read-only Windows host diagnostics, with no mutation controls. */
+  | 'windows-diagnostics'
 
 /**
  * The service kinds, as a runtime list. Exported because both the renderer (menu rows, one shared
@@ -4634,6 +4636,8 @@ export interface NodeTerminalApi {
    *  degrades honestly rather than silently: `wsl.exe` missing/unreachable rejects with a
    *  real error, never a fabricated empty list. */
   wsl?: import('./wsl').WslApi
+  /** Read-only host facts for the Windows diagnostics node. No mutation methods are exposed. */
+  windowsDiagnostics: import('./windows-diagnostics').WindowsDiagnosticsApi
   export: ExportApi
   history: LocalHistoryApi
   context: ContextApi

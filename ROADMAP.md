@@ -78,6 +78,11 @@ later commit, since this file will not be kept in lockstep with every merge).
       cancellable operation plumbing and duplicate-submit protection in `src/core/wsl/`,
       `src/shared/wsl.ts`, the bridges, and `src/renderer/wsl/WslCreateDialog.tsx`. Focused
       verification and real built-artifact interaction remain pending.
+- [ ] **Read-only Windows diagnostics, issue #66**: the canvas node and fixed host snapshot route
+      cover drives/storage, services, startup entries, scheduled tasks, updates, network state,
+      and bounded event summaries. Tests, type checks, lint, reviews, security/accessibility
+      checks, builds, packaging, runtime interaction, and captures remain intentionally unrun in
+      the ultra-speed lane.
 - [ ] **Full Material Design 3 surface audit (#91)**: source-level inventory and remediation are
       recorded in `docs/features/appearance/material-3-audit.md` and checked by
       `scripts/check-material-audit.mjs` (201 rows, including every desktop shell, node,

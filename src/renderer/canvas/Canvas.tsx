@@ -109,6 +109,7 @@ import VirtualMachineNode from '../nodes/VirtualMachineNode'
 import NsisInstallerNode from '../nodes/NsisInstallerNode'
 import ShopNode from '../nodes/ShopNode'
 import TorrentNode from '../nodes/TorrentNode'
+import WindowsDiagnosticsNode from '../nodes/WindowsDiagnosticsNode'
 import { normalizeAddress } from '../nodes/browserUrl'
 import VideoNode from '../nodes/VideoNode'
 import PhotoNode from '../nodes/PhotoNode'
@@ -721,6 +722,7 @@ import {
   nodeSshFor,
   createServiceNode,
   createVirtualMachineNode,
+  createWindowsDiagnosticsNode,
   SERVICE_NODE_LABELS,
   createVideoNode,
   createPhotoNode,
@@ -2079,7 +2081,8 @@ export function Canvas() {
       gitlab: withNodeBoundary(ServiceNode),
       homeassistant: withNodeBoundary(ServiceNode),
       freepbx: withNodeBoundary(ServiceNode),
-      'linux-vm': withNodeBoundary(VirtualMachineNode)
+      'linux-vm': withNodeBoundary(VirtualMachineNode),
+      'windows-diagnostics': withNodeBoundary(WindowsDiagnosticsNode)
     }),
     []
   )
@@ -5400,6 +5403,7 @@ export function Canvas() {
             if (catalogEntry.id === 'wild-dim-sum') return createWildDimSumNode(index, undefined, center)
             if (catalogEntry.id === 'homeassistant-control') return createHomeAssistantControlNode(index, center)
             if (catalogEntry.id === 'homeassistant-sensor') return createHomeAssistantSensorNode(index, center)
+            if (catalogEntry.id === 'windows-diagnostics') return createWindowsDiagnosticsNode(index, center)
             if (catalogEntry.id.startsWith('service:')) {
               return createServiceNode(catalogEntry.nodeKind as ServiceNodeKind, index, center)
             }

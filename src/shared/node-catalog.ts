@@ -430,6 +430,18 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
     availability: alwaysAvailable
   },
   {
+    id: 'windows-diagnostics',
+    nodeKind: 'windows-diagnostics',
+    category: 'managers',
+    label: 'Windows diagnostics',
+    description: 'Inspect drives, services, startup, scheduled tasks, updates, network state, and event summaries without changing the host.',
+    keywords: ['windows', 'diagnostics', 'drives', 'storage', 'services', 'startup', 'scheduled tasks', 'updates', 'network', 'events', 'read only'],
+    documentationPath: 'docs/features/windows/windows-diagnostics.md',
+    safeDefaults: {},
+    dependencies: ['powershell-read-only'],
+    availability: alwaysAvailable
+  },
+  {
     id: 'editor',
     nodeKind: 'editor',
     category: 'files',
@@ -567,6 +579,7 @@ export const NODE_CATALOG_COMPLETENESS: readonly NodeCatalogCompletenessRecord[]
   { id: 'service:gitlab', state: 'current', scope: 'any', reason: 'service manager node' },
   { id: 'service:homeassistant', state: 'current', scope: 'any', reason: 'service manager node' },
   { id: 'service:freepbx', state: 'current', scope: 'any', reason: 'service manager node' },
+  { id: 'windows-diagnostics', state: 'current', scope: 'any', reason: 'read-only host diagnostics with fixed queries' },
   { id: 'subagent', state: 'ephemeral', scope: 'none', reason: 'hook-derived render-only card' },
   { id: 'loop-card', state: 'ephemeral', scope: 'none', reason: 'schedule-derived render-only card' },
   { id: 'photo', state: 'planned', scope: 'any', reason: 'photo adapter not implemented' },

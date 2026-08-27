@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add a read-only Windows diagnostics canvas node with fixed PowerShell queries for drives and
+  storage, services, startup entries, scheduled tasks, updates, network state, and bounded event
+  summaries. Each section has guided tabs and a local filter with an adjacent anchored full regex
+  builder, while unavailable and malformed host responses remain explicit. No tests, type checks,
+  lint, reviews, security or accessibility checks, builds, packaging, installer execution, runtime
+  interaction, or UI captures were run in this ultra-speed lane.
+
 - Complete the Express File Converter flow with queue-wide collision-safe destination names,
   visible rename disclosure, final atomic no-clobber publication, and a completed-output action that
   opens the exact result in Visual Studio Code through the active project API. The converter queue

@@ -122,6 +122,10 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     // elsewhere. VM paths and process state are machine-local; until a scoped relay route exists,
     // keep the operation visibly unavailable rather than silently using this desktop's QEMU.
     virtualMachine: stub.virtualMachine,
+    // Host diagnostics describe the machine running the core service. A relay viewer must not
+    // silently replace that with this desktop's local snapshot; until a scoped host route exists,
+    // keep the capability explicitly unavailable.
+    windowsDiagnostics: stub.windowsDiagnostics,
     ...buildAgentApi(client), // onAgentStatus / onSubagentActivity — the host's agent hooks
     ...buildCanvasApi(client), // canvas sync against the host's reflector
     ...buildPresenceApi(client), // the host's presence hub

@@ -751,6 +751,9 @@ export function buildStubApi(): Omit<
       reset: U('virtualMachine.reset'),
       onEvent: noopUnsub,
     },
+    windowsDiagnostics: {
+      snapshot: U('windowsDiagnostics.snapshot')
+    },
     calendar: {
       status: U('calendar.status'),
       accounts: U('calendar.accounts'),

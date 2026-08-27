@@ -96,6 +96,7 @@ const NATIVE_LOOP_SIZE = { width: 340, height: 280 }
 const SHOP_SIZE = { width: 480, height: 420 }
 export const TORRENT_SIZE = { width: 620, height: 520 }
 const LINUX_VM_SIZE = { width: 760, height: 560 }
+const WINDOWS_DIAGNOSTICS_SIZE = { width: 760, height: 560 }
 const TIMER_SIZE = { width: 380, height: 360 }
 const ALARM_SIZE = { width: 380, height: 360 }
 /** Fallback bounding box `flowToNodeStates` uses if an annotation node somehow has no live
@@ -1613,6 +1614,23 @@ export function createVirtualMachineNode(index: number, center?: { x: number; y:
   }
 }
 
+/** Creates a read-only host diagnostics node. Host state is queried live and never persisted. */
+export function createWindowsDiagnosticsNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  return {
+    id: nextId('windows-diagnostics'),
+    type: 'windows-diagnostics',
+    position: placeAt(center, index, WINDOWS_DIAGNOSTICS_SIZE.width, WINDOWS_DIAGNOSTICS_SIZE.height),
+    width: WINDOWS_DIAGNOSTICS_SIZE.width,
+    height: WINDOWS_DIAGNOSTICS_SIZE.height,
+    style: { width: WINDOWS_DIAGNOSTICS_SIZE.width, height: WINDOWS_DIAGNOSTICS_SIZE.height },
+    data: {
+      title: 'Windows diagnostics',
+      color: NODE_COLORS[0],
+      group: null
+    }
+  }
+}
+
 /**
  * Creates an NSIS installer-builder node — a GUI for authoring a Windows NSIS installer script for
  * ANOTHER project. Not this app's own installer, which stays Squirrel.Windows (see CLAUDE.md's
@@ -2214,7 +2232,8 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   nsis: true,
   shop: true,
   torrent: true,
-  'linux-vm': true
+  'linux-vm': true,
+  'windows-diagnostics': true
 }
 
 /**
@@ -2265,7 +2284,8 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   nsis: NSIS_SIZE,
   shop: SHOP_SIZE,
   torrent: TORRENT_SIZE,
-  'linux-vm': LINUX_VM_SIZE
+  'linux-vm': LINUX_VM_SIZE,
+  'windows-diagnostics': WINDOWS_DIAGNOSTICS_SIZE
 }
 
 /** A `Set`, not `type in NODE_KIND_TABLE`: `in` walks the prototype, so `'constructor'` and

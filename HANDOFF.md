@@ -1,5 +1,28 @@
 # Handoff
 
+## 2026-08-27, read-only Windows diagnostics, issue #66
+
+The implementation lane is `feat/program-55-windows-diagnostics` in the linked checkout
+`C:\Users\cntow\Documents\GitHub\material-nodeterm-worktrees\issue-66`. It adds the
+`windows-diagnostics` node kind, the typed `windowsDiagnostics` bridge, and a core snapshot service
+that invokes only one fixed, read-only PowerShell script. The script reports drives/storage,
+services, startup entries, scheduled tasks, updates, network state, and bounded System/Application
+event summaries. It has a fifteen-second query deadline, a four MiB response bound, and a 1,000-row
+per-section bound. Non-Windows hosts, missing providers, command failures, and malformed responses
+remain explicit unavailable/error states instead of empty success.
+
+The canvas node exposes a tab for each section, a local plain-text-first filter, and the adjacent
+anchored full regex builder. It contains only refresh and rename interactions; no host mutation
+control is present. Snapshot output and host-specific facts remain runtime-local and are not added
+to portable project data. Direct documentation is in
+`docs/features/windows/windows-diagnostics.md`, with the category index at
+`docs/features/windows/README.md`; the offline bundle has a corresponding article entry in
+`src/shared/docs-data.ts`.
+
+Verification boundary: this ultra-speed lane intentionally ran no tests, lint, type checks, builds,
+packaging, installer execution, reviews, security or accessibility checks, runtime interaction, or
+captures. The parent integration lane must keep those verdicts unverified.
+
 ## 2026-08-27, Express File Converter completion, issue #21
 
 The implementation lane is `feat/program-10-file-converter`, refreshed by fast-forward before edits

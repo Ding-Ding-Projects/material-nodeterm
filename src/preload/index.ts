@@ -33,6 +33,7 @@ import type { DockerHostAction, DockerHostJobProgress } from '../shared/docker-h
 import type { MinecraftEvent } from '../shared/minecraft'
 import type { NodeDependencyAvailability, NodeDependencyProgress, NodeDependencyInstallResult } from '../shared/node-dependencies'
 import type { WslCreateProgress } from '../shared/wsl'
+import type { WindowsDiagnosticsApi } from '../shared/windows-diagnostics'
 import type { TorrentTaskState } from '../shared/torrent'
 import type { VirtualMachineEvent } from '../shared/virtual-machine'
 import type { CalendarProvider } from '../shared/calendar'
@@ -692,6 +693,9 @@ const api: NodeTerminalApi = {
     wake: (name: string) => ipcRenderer.invoke(IPC.wslWake, name),
     delete: (name: string) => ipcRenderer.invoke(IPC.wslDelete, name)
   },
+  windowsDiagnostics: {
+    snapshot: () => ipcRenderer.invoke(IPC.windowsDiagnosticsSnapshot)
+  } satisfies WindowsDiagnosticsApi,
   vscode: {
     detect: () => ipcRenderer.invoke(IPC.vscodeDetect),
     open: (path: string) => ipcRenderer.invoke(IPC.vscodeOpen, path)
