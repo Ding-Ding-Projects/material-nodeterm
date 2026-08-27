@@ -178,6 +178,12 @@
   idempotent conversion. The issue #86 and upstream PR #422 migration lane was reconciled with
   `origin/main` at `54164b84dce0b7e62787b1de2885405ff4ed821c`. This source lane did not run tests,
   lint, type checks, builds, packaging, runtime interaction, reviews, audits, or captures.
+- Add the cross-project link transport and storage slice for issue #86 and upstream PR #422. The
+  Canvas-owned commit funnel keeps live link state and persisted `Project.links` together, while
+  background-project context transport accepts only local node-to-node context links. Branch,
+  dependency, lineage, and foreign-node behaviors remain in their dedicated lanes. This source lane
+  intentionally did not run tests, lint, type checks, builds, packaging, runtime interaction,
+  reviews, audits, or captures.
 
 - Mount the seven AWS core-service routes on the shared AWS manager: S3, EC2, IAM, STS, Lambda,
   CloudWatch, and CloudWatch Logs. Typed operation controls now cover bounded reads, selected writes,
