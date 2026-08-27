@@ -405,6 +405,9 @@ intentionally unchecked because this task publishes the plan only.
       DNS record adoption. Issue #59 source implementation is present in the isolated lane, with
       tests, builds, packaging, runtime interaction, and captures intentionally unrun under the
       ultra-speed boundary.
+  - [ ] Add per-user process, Windows service, and pinned Docker connector runtimes for `cloudflared`.
+        Source contracts and local credential handling are present in issue #61; tests, builds,
+        packaging, runtime interaction, and capture evidence remain pending.
 
 ### Clean-room features and upstream parity
 

@@ -13,9 +13,8 @@ Two different ways nodeterm reaches a machine that isn't the one in front of you
 - [Cloudflare Tunnel wizard](./cloudflare-tunnel-wizard.md) - one-click review-first route with
   populated account, zone, hostname, host, container, network, port, and origin choices, local
   credential binding, portable intent, cancellation, and recovery.
-- [Cloudflare Tunnel wizard](./cloudflare-tunnel-wizard.md) - one-click review-first route with
-  populated account, zone, hostname, host, container, network, port, and origin choices, local
-  credential binding, portable intent, cancellation, and recovery.
+- [cloudflared connector runtimes](./cloudflared-runtimes.md) - guided per-user process, Windows
+  service, and pinned Docker connector lifecycles with local token storage and portable intent.
 
 See also [Agents](../agents/README.md) for how agent hooks and permission modes work across an
 SSH connection, and [Packaging](../packaging/README.md) for how the headless notification host

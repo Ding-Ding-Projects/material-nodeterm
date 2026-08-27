@@ -133,6 +133,29 @@ generation before packaging.
 No tests, type checks, lint, reviews, security or accessibility checks, builds, packaging, installer
 execution, runtime interaction, or UI captures were run. The source is therefore unverified at
 runtime and the parent integration lane must run its own checks against the merged commit.
+## 2026-08-27, cloudflared connector runtimes, issue #61
+
+The implementation lane is `feat/program-50-cloudflared-runtimes` in the isolated issue-61
+checkout, reconciled with `origin/main` at `54164b84dce0b7e62787b1de2885405ff4ed821c`. The
+Program 50 commit `051f409d4102f1287759a1686d54fd6cbed36641` defines the typed per-user process,
+Windows service, and Docker connector contracts, fixed argument builders, guided picker inventory,
+disabled reasons, bounded progress and health shapes, local ownership fields, and schema 3 portable
+blueprint. The main-process manager owns discovery, protected credential storage, token-file
+materialization, process/service/container lifecycle, cancellation, restart, health reads, and local
+runtime records. The current HuiFlare Zero Trust and tunnel stack from `origin/main` is preserved.
+
+Direct records remain current in `docs/features/remote/cloudflared-runtimes.md`,
+`site/docs/cloudflared-runtimes.html`, `docs/features/remote/README.md`, `site/docs/index.html`,
+`docs/uh-feature-inventory.md`, `ROADMAP.md`, `CHANGELOG.md`, and this handoff. The offline docs
+bundle entry is updated to the normalized article. Its documented generator could not run because
+this checkout has no installed `esbuild` dependency; the integration lane must regenerate and verify
+the bundle.
+
+No tests, type checks, lint, reviews, security or accessibility checks, builds, packaging, installer
+execution, runtime interaction, or UI captures were run in this ultra-speed implementation lane.
+The owning integration lane must verify the exact merged commit and may not infer those verdicts
+from source inspection.
+
 ## 2026-08-27, AWS core-service managers, issue #46 PR preparation
 
 The issue jer was reconciled with the exact `origin/main` tip `2472cf23b99559005476841d3db5e6bc4691ac06`.

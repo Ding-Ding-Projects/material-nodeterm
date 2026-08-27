@@ -51,6 +51,15 @@
   separate from schema 3 portable intent. This ultra-speed lane intentionally did not run tests,
   type checks, lint, reviews, security or accessibility checks, builds, packaging, installer
   execution, runtime interaction, or UI captures.
+- Add guided `cloudflared` connector runtimes for a per-user process, an owned Windows service,
+  and a pinned Docker connector. The main process validates discovered executables, contexts,
+  networks, tunnel references, and generated ownership names; invokes fixed argument arrays with
+  bounded progress and health; stores tunnel credentials locally; materializes only short-lived
+  token files; and keeps portable schema 3 intent free of paths, credentials, process state, and
+  host identifiers. Tests, type checks, lint, reviews, security or accessibility checks, builds,
+  packaging, installer execution, runtime interaction, and captures were intentionally not run in
+  this ultra-speed implementation lane.
+
 - Mount the seven AWS core-service routes on the shared AWS manager: S3, EC2, IAM, STS, Lambda,
   CloudWatch, and CloudWatch Logs. Typed operation controls now cover bounded reads, selected writes,
   destructive confirmation, pagination, cancellation, and progress while reusing the current local
