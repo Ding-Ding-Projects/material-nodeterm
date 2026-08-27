@@ -321,6 +321,18 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
     availability: alwaysAvailable
   },
   {
+    id: 'recovery-game',
+    nodeKind: 'recovery-game',
+    category: 'tools',
+    label: 'Recovery game',
+    description: 'Energize three keys, avoid hazards, and activate the central core.',
+    keywords: ['game', 'recovery', 'energy keys', 'hazards', 'activation core'],
+    documentationPath: 'docs/features/canvas/recovery-game.md',
+    safeDefaults: { recoveryGame: { player: { x: 1, y: 5 }, energizedKeys: [], coreActivated: false, hazardHits: 0 } },
+    dependencies: [],
+    availability: alwaysAvailable
+  },
+  {
     id: 'loop',
     nodeKind: 'scheduler',
     category: 'automation',
@@ -496,6 +508,7 @@ export const NODE_CATALOG_COMPLETENESS: readonly NodeCatalogCompletenessRecord[]
   { id: 'diff', state: 'current', scope: 'any', reason: 'project file picker required' },
   { id: 'authenticator', state: 'current', scope: 'any', reason: 'local authenticator node' },
   { id: 'dino', state: 'current', scope: 'any', reason: 'local dino node' },
+  { id: 'recovery-game', state: 'current', scope: 'any', reason: 'portable local recovery game' },
   { id: 'loop', state: 'current', scope: 'any', reason: 'persisted scheduler node' },
   { id: 'nsis', state: 'current', scope: 'any', reason: 'persisted installer-builder node' },
   { id: 'service:minecraft', state: 'current', scope: 'any', reason: 'service manager node' },

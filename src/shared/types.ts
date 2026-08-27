@@ -372,6 +372,7 @@ export type NodeKind =
   | 'loop'
   | 'scheduler'
   | 'dino'
+  | 'recovery-game'
   | 'annotation'
   // A permanent catalog surface owned by each Multiverse or AWS Universe child canvas. Shop is
   // intentionally a distinct kind so the canvas can refuse deletion, duplication, grouping, and
@@ -621,6 +622,8 @@ export interface CanvasNodeState {
   textUpdatedBy?: string
   // dino-only: best score reached in the T-Rex Runner game.
   highScore?: number
+  /** recovery-game-only: bounded portable progress with no process, account, or host state. */
+  recoveryGame?: import('./recovery-game').RecoveryGameSnapshot
   /**
    * service-kinds only: the display name the user gave this manager ("Home lab Proxmox", "Survival
    * server"). This is the ONLY thing a service node persists, and the restraint is deliberate — the

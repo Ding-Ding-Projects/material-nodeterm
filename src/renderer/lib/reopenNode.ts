@@ -16,6 +16,7 @@ import {
   createDiffNode,
   createStickyNode,
   createDinoNode,
+  createRecoveryGameNode,
   createVirtualMachineNode,
   createTorrentNode,
   createCalendarNode,
@@ -192,6 +193,8 @@ function buildBase(snapshot: ReopenNodeSnapshot, ctx: RecreateContext): CanvasNo
       return createBrowserNode(0, d.url ?? '', undefined, undefined, d.browserProfileId)
     case 'dino':
       return createDinoNode(0, undefined, d.highScore ?? 0)
+    case 'recovery-game':
+      return createRecoveryGameNode(0, undefined, d.recoveryGame)
     case 'linux-vm': {
       const node = createVirtualMachineNode(0)
       return {
