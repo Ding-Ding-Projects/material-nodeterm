@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Expand English and Cantonese funny-level controls from 1–5 to 1–10 for issue #113. New
+  installations default both values to level 10, while settings schema version 2 preserves valid
+  established choices and safely normalizes malformed hand-edited values. Scheduled settings,
+  site-local storage, exports, provenance copy, and the Easter-egg and feature copy resolvers now
+  accept the complete range. This source lane intentionally did not run tests, type checks, lint,
+  builds, packaging, runtime interaction, reviews, audits, or UI captures.
+
 - Add the guided Nextcloud AIO hosting profile for issue #52. It uses a pinned official image,
   explicitly discloses read-only Docker socket authority, refuses privileged mode and arbitrary
   shell input, and provides local binding, health, update, backup, restore, rollback, cancellation,

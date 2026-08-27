@@ -8,25 +8,33 @@
  *  compact secondary). Persisted in Settings.languageMode. */
 export type LanguageMode = 'en' | 'yue' | 'bilingual'
 
-/** 1 = fully professional, 5 = maximum playfulness. Two independent sliders — one per language —
- *  because a user may want plain English with playful Cantonese, or the reverse. */
-export type FunnyLevel = 1 | 2 | 3 | 4 | 5
+/** The inclusive funny-level range. Level 1 is fully professional; level 10 is maximum
+ * playfulness. The English and Cantonese controls remain independent. */
+export const FUNNY_LEVEL_MIN = 1 as const
+export const FUNNY_LEVEL_MAX = 10 as const
+export const DEFAULT_FUNNY_LEVEL = 10 as const
+export type FunnyLevel = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
 
 export interface FunnyLevels {
   en: FunnyLevel
   yue: FunnyLevel
 }
 
-/** Exactly five variants, indexed [level 1 .. level 5]. A level may repeat a neighbour's text
- *  verbatim when a distinct joke would add nothing (a plain noun like "Terminal" needs no fifth
- *  variant) — but the array must always carry all five so a slider move never resolves to
- *  nothing. An empty string at a Cantonese index means "no distinct Cantonese text" and falls
- *  back to the English variant at the same level (see resolve.ts) rather than rendering blank. */
+/** Legacy five-variant rows remain accepted while the catalogue migrates. The resolver expands
+ * those rows through five additional, voice-only levels, so old persisted/catalogue data never
+ * indexes past its end. New rows should use FunnyVariants. */
 export type FiveVariants = readonly [string, string, string, string, string]
 
+/** Ten variants, indexed [level 1 .. level 10]. An empty Cantonese slot means "use the English
+ * variant at the same level" rather than rendering blank. */
+export type FunnyVariants = readonly [
+  string, string, string, string, string,
+  string, string, string, string, string
+]
+
 export interface CatalogEntry {
-  en: FiveVariants
-  yue: FiveVariants
+  en: FunnyVariants | FiveVariants
+  yue: FunnyVariants | FiveVariants
 }
 
 export type Catalog = Record<string, CatalogEntry>

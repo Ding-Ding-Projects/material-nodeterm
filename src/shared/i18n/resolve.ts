@@ -1,6 +1,35 @@
 import { CATALOG } from './catalog'
 import type { Catalog, FunnyLevels, LanguageMode, LocalizedText } from './types'
-import { normalizeLanguageMode } from './validation'
+import { normalizeFunnyLevel, normalizeLanguageMode } from './validation'
+
+const EXTRA_EN = [
+  ' A little extra sparkle, with the facts still firmly in charge.',
+  ' The copy has found a tasteful confetti button, and nothing factual moved.',
+  ' More whimsy has entered the room; the action and its consequences stay exact.',
+  ' Maximum playful voice engaged, while every useful detail remains on duty.',
+  ' Full comedy overdrive: same facts, same choices, spectacularly sillier delivery.'
+] as const
+const EXTRA_YUE = [
+  ' 加少少生氣，事實照樣企得穩陣。',
+  ' 文字掂咗下靚靚紙碎，重要資料一粒都冇郁。',
+  ' 多啲玩味入場，動作同後果仍然原原本本。',
+  ' 玩味開到盡，所有有用細節繼續當值。',
+  ' 全速搞笑模式：事實一樣，選擇一樣，語氣就放飛喇。'
+] as const
+
+function variantAt(
+  variants: readonly string[],
+  level: FunnyLevels['en'],
+  extra: readonly string[],
+  fallback: string
+): string {
+  const safeLevel = normalizeFunnyLevel(level, 1)
+  const base = variants[Math.min(safeLevel, 5) - 1] || variants[0] || fallback
+  // Ten-slot rows own their copy directly. Five-slot legacy rows receive a deliberate extra
+  // voice layer for levels 6–10 instead of silently repeating level 5.
+  if (variants.length >= 10 || safeLevel <= 5) return base
+  return `${base}${extra[safeLevel - 6]}`
+}
 
 /**
  * Pure resolver: given a catalogue id, the caller's own English default, the active language
@@ -24,8 +53,8 @@ export function t(
   const entry = catalog[id]
   if (!entry) return { primary: fallback, secondary: null }
 
-  const en = entry.en[levels.en - 1] || entry.en[0] || fallback
-  const yueRaw = entry.yue[levels.yue - 1]
+  const en = variantAt(entry.en, levels.en, EXTRA_EN, fallback)
+  const yueRaw = variantAt(entry.yue, levels.yue, EXTRA_YUE, en)
   const yue = yueRaw && yueRaw.length > 0 ? yueRaw : en
 
   switch (normalizeLanguageMode(mode)) {

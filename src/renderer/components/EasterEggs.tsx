@@ -4,6 +4,7 @@ import { useI18n } from '../lib/i18n'
 import { useSchoolMode } from '../state/schoolMode'
 import { schoolModeAllowsOptionalFeatures } from '../lib/schoolModePolicy'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { normalizeFunnyLevel } from '@shared/i18n'
 
 const STORAGE_KEY = 'nodeterm.easter-eggs.v1'
 const ARM_MS = 3000
@@ -55,10 +56,9 @@ function saveDiscoveries(ids: Set<string>): void {
 }
 
 function levelFor(value: number): number {
-  // The product's language sliders currently expose five values. Map those values onto the
-  // catalog's ten explicit voice levels so every catalog row remains defined from 1 through 10.
-  const slider = Math.max(1, Math.min(5, Math.round(value)))
-  return slider === 5 ? 10 : slider * 2 - 1
+  // Easter-egg copy has ten explicit voice levels too. Preserve the selected level rather than
+  // collapsing 6–10 back onto the old five-level scale.
+  return normalizeFunnyLevel(value, 1)
 }
 
 function surfaceLabel(surface: EasterEggEntry['surface'], yue: boolean): string {

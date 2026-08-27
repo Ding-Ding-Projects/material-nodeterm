@@ -9,6 +9,7 @@ import { SegmentedPill } from '@renderer/ui/SegmentedPill'
 import { Input } from '@renderer/ui/Input'
 import { hintLabel } from '@shared/platform-utils'
 import { DEFAULT_WORKTREE_PATH_TEMPLATE } from '@shared/worktree'
+import { useI18n } from '@renderer/lib/i18n'
 
 const ROWS = {
   defaultView: {
@@ -66,6 +67,7 @@ const ENTRIES = Object.values(ROWS)
 export function BehaviorSection({ isActive }: { isActive: boolean }): React.JSX.Element {
   const settings = useSettings((s) => s.settings)
   const update = useSettings((s) => s.update)
+  const { t } = useI18n()
   return (
     <SettingsSection id="behavior" title="Behavior" isActive={isActive} searchEntries={ENTRIES}>
       <SearchableRow {...ROWS.defaultView}>
@@ -222,13 +224,13 @@ export function BehaviorSection({ isActive }: { isActive: boolean }): React.JSX.
       </SearchableRow>
       <SearchableRow {...ROWS.wheelZoom}>
         <FieldRow
-          label="Scroll wheel zooms"
-          description={hintLabel('Zoom with a plain mouse wheel (no ⌘). Two-finger trackpad scroll still pans.')}
+          label={t('settings.behavior.wheelZoom.label', 'Scroll wheel zooms').primary}
+          description={t('settings.behavior.wheelZoom.description', 'Zoom with a plain mouse wheel (no Command). Two-finger trackpad scroll still pans.').primary}
           control={
             <Switch
               checked={settings.wheelZoom}
               onChange={(v) => update({ wheelZoom: v })}
-              ariaLabel="Scroll wheel zooms"
+              ariaLabel={t('settings.behavior.wheelZoom.label', 'Scroll wheel zooms').primary}
             />
           }
         />
