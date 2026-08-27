@@ -17,6 +17,7 @@ import { createSubagentTail, type SubagentTail } from '../core/subagent-tail'
 import { createContextTail, type ContextTail, type TaskNotification } from '../core/context-tail'
 import { geminiContextParse } from '../core/gemini-session'
 import { codexContextParse } from '../core/codex-session'
+import { locateClaude, locateCodex, locateGemini } from '../core/handoff/locate'
 import { createCodexSubagentFormatter } from '../core/codex-subagent-format'
 import { codexHome } from '../core/usage/codex-usage'
 import { setNodeTranscript } from '../core/context-link'
@@ -145,6 +146,32 @@ export function wireAgentStatus(
   // and the declined-ask rescue is claude-only too).
   const geminiContextTail = createContextTail(pushContextUpdate, { parse: geminiContextParse })
   const codexContextTail = createContextTail(pushContextUpdate, { parse: codexContextParse })
+
+  // Mount-time rehydration for idle or resumed browser sessions. Keep locator work deduplicated
+  // because the canvas and board can both mount the same node at once, and route by provider so a
+  // Codex/Gemini id never falls through to Claude's cwd fallback.
+  const contextEnsureInFlight = new Map<string, Promise<void>>()
+  platform.on(
+    IPC.contextEnsure,
+    (sessionId?: string, cwd?: string, accountId?: string, agentId?: string) => {
+      if (!sessionId) return
+      const provider = agentId === 'codex' || agentId === 'gemini' ? agentId : 'claude'
+      const key = `${provider}:${sessionId}:${accountId ?? ''}:${cwd ?? ''}`
+      const active = contextEnsureInFlight.get(key)
+      if (active) return
+      const work = (async (): Promise<void> => {
+        let transcriptPath: string | undefined
+        if (provider === 'codex') transcriptPath = await locateCodex(sessionId)
+        else if (provider === 'gemini') transcriptPath = await locateGemini(sessionId)
+        else transcriptPath = contextTail.pathFor(sessionId) ?? (await locateClaude(sessionId, accountId))
+        if (!transcriptPath) return
+        if (provider === 'codex') codexContextTail.track(sessionId, transcriptPath)
+        else if (provider === 'gemini') geminiContextTail.track(sessionId, transcriptPath)
+        else contextTail.track(sessionId, transcriptPath)
+      })().finally(() => contextEnsureInFlight.delete(key))
+      contextEnsureInFlight.set(key, work)
+    }
+  )
 
   hooks.setListener((e) => {
     // Record FIRST: recordAgentEvent computes the stash-priority classification and returns the

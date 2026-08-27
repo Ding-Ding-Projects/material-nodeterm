@@ -10,7 +10,7 @@
 export type NodeDependencyPlatform = 'win32' | 'darwin' | 'linux'
 export type NodeDependencyArchitecture = 'x64' | 'arm64'
 
-export type NodeDependencyArchiveFormat = 'zip' | 'tar.gz' | 'tar.xz' | 'binary'
+export type NodeDependencyArchiveFormat = 'zip' | 'tar.gz' | 'tar.xz' | 'msi' | 'binary'
 export type NodeDependencyInstallMode = 'bundled' | 'portable' | 'user-scoped'
 
 export type NodeDependencyState =
@@ -33,6 +33,8 @@ export interface NodeDependencyHealthProbe {
   args?: readonly string[]
   /** Exact expected output, when the probe is an executable-version probe. */
   expectedVersion?: string
+  /** Expected leading version token when the executable appends build/runtime details. */
+  expectedVersionPrefix?: string
 }
 
 export interface NodeDependencyRepairStrategy {
@@ -81,6 +83,25 @@ export interface NodeDependencyInstallRecord {
   updatedAt: number
   error: string | null
   resume: NodeDependencyResumeMetadata | null
+  /** Which verified immutable archive supplied the published payload. */
+  archiveSource?: 'bundled' | 'verified-cache' | 'verified-download' | null
+}
+
+export interface NodeDependencyModelInventoryEntry {
+  service: string
+  versions: readonly string[]
+  modelFileCount: number
+}
+
+export interface NodeDependencyDetails {
+  dependency: NodeDependencyAvailability
+  version: string | null
+  versionOutput: string | null
+  archiveSource: NodeDependencyInstallRecord['archiveSource']
+  models: readonly NodeDependencyModelInventoryEntry[]
+  modelCount: number
+  inventoryComplete: boolean
+  inventoryError: string | null
 }
 
 export interface NodeDependencyResumeMetadata {
@@ -121,6 +142,7 @@ export interface NodeDependencyInstallResult {
 export interface NodeDependenciesApi {
   catalog(): Promise<NodeDependencyAvailability[]>
   status(id: string): Promise<NodeDependencyAvailability>
+  details(id: string): Promise<NodeDependencyDetails>
   install(id: string): Promise<NodeDependencyInstallResult>
   cancel(operationId: string): Promise<boolean>
   repair(id: string): Promise<NodeDependencyInstallResult>
@@ -131,6 +153,8 @@ export interface NodeDependenciesApi {
 
 const NODE_SOURCE_X64 = 'https://nodejs.org/dist/v24.19.0/node-v24.19.0-win-x64.zip'
 const NODE_SOURCE_ARM64 = 'https://nodejs.org/dist/v24.19.0/node-v24.19.0-win-arm64.zip'
+const AWS_CLI_VERSION = '2.36.32'
+const AWS_CLI_SOURCE_X64 = `https://awscli.amazonaws.com/AWSCLIV2-User-${AWS_CLI_VERSION}.msi`
 
 /**
  * The first shared node-feature dependency. New catalog entries add rows here, never free-form
@@ -138,6 +162,34 @@ const NODE_SOURCE_ARM64 = 'https://nodejs.org/dist/v24.19.0/node-v24.19.0-win-ar
  * can audit the dependency contract without reading a machine-local file.
  */
 export const NODE_DEPENDENCY_MANIFEST: readonly NodeDependencyManifestEntry[] = [
+  {
+    id: 'aws-cli-v2',
+    version: AWS_CLI_VERSION,
+    platform: 'win32',
+    architecture: 'x64',
+    source: AWS_CLI_SOURCE_X64,
+    sha256: 'bc695531b7fd83490e02741777dfda109cfab7fd9bef85fa1d5db21684cbaee2',
+    bundledSource: `node-dependencies/aws-cli-v2/AWSCLIV2-User-${AWS_CLI_VERSION}.msi`,
+    archiveFormat: 'msi',
+    expectedFiles: ['aws.exe', 'awscli/data/ac.index'],
+    unpackedSizeBytes: 260_000_000,
+    license: {
+      spdx: 'Apache-2.0',
+      redistributable: true,
+      notice: 'AWS CLI v2 includes third-party components; retain the license and notice files shipped by AWS.'
+    },
+    installMode: 'bundled',
+    healthProbe: {
+      kind: 'executable-version',
+      relativePath: 'aws.exe',
+      args: ['--version'],
+      expectedVersionPrefix: `aws-cli/${AWS_CLI_VERSION}`
+    },
+    repairStrategy: {
+      kind: 'reinstall-from-cache-or-source',
+      description: 'Reverify the bundled or cached AWS MSI, then republish a fresh app-local payload.'
+    }
+  },
   {
     id: 'node-runtime',
     version: '24.19.0',

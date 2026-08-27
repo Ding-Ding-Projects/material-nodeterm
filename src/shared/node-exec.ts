@@ -72,6 +72,10 @@ export interface LocalNodeExec {
   nsisLocalPaths?: NsisLocalPaths
   /** Linux ISO/disk selections, kept out of git-shared project files. */
   virtualMachineLocalPaths?: VirtualMachineLocalPaths
+  /** Photo/video source file on this machine. Never written to a shared project file. */
+  mediaFilePath?: string
+  /** Gallery asset id to this machine's source file. Never written to a shared project file. */
+  mediaSourcePaths?: Record<string, string>
 }
 
 /**
@@ -170,6 +174,61 @@ function safePathString(value: unknown): value is string {
     if (code < 0x20 || code === 0x7f) return false
   }
   return true
+}
+
+const SAFE_MEDIA_ASSET_ID = /^[0-9a-f]{64}$/
+const MAX_MEDIA_SOURCE_PATHS = 10_000
+
+function safeMediaSourcePaths(value: unknown): Record<string, string> | undefined {
+  if (!isRecord(value)) return undefined
+  const out: Record<string, string> = {}
+  for (const [assetId, sourcePath] of Object.entries(value).slice(0, MAX_MEDIA_SOURCE_PATHS)) {
+    if (SAFE_MEDIA_ASSET_ID.test(assetId) && safePathString(sourcePath)) out[assetId] = sourcePath
+  }
+  return Object.keys(out).length > 0 ? out : undefined
+}
+
+function localMediaSourcePaths(node: CanvasNodeState): Record<string, string> | undefined {
+  if (!Array.isArray(node.mediaAssets)) return undefined
+  const out: Record<string, string> = {}
+  for (const asset of node.mediaAssets.slice(0, MAX_MEDIA_SOURCE_PATHS)) {
+    if (SAFE_MEDIA_ASSET_ID.test(asset.assetId) && safePathString(asset.sourcePath)) {
+      out[asset.assetId] = asset.sourcePath
+    }
+  }
+  return Object.keys(out).length > 0 ? out : undefined
+}
+
+function stripMediaPaths(node: CanvasNodeState): CanvasNodeState {
+  const isMediaNode = node.kind === 'photo' || node.kind === 'video' || node.kind === 'gallery'
+  const hasSourcePath = node.mediaAssets?.some((asset) => asset.sourcePath !== undefined) === true
+  const hasFilePath = (node.kind === 'photo' || node.kind === 'video') && node.filePath !== undefined
+  if (!isMediaNode || (!hasSourcePath && !hasFilePath)) return node
+  const out: CanvasNodeState = { ...node }
+  if (hasFilePath) delete out.filePath
+  if (hasSourcePath) {
+    out.mediaAssets = node.mediaAssets?.map(({ sourcePath: _sourcePath, ...asset }) => asset)
+  }
+  return out
+}
+
+function restoreMediaPaths(
+  node: CanvasNodeState,
+  local: Pick<LocalNodeExec, 'mediaFilePath' | 'mediaSourcePaths'> | undefined
+): CanvasNodeState {
+  if (node.kind !== 'photo' && node.kind !== 'video' && node.kind !== 'gallery') return node
+  const mediaFilePath = safePathString(local?.mediaFilePath) ? local.mediaFilePath : undefined
+  const mediaSourcePaths = safeMediaSourcePaths(local?.mediaSourcePaths)
+  if (!mediaFilePath && !mediaSourcePaths) return node
+  const out: CanvasNodeState = { ...node }
+  if ((node.kind === 'photo' || node.kind === 'video') && mediaFilePath) out.filePath = mediaFilePath
+  if (mediaSourcePaths && node.mediaAssets) {
+    out.mediaAssets = node.mediaAssets.map((asset) => {
+      const sourcePath = mediaSourcePaths[asset.assetId]
+      return sourcePath ? { ...asset, sourcePath } : asset
+    })
+  }
+  return out
 }
 
 /** Keeps only an `nsisLocalPaths` record we are prepared to write down. Tolerant, like
@@ -316,19 +375,20 @@ export function safeSessionProgram(shell: string | undefined): string | undefine
  * host carries no command or local profile selection of any kind.
  */
 function stripNodeExec(n: CanvasNodeState): CanvasNodeState {
+  const withoutMediaPaths = stripMediaPaths(n)
   if (
-    n.shell === undefined &&
-    n.terminalProfileId === undefined &&
-    n.pendingLaunch === undefined &&
-    n.serviceConnection === undefined &&
-    n.awsIdentityBinding === undefined &&
-    n.nsisLocalPaths === undefined &&
-    n.virtualMachineLocalPaths === undefined &&
-    n.ssh?.extraArgs === undefined &&
-    n.ssh?.execTrusted === undefined
+    withoutMediaPaths.shell === undefined &&
+    withoutMediaPaths.terminalProfileId === undefined &&
+    withoutMediaPaths.pendingLaunch === undefined &&
+    withoutMediaPaths.serviceConnection === undefined &&
+    withoutMediaPaths.awsIdentityBinding === undefined &&
+    withoutMediaPaths.nsisLocalPaths === undefined &&
+    withoutMediaPaths.virtualMachineLocalPaths === undefined &&
+    withoutMediaPaths.ssh?.extraArgs === undefined &&
+    withoutMediaPaths.ssh?.execTrusted === undefined
   )
-    return n
-  const out: CanvasNodeState = { ...n }
+    return withoutMediaPaths
+  const out: CanvasNodeState = { ...withoutMediaPaths }
   delete out.shell
   delete out.terminalProfileId
   delete out.pendingLaunch
@@ -424,6 +484,8 @@ export function carryLocalNodeExec(
   const nsisPaths = safeNsisLocalPaths(prev.nsisLocalPaths)
   const vmPaths = normalizeVirtualMachineLocalPaths(prev.virtualMachineLocalPaths)
   const awsIdentityBinding = normalizeAwsIdentityBinding(prev.awsIdentityBinding)
+  const mediaFilePath = safePathString(prev.filePath) ? prev.filePath : undefined
+  const mediaSourcePaths = localMediaSourcePaths(prev)
   if (
     prev.shell === undefined &&
     prev.terminalProfileId === undefined &&
@@ -431,7 +493,9 @@ export function carryLocalNodeExec(
     pendingLaunch === undefined &&
     nsisPaths === undefined &&
     awsIdentityBinding === null &&
-    Object.keys(vmPaths).length === 0
+    Object.keys(vmPaths).length === 0 &&
+    mediaFilePath === undefined &&
+    mediaSourcePaths === undefined
   )
     return next
   const out: CanvasNodeState = { ...next }
@@ -443,7 +507,7 @@ export function carryLocalNodeExec(
   if (nsisPaths !== undefined) out.nsisLocalPaths = nsisPaths
   if (Object.keys(vmPaths).length > 0) out.virtualMachineLocalPaths = vmPaths
   if (awsIdentityBinding) out.awsIdentityBinding = awsIdentityBinding
-  return out
+  return restoreMediaPaths(out, { mediaFilePath, mediaSourcePaths })
 }
 
 /** `sanitizeInboundNode` for a whole mutation (the stamps — `src`, `seq`, `seen` — are preserved).
@@ -495,6 +559,11 @@ export function localNodeExec(nodes: CanvasNodeState[]): LocalNodeExecMap | unde
     if (safeVirtualMachinePath(vmPaths.isoPath) || safeVirtualMachinePath(vmPaths.diskPath)) {
       entry.virtualMachineLocalPaths = vmPaths
     }
+    if ((n.kind === 'photo' || n.kind === 'video') && safePathString(n.filePath)) {
+      entry.mediaFilePath = n.filePath
+    }
+    const mediaSourcePaths = localMediaSourcePaths(n)
+    if (mediaSourcePaths) entry.mediaSourcePaths = mediaSourcePaths
     if (
       entry.shell ||
       entry.terminalProfileId !== undefined ||
@@ -503,7 +572,9 @@ export function localNodeExec(nodes: CanvasNodeState[]): LocalNodeExecMap | unde
       entry.serviceConnection ||
       entry.awsIdentityBinding ||
       entry.nsisLocalPaths ||
-      entry.virtualMachineLocalPaths
+      entry.virtualMachineLocalPaths ||
+      entry.mediaFilePath ||
+      entry.mediaSourcePaths
     )
       map[n.id] = entry
   }
@@ -548,6 +619,6 @@ export function applyLocalNodeExec(
     if (safeVirtualMachinePath(vmPaths.isoPath) || safeVirtualMachinePath(vmPaths.diskPath)) {
       out.virtualMachineLocalPaths = vmPaths
     }
-    return out
+    return restoreMediaPaths(out, mine)
   })
 }

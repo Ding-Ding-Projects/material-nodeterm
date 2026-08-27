@@ -74,9 +74,32 @@ export interface AwsIdentityPlan {
   endpointServices: string[]
 }
 
+export type AwsIdentityAction = 'verify' | 'sso-login' | 'assume-role'
+export type AwsIdentityOperationState = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled'
+
+export interface AwsIdentityFact {
+  accountId: string | null
+  arn: string | null
+  userId: string | null
+  expiresAt: number | null
+}
+
+export interface AwsIdentityOperation {
+  operationId: string
+  action: AwsIdentityAction
+  state: AwsIdentityOperationState
+  message: string
+  startedAt: number | null
+  completedAt: number | null
+  identity: AwsIdentityFact | null
+}
+
 export interface AwsIdentityApi {
   /** Reads only local AWS config metadata and credential section names. Never returns secrets. */
   discover(): Promise<AwsIdentityDiscovery>
+  start(action: AwsIdentityAction, profileName: string, binding?: AwsIdentityBinding): Promise<AwsIdentityOperation>
+  cancel(operationId: string): Promise<boolean>
+  onOperation(listener: (operation: AwsIdentityOperation) => void): () => void
 }
 
 export const AWS_REGIONS = [

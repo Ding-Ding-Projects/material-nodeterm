@@ -1,19 +1,31 @@
 import { homedir } from 'node:os'
 import { resolve } from 'node:path'
 import { readFile } from 'node:fs/promises'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
+import { randomUUID } from 'node:crypto'
 import type { CorePlatform } from './platform'
 import { IPC } from '../shared/ipc'
 import {
   AWS_REGIONS,
   type AwsIdentityDiscovery,
-  type AwsProfileSummary
+  type AwsProfileSummary,
+  planAwsIdentity,
+  normalizeAwsIdentityBinding,
+  type AwsIdentityAction,
+  type AwsIdentityBinding,
+  type AwsIdentityOperation,
+  type AwsIdentityFact
 } from '../shared/aws-identity'
+
+const execFileAsync = promisify(execFile)
 
 const MAX_CONFIG_BYTES = 1024 * 1024
 const MAX_PROFILES = 512
 const SAFE_PROFILE = /^[A-Za-z0-9][A-Za-z0-9_.@+-]{0,127}$/
 const SAFE_REGION = /^[a-z]{2,8}(?:-[a-z0-9]+){1,3}-\d$/
 const SAFE_METADATA = /^[^\u0000-\u001f\u007f]{1,2048}$/
+const MAX_OPERATIONS = 64
 
 interface ProfileFacts {
   name: string
@@ -36,6 +48,7 @@ export interface AwsIdentityServiceOptions {
   credentialsPath?: string
   readText?: (path: string) => Promise<string | null>
   now?: () => number
+  resolveAwsCli?: () => Promise<{ path: string | null; reason: string | null }>
 }
 
 function defaultConfigPath(): string {
@@ -188,12 +201,16 @@ export class AwsIdentityService {
   private readonly credentialsPath: string
   private readonly readText: (path: string) => Promise<string | null>
   private readonly now: () => number
+  private readonly resolveAwsCli: () => Promise<{ path: string | null; reason: string | null }>
+  private readonly operations = new Map<string, { operation: AwsIdentityOperation; controller: AbortController }>()
+  private readonly listeners = new Set<(operation: AwsIdentityOperation) => void>()
 
   constructor(options: AwsIdentityServiceOptions = {}) {
     this.configPath = options.configPath ?? defaultConfigPath()
     this.credentialsPath = options.credentialsPath ?? defaultCredentialsPath()
     this.readText = options.readText ?? boundedRead
     this.now = options.now ?? Date.now
+    this.resolveAwsCli = options.resolveAwsCli ?? (async () => ({ path: null, reason: 'The verified aws-cli-v2 dependency is not connected to this host action.' }))
   }
 
   async discover(): Promise<AwsIdentityDiscovery> {
@@ -232,6 +249,154 @@ export class AwsIdentityService {
       scannedAt: this.now()
     }
   }
+
+  onOperation(listener: (operation: AwsIdentityOperation) => void): () => void {
+    this.listeners.add(listener)
+    return () => this.listeners.delete(listener)
+  }
+
+  private emit(operation: AwsIdentityOperation): void {
+    for (const listener of this.listeners) listener(operation)
+  }
+
+  private updateOperation(operationId: string, patch: Partial<AwsIdentityOperation>): AwsIdentityOperation | null {
+    const record = this.operations.get(operationId)
+    if (!record) return null
+    record.operation = { ...record.operation, ...patch }
+    this.emit(record.operation)
+    if (record.operation.state === 'succeeded' || record.operation.state === 'failed' || record.operation.state === 'cancelled') {
+      setTimeout(() => this.operations.delete(operationId), 10 * 60_000).unref?.()
+    }
+    return record.operation
+  }
+
+  async start(action: AwsIdentityAction, profileName: string, bindingInput?: AwsIdentityBinding): Promise<AwsIdentityOperation> {
+    const operationId = randomUUID()
+    if (this.operations.size >= MAX_OPERATIONS) {
+      return {
+        operationId,
+        action,
+        state: 'failed',
+        message: 'Too many AWS identity operations are already active. Wait for one to finish, then retry.',
+        startedAt: null,
+        completedAt: this.now(),
+        identity: null
+      }
+    }
+    const operation: AwsIdentityOperation = {
+      operationId,
+      action,
+      state: 'queued',
+      message: 'AWS identity operation queued.',
+      startedAt: null,
+      completedAt: null,
+      identity: null
+    }
+    const controller = new AbortController()
+    this.operations.set(operationId, { operation, controller })
+    this.emit(operation)
+    void this.execute(operationId, action, profileName, bindingInput)
+    return operation
+  }
+
+  async cancel(operationId: string): Promise<boolean> {
+    const record = this.operations.get(operationId)
+    if (!record || (record.operation.state !== 'queued' && record.operation.state !== 'running')) return false
+    record.controller.abort()
+    this.updateOperation(operationId, {
+      state: 'cancelled',
+      message: 'AWS identity operation cancelled.',
+      completedAt: this.now()
+    })
+    return true
+  }
+
+  private async execute(
+    operationId: string,
+    action: AwsIdentityAction,
+    profileName: string,
+    bindingInput?: AwsIdentityBinding
+  ): Promise<void> {
+    const record = this.operations.get(operationId)
+    if (!record) return
+    if (!SAFE_PROFILE.test(profileName)) {
+      this.updateOperation(operationId, { state: 'failed', message: 'The selected AWS profile name is invalid.', completedAt: this.now() })
+      return
+    }
+    const discovery = await this.discover()
+    const profile = discovery.profiles.find((candidate) => candidate.name === profileName)
+    if (!profile) {
+      this.updateOperation(operationId, { state: 'failed', message: 'The selected AWS profile is no longer available on this computer.', completedAt: this.now() })
+      return
+    }
+    const binding = normalizeAwsIdentityBinding(bindingInput) ?? {
+      schemaVersion: 1 as const,
+      profileName,
+      region: profile.region,
+      endpoints: [],
+      verifiedAt: null
+    }
+    const plan = planAwsIdentity(discovery, binding)
+    if (plan.state !== 'ready') {
+      this.updateOperation(operationId, { state: 'failed', message: plan.reason ?? 'The AWS identity plan is unavailable.', completedAt: this.now() })
+      return
+    }
+    if (action === 'sso-login' && !plan.signInArgs) {
+      this.updateOperation(operationId, { state: 'failed', message: 'The selected AWS profile has no IAM Identity Center sign-in configuration.', completedAt: this.now() })
+      return
+    }
+    if (action === 'assume-role' && !plan.roleArgs) {
+      this.updateOperation(operationId, { state: 'failed', message: 'The selected AWS profile has no role assumption configuration.', completedAt: this.now() })
+      return
+    }
+    const resolved = await this.resolveAwsCli()
+    if (!resolved.path) {
+      this.updateOperation(operationId, { state: 'failed', message: resolved.reason ?? 'The verified AWS CLI is unavailable on this host.', completedAt: this.now() })
+      return
+    }
+    const args = action === 'sso-login'
+      ? [...plan.signInArgs!]
+      : [...plan.callerIdentityArgs, '--output', 'json']
+    this.updateOperation(operationId, { state: 'running', message: action === 'sso-login' ? 'AWS IAM Identity Center sign-in is running.' : 'AWS identity verification is running.', startedAt: this.now() })
+    try {
+      const result = await execFileAsync(resolved.path, args, {
+        signal: record.controller.signal,
+        timeout: 120_000,
+        windowsHide: true,
+        maxBuffer: 256 * 1024,
+        encoding: 'utf8'
+      })
+      if (record.controller.signal.aborted) return
+      const identity = action === 'sso-login' ? null : parseIdentityFact(String(result.stdout ?? ''))
+      if (action !== 'sso-login' && !identity) {
+        this.updateOperation(operationId, { state: 'failed', message: 'AWS identity verification returned no usable identity facts.', completedAt: this.now() })
+        return
+      }
+      this.updateOperation(operationId, {
+        state: 'succeeded',
+        message: action === 'sso-login' ? 'AWS IAM Identity Center sign-in completed without returning session data.' : 'AWS identity verified. Session credentials remain in AWS local storage.',
+        identity,
+        completedAt: this.now()
+      })
+    } catch (error) {
+      if (record.controller.signal.aborted) return
+      const code = (error as NodeJS.ErrnoException).code
+      this.updateOperation(operationId, { state: 'failed', message: code === 'ETIMEDOUT' ? 'AWS identity operation timed out.' : 'AWS identity operation did not complete.', completedAt: this.now() })
+    }
+  }
+}
+
+function parseIdentityFact(stdout: string): AwsIdentityFact | null {
+  try {
+    const value = JSON.parse(stdout) as Record<string, unknown>
+    const accountId = typeof value.Account === 'string' && /^[0-9]{12}$/.test(value.Account) ? value.Account : null
+    const arn = typeof value.Arn === 'string' && SAFE_METADATA.test(value.Arn) ? value.Arn : null
+    const userId = typeof value.UserId === 'string' && SAFE_METADATA.test(value.UserId) ? value.UserId : null
+    if (!accountId && !arn && !userId) return null
+    return { accountId, arn, userId, expiresAt: null }
+  } catch {
+    return null
+  }
 }
 
 export function registerAwsIdentityIpc(
@@ -240,5 +405,8 @@ export function registerAwsIdentityIpc(
 ): AwsIdentityService {
   const service = new AwsIdentityService(options)
   platform.handle(IPC.awsIdentityDiscover, () => service.discover())
+  platform.handle(IPC.awsIdentityStart, (action: AwsIdentityAction, profileName: string, binding?: AwsIdentityBinding) => service.start(action, profileName, binding))
+  platform.handle(IPC.awsIdentityCancel, (operationId: string) => service.cancel(operationId))
+  service.onOperation((operation) => platform.broadcast(IPC.awsIdentityOperation, operation))
   return service
 }

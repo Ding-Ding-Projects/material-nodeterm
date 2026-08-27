@@ -8,6 +8,8 @@ import {
   type AwsIdentityBinding,
   type AwsIdentityDiscovery,
   type AwsIdentityIntent,
+  type AwsIdentityAction,
+  type AwsIdentityOperation,
   type AwsProfileSummary
 } from '@shared/aws-identity'
 import { useRegexSearchField } from '../../lib/regex/useRegexSearchField'
@@ -120,6 +122,7 @@ export function AwsIdentityManager({ binding: inputBinding, intent, onChange }: 
   const [endpointService, setEndpointService] = useState<string>('sts')
   const [endpointDraft, setEndpointDraft] = useState('')
   const [endpointError, setEndpointError] = useState<string | null>(null)
+  const [operation, setOperation] = useState<AwsIdentityOperation | null>(null)
   const endpointSearch = useRegexSearchField()
   const endpointSearchRef = useRef<HTMLInputElement>(null)
   const binding = normalizeAwsIdentityBinding(inputBinding)
@@ -148,6 +151,8 @@ export function AwsIdentityManager({ binding: inputBinding, intent, onChange }: 
   useEffect(() => {
     void refresh()
   }, [])
+
+  useEffect(() => window.nodeTerminal.awsIdentity.onOperation((next) => setOperation(next)), [])
 
   const saveBinding = (next: AwsIdentityBinding | undefined) => {
     if (!next) {
@@ -205,6 +210,12 @@ export function AwsIdentityManager({ binding: inputBinding, intent, onChange }: 
     setEndpointDraft('')
     setEndpointError(null)
     saveBinding({ ...binding, endpoints: next, verifiedAt: Date.now() })
+  }
+
+  const startAction = async (action: AwsIdentityAction): Promise<void> => {
+    if (!binding || plan.state !== 'ready') return
+    const next = await window.nodeTerminal.awsIdentity.start(action, binding.profileName, binding)
+    setOperation(next)
   }
 
   return (
@@ -301,6 +312,51 @@ export function AwsIdentityManager({ binding: inputBinding, intent, onChange }: 
                 Require role assumption for this node
               </label>
             </fieldset>
+            <div className="aws-identity__actions" aria-label="AWS identity actions">
+              <button
+                type="button"
+                disabled={operation?.state === 'queued' || operation?.state === 'running' || plan.state !== 'ready'}
+                title={plan.state !== 'ready' ? (plan.reason ?? 'Choose a valid AWS profile first.') : 'Verify the selected profile without returning session credentials.'}
+                onClick={() => void startAction('verify')}
+              >
+                Verify identity
+              </button>
+              {plan.signInArgs && (
+                <button
+                  type="button"
+                  disabled={operation?.state === 'queued' || operation?.state === 'running'}
+                  title="Run the fixed AWS IAM Identity Center sign-in action. Session data stays in AWS local storage."
+                  onClick={() => void startAction('sso-login')}
+                >
+                  Sign in with IAM Identity Center
+                </button>
+              )}
+              {plan.roleArgs && (
+                <button
+                  type="button"
+                  disabled={operation?.state === 'queued' || operation?.state === 'running'}
+                  title="Verify the selected role profile through caller identity. Temporary credentials are never returned."
+                  onClick={() => void startAction('assume-role')}
+                >
+                  Verify assumed role
+                </button>
+              )}
+              {operation && (
+                <div className={`aws-identity__operation is-${operation.state}`} role="status" aria-live="polite">
+                  <span>{operation.message}</span>
+                  {(operation.state === 'queued' || operation.state === 'running') && (
+                    <button type="button" onClick={() => void window.nodeTerminal.awsIdentity.cancel(operation.operationId)}>Cancel</button>
+                  )}
+                  {operation.identity && (
+                    <small>
+                      {operation.identity.accountId ? `Account ${operation.identity.accountId}` : 'Account unavailable'}
+                      {operation.identity.arn ? ` · ${operation.identity.arn}` : ''}
+                      {operation.identity.expiresAt ? ` · expires ${new Date(operation.identity.expiresAt).toISOString()}` : ''}
+                    </small>
+                  )}
+                </div>
+              )}
+            </div>
           </section>
 
           <section className="aws-identity__endpoint-editor" aria-label="Custom AWS endpoints">

@@ -12,7 +12,7 @@ export function registerTorrentIpc(platform: CorePlatform): { service: TorrentSe
   })
   platform.handle(IPC.torrentRuntime, () => service.runtime())
   platform.handle(IPC.torrentList, (nodeId?: string) => service.list(nodeId))
-  platform.handle(IPC.torrentInspect, (input: { sourceKind: TorrentSourceKind; sourceRef: string }) => service.inspect(input))
+  platform.handle(IPC.torrentInspect, (input: { nodeId: string; sourceKind: TorrentSourceKind; sourceRef: string }) => service.inspect(input))
   platform.handle(IPC.torrentAdd, (input: TorrentAddInput) => service.add(input))
   platform.handle(IPC.torrentChooseFiles, (id: string, paths: string[]) => service.chooseFiles(id, paths))
   platform.handle(IPC.torrentSetDestination, (id: string, destination: string) => service.setDestination(id, destination))

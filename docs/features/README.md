@@ -15,7 +15,7 @@ the deep architecture reference these articles are distilled from.
 | [Terminals](./terminals/README.md) | Real shells as nodes, persistent backends across app restarts, and cold restore after reboot. |
 | [Canvas](./canvas/README.md) | The pan/zoom surface, every node kind, and the terminal-node lifecycle. |
 | [Projects](./projects/README.md) | Projects as tabs, per-project canvases, persistence and folder binding. |
-| [Agents](./agents/README.md) | Claude Code, Codex, Gemini, opencode, Grok and custom agent CLIs as nodes. |
+| [Agents](./agents/README.md) | Claude Code, Codex, Gemini, opencode, Grok, Cognition Devin and custom agent CLIs as nodes. |
 | [Source control](./source-control/README.md) | The git panel, and git worktrees bound to canvas group frames. |
 | [Kanban](./kanban/README.md) | The Trello-style board that mirrors a project's live sessions as cards. |
 | [Appearance](./appearance/README.md) | Design tokens, themes, and the measured state of the Material Design 3 migration. |
@@ -24,6 +24,8 @@ the deep architecture reference these articles are distilled from.
 | [Packaging](./packaging/README.md) | How builds are produced, distributed, and kept up to date. |
 | [Dependency installation](./dependencies/README.md) | The manifest and machine-local lifecycle that installs prerequisites for node features. |
 | [Torrents](./torrents/README.md) | Explicit local WebTorrent tasks with safe destinations, progress, recovery, and bounded seeding. |
+| [Files and conversion](./files/README.md) | Local file conversion, collision-safe destinations, honest capability gaps, and completed-output handoff. |
+| [File conversion and pipelines](./converter/README.md) | Guided local media, archive, PDF, OCR, and structured-data operations with bounded resources. |
 | [Global and project settings](./global-and-project-settings.md) | Durable app defaults and complete sparse per-project overlays. |
 | [Help](./help/README.md) | The in-app offline documentation browser these articles are read in. |
 | [Calendar](./calendar/README.md) | Local, ICS, CalDAV, Google Calendar, and Microsoft 365 calendar nodes with offline cache and guided provider binding. |

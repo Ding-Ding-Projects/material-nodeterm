@@ -6,6 +6,7 @@
  */
 
 import { promises as fs } from 'node:fs'
+import { createHash } from 'node:crypto'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { Project } from '../shared/types'
@@ -17,6 +18,7 @@ import {
   parsePortableProjectV3Manifest,
   PORTABLE_PROJECT_LIMITS,
   PortableProjectV3Error,
+  sha256Hex,
   validatePortableArchiveInventory,
   validatePortableProjectV3Entries,
   type PortableProjectV3Entry,
@@ -30,8 +32,18 @@ import {
   serializePortableCanvasProjectionV3,
   type PortableCanvasProjectionV3
 } from './portable-canvas-projection'
+import { repairPortablePortals, type PortalRepairRecord } from './portal-lifecycle'
 import { openContainer, packContainer } from './project-archive-container'
 import { renameAtomic } from './fs-atomic'
+import {
+  validatePortableMediaArchive,
+  type PortableMediaArchiveFile,
+  type PortableMediaExportPayload
+} from './portable-media-assets'
+import { assertNoSymlinkAncestor, detectBoardAttachmentKind } from './board-attachments'
+import { validateBoardAttachmentRef } from '../shared/comment-attachments'
+import { validEntry } from './board-log'
+import type { PortablePlannerDefinitions } from './portable-planner'
 
 const READ_LIMITS = {
   maxArchiveBytes: PORTABLE_PROJECT_LIMITS.maxCompressedBytes,
@@ -55,12 +67,23 @@ export interface PortableImportResult {
   /** Bindings are always empty on import. This is a visible fact, not an omitted state. */
   bindings: []
   omissions: PortableProjectOmission[]
+  mediaFiles: number
+  mediaBytes: number
+  commentFiles: number
+  commentBytes: number
+  /** Safe planner definitions are returned for an explicit destination Configure action. */
+  plannerDefinitions?: PortablePlannerDefinitions
+  /** Explicit, non-fatal repairs applied to portal metadata while preserving child content. */
+  repairs: PortalRepairRecord[]
 }
 
 export interface PortableProjectV3ExportOptions {
   historyBundle: Buffer
   omissions?: readonly PortableProjectOmission[]
   appearance?: Record<string, unknown>
+  media?: PortableMediaExportPayload
+  planner?: import('../shared/planner-occurrences').PlannerSchedule[]
+  commentAttachments?: { entries: Array<{ path: string; data: Uint8Array }> }
 }
 
 export interface PortableProjectV3ImportOptions {
@@ -69,6 +92,8 @@ export interface PortableProjectV3ImportOptions {
   signal?: AbortSignal
   onProgress?: (event: PortableImportProgress) => void
 }
+
+interface PortableCommentArchiveFile { path: string; data: Uint8Array }
 
 function emit(options: PortableProjectV3ImportOptions, phase: PortableImportProgress['phase'], progress: number, message: string): void {
   options.onProgress?.({ phase, progress, message })
@@ -87,11 +112,17 @@ function ensureNotCancelled(options: PortableProjectV3ImportOptions): void {
 
 /** Build a schema 3 container. The manifest hashes every payload entry, including history. */
 export async function exportPortableProjectV3(project: Project, options: PortableProjectV3ExportOptions): Promise<{ bytes: Buffer; manifest: PortableProjectV3Manifest; projection: PortableCanvasProjectionV3 }> {
-  const projection = projectToPortableCanvasV3(project, options.appearance ? { appearance: options.appearance } : {})
+  const projection = projectToPortableCanvasV3(project, {
+    ...(options.appearance ? { appearance: options.appearance } : {}),
+    ...(options.media ? { media: options.media.manifest } : {}),
+    ...(options.planner ? { planner: options.planner } : {})
+  })
   const projectBytes = Buffer.from(serializePortableCanvasProjectionV3(projection))
   const entries: PortableProjectV3Entry[] = [
     { path: 'project.json', data: projectBytes, required: true },
-    { path: 'history.bundle', data: options.historyBundle, required: true }
+    { path: 'history.bundle', data: options.historyBundle, required: true },
+    ...(options.media?.files.map((file) => ({ path: file.path, data: file.data, required: false })) ?? []),
+    ...(options.commentAttachments?.entries.map((file) => ({ path: file.path, data: file.data, required: false })) ?? [])
   ]
   const manifest = await createPortableProjectV3Manifest(
     { name: projection.project.name, color: projection.project.color },
@@ -102,8 +133,7 @@ export async function exportPortableProjectV3(project: Project, options: Portabl
   if (manifestBytes.length > PORTABLE_PROJECT_LIMITS.maxManifestBytes) throw new PortableProjectV3Error('manifest', 'Portable project manifest exceeds its byte limit.')
   const bytes = packContainer([
     { path: 'manifest.json', data: manifestBytes },
-    { path: 'project.json', data: projectBytes },
-    { path: 'history.bundle', data: options.historyBundle }
+    ...entries.map((entry) => ({ path: entry.path, data: Buffer.from(entry.data) }))
   ])
   if (bytes.length > PORTABLE_PROJECT_LIMITS.maxCompressedBytes) throw new PortableProjectV3Error('compressed-limit', 'Portable project archive exceeds its compressed-byte limit.')
   return { bytes, manifest, projection }
@@ -116,9 +146,10 @@ function parseLegacyProject(value: unknown, version: 1 | 2): PortableCanvasProje
   return projectToPortableCanvasV3(project)
 }
 
-async function stageProjection(destination: string, project: Project, projectBytes: Buffer, manifestBytes: Buffer, options: PortableProjectV3ImportOptions): Promise<string> {
+async function stageProjection(destination: string, project: Project, projectBytes: Buffer, manifestBytes: Buffer, mediaFiles: readonly PortableMediaArchiveFile[], commentFiles: readonly PortableCommentArchiveFile[], options: PortableProjectV3ImportOptions): Promise<string> {
   const finalPath = path.resolve(destination)
   const parent = path.dirname(finalPath)
+  await assertNoSymlinkAncestor(parent)
   const parentStat = await fs.stat(parent).catch(() => null)
   if (!parentStat?.isDirectory()) throw new PortableProjectV3Error('destination-collision', `Destination parent is unavailable: ${parent}`)
   try {
@@ -138,6 +169,19 @@ async function stageProjection(destination: string, project: Project, projectByt
     await fs.writeFile(path.join(stage, '.nodeterm', 'project.json'), runtimeFile, { flag: 'wx' })
     await fs.writeFile(path.join(stage, '.nodeterm', 'portable-project.json'), projectBytes, { flag: 'wx' })
     await fs.writeFile(path.join(stage, '.nodeterm', 'portable-manifest.json'), manifestBytes, { flag: 'wx' })
+    for (const media of mediaFiles) {
+      const destinationPath = path.join(stage, ...media.path.split('/'))
+      await fs.mkdir(path.dirname(destinationPath), { recursive: true })
+      await fs.writeFile(destinationPath, media.data, { flag: 'wx' })
+    }
+    for (const commentFile of commentFiles) {
+      const relative = commentFile.path === 'comments/board-log.jsonl' ? '.nodeterm/board-log.jsonl' :
+        commentFile.path === 'comments/board-log.jsonl.1' ? '.nodeterm/board-log.jsonl.1' :
+          path.join('.nodeterm', 'board-attachments', path.basename(commentFile.path))
+      const destinationPath = path.join(stage, relative)
+      await fs.mkdir(path.dirname(destinationPath), { recursive: true })
+      await fs.writeFile(destinationPath, commentFile.data, { flag: 'wx' })
+    }
     ensureNotCancelled(options)
     emit(options, 'publishing', 0.95, 'Publishing the staged project atomically.')
     await renameAtomic(stage, finalPath)
@@ -145,6 +189,28 @@ async function stageProjection(destination: string, project: Project, projectByt
   } catch (error) {
     await fs.rm(stage, { recursive: true, force: true }).catch(() => {})
     throw error
+  }
+}
+
+function bindImportedMedia(project: Project, cwd: string): Project {
+  const bindNodes = (nodes: Project['nodes']): Project['nodes'] => nodes.map((node) => {
+    if (!node.mediaAssets) return node
+    const mediaAssets = node.mediaAssets.map((asset) => {
+      if (asset.missing) return asset
+      return { ...asset, sourcePath: path.join(cwd, ...asset.portablePath.slice(2).split('/')) }
+    })
+    const first = mediaAssets.find((asset) => !asset.missing)?.sourcePath
+    return {
+      ...node,
+      mediaAssets,
+      ...((node.kind === 'photo' || node.kind === 'video') && first ? { filePath: first } : {})
+    }
+  })
+  return {
+    ...project,
+    cwd,
+    nodes: bindNodes(project.nodes),
+    ...(project.childCanvases ? { childCanvases: project.childCanvases.map((canvas) => ({ ...canvas, nodes: bindNodes(canvas.nodes) })) } : {})
   }
 }
 
@@ -177,16 +243,90 @@ export async function importPortableProjectV3(bytes: Buffer, options: PortablePr
     const version = typeof parsed === 'object' && parsed !== null && 'version' in parsed && (parsed as { version?: unknown }).version === 1 ? 1 : 2
     projection = parseLegacyProject(parsed, version)
   }
+  const portalRepair = repairPortablePortals(projection)
+  projection = portalRepair.projection
+  const repairedProjectBytes = Buffer.from(serializePortableCanvasProjectionV3(projection))
+  // Repairs legitimately change project.json. Refresh only that manifest row so the staged
+  // portable files remain self-consistent and a later reader does not mistake a recorded repair
+  // for tampering.
+  const outputManifest = portalRepair.repairs.length
+    ? {
+        ...manifest,
+        entries: await Promise.all(manifest.entries.map(async (entry) => entry.path === 'project.json'
+          ? { ...entry, sha256: await sha256Hex(repairedProjectBytes), rawBytes: repairedProjectBytes.byteLength, compressedBytes: repairedProjectBytes.byteLength }
+          : entry))
+      }
+    : manifest
+  const outputManifestBytes = Buffer.from(JSON.stringify(outputManifest, null, 2) + '\n', 'utf8')
+  if (outputManifestBytes.length > PORTABLE_PROJECT_LIMITS.maxManifestBytes) {
+    throw new PortableProjectV3Error('manifest', 'The repaired portable project manifest exceeds its byte limit.')
+  }
+  ensureNotCancelled(options)
+  if (!projection.media && [...entries.keys()].some((entryPath) => entryPath.startsWith('assets/media/'))) throw new PortableProjectV3Error('manifest', 'Portable media entries exist without a media manifest.')
+  const mediaFiles = projection.media ? await validatePortableMediaArchive(projection.media, entries) : []
+  const commentFiles = validatePortableCommentArchive(entries)
   ensureNotCancelled(options)
   const id = freshProjectId()
   const project = portableCanvasProjectionToProject(projection, { id })
   let stagedPath: string | undefined
   if (options.destination) {
     emit(options, 'staging', 0.7, 'Preparing a collision-free local destination; no bindings or external services are touched.')
-    stagedPath = await stageProjection(options.destination, project, Buffer.from(serializePortableCanvasProjectionV3(projection)), manifestBytes, options)
+    stagedPath = await stageProjection(options.destination, project, repairedProjectBytes, outputManifestBytes, mediaFiles, commentFiles, options)
   }
   emit(options, 'completed', 1, 'Project import completed with local bindings left unconfigured.')
-  return { project: stagedPath ? { ...project, cwd: stagedPath } : project, manifest, projection, archiveVersion: 3, bindings: [], omissions: manifest.omissions }
+  return {
+    project: stagedPath ? bindImportedMedia(project, stagedPath) : project,
+    manifest: outputManifest,
+    projection,
+    archiveVersion: 3,
+    ...(stagedPath ? { stagedPath } : {}),
+    bindings: [],
+    omissions: outputManifest.omissions,
+    mediaFiles: mediaFiles.length,
+    mediaBytes: mediaFiles.reduce((total, item) => total + item.data.byteLength, 0),
+    commentFiles: commentFiles.length,
+    commentBytes: commentFiles.reduce((total, item) => total + item.data.byteLength, 0),
+    ...(projection.planner ? { plannerDefinitions: projection.planner } : {}),
+    repairs: portalRepair.repairs
+  }
+}
+
+/** Validate board-log references and attachment carriers before any destination is written. */
+function validatePortableCommentArchive(entries: ReadonlyMap<string, Uint8Array>): PortableCommentArchiveFile[] {
+  const paths = [...entries.keys()].filter((entryPath) => entryPath === 'comments/board-log.jsonl' || entryPath === 'comments/board-log.jsonl.1' || entryPath.startsWith('assets/attachments/'))
+  if (paths.length === 0) return []
+  const references = new Map<string, import('../shared/comment-attachments').BoardAttachmentRef>()
+  for (const logPath of ['comments/board-log.jsonl.1', 'comments/board-log.jsonl']) {
+    const data = entries.get(logPath)
+    if (!data) continue
+    for (const line of data.toString('utf8').split('\n')) {
+      if (!line.trim()) continue
+      let parsed: unknown
+      try { parsed = JSON.parse(line) } catch { throw new PortableProjectV3Error('manifest', `Portable comment history contains malformed JSON in ${logPath}.`) }
+      if (!validEntry(parsed)) throw new PortableProjectV3Error('manifest', `Portable comment history contains an invalid entry in ${logPath}.`)
+      for (const attachment of parsed.attachments ?? []) {
+        validateBoardAttachmentRef(attachment)
+        if (references.has(attachment.id)) throw new PortableProjectV3Error('duplicate-entry', `Portable comment attachment is referenced more than once: ${attachment.id}`)
+        references.set(attachment.id, attachment)
+      }
+    }
+  }
+  const files: PortableCommentArchiveFile[] = []
+  for (const [id, attachment] of references) {
+    const expected = attachment.archivePath
+    const data = entries.get(expected)
+    if (!data) throw new PortableProjectV3Error('required-entry', `Portable comment attachment is missing: ${expected}`)
+    const detected = detectBoardAttachmentKind(data)
+    const hash = createHash('sha256').update(data).digest('hex')
+    if (data.byteLength !== attachment.bytes || hash !== attachment.sha256 || detected.kind !== attachment.kind || detected.mime !== attachment.mime) throw new PortableProjectV3Error('hash', `Portable comment attachment failed integrity validation: ${attachment.name}`)
+    files.push({ path: expected, data })
+  }
+  for (const entryPath of paths.filter((candidate) => candidate.startsWith('assets/attachments/'))) if (!references.has(path.basename(entryPath, '.bin').split('-')[0])) {
+    const id = path.basename(entryPath, '.bin').split('-')[0]
+    if (![...references.keys()].some((reference) => reference.startsWith(`${id}-`))) throw new PortableProjectV3Error('unknown-optional', `Portable comment attachment is not referenced by board history: ${entryPath}`)
+  }
+  for (const logPath of ['comments/board-log.jsonl.1', 'comments/board-log.jsonl']) if (entries.has(logPath)) files.push({ path: logPath, data: entries.get(logPath)! })
+  return files
 }
 
 /** Marker used by archive callers without exposing container internals. */

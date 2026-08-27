@@ -26,6 +26,7 @@ empty-canvas context menu, group context menu, and command palette all expose th
 | **Torrent Downloader** | A local WebTorrent task surface with magnet or `.torrent` intake, metadata/file selection, destination preflight, progress, recovery, and bounded seeding. See [Torrent Downloader](../torrents/torrent-downloader.md). |
 | **Linux ISO VM** | A one-shot QEMU Linux guest with guided ISO/disk pickers, disposable live and persistent install modes, loopback VNC/QMP, and bounded resources. It is distinct from WSL. See [Linux ISO VM](../integrations/linux-iso-vm.md). |
 | **Calendar** | A guided calendar view for local events and imported ICS files, with provider account and calendar pickers for CalDAV, Google Calendar, and Microsoft 365. Agenda, week, month, recurrence, timezone, offline cache, create/edit preview, and destructive delete confirmation all live in the node. |
+| **Home Assistant control** | A schema-driven entity controller with machine-local connection binding, rich controls for common domains, and a verified service-schema fallback. See [Home Assistant controls](../integrations/home-assistant-controls.md). |
 | **Alarm Clock** | A one-shot or recurring wall-clock reminder with an explicit timezone, DST-safe planning, snooze, dismiss, and missed-occurrence history. See [Alarm Clock nodes](../../alarm-clock.md). |
 
 Two other things render *on* the canvas but are not persisted node kinds: **subagent cards**
@@ -49,6 +50,9 @@ travel with the project; notification handles and any machine-specific runtime s
 - Calendar nodes persist only `calendarConfig` intent: provider, opaque account/calendar references,
   timezone, view, weekend visibility, and cache preference. OAuth values, local ICS paths, event
   cache, provider sessions, and host identifiers remain in machine-local application data.
+- Home Assistant control nodes persist only entity, domain, service, and control-mode hints.
+  Connection ids, origins, bearer tokens, discovery caches, host identity, and active requests stay
+  machine-local and are omitted from portable project files.
 - Alarm Clock nodes additionally persist the recurrence, local wall-clock time, selected IANA
   timezone, snooze interval, sound and narrator choices, and bounded occurrence history. They never
   persist a claim or mechanism for waking a powered-off computer.

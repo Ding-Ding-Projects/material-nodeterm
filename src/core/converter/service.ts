@@ -4,7 +4,7 @@
 
 import { access, mkdir, open, stat, type FileHandle } from 'node:fs/promises'
 import { constants as fsConstants, promises as fs } from 'node:fs'
-import { basename, dirname, extname, join } from 'node:path'
+import { basename, dirname, extname, join, resolve } from 'node:path'
 import { freeDiskBytes } from '../disk-space'
 import {
   CONVERTER_CATALOG,
@@ -34,9 +34,9 @@ function errorCode(error: unknown): string {
     : ''
 }
 
-function uniqueDestPath(destDir: string, sourceName: string, targetExt: string): string {
-  const base = basename(sourceName, extname(sourceName))
-  return join(destDir, `${base}${targetExt}`)
+function destinationKey(path: string): string {
+  const absolute = resolve(path)
+  return process.platform === 'win32' ? absolute.toLocaleLowerCase('en-US') : absolute
 }
 
 export interface ConverterServiceDeps {
@@ -58,6 +58,9 @@ export class ConverterService {
   private activeRunners = 0
   private cancelRequested = new Set<string>()
   private scanAbort: AbortController | null = null
+  /** Destinations claimed by current queue items. The filesystem remains the final authority, but
+   *  this closes the window where two addFiles calls could select the same absent name. */
+  private reservedDestinations = new Set<string>()
   private loaded: Promise<void>
 
   constructor(deps: ConverterServiceDeps) {
@@ -69,6 +72,7 @@ export class ConverterService {
         i.status === 'running' ? { ...i, status: 'queued' as ConvertItemStatus, updatedAt: Date.now() } : i
       )
       for (const i of this.items) this.byId.set(i.id, i)
+      this.rebuildDestinationReservations()
     })
   }
 
@@ -109,6 +113,42 @@ export class ConverterService {
       concurrency: this.concurrency,
       total: this.items.length
     })
+  }
+
+  private rebuildDestinationReservations(): void {
+    this.reservedDestinations = new Set(this.items.map((item) => destinationKey(item.destPath)))
+  }
+
+  /**
+   * Claim the first available destination using the familiar `name.ext`, `name (2).ext`, ...
+   * sequence. A second reservation check after the asynchronous filesystem probe is load-bearing:
+   * another addFiles call can finish the same probe while this one is waiting.
+   */
+  private async reserveDestination(
+    destDir: string,
+    sourceName: string,
+    targetExt: string
+  ): Promise<{ path: string; collisionIndex: number }> {
+    const base = basename(sourceName, extname(sourceName))
+    for (let collisionIndex = 1; collisionIndex < Number.MAX_SAFE_INTEGER; collisionIndex++) {
+      const suffix = collisionIndex === 1 ? '' : ` (${collisionIndex})`
+      const path = join(destDir, `${base}${suffix}${targetExt}`)
+      const key = destinationKey(path)
+      if (this.reservedDestinations.has(key)) continue
+
+      let exists = false
+      try {
+        await access(path, fsConstants.F_OK)
+        exists = true
+      } catch {
+        exists = false
+      }
+      if (exists || this.reservedDestinations.has(key)) continue
+
+      this.reservedDestinations.add(key)
+      return { path, collisionIndex }
+    }
+    throw new Error(`Could not reserve a collision-safe destination name for "${sourceName}".`)
   }
 
   // -------------------------------------------------------------------------------------------
@@ -221,24 +261,18 @@ export class ConverterService {
         path
       }
     }
-    const destPath = uniqueDestPath(destDir, basename(path), descriptor.targetExt)
-    let destExists = false
-    try {
-      await access(destPath, fsConstants.F_OK)
-      destExists = true
-    } catch {
-      destExists = false
-    }
+    const destination = await this.reserveDestination(destDir, basename(path), descriptor.targetExt)
     const reasons: ('lossy' | 'overwrite')[] = []
     if (descriptor.lossy && !lossyAcknowledged) reasons.push('lossy')
-    if (destExists) reasons.push('overwrite')
     const now = Date.now()
     return {
       id: freshId(),
       sourcePath: path,
       sourceName: basename(path),
       sourceBytes: st.size,
-      destPath,
+      destPath: destination.path,
+      destinationCollisionIndex:
+        destination.collisionIndex === 1 ? undefined : destination.collisionIndex,
       adapterId,
       status: reasons.length > 0 ? 'needs-confirm' : 'queued',
       confirmReasons: reasons.length > 0 ? reasons : undefined,
@@ -380,6 +414,7 @@ export class ConverterService {
     if (!item || item.status === 'running' || item.status === 'queued') return
     this.items = this.items.filter((i) => i.id !== id)
     this.byId.delete(id)
+    this.rebuildDestinationReservations()
     this.persistInBackground()
     this.emitSummary()
   }
@@ -391,6 +426,7 @@ export class ConverterService {
     )
     for (const i of [...this.byId.values()]) if (!this.items.includes(i)) this.byId.delete(i.id)
     if (this.items.length !== before) {
+      this.rebuildDestinationReservations()
       this.persistInBackground()
       this.emitSummary()
     }
@@ -456,7 +492,7 @@ export class ConverterService {
     let output: Buffer
     let warnings: string[] = []
     try {
-      const result = adapter.convert(input)
+      const result = await adapter.convert(input)
       output = result.output
       warnings = result.warnings
     } catch (e) {
@@ -466,7 +502,7 @@ export class ConverterService {
     item.progressBytes = Math.round(item.totalBytes * 0.7)
     this.touch(item)
 
-    const validationError = adapter.validate(output)
+    const validationError = await adapter.validate(output)
     if (validationError) return bail('failed', validationError)
 
     // Re-check overwrite right before the write — the destination could have appeared since the

@@ -71,7 +71,7 @@ export interface TorrentAddInput {
 export interface TorrentApi {
   runtime(): Promise<{ available: boolean; origin: 'bundled' | 'auto-installed' | 'unavailable'; detail: string | null }>
   list(nodeId?: string): Promise<TorrentTaskState[]>
-  inspect(input: { sourceKind: TorrentSourceKind; sourceRef: string }): Promise<TorrentTaskState>
+  inspect(input: { nodeId: string; sourceKind: TorrentSourceKind; sourceRef: string }): Promise<TorrentTaskState>
   add(input: TorrentAddInput): Promise<TorrentTaskState>
   chooseFiles(taskId: string, selectedPaths: string[]): Promise<TorrentTaskState | null>
   setDestination(taskId: string, destination: string): Promise<TorrentTaskState | null>
