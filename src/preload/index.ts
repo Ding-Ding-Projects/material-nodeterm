@@ -34,6 +34,7 @@ import type { WslCreateProgress } from '../shared/wsl'
 import type { TorrentTaskState } from '../shared/torrent'
 import type { VirtualMachineEvent } from '../shared/virtual-machine'
 import type { CalendarProvider } from '../shared/calendar'
+import type { AwsManagerProgress } from '../shared/aws-resource'
 import type { ProjectConsentRequest, ProjectSetupEvent } from '../shared/project-settings'
 
 // Fan a single ipcRenderer listener per channel out to many renderer subscribers. Without
@@ -86,6 +87,7 @@ const subscribeOllamaChatStream = subscribe<
 const subscribeMinecraftEvent = subscribe<[MinecraftEvent]>(IPC.minecraftEvent)
 const subscribeNodeDependencyState = subscribe<[NodeDependencyAvailability]>(IPC.nodeDependencyState)
 const subscribeNodeDependencyProgress = subscribe<[NodeDependencyProgress]>(IPC.nodeDependencyProgress)
+const subscribeAwsResourceProgress = subscribe<[AwsManagerProgress]>(IPC.awsResourceProgress)
 const subscribeTorrentTask = subscribe<[TorrentTaskState]>(IPC.torrentTask)
 const subscribeVirtualMachineEvent = subscribe<[VirtualMachineEvent]>(IPC.virtualMachineEvent)
 const subscribeWidgetState = subscribe<[CanvasWidgetLiveState]>(IPC.widgetStateChanged)
@@ -1080,6 +1082,17 @@ const api: NodeTerminalApi = {
     reconcile: () => ipcRenderer.invoke(IPC.nodeDependencyReconcile),
     onState: (listener) => subscribeNodeDependencyState(listener),
     onProgress: (listener) => subscribeNodeDependencyProgress(listener)
+  },
+  awsResource: {
+    runtime: () => ipcRenderer.invoke(IPC.awsResourceRuntime),
+    profiles: () => ipcRenderer.invoke(IPC.awsResourceProfiles),
+    binding: (nodeId) => ipcRenderer.invoke(IPC.awsResourceBinding, nodeId),
+    bind: (input) => ipcRenderer.invoke(IPC.awsResourceBind, input),
+    unbind: (nodeId) => ipcRenderer.invoke(IPC.awsResourceUnbind, nodeId),
+    preview: (nodeId, request) => ipcRenderer.invoke(IPC.awsResourcePreview, nodeId, request),
+    execute: (nodeId, operationId, request) => ipcRenderer.invoke(IPC.awsResourceExecute, nodeId, operationId, request),
+    cancel: (operationId) => ipcRenderer.invoke(IPC.awsResourceCancel, operationId),
+    onProgress: (listener) => subscribeAwsResourceProgress(listener)
   },
   ollama: {
     status: () => ipcRenderer.invoke(IPC.ollamaStatus),

@@ -711,6 +711,17 @@ export const IPC = {
   nodeDependencyReconcile: 'node-dependency:reconcile',
   nodeDependencyState: 'node-dependency:state',
   nodeDependencyProgress: 'node-dependency:progress',
+  // Guided AWS Resource Explorer and Cloud Control managers. Profile and endpoint bindings stay
+  // in the privileged host; project files carry only portable query and resource-type intent.
+  awsResourceRuntime: 'aws-resource:runtime',
+  awsResourceProfiles: 'aws-resource:profiles',
+  awsResourceBinding: 'aws-resource:binding',
+  awsResourceBind: 'aws-resource:bind',
+  awsResourceUnbind: 'aws-resource:unbind',
+  awsResourcePreview: 'aws-resource:preview',
+  awsResourceExecute: 'aws-resource:execute',
+  awsResourceCancel: 'aws-resource:cancel',
+  awsResourceProgress: 'aws-resource:progress',
   /** Electron only: a multi-file picker (dialog:select-file only returns one path). Browser (Server
    *  Edition) uses a plain `<input type="file" multiple>` + files.saveUpload instead — see
    *  FileConverterPanel.tsx. */

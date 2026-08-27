@@ -49,6 +49,7 @@ import { newUniverseCreationEventId, shopNodeIdForCanvas } from '../../core/univ
 import { TORRENT_NODE_CATALOG_ENTRY } from '@shared/torrent'
 import { DEFAULT_VIRTUAL_MACHINE_CONFIG } from '@shared/virtual-machine'
 import { TIMER_DEFAULT_DURATION_MS, type TimerNodeData } from '@shared/timer'
+import { AWS_MANAGER_DEFAULT_INTENT, type AwsManagerMode, type AwsManagerPortableIntent } from '@shared/aws-resource'
 
 // Re-exported so Canvas (and anything else in the renderer) keeps importing it from here, while the
 // single implementation lives in src/shared and is shared with the relay host + the canvas-sync
@@ -86,6 +87,7 @@ const BROWSER_SIZE = { width: 800, height: 560 }
 const NATIVE_LOOP_SIZE = { width: 340, height: 280 }
 const SHOP_SIZE = { width: 480, height: 420 }
 export const TORRENT_SIZE = { width: 620, height: 520 }
+export const AWS_RESOURCE_SIZE = { width: 720, height: 580 }
 const LINUX_VM_SIZE = { width: 760, height: 560 }
 const TIMER_SIZE = { width: 380, height: 360 }
 const ALARM_SIZE = { width: 380, height: 360 }
@@ -257,6 +259,8 @@ export interface NodeData {
   serviceConnection?: ServiceConnection
   /** Safe torrent magnet intent shared with the canvas. */
   torrentMagnet?: string
+  /** AWS Resource Explorer and Cloud Control safe portable intent. */
+  awsManagerIntent?: AwsManagerPortableIntent
   /** nsis-only, GIT-SHARED: the installer's description. See `NsisSpec`. */
   nsisSpec?: NsisSpec
   /** nsis-only, MACHINE-LOCAL: absolute source/license/icon paths on this machine. Stripped
@@ -1461,6 +1465,30 @@ export function createTimerNode(index: number, center?: { x: number; y: number }
   return { id: nextId('timer'), type: 'timer', position: placeAt(center, index, TIMER_SIZE.width, TIMER_SIZE.height), width: TIMER_SIZE.width, height: TIMER_SIZE.height, style: { width: TIMER_SIZE.width, height: TIMER_SIZE.height }, data }
 }
 
+/** Creates one guided AWS manager node. Local profile and endpoint binding is resolved by core. */
+export function createAwsResourceNode(
+  index: number,
+  mode: AwsManagerMode = 'resource-explorer',
+  center?: { x: number; y: number }
+): CanvasNode {
+  const intent: AwsManagerPortableIntent = { ...AWS_MANAGER_DEFAULT_INTENT, mode }
+  return {
+    id: nextId('aws-resource'),
+    type: 'aws-resource',
+    position: placeAt(center, index, AWS_RESOURCE_SIZE.width, AWS_RESOURCE_SIZE.height),
+    width: AWS_RESOURCE_SIZE.width,
+    height: AWS_RESOURCE_SIZE.height,
+    style: { width: AWS_RESOURCE_SIZE.width, height: AWS_RESOURCE_SIZE.height },
+    data: {
+      title: mode === 'cloud-control' ? 'AWS Cloud Control' : 'AWS Resource Explorer',
+      color: '#ff9900',
+      group: null,
+      awsManagerIntent: intent,
+      tags: ['aws', mode]
+    }
+  }
+}
+
 export function createStickyNode(index: number, center?: { x: number; y: number }): CanvasNode {
   return {
     id: nextId('sticky'),
@@ -2628,6 +2656,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         creationEventId: n.creationEventId,
         shopSelection: (n as CanvasNodeState & { shopSelection?: string }).shopSelection,
         torrentMagnet: n.torrentMagnet,
+        awsManagerIntent: n.awsManagerIntent,
         serviceConnection: n.serviceConnection,
         nsisSpec: n.nsisSpec,
         nsisLocalPaths: n.nsisLocalPaths,
@@ -2746,6 +2775,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         creationEventId: n.data.creationEventId,
         shopSelection: n.data.shopSelection,
         torrentMagnet: n.data.torrentMagnet,
+        awsManagerIntent: n.data.awsManagerIntent,
         serviceConnection: n.data.serviceConnection,
         nsisSpec: n.data.nsisSpec,
         nsisLocalPaths: n.data.nsisLocalPaths,

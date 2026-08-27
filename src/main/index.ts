@@ -55,6 +55,7 @@ import { registerFsHandlers } from '../core/fs-handlers'
 import { registerConverterIpc } from '../core/converter/register-ipc'
 import { registerNodeDependencyIpc } from '../core/node-dependencies/register-ipc'
 import { registerOllamaIpc } from '../core/ollama/register-ipc'
+import { registerAwsResourceIpc } from '../core/aws-resource-register-ipc'
 import { registerMinecraftIpc } from '../core/minecraft/register-ipc'
 import { registerTorrentIpc } from '../core/torrent/register-ipc'
 import { registerVirtualMachineIpc } from '../core/virtual-machine/register-ipc'
@@ -2290,6 +2291,7 @@ app.whenReady().then(async () => {
   // same functions.
   registerConverterIpc(corePlatform)
   registerNodeDependencyIpc(corePlatform)
+  registerAwsResourceIpc(corePlatform)
   registerOllamaIpc(corePlatform)
   minecraftServers = registerMinecraftIpc(corePlatform).manager
   registerTorrentIpc(corePlatform)
