@@ -179,12 +179,9 @@ const PRODUCTION_SURFACES = [
   ['browser-start-page', 'src/renderer/nodes/BrowserStartPage.tsx', 'mapped-callsite'],
   ['browser-extensions-panel', 'src/renderer/nodes/BrowserExtensionsPanel.tsx', 'mapped-callsite'],
   ['discarded-plate', 'src/renderer/nodes/DiscardedPlate.tsx', 'mapped-callsite'],
-  ['wsl-dialog', 'src/renderer/wsl/WslCreateDialog.tsx', 'unmapped-callsite-pending'],
+  ['wsl-dialog', 'src/renderer/wsl/WslCreateDialog.tsx', 'mapped-callsite'],
   ['regex-builder', 'src/renderer/components/regex/RegexBuilder.tsx', 'mapped-callsite'],
   ['anchored-regex-builder', 'src/renderer/components/regex/AnchoredRegexBuilder.tsx', 'mapped-callsite'],
-  ['wsl-dialog', 'src/renderer/wsl/WslCreateDialog.tsx', 'mapped-callsite'],
-  ['regex-builder', 'src/renderer/components/regex/RegexBuilder.tsx', 'unmapped-callsite-pending'],
-  ['anchored-regex-builder', 'src/renderer/components/regex/AnchoredRegexBuilder.tsx', 'unmapped-callsite-pending'],
   ['notification-center', 'src/renderer/components/NotificationCenter.tsx', 'mapped-callsite'],
   ['notification-toasts', 'src/renderer/components/NotificationToasts.tsx', 'mapped-callsite'],
   ['changelog-panel', 'src/renderer/components/changelog/ChangelogPanel.tsx', 'mapped-callsite'],
@@ -210,11 +207,7 @@ const PRODUCTION_SURFACES = [
   ['remote-access-dialog', 'src/renderer/components/RemoteAccessDialog.tsx', 'mapped-callsite'],
   ['ssh-project-dialog', 'src/renderer/components/SshProjectDialog.tsx', 'mapped-callsite'],
   ['phone-pair-popover', 'src/renderer/components/PhonePairPopover.tsx', 'mapped-callsite'],
-  ['dictation-overlay', 'src/renderer/components/DictationOverlay.tsx', 'mapped-callsite']
-  ['bulk-action-bar', 'src/renderer/components/BulkActionBar.tsx', 'unmapped-callsite-pending'],
-  ['pty-pressure', 'src/renderer/components/PtyPressureBanner.tsx', 'unmapped-callsite-pending'],
-  ['update-card', 'src/renderer/components/UpdateCard.tsx', 'unmapped-callsite-pending'],
-  ['resume-card', 'src/renderer/components/ResumeCard.tsx', 'unmapped-callsite-pending'],
+  ['dictation-overlay', 'src/renderer/components/DictationOverlay.tsx', 'mapped-callsite'],
   ['widget-entrypoint', 'src/renderer/widget/WidgetApp.tsx', 'mapped-callsite'],
   ['hud-entrypoint', 'src/renderer/hud/main.ts', 'mapped-callsite'],
   ['dialog-picker-root', 'src/renderer/bridge/dialog-picker.tsx', 'mapped-callsite'],
@@ -225,7 +218,7 @@ const PRODUCTION_SURFACES = [
 // Independent hand-written manifests. The mutable rows above are implementation evidence; these
 // lists are the required universe, so deleting a row cannot delete its own requirement too.
 const CANONICAL_PRODUCER_IDS = `settings-fields settings-sections personal-vocabulary-upload command-palette context-menus confirm-dialog input-dialog notifications tooltip conflict-banner canvas-prose fab-menu kanban-view kanban-column kanban-session-card kanban-card-modal source-control worktree-dialog onboarding dim-sum-surprise publish-dialog find-bar remote-picker browser-profile-picker password-manager converter-adapter-catalog converter-upload-limit minecraft-backups minecraft-players minecraft-properties authenticator-settings speech-settings toy-lock-wizard personal-vocabulary-surface-mapper personal-vocabulary-application typed-copy-fact-boundary personal-vocabulary-host-message widget-entrypoint hud-entrypoint dialog-picker-root ws-reconnect-overlay browser-bridge-stubs notification-body-classification site-vocabulary-json site-vocabulary-cache native-notification-canvas native-notification-onboarding native-notification-settings personal-vocabulary-template native-notification-browser native-notification-main`.split(/\s+/)
-const CANONICAL_SURFACE_IDS = `app-shell welcome top-app-bar status-surface sessions-sidebar session-row terminal-node sticky-node group-node editor-node diff-node browser-node web-node video-node loop-node service-node wsl-dialog regex-builder anchored-regex-builder notification-center notification-toasts changelog-panel release-card local-history docs-browser docs-article appearance-editor color-field color-menu color-picker branch-select bulk-action-bar pty-pressure update-card resume-card widget-entrypoint hud-entrypoint dialog-picker-root ws-reconnect-overlay browser-bridge-stubs`.split(/\s+/)
+const CANONICAL_SURFACE_IDS = `app-shell welcome top-app-bar status-surface sessions-sidebar session-row terminal-node sticky-node group-node editor-node diff-node browser-node web-node video-node loop-node service-node native-loop-node nsis-node authenticator-node annotation-node dino-node subagent-node chat-panel browser-surface browser-start-page browser-extensions-panel discarded-plate wsl-dialog regex-builder anchored-regex-builder notification-center notification-toasts changelog-panel release-card local-history docs-browser docs-article appearance-editor color-field color-menu color-picker branch-select bulk-action-bar explorer-panel project-switcher ollama-manager converter-panel pty-pressure update-card resume-card announcement-banner session-memory remote-access-dialog ssh-project-dialog phone-pair-popover dictation-overlay widget-entrypoint hud-entrypoint dialog-picker-root ws-reconnect-overlay browser-bridge-stubs`.split(/\s+/)
 // Every Settings section is listed explicitly. The shared FieldRow/SettingsSection funnels cover
 // their ordinary rows, while SettingsText marks standalone inline prose and the shared primitives
 // cover labels/options. Keeping this list hand-written means deleting a section cannot make its
