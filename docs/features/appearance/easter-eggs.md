@@ -1,10 +1,10 @@
 # Easter eggs
 
 The Windows desktop app includes a catalog of local, harmless interface surprises. Each entry has
-a stable id, a named surface, a bounded keyboard trigger, English and Cantonese copy, ten funny
-levels, and a clear dismissal path. The cabinet is available from the keyboard with
-`Ctrl+Alt+Shift+E`, or by focusing its controls after it is opened. The cabinet's search is local
-and only matches the title, surface, and stable id.
+a stable id, a named surface, a bounded contextual trigger, English and Cantonese copy, ten funny
+levels, and a clear dismissal path. The cabinet is opened from a discovered status card and is a
+history view only. It does not expose codes, keyboard chords, force-trigger actions, or direct Try
+controls.
 
 ## Safety contract
 
@@ -16,7 +16,7 @@ browser storage. Resetting the cabinet removes those ids and does not touch proj
 School mode suppresses the entire cabinet and every egg, including its names, trigger hints,
 storage record, and accessible status. Reduced motion receives a static treatment. The status
 card has a labelled dismissal control and a polite live region, while keyboard and touch users can
-use the same cabinet buttons.
+use the same cabinet buttons for dismissal and reset.
 
 ## Catalog coverage
 
@@ -27,11 +27,13 @@ converter, local model management, authenticator, support, and status. Every row
 English and Cantonese seed copy, ten-level voice expansion, School-mode suppression,
 accessibility behavior, reduced-motion behavior, local persistence policy, and reset path.
 
-The trigger route is intentionally bounded: the user opens the cabinet, presses **Arm an egg code**,
-and types the row's short code within three seconds. Marked desktop surfaces also accept an
-explicit Alt-click to reveal the next undiscovered row for that surface. Selecting **Try this egg**
-is the equivalent touch and assistive-technology route. A found egg announces its title and
-localized copy, then remains available until the user explicitly dismisses it.
+The trigger route is intentionally contextual and bounded: normal interaction with a marked surface
+increments a local counter, and the next undiscovered entry for that surface may appear after the
+documented interaction threshold. A global cooldown prevents a burst of cards, and every result is
+non-blocking. Touch, keyboard, and assistive-technology users receive the same result from the
+underlying real control. A found egg announces its title and localized copy, then remains available
+until the user explicitly dismisses it. The cabinet lists discovered entries only and offers Reset
+discoveries.
 
 ## Suggested articles
 

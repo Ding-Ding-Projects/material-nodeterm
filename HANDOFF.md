@@ -2835,3 +2835,24 @@ verification state.
 No tests, lint, type checks, builds, packaging, runtime interaction, reviews, audits, or HuiShots
 were run, as required by issue #103. The feature jer remains separate from `main`; the parent Dog
 must perform integration and any later verification.
+
+# 2026-08-27, Easter egg contextual-trigger correction, issue #103
+
+Reconciled the task-owned feature jer with the exact `origin/main` tip
+`54164b84dce0b7e62787b1de2885405ff4ed821c`. Corrected the Easter egg suite so every one of the 60
+entries is a contextual, bounded surprise from natural interaction with its marked real surface.
+Removed the `Ctrl+Alt+Shift+E` opener, all typed/code/chord activation, Alt-click force discovery,
+and direct Try controls. The cabinet now appears only through a discovered status card and contains
+discovery history plus Reset discoveries. The catalog retains ten funny levels, School-mode
+suppression, accessibility, reduced-motion handling, local-only discovery persistence, and the
+no-data-mutation, no-process-launch, no-network, and no-credential-access contract.
+
+The contextual route uses a per-surface interaction counter, a three-interaction threshold, and a
+45-second global cooldown. A discovered status card is non-blocking and offers dismissal plus a
+history route. No new force-trigger affordance was added.
+
+No tests, lint, type checks, builds, packaging, debugging, runtime interaction, reviews, audits, or
+UI captures were run, as required by issue #103. Correction commit
+`63ec24efa96f27880931d4cc3c6424f53f11feb9` was pushed to `feat/easter-egg-suite` and verified by
+exact ref and ancestry checks. The feature branch remains separate from `main`; no PR, issue
+mutation, deletion, or cleanup was performed.
