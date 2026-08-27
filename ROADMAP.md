@@ -57,8 +57,15 @@ later commit, since this file will not be kept in lockstep with every merge).
       (`scripts/check-app-contract.mjs`), 1,101 assertions across 59 features, run clean except
       for the one pending item below.
 - [x] Windows packaging path: Squirrel.Windows via `scripts/windows-installer.mjs`, unsigned by
-      permanent policy, with ICO regeneration/verification, nupkg/RELEASES agreement checks, and
-      a manual-dispatch-only `main`-only release workflow.
+      permanent policy, with ICO regeneration/verification, Setup.exe plus nupkg/RELEASES
+      agreement checks, and a Windows-only release workflow triggered by pushes to `main` and
+      manual dispatch. ZIP, NSIS-only, MSI-only, MSIX-only, and portable-only parallel installer
+      routes are retired.
+- [ ] Cognition Devin CLI support (#106): source-level builtin registry, launch forms, project
+      hook installation, status normalization, and notification fallback are implemented on
+      `feat/devin-cli-support`. The real `devin 3000.4.25` binary was unavailable in this lane, so
+      runtime launch, availability, hook delivery, Desktop, Server Edition, SSH, and packaged
+      evidence remain unverified.
 
 ## In progress / partially landed
 
@@ -68,6 +75,30 @@ later commit, since this file will not be kept in lockstep with every merge).
       runtime interaction, reviews, security and accessibility audits, and captures remain pending
       in the integration lane.
 
+- [ ] **Agent-to-agent drag collaboration, issue #90**: the bounded collaboration handle and
+      keyboard/touch equivalent now reuse the existing context-link path for two compatible agent
+      nodes. Credentials, accounts, projects, working directories, and live sessions remain
+      unchanged. Tests, builds, runtime interaction, accessibility review, security review, and
+      captures remain unverified under the lane's explicit boundary.
+
+- [ ] **Context-window progress, issue #89**: every agent-backed node, session row, Kanban card,
+      and card modal now keeps a visible meter with provider-scoped telemetry, exact known values,
+      explicit unknown/not-reported/stale/unavailable states, restart-safe generation fencing, and
+      bounded local/remote transcript reads. The implementation lane intentionally has no tests,
+      lint, type checks, builds, packaging, runtime interaction, reviews, audits, or captures yet.
+
+- [ ] **Bounded wheel zoom and persisted wheel speed, issue #107**: the renderer now shares a ±50
+      `deltaY` budget across each 40 ms burst and applies a persisted 0.2×–2.0× multiplier only to
+      plain-wheel zoom. The Behavior setting has localized copy, point-of-use validation, and
+      provenance text. Server Edition shares the same renderer and settings record. Tests, type
+      checks, lint, builds, packaging, runtime interaction, reviews, audits, and captures remain
+      unrun in this implementation lane; the generated offline-doc bundle awaits the normal docs
+      generation step in integration.
+- [ ] **Ten-level funny controls, issue #113**: source and localization range now covers independent
+      English and Cantonese levels 1–10, schema-versioned settings migration, scheduled values,
+      site storage, exports, provenance copy, Easter eggs, and feature resolvers. This implementation
+      lane intentionally has no tests, type checks, lint, builds, packaging, runtime interaction,
+      reviews, audits, or captures; integrated verification remains pending.
 - [ ] **Desktop trackpad gesture facts, issue #108**: main-process scroll and pinch edges now feed
       a depth-safe typed bridge so macOS desktop wheel routing distinguishes a precise-pixel mouse
       from a trackpad, including the bounded momentum-gap linger. Server Edition keeps its browser

@@ -30,6 +30,143 @@ failure rollback, remote decoding, Desktop and Server Edition interaction, and r
 remain pending. The parent owns the dedicated pull request, append-only issue comments, integration,
 issue closure, retention, and upstream PR #463.
 
+## 2026-08-27, agent-to-agent drag collaboration, issue #90
+
+The implementation is on `feat/agent-drag-collaboration`, based on the reconciled hui tip
+`0d22ff8839a33b6cee9bb93ecc8070a18398c2f1`. `src/renderer/lib/agentCollaborationDrag.ts` defines a
+bounded versioned drag payload, validates context-link capability through the existing agent
+registry, and exposes the keyboard/touch pick event used by the Canvas. `TerminalNode.tsx` adds a
+Material Design 3 collaboration handle, valid-target highlighting, and an accessible two-button
+pick path. `Canvas.tsx` validates both nodes on the active project, then calls the existing
+context-link `onConnect` path, so no process, account, credential, project, working-directory, or
+conversation-transfer state is changed. `Link selected agents` is available from the node context
+menu when exactly two compatible nodes are selected.
+
+The source basis was checked against the pinned upstream checkout and `eneskirca/nodeterm` `main`
+at `7d9cba33f7a29baa2a3cb010f07d351b87fc6e4d`. The existing upstream context-link behavior and the
+namespaced bounded drag payload from commit `d1b7da3af28587716e7e4de2fb0db8cd18732c3f`, merged by
+`acc5d51847094ea33c70721ea259e1483705a25e`, are the only reused semantics. Upstream does not
+define conversation transfer or agent-spawn-on-agent-drop, so those behaviors remain intentionally
+absent. Folder drops and ordinary node movement are unchanged.
+
+Documentation is in `docs/features/agents/agent-drag-collaboration.md` and the Agents category
+index. `CHANGELOG.md` and `ROADMAP.md` record the same scope and verification boundary. Tests, lint,
+type checks, builds, packaging, runtime interaction, reviews, audits, and captures were not run by
+this lane, as explicitly requested. The parent integration lane owns those checks, the dedicated
+pull request, append-only issue comments, upstream PR #463, merge, and issue closure.
+
+## 2026-08-27, context-window progress, issue #89
+
+The implementation is on `feat/context-window-progress`, based on the reconciled hui tip `0d22ff88`.
+`ContextMeter` now renders on every agent-backed node, session list row, Kanban card, and card modal,
+including providers without telemetry. It shows exact used, total, remaining, and percentage values
+only for finite provider readings, with explicit known, unknown, not-reported, stale, and unavailable
+states. The meter has a visible Material Design 3 focus ring, accessible value text, a viewport-bounded
+details surface, narrow-layout sizing, and reduced-motion behavior.
+
+`ContextWindowUsage` carries provider and source scope plus a process source epoch and monotonic
+generation. The renderer persists only bounded machine-local numeric snapshots and rejects older
+generations within one epoch, so a fresh process generation 1 reading is accepted after restart.
+Local and SSH source keys cannot overwrite one another. The remote first read now records the remote
+file's absolute byte length, so a large transcript is not transferred again from byte zero on the
+next poll. Codex rehydration honours `CODEX_HOME`; Gemini header reads are capped; concurrent locator
+requests are coalesced; and the Server Edition registers the same mount-time rehydration route.
+
+Documentation is in `docs/features/agents/context-window-progress.md`, indexed from the agents
+category, and the offline bundle includes the new article. Full bundle regeneration remains pending:
+`node scripts/build-docs-bundle.mjs` could not start because `esbuild` is absent in this clean
+checkout, and this ultra-speed lane does not install dependencies or run builds. The parent integration
+lane must regenerate and verify the bundle before merging. The current funny-level-10 lane remains
+separate and unverified; this lane only routes its meter copy through the existing localization
+boundary.
+
+This source lane intentionally did not run tests, lint, type checks, builds, packaging, runtime
+interaction, reviews, security or accessibility audits, or UI captures. The parent integration lane
+must verify the exact commit and handle the dedicated pull request, issue progress and closure, and
+any later evidence without treating these unrun checks as green.
+
+## 2026-08-27, Cognition Devin CLI lane, issue #106
+
+Issue #106 is implemented on `feat/devin-cli-support` from the measured upstream contract in
+[`eneskirca/nodeterm#447`](https://github.com/eneskirca/nodeterm/issues/447). The source lane adds
+the `devin` builtin registry entry and inline mark, argv prompt handling with the required `--`
+separator, prompt-file and single-turn print command helpers, `-r` resume and `-c` continue forms,
+and `devin` foreground-process recognition.
+
+Devin's direct project hook format is implemented in `src/core/agents/hooks/devin.ts`. It preserves
+foreign definitions while installing one managed observer command for `PreToolUse`, `PostToolUse`,
+`PermissionRequest`, `UserPromptSubmit`, `Stop`, `PostCompaction`, `SessionStart`, and `SessionEnd`
+in `.devin/hooks.v1.json`. The trusted local spawn path calls this installer for local Desktop and
+Server Edition projects. SSH projects are deliberately left without this write because the current
+remote protocol has no safe project-root file-write route.
+
+`normalizeDevin` maps measured lifecycle events to the shared status model, while
+`parseDevinTerminalNotification` treats BEL, OSC 9, and OSC 777 as a fallback only. A bare BEL is
+unknown, and no terminal text is promoted into a fabricated structured event. Context and billing
+usage, permission-mode mutation, title read/rename, subagents, transfer, branching, canvas control,
+shared identity, and transcript rendering remain out of the capability lists until their Devin
+contracts are measured.
+
+The real Devin CLI was unavailable in this lane. No tests, lint, type checks, builds, packaging,
+debugging, reviews, audits, runtime interaction, or HuiShots were run. The docs bundle generator
+was attempted but could not start because this isolated worktree has no `esbuild` installation;
+the source Markdown article, indexes, changelog, roadmap, and this handoff are updated, while
+`src/shared/docs-data.ts` still needs regeneration in an environment with the declared See Fut.
+The feature jer remains separate and is not integrated, dewed, or cleaned here.
+## 2026-08-27, bounded wheel zoom and speed, issue #107
+
+This implementation lane is `feat/wheel-zoom-speed` in the task-owned linked checkout. It ports
+the behavior from upstream PR `eneskirca/nodeterm#451` at commit
+`e98333c35fcb7846c1e9c86eb7a1b786f255587a`, while retaining the newer canvas gesture routing and
+the current renderer architecture.
+
+`src/renderer/canvas/wheel-zoom.ts` provides a shared ±50 `deltaY` budget per 40 ms burst,
+point-of-use speed clamping from 0.2× through 2.0×, and bounded next-zoom calculation. The canvas
+capture-phase handler owns one limiter per mounted canvas. Its speed multiplier is selected only
+for plain-wheel input; Cmd/Ctrl+wheel and trackpad pinch use the fixed historical multiplier.
+`Settings.wheelZoomSpeed` defaults to 1.0, so the historical feel remains intact, and the shared
+settings persistence path supplies the value to Desktop and Server Edition.
+
+`BehaviorSection.tsx` adds the guided slider with 0.2× minimum, 2.0× maximum, 0.1× steps, accessible
+value text, live language-mode copy, funny-level variants, and a provenance line that distinguishes
+loading, saved, compiled-default-equivalent, and scheduled states. The direct feature article is
+`docs/features/canvas/wheel-zoom-speed.md`, linked from the Canvas category and expanded in
+`docs/features/canvas/canvas-and-lifecycle.md`.
+
+After the current-main merge, this feature consumes the shared funny-level 1–10 types, resolver,
+and catalogue layers from issue #113. The wheel feature additions define no five-level type, range,
+resolver, migration, or duplicate catalogue implementation; all ten-level behavior comes from the
+shared implementation.
+
+The root `CHANGELOG.md` and `ROADMAP.md` record the feature and its verification boundary. The
+generated `src/shared/changelog-data.ts` and `src/shared/docs-data.ts` were not regenerated because
+this checkout has no installed `esbuild`; the integration lane must run the normal generators and
+commit their outputs before treating the offline viewer as current.
+
+No tests, type checks, lint, builds, packaging, runtime interaction, reviews, security or
+accessibility audits, or UI captures were run in this lane, per issue #107. The linked checkout is
+clean after the implementation commit. The feature jer was not integrated into `main`, no release
+was created, and no cleanup was performed here.
+## 2026-08-27, ten-level funny controls, issue #113
+
+The implementation lane is `feat/funny-level-10`. It expands the shared funny-level union and
+resolver to levels 1–10, adds distinct voice-only level 6–10 handling for legacy five-slot
+catalogue rows, and keeps factual labels intentionally flat. New installations default both
+language values to level 10. Settings schema version 2 is written by the settings store; valid
+existing 1–5 values survive unchanged, while malformed or missing hand-edited values resolve to
+the level-10 shipped default. Renderer hydration and scheduled settings use the same bounded
+normalization.
+
+The Language settings controls now expose 1–10 with a level-10 label and saved-base versus
+scheduled-value provenance. The Easter-egg and portal-entry resolvers consume the full range.
+The site uses versioned `nodeterm-playground.v2` storage, reads the v1 key once for migration,
+preserves valid old values, defaults invalid values to 10, and exports the range/schema metadata.
+Related docs, site article copy, roadmap, and changelog are updated.
+
+No tests, type checks, lint, builds, packaging, reviews, audits, runtime interaction, or captures
+were run in this source lane, per issue #113. The parent integration lane must verify the complete
+tree against its exact integrated commit. No merge, release, issue comment, issue closure, or
+cleanup was performed here.
 ## 2026-08-27, desktop trackpad gesture facts, issue #108
 
 The implementation is on `feat/trackpad-gesture-facts`, based on the current `origin/main` tip

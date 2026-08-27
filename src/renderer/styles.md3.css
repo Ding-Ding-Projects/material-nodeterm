@@ -1200,6 +1200,7 @@
 .term-node__header--filled .term-node__session,
 .term-node__header--filled .term-node__collapse,
 .term-node__header--filled .term-node__folder-drag,
+.term-node__header--filled .term-node__collaboration-drag,
 .term-node__header--filled .term-node__ai,
 .term-node__header--filled .term-node__move-worktree,
 .term-node__header--filled .term-node__search,
@@ -1215,6 +1216,7 @@
    header's default dark/light background and can vanish or invert against an arbitrary fill. */
 .term-node__header--filled .term-node__collapse:hover,
 .term-node__header--filled .term-node__folder-drag:hover,
+.term-node__header--filled .term-node__collaboration-drag:hover,
 .term-node__header--filled .term-node__ai:hover:not(:disabled),
 .term-node__header--filled .term-node__move-worktree:hover,
 .term-node__header--filled .term-node__search:hover,
@@ -1240,6 +1242,7 @@
 
 .term-node__collapse,
 .term-node__folder-drag,
+.term-node__collaboration-drag,
 .term-node__ai,
 .term-node__move-worktree,
 .term-node__search,
@@ -1280,6 +1283,16 @@
   cursor: grab;
 }
 
+.term-node__collaboration-drag {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  flex-shrink: 0;
+  display: inline-grid;
+  place-items: center;
+  cursor: grab;
+}
+
 .term-node__close {
   font-size: 16px;
   padding: 2px 6px;
@@ -1306,6 +1319,7 @@
 /* Hover steps one surface-container level up from the header's own surface-container-high. */
 .term-node__collapse:hover,
 .term-node__folder-drag:hover,
+.term-node__collaboration-drag:hover,
 .term-node__ai:hover:not(:disabled),
 .term-node__move-worktree:hover,
 .term-node__search:hover,
@@ -1320,6 +1334,18 @@
 .term-node__close:hover {
   background: color-mix(in srgb, var(--md-error) 20%, transparent);
   color: var(--md-error);
+}
+
+/* A valid agent-to-agent drop paints the target itself. The source and target are existing
+   sessions, so the state is a link affordance only and never implies a move or a new process. */
+.term-node.term-node--agent-collaboration-target {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 3px;
+  background: var(--md-primary-container);
+}
+.term-node.term-node--agent-collaboration-source {
+  outline: 2px dashed var(--md-secondary);
+  outline-offset: 3px;
 }
 
 /* Browser node header — profile picker trigger (see nodes/BrowserProfilePicker.tsx). */

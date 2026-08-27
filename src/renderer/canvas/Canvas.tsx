@@ -44,6 +44,7 @@ import {
 import { solveFitPadding } from './fit-view'
 import { paneMenuGroup } from './paneMenuGroup'
 import { MacWheelGestureRouter, trackpadRoutingEnabled } from './wheel-gesture'
+import { WheelZoomBurstLimiter, clampWheelZoomSpeed, nextWheelZoom } from './wheel-zoom'
 import { isBrowserRuntime } from '@renderer/bridge/runtime'
 import { selectedLocalFilePaths } from './canvas-file-copy'
 import { codexAccountSwitchStillEligible } from './codex-account-switch'
@@ -63,6 +64,11 @@ import {
   readAuthenticatorDrag,
   readExplorerFolderDrag
 } from '../lib/explorerNodeDrag'
+import {
+  AGENT_COLLABORATION_MODE_EVENT,
+  AGENT_COLLABORATION_PICK_EVENT,
+  canLinkAgentPair
+} from '../lib/agentCollaborationDrag'
 import {
   SharedGlyphLayer,
   flushOpaqueNodeIds,
@@ -1477,6 +1483,7 @@ export function Canvas() {
   }, [])
   const [explorerAgentNodeId, setExplorerAgentNodeId] = useState<string | null>(null)
   const [explorerFolderDropActive, setExplorerFolderDropActive] = useState(false)
+  const [agentCollaborationSourceId, setAgentCollaborationSourceId] = useState<string | null>(null)
   useEffect(() => {
     if (!explorerOpen) setExplorerAgentNodeId(null)
   }, [explorerOpen])
@@ -4177,6 +4184,91 @@ export function Canvas() {
     [linkEndpointOf, agentIdOf, setLinkEdges, setNodes, markDirty, nodes]
   )
 
+  /** Resolve the explicit agent-to-agent drop into the existing context-link operation. */
+  const linkAgentCollaboration = useCallback(
+    (sourceNodeId: string, targetNodeId: string): void => {
+      const source = nodesRef.current.find((node) => node.id === sourceNodeId)
+      const target = nodesRef.current.find((node) => node.id === targetNodeId)
+      const sourceAgent = agentIdOf(sourceNodeId)
+      const targetAgent = agentIdOf(targetNodeId)
+      if (
+        !source ||
+        !target ||
+        !sourceAgent ||
+        !targetAgent ||
+        !canLinkAgentPair(sourceNodeId, sourceAgent, targetNodeId, targetAgent)
+      ) {
+        window.dispatchEvent(
+          new CustomEvent('nodeterm:toast', {
+            detail: {
+              kind: 'error',
+              message: 'Only two existing context-capable agent nodes in this project can be linked.'
+            }
+          })
+        )
+        return
+      }
+      onConnect({
+        source: sourceNodeId,
+        target: targetNodeId,
+        sourceHandle: 'link-out',
+        targetHandle: 'link-in'
+      })
+    },
+    [agentIdOf, onConnect]
+  )
+
+  // Pointer drops carry both endpoint ids. Keyboard and touch use the same button on two nodes:
+  // the first activation arms a source, and the second chooses its target. When exactly two
+  // compatible nodes are selected, one activation links them directly for a shorter keyboard path.
+  useEffect(() => {
+    const onPick = (event: Event): void => {
+      const detail = (event as CustomEvent<{
+        nodeId?: string
+        sourceNodeId?: string
+        targetNodeId?: string
+      }>).detail
+      if (detail?.sourceNodeId && detail.targetNodeId) {
+        setAgentCollaborationSourceId(null)
+        linkAgentCollaboration(detail.sourceNodeId, detail.targetNodeId)
+        return
+      }
+      const nodeId = detail?.nodeId
+      if (!nodeId) return
+      const selected = nodesRef.current
+        .filter((node) => node.selected)
+        .map((node) => node.id)
+      if (selected.length === 2 && selected.includes(nodeId)) {
+        setAgentCollaborationSourceId(null)
+        linkAgentCollaboration(selected[0], selected[1])
+        return
+      }
+      setAgentCollaborationSourceId((current) => {
+        if (!current) return nodeId
+        if (current === nodeId) {
+          window.dispatchEvent(
+            new CustomEvent('nodeterm:toast', {
+              detail: { kind: 'error', message: 'Choose a different agent as the collaboration target.' }
+            })
+          )
+          return null
+        }
+        linkAgentCollaboration(current, nodeId)
+        return null
+      })
+    }
+    window.addEventListener(AGENT_COLLABORATION_PICK_EVENT, onPick)
+    return () => window.removeEventListener(AGENT_COLLABORATION_PICK_EVENT, onPick)
+  }, [linkAgentCollaboration])
+
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent(AGENT_COLLABORATION_MODE_EVENT, {
+        detail: { sourceNodeId: agentCollaborationSourceId }
+      })
+    )
+  }, [agentCollaborationSourceId])
+
   // Double-click a context link to remove it (ephemeral subagent/loop edges are left alone).
   const onEdgeDoubleClick = useCallback(
     (_e: React.MouseEvent, edge: Edge) => {
@@ -4368,6 +4460,7 @@ export function Canvas() {
   // MacWheelGestureRouter tells them apart (and stays sticky for the length of one physical
   // gesture) and hands trackpad packets back to React Flow's own panOnScroll.
   const wheelZoom = settings.wheelZoom
+  const wheelZoomSpeed = clampWheelZoomSpeed(settings.wheelZoomSpeed)
   // The escape hatch, resolved ONCE: the router and React Flow's panOnScroll below must agree, or
   // a gesture neither of them pans is a gesture that does nothing.
   const trackpadRouting = trackpadRoutingEnabled(isMac, settings.trackpadPan)
@@ -4381,9 +4474,11 @@ export function Canvas() {
     const offGesture = gestureReporting
       ? window.nodeTerminal.onCanvasTrackpadGesture((active) => wheelRouting.noteGesture(active))
       : undefined
+    const wheelLimiter = new WheelZoomBurstLimiter()
     const onWheel = (e: WheelEvent) => {
       if (canvasLocked) return
-      if (!e.ctrlKey && !e.metaKey) {
+      const plainWheel = !e.ctrlKey && !e.metaKey
+      if (plainWheel) {
         // The ancestor walk is the expensive part of this handler at ~120 Hz, so it is memoized
         // per packet AND never run for a packet no guard asks about (a plain wheel with wheelZoom
         // off, which is the default, walks nothing at all).
@@ -4404,9 +4499,11 @@ export function Canvas() {
       const rect = wrap.getBoundingClientRect()
       const px = e.clientX - rect.left
       const py = e.clientY - rect.top
-      // Cap a single event's influence so a chunky mouse-wheel tick doesn't jump zoom levels.
-      const d = Math.max(-50, Math.min(50, e.deltaY))
-      const next = Math.min(2, Math.max(0.01, zoom * Math.exp(-d * 0.01)))
+      // Spend one shared budget across a short burst: high-resolution ratchet wheels can send
+      // one detent as several packets. The speed setting applies only to plain wheel input;
+      // modifier zoom and pinch retain the fixed historical multiplier.
+      const d = wheelLimiter.apply(e.deltaY, e.timeStamp)
+      const next = nextWheelZoom(zoom, d, plainWheel ? wheelZoomSpeed : 1)
       if (next === zoom) return
       const k = next / zoom
       setViewport({ x: px - (px - x) * k, y: py - (py - y) * k, zoom: next })
@@ -4416,7 +4513,7 @@ export function Canvas() {
       wrap.removeEventListener('wheel', onWheel, { capture: true })
       offGesture?.()
     }
-  }, [getViewport, setViewport, wheelZoom, trackpadRouting, canvasLocked])
+  }, [getViewport, setViewport, wheelZoom, wheelZoomSpeed, trackpadRouting, canvasLocked])
 
   // Double-clicking EMPTY canvas pulls back to the overview zoom — the inverse of the node
   // double-click, which frames one node. A fixed zoom, not "the camera the last focus came from":
@@ -10111,6 +10208,21 @@ export function Canvas() {
     const hidden = useSettings.getState().settings.hiddenNodeMenuItems
     return tidySeparators<MenuItem>([
       { type: 'label', label: ids.length > 1 ? `${ids.length} nodes` : '1 node' },
+      ...(ids.length === 2
+        ? (() => {
+            const firstAgent = agentIdOf(ids[0])
+            const secondAgent = agentIdOf(ids[1])
+            return firstAgent && secondAgent && canLinkAgentPair(ids[0], firstAgent, ids[1], secondAgent)
+              ? ([
+                  {
+                    label: 'Link selected agents',
+                    icon: <IconGroup />,
+                    onClick: () => linkAgentCollaboration(ids[0], ids[1])
+                  }
+                ] as MenuItem[])
+              : []
+          })()
+        : []),
       {
         label: 'New node from catalog…',
         icon: <IconShapes />,
@@ -10793,6 +10905,7 @@ export function Canvas() {
     profileText
     switchCodexAccountNode,
     connectedProjectIdForHost,
+    linkAgentCollaboration,
     deleteNodes,
     gatewayModels,
     gatewayStatus,
