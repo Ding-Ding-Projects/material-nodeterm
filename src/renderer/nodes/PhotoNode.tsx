@@ -15,7 +15,7 @@ export default function PhotoNode({ id, data, selected }: NodeProps<CanvasNode>)
     return () => { alive = false }
   }, [path])
   const fill = nodeHeaderFillStyle(data.color)
-  return <div className={`term-node photo-node${selected ? ' selected' : ''}`} style={{ borderTopColor: data.color }}>
+  return <div className={`term-node photo-node${selected ? ' selected' : ''}`} data-easter-surface="media" style={{ borderTopColor: data.color }}>
     <NodeResizer minWidth={280} minHeight={220} isVisible={selected} color={data.color} />
     <Handle id="flow-in" type="target" position={Position.Top} isConnectable={false} style={{ opacity: 0, pointerEvents: 'none', top: 0 }} />
     <div className={`term-node__header ${fill.className}${fill.filled ? ' term-node__header--filled' : ''}`} style={fill.style}>

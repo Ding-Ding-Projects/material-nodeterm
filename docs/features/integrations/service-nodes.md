@@ -6,16 +6,20 @@ any other node, and it stores where it would reach a service — but nothing dia
 Read this document alongside the "what does not work yet" section below before assuming a control
 does more than it says.
 
-## The six kinds, and why one is called a manager and not a host
+The separate `gitlab-hosting` node is now the guided hosting route for GitLab Server. It does not
+change the placeholder `gitlab` service node described below, which remains a manager for an
+already-running external GitLab instance and still stores only its safe address intent.
 
-Six new node kinds join the canvas's `NodeKind` union
+## The service kinds, and why one is called a manager and not a host
+
+Service manager node kinds join the canvas's `NodeKind` union
 (`src/shared/types.ts` `SERVICE_NODE_KINDS`): `minecraft`, `dockerhost`, `proxmox`, `gitlab`,
-`homeassistant`, `freepbx`. Each shares the same service-node shell,
-`src/renderer/nodes/ServiceNode.tsx` — one component with six callers, because the only thing that
+`homeassistant`, `freepbx`, `cloudflare-zero-trust`, and `nextcloud-aio`. Each shares the same service-node shell,
+`src/renderer/nodes/ServiceNode.tsx` — one component with these callers, because the only thing that
 varies between them is a label and a starting size, and this codebase's most repeated lesson is
 that a duplicated rule drifts from its copies.
 
-Every one of the six is a **manager for something that already exists elsewhere**, not a thing this
+Every service kind is a **manager for something that already exists elsewhere**, not a thing this
 node hosts. That is deliberate and it is worth stating for Proxmox specifically, because it is the
 kind most likely to be misread: **Proxmox is a bare-metal hypervisor distribution.** You install it
 directly onto a physical machine's disk — it does not run inside Docker, and there is nothing for a
@@ -23,31 +27,35 @@ canvas right-click to spin up. A Proxmox node's whole job, once it does somethin
 window onto an installation that is already running somewhere. The same framing holds for the rest
 of the family in softer form: a `dockerhost` node manages a Docker daemon that is already running on
 some machine, a `gitlab` node manages a GitLab instance, `homeassistant` discovers a running Home
-Assistant, and `freepbx` manages a running FreePBX box. `minecraft` is the closest thing to an
+Assistant, and `freepbx` manages a running FreePBX box. `nextcloud-aio` manages a pinned official
+Nextcloud AIO master container through an explicitly disclosed Docker socket, without privileged
+mode. `minecraft` is the closest thing to an
 exception — a Minecraft server is realistically something *this* app would help stand up in Docker —
 but the node itself, as shipped, is exactly as inert as its five siblings; see
 [`minecraft-server.md`](minecraft-server.md) for the researched design of the part that would
 actually create one.
 
-None of the six kinds appear in `docs/features/integrations/README.md`'s old "planned, not yet
-researched" list by accident of naming — they are the same six products that list already named.
+None of the service kinds appear in `docs/features/integrations/README.md`'s old "planned, not yet
+researched" list by accident of naming — they are the products that list already named. The
+Cloudflare manager is now the live typed API-backed member of the family.
 What changed is that the canvas object for each now exists; the research and the real client work
 for most of them has not started.
 
 ## Creating one
 
-Right-click empty canvas → **Managers** → **New manager…** opens a submenu listing all six kinds by
+Right-click empty canvas → **Managers** → **New manager…** opens a submenu listing all service kinds by
 their human-readable label (`SERVICE_NODE_LABELS`, e.g. "Docker host", "Home Assistant"). Picking
 one calls `addService(kind, at)` in `src/renderer/canvas/Canvas.tsx`, which is the one handler for
 every kind — the kind is data, not six copies of the same three lines. The **Managers** group is
-folded into a single submenu row deliberately: six product names spliced directly into the pane
+folded into a single submenu row deliberately: product names spliced directly into the pane
 menu would have been exactly the clutter the menu's own search filter exists to avoid, and the
 submenu still matches on its children's labels, so typing "prox" into the pane-menu filter reaches
 Proxmox from the top level anyway (see the sectioned/filterable pane-menu behavior in the root
 `CLAUDE.md`).
 
-There is currently no other creation path — no command-palette entry, no dock button — only the
-pane context menu.
+The Cloudflare manager panel provides typed Access, Zero Trust, Workers, Pages, R2, D1 and Queues
+operations with local protected credentials, portable neutral intent, bounded responses, progress,
+cancellation, and destructive confirmation. Other service kinds retain their documented paths.
 
 ### What you get, and its starting size
 

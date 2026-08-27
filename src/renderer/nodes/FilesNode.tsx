@@ -19,13 +19,15 @@
  * Canvas's one `openFile`, and this node never grows a second opinion about what a `.png` is.
  * Directories navigate in place (persisted, so a reload comes back where you were).
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { NodeResizer, useReactFlow, type NodeProps } from '@xyflow/react'
 import type { DirEntry } from '@shared/types'
 import { NODE_MIN_SIZES } from '../lib/nodeSizing'
 import { COLLAPSED_HEIGHT, NODE_COLORS, type CanvasNode } from '../state/workspace'
-import { breadcrumbs, childPath, fileOpenTarget, filterEntries, folderTitle, parentDir } from '../lib/filesNode'
+import { breadcrumbs, childPath, fileOpenTarget, folderTitle, parentDir } from '../lib/filesNode'
 import { ancestorDirs, createTargetDir, newEntryPath } from '../lib/explorerCreate'
+import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
+import { AnchoredRegexBuilder } from '../components/regex/AnchoredRegexBuilder'
 import { sshFs } from '../terminal/ssh-fs'
 import { useSession } from '../session/session'
 import { useProjects } from '../state/projects'
@@ -58,7 +60,8 @@ export function FilesNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const [titleBefore, setTitleBefore] = useState('')
   const [entries, setEntries] = useState<DirEntry[] | null>(null)
   const [error, setError] = useState('')
-  const [query, setQuery] = useState('')
+  const search = useRegexSearchField({ mode: 'text' })
+  const searchRef = useRef<HTMLInputElement>(null)
   const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null)
   /** Bumped to force a re-list after a create; `cwd` alone cannot express "same dir, new content". */
   const [version, setVersion] = useState(0)
@@ -106,9 +109,9 @@ export function FilesNode({ id, data, selected }: NodeProps<CanvasNode>) {
       const patch: Record<string, unknown> = { cwd: to }
       if (data.titleAuto !== false) patch.title = folderTitle(to)
       updateNodeData(id, patch)
-      setQuery('')
+      search.reset()
     },
-    [id, updateNodeData, data.titleAuto]
+    [id, updateNodeData, data.titleAuto, search.reset]
   )
 
   const open = useCallback(
@@ -224,7 +227,10 @@ export function FilesNode({ id, data, selected }: NodeProps<CanvasNode>) {
       })
     )
 
-  const shown = useMemo(() => filterEntries(entries ?? [], query), [entries, query])
+  const shown = useMemo(
+    () => (entries ?? []).filter((entry) => search.test(entry.name)),
+    [entries, search.test]
+  )
   const crumbs = useMemo(() => breadcrumbs(cwd), [cwd])
 
   return (
@@ -330,19 +336,26 @@ export function FilesNode({ id, data, selected }: NodeProps<CanvasNode>) {
             ))}
           </div>
 
-          <input
-            className="files-node__filter nodrag"
-            value={query}
-            placeholder="Filter…"
-            spellCheck={false}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                e.preventDefault()
-                setQuery('')
-              }
-            }}
-          />
+          <div className="files-node__search nodrag">
+            <input
+              ref={searchRef}
+              className="files-node__filter"
+              type="search"
+              value={search.value}
+              placeholder={search.mode === 'regex' ? 'Filter files… (regex)' : 'Filter files…'}
+              aria-label="Filter files"
+              spellCheck={false}
+              onChange={(e) => search.setValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  e.preventDefault()
+                  search.reset()
+                }
+              }}
+            />
+            <AnchoredRegexBuilder search={search} fieldRef={searchRef} label="Regex builder for Files node filter" />
+          </div>
+          {search.error && <p className="files-node__search-error" role="alert">{search.error}</p>}
 
           <div
             className="files-node__list nodrag nowheel"
@@ -359,7 +372,7 @@ export function FilesNode({ id, data, selected }: NodeProps<CanvasNode>) {
             ) : entries.length === 0 ? (
               <div className="files-node__empty">This folder is empty.</div>
             ) : shown.length === 0 ? (
-              <div className="files-node__empty">Nothing matches “{query.trim()}”.</div>
+              <div className="files-node__empty">Nothing matches “{search.value.trim()}”.</div>
             ) : (
               shown.map((entry) => (
                 <div

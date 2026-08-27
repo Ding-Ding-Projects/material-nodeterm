@@ -15,7 +15,7 @@ the deep architecture reference these articles are distilled from.
 | [Terminals](./terminals/README.md) | Real shells as nodes, persistent backends across app restarts, and cold restore after reboot. |
 | [Canvas](./canvas/README.md) | The pan/zoom surface, every node kind, and the terminal-node lifecycle. |
 | [Projects](./projects/README.md) | Projects as tabs, per-project canvases, persistence and folder binding. |
-| [Agents](./agents/README.md) | Claude Code, Codex, Gemini, opencode, Grok and custom agent CLIs as nodes. |
+| [Agents](./agents/README.md) | Claude Code, Codex, Gemini, opencode, Grok, Cognition Devin and custom agent CLIs as nodes. |
 | [Source control](./source-control/README.md) | The git panel, and git worktrees bound to canvas group frames. |
 | [Kanban](./kanban/README.md) | The Trello-style board that mirrors a project's live sessions as cards. |
 | [Appearance](./appearance/README.md) | Design tokens, themes, and the measured state of the Material Design 3 migration. |
@@ -29,6 +29,7 @@ the deep architecture reference these articles are distilled from.
 | [Global and project settings](./global-and-project-settings.md) | Durable app defaults and complete sparse per-project overlays. |
 | [Help](./help/README.md) | The in-app offline documentation browser these articles are read in. |
 | [Calendar](./calendar/README.md) | Local, ICS, CalDAV, Google Calendar, and Microsoft 365 calendar nodes with offline cache and guided provider binding. |
+| [AWS managers](./aws/README.md) | Resource Explorer and Cloud Control manager nodes with local bindings, operation previews, bounded results, and cancellation. |
 
 ## How these articles are organized
 
