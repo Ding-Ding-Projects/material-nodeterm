@@ -13865,16 +13865,6 @@ button.term-node__title-text:focus-visible {
 }
 
 .easter-eggs__header > button { padding: 4px 12px; font-size: 1.4rem; }
-.easter-eggs__search { display: grid; gap: 6px; margin-top: 16px; }
-.easter-eggs__search input {
-  min-height: 44px;
-  border: 1px solid var(--md-outline, #938f99);
-  border-radius: 12px;
-  padding: 0 12px;
-  background: var(--md-surface, #1c1b1f);
-  color: inherit;
-}
-
 .easter-eggs__actions { flex-wrap: wrap; justify-content: flex-start; margin-top: 12px; }
 .easter-eggs__list { display: grid; gap: 8px; margin: 12px 0 0; padding: 0; list-style: none; }
 .easter-eggs__row {
@@ -13889,8 +13879,7 @@ button.term-node__title-text:focus-visible {
 .easter-eggs__row small { color: var(--md-on-surface-variant, #cac4d0); }
 .easter-eggs__row code { color: var(--md-primary, #d0bcff); }
 
-.easter-eggs__toast,
-.easter-eggs__armed {
+.easter-eggs__toast {
   position: fixed;
   right: 18px;
   z-index: 121;
@@ -13905,12 +13894,10 @@ button.term-node__title-text:focus-visible {
   box-shadow: var(--md-elevation-2, 0 4px 16px rgb(0 0 0 / 22%));
 }
 .easter-eggs__toast { bottom: 18px; }
-.easter-eggs__armed { top: 76px; }
 .easter-eggs__toast button { justify-self: start; }
 
 @media (prefers-reduced-motion: reduce) {
-  .easter-eggs__toast,
-  .easter-eggs__armed { animation: none; }
+  .easter-eggs__toast { animation: none; }
 }
 @media (max-width: 640px) {
   .easter-eggs__backdrop { place-items: stretch; padding: 12px; }

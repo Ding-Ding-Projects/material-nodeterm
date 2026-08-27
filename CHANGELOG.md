@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Correct issue #103's Easter egg discovery route so all 60 entries are contextual and bounded.
+  Removed keyboard chords, typed codes, Alt-click force discovery, and direct Try controls. The
+  cabinet now contains discovery history and Reset discoveries only, while the 45-second cooldown,
+  School-mode suppression, accessibility, reduced motion, ten funny levels, and local-only safety
+  contract remain in place. This correction lane did not run tests, lint, type checks, builds,
+  packaging, runtime interaction, reviews, audits, or captures.
+
 - Mount the seven AWS core-service routes on the shared AWS manager: S3, EC2, IAM, STS, Lambda,
   CloudWatch, and CloudWatch Logs. Typed operation controls now cover bounded reads, selected writes,
   destructive confirmation, pagination, cancellation, and progress while reusing the current local
