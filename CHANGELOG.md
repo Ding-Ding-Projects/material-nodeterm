@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Restore one coherent managed Codex account lifecycle and same-machine switching implementation.
+  Duplicate account handlers, app-server readers, and rollout-link publication paths were removed;
+  account-id validation, owner-bound reservations, no-overwrite hardlinks, rollback, and credential
+  boundaries remain intact. This lane intentionally did not run tests, lint, type checks, builds,
+  packaging, runtime interaction, reviews, audits, or UI captures.
+
 - Add the bundled AWS CLI v2 dependency lane. Windows packaging now stages the pinned official
   `2.36.32` MSI, verifies its SHA-256, falls back through a verified local cache or canonical
   HTTPS download, extracts it into application-local storage, exposes the installed version, and

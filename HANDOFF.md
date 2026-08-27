@@ -1,5 +1,26 @@
 # Handoff
 
+## 2026-08-27, managed Codex account behavior, issue #86
+
+The account behavior lane is implemented on `feat/program-75-account-behavior` at
+`e91c4ee610307302fb427efc1b12f75b65e7d254`. It removes duplicated account lifecycle registration,
+app-server readers, and rollout-link publication paths from the current base while preserving the
+shared safe account-id predicate, isolated account homes, owner-bound switch reservations,
+no-overwrite same-machine rollout hardlinks, rollback, and removal coordination.
+
+The lane was compared with `origin/main` at
+`54164b84dce0b7e62787b1de2885405ff4ed821c`. That ref was 108 commits ahead and would introduce
+unrelated changes across 284 files, so no unrelated base merge was retained in this account-only
+lane. The working tree remains clean after the account commit and the normal push.
+
+Direct records are in `docs/features/agents/codex-account-behavior.md` and the agents category
+index. Migration, endpoint modeling, cross-project transport, projections, navigation, grouping,
+dependency operations, custom-agent harnesses, model switching, and restart logic remain outside
+this handoff.
+
+Tests, lint, type checks, builds, packaging, runtime interaction, reviews, audits, and screenshots were
+not run by explicit lane scope. No main merge, release, deletion, or cleanup was performed.
+
 ## 2026-08-27, bundled AWS CLI v2 lane, issue #41
 
 Issue #41 is implemented on `feat/program-30-bundled-aws-cli`, reconciled with
