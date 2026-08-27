@@ -52,6 +52,37 @@ evidence before integration. No tests, type checks, lint, reviews, audits, build
 installer execution, runtime interaction, or UI captures were run in that lane. The integration
 owner must evaluate the exact merged commit before treating the release workflow as recovered.
 
+## 2026-08-27, personal vocabulary surface manifest repair
+
+Release run `33121215883` at `c037d569f1ce77bc98fb47c80f2cad4d30a9c977` passed the packaging-wrapper
+and icon phases, then failed while evaluating `scripts/check-personal-vocabulary-coverage.mjs:362`
+with `TypeError: undefined is not iterable` at the `PRODUCTION_SURFACES` destructuring map.
+
+The repair keeps exactly one current row for each of the 61 production surfaces, retains the mapped
+rows where mapped and obsolete unmapped rows overlapped, restores the missing `dictation-overlay`
+separator, and updates `CANONICAL_SURFACE_IDS` to the same 61-ID order. The set comparison was
+performed read-only outside the production checker and found no duplicate IDs or set differences.
+
+This lane intentionally ran no scripts, tests, checkers, lint, type checks, builds, packaging,
+installer execution, runtime interaction, reviews, audits, or UI captures. The repair remains
+unverified by those activities until the integration owner evaluates the exact merged commit.
+
+## 2026-08-27, personal vocabulary mutation fixture repair
+
+Release run `33120352944` at `4becb8deb1ee520ebccabcb3bd1d43293c60af00` passed every packaging-wrapper
+and icon phase, then failed during application build while parsing
+`scripts/check-personal-vocabulary-coverage.mjs:515` with
+`SyntaxError: Identifier 'titleMutationCalls' has already been declared`.
+
+The repair removes the obsolete duplicate title and body mutation fixture checks that used the
+older object-shape filter. One title mutation and one body mutation now remain, both using the
+same production `kind` plus `title` object-payload filter as the main Canvas inventory. No adjacent
+duplicate declaration or missing fixture boundary was found after the edit.
+
+This lane intentionally ran no scripts, tests, checkers, lint, type checks, builds, packaging,
+installer execution, runtime interaction, reviews, audits, or UI captures. The repair remains
+unverified by those activities until the integration owner evaluates the exact merged commit.
+
 ## 2026-08-27, Squirrel packaging asynchronous exit repair
 
 The Windows packaging wrapper now keeps its top-level asynchronous entrypoint alive until every
