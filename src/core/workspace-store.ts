@@ -7,10 +7,10 @@ import { platform } from './platform'
 import { renameAtomic, sweepStaleTempFiles, tempNameFor } from './fs-atomic'
 import {
   DEFAULT_PROJECT_ID, EMPTY_WORKSPACE,
-  type BridgeLink, type CanvasNodeState, type Project, type Workspace, type WorkspaceV1
+  type CanvasNodeState, type Link, type Project, type Workspace, type WorkspaceV1
 } from '../shared/types'
 import {
-  PROJECT_DIR, PROJECT_FILE, fileToProject, projectToFile, resolveNodes, sameProjectContent,
+  PROJECT_DIR, PROJECT_FILE, fileToProject, migrateLinks, projectToFile, resolveNodes, sameProjectContent,
   serializeProjectFile, splitWorkspace, validKanban,
   type IndexEntryV3, type ProjectFileV1, type WorkspaceIndexV3
 } from './workspace-files'
@@ -360,13 +360,16 @@ export class WorkspaceStore {
         // Inline projects are stored verbatim in the index (no fileToProject pass), so apply the
         // same runtime guards here. In particular, old/hand-edited `pendingLaunch.command` must not
         // reach the renderer: only a validated typed launch from this machine-local store survives.
+        const { kanban, ...rest } = e.project
+        const links = migrateLinks(e.project)
+        const base = validKanban(kanban) ? e.project : rest
         const project = {
-          ...e.project,
-          nodes: normalizeLocalPendingLaunch(e.project.nodes)
+          ...base,
+          nodes: normalizeLocalPendingLaunch(base.nodes),
+          ...(links ? { links } : {})
         }
         e.project = project
-        const { kanban, ...rest } = project
-        built.push({ entry: e, project: validKanban(kanban) ? project : rest })
+        built.push({ entry: e, project })
       } else if (e.cwd) {
         if (sideline) await sweepStaleTempFiles(projectFilePath(e.cwd))
         const read = await this.readProjectFile(e.cwd, sideline)
@@ -1519,17 +1522,17 @@ export class WorkspaceStore {
    * project.json, so a project whose file has never been read this run is simply absent (it
    * appears after the next load/save, which is also what re-derives the map).
    */
-  persistedCanvases(): Array<{ id: string; nodes: CanvasNodeState[]; bridges?: BridgeLink[] }> {
-    const out: Array<{ id: string; nodes: CanvasNodeState[]; bridges?: BridgeLink[] }> = []
+  persistedCanvases(): Array<{ id: string; nodes: CanvasNodeState[]; links?: Link[] }> {
+    const out: Array<{ id: string; nodes: CanvasNodeState[]; links?: Link[] }> = []
     for (const e of this.index?.entries ?? []) {
       if (e.project) {
         out.push({
           id: e.project.id,
           nodes: stripSharedNodeExec(e.project.nodes),
-          bridges: e.project.bridges
+          links: e.project.links
         })
       } else if (e.cache) {
-        out.push({ id: e.id, nodes: stripSharedNodeExec(e.cache.nodes), bridges: e.cache.bridges })
+        out.push({ id: e.id, nodes: stripSharedNodeExec(e.cache.nodes), links: migrateLinks(e.cache) })
       } else if (e.cwd) {
         const raw = this.lastWritten.get(projectFilePath(e.cwd))
         if (!raw) continue
@@ -1542,7 +1545,7 @@ export class WorkspaceStore {
           out.push({
             id: e.id,
             nodes: resolveNodes(stripSharedNodeExec(f.nodes), e.cwd),
-            bridges: f.bridges
+            links: migrateLinks(f)
           })
         } catch {
           // Corrupt cached content: skip this entry, keep scanning the others.
