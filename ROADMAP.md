@@ -277,6 +277,9 @@ intentionally unchecked because this task publishes the plan only.
       and offline documentation entry are present on the issue #41 jer. Tests, builds, packaging,
       installer execution, runtime interaction, and HuiShots remain pending, so this item stays
       unticked.
+- [x] Add the platform-free AWS CLI model documentation index for services, commands, options,
+      paginators, waiters, input and output shapes, and input skeletons. Tests, builds, runtime
+      interaction, and packaged verification remain unrun under issue #42's lane boundary.
 - [ ] Generate interactive wizard forms for every AWS service, command, option, paginator, waiter,
       skeleton, input, and output described by the installed CLI models.
 - [ ] Add AWS identity, SSO, role, MFA, Resource Explorer, Cloud Control, S3, EC2, IAM, STS,

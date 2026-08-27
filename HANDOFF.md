@@ -37,6 +37,34 @@ No tests, type checks, lint, reviews, security or accessibility checks, builds, 
 execution, runtime interaction, or HuiShots were run, per the issue's explicit ultra-speed boundary.
 The feature jer was not integrated into main and no cleanup was performed in this lane.
 
+## 2026-08-27, AWS CLI model documentation index
+
+Issue #42 is implemented on `feat/program-31-aws-model-docs`. The platform-free
+`src/core/aws-model-documentation.ts` module consumes bounded decoded official AWS CLI service,
+paginator, and waiter models and projects them into deterministic service, command, option,
+paginator, waiter, input, output, and input-skeleton documentation records. It generates official
+`docs.aws.amazon.com` CLI reference links, accepts only allowlisted optional API reference URLs,
+flattens documentation text, rejects malformed source records, duplicate required members, missing
+required shape members, duplicate CLI service tokens, and opaque future shape kinds that cannot be
+represented safely.
+
+The module also provides local plain-text or explicit regular-expression search, guided service,
+command, and section picker models with exact disabled-state reasons, and a strict portable
+selection projection. Only `serviceId`, `commandName`, and the selected documentation section can
+enter schema 3 intent. Installed executable paths, decoded model caches, generated runtime indexes,
+credentials, profiles, provider sessions, account or role identity, endpoints, pagination cursors,
+waiter progress, results, and process state are explicitly omitted.
+
+The article is bundled in `src/shared/docs-data.ts` for the offline documentation browser. The AWS
+service catalog row remains planned for the later executor and typed-wizard lanes, but links to the
+implemented documentation-index article rather than only the program plan.
+
+This lane intentionally did not run tests, type checks, lint, reviews, security checks, accessibility
+checks, builds, packaging, installer execution, runtime interaction, or UI captures. No runtime,
+accessibility, packaged-artifact, or visual correctness verdict is claimed. The later AWS CLI
+inventory lane must supply decoded official models, and the later wizard lane must render the picker
+and shape records as typed controls without adding a blank command textbox.
+
 ## 2026-08-27, Express File Converter completion, issue #21
 
 The implementation lane is `feat/program-10-file-converter`, refreshed by fast-forward before edits

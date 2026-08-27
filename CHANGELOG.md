@@ -10,6 +10,12 @@
   reviews, security or accessibility checks, builds, packaging, installer execution, runtime
   interaction, or UI captures.
 
+- Harden the AWS CLI model documentation index against malformed source records, duplicate service
+  tokens, missing required members, and unfamiliar future shape kinds. Bundle its feature article in
+  the offline documentation corpus. This ultra-speed lane intentionally did not run tests, type
+  checks, lint, reviews, security or accessibility checks, builds, packaging, installer execution,
+  runtime interaction, or UI captures.
+
 - Complete the Express File Converter flow with queue-wide collision-safe destination names,
   visible rename disclosure, final atomic no-clobber publication, and a completed-output action that
   opens the exact result in Visual Studio Code through the active project API. The converter queue
