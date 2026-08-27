@@ -140,6 +140,8 @@ function validPersistedRecord(
   if (typeof value.updatedAt !== 'number' || !Number.isFinite(value.updatedAt) || value.updatedAt < 0) return false
   if (typeof value.error !== 'string' && value.error !== null) return false
   if (typeof value.error === 'string' && value.error.length > 4096) return false
+  if (value.archiveSource !== undefined && value.archiveSource !== null &&
+    value.archiveSource !== 'bundled' && value.archiveSource !== 'verified-cache' && value.archiveSource !== 'verified-download') return false
   return validResume(value.resume)
 }
 
@@ -149,6 +151,12 @@ function errorMessage(error: unknown): string {
 
 function awsCliVersion(output: string): string | null {
   const match = /^aws-cli\/(\d+\.\d+\.\d+)\b/u.exec(output.trim())
+  return match?.[1] ?? null
+}
+
+function dependencyVersion(id: string, output: string): string | null {
+  if (id === 'aws-cli-v2') return awsCliVersion(output)
+  const match = /^v?(\d+\.\d+\.\d+)\b/u.exec(output.trim())
   return match?.[1] ?? null
 }
 
@@ -372,7 +380,19 @@ export class NodeDependencyService {
     } catch (error) {
       return { dependency, version: null, versionOutput: null, archiveSource, models: [], modelCount: 0, inventoryComplete: false, inventoryError: `AWS CLI version probe failed: ${errorMessage(error)}` }
     }
-    const version = awsCliVersion(versionOutput)
+    const version = dependencyVersion(id, versionOutput)
+    if (version !== dependency.manifest.version) {
+      return {
+        dependency,
+        version,
+        versionOutput,
+        archiveSource,
+        models: [],
+        modelCount: 0,
+        inventoryComplete: false,
+        inventoryError: `Dependency reported version ${version ?? 'unknown'}; expected ${dependency.manifest.version}.`
+      }
+    }
     if (id !== 'aws-cli-v2') {
       return { dependency, version, versionOutput, archiveSource, models: [], modelCount: 0, inventoryComplete: true, inventoryError: null }
     }
@@ -380,9 +400,12 @@ export class NodeDependencyService {
     const root = path.join(path.dirname(dependency.executablePath), 'awscli', 'botocore', 'data')
     const models: NodeDependencyModelInventoryEntry[] = []
     let visited = 0
+    let visitedServices = 0
     try {
       for (const serviceEntry of await fs.readdir(root, { withFileTypes: true })) {
-        if (!serviceEntry.isDirectory() || models.length >= AWS_MODEL_INVENTORY_MAX_SERVICES) continue
+        if (!serviceEntry.isDirectory()) continue
+        visitedServices += 1
+        if (visitedServices > AWS_MODEL_INVENTORY_MAX_SERVICES) throw new Error('AWS CLI model inventory exceeded its service limit.')
         const serviceRoot = path.join(root, serviceEntry.name)
         const versions: string[] = []
         let modelFileCount = 0
@@ -400,19 +423,19 @@ export class NodeDependencyService {
         if (versions.length) models.push({ service: serviceEntry.name, versions: versions.sort(), modelFileCount })
       }
       models.sort((left, right) => left.service.localeCompare(right.service))
-      const complete = models.length < AWS_MODEL_INVENTORY_MAX_SERVICES
+      const complete = models.length > 0
       return {
         dependency,
         version,
         versionOutput,
-        archiveSource: archiveSource ?? 'verified-cache',
+        archiveSource,
         models,
         modelCount: models.reduce((total, item) => total + item.modelFileCount, 0),
         inventoryComplete: complete,
-        inventoryError: complete ? null : 'AWS CLI model inventory reached its service limit.'
+        inventoryError: complete ? null : 'AWS CLI model inventory contained no service models.'
       }
     } catch (error) {
-      return { dependency, version, versionOutput, archiveSource: archiveSource ?? 'verified-cache', models: [], modelCount: 0, inventoryComplete: false, inventoryError: errorMessage(error) }
+      return { dependency, version, versionOutput, archiveSource, models: [], modelCount: 0, inventoryComplete: false, inventoryError: errorMessage(error) }
     }
   }
 
@@ -775,7 +798,9 @@ export class NodeDependencyService {
       if (!stat.isFile()) return false
       if (entry.healthProbe.kind === 'file') return true
       const result = await execFileAsync(file, [...(entry.healthProbe.args ?? [])], { timeout: 10_000, windowsHide: true, encoding: 'utf8' })
-      return typeof entry.healthProbe.expectedVersion !== 'string' || String(result.stdout).trim() === entry.healthProbe.expectedVersion
+      const output = String(result.stdout || result.stderr).trim()
+      if (typeof entry.healthProbe.expectedVersion === 'string' && output !== entry.healthProbe.expectedVersion) return false
+      return typeof entry.healthProbe.expectedVersionPrefix !== 'string' || output.startsWith(entry.healthProbe.expectedVersionPrefix)
     } catch {
       return false
     }

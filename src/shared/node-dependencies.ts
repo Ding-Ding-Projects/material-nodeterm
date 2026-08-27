@@ -33,6 +33,8 @@ export interface NodeDependencyHealthProbe {
   args?: readonly string[]
   /** Exact expected output, when the probe is an executable-version probe. */
   expectedVersion?: string
+  /** Expected leading version token when the executable appends build/runtime details. */
+  expectedVersionPrefix?: string
 }
 
 export interface NodeDependencyRepairStrategy {
@@ -181,7 +183,7 @@ export const NODE_DEPENDENCY_MANIFEST: readonly NodeDependencyManifestEntry[] = 
       kind: 'executable-version',
       relativePath: 'aws.exe',
       args: ['--version'],
-      expectedVersion: undefined
+      expectedVersionPrefix: `aws-cli/${AWS_CLI_VERSION}`
     },
     repairStrategy: {
       kind: 'reinstall-from-cache-or-source',
