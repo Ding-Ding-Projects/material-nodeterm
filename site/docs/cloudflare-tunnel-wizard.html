@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cloudflare Tunnel wizard - nodeterm docs</title>
+    <meta name="description" content="A guided, review-first Cloudflare Tunnel wizard with discovered origin choices and local credential binding." />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+  </head>
+  <body>
+    <div class="doc-topbar"><a href="../index.html">← nodeterm</a><span aria-hidden="true">/</span><a href="./index.html">Docs</a></div>
+    <article class="doc-body">
+      <p class="doc-kicker">Remote and services</p>
+      <h1>Cloudflare Tunnel wizard</h1>
+      <p>The one-click wizard presents populated choices for a Cloudflare account, zone, hostname, origin host, discovered container, network, port, and verified origin. It is review-first: the user sees the exact route before any external operation starts.</p>
+      <h2>Guided controls</h2>
+      <p>Every picker has its own local plain-text search and adjacent anchored regex builder. The host boundary receives opaque selections from the latest discovery snapshot, not a raw request, shell command, container command, or arbitrary origin URL. The hostname is validated as a DNS name inside the selected zone.</p>
+      <h2>Progress and recovery</h2>
+      <p>Creation reports preflight, creation, routing, verification, completion, cancellation, and failure. Cancellation uses a bounded abort path and preserves the prior binding. A failed operation retains its review so the user can refresh discovery or retry without re-entering the choices.</p>
+      <h2>Privacy and portability</h2>
+      <p>Portable schema 3 keeps the requested hostname, zone name, protocol, port, and desired host, container, and network labels. Account ids, zone ids, host ids, container ids, network ids, credentials, paths, caches, and process state remain local. The trusted host stores a provider-account reference and a stable local vault-key name, never the credential value.</p>
+      <h2>Verification</h2>
+      <p>This ultra-speed implementation lane did not run tests, type checking, lint, review, security or accessibility checks, builds, packaging, installer execution, runtime interaction, or captures. Provider adapter wiring and runtime evidence remain for the integration and verification lanes.</p>
+      <section class="doc-suggested"><h2>Suggested articles</h2><ul><li><a href="./provider-services.html">Shared provider services</a></li><li><a href="./docker-host-manager.html">Docker host manager</a></li><li><a href="./node-catalog.html">Unified Node Catalog</a></li></ul></section>
+    </article>
+  </body>
+</html>

@@ -8,6 +8,9 @@ Two different ways nodeterm reaches a machine that isn't the one in front of you
   browser over plain HTTP/WebSocket.
 - [Docker host manager](./docker-host.md) - guided local and SSH context management for containers,
   images, volumes, networks, Compose profiles, statistics, logs, and fixed typed tasks.
+- [Cloudflare Tunnel wizard](./cloudflare-tunnel-wizard.md) - one-click review-first route with
+  populated account, zone, hostname, host, container, network, port, and origin choices, local
+  credential binding, portable intent, cancellation, and recovery.
 
 See also [Agents](../agents/README.md) for how agent hooks and permission modes work across an
 SSH connection, and [Packaging](../packaging/README.md) for how the headless notification host

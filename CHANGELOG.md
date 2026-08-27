@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add the review-first Cloudflare Tunnel wizard with populated account, zone, hostname, host,
+  discovered container, network, port, and origin pickers. Each picker has isolated local search
+  and an anchored regex builder; the host boundary receives only opaque selections, progress is
+  cancellable, failures retain a recovery preview, and local provider credential binding stays
+  separate from schema 3 portable intent. This ultra-speed lane intentionally did not run tests,
+  type checks, lint, reviews, security or accessibility checks, builds, packaging, installer
+  execution, runtime interaction, or UI captures.
+
 - Complete the Express File Converter flow with queue-wide collision-safe destination names,
   visible rename disclosure, final atomic no-clobber publication, and a completed-output action that
   opens the exact result in Visual Studio Code through the active project API. The converter queue

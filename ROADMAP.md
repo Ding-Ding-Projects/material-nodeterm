@@ -286,7 +286,10 @@ intentionally unchecked because this task publishes the plan only.
 - [ ] Add Open WebUI hosting with existing Ollama reuse and honest bootstrap states.
 - [ ] Add Cloudflare account, zone, DNS, security, Workers, Pages, storage, queue, Access, and
       analytics managers.
-- [ ] Add one-click Cloudflare Tunnel setup with private-first routing and connector choices.
+- [ ] Add one-click Cloudflare Tunnel setup with private-first routing and connector choices. The
+      wizard source surface is implemented in `src/shared/cloudflare-tunnel-wizard.ts` and
+      `src/renderer/components/cloudflare/CloudflareTunnelWizard.tsx`; provider and host adapters,
+      built-artifact verification, and release evidence remain pending.
 
 ### Clean-room features and upstream parity
 
