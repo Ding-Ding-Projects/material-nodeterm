@@ -488,6 +488,29 @@ interaction, reviews, security or accessibility audits, or captures. The parent 
 must wire the validator into every relevant persistence boundary, regenerate the offline
 documentation bundle, and perform the remaining verification before merging. No GitHub issue or
 pull request mutation was performed by this lane.
+## 2026-08-27, persisted link migration, issue #86 and upstream PR #422
+
+The link migration is present on the assigned branch at `feat/program-75-link-migration`, reconciled
+with the exact `origin/main` tip `54164b84dce0b7e62787b1de2885405ff4ed821c`. The source integration
+is commit `24edc040d38366f9dbc7e85549d3adf38997b6bc`, which carries the two-file migration change
+from commit `eb9147af08606da84927a57c0faae7abf949247b`.
+
+`src/core/workspace-files.ts` now provides `migrateLinks`, mapping `bridges` to context links and
+`ropes` to display-only lineage links while preserving ids. New project saves emit `links` only.
+`src/core/workspace-store.ts` applies the same conversion to inline projects and to the
+`persistedCanvases()` snapshot for inline, cached SSH, and local project data. Existing `links`
+content wins over stale legacy arrays, and empty legacy collections remain absent.
+
+Direct documentation is `docs/features/projects/persisted-link-migration.md`, indexed from the
+Projects category. The changelog records the same scope and verification boundary. The generated
+offline documentation bundle was not regenerated because this lane explicitly forbids builds and
+checks; the parent integration lane must regenerate it and verify the bundle.
+
+This lane intentionally did not run tests, lint, type checks, builds, packaging, runtime
+interaction, reviews, accessibility or security audits, or captures. Endpoint modeling, navigation,
+foreign-node projections, cross-project relationships, grouping, dependency operations, harness
+behavior, model switching, restart behavior, and account behavior remain owned by their separate
+branches. The parent owns the final integration review and any issue or pull-request updates.
 
 ## 2026-08-27, AWS core-service managers, issue #46 PR preparation
 

@@ -172,6 +172,12 @@
   rejects malformed or non-portable records, unsafe metadata, foreign mutation sources, duplicate
   ids, and oversized collections. This issue #86 model lane did not run tests, type checks, lint,
   builds, packaging, runtime interaction, reviews, accessibility or security checks, or captures.
+- Migrate legacy `bridges` and `ropes` project-file arrays into the unified typed `links` collection.
+  Bridge ids remain context links, rope ids remain display-only lineage links, and new saves emit
+  only `links`. Inline projects, cached SSH content, and persisted canvas snapshots use the same
+  idempotent conversion. The issue #86 and upstream PR #422 migration lane was reconciled with
+  `origin/main` at `54164b84dce0b7e62787b1de2885405ff4ed821c`. This source lane did not run tests,
+  lint, type checks, builds, packaging, runtime interaction, reviews, audits, or captures.
 
 - Mount the seven AWS core-service routes on the shared AWS manager: S3, EC2, IAM, STS, Lambda,
   CloudWatch, and CloudWatch Logs. Typed operation controls now cover bounded reads, selected writes,
