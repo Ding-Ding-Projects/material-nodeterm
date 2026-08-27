@@ -25,6 +25,25 @@ the tab bar but its nodes and sessions are left exactly as they were, reachable 
 away. Permanently deleting a project — which does tear down its sessions — only happens from
 that "Recently closed" list's own remove action, so an accidental tab close is always recoverable.
 
+### New project reachability
+
+The `ProjectSwitcher` menu keeps **New project** reachable when many projects are open. The
+project rows live in the menu's only scrolling region (`.md3-switcher-menu__list`), while the
+`New project` button is its sibling (`.md3-switcher-menu__add`) in the outer flex column. The
+menu's list can therefore scroll independently without carrying the creation action off-screen;
+the add button is a non-shrinking, 44-pixel control that remains available below the list. This
+is the current implementation of issue #375's reachability requirement, carried into the
+Material 3 project switcher after the former tab strip was retired.
+
+Selecting **New project** opens the existing welcome surface through `onOpenWelcome`, which keeps
+the guided New project, Open folder, and Clone repository choices together. The command palette's
+separate **New project** command still creates a project directly, so the two entry points remain
+deliberately distinct rather than silently changing one route's behavior.
+
+Source status: verified in `src/renderer/components/ProjectSwitcher.tsx` and
+`src/renderer/styles.md3.css` on 2026-08-27. Full-strip runtime interaction was not run in this
+lane.
+
 ## Configuration
 
 - A project's working directory is set once, via the folder picker, and used as the default
