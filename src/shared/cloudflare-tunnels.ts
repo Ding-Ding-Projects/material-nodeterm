@@ -221,7 +221,23 @@ export function planCloudflareRoute(
     const sameHost = routes.filter((item) => item.hostname === route.hostname)
     const existingRoute = sameHost.find((item) => item.path === route.path) ?? null
     const existingDnsRecords = dnsRecords.filter((item) => item.name === route.hostname)
-    if (existingRoute) return { status: 'conflict', route, conflict: { kind: existingRoute.tunnelId === route.tunnelId ? 'route-in-use' : 'hostname-in-use', hostname: route.hostname, requestedPath: route.path, existingRoute, existingDnsRecords, canAdopt: existingRoute.tunnelId === route.tunnelId && existingRoute.ownership === 'managed', reason: existingRoute.tunnelId === route.tunnelId ? 'This route already belongs to the selected tunnel. Review it before saving.' : 'Another tunnel already uses this hostname and path. Existing routes are preserved.' }, reason: 'Review the existing route before continuing.' }
+    if (existingRoute) {
+      return {
+        status: 'conflict',
+        route,
+        conflict: {
+          kind: existingRoute.tunnelId === route.tunnelId ? 'route-in-use' : 'hostname-in-use',
+          hostname: route.hostname,
+          requestedPath: route.path,
+          existingRoute,
+          existingDnsRecords,
+          canAdopt: existingRoute.tunnelId === route.tunnelId && existingRoute.ownership === 'managed',
+          reason: existingRoute.tunnelId === route.tunnelId
+            ? 'This route already belongs to the selected tunnel. Review it before saving.'
+            : 'Another tunnel already uses this hostname and path. Existing routes are preserved.'
+        },
+        reason: 'Review the existing route before continuing.'
+      }
     }
     if (existingDnsRecords.length && !sameHost.length) return { status: 'conflict', route, conflict: { kind: 'dns-in-use', hostname: route.hostname, requestedPath: route.path, existingRoute: null, existingDnsRecords, canAdopt: existingDnsRecords.every((record) => record.type === 'CNAME'), reason: 'A DNS record already uses this hostname. Adopt it explicitly or leave it unmanaged.' }, reason: 'DNS adoption requires an explicit review.' }
     return { status: 'ready', route, conflict: null, reason: null }

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Restore the Cloudflare Tunnel route planner after a merge retained the closing brace from a
+  block-bodied conflict branch beside the one-line return from another version. Route ownership
+  conflicts and DNS-only conflicts now remain inside the same guarded planning operation, with the
+  existing fail-closed tunnel, hostname, path, zone, DNS-record, and explicit-adoption checks
+  unchanged. A single-file esbuild transform recorded syntax-only evidence. This ultra-speed repair
+  ran no tests, type checks, lint, reviews, audits, builds, packaging, runtime interaction, or screen
+  captures.
+
 - Reconcile stale merge fragments in `src/main/index.ts`. The main process now keeps one import
   declaration per duplicated filesystem, Electron, SSH, account, and notification helper; one quit-confirmation
   declaration and detail; one configurable-shortcut interception path; one native-notification
