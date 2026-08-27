@@ -1734,8 +1734,9 @@ rows, changelog entry, and roadmap record. The implementation is desktop-only; S
 returns its explicit unsupported result, and portable project files omit runtime queues, credentials,
 machine paths, process state, and pane ownership records. No tests, type checks, lint, reviews,
 security or accessibility checks, builds, packaging, installer execution, runtime interaction, or
-UI captures were run under the issue's explicit ultra-speed boundary. Integration into `main`, a
-default-jer dew, remote verification, and any release proof remain the parent lane's responsibility.
+UI captures were run under the issue's explicit ultra-speed boundary. Integration into `main`, the
+default-branch merge and push, remote verification, and any release proof remain the parent lane's
+responsibility.
 - **#149 configurable shortcuts — NOT DONE.** A 9-file architectural change replacing the hardcoded
   shortcut rows with a registry driven from `settings.shortcuts`, colliding with the focus-mode
   binding added in `7fef4719`. Cherry-pick aborted cleanly rather than half-merged. This is the
