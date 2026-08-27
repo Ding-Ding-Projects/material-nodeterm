@@ -176,14 +176,18 @@ export function validatePortablePortals(
   return result.sort((left, right) => left.id.localeCompare(right.id))
 }
 
-function portalDoors(portal: PortablePortalV3): [PortableUniverseDoorV3, PortableUniverseDoorV3] {
+function portalDoors(portal: PortablePortalV3, existingDoors: readonly PortableUniverseDoorV3[] = []): [PortableUniverseDoorV3, PortableUniverseDoorV3] {
+  const existingEntry = existingDoors.find((door) => door.id === portal.entryDoorId)
+  const existingReturn = existingDoors.find((door) => door.id === portal.returnDoorId)
   return createPortableUniverseDoorPair({
     entryDoorId: portal.entryDoorId,
     returnDoorId: portal.returnDoorId,
     parentCanvasId: portal.parentCanvasId,
     childCanvasId: portal.childCanvasId,
     entryLabel: portal.title,
-    returnLabel: `Return to ${portal.title}`
+    returnLabel: `Return to ${portal.title}`,
+    ...(existingEntry?.construction ? { entryConstruction: existingEntry.construction } : {}),
+    ...(existingReturn?.construction ? { returnConstruction: existingReturn.construction } : {})
   })
 }
 
@@ -203,7 +207,7 @@ export function repairPortablePortals(input: PortableCanvasProjectionV3): Portal
       continue
     }
     portalByChild.add(portal.childCanvasId)
-    const [entry, exit] = portalDoors(portal)
+    const [entry, exit] = portalDoors(portal, existingDoors)
     const entryPresent = existingDoors.some((door) => door.id === entry.id && door.canvasId === entry.canvasId && door.targetCanvasId === entry.targetCanvasId && door.pairedDoorId === entry.pairedDoorId)
     const exitPresent = existingDoors.some((door) => door.id === exit.id && door.canvasId === exit.canvasId && door.targetCanvasId === exit.targetCanvasId && door.pairedDoorId === exit.pairedDoorId)
     doors.push(entry, exit)

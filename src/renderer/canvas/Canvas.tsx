@@ -103,6 +103,7 @@ import RecoveryGameNode from '../nodes/RecoveryGameNode'
 import { SERVICE_NODE_KINDS, type ServiceNodeKind, type ProjectArchiveContents } from '@shared/types'
 import { VIRTUAL_MACHINE_NODE_CATALOG } from '@shared/virtual-machine'
 import type { ProjectIcon } from '@shared/project-icon'
+import type { PortableDoorConstructionV3 } from '@shared/door-construction'
 import BrowserNode from '../nodes/BrowserNode'
 import { ServiceNode } from '../nodes/ServiceNode'
 import VirtualMachineNode from '../nodes/VirtualMachineNode'
@@ -3210,6 +3211,22 @@ export function Canvas() {
     commitActiveToStore()
     const result = useProjects.getState().createMultiverseCanvas(activeProjectId, parentCanvasId, title)
     if (result.canvasId) bumpDirty()
+    return result
+  }, [activeProjectId, bumpDirty, commitActiveToStore])
+
+  const attachMultiverseDoor = useCallback((input: {
+    parentCanvasId: string
+    childCanvasId: string
+    entryDoorId: string
+    returnDoorId: string
+    title: string
+    entryConstruction: PortableDoorConstructionV3
+    returnConstruction: PortableDoorConstructionV3
+  }) => {
+    if (!activeProjectId) return { reason: 'Choose an open project before attaching a door.' }
+    commitActiveToStore()
+    const result = useProjects.getState().attachMultiverseDoor(activeProjectId, input)
+    if (result.portalId) bumpDirty()
     return result
   }, [activeProjectId, bumpDirty, commitActiveToStore])
 
@@ -16636,7 +16653,7 @@ export function Canvas() {
           onOpenArchive={() => void importProjectArchive()}
           archiveBusy={() => projectArchiveBusyRef.current}
         />
-        <MultiverseNavigator onNavigate={navigateMultiverseCanvas} onCreate={createMultiverseCanvas} />
+        <MultiverseNavigator onNavigate={navigateMultiverseCanvas} onCreate={createMultiverseCanvas} onConstructDoor={attachMultiverseDoor} />
         <div className="md3-app-bar__spacer" />
         {/* The docked search bar — the SAME `.cluster-search` button/title the packaged-app
             driver script selects; re-themed, never renamed. */}

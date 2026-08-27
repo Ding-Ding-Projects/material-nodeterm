@@ -28,6 +28,7 @@ import type { BridgeLink, CanvasNodeState, NavStop, Project, ProjectKanban, View
 import { projectCapabilityFields, readProjectCapabilities } from '../shared/project-capabilities'
 import { loadedAgentBrowserPartition } from '../shared/browser-partition'
 import { sanitizeProjectIcon, type ProjectIcon } from '../shared/project-icon'
+import { validatePortableDoorConstruction } from '../shared/door-construction'
 import { validateCalendarConfig } from '../shared/calendar'
 
 /**
@@ -382,9 +383,14 @@ function validPortals(value: unknown): value is ProjectPortalState[] {
   return Array.isArray(value) && value.every((item) => {
     if (!item || typeof item !== 'object' || Array.isArray(item)) return false
     const portal = item as Partial<ProjectPortalState>
-    return [portal.id, portal.parentCanvasId, portal.childCanvasId, portal.entryDoorId, portal.returnDoorId, portal.title].every((part) => typeof part === 'string' && part.length > 0) &&
-      typeof portal.depth === 'number' && Number.isInteger(portal.depth) && portal.depth > 0 &&
-      (portal.status === 'open' || portal.status === 'closed')
+    if (![portal.id, portal.parentCanvasId, portal.childCanvasId, portal.entryDoorId, portal.returnDoorId, portal.title].every((part) => typeof part === 'string' && part.length > 0) ||
+      typeof portal.depth !== 'number' || !Number.isInteger(portal.depth) || portal.depth <= 0 ||
+      (portal.status !== 'open' && portal.status !== 'closed')) return false
+    try {
+      if (portal.entryConstruction !== undefined) validatePortableDoorConstruction(portal.entryConstruction)
+      if (portal.returnConstruction !== undefined) validatePortableDoorConstruction(portal.returnConstruction)
+      return true
+    } catch { return false }
   })
 }
 
