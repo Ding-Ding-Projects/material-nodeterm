@@ -205,7 +205,11 @@ intentionally unchecked because this task publishes the plan only.
 - [ ] Add Photo, Video, mixed-media Gallery, and wild Dim Sum nodes. Photo, Video, and Gallery
       source implementation is present for issue #20; tests, builds, and packaged captures remain
       pending in the parent integration lane.
-- [ ] Add the categorized local file-converter and advanced media, archive, PDF, and OCR pipelines.
+- [ ] Add the categorized local file-converter and advanced media, archive, PDF, OCR, and
+      structured-data pipelines. Issue #22 source implementation now provides packaged PDF,
+      supported image, local English OCR, bounded ZIP inventory, deterministic JSON, portable
+      unbound intent, queue progress, cancellation, retry, and recovery. The item remains unticked
+      until the required tests, built-artifact interaction, packaging, and capture evidence run.
 - [ ] Add the bundled WebTorrent downloader with resumable per-task lifecycle. The implementation
       lane now contains the local runtime, guided intake, metadata selection, progress controls,
       restart reconciliation, bounded seeding, and machine-local state; focused verification and
