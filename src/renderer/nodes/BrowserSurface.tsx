@@ -41,21 +41,8 @@ interface BrowserSurfaceProps {
   onUrlChange: (url: string) => void
   /** Persist the page title. */
   onTitleChange: (title: string) => void
-  /**
-   * Electron session partition (see `shared/browser-profiles.ts`'s `browserPartitionFor`).
-   * Undefined = the app's default (unpartitioned) session — bit-for-bit the pre-profiles
-   * behavior. Two webviews given the SAME partition share cookies/localStorage/session state;
-   * different partitions are isolated from each other. Read once at mount: the caller (`BrowserNode`)
-   * keys this component by the partition string, so a profile CHANGE remounts a fresh
-   * `BrowserSurface` (and a fresh `<webview>`) on the new partition rather than trying to reparent
-   * a live guest across sessions — see `CanvasNodeState.browserProfileId`.
-   */
-  partition?: string
-   * The memory saver released this surface's guest process. Optional; today's one caller is a
-   * background keep-alive GHOST (see lib/webviewKeepAlive.ts), which answers by dropping its pool
-   * entry — a hidden husk with no guest has nothing left to keep alive. An ACTIVE node passes
-   * nothing and keeps the plate-and-restore behavior unchanged.
-   */
+  /** The memory saver released this surface's guest process. */
+  /* The background keep-alive caller drops its pool entry after this callback. */
   onGuestDiscarded?: () => void
 }
 
@@ -72,15 +59,10 @@ export function BrowserSurface({
   url,
   onUrlChange,
   onTitleChange,
-  partition
-}: BrowserSurfaceProps) {
-  const vocab = useVocabularyMapper()
-  url,
   partition,
-  onUrlChange,
-  onTitleChange,
   onGuestDiscarded
 }: BrowserSurfaceProps) {
+  const vocab = useVocabularyMapper()
   const ref = useRef<WebviewEl | null>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const lastUrlRef = useRef('')

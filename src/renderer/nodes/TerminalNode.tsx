@@ -191,9 +191,6 @@ import {
   NODE_COLORS,
   type CanvasNode
 } from '../state/workspace'
-import {
-  hasHooks,
-  canRecur,
 import { accountChipLabel, agentLaunchOverride, COLLAPSED_HEIGHT, NODE_COLORS, type CanvasNode } from '../state/workspace'
 import {
   hasHooks,
@@ -238,11 +235,6 @@ import {
   pendingLaunchErrorOwnership,
   pendingLaunchSummaryText
 } from './nodeVocabulary'
-  reportsOwnCopy,
-  agentConfig,
-  capabilityAgentId,
-  type AgentId
-} from '@shared/agents/config'
 import { withPermissionMode } from '@shared/agents/approval-mode'
 import { assembleResumeCommand } from '@shared/agents/launch'
 import { agentEnvSnapshot } from '@renderer/lib/agentEnv'
@@ -1106,8 +1098,6 @@ function setCo(key: string, patch: Partial<CoState>): void {
   coStates.set(key, next)
   coSubs.get(key)?.(next)
 }
-
-const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
 
 /**
  * A single terminal node: header (collapse + color + title + close), optional tag chips,
@@ -2093,14 +2083,6 @@ export function TerminalNode({
       })
       .finally(() => setPendingLaunchExecuting(false))
   }
-  const pendingWaitingOn = [
-    ...(pendingLaunch?.after ?? []).map(
-      (depId) => ((getNode(depId) as CanvasNode | undefined)?.data.title as string) || depId
-    ),
-    // The other thing a launch can be held on: this worktree's project setup script. Named, or the
-    // tooltip on a setup-only hold would read "Waiting for  to finish".
-    ...(pendingLaunch?.awaitSetupGroup ? ['the project setup script'] : [])
-  ].join(', ')
   // Use the chat panel only for a chat-capable agent with a known session; otherwise the
   // markdown-of-output view (computed in the capture effect below) is shown as a fallback.
   const useChat = mdMode && showChat && !!status?.sessionId
@@ -3660,57 +3642,6 @@ export function TerminalNode({
               // Seed written — release the PTY output that arrived while it was in flight.
               if (!toreDown) gate.open()
             }
-          }
-          // A CO-ATTACH JOINER (a second window on this node — rare on the canvas, but possible)
-          // missed the mouse-tracking mode tmux only emits at its own attach, so it can't
-          // wheel-scroll tmux history. Enable it (see CO_ATTACH_MOUSE_SEQ). Only ever set on a join,
-          // so this never fires on the solo spawn / warm-reattach-with-own-tmux-client path.
-          if (coAttachMouse) term.write(CO_ATTACH_MOUSE_SEQ)
-        } catch (err) {
-          // Never let a seed failure freeze the terminal: the live stream matters more than the
-          // history. `finally` still opens the gate below.
-          console.error('[terminal] history seed failed', err)
-        } finally {
-          // Seed written — release the PTY output that arrived while it was in flight.
-          if (!toreDown) gate.open()
-        }
-        cleanups.push(
-          transport.onExit(sid, (code) => {
-            term.write(`\r\n\x1b[90m[process exited with code ${code}]\x1b[0m\r\n`)
-            // ssh exiting 255 on an SSH-project terminal is a CONNECTION drop (sleep/wake,
-            // network change, NAT idle) — the remote tmux session survives. Report it so the
-            // reconnect coordinator can re-establish the master and respawn this node.
-            if (code === 255 && sshProjectId) sshDropHandler?.(sshProjectId, id)
-          })
-        )
-        cleanups.push(
-          term.onData((input) => {
-            // Lone Esc / Ctrl-C while the agent works: Claude Code fires NO hook on a user
-            // interrupt, so probe the cancelled turn (still-silent working → done). Exact
-            // match — arrow keys etc. arrive as multi-byte \x1b[… sequences.
-            if (showStatus && (input === '\x1b' || input === '\x03')) inferInterruptAfterSettle(id)
-            // While a wake is in flight, HOLD this input rather than write it: the resume line is
-            // sitting un-submitted in the pane and a keystroke would splice into it. The buffer is
-            // bounded — a `queueFull`/`buffered` verdict means "held, do not write". Flushed (or
-            // dropped) when the resume resolves; see `wakeInputBufferRef`. `passthrough` is the
-            // ordinary case and is byte-for-byte the old behaviour.
-            if (wakeInputBufferRef.current.offer(input).kind !== 'passthrough') return
-            transport.write(sid, input)
-          }).dispose
-        )
-        // Deliver a command only after the fresh shell settles, and never blind: zsh's init
-        // (rc files / ZLE setup) resets the tty with a FLUSH that can eat part of a queued
-        // line — a long agent launch line then sat at the prompt mangled (unbalanced quote →
-        // `quote>` on Enter) instead of running. The settle wait below minimizes wasted
-        // attempts; deliverCommand (echo-verify + retry, fail-open) guarantees a mangled
-        // line is never submitted. See command-delivery.ts.
-        const writeWhenShellReady = (cmd: string): void => {
-          let done = false
-          let timer: ReturnType<typeof setTimeout>
-          const fire = (): void => {
-            if (done) return
-            done = true
-            unsub()
             cleanups.push(
               transport.onExit(sid, (code) => {
                 term.write(`\r\n\x1b[90m[${vocabRef.current('process exited with code')} ${code}]\x1b[0m\r\n`)
@@ -3829,85 +3760,6 @@ export function TerminalNode({
               // relaunched empty while their transcripts sat on disk, unreachable.
               const st = useAgentStatus.getState().byId[id]
               const priorId = st?.sessionId || data.agentSessionId
-              const customLaunchCmd = useSettings
-                .getState()
-                .settings.customAgents.find((custom) => custom.id === agentId)?.launchCmd
-              // Shared-identity agents resume THROUGH their launcher, so the cold-restored node
-              // re-claims its own thread instead of joining as an anonymous client. `data.ssh` is what
-              // keeps a remote node on the bare command (no launcher on the host).
-              const shared = codexSharedIdentity(data.ssh || data.sshRemoteTmux)
-              const relaunch = agentColdRelaunchDecision({
-                agentId,
-                priorSessionId: priorId,
-                customLaunchCmd,
-                sharedIdentity: shared,
-                launchOverride: agentLaunchOverride(agentId)
-              })
-              if (!relaunch.reconstructable) {
-                // The shell exists, but executing the opaque custom id would cross the execution trust
-                // boundary. Leave the blank generation intact and make recovery explicit; its retry
-                // must recycle this generation first or create() would only warm-attach it.
-                setCo(termKey, {
-                  agentRelaunchError: { code: relaunch.reason }
-                })
-                return
-              }
-              setCo(termKey, { agentRelaunchError: null })
-              const remoteCodexResume =
-                agentId === 'codex' && sshProjectId && priorId
-                  ? resumeCommand(agentId, priorId, {
-                      codexProgram: sshRemote?.codexLauncherPath
-                    })
-                  : null
-              const base =
-                agentId === 'codex' && sshProjectId
-                  ? remoteCodexResume ||
-                    codexCommandForRemoteHost(relaunch.command, sshRemote?.codexLauncherPath)
-                  : relaunch.command
-              // Re-resolve the mode at relaunch: it's a property of how a session is launched, not
-              // a persisted property of the node, so the current setting wins after a reboot. `base`
-              // is always freshly built here — never a command string read back from node data — so
-              // it can never end up double-flagged. Awaited (not the sync `activePermissionMode`)
-              // because this fires on mount: right after a machine reboot it can beat the CLI version
-              // probe, and an unanswered probe would conservatively drop `auto`.
-              // Gated on THIS node's agent: claude's `auto` version gate must not decide what a grok
-              // (or any other permission-mode-capable agent's) relaunch is flagged with.
-              const cmd =
-                base &&
-                commandForAgentLaunch(
-                  base,
-                  await ensureActiveAgentLaunchPlan('terminal-cold-restore', agentId)
-                )
-              if (cmd) writeWhenShellReady(cmd) // same shell-startup race as initialCommand
-            }
-          }
-        )
-        .catch((err: unknown) => {
-          // THE missing handler, and the answer to "some terminals are black" (2026-08-06).
-          //
-          // A rejected create means core started NOTHING: no session to tear down, no data gate to
-          // open, nothing to unwire. The only thing owed is telling the user — and until now nobody
-          // did. The rejection went nowhere, the node kept the empty xterm it had mounted with, and
-          // the result was a black rectangle with no message and no way back short of deleting the
-          // node. The failure was in the main-process log the whole time.
-          //
-          // `life.dead` first: a node unmounted while its spawn was in flight has no state worth
-          // writing, and `setCo` would publish into a key the next mount reads.
-          if (life.dead) return
-          setCo(termKey, {
-            spawnError: err instanceof Error ? err.message : String(err)
-          })
-        })
-          // Two sources, in this order, and the order is the whole point:
-          //  1. the LIVE id from hooks, which tracks `/clear` and `--fork-session` minting a new
-          //     one mid-conversation, so it is the only one that can be current;
-          //  2. the id nodeterm MINTED at node creation and persisted (`data.agentSessionId`).
-          // Falling back to (2) is what stops a cold start from opening a blank conversation when
-          // no hook ever landed. That is not hypothetical: hook POSTs from an SSH node ride the
-          // reverse tunnel, and after one host reboot 18 of 40 agent nodes had no id at all and
-          // relaunched empty while their transcripts sat on disk, unreachable.
-          const st = useAgentStatus.getState().byId[id]
-          const priorId = st?.sessionId || data.agentSessionId
           // Re-resolve the mode at relaunch: it's a property of how a session is launched, not
           // a persisted property of the node, so the current setting wins after a reboot. Awaited
           // (not the sync `activePermissionMode`) because this fires on mount: right after a machine
@@ -3923,12 +3775,14 @@ export function TerminalNode({
           // Shared-identity agents (codex) resume THROUGH their launcher, so the cold-restored node
           // re-claims its own thread instead of joining as an anonymous client. `data.ssh` /
           // `data.sshRemoteTmux` keep a remote node on the bare command (no launcher on the host).
-          const mode = await ensureActivePermissionMode(agentId)
+          return Promise.all([
+            ensureActivePermissionMode(agentId),
+            warmOwningProjectId()
+          ]).then(([mode, ownerProjectId]) => {
           // …and the project's launch-info snapshot, for the same reason and with the same shape:
           // this runs at MOUNT, so on a cold boot it is racing the session's very first fetch, and
           // the synchronous `agentLaunchOverride` read below would answer "no project settings" for
           // a whole canvas of restoring nodes. Bounded and never-rejecting (see the helper).
-          const ownerProjectId = await warmOwningProjectId()
           const shared = codexSharedIdentity(data.ssh || data.sshRemoteTmux)
           const customAgent = agentConfig(agentId)
             ? undefined
@@ -3953,8 +3807,10 @@ export function TerminalNode({
             agentEnvSnapshot()
           )
           if (cmd) writeWhenShellReady(cmd) // same shell-startup race as initialCommand
+          })
         }
-      })
+      }
+      )
       .catch((err: unknown) => {
         // THE missing handler, and the answer to "some terminals are black" (2026-08-06).
         //
@@ -4010,36 +3866,6 @@ export function TerminalNode({
       id,
       guardConcurrentRestart(id, async (targetAgentId?: AgentId, targetModel?: string, restartShell?: boolean) => {
         const st = useAgentStatus.getState().byId[id]
-        const agentSessionId = st?.sessionId
-        const gate = restartEligibility(agentId, st?.state, agentSessionId)
-        if (!gate.ok || !agentId || !agentSessionId || !restartTarget()) return 'not-eligible'
-        // Built HERE, not inside the choreography: the branded launch plan owns the renderer-side,
-        // async mode read — exactly as the cold-restore relaunch above does it. Without it a canvas
-        // running
-        // in acceptEdits/plan would come back from a restart in the default mode, silently.
-        // Re-resolved at call time for the same reason as there: the mode is a property of how a
-        // session is launched, not of the node.
-        // The launch-command override rides this restart the same way it rides cold restore — a
-        // property of how the agent is launched, read fresh here rather than persisted on the
-        // node. It is skipped on the SSH-codex managed-launcher branch: that path types the
-        // remote host's own launcher path, not a program on this machine's PATH, and a local
-        // wrapper override has no meaning there.
-        const restartOverride = agentLaunchOverride(agentId)
-        const base = resumeCommand(
-          agentId,
-          agentSessionId,
-          agentId === 'codex' && sshProjectId
-            ? {
-                codexProgram: useSshConn.getState().getCodexRuntime(sshProjectId).codexLauncherPath
-              }
-            : { base: restartOverride }
-        )
-        const command = base
-          ? commandForAgentLaunch(
-              base,
-              await ensureActiveAgentLaunchPlan('terminal-restart-resume', agentId)
-            )
-          : undefined
         const currentNode = getNode(id)
         const agentSessionId = restartSessionId(st?.sessionId, currentNode?.data.agentSessionId)
         // `data.agentId` can change after a successful same-base swap while this deliberately
@@ -4247,7 +4073,6 @@ export function TerminalNode({
         // not carry its directory on PATH — naming it there would be `command not found` where a
         // plain `codex resume` works. A restarted codex node therefore rejoins as a plain client
         // until its next cold start. Fail open, same rule as everywhere else in this feature.
-        const base = resumeCommand(agentId, agentSessionId, { base: agentLaunchOverride(agentId) })
         const customAgent = agentConfig(agentId)
           ? undefined
           : useSettings.getState().settings.customAgents.find((c) => c.id === agentId)
@@ -4273,11 +4098,6 @@ export function TerminalNode({
         // and would refuse too — but the KILL_LINE below is ours, so leaving this check to it
         // meant an unusable session id erased the pane's line (three times, once per wake trigger)
         // and then declined to resume.
-        if (!base) return 'not-eligible'
-        const command = commandForAgentLaunch(
-          base,
-          await ensureActiveAgentLaunchPlan('terminal-hibernation-resume', agentId)
-        )
         if (!command) return 'not-eligible'
         // THE load-bearing gate of the wake half. Hours can pass between the exit and this
         // resume, and the pane is a REPL the user can type into: by now it may belong to vim, to
@@ -5297,7 +5117,6 @@ export function TerminalNode({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const findShortcut = useSettings.getState().settings.shortcuts.findInTerminal
-      if (matchesShortcut(e, findShortcut, isMac) && hoveredRef.current) {
       if (hoveredRef.current && effectiveBindings('terminal.find').some((s) => matchesShortcut(e, s, isMac))) {
         e.preventDefault()
         setSearchOpen((v) => !v)
@@ -5852,25 +5671,6 @@ export function TerminalNode({
             ×
           </button>
         </div>
-        )}
-        {!isHidden('ai-name', hiddenHeaderButtons) && (
-          <Tooltip label="Name with AI (from terminal output)">
-            <button className="term-node__ai nodrag" disabled={naming} onClick={nameWithAi}>
-              {naming ? '…' : '✦'}
-            </button>
-          </Tooltip>
-        )}
-        {!isHidden('comments', hiddenHeaderButtons) && (
-          <Tooltip label="Comments & activity">
-            <button
-              className="term-node__chat nodrag"
-              aria-pressed={commentsOpen}
-              onClick={() => setCommentsOpen((v) => !v)}
-            >
-              <IconChat />
-            </button>
-          </Tooltip>
-        )}
         {fanoutCapable && !isHidden('hide-fanout', hiddenHeaderButtons) && (
           <Tooltip label={hideFanout ? 'Show subagent/loop cards' : 'Hide subagent/loop cards'}>
             <button
@@ -6114,68 +5914,6 @@ export function TerminalNode({
               >
                 {pendingLaunchExecuting ? vocab('Launching…') : vocab('Retry queued launch')}
               </button>
-        {offscreenDown && (
-          <div className="term-node__offscreen nodrag">
-            <span>Session running — reattaches on view</span>
-          </div>
-        )}
-        {co.closed && (
-          <div className="term-node__closed nodrag">
-            Closed by {closedName} — this session was ended.
-          </div>
-        )}
-        {!co.closed && co.ended && (
-          <div className="term-node__closed nodrag">
-            <span>Session ended — the node was moved and never came back.</span>
-            <button className="term-node__reopen" onClick={reopenEnded}>
-              Reopen
-            </button>
-          </div>
-        )}
-        {!co.closed && !co.ended && co.spawnError && (
-          <div className="term-node__closed nodrag">
-            <span>This terminal could not be started. {co.spawnError}</span>
-            <button className="term-node__reopen" onClick={retrySpawn}>
-              Try again
-            </button>
-          </div>
-        )}
-        {!co.closed && !co.ended && !co.spawnError && co.offline && (
-          <div className="term-node__closed nodrag">
-            <span>
-              Not connected to {data.ssh ? `${(data.ssh as SshConnection).user}@${(data.ssh as SshConnection).host}` : 'the host'} — this session was not started
-              locally.
-            </span>
-            <button className="term-node__reopen" onClick={reconnectOffline}>
-              Reconnect
-            </button>
-          </div>
-        )}
-        {armed && !mdMode && (
-          <div
-            className="term-hover-guard"
-            onMouseDown={onGuardDown}
-            onMouseUp={onGuardUp}
-            title="Click to type · drag to move · scroll to pan"
-          />
-        )}
-        {mdMode &&
-          (useChat ? (
-            <Suspense fallback={null}>
-              <ChatPanel
-                nodeId={id}
-                sessionId={status?.sessionId}
-                cwd={data.cwd as string | undefined}
-                accountId={data.accountId}
-              />
-            </Suspense>
-          ) : (
-            <div className="term-md nodrag nowheel">
-              <div className="term-md__bar">
-                <span>Markdown</span>
-                <span className="term-md__hint">{mdChip ? `${mdChip} to exit` : 'Exit'}</span>
-              </div>
-              <div className="term-md__content" dangerouslySetInnerHTML={{ __html: mdHtml }} />
             </div>
           )}
           {!co.closed && !co.ended && !co.spawnError && !co.agentRelaunchError && co.offline && (

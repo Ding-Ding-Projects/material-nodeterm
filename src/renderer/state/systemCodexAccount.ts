@@ -1,9 +1,3 @@
-import { create } from 'zustand'
-
-interface SystemCodexAccountState {
-  email: string | null
-  loaded: boolean
-  remoteEmails: Record<string, string | null>
 // S6 PR 8 — the discovered identity of the SYSTEM Codex account (`~/.codex`), per machine.
 // Based on @Corvin's #112 (`src/renderer/state/systemCodexAccount.ts`).
 //

@@ -154,7 +154,10 @@ export function activePermissionMode(agentId: AgentId = 'claude'): AgentPermissi
  * kind of cross-project leak `resolvePermissionMode` exists to prevent everywhere else.
  */
 export function permissionModeForProject(
-  return projectPermissionMode(getProject(activeProjectId), agentId)
+  project: Project | undefined,
+  agentId: AgentId = 'claude'
+): AgentPermissionMode {
+  return projectPermissionMode(project, agentId)
 }
 
 /**

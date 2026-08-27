@@ -646,22 +646,12 @@ export function agentLaunchOverride(agentId: AgentId, projectId?: string): strin
  * own pane. Custom agents index past the builtin-keyed map to undefined — they already own their
  * launchCmd.
  */
-export function agentLaunchOverride(agentId: AgentId): string | undefined {
-  const raw = useSettings.getState().settings.agentLaunchCommands?.[agentId as BuiltinAgentId]
-  const cmd = typeof raw === 'string' ? raw.trim() : ''
-  return cmd || undefined
-}
-
 /**
  * Command that launches Claude Code. Detection works via hooks installed globally in
  * ~/.claude/settings.json (gated by NODETERM_* env that the PTY manager sets), so a plain
  * `claude` is enough — which is also why an override wrapper (account switchers etc.) is safe
  * here: hooks identify the session whatever the launch line was, as long as the wrapper ends up
  * exec-ing the real CLI. Append `-r <id>` to resume a specific session (used by Branch).
- */
-export function claudeLaunchCommand(): string {
-  return agentLaunchOverride('claude') ?? 'claude'
- * `projectId` layers that project's own launchCmd over the global one (`agentLaunchOverride`).
  */
 export function claudeLaunchCommand(projectId?: string): string {
   return agentLaunchOverride('claude', projectId) ?? 'claude'
@@ -800,54 +790,9 @@ export function createAgentNode(
   initialPrompt?: string,
   ssh?: Project['ssh'],
   accountId?: string,
+  projectId?: string,
   launchPlanOrPermission?: ActiveAgentLaunchPlan | AgentPermissionMode,
   options?: TerminalNodeCreationOptions
-): CanvasNode {
-  const { label, color, launchCmd } = resolveAgent(agentId)
-  // A SHARED_IDENTITY_CAPABLE agent (codex) launches through its managed launcher when this
-  // machine actually has one — otherwise the bare CLI, byte-identical to before. Asked through the
-  // capability helper, never `agentId === 'codex'`; `codexSharedIdentity` folds in the SSH answer
-  // too. An SSH node stays bare at factory construction so TerminalNode can rewrite the trusted
-  // launch to the host's preflight-resolved `codexLauncherPath` once its attachment is available.
-  // A user launch-command override wins over BOTH the builtin default and the managed launcher —
-  // an explicit "launch it exactly like this" (see agentLaunchOverride / resumeCommand's `base`).
-  const override = agentLaunchOverride(agentId)
-  const baseCmd =
-    agentId === 'claude'
-      ? claudeLaunchCommand()
-      : (override ?? agentLaunchProgram(agentId, launchCmd, codexSharedIdentity(ssh)))
-  // A flag-prompt agent (opencode) takes the initial prompt via its flag — a bare positional
-  // would be misread (opencode treats it as a project path). Everything else keeps the
-  // historical argv append, INCLUDING stdin-after-start agents (gemini has always launched
-  // via argv here; changing that is a separate decision).
-  const normalizedPrompt = initialPrompt?.replace(/\s+/g, ' ').trim() || undefined
-  const promptArg = normalizedPrompt ? shellSingleQuote(normalizedPrompt) : null
-  // A CLI whose positional prompt shares its slot with subcommands needs a separator, or a
-  // one-word prompt runs as a command instead (grok: `grok version` prints the version, `grok --
-  // version` asks the model about "version"). Absent for everyone else, so their command line is
-  // byte-identical to what it was.
-  const sep = agentConfig(agentId)?.argvPromptSeparator
-  const isFlagPrompt = agentConfig(agentId)?.promptInjectionMode === 'flag-prompt'
-  // The separator only participates when there is actually a prompt to separate (no dangling `--`),
-  // and never for a flag-prompt agent, whose prompt is not a positional at all.
-  const usesSep = !!promptArg && !!sep && !isFlagPrompt
-  // `withPrompt` is the NO-separator shape, and only that: it is read at exactly one place below,
-  // in the `!usesSep` arm. Reaching it with a prompt and no flag-prompt mode means `sep` was falsy,
-  // so an inline `${sep ? … : ''}` here could only ever expand to '' — the separator's one home is
-  // the `usesSep` arm, which spells it out.
-  const withPrompt = promptArg
-    ? isFlagPrompt
-      ? `${baseCmd} --prompt ${promptArg}`
-      : `${baseCmd} ${promptArg}`
-    : baseCmd
-  permissionMode?: AgentPermissionMode,
-  projectId?: string,
-  /** Per-node model override for a MODEL_SWITCH_CAPABLE agent (claude/codex/copilot, base-resolved).
-   *  Applied through the effective base harness via `withAgentModel` (a no-op for a non-capable
-   *  agent, so passing a model for one is harmless — it's simply not appended). Persisted as
-   *  `data.agentModel` so cold-restore and later restarts keep the model. Trails `projectId`: every
-   *  existing caller passes that ninth argument, so the model is the one that had to move. */
-  model?: string
 ): CanvasNode {
   const { label, color } = resolveAgent(agentId)
   // The launch-command override (this project's `.nodeterm/settings.json` first, then Settings →
@@ -856,6 +801,18 @@ export function createAgentNode(
   // cold-restore resume and in-place restart all pick it up identically. Custom agents already own
   // their `launchCmd`, so the global layer returns undefined for them.
   const launchCmdOverride = agentLaunchOverride(agentId, projectId)
+  const launchCmd = resolveAgent(agentId).launchCmd
+  const baseCmd = agentId === 'claude'
+    ? claudeLaunchCommand(projectId)
+    : (launchCmdOverride ?? agentLaunchProgram(agentId, launchCmd, codexSharedIdentity(ssh)))
+  const normalizedPrompt = initialPrompt?.replace(/\s+/g, ' ').trim() || undefined
+  const promptArg = normalizedPrompt ? shellSingleQuote(normalizedPrompt) : null
+  const sep = agentConfig(agentId)?.argvPromptSeparator
+  const isFlagPrompt = agentConfig(agentId)?.promptInjectionMode === 'flag-prompt'
+  const usesSep = !!promptArg && !!sep && !isFlagPrompt
+  const withPrompt = promptArg
+    ? isFlagPrompt ? `${baseCmd} --prompt ${promptArg}` : `${baseCmd} ${promptArg}`
+    : baseCmd
   // The session id is DECIDED here rather than learned from a hook later, so this node always has
   // something to resume with — see SESSION_ID_CAPABLE for the failure this closes. `uuid()` (not
   // crypto.randomUUID) because the Server Edition serves plain HTTP on a LAN, where randomUUID is
@@ -902,54 +859,6 @@ export function createAgentNode(
     ...(normalizedPrompt ? { prompt: normalizedPrompt } : {}),
     ...(permissionMode ? { permissionMode } : {}),
     ...(mintedSessionId ? { newSessionId: mintedSessionId } : {})
-  }
-  // learning its id from hooks exactly as before. Inheritance-aware: a custom agent with
-  // baseAgent:'claude' mints an id too (capabilityAgentId resolves it to claude).
-  const cliCaps = claudeCliCapsNow()
-  const sessionIdFlagSupported = supportsSessionIdFlag(agentId, cliCaps.sessionIdFlag)
-  const mintedSessionId = sessionIdFlagSupported ? uuid() : undefined
-  // Command assembly is delegated to the ONE shared builder (src/shared/agents/launch.ts), used by
-  // fresh launch AND cold-restore resume, so a custom agent's baseAgent/args/expansion are applied
-  // identically in both paths. ${env:...} in launchCmd/args expands against the boot-time env
-  // snapshot (lib/agentEnv.ts) — the SAME object the Settings preview expands against, so the
-  // typed line is the previewed line. Env-var VALUES (the env map) are separate: pty-manager
-  // injects them as process env main-side, never into the typed command. For a builtin with no
-  // custom args this is byte-identical to the old hand-built command line.
-  const customAgent = agentConfig(agentId)
-    ? undefined
-    : useSettings.getState().settings.customAgents.find((c) => c.id === agentId)
-  const { command: initialCommand, missingEnv } = assembleLaunchCommand(
-    {
-      agentId,
-      customAgent,
-      initialPrompt,
-      permissionMode,
-      sessionId: mintedSessionId,
-      sessionIdFlagSupported,
-      // A per-builtin launch-command override (Settings → Agents → Launch commands) replaces the
-      // program in the assembled line; undefined for a builtin with no override and for custom
-      // agents (they own their launchCmd). Wins over the shared-identity launcher, like a custom
-      // launchCmd — an explicit "launch it exactly like this".
-      launchCmdOverride,
-      // A SHARED_IDENTITY_CAPABLE agent (codex) launches through its managed launcher when this
-      // machine actually has one — otherwise the bare CLI, byte-identical to before. `codexSharedIdentity`
-      // folds in the SSH answer (a host has no launcher installed yet, so a remote node stays bare).
-      sharedIdentity: codexSharedIdentity(ssh),
-      // A model picked at creation (e.g. Transfer-to-agent-with-model). `withAgentModel` appends
-      // `--model <value>` for a switch-capable agent and no-ops otherwise, so the line stays
-      // byte-identical when no model is chosen.
-      model
-    },
-    // The boot-time snapshot of the desktop env (empty on browser/relay by design, where the
-    // missing-env warning below is the honest outcome — the same markers the preview shows).
-    agentEnvSnapshot()
-  )
-  if (missingEnv.length) {
-    // A missing var in the typed command (launchCmd/args) would launch with a blank — surface it,
-    // matching the preview. Env-var VALUES (the env map) are merged main-side and warned there.
-    console.warn(
-      `[custom-agent] ${label}: ${missingEnv.map((m) => '${env:' + m + '}').join(', ')} unset in launch command — expanded to empty.`
-    )
   }
   const size = terminalNodeSize()
   const terminalProfileId = terminalProfileForNewNode(ssh, options)
@@ -1113,21 +1022,6 @@ export function createAccountLoginNode(
  * agent-less shape is what keeps the node out of the Codex AGENT paths while still being scoped.
  * Local only — `codexAccounts.add()` mints on THIS machine, so there is no ssh binding to pass.
  */
-export function createCodexAccountLoginNode(
-  accountId: string,
-  index: number,
-  center?: { x: number; y: number }
-): CanvasNode {
-  const node = createTerminalNode(index, undefined, center)
-  node.data = {
-    ...node.data,
-    title: 'Codex login',
-    accountId,
-    initialCommand: 'codex login'
-  }
-  return node
-}
-
 /**
  * Terminal node that SWITCHES the system (~/.claude) Claude identity — the usage popover's
  * "Switch account" action (issue #420). Runs `claude /login` with NO `accountId`, so the spawn
@@ -1351,7 +1245,7 @@ export function createBrowserNode(
    *  what a popup is. The node's own "Keep" action clears this flag and promotes it into an
    *  ordinary persisted node. See `flowToNodeStates`, which is where the promise is actually
    *  kept. */
-  temporary?: boolean
+  temporary?: boolean,
   partition?: string
 ): CanvasNode {
   const title = url ? url.replace(/^https?:\/\//, '').slice(0, 40) : 'Browser'
@@ -1369,7 +1263,7 @@ export function createBrowserNode(
       ...(url ? { url } : {}),
       ...(ownerNodeId ? { browserOwnerNodeId: ownerNodeId } : {}),
       ...(profileId ? { browserProfileId: profileId } : {}),
-      ...(temporary ? { temporary: true } : {})
+      ...(temporary ? { temporary: true } : {}),
       ...(partition ? { partition } : {})
     }
   }
@@ -1464,6 +1358,10 @@ export function createShopNode(
       nonDeletable: true,
       tags: ['universe-shop', scope],
       creationEventId: options.creationEventId ?? newUniverseCreationEventId()
+    }
+  }
+}
+
 /** Creates a torrent downloader node. Magnet intent is safe project content; task state, source
  * file paths, destinations and runtime handles remain on the owning machine. */
 export function createTorrentNode(index: number, center?: { x: number; y: number }): CanvasNode {
@@ -1479,6 +1377,10 @@ export function createTorrentNode(index: number, center?: { x: number; y: number
       color: NODE_COLORS[(index + 2) % NODE_COLORS.length],
       group: null,
       torrentMagnet: ''
+    }
+  }
+}
+
 /** Creates a calendar node with a safe local source as the guided starting point. */
 export function createCalendarNode(index: number, center?: { x: number; y: number }): CanvasNode {
   return {
@@ -1495,6 +1397,8 @@ export function createCalendarNode(index: number, center?: { x: number; y: numbe
       calendarConfig: { provider: 'local', accountId: null, calendarId: null, timezone: 'local', view: 'agenda', showWeekends: true, cacheEnabled: true }
     }
   }
+}
+
 export function createTimerNode(index: number, center?: { x: number; y: number }): CanvasNode {
   const data: TimerNodeData = {
     title: 'Timer', color: NODE_COLORS[index % NODE_COLORS.length], group: null,
@@ -2530,46 +2434,6 @@ export function fitGroupToChildren(nodes: CanvasNode[], groupId: string): Canvas
     }
     return n
   })
-}
-
-/**
- * Zone snap (issue #394 v1, ported): place `nodeId` at `rect` — a zone of the visible viewport in
- * ROOT/flow coordinates (`zoneTargetRect`). Plain placement: the node is simply MOVED and resized,
- * exactly as if by hand. Refuses an unknown id, a group frame, or a collapsed node (a collapsed
- * node has no real height to occupy a zone with).
- *
- * `rect` is root-space; a grouped node's position is relative to its frame, so this subtracts the
- * ancestor origins (root position minus own offset = the parent chain's origin) the same way
- * `maximizeNodeToRect`-style placement would, then re-fits the ancestor frame chain — `extent:
- * 'parent'` would otherwise clamp a child bigger than its frame into an inverted range (the trap
- * `groupSelectedNodes` documents).
- */
-export function placeNodeInRect(
-  nodes: CanvasNode[],
-  nodeId: string,
-  rect: { x: number; y: number; width: number; height: number }
-): CanvasNode[] {
-  const node = nodes.find((n) => n.id === nodeId)
-  if (!node || node.type === 'group' || node.data.collapsed) return nodes
-  const root = rootPosition(node, nodes)
-  const originX = root.x - node.position.x
-  const originY = root.y - node.position.y
-  const next = nodes.map((n) =>
-    n.id === nodeId
-      ? {
-          ...n,
-          position: { x: rect.x - originX, y: rect.y - originY },
-          width: rect.width,
-          height: rect.height,
-          style: { ...n.style, width: rect.width, height: rect.height },
-          // Drop the stale measurement in the same tick: flowToNodeStates prefers `measured` over
-          // `width`/`height`, and a commit racing the re-measure would persist the OLD size.
-          measured: undefined,
-          data: { ...n.data, expandedHeight: rect.height }
-        }
-      : n
-  )
-  return fitAncestorChain(next, node.parentId)
 }
 
 /**

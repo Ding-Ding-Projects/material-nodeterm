@@ -98,6 +98,14 @@ interface EntitlementState {
 
 const EMPTY: LicenseStatus = { tier: null, active: false, expiresAt: null, seats: 0, error: null }
 
+const EMPTY_DETAIL: LicenseDetail = {
+  key: null,
+  used: 0,
+  seats: 0,
+  source: null,
+  error: null
+}
+
 export const useEntitlement = create<EntitlementState>((set, get) => {
   const apply = (status: LicenseStatus) => {
     const features = currentFeatures()
@@ -108,18 +116,6 @@ export const useEntitlement = create<EntitlementState>((set, get) => {
       seats: features.teamSeats ? Math.max(status.seats, FREE_SEATS) : 0
     })
   }
-
-const EMPTY_DETAIL: LicenseDetail = {
-  key: null,
-  used: 0,
-  seats: 0,
-  source: null,
-  error: null
-}
-
-export const useEntitlement = create<EntitlementState>((set, get) => {
-  const apply = (status: LicenseStatus) =>
-    set({ status, isPremium: status.active, seats: status.seats })
   // Live updates from the main process (launch refresh, offline grace).
   window.nodeTerminal.license.onChange(apply)
 
@@ -147,8 +143,6 @@ export const useEntitlement = create<EntitlementState>((set, get) => {
     isPremium: initialFeatures.remoteAccess,
     features: initialFeatures,
     seats: initialFeatures.teamSeats ? FREE_SEATS : 0,
-    isPremium: false,
-    seats: 0,
     detail: null,
     async hydrate() {
       apply(await window.nodeTerminal.license.getStatus())

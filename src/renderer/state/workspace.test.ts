@@ -748,6 +748,9 @@ describe('canvas-control terminal compatibility', () => {
       'codex-a'
     )
     expect(node.data.initialCommand).toBe('nodeterm-codex resume thread-a')
+  })
+})
+
 describe('model on agent node factory', () => {
   it('stamps agentModel and threads --model into the launch command for a switch-capable agent', () => {
     const node = createAgentNode('claude', 0, undefined, undefined, undefined, undefined, undefined, undefined, undefined, 'claude-sonnet-5')
