@@ -172,7 +172,7 @@ describe('recordAgentEvent + atomic write', () => {
 
   afterEach(() => {
     _resetForTest()
-    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+    fs.rmSync(dir, { recursive: true, force: true })
   })
 
   it('records events into memory and flushes valid JSON to disk', async () => {
@@ -189,10 +189,7 @@ describe('recordAgentEvent + atomic write', () => {
     expect(doc.nodes.n1.agentId).toBe('claude')
   })
 
-  // NTFS has no POSIX owner/group/other permission bits — Node's `writeFile({ mode })` on win32
-  // only ever influences the DOS read-only attribute, so `stat().mode` reports 0o666 for a normal
-  // writable file no matter what mode was requested. There is no real 0600 to observe there.
-  it.skipIf(process.platform === 'win32')('writes the file with 0600 permissions', async () => {
+  it('writes the file with 0600 permissions', async () => {
     recordAgentEvent(ev({ state: 'working' }))
     await flush()
     const mode = fs.statSync(file).mode & 0o777
@@ -228,57 +225,6 @@ describe('recordAgentEvent + atomic write', () => {
     recordAgentEvent(ev({ nodeId: 'n1', state: 'working' }))
     await flush()
     expect(seen).toHaveLength(1)
-  })
-
-  it('an older retrying flush cannot overwrite a newer mirror generation', async () => {
-    recordAgentEvent(ev({ nodeId: 'n1', state: 'working' }))
-
-    const realRename = fs.promises.rename
-    let firstAttempt = true
-    let firstRenameObserved!: () => void
-    let overlappingRenameObserved!: () => void
-    let releaseFirstRename!: () => void
-    const observed = new Promise<void>((resolve) => { firstRenameObserved = resolve })
-    const overlapped = new Promise<void>((resolve) => { overlappingRenameObserved = resolve })
-    const released = new Promise<void>((resolve) => { releaseFirstRename = resolve })
-    const renameSpy = vi.spyOn(fs.promises, 'rename').mockImplementation(async (from, to) => {
-      // Generation reservations have their own atomic sidecar write. Park only publication of
-      // agent-status.json itself or this would test the counter rather than the mirror retry.
-      if (to === file && firstAttempt) {
-        firstAttempt = false
-        firstRenameObserved()
-        await released
-        const error = new Error('injected sharing violation') as NodeJS.ErrnoException
-        error.code = 'EPERM'
-        throw error
-      }
-      if (to === file) overlappingRenameObserved()
-      return realRename(from, to)
-    })
-
-    let older: Promise<void> | undefined
-    let newer: Promise<void> | undefined
-    try {
-      older = flush()
-      await observed
-      recordAgentEvent(ev({ nodeId: 'n1', state: 'done' }))
-      newer = flush()
-      // With no FIFO, the newer write reaches rename while the older one is parked. Wait a
-      // bounded interval for that exact evidence before releasing the old writer; checking only
-      // final bytes was scheduler-dependent because either rename could happen to finish last.
-      const reachedRenameWhileOlderWasParked = await Promise.race([
-        overlapped.then(() => true),
-        new Promise<false>((resolve) => setTimeout(() => resolve(false), 100))
-      ])
-      expect(reachedRenameWhileOlderWasParked).toBe(false)
-    } finally {
-      releaseFirstRename()
-      await Promise.allSettled([older, newer].filter((p): p is Promise<void> => p !== undefined))
-      renameSpy.mockRestore()
-    }
-
-    const doc = JSON.parse(fs.readFileSync(file, 'utf8')) as MirrorFile
-    expect(doc.nodes.n1.state).toBe('done')
   })
 })
 
@@ -317,7 +263,7 @@ describe('settings block', () => {
 
   afterEach(() => {
     _resetForTest()
-    fs.rmSync(tmpDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+    fs.rmSync(tmpDir, { recursive: true, force: true })
   })
 
   it('buildFile includes the settings block when given one', () => {
@@ -376,7 +322,7 @@ describe('server block', () => {
 
   afterEach(() => {
     _resetForTest()
-    fs.rmSync(tmpDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+    fs.rmSync(tmpDir, { recursive: true, force: true })
   })
 
   it('buildFile includes the server block when given one', () => {
@@ -891,13 +837,6 @@ describe('activity mapping (toolActivity + recordRawToolEvent)', () => {
     expect(toolActivity('Write', { file_path: 'x/bar.py' })).toBe('Editing bar.py')
     expect(toolActivity('NotebookEdit', { notebook_path: '/n/nb.ipynb' })).toBe('Editing nb.ipynb')
     expect(toolActivity('Read', { file_path: '/a/baz.md' })).toBe('Reading baz.md')
-    // Cross-dialect rule, from core/path-basename.ts: a recorded path with no owner metadata
-    // treats an unqualified backslash as filename TEXT, because a POSIX file may legally be
-    // named notes\\draft.md. The old local split reported draft.md — a file that does not
-    // exist on that host — and the mistake was invisible on Windows, where the same split gives
-    // the right answer. A drive-anchored Windows path still splits as structure.
-    expect(toolActivity('Read', { file_path: '/home/dev/notes\\draft.md' })).toBe('Reading notes\\draft.md')
-    expect(toolActivity('Read', { file_path: 'C:\\Users\\x\\file.txt' })).toBe('Reading file.txt')
     expect(toolActivity('Bash', { command: 'npm test' })).toBe('Running npm test')
     expect(toolActivity('Grep', { pattern: 'foo.*bar' })).toBe('Searching foo.*bar')
     expect(toolActivity('Glob', { pattern: '**/*.ts' })).toBe('Searching **/*.ts')
@@ -1619,7 +1558,7 @@ describe('usage block on flush', () => {
   })
   afterEach(() => {
     _resetForTest()
-    fs.rmSync(tmpDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+    fs.rmSync(tmpDir, { recursive: true, force: true })
   })
 
   it('writes the usage block from the provider', async () => {
@@ -1917,7 +1856,7 @@ describe('recordAgentEvent — codex request_user_input broadcast conversion', (
 
   afterEach(() => {
     _resetForTest()
-    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+    fs.rmSync(dir, { recursive: true, force: true })
   })
 
   it('rewrites the held turn-end done to waiting, so every consumer agrees', () => {
@@ -2044,7 +1983,6 @@ describe('a restored entry is never proof', () => {
   })
   afterEach(() => {
     _resetForTest()
-    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
     fs.rmSync(dir, { recursive: true, force: true })
   })
 
@@ -2067,19 +2005,6 @@ describe('a restored entry is never proof', () => {
     expect(_snapshot().n1?.stateVerified).toBe(false)
   })
 
-  it('the first live event clears `restored`', () => {
-    const a = { state: 'done', stateVerified: false, restored: true, updatedAt: 0 } as MirrorEntry
-    expect(reduceEntry(a, ev({ state: 'working', verified: true }), 5).restored).toBeUndefined()
-  })
-
-  it('even an event that changes nothing clears it — the entry is live evidence now', () => {
-    // A context/usage event is not a state transition, but it IS this run's traffic from that
-    // node. What `restored` means is "nothing has been heard from this node since boot".
-    const a = { state: 'done', restored: true, updatedAt: 0 } as MirrorEntry
-    expect(reduceEntry(a, ev({ kind: 'context' } as never), 5).restored).toBeUndefined()
-  })
-
-  it('a restored `stateVerified` never survives to disk either', () => {
   it('the first live event that COMMITS a state clears `restored`', () => {
     // `newTurn` matters here and the first draft of this test omitted it: at now=5 against a
     // restored `done` stamped 0, a bare `working` is inside the done-holdoff, commits nothing, and
@@ -2278,3 +2203,5 @@ describe('inbox event age prune (flush)', () => {
     expect(_inboxSnapshot().events[0].resolved).toBeUndefined()
   })
 })
+
+

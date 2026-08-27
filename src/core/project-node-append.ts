@@ -40,25 +40,6 @@ const SAFE_NODE_ID = /^term-[a-z0-9]+-[a-z0-9]{1,16}$/
 const TITLE_MAX = 120
 
 /**
- * This writer deliberately preserves fields it does not understand, but execution authority is
- * the exception: project.json is shared and may have been hand-edited since the desktop last
- * wrote it. Scrub every known machine-local execution field whenever this raw rewrite lands.
- */
-function stripRawNodeExec(node: Record<string, unknown>): Record<string, unknown> {
-  const {
-    shell: _shell,
-    terminalProfileId: _terminalProfileId,
-    pendingLaunch: _pendingLaunch,
-    ...portable
-  } = node
-  const ssh = portable.ssh
-  if (!ssh || typeof ssh !== 'object' || Array.isArray(ssh)) return portable
-  const {
-    extraArgs: _extraArgs,
-    execTrusted: _execTrusted,
-    ...connection
-  } = ssh as Record<string, unknown>
-  return { ...portable, ssh: connection }
  * A `data.ssh` block usable as a donor: the two fields the pty manager needs to dial the host.
  * Half a spec is worse than none — it would produce a node that claims to be remote and cannot
  * connect.
@@ -91,7 +72,7 @@ export function appendProjectNode(raw: string, input: RemoteNodeInput, now: Date
     return null
   }
   if (root.version !== 1 || typeof root.rev !== 'number' || !Array.isArray(root.nodes)) return null
-  const nodes = (root.nodes as Array<Record<string, unknown>>).map(stripRawNodeExec)
+  const nodes = root.nodes as Array<Record<string, unknown>>
   if (nodes.some((n) => n?.id === input.id)) return null
 
   const isTerminal = (n: Record<string, unknown>): boolean =>
@@ -139,9 +120,6 @@ export function appendProjectNode(raw: string, input: RemoteNodeInput, now: Date
   if (typeof input.agentId === 'string') node.agentId = input.agentId
   if (typeof input.accountId === 'string') node.accountId = input.accountId
   // Desktop remote nodes carry the connection spec PER NODE — a sibling terminal in the same
-  // project has the right portable connection values. Machine-local execution fields were
-  // stripped above and therefore cannot be copied onto the new node.
-  const sshDonor = nodes.find((n) => isTerminal(n) && n.ssh !== undefined)
   // project has the right values; copy verbatim. No genuine donor → a plain local node.
   //
   // "Genuine" is load-bearing, and the rule used to be `n.ssh !== undefined` — which does not even
@@ -195,3 +173,5 @@ export function removeProjectNode(raw: string, nodeId: string, now: Date): strin
   root.savedAt = now.toISOString()
   return JSON.stringify(root, null, 2)
 }
+
+

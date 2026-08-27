@@ -25,36 +25,8 @@ import {
 } from './agents/node-token-files'
 import { initPlatform, resetPlatformForTests } from './platform'
 import { fakePlatform } from './platform-fake'
-import {
-  environmentForPosixShell,
-  REAL_POSIX_SHELL,
-  REAL_SHELL_TEST_TIMEOUT_MS,
-  pathForPosixShell,
-  pathsForPosixShellEnv,
-  posixShellScriptArgs,
-  quotePathForPosixShell
-} from './testing/posix-shell'
 
 const run = promisify(execFile)
-
-const SHELL_PATH_ENV_KEYS = [
-  'CODEX_HOME',
-  'HOME',
-  'NODETERM_HOOK_ENDPOINT',
-  'NODETERM_HOOK_SOCK',
-  'NODETERM_NODE_TOKEN_DIR'
-] as const
-
-/**
- * The launcher reads `cwd=$PWD` from a real MSYS shell, where `$PWD` uses `/c/...`. When that value
- * crosses into Git's native curl executable, MSYS argv conversion rewrites it to `C:/...`; that is
- * the value the Node hook server receives and the assertion must compare. A no-op on POSIX, where
- * `fs.realpathSync` is already forward-slash-shaped.
- */
-function shCwd(nativePath: string): string {
-  if (process.platform !== 'win32') return nativePath
-  return nativePath.replace(/\\/g, '/')
-}
 
 /** The one secret. Every token in this file is derived from it by `nodeAuthToken` — the same
  *  function the server verifies with, so a second derivation cannot hide here. */
@@ -75,7 +47,7 @@ let bindAnswer: (() => void) | null = null
 function writeFakeCodex(): void {
   fs.writeFileSync(
     path.join(binDir, 'codex'),
-    `#!/bin/sh\nprintf '%s\\n' "$*" >> ${quotePathForPosixShell(argvLog)}\nexit 0\n`,
+    `#!/bin/sh\nprintf '%s\\n' "$*" >> ${JSON.stringify(argvLog)}\nexit 0\n`,
     { mode: 0o755 }
   )
 }
@@ -114,7 +86,7 @@ afterAll(() => {
   hookServer.clearNodeAuthSecretForTests()
   resetNodeTokenFilesForTests()
   resetPlatformForTests()
-  fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+  fs.rmSync(dir, { recursive: true, force: true })
 })
 
 beforeEach(() => {
@@ -140,7 +112,7 @@ beforeEach(() => {
  */
 function baseEnv(): Record<string, string> {
   return {
-    PATH: process.env.PATH ?? '',
+    PATH: `${binDir}:${process.env.PATH ?? ''}`,
     HOME: dir,
     NODETERM_NODE_ID: 'node-1',
     NODETERM_HOOK_ENDPOINT: hookServer.endpointFilePath(),
@@ -159,10 +131,7 @@ function callLauncher(
 ): Promise<{ stdout: string; stderr: string }> {
   const merged = { ...baseEnv(), ...env }
   for (const [k, v] of Object.entries(merged)) if (v === '') delete (merged as any)[k]
-  return run(REAL_POSIX_SHELL, posixShellScriptArgs(script, args, binDir), {
-    env: environmentForPosixShell(pathsForPosixShellEnv(merged, SHELL_PATH_ENV_KEYS)),
-    cwd: dir
-  })
+  return run('/bin/sh', [script, ...args], { env: merged, cwd: dir })
 }
 
 /** What the fake `codex` was exec'd with, one line per invocation. */
@@ -170,7 +139,6 @@ function codexArgv(): string[] {
   return fs.readFileSync(argvLog, 'utf8').split('\n').slice(0, -1)
 }
 
-describe('generated Codex launcher', { timeout: REAL_SHELL_TEST_TIMEOUT_MS }, () => {
 /**
  * POST a codex-thread request DIRECTLY, bypassing the launcher's own account-id validation, to
  * exercise the SERVER's gate. Both bearer headers are presented so the request is authenticated and
@@ -207,16 +175,12 @@ function postCodexThread(
 
 describe('generated Codex launcher', () => {
   it('is valid POSIX sh', async () => {
-    await expect(
-      run(REAL_POSIX_SHELL, ['-n', pathForPosixShell(launcher)], {
-        env: environmentForPosixShell()
-      })
-    ).resolves.toBeTruthy()
+    await expect(run('/bin/sh', ['-n', launcher])).resolves.toBeTruthy()
   })
 
   it('starts a thread for a fresh node and resumes it on the shared app-server', async () => {
     await callLauncher([])
-    expect(started).toEqual([{ nodeId: 'node-1', cwd: shCwd(fs.realpathSync(dir)) }])
+    expect(started).toEqual([{ nodeId: 'node-1', cwd: fs.realpathSync(dir) }])
     expect(codexArgv()).toEqual(['--remote unix:// resume thread-abc'])
     expect(fallbacks).toEqual([])
   })
@@ -339,7 +303,7 @@ describe('generated Codex launcher', () => {
 // Each case below is a way the managed identity can be unavailable on a real machine. The
 // assertion is always the same pair: plain `codex` ran WITH THE ORIGINAL ARGUMENTS, and the
 // desktop was told why. Upstream, every one of these exited 69 — a dead node.
-describe('falls back to plain codex', { timeout: REAL_SHELL_TEST_TIMEOUT_MS }, () => {
+describe('falls back to plain codex', () => {
   const cases: Array<[string, Record<string, string>, string]> = [
     ['no node id (a session nodeterm did not spawn)', { NODETERM_NODE_ID: '' }, 'node-id-unavailable'],
     [
@@ -427,7 +391,7 @@ describe('falls back to plain codex', { timeout: REAL_SHELL_TEST_TIMEOUT_MS }, (
   })
 })
 
-describe('a start handler that takes real time', { timeout: REAL_SHELL_TEST_TIMEOUT_MS }, () => {
+describe('a start handler that takes real time', () => {
   // REGRESSION. `/codex-thread/start` mints a thread through a five-step conversation with an
   // app-server that is typically COLD — the first codex node after boot. The route inherited the
   // 2s slowloris guard (a RECEIVE-phase guard), so the socket was destroyed while the handler was
@@ -447,7 +411,7 @@ describe('a start handler that takes real time', { timeout: REAL_SHELL_TEST_TIME
 // shared derivation with /hook/*) and it arrives in a 0600 FILE, not in the tmux argv. Between the
 // two changes the feature was INERT — the launcher read an env var nothing set any more, reported
 // `node-token-unavailable` and ran plain codex. These are the tests that say it is not.
-describe('the per-node capability, over the file channel', { timeout: REAL_SHELL_TEST_TIMEOUT_MS }, () => {
+describe('the per-node capability, over the file channel', () => {
   it('accepts the kid.mac wire shape — the dot is part of the token, not a charset violation', async () => {
     // THE TRAP. The old gate was `*[!A-Za-z0-9_-]*`, minted from HMAC(secret, nodeId) with no
     // separator in it. The shared derivation puts a `.` between kid and mac, so that gate rejects
@@ -456,7 +420,7 @@ describe('the per-node capability, over the file channel', { timeout: REAL_SHELL
     expect(token).toContain('.')
     expect(fs.readFileSync(path.join(nodeTokenDir(), 'node-1'), 'utf8').trim()).toBe(token)
     await callLauncher([])
-    expect(started).toEqual([{ nodeId: 'node-1', cwd: shCwd(fs.realpathSync(dir)) }])
+    expect(started).toEqual([{ nodeId: 'node-1', cwd: fs.realpathSync(dir) }])
     expect(fallbacks).toEqual([])
     expect(codexArgv()).toEqual(['--remote unix:// resume thread-abc'])
   })
@@ -472,7 +436,7 @@ describe('the per-node capability, over the file channel', { timeout: REAL_SHELL
     // Charset-valid but minted for the WRONG node. If anything still read that variable, the route
     // would 403 and this node would degrade to plain codex.
     await callLauncher([], { NODETERM_CODEX_NODE_TOKEN: nodeAuthToken(SECRET, 'node-2') })
-    expect(started).toEqual([{ nodeId: 'node-1', cwd: shCwd(fs.realpathSync(dir)) }])
+    expect(started).toEqual([{ nodeId: 'node-1', cwd: fs.realpathSync(dir) }])
     expect(fallbacks).toEqual([])
   })
 
@@ -512,12 +476,12 @@ describe('the per-node capability, over the file channel', { timeout: REAL_SHELL
       expect(started).toEqual([])
       expect(fallbacks).toEqual([{ nodeId: 'node-1', reason: 'node-token-unavailable' }])
     } finally {
-      fs.rmSync(file, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+      fs.rmSync(file, { recursive: true, force: true })
     }
   })
 })
 
-describe('per-node capability (the authorization the shared bearer cannot give)', { timeout: REAL_SHELL_TEST_TIMEOUT_MS }, () => {
+describe('per-node capability (the authorization the shared bearer cannot give)', () => {
   const post = (verb: string, body: string, headers: Record<string, string>) =>
     fetch(`http://127.0.0.1:${hookServer.getPort()}/codex-thread/${verb}`, {
       method: 'POST',
@@ -593,3 +557,5 @@ describe('per-node capability (the authorization the shared bearer cannot give)'
     expect(fallbacks).toEqual([{ nodeId: 'node-1', reason: 'thread-bind-refused' }])
   })
 })
+
+

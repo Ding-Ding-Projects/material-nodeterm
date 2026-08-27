@@ -13,36 +13,6 @@
  */
 import { posixQuote } from '../shared/ssh'
 
-function buildResolver(
-  rootAssignment: string,
-  legacyMap: string,
-  scopedMap: string
-): string {
- * The mapping file is parsed as DATA (`sed`), never sourced as shell code, and both recovered
- * fields are re-validated before they are exported. The record itself is HMAC-signed by
- * `codex-identity-proxy.ts`; this prelude cannot verify that signature (no key in an agent's
- * shell), which is why the charset re-validation below is not redundant.
- *
- * ACCOUNT SCOPING (S6): a SYSTEM record lives at the bare root (`<root>/<threadId>`) and a MANAGED
- * record under `<root>/<accountId>/<threadId>`. This prelude reads `NODETERM_CODEX_ACCOUNT_ID` from
- * the daemon's env to pick the scope:
- *   - a known, safe account id ⇒ read ONLY that account's record, and require the record's
- *     `accountId=` line to agree with the daemon scope;
- *   - an EMPTY account id (the classic shared tool shell that knows only a bare thread id) ⇒ scan
- *     EVERY scope (bare-root system + each managed subdir) and bind ONLY when exactly one candidate
- *     matches (`nt_codex_matches -eq 1`). Two accounts holding the same thread id ⇒ ambiguous ⇒
- *     change nothing (Property 3 / Constraint 8, the same fail-closed posture as the TypeScript
- *     `resolveCodexThreadNodeIdentity`).
- *
- * Inert for every other agent: without `CODEX_THREAD_ID` the whole block is skipped. A machine with
- * no managed accounts has no subdirs, so the scan reduces to the one bare-root read S4 did — the
- * legacy layout keeps resolving byte-for-byte (Constraint 12).
- *
- * Deliberately free of Node/Electron imports beyond the path it is given: the generated-script
- * cores are shared by the desktop and the Server Edition.
- */
-import { posixQuote } from '../shared/ssh'
-
 /**
  * PROBE U5 (Codex 0.146.0, 2026-08-19 — docs/superpowers/probes/2026-08-codex-tool-shell-env.md):
  * a shared `app-server`-spawned tool shell carries `CODEX_THREAD_ID` (measured — a fresh id per
@@ -206,19 +176,8 @@ if [ -z "\${NODETERM_NODE_ID-}" ] && [ -n "\${CODEX_THREAD_ID-}" ]; then
 fi`
 }
 
-/** Build the resolver for the app-owned identity root supplied by `CorePlatform`. */
-export function codexThreadIdentityResolverSh(identityRoot: string): string {
-  const root = posixQuote(identityRoot)
-  return buildResolver(
-    `nt_codex_root=${root}`,
-    `${root}/"$CODEX_THREAD_ID"`,
-    `${root}/"$nt_codex_scope"/"$CODEX_THREAD_ID"`
-  )
-}
-
 /** `$HOME`-rooted form used by the remote context-link and canvas-control shims. */
-export const CODEX_THREAD_IDENTITY_RESOLVER_SH = buildResolver(
-  'nt_codex_root="$HOME/.nodeterm/codex-thread-nodes"',
-  '"$HOME/.nodeterm/codex-thread-nodes/$CODEX_THREAD_ID"',
-  '"$HOME/.nodeterm/codex-thread-nodes/$nt_codex_scope/$CODEX_THREAD_ID"'
+export const CODEX_THREAD_IDENTITY_RESOLVER_SH = codexThreadIdentityResolverSh(
+  '$HOME/.nodeterm/codex-thread-nodes'
 )
+
