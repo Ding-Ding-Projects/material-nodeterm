@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add shared provider-account, sealed credential, OAuth PKCE callback, resource-discovery, and
+  local-binding services across Desktop and Server Edition. The guided binding wizard now uses
+  searchable account and resource pickers with adjacent regex builders and exact unavailable
+  reasons instead of accepting hand-typed provider identities or resource references. Project
+  import remains side-effect free. This ultra-speed lane did not run tests, type checks, lint,
+  reviews, security or accessibility checks, builds, packaging, installer execution, runtime
+  interaction, or UI captures.
+
 - Add a source-only desktop Material Design 3 audit with a hand-written inventory of 212 rendered
   surfaces, including onboarding, profile picking, conversion, password management, Minecraft
   management, dialogs, find bars, and notifications. Shared NumberField, Radio, Progress, and Tabs

@@ -207,6 +207,31 @@ operation untouched when the picker is cancelled. The selected source path and s
 transient renderer state only. The archive writer still needs a follow-up adapter to consume the
 selected streaming sources and emit schema 3 media entries; no portable record claims those paths.
 No tests, builds, type checks, captures, commits, or dews were made.
+## 2026-08-27, shared provider services and local binding integration, issue #18
+
+Added `src/shared/provider-services.ts` and `src/core/provider-services.ts` as the shared provider
+boundary. Provider adapters now have one typed catalog, OAuth PKCE start/exchange contract, bounded
+single-use callback ledger, account metadata shape, sealed credential store, and verified resource
+discovery route. Desktop and Server Edition register the same core handlers. The preload and browser
+bridge expose the same renderer API.
+
+Reworked `PortableBindingWizard.tsx` to use guided, searchable connected-account and provider-
+resource pickers, each with its own adjacent anchored regex builder. Hand-typed provider identity
+and resource fields were removed. Configure, Rebind, and Adopt require a connected account and an
+adapter-verified resource. Locate Asset uses the existing file picker. Deploy stays disabled until
+a provider-specific adapter supplies it. Import still performs no network call, consent flow,
+deployment, provider mutation, process launch, download, or binding action.
+
+Provider secrets live only in `provider-accounts.json` under private application data, sealed by
+the platform vault when available or stored through the established owner-only Server Edition
+fallback. Local account/resource references live only in `portable-node-bindings.json`. Neither file
+enters the schema 3 projection or export. Updated the integration article and index, portable-
+binding article, documentation site article, changelog, roadmap, and handoff.
+
+This ultra-speed lane did not run tests, type checks, lint, reviews, security or accessibility
+checks, builds, packaging, installer execution, runtime interaction, or UI captures. Individual
+provider adapters and provider-specific deployment behavior remain separate program lanes.
+
 ## 2026-08-26, atomic schema 3 import and destination binding wizard
 
 Implemented schema 3 archive production and import wiring. `src/core/portable-project-import.ts`

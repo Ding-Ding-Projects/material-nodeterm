@@ -57,6 +57,12 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## In progress / partially landed
 
+- [ ] **Shared provider services, issue #18**: provider catalog, account metadata, sealed
+      credential payloads, bounded one-time OAuth PKCE callbacks, adapter-owned resource discovery,
+      and shared Desktop/Server local bindings are implemented in source. Individual provider
+      adapters, build/package evidence, runtime interaction, and captures remain pending under the
+      stated ultra-speed no-check boundary.
+
 - [ ] Desktop Material Design 3 and personal vocabulary reconciliation: the source audit and focused
   Material Design 3 fixes are present in the audit scripts and shared primitives. The Material Design 3 audit is green
   with deliberate negative regressions. Personal-vocabulary coverage is intentionally red with

@@ -49,6 +49,7 @@ export const DOCS = [
   ['Node kinds', 'terminal, agent, sticky, group, editor, diff, web', 'node-kinds'],
   ['Packaging & auto-update', 'how builds are made and shipped', 'packaging-updates'],
   ['Personal vocabulary', 'swap words for your own', 'personal-vocabulary'],
+  ['Shared provider services', 'accounts, local credentials, OAuth callbacks, and bindings', 'provider-services'],
   ['Projects & tabs', 'one canvas per project', 'projects-and-tabs'],
   ['Remote & SSH projects', 'work on another machine', 'remote-ssh-projects'],
   ['School mode', 'plain English, locked with a PIN', 'school-mode'],
