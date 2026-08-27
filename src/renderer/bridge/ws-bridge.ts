@@ -1160,7 +1160,11 @@ export function buildCloudflareCoreManagersApi(client: RpcClient): Pick<NodeTerm
     preview: (nodeId, request) => client.request(IPC.cloudflareCorePreview, nodeId, request) as ReturnType<CloudflareCoreManagersApi['preview']>,
     execute: (nodeId, request) => client.request(IPC.cloudflareCoreExecute, nodeId, request) as ReturnType<CloudflareCoreManagersApi['execute']>,
     cancel: (operationId) => client.request(IPC.cloudflareCoreCancel, operationId) as ReturnType<CloudflareCoreManagersApi['cancel']>,
-    onProgress: (listener) => client.subscribe(IPC.cloudflareCoreProgress, listener as Listener)
+    onProgress: (listener) => client.subscribe(IPC.cloudflareCoreProgress, listener as Listener),
+    tunnelState: (nodeId) => client.request(IPC.cloudflareCoreTunnelState, nodeId) as ReturnType<CloudflareCoreManagersApi['tunnelState']>,
+    probeTunnelFacet: (nodeId, facet) => client.request(IPC.cloudflareCoreTunnelProbe, nodeId, facet) as ReturnType<CloudflareCoreManagersApi['probeTunnelFacet']>,
+    cancelTunnelProbe: (nodeId) => client.request(IPC.cloudflareCoreTunnelCancel, nodeId) as ReturnType<CloudflareCoreManagersApi['cancelTunnelProbe']>,
+    onTunnelState: (listener) => client.subscribe(IPC.cloudflareCoreTunnelStateChanged, listener as Listener)
   }
   return { cloudflareCoreManagers }
 }

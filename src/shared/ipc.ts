@@ -719,6 +719,10 @@ export const IPC = {
   cloudflareCoreExecute: 'cloudflare-core:execute',
   cloudflareCoreCancel: 'cloudflare-core:cancel',
   cloudflareCoreProgress: 'cloudflare-core:progress',
+  cloudflareCoreTunnelState: 'cloudflare-core:tunnel-state',
+  cloudflareCoreTunnelProbe: 'cloudflare-core:tunnel-probe',
+  cloudflareCoreTunnelCancel: 'cloudflare-core:tunnel-cancel',
+  cloudflareCoreTunnelStateChanged: 'cloudflare-core:tunnel-state-changed',
   // Team Access (multi-seat): `relayHostInvite` ADDS a seat (invoke, `{ projectId?, email? }` →
   // `{ offer }`, cap-checked → rejects `E_SEATS_FULL`); `relayHostRevoke` (send, `{ id }`) cuts one
   // bridged peer's live session. `relayHostPeerPending`/`relayHostOpen` now also carry the seat

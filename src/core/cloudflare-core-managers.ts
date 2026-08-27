@@ -23,6 +23,15 @@ import {
   type CloudflareRisk,
   type CloudflareRuntimeStatus
 } from '../shared/cloudflare-core-managers'
+import {
+  createUnknownTunnelLiveState,
+  TUNNEL_FACETS,
+  TUNNEL_FACET_LABELS,
+  transitionTunnelState,
+  type TunnelFacet,
+  type TunnelFacetObservation,
+  type TunnelLiveState
+} from '../shared/tunnel-state'
 
 const API_BASE = 'https://api.cloudflare.com/client/v4'
 const MAX_RESPONSE_BYTES = 4 * 1024 * 1024
@@ -31,6 +40,7 @@ const MAX_INPUT_TEXT = 4096
 const COMMAND_TIMEOUT_MS = 90_000
 const MAX_PAGE = 10_000
 const MAX_PER_PAGE = 100
+const TUNNEL_PROBE_TIMEOUT_MS = 30_000
 
 interface CloudflareCredentialMeta extends CloudflareCredentialSummary {
   credentialRef: string
@@ -299,6 +309,11 @@ export class CloudflareCoreManagers implements CloudflareCoreManagersApi {
   private readonly running = new Map<string, RunningOperation>()
   private readonly cancelled = new Set<string>()
   private readonly fetchImpl: typeof fetch
+  private readonly tunnelStates = new Map<string, TunnelLiveState>()
+  private readonly tunnelGenerations = new Map<string, number>()
+  private readonly tunnelControllers = new Map<string, AbortController>()
+  private readonly tunnelProbeBaselines = new Map<string, TunnelLiveState>()
+  private readonly tunnelListeners = new Set<(state: TunnelLiveState & { nodeId: string }) => void>()
 
   constructor(private readonly platform: CorePlatform, fetchImpl: typeof fetch = globalThis.fetch) {
     this.bindings = new AtomicJsonArrayStore(join(platform.userDataDir, 'cloudflare', 'core-bindings.json'))
@@ -452,6 +467,105 @@ export class CloudflareCoreManagers implements CloudflareCoreManagersApi {
   }
 
   onProgress(_listener: (progress: CloudflareProgress) => void): () => void { return () => undefined }
+
+  async tunnelState(nodeId: string): Promise<TunnelLiveState> {
+    const target = requiredText(nodeId, 'Node id', 256)
+    return this.tunnelStates.get(target) ?? createUnknownTunnelLiveState()
+  }
+
+  private publishTunnelState(nodeId: string, state: TunnelLiveState): TunnelLiveState {
+    this.tunnelStates.set(nodeId, state)
+    const event = { nodeId, ...state }
+    this.platform.broadcast(IPC.cloudflareCoreTunnelStateChanged, event)
+    for (const listener of this.tunnelListeners) {
+      try { listener(event) } catch { /* listeners are advisory and must not break the probe */ }
+    }
+    return state
+  }
+
+  private unavailableTunnelObservation(facet: TunnelFacet, hasBinding: boolean, checkedAt: number): TunnelFacetObservation {
+    if (!hasBinding) {
+      return {
+        status: 'blocked',
+        checkedAt,
+        source: 'local-binding',
+        evidence: 'No local Cloudflare binding was available to start this observation.',
+        reason: 'Configure a local Cloudflare account binding before checking the tunnel.'
+      }
+    }
+    return {
+      status: 'unknown',
+      checkedAt,
+      source: 'unavailable',
+      evidence: `${TUNNEL_FACET_LABELS[facet]} has no registered probe in the current Cloudflare stack.`,
+      reason: 'The tunnel-specific adapter is not available on this shell yet.'
+    }
+  }
+
+  async probeTunnelFacet(nodeId: string, facet: TunnelFacet): Promise<TunnelLiveState> {
+    const target = requiredText(nodeId, 'Node id', 256)
+    if (!TUNNEL_FACETS.includes(facet)) throw new Error('Tunnel facet is invalid.')
+    const previous = this.tunnelStates.get(target) ?? createUnknownTunnelLiveState()
+    const generation = (this.tunnelGenerations.get(target) ?? previous.generation) + 1
+    this.tunnelGenerations.set(target, generation)
+    this.tunnelControllers.get(target)?.abort()
+    const controller = new AbortController()
+    this.tunnelControllers.set(target, controller)
+    this.tunnelProbeBaselines.set(target, previous)
+    const pending = transitionTunnelState(previous, facet, {
+      status: 'pending',
+      checkedAt: Date.now(),
+      source: 'local-binding',
+      evidence: 'A bounded tunnel observation has started.'
+    })
+    const pendingState = pending.ok ? { ...pending.state, generation } : { ...previous, generation }
+    this.publishTunnelState(target, pendingState)
+    const timeout = setTimeout(() => controller.abort(), TUNNEL_PROBE_TIMEOUT_MS)
+    try {
+      const currentBinding = await this.binding(target)
+      if (controller.signal.aborted || this.tunnelGenerations.get(target) !== generation) return previous
+      const observation = this.unavailableTunnelObservation(facet, currentBinding !== null, Date.now())
+      if (this.tunnelGenerations.get(target) !== generation) return previous
+      const result = transitionTunnelState(pendingState, facet, observation)
+      if (!result.ok) return previous
+      return this.publishTunnelState(target, { ...result.state, generation })
+    } catch {
+      if (controller.signal.aborted || this.tunnelGenerations.get(target) !== generation) return previous
+      const result = transitionTunnelState(pendingState, facet, {
+        status: 'unknown',
+        checkedAt: Date.now(),
+        source: 'unavailable',
+        evidence: 'The local Cloudflare binding could not be read.',
+        reason: 'Retry after the local Cloudflare binding becomes readable.'
+      })
+      return result.ok ? this.publishTunnelState(target, { ...result.state, generation }) : previous
+    } finally {
+      clearTimeout(timeout)
+      if (this.tunnelControllers.get(target) === controller) {
+        this.tunnelControllers.delete(target)
+        this.tunnelProbeBaselines.delete(target)
+      }
+    }
+  }
+
+  async cancelTunnelProbe(nodeId: string): Promise<boolean> {
+    const target = requiredText(nodeId, 'Node id', 256)
+    const controller = this.tunnelControllers.get(target)
+    if (!controller) return false
+    controller.abort()
+    this.tunnelControllers.delete(target)
+    const baseline = this.tunnelProbeBaselines.get(target)
+    this.tunnelProbeBaselines.delete(target)
+    if (baseline && this.tunnelGenerations.get(target) !== undefined) {
+      this.publishTunnelState(target, { ...baseline, generation: this.tunnelGenerations.get(target)! })
+    }
+    return true
+  }
+
+  onTunnelState(listener: (state: TunnelLiveState & { nodeId: string }) => void): () => void {
+    this.tunnelListeners.add(listener)
+    return () => this.tunnelListeners.delete(listener)
+  }
 }
 
 export async function ensureCloudflareDataDir(platform: CorePlatform): Promise<void> {
@@ -471,5 +585,8 @@ export function registerCloudflareCoreManagersIpc(platform: CorePlatform): Cloud
   platform.handle(IPC.cloudflareCorePreview, (nodeId: string, request: CloudflareOperationRequest) => manager.preview(nodeId, request))
   platform.handle(IPC.cloudflareCoreExecute, (nodeId: string, request: CloudflareOperationRequest) => manager.execute(nodeId, request))
   platform.handle(IPC.cloudflareCoreCancel, (operationId: string) => manager.cancel(operationId))
+  platform.handle(IPC.cloudflareCoreTunnelState, (nodeId: string) => manager.tunnelState(nodeId))
+  platform.handle(IPC.cloudflareCoreTunnelProbe, (nodeId: string, facet: TunnelFacet) => manager.probeTunnelFacet(nodeId, facet))
+  platform.handle(IPC.cloudflareCoreTunnelCancel, (nodeId: string) => manager.cancelTunnelProbe(nodeId))
   return manager
 }

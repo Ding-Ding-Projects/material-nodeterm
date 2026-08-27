@@ -64,6 +64,7 @@ import { normalizeAwsIdentityIntent } from '@shared/aws-identity'
 import { createRecoveryGameSnapshot, normalizeRecoveryGameSnapshot, type RecoveryGameSnapshot } from '@shared/recovery-game'
 import { CLOUDFLARE_DEFAULT_INTENT, type CloudflarePortableIntent } from '@shared/cloudflare-core-managers'
 import { AWS_MANAGER_DEFAULT_INTENT, type AwsManagerMode, type AwsManagerPortableIntent } from '@shared/aws-resource'
+import type { TunnelPortableIntent } from '@shared/tunnel-state'
 
 // Re-exported so Canvas (and anything else in the renderer) keeps importing it from here, while the
 // single implementation lives in src/shared and is shared with the relay host + the canvas-sync
@@ -273,6 +274,8 @@ export interface NodeData {
   nextcloudManagedBinding?: NextcloudManagedBinding
   /** Cloudflare manager safe intent; local credential and provider state never enters project data. */
   cloudflareCoreIntent?: CloudflarePortableIntent
+  /** Cloudflare Tunnel route intent; local observations and provider bindings stay outside project data. */
+  cloudflareTunnelIntent?: TunnelPortableIntent
   /** Access, Zero Trust, Workers, Pages, R2, D1 and Queues intent; account state stays local. */
   cloudflareZeroTrustIntent?: import('@shared/cloudflare-zero-trust').CloudflarePortableIntent
   homeAssistantIntent?: HomeAssistantNodeIntent
@@ -2908,6 +2911,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         serviceConnection: n.serviceConnection,
         cloudflareZeroTrustIntent: n.cloudflareZeroTrustIntent,
         cloudflareCoreIntent: n.cloudflareCoreIntent,
+        cloudflareTunnelIntent: n.cloudflareTunnelIntent,
         nsisSpec: n.nsisSpec,
         nsisLocalPaths: n.nsisLocalPaths,
         virtualMachineConfig: n.virtualMachineConfig,
@@ -3044,6 +3048,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         serviceConnection: n.data.serviceConnection,
         cloudflareZeroTrustIntent: n.data.cloudflareZeroTrustIntent,
         cloudflareCoreIntent: n.data.cloudflareCoreIntent,
+        cloudflareTunnelIntent: n.data.cloudflareTunnelIntent,
         nsisSpec: n.data.nsisSpec,
         nsisLocalPaths: n.data.nsisLocalPaths,
         // Media paths remain in the live node long enough for the machine-local index to retain

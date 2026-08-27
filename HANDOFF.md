@@ -156,6 +156,40 @@ execution, runtime interaction, or UI captures were run in this ultra-speed impl
 The owning integration lane must verify the exact merged commit and may not infer those verdicts
 from source inspection.
 
+## 2026-08-27, Cloudflare Tunnel state model implementation
+
+Issue #62 is implemented on `feat/program-51-tunnel-state` at the source level and reconciled with
+`origin/main` at `54164b84dce0b7e62787b1de2885405ff4ed821c`. The shared
+`src/shared/tunnel-state.ts` module keeps API creation, DNS routing, connector health, Access policy,
+origin reachability, and external reachability as six separately timestamped facets. Each facet now
+also carries its source and evidence. Transitions are bounded, reject stale observations, require a
+fresh check after failure, and preserve `unknown` as a distinct state when no trustworthy observation
+exists. Schema 3 intent is limited to the node label, hostname, origin protocol and port, connector
+mode, access-policy intent, and route mode. Provider ids, connector ids, process state, local paths,
+credentials, and observations are local-only.
+
+`src/core/cloudflare-core-managers.ts` now owns local state, per-node generations, cancellation, and
+bounded probe expiry, and publishes complete state events through typed IPC. Desktop preload,
+Server Edition handlers, the WebSocket bridge, and unsupported-surface stubs expose the same API.
+`src/renderer/nodes/CloudflareCoreManagersNode.tsx` mounts
+`src/renderer/components/tunnel/TunnelStatePanel.tsx`, whose plain-text check search and status filter
+each own an adjacent anchored full regex builder. Rows show independent status, bounded detail or
+recovery reason, timestamp, source, evidence, and a retry control with an explicit disabled-state
+reason. The current Cloudflare stack has no tunnel-specific provider or connector probes yet, so a
+configured binding remains visibly `unknown` with source `unavailable`; no binding is `blocked` with
+a Configure recovery action.
+
+Direct documentation is in `docs/features/remote/cloudflare-tunnel-state.md`, indexed from
+`docs/features/remote/README.md`. The static documentation site has the matching
+`site/docs/cloudflare-tunnel-state.html` article and index link. `CHANGELOG.md` and `ROADMAP.md`
+record the source state and the remaining verification boundary. The generated offline docs bundle
+was not rebuilt in this lane because the requested ultra-speed boundary forbids builds and runtime
+work.
+
+The lane intentionally did not run tests, type checks, lint, reviews, security or accessibility
+checks, builds, packaging, installer execution, runtime interaction, or captures. The next owner
+must wire the panel into the Cloudflare tunnel node and host APIs, regenerate the offline bundle,
+then run the appropriate focused verification against the integrated commit.
 ## 2026-08-27, AWS core-service managers, issue #46 PR preparation
 
 The issue jer was reconciled with the exact `origin/main` tip `2472cf23b99559005476841d3db5e6bc4691ac06`.

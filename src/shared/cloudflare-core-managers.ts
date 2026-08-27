@@ -5,6 +5,8 @@
  * data, request cancellation, and provider sessions remain in the local host service.
  */
 
+import type { TunnelFacet, TunnelLiveState } from './tunnel-state'
+
 export const CLOUDFLARE_MANAGER_KINDS = [
   'account',
   'zone',
@@ -119,6 +121,14 @@ export interface CloudflareCoreManagersApi {
   execute(nodeId: string, request: CloudflareOperationRequest): Promise<CloudflareOperationResult>
   cancel(operationId: string): Promise<boolean>
   onProgress(listener: (progress: CloudflareProgress) => void): () => void
+  /** Local-only six-facet tunnel observation. Unknown is preserved when this stack lacks a probe. */
+  tunnelState(nodeId: string): Promise<TunnelLiveState>
+  /** Start one bounded facet observation, replacing only an older generation for this node. */
+  probeTunnelFacet(nodeId: string, facet: TunnelFacet): Promise<TunnelLiveState>
+  /** Cancel the active facet observation for one node without changing its last trustworthy state. */
+  cancelTunnelProbe(nodeId: string): Promise<boolean>
+  /** Emits a complete state after each accepted facet transition. */
+  onTunnelState(listener: (state: TunnelLiveState & { nodeId: string }) => void): () => void
 }
 
 /** Short alias used by host integrations that name this surface Cloudflare Core. */

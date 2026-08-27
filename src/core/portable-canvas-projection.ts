@@ -29,6 +29,7 @@ import { normalizeRecoveryGameSnapshot, RECOVERY_ENERGY_KEYS, type RecoveryGameS
 import { repairPortablePortals, validatePortablePortals, type PortablePortalV3 } from './portal-lifecycle'
 import { normalizeCloudflareIntent as normalizeCloudflareZeroTrustIntent, type CloudflarePortableIntent as CloudflareZeroTrustPortableIntent } from '../shared/cloudflare-zero-trust'
 import { normalizeCloudflareIntent as normalizeCloudflareCoreIntent, type CloudflarePortableIntent as CloudflareCorePortableIntent } from '../shared/cloudflare-core-managers'
+import { sanitizeTunnelPortableIntent, type TunnelPortableIntent } from '../shared/tunnel-state'
 import { normalizeNextcloudAioConfig, type NextcloudAioConfig } from '../shared/nextcloud-aio'
 import { validateNextcloudManagedIntent, type NextcloudManagedIntent } from '../shared/nextcloud-managed'
 import type { AwsManagerPortableIntent } from '../shared/aws-resource'
@@ -74,6 +75,8 @@ export interface PortableCanvasNodeV3 {
   /** Typed Cloudflare operation intent only; credentials and provider bindings are local. */
   cloudflareZeroTrustIntent?: CloudflareZeroTrustPortableIntent
   cloudflareCoreIntent?: CloudflareCorePortableIntent
+  /** Safe Tunnel route intent. Provider ids, credentials, local bindings and observations stay local. */
+  cloudflareTunnelIntent?: TunnelPortableIntent
   /** Safe Nextcloud AIO hosting intent; Docker context and live state remain local. */
   nextcloudAioConfig?: NextcloudAioConfig
   nextcloudManagedIntent?: NextcloudManagedIntent
@@ -162,7 +165,7 @@ const ALLOWED_NODE = new Set([
   'id', 'kind', 'creationEventId', 'position', 'size', 'title', 'color', 'group',
   'universeCanvasId', 'universeScope', 'universeDepth', 'nonDeletable', 'shopSelection',
   'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel', 'awsManagerIntent',
-  'wildDimSumDish', 'homeAssistantIntent', 'homeAssistantControlConfig', 'homeAssistantSensorConfig', 'cloudflareZeroTrustIntent', 'cloudflareCoreIntent', 'nextcloudAioConfig', 'nextcloudManagedIntent',
+  'wildDimSumDish', 'homeAssistantIntent', 'homeAssistantControlConfig', 'homeAssistantSensorConfig', 'cloudflareZeroTrustIntent', 'cloudflareCoreIntent', 'cloudflareTunnelIntent', 'nextcloudAioConfig', 'nextcloudManagedIntent',
   'alarmSchedule', 'alarmTimeZone', 'alarmEnabled', 'alarmSnoozeMinutes',
   'alarmSoundEnabled', 'alarmNarratorEnabled', 'alarmHistory', 'mediaAssets',
   'mediaActiveAssetId', 'recoveryGame'
@@ -270,6 +273,7 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
   if (strict && node.text !== undefined && typeof node.text !== 'string') throw new PortableProjectV3Error('manifest', 'Portable node text is invalid.')
   if (strict && node.serviceLabel !== undefined && typeof node.serviceLabel !== 'string') throw new PortableProjectV3Error('manifest', 'Portable service label is invalid.')
   if (strict && node.cloudflareZeroTrustIntent !== undefined && !normalizeCloudflareZeroTrustIntent(node.cloudflareZeroTrustIntent)) throw new PortableProjectV3Error('manifest', 'Portable Cloudflare manager intent is invalid.')
+  if (strict && node.cloudflareTunnelIntent !== undefined && !sanitizeTunnelPortableIntent(node.cloudflareTunnelIntent)) throw new PortableProjectV3Error('manifest', 'Portable Cloudflare Tunnel intent is invalid.')
   if (strict && node.homeAssistantControlConfig !== undefined) {
     if (!record(node.homeAssistantControlConfig)) throw new PortableProjectV3Error('manifest', 'Portable Home Assistant control intent is invalid.')
     exactKeys(node.homeAssistantControlConfig, ALLOWED_HOME_ASSISTANT_CONTROL, 'Home Assistant control intent')
@@ -306,6 +310,11 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
     const normalized = normalizeCloudflareCoreIntent(node.cloudflareCoreIntent)
     if (strict && (node.cloudflareCoreIntent.schemaVersion !== 1 || normalized.manager !== node.cloudflareCoreIntent.manager || normalized.operation !== node.cloudflareCoreIntent.operation)) throw new PortableProjectV3Error('manifest', 'Portable Cloudflare manager intent is unsupported.')
     out.cloudflareCoreIntent = normalized
+  }
+  if (node.cloudflareTunnelIntent !== undefined) {
+    const normalized = sanitizeTunnelPortableIntent(node.cloudflareTunnelIntent)
+    if (!normalized) throw new PortableProjectV3Error('manifest', 'Portable Cloudflare Tunnel intent is invalid.')
+    out.cloudflareTunnelIntent = normalized
   }
   if (node.nextcloudAioConfig !== undefined) {
     const normalized = normalizeNextcloudAioConfig(node.nextcloudAioConfig)
@@ -690,6 +699,7 @@ export function portableCanvasProjectionToProject(
     ...(node.awsManagerIntent !== undefined ? { awsManagerIntent: { ...node.awsManagerIntent } } : {}),
     ...(node.cloudflareZeroTrustIntent !== undefined ? { cloudflareZeroTrustIntent: normalizeCloudflareZeroTrustIntent(node.cloudflareZeroTrustIntent)! } : {}),
     ...(node.cloudflareCoreIntent !== undefined ? { cloudflareCoreIntent: normalizeCloudflareCoreIntent(node.cloudflareCoreIntent) } : {}),
+    ...(node.cloudflareTunnelIntent !== undefined ? { cloudflareTunnelIntent: sanitizeTunnelPortableIntent(node.cloudflareTunnelIntent)! } : {}),
     ...(node.nextcloudAioConfig !== undefined ? { nextcloudAioConfig: normalizeNextcloudAioConfig(node.nextcloudAioConfig) } : {}),
     ...(node.nextcloudManagedIntent !== undefined ? { nextcloudManagedIntent: validateNextcloudManagedIntent(node.nextcloudManagedIntent) } : {}),
     ...(node.mediaAssets ? { mediaAssets: node.mediaAssets.map((asset) => ({ ...asset })) } : {}),

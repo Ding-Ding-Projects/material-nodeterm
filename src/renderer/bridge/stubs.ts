@@ -213,7 +213,11 @@ export function buildStubApi(): Omit<
       preview: U('cloudflareCoreManagers.preview'),
       execute: U('cloudflareCoreManagers.execute'),
       cancel: U('cloudflareCoreManagers.cancel'),
-      onProgress: noopUnsub
+      onProgress: noopUnsub,
+      tunnelState: U('cloudflareCoreManagers.tunnelState'),
+      probeTunnelFacet: U('cloudflareCoreManagers.probeTunnelFacet'),
+      cancelTunnelProbe: U('cloudflareCoreManagers.cancelTunnelProbe'),
+      onTunnelState: noopUnsub
     },
     ssh: {
       list: U('ssh.list'),

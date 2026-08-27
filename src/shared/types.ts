@@ -685,6 +685,8 @@ export interface CanvasNodeState {
   cloudflareZeroTrustIntent?: import('./cloudflare-zero-trust').CloudflarePortableIntent
   /** Cloudflare manager safe intent. Credentials and local bindings stay in the host overlay. */
   cloudflareCoreIntent?: import('./cloudflare-core-managers').CloudflarePortableIntent
+  /** Cloudflare Tunnel route intent. Local observations and provider bindings stay outside project data. */
+  cloudflareTunnelIntent?: import('./tunnel-state').TunnelPortableIntent
   /** Home Assistant node presentation intent safe for schema 3. Hosts, instance ids, credentials,
    *  sessions, and entity caches stay in the machine-local service and binding overlay. */
   homeAssistantIntent?: import('./home-assistant').HomeAssistantNodeIntent

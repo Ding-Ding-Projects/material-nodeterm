@@ -41,6 +41,7 @@ import type { TorrentTaskState } from '../shared/torrent'
 import type { VirtualMachineEvent } from '../shared/virtual-machine'
 import type { CalendarProvider } from '../shared/calendar'
 import type { CloudflareProgress } from '../shared/cloudflare-core-managers'
+import type { TunnelFacet, TunnelLiveState } from '../shared/tunnel-state'
 import type { HomeAssistantClientEvent } from '../shared/home-assistant'
 import type { CloudflareTunnelProgress, CloudflareTunnelRouteInput, CloudflareDnsAdoptionInput } from '../shared/cloudflare-tunnels'
 import type { ProjectConsentRequest, ProjectSetupEvent } from '../shared/project-settings'
@@ -105,6 +106,7 @@ const subscribeNodeDependencyProgress = subscribe<[NodeDependencyProgress]>(IPC.
 const subscribeTorrentTask = subscribe<[TorrentTaskState]>(IPC.torrentTask)
 const subscribeVirtualMachineEvent = subscribe<[VirtualMachineEvent]>(IPC.virtualMachineEvent)
 const subscribeCloudflareCoreProgress = subscribe<[CloudflareProgress]>(IPC.cloudflareCoreProgress)
+const subscribeCloudflareTunnelState = subscribe<[TunnelLiveState & { nodeId: string }]>(IPC.cloudflareCoreTunnelStateChanged)
 const subscribeHomeAssistantEvent = subscribe<[HomeAssistantClientEvent]>(IPC.homeAssistantEvent)
 const subscribeCloudflareProgress = subscribe<[CloudflareExecutionProgress & { nodeId: string }]>(IPC.cloudflareProgress)
 const subscribeAwsResourceProgress = subscribe<[AwsManagerProgress]>(IPC.awsResourceProgress)
@@ -1280,7 +1282,11 @@ const api: NodeTerminalApi = {
     preview: (nodeId, request) => ipcRenderer.invoke(IPC.cloudflareCorePreview, nodeId, request),
     execute: (nodeId, request) => ipcRenderer.invoke(IPC.cloudflareCoreExecute, nodeId, request),
     cancel: (operationId) => ipcRenderer.invoke(IPC.cloudflareCoreCancel, operationId),
-    onProgress: (listener) => subscribeCloudflareCoreProgress(listener)
+    onProgress: (listener) => subscribeCloudflareCoreProgress(listener),
+    tunnelState: (nodeId) => ipcRenderer.invoke(IPC.cloudflareCoreTunnelState, nodeId),
+    probeTunnelFacet: (nodeId, facet: TunnelFacet) => ipcRenderer.invoke(IPC.cloudflareCoreTunnelProbe, nodeId, facet),
+    cancelTunnelProbe: (nodeId) => ipcRenderer.invoke(IPC.cloudflareCoreTunnelCancel, nodeId),
+    onTunnelState: (listener) => subscribeCloudflareTunnelState(listener)
   },
   minecraft: {
     versions: () => ipcRenderer.invoke(IPC.minecraftVersions),

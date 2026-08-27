@@ -15,6 +15,9 @@ Two different ways nodeterm reaches a machine that isn't the one in front of you
   credential binding, portable intent, cancellation, and recovery.
 - [cloudflared connector runtimes](./cloudflared-runtimes.md) - guided per-user process, Windows
   service, and pinned Docker connector lifecycles with local token storage and portable intent.
+- [Cloudflare Tunnel state](./cloudflare-tunnel-state.md) - six independently observed facets for
+  API creation, DNS routing, connector health, Access policy, origin reachability, and external
+  reachability, with safe portable intent and local live observations.
 
 See also [Agents](../agents/README.md) for how agent hooks and permission modes work across an
 SSH connection, and [Packaging](../packaging/README.md) for how the headless notification host

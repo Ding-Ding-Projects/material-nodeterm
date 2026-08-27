@@ -408,6 +408,10 @@ intentionally unchecked because this task publishes the plan only.
   - [ ] Add per-user process, Windows service, and pinned Docker connector runtimes for `cloudflared`.
         Source contracts and local credential handling are present in issue #61; tests, builds,
         packaging, runtime interaction, and capture evidence remain pending.
+- [ ] Add independent Cloudflare Tunnel state observations for API creation, DNS routing, connector
+      health, Access policy, origin reachability, and external reachability. Source model and
+      guided searchable display are present in issue #62; focused verification and runtime evidence
+      remain pending because the ultra-speed lane intentionally did not run them.
 
 ### Clean-room features and upstream parity
 

@@ -60,6 +60,18 @@
   packaging, installer execution, runtime interaction, and captures were intentionally not run in
   this ultra-speed implementation lane.
 
+- Add the tunnel state model for six independent observations: API creation, DNS routing, connector
+  health, Access policy, origin reachability, and external reachability. The shared model uses
+  bounded, timestamp-ordered transitions with honest `unknown`, `pending`, `ready`, `failed`, and
+  `blocked` states, plus source and evidence for each observation. The Cloudflare core stack now
+  exposes local state, generation fencing, cancellation, bounded probe expiry, typed IPC, and
+  Desktop/Server Edition parity. Schema 3 carries only safe route intent, while provider ids,
+  connector ids, process state, local paths, and live observations remain local. The guided state
+  panel mounts in the Cloudflare manager with separate plain-text search and status filtering, each
+  with its own adjacent anchored regex builder. Current tunnel-specific probes remain visibly
+  unavailable or unknown until their adapters exist. This ultra-speed implementation lane
+  intentionally did not run tests, type checks, lint, reviews, security or accessibility checks,
+  builds, packaging, installer execution, runtime interaction, or captures.
 - Mount the seven AWS core-service routes on the shared AWS manager: S3, EC2, IAM, STS, Lambda,
   CloudWatch, and CloudWatch Logs. Typed operation controls now cover bounded reads, selected writes,
   destructive confirmation, pagination, cancellation, and progress while reusing the current local
