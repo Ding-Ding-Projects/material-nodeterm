@@ -1,5 +1,32 @@
 # Handoff
 
+## 2026-08-27, Home Assistant multi-instance client
+
+Issue #26 adds the shared Home Assistant contract in `src/shared/home-assistant.ts`, the host-owned
+client in `src/core/home-assistant/`, desktop and Server Edition registration, preload and
+WebSocket bridge methods, and the guided node surface in
+`src/renderer/components/home-assistant/HomeAssistantPanel.tsx`. The existing Home Assistant
+service node now renders that client instead of an address-only placeholder.
+
+Instance metadata is stored below application data in `home-assistant/instances.json`. Access
+tokens use a dedicated Home Assistant credential directory through the core platform's existing
+seal and unseal seam, and are never returned over IPC.
+The selected instance address remains in the machine-local `serviceConnection` overlay. Schema 3
+stores only `homeAssistantIntent`, containing the REST or WebSocket preference and domain filter,
+plus the existing node label, layout, and relationships. Import performs no network request and
+does not restore a credential, instance id, address, socket, entity result, or cache.
+
+The interface supplies searchable instance, domain, and entity surfaces, each with its own adjacent
+anchored regex builder. REST and WebSocket discovery enforce a 20-second deadline, a 5 MB response
+bound, and a 20,000-entity cap. Progress, cancellation, retry, partial-result wording, exact
+disabled-state reasons, and two-key destructive instance removal are present. Program 16 and
+Program 17 remain responsible for domain control nodes and dedicated sensor display nodes.
+
+No tests, type checks, lint, builds, packaging, reviews, security checks, accessibility checks,
+installer execution, runtime interaction checks, or UI captures were run in this ultra-speed
+implementation lane. The source is implemented but has no runtime or packaged verification from
+this lane.
+
 ## 2026-08-26, desktop Material Design 3 and personal vocabulary reconciliation
 
 This source-only lane is on feat/full-app-material3-reconciliation at the current integration tip.

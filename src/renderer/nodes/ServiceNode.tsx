@@ -7,6 +7,7 @@ import { safeServiceEndpoint } from '@shared/node-exec'
 import { nodeBorderStyle, nodeColorStyle } from '../lib/nodeColor'
 import { ColorMenu } from '../components/color/ColorMenu'
 import { MinecraftServerPanel } from '../components/minecraft/MinecraftServerPanel'
+import { HomeAssistantPanel } from '../components/home-assistant/HomeAssistantPanel'
 import { EditableNodeTitle } from '../components/EditableNodeTitle'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { mapAroundExactFacts } from './nodeVocabulary'
@@ -18,7 +19,8 @@ import { mapAroundExactFacts } from './nodeVocabulary'
  *
  * WHAT THIS DELIBERATELY DOES NOT DO for five of the six kinds, and why the emptiness is the point:
  *
- * Docker/Proxmox/GitLab/Home Assistant/FreePBX are not connected to anything yet. CLAUDE.md is
+ * Docker/Proxmox/GitLab/FreePBX are not connected to anything yet. Home Assistant is implemented
+ * by HomeAssistantPanel through the host-owned REST/WebSocket client. CLAUDE.md is
  * explicit that a control which is styled as operable while being inert is a defect rather than a
  * placeholder — "any icon, preview, mock window, toolbar control, card, tab, badge, illustration,
  * affordance ... presented as if it can be used must perform its labeled action". So there is no
@@ -231,7 +233,17 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
 
         {!collapsed && kind === 'minecraft' && <MinecraftServerPanel nodeId={id} />}
 
-        {!collapsed && kind !== 'minecraft' && (
+        {!collapsed && kind === 'homeassistant' && (
+          <HomeAssistantPanel
+            nodeId={id}
+            boundEndpoint={data.serviceConnection?.endpoint ?? null}
+            onBind={(endpoint) => updateNodeData(id, { serviceConnection: endpoint ? { endpoint } : undefined })}
+            intent={data.homeAssistantIntent}
+            onIntentChange={(homeAssistantIntent) => updateNodeData(id, { homeAssistantIntent })}
+          />
+        )}
+
+        {!collapsed && kind !== 'minecraft' && kind !== 'homeassistant' && (
           <div className="service-node__body">
             <label className="service-node__field" htmlFor={`${id}-endpoint`}>
               <span className="service-node__field-label">{vocab('Address')}</span>

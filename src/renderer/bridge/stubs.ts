@@ -744,6 +744,14 @@ export function buildStubApi(): Omit<
       create: U('calendar.create'),
       update: U('calendar.update'),
       remove: U('calendar.remove')
+    },
+    homeAssistant: {
+      instances: U('homeAssistant.instances'),
+      saveInstance: U('homeAssistant.saveInstance'),
+      removeInstance: U('homeAssistant.removeInstance'),
+      discover: U('homeAssistant.discover'),
+      cancel: U('homeAssistant.cancel'),
+      onEvent: noopUnsub
     // Browser control is desktop-only (no <webview>, no CDP on the Server Edition / relay), so the
     // resolve round-trip is inert here — the verb is refused by name before it reaches a handler.
     onBrowserControlResolve: noopUnsub,

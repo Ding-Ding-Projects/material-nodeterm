@@ -802,6 +802,14 @@ export const IPC = {
   calendarCreate: 'calendar:create',
   calendarUpdate: 'calendar:update',
   calendarRemove: 'calendar:remove',
+  // Home Assistant multi-instance client. Instance metadata and credentials remain machine-local;
+  // only bounded entity metadata and progress events cross the renderer boundary.
+  homeAssistantInstances: 'home-assistant:instances',
+  homeAssistantSaveInstance: 'home-assistant:save-instance',
+  homeAssistantRemoveInstance: 'home-assistant:remove-instance',
+  homeAssistantDiscover: 'home-assistant:discover',
+  homeAssistantCancel: 'home-assistant:cancel',
+  homeAssistantEvent: 'home-assistant:event',
   // "Open in Visual Studio Code" (src/core/vscode-detect.ts, src/core/vscode-handlers.ts).
   // Registered on BOTH shells via the generic `platform.handle` seam, so it opens VS Code on
   // whichever machine is actually running the shell (this desktop, or the Server Edition host).

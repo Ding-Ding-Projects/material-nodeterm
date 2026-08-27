@@ -50,6 +50,7 @@ export interface PortableCanvasNodeV3 {
   url?: string
   browserTabs?: Array<{ id: string; url?: string; title: string }>
   serviceLabel?: string
+  homeAssistantIntent?: { transport: 'rest' | 'websocket'; domain: string }
   alarmSchedule?: { recurrence: string; date?: string; time: string; weekdays?: number[]; monthDay?: number }
   alarmTimeZone?: string
   alarmEnabled?: boolean
@@ -108,9 +109,8 @@ const ALLOWED_PROJECT = new Set(['name', 'color', 'icon'])
 const ALLOWED_ICON = new Set(['type', 'name'])
 const ALLOWED_CANVAS = new Set(['id', 'scope', 'parentCanvasId', 'depth', 'title', 'order', 'viewport', 'nodeIds'])
 const ALLOWED_VIEWPORT = new Set(['x', 'y', 'zoom'])
-const ALLOWED_NODE = new Set(['id', 'kind', 'creationEventId', 'position', 'size', 'title', 'color', 'group', 'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel'])
-const ALLOWED_NODE = new Set(['id', 'kind', 'creationEventId', 'position', 'size', 'title', 'color', 'group', 'universeCanvasId', 'universeScope', 'universeDepth', 'nonDeletable', 'shopSelection', 'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel'])
-const ALLOWED_NODE = new Set(['id', 'kind', 'position', 'size', 'title', 'color', 'group', 'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel', 'alarmSchedule', 'alarmTimeZone', 'alarmEnabled', 'alarmSnoozeMinutes', 'alarmSoundEnabled', 'alarmNarratorEnabled', 'alarmHistory'])
+const ALLOWED_NODE = new Set(['id', 'kind', 'creationEventId', 'position', 'size', 'title', 'color', 'group', 'universeCanvasId', 'universeScope', 'universeDepth', 'nonDeletable', 'shopSelection', 'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel', 'homeAssistantIntent', 'alarmSchedule', 'alarmTimeZone', 'alarmEnabled', 'alarmSnoozeMinutes', 'alarmSoundEnabled', 'alarmNarratorEnabled', 'alarmHistory'])
+const ALLOWED_HOME_ASSISTANT_INTENT = new Set(['transport', 'domain'])
 const ALLOWED_POSITION = new Set(['x', 'y'])
 const ALLOWED_SIZE = new Set(['width', 'height'])
 const ALLOWED_TAB = new Set(['id', 'url', 'title'])
@@ -205,6 +205,14 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
   if (node.text !== undefined) out.text = content(node.text, 'node text')
   if (node.url !== undefined) { const url = safeUrl(node.url, 'node URL'); if (url) out.url = url }
   if (node.serviceLabel !== undefined) out.serviceLabel = text(node.serviceLabel, 'service label')
+  if (node.homeAssistantIntent !== undefined) {
+    if (!record(node.homeAssistantIntent)) throw new PortableProjectV3Error('manifest', 'Portable Home Assistant intent is invalid.')
+    exactKeys(node.homeAssistantIntent, ALLOWED_HOME_ASSISTANT_INTENT, 'Home Assistant intent')
+    if (!['rest', 'websocket'].includes(String(node.homeAssistantIntent.transport))) throw new PortableProjectV3Error('manifest', 'Portable Home Assistant transport is invalid.')
+    const domain = text(node.homeAssistantIntent.domain, 'Home Assistant domain')
+    if (domain !== 'all' && !/^[a-z0-9_]{1,64}$/.test(domain)) throw new PortableProjectV3Error('manifest', 'Portable Home Assistant domain is invalid.')
+    out.homeAssistantIntent = { transport: node.homeAssistantIntent.transport as 'rest' | 'websocket', domain }
+  }
   if (node.alarmSchedule !== undefined) {
     if (!record(node.alarmSchedule)) throw new PortableProjectV3Error('manifest', 'Portable alarm schedule is invalid.')
     exactKeys(node.alarmSchedule, ALLOWED_ALARM_SCHEDULE, 'alarm schedule')
@@ -402,7 +410,8 @@ export function portableCanvasProjectionToProject(
     ...(node.text !== undefined ? { text: node.text } : {}),
     ...(node.url !== undefined ? { url: node.url } : {}),
     ...(node.browserTabs ? { browserTabs: node.browserTabs.map((tab) => ({ ...tab })) } : {}),
-    ...(node.serviceLabel !== undefined ? { serviceLabel: node.serviceLabel } : {})
+    ...(node.serviceLabel !== undefined ? { serviceLabel: node.serviceLabel } : {}),
+    ...(node.homeAssistantIntent !== undefined ? { homeAssistantIntent: { ...node.homeAssistantIntent } } : {})
   }))
   const bridgeLinks = value.relationships
     .filter((link) => link.kind === 'bridge')

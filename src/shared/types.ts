@@ -21,6 +21,7 @@ import type { FunnyLevel, LanguageMode } from './i18n/types'
 import type { VsCodeInstall, VsCodeOpenResult } from './vscode'
 import type { HistoryFilters, HistoryListResult, HistoryRestoreResult } from './local-history'
 import type { CalendarApi, CalendarNodeConfig } from './calendar'
+import type { HomeAssistantApi } from './home-assistant'
 import type {
   ToyLockBeginTotpInput,
   ToyLockBeginTotpResult,
@@ -630,6 +631,9 @@ export interface CanvasNodeState {
    * `localExec` on the index entry, exactly where the shell and Windows profile already live.
    */
   serviceLabel?: string
+  /** Home Assistant node presentation intent safe for schema 3. Hosts, instance ids, credentials,
+   *  sessions, and entity caches stay in the machine-local service and binding overlay. */
+  homeAssistantIntent?: import('./home-assistant').HomeAssistantNodeIntent
   /** torrent-only: safe display intent shared with the canvas; task state and paths stay local. */
   torrentMagnet?: string
   /** Linux ISO VM settings stored in the shared project projection. */
@@ -4500,6 +4504,8 @@ export interface NodeTerminalApi {
   minecraft: import('./minecraft').MinecraftApi
   /** Local Linux ISO VM lifecycle — docs/linux-iso-vm.md. */
   virtualMachine: import('./virtual-machine').VirtualMachineApi
+  /** Machine-local Home Assistant instances with bounded REST and WebSocket discovery. */
+  homeAssistant: HomeAssistantApi
   ssh: SshApi
   sshProject: SshProjectApi
   sshFs: SshFsApi

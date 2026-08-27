@@ -213,7 +213,8 @@ intentionally unchecked because this task publishes the plan only.
 - [ ] Add the bundled QEMU Linux ISO VM with persistent and disposable modes.
 - [ ] Add the bundled WebTorrent downloader with resumable per-task lifecycle.
 - [ ] Add the bundled QEMU Linux ISO VM with persistent and disposable modes. Implementation landed in `src/core/virtual-machine/` and `src/renderer/nodes/VirtualMachineNode.tsx`; tests, build, packaging, runtime interaction, and captures remain unrun in the ultra-speed lane.
-- [ ] Add Home Assistant multi-instance controls and sensor displays.
+- [x] Add the Home Assistant multi-instance client with REST and WebSocket discovery. Dedicated
+      control and sensor display nodes remain Program 16 and Program 17.
 - [ ] Add Calendar, Timer, and Alarm Clock nodes. Planner occurrence service is implemented in the
       current lane, but remains unticked until its required checks and packaged interaction evidence land.
 - [ ] Add Calendar nodes for local calendars and ICS, with guided CalDAV, Google Calendar, and
