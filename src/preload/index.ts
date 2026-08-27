@@ -196,6 +196,14 @@ const api: NodeTerminalApi = {
       return () => ipcRenderer.removeListener(channel, handler)
     }
   },
+  providerServices: {
+    catalog: () => ipcRenderer.invoke(IPC.providerCatalog),
+    accounts: (providerId?: string) => ipcRenderer.invoke(IPC.providerAccounts, providerId),
+    resources: (accountId: string, capability?: string) => ipcRenderer.invoke(IPC.providerResources, accountId, capability),
+    beginOAuth: (providerId: string) => ipcRenderer.invoke(IPC.providerBeginOAuth, providerId),
+    completeOAuth: (callbackUrl: string) => ipcRenderer.invoke(IPC.providerCompleteOAuth, callbackUrl),
+    removeAccount: (accountId: string) => ipcRenderer.invoke(IPC.providerRemoveAccount, accountId)
+  },
   workspace: {
     load: () => ipcRenderer.invoke(IPC.workspaceLoad),
     save: (workspace: Workspace) => ipcRenderer.invoke(IPC.workspaceSave, workspace),
@@ -211,7 +219,7 @@ const api: NodeTerminalApi = {
     portableBindings: {
       state: (input: { nodeId: string; featureId: string; displayLabel: string; hasMissingAssets?: boolean }) =>
         ipcRenderer.invoke(IPC.portableBindingState, input),
-      apply: (input: { nodeId: string; action: import('../shared/types').PortableBindingAction; providerOrHostIdentity?: string; localResourceReferences?: Record<string, string | number | boolean>; credentialKeys?: string[] }) =>
+      apply: (input: { nodeId: string; action: import('../shared/types').PortableBindingAction; featureId?: string; providerAccountId?: string; resourceId?: string }) =>
         ipcRenderer.invoke(IPC.portableBindingApply, input)
     },
     onArchiveProgress: (cb: (event: import('../shared/types').ProjectArchiveProgress) => void) => {

@@ -1385,9 +1385,9 @@ export interface PortableBindingApi {
   apply(input: {
     nodeId: string
     action: PortableBindingAction
-    providerOrHostIdentity?: string
-    localResourceReferences?: Record<string, string | number | boolean>
-    credentialKeys?: string[]
+    featureId?: string
+    providerAccountId?: string
+    resourceId?: string
   }): Promise<{ ok: true; state: 'bound' | 'unbound' } | { ok: false; error: string }>
 }
 
@@ -4479,6 +4479,8 @@ export interface NodeTerminalApi {
   /** Desktop-only Windows profile detection; absent on Server Edition and mobile bridges. */
   terminalProfiles?: TerminalProfilesApi
   workspace: WorkspaceApi
+  /** Shared provider-account, credential-vault, OAuth-callback, and resource-picker services. */
+  providerServices: import('./provider-services').ProviderServicesApi
   timer: TimerApi
   serverDeployment: ServerDeploymentApi
   projectSettings: ProjectSettingsApi

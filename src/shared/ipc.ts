@@ -342,6 +342,12 @@ export const IPC = {
   projectArchiveImport: 'project-archive:import',
   portableBindingState: 'portable-binding:state',
   portableBindingApply: 'portable-binding:apply',
+  providerCatalog: 'provider-services:catalog',
+  providerAccounts: 'provider-services:accounts',
+  providerResources: 'provider-services:resources',
+  providerBeginOAuth: 'provider-services:begin-oauth',
+  providerCompleteOAuth: 'provider-services:complete-oauth',
+  providerRemoveAccount: 'provider-services:remove-account',
   projectArchiveProgress: 'project-archive:progress',
   projectArchiveCancel: 'project-archive:cancel',
   /** The unlock ladder for a protected project file's password prompt — issue a challenge, and
