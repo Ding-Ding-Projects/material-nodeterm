@@ -30,6 +30,12 @@
   reviews, security or accessibility checks, builds, packaging, installer execution, runtime
   interaction, or UI captures.
 
+- Add a Wild dim sum canvas node backed only by the canonical public catalog and published photo
+  releases. It offers random selection, plain-text and anchored regex search, bounded progress,
+  cancellation, retry, bilingual factual dish details, portable schema 3 selection state, and
+  explicit offline/photo recovery without vendoring images. This ultra-speed lane ran no tests,
+  type checks, lint, builds, packaging, runtime interaction, audits, reviews, or captures.
+
 - Add a source-only desktop Material Design 3 audit with a hand-written inventory of 212 rendered
   surfaces, including onboarding, profile picking, conversion, password management, Minecraft
   management, dialogs, find bars, and notifications. Shared NumberField, Radio, Progress, and Tabs

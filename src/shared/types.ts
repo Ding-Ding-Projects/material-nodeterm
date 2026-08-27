@@ -366,6 +366,7 @@ export type NodeKind =
   | 'diff'
   | 'photo'
   | 'gallery'
+  | 'wild-dim-sum'
   | 'video'
   | 'web'
   | 'browser'
@@ -666,6 +667,8 @@ export interface CanvasNodeState {
   mediaAssets?: import('./media-catalog').MediaAssetReference[]
   /** Gallery selection is an ordered list of asset ids. */
   mediaActiveAssetId?: string
+  /** Wild dim sum only: portable public-catalog identity and display copy, never image bytes or cache state. */
+  wildDimSumDish?: import('./public-dim-sum').PublicDimSumSelection
   /**
    * editor/diff-only: true once `filePath` was confirmed gone (e.g. its worktree was removed —
    * see `displacedByWorktree` in `./worktree.ts`). There is nothing to re-point the node at, so
