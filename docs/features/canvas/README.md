@@ -10,6 +10,8 @@ The pan/zoom surface nodeterm is built around, and everything that lives on it.
   portable byte carriers, local bindings, and explicit missing-asset recovery.
 - [Door-only universe navigation](./door-only-universe-navigation.md) - paired entry and return
   doors, shared refusal of tab and direct-selection bypasses, and safe schema 3 intent.
+- [Wild dim sum node](./wild-dim-sum-node.md) — bounded public-catalog browsing, random published
+  dish selection, portable display intent, and published-photo recovery without vendored images.
 - [Alarm Clock nodes](../../alarm-clock.md) — one-shot and recurring reminders with timezone,
   daylight-saving, snooze, dismiss, and missed-occurrence handling.
 - [Canvas & node lifecycle](./canvas-and-lifecycle.md) — how nodes mount, unmount, park, and

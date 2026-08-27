@@ -279,6 +279,31 @@ operation untouched when the picker is cancelled. The selected source path and s
 transient renderer state only. The archive writer still needs a follow-up adapter to consume the
 selected streaming sources and emit schema 3 media entries; no portable record claims those paths.
 No tests, builds, type checks, captures, commits, or dews were made.
+## 2026-08-27, shared provider services and local binding integration, issue #18
+
+Added `src/shared/provider-services.ts` and `src/core/provider-services.ts` as the shared provider
+boundary. Provider adapters now have one typed catalog, OAuth PKCE start/exchange contract, bounded
+single-use callback ledger, account metadata shape, sealed credential store, and verified resource
+discovery route. Desktop and Server Edition register the same core handlers. The preload and browser
+bridge expose the same renderer API.
+
+Reworked `PortableBindingWizard.tsx` to use guided, searchable connected-account and provider-
+resource pickers, each with its own adjacent anchored regex builder. Hand-typed provider identity
+and resource fields were removed. Configure, Rebind, and Adopt require a connected account and an
+adapter-verified resource. Locate Asset uses the existing file picker. Deploy stays disabled until
+a provider-specific adapter supplies it. Import still performs no network call, consent flow,
+deployment, provider mutation, process launch, download, or binding action.
+
+Provider secrets live only in `provider-accounts.json` under private application data, sealed by
+the platform vault when available or stored through the established owner-only Server Edition
+fallback. Local account/resource references live only in `portable-node-bindings.json`. Neither file
+enters the schema 3 projection or export. Updated the integration article and index, portable-
+binding article, documentation site article, changelog, roadmap, and handoff.
+
+This ultra-speed lane did not run tests, type checks, lint, reviews, security or accessibility
+checks, builds, packaging, installer execution, runtime interaction, or UI captures. Individual
+provider adapters and provider-specific deployment behavior remain separate program lanes.
+
 ## 2026-08-26, atomic schema 3 import and destination binding wizard
 
 Implemented schema 3 archive production and import wiring. `src/core/portable-project-import.ts`
@@ -425,6 +450,22 @@ bundle generation, focused tests, built-artifact interaction proof, release pack
 and remote verification remain for the owning integration pass.
 ## 2026-08-26, Linux ISO VM node, issue #24
 
+### Issue #24 completion repair, 2026-08-27
+
+Restored parseable package scripts, node-kind tables, desktop bridge objects, browser fallback
+objects, and Server Edition bridge functions after the parallel program-lane merge. Corrected
+QEMU's VNC display-number to loopback-port mapping and kept Stop operable while startup is
+pending. The manager now distinguishes cancellation from startup failure, reports a QMP stop failure
+after bounded process termination, refuses to collapse unreadable state into an absent record, and
+publishes unique temporary state files through the shared bounded atomic rename helper. Snapshot
+restore now uses the machine-local saved-name catalogue, plain-text filtering, and the shared
+anchored regex builder instead of freehand restore input. The new picker copy is present in English
+and playful Cantonese resources. The mode dropdown now has its own plain-text filter and isolated
+anchored regex builder too.
+
+This completion repair intentionally ran no tests, type checks, lint, builds, packaging, runtime
+interaction, captures, audits, or reviews. Those verdicts remain unrun rather than inferred.
+
 Implemented the one-shot `linux-vm` canvas node and its shared lifecycle contract. The renderer
 provides guided ISO and persistent-disk pickers, persistent-install and disposable-live modes,
 bounded memory and CPU controls, explicit network-off-by-default and WHPX preference switches,
@@ -530,9 +571,21 @@ Updated `src/shared/types.ts`, `src/renderer/state/workspace.ts`,
 `src/renderer/canvas/Canvas.tsx`, `src/renderer/components/FabMenu.tsx`,
 `src/core/portable-canvas-projection.ts`, both renderer style sheets,
 `docs/alarm-clock.md`, `docs/features/projects/README.md`, `ROADMAP.md`, and `CHANGELOG.md`.
-This ultra-speed lane intentionally did not run tests, type checks, lint, reviews, security checks,
-accessibility checks, builds, packaging, installer execution, runtime interaction, or captures. No
-commit or dew was made by this lane.
+
+The original ultra-speed checkpoint intentionally did not run tests, type checks, lint, reviews,
+security checks, accessibility checks, builds, packaging, installer execution, runtime interaction,
+or captures. It landed in `716f0a9f82c83c0c52f284ade19adb6f208b3b03` for later completion.
+
+### 2026-08-27 completion checkpoint
+
+The existing file-backed planner now has a production lifecycle owner and bounded request handlers
+in both Desktop and Server Edition. The desktop bridge mirrors validated node schedules into the
+host snapshot, receives due events, and routes Snooze, Dismiss, and node removal back to that host.
+Alarm Clock is an active, localized Node Catalog entry and the shared catalog creation coordinator
+creates the existing paused, timezone-aware Alarm Clock node rather than returning no node. This
+checkpoint intentionally ran no tests, type checks, lint, builds, packaging, runtime interaction,
+reviews, or UI captures. The offline documentation bundle was not regenerated because generation
+was excluded with the build boundary; the authored Alarm Clock and Node Catalog articles are current.
 
 ## 2026-08-26, portable canvas projection implementation
 
@@ -2031,3 +2084,21 @@ state, one-shot non-blocking alarms, and versioned JSON export data.
 
 Documentation is in `docs/features/canvas/timer-nodes.md`. Tests, builds, captures, commits, and dews
 were intentionally left to the parent integration lane.
+# Issue #25: Wild dim sum node source lane
+
+The `feat/program-14-wild-dim-sum-node` branch adds the `wild-dim-sum` node kind, Unified Node
+Catalog factory, renderer surface, localized control copy, bounded public-catalog loader, published
+release-photo resolver, schema 3 portable selection, close-and-reopen path, CSP allowances, Material
+Design 3 styling, feature documentation, offline docs page, changelog, and roadmap record.
+
+Portable state is limited to validated public dish identity and display copy. Catalog response
+bytes, image bytes, request state, browser cache, credentials, provider sessions, machine paths,
+process state, host identifiers, and generated URLs remain excluded. Import has no network,
+deployment, provider, process, or download side effect. Runtime photo availability depends on the
+canonical public catalog and its published GitHub release assets; the installer contains no copied
+photo.
+
+This ultra-speed lane intentionally ran no tests, type checks, lint, builds, packaging, runtime
+interaction, accessibility or security audits, reviews, or captures. The parent integration lane
+must supply every verification verdict and release evidence before describing the feature as
+verified.

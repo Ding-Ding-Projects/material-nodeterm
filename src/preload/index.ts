@@ -24,6 +24,7 @@ import type {
 } from '../shared/types'
 import type { ScheduledSettingsActiveState, ScheduledSettingsFile } from '../shared/scheduled-settings'
 import type { PlannerFile, PlannerLoadState, PlannerOccurrence } from '../shared/planner-occurrences'
+import type { AlarmDefinition, AlarmDueEvent } from '../shared/alarm-clock'
 import type { HistoryFilters } from '../shared/local-history'
 import type { ClientId, PeerDiff, PeerIdentity, PeerState } from '../shared/presence'
 import type { ConvertQueueItem, ConverterQueueState } from '../shared/converter'
@@ -102,6 +103,7 @@ const subscribeScheduledSettingsActive = subscribe<[ScheduledSettingsActiveState
   IPC.scheduledSettingsActiveChange
 )
 const subscribePlannerOccurrence = subscribe<[PlannerOccurrence]>(IPC.plannerOccurrence)
+const subscribeAlarmDue = subscribe<[AlarmDueEvent]>(IPC.alarmPlannerDue)
 // Project setup/archive (SDD: 2026-08-19-project-settings-trust): global (not per-project) main →
 // renderer prompts, fanned out the same way as the relay events above.
 const subscribeProjectSetupConsentRequest = subscribe<[ProjectConsentRequest]>(
@@ -196,6 +198,14 @@ const api: NodeTerminalApi = {
       return () => ipcRenderer.removeListener(channel, handler)
     }
   },
+  providerServices: {
+    catalog: () => ipcRenderer.invoke(IPC.providerCatalog),
+    accounts: (providerId?: string) => ipcRenderer.invoke(IPC.providerAccounts, providerId),
+    resources: (accountId: string, capability?: string) => ipcRenderer.invoke(IPC.providerResources, accountId, capability),
+    beginOAuth: (providerId: string) => ipcRenderer.invoke(IPC.providerBeginOAuth, providerId),
+    completeOAuth: (callbackUrl: string) => ipcRenderer.invoke(IPC.providerCompleteOAuth, callbackUrl),
+    removeAccount: (accountId: string) => ipcRenderer.invoke(IPC.providerRemoveAccount, accountId)
+  },
   workspace: {
     load: () => ipcRenderer.invoke(IPC.workspaceLoad),
     save: (workspace: Workspace) => ipcRenderer.invoke(IPC.workspaceSave, workspace),
@@ -211,7 +221,7 @@ const api: NodeTerminalApi = {
     portableBindings: {
       state: (input: { nodeId: string; featureId: string; displayLabel: string; hasMissingAssets?: boolean }) =>
         ipcRenderer.invoke(IPC.portableBindingState, input),
-      apply: (input: { nodeId: string; action: import('../shared/types').PortableBindingAction; providerOrHostIdentity?: string; localResourceReferences?: Record<string, string | number | boolean>; credentialKeys?: string[] }) =>
+      apply: (input: { nodeId: string; action: import('../shared/types').PortableBindingAction; featureId?: string; providerAccountId?: string; resourceId?: string }) =>
         ipcRenderer.invoke(IPC.portableBindingApply, input)
     },
     onArchiveProgress: (cb: (event: import('../shared/types').ProjectArchiveProgress) => void) => {
@@ -354,6 +364,16 @@ const api: NodeTerminalApi = {
     history: () => ipcRenderer.invoke(IPC.plannerHistory),
     export: (format: 'json' | 'csv') => ipcRenderer.invoke(IPC.plannerExport, format),
     onOccurrence: subscribePlannerOccurrence
+  },
+  alarm: {
+    state: () => ipcRenderer.invoke(IPC.alarmPlannerState),
+    upsert: (alarm: Omit<AlarmDefinition, 'createdAt' | 'updatedAt'> & { id?: string }) =>
+      ipcRenderer.invoke(IPC.alarmPlannerUpsert, alarm),
+    remove: (alarmId: string) => ipcRenderer.invoke(IPC.alarmPlannerRemove, alarmId),
+    snooze: (occurrenceId: string, minutes: number) =>
+      ipcRenderer.invoke(IPC.alarmPlannerSnooze, occurrenceId, minutes),
+    dismiss: (occurrenceId: string) => ipcRenderer.invoke(IPC.alarmPlannerDismiss, occurrenceId),
+    onDue: subscribeAlarmDue
   },
   githubIssues: {
     subscribe: (projectId) => ipcRenderer.invoke(IPC.githubIssuesSubscribe, { projectId }),
@@ -1160,6 +1180,7 @@ const api: NodeTerminalApi = {
     setSeedPolicy: (id, policy) => ipcRenderer.invoke(IPC.torrentSetSeedPolicy, id, policy),
     reconcile: () => ipcRenderer.invoke(IPC.torrentReconcile),
     onTask: (listener) => subscribeTorrentTask(listener)
+  },
   virtualMachine: {
     tools: () => ipcRenderer.invoke(IPC.virtualMachineTools),
     status: (id) => ipcRenderer.invoke(IPC.virtualMachineStatus, id),
@@ -1172,6 +1193,7 @@ const api: NodeTerminalApi = {
     openDisplay: (id) => ipcRenderer.invoke(IPC.virtualMachineOpenDisplay, id),
     reset: (id) => ipcRenderer.invoke(IPC.virtualMachineReset, id),
     onEvent: (listener) => subscribeVirtualMachineEvent(listener)
+  },
   calendar: {
     status: (id, config) => ipcRenderer.invoke(IPC.calendarStatus, id, config),
     accounts: () => ipcRenderer.invoke(IPC.calendarAccounts),

@@ -249,6 +249,8 @@ export const CATALOG: Catalog = {
   'nodeCatalog.entry.authenticator.description': { en: flat('Open the local TOTP authenticator without moving secrets into the project.'), yue: flat('開本機 TOTP 驗證器，唔會將秘密搬入項目。') },
   'nodeCatalog.entry.loop.label': { en: flat('Loop'), yue: flat('循環排程') },
   'nodeCatalog.entry.loop.description': { en: flat('Create a paused local schedule with an explicit next action.'), yue: flat('建立一個暫停中、下一步清清楚楚嘅本機排程。') },
+  'nodeCatalog.entry.alarm.label': { en: flat('Alarm clock'), yue: flat('鬧鐘') },
+  'nodeCatalog.entry.alarm.description': { en: flat('Create a one-shot or recurring wall-clock alarm with an explicit timezone.'), yue: flat('建立一次性或重複嘅牆鐘時間鬧鐘，時區清清楚楚。') },
   'nodeCatalog.entry.dino.label': { en: flat('Dino game'), yue: flat('恐龍遊戲') },
   'nodeCatalog.entry.dino.description': { en: flat('Open the small local canvas game.'), yue: flat('開個細細嘅本機畫布遊戲。') },
   'nodeCatalog.entry.remote-terminal.label': { en: flat('Remote terminal'), yue: flat('遠端終端機') },
@@ -1224,6 +1226,26 @@ export const CATALOG: Catalog = {
   'universeShop.fixed.title': {
     en: flat('This Shop belongs to its universe and cannot be moved or deleted.'),
     yue: flat('呢間商店屬於自己嘅宇宙，唔可以移動或者刪除。')
+  },
+  'wildDimSum.title': { en: flat('Wild dim sum'), yue: flat('野生點心') },
+  'wildDimSum.aria': { en: flat('Wild dim sum node'), yue: flat('野生點心節點') },
+  'wildDimSum.close': { en: flat('Close'), yue: flat('關閉') },
+  'wildDimSum.closeAria': { en: flat('Close Wild dim sum node'), yue: flat('關閉野生點心節點') },
+  'wildDimSum.random': { en: flat('Surprise me'), yue: flat('隨機點一籠') },
+  'wildDimSum.randomReady': { en: flat('Choose a random published dish'), yue: flat('隨機揀一款已發布點心') },
+  'wildDimSum.randomDisabled': { en: flat('The public catalog must finish loading first'), yue: flat('要等公開目錄載入完成先可以隨機揀') },
+  'wildDimSum.retry': { en: flat('Retry catalog'), yue: flat('重試目錄') },
+  'wildDimSum.refresh': { en: flat('Refresh catalog'), yue: flat('重新整理目錄') },
+  'wildDimSum.cancel': { en: flat('Cancel'), yue: flat('取消') },
+  'wildDimSum.cancelled': { en: flat('Catalog loading was cancelled. The saved dish remains unchanged.'), yue: flat('目錄載入已取消，已儲存嘅點心保持不變。') },
+  'wildDimSum.chooseAria': { en: flat('Choose a public catalog dish'), yue: flat('揀一款公開目錄點心') },
+  'wildDimSum.search': { en: flat('Search published dishes'), yue: flat('搜尋已發布點心') },
+  'wildDimSum.searchPlaceholder': { en: flat('Name, category, or subcategory'), yue: flat('名稱、分類或者子分類') },
+  'wildDimSum.regex': { en: flat('Regex builder for published dishes'), yue: flat('已發布點心正則建立器') },
+  'wildDimSum.invalidPattern': { en: flat('Invalid pattern. All dishes remain visible.'), yue: flat('模式無效，全部點心仍然顯示。') },
+  'wildDimSum.count': { en: flat('{shown} of {total} dishes shown.'), yue: flat('顯示 {shown} 款，共 {total} 款點心。') },
+  'wildDimSum.listAria': { en: flat('Published dishes'), yue: flat('已發布點心') },
+  'wildDimSum.empty': { en: flat('No published dishes match this search.'), yue: flat('冇已發布點心符合呢個搜尋。') },
   // Linux ISO VM node. These labels are flat because they identify controls, while operation
   // details and digest values remain facts supplied by the VM manager.
   'virtualMachine.title': { en: flat('Linux ISO VM'), yue: flat('Linux ISO 虛擬機') },
@@ -1232,6 +1254,9 @@ export const CATALOG: Catalog = {
   'virtualMachine.mode': { en: flat('Mode'), yue: flat('模式') },
   'virtualMachine.mode.disposable': { en: flat('Disposable live, changes are discarded'), yue: flat('即用即棄，變更會丟棄') },
   'virtualMachine.mode.persistent': { en: flat('Persistent install, keep the selected disk'), yue: flat('持久安裝，保留所選磁碟') },
+  'virtualMachine.mode.filter': { en: flat('Filter VM modes'), yue: flat('篩選虛擬機模式') },
+  'virtualMachine.mode.filterRegex': { en: flat('Filter VM modes with regex'), yue: flat('用正規表示式篩選虛擬機模式') },
+  'virtualMachine.mode.regex': { en: flat('Regex for VM modes'), yue: flat('虛擬機模式正規表示式') },
   'virtualMachine.expectedHash': { en: flat('Expected ISO SHA-256 (optional)'), yue: flat('預期 ISO SHA-256（可選）') },
   'virtualMachine.memory': { en: flat('Memory (MiB)'), yue: flat('記憶體（MiB）') },
   'virtualMachine.cpus': { en: flat('CPUs'), yue: flat('CPU 數量') },
@@ -1245,8 +1270,14 @@ export const CATALOG: Catalog = {
   'virtualMachine.openDisplay': { en: flat('Open display'), yue: flat('開啟顯示畫面') },
   'virtualMachine.createDisk': { en: flat('Create disk'), yue: flat('建立磁碟') },
   'virtualMachine.browse': { en: flat('Browse'), yue: flat('瀏覽') },
-  'virtualMachine.note': { en: flat('Linux ISO VM is separate from WSL. It runs one isolated QEMU machine with a loopback-only display.'), yue: flat('Linux ISO 虛擬機同 WSL 分開，會用只限本機回環顯示嘅 QEMU 隔離機器。') }
-  }
+  'virtualMachine.note': { en: flat('Linux ISO VM is separate from WSL. It runs one isolated QEMU machine with a loopback-only display.'), yue: flat('Linux ISO 虛擬機同 WSL 分開，會用只限本機回環顯示嘅 QEMU 隔離機器。') },
+  'virtualMachine.snapshot.newName': { en: flat('New snapshot name'), yue: flat('新快照名稱') },
+  'virtualMachine.snapshot.filter': { en: flat('Filter saved snapshots'), yue: flat('篩選已儲存快照') },
+  'virtualMachine.snapshot.filterRegex': { en: flat('Filter snapshots with regex'), yue: flat('用正規表示式篩選快照') },
+  'virtualMachine.snapshot.regex': { en: flat('Regex for saved snapshots'), yue: flat('已儲存快照正規表示式') },
+  'virtualMachine.snapshot.restoreChoice': { en: flat('Saved snapshot to restore'), yue: flat('要還原嘅已儲存快照') },
+  'virtualMachine.snapshot.noMatch': { en: flat('No snapshots match the filter'), yue: flat('冇快照符合篩選') },
+  'virtualMachine.snapshot.none': { en: flat('Create a snapshot before restoring'), yue: flat('還原之前先建立快照') },
   // WSL creation dialog (WslCreateDialog.tsx). Labels stay flat, while explanatory copy gets
   // five honest levels. Runtime distribution names, versions, instance names, paths, operation
   // ids, parser details, and executable names are supplied by the caller and never live here.

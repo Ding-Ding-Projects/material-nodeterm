@@ -30,6 +30,20 @@
   and records only safe paired-door intent in schema 3. No tests, type checks, lint, reviews,
   builds, packaging, runtime interaction, or captures were run in this ultra-speed lane.
 
+- Add shared provider-account, sealed credential, OAuth PKCE callback, resource-discovery, and
+  local-binding services across Desktop and Server Edition. The guided binding wizard now uses
+  searchable account and resource pickers with adjacent regex builders and exact unavailable
+  reasons instead of accepting hand-typed provider identities or resource references. Project
+  import remains side-effect free. This ultra-speed lane did not run tests, type checks, lint,
+  reviews, security or accessibility checks, builds, packaging, installer execution, runtime
+  interaction, or UI captures.
+
+- Add a Wild dim sum canvas node backed only by the canonical public catalog and published photo
+  releases. It offers random selection, plain-text and anchored regex search, bounded progress,
+  cancellation, retry, bilingual factual dish details, portable schema 3 selection state, and
+  explicit offline/photo recovery without vendoring images. This ultra-speed lane ran no tests,
+  type checks, lint, builds, packaging, runtime interaction, audits, reviews, or captures.
+
 - Add a source-only desktop Material Design 3 audit with a hand-written inventory of 212 rendered
   surfaces, including onboarding, profile picking, conversion, password management, Minecraft
   management, dialogs, find bars, and notifications. Shared NumberField, Radio, Progress, and Tabs
@@ -120,6 +134,13 @@
   probing with TCG fallback, ISO digest validation, qcow2/raw detection, disk free-space checks,
   QMP/display startup handshakes, bounded diagnostics, cancellation generations, stale-process
   recovery, atomic state retries, and a truthful Server Edition display boundary.
+- Complete the Linux ISO VM integration by restoring parseable package and node-kind registration,
+  closing the desktop and Server Edition bridge boundaries, mapping QEMU VNC display numbers to
+  their real loopback TCP ports, allowing startup cancellation,
+  surfacing QMP stop failures after bounded termination, and refusing to treat unreadable local VM
+  state as an absent machine. Restore now selects from a searchable machine-local snapshot catalogue
+  with an adjacent anchored regex builder, and the mode dropdown has its own isolated search and
+  builder state.
 - Add a host-owned planner occurrence service with durable local schedules, recurrence choices,
   timezone and DST semantics, cross-midnight descriptions, missed-occurrence history, JSON/CSV
   export, Desktop IPC and Server Edition WS-RPC events, and a guided Planner settings surface.

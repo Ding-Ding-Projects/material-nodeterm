@@ -2578,6 +2578,9 @@ button.term-node__title-text:focus-visible {
 .virtual-machine-node__status { color:var(--md-primary); }
 .virtual-machine-node__status.is-error { color:var(--md-error); }
 .virtual-machine-node__actions,.virtual-machine-node__snapshot { display:flex; gap:6px; align-items:center; }
+.virtual-machine-node__snapshot { flex-wrap:wrap; }
+.virtual-machine-node__snapshot-search,.virtual-machine-node__picker-search { display:flex; flex:1 1 260px; align-items:center; gap:4px; }
+.virtual-machine-node__picker-search { width:100%; }
 .virtual-machine-node__snapshot .mdx-input { flex:1; }
 .virtual-machine-node__display code { user-select:all; }
 .virtual-machine-node :is(button,input,select):focus-visible { outline:2px solid var(--md-primary); outline-offset:2px; }

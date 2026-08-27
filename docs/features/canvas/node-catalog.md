@@ -18,11 +18,14 @@ media, managers, automation, and tools. Rows that cannot be created in the curre
 visible and explain the exact missing capability and the next action. An editor or diff row, for
 example, waits for a project file picker instead of accepting an arbitrary path.
 
-The registry also carries explicit disabled blueprint rows for planned Photo, Gallery, Torrent,
-Linux VM, wild dim sum, Home Assistant control and sensor, Calendar, Timer, Alarm Clock, Planner,
+The registry also carries explicit disabled blueprint rows for planned Home Assistant control and
+sensor, Calendar, Planner,
 Multiverse, AWS Universe, AWS service, Cloudflare hosting, GitLab hosting, Nextcloud hosting, and
 Open WebUI hosting nodes. A planned row is never mistaken for an available feature. Remote terminal
 creation remains disabled until the dedicated saved-connection picker supplies a concrete binding.
+Alarm Clock is active and creates the same paused, timezone-aware node used by the canvas add menu.
+Wild dim sum is also active: it creates a guided public-catalog node whose live network state stays
+outside schema 3 while the validated selected dish remains portable.
 
 Selecting a row creates one immutable `creationEventId`. Retries carrying that id are idempotent and
 return the existing node rather than creating a second node. The coordinator searches a deterministic

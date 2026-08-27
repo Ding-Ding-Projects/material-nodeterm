@@ -1,6 +1,7 @@
 import type { Node } from '@xyflow/react'
 import type { AgentLaunchIntent, BrowserTab, CanvasMutation, CanvasNodeState, ClaudeAccount, NodeKind, PendingLaunch, Project, ServiceNodeKind } from '@shared/types'
 import { normalizeMediaReference, type MediaAssetReference } from '@shared/media-catalog'
+import { normalizePublicDimSumSelection, type PublicDimSumSelection } from '@shared/public-dim-sum'
 import type { CalendarNodeConfig } from '@shared/calendar'
 import type { AlarmOccurrence, AlarmRecurrence } from '@shared/alarm-clock'
 import type { ServiceConnection } from '@shared/node-exec'
@@ -81,6 +82,7 @@ const DINO_SIZE = { width: 600, height: 200 }
 const VIDEO_SIZE = { width: 640, height: 420 }
 const PHOTO_SIZE = { width: 560, height: 440 }
 const GALLERY_SIZE = { width: 760, height: 520 }
+const WILD_DIM_SUM_SIZE = { width: 560, height: 560 }
 const WEB_SIZE = { width: 720, height: 520 }
 const BROWSER_SIZE = { width: 800, height: 560 }
 const NATIVE_LOOP_SIZE = { width: 340, height: 280 }
@@ -200,6 +202,8 @@ export interface NodeData {
   textUpdatedAt?: number
   textUpdatedBy?: string
   filePath?: string
+  /** Wild dim sum only: validated portable selection from the public catalog. */
+  wildDimSumDish?: PublicDimSumSelection
   /**
    * editor/diff-only: true once this node's `filePath` was confirmed gone — e.g. a worktree
    * that contained it was removed (`displacedByWorktree` in @shared/worktree sweeps these up
@@ -1262,6 +1266,15 @@ export function createGalleryNode(index: number, assets: MediaAssetReference[] =
   }
 }
 
+export function createWildDimSumNode(index: number, selection?: PublicDimSumSelection, center?: { x: number; y: number }): CanvasNode {
+  const dish = normalizePublicDimSumSelection(selection)
+  return {
+    id: nextId('wild-dim-sum'), type: 'wild-dim-sum', position: placeAt(center, index, WILD_DIM_SUM_SIZE.width, WILD_DIM_SUM_SIZE.height),
+    width: WILD_DIM_SUM_SIZE.width, height: WILD_DIM_SUM_SIZE.height, style: { width: WILD_DIM_SUM_SIZE.width, height: WILD_DIM_SUM_SIZE.height },
+    data: { title: dish ? `Wild dim sum · ${dish.name.en}` : 'Wild dim sum', color: '#f59e0b', group: null, ...(dish ? { wildDimSumDish: dish } : {}) }
+  }
+}
+
 /** Creates a web (webview) node showing a live URL or a local html file. */
 export function createWebNode(
   index: number,
@@ -2105,6 +2118,7 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   diff: true,
   photo: true,
   gallery: true,
+  'wild-dim-sum': true,
   video: true,
   web: true,
   browser: true,
@@ -2120,8 +2134,8 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   homeassistant: true,
   freepbx: true,
   nsis: true,
-  shop: true
-  torrent: true
+  shop: true,
+  torrent: true,
   'linux-vm': true
 }
 
@@ -2150,6 +2164,7 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   diff: DIFF_SIZE,
   photo: PHOTO_SIZE,
   gallery: GALLERY_SIZE,
+  'wild-dim-sum': WILD_DIM_SUM_SIZE,
   video: VIDEO_SIZE,
   web: WEB_SIZE,
   browser: BROWSER_SIZE,
@@ -2167,8 +2182,8 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   homeassistant: SERVICE_SUMMARY_SIZE,
   freepbx: SERVICE_SUMMARY_SIZE,
   nsis: NSIS_SIZE,
-  shop: SHOP_SIZE
-  torrent: TORRENT_SIZE
+  shop: SHOP_SIZE,
+  torrent: TORRENT_SIZE,
   'linux-vm': LINUX_VM_SIZE
 }
 
@@ -2263,7 +2278,7 @@ export function duplicateNode(node: CanvasNode, offset = 28): CanvasNode {
       loopNextRunAt: undefined,
       loopLastRunAt: undefined,
       // A duplicate owns a fresh VM identity and must never inherit another VM's ISO or disk.
-      virtualMachineLocalPaths: undefined
+      virtualMachineLocalPaths: undefined,
       ...(kind === 'timer' ? {
         running: false, paused: false, elapsedMs: 0, remainingMs: (node.data as TimerNodeData).durationMs,
         lapsMs: [], sequenceIndex: 0, repeatRemaining: 0, occurrenceId: undefined,
@@ -2639,6 +2654,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         filePath: n.filePath,
         mediaAssets: n.mediaAssets?.map(normalizeMediaReference).filter((reference): reference is MediaAssetReference => !!reference),
         mediaActiveAssetId: n.mediaActiveAssetId,
+        wildDimSumDish: normalizePublicDimSumSelection(n.wildDimSumDish) ?? undefined,
         fileMissing: n.fileMissing,
         url: n.url,
         browserProfileId: n.browserProfileId,
@@ -2755,6 +2771,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         filePath: n.data.filePath,
         mediaAssets: n.data.mediaAssets?.map((reference) => ({ ...reference })),
         mediaActiveAssetId: n.data.mediaActiveAssetId,
+        wildDimSumDish: normalizePublicDimSumSelection(n.data.wildDimSumDish) ?? undefined,
         virtualMachineConfig: n.data.virtualMachineConfig,
         virtualMachineLocalPaths: n.data.virtualMachineLocalPaths,
         calendarConfig: n.data.calendarConfig,
