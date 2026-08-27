@@ -1198,6 +1198,8 @@ export function buildCalendarApi(client: RpcClient): Pick<NodeTerminalApi, 'cale
     importIcs: (id, text, name) => client.request(IPC.calendarImportIcs, id, text, name) as ReturnType<CalendarApi['importIcs']>,
     refresh: (id, config) => client.request(IPC.calendarRefresh, id, config) as ReturnType<CalendarApi['refresh']>,
     beginOAuth: (provider: Exclude<CalendarProvider, 'local' | 'ics'>) => client.request(IPC.calendarBeginOAuth, provider) as ReturnType<CalendarApi['beginOAuth']>,
+    connectCalDav: (input) => client.request(IPC.calendarConnectCalDav, input) as ReturnType<CalendarApi['connectCalDav']>,
+    disconnectAccount: (accountId) => client.request(IPC.calendarDisconnectAccount, accountId) as ReturnType<CalendarApi['disconnectAccount']>,
     create: (input) => client.request(IPC.calendarCreate, input) as ReturnType<CalendarApi['create']>,
     update: (input) => client.request(IPC.calendarUpdate, input) as ReturnType<CalendarApi['update']>,
     remove: (id, eventId) => client.request(IPC.calendarRemove, id, eventId) as ReturnType<CalendarApi['remove']>

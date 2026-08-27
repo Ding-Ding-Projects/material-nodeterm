@@ -759,6 +759,8 @@ export function buildStubApi(): Omit<
       importIcs: U('calendar.importIcs'),
       refresh: U('calendar.refresh'),
       beginOAuth: U('calendar.beginOAuth'),
+      connectCalDav: U('calendar.connectCalDav'),
+      disconnectAccount: U('calendar.disconnectAccount'),
       create: U('calendar.create'),
       update: U('calendar.update'),
       remove: U('calendar.remove')

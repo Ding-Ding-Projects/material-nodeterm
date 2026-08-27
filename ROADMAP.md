@@ -243,9 +243,10 @@ intentionally unchecked because this task publishes the plan only.
       current lane, but remains unticked until its required checks and packaged interaction evidence land.
 - [ ] Add Calendar nodes for local calendars and ICS, with guided CalDAV, Google Calendar, and
       Microsoft 365 provider bindings, recurrence/timezone views, offline cache, and create/edit/
-      delete flows. Provider adapters still report an honest unavailable state until trusted OAuth
-      vault wiring is supplied. Ultra-speed lane intentionally skipped tests, builds, packaging,
-      runtime interaction, and captures.
+      delete flows. Host-owned provider adapters, credential storage, loopback OAuth PKCE, bounded
+      pagination, validators, retry backoff, and remote writes are implemented but remain unticked
+      because the ultra-speed lane intentionally skipped tests, type checking, lint, builds,
+      packaging, runtime interaction, reviews, audits, and captures.
 - [ ] Add Timer, Alarm Clock, and planner occurrence services.
 - [x] Add Timer nodes and persistent planner occurrence service. Calendar and Alarm Clock remain
   separate follow-up surfaces.

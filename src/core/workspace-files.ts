@@ -24,6 +24,7 @@ import type { BridgeLink, CanvasNodeState, NavStop, Project, ProjectKanban, View
 import { projectCapabilityFields, readProjectCapabilities } from '../shared/project-capabilities'
 import { loadedAgentBrowserPartition } from '../shared/browser-partition'
 import { sanitizeProjectIcon, type ProjectIcon } from '../shared/project-icon'
+import { validateCalendarConfig } from '../shared/calendar'
 
 /**
  * Drop a browser node's persisted `partition` unless it is exactly the jar THIS project (its
@@ -40,6 +41,13 @@ function sanitizeBrowserPartitions(nodes: CanvasNodeState[], projectId: string):
     const { partition: _dropped, ...rest } = n
     return safe === undefined ? rest : { ...rest, partition: safe }
   })
+}
+
+/** Keep calendar node data to the portable allowlist at every project-file boundary. */
+function sanitizeCalendarConfigs(nodes: CanvasNodeState[]): CanvasNodeState[] {
+  return nodes.map((n) => n.kind === 'calendar' && n.calendarConfig
+    ? { ...n, calendarConfig: validateCalendarConfig(n.calendarConfig) }
+    : n)
 }
 
 export const PROJECT_DIR = '.nodeterm'
@@ -258,7 +266,7 @@ export function projectToFile(
   // The project file is a SHARED document (git, or the remote host). Exec-enabling node fields
   // (`shell`, `ssh.extraArgs`) never leave this machine in it — they ride the machine-local index
   // entry instead (`localNodeExec` / `IndexEntryV3.localExec`). See @shared/node-exec.
-  const nodes = stripSharedNodeExec(p.cwd ? toPortableNodes(p.nodes, p.cwd) : p.nodes)
+  const nodes = sanitizeCalendarConfigs(stripSharedNodeExec(p.cwd ? toPortableNodes(p.nodes, p.cwd) : p.nodes))
   const icon = sanitizeProjectIcon(p.icon)
   return {
     version: 1,
@@ -363,10 +371,10 @@ export function fileToProject(
     // `partition` survives only when it is exactly the one THIS project (base.id, machine-local)
     // would mint — a foreign/cloned/unsafe one drops to un-owned default session. See
     // loadedAgentBrowserPartition; without it a cloned project.json forges another project's jar.
-    nodes: sanitizeBrowserPartitions(
-      applyLocalNodeExec(base.cwd ? resolveNodes(f.nodes, base.cwd) : f.nodes, base.localExec),
-      base.id
-    ),
+      nodes: sanitizeBrowserPartitions(
+        sanitizeCalendarConfigs(applyLocalNodeExec(base.cwd ? resolveNodes(f.nodes, base.cwd) : f.nodes, base.localExec)),
+        base.id
+      ),
     ...(f.bridges ? { bridges: f.bridges } : {}),
     ...(f.ropes ? { ropes: f.ropes } : {}),
     ...(defaultAccountId ? { defaultAccountId } : {}),
@@ -541,5 +549,5 @@ export function splitWorkspace(
  * file could be adopted and then mirrored back with its execution fields intact.
  */
 export function serializeProjectFile(f: ProjectFileV1): string {
-  return JSON.stringify({ ...f, nodes: stripSharedNodeExec(f.nodes) }, null, 2)
+  return JSON.stringify({ ...f, nodes: sanitizeCalendarConfigs(stripSharedNodeExec(f.nodes)) }, null, 2)
 }
