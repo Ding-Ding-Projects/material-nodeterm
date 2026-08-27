@@ -378,6 +378,10 @@ Identical on desktop and in the browser.
   cache reuse, repair, cancellation, and restart reconciliation. Node Catalog `Install and
   continue` wiring and focused verification remain in progress. See
   [`docs/features/dependencies/automatic-node-dependencies.md`](./docs/features/dependencies/automatic-node-dependencies.md).
+- **Shared hosted-resource backup and restore** — versioned, edition-aware, ownership-reviewed
+  archives with bounded ZIP validation, explicit omissions, progress, cancellation, atomic
+  publication, and rollback contracts for hosted-service nodes. See
+  [`docs/features/integrations/backup-restore.md`](./docs/features/integrations/backup-restore.md).
 - **Local Ollama suite manager** — a local manager for [Ollama](https://ollama.com) that talks
   only to its documented local HTTP API, never a cloud service. See
   [`docs/ollama-manager.md`](./docs/ollama-manager.md).

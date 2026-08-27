@@ -22,6 +22,15 @@
   reviews, security checks, accessibility checks, builds, packaging, installer execution, runtime
   interaction, and captures remain unrun under issue #39's ultra-speed boundary.
 
+- Add the shared hosted-resource backup and restore framework. Versioned manifests now carry safe
+  resource, edition, ownership, payload-hash, omission, and byte-budget evidence; bounded ZIP
+  validation rejects unsafe paths and malformed payloads; staged operations report progress and
+  cancellation; local publication is collision-safe and atomic; restore review and expiry-bound
+   rollback contracts keep later hosting nodes from applying an unverified destination change.
+   This ultra-speed implementation lane intentionally did not run tests, type checks, lint, reviews,
+   security or accessibility checks, builds, packaging, installer execution, runtime interaction,
+   or UI captures.
+
 - Complete the Express File Converter flow with queue-wide collision-safe destination names,
   visible rename disclosure, final atomic no-clobber publication, and a completed-output action that
   opens the exact result in Visual Studio Code through the active project API. The converter queue
