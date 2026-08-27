@@ -12,6 +12,7 @@ import type { NormalizedAgentEvent } from './agents/normalize'
 import type { AgentId, AgentPermissionMode, BuiltinAgentId, PromptInjectionMode } from './agents/config'
 import type { AgentMessageDeliverRequest, AgentMessageReply } from './agents/agent-messaging'
 import type { BrowserLeasePush } from './browser-indicator'
+import type { DebugBrowserIntent, DebugBrowserProfile } from './browser-debug-sessions'
 import type { GroupWorktree } from './worktree'
 import type { ClientId, DinoSnapshot, PeerDiff, PeerIdentity, PeerState } from './presence'
 import type { WhisperModelInfo } from './speech'
@@ -773,6 +774,8 @@ export interface CanvasNodeState {
   browserActiveTabId?: string
   /** Kiosk/PWA sessions carry only safe launch intent; profile and runtime state stay local. */
   kioskPwaIntent?: PortableKioskPwaIntent
+  /** Debugging-browser intent only. Certificates, credentials, executable paths and process state stay local. */
+  debugBrowser?: DebugBrowserIntent
    * browser-only: the Electron session partition for an AGENT-opened browser node
    * (`persist:nt-agent-browser-<projectId>`), set once at creation and never mutated. Absent for a
    * USER-opened node (default session, no migration). Persisted so the jar survives reopen; carried
@@ -918,6 +921,9 @@ export interface BrowserTab {
   url: string
   title: string
 }
+
+/** Named debugging-browser profiles. Only safe proxy and certificate intent is shared. */
+export type { DebugBrowserIntent, DebugBrowserProfile } from './browser-debug-sessions'
 
 /** One kanban board column. Column order = array order in ProjectKanban.columns. */
 export interface KanbanColumn {
@@ -1253,6 +1259,8 @@ export interface Project {
   browserProfiles?: BrowserProfile[]
   /** Unified typed links whose source belongs to this project. */
   links?: Link[]
+  /** Portable debugging-browser profiles. Local credentials, certificates and runtime state are omitted. */
+  debugBrowserProfiles?: DebugBrowserProfile[]
   /** Bridge links between Claude nodes (optional; absent in pre-bridge files). */
   bridges?: BridgeLink[]
   /**

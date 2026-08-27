@@ -21,6 +21,9 @@ Two different ways nodeterm reaches a machine that isn't the one in front of you
 - [Kiosk and PWA sessions](./kiosk-pwa-sessions.md) - guided secure URL and installed web-app
   sessions with isolated local profiles, portable intent, explicit permissions, lifecycle recovery,
   and honest unavailable states.
+- [Proxy and isolated debugging browser sessions](./browser-debug-sessions.md) - host-owned
+  debugging sessions with explicit proxy and certificate intent, local-only bindings, and no
+  silent fallback to ordinary browsing.
 
 See also [Agents](../agents/README.md) for how agent hooks and permission modes work across an
 SSH connection, and [Packaging](../packaging/README.md) for how the headless notification host

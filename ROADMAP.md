@@ -152,6 +152,11 @@ later commit, since this file will not be kept in lockstep with every merge).
       Configure/Rebind/Adopt/Deploy/Locate Asset/Leave Unbound surface is wired for Desktop with
       an honest Server Edition boundary. Tests, build/package evidence, generated docs bundle,
       runtime interaction, and captures remain outstanding.
+- [ ] **Proxy and isolated debugging browser sessions (issue #65)**: the bounded portable intent,
+      separate debugging partition, host-owned lifecycle manager, guided proxy/certificate profile
+      picker, and explicit recovery states are implemented in the issue lane. Tests, type checks,
+      lint, security review, build/package evidence, runtime interaction, and captures remain
+      intentionally unrun under the ultra-speed boundary.
 
 - [ ] **Nextcloud AIO hosting, issue #52**: the guided pinned official image profile is implemented
       on `feat/program-41-nextcloud-aio` with explicit Docker socket authority disclosure, no
