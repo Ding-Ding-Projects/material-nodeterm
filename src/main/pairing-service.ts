@@ -823,20 +823,6 @@ export function createPairingService(
         // unchanged, and the mint still reads this same value.
         const phoneDeviceId =
           typeof body.deviceId === 'string' && body.deviceId.trim() ? body.deviceId.trim() : deviceId
-        // One unit, and queued behind any in-flight revoke: a pairing that interleaves with one
-        // would either append onto the inode the revoke is about to rename over, or lose its
-        // agent.json entry to the revoke's stale read.
-        await serialize(async () => {
-          await appendAuthorizedKey(rewriteKeyComment(publicKey, deviceId))
-          await persistDevice({
-            id: deviceId,
-            name,
-            token: agentToken,
-            pairedAt: Date.now(),
-            lastSeenAt: 0,
-            relayDeviceId: phoneDeviceId
-          })
-        })
         // Provision relay access for the phone when enabled + Pro. Any failure ⇒ LAN-only: we
         // never fail the pairing over a relay hiccup (the phone still got its SSH key installed).
         let relayFields: { relay?: RelayPairingBlock; relayDeviceToken?: string } = {}
@@ -874,7 +860,8 @@ export function createPairingService(
             name,
             token: agentToken,
             pairedAt: Date.now(),
-            lastSeenAt: 0
+            lastSeenAt: 0,
+            relayDeviceId: phoneDeviceId
           })
           await testHooks.afterDevicePersisted?.()
           // stop() and a superseding start poison this attempt synchronously. Re-check after the
