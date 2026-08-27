@@ -8,6 +8,7 @@ import {
   type CrossProcessLease
 } from '../core/fs-transaction-lock'
 import type { GitHubSecretStore } from '../core/github/credentials'
+import type { SecretStore } from '../core/secret-store'
 import {
   GitHubTokenDocumentError,
   parseGitHubTokenDocument,
@@ -26,21 +27,28 @@ export class ServerGitHubSecretError extends Error {
   }
 }
 
+export class ServerSecretStoreError extends Error {
+  constructor(readonly code: 'invalid-token') {
+    super(code)
+  }
+}
+
 async function atomicWrite(file: string, document: GitHubTokenDocument, expectedRevision: string, lease: CrossProcessLease): Promise<void> {
   await fs.mkdir(path.dirname(file), { recursive: true })
   await sweepStaleTempFiles(file)
   await writeAtomicFileCompared(file, JSON.stringify(document), expectedRevision, lease, { encoding: 'utf8', mode: 0o600 })
+  await fs.chmod(file, 0o600)
 }
 
-export class ServerGitHubSecretStore implements GitHubSecretStore {
+export class ServerSecretStore implements SecretStore {
   readonly availability = 'restricted-file' as const
   private chain: Promise<unknown> = Promise.resolve()
-  constructor(private readonly userDataDir: string) {}
+  constructor(private readonly userDataDir: string, private readonly fileName: string) {}
   private chained<T>(fn: () => Promise<T>): Promise<T> { const run = this.chain.then(fn); this.chain = run.catch(() => {}); return run }
-  private get filePath(): string { return path.join(this.userDataDir, FILE_NAME) }
+  private get filePath(): string { return path.join(this.userDataDir, this.fileName) }
   save(token: string): Promise<void> { return this.chained(() => withCrossProcessLock(this.filePath, (lease) => this.saveNow(token, lease))) }
   private async saveNow(token: string, lease: CrossProcessLease): Promise<void> {
-    if (!validGitHubToken(token)) throw new ServerGitHubSecretError('invalid-token')
+    if (!validGitHubToken(token)) throw new ServerSecretStoreError('invalid-token')
     const current = await readAtomicFileSnapshot(this.filePath)
     if (current.exists) {
       let value: unknown
@@ -59,6 +67,12 @@ export class ServerGitHubSecretStore implements GitHubSecretStore {
     const document = parseGitHubTokenDocument(value)
     if (document.kind === 'safe-storage') throw new GitHubTokenDocumentError('The stored GitHub credential requires Desktop keyring access.')
     return document.token
+  }
+}
+
+export class ServerGitHubSecretStore extends ServerSecretStore implements GitHubSecretStore {
+  constructor(userDataDir: string) {
+    super(userDataDir, FILE_NAME)
   }
 }
 
