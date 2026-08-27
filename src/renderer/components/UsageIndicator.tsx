@@ -5,14 +5,8 @@ import { useSettings } from '../state/settings'
 import { useSystemCodexAccount } from '../state/systemCodexAccount'
 import { useProjects } from '../state/projects'
 import { useSshConn } from '../state/sshConn'
-import {
-  accountRowAction,
-  dedupeProviderRows,
-  providerRowKey,
-  scopeFromKey,
-  scopeUsage,
-  usageScopeKey
-} from '../lib/usageScope'
+import { markWorkspaceDirty } from '../state/workspaceDirty'
+import { dedupeProviderRows, providerRowKey, scopeFromKey, scopeUsage, usageScopeKey } from '../lib/usageScope'
 import {
   barFillPercent,
   formatResetCountdown,
@@ -46,60 +40,23 @@ function LimitRow({ limit, mode }: { limit: UsageLimit; mode: 'used' | 'remainin
   const left = 100 - limit.usedPercent
   const fill = barFillPercent(limit.usedPercent, mode)
   return (
-    <div className="usage-row">
-      <div className="usage-row__title">
+    <span className="usage-row">
+      <span className="usage-row__title">
         {limitLabel(limit.kind, limit.scopeLabel)}
         {/* The server flags which window is actually gating the account right now. */}
         {limit.isActive && <span className="usage-row__active" title="Currently limiting">●</span>}
-      </div>
-      <div className="usage-bar">
-        <div
+      </span>
+      <span className="usage-bar">
+        <span
           className="usage-bar__fill"
           style={{ width: `${fill}%`, background: severityColor(limit.severity, left) }}
         />
-      </div>
-      <div className="usage-row__meta">
+      </span>
+      <span className="usage-row__meta">
         <span>{percentText(limit.usedPercent, mode)}</span>
         <span>{formatResetCountdown(limit.resetsAt)}</span>
-      </div>
-    </div>
-  )
-}
-
-/**
- * The account-row affordance for issue #142 — the switch lives where the decision is made.
- * It writes `project.defaultAccountId` and nothing else: `data.accountId` is resolved once at
- * node creation and is immutable after, so the copy says "new sessions" and running sessions
- * never move. `isDefault` marks the row the project currently resolves to; `onUse` is absent
- * when there is nothing honest to offer (no active project, or a row whose account this
- * project cannot launch).
- */
-function DefaultAccountMark({
-  isDefault,
-  onUse
-}: {
-  isDefault: boolean
-  onUse?: () => void
-}) {
-  if (isDefault)
-    return (
-      <span
-        className="usage-account__default"
-        title="New Claude nodes in this project open under this account."
-      >
-        ✓ new sessions
       </span>
-    )
-  if (!onUse) return null
-  return (
-    <button
-      type="button"
-      className="usage-account__use"
-      title="New Claude nodes in this project will open under this account. Running sessions keep theirs."
-      onClick={onUse}
-    >
-      Use for new sessions
-    </button>
+    </span>
   )
 }
 
@@ -112,28 +69,44 @@ function AccountUsageBlock({
   email,
   u,
   mode,
-  isDefault = false,
-  onUse
+  accountId,
+  selected,
+  onSelect,
+  selectable
 }: {
   label: string
   email?: string
   u: ClaudeUsage | null
   mode: 'used' | 'remaining' | 'tokens'
-  isDefault?: boolean
-  onUse?: () => void
+  accountId: string | undefined
+  selected: boolean
+  onSelect: (accountId: string | undefined) => void
+  selectable: boolean
 }) {
   return (
     <div className="usage-account">
-      <div className="usage-account__label">
-        {label}
-        <DefaultAccountMark isDefault={isDefault} onUse={onUse} />
-      </div>
-      {(email ?? u?.email) && <div className="usage-account__email">{email ?? u?.email}</div>}
+      <span className="usage-account__label">
+        <span>{label}</span>
+        {selected && <span className="usage-account__default" aria-hidden>✓</span>}
+      </span>
+      {(email ?? u?.email) && <span className="usage-account__email">{email ?? u?.email}</span>}
       {u?.limits.map((l) => (
         <LimitRow key={limitKey(l)} limit={l} mode={mode} />
       ))}
-      {u && u.limits.length === 0 && <div className="usage-popover__empty">No usage data.</div>}
-      {!u && <div className="usage-popover__empty usage-pill__pulse">···</div>}
+      {u && u.limits.length === 0 && <span className="usage-popover__empty">No usage data.</span>}
+      {!u && <span className="usage-popover__empty usage-pill__pulse">···</span>}
+      {selectable && (
+        <button
+          type="button"
+          className="usage-account__select"
+          role="radio"
+          aria-checked={selected}
+          aria-label={`Use ${label} for new sessions`}
+          onClick={() => onSelect(accountId)}
+        >
+          Use for new sessions
+        </button>
+      )}
     </div>
   )
 }
@@ -150,33 +123,49 @@ function AccountUsageBlock({
 function RemoteUsageBlock({
   row,
   mode,
-  isDefault = false,
-  onUse
+  accountId,
+  selected,
+  onSelect,
+  selectable
 }: {
   row: RemoteAccountUsage
   mode: 'used' | 'remaining' | 'tokens'
-  isDefault?: boolean
-  onUse?: () => void
+  accountId: string | undefined
+  selected: boolean
+  onSelect: (accountId: string | undefined) => void
+  selectable: boolean
 }) {
   if (row.usage.status === 'unavailable') return null
   const showHost = row.label !== row.hostKey
   return (
     <div className="usage-account">
-      <div className="usage-account__label">
-        {row.label}
+      <span className="usage-account__label">
+        <span>{row.label}</span>
+        {selected && <span className="usage-account__default" aria-hidden>✓</span>}
         <span className="usage-account__host" title={`Read on ${row.hostKey} over SSH`}>
           {showHost ? row.hostKey : 'SSH'}
         </span>
-        <DefaultAccountMark isDefault={isDefault} onUse={onUse} />
-      </div>
-      {row.usage.email && <div className="usage-account__email">{row.usage.email}</div>}
+      </span>
+      {row.usage.email && <span className="usage-account__email">{row.usage.email}</span>}
       {row.usage.limits.map((l) => (
         <LimitRow key={limitKey(l)} limit={l} mode={mode} />
       ))}
       {row.usage.limits.length === 0 && (
-        <div className="usage-popover__empty">
+        <span className="usage-popover__empty">
           {row.usage.status === 'error' ? 'Could not read usage on this host.' : 'No usage data.'}
-        </div>
+        </span>
+      )}
+      {selectable && (
+        <button
+          type="button"
+          className="usage-account__select"
+          role="radio"
+          aria-checked={selected}
+          aria-label={`Use ${row.label} for new sessions`}
+          onClick={() => onSelect(accountId)}
+        >
+          Use for new sessions
+        </button>
       )}
     </div>
   )
@@ -200,10 +189,9 @@ function ProviderBlock({
   identity
 }: {
   u: ProviderUsage
-  mode: 'used' | 'remaining'
+  mode: 'used' | 'remaining' | 'tokens'
   identity?: string | null
 }) {
-function ProviderBlock({ u, mode }: { u: ProviderUsage; mode: 'used' | 'remaining' | 'tokens' }) {
   if (u.status === 'unavailable') return null
   const label = labelFor(u.provider)
   return (
@@ -235,8 +223,7 @@ export function UsageIndicator({
   onSetDefaultAccount
 }: {
   overBoard?: boolean
-  /** Writes `project.defaultAccountId` + persists (Canvas's own TabBar handler). When absent the
-   *  popover is a pure readout, exactly as before issue #142. */
+  /** Existing Canvas call sites may provide the same persisted write path used by its menu. */
   onSetDefaultAccount?: (projectId: string, accountId: string | undefined) => void
 }): JSX.Element | null {
   const [usage, setUsage] = useState<ClaudeUsage | null>(null)
@@ -246,7 +233,9 @@ export function UsageIndicator({
   const [providers, setProviders] = useState<ProviderUsage[]>([])
   const [remote, setRemote] = useState<RemoteAccountUsage[]>([])
   const popRef = useRef<HTMLDivElement>(null)
+  const pillRef = useRef<HTMLButtonElement>(null)
   const closeTimerRef = useRef<number | null>(null)
+  const suppressNextPillFocusRef = useRef(false)
 
   const claudeAccounts = useSettings((s) => s.settings.claudeAccounts)
   const codexAccounts = useSettings((s) => s.settings.codexAccounts)
@@ -266,41 +255,13 @@ export function UsageIndicator({
   // project it is that host and nothing else. Showing every source at once is what made the panel
   // unreadable once remote hosts joined it.
   const activeProjectId = useProjects((s) => s.activeProjectId)
+  const defaultAccountId = useProjects((s) =>
+    s.projects.find((p) => p.id === s.activeProjectId)?.defaultAccountId
+  )
   const scopeHostKey = useProjects((s) =>
     usageScopeKey(s.projects.find((p) => p.id === s.activeProjectId))
   )
   const scope = useMemo(() => scopeFromKey(scopeHostKey), [scopeHostKey])
-
-  // Issue #142 — "Use for new sessions" on the account rows. A PRIMITIVE selector on purpose
-  // (see scopeHostKey above): selecting the project object would re-render the pill on every
-  // canvas edit.
-  const projectDefaultId = useProjects(
-    (s) => s.projects.find((p) => p.id === s.activeProjectId)?.defaultAccountId
-  )
-  // The accounts THIS project can actually launch — the same host rule the whole panel follows
-  // (local project: local accounts; SSH project: that host's). The persisted default is validated
-  // against them, exactly as resolveNewNodeAccount does at node creation: a stale id (account
-  // since removed) marks the System row, never a ghost.
-  const eligibleAccounts = useMemo(
-    () =>
-      claudeAccounts.filter(
-        (a) => !a.pending && (scopeHostKey ? a.host === scopeHostKey : !a.host)
-      ),
-    [claudeAccounts, scopeHostKey]
-  )
-  // One rule for every row, local and remote alike — `accountRowAction` (pure, tested) decides
-  // default/offer/none; this pair just turns its answer into props. Absent handler / no project =
-  // pure readout, exactly as before. null = the System row (clears the override).
-  const rowMark = (accountId: string | null): { isDefault: boolean; onUse?: () => void } => {
-    const action = accountRowAction(accountId, eligibleAccounts, projectDefaultId)
-    return {
-      isDefault: action === 'default',
-      onUse:
-        action === 'offer' && onSetDefaultAccount && activeProjectId
-          ? () => onSetDefaultAccount(activeProjectId, accountId ?? undefined)
-          : undefined
-    }
-  }
 
   useEffect(() => {
     void window.nodeTerminal.usage.fetch().then(setUsage)
@@ -376,6 +337,10 @@ export function UsageIndicator({
   // travelling from the pill into it never leaves; only leaving the whole thing closes, and that
   // is delayed so a pointer clipping the corner on its way elsewhere doesn't snap it shut.
   const openNow = (): void => {
+    if (suppressNextPillFocusRef.current) {
+      suppressNextPillFocusRef.current = false
+      return
+    }
     if (closeTimerRef.current) window.clearTimeout(closeTimerRef.current)
     closeTimerRef.current = null
     setOpen(true)
@@ -383,6 +348,33 @@ export function UsageIndicator({
   const closeSoon = (): void => {
     if (closeTimerRef.current) window.clearTimeout(closeTimerRef.current)
     closeTimerRef.current = window.setTimeout(() => setOpen(false), USAGE_HOVER_CLOSE_MS)
+  }
+
+  const selectDefaultAccount = (accountId: string | undefined): void => {
+    const projectId = useProjects.getState().activeProjectId
+    if (!projectId) return
+    if (useProjects.getState().getProject(projectId)?.defaultAccountId === accountId) return
+    if (onSetDefaultAccount) {
+      onSetDefaultAccount(projectId, accountId)
+    } else {
+      useProjects.getState().setProjectDefaultAccount(projectId, accountId)
+      markWorkspaceDirty()
+    }
+  }
+
+  const moveRadioFocus = (event: React.KeyboardEvent<HTMLDivElement>): void => {
+    const radios = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('button[role="radio"]')]
+    const current = radios.indexOf(event.target as HTMLButtonElement)
+    if (current < 0 || radios.length < 2) return
+    let next = current
+    if (event.key === 'ArrowDown' || event.key === 'ArrowRight') next = (current + 1) % radios.length
+    else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') next = (current - 1 + radios.length) % radios.length
+    else if (event.key === 'Home') next = 0
+    else if (event.key === 'End') next = radios.length - 1
+    else return
+    event.preventDefault()
+    radios[next].focus()
+    radios[next].click()
   }
 
   // Settings → Usage toggles are a display choice, applied before any other rule — a hidden
@@ -401,6 +393,14 @@ export function UsageIndicator({
   const claudeUsage = scoped.claude
   const visibleProviders = scoped.providers
   const visibleRemote = scoped.remote
+  const selectableRemote = visibleRemote.some((row) => row.accountId !== null)
+  const availableAccountIds =
+    scope.kind === 'local'
+      ? scoped.accounts.map((account) => account.id)
+      : visibleRemote.flatMap((row) => (row.accountId === null ? [] : [row.accountId]))
+  const effectiveDefault = availableAccountIds.includes(defaultAccountId ?? '')
+    ? defaultAccountId
+    : undefined
 
   // Only providers the user has actually enabled reach the pill; render whenever ANY of them
   // (Claude included) has something to say. Both rules are pure and pinned by tests — gating on
@@ -414,11 +414,11 @@ export function UsageIndicator({
   const hasData = limits.length > 0 || enabled.length > 0
   const fetching = refreshing
   const isError = status === 'error'
-  // Each account owns its own compact row and minibar. A single global minibar made two Codex
-  // accounts look like one account followed by two unrelated percentages.
-  const claudePrimary = primaryLimit(limits)
+  // The pill leads with whatever is closest to biting, so a scoped model cap that is nearly
+  // exhausted can't hide behind a comfortable 5h window. Considers every enabled provider, not
+  // just Claude, so an exhausted Codex window drives the bar too.
+  const primary = primaryLimit([...limits, ...enabled.flatMap((p) => p.limits)])
   const updatedAt = claudeUsage?.updatedAt ?? visibleRemote[0]?.usage.updatedAt ?? null
-
   const providerIdentity = (p: ProviderUsage): string | null | undefined =>
     p.provider !== 'codex'
       ? p.account
@@ -442,12 +442,7 @@ export function UsageIndicator({
             .catch((): RemoteAccountUsage[] => [])
         )
       } else {
-        const [nextUsage, nextProviders] = await Promise.all([
-          window.nodeTerminal.usage.refresh(),
-          window.nodeTerminal.usage.providers(true)
-        ])
-        setUsage(nextUsage)
-        setProviders(nextProviders)
+        setUsage(await window.nodeTerminal.usage.refresh())
       }
     } finally {
       setRefreshing(false)
@@ -461,58 +456,42 @@ export function UsageIndicator({
     pillBody = <span className="usage-pill__dim">⚠</span>
   } else {
     pillBody = (
-      <span className="usage-pill__rows">
-        {claudePrimary && (
-          <span className="usage-pill__account-row">
+      <>
+        {primary && (
           <span className="usage-pill__minibar" aria-hidden>
             <span
               className="usage-pill__minibar-fill"
               style={{
-                width: `${barFillPercent(claudePrimary.usedPercent, percentMode)}%`,
-                background: severityColor(claudePrimary.severity, 100 - claudePrimary.usedPercent)
+                width: `${barFillPercent(primary.usedPercent, percentMode)}%`,
+                background: severityColor(primary.severity, 100 - primary.usedPercent)
               }}
             />
           </span>
-          <span className="usage-pill__values">
+        )}
         {limits.map((l, i) => (
           <span key={limitKey(l)}>
             {i > 0 && <span className="usage-pill__sep">·</span>}
             <span className="usage-pill__num">
-              {percentNumber(l.usedPercent, percentMode)}%{' '}
-              {limitShortLabel(l.kind, l.scopeLabel)}
+              {percentNumber(l.usedPercent, percentMode)}% {limitShortLabel(l.kind, l.scopeLabel)}
             </span>
           </span>
         ))}
-      </span>
-    </span>
-  )}
-  {/* One ROW per enabled provider account, carrying its own bar and worst limit. */}
-  {enabled.map((p) => {
+        {/* One segment per enabled provider, carrying only its worst limit — a provider's full
+            breakdown belongs in the popover, not in a pill that has to fit beside the canvas. */}
+        {enabled.map((p, i) => {
           const worst = primaryLimit(p.limits)
           if (!worst) return null
-          const identity = providerIdentity(p)
           return (
-            <span
-              key={`${p.provider}:${p.accountId ?? 'system'}`}
-              className="usage-pill__account-row usage-pill__provider"
-            >
-              <span className="usage-pill__minibar" aria-hidden>
-                <span
-                  className="usage-pill__minibar-fill"
-                  style={{
-                    width: `${barFillPercent(worst.usedPercent, percentMode)}%`,
-                    background: severityColor(worst.severity, 100 - worst.usedPercent)
-                  }}
-                />
-              </span>
+            <span key={p.provider} className="usage-pill__provider">
+              {(limits.length > 0 || i > 0) && <span className="usage-pill__sep">·</span>}
               <span className="usage-pill__num">
-                {percentNumber(worst.usedPercent, percentMode)}% {identity || labelFor(p.provider)}
+              {percentNumber(worst.usedPercent, percentMode)}% {providerIdentity(p) || labelFor(p.provider)}
               </span>
             </span>
           )
         })}
         {isError && hasData && <span className="usage-pill__dim">⚠</span>}
-      </span>
+      </>
     )
   }
 
@@ -523,8 +502,30 @@ export function UsageIndicator({
       onMouseEnter={openNow}
       onMouseLeave={closeSoon}
     >
+      {/* The SSH pill is visually identical to the local one — same labels, same bar — so the
+          title is what answers "whose numbers are these?" without opening the popover. The trigger
+          comes first so Tab enters an open popover before the refresh button. */}
+      <button
+        ref={pillRef}
+        className="usage-pill"
+        onClick={() => setOpen((v) => !v)}
+        onFocus={openNow}
+        title={scope.kind === 'ssh' ? `Agent usage on ${scope.hostKey}` : 'Agent usage'}
+      >
+        <span className="usage-pill__icon">✦</span>
+        {pillBody}
+      </button>
       {open && (
-        <div className="usage-popover">
+        <div
+          className="usage-popover"
+          onKeyDown={(event) => {
+            if (event.key !== 'Escape') return
+            event.preventDefault()
+            suppressNextPillFocusRef.current = true
+            setOpen(false)
+            pillRef.current?.focus()
+          }}
+        >
           <div className="usage-popover__head">
             <span className="usage-popover__title">✦ Usage</span>
             {/* Tracks whichever snapshot the panel is actually showing — the local poll's, or
@@ -538,14 +539,17 @@ export function UsageIndicator({
               host's numbers twice under two different headings. */}
           {scope.kind === 'local' &&
             (scoped.accounts.length > 0 && claudeUsage ? (
-              <>
+              <div role="radiogroup" aria-label="Default Claude account for new sessions" onKeyDown={moveRadioFocus}>
                 <AccountUsageBlock
                   mode={percentMode}
                   label={systemAccountDisplay(systemLabelSetting, claudeUsage.email)}
                   // Avoid printing the email twice when it's already the display label.
                   email={systemLabelSetting.trim() ? (claudeUsage.email ?? undefined) : undefined}
                   u={claudeUsage}
-                  {...rowMark(null)}
+                  accountId={undefined}
+                  selected={effectiveDefault === undefined}
+                  onSelect={selectDefaultAccount}
+                  selectable
                 />
                 {scoped.accounts.map((a) => (
                   <AccountUsageBlock
@@ -554,14 +558,16 @@ export function UsageIndicator({
                     label={a.label}
                     email={a.email}
                     u={acctUsage[a.id] ?? null}
-                    {...rowMark(a.id)}
+                    accountId={a.id}
+                    selected={effectiveDefault === a.id}
+                    onSelect={selectDefaultAccount}
+                    selectable
                   />
                 ))}
-              </>
+              </div>
             ) : (
               <>
-                {/* Claude's rows are bare when it is the only provider; once others share the
-                    panel they need a heading of their own to stay attributable. */}
+                {/* No Claude snapshot is available, but enabled providers may still have limits. */}
                 {enabled.length > 0 && limits.length > 0 && (
                   <div className="usage-account__label">Claude</div>
                 )}
@@ -579,51 +585,48 @@ export function UsageIndicator({
             ))}
           {/* On an SSH project these are the whole panel; the host badge is what says the numbers
               were read somewhere other than this machine. */}
-          {/* The same offer on an SSH project's rows — scoped as ever: only the host's system
-              identity and THIS host's managed accounts are actionable (accountRowAction). */}
-          {visibleRemote.map((r) => (
-            <RemoteUsageBlock
-              key={`${r.hostKey}#${r.accountId ?? ''}`}
-              row={r}
-              mode={percentMode}
-              {...rowMark(r.accountId)}
-            />
-          ))}
+          {selectableRemote ? (
+            <div role="radiogroup" aria-label="Default Claude account for new sessions" onKeyDown={moveRadioFocus}>
+              {visibleRemote.map((r) => (
+                <RemoteUsageBlock
+                  key={`${r.hostKey}#${r.accountId ?? ''}`}
+                  row={r}
+                  mode={percentMode}
+                  accountId={r.accountId ?? undefined}
+                  selected={(r.accountId ?? undefined) === effectiveDefault}
+                  onSelect={selectDefaultAccount}
+                  selectable
+                />
+              ))}
+            </div>
+          ) : (
+            visibleRemote.map((r) => (
+              <RemoteUsageBlock
+                key={`${r.hostKey}#${r.accountId ?? ''}`}
+                row={r}
+                mode={percentMode}
+                accountId={r.accountId ?? undefined}
+                selected={(r.accountId ?? undefined) === effectiveDefault}
+                onSelect={selectDefaultAccount}
+                selectable={false}
+              />
+            ))
+          )}
           {scope.kind === 'ssh' && visibleRemote.length === 0 && (
             <div className="usage-popover__empty">
               No usage from this host yet — it is read once the project connects.
             </div>
           )}
-          {visibleProviders.map((p) => (
-            <ProviderBlock
-              key={`${p.provider}:${p.accountId ?? 'system'}`}
-              u={p}
-              mode={percentMode}
-              identity={providerIdentity(p)}
-            />
-          {/* U8 (owed from PR 7): Codex emits one row per account, all `provider: 'codex'`.
-              Key on provider+accountId so each account renders distinctly, and reduce true
-              duplicates (two settings entries → the same underlying account) to one row. */}
           {dedupeProviderRows(visibleProviders).map((p) => (
-            <ProviderBlock key={providerRowKey(p)} u={p} mode={percentMode} />
+            <ProviderBlock key={providerRowKey(p)} u={p} mode={percentMode} identity={providerIdentity(p)} />
           ))}
-          {/* Issue #420 — "Switch account" where the limit is displayed: opens a terminal
-              running the SYSTEM-scoped `claude /login` (createSystemLoginNode), so picking the
-              other org is one click from the panel that said you need to. Nothing changes until
-              the user completes the login IN that terminal — the CLI's own org picker + OAuth —
-              which is why there is no confirm dialog in front of it: the terminal is the
-              confirmation surface, and the tooltip names what completing it changes. LOCAL scope
-              only: on an SSH project a system login would rewrite the HOST's ~/.claude, and
-              saying "switch account" while meaning another machine's identity is the kind of
-              ambiguity this popover exists to avoid. Hidden with the Claude provider — a switch
-              button for numbers the user chose not to see would be an orphan. */}
           {scope.kind === 'local' && !hidden.has('claude') && (
             <button
               type="button"
               className="usage-popover__switch"
               title={
-                'Opens a terminal running `claude /login` for the system account (~/.claude). ' +
-                'Completing it switches the org/account all system sessions use — running ' +
+                'Opens a terminal running \`claude /login\` for the system account (~/.claude). ' +
+                'Completing it switches the org/account all system sessions use. Running ' +
                 'sessions carry on under the new one. Managed accounts keep their own logins.'
               }
               onClick={() => {
@@ -636,19 +639,6 @@ export function UsageIndicator({
           )}
         </div>
       )}
-      {/* The SSH pill is visually identical to the local one — same labels, same bar — so the
-          title is what answers "whose numbers are these?" without opening the popover. */}
-      <button
-        className="usage-pill"
-        // Hover already opens it; the click stays for the pointer-less paths (keyboard focus,
-        // touch) and as the way to dismiss it without moving the pointer away.
-        onClick={() => setOpen((v) => !v)}
-        onFocus={openNow}
-        title={scope.kind === 'ssh' ? `Agent usage on ${scope.hostKey}` : 'Agent usage'}
-      >
-        <span className="usage-pill__icon">✦</span>
-        {pillBody}
-      </button>
       <button
         className={`usage-refresh${fetching ? ' spin' : ''}`}
         onClick={refresh}

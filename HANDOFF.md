@@ -508,6 +508,22 @@ No tests, type checks, lint, reviews, security or accessibility checks, builds, 
 installer execution, runtime interaction, or captures were run in this ultra-speed lane. The source
 is committed for the parent integration lane to verify against the exact integrated commit.
 
+## 2026-08-27, Usage popover default account selection, issue #70
+
+The implementation lane is `feat/program-59-usage-default-account`, based on the exact default branch tip `54164b84dce0b7e62787b1de2885405ff4ed821c`. Implementation commit `95e8eb8e19e4a568bf7286b35a9cdf789a6983ac` and documentation commit `1665f63d96d9d95e2f1d11cde9aa04763ddff997` are present on the feature branch.
+
+The usage popover in `src/renderer/components/UsageIndicator.tsx` now exposes local and SSH Claude identity rows as independently selectable radio actions labelled `Use for new sessions`. The selection changes only the active project's default account, preserves the account identity of existing nodes and running sessions, treats stale saved identities as System, and keeps rows from other hosts read-only. Arrow keys, Home, End, Escape focus return, accessible names, and pressed state are included. The existing provider identity rendering, duplicate-row reduction, and system-account switch action remain present. `src/renderer/styles.css` contains the selection and focus treatment.
+
+Direct documentation is `docs/features/integrations/usage-popover-default-account.md`, indexed from the integrations category. The changelog and roadmap carry the same scope and verification boundary.
+
+This source lane intentionally did not run tests, lint, type checks, builds, packaging, runtime interaction, reviews, accessibility checks, security audits, or UI captures. The parent integration lane owns those checks, generated documentation bundles, the dedicated pull request, issue progress and closure, main integration, and release work.
+
+### Handoff facts
+
+- Base: `origin/main` at `54164b84dce0b7e62787b1de2885405ff4ed821c`.
+- Tip: `1665f63d96d9d95e2f1d11cde9aa04763ddff997`, verified equal to `refs/heads/feat/program-59-usage-default-account` on origin. The implementation commit remains `95e8eb8e19e4a568bf7286b35a9cdf789a6983ac`.
+- Working tree: clean after the commit.
+- No merge into main, release, deletion, or cleanup was performed.
 ## 2026-08-27, bundled AWS CLI v2 lane, issue #41
 
 Issue #41 is implemented on `feat/program-30-bundled-aws-cli`, reconciled with

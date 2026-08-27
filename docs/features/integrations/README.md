@@ -27,6 +27,7 @@ substrate described in CLAUDE.md rather than inventing a surface each.
 | [Planner occurrences](planner-occurrences.md) | host-owned durable recurrence, timezone/DST handling, missed history, UI-closure continuity, and schema 3 definition transfer with explicit destination Configure |
 | [Shared provider services](provider-services.md) | shared account metadata, sealed credentials, bounded OAuth PKCE callbacks, resource discovery, and local binding integration |
 | [Shared hosted-resource backup and restore](backup-restore.md) | versioned, edition-aware, ownership-reviewed archives with bounded validation, progress, cancellation, atomic publication, and rollback contracts |
+| [Usage popover default account](usage-popover-default-account.md) | choose the Claude identity used by future sessions for the active local or SSH project |
 | [Home Assistant controls](home-assistant-controls.md) | implemented schema-driven entity controls with machine-local connections and portable selection intent; verification intentionally unrun |
 | [Home Assistant sensor displays](home-assistant-sensor-display.md) | implemented portable entity/display intent with machine-local sealed binding, discovery, bounded observations, and typed value/state/gauge/trend/event/weather/calendar/attribute views |
 | [Hosted-service Cloudflare Tunnel handoff](cloudflare-tunnel-handoff.md) | guided local-health verification and explicit external exposure handoff with portable intent and machine-local bindings; provider adapter wiring remains a separate lane |

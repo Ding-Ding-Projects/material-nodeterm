@@ -118,6 +118,14 @@ later commit, since this file will not be kept in lockstep with every merge).
       from a trackpad, including the bounded momentum-gap linger. Server Edition keeps its browser
       heuristic and mobile is not applicable. This implementation lane intentionally has no tests,
       lint, type checks, builds, packaging, runtime interaction, reviews, audits, or captures yet.
+- [ ] **Usage popover default account selection, issue #70**: the active local or SSH project can
+      choose the Claude identity used by future sessions from the usage popover. Selection is
+      keyboard-accessible, persisted through the project default-account path, keeps running
+      sessions unchanged, and treats stale identities as System. The implementation is on
+      `feat/program-59-usage-default-account` at `95e8eb8e19e4a568bf7286b35a9cdf789a6983ac`,
+      based on `origin/main` `54164b84dce0b7e62787b1de2885405ff4ed821c`. Tests, lint, type checks,
+      builds, packaging, runtime interaction, reviews, accessibility checks, security audits, and
+      UI captures remain unrun in this source lane.
 
 - [ ] **Shared provider services, issue #18**: provider catalog, account metadata, sealed
       credential payloads, bounded one-time OAuth PKCE callbacks, adapter-owned resource discovery,
