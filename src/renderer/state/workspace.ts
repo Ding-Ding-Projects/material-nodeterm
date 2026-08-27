@@ -256,6 +256,8 @@ export interface NodeData {
   /** service-kinds only: the display name the user gave this manager. See `CanvasNodeState`. */
   serviceLabel?: string
   homeAssistantIntent?: HomeAssistantNodeIntent
+  /** Safe Cloudflare Tunnel routing intent; provider and local runtime state stays machine-local. */
+  cloudflareTunnelIntent?: import('@shared/cloudflare-tunnel-handoff').CloudflareTunnelIntent
   /** Safe ownership metadata for a special-universe Shop node. */
   universeCanvasId?: string
   universeScope?: 'multiverse' | 'aws-universe'
@@ -2718,6 +2720,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         text: n.text,
         serviceLabel: n.serviceLabel,
         homeAssistantIntent: n.homeAssistantIntent,
+        cloudflareTunnelIntent: n.cloudflareTunnelIntent,
         universeCanvasId: n.universeCanvasId,
         universeScope: n.universeScope,
         universeDepth: n.universeDepth,
@@ -2843,6 +2846,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         text: n.data.text,
         serviceLabel: n.data.serviceLabel,
         homeAssistantIntent: n.data.homeAssistantIntent,
+        cloudflareTunnelIntent: n.data.cloudflareTunnelIntent,
         universeCanvasId: n.data.universeCanvasId,
         universeScope: n.data.universeScope,
         universeDepth: n.data.universeDepth,

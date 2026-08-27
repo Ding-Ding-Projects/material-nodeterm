@@ -2306,3 +2306,24 @@ This ultra-speed lane intentionally ran no tests, type checks, lint, builds, pac
 interaction, accessibility or security audits, reviews, or captures. The parent integration lane
 must supply every verification verdict and release evidence before describing the feature as
 verified.
+
+## Hosted-service Cloudflare Tunnel handoff lane, issue #56
+
+The isolated `feat/program-45-hosted-cloudflare-handoff` lane adds the shared contract in
+`src/shared/cloudflare-tunnel-handoff.ts`, the core sequencing and machine-local binding coordinator
+in `src/core/cloudflare-tunnel-handoff.ts`, and the guided renderer surface in
+`src/renderer/components/CloudflareTunnelHandoffPanel.tsx`. The handoff verifies a selected loopback
+origin before provider mutation, requires an explicit exposure confirmation, resolves the credential
+only inside the provider adapter, and separates local health, connector state, DNS or tunnel state,
+and external reachability.
+
+Portable state is limited to validated service and routing intent. Cloudflare account, zone, tunnel,
+connector, credential, local endpoint, host identity, process state, and cache data stay in the
+machine-local binding store. A failed external reachability check returns a partial result and does
+not claim that the route is verified. A missing provider adapter remains visibly unavailable instead
+of being simulated.
+
+This ultra-speed lane intentionally ran no tests, type checks, lint, builds, packaging, reviews,
+security or accessibility checks, installer execution, runtime interaction, or captures. The parent
+integration lane must wire the provider adapter and supply all build, packaging, runtime, and release
+evidence before calling the feature verified.

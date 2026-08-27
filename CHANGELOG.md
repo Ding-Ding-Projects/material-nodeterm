@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add a guided hosted-service Cloudflare Tunnel handoff that verifies a loopback origin before any
+  external change, requires explicit exposure confirmation, keeps provider credentials and runtime
+  identifiers machine-local, and reports connector and external reachability as separate states. The
+  ultra-speed lane did not run tests, type checks, lint, builds, packaging, reviews, security or
+  accessibility checks, installer execution, runtime interaction, or captures.
+
 - Complete the Express File Converter flow with queue-wide collision-safe destination names,
   visible rename disclosure, final atomic no-clobber publication, and a completed-output action that
   opens the exact result in Visual Studio Code through the active project API. The converter queue
