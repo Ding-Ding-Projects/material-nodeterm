@@ -571,9 +571,21 @@ Updated `src/shared/types.ts`, `src/renderer/state/workspace.ts`,
 `src/renderer/canvas/Canvas.tsx`, `src/renderer/components/FabMenu.tsx`,
 `src/core/portable-canvas-projection.ts`, both renderer style sheets,
 `docs/alarm-clock.md`, `docs/features/projects/README.md`, `ROADMAP.md`, and `CHANGELOG.md`.
-This ultra-speed lane intentionally did not run tests, type checks, lint, reviews, security checks,
-accessibility checks, builds, packaging, installer execution, runtime interaction, or captures. No
-commit or dew was made by this lane.
+
+The original ultra-speed checkpoint intentionally did not run tests, type checks, lint, reviews,
+security checks, accessibility checks, builds, packaging, installer execution, runtime interaction,
+or captures. It landed in `716f0a9f82c83c0c52f284ade19adb6f208b3b03` for later completion.
+
+### 2026-08-27 completion checkpoint
+
+The existing file-backed planner now has a production lifecycle owner and bounded request handlers
+in both Desktop and Server Edition. The desktop bridge mirrors validated node schedules into the
+host snapshot, receives due events, and routes Snooze, Dismiss, and node removal back to that host.
+Alarm Clock is an active, localized Node Catalog entry and the shared catalog creation coordinator
+creates the existing paused, timezone-aware Alarm Clock node rather than returning no node. This
+checkpoint intentionally ran no tests, type checks, lint, builds, packaging, runtime interaction,
+reviews, or UI captures. The offline documentation bundle was not regenerated because generation
+was excluded with the build boundary; the authored Alarm Clock and Node Catalog articles are current.
 
 ## 2026-08-26, portable canvas projection implementation
 

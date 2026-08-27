@@ -249,6 +249,8 @@ export const CATALOG: Catalog = {
   'nodeCatalog.entry.authenticator.description': { en: flat('Open the local TOTP authenticator without moving secrets into the project.'), yue: flat('開本機 TOTP 驗證器，唔會將秘密搬入項目。') },
   'nodeCatalog.entry.loop.label': { en: flat('Loop'), yue: flat('循環排程') },
   'nodeCatalog.entry.loop.description': { en: flat('Create a paused local schedule with an explicit next action.'), yue: flat('建立一個暫停中、下一步清清楚楚嘅本機排程。') },
+  'nodeCatalog.entry.alarm.label': { en: flat('Alarm clock'), yue: flat('鬧鐘') },
+  'nodeCatalog.entry.alarm.description': { en: flat('Create a one-shot or recurring wall-clock alarm with an explicit timezone.'), yue: flat('建立一次性或重複嘅牆鐘時間鬧鐘，時區清清楚楚。') },
   'nodeCatalog.entry.dino.label': { en: flat('Dino game'), yue: flat('恐龍遊戲') },
   'nodeCatalog.entry.dino.description': { en: flat('Open the small local canvas game.'), yue: flat('開個細細嘅本機畫布遊戲。') },
   'nodeCatalog.entry.remote-terminal.label': { en: flat('Remote terminal'), yue: flat('遠端終端機') },

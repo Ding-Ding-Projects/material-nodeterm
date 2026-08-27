@@ -5365,6 +5365,7 @@ export function Canvas() {
             if (catalogEntry.id === 'authenticator') return createAuthenticatorNode(index, center)
             if (catalogEntry.id === 'dino') return createDinoNode(index, center)
             if (catalogEntry.id === 'loop') return createNativeLoopNode(index, center)
+            if (catalogEntry.id === 'alarm') return createAlarmClockNode(index, center)
             if (catalogEntry.id === 'nsis') return createNsisNode(index, center)
             if (catalogEntry.id === 'wild-dim-sum') return createWildDimSumNode(index, undefined, center)
             if (catalogEntry.id.startsWith('service:')) {

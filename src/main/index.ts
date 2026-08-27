@@ -147,6 +147,7 @@ import { SchoolModeStore } from '../core/school-mode'
 import { KidsModeStore } from '../core/kids-mode'
 import { ScheduledSettingsRuntime } from '../core/scheduled-settings-runtime'
 import { PlannerOccurrenceRuntime } from '../core/planner-occurrence-service'
+import { AlarmPlannerRuntime } from '../core/alarm-planner'
 import { registerAgentEnvIpc } from '../core/agent-env-ipc'
 import { presenceHub } from '../core/presence/hub'
 import { SshStore } from './ssh-store'
@@ -477,6 +478,29 @@ const plannerRuntime = new PlannerOccurrenceRuntime({
     retainUntilDismissed(notification)
   }
 })
+const alarmPlannerRuntime = new AlarmPlannerRuntime(
+  join(corePlatform.userDataDir, 'alarm-clock-planner.json'),
+  {
+    onDue: (event) => {
+      const win = getMainWindow()
+      if (win && !win.isDestroyed() && win.isFocused()) return
+      if (!Notification.isSupported()) return
+      const title = event.alarm.title || 'Alarm Clock'
+      const body = event.kind === 'missed'
+        ? `${title} was missed while the app or computer was unavailable.`
+        : `${title} is due now. This app cannot wake a powered-off computer.`
+      const notification = new Notification({ title, body })
+      notification.on('click', () => {
+        const current = getMainWindow()
+        if (!current || current.isDestroyed()) return
+        if (current.isMinimized()) current.restore()
+        current.show()
+        current.focus()
+      })
+      retainUntilDismissed(notification)
+    }
+  }
+)
 // ⌘M / ⌘W are registry commands (`node.toggleMarkdown` / `node.close`), so what the window
 // intercepts follows the user's settings. Resolved LAZILY (first keystroke, long after
 // `settingsStore.init()` in `whenReady`) rather than at module load, where `get()` would still be
@@ -1542,6 +1566,9 @@ app.whenReady().then(async () => {
   // Planner occurrence evaluation stays in the host process. Closing the UI leaves this service
   // alive, while a powered-off computer cannot evaluate time and is reported as missed on restart.
   plannerRuntime.start()
+  // Alarm Clock evaluation uses its own bounded, file-backed snapshot. Keeping it beside the
+  // generic planner runtime makes the same no-powered-off-wake behavior explicit at boot.
+  await alarmPlannerRuntime.start()
   // Local, git-backed settings history (docs/local-history.md). One append-only revision per
   // save; the diff-based label lives in shared/settings-diff.ts so it is shared with any future
   // shell that saves settings, rather than re-derived per process.
@@ -4648,6 +4675,7 @@ app.on('before-quit', (e) => {
   destroyNotchHud()
   const scheduledSettingsStop = scheduledSettingsRuntime.stop()
   const plannerStop = plannerRuntime.stop()
+  alarmPlannerRuntime.stop()
   // Electron releases power assertions at exit anyway; disposing keeps the hold/release log honest.
   keepAwake?.dispose()
   // Electron releases power assertions at exit anyway; disposing keeps the hold/release log

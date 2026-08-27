@@ -501,6 +501,14 @@ export const IPC = {
   plannerHistory: 'planner:history',
   plannerExport: 'planner:export',
   plannerOccurrence: 'planner:occurrence',
+  // Alarm Clock nodes keep portable schedule intent in project data and mirror active execution
+  // into a bounded, machine-local host snapshot. Due events carry no path or host identity.
+  alarmPlannerState: 'alarm:planner-state',
+  alarmPlannerUpsert: 'alarm:planner-upsert',
+  alarmPlannerRemove: 'alarm:planner-remove',
+  alarmPlannerSnooze: 'alarm:planner-snooze',
+  alarmPlannerDismiss: 'alarm:planner-dismiss',
+  alarmPlannerDue: 'alarm:planner-due',
   sshList: 'ssh:list',
   sshSave: 'ssh:save',
   sshDelete: 'ssh:delete',
