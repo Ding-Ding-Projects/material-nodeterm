@@ -505,7 +505,10 @@ export function universeShopCatalogProvider(): UniverseShopCatalogProvider | nul
 
 /** Return only catalog entries legal for the Shop's own universe. */
 export function catalogForUniverse(options: ShopCatalogOptions): ShopCatalogEntry[] {
-  const depth = Math.max(1, Math.floor(options.depth ?? 1))
+  const requestedDepth = options.depth ?? 1
+  const depth = Number.isFinite(requestedDepth) && requestedDepth >= 1
+    ? Math.floor(requestedDepth)
+    : 1
   const source = options.catalog ?? sharedCatalogProvider
   if (!source) return []
   return source.list().filter(

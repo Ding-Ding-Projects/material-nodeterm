@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Extend the special-universe Shop with the complete AWS catalog inventory: identity, Resource
+  Explorer, Cloud Control, S3, EC2, IAM, STS, Lambda, CloudWatch, CloudWatch Logs, CloudFormation,
+  CDK, ECR, ECS, EKS, RDS, databases, VPC, Route 53, cost management, and all-service rows. The
+  AWS projection is scope-bound, revalidates selected entries at creation time, and keeps every
+  later-wave executor visible with its exact disabled reason. The issue #40 ultra-speed lane did
+  not run tests, type checks, lint, security or accessibility checks, builds, packaging, runtime
+  interaction, or captures.
+
 - Complete the Express File Converter flow with queue-wide collision-safe destination names,
   visible rename disclosure, final atomic no-clobber publication, and a completed-output action that
   opens the exact result in Visual Studio Code through the active project API. The converter queue

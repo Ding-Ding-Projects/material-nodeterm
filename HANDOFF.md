@@ -1993,6 +1993,34 @@ switcher and FAB menu on a real screen — nothing above substitutes for that. T
 the `.mc-console` styling defect and the two atomic-write violations found above are worth a
 one-line fix before the next release, since both are small, both are diagnosed, and neither
 requires touching anything MD3-specific to correct.
+
+## 2026-08-27, AWS Shop and catalog enforcement, issue #40
+
+The AWS Shop lane extends the existing special-universe Shop with an explicit inventory of all
+planned AWS catalog rows: identity, Resource Explorer, Cloud Control, S3, EC2, IAM, STS, Lambda,
+CloudWatch, CloudWatch Logs, CloudFormation, CDK, ECR, ECS, EKS, RDS, databases, VPC, Route 53,
+cost management, and all-service operations. `src/renderer/state/universeShopCatalogProvider.ts`
+keeps that inventory scope-bound, while `src/core/universe-shop.ts` resolves a selected id again
+at execution time and rechecks the canvas scope, depth, and availability before forwarding the
+immutable creation event to the live coordinator. Later-wave rows stay visible and explain their
+disabled state instead of appearing as working provider operations.
+
+The Shop search remains local and plain-text-first with its adjacent anchored full regex builder.
+The card keeps keyboard-operable entry buttons, result status, localized copy, and accessible
+disabled reasons. The docs article and its offline and site copies now list the complete AWS
+inventory and describe the revalidation boundary. A finite invalid depth is normalized to the
+safe child depth for catalog projection, and enabled rows no longer reference a nonexistent
+disabled-description element.
+
+Changed files: `src/core/universe-shop.ts`, `src/renderer/nodes/ShopNode.tsx`,
+`src/renderer/state/universeShopCatalogProvider.ts`, `src/shared/node-catalog.ts`,
+`src/shared/i18n/catalog.ts`, `docs/features/integrations/aws-universe-shop.md`,
+`src/shared/docs-data.ts`, `site/docs/aws-universe-shop.html`, `CHANGELOG.md`, and this handoff.
+
+The lane intentionally did not run tests, type checks, lint, security or accessibility checks,
+builds, packaging, installer execution, runtime interaction, or captures. The preserved feature
+commit is `86aac4f4b3684b4e67036c8e5846dcd42fab4552`; the later documentation and boundary update
+is being committed on `feat/program-29-aws-shop` before it is pushed.
 ## Timer nodes lane, issue #31
 
 Implemented the timer node model in `src/shared/timer.ts`, the persistent occurrence coordinator in

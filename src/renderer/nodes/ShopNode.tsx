@@ -134,7 +134,7 @@ export function ShopNode({ id, data, selected }: NodeProps<CanvasNode>): React.J
                   disabled={entry.available === false}
                   aria-pressed={chosen === entry.id}
                   onClick={() => choose(entry)}
-                  aria-describedby={`${id}-entry-${entry.id}-note`}
+                  aria-describedby={entry.available === false ? `${id}-entry-${entry.id}-note` : undefined}
                   data-appearance-id={appearanceId('node', `${id}:shop-entry:${entry.id}`)}
                   title={entry.available === false
                     ? ts(entry.disabledReasonKey ?? 'universeShop.entryUnavailable', entry.disabledReason ?? 'This catalog entry is unavailable until its executor is available.')
