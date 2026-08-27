@@ -23,6 +23,8 @@ import {
   ROOT_CANVAS_ID
 } from '@shared/multiverse-canvases'
 import { createSpecialUniverseCanvas } from '../../core/universe-shop'
+import { deletePortablePortal, navigatePortablePortal } from '../../core/portal-lifecycle'
+import { portableCanvasProjectionToProject, projectToPortableCanvasV3 } from '../../core/portable-canvas-projection'
 import type { ProjectCapability } from '@shared/project-capabilities'
 import type { ProjectIcon } from '@shared/project-icon'
 import { recordCapabilityAck, type CapabilityAnswer } from '@shared/project-capability-consent'
@@ -58,6 +60,9 @@ interface ProjectsState {
     canvasId?: string
     reason?: string
   }
+  setPortalStatus(projectId: string, portalId: string, status: 'open' | 'closed'): boolean
+  deletePortal(projectId: string, portalId: string): { ok: true; preservedNodeIds: string[] } | { ok: false; reason: string }
+  openPortal(projectId: string, portalId: string, fromCanvasId: string): { ok: true; canvasId: string; returnDoorId: string } | { ok: false; reason: string }
   /** Adds a new project and returns it (caller commits the current canvas first). */
   addProject(name?: string, cwd?: string, ssh?: Project['ssh']): Project
   /** "Open folder…": a folder maps to one project. Reuses the existing project with that
@@ -331,6 +336,21 @@ function newMultiverseCanvasId(project: Project): string {
   return base
 }
 
+/** Apply a portal projection back onto the live project while retaining machine-local fields and
+ * the current project identity. Portable conversion owns only canvases, nodes, links, and portal
+ * intent, so settings, bindings, and session metadata never get replaced by a dialog action. */
+function withPortalProjection(project: Project, projection: ReturnType<typeof projectToPortableCanvasV3>): Project {
+  const hydrated = portableCanvasProjectionToProject(projection, { id: project.id, ...(project.cwd ? { cwd: project.cwd } : {}) })
+  return {
+    ...project,
+    nodes: hydrated.nodes,
+    viewport: hydrated.viewport,
+    multiverseCanvases: hydrated.multiverseCanvases,
+    portals: hydrated.portals,
+    ...(hydrated.childCanvases ? { childCanvases: hydrated.childCanvases } : {})
+  }
+}
+
 export const useProjects = create<ProjectsState>((set, get) => ({
   projects: [],
   activeProjectId: '',
@@ -392,6 +412,9 @@ export const useProjects = create<ProjectsState>((set, get) => ({
       return { reason: created.reason ?? 'The child canvas could not be created.' }
     }
     const shop: CanvasNodeState = { ...created.shop, kind: 'shop' }
+    const portalId = `portal-${created.canvas!.id}`
+    const entryDoorId = `door-${created.canvas!.id}-entry`
+    const returnDoorId = `door-${created.canvas!.id}-return`
     set((state) => ({
       projects: state.projects.map((item) => item.id === projectId
         ? {
@@ -403,13 +426,71 @@ export const useProjects = create<ProjectsState>((set, get) => ({
               depth: created.canvas!.depth!,
               order: created.canvas!.order,
               viewport: created.canvas!.viewport ?? { x: 0, y: 0, zoom: 1 },
-              nodes: [shop]
+               nodes: [shop]
+             }],
+            portals: [...(item.portals ?? []), {
+              id: portalId,
+              parentCanvasId,
+              childCanvasId: created.canvas!.id,
+              entryDoorId,
+              returnDoorId,
+              title,
+              depth,
+              status: 'open' as const
             }]
           }
         : item
       )
     }))
     return { canvasId }
+  },
+
+  setPortalStatus(projectId, portalId, status) {
+    const project = get().projects.find((item) => item.id === projectId)
+    if (!project || !(project.portals ?? []).some((portal) => portal.id === portalId)) return false
+    set((state) => ({
+      projects: state.projects.map((item) => item.id === projectId
+        ? { ...item, portals: (item.portals ?? []).map((portal) => portal.id === portalId ? { ...portal, status } : portal) }
+        : item
+      )
+    }))
+    return true
+  },
+
+  openPortal(projectId, portalId, fromCanvasId) {
+    const project = get().projects.find((item) => item.id === projectId)
+    if (!project) return { ok: false, reason: 'Choose an open project before entering a portal.' }
+    let projection: ReturnType<typeof projectToPortableCanvasV3>
+    try {
+      projection = projectToPortableCanvasV3(project)
+    } catch (error) {
+      return { ok: false, reason: error instanceof Error ? error.message : 'Portal data could not be read.' }
+    }
+    const decision = navigatePortablePortal(projection, portalId, fromCanvasId)
+    if (!decision.allowed) return { ok: false, reason: `${decision.reason} ${decision.nextAction}` }
+    if (!get().openMultiverseCanvas(projectId, decision.targetCanvasId)) return { ok: false, reason: 'The portal target canvas is no longer available.' }
+    return { ok: true, canvasId: decision.targetCanvasId, returnDoorId: decision.returnDoorId }
+  },
+
+  deletePortal(projectId, portalId) {
+    const project = get().projects.find((item) => item.id === projectId)
+    if (!project) return { ok: false, reason: 'Choose an open project before deleting a portal.' }
+    try {
+      const result = deletePortablePortal(projectToPortableCanvasV3(project), portalId)
+      if (result.refused || !result.projection) return { ok: false, reason: result.reason ?? 'Portal deletion was refused.' }
+      const next = withPortalProjection(project, result.projection)
+      const activeRemoved = !!project.activeCanvasId && result.removedCanvasIds.includes(project.activeCanvasId)
+      set((state) => ({
+        projects: state.projects.map((item) => item.id === projectId
+          ? { ...next, ...(activeRemoved ? { activeCanvasId: undefined } : {}) }
+          : item
+        ),
+        reloadNonce: state.reloadNonce + 1
+      }))
+      return { ok: true, preservedNodeIds: result.preservedNodeIds }
+    } catch (error) {
+      return { ok: false, reason: error instanceof Error ? error.message : 'Portal deletion was refused.' }
+    }
   },
 
   addProject(name, cwd, ssh) {
