@@ -1,4 +1,4 @@
-import type { Catalog, FiveVariants } from './types'
+import type { Catalog, FunnyVariants } from './types'
 
 /**
  * ============================================================================================
@@ -6,7 +6,7 @@ import type { Catalog, FiveVariants } from './types'
  * ============================================================================================
  *
  * It applies to every category of message in this catalogue, with NO exemptions — destructive
- * actions, security prompts, accessibility copy and error text included. At any level 1-5 a
+ * actions, security prompts, accessibility copy and error text included. At any level 1-10 a
  * string must still name, in unambiguous words, what happened, what is affected, and what the
  * user's options are: which file, which account, which action is irreversible, what the error
  * actually was. Level 5 may wrap those facts in a joke; it must never REPLACE, SOFTEN or OMIT
@@ -22,18 +22,18 @@ import type { Catalog, FiveVariants } from './types'
  * version number, a count) into the catalogue text itself — that value belongs to the CALLER,
  * which is the one place that actually knows it.
  *
- * Adding a new string: pick a dotted id (`surface.element.purpose`), write five English variants
- * (level 1 plain, level 5 playful, 2-4 stepping between) and five Cantonese ones. Reusing a
- * neighbour's text across levels is fine and often correct for a plain label — the array must
- * still have five entries. See docs/language-modes.md.
+ * Adding a new string: pick a dotted id (`surface.element.purpose`), write ten English variants
+ * (level 1 plain, level 10 playful, stepping between) and ten Cantonese ones. Legacy five-slot
+ * rows are expanded by the resolver with distinct voice-only level 6-10 tails until migrated.
+ * See docs/language-modes.md.
  * ============================================================================================
  */
 
 /** For a plain factual label that has no meaningful "funnier" version (a settings-nav noun, an
  *  aria-label) — repeats the same text at all five levels. Still satisfies the five-variant
  *  shape; it just declines to invent forced jokes for something that shouldn't have any. */
-function flat(text: string): FiveVariants {
-  return [text, text, text, text, text]
+function flat(text: string): FunnyVariants {
+  return [text, text, text, text, text, text, text, text, text, text]
 }
 
 export const CATALOG: Catalog = {
@@ -86,6 +86,37 @@ export const CATALOG: Catalog = {
   'settings.section.language': { en: flat('Language'), yue: flat('語言') },
   'settings.section.privacy': { en: flat('Privacy'), yue: flat('私隱') },
 
+  // Context-window meter copy. Values are interpolated by the component, while these variants
+  // keep status and threshold wording in the same language/funny-level pipeline as other chrome.
+  'contextWindow.title': { en: flat('Context window'), yue: flat('內容視窗') },
+  'contextWindow.shortLabel': { en: flat('Context'), yue: flat('內容') },
+  'contextWindow.provider.unknown': { en: flat('agent'), yue: flat('代理') },
+  'contextWindow.updated': { en: flat('updated'), yue: flat('更新於') },
+  'contextWindow.status.known': { en: flat('reported'), yue: flat('已回報') },
+  'contextWindow.status.stale': { en: flat('stale'), yue: flat('過期') },
+  'contextWindow.status.unavailable': { en: flat('unavailable'), yue: flat('未能提供') },
+  'contextWindow.status.unknown': { en: flat('unknown'), yue: flat('未知') },
+  'contextWindow.status.notReported': { en: flat('not reported'), yue: flat('未有回報') },
+  'contextWindow.level.healthy': { en: flat('Healthy'), yue: flat('健康') },
+  'contextWindow.level.warning': { en: flat('Warning'), yue: flat('注意') },
+  'contextWindow.level.critical': { en: flat('Critical'), yue: flat('危急') },
+  'contextWindow.detail': {
+    en: [
+      'Used {used} of {total} tokens, {remaining} remaining, {percent}% used',
+      'Used {used} of {total} tokens, with {remaining} still in the tank, {percent}% used',
+      '{used} of {total} tokens used, {remaining} left, {percent}% used',
+      '{used}/{total} tokens have joined the queue, {remaining} remain, {percent}% used',
+      '{used} of {total} tokens are partying, {remaining} remain, {percent}% used'
+    ],
+    yue: [
+      '已用 {used} / {total} tokens，剩返 {remaining}，已用 {percent}%',
+      '用咗 {used} / {total} tokens，仲有 {remaining}，已用 {percent}%',
+      '{used} / {total} tokens 已用，剩返 {remaining}，已用 {percent}%',
+      '{used} / {total} tokens 排緊隊，仲有 {remaining}，已用 {percent}%',
+      '{used} / {total} tokens 開緊派對，仲有 {remaining}，已用 {percent}%'
+    ]
+  },
+
   // ---------------------------------------------------------------------------------------
   // Language settings section — this feature's own copy. Playful escalation across levels,
   // because a sentence about a joke slider is a fair place to demonstrate the joke slider.
@@ -130,13 +161,25 @@ export const CATALOG: Catalog = {
     en: flat('Cantonese funny level'),
     yue: flat('廣東話抵死程度')
   },
+  'settings.language.level.10': {
+    en: flat('10 — Maximum playfulness'),
+    yue: flat('10 — 抵死到爆')
+  },
+  'settings.language.funnyEn.provenance': {
+    en: flat('English saved value: level {level}.'),
+    yue: flat('英文已儲存值：第 {level} 級。')
+  },
+  'settings.language.funnyYue.provenance': {
+    en: flat('Cantonese saved value: level {level}.'),
+    yue: flat('廣東話已儲存值：第 {level} 級。')
+  },
   'settings.language.level.1': {
     en: flat('1 — Fully professional'),
     yue: flat('1 — 正正經經')
   },
   'settings.language.level.5': {
-    en: flat('5 — Maximum playfulness'),
-    yue: flat('5 — 抵死到爆')
+    en: flat('5 — Playful'),
+    yue: flat('5 — 有啲玩味')
   },
   'settings.language.disclosure': {
     en: [
@@ -173,6 +216,74 @@ export const CATALOG: Catalog = {
       '俾對話框同訊息框加少少表情符號情趣，按鈕標籤同任何可以撳嘅嘢一律唔會有。',
       '等你嘅對話框同訊息框戴返個得體嘅表情符號，按鈕標籤依然係表情符號禁區。'
     ]
+  },
+  'settings.behavior.wheelZoom.label': {
+    en: flat('Scroll wheel zooms'),
+    yue: flat('滑鼠滾輪縮放')
+  },
+  'settings.behavior.wheelZoom.description': {
+    en: [
+      'Zoom with a plain mouse wheel (no Command). Two-finger trackpad scroll still pans.',
+      'A plain mouse wheel zooms; two-finger trackpad scroll keeps panning.',
+      'Use the wheel for zoom and two fingers for pan, with both gestures staying distinct.',
+      'The wheel handles zooming while two fingers keep the map wandering politely.',
+      'Spin the wheel to zoom; let two fingers pan, because even gestures deserve separate jobs.'
+    ],
+    yue: [
+      '用普通滑鼠滾輪縮放（唔使 Command）。雙指觸控板捲動仍然平移。',
+      '普通滾輪負責縮放，雙指觸控板捲動繼續平移。',
+      '滾輪縮放、雙指平移，兩種手勢各自做返自己份工。',
+      '滾輪處理縮放，雙指就禮貌咁帶住張圖周圍行。',
+      '轉滾輪就縮放，雙指就平移，手勢都有自己嘅崗位㗎。'
+    ]
+  },
+
+  // Canvas wheel-zoom speed is a real setting, so its label, explanation, and provenance all
+  // follow the live language mode and per-language funny levels. The numeric multiplier remains
+  // a factual value and is supplied by the renderer rather than baked into catalogue copy.
+  'settings.behavior.wheelZoomSpeed.label': {
+    en: flat('Wheel zoom speed'),
+    yue: flat('滑輪縮放速度')
+  },
+  'settings.behavior.wheelZoomSpeed.description': {
+    en: [
+      'How far one plain wheel click zooms. Lower it if one click jumps too far.',
+      'Controls the zoom distance for each plain wheel click. Turn it down for gentler jumps.',
+      'Sets how much canvas zoom one plain wheel click spends.',
+      'Tunes the canvas jump for each plain wheel click, so the map does not go sightseeing.',
+      'Sets the plain-wheel zoom jump. Turn it down before one click sends the canvas on a world tour.'
+    ],
+    yue: [
+      '每一下普通滑輪撳落去縮放幾多。一下跳得太遠就調低啲。',
+      '控制普通滑輪每一下縮放幾遠，一下太大步就收細啲。',
+      '設定普通滑輪一下會用幾多畫布縮放幅度。',
+      '調校普通滑輪每一下嘅畫布跳步，唔好等張圖周圍去旅行。',
+      '設定普通滑輪嘅縮放跳步，調低啲先，唔好一下就送張畫布環遊世界。'
+    ]
+  },
+  'settings.behavior.wheelZoomSpeed.provenance.default': {
+    en: flat('Matches the compiled-in default of 1.0×. An explicit saved 1.0× cannot be distinguished from that same value.'),
+    yue: flat('同編譯入去嘅 1.0× 預設值一致。明確儲存嘅 1.0× 無法同呢個值分辨。')
+  },
+  'settings.behavior.wheelZoomSpeed.provenance.saved': {
+    en: flat('Using the saved value from settings.json.'),
+    yue: flat('使用 settings.json 入面儲存嘅數值。')
+  },
+  'settings.behavior.wheelZoomSpeed.provenance.clamped': {
+    en: flat('The saved value is outside 0.2×–2.0×; using the clamped value of {speed}×.'),
+    yue: flat('儲存嘅數值唔喺 0.2×–2.0× 範圍內，而家使用夾返正嘅 {speed}×。')
+  },
+  'settings.behavior.wheelZoomSpeed.provenance.invalid': {
+    en: flat('The saved value is invalid; using the compiled-in 1.0× value.'),
+    yue: flat('儲存嘅數值無效，而家使用編譯入去嘅 1.0× 數值。')
+  },
+  'settings.behavior.wheelZoomSpeed.provenance.loading': {
+    en: flat('Using the compiled-in 1.0× value while saved settings load.'),
+    yue: flat('儲存設定載入緊，暫時使用編譯入去嘅 1.0× 數值。')
+  },
+  'settings.behavior.wheelZoomSpeed.provenance.scheduled': {
+    en: flat('A scheduled value is active. The saved base value is {speed}×.'),
+    yue: flat('而家有排程數值生效，儲存嘅基礎值係 {speed}×。')
   },
 
   // ---------------------------------------------------------------------------------------

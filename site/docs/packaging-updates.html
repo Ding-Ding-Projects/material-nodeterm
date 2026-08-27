@@ -31,7 +31,7 @@
     <article class="doc-body">
       <p class="doc-kicker">Releases</p>
       <h1>Packaging &amp; auto-update</h1>
-      <p>Windows builds ship as an unsigned Squirrel set: Setup.exe, RELEASES, and a full package. The current stable release is <strong>v0.4.120</strong>, published 2026-08-26 from commit <code>c682073037fe7b7e34d19568ced6e3d3a9037e22</code>. The installed app checks the stable GitHub Release in the background and never interrupts active work.</p>
+      <p>Windows builds ship as one unsigned Squirrel.Windows set: Setup.exe, RELEASES, one full package, and any matching delta package emitted for the candidate. ZIP, NSIS-only, MSI-only, MSIX-only, and portable-only parallel installer routes are not supported. The current stable release is <strong>v0.4.120</strong>, published 2026-08-26 from commit <code>c682073037fe7b7e34d19568ced6e3d3a9037e22</code>. The installed app checks the stable GitHub Release in the background and never interrupts active work.</p>
 
       <h2>Behaviour</h2>
       <p>Windows uses Electron's built-in Squirrel updater. While a newer package downloads, the minimizable card shows an indeterminate state because Squirrel does not expose byte progress. Once ready, <strong>Restart to update</strong> is your explicit way to restart immediately and can run only once. A downloaded update may instead apply on the next normal app launch even when that button is unused. Historical non-Windows updater paths are outside the active delivery scope.</p>

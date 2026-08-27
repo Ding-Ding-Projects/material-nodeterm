@@ -21,6 +21,7 @@ import {
 } from '../shared/types'
 import { findCommand, findFixedTmux, tmuxInstall } from './tmux-hint'
 import { hookServer, PERM_WAIT_SECS_DEFAULT } from './agents/hook-server'
+import { installDevinHooksInto } from './agents/hooks/devin'
 import {
   probeSaysAbsent,
   remoteHookEnvArgs,
@@ -2213,6 +2214,13 @@ export class PtyManager {
     // Ensure the login-shell PATH is resolved (prewarmed in init(); usually already settled)
     // so the session env below picks it up — awaiting keeps the event loop free either way.
     await resolveShellPath()
+    // Devin discovers hooks from the project-level `.devin/hooks.v1.json`, so install its
+    // observation-only bridge at the trusted local project cwd immediately before a local spawn.
+    // SSH nodes deliberately skip this path: their project root belongs to the remote host and
+    // the current remote hook protocol does not yet carry a project-root write route.
+    if (options.agentId === 'devin' && !options.sshRemote && options.cwd) {
+      installDevinHooksInto(options.cwd)
+    }
     // Rewrite the launcher on every create: it is generated, so an app upgrade must not leave an
     // old copy behind. Failure is not fatal — `installCodexLauncher` answers null, the caps probe
     // says "no shared identity", and the launch line the renderer already chose is the bare CLI.

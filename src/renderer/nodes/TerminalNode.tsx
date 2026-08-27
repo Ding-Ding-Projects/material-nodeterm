@@ -151,6 +151,7 @@ import { Tooltip } from '../components/Tooltip'
 import { useTerminalSearch } from '../terminal/useTerminalSearch'
 import { useCopyFeedback } from '../terminal/useCopyFeedback'
 import { ContextMeter } from '../components/ContextMeter'
+import { contextSourceKey } from '../state/contextWindow'
 import { AdhdElapsedChip, AdhdMomentumNote } from '../components/AdhdNodeSurfaces'
 import { markNodeActivity, markNodeOpened } from '../lib/nodeActivity'
 import { AccountIdentityPills } from '../components/AccountIdentityPills'
@@ -199,7 +200,6 @@ import {
   canRecur,
   canSubagent,
   canContextLink,
-  hasUsage,
   canChat,
   canResume,
   canRename,
@@ -1703,7 +1703,9 @@ export function TerminalNode({
   const showStatus = !!agentId && hasHooks(agentId) // status badge + session-title capture
   const showLoop = !!agentId && canRecur(agentId) // /loop · /schedule · /cron chrome
   const contextLinkCapable = !!agentId && canContextLink(agentId) // context-link tip wording only; handles render on all terminals
-  const showUsage = !!agentId && hasUsage(agentId) // per-node context-window meter
+  // Every agent-backed node gets a meter. Providers without verified telemetry remain visible with
+  // an explicit not-reported or unavailable state instead of disappearing from the header.
+  const showUsage = !!agentId
   const showChat = !!agentId && canChat(agentId) // Cmd+M opens a chat panel instead of markdown
   // Everything that reads the conversation through CLAUDE's transcript readers (`context.ensure`'s
   // mount-time meter rehydration, the find bar's transcript index) — deliberately NOT `showUsage`,
@@ -2106,18 +2108,18 @@ export function TerminalNode({
   // continuing tmux session is idle and emits no event, so the main-process tailer is never
   // re-fed. Re-runs if the sessionId changes (track is idempotent). cwd is a path fallback.
   //
-  // CLAUDE ONLY (`claudeTranscript`, not `showUsage`). The handler resolves this sessionId through
-  // claude's `resolveTranscript`, whose cwd fallback answers *the newest claude transcript for that
-  // cwd* — for a codex/gemini node that is a stranger's session, tracked on the CLAUDE tail under
-  // this node's session id, so its meter would show another agent's fill and then flap against the
-  // correct tail. The cost of the gate: a codex/gemini meter fills on the first hook event after
-  // mount instead of instantly. Their tails need no resolver (the hook envelope carries the path),
-  // so nothing else is lost. Per-agent rehydration is a follow-up task — see transcriptGates.ts.
+  // Rehydrate from the provider's own transcript on mount. The provider id is part of the request,
+  // so a resumed Codex or Gemini session cannot fall through to Claude's cwd fallback.
   useEffect(() => {
     const sid = status?.sessionId
-    if (claudeTranscript && sid)
-      window.nodeTerminal.context.ensure(sid, (data.cwd as string) || undefined, data.accountId)
-  }, [claudeTranscript, status?.sessionId, data.cwd, data.accountId])
+    if (showUsage && sid)
+      window.nodeTerminal.context.ensure(
+        sid,
+        (data.cwd as string) || undefined,
+        data.accountId,
+        remoteSession ? 'claude:remote' : agentId
+      )
+  }, [showUsage, status?.sessionId, data.cwd, data.accountId, agentId])
   const updateNodeInternals = useUpdateNodeInternals()
 
   const [searchOpen, setSearchOpen] = useState(false)
@@ -5598,7 +5600,13 @@ export function TerminalNode({
               SSH {(data.ssh as SshConnection).user}@{(data.ssh as SshConnection).host}
             </span>
           ) : null}
-          {showUsage && <ContextMeter sessionId={status?.sessionId ?? null} />}
+          {showUsage && (
+            <ContextMeter
+              sessionId={status?.sessionId ?? null}
+              agentId={agentId}
+              sourceKey={contextSourceKey(agentId, remoteSession)}
+            />
+          )}
           {/* ADHD time awareness — beside the session chip, because a clock in a menu does nothing
             for time blindness. Renders nothing at all while the mode is off. */}
           <AdhdElapsedChip nodeId={id} />

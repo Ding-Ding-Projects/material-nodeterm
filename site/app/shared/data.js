@@ -44,6 +44,7 @@ export const DOCS = [
   ['Agent support', 'Claude, Codex, Gemini, opencode, Grok', 'agent-support'],
   ['Linked-agent inbox notifications', 'fixed prompts between verified linked agents', 'linked-agent-inbox-notifications'],
   ['Canvas & node lifecycle', 'how blocks are born and cleaned up', 'canvas-lifecycle'],
+  ['Bounded wheel zoom and speed', 'shared burst budgets and plain-wheel speed', 'wheel-zoom-speed'],
   ['Changelog viewer', 'the date picker and the commit links', 'changelog-viewer'],
   ['Dim sum surprise', 'the little treat that shows up one visit in ten', 'dim-sum-surprise'],
   ['Wild dim sum node', 'public catalog browsing and portable dish selection', 'wild-dim-sum-node'],
