@@ -1,5 +1,30 @@
 # Handoff
 
+## 2026-08-27, agent-to-agent drag collaboration, issue #90
+
+The implementation is on `feat/agent-drag-collaboration`, based on the reconciled hui tip
+`0d22ff8839a33b6cee9bb93ecc8070a18398c2f1`. `src/renderer/lib/agentCollaborationDrag.ts` defines a
+bounded versioned drag payload, validates context-link capability through the existing agent
+registry, and exposes the keyboard/touch pick event used by the Canvas. `TerminalNode.tsx` adds a
+Material Design 3 collaboration handle, valid-target highlighting, and an accessible two-button
+pick path. `Canvas.tsx` validates both nodes on the active project, then calls the existing
+context-link `onConnect` path, so no process, account, credential, project, working-directory, or
+conversation-transfer state is changed. `Link selected agents` is available from the node context
+menu when exactly two compatible nodes are selected.
+
+The source basis was checked against the pinned upstream checkout and `eneskirca/nodeterm` `main`
+at `7d9cba33f7a29baa2a3cb010f07d351b87fc6e4d`. The existing upstream context-link behavior and the
+namespaced bounded drag payload from commit `d1b7da3af28587716e7e4de2fb0db8cd18732c3f`, merged by
+`acc5d51847094ea33c70721ea259e1483705a25e`, are the only reused semantics. Upstream does not
+define conversation transfer or agent-spawn-on-agent-drop, so those behaviors remain intentionally
+absent. Folder drops and ordinary node movement are unchanged.
+
+Documentation is in `docs/features/agents/agent-drag-collaboration.md` and the Agents category
+index. `CHANGELOG.md` and `ROADMAP.md` record the same scope and verification boundary. Tests, lint,
+type checks, builds, packaging, runtime interaction, reviews, audits, and captures were not run by
+this lane, as explicitly requested. The parent integration lane owns those checks, the dedicated
+pull request, append-only issue comments, upstream PR #463, merge, and issue closure.
+
 ## 2026-08-27, context-window progress, issue #89
 
 The implementation is on `feat/context-window-progress`, based on the reconciled hui tip `0d22ff88`.

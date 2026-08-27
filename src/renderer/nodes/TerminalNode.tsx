@@ -273,6 +273,12 @@ import {
   OPEN_EXPLORER_FOR_AGENT_EVENT,
   writeAgentNodeDrag
 } from '../lib/explorerNodeDrag'
+import {
+  AGENT_COLLABORATION_MODE_EVENT,
+  AGENT_COLLABORATION_PICK_EVENT,
+  readAgentCollaborationDrag,
+  writeAgentCollaborationDrag
+} from '../lib/agentCollaborationDrag'
 
 /** Which physical modifier the registry's abstract `Cmd` resolves to for the find-bar chord. */
 const isMac = isMacPlatform()
@@ -1326,6 +1332,8 @@ export function TerminalNode({
   const [colorAnchor, setColorAnchor] = useState<{ x: number; y: number } | null>(null)
   const [armed, setArmed] = useState(true)
   const [dropping, setDropping] = useState(false)
+  const [agentCollaborationDropTarget, setAgentCollaborationDropTarget] = useState(false)
+  const [agentCollaborationPending, setAgentCollaborationPending] = useState(false)
   // Overlay while dropped files upload to an SSH host (scp is seconds-long with zero feedback);
   // doubles as a brief "Upload failed" flash when nothing made it.
   const [uploadNote, setUploadNote] = useState<{
@@ -1710,6 +1718,48 @@ export function TerminalNode({
   // gemini names its own sessions but has no rename command, so it polls and never pushes.
   const canReadTitleNode = !!agentId && canReadTitle(agentId)
   const agentLabel = (agentId ? agentConfig(agentId) : undefined)?.label ?? 'Agent'
+
+  // The whole-node drop gesture is deliberately an explicit collaboration affordance, not a
+  // second way to move a terminal. The Canvas validates both endpoints in the active project and
+  // then reuses its existing context-link path. This listener only mirrors the pending source so
+  // keyboard and touch users get the same visible state as a pointer drag.
+  useEffect(() => {
+    const onMode = (event: Event): void => {
+      const sourceNodeId = (event as CustomEvent<{ sourceNodeId?: string | null }>).detail
+        ?.sourceNodeId
+      setAgentCollaborationPending(sourceNodeId === id)
+    }
+    window.addEventListener(AGENT_COLLABORATION_MODE_EVENT, onMode)
+    return () => window.removeEventListener(AGENT_COLLABORATION_MODE_EVENT, onMode)
+  }, [id])
+
+  const onAgentCollaborationDragOver = (event: React.DragEvent): void => {
+    const payload = readAgentCollaborationDrag(event.dataTransfer)
+    if (!contextLinkCapable || !payload || payload.nodeId === id) return
+    event.preventDefault()
+    event.stopPropagation()
+    event.dataTransfer.dropEffect = 'link'
+    setAgentCollaborationDropTarget(true)
+  }
+
+  const onAgentCollaborationDragLeave = (event: React.DragEvent): void => {
+    const related = event.relatedTarget as Node | null
+    if (!related || !event.currentTarget.contains(related)) setAgentCollaborationDropTarget(false)
+  }
+
+  const onAgentCollaborationDrop = (event: React.DragEvent): void => {
+    if (!contextLinkCapable) return
+    const payload = readAgentCollaborationDrag(event.dataTransfer)
+    if (!payload) return
+    event.preventDefault()
+    event.stopPropagation()
+    setAgentCollaborationDropTarget(false)
+    window.dispatchEvent(
+      new CustomEvent(AGENT_COLLABORATION_PICK_EVENT, {
+        detail: { sourceNodeId: payload.nodeId, targetNodeId: id }
+      })
+    )
+  }
   // Could this node's CLI ever be hibernated — quit AND brought back? A durable property of the
   // agent, not of its current state: the offscreen release consults it to decide whether waiting
   // for Eco is even meaningful here (see `shouldDeferReleaseForEco`).
@@ -5334,11 +5384,16 @@ export function TerminalNode({
         isUnread ? ' unread' : ''
       }${status?.state === 'working' ? ' working' : ''}${
         status?.state === 'waiting' || status?.state === 'blocked' ? ' attention' : ''
-      }${glyphMounted ? ' term-node--glyphgrid' : ''}${focused ? ' term-node--focused' : ''}`}
+      }${glyphMounted ? ' term-node--glyphgrid' : ''}${focused ? ' term-node--focused' : ''}${
+        agentCollaborationDropTarget ? ' term-node--agent-collaboration-target' : ''
+      }${agentCollaborationPending ? ' term-node--agent-collaboration-source' : ''}`}
       ref={rootRef}
       style={{ borderTopColor: data.color }}
       onMouseEnter={() => (hoveredRef.current = true)}
       onMouseLeave={() => (hoveredRef.current = false)}
+      onDragOver={onAgentCollaborationDragOver}
+      onDragLeave={onAgentCollaborationDragLeave}
+      onDrop={onAgentCollaborationDrop}
     >
       <NodeResizer minWidth={NODE_MIN_SIZES.terminal.width} minHeight={NODE_MIN_SIZES.terminal.height} isVisible={selected && !collapsed} color="#0a84ff" />
       {/* Invisible source handle so edges to subagent/loop nodes can attach. */}
@@ -5441,6 +5496,30 @@ export function TerminalNode({
               }}
             >
               <MaterialSymbol name="folder_open" size={16} />
+            </button>
+          )}
+          {contextLinkCapable && agentId && (
+            <button
+              className="term-node__collaboration-drag nodrag"
+              draggable
+              aria-pressed={agentCollaborationPending}
+              aria-grabbed={agentCollaborationPending}
+              title="Drag this agent onto another agent to share context"
+              aria-label="Link this agent to another agent"
+              onDragStart={(event) => {
+                event.stopPropagation()
+                event.dataTransfer.effectAllowed = 'link'
+                writeAgentCollaborationDrag(event.dataTransfer, id, agentId)
+              }}
+              onDragEnd={() => setAgentCollaborationDropTarget(false)}
+              onClick={(event) => {
+                event.stopPropagation()
+                window.dispatchEvent(
+                  new CustomEvent(AGENT_COLLABORATION_PICK_EVENT, { detail: { nodeId: id } })
+                )
+              }}
+            >
+              <MaterialSymbol name="link" size={16} />
             </button>
           )}
           {editingTitle ? (

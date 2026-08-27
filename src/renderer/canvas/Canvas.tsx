@@ -65,6 +65,11 @@ import {
   readExplorerFolderDrag
 } from '../lib/explorerNodeDrag'
 import {
+  AGENT_COLLABORATION_MODE_EVENT,
+  AGENT_COLLABORATION_PICK_EVENT,
+  canLinkAgentPair
+} from '../lib/agentCollaborationDrag'
+import {
   SharedGlyphLayer,
   flushOpaqueNodeIds,
   gestureTerminalIds,
@@ -1478,6 +1483,7 @@ export function Canvas() {
   }, [])
   const [explorerAgentNodeId, setExplorerAgentNodeId] = useState<string | null>(null)
   const [explorerFolderDropActive, setExplorerFolderDropActive] = useState(false)
+  const [agentCollaborationSourceId, setAgentCollaborationSourceId] = useState<string | null>(null)
   useEffect(() => {
     if (!explorerOpen) setExplorerAgentNodeId(null)
   }, [explorerOpen])
@@ -4177,6 +4183,91 @@ export function Canvas() {
     },
     [linkEndpointOf, agentIdOf, setLinkEdges, setNodes, markDirty, nodes]
   )
+
+  /** Resolve the explicit agent-to-agent drop into the existing context-link operation. */
+  const linkAgentCollaboration = useCallback(
+    (sourceNodeId: string, targetNodeId: string): void => {
+      const source = nodesRef.current.find((node) => node.id === sourceNodeId)
+      const target = nodesRef.current.find((node) => node.id === targetNodeId)
+      const sourceAgent = agentIdOf(sourceNodeId)
+      const targetAgent = agentIdOf(targetNodeId)
+      if (
+        !source ||
+        !target ||
+        !sourceAgent ||
+        !targetAgent ||
+        !canLinkAgentPair(sourceNodeId, sourceAgent, targetNodeId, targetAgent)
+      ) {
+        window.dispatchEvent(
+          new CustomEvent('nodeterm:toast', {
+            detail: {
+              kind: 'error',
+              message: 'Only two existing context-capable agent nodes in this project can be linked.'
+            }
+          })
+        )
+        return
+      }
+      onConnect({
+        source: sourceNodeId,
+        target: targetNodeId,
+        sourceHandle: 'link-out',
+        targetHandle: 'link-in'
+      })
+    },
+    [agentIdOf, onConnect]
+  )
+
+  // Pointer drops carry both endpoint ids. Keyboard and touch use the same button on two nodes:
+  // the first activation arms a source, and the second chooses its target. When exactly two
+  // compatible nodes are selected, one activation links them directly for a shorter keyboard path.
+  useEffect(() => {
+    const onPick = (event: Event): void => {
+      const detail = (event as CustomEvent<{
+        nodeId?: string
+        sourceNodeId?: string
+        targetNodeId?: string
+      }>).detail
+      if (detail?.sourceNodeId && detail.targetNodeId) {
+        setAgentCollaborationSourceId(null)
+        linkAgentCollaboration(detail.sourceNodeId, detail.targetNodeId)
+        return
+      }
+      const nodeId = detail?.nodeId
+      if (!nodeId) return
+      const selected = nodesRef.current
+        .filter((node) => node.selected)
+        .map((node) => node.id)
+      if (selected.length === 2 && selected.includes(nodeId)) {
+        setAgentCollaborationSourceId(null)
+        linkAgentCollaboration(selected[0], selected[1])
+        return
+      }
+      setAgentCollaborationSourceId((current) => {
+        if (!current) return nodeId
+        if (current === nodeId) {
+          window.dispatchEvent(
+            new CustomEvent('nodeterm:toast', {
+              detail: { kind: 'error', message: 'Choose a different agent as the collaboration target.' }
+            })
+          )
+          return null
+        }
+        linkAgentCollaboration(current, nodeId)
+        return null
+      })
+    }
+    window.addEventListener(AGENT_COLLABORATION_PICK_EVENT, onPick)
+    return () => window.removeEventListener(AGENT_COLLABORATION_PICK_EVENT, onPick)
+  }, [linkAgentCollaboration])
+
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent(AGENT_COLLABORATION_MODE_EVENT, {
+        detail: { sourceNodeId: agentCollaborationSourceId }
+      })
+    )
+  }, [agentCollaborationSourceId])
 
   // Double-click a context link to remove it (ephemeral subagent/loop edges are left alone).
   const onEdgeDoubleClick = useCallback(
@@ -10117,6 +10208,21 @@ export function Canvas() {
     const hidden = useSettings.getState().settings.hiddenNodeMenuItems
     return tidySeparators<MenuItem>([
       { type: 'label', label: ids.length > 1 ? `${ids.length} nodes` : '1 node' },
+      ...(ids.length === 2
+        ? (() => {
+            const firstAgent = agentIdOf(ids[0])
+            const secondAgent = agentIdOf(ids[1])
+            return firstAgent && secondAgent && canLinkAgentPair(ids[0], firstAgent, ids[1], secondAgent)
+              ? ([
+                  {
+                    label: 'Link selected agents',
+                    icon: <IconGroup />,
+                    onClick: () => linkAgentCollaboration(ids[0], ids[1])
+                  }
+                ] as MenuItem[])
+              : []
+          })()
+        : []),
       {
         label: 'New node from catalog…',
         icon: <IconShapes />,
@@ -10799,6 +10905,7 @@ export function Canvas() {
     profileText
     switchCodexAccountNode,
     connectedProjectIdForHost,
+    linkAgentCollaboration,
     deleteNodes,
     gatewayModels,
     gatewayStatus,

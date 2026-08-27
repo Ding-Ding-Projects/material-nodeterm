@@ -69,6 +69,12 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## In progress / partially landed
 
+- [ ] **Agent-to-agent drag collaboration, issue #90**: the bounded collaboration handle and
+      keyboard/touch equivalent now reuse the existing context-link path for two compatible agent
+      nodes. Credentials, accounts, projects, working directories, and live sessions remain
+      unchanged. Tests, builds, runtime interaction, accessibility review, security review, and
+      captures remain unverified under the lane's explicit boundary.
+
 - [ ] **Context-window progress, issue #89**: every agent-backed node, session row, Kanban card,
       and card modal now keeps a visible meter with provider-scoped telemetry, exact known values,
       explicit unknown/not-reported/stale/unavailable states, restart-safe generation fencing, and

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add upstream-compatible agent-to-agent drag collaboration for issue #90. A bounded,
+  namespaced collaboration handle links two existing context-capable agent sessions through the
+  existing Context Link path. Valid targets show an honest Material Design 3 drop state, while
+  keyboard, touch, and screen-reader users can activate two link buttons or use **Link selected
+  agents**. No process, account, credential, project, working-directory, or conversation-transfer
+  state moves. This implementation lane intentionally did not run tests, lint, type checks, builds,
+  packaging, runtime interaction, reviews, audits, or captures.
+
 - Add the context-window progress meter to every agent-backed node and session surface. Provider
   telemetry is source-scoped and generation-fenced, exact values are shown only when reported, and
   unknown, not-reported, stale, and unavailable states remain visible. Local and remote transcript
