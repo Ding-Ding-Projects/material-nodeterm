@@ -4117,6 +4117,10 @@ export function TerminalNode({
               target,
               getNode(id)?.data.agentModel as string | undefined
             )
+        const currentModel = normalizedAgentModel(
+          target,
+          getNode(id)?.data.agentModel as string | undefined
+        )
         // A model switch must rebuild the terminal session: URL/key env was fixed when that shell
         // was spawned and may have been configured AFTER this node was created. Do not type the
         // harness's slash-exit command here — an agent composer can treat it as prompt text. Core
@@ -4124,11 +4128,22 @@ export function TerminalNode({
         // replacement shell the current gateway env. Relay sessions belong to another
         // core/settings store, so a local gateway must never be pushed into one.
         if (targetModel) {
-          if (!selectedModel || session.source === 'relay') return 'not-eligible'
+          // A stale menu can still invoke its callback after the node changed. Treat a request for
+          // the already-active model as a no-op before signalling the foreground process; a model
+          // switch must never recycle a healthy conversation just because its menu was stale.
+          if (!selectedModel || selectedModel === currentModel || session.source === 'relay')
+            return 'not-eligible'
           // Identity-gated: core SIGTERMs the foreground group ONLY if `target`'s harness still
           // owns it, so a stale model-switch menu can never kill vim or a build in this pane.
           if (!(await api.pty.terminateForeground(id, target))) return 'not-eligible'
-          transport.recycle(id)
+          // Recycling is the commit point for this change. The core can refuse or lose the
+          // session-host acknowledgement, and updating node data before that promise settles
+          // would claim a model switch whose shell never received the new environment.
+          try {
+            await transport.recycle(id)
+          } catch {
+            return 'not-eligible'
+          }
           updateNodeData(id, (node) => ({
             agentId: target,
             agentModel: selectedModel,

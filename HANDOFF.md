@@ -615,6 +615,31 @@ Direct documentation is `docs/features/agents/custom-agent-harness.md`, indexed 
 category. The changelog and roadmap carry the same boundary. No tests, lint, type checks, builds,
 packaging, runtime interaction, reviews, audits, or captures were run in this source lane. The
 parent integration lane owns those checks, the final default-branch merge, issue updates, and closure.
+## 2026-08-27, per-node model switching, issue #86 and upstream PR #422
+
+The model-switching branch was reconciled with the exact current `origin/main` tip
+`54164b84dce0b7e62787b1de2885405ff4ed821c` by merge commit `0138fc8aed83b9075d3d5678ec4446ce97cbdd40`.
+The source slice is present in the shared agent
+capability and model-gateway modules, launch assembly, node/project persistence, Canvas context
+menu, TerminalNode recycle choreography, and host-side foreground ownership checks.
+
+The direct article is `docs/features/agents/model-switching.md`, indexed from the Agents category
+and linked from `docs/features/agents/agent-support.md`. It records available-model enumeration,
+explicit user choice, future-node versus running-node behavior, relay and project ownership,
+failure recovery, and the model-switching source locations. A stale same-model callback now stops
+before foreground termination or session recycling, and a recycle rejection leaves node data
+unchanged instead of claiming that the new model is active.
+
+The selected model remains per-node `agentModel` state. A future node applies it through the normal
+launch path. A running node retains its provider session identity, validates harness ownership,
+terminates only the expected foreground process, recycles the persistent session, and resumes with
+the selected model and current gateway environment. Gateway credentials remain host-side and are
+never placed in a launch command.
+
+No tests, lint, type checks, builds, packaging, runtime interaction, reviews, audits, debugging,
+or screenshots were taken, per the lane boundary. The generated offline documentation bundle was not
+regenerated because that requires the prohibited build step. The parent integration lane owns those
+checks and the final bundled-doc verification. No public issue or pull-request mutation was made.
 
 ## 2026-08-27, AWS core-service managers, issue #46 PR preparation
 

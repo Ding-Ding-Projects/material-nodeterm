@@ -21,6 +21,8 @@ Cognition Devin are built in; any other CLI can be added as a custom agent.
   and touch route to the existing context-link behavior.
 - [Context-window progress](./context-window-progress.md) — provider telemetry sources, honest
   unknown and stale states, generation fencing, and the shared meter across node and board views.
+- [Per-node model switching](./model-switching.md) — gateway discovery, explicit model choice,
+  running-node recycle and resume, ownership checks, persistence, and recovery boundaries.
 
 See also [Canvas → Node kinds](../canvas/README.md) for the agent node itself,
 [Kanban](../kanban/README.md) for how agent status renders on a board card, and

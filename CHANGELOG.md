@@ -213,6 +213,11 @@
   states, reject cross-project or mismatched-link requests, bound paths, refs, arguments, and output,
   and never accept arbitrary shell text. This source lane intentionally did not run tests, type
   checks, lint, builds, packaging, runtime interaction, reviews, audits, or captures.
+- Harden per-node model switching against stale menu callbacks. A request for the model the node
+  already runs now refuses before foreground termination or session recycling, preserving the
+  active conversation. The source implementation and documentation records were updated in this
+  lane; tests, type checks, lint, reviews, builds, packaging, runtime interaction, and UI captures
+  were intentionally not run.
 
 - Mount the seven AWS core-service routes on the shared AWS manager: S3, EC2, IAM, STS, Lambda,
   CloudWatch, and CloudWatch Logs. Typed operation controls now cover bounded reads, selected writes,
