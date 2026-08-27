@@ -147,7 +147,7 @@ export function parseWindowsProcessTable(stdout: string): ProcEntry[] {
  *
  *  (A darwin `vm_stat` reader used to sit between the two legs — macOS keeps almost nothing
  *  genuinely "free", so `os.freemem()` there read near zero and permanently tripped the reaper's
- *  watermark. It died with the macOS desktop; neither surviving platform has that pathology.) */
+ *  watermark. It died with the macOS desktop; neither surviving platform has that pathology.)
  * That fallback is the very number this function exists to replace: on macOS it sits near zero, and
  * the session reaper's watermark (10% of RAM) then reads as permanent memory pressure — which had a
  * Mac reaping idle detached sessions every 10 minutes regardless of how much memory was free. A

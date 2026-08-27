@@ -259,10 +259,8 @@ export function sessionBudgetConfig(
     disabled: env.NODETERM_SESSION_REAP_DISABLED === '1' || env.NODETERM_SESSION_REAP_DISABLED === 'true',
     minAvailableMb: envInt(env, 'NODETERM_SESSION_MIN_AVAILABLE_MB', Math.max(1024, Math.round(totalMb * 0.1))),
     maxIdle: envInt(env, 'NODETERM_SESSION_MAX_IDLE', envInt(env, 'NODETERM_SESSION_MAX_DETACHED', 48)),
-    graceSec: envHours(env, 'NODETERM_SESSION_GRACE_HOURS', 24),
-    batchMax: envInt(env, 'NODETERM_SESSION_REAP_BATCH', 8)
     maxDetached: envInt(env, 'NODETERM_SESSION_MAX_DETACHED', derivedCap),
-    graceSec: envHours(env, 'NODETERM_SESSION_GRACE_HOURS', 6),
+    graceSec: envHours(env, 'NODETERM_SESSION_GRACE_HOURS', 24),
     batchMax: envInt(env, 'NODETERM_SESSION_REAP_BATCH', 8),
     // Percentages, so `envInt`'s `>= 1` floor is not the trap it is for a cap: 0 and junk both fall
     // back to the default, and an operator who wants the term OFF sets the ratio via a value the
@@ -365,13 +363,8 @@ export function planReap(
   externalPressure = false
 ): string[] {
   if (cfg.disabled) return []
-  const eligible = sessions
-    .filter((s) => s.name.startsWith('nt-'))
-    .filter((s) => nowSec - s.activitySec >= cfg.graceSec)
-    .sort((a, b) => a.activitySec - b.activitySec)
   const nt = sessions.filter((s) => s.name.startsWith('nt-'))
-  const detached = nt.filter((s) => s.clients === 0)
-  const eligible = detached
+  const eligible = nt
     .filter((s) => nowSec - s.outputSec >= cfg.graceSec)
     .sort((a, b) => a.outputSec - b.outputSec)
 
@@ -508,9 +501,6 @@ export function createSessionReaper(opts: SessionReaperOpts): SessionReaper {
 
   const listSocket = async (bin: string, socket: string): Promise<SessionInfo[] | null> => {
     try {
-      const listed = parseSessionList(await exec(bin, ['-L', socket, 'list-sessions', '-F', LIST_FMT]))
-      // Preserve the existing per-socket client-count normalization for callers and diagnostics.
-      // The reaper's decision intentionally ignores the resulting count and follows activity age.
       const listed = parseSessionList(await exec(bin, ['-L', socket, 'list-windows', '-a', '-F', LIST_FMT]))
       // Our own shadows are subtracted from tmux's client COUNT here, at the one place every
       // listing comes through, so the plan and the kill-time re-verify can never disagree about it

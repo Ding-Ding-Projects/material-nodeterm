@@ -462,18 +462,6 @@ describe('control-mode shadow clients for released sessions', () => {
     // 27.8 h — past the grace window, which now defaults to a DAY (NODETERM_SESSION_GRACE_HOURS,
     // 24) rather than the 6 h that was safe while attachment was also required.
     const OLD = NOW - 100_000
-    const listings: Record<string, string> = {
-      // Both are attached and both are idle past grace, so both are eligible: planReap filters on
-      // the `nt-` prefix and activity age ONLY — it never reads `clients`. This used to assert that
-      // `nt-node-9` survived because somebody was looking at it; that protection was deliberately
-      // removed (see the session-budget header: 54 of 54 sessions on a real host reported attached,
-      // so the reaper had never once fired). Activity staleness now carries the guard alone.
-      'node-terminal': `nt-node-1|1|${OLD}\nnt-node-9|1|${OLD}`,
-      // The SAME NAME on the SSH-remote socket. Shadows only ever live on the local socket, so the
-      // shadow bookkeeping must not follow a name across sockets — still true, and still asserted
-      // below by the kill list naming the socket each target was reaped on.
-      'nodeterm-rmt': `nt-node-1|1|${OLD}`
-    const OLD = NOW - 100_000 // well past the 6h grace window: no PANE OUTPUT since then
     // `#{session_activity}` stays FRESH, the shape a live host always has — the reaper gates on
     // last pane output now, not on when a client last attached. See SessionInfo.activitySec.
     const FRESH = NOW - 60
@@ -534,7 +522,6 @@ describe('control-mode shadow clients for released sessions', () => {
     await m.shadowAttach('node-2')
 
     const NOW = 1_000_000
-    const OLD = NOW - 100_000 // past the 24 h grace
     const OLD = NOW - 100_000 // no PANE OUTPUT since then
     const FRESH = NOW - 60 // …while `#{session_activity}` stays fresh, as it always is in production
     const killed: string[] = []
@@ -550,8 +537,6 @@ describe('control-mode shadow clients for released sessions', () => {
         }
         // Both look idle when the plan is made. On the RE-VERIFY listing, nt-node-2 has just been
         // typed into — its activity jumps to now — so it must be spared even though it was planned.
-        const nodeTwoActivity = listings++ === 0 ? OLD : NOW
-        return `nt-node-1|1|${OLD}\nnt-node-2|1|${nodeTwoActivity}`
         // nt-node-1 carries the user's own client the whole time (2 = theirs + ours), so the PLAN
         // must never name it. nt-node-2 is shadow-only when the plan is made and gains a real
         // client before the kill — precisely what the kill-time re-verify exists for.

@@ -38,10 +38,9 @@ import {
   remotePaneOwnerArgs,
   remoteForegroundArgvArgs,
   remotePaneCursorArgs,
-  childArgs
+  childArgs,
   remotePaneProcessArgs,
-  remoteTerminateForegroundArgs,
-  remotePaneCursorArgs
+  remoteTerminateForegroundArgs
 } from './remote-ssh/control-master'
 import { probeAgentSockToPin } from './remote-ssh/agent-probe'
 import { parsePaneCursor } from './pane-cursor'
@@ -56,8 +55,6 @@ import { readSpawnResources, spawnResourceNote } from './spawn-resources'
 import { primePtyCeiling, ptyDevicesExhausted, readPtyDevices, spawnFailureHint, type PtyDevices } from './pty-devices'
 import { REAP_SWEEP_MS, shouldReap } from './pty-reap'
 import { ControlModeClient, type ControlSpawn } from './tmux-control-client'
-import { TMUX_SOCKET, sessionName, isSessionName, localTmuxSendKeysArgs, localTmuxEnterArgs } from './tmux-naming'
-import { encodeSendKeysHex } from './tmux-control'
 import { decideLeadPaneCorrection, resizeLeadPaneArgs } from '../shared/agents/team-pane-layout'
 import { bracketedInjection, sanitizePasteText } from './paste-injection'
 import {
@@ -68,7 +65,6 @@ import {
   localFramedDelivery,
   runPasteDelivery
 } from './tmux-naming'
-import { encodeSendKeysHex } from './tmux-control'
 import { releasePty, type ReleasablePty } from './pty-release'
 import { terminateWindowsProcessTree } from '../session-host/windows-process-tree'
 import { effectiveSize, type PtySize } from './pty-size'
@@ -83,7 +79,6 @@ import {
   resolveShellPath,
   shellPathNow
 } from './exec-path'
-import { AUTH_ENV_STRIP, accountTmuxEnvArgs, remoteAccountConfigDirAbs } from './claude-accounts-core'
 import {
   AUTH_ENV_STRIP,
   accountTmuxEnvArgs,
@@ -92,19 +87,22 @@ import {
 } from './claude-accounts-core'
 import {
   AUTH_ENV_STRIP as CODEX_AUTH_ENV_STRIP,
+  codexAccountHome,
   codexSessionEnv,
+  codexTmuxEnvArgs,
   isCodexScopeRefusal,
   needsCodexAccountScope,
+  remoteCodexHome,
+  remoteCodexTmuxEnvArgs,
   resolveCodexSessionScope
 } from './codex-accounts-core'
 import { NODE_ID_MAX, isSafeNodeId } from './remote-safety'
 import { presenceHub } from './presence/hub'
 import { codexLauncherDir, forgetCodexThreadIdentitiesForNode, installCodexLauncher } from './codex-identity-proxy'
 import { ensureNodeToken, ensureRemoteNodeToken, sweepNodeToken } from './agents/node-token-service'
-import { hasSharedIdentity, type AgentId } from '../shared/agents/config'
+import { hasSharedIdentity, setCustomAgentBaseResolver, type AgentId } from '../shared/agents/config'
 import { quitWouldLoseWork } from './quit-risk'
 import { clearNode as clearNodeAgentStatus } from './agent-status-mirror'
-import { hasSharedIdentity, setCustomAgentBaseResolver, type AgentId } from '../shared/agents/config'
 import { findCustomAgent } from '../shared/agents/custom-agent'
 import { applyCustomAgentEnv, customAgentEnvArgs } from './custom-agent-env'
 import {
@@ -143,14 +141,6 @@ import {
   type ResolvedWindowsTerminalProfile,
   type WindowsTerminalProfileResolver
 } from './windows-terminal-profiles'
-import {
-  codexAccountHome,
-  codexSessionEnv,
-  codexTmuxEnvArgs,
-  remoteCodexHome,
-  remoteCodexTmuxEnvArgs,
-  needsCodexAccountScope
-} from './codex-accounts-core'
 import type { ProjectSpawnOverrides, ProjectSpawnOverridesReader } from './project-spawn-overrides'
 
 // How often we snapshot a live tmux session's scrollback to disk, so a machine reboot (which
@@ -283,7 +273,6 @@ function runWithStdin(file: string, args: readonly string[], input: string): Pro
 // payload with `terminal-features`). The renderer's OSC 52 handler writes the system clipboard, so
 // this is the copy path on EVERY platform and over SSH — no `pbcopy` pipe (that was macOS-only,
 // and half of why copying was broken).
-export function tmuxConf(scrollback: number, wordSeparators: string): string {
 /**
  * Session-identity env names the LOCAL conf's `update-environment` carries on top of the stock +
  * gateway list (issue #419). The point is the REMOVAL half of update-environment's contract: the
@@ -1742,6 +1731,7 @@ export class PtyManager {
     platform().handle(IPC.ptyPaneCommand, (persistKey: string) => this.paneCommand(persistKey))
     platform().handle(IPC.ptyCorrectTeamPaneWidth, (persistKey: string) =>
       this.correctTeamLeadPaneWidth(persistKey)
+    )
     platform().handle(IPC.ptyTerminateForeground, (persistKey: string, expectedAgentId?: string) =>
       this.terminateForeground(persistKey, expectedAgentId)
     )
@@ -1930,7 +1920,6 @@ export class PtyManager {
         (options.cwd || os.homedir()) === pendingRecycle.target.cwd)
     // Profile-switch targets arrive with the windows-terminal-profiles phase; until then no
     // pendingRecycle entry carries one, so an absent target always matches.
-    const matchesRecycleTarget = !pendingRecycle?.target
     if (
       pendingRecycle &&
       (pendingRecycle.owner !== requestingView || !matchesRecycleTarget)
@@ -2133,6 +2122,9 @@ export class PtyManager {
           { timeout: PROBE_TIMEOUT_MS }
         )
       } catch {
+        return { sessionId: '', fresh: false, unavailable: 'codex-account' }
+      }
+    }
     // FAIL-CLOSED Codex account scope (S6 §5 property 4 / Decision 2, the carried PR-1 obligation).
     // A LOCAL Codex spawn that EXPLICITLY selected a managed account whose home is missing REFUSES
     // here — it must never fall through and spawn against the SYSTEM `~/.codex` (silently acting as
@@ -2184,13 +2176,7 @@ export class PtyManager {
       !resolveWindowsProfile &&
       !!this.tmuxPath &&
       this.getSettings().tmuxEnabled &&
-      !!options.persistKey
-    // The Windows-profile warm-backend probe (attach-only reattach of a proven session-host or
-    // tmux generation, decided ahead of trusted profile resolution) lands with the
-    // windows-terminal-profiles phase; until then nothing assigns this and every create takes the
-    // ordinary attach-or-create path below.
-    let warmWindowsBackend: 'session-host' | 'tmux' | undefined
-    const tmuxBacked = !!this.tmuxPath && this.getSettings().tmuxEnabled && !!options.persistKey
+      !!options.persistKey;
     // For an SSH-project node, "fresh" is decided by the REMOTE tmux server (over the project's
     // ControlMaster), not the local one. The remote `has-session` is a full network round-trip,
     // so it MUST be async (`runAsync`) — a synchronous probe here would freeze every window/IPC
@@ -2210,7 +2196,7 @@ export class PtyManager {
         ? false
         : tmuxBacked
         ? !(await this.tmuxSessionExists(options.persistKey as string))
-        : true
+        : true;
     // Ensure the login-shell PATH is resolved (prewarmed in init(); usually already settled)
     // so the session env below picks it up — awaiting keeps the event loop free either way.
     await resolveShellPath()
@@ -2238,6 +2224,7 @@ export class PtyManager {
         options.profileId ?? settings.defaultTerminalProfileId,
         options.cwd || os.homedir()
       )
+    }
     // Resolved HERE rather than inside `spawnSession` because that function is synchronous and two
     // of its three callers (`createDetached`/`attachDetached`, the relay host's attach path) are
     // synchronous public API.
@@ -2277,10 +2264,6 @@ export class PtyManager {
       undefined,
       resolvedProfile,
       warmWindowsBackend
-    )
-    const spawned = this.sessions.get(sessionId)
-      warmWindowsBackend,
-      projectOverrides
     )
     const spawned = this.sessions.get(sessionId)
     // PANE OWNERSHIP (agent messaging, PR #237 fix round 2): record the OWNING project of a pane
@@ -2349,15 +2332,10 @@ export class PtyManager {
     // (`persisted` in spawnSession) — i.e. exactly "this session survives losing its client",
     // which is what the renderer's cache-dispose levers must not assume. See PtyCreateResult.
     const persistent = !!spawned?.persistKey
-    return accountFallback
-      ? {
-          sessionId,
-          fresh,
-          accountFallback,
-          persistent,
-          ...(screen ? { screen } : {})
-        }
-      : { sessionId, fresh, persistent, ...(screen ? { screen } : {}) }
+    if (accountFallback) {
+      return { sessionId, fresh, accountFallback, persistent, ...(screen ? { screen } : {}) }
+    }
+    return { sessionId, fresh, persistent, ...(screen ? { screen } : {}) }
   }
 
   /** Does the node's remote tmux session exist (over the project's ControlMaster)? Async so the
@@ -2618,8 +2596,6 @@ export class PtyManager {
     /** Trusted desktop-only launch resolved from a stable profile id immediately before spawn. */
     resolvedProfile?: ResolvedWindowsTerminalProfile,
     /** A persistent generation proven before profile/cwd resolution; attach-only, never create. */
-    warmWindowsBackend?: 'session-host' | 'tmux'
-    /** A persistent generation proven before profile/cwd resolution; attach-only, never create. */
     warmWindowsBackend?: 'session-host' | 'tmux',
     /** What the OWNING project contributes (see `projectSpawnOverrides`) — already resolved,
      *  because this function is synchronous. Null on every path with no proven project owner. */
@@ -2777,23 +2753,6 @@ export class PtyManager {
       env.PATH = `${codexLauncherDir()}${path.delimiter}${env.PATH ?? ''}`
     }
 
-    // Managed Claude account: the whole session runs under the account's private config
-    // dir. The claude CLI then reads/writes credentials + transcripts there. Also strip
-    // env auth vars that would silently shadow the account's OAuth login (an inherited
-    // ANTHROPIC_API_KEY wins over CLAUDE_CONFIG_DIR credentials). System-default nodes
-    // (no accountId) are untouched. Remote (ssh) sessions get their account env via the
-    // remote tmux `-e` list instead (the local ssh client process doesn't need it).
-    let accountFallback = false
-    if (needsCodexAccountScope(options.agentId, options.codexAccountId) && !options.sshRemote) {
-      if (
-        options.codexAccountId &&
-        !fs.existsSync(codexAccountHome(platform().userDataDir, options.codexAccountId))
-      ) {
-        throw new Error('Managed Codex account home is unavailable')
-      }
-      Object.assign(env, codexSessionEnv(platform().userDataDir, options.codexAccountId))
-    }
-
     // (no accountId) set nothing HERE — but they are not "untouched" on the tmux leg:
     // CLAUDE_CONFIG_DIR is in ACCOUNT_SCOPE_UPDATE_ENV, so a client whose env lacks it makes
     // tmux STRIP it from the new session, which is what keeps a server seeded by a managed
@@ -2915,16 +2874,6 @@ export class PtyManager {
     // mutation, or the user), so an unsafe value degrades to `undefined` = the default shell —
     // never to execution. @shared/node-exec keeps foreign values out of `options.shell` in the
     // first place; this is the second layer.
-    const reqShell = safeSessionProgram(options.shell)
-    const program = resolvedProfile?.shell ?? (reqShell === 'ssh' ? findSsh() ?? 'ssh' : reqShell)
-    // A selected profile's argv is private trusted core output. Renderer/project `shellArgs` never
-    // append to or replace it; this is the point-of-use boundary that makes profile ids non-code.
-    const programArgs = resolvedProfile
-      ? [...resolvedProfile.shellArgs]
-      : options.shellArgs ?? []
-    const localSessionShell = resolvedProfile?.shell ?? resolveLocalSessionShell(program, settings.defaultShell)
-    const localSessionArgs = resolvedProfile ? programArgs : program ? programArgs : []
-    //
     // PRECEDENCE: the NODE's own `options.shell` wins outright — it is the exec-trusted value
     // @shared/node-exec already vouched for, and a node that names its program means it. Only when
     // it names none does the owning project's shell apply (local overlay, or a shared value the
@@ -3218,7 +3167,6 @@ export class PtyManager {
       if (shell) {
         args.push(shell)
         args.push(...programArgs)
-      }
       }
     } else if (
       !options.sshRemote &&
@@ -4173,13 +4121,6 @@ export class PtyManager {
         : false
     }
     try {
-      if (await this.bracketPasteRequested(target)) {
-        // Paste-aware target (agent TUIs, multiplexers like herdr): one atomic write — the
-        // text framed in paste markers plus the Enter — so the composer sees a definitive
-        // paste boundary and the Enter can never be re-chunked into the paste (issue #47).
-        await runAsync(this.tmuxPath, localTmuxSendKeysArgs(TMUX_SOCKET, target, bracketedInjection(text, enter)))
-        return true
-    try {
       if (sshRemote) {
         const ssh = findSsh()
         if (!ssh) return false
@@ -4300,7 +4241,13 @@ export class PtyManager {
       const decision = decideLeadPaneCorrection(paneCount, cfg)
       if (!decision.act || !decision.widthArg) return false
       await runAsync(this.tmuxPath, resizeLeadPaneArgs(TMUX_SOCKET, target, decision.widthArg))
-   * Terminate the foreground agent process group in a node's tmux pane without writing anything
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  /** Terminate the foreground agent process group in a node's tmux pane without writing anything
    * into the terminal. This is intentionally narrower than recycling the session: model switching
    * first stops the harness by PID, then uses the existing recycle path to rebuild the shell with
    * current gateway environment.
@@ -4708,12 +4655,6 @@ export class PtyManager {
     // discovered hidden host/tmux generation must not make an indexed direct PTY stop being plain:
     // dropping that local mapping without taskkill/onExit proof leaks the silent process.
     const sourcePlain = !!live && !live.sessionHost && !live.tmuxBacked && !live.sshRemote
-    // This is a TARGET lease, not an old-backend property. A trusted Windows replacement uses the
-    // host only while persistence is enabled and the bundle exists. Acquire that lease before
-    // touching tmux/plain so another app cannot create the name in the gap. A direct replacement
-    // deliberately holds no host lease, while old host/tmux duplicates are still ended below.
-    const reserveHostReplacement =
-      this.runtimePlatform === 'win32' && settings.tmuxEnabled && hostAvailable
     // This is a TARGET lease, not an old-backend property. Acquire it before touching tmux/plain
     // so another app cannot create the name in the gap, and take it exactly when the REPLACEMENT
     // generation will be host-backed — the same predicate spawnSession's backend selection uses:
