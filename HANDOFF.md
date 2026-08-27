@@ -11,6 +11,8 @@ adds a real per-event audio picker, filename state, preview, replacement, reset,
 validation copy. Sound bytes are stored in the app's settings data rather than a path local to the
 browser client, so Server Edition can replay them on its host through the same renderer.
 
+Implementation source tip: `c54c4e1944bd86b02afa2543291cdfc8377b2a5e`.
+
 The accepted input bound is 8 MB and 30 seconds. Empty, non-audio, malformed, undecodable, and
 overlong selections are rejected without replacing the last valid selection. Clearing an entry
 returns immediately to the built-in synthesized cue. The direct implementation and documentation
