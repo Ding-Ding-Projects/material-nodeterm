@@ -7,7 +7,7 @@ import { platform } from './platform'
 import { renameAtomic, sweepStaleTempFiles, tempNameFor } from './fs-atomic'
 import {
   DEFAULT_PROJECT_ID, EMPTY_WORKSPACE,
-  type BridgeLink, type CanvasNodeState, type Project, type Workspace, type WorkspaceV1
+  type CanvasNodeState, type Link, type Project, type Workspace, type WorkspaceV1
 } from '../shared/types'
 import {
   PROJECT_DIR, PROJECT_FILE, fileToProject, projectToFile, resolveNodes, sameProjectContent,
@@ -1510,7 +1510,7 @@ export class WorkspaceStore {
   }
 
   /**
-   * Every persisted canvas as {id, nodes, bridges} — the raw material the Server Edition derives
+   * Every persisted canvas as {id, nodes, links} — the raw material the Server Edition derives
    * its context-link map from (src/server/context-link.ts). Same three-entry-kind scan as
    * `getNode`, but whole projects rather than one node, because a link edge only means anything
    * alongside the nodes it joins.
@@ -1519,17 +1519,17 @@ export class WorkspaceStore {
    * project.json, so a project whose file has never been read this run is simply absent (it
    * appears after the next load/save, which is also what re-derives the map).
    */
-  persistedCanvases(): Array<{ id: string; nodes: CanvasNodeState[]; bridges?: BridgeLink[] }> {
-    const out: Array<{ id: string; nodes: CanvasNodeState[]; bridges?: BridgeLink[] }> = []
+  persistedCanvases(): Array<{ id: string; nodes: CanvasNodeState[]; links?: Link[] }> {
+    const out: Array<{ id: string; nodes: CanvasNodeState[]; links?: Link[] }> = []
     for (const e of this.index?.entries ?? []) {
       if (e.project) {
         out.push({
           id: e.project.id,
           nodes: stripSharedNodeExec(e.project.nodes),
-          bridges: e.project.bridges
+          links: e.project.links
         })
       } else if (e.cache) {
-        out.push({ id: e.id, nodes: stripSharedNodeExec(e.cache.nodes), bridges: e.cache.bridges })
+        out.push({ id: e.id, nodes: stripSharedNodeExec(e.cache.nodes), links: e.cache.links })
       } else if (e.cwd) {
         const raw = this.lastWritten.get(projectFilePath(e.cwd))
         if (!raw) continue
@@ -1542,7 +1542,7 @@ export class WorkspaceStore {
           out.push({
             id: e.id,
             nodes: resolveNodes(stripSharedNodeExec(f.nodes), e.cwd),
-            bridges: f.bridges
+            links: f.links
           })
         } catch {
           // Corrupt cached content: skip this entry, keep scanning the others.
