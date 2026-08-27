@@ -406,6 +406,9 @@ export const IconAnnotationArrow = () => (
   <svg {...S}>
     <path d="M6 18L18 6" />
     <path d="M10 6h8v8" />
+  </svg>
+)
+
 /** Fullscreen expand — outward diagonal arrows: the maximize toggle's "will fill the viewport"
  *  state (issue #399). Pairs with IconRestoreSize; the two states must not share a glyph. */
 export const IconMaximize = () => (
