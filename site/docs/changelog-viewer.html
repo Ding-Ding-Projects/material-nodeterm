@@ -46,7 +46,7 @@
       <p>Regex evaluation in the search field is local only — nothing is sent anywhere — and every pattern and sample is length-capped before it's ever compiled.</p>
 
       <h2>Verification</h2>
-      <p>The historical entries in <code>site/content/changelog.json</code> are generated directly from <code>CHANGELOG.md</code>'s real entries; a parse that cannot confirm a version, date, and commit drops it rather than emitting a partial or fabricated record. The same file carries a verified <code>currentRelease</code> overlay for the latest published stable build, currently v0.4.120 at commit <code>c682073037fe7b7e34d19568ced6e3d3a9037e22</code>, so the landing site stays current even while the historical changelog window remains compact.</p>
+      <p>The entries in <code>site/content/changelog.json</code> are derived from the repository history for the active Windows scope. The complete <code>CHANGELOG.md</code> remains the canonical audit record. A parse that cannot confirm a version, date, and commit drops the entry rather than emitting a partial or fabricated record. The same file carries a verified <code>currentRelease</code> overlay for the latest published stable build, currently v0.4.120 at commit <code>c682073037fe7b7e34d19568ced6e3d3a9037e22</code>.</p>
 
       <section class="doc-suggested">
         <h2>Suggested articles</h2>

@@ -656,7 +656,7 @@ if (cdnHits.length > 0) {
   for (const file of ALL_SITE_FILES) {
     const rel = relative(REPO_ROOT, file)
     if (rel.endsWith('shared/data.js') || rel.endsWith('shared\\data.js')) continue // UPSTREAM_URL's own definition
-    if (rel.endsWith('changelog.json')) continue // real project history may name eneskirca's Homebrew tap as a historical fact, not a link
+    if (rel.endsWith('changelog.json')) continue // the generated history is checked through its dedicated schema and release assertions
     const text = readFileSync(file, 'utf8')
     const matches = text.match(/eneskirca\/nodeterm/g)
     if (matches) {
