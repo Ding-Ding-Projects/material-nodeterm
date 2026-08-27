@@ -354,8 +354,6 @@ describe('revokeDevice', () => {
     expect(deviceIds()).toEqual([])
   })
 
-  it('a failed revoke rejects to its caller and does not block the next one', async () => {
-    const service = newService()
   it('a failed revoke reports local:false to its caller and does not block the next one', async () => {
     const service = createPairingService()
     // First rename is agent.json's, inside the failing revoke.
