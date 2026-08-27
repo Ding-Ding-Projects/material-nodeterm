@@ -2513,5 +2513,5 @@ run the normal docs-bundle path before claiming a complete packaged surface.
 
 No tests, type checks, lint, reviews, security or accessibility checks, builds, packaging, installer
 execution, runtime interaction, audits, or HuiShots were run, per the issue's explicit boundary.
-The feature jer remains separate from `main` and is intended to remain available for the dedicated
+The feature branch remains separate from `main` and is intended to remain available for the dedicated
 pull request.

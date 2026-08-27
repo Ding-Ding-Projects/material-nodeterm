@@ -112,7 +112,7 @@ later commit, since this file will not be kept in lockstep with every merge).
       scope and local credentials, validates semantic inputs, bounds pagination and response data,
       reports progress and rate limits, supports cancellation, and requires exact destructive
       confirmation. Tests, type checks, lint, reviews, builds, packaging, runtime interaction, and
-      captures remain unverified on the dedicated feature jer.
+      captures remain unverified on the dedicated feature branch.
 
 - [ ] **ADHD modes** — Focus, Low stimulation, Time awareness, One thing at a time, and Momentum
       are all specced in `docs/adhd-modes.md`. Time awareness, Momentum, and the
