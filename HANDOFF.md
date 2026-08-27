@@ -1,5 +1,94 @@
 # Handoff
 
+## 2026-08-27, bundled AWS CLI v2 lane, issue #41
+
+Issue #41 is implemented on `feat/program-30-bundled-aws-cli`, reconciled with
+`origin/main` at `12055e96d66c7e4cfdb143295b78ed20d68fd97e`, and dewed at
+`d60a25fa0f8d4665cc3e898c531cb4440ea72d9b` plus the reconciliation commit recorded below.
+The lane keeps AWS CLI v2 `2.36.32` in the immutable dependency manifest and stages the official
+Windows x64 MSI through `scripts/ensure-aws-cli-resources.mjs`. The resource path checks the
+download size, rejects redirects, verifies SHA-256, and uses a unique staged file before packaging.
+
+The host-owned dependency service checks the packaged resource first, then a verified local cache,
+then the canonical HTTPS source. It extracts the MSI through `msiexec.exe /a` into application-local
+storage, records archive provenance, requires the pinned `aws-cli/2.36.32` version prefix, and
+returns parsed version details. The `nodeDependencyDetails` IPC route also inventories the installed
+`awscli/botocore/data` tree by service and model version, with bounded service and file traversal
+and an incomplete state for missing, empty, or truncated model data. Desktop preload, renderer
+stubs, and Server Edition WebSocket bridges expose the same typed route.
+
+Direct fetch evidence: the official URL returned HTTP 200, a 49,405,952-byte MSI, and SHA-256
+`bc695531b7fd83490e02741777dfda109cfab7fd9bef85fa1d5db21684cbaee2`, matching
+`dependencies.manifest.json`.
+
+Direct documentation is in `docs/features/dependencies/aws-cli-v2.md`, indexed from the dependency
+category. `src/shared/docs-data.ts` contains both the category link and bundled article. The roadmap
+item remains unticked because the full implementation lane has no test, build, package, installer,
+runtime, or UI evidence yet. A bundled-doc generator invocation was attempted but could not start
+because this isolated checkout has no `esbuild` installation; the generated entries were reconciled
+manually and matched the checked-in Markdown bodies.
+
+The reconciliation commit merged `origin/main` non-destructively and kept main's current package
+version, engine range, scripts, package dependencies, and unsigned Squirrel settings. `package.json`
+contains exactly one AWS preparation script and one AWS packaged-resource entry. `package-lock.json`,
+the dependency manifest, installer, IPC, bridge, and shared-type changes from main are retained.
+
+No tests, type checks, lint, reviews, security or accessibility checks, builds, packaging, installer
+execution, runtime interaction, or HuiShots were run, per the issue's explicit ultra-speed boundary.
+The feature jer was not integrated into main and no cleanup was performed in this lane.
+
+## 2026-08-27, AWS CLI model documentation index
+
+Issue #42 is implemented on `feat/program-31-aws-model-docs`. The platform-free
+`src/core/aws-model-documentation.ts` module consumes bounded decoded official AWS CLI service,
+paginator, and waiter models and projects them into deterministic service, command, option,
+paginator, waiter, input, output, and input-skeleton documentation records. It generates official
+`docs.aws.amazon.com` CLI reference links, accepts only allowlisted optional API reference URLs,
+flattens documentation text, rejects malformed source records, duplicate required members, missing
+required shape members, duplicate CLI service tokens, and opaque future shape kinds that cannot be
+represented safely.
+
+The module also provides local plain-text or explicit regular-expression search, guided service,
+command, and section picker models with exact disabled-state reasons, and a strict portable
+selection projection. Only `serviceId`, `commandName`, and the selected documentation section can
+enter schema 3 intent. Installed executable paths, decoded model caches, generated runtime indexes,
+credentials, profiles, provider sessions, account or role identity, endpoints, pagination cursors,
+waiter progress, results, and process state are explicitly omitted.
+
+The article is bundled in `src/shared/docs-data.ts` for the offline documentation browser. The AWS
+service catalog row remains planned for the later executor and typed-wizard lanes, but links to the
+implemented documentation-index article rather than only the program plan.
+
+This lane intentionally did not run tests, type checks, lint, reviews, security checks, accessibility
+checks, builds, packaging, installer execution, runtime interaction, or UI captures. No runtime,
+accessibility, packaged-artifact, or visual correctness verdict is claimed. The later AWS CLI
+inventory lane must supply decoded official models, and the later wizard lane must render the picker
+and shape records as typed controls without adding a blank command textbox.
+
+## 2026-08-27, AWS Universe portal with unlimited instances
+
+Issue #39 is implemented on `feat/program-28-aws-universe`. The renderer now exposes an AWS Universe
+navigator with local plain-text search and an adjacent anchored full regex builder, guided naming,
+keyboard-operable instance selection, and explicit AWS-only scope. Root portal cards open their
+matching child canvas through a real event route. Each child starts with one permanent scope-bound
+Shop node.
+
+Portable project files preserve safe AWS child-canvas intent, node membership, viewport, and
+canvas-owned relationships. Schema 3 projection and hydration keep credentials, profiles, SSO and
+role sessions, CLI paths, local files, process state, caches, and account bindings out of shared
+content. Import remains data-only and validates relationship ownership before accepting the result.
+
+Changed implementation paths include `src/shared/aws-universes.ts`, `src/shared/types.ts`,
+`src/shared/node-catalog.ts`, `src/shared/i18n/catalog.ts`, `src/core/workspace-files.ts`,
+`src/core/portable-canvas-projection.ts`, `src/renderer/state/projects.ts`,
+`src/renderer/components/AwsUniverseNavigator.tsx`, `src/renderer/nodes/AwsUniversePortalNode.tsx`,
+`src/renderer/canvas/Canvas.tsx`, and `src/renderer/styles.md3.css`. Related README, roadmap,
+changelog, offline documentation, and site documentation accompany the implementation.
+
+This lane intentionally did not run tests, type checks, lint, reviews, security checks,
+accessibility checks, builds, packaging, installer execution, runtime interaction, or UI captures.
+Those checks remain unverified and are delegated to a later integration lane.
+
 ## 2026-08-27, Express File Converter completion, issue #21
 
 The implementation lane is `feat/program-10-file-converter`, refreshed by fast-forward before edits

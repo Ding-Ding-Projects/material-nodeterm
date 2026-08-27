@@ -6,10 +6,14 @@ The pan/zoom surface nodeterm is built around, and everything that lives on it.
   what each one is for.
 - [Unified Node Catalog](./node-catalog.md) — the typed registry, guided picker, creation event
   idempotence, availability reasons, and collision-free placement shared by every creation path.
+- [AWS Universe portal](./aws-universe.md) - unlimited AWS-only child canvases, guided navigation,
+  scoped Shop ownership, and portable schema 3 intent.
 - [Photo, Video, and Gallery nodes](./media-gallery.md): content-addressed media, mixed galleries,
   portable byte carriers, local bindings, and explicit missing-asset recovery.
 - [Door-only universe navigation](./door-only-universe-navigation.md) - paired entry and return
   doors, shared refusal of tab and direct-selection bypasses, and safe schema 3 intent.
+- [Interactive Multiverse door construction](./door-construction.md) - guided frame, hinges, panel,
+  handle, activation core, reciprocal door creation, and schema 3 portability.
 - [Wild dim sum node](./wild-dim-sum-node.md) — bounded public-catalog browsing, random published
   dish selection, portable display intent, and published-photo recovery without vendored images.
 - [Multiverse child canvases](./multiverse-canvases.md) - scoped nested canvases, guided hierarchy

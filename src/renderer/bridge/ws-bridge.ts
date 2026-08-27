@@ -1107,6 +1107,7 @@ export function buildNodeDependenciesApi(client: RpcClient): Pick<NodeTerminalAp
   const nodeDependencies: NodeDependenciesApi = {
     catalog: () => client.request(IPC.nodeDependencyCatalog) as ReturnType<NodeDependenciesApi['catalog']>,
     status: (id) => client.request(IPC.nodeDependencyStatus, id) as ReturnType<NodeDependenciesApi['status']>,
+    details: (id) => client.request(IPC.nodeDependencyDetails, id) as ReturnType<NodeDependenciesApi['details']>,
     install: (id) => client.request(IPC.nodeDependencyInstall, id) as ReturnType<NodeDependenciesApi['install']>,
     cancel: (operationId) => client.request(IPC.nodeDependencyCancel, operationId) as ReturnType<NodeDependenciesApi['cancel']>,
     repair: (id) => client.request(IPC.nodeDependencyRepair, id) as ReturnType<NodeDependenciesApi['repair']>,
@@ -1473,6 +1474,18 @@ export function buildPasswordManagerApi(client: RpcClient): Pick<NodeTerminalApi
   return { passwordManager }
 }
 
+/** Build the host-owned Multiverse door-entry vault API. Credential values are sent only for the
+ * immediate configure or verify request and the server returns no stored value. */
+export function buildUniverseDoorEntryApi(client: RpcClient): Pick<NodeTerminalApi, 'universeDoorEntry'> {
+  return {
+    universeDoorEntry: {
+      configure: (input) => client.request(IPC.universeDoorEntryConfigure, input),
+      verify: (input) => client.request(IPC.universeDoorEntryVerify, input),
+      remove: (doorId) => client.request(IPC.universeDoorEntryRemove, doorId)
+    }
+  }
+}
+
 /**
  * Build the `claude` namespace over an RpcClient. `cliCaps` is a REAL handler on the server
  * (`registerClaudeCliIpc` runs in the server shell too), so the browser resolves the very same
@@ -1720,6 +1733,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildToylockApi(client),
     ...buildAuthenticatorApi(client),
     ...buildPasswordManagerApi(client),
+    ...buildUniverseDoorEntryApi(client),
     ...buildGitHubApi(client),
     ...buildClaudeAccountsApi(client),
     codex: buildCodexApi(client),

@@ -271,8 +271,18 @@ intentionally unchecked because this task publishes the plan only.
 - [ ] Add interactive door construction and numeric or passphrase entry. Source components and
       portable intent are present; live navigator wiring remains pending.
 - [x] Add the top-down recovery game with three energy keys, hazards, core activation, and portable state. Source implementation is complete; built-artifact verification remains for integration.
-- [ ] Add unlimited AWS Universes with AWS-only scope and AWS Shop nodes.
-- [ ] Bundle AWS CLI v2 and maintain verified model and documentation indexing.
+- [x] Add unlimited AWS Universes with AWS-only scope, guided navigation, and AWS Shop nodes.
+      Source implementation and delivery records are present; tests, type checks, builds,
+      packaging, runtime interaction, and captures remain explicitly unrun under issue #39's
+      ultra-speed boundary.
+- [ ] Bundle AWS CLI v2 and maintain verified model and documentation indexing. The pinned MSI,
+      verified fallback, version details route, bounded installed-model inventory, feature article,
+      and offline documentation entry are present on the issue #41 jer. Tests, builds, packaging,
+      installer execution, runtime interaction, and HuiShots remain pending, so this item stays
+      unticked.
+- [x] Add the platform-free AWS CLI model documentation index for services, commands, options,
+      paginators, waiters, input and output shapes, and input skeletons. Tests, builds, runtime
+      interaction, and packaged verification remain unrun under issue #42's lane boundary.
 - [ ] Generate interactive wizard forms for every AWS service, command, option, paginator, waiter,
       skeleton, input, and output described by the installed CLI models.
 - [ ] Add AWS identity, SSO, role, MFA, Resource Explorer, Cloud Control, S3, EC2, IAM, STS,
@@ -281,6 +291,10 @@ intentionally unchecked because this task publishes the plan only.
 
 ### Hosting and Cloudflare
 
+- [x] Add the shared hosted-resource backup and restore framework with version, edition, resource,
+      ownership, archive-safety, progress, cancellation, atomic publication, restore-review, and
+      rollback contracts. Source and direct documentation are present; tests, builds, packaging,
+      runtime interaction, and captures remain explicitly unrun under issue #55's ultra-speed boundary.
 - [ ] Add GitLab Server CE and EE hosting profiles with backup, restore, readiness, credential
       handoff, update, rollback, four managed volumes, and private binding. Source and docs are
       present in issue #51; tests, builds, packaging, runtime interaction, and captures remain

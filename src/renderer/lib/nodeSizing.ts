@@ -24,7 +24,8 @@ export const NODE_MIN_SIZES: Record<NodeKind, { width: number; height: number }>
   loop: { width: 180, height: 84 },
   dino: { width: 400, height: 160 },
   'recovery-game': { width: 480, height: 520 },
-  'gitlab-hosting': { width: 560, height: 360 }
+  'gitlab-hosting': { width: 560, height: 360 },
+  'aws-universe': { width: 320, height: 220 }
 }
 
 export interface Rect {

@@ -766,6 +766,11 @@ const api: NodeTerminalApi = {
     listCredentials: (projectId, managerId) =>
       ipcRenderer.invoke(IPC.passwordManagerListCredentials, projectId, managerId)
   },
+  universeDoorEntry: {
+    configure: (input) => ipcRenderer.invoke(IPC.universeDoorEntryConfigure, input),
+    verify: (input) => ipcRenderer.invoke(IPC.universeDoorEntryVerify, input),
+    remove: (doorId) => ipcRenderer.invoke(IPC.universeDoorEntryRemove, doorId)
+  },
   context: {
     onUpdate: (listener) => {
       const handler = (_e: unknown, payload: Parameters<typeof listener>[0]) => listener(payload)
@@ -1121,6 +1126,7 @@ const api: NodeTerminalApi = {
   nodeDependencies: {
     catalog: () => ipcRenderer.invoke(IPC.nodeDependencyCatalog),
     status: (id) => ipcRenderer.invoke(IPC.nodeDependencyStatus, id),
+    details: (id) => ipcRenderer.invoke(IPC.nodeDependencyDetails, id),
     install: (id) => ipcRenderer.invoke(IPC.nodeDependencyInstall, id) as Promise<NodeDependencyInstallResult>,
     cancel: (operationId) => ipcRenderer.invoke(IPC.nodeDependencyCancel, operationId),
     repair: (id) => ipcRenderer.invoke(IPC.nodeDependencyRepair, id) as Promise<NodeDependencyInstallResult>,

@@ -19,6 +19,7 @@ import type { ProjectIcon } from './project-icon'
 import type { ShortcutMap } from './shortcuts'
 import { DEFAULT_SHORTCUTS } from './shortcuts'
 import type { FunnyLevel, LanguageMode } from './i18n/types'
+import type { PortableDoorConstructionV3 } from './door-construction'
 import type { VsCodeInstall, VsCodeOpenResult } from './vscode'
 import type { HistoryFilters, HistoryListResult, HistoryRestoreResult } from './local-history'
 import type { CalendarApi, CalendarNodeConfig } from './calendar'
@@ -383,6 +384,8 @@ export type NodeKind =
   // intentionally a distinct kind so the canvas can refuse deletion, duplication, grouping, and
   // cross-universe movement at every mutation boundary.
   | 'shop'
+  // AWS Universe portal. The portal is a safe project intent and never carries provider state.
+  | 'aws-universe'
   // A GUI for authoring a Windows NSIS installer script for ANOTHER project (not this app's
   // own installer, which stays Squirrel.Windows — see CLAUDE.md's Packaging section). See
   // `NsisSpec`/`NsisLocalPaths` in `./nsis-form-types` for the shared-vs-machine-local split.
@@ -1044,6 +1047,16 @@ export interface ProjectChildCanvas {
   order: number
   viewport?: Viewport
   nodes: CanvasNodeState[]
+  bridges?: BridgeLink[]
+  ropes?: BridgeLink[]
+}
+
+/** Narrow AWS Universe view over the shared child-canvas projection. */
+export type ProjectAwsUniverseCanvas = ProjectChildCanvas & {
+  scope: 'aws-universe'
+  parentCanvasId: 'root'
+  depth: 1
+  viewport: Viewport
 }
 
 /** Safe portal intent shared by the runtime project and schema 3 projection. */
@@ -1056,6 +1069,9 @@ export interface ProjectPortalState {
   title: string
   depth: number
   status: 'open' | 'closed'
+  /** Safe construction intent for each side. Credentials and runtime bindings are never stored. */
+  entryConstruction?: PortableDoorConstructionV3
+  returnConstruction?: PortableDoorConstructionV3
 }
 
 /** A project is one canvas/page: its own nodes, viewport, and default working dir. */
@@ -1552,6 +1568,8 @@ export interface WorkspaceApi {
       schedules: import('./planner-occurrences').PlannerSchedule[]
     }
     restoredTo?: string
+    /** Non-fatal portal metadata repairs applied while preserving child content. */
+    repairs?: Array<{ portalId?: string; canvasId?: string; action: string; detail: string; preservedNodeIds: string[] }>
   }>
   /** Hand out the next unlock-ladder question for a rate-limited protected project file. `null`
    *  means no ladder is on offer (no wait to end, this climb already failed to the bottom, or the
@@ -4543,6 +4561,25 @@ export interface PasswordManagerApi {
   listCredentials(projectId: string, managerId: string): Promise<ListCredentialsResult>
 }
 
+/** Portal-door entry uses a separate host-owned local vault, never toy-lock state. Values cross
+ * the protected renderer boundary only for the immediate configure or verify call and are never
+ * returned, projected, logged, or exported. */
+export interface UniverseDoorEntryApi {
+  configure(input: {
+    doorId: string
+    method: 'numeric-code' | 'passphrase'
+    value: string
+    numericCodeDigits?: number
+    passphraseMinLength?: number
+  }): Promise<{ ok: true; credentialKey: string } | { ok: false; error: string }>
+  verify(input: {
+    doorId: string
+    method: 'numeric-code' | 'passphrase'
+    value: string
+  }): Promise<{ verified: true } | { verified: false; reason: string }>
+  remove(doorId: string): Promise<void>
+}
+
 export interface TimerApi {
   occurrences(): Promise<import('./timer').TimerOccurrence[]>
   schedule(timerId: string, scheduledAt: number): Promise<import('./timer').TimerOccurrence | null>
@@ -4659,6 +4696,8 @@ export interface NodeTerminalApi {
   toylock: ToylockApi
   authenticator: AuthenticatorApi
   passwordManager: PasswordManagerApi
+  /** Host-owned portal-door entry vault. This is deliberately separate from toy locks. */
+  universeDoorEntry: UniverseDoorEntryApi
   /** "Escape to widget" — one node's session in its own always-on-top-configurable window. */
   canvasWidget: CanvasWidgetApi
   shortcuts: ShortcutsApi

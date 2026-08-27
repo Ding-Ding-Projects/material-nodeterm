@@ -16,6 +16,7 @@ import {
 import {
   GITLAB_HOSTING_IMAGES,
   GITLAB_HOSTING_VOLUME_ROLES,
+  gitlabBackupResourceDescriptor,
   isGitLabHostingConfig,
   type GitLabBackupSummary,
   type GitLabCredentialHandoff,
@@ -23,6 +24,7 @@ import {
   type GitLabHostingConfig,
   type GitLabHostingStatus
 } from '../../shared/gitlab-hosting'
+import { validateBackupArchivePath } from '../../shared/backup-restore'
 
 const execFileAsync = promisify(execFile)
 const SAFE_CONTEXT = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/
@@ -212,11 +214,11 @@ function validateGitLabAction(action: GitLabHostingAction): GitLabHostingAction 
   contextArgs(action.context, [])
   gitlabContainerName(action.nodeId)
   if (action.type === 'deploy' || action.type === 'update') validateGitLabConfig(action.config)
-  if (action.type === 'restore') safeName(action.backupId, 'The backup')
+  if (action.type === 'restore') validateBackupArchivePath(action.backupId)
   return action
 }
 
-function gitlabRunArgs(action: GitLabHostingAction): { label: string; steps: string[][] } {
+async function gitlabRunArgs(action: GitLabHostingAction): Promise<{ label: string; steps: string[][] }> {
   validateGitLabAction(action)
   const container = gitlabContainerName(action.nodeId)
   const volumes = gitlabVolumeNames(action.nodeId)
@@ -249,8 +251,11 @@ function gitlabRunArgs(action: GitLabHostingAction): { label: string; steps: str
       }
     case 'backup':
       return { label: 'Back up GitLab server', steps: [['exec', container, 'gitlab-backup', 'create']] }
-    case 'restore':
+    case 'restore': {
+      const backups = await gitlabBackups(action.context, action.nodeId)
+      if (!backups.some((backup) => backup.id === action.backupId)) throw new Error('The selected backup is no longer present for this GitLab resource. Refresh and choose it again.')
       return { label: 'Restore GitLab backup', steps: [['exec', container, 'gitlab-backup', 'restore', `BACKUP=${action.backupId}`, 'force=yes']] }
+    }
     case 'update':
       return {
         label: `Update GitLab ${action.config.edition.toUpperCase()} server`,
@@ -307,13 +312,18 @@ async function gitlabStatus(context: string, nodeId: string): Promise<GitLabHost
 
 async function gitlabBackups(context: string, nodeId: string): Promise<GitLabBackupSummary[]> {
   const container = gitlabContainerName(nodeId)
+  const status = await gitlabStatus(context, nodeId)
+  const image = GITLAB_HOSTING_IMAGES.find((candidate) => candidate.ref === status.image)
+  if (!status.edition || !image) throw new Error('GitLab backup metadata is unavailable until the managed image and edition are verified.')
+  const resource = gitlabBackupResourceDescriptor(nodeId, status.edition, image.version)
   const raw = await docker(context, ['exec', container, 'find', '/var/opt/gitlab/backups', '-maxdepth', '1', '-type', 'f', '-printf', '%f\\t%s\\t%T@\\n'], 15_000)
   return raw.split(/\r?\n/).filter(Boolean).flatMap((line) => {
     const [filename, size, mtime] = line.split('\t')
     if (!filename || !SAFE_BACKUP_ID.test(filename)) return []
+    try { validateBackupArchivePath(filename) } catch { return [] }
     const sizeBytes = Number(size)
     const createdAt = Number(mtime)
-    return [{ id: filename, filename, sizeBytes: Number.isFinite(sizeBytes) ? sizeBytes : null, createdAt: Number.isFinite(createdAt) ? Math.round(createdAt * 1000) : null }]
+    return [{ id: filename, filename, sizeBytes: Number.isFinite(sizeBytes) ? sizeBytes : null, createdAt: Number.isFinite(createdAt) ? Math.round(createdAt * 1000) : null, resource }]
   }).sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0)).slice(0, 200)
 }
 
@@ -426,7 +436,7 @@ export function registerDockerHostManager(win: BrowserWindow): { dispose(): void
   }
 
   const runGitLab = async (action: GitLabHostingAction): Promise<{ jobId: string }> => {
-    const plan = gitlabRunArgs(action)
+    const plan = await gitlabRunArgs(action)
     const jobId = randomUUID()
     send({ jobId, phase: 'queued', label: plan.label, completedSteps: 0, totalSteps: plan.steps.length, message: 'Queued.' })
     const runStep = (args: string[], step: number): Promise<number> => new Promise((resolve, reject) => {

@@ -8,6 +8,12 @@ Choose a discovered local or SSH Docker context, then choose Community Edition o
 
 The lifecycle controls are Deploy, Back up, Restore, Update, and Roll back. Restore and rollback use the existing two-key destructive confirmation surface. Backups are enumerated from the managed backup volume, and a backup must be selected from that list before restore is enabled. Long-running actions report queued, running, completed, failed, and cancelled states with progress.
 
+GitLab backup rows carry the shared hosted-resource backup framework descriptor, including product
+version, edition, service kind, source, ownership, and resource identity. Backup identifiers pass
+the shared safe archive-path validator before they can reach Docker. Restore rechecks that the
+selected backup still belongs to the current verified GitLab resource before invoking the native
+GitLab restore operation.
+
 After readiness, the user may request one initial root credential handoff. The password is read in memory from GitLab's one-time file and returned only to the active UI. It is never logged, persisted, exported, broadcast as progress, or written into the project file. The UI makes the expiry and one-session visibility explicit.
 
 ## Portable and local state

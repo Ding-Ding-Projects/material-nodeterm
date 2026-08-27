@@ -722,6 +722,20 @@ privileged and socket mounts, default network to none and the project bind to re
 only the labelled random-name container the session created. Relay PTYs must be `docker exec`, never
 the local profile with a Docker-looking label painted over it.
 
+### Hosted-resource backup and restore
+
+Use `src/shared/backup-restore.ts` for every hosted-service backup contract. A manifest must record
+the framework schema, product, resource id and kind, edition, source, ownership evidence, version,
+payload hashes, byte totals, and explicit omissions. Credentials, provider sessions, machine paths,
+host identifiers, process state, caches, and generated runtime data never travel in the archive.
+
+Use `src/core/backup-restore.ts` for bounded ZIP framing and atomic local publication. Restore code
+must show the compatibility and ownership review before calling a provider, stage and validate
+before publication, report byte-aware progress and cancellation, and retain an expiry-bound rollback
+contract. Every list and picker added by a hosting node gets its own plain-text search and adjacent
+anchored regex builder, with a concrete disabled reason when verified metadata or review is absent.
+The framework intentionally does not deploy or mutate a provider on import.
+
 Two files, two audiences:
 
 - **`CONTRIBUTING.md`** (this file) — what another human needs before touching the code.

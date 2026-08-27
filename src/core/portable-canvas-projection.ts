@@ -15,6 +15,7 @@ import { validatePortableMediaManifest } from './portable-media-assets'
 import { normalizeMediaReference, type MediaAssetReference } from '../shared/media-catalog'
 import { MAX_MULTIVERSE_DEPTH, repairUniverseShops } from './universe-shop'
 import { validatePortableUniverseDoors, type PortableUniverseDoorV3 } from './universe-door-navigation'
+import { createPortableUniverseDoorPair } from './universe-door-navigation'
 import { normalizePublicDimSumSelection, type PublicDimSumSelection } from '../shared/public-dim-sum'
 import { validateHomeAssistantControlConfig, type HomeAssistantControlConfig } from '../shared/home-assistant-control'
 import { validateHomeAssistantSensorConfig, type HomeAssistantSensorConfig } from '../shared/home-assistant-sensor'
@@ -389,6 +390,12 @@ function relationships(project: Project): PortableRelationshipV3[] {
     append(canvas.id, 'bridge', canvas.bridges)
     append(canvas.id, 'rope', canvas.ropes)
   }
+  const multiverseIds = new Set((project.multiverseCanvases ?? []).map((canvas) => canvas.id))
+  for (const canvas of project.childCanvases ?? []) {
+    if (multiverseIds.has(canvas.id)) continue
+    append(canvas.id, 'bridge', canvas.bridges)
+    append(canvas.id, 'rope', canvas.ropes)
+  }
   return all.sort((a, b) => a.kind.localeCompare(b.kind) || a.order - b.order || a.id.localeCompare(b.id)).map((link, order) => ({ ...link, order }))
 }
 
@@ -432,7 +439,19 @@ export function projectToPortableCanvasV3(project: Project, input: PortableCanva
   const icon = project.icon && sanitizeProjectIcon(project.icon)
   const portableIcon = icon?.type === 'emoji' ? { type: icon.type, name: icon.emoji } : icon ? { type: icon.type, name: icon.name } : undefined
   const doorCanvasIds = new Set(canvases.map((canvas) => canvas.id))
-  const doors = input.doors === undefined ? undefined : validatePortableUniverseDoors(input.doors, doorCanvasIds)
+  const derivedDoors = input.doors === undefined
+    ? project.portals?.flatMap((portal) => createPortableUniverseDoorPair({
+      entryDoorId: portal.entryDoorId,
+      returnDoorId: portal.returnDoorId,
+      parentCanvasId: portal.parentCanvasId,
+      childCanvasId: portal.childCanvasId,
+      entryLabel: portal.title,
+      returnLabel: `Return to ${portal.title}`,
+      ...(portal.entryConstruction ? { entryConstruction: portal.entryConstruction } : {}),
+      ...(portal.returnConstruction ? { returnConstruction: portal.returnConstruction } : {})
+    }))
+    : input.doors
+  const doors = derivedDoors === undefined ? undefined : validatePortableUniverseDoors(derivedDoors, doorCanvasIds)
   const planner = input.planner === undefined ? undefined : plannerDefinitionsToPortable(input.planner)
   const portalInput = input.portals ?? project.portals
   const portals = portalInput === undefined ? undefined : validatePortablePortals(portalInput, canvases)
@@ -524,6 +543,9 @@ export function validatePortableCanvasProjectionV3(value: unknown): PortableCanv
     })()
     if (canvas.scope === 'multiverse' && (canvas.depth === undefined || measuredDepth < 1 || measuredDepth > MAX_MULTIVERSE_DEPTH)) {
       throw new PortableProjectV3Error('manifest', `Multiverse canvases require a persisted depth from 1 through ${MAX_MULTIVERSE_DEPTH}.`)
+    }
+    if (canvas.scope === 'aws-universe' && (canvas.parentCanvasId !== value.rootCanvasId || canvas.depth !== 1 || measuredDepth !== 1)) {
+      throw new PortableProjectV3Error('manifest', 'AWS Universe canvases must be direct root children at depth 1.')
     }
     if (canvas.depth !== undefined && canvas.depth !== measuredDepth) throw new PortableProjectV3Error('manifest', 'Portable canvas depth does not match its containing canvas chain.')
   }
@@ -673,7 +695,9 @@ export function portableCanvasProjectionToProject(
            title: canvas.title,
            order: canvas.order,
            ...(canvas.viewport ? { viewport: { ...canvas.viewport } } : {}),
-             nodes: canvas.nodeIds.map((nodeId) => nodeById.get(nodeId)).filter((node): node is CanvasNodeState => !!node)
+           nodes: canvas.nodeIds.map((nodeId) => nodeById.get(nodeId)).filter((node): node is CanvasNodeState => !!node),
+           bridges: value.relationships.filter((link) => link.kind === 'bridge' && link.canvasId === canvas.id).map((link) => ({ id: link.id, source: link.source, target: link.target })),
+           ropes: value.relationships.filter((link) => link.kind === 'rope' && link.canvasId === canvas.id).map((link) => ({ id: link.id, source: link.source, target: link.target }))
          }))
      } : {}),
      ...(value.portals ? { portals: value.portals } : {})

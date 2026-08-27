@@ -28,6 +28,7 @@ import type { BridgeLink, CanvasNodeState, NavStop, Project, ProjectKanban, View
 import { projectCapabilityFields, readProjectCapabilities } from '../shared/project-capabilities'
 import { loadedAgentBrowserPartition } from '../shared/browser-partition'
 import { sanitizeProjectIcon, type ProjectIcon } from '../shared/project-icon'
+import { validatePortableDoorConstruction } from '../shared/door-construction'
 import { validateCalendarConfig } from '../shared/calendar'
 
 /**
@@ -358,6 +359,7 @@ function validChildCanvases(value: unknown, _projectId: string): ProjectChildCan
       typeof candidate.order !== 'number' || !Number.isFinite(candidate.order) ||
       !Array.isArray(candidate.nodes)
     ) continue
+    if (candidate.scope === 'aws-universe' && (candidate.parentCanvasId !== 'root' || candidate.depth !== 1)) continue
     const viewport = candidate.viewport && typeof candidate.viewport === 'object' &&
       typeof candidate.viewport.x === 'number' && Number.isFinite(candidate.viewport.x) &&
       typeof candidate.viewport.y === 'number' && Number.isFinite(candidate.viewport.y) &&
@@ -372,7 +374,9 @@ function validChildCanvases(value: unknown, _projectId: string): ProjectChildCan
       title: candidate.title,
       order: candidate.order,
       ...(viewport ? { viewport } : {}),
-      nodes: candidate.nodes.filter((node): node is CanvasNodeState => !!node && typeof node === 'object' && typeof node.id === 'string' && typeof node.kind === 'string')
+      nodes: candidate.nodes.filter((node): node is CanvasNodeState => !!node && typeof node === 'object' && typeof node.id === 'string' && typeof node.kind === 'string'),
+      ...(Array.isArray(candidate.bridges) ? { bridges: candidate.bridges } : {}),
+      ...(Array.isArray(candidate.ropes) ? { ropes: candidate.ropes } : {})
     })
   }
   return result.length > 0 ? result : undefined
@@ -382,9 +386,14 @@ function validPortals(value: unknown): value is ProjectPortalState[] {
   return Array.isArray(value) && value.every((item) => {
     if (!item || typeof item !== 'object' || Array.isArray(item)) return false
     const portal = item as Partial<ProjectPortalState>
-    return [portal.id, portal.parentCanvasId, portal.childCanvasId, portal.entryDoorId, portal.returnDoorId, portal.title].every((part) => typeof part === 'string' && part.length > 0) &&
-      typeof portal.depth === 'number' && Number.isInteger(portal.depth) && portal.depth > 0 &&
-      (portal.status === 'open' || portal.status === 'closed')
+    if (![portal.id, portal.parentCanvasId, portal.childCanvasId, portal.entryDoorId, portal.returnDoorId, portal.title].every((part) => typeof part === 'string' && part.length > 0) ||
+      typeof portal.depth !== 'number' || !Number.isInteger(portal.depth) || portal.depth <= 0 ||
+      (portal.status !== 'open' && portal.status !== 'closed')) return false
+    try {
+      if (portal.entryConstruction !== undefined) validatePortableDoorConstruction(portal.entryConstruction)
+      if (portal.returnConstruction !== undefined) validatePortableDoorConstruction(portal.returnConstruction)
+      return true
+    } catch { return false }
   })
 }
 

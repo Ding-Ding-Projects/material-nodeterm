@@ -1,3 +1,9 @@
+import {
+  BACKUP_RESTORE_SCHEMA,
+  BACKUP_RESTORE_SCHEMA_VERSION,
+  type BackupRestoreResourceDescriptor
+} from './backup-restore'
+
 /**
  * Typed, guided contract for the local GitLab Server hosting node.
  *
@@ -58,6 +64,29 @@ export function gitlabHostingImage(edition: GitLabEdition): GitLabHostingImage {
   return GITLAB_HOSTING_IMAGES.find((image) => image.edition === edition) ?? GITLAB_HOSTING_IMAGES[0]
 }
 
+/** Shared hosted-resource metadata used to review GitLab backups before restore. */
+export const GITLAB_BACKUP_FRAMEWORK = {
+  schema: BACKUP_RESTORE_SCHEMA,
+  schemaVersion: BACKUP_RESTORE_SCHEMA_VERSION
+} as const
+
+export function gitlabBackupResourceDescriptor(
+  nodeId: string,
+  edition: GitLabEdition,
+  version: string
+): BackupRestoreResourceDescriptor {
+  return {
+    resourceId: `gitlab:${nodeId}`,
+    displayLabel: 'GitLab Server',
+    kind: 'service',
+    edition: edition === 'ee' ? 'enterprise' : 'community',
+    version: { product: 'GitLab', version, schema: 1 },
+    source: 'host',
+    ownership: 'owned',
+    ownerId: `nodeterm:${nodeId}`
+  }
+}
+
 export function isGitLabHostingConfig(value: unknown): value is GitLabHostingConfig {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
   const candidate = value as Partial<GitLabHostingConfig>
@@ -107,6 +136,7 @@ export interface GitLabBackupSummary {
   filename: string
   createdAt: number | null
   sizeBytes: number | null
+  resource: BackupRestoreResourceDescriptor
 }
 
 /** The first root password is returned only to the active UI and never persisted or broadcast. */
