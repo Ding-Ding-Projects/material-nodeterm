@@ -1732,10 +1732,12 @@ Already present via convergence or the concurrent session: **#112 #189 #113 #156
 
 Three deliberate exclusions, with reasons — do not "finish" these without revisiting the reasoning:
 
-- **#111 psmux — skipped.** This fork already has its own Windows persistence backend (the session
-  host: ~4,000 lines, protocol v2, ConPTY, process-tree termination; `sessionHost` appears 62 times
-  in `pty-manager.ts`). psmux is a competing implementation of the same job. Its **NSIS packaging
-  commit `daecb26e` is excluded permanently** — Squirrel is the only Windows installer path here.
+- **#111 psmux discovery — implemented on `feat/program-64-psmux-discovery`.** The resolver now
+  checks `tmux` then the tmux-compatible `psmux` executable through Windows `PATHEXT`, and the
+  missing-multiplexer banner offers the exact Windows Package Manager install action when it is
+  available. The standalone Windows session host remains the fallback when neither executable is
+  installed. PR #111's **NSIS packaging commit `daecb26e` remains excluded permanently** because
+  Squirrel is the only Windows installer path here.
 - **#98 — skipped, superseded.** `main` has `send`/`reply`/`status` persistent inter-agent messaging
   with authenticated routes and safe-turn-boundary delivery; #98's `notify` is a weaker fixed-prompt
   predecessor of it.
