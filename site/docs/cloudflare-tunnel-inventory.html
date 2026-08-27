@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Cloudflare Tunnel inventory | nodeterm</title>
+    <meta name="description" content="Bounded Cloudflare Tunnel inventory, preserved routes, hostname conflict review, and explicit DNS adoption.">
+    <link rel="stylesheet" href="../styles.css">
+  </head>
+  <body>
+    <main class="docs-page">
+      <p><a href="./index.html">Documentation</a></p>
+      <h1>Cloudflare Tunnel inventory</h1>
+      <p>This manager reads bounded tunnel, route, and DNS inventories through the documented API.
+        It preserves existing ingress routes and requires explicit review for hostname conflicts or
+        DNS adoption. It is not the primary application runtime.</p>
+      <h2>Guided configuration</h2>
+      <p>Select an account, zone, and tunnel from the refreshed inventory, then choose a hostname,
+        path, and origin service. The privileged host process validates each value again before
+        sending a fixed request. Search fields are plain-text-first and each has its own anchored
+        regex builder.</p>
+      <h2>DNS adoption</h2>
+      <p>Choose <strong>Adopt existing</strong> to retain a matching CNAME, <strong>Leave
+        unmanaged</strong> to make no ownership claim, or <strong>Replace after confirmation</strong>
+        for one exact record. Replacement requires the application two-key confirmation and the
+        text <code>ADOPT &lt;hostname&gt;</code>. Unrelated records remain unchanged.</p>
+      <h2>Portable intent and local credentials</h2>
+      <p>Portable schema 3 intent contains only route presentation choices. Account, zone, tunnel,
+        DNS ids, tokens, sessions, paths, caches, and live state remain local. Import performs no
+        network or provider operation. Tokens are selected from the existing Cloudflare core
+        credential manager and never copied into the tunnel manager.</p>
+      <h2>Verification</h2>
+      <p>Issue #59's ultra-speed lane intentionally did not run tests, type checks, lint, reviews,
+        security or accessibility checks, builds, packaging, installer execution, runtime
+        interaction, or UI captures. Source implementation is not packaged-runtime proof.</p>
+    </main>
+  </body>
+</html>

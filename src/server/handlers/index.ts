@@ -20,6 +20,7 @@ import { registerProviderServicesIpc } from '../../core/provider-services'
 import { registerHomeAssistantIpc } from '../../core/home-assistant/register-ipc'
 import { registerHomeAssistantControlIpc } from '../../core/home-assistant-control/register-ipc'
 import { registerHomeAssistantSensorIpc } from '../../core/home-assistant-sensor/register-ipc'
+import { registerCloudflareTunnelIpc } from '../../core/cloudflare/register-ipc'
 import { registerCloudflareZeroTrustIpc } from '../../core/cloudflare-zero-trust/service'
 import { registerAwsIdentityIpc } from '../../core/aws-identity'
 import type { MinecraftServerManager } from '../../core/minecraft/server-manager'
@@ -93,11 +94,12 @@ export function registerCoreHandlers(
   registerTorrentIpc(platform)
   const { manager: virtualMachineManager } = registerVirtualMachineIpc(platform)
   registerCalendarIpc(platform)
-  registerCloudflareCoreManagersIpc(platform)
+  const cloudflareCoreManagers = registerCloudflareCoreManagersIpc(platform)
   registerProviderServicesIpc(platform)
   registerHomeAssistantIpc(platform)
   registerHomeAssistantControlIpc(platform)
   registerHomeAssistantSensorIpc(platform)
+  registerCloudflareTunnelIpc(platform, cloudflareCoreManagers)
   registerCloudflareZeroTrustIpc(platform)
   registerAwsIdentityIpc(platform, {
     resolveAwsCli: async () => {

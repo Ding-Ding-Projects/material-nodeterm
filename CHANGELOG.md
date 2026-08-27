@@ -36,6 +36,13 @@
   and pagination, supports cancellation and progress, and uses destructive confirmation. No tests,
   type checks, lint, builds, packaging, runtime interaction, reviews, accessibility or security
   checks, or captures were run in this ultra-speed lane.
+- Add the typed Cloudflare Tunnel inventory and route manager. It reads bounded tunnel, ingress,
+  and DNS records, preserves existing routes, reports hostname conflicts, and supports explicit
+  CNAME adoption or one-record replacement behind the existing two-key confirmation. Portable
+  schema 3 intent excludes account, zone, tunnel, DNS ids, credentials, provider sessions, paths,
+  caches, and live state. The ultra-speed lane intentionally did not run tests, type checks, lint,
+  reviews, security or accessibility checks, builds, packaging, installer execution, runtime
+  interaction, or UI captures.
 
 - Mount the seven AWS core-service routes on the shared AWS manager: S3, EC2, IAM, STS, Lambda,
   CloudWatch, and CloudWatch Logs. Typed operation controls now cover bounded reads, selected writes,

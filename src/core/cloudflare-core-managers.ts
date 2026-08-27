@@ -316,6 +316,16 @@ export class CloudflareCoreManagers implements CloudflareCoreManagersApi {
     return entries.map(({ meta }) => ({ id: meta.id, label: meta.label, accountId: meta.accountId, createdAt: meta.createdAt, updatedAt: meta.updatedAt })).sort((a, b) => a.label.localeCompare(b.label))
   }
 
+  /** Core-only token lookup shared by the Tunnel inventory; never register this over IPC. */
+  async tokenForAccount(accountId: string): Promise<string> {
+    const target = id(accountId, 'Account id')
+    const entry = (await this.credentialStore.load()).find((candidate) => candidate.meta.accountId === target)
+    if (!entry) throw new Error('Choose a local Cloudflare credential with this account id before using tunnels.')
+    const secret = this.credentialStore.unseal<CloudflareCredentialSecret>(entry.secretEnc)
+    if (!secret || typeof secret.apiToken !== 'string' || secret.apiToken.length < 16) throw new Error('The selected Cloudflare credential is unavailable.')
+    return secret.apiToken
+  }
+
   async saveCredential(input: { label: string; token: string; accountId?: string | null }): Promise<CloudflareCredentialSummary> {
     const label = requiredText(input.label, 'Credential label', 256)
     const token = requiredText(input.token, 'Cloudflare API token', 4096)

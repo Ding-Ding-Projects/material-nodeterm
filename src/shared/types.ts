@@ -433,6 +433,7 @@ export type NodeKind =
   | 'homeassistant-sensor'
   | 'freepbx'
   | 'open-webui-hosting'
+  | 'cloudflare-tunnel'
   | 'awsidentity'
   | 'nextcloud-aio'
   /** Managed Nextcloud profile with PostgreSQL, Redis, and no container-runtime socket. */
@@ -457,6 +458,7 @@ export const SERVICE_NODE_KINDS = [
   'gitlab',
   'homeassistant',
   'freepbx',
+  'cloudflare-tunnel',
   'awsidentity',
   'cloudflare-zero-trust',
   'nextcloud-aio',
@@ -4721,6 +4723,8 @@ export interface NodeTerminalApi {
   workspace: WorkspaceApi
   /** Shared provider-account, credential-vault, OAuth-callback, and resource-picker services. */
   providerServices: import('./provider-services').ProviderServicesApi
+  /** Host-owned Cloudflare tunnel inventory, route preservation, and reviewed DNS adoption. */
+  cloudflareTunnels: import('./cloudflare-tunnels').CloudflareTunnelApi
   /** Typed Cloudflare Access, Zero Trust, Workers, Pages, R2, D1 and Queues managers. */
   cloudflareZeroTrust: import('./cloudflare-zero-trust').CloudflareApi
   timer: TimerApi

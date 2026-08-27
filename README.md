@@ -33,6 +33,19 @@ published 2026-08-26 at 17:32:49 UTC.
 > target is Windows x64. The browser-based Server Edition and the separate mobile companion are
 > different surfaces with different deployment and verification boundaries.
 
+## Cloudflare Tunnel inventory
+
+The Cloudflare Tunnel manager offers a bounded, searchable inventory of tunnels, ingress routes,
+and DNS records. Route saves preserve existing ingress rules. Hostname conflicts are shown before
+mutation, and DNS adoption is an explicit reviewed action; replacing one record requires the
+existing two-key confirmation. Portable schema 3 intent carries route choices only, while account
+ids, provider sessions, credentials, paths, caches, and live state remain local. See the
+[Cloudflare Tunnel article](docs/features/remote/cloudflare-tunnel-inventory.md).
+
+This is a fork of [eneskirca/nodeterm](https://github.com/eneskirca/nodeterm). The site's own
+custom domain belongs to the upstream repository, so this fork publishes its documentation at
+[ding-ding-projects.github.io/material-nodeterm](https://ding-ding-projects.github.io/material-nodeterm/)
+instead — note the trailing `/material-nodeterm/`.
 ## Install
 
 The latest verified release baseline for this document is **v0.4.120**:

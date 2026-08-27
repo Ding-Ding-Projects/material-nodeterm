@@ -10,6 +10,7 @@ import { MinecraftServerPanel } from '../components/minecraft/MinecraftServerPan
 import { AwsIdentityManager } from '../components/aws/AwsIdentityManager'
 import { DockerHostManagerPanel } from '../components/docker/DockerHostManagerPanel'
 import { HomeAssistantPanel } from '../components/home-assistant/HomeAssistantPanel'
+import { CloudflareTunnelInventoryPanel } from '../components/cloudflare/CloudflareTunnelInventoryPanel'
 import { CloudflareZeroTrustPanel } from '../components/cloudflare/CloudflareZeroTrustPanel'
 import { NextcloudAioPanel } from '../components/nextcloud/NextcloudAioPanel'
 import { NextcloudManagedPanel } from '../components/nextcloud/NextcloudManagedPanel'
@@ -58,6 +59,7 @@ const ENDPOINT_PLACEHOLDER: Record<ServiceNodeKind, string> = {
   gitlab: 'https://gitlab.example.com',
   homeassistant: 'http://homeassistant.local:8123',
   freepbx: 'https://pbx.local',
+  'cloudflare-tunnel': 'https://api.cloudflare.com/client/v4',
   awsidentity: 'https://sts.amazonaws.com',
   'cloudflare-zero-trust': 'https://api.cloudflare.com',
   'nextcloud-aio': 'http://127.0.0.1:8080',
@@ -264,6 +266,10 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
           />
         )}
 
+        {!collapsed && kind === 'cloudflare-tunnel' && (
+          <CloudflareTunnelInventoryPanel nodeId={id} />
+        )}
+
         {!collapsed && kind === 'cloudflare-zero-trust' && (
           <CloudflareZeroTrustPanel
             nodeId={id}
@@ -272,7 +278,7 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
           />
         )}
 
-        {!collapsed && kind !== 'minecraft' && kind !== 'dockerhost' && kind !== 'homeassistant' && kind !== 'awsidentity' && kind !== 'cloudflare-zero-trust' && kind !== 'nextcloud-aio' && kind !== 'nextcloud-managed' && (
+        {!collapsed && kind !== 'minecraft' && kind !== 'dockerhost' && kind !== 'homeassistant' && kind !== 'cloudflare-tunnel' && kind !== 'awsidentity' && kind !== 'cloudflare-zero-trust' && kind !== 'nextcloud-aio' && kind !== 'nextcloud-managed' && kind !== 'open-webui-hosting' && kind !== 'gitlab-hosting' && kind !== 'cloudflare-core-managers' && (
           <div className="service-node__body">
             <label className="service-node__field" htmlFor={`${id}-endpoint`}>
               <span className="service-node__field-label">{vocab('Address')}</span>

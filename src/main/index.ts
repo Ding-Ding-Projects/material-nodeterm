@@ -69,6 +69,7 @@ import { registerCloudflareCoreManagersIpc } from '../core/cloudflare-core-manag
 import { registerHomeAssistantIpc } from '../core/home-assistant/register-ipc'
 import { registerHomeAssistantControlIpc } from '../core/home-assistant-control/register-ipc'
 import { registerHomeAssistantSensorIpc } from '../core/home-assistant-sensor/register-ipc'
+import { registerCloudflareTunnelIpc } from '../core/cloudflare/register-ipc'
 import { registerCloudflareZeroTrustIpc } from '../core/cloudflare-zero-trust/service'
 import { AtomicJsonArrayStore } from '../core/atomic-json-store'
 import { TimerOccurrenceService } from '../core/timer-service'
@@ -2397,10 +2398,11 @@ app.whenReady().then(async () => {
   virtualMachineManager = registerVirtualMachineIpc(corePlatform).manager
   registerCalendarIpc(corePlatform)
   registerCdkHandlers(ipcMain, process.resourcesPath, app.getPath('userData'))
-  registerCloudflareCoreManagersIpc(corePlatform)
+  const cloudflareCoreManagers = registerCloudflareCoreManagersIpc(corePlatform)
   registerHomeAssistantIpc(corePlatform)
   registerHomeAssistantControlIpc(corePlatform)
   registerHomeAssistantSensorIpc(corePlatform)
+  registerCloudflareTunnelIpc(corePlatform, cloudflareCoreManagers)
   registerCloudflareZeroTrustIpc(corePlatform)
 
   const githubSecret = new ElectronGitHubSecretStore(app.getPath('userData'), safeStorage)

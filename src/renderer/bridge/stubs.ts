@@ -192,6 +192,16 @@ export function buildStubApi(): Omit<
       completeOAuth: () => Promise.resolve({ status: 'rejected' as const, account: null, reason: mapLocalVocabularyText('Provider callbacks are not accepted on this surface.') }),
       removeAccount: () => Promise.resolve({ ok: false as const, error: mapLocalVocabularyText('Provider accounts are not connected on this surface.') })
     },
+    cloudflareTunnels: {
+      zones: U('cloudflareTunnels.zones'),
+      inventory: U('cloudflareTunnels.inventory'),
+      planRoute: U('cloudflareTunnels.planRoute'),
+      planDnsAdoption: U('cloudflareTunnels.planDnsAdoption'),
+      saveRoute: U('cloudflareTunnels.saveRoute'),
+      adoptDnsRecord: U('cloudflareTunnels.adoptDnsRecord'),
+      cancel: noop,
+      onProgress: noopUnsub
+    },
     cloudflareCoreManagers: {
       runtime: U('cloudflareCoreManagers.runtime'),
       credentials: U('cloudflareCoreManagers.credentials'),
