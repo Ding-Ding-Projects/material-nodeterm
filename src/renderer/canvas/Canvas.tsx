@@ -13039,12 +13039,15 @@ export function Canvas() {
               vaultWarning,
             bodyKind: 'fact'
           })
+        } else if (result.canceled) {
+          notify({ kind: 'info', titleKind: 'authored', title: 'Project save cancelled' })
         } else {
           notify(
             result.canceled
               ? { kind: 'info', titleKind: 'authored', title: 'Project save cancelled' }
               : { kind: 'error', titleKind: 'authored', title: 'Project save failed', body: result.error, bodyKind: 'fact' }
           )
+          notify({ kind: 'error', titleKind: 'authored', title: 'Project save failed', body: result.error, bodyKind: 'fact' })
         }
       } finally {
         projectArchiveBusyRef.current = false

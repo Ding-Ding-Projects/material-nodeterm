@@ -4,6 +4,9 @@ import { isFreshVocabularyCache, validateVocabularyCacheJson, validateVocabulary
 import { shapeCopy, shapeTitle } from './i18n.js'
 import { createStore } from '../core/store.js'
 import { render } from '../core/render.js'
+import { notify, registerListRoom, toast } from '../core/engine.js'
+import { DIM_SUM_TOAST_OWNERSHIP, registerDimSum } from '../features/dimsum.js'
+import { datasetRecords } from '../features/exports.js'
 import { handleVocabularyFileChange, readVocabularyFile, registerVocabulary } from '../features/vocabulary.js'
 
 function storageFixture(initial = {}) {
@@ -260,6 +263,117 @@ test('delegated file change resets the picker, reports size/read errors, and rer
     store.state.view = 'room'
     store.state.sec = 'home'
     assert.match(render(store), /shell box/)
+  } finally {
+    if (original === undefined) delete globalThis.localStorage
+    else globalThis.localStorage = original
+  }
+})
+
+test('the real renderer maps authored strings and preserves exact facts', () => {
+  const original = globalThis.localStorage
+  globalThis.localStorage = storageFixture()
+  try {
+    const store = createStore()
+    store.state.vocabEntries = {
+      Jump: 'JUMPED',
+      Changelog: 'CHANGES',
+      items: 'THINGS',
+      nodeterm: 'WRONG BRAND',
+      GitHub: 'WRONG FORGE',
+      'BUSL-1.1 licensed · fork of': 'WRONG LICENSE',
+      'Magic jump box — Ctrl+Shift+F': 'WRONG SHORTCUT',
+      'brew install --cask nodeterm': 'WRONG COMMAND'
+    }
+    store.state.vocabStatus = 'loaded'
+    store.state.view = 'hall'
+    const hall = render(store)
+    // Authored labels are intentionally replaceable in the user-visible renderer.
+    assert.match(hall, />✨ Jump</)
+    // Brand, command, shortcut and URL-adjacent facts stay byte-identical.
+    assert.match(hall, />nodeterm school</)
+    assert.match(hall, /Magic jump box — Ctrl\+Shift\+F/)
+    assert.match(hall, /brew install --cask nodeterm/)
+    assert.match(hall, /<span class="brand__name">nodeterm school<\/span>/)
+    assert.match(hall, /title="Magic jump box — Ctrl\+Shift\+F"/)
+    assert.match(hall, /brew install --cask nodeterm/)
+
+    store.state.view = 'room'
+    store.state.sec = 'notes'
+    const room = render(store)
+    assert.match(room, />CHANGES</)
+    assert.match(room, /BUSL-1\.1 licensed · fork of/)
+    assert.match(room, />GitHub</)
+    assert.match(room, /BUSL-1\.1 licensed · fork of/)
+    assert.match(room, />GitHub</)
+  } finally {
+    if (original === undefined) delete globalThis.localStorage
+    else globalThis.localStorage = original
+  }
+})
+
+test('Day Teet Hui toasts map authored title, body, and sub fields while facts stay exact', () => {
+  const original = globalThis.localStorage
+  globalThis.localStorage = storageFixture()
+  try {
+    const store = createStore()
+    store.state.vocabEntries = { 'friendly title': 'mapped title', 'friendly body': 'mapped body', 'friendly sub': 'mapped sub', 'provider body': 'wrong fact' }
+    toast(store, 'ℹ️', 'friendly title', 'provider body', 'friendly sub', undefined, {
+      titleKind: 'authored',
+      bodyKind: 'fact',
+      subKind: 'authored'
+    })
+    store.state.view = 'hall'
+    const output = render(store)
+    assert.match(output, /mapped title/)
+    assert.match(output, /provider body/)
+    assert.match(output, /mapped sub/)
+    assert.doesNotMatch(output, /wrong fact/)
+    assert.throws(() => toast(store, 'ℹ️', 'title', 'body', '', undefined, { titleKind: 'unknown' }), /ownership/)
+  } finally {
+    if (original === undefined) delete globalThis.localStorage
+    else globalThis.localStorage = original
+  }
+})
+
+test('dim sum surprise marks its authored trolley title separately from factual dish fields', () => {
+  const store = createStore()
+  let another
+  registerDimSum(store, {}, (id, handler) => { if (id === 'dish-another') another = handler }, () => {})
+  const calls = []
+  another(store.state, '', null, { toast: (...args) => calls.push(args) })
+  assert.equal(calls.length, 1)
+  assert.deepEqual(calls[0][4], DIM_SUM_TOAST_OWNERSHIP)
+  assert.equal(calls[0][4].titleKind, 'authored')
+  assert.equal(calls[0][4].bodyKind, 'fact')
+  assert.equal(calls[0][4].subKind, 'fact')
+})
+
+test('persistent Day Teet Hui messages retain ownership through render, search, and export', () => {
+  const original = globalThis.localStorage
+  globalThis.localStorage = storageFixture()
+  try {
+    const store = createStore()
+    store.state.vocabEntries = { terminal: 'shell box' }
+    notify(store, 'Open terminal', 'fatal: C:/workspace/terminal', 'fact-check', { titleKind: 'authored', bodyKind: 'fact' })
+    const saved = store.state.notes[0]
+    assert.equal(saved.titleKind, 'authored')
+    assert.equal(saved.bodyKind, 'fact')
+    registerListRoom('notes', { kind: 'list', getRows: (s) => s.notes.map((n) => ({ ...n, meta: '', right: '' })) })
+    store.state.view = 'room'
+    store.state.sec = 'notes'
+    assert.match(render(store), /Open shell box/)
+    assert.match(render(store), /fatal: C:\/workspace\/terminal/)
+    store.state.qSec = 'shell box'
+    assert.match(render(store), /Open shell box/)
+    const exported = datasetRecords(store, 'notes')[0]
+    assert.deepEqual(exported, {
+      title: 'Open terminal',
+      body: 'fatal: C:/workspace/terminal',
+      titleKind: 'authored',
+      bodyKind: 'fact',
+      tag: 'fact-check',
+      when: saved.when
+    })
   } finally {
     if (original === undefined) delete globalThis.localStorage
     else globalThis.localStorage = original

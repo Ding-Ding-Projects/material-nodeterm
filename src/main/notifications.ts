@@ -34,6 +34,29 @@ export function isPreparedNativeNotification(payload: {
   )
 }
 
+export function isPreparedNativeNotification(payload: unknown): payload is PreparedNativeNotification {
+  if (!payload || typeof payload !== 'object') return false
+  const candidate = payload as {
+    title?: unknown
+    body?: unknown
+    titleKind?: unknown
+    bodyKind?: unknown
+  }
+  return (
+    typeof candidate.title === 'string' &&
+    typeof candidate.body === 'string' &&
+    (candidate.titleKind === 'authored' || candidate.titleKind === 'fact') &&
+    (candidate.bodyKind === 'authored' || candidate.bodyKind === 'fact')
+  )
+}
+
+/** The exact admission helper used by the app IPC handler. Keeping this tiny function beside
+ * the structural check gives tests a seam that exercises the same rejection decision without
+ * starting Electron's process-wide bootstrap. */
+export function prepareNativeNotification(payload: unknown): PreparedNativeNotification | null {
+  return isPreparedNativeNotification(payload) ? payload : null
+}
+
 /** Native notifications receive already-classified copy from the renderer. Keep title and body
  * separate, and never concatenate or map the body here: provider/host facts must survive exactly. */
 export function composeNativeNotification(payload: PreparedNativeNotification): NativeNotificationCopy {

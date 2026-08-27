@@ -18,6 +18,7 @@ import {
 import { registerFeatures } from './features/index.js'
 import { handleVocabularyFileChange } from './features/vocabulary.js'
 import { SECTIONS, FEATURES, DOCS, COVERAGE, RX_TOKENS, DISHES } from './shared/data.js'
+import { DIM_SUM_TOAST_OWNERSHIP } from './features/dimsum.js'
 import { listVoices, findVoice } from './shared/narrator-state.js'
 import { createBulkList } from './shared/bulkList.js'
 import { VOCAB_MAX_FILE_BYTES } from './shared/vocabulary-state.js'
@@ -44,8 +45,8 @@ function speak(text) {
     /* speechSynthesis unavailable */
   }
 }
-function toastX(icon, title, body, sub) {
-  toast(store, icon, title, body, sub, speak)
+function toastX(icon, title, body, sub, ownership) {
+  toast(store, icon, title, body, sub, speak, ownership)
 }
 
 function enterDoor(id) {
@@ -381,7 +382,7 @@ export function registerBinding(name, fn) {
 }
 function runFeatureAction(name, id, el) {
   const fn = featureActions.get(name)
-  if (fn) fn(store, id, el, { toast: toastX, notify: (t, b, tag) => notify(store, t, b, tag), save: (p, n) => save(store, p, n), speak, applyTheme: () => applyTheme(store.state), askConfirm: (t, b, w, r) => askConfirm(store, t, b, w, r) })
+  if (fn) fn(store, id, el, { toast: toastX, notify: (t, b, tag, ownership) => notify(store, t, b, tag, ownership), save: (p, n) => save(store, p, n), speak, applyTheme: () => applyTheme(store.state), askConfirm: (t, b, w, r) => askConfirm(store, t, b, w, r) })
 }
 function runFeatureBind(name, id, value) {
   const fn = featureBindings.get(name)
@@ -403,7 +404,7 @@ function registerCoreRooms() {
   // app/core/engine.js#notify/#log. Both rooms are still registered
   // through the same list-room contract every feature room uses.
   registerListRoom('notes', {
-    getRows: (s) => s.notes.map((n) => ({ id: n.id, title: n.title, body: n.body, tag: n.tag, meta: fmtWhen(n.when), right: '' })),
+    getRows: (s) => s.notes.map((n) => ({ id: n.id, title: n.title, body: n.body, titleKind: n.titleKind || 'authored', bodyKind: n.bodyKind || 'authored', tag: n.tag, meta: fmtWhen(n.when), right: '' })),
     emptyText: 'No messages. Lovely and quiet. 🌤',
     remove: (store2, ids) => {
       const set = new Set(ids)
@@ -429,7 +430,7 @@ function registerCoreRooms() {
 
 async function boot() {
   registerCoreRooms()
-  registerFeatures({ store, deps: { toast: toastX, notify: (t, b, tag) => notify(store, t, b, tag), save: (p, n) => save(store, p, n), speak, applyTheme: () => applyTheme(store.state), download: (n, t) => download(store, n, t), copy: (t) => copyToClipboard(store, t), askConfirm: (t, b, w, r) => askConfirm(store, t, b, w, r), refreshCodes: () => refreshCodes(store), log: (t, b) => log(store, t, b), undoEntry: (id) => undoEntry(store, id) }, registerAction, registerBinding })
+  registerFeatures({ store, deps: { toast: toastX, notify: (t, b, tag, ownership) => notify(store, t, b, tag, ownership), save: (p, n) => save(store, p, n), speak, applyTheme: () => applyTheme(store.state), download: (n, t) => download(store, n, t), copy: (t) => copyToClipboard(store, t), askConfirm: (t, b, w, r) => askConfirm(store, t, b, w, r), refreshCodes: () => refreshCodes(store), log: (t, b) => log(store, t, b), undoEntry: (id) => undoEntry(store, id) }, registerAction, registerBinding })
 
   applyTheme(store.state)
   store.state.dishIdx = Math.floor(Math.random() * DISHES.length)
@@ -437,7 +438,7 @@ async function boot() {
 
   if (!store.state.school && Math.random() < 0.1) {
     const d = DISHES[store.state.dishIdx]
-    toastX('🥟', 'The trolley rolled by!', d.en + ' · ' + d.yue, d.body)
+    toastX('🥟', 'The trolley rolled by!', d.en + ' · ' + d.yue, '', DIM_SUM_TOAST_OWNERSHIP)
   }
 
   refreshCodes(store)

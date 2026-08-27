@@ -25,7 +25,7 @@ import {
 } from '../../shared/types'
 import type { HistoryListResult } from '../../shared/local-history'
 import { E_UNSUPPORTED } from '../../shared/rpc'
-import { formatHostMessage, hostFact, hostText, mapLocalVocabularyText } from '../lib/personalVocabulary/hostMessage'
+import { formatHostMessage, hostFact, hostText, mapLocalVocabularyText, mapNativeNotification } from '../lib/personalVocabulary/hostMessage'
 
 /** Reject with a coded error the RPC layer + renderer recognize (renderer degrades silently). */
 export function unsupported(name: string): Promise<never> {
@@ -496,9 +496,14 @@ export function buildStubApi(): Omit<
     setBadgeCount: noop,
     getPathForFile: (): string => '',
     notify: async (payload: NotifyPayload): Promise<'shown' | 'failed' | 'skipped'> => {
+      // Keep the browser equivalent honest too: native and browser notifications share the
+      // same authored/fact ownership contract, and authored fields are mapped before display.
+      if (payload.titleKind !== 'authored' && payload.titleKind !== 'fact') return 'failed'
+      if (payload.bodyKind !== 'authored' && payload.bodyKind !== 'fact') return 'failed'
+      const copy = mapNativeNotification(payload, mapLocalVocabularyText)
       if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
         try {
-          new Notification(payload.title, { body: payload.body })
+          new Notification(copy.title, { body: copy.body })
           return 'shown'
         } catch {
           return 'skipped'

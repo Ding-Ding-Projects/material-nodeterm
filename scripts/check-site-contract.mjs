@@ -936,6 +936,91 @@ function hasOwnedRenderString(body, text, owner) {
   const copied = calls.some((args) => args.includes(text))
   if (owner === 'fact') return !copied
   return copied
+  const facts = [...copyCallArguments(body, 'fact'), ...copyCallArguments(body, 'factAttr')]
+  const hasExactArgument = (args) => {
+    const quoted = [`'${text}'`, `"${text}"`, `\`${text}\``]
+    return args.trim() === text || quoted.some((value) => args.includes(value))
+  }
+  const copied = calls.some(hasExactArgument)
+  const factored = facts.some(hasExactArgument)
+  if (owner === 'fact') return factored && !copied
+  return copied
+}
+
+function balancedExpression(source, start) {
+  let depth = 1
+  let quote = ''
+  let escaped = false
+  for (let i = start; i < source.length; i += 1) {
+    const ch = source[i]
+    if (quote) {
+      if (escaped) escaped = false
+      else if (ch === '\\') escaped = true
+      else if (ch === quote) quote = ''
+      continue
+    }
+    if (ch === "'" || ch === '"' || ch === '`') {
+      quote = ch
+    } else if (ch === '{') {
+      depth += 1
+    } else if (ch === '}' && --depth === 0) {
+      return source.slice(start, i)
+    }
+  }
+  return null
+}
+
+// Parse attributes structurally instead of treating one physical source line as the unit. A
+// template expression can span lines, contain nested calls, and contain quoted text with braces.
+function unownedLabelAttributes(source) {
+  const found = []
+  const attrRe = /(data-menu-label|aria-label|title)\s*=\s*(["'])/g
+  for (const match of source.matchAll(attrRe)) {
+    const contentStart = match.index + match[0].length
+    const quote = match[2]
+    let end = -1
+    let expressionDepth = 0
+    let expressionQuote = ''
+    let escaped = false
+    for (let i = contentStart; i < source.length; i += 1) {
+      const ch = source[i]
+      if (expressionDepth > 0) {
+        if (expressionQuote) {
+          if (escaped) escaped = false
+          else if (ch === '\\') escaped = true
+          else if (ch === expressionQuote) expressionQuote = ''
+        } else if (ch === "'" || ch === '"' || ch === '`') {
+          expressionQuote = ch
+        } else if (ch === '{') {
+          expressionDepth += 1
+        } else if (ch === '}') {
+          expressionDepth -= 1
+        }
+      } else if (ch === '$' && source[i + 1] === '{') {
+        expressionDepth = 1
+        i += 1
+      } else if (ch === quote) {
+        end = i
+        break
+      }
+    }
+    if (end < 0) {
+      found.push(source.slice(match.index, match.index + 80))
+      continue
+    }
+    const content = source.slice(contentStart, end)
+    if (!content.includes('${')) {
+      found.push(content)
+      continue
+    }
+    let cursor = 0
+    while ((cursor = content.indexOf('${', cursor)) >= 0) {
+      const expression = balancedExpression(content, cursor + 2)
+      if (expression === null || !/(copyAttr|factAttr)/.test(expression)) found.push(expression || content.slice(cursor))
+      cursor += 2
+    }
+  }
+  return found
 }
 
 {
@@ -969,6 +1054,18 @@ function hasOwnedRenderString(body, text, owner) {
   const body = renderFunnelBody(mutated, 'function renderHall')
   if (hasAuthoredCopyFunnel(body)) fail('Site renderer funnel mutation was not rejected')
   else pass('Site renderer funnel mutation is rejected')
+
+  // Every user-visible menu, accessibility, and regex-token label must declare its ownership
+  // helper at the callsite. A raw `attr(...)` or `esc(...)` can accidentally bypass the mapper,
+  // while a broad substring check would miss a renamed or commented-out helper call.
+  const untypedLabels = unownedLabelAttributes(renderSource)
+  checkedCount += 1
+  if (untypedLabels.length) {
+    fail(`Site renderer has ${untypedLabels.length} user-visible label line(s) without copyAttr/factAttr ownership`)
+    for (const line of untypedLabels) console.error(`    - ${line.trim()}`)
+  } else {
+    pass('Site renderer menu, aria, and title labels carry explicit copyAttr/factAttr ownership')
+  }
 }
 
 {
@@ -977,6 +1074,13 @@ function hasOwnedRenderString(body, text, owner) {
     fail('Site renderer string ownership inventory contains duplicate identifiers')
   } else {
     pass('Site renderer string ownership inventory has unique identifiers')
+  }
+  const ownershipIds = SITE_RENDER_STRING_OWNERSHIP.map(([id]) => id)
+  checkedCount += 1
+  if (ownershipIds.length !== CANONICAL_SITE_RENDER_STRING_IDS.length || ownershipIds.some((id, i) => id !== CANONICAL_SITE_RENDER_STRING_IDS[i])) {
+    fail('Site renderer string ownership inventory does not exactly match its independent canonical list')
+  } else {
+    pass('Site renderer string ownership inventory exactly matches its independent canonical list')
   }
   for (const [id, text, owner, marker] of SITE_RENDER_STRING_OWNERSHIP) {
     const body = renderFunnelBody(readText('site/app/core/render.js'), marker)
@@ -1003,6 +1107,18 @@ function hasOwnedRenderString(body, text, owner) {
       if (hasOwnedRenderString(copiedBody, text, owner)) fail(`${id}: file-backed string mutation was not rejected`)
       else pass(`${id}: file-backed string mutation is rejected`)
       writeFileSync(renderCopy, original, 'utf8')
+    }
+    const labelsWithoutOwnership = join(mutationRoot, 'render-labels.fixture.js')
+    writeFileSync(labelsWithoutOwnership, original.split('copyAttr').join('').split('factAttr').join(''), 'utf8')
+    checkedCount += 1
+    if (unownedLabelAttributes(readFileSync(labelsWithoutOwnership, 'utf8')).length === 0) fail('Site renderer copied label ownership mutation was not rejected')
+    else pass('Site renderer copied label ownership mutation is rejected')
+    const ownershipWithoutFirst = SITE_RENDER_STRING_OWNERSHIP.slice(1).map(([id]) => id)
+    checkedCount += 1
+    if (ownershipWithoutFirst.length === CANONICAL_SITE_RENDER_STRING_IDS.length && ownershipWithoutFirst.every((id, i) => id === CANONICAL_SITE_RENDER_STRING_IDS[i])) {
+      fail('Site renderer canonical ownership deletion mutation was not rejected')
+    } else {
+      pass('Site renderer canonical ownership deletion mutation is rejected')
     }
   } finally {
     rmSync(mutationRoot, { recursive: true, force: true })

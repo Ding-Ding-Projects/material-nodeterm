@@ -27,15 +27,20 @@ function badgeFor(state, id) {
 }
 function copy(state, text) { return esc(shapeCopy(state, text)) }
 function copyAttr(state, text) { return attr(shapeCopy(state, text)) }
+// Provider, command, brand, legal and version facts deliberately bypass the personal
+// vocabulary mapper. Keeping this boundary named in the template makes it reviewable and
+// prevents a future convenience refactor from translating a value that must remain exact.
+function fact(text) { return esc(text) }
+function factAttr(text) { return attr(text) }
 function visibleSections(state) { return SECTIONS }
 function visibleDocs(state) { return state.school ? DOCS.filter((d) => d[2] !== 'personal-vocabulary') : DOCS }
 function visibleCoverage(state) { return state.school ? COVERAGE.filter((c) => !String(c[0]).toLowerCase().includes('vocabulary')) : COVERAGE }
 function searchBar({ id, value, placeholder, ariaLabel, rxKey, state, cls, autoIconSize }) {
   const on = !!state.rxOn[rxKey]
-  return `<div class="searchbar ${cls || ''}" data-menu-kind="search" data-menu-label="${attr(ariaLabel)}">
+  return `<div class="searchbar ${cls || ''}" data-menu-kind="search" data-menu-label="${copyAttr(state, ariaLabel)}">
     <span class="searchbar__icon" aria-hidden="true">🔎</span>
     <input type="search" data-bind="${id}" data-focus-id="${id}" value="${attr(value)}" placeholder="${copyAttr(state, placeholder)}" aria-label="${copyAttr(state, ariaLabel)}" />
-    <button type="button" class="rx-btn ${on ? 'is-on' : ''}" data-action="open-rx" data-id="${rxKey}" data-arg="${attr(ariaLabel)}" title="${copyAttr(state, 'Build a pattern for this search box')}" aria-label="${copyAttr(state, 'Regex builder for ' + ariaLabel)}">.*</button>
+    <button type="button" class="rx-btn ${on ? 'is-on' : ''}" data-action="open-rx" data-id="${rxKey}" data-arg="${factAttr(ariaLabel)}" title="${copyAttr(state, 'Build a pattern for this search box')}" aria-label="${copyAttr(state, 'Regex builder for ' + ariaLabel)}">.*</button>
   </div>`
 }
 
@@ -59,11 +64,12 @@ function renderHall(store) {
     <header class="hall__header" data-menu-kind="header" data-menu-label="${copyAttr(s, 'the top bar')}">
       <a class="brand" href="./index.html" data-no-room>
         <span class="brand__mark" style="background-image:url('${attr(s.logo || './assets/mark.svg')}')"></span>
-        <span class="brand__name">nodeterm school</span>
+        <span class="brand__name">${fact('nodeterm school')}</span>
       </a>
       ${searchBar({ id: 'qGlobal', value: s.qGlobal, placeholder: 'Which room are you looking for?', ariaLabel: 'the whole school', rxKey: 'global', state: s, cls: 'header-search' })}
       <div class="header-actions">
         <button type="button" class="round-btn round-btn--jump" data-action="open-palette" data-menu-kind="generic" data-menu-label="${copyAttr(s, 'this button')}" title="Magic jump box — Ctrl+Shift+F">✨ Jump</button>
+        <button type="button" class="round-btn round-btn--jump" data-action="open-palette" data-menu-kind="generic" data-menu-label="${copyAttr(s, 'this button')}" title="${factAttr('Magic jump box — Ctrl+Shift+F')}">✨ ${fact('Jump')}</button>
         <button type="button" class="round-btn round-btn--theme" data-action="toggle-theme" data-menu-kind="generic" data-menu-label="${copyAttr(s, 'this button')}" aria-label="${copyAttr(s, 'Day or night')}">${s.theme === 'night' ? '🌙' : '☀️'}</button>
         <button type="button" class="round-btn round-btn--bell" data-action="go-room" data-id="notes" data-menu-kind="generic" data-menu-label="${copyAttr(s, 'this button')}" aria-label="${copyAttr(s, 'Message box')}">🔔${s.notes.length ? `<span class="bell-count">${s.notes.length}</span>` : ''}</button>
       </div>
@@ -79,7 +85,7 @@ function renderHall(store) {
       ${searchBar({ id: 'qNav', value: s.qNav, placeholder: 'Filter the doors…', ariaLabel: 'the room list', rxKey: 'nav', state: s, cls: 'hall__nav-search' })}
     </div>
 
-    <div class="doors" data-menu-kind="rail" data-menu-label="the room list">
+    <div class="doors" data-menu-kind="rail" data-menu-label="${copyAttr(s, 'the room list')}">
       <div class="doors__grid">
         ${doors.length ? doors.map((x, i) => doorTile(s, x, i)).join('') : `<div class="empty" style="grid-column:1/-1">${copy(s, 'No door has that name. Try the')} <strong>.*</strong> ${copy(s, 'button next to the filter!')} 🔎</div>`}
       </div>
@@ -92,9 +98,9 @@ function renderHall(store) {
             <h2>${copy(s, 'Your terminals are')}<br />${copy(s, 'blocks on a giant canvas.')}</h2>
             <p>${copy(s, 'Every terminal is a block you can drag around. Robot helpers get their own blocks too, and they raise a hand when they need you. Nothing disappears when you close the lid.')}</p>
             <div class="cta-row">
-              <a class="btn" style="background:var(--green)" href="${REPO_RELEASES}" target="_blank" rel="noopener">⬇ Get nodeterm</a>
-              <a class="btn" href="${REPO_URL}" target="_blank" rel="noopener">👀 ${copy(s, 'Peek at the code')}</a>
-              <span class="brew-pill">brew install --cask nodeterm</span>
+              <a class="btn" style="background:var(--green)" href="${factAttr(REPO_RELEASES)}" target="_blank" rel="noopener">⬇ ${fact('Get nodeterm')}</a>
+              <a class="btn" href="${factAttr(REPO_URL)}" target="_blank" rel="noopener">👀 ${copy(s, 'Peek at the code')}</a>
+              <span class="brew-pill">${fact('brew install --cask nodeterm')}</span>
             </div>
           </div>
         </div>
@@ -138,8 +144,8 @@ function renderHall(store) {
           <h3>${copy(s, 'Stop hunting through tabs.')}</h3>
           <p>${copy(s, 'Free, open source, and it works offline. macOS 12+ and Linux x64.')}</p>
           <div class="cta-row" style="justify-content:center">
-            <a class="btn" style="background:var(--card);height:56px;font-size:18px" href="${REPO_RELEASES}" target="_blank" rel="noopener">⬇ Download nodeterm</a>
-            <button type="button" class="btn" style="background:var(--card);height:56px;font-family:var(--mono);font-size:14px" data-action="copy-brew">📋 brew install --cask nodeterm</button>
+            <a class="btn" style="background:var(--card);height:56px;font-size:18px" href="${factAttr(REPO_RELEASES)}" target="_blank" rel="noopener">⬇ ${fact('Download nodeterm')}</a>
+            <button type="button" class="btn" style="background:var(--card);height:56px;font-family:var(--mono);font-size:14px" data-action="copy-brew">📋 ${fact('brew install --cask nodeterm')}</button>
           </div>
         </div>
       </div>
@@ -159,7 +165,7 @@ function doorTile(state, x, i) {
   const opening = state.opening === x.id ? 'is-opening' : ''
   const knocking = state.knock === x.id ? 'is-knocking' : ''
   return `<div class="door-slot" data-menu-kind="room" data-menu-label="${copyAttr(state, x.label)}" data-menu-extra="${attr(x.id)}">
-    <button type="button" class="door-frame" data-action="enter-door" data-id="${x.id}" aria-label="${copyAttr(state, locked ? 'Locked door: ' : 'Open the door to ')}${attr(shapeTitle(state, x.label))}">
+    <button type="button" class="door-frame" data-action="enter-door" data-id="${factAttr(x.id)}" aria-label="${copyAttr(state, locked ? 'Locked door: ' : 'Open the door to ')}${factAttr(shapeTitle(state, x.label))}">
       <span class="door-frame__peek">${x.icon}</span>
       <span class="door-frame__door ${opening} ${knocking}" style="background:${doorColor(i)}">
         <span class="door-frame__plaque">${x.icon}</span>
@@ -173,7 +179,7 @@ function doorTile(state, x, i) {
   </div>`
 }
 function featureCard(f, state) {
-  return `<article class="card feature-card" data-menu-kind="card" data-menu-label="${attr(f.title)}">
+  return `<article class="card feature-card" data-menu-kind="card" data-menu-label="${copyAttr(state, f.title)}">
     <div class="feature-card__icon" style="background:${f.color}">${f.icon}</div>
     <h4>${copy(state, f.title)}</h4>
     <p>${copy(state, f.body)}</p>
@@ -193,12 +199,13 @@ function renderRoom(store) {
     <header class="room__header" data-menu-kind="header" data-menu-label="${copyAttr(s, 'the top bar')}">
       <a class="brand" href="./index.html" data-no-room>
         <img class="brand__mark" src="./assets/mark.svg" alt="" width="34" height="34" style="padding:3px;background:var(--yellow)" />
-        <span class="brand__name">nodeterm</span>
-        <span class="brand__ver">v0.3.0</span>
+        <span class="brand__name">${fact('nodeterm')}</span>
+        <span class="brand__ver">${fact('v0.3.0')}</span>
       </a>
       ${searchBar({ id: 'qGlobal', value: s.qGlobal, placeholder: 'Search the whole playground…', ariaLabel: 'the big search', rxKey: 'global', state: s, cls: 'header-search' })}
       <div class="header-actions">
         <button type="button" class="round-btn round-btn--jump" data-action="open-palette" data-menu-kind="generic" data-menu-label="${copyAttr(s, 'this button')}" title="Magic jump box — Ctrl+Shift+F">✨ Jump</button>
+        <button type="button" class="round-btn round-btn--jump" data-action="open-palette" data-menu-kind="generic" data-menu-label="${copyAttr(s, 'this button')}" title="${factAttr('Magic jump box — Ctrl+Shift+F')}">✨ ${fact('Jump')}</button>
         <button type="button" class="round-btn round-btn--theme" data-action="toggle-theme" data-menu-kind="generic" data-menu-label="${copyAttr(s, 'this button')}" aria-label="${copyAttr(s, 'Switch between day and night')}">${s.theme === 'night' ? '🌙' : '☀️'}</button>
         <button type="button" class="round-btn round-btn--bell" data-action="go-room" data-id="notes" data-menu-kind="generic" data-menu-label="${copyAttr(s, 'this button')}" aria-label="${copyAttr(s, 'Open the message box')}">🔔${s.notes.length ? `<span class="bell-count">${s.notes.length}</span>` : ''}</button>
       </div>
@@ -213,7 +220,7 @@ function renderRoom(store) {
           ${navItems.length
             ? navItems
                 .map(
-                  (x) => `<button type="button" role="tab" aria-selected="${s.sec === x.id}" aria-label="${copyAttr(s, x.label + (badgeFor(s, x.id) ? ', ' + badgeFor(s, x.id) + ' items' : ''))}" class="nav-btn ${s.sec === x.id ? 'is-active' : ''}" data-action="go-room" data-id="${x.id}" data-menu-kind="room" data-menu-label="${copyAttr(s, x.label)}" data-menu-extra="${attr(x.id)}" style="${s.sec === x.id ? 'background:' + s.accent : ''}">
+                  (x) => `<button type="button" role="tab" aria-selected="${s.sec === x.id}" aria-label="${copyAttr(s, x.label)}${badgeFor(s, x.id) ? ', ' + badgeFor(s, x.id) + ' ' + copyAttr(s, 'items') : ''}" class="nav-btn ${s.sec === x.id ? 'is-active' : ''}" data-action="go-room" data-id="${factAttr(x.id)}" data-menu-kind="room" data-menu-label="${copyAttr(s, x.label)}" data-menu-extra="${factAttr(x.id)}" style="${s.sec === x.id ? 'background:' + factAttr(s.accent) : ''}">
               <span class="nav-btn__icon" aria-hidden="true">${x.icon}</span>
               <span class="nav-btn__label" aria-hidden="true">${copy(s, x.label)}</span>
               ${badgeFor(s, x.id) ? `<span class="chip" aria-hidden="true">${badgeFor(s, x.id)}</span>` : ''}
@@ -229,7 +236,7 @@ function renderRoom(store) {
         </div>
       </aside>
 
-      <main class="room-main" data-menu-kind="generic" data-menu-label="${attr(shapeTitle(s, section.title))}">
+      <main class="room-main" data-menu-kind="generic" data-menu-label="${factAttr(shapeTitle(s, section.title))}">
         <div class="room-main__head">
           <div class="room-main__titlewrap">
             <div class="pill">${copy(s, section.kicker)}</div>
@@ -249,8 +256,12 @@ function renderRoom(store) {
       <a href="${REPO_URL}" target="_blank" rel="noopener">GitHub</a>
       <a href="${REPO_URL}/blob/main/CHANGELOG.md" target="_blank" rel="noopener">${copy(s, 'Changelog')}</a>
       <a href="${REPO_URL}/issues" target="_blank" rel="noopener">${copy(s, 'Help')}</a>
+      <span>${fact('BUSL-1.1 licensed · fork of')} <a href="${factAttr(UPSTREAM_URL)}" target="_blank" rel="noopener">${fact('eneskirca/nodeterm')}</a></span>
+      <a href="${factAttr(REPO_URL)}" target="_blank" rel="noopener">${fact('GitHub')}</a>
+      <a href="${factAttr(REPO_URL + '/blob/main/CHANGELOG.md')}" target="_blank" rel="noopener">${copy(s, 'Changelog')}</a>
+      <a href="${factAttr(REPO_URL + '/issues')}" target="_blank" rel="noopener">${copy(s, 'Help')}</a>
       <div class="spacer"></div>
-      <span>“Claude” and “Claude Code” are trademarks of Anthropic. nodeterm is not affiliated with or endorsed by Anthropic.</span>
+      <span>${fact('“Claude” and “Claude Code” are trademarks of Anthropic. nodeterm is not affiliated with or endorsed by Anthropic.')}</span>
     </footer>
   </div>`
 }
@@ -304,17 +315,19 @@ function renderHomeRoom(store) {
 
 function rowItem(state, row) {
   const picked = !!state.picked[row.id]
+  const title = row.titleKind === 'fact' ? fact(row.title) : row.titleKind === 'authored' ? copy(state, row.title) : esc(row.title)
+  const body = row.bodyKind === 'fact' ? fact(row.body) : row.bodyKind === 'authored' ? copy(state, row.body) : esc(row.body)
   const name = row.title + (picked ? ', picked' : '') + (row.tag ? ', ' + row.tag : '') + (row.body ? '. ' + row.body : '')
-  const btn = `<button type="button" class="row-item" aria-pressed="${picked}" aria-label="${attr(name)}" data-action="toggle-pick" data-id="${attr(row.id)}" data-menu-kind="row" data-menu-label="${attr(row.title)}" data-menu-extra='${attr(JSON.stringify({ id: row.id, title: row.title, body: row.body, url: row.url || '', canUndo: !!row.canUndo }))}'>
+  const btn = `<button type="button" class="row-item" aria-pressed="${picked}" aria-label="${factAttr(name)}" data-action="toggle-pick" data-id="${factAttr(row.id)}" data-menu-kind="row" data-menu-label="${factAttr(row.title)}" data-menu-extra='${factAttr(JSON.stringify({ id: row.id, title: row.title, body: row.body, url: row.url || '', canUndo: !!row.canUndo }))}'>
     <span class="row-item__check ${picked ? 'is-picked' : ''}" aria-hidden="true">${picked ? '✔' : ''}</span>
     ${row.img ? `<img src="${attr(row.img)}" alt="" width="44" height="44" aria-hidden="true" style="flex:0 0 auto;border:3px solid var(--line);border-radius:12px;background:var(--paper2)" />` : ''}
     <span class="row-item__body" aria-hidden="true">
       <span class="row-item__title">
-        <span class="row-item__title-text">${esc(row.title)}</span>
+        <span class="row-item__title-text">${title}</span>
         ${row.tag ? `<span class="chip" style="background:${state.accent}">${esc(row.tag)}</span>` : ''}
         ${row.meta ? `<span class="row-item__meta">${esc(row.meta)}</span>` : ''}
       </span>
-      <span class="row-item__text">${esc(row.body)}</span>
+      <span class="row-item__text">${body}</span>
     </span>
     ${row.right && !row.docHref ? `<span class="row-item__right" aria-hidden="true">${esc(row.right)}</span>` : ''}
   </button>`
@@ -333,7 +346,7 @@ function rowItem(state, row) {
   if (!row.docHref) return btn
   return `<span class="row-item-wrap">
     ${btn}
-    <a class="row-item__open" href="${attr(row.docHref)}" aria-label="${copyAttr(state, 'Read the')} ${attr(row.title)} ${copyAttr(state, 'guide page')}">
+    <a class="row-item__open" href="${factAttr(row.docHref)}" aria-label="${copyAttr(state, 'Read the')} ${factAttr(row.title)} ${copyAttr(state, 'guide page')}">
       <span aria-hidden="true">${esc(row.right || '→')}</span>
     </a>
   </span>`
@@ -344,7 +357,15 @@ function renderListRoom(store, room) {
   const rawRows = room.getRows(s)
   const gm = makeMatcher(s, 'global', s.qGlobal)
   const sm = makeMatcher(s, 'sec', s.qSec)
-  const rows = rawRows.filter((r) => sm(r.title + ' ' + r.body + ' ' + (r.tag || '')) && gm(r.title + ' ' + r.body))
+  const searchable = (r) => {
+    const title = r.titleKind === 'authored' ? shapeCopy(s, r.title) : r.title
+    const body = r.bodyKind === 'authored' ? shapeCopy(s, r.body) : r.body
+    return { title, body }
+  }
+  const rows = rawRows.filter((r) => {
+    const text = searchable(r)
+    return sm(text.title + ' ' + text.body + ' ' + (r.tag || '')) && gm(text.title + ' ' + text.body)
+  })
   const pickedIds = Object.keys(s.picked).filter((k) => rawRows.some((r) => r.id === k))
   const allPicked = rawRows.length > 0 && pickedIds.length === rawRows.length
   const panelActions = room.panelActions ? room.panelActions(store) : []
@@ -400,7 +421,7 @@ function ctlHtml(cardId, ctl, state) {
     return `<div class="ctl-row"><label>${copy(state, ctl.label)}</label><input data-bind-file="${attr(ctl.action)}" data-id="${attr(cardId)}" data-focus-id="ctl-${attr(cardId)}-${attr(ctl.action)}" type="file" accept="${attr(ctl.accept || 'application/json,.json')}" aria-label="${copyAttr(state, ctl.label)}" /><span class="ctl-file-status">${copy(state, ctl.status || 'No file selected')}</span></div>`
   }
   if (ctl.isColor) {
-    return `<div class="ctl-row">${label}<div class="swatch-row">${(ctl.swatches || []).map((sw) => `<button type="button" class="swatch ${sw.picked ? 'is-picked' : ''}" style="background:${sw.hex}" title="${attr(sw.name)}" aria-label="${attr(sw.name)}" data-action="pick-accent" data-id="${attr(sw.hex)}"></button>`).join('')}</div></div>`
+    return `<div class="ctl-row">${label}<div class="swatch-row">${(ctl.swatches || []).map((sw) => `<button type="button" class="swatch ${sw.picked ? 'is-picked' : ''}" style="background:${factAttr(sw.hex)}" title="${copyAttr(state, sw.name)}" aria-label="${copyAttr(state, sw.name)}" data-action="pick-accent" data-id="${factAttr(sw.hex)}"></button>`).join('')}</div></div>`
   }
   if (ctl.isButton) {
     return `<div class="ctl-row">${label}<button type="button" class="btn-set" data-action="${attr(ctl.action)}" data-id="${attr(cardId)}">${copy(state, ctl.toggleLabel)}</button></div>`
@@ -422,11 +443,11 @@ function settingsCardHtml(store, c) {
   if (s.school && c.id === 'vocab') return ''
   const gate = guardPanel(s, c.id)
   const controls = typeof c.controls === 'function' ? c.controls(s) : []
-  return `<section class="card" data-menu-kind="setting" data-menu-label="${attr(c.title)}" data-menu-extra="${attr(c.id)}">
+  return `<section class="card" data-menu-kind="setting" data-menu-label="${copyAttr(s, c.title)}" data-menu-extra="${factAttr(c.id)}">
     <div class="settings-card__head">
       <span aria-hidden="true" style="font-size:24px">${c.icon}</span>
       <h3>${copy(s, c.title)}</h3>
-      <button type="button" class="settings-card__lock" data-action="toggle-lock" data-id="${attr(c.id)}" title="Put a toy lock on this box">${gate.hasLock ? (gate.locked ? '🔒' : '🔓') : '➕'}</button>
+      <button type="button" class="settings-card__lock" data-action="toggle-lock" data-id="${factAttr(c.id)}" title="${copyAttr(s, 'Put a toy lock on this box')}">${gate.hasLock ? (gate.locked ? '🔒' : '🔓') : '➕'}</button>
     </div>
     <p class="settings-card__desc">${copy(s, c.desc)}</p>
     ${
@@ -485,7 +506,7 @@ function renderRx(store) {
         <input data-bind-rx="flags" data-focus-id="rxFlags" aria-label="${copyAttr(s, 'Flags')}" value="${attr(rx.flags)}" />
       </div>
       <div class="rx-tokens">
-        ${RX_TOKENS.map((t, i) => `<button type="button" class="rx-token" style="background:${t[2]}" title="${attr(t[3])}" data-action="rx-insert" data-id="${i}">${esc(t[0])}</button>`).join('')}
+        ${RX_TOKENS.map((t, i) => `<button type="button" class="rx-token" style="background:${t[2]}" title="${copyAttr(s, t[3])}" data-action="rx-insert" data-id="${i}">${copy(s, t[0])}</button>`).join('')}
       </div>
       <label>${copy(s, 'Try it on some words')}</label>
       <textarea class="rx-sample" data-bind="rxSample" spellcheck="false" aria-label="${copyAttr(s, 'Sample text')}">${esc(s.rxSample)}</textarea>
@@ -553,9 +574,9 @@ function renderToasts(store) {
       <div class="toast__row">
         <span class="toast__icon" aria-hidden="true">${t.icon}</span>
         <div style="flex:1;min-width:0">
-          <div class="toast__title">${esc(t.title)}</div>
-          <div class="toast__body">${esc(t.body)}</div>
-          ${t.sub ? `<div class="toast__sub">${esc(t.sub)}</div>` : ''}
+          <div class="toast__title">${t.titleKind === 'fact' ? fact(t.title) : copy(s, t.title)}</div>
+          <div class="toast__body">${t.bodyKind === 'fact' ? fact(t.body) : copy(s, t.body)}</div>
+          ${t.sub ? `<div class="toast__sub">${t.subKind === 'fact' ? fact(t.sub) : copy(s, t.sub)}</div>` : ''}
         </div>
         <button type="button" class="toast__close" data-action="dismiss-toast" data-id="${attr(t.id)}" aria-label="${copyAttr(s, 'Close this message')}">✕</button>
       </div>

@@ -162,6 +162,7 @@ import { initRemoteStatusPush } from './remote-ssh/remote-status-push'
 import { runGitRemoteOp } from '../core/git-remote-proxy'
 import { initCanvasSync } from '../core/canvas-sync'
 import { composeNativeNotification, isPreparedNativeNotification, retainUntilDismissed } from './notifications'
+import { composeNativeNotification, prepareNativeNotification, retainUntilDismissed } from './notifications'
 import { installManagedAgentHooks } from '../core/agents/hooks'
 import { createSubagentTail } from '../core/subagent-tail'
 import { createContextTail, type TaskNotification } from '../core/context-tail'
@@ -1444,6 +1445,12 @@ app.whenReady().then(async () => {
   ipcMain.handle(
     IPC.appNotify,
     async (_e, payload: NotifyPayload) => {
+      // The native boundary is deliberately fail-closed. A missing ownership tag would make
+      // it impossible to tell whether a personal vocabulary replacement is safe, so reject it
+      // before window focus or notification support checks can turn the malformed request into a
+      // misleading `skipped` result.
+      const prepared = prepareNativeNotification(payload)
+      if (!prepared) return 'failed'
       const win = getMainWindow()
       if (!win || !Notification.isSupported()) return 'skipped'
       // `force` (permission request / confirmation) shows even when focused; normal
@@ -1451,6 +1458,7 @@ app.whenReady().then(async () => {
       if (!payload.force && win.isFocused()) return 'skipped'
       if (!isPreparedNativeNotification(payload)) return 'failed'
       const copy = composeNativeNotification(payload)
+      const copy = composeNativeNotification(prepared)
       const n = new Notification(copy)
       n.on('click', () => {
         // Re-resolve at click time — the window may have been hidden/recreated since.

@@ -23,7 +23,7 @@ export function formatHostMessage(parts: HostMessagePart[], map: HostVocabularyM
   return parts.map((part) => (part.kind === 'text' ? map(part.value) : part.value)).join('')
 }
 
-export function mapNativeNotification<T extends { title: string; body: string; titleKind?: 'authored' | 'fact'; bodyKind?: 'authored' | 'fact' }>(
+export function mapNativeNotification<T extends { title: string; body: string; titleKind: 'authored' | 'fact'; bodyKind: 'authored' | 'fact' }>(
   payload: T,
   map: HostVocabularyMap
 ): T {

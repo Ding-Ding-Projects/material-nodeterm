@@ -146,6 +146,9 @@ const PRODUCERS = [
   ['native-notification-onboarding', 'src/renderer/components/onboarding/OnboardingFlow.tsx', 'mapNativeNotification('],
   ['native-notification-settings', 'src/renderer/components/settings/sections/NotificationsSection.tsx', 'mapNativeNotification(']
   ['personal-vocabulary-template', 'src/renderer/lib/personalVocabulary/apply.ts', 'export function applyVocabularyToTemplate']
+  ['native-notification-settings', 'src/renderer/components/settings/sections/NotificationsSection.tsx', 'mapNativeNotification('],
+  ['native-notification-browser', 'src/renderer/bridge/stubs.ts', 'mapNativeNotification('],
+  ['native-notification-main', 'src/main/notifications.ts', 'prepareNativeNotification(']
 ]
 
 const DOC = 'docs/features/appearance/material-3-audit.md'
@@ -222,7 +225,7 @@ const PRODUCTION_SURFACES = [
 
 // Independent hand-written manifests. The mutable rows above are implementation evidence; these
 // lists are the required universe, so deleting a row cannot delete its own requirement too.
-const CANONICAL_PRODUCER_IDS = `settings-fields settings-sections personal-vocabulary-upload command-palette context-menus confirm-dialog input-dialog notifications tooltip conflict-banner canvas-prose fab-menu kanban-view kanban-column kanban-session-card kanban-card-modal source-control worktree-dialog onboarding dim-sum-surprise publish-dialog find-bar remote-picker browser-profile-picker password-manager converter-adapter-catalog converter-upload-limit minecraft-backups minecraft-players minecraft-properties authenticator-settings speech-settings toy-lock-wizard personal-vocabulary-surface-mapper personal-vocabulary-application personal-vocabulary-host-message widget-entrypoint hud-entrypoint dialog-picker-root ws-reconnect-overlay browser-bridge-stubs notification-body-classification site-vocabulary-json site-vocabulary-cache native-notification-canvas native-notification-onboarding native-notification-settings`.split(/\s+/)
+const CANONICAL_PRODUCER_IDS = `settings-fields settings-sections personal-vocabulary-upload command-palette context-menus confirm-dialog input-dialog notifications tooltip conflict-banner canvas-prose fab-menu kanban-view kanban-column kanban-session-card kanban-card-modal source-control worktree-dialog onboarding dim-sum-surprise publish-dialog find-bar remote-picker browser-profile-picker password-manager converter-adapter-catalog converter-upload-limit minecraft-backups minecraft-players minecraft-properties authenticator-settings speech-settings toy-lock-wizard personal-vocabulary-surface-mapper personal-vocabulary-application personal-vocabulary-host-message widget-entrypoint hud-entrypoint dialog-picker-root ws-reconnect-overlay browser-bridge-stubs notification-body-classification site-vocabulary-json site-vocabulary-cache native-notification-canvas native-notification-onboarding native-notification-settings native-notification-browser native-notification-main`.split(/\s+/)
 const CANONICAL_SURFACE_IDS = `app-shell welcome top-app-bar status-surface sessions-sidebar session-row terminal-node sticky-node group-node editor-node diff-node browser-node web-node video-node loop-node service-node wsl-dialog regex-builder anchored-regex-builder notification-center notification-toasts changelog-panel release-card local-history docs-browser docs-article appearance-editor color-field color-menu color-picker branch-select bulk-action-bar pty-pressure update-card resume-card widget-entrypoint hud-entrypoint dialog-picker-root ws-reconnect-overlay browser-bridge-stubs`.split(/\s+/)
 const CANONICAL_CANVAS_NOTIFY_CALL_IDS = `terminal-profile-create-unavailable explorer-folder-drop-stale explorer-agent-drop-missing explorer-folder-open-stale terminal-profile-restart-disabled terminal-profile-restart-failed branch-failed transfer-not-ready transfer-failed explorer-terminal-profile-unavailable project-save-busy project-save-progress project-save-success project-save-cancelled-or-failed project-password-mismatch project-open-busy project-open-cancelled project-open-password-check project-open-success-or-failed test-notification`.split(/\s+/)
 // Every Settings section is listed explicitly. The shared FieldRow/SettingsSection funnels cover
@@ -300,6 +303,31 @@ if (dropSectionIndex >= 0 && scriptArgs[dropSectionIndex + 1]) {
   const index = SETTINGS_SECTION_BOUNDARY_MANIFEST.findIndex(([id]) => id === dropped)
   if (index >= 0) SETTINGS_SECTION_BOUNDARY_MANIFEST.splice(index, 1)
 }
+const CANONICAL_CANVAS_NOTIFY_CALL_IDS = `terminal-profile-create-unavailable explorer-folder-drop-stale explorer-agent-drop-missing explorer-folder-open-stale terminal-profile-restart-disabled terminal-profile-restart-failed branch-failed transfer-not-ready transfer-failed explorer-terminal-profile-unavailable project-save-busy project-save-progress project-save-success project-save-cancelled project-save-failed project-password-mismatch project-open-busy project-open-cancelled project-open-password-check project-open-success project-open-failed test-notification`.split(/\s+/)
+// Keep the expected title evidence independent from the mutable callsite count. A replacement
+// notification with the same number of arguments must not make the inventory look complete.
+const CANONICAL_CANVAS_NOTIFY_TITLE_MARKERS = [
+  ['terminalProfiles.common.unavailableHereTitle', 2],
+  ['Folder drop cancelled', 2],
+  ['Agent drop cancelled', 1],
+  ['terminalProfiles.restart.failedTitle', 2],
+  ['Branch failed', 1],
+  ['Conversation not ready to transfer yet.', 1],
+  ['Transfer failed', 1],
+  ['Project save already running', 1],
+  ['Saving project…', 1],
+  ['Protected project saved as one file', 1],
+  ['Project saved as one file', 1],
+  ['Project save cancelled', 1],
+  ['Project save failed', 1],
+  ['The passwords did not match', 1],
+  ['Project open already running', 1],
+  ['Project open cancelled', 1],
+  ['Unlocking project file…', 1],
+  ['Project opened from file', 1],
+  ['Project open failed', 1],
+  ['Test notification', 1]
+]
 let failures = 0
 let checked = 0
 const read = (file) => existsSync(join(ROOT, file)) ? readFileSync(join(ROOT, file), 'utf8') : null
@@ -383,6 +411,16 @@ const canvasNotifyCalls = callArguments(read('src/renderer/canvas/Canvas.tsx') |
 check('canonical Canvas notification inventory is independent and complete', canvasNotifyCalls.length === CANONICAL_CANVAS_NOTIFY_CALL_IDS.length)
 check('every Canvas notification has explicit title ownership', canvasNotifyCalls.length === CANONICAL_CANVAS_NOTIFY_CALL_IDS.length && canvasNotifyCalls.every((args) => /\btitleKind\s*:/.test(args)))
 check('every Canvas notification body has explicit ownership', canvasNotifyCalls.length === CANONICAL_CANVAS_NOTIFY_CALL_IDS.length && canvasNotifyCalls.filter((args) => /\bbody\s*:/.test(args)).every((args) => /\bbodyKind\s*:/.test(args)))
+  // Keep only production object payloads. This excludes comments and the two native
+  // `window.nodeTerminal.notify` calls while retaining multiline object literals.
+  .filter((args) => /\bkind\s*:/.test(args) && /\btitle\s*:/.test(args))
+check('canonical Canvas notification inventory is independent and complete', canvasNotifyCalls.length === CANONICAL_CANVAS_NOTIFY_CALL_IDS.length)
+check('every Canvas notification has explicit title ownership', canvasNotifyCalls.length === CANONICAL_CANVAS_NOTIFY_CALL_IDS.length && canvasNotifyCalls.every((args) => /\btitleKind\s*:/.test(args)))
+check('every Canvas notification body has explicit ownership', canvasNotifyCalls.length === CANONICAL_CANVAS_NOTIFY_CALL_IDS.length && canvasNotifyCalls.filter((args) => /\bbody\s*:/.test(args)).every((args) => /\bbodyKind\s*:/.test(args)))
+for (const [marker, expected] of CANONICAL_CANVAS_NOTIFY_TITLE_MARKERS) {
+  const actual = canvasNotifyCalls.filter((args) => args.includes(marker)).length
+  check(`Canvas notification title marker ${marker} appears exactly ${expected} time(s)`, actual === expected)
+}
 for (const [id, file, marker] of PRODUCERS) {
   if (ids.has(id)) errors.push('duplicate producer id ' + id)
   ids.add(id)
@@ -480,6 +518,15 @@ try {
   writeFileSync(canvasCopy, canvasOriginal.replace(/\bbodyKind\s*:\s*['"](?:authored|fact)['"],?/g, ''), 'utf8')
   const bodyMutationCalls = callArguments(readFileSync(canvasCopy, 'utf8'), 'notify').filter((args) => args.trimStart().startsWith('{'))
   check('real-file Canvas body ownership mutation is rejected', !bodyMutationCalls.filter((args) => /\bbody\s*:/.test(args)).every((args) => /\bbodyKind\s*:/.test(args)))
+  const titleMutationCalls = callArguments(readFileSync(canvasCopy, 'utf8'), 'notify').filter((args) => /\bkind\s*:/.test(args) && /\btitle\s*:/.test(args))
+  check('real-file Canvas title ownership mutation is rejected', !titleMutationCalls.every((args) => /\btitleKind\s*:/.test(args)))
+  writeFileSync(canvasCopy, canvasOriginal.replace(/\bbodyKind\s*:\s*['"](?:authored|fact)['"],?/g, ''), 'utf8')
+  const bodyMutationCalls = callArguments(readFileSync(canvasCopy, 'utf8'), 'notify').filter((args) => /\bkind\s*:/.test(args) && /\btitle\s*:/.test(args))
+  check('real-file Canvas body ownership mutation is rejected', !bodyMutationCalls.filter((args) => /\bbody\s*:/.test(args)).every((args) => /\bbodyKind\s*:/.test(args)))
+  const titleMarkerMutation = join(mutationRoot, 'Canvas-title-marker.tsx')
+  writeFileSync(titleMarkerMutation, canvasOriginal.split('Folder drop cancelled').join(''), 'utf8')
+  const markerMutationCalls = callArguments(readFileSync(titleMarkerMutation, 'utf8'), 'notify').filter((args) => /\bkind\s*:/.test(args) && /\btitle\s*:/.test(args))
+  check('real-file Canvas title inventory mutation is rejected', markerMutationCalls.filter((args) => args.includes('Folder drop cancelled')).length !== 2)
 } finally {
   rmSync(mutationRoot, { recursive: true, force: true })
 // Mutate a complete fixture and execute this checker against it, rather than only invoking one
