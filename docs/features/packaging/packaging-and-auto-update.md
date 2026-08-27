@@ -104,9 +104,9 @@ applicable to those two surfaces.
 
 ## Verification
 
-Controller Chuts cover feed/protocol selection, strict version advancement, wrong-channel
+Controller checks cover feed/protocol selection, strict version advancement, wrong-channel
 diagnostics/immediate-restart refusal, duplicate checks and installs, progress truth,
-ready-before-restart, and offline/404 degradation. Those deterministic Chuts do not replace a
+ready-before-restart, and offline/404 degradation. Those deterministic checks do not replace a
 packaged interaction.
 
 The previously documented disposable-checkout commands are intentionally not presented as a

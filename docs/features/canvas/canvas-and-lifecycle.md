@@ -53,6 +53,14 @@ no mouse-wheel canvas route, so this behavior is not applicable there.
 with independent past/future stacks per project. It's suspended while you're typing into an
 input, a terminal, or Monaco, so `⌘Z` in a terminal reaches the shell, not the canvas.
 
+**Project-aware focus** is a transient single-node canvas. The node header, command palette, and
+desktop `F11` route promote the active node to root coordinates while retaining its live identity.
+Edits are merged back into the full project before save or canvas synchronization, and the parent
+viewport is restored on return. Same-project jumps first return from a focused view so a sibling
+target cannot be mistaken for a missing node. Cross-project jumps resolve ownership by project id,
+reopen closed projects, and refuse unavailable or missing targets honestly. See [Project-aware
+navigation](./project-aware-navigation.md).
+
 **Memory management.** A canvas can hold far more terminals than a browser can afford to give a
 full WebGL rendering context to at once, and a browser physically caps how many contexts can
 exist simultaneously. nodeterm handles this in layers rather than as a single on/off switch:

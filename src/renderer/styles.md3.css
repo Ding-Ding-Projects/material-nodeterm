@@ -14362,3 +14362,24 @@ button.term-node__title-text:focus-visible {
   .easter-eggs__backdrop { place-items: stretch; padding: 12px; }
   .easter-eggs__cabinet { width: auto; max-height: calc(100vh - 24px); }
 }
+
+.canvas-zone-preview {
+  position: absolute;
+  z-index: 12;
+  pointer-events: none;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  border: 2px solid var(--md-primary);
+  border-radius: var(--md-shape-medium);
+  background: color-mix(in srgb, var(--md-primary-container) 78%, transparent);
+  color: var(--md-on-primary-container);
+  font-size: 14px;
+  font-weight: 600;
+  opacity: 0.9;
+  transition: left 80ms linear, top 80ms linear, width 80ms linear, height 80ms linear;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .canvas-zone-preview { transition: none; }
+}

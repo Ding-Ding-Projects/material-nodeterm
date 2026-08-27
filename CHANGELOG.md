@@ -11,6 +11,18 @@
   and release-workflow checks. The ultra-speed pass does not run tests, reviews, accessibility or
   security checks, runtime interaction, or screen captures after activation.
 
+
+- Add project-aware single-node canvas focus for issue #86. The terminal header, command palette,
+  and desktop F11 path now promote one node into a transient canvas, merge edits back into the full
+  project, restore nested coordinates and the parent viewport, and refuse missing or unavailable
+  targets without inventing a destination. This lane did not run tests, type checks, lint, builds,
+  packaging, runtime interaction, reviews, audits, or captures.
+
+- Add viewport-relative canvas zones and named saved layouts. Nodes can preview and snap into half,
+  third, or quarter regions while dragging, and a saved arrangement restores portable geometry and
+  the camera without carrying sessions, credentials, process state, or machine paths. This
+  ultra-speed lane intentionally did not run tests, type checks, lint, reviews, security or
+  accessibility checks, builds, packaging, installer execution, runtime interaction, or captures.
 - Add opt-in Claude account rotation for new default sessions. When the selected account reaches the
   configured usage threshold, the launch funnel chooses the configured account with the most
   headroom, preserves explicit account picks and running sessions, and fails safe when usage is
@@ -170,6 +182,24 @@
   implementation lane intentionally did not run tests, type checks, lint, reviews, security or
   accessibility checks, builds, packaging, installer execution, runtime interaction, or UI
   captures.
+- Add a bounded typed link endpoint model for canvas relationships. `Endpoint` now distinguishes
+  local nodes, foreign project-node references, and repository-relative branches, while `Link`
+  carries one explicit relationship kind and project-owned source semantics. The shared validator
+  rejects malformed or non-portable records, unsafe metadata, foreign mutation sources, duplicate
+  ids, and oversized collections. This issue #86 model lane did not run tests, type checks, lint,
+  builds, packaging, runtime interaction, reviews, accessibility or security checks, or captures.
+- Migrate legacy `bridges` and `ropes` project-file arrays into the unified typed `links` collection.
+  Bridge ids remain context links, rope ids remain display-only lineage links, and new saves emit
+  only `links`. Inline projects, cached SSH content, and persisted canvas snapshots use the same
+  idempotent conversion. The issue #86 and upstream PR #422 migration lane was reconciled with
+  `origin/main` at `54164b84dce0b7e62787b1de2885405ff4ed821c`. This source lane did not run tests,
+  lint, type checks, builds, packaging, runtime interaction, reviews, audits, or captures.
+- Add the cross-project link transport and storage slice for issue #86 and upstream PR #422. The
+  Canvas-owned commit funnel keeps live link state and persisted `Project.links` together, while
+  background-project context transport accepts only local node-to-node context links. Branch,
+  dependency, lineage, and foreign-node behaviors remain in their dedicated lanes. This source lane
+  intentionally did not run tests, lint, type checks, builds, packaging, runtime interaction,
+  reviews, audits, or captures.
 
 - Mount the seven AWS core-service routes on the shared AWS manager: S3, EC2, IAM, STS, Lambda,
   CloudWatch, and CloudWatch Logs. Typed operation controls now cover bounded reads, selected writes,

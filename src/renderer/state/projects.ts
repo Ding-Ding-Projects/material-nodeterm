@@ -9,6 +9,7 @@ import type {
   Project,
   ProjectAwsUniverseCanvas,
   ProjectKanban,
+  SavedCanvasLayout,
   Viewport,
   Workspace
 } from '@shared/types'
@@ -148,6 +149,8 @@ interface ProjectsState {
   /** Replaces the project's browser-profile list (create/rename/remove all funnel through this).
    *  See `BrowserProfile` in @shared/types and `shared/browser-profiles.ts`. */
   setProjectBrowserProfiles(id: string, browserProfiles: BrowserProfile[]): void
+  /** Replaces the named portable arrangements for a project. */
+  setProjectSavedLayouts(id: string, savedLayouts: SavedCanvasLayout[]): void
   /** Writes the serialized canvas (nodes + viewport + unified links) back into a project. */
   commitCanvas(id: string, nodes: CanvasNodeState[], viewport: Viewport, links?: Link[]): void
   /**
@@ -782,6 +785,12 @@ export const useProjects = create<ProjectsState>((set, get) => ({
   setProjectBrowserProfiles(id, browserProfiles) {
     set((s) => ({
       projects: s.projects.map((p) => (p.id === id ? { ...p, browserProfiles } : p))
+    }))
+  },
+
+  setProjectSavedLayouts(id, savedLayouts) {
+    set((s) => ({
+      projects: s.projects.map((p) => (p.id === id ? { ...p, savedLayouts } : p))
     }))
   },
 

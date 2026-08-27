@@ -429,3 +429,11 @@ export const IconRestoreSize = () => (
     <path d="M4 20l6-6" />
   </svg>
 )
+
+/** Focus a node as the only visible canvas item. */
+export const IconFocus = () => (
+  <svg {...S}>
+    <path d="M8 4H5a1 1 0 0 0-1 1v3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+)

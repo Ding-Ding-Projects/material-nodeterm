@@ -1,5 +1,53 @@
 # Handoff
 
+## 2026-08-27, project-aware navigation, issue #86
+
+This task branch was reconciled with the exact remote `origin/main` tip
+`54164b84dce0b7e62787b1de2885405ff4ed821c` in merge commit `8582d087`. The implementation commit is
+`db8189b4d3cf1efc84f4588b28eb2e7b726c32d1`.
+
+The Canvas now owns a transient single-node focus view. A terminal header control, the command-palette
+Focus node action, and desktop `F11` promote the selected node into root coordinates. The full source
+node set and parent viewport stay in memory, while autosave, explicit save, and canvas synchronization
+merge the focused edit back into the owning project. Returning restores the original parent relationship,
+nested coordinates, and viewport. Same-project navigation exits focus before resolving a sibling target.
+
+Project-linked navigation keeps ownership explicit: open projects switch normally, closed projects reopen
+before focus, unavailable projects are refused, and missing project or node ids are no-ops. No project
+display name, stale projection flag, credential, process, provider operation, or external network action
+is used as an ownership substitute. Projection, link, grouping, dependency, harness, model, restart, and
+account behavior remains outside this branch.
+
+Direct documentation is `docs/features/canvas/project-aware-navigation.md`, indexed from
+`docs/features/canvas/README.md` and cross-linked from `docs/features/canvas/canvas-and-lifecycle.md`.
+`CHANGELOG.md` and `ROADMAP.md` record the same scope and evidence boundary.
+
+This implementation lane did not run tests, lint, type checks, builds, packaging, runtime interaction,
+reviews, audits, or captures. The branch remains separate from the default branch, and no release or cleanup
+was performed here.
+
+## 2026-08-27, canvas zones and saved layouts, issue #82
+
+The lane is implemented on `feat/program-71-zones-layouts` and reconciled with the exact
+`origin/main` tip `54164b84dce0b7e62787b1de2885405ff4ed821c`. It completes the upstream issue #394
+follow-up beyond the v1 zone menu: edge and corner drag previews, half, third, and quarter targets,
+and named per-project saved layouts now share one placement and validation path. Saved records carry
+only node ids, geometry, grouping, collapsed state, and the viewport. They exclude sessions,
+credentials, process state, machine paths, and other runtime data.
+
+The implementation paths are `src/renderer/lib/nodeZones.ts`, `src/renderer/lib/nodeLayouts.ts`,
+`src/renderer/canvas/Canvas.tsx`, `src/renderer/state/workspace.ts`, `src/renderer/state/projects.ts`,
+`src/shared/types.ts`, and `src/core/workspace-files.ts`. The feature article is
+`docs/features/canvas/zones-and-saved-layouts.md`, indexed from the canvas category and noted in
+`CHANGELOG.md` and `ROADMAP.md`.
+
+This ultra-speed lane intentionally did not run tests, type checks, lint, reviews, security or
+accessibility checks, builds, packaging, installer execution, runtime interaction, or captures.
+The generated offline documentation bundle was not regenerated because that is a build step; the
+next integration lane must run the supported generator and verify the generated output before
+claiming the documentation browser is current. The lane was not integrated into `main`, and no
+release or cleanup was performed here.
+
 ## 2026-08-27, AWS CDK manager, issue #48 PR preparation
 
 The issue branch was reconciled with the exact remote `origin/main` tip
@@ -441,6 +489,77 @@ were run in this ultra-speed lane. The generated `src/shared/docs-data.ts` bundl
 because `esbuild` is absent from this checkout and this lane does not install dependencies or run
 builds. The parent owns the final current-main integration, offline-bundle regeneration, release
 evidence, and any later verification.
+## 2026-08-27, bounded typed link endpoint model, issue #86
+
+This source lane was reconciled with the exact `origin/main` tip
+`54164b84dce0b7e62787b1de2885405ff4ed821c`. Commit
+`20a57197b6d470d03a8e7d7f3e2cff73a7f16c03` adds the platform-free shared validator in
+`src/shared/link-model.ts`. It accepts the discriminated `Endpoint` forms `node`, `xnode`, and
+`branch`, the `context`, `lineage`, and `dependency` kinds, and project-owned `Link` records.
+
+The validator bounds identifiers, endpoint components, metadata depth, metadata keys, metadata
+bytes, and total link count. It rejects unknown fields, malformed values, unsafe metadata names,
+absolute or traversing repository paths, duplicate ids, self-links, missing local endpoints,
+foreign mutation sources, and foreign references that point back at the local project. Foreign
+nodes are references only and are never mutated by this model.
+
+The direct article is `docs/features/canvas/link-endpoint-model.md`, indexed from the Canvas
+category. `CHANGELOG.md` records the same scope and verification boundary. Legacy `bridges` and
+`ropes` fields, migration, persistence wiring, cross-project projection, navigation, grouping,
+dependency execution, model switching, restart behavior, account behavior, and user-facing link
+authoring remain outside this lane for their dedicated owners.
+
+This source lane intentionally did not run tests, lint, type checks, builds, packaging, runtime
+interaction, reviews, security or accessibility audits, or captures. The parent integration lane
+must wire the validator into every relevant persistence boundary, regenerate the offline
+documentation bundle, and perform the remaining verification before merging. No GitHub issue or
+pull request mutation was performed by this lane.
+## 2026-08-27, persisted link migration, issue #86 and upstream PR #422
+
+The link migration is present on the assigned branch at `feat/program-75-link-migration`, reconciled
+with the exact `origin/main` tip `54164b84dce0b7e62787b1de2885405ff4ed821c`. The source integration
+is commit `24edc040d38366f9dbc7e85549d3adf38997b6bc`, which carries the two-file migration change
+from commit `eb9147af08606da84927a57c0faae7abf949247b`.
+
+`src/core/workspace-files.ts` now provides `migrateLinks`, mapping `bridges` to context links and
+`ropes` to display-only lineage links while preserving ids. New project saves emit `links` only.
+`src/core/workspace-store.ts` applies the same conversion to inline projects and to the
+`persistedCanvases()` snapshot for inline, cached SSH, and local project data. Existing `links`
+content wins over stale legacy arrays, and empty legacy collections remain absent.
+
+Direct documentation is `docs/features/projects/persisted-link-migration.md`, indexed from the
+Projects category. The changelog records the same scope and verification boundary. The generated
+offline documentation bundle was not regenerated because this lane explicitly forbids builds and
+checks; the parent integration lane must regenerate it and verify the bundle.
+
+This lane intentionally did not run tests, lint, type checks, builds, packaging, runtime
+interaction, reviews, accessibility or security audits, or captures. Endpoint modeling, navigation,
+foreign-node projections, cross-project relationships, grouping, dependency operations, harness
+behavior, model switching, restart behavior, and account behavior remain owned by their separate
+branches. The parent owns the final integration review and any issue or pull-request updates.
+## 2026-08-27, cross-project link transport and storage, issue #86
+
+The feature branch was reconciled with the exact `origin/main` tip
+`54164b84dce0b7e62787b1de2885405ff4ed821c`. The current default source already contains the
+integrated link transport commit `fd1cb6c968ea4ef7c36befb64f7c6dc154c3a0f9`, which includes the
+Canvas-owned commit funnel, unified `Project.links` persistence, local node-only context-map
+extraction, and Server Edition persisted-canvas transport. The feature branch also preserves the
+earlier source commit `08d3b2169177bf85155301a64a26818f69484e3d` in its history without rewriting
+the pushed record.
+
+Direct documentation is `docs/features/projects/cross-project-link-transport.md`, indexed from
+`docs/features/projects/README.md`. `CHANGELOG.md` and `ROADMAP.md` record the same scope and
+verification boundary. The generated `src/shared/docs-data.ts` bundle was not regenerated because
+this lane explicitly forbids builds; the parent integration lane must regenerate it before treating
+the offline article as current.
+
+This lane excludes endpoint modeling, legacy migration, foreign-node projections, navigation,
+grouping and drill-through, dependency operations, custom-agent harness, model switching,
+restart-on-subscription, and account behavior. No tests, lint, type checks, builds, packaging,
+runtime interaction, reviews, audits, or captures were run. No public issue mutation, main merge,
+release, or cleanup was performed by this lane. The parent owns final verification, integration,
+issue progress, and closure.
+
 ## 2026-08-27, AWS core-service managers, issue #46 PR preparation
 
 The issue jer was reconciled with the exact `origin/main` tip `2472cf23b99559005476841d3db5e6bc4691ac06`.

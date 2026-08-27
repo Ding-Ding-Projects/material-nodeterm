@@ -78,6 +78,11 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## In progress / partially landed
 
+- [ ] **Canvas zones and saved layouts, issue #82 / upstream issue #394**: edge and corner drag
+      previews, complete half, third, and quarter targets, and bounded named layout snapshots are
+      implemented in the source and project persistence path. Tests, type checks, lint, reviews,
+      built-artifact interaction, packaging, runtime verification, and captures remain pending
+      under the lane's ultra-speed boundary.
 - [ ] **AWS platform managers, issue #49**: ECR, ECS, EKS, RDS, database, VPC, Route 53, and cost
       operations are mounted on the existing shared AWS resource manager and AWS Shop. The node
       now carries typed previews, fixed argv with `shell: false`, bounded inputs and output,
@@ -485,6 +490,13 @@ intentionally unchecked because this task publishes the plan only.
 - [ ] Implement the outstanding upstream behavior from the planned issue and pull-request parity map.
 - [ ] Split the PR #422 behavior into independent link, endpoint, navigation, grouping, agent, and
       account lanes.
+- [ ] **Program 75 cross-project link transport and storage, issue #86.** Canvas-owned link commits,
+      persisted `Project.links`, background-project context transport, and local node-endpoint
+      filtering are recorded in `docs/features/projects/cross-project-link-transport.md`. Source
+      implementation is present, but the requested checks and runtime evidence remain pending.
+- [ ] Project-aware navigation source is present on the issue #86 branch, including single-node focus,
+      safe return, ownership-aware target routing, and direct documentation. Tests, type checks,
+      lint, builds, packaging, runtime interaction, reviews, audits, and captures remain pending.
 - [ ] Publish the new upstream pull request based on the final default branch with verified evidence.
 
 ## Deliberately not doing

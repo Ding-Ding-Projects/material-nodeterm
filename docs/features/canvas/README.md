@@ -20,6 +20,8 @@ The pan/zoom surface nodeterm is built around, and everything that lives on it.
   dish selection, portable display intent, and published-photo recovery without vendored images.
 - [Multiverse child canvases](./multiverse-canvases.md) - scoped nested canvases, guided hierarchy
   navigation, the depth-8 boundary, persistence, and portable schema 3 projection.
+- [Typed link endpoint model](./link-endpoint-model.md) - bounded node, foreign-node, and branch
+  endpoints, project ownership, portable repository references, and safe link metadata.
 - [Portal lifecycle and child-content preservation](./portal-lifecycle.md) - guided creation,
   import repair, deletion, and preservation of nested child content.
 - [Alarm Clock nodes](../../alarm-clock.md) — one-shot and recurring reminders with timezone,
@@ -27,6 +29,10 @@ The pan/zoom surface nodeterm is built around, and everything that lives on it.
 - [Canvas & node lifecycle](./canvas-and-lifecycle.md) — how nodes mount, unmount, park, and
   release memory as you pan around a large canvas; context menus, undo/redo, selection, and
   bounded wheel zoom speed.
+- [Canvas zones and saved layouts](./zones-and-saved-layouts.md) - edge and corner drag overlays,
+  complete half, third, and quarter targets, and bounded named arrangements.
+- [Project-aware navigation](./project-aware-navigation.md) — single-node focus, safe return,
+  project ownership, and honest missing or unavailable target handling.
 - [Bounded wheel zoom and speed](./wheel-zoom-speed.md) — the shared 40 ms burst budget, plain-
   wheel-only speed multiplier, point-of-use validation, persistence, and verification boundary.
   desktop trackpad gesture facts for wheel routing.

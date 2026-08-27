@@ -89,7 +89,7 @@ selection, traversal rejection, destination preflight, progress/speed/peers/ETA,
 cancel/retry, restart reconciliation, corrupt snapshots, bounded seeding, and the relay refusal.
 This ultra-speed lane intentionally does not run tests, builds, installer execution, runtime
 interaction checks, UI captures, or other verification commands; those remain explicit follow-up
-Chuts for the release pass.
+checks for the release pass.
 
 ## Suggested articles
 

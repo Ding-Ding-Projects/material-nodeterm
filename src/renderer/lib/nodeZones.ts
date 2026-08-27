@@ -1,44 +1,12 @@
-// Zone snapping (issue #394, v1, ported from upstream): place ONE node into a chosen region of
-// the visible canvas — halves and quarters — at that region's position and size. The
-// MacsyZones/FancyZones idea, scoped to the deliberate keyboard/menu gesture (a drag-time overlay
-// is a later phase, not this one).
-//
-// The gesture is viewport-relative ("left half of what I am looking at right now"); the result is
-// plain absolute node geometry that persists — a zone is a placement verb, not a live constraint.
-// Pan away and the node stays where it was put.
-//
-// Unlike the upstream original, this module does not depend on a "maximize/restore" feature (this
-// fork has none): it is self-contained, with its own margin constant and rect type.
-
-import type { Viewport } from '@xyflow/system'
-
-/** Screen-pixel inset kept between the viewport edge and the outermost zones. */
-export const ZONE_MARGIN_PX = 24
-// Zone snapping (issue #394, v1): place ONE node into a chosen region of the visible canvas —
-// halves, quarters, thirds — at that region's position and size. The MacsyZones/FancyZones idea,
-// scoped to the deliberate keyboard/menu gesture (the drag-time overlay is the follow-up).
-//
-// Same coordinate answer as the maximize toggle (issue #399), because it resolves the issue's own
-// "viewport-relative or canvas-relative?" question the same way: the GESTURE is viewport-relative
-// ("left half of what I am looking at right now"), the RESULT is plain absolute node geometry
-// that persists. A zone is a placement verb, not a live constraint — pan away and the node stays
-// where it was put.
+// Canvas placement zones for issue #394. The gesture is viewport-relative, while the resulting
+// geometry is ordinary flow coordinates that survives panning, reloads, and project sharing.
 
 import type { Viewport } from '@xyflow/system'
 import { NODE_MAXIMIZE_MARGIN_PX, type FlowRect } from './nodeMaximize'
 
-/** Screen-pixel gap between two adjacent zones, so side-by-side nodes don't touch. */
+export const ZONE_MARGIN_PX = NODE_MAXIMIZE_MARGIN_PX
 export const ZONE_GUTTER_PX = 12
-
-/** Below this, a "zone" is smaller than a node header — a comic strip the user has to fish back out. */
 const ZONE_MIN_PX = 120
-
-export interface FlowRect {
-  x: number
-  y: number
-  width: number
-  height: number
-}
 
 export type ZoneId =
   | 'left-half'
@@ -60,7 +28,6 @@ interface ZoneFraction {
   y1: number
 }
 
-/** Each zone as fractions of the usable (margin-inset) viewport. The menu renders in this order. */
 export const ZONES: readonly { id: ZoneId; label: string; frac: ZoneFraction }[] = [
   { id: 'left-half', label: 'Left half', frac: { x0: 0, y0: 0, x1: 0.5, y1: 1 } },
   { id: 'right-half', label: 'Right half', frac: { x0: 0.5, y0: 0, x1: 1, y1: 1 } },
@@ -75,9 +42,8 @@ export const ZONES: readonly { id: ZoneId; label: string; frac: ZoneFraction }[]
   { id: 'right-third', label: 'Right third', frac: { x0: 2 / 3, y0: 0, x1: 1, y1: 1 } }
 ]
 
-const ZONES_BY_ID: ReadonlyMap<ZoneId, ZoneFraction> = new Map(ZONES.map((z) => [z.id, z.frac]))
+const ZONES_BY_ID: ReadonlyMap<ZoneId, ZoneFraction> = new Map(ZONES.map((zone) => [zone.id, zone.frac]))
 
-/** Arrow-key -> zone for the keyboard chord (halves only; quarters live in the menu). */
 export const ZONE_ARROW_KEYS: Readonly<Record<string, ZoneId>> = {
   ArrowLeft: 'left-half',
   ArrowRight: 'right-half',
@@ -85,38 +51,72 @@ export const ZONE_ARROW_KEYS: Readonly<Record<string, ZoneId>> = {
   ArrowDown: 'bottom-half'
 }
 
+/** Return every usable zone in flow coordinates for the current viewport. */
+export function zoneTargetRects(
+  viewport: Viewport,
+  containerWidth: number,
+  containerHeight: number,
+  marginPx: number = ZONE_MARGIN_PX,
+  gutterPx: number = ZONE_GUTTER_PX
+): ReadonlyMap<ZoneId, FlowRect> {
+  const result = new Map<ZoneId, FlowRect>()
+  for (const zone of ZONES) {
+    const rect = zoneTargetRect(viewport, containerWidth, containerHeight, zone.id, marginPx, gutterPx)
+    if (rect) result.set(zone.id, rect)
+  }
+  return result
+}
+
 /**
- * The zone's rect in FLOW coordinates, or null when the container has no usable size, the zoom is
- * degenerate, or the resulting zone is below the minimum useful size. Internal zone edges are
- * inset by half the gutter each, so two adjacent zones share one `ZONE_GUTTER_PX` gap; outer edges
- * keep the margin.
+ * Resolve an edge or corner drag to a zone. The outer 22 percent of an edge is an intentional
+ * affordance, leaving the middle of the canvas available for an ordinary node drag.
+ */
+export function zoneForPointer(
+  clientX: number,
+  clientY: number,
+  containerWidth: number,
+  containerHeight: number,
+  edgeFraction = 0.22
+): ZoneId | null {
+  if (!(containerWidth > 0) || !(containerHeight > 0)) return null
+  const edgeX = Math.min(clientX, containerWidth - clientX) / containerWidth
+  const edgeY = Math.min(clientY, containerHeight - clientY) / containerHeight
+  const nearX = edgeX <= edgeFraction
+  const nearY = edgeY <= edgeFraction
+  if (!nearX && !nearY) return null
+  if (nearX && nearY) {
+    const left = clientX < containerWidth / 2
+    const top = clientY < containerHeight / 2
+    if (top && left) return 'top-left'
+    if (top) return 'top-right'
+    if (left) return 'bottom-left'
+    return 'bottom-right'
+  }
+  if (nearX) return clientX < containerWidth / 2 ? 'left-half' : 'right-half'
+  return clientY < containerHeight / 2 ? 'top-half' : 'bottom-half'
+}
+
 /**
- * The zone's rect in FLOW coordinates, or null when the container has no usable size — the same
- * contract as `maximizeTargetRect` (which this generalizes: the full-viewport zone IS maximize).
- * Internal zone edges are inset by half the gutter each, so two adjacent zones share one
- * `ZONE_GUTTER_PX` gap; outer edges keep the maximize margin.
+ * Resolve one zone to a flow-space rectangle. Null means the viewport is not usable yet or the
+ * result would be too small to hold a node header.
  */
 export function zoneTargetRect(
   viewport: Viewport,
   containerWidth: number,
   containerHeight: number,
   zone: ZoneId,
-  marginPx: number = NODE_MAXIMIZE_MARGIN_PX,
+  marginPx: number = ZONE_MARGIN_PX,
   gutterPx: number = ZONE_GUTTER_PX
 ): FlowRect | null {
   const frac = ZONES_BY_ID.get(zone)
-  if (!frac || !(viewport.zoom > 0)) return null
+  if (!frac || !(viewport.zoom > 0) || !(containerWidth > 0) || !(containerHeight > 0)) return null
   const innerW = containerWidth - marginPx * 2
   const innerH = containerHeight - marginPx * 2
-  // Screen-px edges inside the margin-inset area, with internal edges pulled in by gutter/2.
   const left = marginPx + frac.x0 * innerW + (frac.x0 > 0 ? gutterPx / 2 : 0)
   const right = marginPx + frac.x1 * innerW - (frac.x1 < 1 ? gutterPx / 2 : 0)
   const top = marginPx + frac.y0 * innerH + (frac.y0 > 0 ? gutterPx / 2 : 0)
   const bottom = marginPx + frac.y1 * innerH - (frac.y1 < 1 ? gutterPx / 2 : 0)
   if (!(right - left >= ZONE_MIN_PX) || !(bottom - top >= ZONE_MIN_PX)) return null
-  // Same refusal floor as maximize: below this the "zone" is smaller than a node header, and a
-  // node parked there is a comic strip the user then has to fish back out.
-  if (!(right - left >= 120) || !(bottom - top >= 120)) return null
   return {
     x: (left - viewport.x) / viewport.zoom,
     y: (top - viewport.y) / viewport.zoom,

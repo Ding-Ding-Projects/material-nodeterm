@@ -194,6 +194,20 @@ export function validateReleaseWorkflow(workflow, packageJson) {
     }
   }
 
+  // Every workflow step must have exactly one executable form. The historical zero-job release
+  // failure removed the `run` block from `Plan the release version` while leaving its metadata,
+  // shell, and environment behind. YAML still parsed, but Actions could not materialize that
+  // step into a runnable job. Keep this structural check at the parsed-step boundary so the exact
+  // regression goes red even when the missing block is surrounded by valid comments.
+  const malformedSteps = steps.filter((step) => {
+    const hasRun = typeof step?.run === 'string' && step.run.trim().length > 0
+    const hasUses = typeof step?.uses === 'string' && step.uses.trim().length > 0
+    return hasRun === hasUses
+  })
+  for (const step of malformedSteps) {
+    issues.push(`step ${step?.id ?? step?.name ?? '<unknown>'} must define exactly one non-empty run or uses section`)
+  }
+
   // The bump this workflow computes must never be written back to the repository. A commit to
   // main is a push to main, which starts this workflow again, which bumps again: an unbounded
   // chain of releases that ends when the Actions minutes do. Checked across every step's `run`

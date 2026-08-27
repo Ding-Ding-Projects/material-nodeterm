@@ -19,6 +19,7 @@ import type {
   ProjectChildCanvas,
   ProjectPortalState,
   ProjectKanban,
+  SavedCanvasLayout,
   Viewport,
   Workspace
 } from '../shared/types'
@@ -143,6 +144,8 @@ export interface ProjectFileV1 {
    */
   viewport?: Viewport
   nodes: CanvasNodeState[]
+  /** Named portable canvas arrangements. Runtime sessions and machine paths are never stored. */
+  savedLayouts?: SavedCanvasLayout[]
   /** Unified typed links written by current builds. Legacy arrays remain read-only migration input. */
   links?: Link[]
   /** Safe shared hierarchy. Runtime selection remains machine-local and is never written here. */
@@ -320,6 +323,7 @@ export function projectToFile(
   }))
   const icon = sanitizeProjectIcon(p.icon)
   const links = p.links ?? migrateLinks(p)
+  const savedLayouts = validSavedLayouts(p.savedLayouts)
   return {
     version: 1,
     rev,
@@ -329,6 +333,7 @@ export function projectToFile(
     color: p.color,
     viewport: framingViewport(nodes),
     nodes,
+    ...(savedLayouts ? { savedLayouts } : {}),
     ...(multiverseCanvases ? { multiverseCanvases } : {}),
     ...(childCanvases && childCanvases.length > 0 ? { childCanvases } : {}),
     ...(p.portals && p.portals.length > 0 ? { portals: p.portals.map((portal) => ({ ...portal })) } : {}),
@@ -378,6 +383,52 @@ export function validBrowserProfiles(v: unknown): BrowserProfile[] | undefined {
 /** Read only safe debugging-browser intent. Malformed rows are dropped individually. */
 export function validDebugBrowserProfiles(v: unknown): DebugBrowserProfile[] | undefined {
   return normalizeDebugBrowserProfiles(v)
+}
+
+export function validSavedLayouts(v: unknown): SavedCanvasLayout[] | undefined {
+  if (!Array.isArray(v) || v.length > 32) return undefined
+  const result: SavedCanvasLayout[] = []
+  const layoutIds = new Set<string>()
+  for (const item of v) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue
+    const candidate = item as Partial<SavedCanvasLayout>
+    if (
+      typeof candidate.id !== 'string' || candidate.id.length === 0 || candidate.id.length > 128 || layoutIds.has(candidate.id) ||
+      typeof candidate.name !== 'string' || candidate.name.trim().length === 0 || candidate.name.length > 160 ||
+      typeof candidate.createdAt !== 'number' || !Number.isFinite(candidate.createdAt) ||
+      typeof candidate.updatedAt !== 'number' || !Number.isFinite(candidate.updatedAt) ||
+      !candidate.viewport || typeof candidate.viewport !== 'object' ||
+      typeof candidate.viewport.x !== 'number' || !Number.isFinite(candidate.viewport.x) ||
+      typeof candidate.viewport.y !== 'number' || !Number.isFinite(candidate.viewport.y) ||
+      typeof candidate.viewport.zoom !== 'number' || !Number.isFinite(candidate.viewport.zoom) || candidate.viewport.zoom <= 0 ||
+      !Array.isArray(candidate.nodes) || candidate.nodes.length > 1000
+    ) continue
+    const nodeIds = new Set<string>()
+    const nodes = candidate.nodes.filter((entry): entry is SavedCanvasLayout['nodes'][number] => {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return false
+      const node = entry as Partial<SavedCanvasLayout['nodes'][number]>
+      if (typeof node.id !== 'string' || node.id.length === 0 || node.id.length > 128 || nodeIds.has(node.id)) return false
+      const valid = !!node.position && typeof node.position.x === 'number' && Number.isFinite(node.position.x) &&
+        typeof node.position.y === 'number' && Number.isFinite(node.position.y) && !!node.size &&
+        typeof node.size.width === 'number' && Number.isFinite(node.size.width) && node.size.width > 0 &&
+        typeof node.size.height === 'number' && Number.isFinite(node.size.height) && node.size.height > 0 &&
+        (node.parentId === undefined || (typeof node.parentId === 'string' && node.parentId.length <= 128)) &&
+        (node.collapsed === undefined || typeof node.collapsed === 'boolean')
+      if (valid) nodeIds.add(node.id)
+      return valid
+    })
+    if (nodes.length !== candidate.nodes.length) continue
+    layoutIds.add(candidate.id)
+    result.push({
+      id: candidate.id,
+      name: candidate.name.trim(),
+      createdAt: candidate.createdAt,
+      updatedAt: candidate.updatedAt,
+      viewport: { x: candidate.viewport.x, y: candidate.viewport.y, zoom: candidate.viewport.zoom },
+      nodes: nodes.map((node) => ({ ...node, position: { ...node.position }, size: { ...node.size } }))
+    })
+  }
+  return result.length > 0 ? result : undefined
 }
 
 /** Tolerant reader for imported child-canvas content. A malformed child record is omitted as an
@@ -484,6 +535,7 @@ export function fileToProject(
   const childCanvases = validChildCanvases(f.childCanvases, base.id)
   const icon = sanitizeProjectIcon(f.icon)
   const links = migrateLinks(f)
+  const savedLayouts = validSavedLayouts(f.savedLayouts)
   return {
     id: base.id,
     name: f.name,
@@ -500,6 +552,7 @@ export function fileToProject(
       sanitizeCalendarConfigs(applyLocalNodeExec(base.cwd ? resolveNodes(f.nodes, base.cwd) : f.nodes, base.localExec)),
       base.id
     ),
+    ...(savedLayouts ? { savedLayouts } : {}),
     ...(multiverseCanvases ? { multiverseCanvases } : {}),
     ...(childCanvases ? {
       childCanvases: childCanvases.map((canvas) => ({
