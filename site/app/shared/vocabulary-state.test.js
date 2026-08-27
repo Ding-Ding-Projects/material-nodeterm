@@ -282,7 +282,7 @@ test('the real renderer maps authored strings and preserves exact facts', () => 
       GitHub: 'WRONG FORGE',
       'BUSL-1.1 licensed · fork of': 'WRONG LICENSE',
       'Magic jump box — Ctrl+Shift+F': 'WRONG SHORTCUT',
-      'brew install --cask nodeterm': 'WRONG COMMAND'
+      'Windows x64 · unsigned Squirrel installer': 'WRONG INSTALLER'
     }
     store.state.vocabStatus = 'loaded'
     store.state.view = 'hall'
@@ -292,10 +292,10 @@ test('the real renderer maps authored strings and preserves exact facts', () => 
     // Brand, command, shortcut and URL-adjacent facts stay byte-identical.
     assert.match(hall, />nodeterm school</)
     assert.match(hall, /Magic jump box — Ctrl\+Shift\+F/)
-    assert.match(hall, /brew install --cask nodeterm/)
+    assert.match(hall, /Windows x64 · unsigned Squirrel installer/)
     assert.match(hall, /<span class="brand__name">nodeterm school<\/span>/)
     assert.match(hall, /title="Magic jump box — Ctrl\+Shift\+F"/)
-    assert.match(hall, /brew install --cask nodeterm/)
+    assert.match(hall, /Windows x64 · unsigned Squirrel installer/)
 
     store.state.view = 'room'
     store.state.sec = 'notes'

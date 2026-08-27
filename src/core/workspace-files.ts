@@ -11,6 +11,7 @@ import type {
   BridgeLink,
   BrowserProfile,
   CanvasNodeState,
+  Link,
   NavStop,
   Project,
   ProjectMultiverseCanvas,
@@ -25,7 +26,10 @@ import { sanitizeMultiverseCanvases } from '../shared/multiverse-canvases'
 import { projectCapabilityFields, readProjectCapabilities } from '../shared/project-capabilities'
 import type { CapabilityAckMap } from '../shared/project-capability-consent'
 import { sanitizeProjectIcon, type ProjectIcon } from '../shared/project-icon'
+import type { BridgeLink, CanvasNodeState, NavStop, Project, ProjectKanban, Viewport, Workspace } from '../shared/types'
+import { projectCapabilityFields, readProjectCapabilities } from '../shared/project-capabilities'
 import { loadedAgentBrowserPartition } from '../shared/browser-partition'
+import { sanitizeProjectIcon, type ProjectIcon } from '../shared/project-icon'
 import { validatePortableDoorConstruction } from '../shared/door-construction'
 import { validateCalendarConfig } from '../shared/calendar'
 
@@ -55,6 +59,41 @@ function sanitizeCalendarConfigs(nodes: CanvasNodeState[]): CanvasNodeState[] {
 
 export const PROJECT_DIR = '.nodeterm'
 export const PROJECT_FILE = 'project.json'
+
+/**
+ * Lift legacy bridge and rope arrays into the unified link substrate while reading a project.
+ *
+ * Bridge ids and rope ids remain unchanged so existing edge identity and deduplication survive
+ * the migration. Ropes are explicitly marked display-only, preserving their historical
+ * non-context semantics. An already-written links array wins over stale legacy fields, and an
+ * empty legacy canvas stays empty so loading it does not create a needless file change.
+ */
+export function migrateLinks(f: {
+  links?: Link[]
+  bridges?: BridgeLink[]
+  ropes?: BridgeLink[]
+}): Link[] | undefined {
+  if (f.links) return f.links
+  const out: Link[] = []
+  for (const bridge of f.bridges ?? []) {
+    out.push({
+      id: bridge.id,
+      kind: 'context',
+      source: { ref: 'node', nodeId: bridge.source },
+      target: { ref: 'node', nodeId: bridge.target }
+    })
+  }
+  for (const rope of f.ropes ?? []) {
+    out.push({
+      id: rope.id,
+      kind: 'lineage',
+      source: { ref: 'node', nodeId: rope.source },
+      target: { ref: 'node', nodeId: rope.target },
+      meta: { displayOnly: true }
+    })
+  }
+  return out.length > 0 ? out : undefined
+}
 
 /**
  * On-disk shape of <cwd>/.nodeterm/project.json — a GIT-SHARED document (users are asked to
@@ -108,12 +147,16 @@ export interface ProjectFileV1 {
   nodes: CanvasNodeState[]
   /** Named portable canvas arrangements. Runtime sessions and machine paths are never stored. */
   savedLayouts?: SavedCanvasLayout[]
+  /** Unified typed links written by current builds. Legacy arrays remain read-only migration input. */
+  links?: Link[]
   /** Safe shared hierarchy. Runtime selection remains machine-local and is never written here. */
   multiverseCanvases?: ProjectMultiverseCanvas[]
   /** Schema 3 child-canvas content. These fields contain safe presentation only. */
   childCanvases?: ProjectChildCanvas[]
   portals?: ProjectPortalState[]
+  /** LEGACY read-only migration source; new writes emit `links` instead. */
   bridges?: BridgeLink[]
+  /** LEGACY read-only migration source; new writes emit `links` instead. */
   ropes?: BridgeLink[]
   /**
    * LEGACY (read-only), same rule as `viewport`: a managed Claude account id names a credential
@@ -257,7 +300,7 @@ export function resolveNodes(nodes: CanvasNodeState[], root: string): CanvasNode
  * Dropped on the way out, because a second machine opening the same repo would legitimately
  * disagree about them: the project `id` (identity — see `IndexEntryV3.id`), the `viewport` (this
  * user's camera) and `defaultAccountId` (a credential dir under this userData). Kept, because a
- * team genuinely shares them: name, color, nodes, bridges/ropes, the kanban board, the permission
+ * team genuinely shares them: name, color, nodes, links, the kanban board, the permission
  * default, the dino record.
  *
  * The two fields a pre-change build cannot do without are still emitted, as machine-INDEPENDENT
@@ -287,6 +330,7 @@ export function projectToFile(
     nodes: sanitizeCalendarConfigs(stripSharedNodeExec(p.cwd ? toPortableNodes(canvas.nodes, p.cwd) : canvas.nodes))
   }))
   const icon = sanitizeProjectIcon(p.icon)
+  const links = p.links ?? migrateLinks(p)
   const savedLayouts = validSavedLayouts(p.savedLayouts)
   return {
     version: 1,
@@ -302,8 +346,7 @@ export function projectToFile(
     ...(childCanvases && childCanvases.length > 0 ? { childCanvases } : {}),
     ...(p.portals && p.portals.length > 0 ? { portals: p.portals.map((portal) => ({ ...portal })) } : {}),
     ...(icon ? { icon } : {}),
-    ...(p.bridges ? { bridges: p.bridges } : {}),
-    ...(p.ropes ? { ropes: p.ropes } : {}),
+    ...(links ? { links } : {}),
     ...(p.defaultPermissionMode ? { defaultPermissionMode: p.defaultPermissionMode } : {}),
     // Strict-normalised (literal true only, known keys only) and omitted when off — an off
     // capability adds no bytes to the committed file. `capabilityAck` is deliberately NOT here:
@@ -344,17 +387,15 @@ export function validBrowserProfiles(v: unknown): BrowserProfile[] | undefined {
   return cleaned.length > 0 ? cleaned : undefined
 }
 
-/** Strict, bounded reader for saved canvas arrangements. Invalid entries are omitted so a
- * hand-edited layout cannot make the project unreadable or introduce runtime-only data. */
 export function validSavedLayouts(v: unknown): SavedCanvasLayout[] | undefined {
   if (!Array.isArray(v) || v.length > 32) return undefined
   const result: SavedCanvasLayout[] = []
-  const ids = new Set<string>()
+  const layoutIds = new Set<string>()
   for (const item of v) {
     if (!item || typeof item !== 'object' || Array.isArray(item)) continue
     const candidate = item as Partial<SavedCanvasLayout>
     if (
-      typeof candidate.id !== 'string' || candidate.id.length === 0 || candidate.id.length > 128 || ids.has(candidate.id) ||
+      typeof candidate.id !== 'string' || candidate.id.length === 0 || candidate.id.length > 128 || layoutIds.has(candidate.id) ||
       typeof candidate.name !== 'string' || candidate.name.trim().length === 0 || candidate.name.length > 160 ||
       typeof candidate.createdAt !== 'number' || !Number.isFinite(candidate.createdAt) ||
       typeof candidate.updatedAt !== 'number' || !Number.isFinite(candidate.updatedAt) ||
@@ -367,20 +408,19 @@ export function validSavedLayouts(v: unknown): SavedCanvasLayout[] | undefined {
     const nodeIds = new Set<string>()
     const nodes = candidate.nodes.filter((entry): entry is SavedCanvasLayout['nodes'][number] => {
       if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return false
-      const n = entry as Partial<SavedCanvasLayout['nodes'][number]>
-      if (typeof n.id !== 'string' || n.id.length === 0 || n.id.length > 128 || nodeIds.has(n.id)) return false
-      const valid =
-        !!n.position && typeof n.position.x === 'number' && Number.isFinite(n.position.x) &&
-        typeof n.position.y === 'number' && Number.isFinite(n.position.y) &&
-        !!n.size && typeof n.size.width === 'number' && Number.isFinite(n.size.width) && n.size.width > 0 &&
-        typeof n.size.height === 'number' && Number.isFinite(n.size.height) && n.size.height > 0 &&
-        (n.parentId === undefined || (typeof n.parentId === 'string' && n.parentId.length <= 128)) &&
-        (n.collapsed === undefined || typeof n.collapsed === 'boolean')
-      if (valid) nodeIds.add(n.id)
+      const node = entry as Partial<SavedCanvasLayout['nodes'][number]>
+      if (typeof node.id !== 'string' || node.id.length === 0 || node.id.length > 128 || nodeIds.has(node.id)) return false
+      const valid = !!node.position && typeof node.position.x === 'number' && Number.isFinite(node.position.x) &&
+        typeof node.position.y === 'number' && Number.isFinite(node.position.y) && !!node.size &&
+        typeof node.size.width === 'number' && Number.isFinite(node.size.width) && node.size.width > 0 &&
+        typeof node.size.height === 'number' && Number.isFinite(node.size.height) && node.size.height > 0 &&
+        (node.parentId === undefined || (typeof node.parentId === 'string' && node.parentId.length <= 128)) &&
+        (node.collapsed === undefined || typeof node.collapsed === 'boolean')
+      if (valid) nodeIds.add(node.id)
       return valid
     })
     if (nodes.length !== candidate.nodes.length) continue
-    ids.add(candidate.id)
+    layoutIds.add(candidate.id)
     result.push({
       id: candidate.id,
       name: candidate.name.trim(),
@@ -486,7 +526,6 @@ export function fileToProject(
 ): Project {
   const defaultAccountId = base.defaultAccountId ?? f.defaultAccountId
   const browserProfiles = validBrowserProfiles(f.browserProfiles)
-  const savedLayouts = validSavedLayouts(f.savedLayouts)
   const multiverseCanvases = sanitizeMultiverseCanvases(f.multiverseCanvases)?.map((canvas) => ({
     ...canvas,
     nodes: sanitizeBrowserPartitions(
@@ -496,6 +535,8 @@ export function fileToProject(
   }))
   const childCanvases = validChildCanvases(f.childCanvases, base.id)
   const icon = sanitizeProjectIcon(f.icon)
+  const links = migrateLinks(f)
+  const savedLayouts = validSavedLayouts(f.savedLayouts)
   return {
     id: base.id,
     name: f.name,
@@ -524,8 +565,7 @@ export function fileToProject(
       }))
     } : {}),
     ...(validPortals(f.portals) ? { portals: f.portals.map((portal) => ({ ...portal })) } : {}),
-    ...(f.bridges ? { bridges: f.bridges } : {}),
-    ...(f.ropes ? { ropes: f.ropes } : {}),
+    ...(links ? { links } : {}),
     ...(defaultAccountId ? { defaultAccountId } : {}),
     ...(base.settingsOverrides ? { settingsOverrides: base.settingsOverrides } : {}),
     // Machine-local, from the index entry ONLY: a file field named `breadcrumbs` is a forgery
