@@ -2,6 +2,7 @@ import { memo, useState } from 'react'
 import type { KanbanCardMeta, KanbanLabel, KanbanPriority } from '@shared/types'
 import { useAgentStatus } from '../../state/agentStatus'
 import { ContextMeter } from '../ContextMeter'
+import { NodeIconView } from '../NodeIcon'
 import { LabelChips } from './LabelChips'
 import type { KanbanSession } from './KanbanView'
 import type { KanbanTerminalProfilePresentation } from './terminal-profile-ui'
@@ -159,6 +160,7 @@ export const SessionCard = memo(function SessionCard({
     >
       <div className="kanban-card__row">
         <span className="kanban-card__nodedot" style={{ background: session.color }} />
+        <NodeIconView icon={session.icon} size={14} className="kanban-card__icon" />
         <span className="kanban-card__title">{session.title}</span>
         {session.kind === 'terminal' && terminalProfile && (
           <SessionCardTerminalProfile profile={terminalProfile} />

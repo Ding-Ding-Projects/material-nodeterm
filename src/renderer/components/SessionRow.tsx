@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { IconBellFilled, IconCircleCheck } from './icons'
+import { NodeIconView } from './NodeIcon'
 import { ProjectGlyph } from './ProjectGlyph'
 import type { SessionRowVM } from '../lib/sessionList'
 import { useContextWindow } from '../state/contextWindow'
@@ -95,6 +96,7 @@ export function SessionRow({
       )}
       <div className="ss-row__body">
         <div className="ss-row__titleline">
+          <NodeIconView icon={row.icon} size={13} className="ss-row__icon" projectId={row.projectId} />
           {row.projectColor ? (
             // Status mode: rows are flattened across projects, so each row shows its project's
             // icon (or, absent one, the monogram — colored circle with the project initial)

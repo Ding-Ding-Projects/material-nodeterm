@@ -56,6 +56,7 @@ import { TORRENT_NODE_CATALOG_ENTRY } from '@shared/torrent'
 import { DEFAULT_VIRTUAL_MACHINE_CONFIG } from '@shared/virtual-machine'
 import { TIMER_DEFAULT_DURATION_MS, type TimerNodeData } from '@shared/timer'
 import { createRecoveryGameSnapshot, normalizeRecoveryGameSnapshot, type RecoveryGameSnapshot } from '@shared/recovery-game'
+import { normalizeNodeIcon } from '@shared/node-icon'
 
 // Re-exported so Canvas (and anything else in the renderer) keeps importing it from here, while the
 // single implementation lives in src/shared and is shared with the relay host + the canvas-sync
@@ -142,6 +143,8 @@ export interface NodeData {
   color: string
   group: string | null
   tags?: string[]
+  /** User-chosen terminal-session mark, validated before entering or leaving live state. */
+  icon?: import('@shared/node-icon').NodeIcon
   collapsed?: boolean
   /** Native persisted Loop node fields (type='scheduler'). */
   loopTask?: string
@@ -2702,6 +2705,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         group: n.group,
         tags: n.tags,
         collapsed,
+        icon: normalizeNodeIcon(n.icon),
         hideFanout: n.hideFanout,
         expandedHeight: n.size.height,
         loopTask: n.loopTask,
@@ -2828,6 +2832,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         group: n.data.group,
         tags: n.data.tags,
         collapsed: n.data.collapsed,
+        icon: normalizeNodeIcon(n.data.icon),
         loopTask: n.data.loopTask,
         loopIntervalMs: n.data.loopIntervalMs,
         loopEnabled: n.data.loopEnabled,

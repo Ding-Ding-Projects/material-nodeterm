@@ -1,6 +1,7 @@
 import type { AgentNodeStatus } from '../state/agentStatus'
 import type { AgentId } from '@shared/agents/config'
 import type { NodeKind } from '@shared/types'
+import type { NodeIcon } from '@shared/node-icon'
 import type { ProjectIcon } from '@shared/project-icon'
 import { hasUsage } from '@shared/agents/config'
 import type { SshConnection } from '@shared/ssh'
@@ -17,6 +18,7 @@ export interface SessionNodeInput {
   ssh?: SshConnection
   /** Parent group node id when this node lives inside a canvas group frame. */
   parentId?: string
+  icon?: NodeIcon
 }
 
 export interface ProjectInput {
@@ -224,6 +226,7 @@ export interface SessionRowVM {
   title: string
   color: string
   agentId?: AgentId
+  icon?: NodeIcon
   isAgent: boolean
   statusKind: StatusKind
   stateLabel: string
@@ -279,6 +282,7 @@ function toRow(
     id: n.id,
     title: n.title,
     color: n.color,
+    icon: n.icon,
     agentId: n.agentId,
     isAgent: !!n.agentId,
     statusKind,
