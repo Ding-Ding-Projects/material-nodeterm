@@ -492,7 +492,6 @@ export class SessionHostClient {
         }
       }
       const onHandshakeData = (chunk: Buffer): void => {
-        const frames = framer.push<SessionHostFrame>(chunk.toString('utf8'))
         let frames: SessionHostFrame[]
         try {
           frames = framer.push<SessionHostFrame>(chunk.toString('utf8'))
@@ -558,7 +557,6 @@ export class SessionHostClient {
     this.everConnected = true
     const framer = new LineFramer()
     socket.on('data', (chunk: Buffer) => {
-      for (const frame of framer.push<SessionHostFrame>(chunk.toString('utf8'))) {
       let frames: SessionHostFrame[]
       try {
         frames = framer.push<SessionHostFrame>(chunk.toString('utf8'))
@@ -793,7 +791,6 @@ export class SessionHostClient {
     onSuccess?: (result: T, socket: net.Socket) => void
   ): Promise<T> {
     if (this.socket !== socket || socket.destroyed) {
-      return Promise.reject(new Error('session-host connection lost'))
       return Promise.reject(
         new SessionHostRequestNotDeliveredError(new Error('session-host connection lost'))
       )
@@ -818,24 +815,6 @@ export class SessionHostClient {
       }
       pending.timer = setTimeout(() => {
         if (this.pending.get(id) !== pending) return
-        this.dropSocket(
-          socket,
-          new Error(`session-host request timed out: ${request.cmd}`),
-          true
-        )
-      }, SESSION_HOST_REQUEST_TIMEOUT_MS)
-      pending.timer.unref?.()
-      this.pending.set(id, pending)
-      try {
-        socket.write(encodeFrame(full), (error) => {
-          // A response may beat a late write callback. Identity-check this exact pending entry so
-          // that callback can neither settle nor delete a newer request that reused surrounding state.
-          if (!error || this.pending.get(id) !== pending) return
-          this.dropSocket(socket, asError(error), true)
-        })
-      } catch (error) {
-        if (this.pending.get(id) === pending) this.dropSocket(socket, asError(error), true)
-      }
         const deadline = new Error(`session-host request timed out: ${request.cmd}`)
         // The deadline is uncertainty even for a frame still queued behind the send turn below:
         // reject THIS entry directly (never as resendable), then retire the socket for the rest.

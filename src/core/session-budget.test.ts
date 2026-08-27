@@ -309,10 +309,6 @@ describe('hostUnderMemoryPressure', () => {
 })
 
 describe('sessionBudgetConfig', () => {
-  it('defaults: 10% of RAM watermark (floor 1GB), cap 48, grace 24h, batch 8', () => {
-    const c = sessionBudgetConfig({}, 64_000)
-    expect(c).toEqual({ disabled: false, minAvailableMb: 6400, maxIdle: 48, graceSec: 86_400, batchMax: 8 })
-    expect(sessionBudgetConfig({}, 4000).minAvailableMb).toBe(1024)
   const memOf = (totalMb: number) => ({ availableMb: Math.round(totalMb / 2), totalMb })
 
   it('defaults: 10% of RAM watermark (floor 1GB), grace 6h, batch 8', () => {
@@ -448,11 +444,7 @@ describe('createSessionReaper (service)', () => {
     ])
   })
 
-  // A sweep spans several tmux calls across sockets, so the world can move between planning and
-  // killing. The re-verify checks the same rule that made the session eligible — it used to check
-  // attachment, which no longer means anything; waking up shows as activity, so that is what is
-  // re-read.
-  it('re-verifies at kill time: a session that became active between plan and kill is spared', async () => {
+  // The kill log carries both clocks so operators can distinguish pane silence from recent attach.
   it('the kill log names BOTH clocks, with the silence leading', async () => {
     // The attach clock's only production consumer is this log line. It rides along BECAUSE it
     // disagrees with the silence: an operator cross-checking `tmux ls` sees `session_activity`
@@ -508,7 +500,7 @@ describe('createSessionReaper (service)', () => {
       ...base,
       env: { NODETERM_SESSION_REAP_DISABLED: '1' },
       tmuxBin: () => 'tmux',
-      exec: w.exec
+      exec: w.exec,
     })
     expect(await reaper.sweep()).toBe(0)
     expect(w.calls).toHaveLength(0)
@@ -557,7 +549,6 @@ describe('createSessionReaper (service)', () => {
 
   it('an external reason never overrides the grace or nt-name gates', async () => {
     const w = fakeWorld({
-      'node-terminal': [`nt-idle|1|${OLD}`, `nt-fresh|0|${NOW - 60}`, `user-shell|0|${OLD}`]
       'node-terminal': [row('nt-watched', 1, OLD), row('nt-fresh', 0, NOW - 60)]
     })
     const reaper = createSessionReaper({
