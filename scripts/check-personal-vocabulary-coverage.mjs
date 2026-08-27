@@ -508,11 +508,6 @@ try {
   copyFileSync(join(ROOT, 'src/renderer/canvas/Canvas.tsx'), canvasCopy)
   const canvasOriginal = readFileSync(canvasCopy, 'utf8')
   writeFileSync(canvasCopy, canvasOriginal.replace(/\btitleKind\s*:\s*['"](?:authored|fact)['"],?/g, ''), 'utf8')
-  const titleMutationCalls = callArguments(readFileSync(canvasCopy, 'utf8'), 'notify').filter((args) => args.trimStart().startsWith('{'))
-  check('real-file Canvas title ownership mutation is rejected', !titleMutationCalls.every((args) => /\btitleKind\s*:/.test(args)))
-  writeFileSync(canvasCopy, canvasOriginal.replace(/\bbodyKind\s*:\s*['"](?:authored|fact)['"],?/g, ''), 'utf8')
-  const bodyMutationCalls = callArguments(readFileSync(canvasCopy, 'utf8'), 'notify').filter((args) => args.trimStart().startsWith('{'))
-  check('real-file Canvas body ownership mutation is rejected', !bodyMutationCalls.filter((args) => /\bbody\s*:/.test(args)).every((args) => /\bbodyKind\s*:/.test(args)))
   const titleMutationCalls = callArguments(readFileSync(canvasCopy, 'utf8'), 'notify').filter((args) => /\bkind\s*:/.test(args) && /\btitle\s*:/.test(args))
   check('real-file Canvas title ownership mutation is rejected', !titleMutationCalls.every((args) => /\btitleKind\s*:/.test(args)))
   writeFileSync(canvasCopy, canvasOriginal.replace(/\bbodyKind\s*:\s*['"](?:authored|fact)['"],?/g, ''), 'utf8')
@@ -524,6 +519,7 @@ try {
   check('real-file Canvas title inventory mutation is rejected', markerMutationCalls.filter((args) => args.includes('Folder drop cancelled')).length !== 2)
 } finally {
   rmSync(mutationRoot, { recursive: true, force: true })
+}
 // Mutate a complete fixture and execute this checker against it, rather than only invoking one
 // predicate in memory. This catches a broken checker that accidentally passes its own miniature
 // assertion while the real inventory path would still accept a missing producer.
