@@ -71,9 +71,12 @@
   documentation page, with a fail-closed source checker and shared numeric, radio, progress,
   keyboard-roving tabs, tooltip, and shape-token remediation. Built-artifact clipping and pixel evidence remain pending;
   the documentation and landing site stays in its existing Kids-mode visual style.
-- Add the schema 3 portable media contract: content-addressed image, audio, and video assets,
-  byte/signature validation, explicit Include/Omit/Locate Later decisions, unresolved placeholders,
-  and machine-local source-path exclusion. Archive wiring and verification remain pending.
+- Complete the schema 3 portable media source path: the typed desktop bridge now prepares
+  path-free decision candidates, Include requires parser-proved media facts, selected bytes are
+  content-addressed under `assets/media/`, and import validates and stages the real bytes before one
+  atomic destination rename. Tests, type checks, lint, reviews, security and accessibility checks,
+  builds, packaging, installer execution, runtime interaction, and captures remain intentionally
+  unrun.
 - Add schema 3 portable project import and export wiring with complete entry hash validation,
   bounded in-memory legacy migration, collision-safe atomic destination staging, cancellation,
   rollback, and an explicit omission report. Keep provider credentials, machine paths, process

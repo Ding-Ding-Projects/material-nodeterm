@@ -65,6 +65,8 @@ import type { TimerOccurrence } from '../shared/timer'
 import { registerVsCodeHandlers } from '../core/vscode-handlers'
 import { LocalHistoryStore } from '../core/local-history'
 import { ProjectArchiveService } from '../core/project-archive'
+import { preparePortableMedia, type PortableMediaPreparation } from '../core/portable-media-assets'
+import type { PortableMediaExportPlan, PortableMediaPrepareInput } from '../shared/portable-media'
 import { ServerDeploymentService, resolveServerDeploymentRoot } from './server-deployment'
 import { registerLocalHistoryHandlers } from '../core/local-history-handlers'
 import { describeSettingsChange } from '../shared/settings-diff'
@@ -1578,6 +1580,93 @@ app.whenReady().then(async () => {
   // bindings for both shells. Import never calls these handlers, so opening a project cannot start
   // consent, contact a provider, or mutate a destination resource as a side effect.
   registerProviderServicesIpc(corePlatform)
+  const portableMediaPreparations = new Map<string, { createdAt: number; projectId: string; preparation: PortableMediaPreparation }>()
+  const discardExpiredPortableMedia = (): void => {
+    const expiresBefore = Date.now() - 10 * 60 * 1000
+    for (const [id, value] of portableMediaPreparations) if (value.createdAt < expiresBefore) portableMediaPreparations.delete(id)
+  }
+  ipcMain.handle(IPC.portableMediaPrepare, async (_event, input: unknown) => {
+    discardExpiredPortableMedia()
+    if (!input || typeof input !== 'object' || Array.isArray(input)) return { ok: false, error: 'Portable media preparation is invalid.' }
+    const value = input as Record<string, unknown>
+    if (typeof value.projectId !== 'string' || !Array.isArray(value.sourcePaths) || value.sourcePaths.some((item) => typeof item !== 'string') || (value.projectRoot !== undefined && typeof value.projectRoot !== 'string')) return { ok: false, error: 'Portable media preparation is invalid.' }
+    try {
+      const preparation = await preparePortableMedia(value as unknown as PortableMediaPrepareInput)
+      const preparationId = randomUUID()
+      portableMediaPreparations.set(preparationId, { createdAt: Date.now(), projectId: value.projectId, preparation })
+      return { ok: true, preparationId, candidates: preparation.items.map((item) => item.candidate) }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  })
+  ipcMain.handle(IPC.portableMediaDiscard, (_event, preparationId: unknown) =>
+    typeof preparationId === 'string' ? portableMediaPreparations.delete(preparationId) : false
+  )
+  const portableBindings = new LocalNodeBindingStore(app.getPath('userData'))
+  ipcMain.handle(IPC.portableBindingState, async (_event, input: unknown) => {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) return []
+    const value = input as Record<string, unknown>
+    if (typeof value.nodeId !== 'string' || typeof value.featureId !== 'string' || typeof value.displayLabel !== 'string') return []
+    const bindings = await portableBindings.load()
+    const current = bindings[value.nodeId]
+    return bindingActionStates(
+      {
+        schemaVersion: 1,
+        featureId: value.featureId,
+        displayLabel: value.displayLabel,
+        requestedCapabilities: [],
+        safeSettings: {},
+        relationships: []
+      },
+      {
+        hasBinding: Boolean(current),
+        hasMatchingResource: Boolean(current),
+        canConfigure: true,
+        canDeploy: false,
+        hasMissingAssets: value.hasMissingAssets === true
+      }
+    ).map((state) => ({
+      nodeId: value.nodeId as string,
+      featureId: value.featureId as string,
+      displayLabel: value.displayLabel as string,
+      action: state.action,
+      enabled: state.enabled,
+      ...(state.reason ? { reason: state.reason } : {}),
+      bound: Boolean(current)
+    }))
+  })
+  ipcMain.handle(IPC.portableBindingApply, async (_event, input: unknown) => {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) return { ok: false, error: 'Binding input is invalid.' }
+    const value = input as Record<string, unknown>
+    if (typeof value.nodeId !== 'string' || typeof value.action !== 'string') return { ok: false, error: 'Binding input is invalid.' }
+    if (value.action === 'leave-unbound') {
+      await portableBindings.remove(value.nodeId)
+      return { ok: true, state: 'unbound' as const }
+    }
+    if (!['configure', 'rebind', 'adopt', 'locate-asset'].includes(value.action)) {
+      return { ok: false, error: 'Deploy requires an explicit provider flow and is not performed by import.' }
+    }
+    try {
+      const binding = validateLocalNodeBinding({
+        nodeId: value.nodeId,
+        bindingVersion: 1,
+        providerOrHostIdentity: value.providerOrHostIdentity,
+        localResourceReferences: value.localResourceReferences,
+        credentialKeys: value.credentialKeys ?? [],
+        lastVerifiedAt: Date.now()
+      })
+      const snapshot = await portableBindings.snapshot()
+      try {
+        await portableBindings.apply(value.nodeId, binding)
+      } catch (error) {
+        await portableBindings.restore(snapshot)
+        throw error
+      }
+      return { ok: true, state: 'bound' as const }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  })
   // The packaged extraResources directory in a production install, the repo root in dev (see
   // resolveServerDeploymentRoot's own doc comment; `build.extraResources` in package.json ships
   // the matching `server-deployment/` directory). Writable state (the generated .env password,
@@ -1660,7 +1749,7 @@ app.whenReady().then(async () => {
   const archiveUnlock = new ArchiveUnlockGuard({ schoolMode: () => schoolModeStore.get().enabled })
   ipcMain.handle(
     IPC.projectArchiveExport,
-    async (_event, project: import('../shared/types').Project, password?: string) => {
+    async (_event, project: import('../shared/types').Project, password?: string, media?: PortableMediaExportPlan) => {
     if (projectArchiveBusy) return { ok: false, error: 'Another project export or import is still running.' }
     projectArchiveBusy = true
     try {
@@ -1678,7 +1767,16 @@ app.whenReady().then(async () => {
       // its own files and is captured with the rest; passing it here too would put two copies in
       // one save file. See core/password-manager/vault-location.ts.
       const vault = project.cwd ? undefined : await readFolderlessVault(project.id)
-      const exported = await projectArchives.export(project, vault ? { vault } : {})
+      let portableMedia: { preparation: PortableMediaPreparation; decisions: PortableMediaExportPlan['decisions'] } | undefined
+      if (media !== undefined) {
+        if (!media || typeof media.preparationId !== 'string' || !Array.isArray(media.decisions)) throw new Error('Portable media export plan is invalid.')
+        const prepared = portableMediaPreparations.get(media.preparationId)
+        if (!prepared) throw new Error('Portable media preparation expired. Choose the media again.')
+        if (prepared.projectId !== project.id) throw new Error('Portable media preparation belongs to a different project.')
+        portableMediaPreparations.delete(media.preparationId)
+        portableMedia = { preparation: prepared.preparation, decisions: media.decisions }
+      }
+      const exported = await projectArchives.export(project, { ...(vault ? { vault } : {}), ...(portableMedia ? { portableMedia } : {}) })
       // Encrypt the FINISHED container, never its entries: a ZIP's entry names alone would say
       // which repository travelled and what the project is called. See project-archive-encryption.ts.
       const bytes = password ? encryptArchive(exported.bytes, password) : exported.bytes

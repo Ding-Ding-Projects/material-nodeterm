@@ -469,6 +469,13 @@ export function buildRealApi(
       ok: false,
       error: mapLocalVocabularyText('Project archive import is available in the Windows desktop app.')
     }),
+    portableMedia: {
+      prepare: async () => ({
+        ok: false,
+        error: mapLocalVocabularyText('Portable media preparation is available in the Windows desktop app.')
+      }),
+      discard: async () => false
+    },
     portableBindings: {
       state: (input) => client.request(IPC.portableBindingState, input) as ReturnType<WorkspaceApi['portableBindings']['state']>,
       apply: (input) => client.request(IPC.portableBindingApply, input) as ReturnType<WorkspaceApi['portableBindings']['apply']>

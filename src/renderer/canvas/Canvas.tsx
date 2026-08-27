@@ -304,7 +304,7 @@ import { peerApprovalView } from '@shared/remote/approval'
 import { promptDialog } from '../components/promptDialog'
 import { requestArchivePassword } from '../components/archiveUnlockDialog'
 import { PortableMediaDecisionDialog } from '../components/PortableMediaDecisionDialog'
-import { collectPortableMedia, sha256Media, type PortableMediaCandidate, type PortableMediaDecision } from '../../core/portable-media-assets'
+import type { PortableMediaCandidate, PortableMediaDecision, PortableMediaExportPlan } from '@shared/portable-media'
 import { RemotePicker } from '../components/RemotePicker'
 import { WorktreeDialog } from '../components/WorktreeDialog'
 import { GroupPickerDialog, type GroupPickerOption } from '../components/canvas/GroupPickerDialog'
@@ -15514,24 +15514,20 @@ export function Canvas() {
   // independently, and the menu rows read the same ref for their disabled state.
   const projectArchiveBusyRef = useRef(false)
   const [portableMediaDialog, setPortableMediaDialog] = useState<{
+    preparationId: string
     candidates: PortableMediaCandidate[]
-    resolve: (decisions: ReadonlyMap<string, PortableMediaDecision> | null) => void
+    resolve: (plan: PortableMediaExportPlan | null) => void
   } | null>(null)
-  const choosePortableMedia = useCallback(async (): Promise<ReadonlyMap<string, PortableMediaDecision> | null> => {
+  const choosePortableMedia = useCallback(async (project: Project): Promise<PortableMediaExportPlan | null> => {
     const selected = await window.nodeTerminal.dialog.selectFiles()
     if (!selected || selected.length === 0) return null
-    const candidates: PortableMediaCandidate[] = []
-    for (const sourcePath of selected) {
-      try {
-        const collected = await collectPortableMedia(sourcePath)
-        candidates.push({ assetId: collected.asset.id, kind: collected.asset.kind, label: collected.asset.label ?? collected.sourceName, sourceName: collected.sourceName, decision: 'include' })
-      } catch (error) {
-        const sourceName = sourcePath.split(/[\\/]/).pop() ?? 'Unavailable media'
-        candidates.push({ assetId: sha256Media(new TextEncoder().encode(sourceName)), kind: 'image', label: sourceName, sourceName, decision: 'locate-later', reason: error instanceof Error ? error.message : 'Media validation failed.' })
-      }
+    const prepared = await api.workspace.portableMedia.prepare({ projectId: project.id, sourcePaths: selected, ...(project.cwd ? { projectRoot: project.cwd } : {}) })
+    if (!prepared.ok) {
+      notify({ kind: 'error', titleKind: 'authored', title: 'Media inspection failed', body: prepared.error, bodyKind: 'fact' })
+      return null
     }
-    return new Promise((resolve) => setPortableMediaDialog({ candidates, resolve }))
-  }, [])
+    return new Promise((resolve) => setPortableMediaDialog({ preparationId: prepared.preparationId, candidates: prepared.candidates, resolve }))
+  }, [api])
   const exportProjectArchive = useCallback(
     async (projectId: string, password?: string) => {
       if (projectArchiveBusyRef.current) {
@@ -15540,11 +15536,12 @@ export function Canvas() {
       }
       projectArchiveBusyRef.current = true
       try {
-        if ((await choosePortableMedia()) === null) return
         if (projectId === useProjects.getState().activeProjectId) commitActiveToStore()
         await writeDisk()
         const project = useProjects.getState().projects.find((candidate) => candidate.id === projectId)
         if (!project) return
+        const portableMedia = await choosePortableMedia(project)
+        if (!portableMedia) return
         // Progress where the action started: packing a repository takes real time, and there is no
         // byte-progress channel — so the copy is honestly indeterminate, never a fabricated %.
         notify({
@@ -15554,7 +15551,7 @@ export function Canvas() {
           body: `Packing "${project.name}" — canvas, history, repository and working files. A large repository can take a moment.`,
           bodyKind: 'fact'
         })
-        const result = await api.workspace.exportProject(project, password)
+        const result = await api.workspace.exportProject(project, password, portableMedia)
         if (result.ok) {
           // The archive packs the project's OWN git-tracked working files verbatim (see
           // project-archive.ts), and a password-manager vault (core/password-manager/vault-store.ts)
@@ -15588,6 +15585,7 @@ export function Canvas() {
             bodyKind: 'fact'
           })
         } else if (result.canceled) {
+          await api.workspace.portableMedia.discard(portableMedia.preparationId)
           notify({ kind: 'info', titleKind: 'authored', title: 'Project save cancelled' })
         } else {
           notify(
@@ -17874,11 +17872,15 @@ export function Canvas() {
         <PortableMediaDecisionDialog
           candidates={portableMediaDialog.candidates}
           onDecisions={(decisions) => {
-            portableMediaDialog.resolve(decisions)
+            portableMediaDialog.resolve({
+              preparationId: portableMediaDialog.preparationId,
+              decisions: [...decisions].map(([assetId, decision]) => ({ assetId, decision }))
+            })
             setPortableMediaDialog(null)
           }}
           onCancel={() => {
             portableMediaDialog.resolve(null)
+            void api.workspace.portableMedia.discard(portableMediaDialog.preparationId)
             setPortableMediaDialog(null)
           }}
         />

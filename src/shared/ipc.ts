@@ -340,6 +340,8 @@ export const IPC = {
   workspaceHasPartsManifest: 'workspace:has-parts-manifest',
   projectArchiveExport: 'project-archive:export',
   projectArchiveImport: 'project-archive:import',
+  portableMediaPrepare: 'portable-media:prepare',
+  portableMediaDiscard: 'portable-media:discard',
   portableBindingState: 'portable-binding:state',
   portableBindingApply: 'portable-binding:apply',
   providerCatalog: 'provider-services:catalog',
