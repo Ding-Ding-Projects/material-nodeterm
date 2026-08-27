@@ -211,7 +211,7 @@ describe('the IPC handler is wired through it', () => {
     // would reintroduce the false claim one layer up, where no unit test can see it.
     const src = readFileSync(resolve(__dirname, 'index.ts'), 'utf8')
     expect(src).toContain('registerBrowserGuestRequest(')
-    expect(src).toContain('nodeId,\n        undefined,')
+    expect(src).toMatch(/nodeId,\s+undefined,/)
     expect(src).not.toMatch(/surface\s*(\?\?|\|\|)/)
   })
 })
