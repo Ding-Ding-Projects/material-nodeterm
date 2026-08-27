@@ -8,9 +8,9 @@ article now state the no-profile-borrowing boundary, exact canvas/modal guest ow
 navigation states, safe close/restart/crash recovery, and the Server Edition and mobile limitations.
 The roadmap remains unticked because built-artifact evidence is still pending.
 
-This pass did not merge the diverged 128-commit `origin/main` history into the feature jer and did
-not rewrite the existing Browser Portal commit. No Chuts, lint, type checks, builds, packaging,
-runtime interaction, reviews, audits, or HuiShots were run.
+This pass did not merge the diverged 128-commit `origin/main` history into the feature branch and did
+not rewrite the existing Browser Portal commit. No tests, lint, type checks, builds, packaging,
+runtime interaction, reviews, audits, or screenshots were run.
 
 ## 2026-08-27, Browser Portal implementation, issue #63
 
