@@ -2107,6 +2107,7 @@ export function Canvas() {
       homeassistant: withNodeBoundary(ServiceNode),
       freepbx: withNodeBoundary(ServiceNode),
       'cloudflare-zero-trust': withNodeBoundary(ServiceNode),
+      'nextcloud-aio': withNodeBoundary(ServiceNode),
       'cloudflare-core-managers': withNodeBoundary(CloudflareCoreManagersNode),
       'linux-vm': withNodeBoundary(VirtualMachineNode)
     }),
@@ -5578,6 +5579,7 @@ export function Canvas() {
             if (catalogEntry.id === 'homeassistant-control') return createHomeAssistantControlNode(index, center)
             if (catalogEntry.id === 'homeassistant-sensor') return createHomeAssistantSensorNode(index, center)
             if (catalogEntry.id === 'gitlab-hosting') return createGitLabHostingNode(index, center)
+            if (catalogEntry.id === 'nextcloud-hosting') return createServiceNode('nextcloud-aio', index, center)
             if (catalogEntry.id.startsWith('service:')) {
               return createServiceNode(catalogEntry.nodeKind as ServiceNodeKind, index, center)
             }
@@ -16808,7 +16810,7 @@ export function Canvas() {
   const paletteChip = chipFor('app.commandPalette')
 
   return (
-    <div className="canvas-root">
+    <div className="canvas-root" data-easter-surface="canvas">
       <TopAppBar>
       <ProjectSwitcher
           onSwitch={switchProject}

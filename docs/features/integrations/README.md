@@ -8,6 +8,7 @@ substrate described in CLAUDE.md rather than inventing a surface each.
 | --- | --- |
 | [Service nodes](service-nodes.md) | implemented as canvas objects (Minecraft, Docker host, Proxmox, GitLab, Home Assistant, FreePBX); Home Assistant and Minecraft have live clients |
 | [GitLab Server hosting](gitlab-hosting.md) | guided Community Edition or Enterprise Edition deployment with pinned official image, four managed volumes, readiness, credential handoff, backup, restore, update, rollback, and loopback-only binding |
+| [Nextcloud AIO hosting](nextcloud-aio-hosting.md) | guided pinned official image profile with explicit Docker socket authority disclosure, no privileged mode, private binding, progress, health, update, backup, restore, and rollback |
 | [Home Assistant client](home-assistant-client.md) | multi-instance machine-local registration with bounded REST and WebSocket entity discovery |
 | [Minecraft server](minecraft-server.md) | research only: cited constraints, not implemented |
 | [Research findings](research-findings.md) | all seven subjects, adversarially checked |
@@ -21,6 +22,7 @@ substrate described in CLAUDE.md rather than inventing a surface each.
 | [Home Assistant controls](home-assistant-controls.md) | implemented schema-driven entity controls with machine-local connections and portable selection intent; verification intentionally unrun |
 | [Home Assistant sensor displays](home-assistant-sensor-display.md) | implemented portable entity/display intent with machine-local sealed binding, discovery, bounded observations, and typed value/state/gauge/trend/event/weather/calendar/attribute views |
 | [Cloudflare core managers](cloudflare-core-managers.md) | typed account, zone, DNS, SSL/TLS, ruleset, redirect, cache, and analytics operations with local sealed credentials, bounded results, previews, cancellation, and portable safe intent |
+| [GitHub CLI account selector](github-cli-accounts.md) | host-owned discovery, guided device-flow login, active-account switching, scope refresh, and per-account sign-out without exposing credentials |
 | [Cloudflare Access, Zero Trust, Workers, Pages, R2, D1 and Queues](cloudflare-zero-trust-managers.md) | typed fixed-route API managers with local protected credentials, portable neutral intent, bounded responses, progress, cancellation, and destructive confirmation; verification intentionally unrun |
 | [Guided GitHub API capabilities](github-api.md) | typed REST and GraphQL operation catalog with host-resolved credentials, approved-project scoping, bounded pagination, progress, cancellation, rate-limit state, and destructive confirmation; verification intentionally unrun |
 

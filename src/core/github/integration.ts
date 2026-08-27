@@ -14,6 +14,8 @@ import { registerGitHubIssueHandlers } from './handlers'
 import { GitHubApiService } from './api-service'
 import { registerGitHubApiHandlers } from './api-handlers'
 import { IPC } from '../../shared/ipc'
+import { GitHubCliAccountService } from './cli-accounts'
+import type { GitHubCliAccountsApi } from '../../shared/github-issues'
 
 type Dependencies = {
   platform: CorePlatform
@@ -28,6 +30,7 @@ export function registerGitHubIntegration(dependencies: Dependencies): {
   controller: GitHubHostController
   service: GitHubIssueService
   api: GitHubApiService
+  cliAccounts: GitHubCliAccountsApi
 } {
   const validateToken = async (token: string) => {
     try {
@@ -70,6 +73,10 @@ export function registerGitHubIntegration(dependencies: Dependencies): {
       dependencies.platform.sendTo(uiId, IPC.githubIssuesChanged(projectId), changedIssueNumbers)
   })
   registerGitHubIssueHandlers(dependencies.platform, service)
+  const cliAccounts = new GitHubCliAccountService(
+    dependencies.run,
+    dependencies.platform.openExternal
+  ).register(dependencies.platform)
 
   const api = new GitHubApiService({
     platform: dependencies.platform,
@@ -103,5 +110,5 @@ export function registerGitHubIntegration(dependencies: Dependencies): {
     }
   })
 
-  return { controller, service, api }
+  return { controller, service, api, cliAccounts }
 }

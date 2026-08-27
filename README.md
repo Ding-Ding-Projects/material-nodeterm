@@ -104,7 +104,7 @@ That distinction is intentional. A restored view is not described as a process t
 | Files and media | File conversion, portable media attachments, galleries, downloads, and export workflows | [Feature index](./docs/features/README.md) |
 | Portals and multiverse | Depth-bounded child canvases, guided door construction, scope-owned catalogs, project import repair, and preserved portal lifecycle | [Multiverse canvases](./docs/features/canvas/multiverse-canvases.md) |
 | Sensors and pipelines | Home Assistant sensor displays plus advanced media, archive, PDF, OCR, and structured-data conversion pipelines | [Integration index](./docs/features/integrations/README.md) |
-| Interface | Material Design 3 primitives, appearance editing, logo and app-name controls, language modes, narrator, schedules, and notifications | [Appearance](./docs/features/appearance/README.md) |
+| Interface | Material Design 3 primitives, appearance editing, logo and app-name controls, language modes, narrator, schedules, notifications, and the local Easter egg cabinet | [Appearance](./docs/features/appearance/README.md) |
 | History and recovery | Local Git-backed history, settings history, changelog browsing, exports, and explicit recovery states | [Local history](./docs/local-history.md) |
 | Accessibility | Keyboard operation, visible focus, reduced motion, language modes, attention accommodations, responsive layouts, and screen-reader semantics | [ADHD modes](./docs/adhd-modes.md) |
 | Windows delivery | Shell-profile detection, Windows session host, Squirrel packaging, unsigned updates, and installer behavior | [Windows support](./docs/windows.md) |
@@ -380,12 +380,11 @@ anything.
 
 ### Session continuity
 
-Every terminal runs inside a persistent [tmux](https://github.com/tmux/tmux) session on macOS and
-Linux, so a shell — and anything in it, including an in-flight agent turn — survives closing a
-node, switching projects and quitting the app. **Windows has no tmux binary to bundle**, so
-nodeterm ships a from-scratch equivalent: the [Windows session host](#windows), a standalone
-process that owns the real PTYs and outlives the app. See [Windows](#windows) for its two honest
-caveats.
+Every terminal on Windows uses a detected `tmux.exe` or `psmux` session when one is available.
+Otherwise nodeterm uses the bundled [Windows session host](#windows), a standalone process that
+owns the real PTYs and outlives the app. A shell and anything running inside it can therefore
+survive closing a node, switching projects, and quitting the app. See [Windows](#windows) for the
+two honest caveats.
 
 ### Remote & SSH, and the Server Edition
 
@@ -538,19 +537,18 @@ Full detail, architecture, and the protocol table: [`docs/windows-session-host.m
 
 ## Install / build
 
-Three scripts live at the repository root, each with a Windows `.bat` and a POSIX `.sh`
-sibling. A checkout with nothing installed should reach a running app (or a real installer) by
-running one of them:
+Three Windows scripts live at the repository root. A checkout with nothing installed should
+reach a running app, or a real installer, by running one of them:
 
-| Script | Windows | macOS / Linux | What it does |
-| --- | --- | --- | --- |
-| Dependencies | `download-dependencies.bat` | `download-dependencies.sh` | Installs Node.js (if missing) and every npm dependency, from canonical upstreams into a user-scoped location. |
-| Build | `build.bat` | `build.sh` | Runs the dependency script, builds `out/`, then offers to launch the app. |
-| Installer | `build-installer.bat` | `build-installer.sh` | Runs the dependency script, then packages and verifies the real platform installer (Squirrel on Windows, `.dmg`/`.zip` on macOS, `.AppImage`/`.deb` on Linux). |
+| Script | Command | What it does |
+| --- | --- | --- |
+| Dependencies | `download-dependencies.bat` | Installs Node.js when missing and every npm dependency from canonical upstreams into a user-scoped location. |
+| Build | `build.bat` | Runs the dependency script, builds `out/`, then offers to launch the app. |
+| Installer | `build-installer.bat` | Runs the dependency script, then packages and verifies the unsigned Squirrel.Windows installer. |
 
-All three accept a silent flag (`/s` / `--silent` on Windows, `-s` / `--silent` elsewhere, or a
-`SILENT=1` environment variable) for unattended use, and exit non-zero on the first real
-failure. None of them ever installs a secret, a credential, or a code-signing certificate.
+All three accept `/s`, `--silent`, or a `SILENT=1` environment variable for unattended use and
+exit non-zero on the first real failure. None of them ever installs a secret, a credential, or a
+code-signing certificate.
 
 <details>
 <summary><strong>Every settings feature card</strong></summary>

@@ -1,6 +1,7 @@
 import { DEFAULT_WORD_SEPARATORS } from './word-separators'
 import type { ServiceConnection } from './node-exec'
 import type { DockerHostManagerApi } from './docker-host-manager'
+import type { NextcloudAioManagerApi } from './nextcloud-aio'
 import type { NsisSpec, NsisLocalPaths } from './nsis-form-types'
 // Types shared across the main, preload, and renderer processes.
 
@@ -429,6 +430,7 @@ export type NodeKind =
   | 'homeassistant'
   | 'homeassistant-sensor'
   | 'freepbx'
+  | 'nextcloud-aio'
   | 'cloudflare-zero-trust'
   /** Guided Cloudflare account, zone, DNS, SSL/TLS, ruleset, redirect, cache, and analytics manager. */
   | 'cloudflare-core-managers'
@@ -448,7 +450,8 @@ export const SERVICE_NODE_KINDS = [
   'gitlab',
   'homeassistant',
   'freepbx',
-  'cloudflare-zero-trust'
+  'cloudflare-zero-trust',
+  'nextcloud-aio'
 ] as const
 
 export type ServiceNodeKind = (typeof SERVICE_NODE_KINDS)[number]
@@ -652,6 +655,8 @@ export interface CanvasNodeState {
    * `localExec` on the index entry, exactly where the shell and Windows profile already live.
    */
   serviceLabel?: string
+  /** Nextcloud AIO safe deployment intent. Context, container state, backups, and socket bindings remain local. */
+  nextcloudAioConfig?: import('./nextcloud-aio').NextcloudAioConfig
   /** Cloudflare manager selection intent. Account ids, credentials and resource ids stay local. */
   cloudflareZeroTrustIntent?: import('./cloudflare-zero-trust').CloudflarePortableIntent
   /** Cloudflare manager safe intent. Credentials and local bindings stay in the host overlay. */
@@ -4304,6 +4309,8 @@ export interface RelayHostApi {
   dockerContexts(): Promise<Array<{ name: string; current: boolean; endpoint: string }>>
   /** Guided local/SSH Docker management. Desktop owns the CLI; Server Edition refuses it. */
   manager: DockerHostManagerApi
+  /** Guided Nextcloud AIO lifecycle manager. Desktop-only; the browser shell reports unsupported. */
+  nextcloudAio: NextcloudAioManagerApi
   /**
    * Enter host mode over the relay: connect and return a pairing offer string to hand to a client.
    * Rejects when Docker or the configured relay is unavailable. `projectId` is the
@@ -4711,6 +4718,8 @@ export interface NodeTerminalApi {
   githubControl: import('./github-issues').GitHubControlApi
   /** Typed, allowlisted REST and GraphQL capability catalog for contextual GitHub actions. */
   githubApi: import('./github-api').GitHubApiApi
+  /** Host-owned GitHub CLI account discovery and selection. Credential material never crosses this boundary. */
+  githubCliAccounts: import('./github-issues').GitHubCliAccountsApi
   usage: UsageApi
   sessionMemory: SessionMemoryApi
   vscode: VsCodeApi
