@@ -4,8 +4,8 @@
 
 nodeterm treats an AI coding agent CLI as just another kind of terminal node — with extra
 behaviour layered on top wherever the specific agent supports it. Claude Code, Codex, Gemini,
-opencode, and Grok are built in; any other CLI can be added as a custom agent with basic
-support (spawn, terminal-title tracking, process status).
+opencode, Grok, and Cognition Devin are built in; any other CLI can be added as a custom agent
+with basic support (spawn, terminal-title tracking, process status).
 
 ## Behaviour
 
@@ -45,6 +45,13 @@ directory.
 demand by drawing a connection between them on the canvas — a pull, not a push: nothing is
 sent automatically, an agent has to ask for the linked context when it wants it.
 
+**Per-node model switching** lets a supported node choose one model from the configured gateway.
+The choice is persisted on that node and reused for future launches, cold restores, and resumes.
+Switching a running node validates the session and harness ownership, terminates only the expected
+foreground agent process, recycles the persistent terminal so its current gateway environment is
+present, and resumes the same provider conversation. See [Per-node model switching](./model-switching.md)
+for the explicit-choice, failure-recovery, project-ownership, and relay boundaries.
+
 ## Configuration
 
 - **Settings → Agents** — default permission mode, agent hibernation (auto-exiting an idle,
@@ -52,7 +59,8 @@ sent automatically, an agent has to ask for the linked context when it wants it.
   long-lived canvases), and the custom-agent list (command, label, color).
 - Per-project — an override permission mode, so a project that genuinely needs broader
   permissions doesn't require changing your global default.
-- Per-node — which agent CLI launches, and (for Claude Code) which managed account.
+- Per-node — which agent CLI launches, its selected gateway model when supported, and (for Claude
+  Code) which managed account.
 
 ## Failure modes
 
@@ -89,9 +97,17 @@ sent automatically, an agent has to ask for the linked context when it wants it.
 - Connect two agent-capable nodes with a context link and confirm one can pull the other's
   transcript on request, and that a plain terminal or an agent outside the capability list is
   not offered the option.
+- Configure a model gateway, choose a discovered model for one supported node, and confirm the
+  selected model is stored on that node while another node remains unchanged. For a running node,
+  confirm the foreground process ownership check, persistent-session recycle, and same-conversation
+  resume. Also confirm that an invalid gateway, relay node, busy session, failed recycle, and stale
+  same-model callback refuse without changing node data. This source-only lane did not run those
+  checks.
 
 ## Suggested articles
 
+- [Devin CLI](./devin-cli.md) — the measured launch, hook, and capability details for Cognition
+  Devin CLI 3000.4.25.
 - [Node kinds](../canvas/node-kinds.md) — the agent node itself, alongside the terminal node
   it's built from.
 - [Kanban board](../kanban/kanban-board.md) — how agent status renders on a card instead of a

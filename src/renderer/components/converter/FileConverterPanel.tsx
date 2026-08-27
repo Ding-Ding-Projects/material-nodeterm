@@ -559,7 +559,7 @@ function FileConverterPanelForApi({
 
   return createPortal(
     <div className="drawer-overlay md3-converter" onClick={onClose}>
-      <aside className="drawer converter" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={vocab('File converter')}>
+      <aside className="drawer converter" data-easter-surface="converter" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={vocab('File converter')}>
         <div className="drawer__head">
           <h2>{vocab('File converter')}</h2>
           <button className="drawer__close" onClick={onClose} aria-label={vocab('Close')}>
