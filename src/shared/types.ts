@@ -871,6 +871,13 @@ export interface Project {
    *  one person's wandering camera history). */
   breadcrumbs?: NavStop[]
   /**
+   * MACHINE-LOCAL follow-up choices created when a portable project is opened on this computer.
+   * These records say which guided route the user selected; they never contain credentials,
+   * provider sessions, machine paths, host identities, or runtime resource identifiers. They live
+   * in the workspace index for referenced projects and therefore never travel in project.json.
+   */
+  destinationBindings?: DestinationBindingDecision[]
+  /**
    * Closed projects are hidden from the tab bar but kept on disk with all their nodes (and their
    * tmux sessions left running) so they can be reopened from the start screen's "Recently closed"
    * list. Absent/false = an open tab. A closed project never becomes `activeProjectId`.
@@ -890,6 +897,37 @@ export interface Project {
    * peer's disk, so it must never land in this client's workspace.json.
    */
   remote?: boolean
+}
+
+export type DestinationBindingAction =
+  | 'configure'
+  | 'rebind'
+  | 'adopt'
+  | 'deploy'
+  | 'locate-asset'
+  | 'leave-unbound'
+
+export interface DestinationBindingRequirement {
+  id: string
+  nodeId: string
+  nodeTitle: string
+  featureId: string
+  reason: string
+  actions: DestinationBindingAction[]
+  recommendedAction: DestinationBindingAction
+}
+
+export interface DestinationBindingDecision extends DestinationBindingRequirement {
+  selectedAction: DestinationBindingAction
+  status: 'planned' | 'unbound'
+}
+
+export interface DestinationBindingPlan {
+  schemaVersion: 1
+  projectName: string
+  requirements: DestinationBindingRequirement[]
+  omissions: Array<{ path: string; reason: string; detail: string }>
+  sideEffects: 'none'
 }
 
 /** The full workspace written to / read from disk. */
