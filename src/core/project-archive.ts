@@ -62,6 +62,8 @@ import {
 } from './portable-media-assets'
 import type { MediaAssetReference } from '../shared/media-catalog'
 import type { PortableMediaDecisionRecord } from '../shared/portable-media'
+import type { PortablePlannerDefinitions } from './portable-planner'
+import type { PlannerSchedule } from '../shared/planner-occurrences'
 
 // Schema 3 is exposed from the established archive seam while its validation remains platform-free.
 export * from './portable-project-v3'
@@ -69,6 +71,7 @@ export * from './portable-canvas-projection'
 export * from './portable-media-assets'
 export * from './portable-project-import'
 export * from './portable-bindings'
+export * from './portable-planner'
 export * from './universe-shop'
 
 /** V1 JSON-text archives keep their historical cap. */
@@ -133,6 +136,8 @@ export interface ProjectArchiveImportResult {
   /** The password-manager vault the archive carried for a FOLDER-LESS project, verbatim. The
    *  caller writes it to the new project's working-copy root - see the export note below. */
   vault?: Buffer
+  /** Safe planner definitions awaiting an explicit destination Configure action. */
+  plannerDefinitions?: PortablePlannerDefinitions
 }
 
 export interface ProjectArchiveExportOptions {
@@ -150,6 +155,8 @@ export interface ProjectArchiveExportOptions {
   vault?: Buffer
   /** Single-use, privileged media preparation plus the user's explicit decisions. */
   portableMedia?: { preparation: PortableMediaPreparation; decisions: PortableMediaDecisionRecord[] }
+  /** Host-owned schedule definitions are copied as safe intent only. */
+  plannerDefinitions?: readonly PlannerSchedule[]
 }
 
 function isProjectFile(value: unknown): value is ProjectFileV1 {
@@ -427,7 +434,8 @@ async function collectProjectMedia(project: Project): Promise<{
 export class ProjectArchiveService {
   constructor(
     private readonly history: LocalHistoryStore,
-    private readonly git: ProjectGitRunner = runProjectGit
+    private readonly git: ProjectGitRunner = runProjectGit,
+    private readonly readPlannerDefinitions?: () => readonly PlannerSchedule[]
   ) {}
 
   async export(
@@ -457,9 +465,10 @@ export class ProjectArchiveService {
       }
       media = { manifest: createPortableMediaManifest(assets), files }
     }
+    const plannerDefinitions = opts.plannerDefinitions ?? this.readPlannerDefinitions?.()
     const snapshot = projectToPortableCanvasV3(
       mediaCapture.project,
-      media ? { media: media.manifest } : {}
+      { ...(media ? { media: media.manifest } : {}), ...(plannerDefinitions ? { planner: plannerDefinitions } : {}) }
     )
     const snapshotText = Buffer.from(serializePortableCanvasProjectionV3(snapshot))
     await this.history.record({
@@ -482,7 +491,8 @@ export class ProjectArchiveService {
     const portable = await exportPortableProjectV3(mediaCapture.project, {
       historyBundle,
       omissions,
-      ...(media ? { media } : {})
+      ...(media ? { media } : {}),
+      ...(plannerDefinitions ? { planner: [...plannerDefinitions] } : {})
     })
     const mediaOmissions: ProjectArchiveExclusion[] = [
       ...(media?.manifest.omissions.map((item) => ({
@@ -626,7 +636,8 @@ export class ProjectArchiveService {
           excludedFiles: imported.omissions.length + mediaOmissions.length,
           excludedBytes: 0
         },
-        ...(imported.stagedPath ? { restoredTo: imported.stagedPath } : {})
+        ...(imported.stagedPath ? { restoredTo: imported.stagedPath } : {}),
+        ...(imported.plannerDefinitions ? { plannerDefinitions: imported.plannerDefinitions } : {})
       }
     }
     if (!looksLikeContainer(bytes)) {

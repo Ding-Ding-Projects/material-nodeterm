@@ -1490,6 +1490,13 @@ export interface WorkspaceApi {
     path?: string
     archiveVersion?: 1 | 2 | 3
     contents?: ProjectArchiveContents
+    /** Safe planner definitions from schema 3, not yet applied to this machine. */
+    plannerDefinitions?: {
+      schemaVersion: 1
+      featureId: 'planner'
+      displayLabel: string
+      schedules: import('./planner-occurrences').PlannerSchedule[]
+    }
     restoredTo?: string
   }>
   /** Hand out the next unlock-ladder question for a rate-limited protected project file. `null`
@@ -2944,6 +2951,8 @@ export interface PlannerApi {
   save(file: import('./planner-occurrences').PlannerFile): Promise<{ ok: true } | { ok: false; error: string }>
   history(): Promise<import('./planner-occurrences').PlannerOccurrence[]>
   export(format: 'json' | 'csv'): Promise<{ filename: string; content: string }>
+  /** Apply imported schedule intent only after the user explicitly chooses Configure. */
+  configure(schedules: import('./planner-occurrences').PlannerSchedule[]): Promise<{ ok: true } | { ok: false; error: string }>
   onOccurrence(listener: (occurrence: import('./planner-occurrences').PlannerOccurrence) => void): () => void
 }
 

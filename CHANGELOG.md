@@ -161,9 +161,18 @@
   builder state.
 - Add a host-owned planner occurrence service with durable local schedules, recurrence choices,
   timezone and DST semantics, cross-midnight descriptions, missed-occurrence history, JSON/CSV
-  export, Desktop IPC and Server Edition WS-RPC events, and a guided Planner settings surface.
+  export, Desktop IPC and Server Edition WS-RPC events, and a guided Planner settings surface. The
+  service now survives Desktop title-bar closure while enabled schedules exist, records each
+  occurrence before notification delivery, preserves host-owned history across stale UI saves,
+  exposes save retry recovery, and gates schedule deletion behind two-key confirmation.
   This ultra-speed lane intentionally leaves tests, builds, packaging, runtime interaction, and
   captures unrun.
+- Extend planner occurrences with a validated schema 3 planner-definition projection and an
+  explicit destination Configure action. Portable import carries schedule intent only, keeps
+  occurrence history and host state local, and merges configured definitions without overwriting a
+  conflicting destination schedule. The generated offline documentation bundle was refreshed from
+  the planner article. Tests, type checks, lint, builds, packaging, runtime interaction, and
+  captures remain unrun under the ultra-speed boundary.
 - Add Calendar nodes for local calendars and ICS import, with guided CalDAV, Google Calendar, and
   Microsoft 365 provider/account/calendar selection, recurrence and timezone views, offline cache,
   create/edit previews, and destructive delete confirmation. Provider credentials stay behind the

@@ -630,7 +630,9 @@ export function buildRealApi(
     save: (file: PlannerFile) => client.request(IPC.plannerSave, file) as ReturnType<PlannerApi['save']>,
     history: () => client.request(IPC.plannerHistory) as Promise<PlannerOccurrence[]>,
     export: (format) => client.request(IPC.plannerExport, format) as ReturnType<PlannerApi['export']>,
+    configure: (schedules) => client.request(IPC.plannerConfigure, schedules) as ReturnType<PlannerApi['configure']>,
     onOccurrence: (cb) => client.subscribe(IPC.plannerOccurrence, cb as Listener)
+  }
   const agent: NodeTerminalApi['agent'] = {
     // Deliberately NOT a request: the server registers no env-snapshot handler (a full host-env
     // dump answerable by any authenticated WS client is the PR #195 leak class at the RPC layer).

@@ -37,6 +37,7 @@ import {
   type PortableMediaArchiveFile,
   type PortableMediaExportPayload
 } from './portable-media-assets'
+import type { PortablePlannerDefinitions } from './portable-planner'
 
 const READ_LIMITS = {
   maxArchiveBytes: PORTABLE_PROJECT_LIMITS.maxCompressedBytes,
@@ -62,6 +63,8 @@ export interface PortableImportResult {
   omissions: PortableProjectOmission[]
   mediaFiles: number
   mediaBytes: number
+  /** Safe planner definitions are returned for an explicit destination Configure action. */
+  plannerDefinitions?: PortablePlannerDefinitions
 }
 
 export interface PortableProjectV3ExportOptions {
@@ -69,6 +72,7 @@ export interface PortableProjectV3ExportOptions {
   omissions?: readonly PortableProjectOmission[]
   appearance?: Record<string, unknown>
   media?: PortableMediaExportPayload
+  planner?: import('../shared/planner-occurrences').PlannerSchedule[]
 }
 
 export interface PortableProjectV3ImportOptions {
@@ -97,7 +101,8 @@ function ensureNotCancelled(options: PortableProjectV3ImportOptions): void {
 export async function exportPortableProjectV3(project: Project, options: PortableProjectV3ExportOptions): Promise<{ bytes: Buffer; manifest: PortableProjectV3Manifest; projection: PortableCanvasProjectionV3 }> {
   const projection = projectToPortableCanvasV3(project, {
     ...(options.appearance ? { appearance: options.appearance } : {}),
-    ...(options.media ? { media: options.media.manifest } : {})
+    ...(options.media ? { media: options.media.manifest } : {}),
+    ...(options.planner ? { planner: options.planner } : {})
   })
   const projectBytes = Buffer.from(serializePortableCanvasProjectionV3(projection))
   const entries: PortableProjectV3Entry[] = [
@@ -234,7 +239,8 @@ export async function importPortableProjectV3(bytes: Buffer, options: PortablePr
     bindings: [],
     omissions: manifest.omissions,
     mediaFiles: mediaFiles.length,
-    mediaBytes: mediaFiles.reduce((total, item) => total + item.data.byteLength, 0)
+    mediaBytes: mediaFiles.reduce((total, item) => total + item.data.byteLength, 0),
+    ...(projection.planner ? { plannerDefinitions: projection.planner } : {})
   }
 }
 

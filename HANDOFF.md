@@ -604,8 +604,28 @@ Updated `src/shared/ipc.ts`, `src/shared/types.ts`, `src/preload/index.ts`,
 the integrations feature index and planner article, the feature inventory, ROADMAP, and CHANGELOG.
 The committed offline docs bundle still needs regeneration through `scripts/build-docs-bundle.mjs`.
 
+The issue #29 repair lane corrected the Desktop title-bar close path so an enabled planner keeps the
+host process alive after the UI window closes. Planner store mutations are now serialized, renderer
+saves replace only user-authored schedule definitions, and fired or missed occurrences are persisted
+before delivery. The Planner surface reloads durable state after a refused save, provides retry, and
+routes schedule deletion through the two-key destructive confirmation gate.
+
+The issue #29 repair lane now includes schema 3 planner-definition transfer. `src/core/portable-planner.ts`
+validates a bounded planner blueprint containing schedule intent only. Schema 3 export includes that
+blueprint from the host-owned planner store, while import returns it without applying schedules or
+performing external side effects. The completed import notification exposes an explicit Configure
+action, which calls the host planner service and merges imported definitions without overwriting a
+conflicting destination definition. Occurrence history, last-tick state, credentials, paths,
+process state, and provider state remain local.
+
+The generated offline documentation bundle was refreshed from
+`docs/features/integrations/planner-occurrences.md` using the existing bundle renderer. The
+implementation lane still intentionally leaves tests, type checks, lint, builds, packaging,
+installer execution, runtime interaction, accessibility review, and screenshots unrun.
+
 This ultra-speed lane deliberately did not run tests, type checks, lint, security checks, builds,
-packaging, installer execution, runtime interaction, or screenshots. No commit or remote update was made here.
+packaging, installer execution, runtime interaction, accessibility review, or screenshots. Those
+checks remain unrun for this repair lane.
 ## 2026-08-26, Calendar nodes lane #30
 
 Implemented the Calendar node surface on `feat/program-19`: local calendars and ICS import, plus
