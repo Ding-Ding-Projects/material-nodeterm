@@ -1222,6 +1222,7 @@ describe('duplicateNode across every node kind', () => {
     gitlab: 'gitlab',
     homeassistant: 'homeassistant',
     freepbx: 'freepbx',
+    'nextcloud-aio': 'nextcloud-aio',
     // A GUI for authoring an NSIS installer script for another project (never this app's own
     // installer, which stays Squirrel.Windows).
     nsis: 'nsis',
@@ -1229,6 +1230,7 @@ describe('duplicateNode across every node kind', () => {
     torrent: 'torrent'
     'linux-vm': 'linux-vm'
     calendar: 'calendar',
+    'homeassistant-control': 'homeassistant-control',
     nsis: 'nsis'
   }
   const ALL_KINDS = Object.keys(EXPECTED_PREFIX) as NodeKind[]

@@ -35,18 +35,21 @@
 
       <h2>Behaviour</h2>
       <p>Unmounting a terminal node (a project switch, most commonly) doesn't tear it down immediately — it's parked: the xterm instance and its PTY client stay alive, just detached from the DOM, so remounting shortly afterward is instant and exact. Only after a park window elapses does the real teardown happen, detaching the PTY client while the underlying tmux session keeps running. A node that stays fully offscreen for long enough (configurable, default on) is released in place: its renderer is torn down but the node stays on the canvas as a plate, reviving the moment it's approached again.</p>
+      <p>When <strong>Scroll wheel zooms</strong> is enabled, a plain wheel zooms toward the pointer. High-resolution ratchet wheels can deliver one physical detent as several packets, so packets inside a 40 ms burst share one ±50 delta budget. A later click gets a fresh budget. <strong>Wheel zoom speed</strong> persists from 0.2× through 2.0×, with 1.0× preserving the historical feel. It changes only plain-wheel zoom; modifier wheel zoom and trackpad pinch retain their fixed behavior. Missing, invalid, or out-of-range hand-edited values are clamped at the point of use.</p>
 
       <h2>Configuration</h2>
-      <p>The offscreen-release timer, terminal GPU rendering mode, and default node size are all in Settings.</p>
+      <p>The offscreen-release timer, terminal GPU rendering mode, default node size, plain-wheel zoom toggle, and wheel zoom speed are all in Settings → Behavior. Desktop and Server Edition share the same renderer and settings record. The mobile companion has no wheel input.</p>
 
       <h2>Failure modes</h2>
       <p>A memory-reclaiming action that kills a PTY client is only free when tmux is genuinely underneath it — on the plain-shell fallback, that PTY <em>is</em> the shell, so the same call would kill whatever process is running inside it. Every lever that reclaims terminal memory checks whether the session actually has live work in progress before it acts.</p>
+      <p>A malformed wheel speed never becomes an unbounded exponent: the renderer uses 1.0× for a missing or non-finite value and clamps finite values to 0.2×–2.0× without rewriting the settings file while reading it.</p>
 
       <h2>Security considerations</h2>
       <p>Not applicable beyond what's already covered under terminal sessions and node kinds — the canvas itself holds no secrets of its own.</p>
 
       <h2>Verification</h2>
       <p>Park/release/revive timing is covered by dedicated tests asserting the two invariants that matter most: the visibility observer must survive the exact re-render that would otherwise kill it, and the "protect live work" gate must never guess a session is safe to kill when it doesn't actually know.</p>
+      <p>The wheel-speed implementation lane intentionally did not run tests, lint, type checks, builds, packaging, runtime interaction, reviews, audits, or captures. The integration lane must exercise multi-packet bursts, budget refill, point-of-use clamping, persistence, and unchanged modifier/pinch behavior in the built surfaces.</p>
 
       <section class="doc-suggested">
         <h2>Suggested articles</h2>
@@ -54,6 +57,7 @@
         <li><a href="./terminal-sessions.html">Terminal sessions &amp; continuity</a></li>
         <li><a href="./node-kinds.html">Node kinds</a></li>
         <li><a href="./projects-and-tabs.html">Projects &amp; tabs</a></li>
+        <li><a href="./wheel-zoom-speed.html">Bounded wheel zoom and speed</a></li>
         </ul>
       </section>
     </article>

@@ -36,6 +36,8 @@ interface CommandOutput {
   stderr: string
 }
 
+export type AwsCliResolver = () => Promise<{ path: string | null; reason: string | null }>
+
 function text(value: unknown, label: string, max = 4096): string {
   if (typeof value !== 'string') throw new Error(`${label} is required.`)
   const trimmed = value.trim()
@@ -238,7 +240,7 @@ export class AwsResourceManagerService {
   private readonly running = new Map<string, ChildProcessWithoutNullStreams>()
   private runtimeCache: { executable: string; status: AwsCliRuntimeStatus } | null = null
 
-  constructor(private readonly platform: CorePlatform) {
+  constructor(private readonly platform: CorePlatform, private readonly resolveAwsCli?: AwsCliResolver) {
     this.bindings = new AtomicJsonArrayStore(join(platform.userDataDir, 'aws', 'resource-manager-bindings.json'))
   }
 
@@ -371,6 +373,35 @@ export class AwsResourceManagerService {
   private async resolveRuntime(): Promise<{ executable: string; status: AwsCliRuntimeStatus }> {
     if (this.runtimeCache) return this.runtimeCache
     const executableName = process.platform === 'win32' ? 'aws.exe' : 'aws'
+    if (this.resolveAwsCli) {
+      try {
+        const resolved = await this.resolveAwsCli()
+        if (resolved.path) {
+          const version = await this.run(resolved.path, ['--version'], undefined, true)
+          const status: AwsCliRuntimeStatus = { available: true, origin: 'bundled', version: (version.stdout || version.stderr).trim() || null, disabledReason: null }
+          return (this.runtimeCache = { executable: resolved.path, status })
+        }
+        return {
+          executable: '',
+          status: {
+            available: false,
+            origin: 'unavailable',
+            version: null,
+            disabledReason: resolved.reason ?? 'The verified AWS CLI dependency is unavailable. Install or repair it before using this manager.'
+          }
+        }
+      } catch (error) {
+        return {
+          executable: '',
+          status: {
+            available: false,
+            origin: 'unavailable',
+            version: null,
+            disabledReason: error instanceof Error ? error.message : 'The verified AWS CLI dependency could not be resolved.'
+          }
+        }
+      }
+    }
     const candidates = this.platform.resourcesPath
       ? [
           join(this.platform.resourcesPath, 'aws-cli', executableName),
@@ -461,4 +492,3 @@ export class AwsResourceManagerService {
     })
   }
 }
-

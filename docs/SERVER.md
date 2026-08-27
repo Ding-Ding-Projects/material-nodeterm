@@ -5,7 +5,9 @@
 The Server Edition starts the same `PlannerOccurrenceRuntime` as the Desktop shell. Schedules live
 in the configured data directory and continue while every browser tab is closed. WS-RPC exposes the
 guided Planner surface's load, save, history, export, and occurrence event channels. A headless host
-records fired and missed occurrences without pretending it can wake a powered-off computer or show a
+records fired and missed occurrences before broadcasting them, and serializes renderer schedule
+edits with host ticks so stale UI state cannot replace durable occurrence history. It does not
+pretend it can wake a powered-off computer or show a
 desktop notification. Both serving and headless shutdown paths stop the runtime before the host
 closes.
 

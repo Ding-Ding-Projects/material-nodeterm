@@ -151,6 +151,7 @@ import { Tooltip } from '../components/Tooltip'
 import { useTerminalSearch } from '../terminal/useTerminalSearch'
 import { useCopyFeedback } from '../terminal/useCopyFeedback'
 import { ContextMeter } from '../components/ContextMeter'
+import { contextSourceKey } from '../state/contextWindow'
 import { AdhdElapsedChip, AdhdMomentumNote } from '../components/AdhdNodeSurfaces'
 import { markNodeActivity, markNodeOpened } from '../lib/nodeActivity'
 import { AccountIdentityPills } from '../components/AccountIdentityPills'
@@ -199,7 +200,6 @@ import {
   canRecur,
   canSubagent,
   canContextLink,
-  hasUsage,
   canChat,
   canResume,
   canRename,
@@ -273,6 +273,12 @@ import {
   OPEN_EXPLORER_FOR_AGENT_EVENT,
   writeAgentNodeDrag
 } from '../lib/explorerNodeDrag'
+import {
+  AGENT_COLLABORATION_MODE_EVENT,
+  AGENT_COLLABORATION_PICK_EVENT,
+  readAgentCollaborationDrag,
+  writeAgentCollaborationDrag
+} from '../lib/agentCollaborationDrag'
 
 /** Which physical modifier the registry's abstract `Cmd` resolves to for the find-bar chord. */
 const isMac = isMacPlatform()
@@ -1326,6 +1332,8 @@ export function TerminalNode({
   const [colorAnchor, setColorAnchor] = useState<{ x: number; y: number } | null>(null)
   const [armed, setArmed] = useState(true)
   const [dropping, setDropping] = useState(false)
+  const [agentCollaborationDropTarget, setAgentCollaborationDropTarget] = useState(false)
+  const [agentCollaborationPending, setAgentCollaborationPending] = useState(false)
   // Overlay while dropped files upload to an SSH host (scp is seconds-long with zero feedback);
   // doubles as a brief "Upload failed" flash when nothing made it.
   const [uploadNote, setUploadNote] = useState<{
@@ -1695,7 +1703,9 @@ export function TerminalNode({
   const showStatus = !!agentId && hasHooks(agentId) // status badge + session-title capture
   const showLoop = !!agentId && canRecur(agentId) // /loop · /schedule · /cron chrome
   const contextLinkCapable = !!agentId && canContextLink(agentId) // context-link tip wording only; handles render on all terminals
-  const showUsage = !!agentId && hasUsage(agentId) // per-node context-window meter
+  // Every agent-backed node gets a meter. Providers without verified telemetry remain visible with
+  // an explicit not-reported or unavailable state instead of disappearing from the header.
+  const showUsage = !!agentId
   const showChat = !!agentId && canChat(agentId) // Cmd+M opens a chat panel instead of markdown
   // Everything that reads the conversation through CLAUDE's transcript readers (`context.ensure`'s
   // mount-time meter rehydration, the find bar's transcript index) — deliberately NOT `showUsage`,
@@ -1708,6 +1718,48 @@ export function TerminalNode({
   // gemini names its own sessions but has no rename command, so it polls and never pushes.
   const canReadTitleNode = !!agentId && canReadTitle(agentId)
   const agentLabel = (agentId ? agentConfig(agentId) : undefined)?.label ?? 'Agent'
+
+  // The whole-node drop gesture is deliberately an explicit collaboration affordance, not a
+  // second way to move a terminal. The Canvas validates both endpoints in the active project and
+  // then reuses its existing context-link path. This listener only mirrors the pending source so
+  // keyboard and touch users get the same visible state as a pointer drag.
+  useEffect(() => {
+    const onMode = (event: Event): void => {
+      const sourceNodeId = (event as CustomEvent<{ sourceNodeId?: string | null }>).detail
+        ?.sourceNodeId
+      setAgentCollaborationPending(sourceNodeId === id)
+    }
+    window.addEventListener(AGENT_COLLABORATION_MODE_EVENT, onMode)
+    return () => window.removeEventListener(AGENT_COLLABORATION_MODE_EVENT, onMode)
+  }, [id])
+
+  const onAgentCollaborationDragOver = (event: React.DragEvent): void => {
+    const payload = readAgentCollaborationDrag(event.dataTransfer)
+    if (!contextLinkCapable || !payload || payload.nodeId === id) return
+    event.preventDefault()
+    event.stopPropagation()
+    event.dataTransfer.dropEffect = 'link'
+    setAgentCollaborationDropTarget(true)
+  }
+
+  const onAgentCollaborationDragLeave = (event: React.DragEvent): void => {
+    const related = event.relatedTarget as Node | null
+    if (!related || !event.currentTarget.contains(related)) setAgentCollaborationDropTarget(false)
+  }
+
+  const onAgentCollaborationDrop = (event: React.DragEvent): void => {
+    if (!contextLinkCapable) return
+    const payload = readAgentCollaborationDrag(event.dataTransfer)
+    if (!payload) return
+    event.preventDefault()
+    event.stopPropagation()
+    setAgentCollaborationDropTarget(false)
+    window.dispatchEvent(
+      new CustomEvent(AGENT_COLLABORATION_PICK_EVENT, {
+        detail: { sourceNodeId: payload.nodeId, targetNodeId: id }
+      })
+    )
+  }
   // Could this node's CLI ever be hibernated — quit AND brought back? A durable property of the
   // agent, not of its current state: the offscreen release consults it to decide whether waiting
   // for Eco is even meaningful here (see `shouldDeferReleaseForEco`).
@@ -2056,18 +2108,18 @@ export function TerminalNode({
   // continuing tmux session is idle and emits no event, so the main-process tailer is never
   // re-fed. Re-runs if the sessionId changes (track is idempotent). cwd is a path fallback.
   //
-  // CLAUDE ONLY (`claudeTranscript`, not `showUsage`). The handler resolves this sessionId through
-  // claude's `resolveTranscript`, whose cwd fallback answers *the newest claude transcript for that
-  // cwd* — for a codex/gemini node that is a stranger's session, tracked on the CLAUDE tail under
-  // this node's session id, so its meter would show another agent's fill and then flap against the
-  // correct tail. The cost of the gate: a codex/gemini meter fills on the first hook event after
-  // mount instead of instantly. Their tails need no resolver (the hook envelope carries the path),
-  // so nothing else is lost. Per-agent rehydration is a follow-up task — see transcriptGates.ts.
+  // Rehydrate from the provider's own transcript on mount. The provider id is part of the request,
+  // so a resumed Codex or Gemini session cannot fall through to Claude's cwd fallback.
   useEffect(() => {
     const sid = status?.sessionId
-    if (claudeTranscript && sid)
-      window.nodeTerminal.context.ensure(sid, (data.cwd as string) || undefined, data.accountId)
-  }, [claudeTranscript, status?.sessionId, data.cwd, data.accountId])
+    if (showUsage && sid)
+      window.nodeTerminal.context.ensure(
+        sid,
+        (data.cwd as string) || undefined,
+        data.accountId,
+        remoteSession ? 'claude:remote' : agentId
+      )
+  }, [showUsage, status?.sessionId, data.cwd, data.accountId, agentId])
   const updateNodeInternals = useUpdateNodeInternals()
 
   const [searchOpen, setSearchOpen] = useState(false)
@@ -5332,11 +5384,16 @@ export function TerminalNode({
         isUnread ? ' unread' : ''
       }${status?.state === 'working' ? ' working' : ''}${
         status?.state === 'waiting' || status?.state === 'blocked' ? ' attention' : ''
-      }${glyphMounted ? ' term-node--glyphgrid' : ''}${focused ? ' term-node--focused' : ''}`}
+      }${glyphMounted ? ' term-node--glyphgrid' : ''}${focused ? ' term-node--focused' : ''}${
+        agentCollaborationDropTarget ? ' term-node--agent-collaboration-target' : ''
+      }${agentCollaborationPending ? ' term-node--agent-collaboration-source' : ''}`}
       ref={rootRef}
       style={{ borderTopColor: data.color }}
       onMouseEnter={() => (hoveredRef.current = true)}
       onMouseLeave={() => (hoveredRef.current = false)}
+      onDragOver={onAgentCollaborationDragOver}
+      onDragLeave={onAgentCollaborationDragLeave}
+      onDrop={onAgentCollaborationDrop}
     >
       <NodeResizer minWidth={NODE_MIN_SIZES.terminal.width} minHeight={NODE_MIN_SIZES.terminal.height} isVisible={selected && !collapsed} color="#0a84ff" />
       {/* Invisible source handle so edges to subagent/loop nodes can attach. */}
@@ -5441,6 +5498,30 @@ export function TerminalNode({
               <MaterialSymbol name="folder_open" size={16} />
             </button>
           )}
+          {contextLinkCapable && agentId && (
+            <button
+              className="term-node__collaboration-drag nodrag"
+              draggable
+              aria-pressed={agentCollaborationPending}
+              aria-grabbed={agentCollaborationPending}
+              title="Drag this agent onto another agent to share context"
+              aria-label="Link this agent to another agent"
+              onDragStart={(event) => {
+                event.stopPropagation()
+                event.dataTransfer.effectAllowed = 'link'
+                writeAgentCollaborationDrag(event.dataTransfer, id, agentId)
+              }}
+              onDragEnd={() => setAgentCollaborationDropTarget(false)}
+              onClick={(event) => {
+                event.stopPropagation()
+                window.dispatchEvent(
+                  new CustomEvent(AGENT_COLLABORATION_PICK_EVENT, { detail: { nodeId: id } })
+                )
+              }}
+            >
+              <MaterialSymbol name="link" size={16} />
+            </button>
+          )}
           {editingTitle ? (
             <input
               className="term-node__title nodrag"
@@ -5519,7 +5600,13 @@ export function TerminalNode({
               SSH {(data.ssh as SshConnection).user}@{(data.ssh as SshConnection).host}
             </span>
           ) : null}
-          {showUsage && <ContextMeter sessionId={status?.sessionId ?? null} />}
+          {showUsage && (
+            <ContextMeter
+              sessionId={status?.sessionId ?? null}
+              agentId={agentId}
+              sourceKey={contextSourceKey(agentId, remoteSession)}
+            />
+          )}
           {/* ADHD time awareness — beside the session chip, because a clock in a menu does nothing
             for time blindness. Renders nothing at all while the mode is off. */}
           <AdhdElapsedChip nodeId={id} />

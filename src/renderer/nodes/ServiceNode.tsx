@@ -7,18 +7,25 @@ import { safeServiceEndpoint } from '@shared/node-exec'
 import { nodeBorderStyle, nodeColorStyle } from '../lib/nodeColor'
 import { ColorMenu } from '../components/color/ColorMenu'
 import { MinecraftServerPanel } from '../components/minecraft/MinecraftServerPanel'
+import { AwsIdentityManager } from '../components/aws/AwsIdentityManager'
+import { DockerHostManagerPanel } from '../components/docker/DockerHostManagerPanel'
+import { HomeAssistantPanel } from '../components/home-assistant/HomeAssistantPanel'
+import { CloudflareZeroTrustPanel } from '../components/cloudflare/CloudflareZeroTrustPanel'
+import { NextcloudAioPanel } from '../components/nextcloud/NextcloudAioPanel'
 import { EditableNodeTitle } from '../components/EditableNodeTitle'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { mapAroundExactFacts } from './nodeVocabulary'
 
 /**
- * One component for the whole service family — Minecraft, Docker, Proxmox, GitLab, Home Assistant
- * and FreePBX. They differ in what they will eventually manage, not in how they behave as canvas
- * objects, so six near-identical components would be six copies of one rule waiting to drift.
+ * One component for the whole service family, including the guided AWS identity manager. They
+ * differ in what they manage, not in how they behave as canvas objects, so near-identical
+ * components would be copies of one rule waiting to drift.
  *
- * WHAT THIS DELIBERATELY DOES NOT DO for five of the six kinds, and why the emptiness is the point:
+ * WHAT THIS DELIBERATELY DOES NOT DO for the still-unwired manager kinds, and why the emptiness is
+ * the point:
  *
- * Docker/Proxmox/GitLab/Home Assistant/FreePBX are not connected to anything yet. CLAUDE.md is
+ * Proxmox/GitLab/FreePBX are not connected to anything yet. Home Assistant is implemented
+ * by HomeAssistantPanel through the host-owned REST/WebSocket client. CLAUDE.md is
  * explicit that a control which is styled as operable while being inert is a defect rather than a
  * placeholder — "any icon, preview, mock window, toolbar control, card, tab, badge, illustration,
  * affordance ... presented as if it can be used must perform its labeled action". So there is no
@@ -30,11 +37,11 @@ import { mapAroundExactFacts } from './nodeVocabulary'
  * rather than implying a connection. Storing where you would connect is a real, useful thing on
  * its own; pretending it connects would not be.
  *
- * `minecraft` IS the lane that wires a real connection — see `MinecraftServerPanel`
+ * `minecraft` and `dockerhost` are the lanes that wire real managers. See `MinecraftServerPanel`
  * (docs/minecraft-server-manager.md). It runs a real local `java -jar server.jar` process on the
- * machine this shell is running on, not a remote connection reached through an address, so it
- * replaces the generic address field entirely rather than growing a fake "Connect" button beside
- * it. When a future lane wires one of the other five kinds, it follows the same pattern: real
+ * and `DockerHostManagerPanel`. Both replace the generic address field entirely rather than growing
+ * a fake "Connect" button beside it. When a future lane wires one of the other four kinds, it follows
+ * the same pattern: real
  * controls that do exactly what they say, added beside this honest copy rather than instead of it.
  */
 /**
@@ -49,7 +56,10 @@ const ENDPOINT_PLACEHOLDER: Record<ServiceNodeKind, string> = {
   proxmox: 'https://proxmox.local:8006',
   gitlab: 'https://gitlab.example.com',
   homeassistant: 'http://homeassistant.local:8123',
-  freepbx: 'https://pbx.local'
+  freepbx: 'https://pbx.local',
+  awsidentity: 'https://sts.amazonaws.com',
+  'cloudflare-zero-trust': 'https://api.cloudflare.com',
+  'nextcloud-aio': 'http://127.0.0.1:8080'
 }
 
 /**
@@ -230,8 +240,36 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
         </div>
 
         {!collapsed && kind === 'minecraft' && <MinecraftServerPanel nodeId={id} />}
+        {!collapsed && kind === 'dockerhost' && <DockerHostManagerPanel />}
+        {!collapsed && kind === 'nextcloud-aio' && <NextcloudAioPanel nodeId={id} config={data.nextcloudAioConfig} onConfigChange={(nextcloudAioConfig) => updateNodeData(id, { nextcloudAioConfig })} />}
 
-        {!collapsed && kind !== 'minecraft' && (
+        {!collapsed && kind === 'awsidentity' && (
+          <AwsIdentityManager
+            binding={data.awsIdentityBinding as never}
+            intent={data.awsIdentityIntent as never}
+            onChange={(awsIdentityBinding, awsIdentityIntent) => updateNodeData(id, { awsIdentityBinding, awsIdentityIntent })}
+          />
+        )}
+
+        {!collapsed && kind === 'homeassistant' && (
+          <HomeAssistantPanel
+            nodeId={id}
+            boundEndpoint={data.serviceConnection?.endpoint ?? null}
+            onBind={(endpoint) => updateNodeData(id, { serviceConnection: endpoint ? { endpoint } : undefined })}
+            intent={data.homeAssistantIntent}
+            onIntentChange={(homeAssistantIntent) => updateNodeData(id, { homeAssistantIntent })}
+          />
+        )}
+
+        {!collapsed && kind === 'cloudflare-zero-trust' && (
+          <CloudflareZeroTrustPanel
+            nodeId={id}
+            intent={data.cloudflareZeroTrustIntent ?? { schemaVersion: 1, manager: null, operation: null, accountHint: null, resourceHint: null, values: {} }}
+            onIntentChange={(cloudflareZeroTrustIntent) => updateNodeData(id, { cloudflareZeroTrustIntent })}
+          />
+        )}
+
+        {!collapsed && kind !== 'minecraft' && kind !== 'dockerhost' && kind !== 'homeassistant' && kind !== 'awsidentity' && kind !== 'cloudflare-zero-trust' && kind !== 'nextcloud-aio' && (
           <div className="service-node__body">
             <label className="service-node__field" htmlFor={`${id}-endpoint`}>
               <span className="service-node__field-label">{vocab('Address')}</span>

@@ -14,6 +14,11 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## Shipped and verified
 
+- [ ] Easter egg catalog (#103): 60 local, bounded, accessible desktop surprises are implemented
+      in `src/shared/easter-eggs.ts` and `src/renderer/components/EasterEggs.tsx`, with the
+      cabinet and documentation in place. Runtime interaction, tests, builds, and captures remain
+      intentionally unverified under the issue's no-check boundary.
+
 - [x] Three-process architecture (main / core / renderer) with the `CorePlatform` seam, so
       Server Edition (`src/server`) boots the same core services as Desktop.
 - [x] Terminal session continuity via tmux (macOS/Linux) and the standalone Windows session host,
@@ -52,10 +57,59 @@ later commit, since this file will not be kept in lockstep with every merge).
       (`scripts/check-app-contract.mjs`), 1,101 assertions across 59 features, run clean except
       for the one pending item below.
 - [x] Windows packaging path: Squirrel.Windows via `scripts/windows-installer.mjs`, unsigned by
-      permanent policy, with ICO regeneration/verification, nupkg/RELEASES agreement checks, and
-      a manual-dispatch-only `main`-only release workflow.
+      permanent policy, with ICO regeneration/verification, Setup.exe plus nupkg/RELEASES
+      agreement checks, and a Windows-only release workflow triggered by pushes to `main` and
+      manual dispatch. ZIP, NSIS-only, MSI-only, MSIX-only, and portable-only parallel installer
+      routes are retired.
+- [ ] Cognition Devin CLI support (#106): source-level builtin registry, launch forms, project
+      hook installation, status normalization, and notification fallback are implemented on
+      `feat/devin-cli-support`. The real `devin 3000.4.25` binary was unavailable in this lane, so
+      runtime launch, availability, hook delivery, Desktop, Server Edition, SSH, and packaged
+      evidence remain unverified.
 
 ## In progress / partially landed
+
+- [ ] **Portable Comment and Activity attachments, issue #94**: source support is present in
+      `src/shared/comment-attachments.ts`, `src/core/board-attachments.ts`, the board-log bridge,
+      composer queue, and schema 3 comment carriers. Tests, type checks, lint, builds, packaging,
+      runtime interaction, reviews, security and accessibility audits, and captures remain pending
+      in the integration lane.
+
+- [ ] **Agent-to-agent drag collaboration, issue #90**: the bounded collaboration handle and
+      keyboard/touch equivalent now reuse the existing context-link path for two compatible agent
+      nodes. Credentials, accounts, projects, working directories, and live sessions remain
+      unchanged. Tests, builds, runtime interaction, accessibility review, security review, and
+      captures remain unverified under the lane's explicit boundary.
+
+- [ ] **Context-window progress, issue #89**: every agent-backed node, session row, Kanban card,
+      and card modal now keeps a visible meter with provider-scoped telemetry, exact known values,
+      explicit unknown/not-reported/stale/unavailable states, restart-safe generation fencing, and
+      bounded local/remote transcript reads. The implementation lane intentionally has no tests,
+      lint, type checks, builds, packaging, runtime interaction, reviews, audits, or captures yet.
+
+- [ ] **Bounded wheel zoom and persisted wheel speed, issue #107**: the renderer now shares a ±50
+      `deltaY` budget across each 40 ms burst and applies a persisted 0.2×–2.0× multiplier only to
+      plain-wheel zoom. The Behavior setting has localized copy, point-of-use validation, and
+      provenance text. Server Edition shares the same renderer and settings record. Tests, type
+      checks, lint, builds, packaging, runtime interaction, reviews, audits, and captures remain
+      unrun in this implementation lane; the generated offline-doc bundle awaits the normal docs
+      generation step in integration.
+- [ ] **Ten-level funny controls, issue #113**: source and localization range now covers independent
+      English and Cantonese levels 1–10, schema-versioned settings migration, scheduled values,
+      site storage, exports, provenance copy, Easter eggs, and feature resolvers. This implementation
+      lane intentionally has no tests, type checks, lint, builds, packaging, runtime interaction,
+      reviews, audits, or captures; integrated verification remains pending.
+- [ ] **Desktop trackpad gesture facts, issue #108**: main-process scroll and pinch edges now feed
+      a depth-safe typed bridge so macOS desktop wheel routing distinguishes a precise-pixel mouse
+      from a trackpad, including the bounded momentum-gap linger. Server Edition keeps its browser
+      heuristic and mobile is not applicable. This implementation lane intentionally has no tests,
+      lint, type checks, builds, packaging, runtime interaction, reviews, audits, or captures yet.
+
+- [ ] **Shared provider services, issue #18**: provider catalog, account metadata, sealed
+      credential payloads, bounded one-time OAuth PKCE callbacks, adapter-owned resource discovery,
+      and shared Desktop/Server local bindings are implemented in source. Individual provider
+      adapters, build/package evidence, runtime interaction, and captures remain pending under the
+      stated ultra-speed no-check boundary.
 
 - [ ] Desktop Material Design 3 and personal vocabulary reconciliation: the source audit and focused
   Material Design 3 fixes are present in the audit scripts and shared primitives. The Material Design 3 audit is green
@@ -91,6 +145,29 @@ later commit, since this file will not be kept in lockstep with every merge).
       Configure/Rebind/Adopt/Deploy/Locate Asset/Leave Unbound surface is wired for Desktop with
       an honest Server Edition boundary. Tests, build/package evidence, generated docs bundle,
       runtime interaction, and captures remain outstanding.
+
+- [ ] **Nextcloud AIO hosting, issue #52**: the guided pinned official image profile is implemented
+      on `feat/program-41-nextcloud-aio` with explicit Docker socket authority disclosure, no
+      privileged mode, local loopback/private binding, fixed lifecycle operations, health and
+      progress states, backup/restore/rollback records, portable safe intent, localized copy, and
+      dedicated docs. Tests, type checks, builds, packaging, runtime interaction, reviews, and
+      captures remain outstanding under the issue's ultra-speed boundary.
+
+- [ ] **Cloudflare core managers, issue #57**: typed account, zone, DNS, SSL/TLS, ruleset, redirect,
+      cache, and analytics operations are implemented in the shared contract, host service, Desktop
+      and Server Edition bridges, and canvas node. Local sealed credentials, bounded output,
+      cancellation, safe previews, destructive confirmation, explicit unavailable states, and safe
+      schema 3 intent are present. Tests, type checks, lint, reviews, security or accessibility
+      checks, builds, packaging, installer execution, runtime interaction, and captures remain
+      unverified under the ultra-speed lane.
+
+- [ ] **Guided GitHub API capabilities, issue #101**: typed REST and fixed GraphQL operations now
+      cover repository, source-control, collaboration, Actions, release, organization, account,
+      search, security, ruleset, webhook, and app resources. The host resolves approved project
+      scope and local credentials, validates semantic inputs, bounds pagination and response data,
+      reports progress and rate limits, supports cancellation, and requires exact destructive
+      confirmation. Tests, type checks, lint, reviews, builds, packaging, runtime interaction, and
+      captures remain unverified on the dedicated feature branch.
 
 - [ ] **ADHD modes** — Focus, Low stimulation, Time awareness, One thing at a time, and Momentum
       are all specced in `docs/adhd-modes.md`. Time awareness, Momentum, and the
@@ -182,9 +259,10 @@ intentionally unchecked because this task publishes the plan only.
 - [ ] Import schema 3 archives atomically without external side effects.
 - [ ] Preserve root, Multiverse, AWS Universe, portal, Shop, node, relationship, and appearance data.
 - [ ] Bundle project-owned media and provide Include, Omit, and Locate Later decisions. Core
-  content-addressing, signature validation, omission records, schema 3 projection support, and a
-  guided decision component are implemented but remain unverified until archive wiring and the
-  required built-artifact checks land.
+  content-addressing, typed desktop preparation, explicit decisions, parser proof, real
+  `assets/media/` container entries, repeated import validation, and atomic destination staging are
+  implemented. The item remains unchecked because all tests, builds, packaging, runtime
+  interaction, accessibility checks, and captures are intentionally unrun.
 - [ ] Separate portable blueprints from machine-local bindings and credential references.
 - [ ] Ship the unified Node Catalog and one creation coordinator. The typed registry,
       availability-aware dialog, immutable creation-event coordinator, collision-free placement,
@@ -198,41 +276,84 @@ intentionally unchecked because this task publishes the plan only.
       runtime and built-artifact verification remain pending under issue #17's explicit
       no-tests/no-builds/no-captures boundary.
 - [ ] Add shared account, credential-vault, OAuth callback, and provider-binding services.
-- [ ] Add guided Docker host management for local and SSH contexts.
+- [ ] Add guided Docker host management for local and SSH contexts. The typed manager, local and
+      saved SSH context discovery, guided resource operations, safe portable blueprint, progress,
+      cancellation, destructive confirmation, documentation, offline article, and site article are
+      implemented on issue #19's feature branch. Tests, type checks, lint, reviews, security and
+      accessibility checks, builds, packaging, runtime interaction, and captures remain unrun under
+      the ultra-speed boundary, so this roadmap claim remains unchecked.
 
 ### Media, torrents, virtual machines, and planning
 
 - [ ] Add Photo, Video, mixed-media Gallery, and wild Dim Sum nodes. Photo, Video, and Gallery
-      source implementation is present for issue #20; tests, builds, and packaged captures remain
-      pending in the parent integration lane.
-- [ ] Add the categorized local file-converter and advanced media, archive, PDF, and OCR pipelines.
+      source implementation, machine-local path round-trip, schema 3 node references, validated
+      content-addressed archive bytes, atomic import staging, and explicit missing-asset states are
+      present for issue #20. Wild Dim Sum source implementation is present for issue #25 with
+      public-catalog selection and portable schema 3 state. Tests, builds, packaging, release
+      evidence, and packaged captures remain pending in the parent integration lane, so the
+      combined row stays unticked.
+- [ ] Verify the categorized local file converter delivered for issue #21. The source now includes
+      collision-safe destination reservations, atomic publication, resumable progress, cancellation,
+      partial outcomes, per-category regex builders, and completed-output editor handoff; this
+      ultra-speed lane intentionally left tests, builds, runtime interaction, and captures unrun.
+- [ ] Add advanced media, archive, PDF, OCR, and
+      structured-data pipelines. Issue #22 source implementation now provides packaged PDF,
+      supported image, local English OCR, bounded ZIP inventory, deterministic JSON, portable
+      unbound intent, queue progress, cancellation, retry, and recovery. The item remains unticked
+      until the required tests, built-artifact interaction, packaging, and capture evidence run.
 - [ ] Add the bundled WebTorrent downloader with resumable per-task lifecycle. The implementation
-      lane now contains the local runtime, guided intake, metadata selection, progress controls,
-      restart reconciliation, bounded seeding, and machine-local state; focused verification and
-      release evidence remain pending.
-- [ ] Add the bundled QEMU Linux ISO VM with persistent and disposable modes.
-- [ ] Add the bundled WebTorrent downloader with resumable per-task lifecycle.
-- [ ] Add the bundled QEMU Linux ISO VM with persistent and disposable modes. Implementation landed in `src/core/virtual-machine/` and `src/renderer/nodes/VirtualMachineNode.tsx`; tests, build, packaging, runtime interaction, and captures remain unrun in the ultra-speed lane.
+      lane now contains ESM-compatible local runtime loading, guided inspect-then-start intake,
+      searchable metadata and seeding controls, progress controls, restart reconciliation,
+      completion-based bounded seeding, and machine-local state; focused verification and release
+      evidence remain pending.
+- [ ] Add the bundled QEMU Linux ISO VM with persistent and disposable modes. Source implementation landed in `src/core/virtual-machine/` and `src/renderer/nodes/VirtualMachineNode.tsx`; automated checks, build, packaging, runtime interaction, and captures remain intentionally unrun in the ultra-speed lane.
+- [x] Add the Home Assistant multi-instance client with REST and WebSocket discovery. Dedicated
+      control and sensor display nodes remain Program 16 and Program 17.
 - [ ] Add Home Assistant multi-instance controls and sensor displays.
+  - [x] Add schema-driven Home Assistant control nodes with local connection binding.
+  - [x] Add Home Assistant sensor display nodes with portable entity and presentation intent,
+        machine-local sealed binding, typed values, binary state, enums, gauges, bounded trends,
+        events, weather, calendars, and selected attributes. Verification remains unrun.
 - [ ] Add Calendar, Timer, and Alarm Clock nodes. Planner occurrence service is implemented in the
-      current lane, but remains unticked until its required checks and packaged interaction evidence land.
+       current lane, including UI-close continuity, ordered durable occurrence delivery, schema 3
+       planner-definition transfer, and the destination Configure action. It remains unticked until
+       required checks and packaged interaction evidence land.
 - [ ] Add Calendar nodes for local calendars and ICS, with guided CalDAV, Google Calendar, and
       Microsoft 365 provider bindings, recurrence/timezone views, offline cache, and create/edit/
-      delete flows. Provider adapters still report an honest unavailable state until trusted OAuth
-      vault wiring is supplied. Ultra-speed lane intentionally skipped tests, builds, packaging,
-      runtime interaction, and captures.
+      delete flows. Host-owned provider adapters, credential storage, loopback OAuth PKCE, bounded
+      pagination, validators, retry backoff, and remote writes are implemented but remain unticked
+      because the ultra-speed lane intentionally skipped tests, type checking, lint, builds,
+      packaging, runtime interaction, reviews, audits, and captures.
 - [ ] Add Timer, Alarm Clock, and planner occurrence services.
 - [x] Add Timer nodes and persistent planner occurrence service. Calendar and Alarm Clock remain
   separate follow-up surfaces.
 - [ ] Add Calendar and Timer occurrence services.
-- [x] Add Alarm Clock nodes and planner occurrence history with timezone and DST-safe recurrence.
+- [x] Add Alarm Clock nodes, the host-owned file planner lifecycle and desktop bridge, active Node
+      Catalog creation, and occurrence history with timezone and DST-safe recurrence.
 
 ### Multiverse and AWS
 
+- [x] Add scoped Multiverse child canvases with guided hierarchy navigation and a depth-8 boundary.
+      Source implementation and delivery records are present; tests, type checks, builds, packaging,
+      runtime interaction, and captures remain explicitly unrun under issue #33's delivery boundary.
 - [ ] Add door-only Multiverse canvases to depth 8.
-- [ ] Add interactive door construction, numeric or passphrase entry, and recovery game.
-- [ ] Add unlimited AWS Universes with AWS-only scope and AWS Shop nodes.
-- [ ] Bundle AWS CLI v2 and maintain verified model and documentation indexing.
+- [ ] Wire the implemented paired-door navigation policy into the pending Multiverse canvas and
+      door-rendering lanes; tab, palette, history, and direct-selection bypasses are refused in core.
+- [ ] Add interactive door construction and numeric or passphrase entry. Source components and
+      portable intent are present; live navigator wiring remains pending.
+- [x] Add the top-down recovery game with three energy keys, hazards, core activation, and portable state. Source implementation is complete; built-artifact verification remains for integration.
+- [x] Add unlimited AWS Universes with AWS-only scope, guided navigation, and AWS Shop nodes.
+      Source implementation and delivery records are present; tests, type checks, builds,
+      packaging, runtime interaction, and captures remain explicitly unrun under issue #39's
+      ultra-speed boundary.
+- [ ] Bundle AWS CLI v2 and maintain verified model and documentation indexing. The pinned MSI,
+      verified fallback, version details route, bounded installed-model inventory, feature article,
+      and offline documentation entry are present on the issue #41 jer. Tests, builds, packaging,
+      installer execution, runtime interaction, and HuiShots remain pending, so this item stays
+      unticked.
+- [x] Add the platform-free AWS CLI model documentation index for services, commands, options,
+      paginators, waiters, input and output shapes, and input skeletons. Tests, builds, runtime
+      interaction, and packaged verification remain unrun under issue #42's lane boundary.
 - [ ] Generate interactive wizard forms for every AWS service, command, option, paginator, waiter,
       skeleton, input, and output described by the installed CLI models.
 - [ ] Add AWS identity, SSO, role, MFA, Resource Explorer, Cloud Control, S3, EC2, IAM, STS,
@@ -241,16 +362,33 @@ intentionally unchecked because this task publishes the plan only.
 
 ### Hosting and Cloudflare
 
-- [ ] Add GitLab Server CE and EE hosting profiles with backup and restore.
+- [x] Add the shared hosted-resource backup and restore framework with version, edition, resource,
+      ownership, archive-safety, progress, cancellation, atomic publication, restore-review, and
+      rollback contracts. Source and direct documentation are present; tests, builds, packaging,
+      runtime interaction, and captures remain explicitly unrun under issue #55's ultra-speed boundary.
+- [ ] Add GitLab Server CE and EE hosting profiles with backup, restore, readiness, credential
+      handoff, update, rollback, four managed volumes, and private binding. Source and docs are
+      present in issue #51; tests, builds, packaging, runtime interaction, and captures remain
+      unrun under the ultra-speed boundary.
 - [ ] Add Nextcloud AIO and managed no-socket hosting profiles.
 - [ ] Add Open WebUI hosting with existing Ollama reuse and honest bootstrap states.
 - [ ] Add Cloudflare account, zone, DNS, security, Workers, Pages, storage, queue, Access, and
       analytics managers.
+- [x] Add typed Cloudflare Access, Zero Trust, Workers, Pages, R2, D1, and Queues managers with
+      local protected credentials, portable neutral intent, bounded fixed-route API calls,
+      progress/cancellation, per-field regex builders, and destructive confirmation. Verification
+      remains intentionally unrun in the ultra-speed lane.
 - [ ] Add one-click Cloudflare Tunnel setup with private-first routing and connector choices.
 
 ### Clean-room features and upstream parity
 
 - [ ] Add clean-room browser, kiosk, PWA, proxy, and read-only diagnostics nodes.
+- [ ] **Program 57 / #68, linked-agent inbox notifications.** The source path already carries the
+      upstream PR #98 intent through the authenticated `notify --node <id>` route, project-local
+      consent, runtime ownership checks, fixed application-authored text, and the bounded
+      deliver-on-idle queue. Feature documentation, the offline bundle, the documentation site,
+      and the completeness inventory are recorded in this lane. Tests, builds, packaging, runtime
+      interaction, and UI captures remain pending under the explicit ultra-speed boundary.
 - [ ] Implement the outstanding upstream behavior from the planned issue and pull-request parity map.
 - [ ] Split the PR #422 behavior into independent link, endpoint, navigation, grouping, agent, and
       account lanes.
