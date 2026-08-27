@@ -14,6 +14,7 @@ import { Button } from '@renderer/ui/Button'
 import { Input } from '@renderer/ui/Input'
 import { Select } from '@renderer/ui/Select'
 import { useLocalizedVocabularyText } from '../../../lib/personalVocabulary/useLocalizedVocabularyText'
+import { NamedTerminalProfilesControls } from './NamedTerminalProfilesControls'
 
 const BASE_ROWS = {
   profile: {
@@ -38,6 +39,10 @@ const BASE_ROWS = {
   custom: {
     title: 'Custom executable',
     keywords: ['shell', 'custom', 'advanced', 'path', 'executable', 'picker']
+  },
+  named: {
+    title: 'Named terminal profiles',
+    keywords: ['named', 'profile', 'directory', 'startup', 'command', 'terminal', 'agent', 'saved']
   },
   legacyShell: {
     title: 'Default shell',
@@ -69,6 +74,11 @@ function localizedRows(profileText: ProfileText): typeof BASE_ROWS {
       ...BASE_ROWS.custom,
       title: profileText('terminalProfiles.settings.customLabel', 'Custom executable'),
       keywords: localizeKeywords('custom', BASE_ROWS.custom.keywords)
+    },
+    named: {
+      ...BASE_ROWS.named,
+      title: profileText('terminalProfiles.named.heading', 'Named terminal profiles'),
+      keywords: localizeKeywords('named', BASE_ROWS.named.keywords)
     },
     legacyShell: {
       ...BASE_ROWS.legacyShell,
@@ -480,6 +490,7 @@ function WindowsProfileControls({ rows }: { rows: typeof BASE_ROWS }): React.JSX
           }
         />
       </SearchableRow>
+      <NamedTerminalProfilesControls rows={rows.named} />
     </>
   )
 }

@@ -134,6 +134,12 @@
   did not run tests, type checks, lint, reviews, security or accessibility checks, builds, packaging,
   installer execution, runtime interaction, or UI captures.
 
+- Add user-named terminal profiles for the upstream #286 workflow. Settings now stores a bounded
+  name, initial directory, and optional startup command, with a native folder picker, local search,
+  edit/remove/default controls, and creation-time selection for terminal and agent nodes. Stable
+  ids remain in the machine-local execution overlay, while paths and commands stay out of portable
+  project files and peer traffic. Tests, type checks, lint, builds, packaging, runtime interaction,
+  and captures remain unrun under the Program 66 issue boundary.
 - Mount the seven AWS core-service routes on the shared AWS manager: S3, EC2, IAM, STS, Lambda,
   CloudWatch, and CloudWatch Logs. Typed operation controls now cover bounded reads, selected writes,
   destructive confirmation, pagination, cancellation, and progress while reusing the current local

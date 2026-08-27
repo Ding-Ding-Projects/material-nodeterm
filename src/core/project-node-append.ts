@@ -51,9 +51,11 @@ function stripRawNodeExec(node: Record<string, unknown>): Record<string, unknown
   const {
     shell: _shell,
     terminalProfileId: _terminalProfileId,
+    namedTerminalProfileId: _namedTerminalProfileId,
     pendingLaunch: _pendingLaunch,
     ...portable
   } = node
+  if (_namedTerminalProfileId !== undefined) delete portable.cwd
   const ssh = portable.ssh
   if (!ssh || typeof ssh !== 'object' || Array.isArray(ssh)) return portable
   const {

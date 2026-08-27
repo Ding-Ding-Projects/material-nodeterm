@@ -225,6 +225,7 @@ import {
   windowsTerminalProfileId,
   windowsTerminalProfileLabel
 } from '../terminal/windows-terminal-profile'
+import { namedTerminalProfileForId } from '../lib/named-terminal-profiles'
 import {
   agentColdRelaunchDecision,
   retryAgentColdRelaunch,
@@ -1255,6 +1256,7 @@ export function TerminalNode({
   const claudeAccounts = useSettings((s) => s.settings.claudeAccounts)
   const terminalProfiles = useTerminalProfiles((s) => s.profiles)
   const defaultTerminalProfileId = useSettings((s) => s.settings.defaultTerminalProfileId)
+  const namedTerminalProfiles = useSettings((s) => s.settings.namedTerminalProfiles)
   const codexAccounts = useSettings((s) => s.settings.codexAccounts)
   const systemClaudeLabel = useSettings((s) => s.settings.systemAccountLabel)
   const systemCodexLabel = useSettings((s) => s.settings.systemCodexAccountLabel)
@@ -1823,7 +1825,12 @@ export function TerminalNode({
     defaultTerminalProfileId
   })
   const terminalProfile = terminalProfiles.find((profile) => profile.id === terminalProfileId)
+  const namedTerminalProfile = namedTerminalProfileForId(
+    data.namedTerminalProfileId as string | undefined,
+    namedTerminalProfiles
+  )
   const terminalProfileLabel =
+    namedTerminalProfile?.name ??
     terminalProfile?.label ??
     windowsTerminalProfileLabel(terminalProfileId, {
       automatic: profileText('terminalProfiles.label.automatic', 'Automatic'),

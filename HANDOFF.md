@@ -371,7 +371,31 @@ builds and checks. The parent integration lane must regenerate it before claimin
 current. This lane also did not run tests, type checks, lint, builds, packaging, runtime
 interaction, reviews, security or accessibility checks, or captures. No issue, pull request,
 release, default branch merge, deletion, or cleanup mutation was performed by this lane.
+## 2026-08-27, named terminal profiles, issue #77 and upstream issue #286
 
+The feature branch was reconciled with the exact `origin/main` tip
+`54164b84dce0b7e62787b1de2885405ff4ed821c`. The named-profile implementation remains in
+`68277d44f8ac6000e723c9cd85a6acbeef8e40bf`, with the portability correction in
+`8d40fb8ec9312d8e0a5ee922556a7601b4e8494f`.
+
+Settings now stores bounded named profiles containing a display name, initial directory, and
+optional startup command. The Settings → Shell surface provides create, edit, remove, default
+selection, native folder browsing, and local search with an adjacent regex builder. The node
+catalog offers the saved profiles when creating Terminal and Agent nodes. Existing detected shell
+profiles remain intact and continue to enumerate PowerShell 7, Windows PowerShell, Command Prompt,
+Git Bash, WSL distributions, and custom executables.
+
+Named profile ids and directories use the machine-local execution overlay. Named directories are
+removed from portable project content and peer traffic, while the local overlay restores the
+selected directory for the owning machine. SSH, relay, Server Edition, and non-Windows surfaces do
+not apply the local named-profile picker. Startup commands remain local one-shot launch intent, and
+an Agent launch runs after the named startup command.
+
+Direct documentation is `docs/features/terminals/windows-shell-profiles.md`, indexed from
+`docs/features/terminals/README.md`. `CHANGELOG.md` and `ROADMAP.md` record the same scope and
+verification boundary. Tests, lint, type checks, builds, packaging, runtime interaction, reviews,
+audits, and captures were not run in this lane. The parent integration lane owns those checks,
+generated documentation refresh, issue comments, final default-branch integration, and release work.
 ## 2026-08-27, AWS core-service managers, issue #46 PR preparation
 
 The issue jer was reconciled with the exact `origin/main` tip `2472cf23b99559005476841d3db5e6bc4691ac06`.

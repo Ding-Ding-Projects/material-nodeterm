@@ -1154,11 +1154,13 @@ const NO_KANBAN_SESSIONS: KanbanSession[] = []
  * this capability fact to snapshot Windows profiles only for local desktop sessions. */
 function terminalCreationOptionsFor(
   projectId: string | null | undefined,
-  terminalProfileId?: string
+  terminalProfileId?: string,
+  namedTerminalProfileId?: string
 ): TerminalNodeCreationOptions {
   return {
     sessionSource: sessionForProject(projectId ?? '').source,
-    ...(terminalProfileId ? { terminalProfileId } : {})
+    ...(terminalProfileId ? { terminalProfileId } : {}),
+    ...(namedTerminalProfileId ? { namedTerminalProfileId } : {})
   }
 }
 
@@ -5672,7 +5674,7 @@ export function Canvas() {
       creationEventId: string,
       at?: { x: number; y: number },
       groupId?: string,
-      options?: { terminalProfileId?: string },
+      options?: { terminalProfileId?: string; namedTerminalProfileId?: string },
       universeContext?: Pick<
         NodeCatalogAvailabilityContext,
         'universeScope' | 'universeId' | 'universeDepth' | 'hasShopNode' | 'parentCanvasId'
@@ -5713,7 +5715,7 @@ export function Canvas() {
                 center,
                 undefined,
                 project?.ssh,
-                terminalCreationOptionsFor(activeProjectId, options?.terminalProfileId)
+                terminalCreationOptionsFor(activeProjectId, options?.terminalProfileId, options?.namedTerminalProfileId)
               )
             }
             if (catalogEntry.id.startsWith('agent:')) {
@@ -5739,7 +5741,7 @@ export function Canvas() {
                 ssh,
                 selectedAccount,
                 activeAgentLaunchPlan('canvas-new-agent', agentId),
-                terminalCreationOptionsFor(activeProjectId)
+                terminalCreationOptionsFor(activeProjectId, options?.terminalProfileId, options?.namedTerminalProfileId)
               )
             }
             if (catalogEntry.id === 'sticky') return createStickyNode(index, center)
@@ -18214,6 +18216,7 @@ export function Canvas() {
             hasShopNode: false
           }}
           terminalProfileChoices={terminalProfileMenuChoices}
+          namedTerminalProfiles={offersTerminalProfiles ? settings.namedTerminalProfiles : []}
           onCreate={(entry, creationEventId, options) => {
             if (entry.id === 'kiosk-session' || entry.id === 'pwa-session') {
               setNodeCatalog(null)
