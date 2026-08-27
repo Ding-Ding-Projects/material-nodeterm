@@ -102,6 +102,7 @@ import BrowserNode from '../nodes/BrowserNode'
 import { ServiceNode } from '../nodes/ServiceNode'
 import NsisInstallerNode from '../nodes/NsisInstallerNode'
 import ShopNode from '../nodes/ShopNode'
+import TorrentNode from '../nodes/TorrentNode'
 import { normalizeAddress } from '../nodes/browserUrl'
 import VideoNode from '../nodes/VideoNode'
 import PhotoNode from '../nodes/PhotoNode'
@@ -590,6 +591,7 @@ import {
   createSshTerminalNode,
   createAuthenticatorNode,
   createNsisNode,
+  createTorrentNode,
   createStickyNode,
   createTerminalNode,
   nodeSshFor,
@@ -1839,6 +1841,7 @@ export function Canvas() {
       // tell them apart without six registrations of six near-identical files.
       nsis: withNodeBoundary(NsisInstallerNode),
       shop: withNodeBoundary(ShopNode),
+      torrent: withNodeBoundary(TorrentNode),
       minecraft: withNodeBoundary(ServiceNode),
       dockerhost: withNodeBoundary(ServiceNode),
       proxmox: withNodeBoundary(ServiceNode),
@@ -4703,6 +4706,17 @@ export function Canvas() {
         if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
         return appended.nodes
       })
+    },
+    [setNodes, markDirty, emptyNodePos, parentInto]
+  )
+
+  const addTorrent = useCallback(
+    (center?: { x: number; y: number }, groupId?: string) => {
+      setNodes((ns) => {
+        const node = createTorrentNode(ns.length, center ?? emptyNodePos())
+        return [...ns, groupId ? parentInto(node, groupId) : node]
+      })
+      markDirty()
     },
     [setNodes, markDirty, emptyNodePos, parentInto]
   )
@@ -9186,6 +9200,11 @@ export function Canvas() {
               onClick: () => addNsis(at)
             },
             {
+              label: 'New torrent downloader',
+              icon: <IconConvert />,
+              onClick: () => addTorrent(at)
+            },
+            {
               label: 'New dino game',
               icon: <IconDino />,
               onClick: () => addDino(at)
@@ -9303,6 +9322,7 @@ export function Canvas() {
       addSticky,
       addAuthenticator,
       addNsis,
+      addTorrent,
       addNativeLoop,
       addDino,
       addBrowser,
@@ -13368,6 +13388,12 @@ export function Canvas() {
             run: () => addNsis()
           },
           {
+            id: 'new-torrent',
+            label: 'New torrent downloader',
+            icon: <IconConvert />,
+            run: () => addTorrent()
+          },
+          {
             id: 'new-dino',
             label: 'New dino game',
             icon: <IconDino />,
@@ -13744,6 +13770,7 @@ export function Canvas() {
     addSticky,
     addGallery,
     addNsis,
+    addTorrent,
     addNativeLoop,
     addDino,
     addWebView,

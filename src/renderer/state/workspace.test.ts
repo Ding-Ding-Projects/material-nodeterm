@@ -1109,6 +1109,7 @@ describe('duplicateNode across every node kind', () => {
     // installer, which stays Squirrel.Windows).
     nsis: 'nsis',
     shop: 'shop'
+    torrent: 'torrent'
   }
   const ALL_KINDS = Object.keys(EXPECTED_PREFIX) as NodeKind[]
 

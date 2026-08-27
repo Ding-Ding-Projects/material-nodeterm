@@ -23,6 +23,7 @@ the deep architecture reference these articles are distilled from.
 | [Speech](./speech/README.md) | On-device dictation into any terminal. |
 | [Packaging](./packaging/README.md) | How builds are produced, distributed, and kept up to date. |
 | [Dependency installation](./dependencies/README.md) | The manifest and machine-local lifecycle that installs prerequisites for node features. |
+| [Torrents](./torrents/README.md) | Explicit local WebTorrent tasks with safe destinations, progress, recovery, and bounded seeding. |
 | [Global and project settings](./global-and-project-settings.md) | Durable app defaults and complete sparse per-project overlays. |
 | [Help](./help/README.md) | The in-app offline documentation browser these articles are read in. |
 

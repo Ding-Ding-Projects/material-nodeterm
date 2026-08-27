@@ -45,6 +45,7 @@ import { registerConverterIpc } from '../core/converter/register-ipc'
 import { registerNodeDependencyIpc } from '../core/node-dependencies/register-ipc'
 import { registerOllamaIpc } from '../core/ollama/register-ipc'
 import { registerMinecraftIpc } from '../core/minecraft/register-ipc'
+import { registerTorrentIpc } from '../core/torrent/register-ipc'
 import { registerVsCodeHandlers } from '../core/vscode-handlers'
 import { LocalHistoryStore } from '../core/local-history'
 import { ProjectArchiveService } from '../core/project-archive'
@@ -1546,13 +1547,15 @@ app.whenReady().then(async () => {
 
   // Universal file converter (docs/file-converter.md) + local Ollama suite manager
   // (docs/ollama-manager.md) + local Minecraft server create-and-manage
-  // (docs/minecraft-server-manager.md) — all three register on the shared CorePlatform, so the
+  // (docs/minecraft-server-manager.md) + local Torrent Downloader (docs/features/torrents/) — all
+  // register on the shared CorePlatform, so the
   // Server Edition gets the identical engine via src/server/handlers/index.ts's own call to these
   // same functions.
   registerConverterIpc(corePlatform)
   registerNodeDependencyIpc(corePlatform)
   registerOllamaIpc(corePlatform)
   minecraftServers = registerMinecraftIpc(corePlatform).manager
+  registerTorrentIpc(corePlatform)
 
   const githubSecret = new ElectronGitHubSecretStore(app.getPath('userData'), safeStorage)
   const github = registerGitHubIntegration({

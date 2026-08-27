@@ -598,6 +598,24 @@ export function buildStubApi(): Omit<
       restoreBackup: U('minecraft.restoreBackup'),
       deleteBackup: U('minecraft.deleteBackup'),
       onEvent: noopUnsub
+    },
+    torrent: {
+      runtime: U('torrent.runtime'),
+      list: U('torrent.list'),
+      inspect: U('torrent.inspect'),
+      add: U('torrent.add'),
+      chooseFiles: U('torrent.chooseFiles'),
+      setDestination: U('torrent.setDestination'),
+      preflight: U('torrent.preflight'),
+      start: U('torrent.start'),
+      pause: U('torrent.pause'),
+      resume: U('torrent.resume'),
+      cancel: U('torrent.cancel'),
+      retry: U('torrent.retry'),
+      remove: U('torrent.remove'),
+      setSeedPolicy: U('torrent.setSeedPolicy'),
+      reconcile: U('torrent.reconcile'),
+      onTask: noopUnsub
     }
   } satisfies Omit<
     NodeTerminalApi,

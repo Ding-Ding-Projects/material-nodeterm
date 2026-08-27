@@ -112,6 +112,10 @@ Proxmox, GitLab, Home Assistant and FreePBX — each an ordinary node you drag, 
 persist like any other, because a managed service is something you arrange beside the terminals
 working on it, not a modal you visit.
 
+The canvas also includes a **Torrent Downloader** node for explicit local WebTorrent tasks, with
+magnet or `.torrent` intake, safe destination selection, file-level metadata choices, live transfer
+progress, restart recovery, and a bounded per-task seeding policy.
+
 **Group** nodes are real containers that nest inside each other and can bind to a git worktree, so
 every node created inside one inherits that worktree's directory. Quit the app and the persistent
 backend reattaches to the live session; reboot the machine and cold restore rebuilds the node,
@@ -236,6 +240,10 @@ Identical on desktop and in the browser.
 - **Local Ollama suite manager** — a local manager for [Ollama](https://ollama.com) that talks
   only to its documented local HTTP API, never a cloud service. See
   [`docs/ollama-manager.md`](./docs/ollama-manager.md).
+- **Torrent Downloader** — local WebTorrent downloads with magnet and `.torrent` intake,
+  metadata/file selection, safe destination preflight, progress, pause/resume/cancel/retry,
+  restart reconciliation, and bounded per-task seeding. See
+  [`docs/features/torrents/torrent-downloader.md`](./docs/features/torrents/torrent-downloader.md).
 - **Scheduled settings** — rules that automatically overlay appearance/customization settings
   for a date+time window ("dark theme after 22:00"), with an optional Home Assistant boolean
   source. See [`docs/scheduled-settings.md`](./docs/scheduled-settings.md).

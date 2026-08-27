@@ -806,6 +806,12 @@ offscreenEpoch])` and torn down on unmount. The component persists across re-ren
   `img-src data:`), on a checkerboard backdrop with the pixel dimensions in the header.
 - **diff** (`DiffNode.tsx`) — Monaco diff editor; `diffStaged` chooses HEAD↔index (staged)
   vs index↔working (unstaged) via `git:show-file` + `fs:read`. Read-only.
+- **torrent** (`TorrentNode.tsx`) — a local WebTorrent downloader with magnet or `.torrent` intake,
+  metadata/file selection, destination preflight, progress/speed/peer/ETA reporting, pause/resume,
+  cancel/retry, restart reconciliation, and bounded per-task seeding. Canvas data carries only safe
+  display intent; source paths, destinations, runtime handles and task state stay in the owning
+  machine's application data. Desktop and Server Edition register the same CorePlatform service;
+  relay sessions refuse it rather than downloading on the viewer's machine.
 - **chat** — **REMOVED 2026-07.** The SDK-driven Claude chat node (`ChatNode.tsx`, `main/chat-driver.ts`,
   the `@anthropic-ai/claude-agent-sdk` dependency, and the whole chat-events/chatSessions stack) is
   gone — dropping the bundled SDK also removed a ~240 MB native binary per platform. A persisted `chat`
