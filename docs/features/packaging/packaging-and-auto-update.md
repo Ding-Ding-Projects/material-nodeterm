@@ -39,6 +39,9 @@ MSBuild will actually use, and the bootstrap does not modify an unrelated comple
 The supported Windows entry point is `npm run dist:win`. Its wrapper starts from a clean checkout,
 regenerates the committed seven-frame ICO, proves that the bytes match the current commit, derives
 an immutable raw URL from that full source SHA, and verifies the public download byte-for-byte.
+Each phase writes synchronous start, completion, or failure diagnostics, and the command awaits
+the complete phase chain before setting its exit status. A post-icon failure therefore names the
+exact phase instead of appearing as a silent early exit.
 After packaging, it requires the exact expected output inventory, semantic nupkg ID/version/title,
 bidirectional `RELEASES` name/size/SHA-1 agreement, the same nuspec `iconUrl`, and matching icon and
 version resources in Setup, the installed app, and its execution stub. The local-installer BAT and

@@ -28,6 +28,10 @@
   and release-workflow checks. The ultra-speed pass does not run tests, reviews, accessibility or
   security checks, runtime interaction, or screen captures after activation.
 
+- Make the Windows Squirrel wrapper await its complete asynchronous entrypoint and emit synchronous
+  phase diagnostics through icon verification, application build, packaging, and contract checks.
+  The unsigned policy and source-SHA icon verification remain unchanged. This repair was not tested,
+  built, packaged, or captured in the ultra-speed lane.
 
 - Preserve a custom agent's selected builtin harness on its node so capability and icon resolution
   survives removal of the mutable settings record.
