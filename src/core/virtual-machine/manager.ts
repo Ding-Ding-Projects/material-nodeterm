@@ -1,11 +1,12 @@
 import { spawn, type ChildProcess } from 'node:child_process'
-import { access, mkdir, readFile, rename, writeFile, statfs, readdir, rm } from 'node:fs/promises'
+import { access, mkdir, readFile, writeFile, statfs, readdir, rm } from 'node:fs/promises'
 import { constants as fsConstants } from 'node:fs'
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { createReadStream } from 'node:fs'
 import * as net from 'node:net'
 import * as path from 'node:path'
 import type { CorePlatform } from '../platform'
+import { renameAtomic } from '../fs-atomic'
 import {
   DEFAULT_VIRTUAL_MACHINE_CONFIG,
   normalizeVirtualMachineConfig,
@@ -243,6 +244,7 @@ function defaultStatus(id: string, record?: PersistedVm): VirtualMachineStatus {
     networkEnabled: config.networkEnabled,
     displayUrl: null,
     qmpEndpoint: null,
+    snapshotNames: record?.snapshotNames ?? [],
     memoryMiB: config.memoryMiB,
     cpus: config.cpus,
     progress: ready ? 100 : 0,
@@ -274,7 +276,7 @@ export class VirtualMachineManager {
   private async read(id: string): Promise<PersistedVm | null> {
     try {
       const raw = JSON.parse(await readFile(this.recordPath(id), 'utf8')) as Partial<PersistedVm>
-      if (!safeId(raw.id) || raw.id !== id) return null
+      if (!safeId(raw.id) || raw.id !== id) throw new Error('The VM state record does not match its file name.')
       return {
         id,
         config: normalizeVirtualMachineConfig(raw.config),
@@ -285,8 +287,9 @@ export class VirtualMachineManager {
         ...(typeof raw.isoSha256Actual === 'string' ? { isoSha256Actual: raw.isoSha256Actual } : {}),
         ...(typeof raw.error === 'string' ? { error: raw.error } : {})
       }
-    } catch {
-      return null
+    } catch (cause) {
+      if ((cause as NodeJS.ErrnoException).code === 'ENOENT') return null
+      throw cause
     }
   }
 
@@ -295,7 +298,12 @@ export class VirtualMachineManager {
    * start, which gives the next launch a fresh generation and QMP/display pair. */
   private async reconcileOrphans(): Promise<void> {
     let entries: string[]
-    try { entries = await readdir(this.stateDir) } catch { return }
+    try {
+      entries = await readdir(this.stateDir)
+    } catch (cause) {
+      if ((cause as NodeJS.ErrnoException).code === 'ENOENT') return
+      throw cause
+    }
     await Promise.all(entries.filter((name) => name.endsWith('.json')).map(async (name) => {
       const id = name.slice(0, -5)
       if (!safeId(id)) return
@@ -314,19 +322,11 @@ export class VirtualMachineManager {
 
   private async writeOnce(record: PersistedVm): Promise<void> {
     await mkdir(this.stateDir, { recursive: true })
-    const tmp = `${this.recordPath(record.id)}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`
-    await writeFile(tmp, JSON.stringify(record, null, 2), { encoding: 'utf8', mode: 0o600 })
-    let lastError: unknown
+    const target = this.recordPath(record.id)
+    const tmp = `${target}.${process.pid}.${Date.now()}.${randomUUID()}.tmp`
     try {
-      for (let attempt = 0; attempt < 6; attempt++) {
-        try { await rename(tmp, this.recordPath(record.id)); return } catch (cause) {
-          lastError = cause
-          const code = (cause as NodeJS.ErrnoException).code
-          if (!['EPERM', 'EACCES', 'EBUSY'].includes(code ?? '')) throw cause
-          await new Promise((resolve) => setTimeout(resolve, 50 * (attempt + 1)))
-        }
-      }
-      throw lastError instanceof Error ? lastError : new Error('The VM state file could not be replaced.')
+      await writeFile(tmp, JSON.stringify(record, null, 2), { encoding: 'utf8', mode: 0o600, flag: 'wx' })
+      await renameAtomic(tmp, target)
     } finally {
       await rm(tmp, { force: true }).catch(() => {})
     }
@@ -495,7 +495,8 @@ export class VirtualMachineManager {
       '-boot', 'menu=on',
       '-qmp', `tcp:127.0.0.1:${qmpPort},server=on,wait=off`,
       '-device', 'virtio-vga',
-      '-display', `vnc=127.0.0.1:${displayPort}`
+      // QEMU's VNC suffix is a display number, while the socket is 5900 plus that number.
+      '-display', `vnc=127.0.0.1:${displayPort - 5900}`
     ]
     if (baseDiskPath) argv.push('-drive', `file=${baseDiskPath},format=${diskFormat},if=virtio`)
     if (record.config.mode === 'disposable-live') argv.push('-snapshot')
@@ -512,13 +513,19 @@ export class VirtualMachineManager {
     child.once('error', (cause) => { exited = true; live.stderr = `${live.stderr}\n${cause.message}`.slice(-16 * 1024) })
     child.once('exit', () => {
       exited = true
+      if (this.generations.get(id) !== generation) return
       if (this.running.get(id)?.process !== child) return
       this.running.delete(id)
       void this.write({ ...record, phase: 'stopped', updatedAt: new Date().toISOString() })
       void this.emit({ ...(defaultStatus(id, record)), phase: 'stopped', message: live.stderr ? 'The VM stopped with a QEMU diagnostic.' : 'The VM stopped.' })
     })
     const qmpBound = await waitForPort(qmpPort, QMP_TIMEOUT_MS * 4, () => !exited && this.generations.get(id) === generation)
-    if (!qmpBound || this.generations.get(id) !== generation) {
+    if (this.generations.get(id) !== generation) {
+      child.kill('SIGTERM')
+      this.running.delete(id)
+      return this.emit(await this.statusFrom(id))
+    }
+    if (!qmpBound) {
       child.kill('SIGTERM')
       this.running.delete(id)
       const message = live.stderr ? `QEMU exited before startup completed: ${live.stderr.slice(-800)}` : 'QEMU exited before its QMP control socket was ready.'
@@ -532,7 +539,13 @@ export class VirtualMachineManager {
     } catch (cause) {
       child.kill('SIGTERM')
       this.running.delete(id)
+      if (this.generations.get(id) !== generation) return this.emit(await this.statusFrom(id))
       const message = cause instanceof Error ? cause.message : 'The VM startup handshake failed.'
+      await this.write({ ...record, phase: 'error', error: message, updatedAt: new Date().toISOString() })
+      throw new Error(message)
+    }
+    if (exited || this.running.get(id)?.process !== child) {
+      const message = live.stderr ? `QEMU exited before startup completed: ${live.stderr.slice(-800)}` : 'QEMU exited before startup completed.'
       await this.write({ ...record, phase: 'error', error: message, updatedAt: new Date().toISOString() })
       throw new Error(message)
     }
@@ -548,15 +561,35 @@ export class VirtualMachineManager {
     this.generations.set(id, (this.generations.get(id) ?? 0) + 1)
     const live = this.running.get(id)
     if (!live) return this.emit(await this.statusFrom(id))
-    try { await this.qmp(live.qmpPort, 'quit') } catch { live.process.kill('SIGTERM') }
+    const record = await this.read(id)
+    let qmpFailure: Error | null = null
+    if (record?.phase === 'starting') {
+      live.process.kill('SIGTERM')
+    } else {
+      try {
+        await this.qmp(live.qmpPort, 'quit')
+      } catch (cause) {
+        qmpFailure = cause instanceof Error ? cause : new Error('QMP refused the stop request.')
+        live.process.kill('SIGTERM')
+      }
+    }
     await new Promise<void>((resolve) => {
+      if (live.process.exitCode !== null || live.process.signalCode !== null) {
+        resolve()
+        return
+      }
       const timer = setTimeout(() => { live.process.kill('SIGKILL'); resolve() }, STOP_TIMEOUT_MS)
       live.process.once('exit', () => { clearTimeout(timer); resolve() })
     })
     this.running.delete(id)
-    const record = await this.read(id)
-    if (record) await this.write({ ...record, phase: 'stopped', updatedAt: new Date().toISOString() })
-    return this.emit(await this.statusFrom(id))
+    if (record) {
+      await this.write(qmpFailure
+        ? { ...record, phase: 'error', error: `The VM process was terminated after QMP stop failed: ${qmpFailure.message}`, updatedAt: new Date().toISOString() }
+        : { ...record, phase: 'stopped', error: undefined, updatedAt: new Date().toISOString() })
+    }
+    const status = this.emit(await this.statusFrom(id))
+    if (qmpFailure) throw new Error(status.error ?? qmpFailure.message)
+    return status
   }
 
   async snapshot(id: string, name: string): Promise<VirtualMachineStatus> {

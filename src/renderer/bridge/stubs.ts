@@ -737,6 +737,7 @@ export function buildStubApi(): Omit<
       setSeedPolicy: U('torrent.setSeedPolicy'),
       reconcile: U('torrent.reconcile'),
       onTask: noopUnsub
+    },
     virtualMachine: {
       tools: U('virtualMachine.tools'),
       status: U('virtualMachine.status'),
@@ -749,6 +750,7 @@ export function buildStubApi(): Omit<
       openDisplay: U('virtualMachine.openDisplay'),
       reset: U('virtualMachine.reset'),
       onEvent: noopUnsub
+    },
     calendar: {
       status: U('calendar.status'),
       accounts: U('calendar.accounts'),

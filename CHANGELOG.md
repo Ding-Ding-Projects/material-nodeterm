@@ -120,6 +120,13 @@
   probing with TCG fallback, ISO digest validation, qcow2/raw detection, disk free-space checks,
   QMP/display startup handshakes, bounded diagnostics, cancellation generations, stale-process
   recovery, atomic state retries, and a truthful Server Edition display boundary.
+- Complete the Linux ISO VM integration by restoring parseable package and node-kind registration,
+  closing the desktop and Server Edition bridge boundaries, mapping QEMU VNC display numbers to
+  their real loopback TCP ports, allowing startup cancellation,
+  surfacing QMP stop failures after bounded termination, and refusing to treat unreadable local VM
+  state as an absent machine. Restore now selects from a searchable machine-local snapshot catalogue
+  with an adjacent anchored regex builder, and the mode dropdown has its own isolated search and
+  builder state.
 - Add a host-owned planner occurrence service with durable local schedules, recurrence choices,
   timezone and DST semantics, cross-midnight descriptions, missed-occurrence history, JSON/CSV
   export, Desktop IPC and Server Edition WS-RPC events, and a guided Planner settings surface.

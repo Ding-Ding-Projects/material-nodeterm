@@ -1160,6 +1160,7 @@ export function buildTorrentApi(client: RpcClient): Pick<NodeTerminalApi, 'torre
     onTask: (listener) => client.subscribe(IPC.torrentTask, listener as (payload: TorrentTaskState) => void)
   }
   return { torrent }
+}
 /** Linux ISO VM manager. The server process owns QEMU and exposes only the bounded lifecycle API. */
 export function buildVirtualMachineApi(client: RpcClient): Pick<NodeTerminalApi, 'virtualMachine'> {
   const virtualMachine: VirtualMachineApi = {
@@ -1176,6 +1177,7 @@ export function buildVirtualMachineApi(client: RpcClient): Pick<NodeTerminalApi,
     onEvent: (listener) => client.subscribe(IPC.virtualMachineEvent, listener as Listener)
   }
   return { virtualMachine }
+}
 /** Calendar nodes use the same host-owned CorePlatform in the desktop and Server Edition. */
 export function buildCalendarApi(client: RpcClient): Pick<NodeTerminalApi, 'calendar'> {
   const calendar: CalendarApi = {

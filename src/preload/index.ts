@@ -1168,6 +1168,7 @@ const api: NodeTerminalApi = {
     setSeedPolicy: (id, policy) => ipcRenderer.invoke(IPC.torrentSetSeedPolicy, id, policy),
     reconcile: () => ipcRenderer.invoke(IPC.torrentReconcile),
     onTask: (listener) => subscribeTorrentTask(listener)
+  },
   virtualMachine: {
     tools: () => ipcRenderer.invoke(IPC.virtualMachineTools),
     status: (id) => ipcRenderer.invoke(IPC.virtualMachineStatus, id),
@@ -1180,6 +1181,7 @@ const api: NodeTerminalApi = {
     openDisplay: (id) => ipcRenderer.invoke(IPC.virtualMachineOpenDisplay, id),
     reset: (id) => ipcRenderer.invoke(IPC.virtualMachineReset, id),
     onEvent: (listener) => subscribeVirtualMachineEvent(listener)
+  },
   calendar: {
     status: (id, config) => ipcRenderer.invoke(IPC.calendarStatus, id, config),
     accounts: () => ipcRenderer.invoke(IPC.calendarAccounts),

@@ -2120,8 +2120,8 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   homeassistant: true,
   freepbx: true,
   nsis: true,
-  shop: true
-  torrent: true
+  shop: true,
+  torrent: true,
   'linux-vm': true
 }
 
@@ -2167,8 +2167,8 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   homeassistant: SERVICE_SUMMARY_SIZE,
   freepbx: SERVICE_SUMMARY_SIZE,
   nsis: NSIS_SIZE,
-  shop: SHOP_SIZE
-  torrent: TORRENT_SIZE
+  shop: SHOP_SIZE,
+  torrent: TORRENT_SIZE,
   'linux-vm': LINUX_VM_SIZE
 }
 
@@ -2263,7 +2263,7 @@ export function duplicateNode(node: CanvasNode, offset = 28): CanvasNode {
       loopNextRunAt: undefined,
       loopLastRunAt: undefined,
       // A duplicate owns a fresh VM identity and must never inherit another VM's ISO or disk.
-      virtualMachineLocalPaths: undefined
+      virtualMachineLocalPaths: undefined,
       ...(kind === 'timer' ? {
         running: false, paused: false, elapsedMs: 0, remainingMs: (node.data as TimerNodeData).durationMs,
         lapsMs: [], sequenceIndex: 0, repeatRemaining: 0, occurrenceId: undefined,
