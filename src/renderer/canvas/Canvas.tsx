@@ -1829,6 +1829,7 @@ export function Canvas() {
   // ever replacing the project with the one-node view.
   const nodeFocusSessionRef = useRef<NodeFocusSession | null>(null)
   const nodeFocusTransitionRef = useRef(false)
+  const exitNodeCanvasRef = useRef<() => void>(() => {})
   const [nodeFocusSession, setNodeFocusSession] = useState<NodeFocusSession | null>(null)
   /**
    * The project whose webview nodes the NEXT load must retire into the keep-alive pool. Separate
@@ -9660,6 +9661,7 @@ export function Canvas() {
     void setViewport(session.returnViewport, { duration: 300 })
     commitActiveToStore()
   }, [commitActiveToStore, setNodes, setViewport])
+  exitNodeCanvasRef.current = exitNodeCanvas
 
   /** Palette equivalent of the node header and F11 focus toggle. */
   const toggleNodeCanvasFocus = useCallback((): void => {
@@ -12050,7 +12052,22 @@ export function Canvas() {
   // project, switch there first and let the project-load effect finish the focus.
   const focusNodeById = useCallback(
     (nodeId: string) => {
+      const activeId = useProjects.getState().activeProjectId
+      const focusedSession = nodeFocusSessionRef.current
       const node = nodesRef.current.find((n) => n.id === nodeId)
+      // Same-project targets are absent from the focused React Flow set by design. Restore the
+      // full canvas first, then retry through the stable ref once React Flow has installed it.
+      if (
+        !node &&
+        focusedSession?.projectId === activeId &&
+        focusedSession.fullFlow.some((candidate) => candidate.id === nodeId)
+      ) {
+        exitNodeCanvasRef.current()
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => focusNodeRef.current(nodeId))
+        })
+        return
+      }
       if (node) {
         // The board is a full-page overlay: framing the node on the canvas underneath it is
         // invisible, which is why the notch's Go (and every other "go to node" path) read as

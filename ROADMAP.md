@@ -392,6 +392,9 @@ intentionally unchecked because this task publishes the plan only.
 - [ ] Implement the outstanding upstream behavior from the planned issue and pull-request parity map.
 - [ ] Split the PR #422 behavior into independent link, endpoint, navigation, grouping, agent, and
       account lanes.
+- [ ] Project-aware navigation source is present on the issue #86 branch, including single-node focus,
+      safe return, ownership-aware target routing, and direct documentation. Tests, type checks,
+      lint, builds, packaging, runtime interaction, reviews, audits, and captures remain pending.
 - [ ] Publish the new upstream pull request based on the final default branch with verified evidence.
 
 ## Deliberately not doing

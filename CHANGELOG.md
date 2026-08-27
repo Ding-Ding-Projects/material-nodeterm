@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add project-aware single-node canvas focus for issue #86. The terminal header, command palette,
+  and desktop F11 path now promote one node into a transient canvas, merge edits back into the full
+  project, restore nested coordinates and the parent viewport, and refuse missing or unavailable
+  targets without inventing a destination. This lane did not run tests, type checks, lint, builds,
+  packaging, runtime interaction, reviews, audits, or captures.
+
 - Mount the seven AWS core-service routes on the shared AWS manager: S3, EC2, IAM, STS, Lambda,
   CloudWatch, and CloudWatch Logs. Typed operation controls now cover bounded reads, selected writes,
   destructive confirmation, pagination, cancellation, and progress while reusing the current local
