@@ -1,230 +1,319 @@
 <div align="center">
 
-<img src="docs/assets/nodeterm.png" alt="nodeterm" width="120" height="120" />
+<img src="docs/assets/nodeterm.png" alt="nodeterm logo" width="120" height="120" />
 
 # nodeterm
 
-**Your terminals and coding agents on one infinite canvas.**
+**Terminals, coding agents, projects, and live work arranged on one spatial canvas.**
 
-Real shells live as draggable nodes on a pan/zoom canvas instead of behind a row of tabs, and
-every project doubles as a **board of live agent sessions**. Built for people whose work does not
-fit in a stack of hidden tabs — a map you arrange, not a list you scroll.
+Instead of hiding every shell behind another tab, nodeterm makes each session a movable node.
+Projects can be viewed as a canvas or a board, agent sessions keep their context visible, and
+Windows terminals can reconnect through a dedicated session host.
 
-[![Build check](https://github.com/Ding-Ding-Projects/material-nodeterm/actions/workflows/ci.yml/badge.svg)](https://github.com/Ding-Ding-Projects/material-nodeterm/actions/workflows/ci.yml)
-[![Platform](https://img.shields.io/badge/platform-Windows%20·%20macOS%20(arm64%20%2B%20x64)%20·%20Linux-black)](#windows)
-[![Built with Electron](https://img.shields.io/badge/built%20with-Electron-47848F?logo=electron&logoColor=white)](https://www.electronjs.org/)
-[![Material Design 3](https://img.shields.io/badge/design-Material%203-6750A4)](#the-interface)
+[![Latest release](https://img.shields.io/github/v/release/Ding-Ding-Projects/material-nodeterm?sort=semver)](https://github.com/Ding-Ding-Projects/material-nodeterm/releases/latest)
+[![Release pipeline](https://github.com/Ding-Ding-Projects/material-nodeterm/actions/workflows/release.yml/badge.svg)](https://github.com/Ding-Ding-Projects/material-nodeterm/actions/workflows/release.yml)
+[![Platform](https://img.shields.io/badge/current%20package-Windows%20x64-0078D4)](#platforms)
+[![Design](https://img.shields.io/badge/design-Material%20Design%203-6750A4)](#interface-and-accessibility)
 [![License](https://img.shields.io/badge/license-BUSL--1.1-blue)](./LICENSE)
-[![GitHub stars](https://img.shields.io/github/stars/Ding-Ding-Projects/material-nodeterm?style=flat)](https://github.com/Ding-Ding-Projects/material-nodeterm/stargazers)
-[![Latest release](https://img.shields.io/github/v/release/Ding-Ding-Projects/material-nodeterm?sort=semver)](https://github.com/Ding-Ding-Projects/material-nodeterm/releases)
 
-[Site](https://ding-ding-projects.github.io/material-nodeterm/) · [Releases](https://github.com/Ding-Ding-Projects/material-nodeterm/releases) · [Features](#-features) · [Windows](#windows) · [Build from source](#install--build) · [Documentation](#documentation) · [Contributing](#contributing) · [License](#license)
+[Download](#install) · [See it](#see-it-in-action) · [Features](#feature-map) ·
+[Screenshots](#real-application-screenshots) · [Build](#build-from-source) ·
+[Documentation](#documentation) · [Contributing](#contributing) · [License](#license)
+
+**Release baseline documented here:** [v0.4.120](https://github.com/Ding-Ding-Projects/material-nodeterm/releases/tag/v0.4.120),
+published 2026-08-26 at 17:32:49 UTC.
 
 </div>
 
-![The nodeterm canvas: a 64px Material Design 3 top app bar carrying the brand mark, project switcher and docked search; an 88px left nav rail with its floating action button and the destinations Canvas, Board, Files, Tools, History, Alerts and Settings; the sessions sidebar; and the pan/zoom canvas with its dot grid, zoom controls and minimap](./docs/assets/shots/app-04-canvas.png)
+![The nodeterm desktop application showing an empty project canvas, the project and sessions controls, the left destination rail, canvas zoom controls, and the minimap](./docs/assets/shots/app-04-canvas.png)
 
-> **Install:** grab the latest build from **[Releases](https://github.com/Ding-Ding-Projects/material-nodeterm/releases)**
-> (Windows `Setup.exe` today — see [Windows](#windows) for the unsigned-installer note), or build
-> it yourself with `build.bat` / `build.sh` — see [Install / build](#install--build).
+> [!NOTE]
+> This is a downstream project based on
+> [eneskirca/nodeterm](https://github.com/eneskirca/nodeterm). The current packaged delivery
+> target is Windows x64. The browser-based Server Edition and the separate mobile companion are
+> different surfaces with different deployment and verification boundaries.
 
-This is a fork of [eneskirca/nodeterm](https://github.com/eneskirca/nodeterm). The site's own
-custom domain belongs to the upstream repository, so this fork publishes its documentation at
-[ding-ding-projects.github.io/material-nodeterm](https://ding-ding-projects.github.io/material-nodeterm/)
-instead — note the trailing `/material-nodeterm/`.
+## Install
 
-## Why nodeterm
+The latest verified release baseline for this document is **v0.4.120**:
 
-Stacked terminal tabs hide context — you lose track of what is running where. nodeterm turns that
-into a **map**: every shell is a node you can place, group, label and zoom into. Sessions are
-spatial and persistent, so your mental model survives a restart. And because the app is built
-around a clean service seam, the same canvas runs two ways: as the **desktop app** (Windows,
-macOS, Linux) and as a **self-hosted browser app** you reach from anywhere — including a phone,
-with nothing to install.
+[**Download nodeterm Setup 0.4.120 for Windows x64**](https://github.com/Ding-Ding-Projects/material-nodeterm/releases/download/v0.4.120/nodeterm-Setup-0.4.120.exe)
 
-## The interface
-<table>
-<tr>
-<td width="42%" valign="middle">
+| Release file | Purpose | SHA-256 |
+| --- | --- | --- |
+| [`nodeterm-Setup-0.4.120.exe`](https://github.com/Ding-Ding-Projects/material-nodeterm/releases/download/v0.4.120/nodeterm-Setup-0.4.120.exe) | Squirrel.Windows installer | `b982df10e225900ad6b8c4ec8d70d6658b36dc3be2c2741946aa07c78acf8bf1` |
+| [`node-terminal-0.4.120-full.nupkg`](https://github.com/Ding-Ding-Projects/material-nodeterm/releases/download/v0.4.120/node-terminal-0.4.120-full.nupkg) | Full Squirrel package | `1b65192671a44584f04114f2cc901963e2efd8aede63424c5dcf4f2cff6048dd` |
+| [`RELEASES`](https://github.com/Ding-Ding-Projects/material-nodeterm/releases/download/v0.4.120/RELEASES) | Squirrel update index | `f9e25fed43951d2f20005bcd8195effaf0c1c1f7a8a3c1b85929bf0e82cfdbe4` |
 
-### Everything is a node
+> [!WARNING]
+> **The installer is unsigned.** Code signing is intentionally not used. Windows SmartScreen
+> and an unknown-publisher warning may appear. Verify the release commit and SHA-256 above before
+> running the installer.
 
-Right-click the canvas to open a **terminal** — or an AI **agent**. Each runs in its own
-persistent tmux session, next to **sticky notes** (link one to feed an agent context),
-**Monaco editors**, **diff views**, and **web/video** nodes — arranged spatially, like a
-map. Quit the app, even **restart the machine** — every session comes back.
+The release workflow builds and packages the application. It does not run tests, lint, or type
+checks. Local verification results are separate from the existence of a release.
 
-</td>
-<td><img src="docs/assets/canvas-tour.webp" alt="The canvas — terminals, agents, notes, editors and diffs as nodes; sessions survive a full restart" /></td>
-</tr>
-<tr>
-<td width="42%" valign="middle">
+## See it in action
 
-### Know when an agent needs you
+![A recording of the built nodeterm renderer showing first run, project creation, a real terminal running a command, the command palette, and settings](./docs/assets/app-walkthrough.webp)
 
-Hook-driven status — no output scraping: pulsing **RUNNING / NEEDS YOU** badges,
-**subagent** cards with live transcripts, a per-node **context meter**, and OS
-notifications. Click the ping, answer the permission prompt right in the node, and get
-told the moment the turn is **done**. On a MacBook, agents live in the **notch** too.
+The recording was produced from the built `out/` application by
+[`scripts/record-app.mjs`](./scripts/record-app.mjs), using a disposable profile and renderer-only
+frames. It did not record the operator's desktop. Its source commit, duration, frame count, and
+hash are recorded in [`app-walkthrough.json`](./docs/assets/app-walkthrough.json).
 
-</td>
-<td><img src="docs/assets/agents-tour.webp" alt="Agent status — NEEDS YOU flip, notification, answering a permission prompt, subagent fan-out" /></td>
-</tr>
-<tr>
-<td width="42%" valign="middle">
+## What nodeterm is
 
-### One project, two views
+nodeterm is a node-based terminal workspace. A project owns a spatial canvas containing real
+terminal sessions, coding-agent sessions, notes, files, editors, diffs, browser surfaces, groups,
+and service tools. The same project can be opened as a kanban board where cards are the live
+sessions rather than copies of them.
 
-Every project is a canvas — **and also a kanban board**. Cards *are* your live
-sessions: drag them across columns while the agent keeps running, open a card into a
-**live card modal** (the real session + members, due date, priority, comments), and
-assign teammates. Toggle with `⌘⇧B`.
-<br/><sub>▶ <a href="docs/assets/kanban-launch.mp4">Watch the board video with sound</a></sub>
+The central idea is simple:
 
-</td>
-<td><img src="docs/assets/kanban-launch.webp" alt="The kanban board — live session cards, drag between columns, the card modal with a live Claude Code session" /></td>
-</tr>
-<tr>
-<td width="42%" valign="middle">
+1. Put related work next to each other on a canvas.
+2. Keep the terminal or agent session attached to the node that represents it.
+3. Group sessions by project, task, or Git checkout.
+4. Switch to the board when status and ownership matter more than spatial layout.
+5. Restore the workspace without pretending that an operating-system reboot preserved a process
+   that actually ended.
 
-### Your sessions, anywhere
+### Warm reconnect and cold restore
 
-**Pair your phone** with one QR — *scan with the nodeterm iOS app* — and the **same
-live session continues in your pocket**, E2E encrypted **over the relay, not just your
-LAN**. The same canvas also runs self-hosted in any browser (Server Edition).
+Session continuity has two distinct states:
 
-</td>
-<td><img src="docs/assets/remote-tour.webp" alt="Pair your phone — scan the QR, the same live session continues on the iPhone" /></td>
-</tr>
-<tr>
-<td width="42%" valign="middle">
+- **Warm reconnect:** a tmux session or the Windows session-host process is still alive, so the
+  application reconnects to the same running session.
+- **Cold restore:** the machine or session host restarted. nodeterm restores recorded layout and
+  scrollback, then resumes supported agent tools through their own resume mechanisms. The original
+  operating-system process did not survive.
 
-### Talk to your terminal
+That distinction is intentional. A restored view is not described as a process that never stopped.
 
-Hold `⌘⌥` and say it. On-device **Whisper** transcribes locally — review the text,
-then **Send** (nothing auto-submits). Your voice never leaves the machine.
+## Feature map
 
-</td>
-<td><img src="docs/assets/dictation-tour.webp" alt="Dictation — hold cmd-shift-D, speak, review, send into the terminal" /></td>
-</tr>
-</table>
-
-### Node kinds
-
-🖥 **Terminal** (xterm + tmux, AI naming) · 🤖 **Agent** (Claude Code / Codex / Gemini /
-GitHub Copilot / opencode / Grok / custom) · 📝 **Sticky note** (link to an agent as context) · 🗂 **Group**
-(bind to a **git worktree** for agent-per-branch) · ✏️ **Editor** (Monaco, ⌘S) ·
-🔀 **Diff** · 🌐 **Web / Video**
-
-### More
-
-- **Session continuity (tmux)** — terminals keep running across node remounts *and* full
-  app restarts, including live processes; machine reboots restore scrollback and resume
-  agent sessions (`claude --resume`). The macOS app **ships its own tmux**, so this works
-  with nothing installed; a tmux already on your system is always used in preference to it,
-  and terminals opened before an upgrade stay as they were until you refresh the node.
-- **Talk to your terminal** — on-device Whisper dictation (hold ⌘⌥): speak, review, send.
-- **Agent superpowers** — **context links** so agent nodes read each other's transcripts
-  on demand; Claude-only **branch a conversation** and **managed accounts** for several
-  logged-in Claude identities side by side; agents can drive the canvas (open nodes,
-  spawn teams, verify each other's work) via the built-in canvas-control CLI.
-- **Remote / SSH projects** — open a project on a remote host over SSH; terminals, files,
-  git, and even the board run there while the canvas stays local.
-- **Source control** — VS Code-style stage/unstage, discard, branch switch/create,
-  commit, push/sync/publish, **worktrees**, and `gh` sign-in — backed by system `git`.
-- **GitHub Issues on Kanban** – opt-in issue cards, exact label-to-column mapping,
-  All / GitHub / Sessions filtering, and two-way move, close, and reopen sync. See
-  [setup and security details](./docs/github-issues-kanban.md).
-- **AI commit messages & terminal names** — bring-your-own local agent CLI run read-only
-  on the staged diff or captured output.
-- **Your sessions, in your pocket** — **nodeterm mobile** (iOS) attaches to the same live
-  tmux sessions: watch an agent work, answer a "needs you", or type into any terminal
-  from your phone — plus push notifications and a mobile board view.
-- **Power & sleep** — while an agent is working, nodeterm keeps the machine from
-  idle-sleeping, and lets go the moment it finishes (on by default; toggle in the setup
-  tour or Settings → Behavior). No app can hold a machine awake through a closed lid —
-  for overnight runs keep the laptop open and plugged in, or run the agents on a box
-  that doesn't sleep via the [Server Edition](./docs/SERVER.md).
-- **Command palette** (⌘K), **file explorer** (⌘⇧E), **markdown view** (⌘M),
-  **undo/redo**, and a native macOS dark UI.
-- **Auto-update & in-app announcements** — the app checks a self-hosted feed and
-  surfaces a "Restart to update" banner and product news.
-
-### 🌍 Server Edition — nodeterm in your browser
-
-The same canvas runs headless on a Linux (or macOS) host and is used from any browser —
-so your terminals, editors, source control, board, and agents live on a server you reach
-from anywhere. Single-user auth (password + secure cookie), a WebSocket bridge, and the
-exact same renderer as the desktop app.
-
-The whole app is **Material Design 3** — one baseline scheme seeded at `#6750A4`, tonal elevation
-rather than drop shadows, and Outfit / Roboto Mono / Material Symbols bundled and subsetted so it
-renders identically offline. A 64px top app bar carries the brand, the project switcher and a
-docked search; an 88px nav rail carries the destinations and a FAB that owns node creation.
-
-Every colour, typeface, size, weight, radius and spacing the app renders is adjustable at runtime
-through the appearance editor, and every colour control is a continuous field with a colour-space
-translator rather than a fixed list of swatches.
-
-### Watch it run
-
-![A recording of the built app: the first-run cover, creating a project, opening a real terminal on the canvas and running a command in it, the command palette searching, and the settings surface](./docs/assets/app-walkthrough.webp)
-
-A still proves a surface exists. This proves it moves. It is a real recording of the built
-artifact, driven by [`scripts/record-app.mjs`](./scripts/record-app.mjs) against a disposable
-profile, and it is frames of the app's own renderer: nothing here captures a screen, a desktop or
-any other window. Provenance, including the commit it was recorded at, sits beside it in
-[`app-walkthrough.json`](./docs/assets/app-walkthrough.json).
+| Area | What is available | Detailed documentation |
+| --- | --- | --- |
+| Canvas and nodes | Spatial projects, terminal and agent nodes, notes, groups, editors, diffs, browser surfaces, timers, calendars, media, service nodes, portal doors, child canvases, recovery activities, and desktop trackpad gesture facts for wheel routing | [Canvas features](./docs/features/canvas/README.md) |
+| Terminals | Local shell profiles, persistent session backends, scrollback restoration, terminal rendering, and word-separator controls | [Terminal features](./docs/features/terminals/README.md) |
+| Coding agents | Launch profiles, status hooks, context links, account selection, messaging, and supported capability reporting | [Agent support](./docs/features/agents/agent-support.md) |
+| Projects and tabs | Multiple projects, portable project files, project settings, groups, searches, and tab organization | [Project features](./docs/features/projects/README.md) |
+| Board | Live-session cards, columns, assignment, priority, due dates, comments, and issue-backed workflows | [Kanban board](./docs/features/kanban/kanban-board.md) |
+| Source control | Git status, staging, diffs, commits, publishing, branches, and linked checkouts | [Source control](./docs/features/source-control/README.md) |
+| Remote work | SSH projects, approved relay peers, browser-based hosting, and machine-scoped safety boundaries | [Remote features](./docs/features/remote/README.md) |
+| Files and media | File conversion, portable media attachments, galleries, downloads, and export workflows | [Feature index](./docs/features/README.md) |
+| Portals and multiverse | Depth-bounded child canvases, guided door construction, scope-owned catalogs, project import repair, and preserved portal lifecycle | [Multiverse canvases](./docs/features/canvas/multiverse-canvases.md) |
+| Sensors and pipelines | Home Assistant sensor displays plus advanced media, archive, PDF, OCR, and structured-data conversion pipelines | [Integration index](./docs/features/integrations/README.md) |
+| Interface | Material Design 3 primitives, appearance editing, logo and app-name controls, language modes, narrator, schedules, notifications, and the local Easter egg cabinet | [Appearance](./docs/features/appearance/README.md) |
+| History and recovery | Local Git-backed history, settings history, changelog browsing, exports, and explicit recovery states | [Local history](./docs/local-history.md) |
+| Accessibility | Keyboard operation, visible focus, reduced motion, language modes, attention accommodations, responsive layouts, and screen-reader semantics | [ADHD modes](./docs/adhd-modes.md) |
+| Windows delivery | Shell-profile detection, Windows session host, Squirrel packaging, unsigned updates, and installer behavior | [Windows support](./docs/windows.md) |
 
 <details>
-<summary><strong>See it</strong> — real captures of the built app, not mockups</summary>
+<summary><strong>Expanded feature inventory</strong></summary>
 
-Every image below was taken from the built `out/` artifact over the DevTools protocol by
-[`scripts/capture-shots.mjs`](./scripts/capture-shots.mjs), which fails the run when a required
-surface cannot be reached. Provenance for each is in
-[`capture-manifest.json`](./docs/assets/shots/capture-manifest.json).
+### Spatial workflow
 
-| | |
-| --- | --- |
-| ![The command palette open over the app, listing create actions for terminals and each supported agent](./docs/assets/shots/app-03-palette.png) | ![The project rendered as a kanban board with Ungrouped, To Do, In Progress and Done columns](./docs/assets/shots/app-05-kanban.png) |
-| **Command palette** — every command, destination and setting behind `Ctrl+Shift+F`. | **The same project as a board** — cards *are* the session nodes, not a separate list. |
-| ![The History screen inset behind the app bar and nav rail, with Session memory, Settings history and Changelog tabs](./docs/assets/shots/app-06-history.png) | ![The settings surface with sidebar navigation, a search field with the regex-builder affordance beside it, and per-agent controls](./docs/assets/shots/app-02-settings.png) |
-| **History** — session memory, local settings history and the changelog viewer. | **Settings** — every surface carries its own search, wired to the full regex builder. |
-| ![The Language settings section: an English, Cantonese and Bilingual segmented button and two independent funny-level sliders](./docs/assets/shots/app-settings-language.png) | ![The Narrator settings section: a master toggle off by default, a narrated-language choice, and a separate voice picker per language](./docs/assets/shots/app-settings-narrator.png) |
-| **Language** — three modes, and two sliders that change tone without changing the facts. | **Narrator** — off by default, with a live line saying which voice will actually speak. |
-| ![The ADHD modes settings section: five independent switches — Focus, Low stimulation, Time awareness, One thing at a time and Momentum — each with a plain description, and a note that they are not a diagnosis, assessment or advice](./docs/assets/shots/app-adhd-modes.png) | |
-| **ADHD modes** — five accommodations, switched on independently, all off by default. | |
+- Pan and zoom across a project rather than losing sessions inside a flat tab stack.
+- Create terminal, coding-agent, sticky-note, group, editor, diff, browser, timer, calendar,
+  gallery, download, virtual-machine, and service-oriented nodes.
+- Create and navigate depth-bounded child canvases through guided doors, preserve portal state
+  through import and deletion, and use the scoped recovery activity where a portal requires it.
+- Nest and label groups, and bind a group to a linked Git checkout.
+- Move between Canvas, Board, Files, Tools, History, Status, Alerts, Settings, and Kids surfaces.
+- Keep project settings separate from global settings through explicit scope controls.
 
-Kids mode ships its own screens, captured the same way:
+### Coding-agent workflow
 
-| | |
-| --- | --- |
-| ![The Kids mode home screen: a robot avatar introducing itself as Beep, activity tiles, and a notice that Kids mode does not sandbox the terminal](./docs/assets/shots/app-kids-home.png) | ![The grown-up screen: time today, daily limit, stickers and sessions, an activity log, and permission switches](./docs/assets/shots/app-kids-parent.png) |
-| **Kids home** — the disclosure sits on the screen the child uses. | **The grown-up screen**, behind a PIN gate that the docs call a speed bump, not security. |
+- Launch Claude Code, Codex, Gemini, GitHub Copilot, opencode, Grok, or a validated custom profile.
+- Read status from tool integrations rather than guessing from terminal text.
+- Display running, waiting, and attention states on the session that owns them.
+- Link session context so one agent can read another session's shared transcript on demand.
+- Keep account and model choices scoped to the selected launch profile.
 
-Also captured: [at launch](./docs/assets/shots/app-01-launch.png),
-[the appearance editor](./docs/assets/shots/app-settings-appearance-editor.png),
-[app name & logo](./docs/assets/shots/app-settings-app-identity.png),
-[scheduled settings](./docs/assets/shots/app-settings-schedule.png),
-[the Kids gate](./docs/assets/shots/app-kids-gate.png) and
-[Kids mode settings](./docs/assets/shots/app-settings-kids-mode.png).
+### Organization and search
 
-Two surfaces are deliberately **absent** rather than faked — an agent mid-turn and an SSH project
-need a live agent session and a reachable host, so the harness skips them loudly and lists why.
+- View the same project as a spatial canvas or as a board.
+- Search project tabs, settings, history, notifications, and feature collections.
+- Open the command palette to reach destinations and actions.
+- Use plain-text search by default and open the adjacent regex workbench when needed.
+- Persist project order, groups, settings scope, and local history.
+
+### Personalization and accessibility
+
+- Choose English, playful Hong Kong-style Cantonese, or bilingual presentation.
+- Adjust English and Cantonese tone independently.
+- Enable the narrator explicitly and choose voices for each narrated language.
+- Configure theme, density, accent, fonts, app name, app logo, schedules, and per-element
+  appearance controls.
+- Enable Focus, Low stimulation, Time awareness, One thing at a time, and Momentum independently.
+- Use keyboard-visible focus, reduced-motion behavior, screen-reader labels, and responsive layouts.
+
+### Local utility surfaces
+
+- Review notification history and application status.
+- Browse a local changelog with dates and commit references.
+- Export records and filtered views in formats that preserve their fields.
+- Use local file conversion adapters with explicit capability and loss warnings.
+- Use advanced media, archive, PDF, OCR, and structured-data pipelines through the same converter
+  boundary, including honest unavailable-adapter states.
+- Display Home Assistant sensor values as canvas nodes through the trusted local service boundary.
+- Manage local Ollama models and chats through the documented loopback API boundary.
+- Use toy locks as an explicitly non-security speed bump, with local recovery documentation.
 
 </details>
 
-## ✨ Features
-**Trying it out?** Removal is one script — it stops every process nodeterm started, reverts
-the status-hook/skill entries it merged into your agent CLIs' config (your own hooks and
-credentials are never touched), and deletes all of nodeterm's own state. Run it with
-`--dry-run` first to see the full list of what it found:
+## Real application screenshots
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/eneskirca/nodeterm/main/scripts/uninstall.sh | bash -s -- --dry-run
-curl -fsSL https://raw.githubusercontent.com/eneskirca/nodeterm/main/scripts/uninstall.sh | bash -s -- --yes
-```
+Every image in this section is grouped by what it proves. A built-renderer capture, a packaged
+application capture, and a deployed documentation-page capture are not interchangeable evidence.
 
+### Built renderer
+
+The main desktop gallery below comes from built source commit
+[`95929ff8`](https://github.com/Ding-Ding-Projects/material-nodeterm/commit/95929ff88983ed7d9e3bfc96702ed7b1591e0003).
+The complete capture run is preserved in the
+[historical manifest](https://github.com/Ding-Ding-Projects/material-nodeterm/blob/01bfbcabcf9b102ceda825c1feefb331d368f4e5/docs/assets/shots/capture-manifest.json).
+These images demonstrate that recorded build. They are not a claim that current `HEAD` is
+pixel-identical.
+
+#### Main desktop surfaces
+
+| Canvas | Board |
+| --- | --- |
+| ![The empty project canvas with the destination rail, project selector, sessions panel, zoom controls, status chips, and minimap](./docs/assets/shots/app-04-canvas.png) | ![The project board with Ungrouped, To Do, In Progress, and Done columns](./docs/assets/shots/app-05-kanban.png) |
+| The normal application shell around an empty project. | The project represented as live workflow columns. |
+
+| History | Settings |
+| --- | --- |
+| ![The History destination with session memory, settings history, and changelog tabs](./docs/assets/shots/app-06-history.png) | ![The settings surface with its search field, category navigation, global and project scopes, and agent controls](./docs/assets/shots/app-02-settings.png) |
+| Local records and released-change history in one destination. | Searchable global and per-project settings. |
+
+![The application status surface with status cards and evidence-oriented state reporting](./docs/assets/shots/app-status-surface.png)
+
+The Status destination keeps operational state separate from promotional messaging.
+
+#### Language, narration, appearance, and attention settings
+
+| Language | Narrator |
+| --- | --- |
+| ![Language settings with English, Cantonese, and Bilingual modes, two independent tone sliders, and the dialog emoji switch](./docs/assets/shots/app-settings-language.png) | ![Narrator settings with opt-in controls, narrated language selection, per-language voice selection, rate, pitch, and effective-voice status](./docs/assets/shots/app-settings-narrator.png) |
+
+| Appearance editor | Attention accommodations |
+| --- | --- |
+| ![The per-element appearance editor with typography, color, shape, spacing, state, and reset controls](./docs/assets/shots/app-settings-appearance-editor.png) | ![Five independent attention accommodation switches with plain descriptions and a non-medical disclosure](./docs/assets/shots/app-adhd-modes.png) |
+
+![App name and logo settings with preset marks, local custom-image controls, and reset actions](./docs/assets/shots/app-settings-app-identity.png)
+
+#### Kids mode and grown-up controls
+
+| Kids home | Grown-up gate | Grown-up screen |
+| --- | --- | --- |
+| ![Kids mode home with activity choices and its terminal-sandbox limitation stated on screen](./docs/assets/shots/app-kids-home.png) | ![The grown-up gate with a PIN keypad and cancellation controls](./docs/assets/shots/app-kids-gate.png) | ![The grown-up screen with time, limits, stickers, sessions, activity history, and permission controls](./docs/assets/shots/app-kids-parent.png) |
+
+Kids mode is a user-experience surface. Its gate is not described as encryption or protection from
+someone who controls the computer.
+
+<details>
+<summary><strong>Docker host settings</strong></summary>
+
+![Docker host settings with machine-scoped configuration, searchable controls, and explicit availability states](./docs/assets/shots/app-settings-docker-host.png)
+
+This newer single screenshot is proven by the current
+[`capture-manifest.json`](./docs/assets/shots/capture-manifest.json), which records source commit
+`4031672e926fe249b5c0f2a0895af1714d8848e0` and a built `out/` application capture.
+
+</details>
+
+### Packaged Windows interaction evidence
+
+The images below were captured from `dist/win-unpacked/nodeterm.exe` through the headless Windows
+desktop route. Their hashes, candidate executable hash, and run metadata are in
+[`packaged-capture-manifest.json`](./docs/assets/shots/packaged-capture-manifest.json).
+
+| Profile picker | Missing-profile state |
+| --- | --- |
+| ![Packaged nodeterm Shell settings showing the selected automatic Windows PowerShell profile, detected profiles, availability states, refresh action, and custom executable picker](./docs/assets/shots/packaged/windows-terminal-profile-picker.png) | ![Packaged nodeterm showing an unavailable terminal profile with the exact reason and no silent fallback](./docs/assets/shots/packaged/windows-terminal-profile-unavailable.png) |
+
+Only the two settings captures above are embedded here. The same packaged run also produced
+terminal-session captures, but those frames expose a local account path and dense session payload
+text, so this public README deliberately does not promote them.
+
+> [!IMPORTANT]
+> This packaged run recorded partial acceptance, not complete installer acceptance. Its remaining
+> blockers were lossless clipboard restore and proof from an installed Squirrel artifact.
+
+### Current documentation and landing surface
+
+The documentation and landing surface was recaptured from commit
+[`1ec54fa8`](https://github.com/Ding-Ding-Projects/material-nodeterm/commit/1ec54fa88552e9286090597d048534fcc8d51e93)
+after its Windows-only release copy was brought current. The static output was hashed, served from a
+task-owned loopback endpoint, and opened as the sole page in an isolated Microsoft Edge profile on an
+off-screen Windows desktop. Desktop and emulated mobile audit receipts both validated with zero
+console errors, unhandled exceptions, failed resources, unexpected third-party requests, unnamed
+interactive accessibility nodes, or body overflow.
+
+| Hallway | Home |
+| --- | --- |
+| ![The current nodeterm documentation hallway with searchable feature doors and a single Jump control](docs/assets/shots/site-current/site-hall-current.png) | ![The current nodeterm documentation Home room showing version 0.4.120, Windows download actions, feature cards, and the navigation rail](docs/assets/shots/site-current/site-home-current.png) |
+
+| Documentation | Changelog |
+| --- | --- |
+| ![The current nodeterm documentation index with bulk selection, per-article actions, local search, and 23 guide entries](docs/assets/shots/site-current/site-docs-current.png) | ![The current nodeterm changelog showing the published version 0.4.120 release and Windows-scope history](docs/assets/shots/site-current/site-changelog-current.png) |
+
+| Settings | Screenshot gallery |
+| --- | --- |
+| ![The current nodeterm settings room showing language, appearance, identity, School mode, narrator, and personal-vocabulary cards](docs/assets/shots/site-current/site-settings-current.png) | ![The current nodeterm screenshot room showing the built desktop capture gallery and searchable navigation](docs/assets/shots/site-current/site-screenshots-current.png) |
+
+| Pattern builder | Appearance controls |
+| --- | --- |
+| ![The current nodeterm pattern builder open beside the settings search with guided tokens, sample text, and apply controls](docs/assets/shots/site-current/site-search-regex-current.png) | ![The current nodeterm appearance settings card filtered in place with theme, color, preset, text-size, logo, save, load, and reset controls](docs/assets/shots/site-current/site-appearance-current.png) |
+
+![The current nodeterm documentation navigation at a 390 pixel emulated mobile viewport with touch-sized controls and no body overflow](docs/assets/shots/site-current/site-mobile-home-current.png)
+
+The complete hashes, viewport tuples, audit summary, and raw-frame relationships are recorded in
+[`docs/assets/recordings/site/`](docs/assets/recordings/site/README.md).
+
+## Feature usage recordings
+
+Each GIF below records real navigation or settings search against the same static output at commit
+`1ec54fa8`. The GIFs are 720 by 450 visual derivatives of retained raw PNG frame sequences. They
+contain no audio and do not replace the full-resolution still captures as evidence.
+
+<details>
+<summary><strong>Every documentation destination</strong></summary>
+
+| Home | Guide book |
+| --- | --- |
+| ![Animated use of the Home destination](docs/assets/recordings/site/site-room-home.gif) | ![Animated use of the Guide book destination](docs/assets/recordings/site/site-room-docs.gif) |
+
+| What changed | Messages |
+| --- | --- |
+| ![Animated use of the What changed destination](docs/assets/recordings/site/site-room-changelog.gif) | ![Animated use of the Messages destination](docs/assets/recordings/site/site-room-notes.gif) |
+
+| Time machine | Code maker |
+| --- | --- |
+| ![Animated use of the Time machine destination](docs/assets/recordings/site/site-room-history.gif) | ![Animated use of the Code maker destination](docs/assets/recordings/site/site-room-auth.gif) |
+
+| Model shop | Turn-it-into |
+| --- | --- |
+| ![Animated use of the Model shop destination](docs/assets/recordings/site/site-room-shop.gif) | ![Animated use of the Turn-it-into destination](docs/assets/recordings/site/site-room-convert.gif) |
+
+| Take it home | Dim sum |
+| --- | --- |
+| ![Animated use of the Take it home destination](docs/assets/recordings/site/site-room-export.gif) | ![Animated use of the Dim sum destination](docs/assets/recordings/site/site-room-dish.gif) |
+
+| Checklist | Screenshots |
+| --- | --- |
+| ![Animated use of the Checklist destination](docs/assets/recordings/site/site-room-coverage.gif) | ![Animated use of the Screenshots destination](docs/assets/recordings/site/site-room-shots.gif) |
+
+| Remote access | Playroom |
+| --- | --- |
+| ![Animated use of the Remote access destination](docs/assets/recordings/site/site-room-pair.gif) | ![Animated use of the Playroom destination](docs/assets/recordings/site/site-room-play.gif) |
+
+![Animated use of the Settings destination](docs/assets/recordings/site/site-room-settings.gif)
+
+</details>
 The full inventory of what nodeterm writes where (and what the script keeps, like the
 `.nodeterm/` canvas folders inside your own repos) is documented in
 [docs/uninstall.md](docs/uninstall.md).
@@ -258,6 +347,17 @@ canvas has no Shop. See the
 [special-universe Shop article](./docs/features/integrations/aws-universe-shop.md) for the
 portable metadata, repair records, disabled AWS entries, and verification boundary.
 
+The AWS Universe navigator creates unlimited AWS-only child canvases in the project root. Each
+instance starts with one fixed scoped Shop, supports guided local search with an adjacent regex
+builder, and preserves safe schema 3 intent without carrying credentials or local runtime state.
+See the [AWS Universe portal article](./docs/features/canvas/aws-universe.md).
+
+A project can now create and navigate a scoped **Multiverse canvas hierarchy** from the canvas app
+bar. The guided parent picker searches names, depths, and identifiers with its adjacent regex
+builder, explains why depth-8 parents cannot accept another child, and preserves each child canvas
+through ordinary project files and portable schema 3 import and export. See the
+[Multiverse child canvases article](./docs/features/canvas/multiverse-canvases.md).
+
 ### Agent support — Claude Code, Codex, Gemini, opencode, Grok, or your own
 
 An **agent** node is a terminal preset that launches an agent CLI as its first command. Status
@@ -280,12 +380,11 @@ anything.
 
 ### Session continuity
 
-Every terminal runs inside a persistent [tmux](https://github.com/tmux/tmux) session on macOS and
-Linux, so a shell — and anything in it, including an in-flight agent turn — survives closing a
-node, switching projects and quitting the app. **Windows has no tmux binary to bundle**, so
-nodeterm ships a from-scratch equivalent: the [Windows session host](#windows), a standalone
-process that owns the real PTYs and outlives the app. See [Windows](#windows) for its two honest
-caveats.
+Every terminal on Windows uses a detected `tmux.exe` or `psmux` session when one is available.
+Otherwise nodeterm uses the bundled [Windows session host](#windows), a standalone process that
+owns the real PTYs and outlives the app. A shell and anything running inside it can therefore
+survive closing a node, switching projects, and quitting the app. See [Windows](#windows) for the
+two honest caveats.
 
 ### Remote & SSH, and the Server Edition
 
@@ -367,6 +466,10 @@ Identical on desktop and in the browser.
   cache reuse, repair, cancellation, and restart reconciliation. Node Catalog `Install and
   continue` wiring and focused verification remain in progress. See
   [`docs/features/dependencies/automatic-node-dependencies.md`](./docs/features/dependencies/automatic-node-dependencies.md).
+- **Shared hosted-resource backup and restore** — versioned, edition-aware, ownership-reviewed
+  archives with bounded ZIP validation, explicit omissions, progress, cancellation, atomic
+  publication, and rollback contracts for hosted-service nodes. See
+  [`docs/features/integrations/backup-restore.md`](./docs/features/integrations/backup-restore.md).
 - **Local Ollama suite manager** — a local manager for [Ollama](https://ollama.com) that talks
   only to its documented local HTTP API, never a cloud service. See
   [`docs/ollama-manager.md`](./docs/ollama-manager.md).
@@ -406,14 +509,14 @@ info**, then **Run anyway**. This is expected of every unsigned installer from a
 is not a sign of a corrupted download, and it is not something this project will ever silently
 work around by acquiring a certificate.
 
-**Session continuity works, through a different mechanism.** There is no Windows build of tmux
-to bundle, so Windows terminals are backed by the **Windows session host** instead — a
-standalone Node process, built on the same `node-pty` this app already depends on plus a
-headless `xterm.js` for server-side screen state, that owns the real PTYs and outlives the
-Electron app. It is selected automatically whenever no real tmux is found on `PATH` (which is
-always, on a stock Windows install), and it gives you the same practical guarantee: close the
-app, reopen it, and your terminals — and any in-flight agent CLI turn — are still there,
-scrollback and all.
+**Session continuity works, through a Windows-aware resolver.** The desktop searches `PATH` for
+`tmux` first and then the tmux-compatible `psmux` executable, using `PATHEXT` so `.exe` and package
+manager shims are discovered just like native Windows commands. When neither is installed,
+terminals use the **Windows session host** instead — a standalone Node process, built on the same
+`node-pty` this app already depends on plus a headless `xterm.js` for server-side screen state,
+that owns the real PTYs and outlives the Electron app. Close the app, reopen it, and terminals —
+and any in-flight agent CLI turn — remain available with scrollback and the selected persistence
+backend.
 
 Two honest caveats, in the spirit of tmux's own trade-offs:
 
@@ -426,212 +529,246 @@ Two honest caveats, in the spirit of tmux's own trade-offs:
   its own `--resume`/equivalent flag, so you land back roughly where you left off even though
   the underlying process itself did not survive.
 
-If you want tmux-grade durability instead, install a real tmux somewhere on your Windows
-`PATH` (MSYS2's `pacman -S tmux`, or Cygwin's tmux package) — nodeterm prefers a system tmux
-over its own session host every time one is found. Full detail, architecture, and the protocol
-table: [`docs/windows-session-host.md`](./docs/windows-session-host.md) and
+If you want tmux-grade durability instead, install `psmux` with Windows Package Manager
+(`winget install -e --id marlocarlo.psmux`) or place a compatible `tmux.exe` on your Windows
+`PATH` — nodeterm prefers `tmux`, then `psmux`, over its own session host every time one is found.
+Full detail, architecture, and the protocol table: [`docs/windows-session-host.md`](./docs/windows-session-host.md) and
 [`docs/windows.md`](./docs/windows.md).
 
 ## Install / build
 
-Three scripts live at the repository root, each with a Windows `.bat` and a POSIX `.sh`
-sibling. A checkout with nothing installed should reach a running app (or a real installer) by
-running one of them:
+Three Windows scripts live at the repository root. A checkout with nothing installed should
+reach a running app, or a real installer, by running one of them:
 
-| Script | Windows | macOS / Linux | What it does |
-| --- | --- | --- | --- |
-| Dependencies | `download-dependencies.bat` | `download-dependencies.sh` | Installs Node.js (if missing) and every npm dependency, from canonical upstreams into a user-scoped location. |
-| Build | `build.bat` | `build.sh` | Runs the dependency script, builds `out/`, then offers to launch the app. |
-| Installer | `build-installer.bat` | `build-installer.sh` | Runs the dependency script, then packages and verifies the real platform installer (Squirrel on Windows, `.dmg`/`.zip` on macOS, `.AppImage`/`.deb` on Linux). |
+| Script | Command | What it does |
+| --- | --- | --- |
+| Dependencies | `download-dependencies.bat` | Installs Node.js when missing and every npm dependency from canonical upstreams into a user-scoped location. |
+| Build | `build.bat` | Runs the dependency script, builds `out/`, then offers to launch the app. |
+| Installer | `build-installer.bat` | Runs the dependency script, then packages and verifies the unsigned Squirrel.Windows installer. |
 
-All three accept a silent flag (`/s` / `--silent` on Windows, `-s` / `--silent` elsewhere, or a
-`SILENT=1` environment variable) for unattended use, and exit non-zero on the first real
-failure. None of them ever installs a secret, a credential, or a code-signing certificate.
+All three accept `/s`, `--silent`, or a `SILENT=1` environment variable for unattended use and
+exit non-zero on the first real failure. None of them ever installs a secret, a credential, or a
+code-signing certificate.
 
 <details>
-<summary><strong>npm scripts, once dependencies are installed</strong></summary>
+<summary><strong>Every settings feature card</strong></summary>
 
-```bash
-npm install        # deps + rebuilds node-pty against Electron's ABI (postinstall hook)
-npm run dev         # dev mode with renderer HMR
-npm run build       # production build into out/
-npm start           # preview the production build
-npm run typecheck   # tsc for both the main/preload and renderer projects
-npm test            # vitest (unit + integration)
-npm run dist:win     # package the Windows Squirrel installer
-npm run dist         # package the macOS .dmg + .zip
-npm run dist:linux   # package the Linux .AppImage + .deb
-npm run server:dev   # build and run the Server Edition
-```
+| About you | How it looks |
+| --- | --- |
+| ![Animated settings search revealing the About you card](docs/assets/recordings/site/site-setting-you.gif) | ![Animated settings search revealing the How it looks card](docs/assets/recordings/site/site-setting-look.gif) |
+
+| Words and jokes | Read it to me |
+| --- | --- |
+| ![Animated settings search revealing the Words and jokes card](docs/assets/recordings/site/site-setting-words.gif) | ![Animated settings search revealing the Read it to me card](docs/assets/recordings/site/site-setting-narrator.gif) |
+
+| School mode | My own words |
+| --- | --- |
+| ![Animated settings search revealing the School mode card](docs/assets/recordings/site/site-setting-school.gif) | ![Animated settings search revealing the My own words card](docs/assets/recordings/site/site-setting-vocab.gif) |
+
+| Toy locks | Timers |
+| --- | --- |
+| ![Animated settings search revealing the Toy locks card](docs/assets/recordings/site/site-setting-safety.gif) | ![Animated settings search revealing the Timers card](docs/assets/recordings/site/site-setting-timers.gif) |
+
+| Download demo | ADHD modes |
+| --- | --- |
+| ![Animated settings search revealing the Download demo card](docs/assets/recordings/site/site-setting-demo.gif) | ![Animated settings search revealing the ADHD modes card](docs/assets/recordings/site/site-setting-adhd.gif) |
 
 </details>
 
-Full detail on every script, including the Windows batch-file traps this project has already
-hit and fixed (`NoDefaultCurrentDirectoryInExePath`, CRLF-only `.bat` line endings, the
-package-manager `PATH` refresh race): [`docs/building.md`](./docs/building.md).
+### Evidence that is still missing
+
+The repository does not claim visual proof it does not have. Current gaps include:
+
+- A current desktop light-theme capture.
+- An agent session captured mid-turn.
+- A live SSH project capture.
+- The elapsed-time chip for Time awareness.
+- Complete packaged clipboard-restore acceptance.
+- Interaction proof from an installed Squirrel package.
+
+See [`docs/assets/shots/README.md`](./docs/assets/shots/README.md) for the longer capture history,
+including discarded captures and known harness limits.
+
+## Interface and accessibility
+
+The desktop shell uses Material Design 3 structure and a custom application title bar. Product
+chrome, settings, overlays, controls, focus states, and motion are governed by shared design
+tokens rather than one-off component styling.
+
+The user-facing interface includes:
+
+- English, playful Hong Kong-style Cantonese, and bilingual modes.
+- Independent tone controls for English and Cantonese.
+- Keyboard navigation and visible focus.
+- Screen-reader names, roles, values, and state changes.
+- Reduced-motion handling.
+- Responsive layouts and high-display-scale constraints.
+- Focus, Low stimulation, Time awareness, One thing at a time, and Momentum modes, all off by
+  default and independently controlled.
+- Search fields with adjacent regex-builder access.
+- Non-blocking operational notifications plus a reviewable notification history.
+- Local settings history and reversible restore paths.
+
+Implementation coverage and open defects are tracked in
+[`docs/features/appearance/material-3-audit.md`](./docs/features/appearance/material-3-audit.md)
+and [`docs/features/appearance/material-3-migration-status.md`](./docs/features/appearance/material-3-migration-status.md).
+
+## Platforms
+
+| Surface | Current delivery state |
+| --- | --- |
+| Windows desktop | Active packaged target. The release includes an unsigned Squirrel.Windows installer for x64. |
+| Server Edition | Self-hosted browser surface built from the shared core and renderer. It is not the desktop package. |
+| Mobile companion | Separate native client for attached sessions. It is not the responsive browser edition. |
+| Linux desktop | Source support exists historically, but it is not part of the current release workflow. |
+
+The Windows desktop build uses a standalone session host when no real tmux is available. Shell
+profiles are selected by stable identifiers and resolved at the trusted process boundary. A
+missing explicit profile remains unavailable and does not silently open a different shell.
+
+## Build from source
+
+The repository root contains the intended Windows entry points:
+
+| Script | Result |
+| --- | --- |
+| `download-dependencies.bat /s` | Resolves the pinned toolchain and project dependencies without interactive prompts. |
+| `build.bat /s` | Builds the runnable application from the checkout. |
+| `build-installer.bat /s` | Builds and verifies the unsigned Squirrel.Windows installer set without publishing it. |
+
+For an interactive local development environment after dependencies are available:
+
+```powershell
+npm run dev
+npm run typecheck
+npm test
+npm run build
+npm run check:wired
+```
+
+> [!CAUTION]
+> At the baseline of this README rewrite, `main` contains a pre-existing malformed
+> `package.json` caused by duplicated merged script blocks. That defect prevents package-manager
+> commands from parsing the file. The commands above describe the repository's intended entry
+> points and are not claimed as green until
+> [issue #98](https://github.com/Ding-Ding-Projects/material-nodeterm/issues/98) is repaired.
+
+Build details, toolchain behavior, and the one-click script contract are documented in
+[`docs/building.md`](./docs/building.md). Windows packaging and updates are documented in
+[`docs/features/packaging/packaging-and-auto-update.md`](./docs/features/packaging/packaging-and-auto-update.md).
+
+<details>
+<summary><strong>Architecture</strong></summary>
+
+| Path | Responsibility |
+| --- | --- |
+| `src/core/` | Platform-free services for sessions, projects, settings, Git, agent integrations, remote operations, history, and utilities. |
+| `src/main/` | Desktop shell, native windows, dialogs, operating-system integration, IPC, and the desktop implementation of the core platform seam. |
+| `src/server/` | Server Edition shell using HTTP, WebSocket, authentication, and browser-facing RPC without desktop-framework imports. |
+| `src/preload/` | Narrow typed bridge exposed to the renderer with context isolation enabled. |
+| `src/renderer/` | React application, canvas, nodes, settings, boards, history, and user-facing surfaces. |
+| `src/shared/` | Cross-boundary types, channel names, capability contracts, and portable schemas. |
+
+The renderer reaches host capabilities only through the typed bridge. Platform-neutral service
+logic belongs in `src/core/`, not inside the desktop shell. The Server Edition and desktop shell
+must implement the same declared behavior or expose a documented unavailable state.
+
+See [`CLAUDE.md`](./CLAUDE.md) for subsystem invariants,
+[`CONTRIBUTING.md`](./CONTRIBUTING.md) for contributor-facing rules, and
+[`docs/SERVER.md`](./docs/SERVER.md) for the browser-hosted architecture.
+
+</details>
+
+## Project scale
+
+The latest published count is tied to release
+[`v0.4.120`](https://github.com/Ding-Ding-Projects/material-nodeterm/releases/tag/v0.4.120) and
+was generated by the committed `node scripts/count-lines.mjs` counter at commit `c6820730`.
+
+| Category | Total lines | Non-blank lines | Files |
+| --- | ---: | ---: | ---: |
+| Source | 263,518 | 248,764 | 1,148 |
+| Tests | 166,389 | 150,170 | 825 |
+| Styles | 28,065 | 26,363 | 10 |
+| Documentation | 38,816 | 32,315 | 152 |
+| Configuration | 3,378 | 3,324 | 17 |
+| **Project total** | **500,166** | **460,936** | **2,152** |
+
+The counter excludes dependency directories, build output, lockfiles, bundled third-party
+licenses, binary assets, and vendored runtime files. It attributes surviving lines with
+`git blame`, not cumulative additions. At that release, 429,058 surviving lines were attributed
+to automation identities, 54,636 to people, and 16,472 were unknown or unresolvable.
+
+**Human implementation-time estimate:** roughly **8 to 21 full-time person-years** for the
+460,936 non-blank lines, using 100 to 250 reviewed non-blank lines per person-day and 220 working
+days per year:
+
+```text
+460,936 / (250 × 220) = 8.4 person-years
+460,936 / (100 × 220) = 21.0 person-years
+```
+
+This is an estimate, not a measured duration. It excludes the same files as the committed counter
+and does not treat a larger number as a quality claim.
 
 ## Documentation
 
-| Where | What's there |
+| Resource | Purpose |
 | --- | --- |
-| [Documentation site](https://ding-ding-projects.github.io/material-nodeterm/) | The landing page and browsable docs, published from `site/`. |
-| [`docs/features/`](./docs/features/README.md) | One article per feature — behaviour, configuration, failure modes, security, verification — grouped by category. |
-| [`docs/app-contract.md`](./docs/app-contract.md) | The desktop app's hand-written feature-completeness guard (`npm run check:app-contract`) — what it checks and why, alongside the site's `check-site-contract.mjs`. |
-| [`docs/features/appearance/material-3-audit.md`](./docs/features/appearance/material-3-audit.md) | The exhaustive source-level Material Design 3 inventory for every desktop surface and checked-in documentation page (`npm run check:material-audit`). |
-| [`CLAUDE.md`](./CLAUDE.md) | The deep architecture reference: process boundaries, every subsystem's invariants and the reasoning behind them. |
-| [`CONTRIBUTING.md`](./CONTRIBUTING.md) | Setup, the process-boundary rules, and the house rules a PR gets sent back for. |
-| [`AGENTS.md`](./AGENTS.md) | Guidance for coding agents working in this repository. |
-| [`docs/adhd-modes.md`](./docs/adhd-modes.md) | The five ADHD modes: what each does, why they are independent, and the rules the copy follows. |
-| [`CHANGELOG.md`](./CHANGELOG.md) | What actually shipped, release by release. |
+| [Documentation site](https://ding-ding-projects.github.io/material-nodeterm/) | Browse the landing and documentation surface. It is not the primary application runtime. |
+| [`docs/features/`](./docs/features/README.md) | Categorized feature articles covering behavior, configuration, failure modes, security, and verification. |
+| [`docs/app-contract.md`](./docs/app-contract.md) | Hand-written desktop feature coverage inventory and completeness checks. |
+| [`docs/uh-feature-inventory.md`](./docs/uh-feature-inventory.md) | Cross-feature implementation and evidence inventory. |
+| [`docs/ci-and-releases.md`](./docs/ci-and-releases.md) | Current release workflow, unsigned packaging, and verification boundaries. |
+| [`docs/windows.md`](./docs/windows.md) | Windows terminal profiles, session behavior, packaging, and known limits. |
+| [`docs/assets/shots/README.md`](./docs/assets/shots/README.md) | Screenshot provenance, capture methods, discarded captures, and evidence gaps. |
+| [`CHANGELOG.md`](./CHANGELOG.md) | Release history linked to the commits that produced each change. |
+| [`ROADMAP.md`](./ROADMAP.md) | Checked roadmap of completed and remaining work. |
+| [`HANDOFF.md`](./HANDOFF.md) | Current implementation state, verification evidence, and open work. |
 
-## Screenshots
+## Working conventions
 
-The app captures live in [The interface](#the-interface) above. This section is the **site**: the
-published documentation site at
-[ding-ding-projects.github.io/material-nodeterm](https://ding-ding-projects.github.io/material-nodeterm/),
-captured from the deployed page rather than a local server. The full manifest — what each image
-shows, the commit it came from, the exact capture method — is in
-[`docs/assets/shots/README.md`](./docs/assets/shots/README.md).
+> **This is a mirror, not a source.** It is a sanitized summary of the project guidance in
+> [`AGENTS.md`](./AGENTS.md), [`CLAUDE.md`](./CLAUDE.md), and
+> [`CONTRIBUTING.md`](./CONTRIBUTING.md). It contains no private infrastructure, credentials,
+> account data, or machine-specific routes.
 
-<details>
-<summary><strong>The site</strong> — light and dark, the regex builder, and a phone layout</summary>
-
-| | |
-| --- | --- |
-| ![The nodeterm site home page in its light theme](./docs/assets/shots/site-home-light.png) | ![The same site home page in its dark theme](./docs/assets/shots/site-home-dark.png) |
-| **Home, light.** | **Home, dark.** |
-| ![A search field on the site with the anchored regex builder open beside it](./docs/assets/shots/site-search-regex-builder.png) | ![The site rendered at a 390px phone width](./docs/assets/shots/site-narrow-390.png) |
-| **The regex builder**, anchored to the field it belongs to. | **390px phone width** — measured, not eyeballed: no sideways scroll at 390, 768 or 1280. |
-| ![The deployed Screenshots room: a three-column gallery of fifteen real app captures, each with a caption, above a note about the two surfaces deliberately absent](./docs/assets/shots/site-screenshots-room.png) | |
-| **The Screenshots room** — the site publishing the same captures this README shows, taken from the deployed page. | |
-
-</details>
-
-**Honestly absent rather than staged:** an agent mid-turn (the RUNNING / NEEDS YOU badge and a
-subagent fan-out) and an SSH project need a live agent session and a reachable host, so the
-capture harness skips them loudly and records why. The canvas shot shows a real, live session
-whose pane is empty — [the manifest](./docs/assets/shots/README.md) explains that, and lists the
-captures that were taken and discarded rather than shipped.
-
-## Working conventions (sanitized mirror)
-
-> **This section is a mirror, not a source.** It is a sanitized summary of the shared working
-> conventions that live in [`CLAUDE.md`](./CLAUDE.md), [`CONTRIBUTING.md`](./CONTRIBUTING.md) and
-> [`AGENTS.md`](./AGENTS.md), kept here so they are visible from the repository's front door.
-> Edit those files first when a rule changes — this copy is refreshed from them, never edited in
-> place — and it deliberately contains no machine-, account- or infrastructure-specific details
-> (`scripts/check-instruction-mirror.mjs` enforces both halves of that).
-
-- **Process boundaries are enforced, not advisory.** Platform-free service logic lives in
-  `src/core` behind a small platform interface; the desktop shell (`src/main`), the
-  browser-edition shell (`src/server`), the one typed preload bridge (`src/preload`) and the
-  React UI (`src/renderer`) each stay on their own side, and dedicated tests fail the build on
-  an illegal import. Put new service logic in the platform-free core — logic left in a shell
-  silently doesn't exist on the other one.
-- **Design for three surfaces, every time** — the desktop app, the self-hosted Server Edition,
-  and the separately maintained mobile companion. A feature is not finished until each surface
-  has a real implementation or a deliberate, visibly documented "not applicable here"; a stub
-  that compiles but does nothing is worse than an explicit "not supported".
-- **House rules** (each one earned by a real shipped bug): a failed read is never evidence of
-  absence; degrade to nothing, never to something wrong; re-validate hand-editable values at the
-  point of use, not by their type alone; test generated shell scripts under a real shell;
-  credentials never travel as command-line arguments — use a locked-down file or standard input;
-  keep parallel shell implementations in sync deliberately; comments explain *why* and name the
-  failure they prevent.
-- **Testing.** `npm run typecheck` is the fastest correctness gate and `npm test` runs the
-  suite. Mutation-test your own guards — deliberately reintroduce the mistake a new check exists
-  to catch and watch it go red before trusting it — and never pin behavior by asserting on
-  source text.
-- **Autonomous work.** Inside an already-authorized task, keep going through natural checkpoints
-  without asking permission to continue; when genuinely blocked, state exactly what blocks, what
-  is finished, and the smallest unblocking step.
-- **Git and commit conventions.** `type(scope): subject` commit subjects (the changelog is
-  generated from them); explain *why* a change was made; say plainly what you did **not**
-  verify; post PR updates as new comments rather than editing old ones; never commit secrets,
-  tokens or credentials.
-- **Security boundaries.** Never disclose or characterize anyone's credentials, and never place
-  secrets or private infrastructure details — internal hostnames, private IP addresses, account
-  names, machine-specific paths — into source, comments, commits or documentation. Where a rule
-  cannot be stated without such a detail, describe the *kind* of thing instead of naming the
-  specific one.
+- **Process boundaries are enforced.** Keep platform-free behavior in `src/core/` behind the
+  declared platform seam.
+- **Design for three surfaces.** Desktop, Server Edition, and mobile behavior each need a real
+  implementation or an explicit, documented unavailable state.
+- **House rules.** Treat failed reads as unknown, degrade to explicit unavailability rather than
+  a guessed substitute, validate editable values at use time, and test generated shell code in a
+  real shell.
+- **Testing.** Run focused local verification, state what was not verified, and deliberately
+  break new completeness checks once to observe red before restoring green.
+- **Git and commit conventions.** Preserve unrelated local work, use scoped commits that explain
+  why the behavior changed, and never rewrite shared history merely to simplify integration.
+- **Security boundaries.** Pass credentials through protected storage or standard input, never
+  plain command arguments, and keep secrets plus private infrastructure out of public records.
 
 ## Contributing
 
-See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for setup, the process-boundary rules
-(`src/main` / `src/core` / `src/preload` / `src/renderer` / `src/server`), and the testing
-habits this repository expects.
+Contributions are welcome. Start with [`CONTRIBUTING.md`](./CONTRIBUTING.md), then read
+[`CLAUDE.md`](./CLAUDE.md) for the subsystem you are changing.
+
+Before opening a pull request:
+
+1. Keep the change on the correct process side.
+2. Update the affected feature article and changelog.
+3. Run the smallest decisive local checks, then the full relevant suite when practical.
+4. Capture visible behavior from the real built application when the interface changed.
+5. Describe what changed, why it changed, and what remains unverified.
+
+The canonical upstream source is pinned at `upstream/nodeterm` as a Git submodule. Updating that
+pin is a deliberate review operation, not a side effect of fetching this repository.
 
 ## License
 
-[Business Source License 1.1](./LICENSE) (BUSL-1.1) — you may copy, modify, create derivative
-works from, and make non-production use of nodeterm freely, plus a production-use grant that
-excludes offering it to third parties on a hosted/embedded basis or as a competing commercial
-product or service. On the fourth anniversary of a given version's first public release (or the
-license's stated Change Date, whichever comes first), that version automatically converts to the
-**MIT License**.
-These are the defaults — every one of them is remappable in **Settings → Keyboard Shortcuts**.
+nodeterm is distributed under the [Business Source License 1.1](./LICENSE). The Additional Use
+Grant permits use, modification, redistribution, and production use except for offering the
+software as a competing hosted, embedded, or standalone product or service. Each version converts
+to the license stated in `LICENSE` on its change date.
 
-| Shortcut | Action |
-| --- | --- |
-| `⌘K` | Command palette |
-| `⌘T` / `⌘⇧C` | New terminal / New Claude Code |
-| `⌘⇧B` | Toggle the kanban board |
-| `⌘W` | Close the selected node |
-| `⌘←` `⌘→` `⌘↑` `⌘↓` | Focus the node left / right / above / below (`Ctrl+Shift+arrow` off macOS) |
-| `⌘Z` / `⌘⇧Z` | Undo / Redo |
-| `⌘M` | Toggle markdown view (terminal / editor) |
-| Hold `⌘⌥` (`Ctrl+Alt`) | Dictate into the focused terminal |
-| `⌘⇧E` | File explorer |
-| `⌘,` | Settings · `⌘/` Shortcuts |
-| `Right-click` | Actions menu (empty space or node) |
-
-## 🏗 Architecture
-
-- **Electron, three contexts** — `src/main` (the Electron shell), `src/preload` (the only
-  bridge, `window.nodeTerminal`), `src/renderer` (React UI). `src/shared` holds the types
-  and IPC channel names used by all three.
-- **`CorePlatform` seam** — every service (PTY, workspace/settings, git, agents, hooks) lives
-  in `src/core` behind a small platform interface and never imports `electron`. Electron is
-  one implementation of that seam; the browser Server Edition (`src/server`) is another,
-  booting the exact same services over a WebSocket-RPC bridge (`src/renderer/bridge` fills
-  `window.nodeTerminal` in the browser). One codebase, one renderer, multiple shells.
-- **`TerminalTransport` abstraction** — the renderer depends only on this interface, never on
-  IPC or node-pty directly. `LocalTransport` talks to the local host; `RemoteTransport` talks
-  to a remote agent over SSH — so remote projects drop in without touching the canvas UI.
-- **React Flow is the single source of truth** for live nodes; projects persist serialized
-  nodes to disk, and tmux keeps sessions alive across restarts.
-- **Three surfaces** — the desktop app, the browser **Server Edition**, and the
-  **mobile companion** (a separate SwiftUI repo) all ride the same core + transport seams.
-
-See [`docs/SERVER.md`](./docs/SERVER.md) for the Server Edition, and the design docs
-under [`docs/`](./docs) for deeper notes.
-
-## 🤝 Contributing
-
-Issues and pull requests are welcome. **Start with [CONTRIBUTING.md](./CONTRIBUTING.md)** —
-setup, the process-boundary rules, and the house rules that come up in review.
-[CLAUDE.md](./CLAUDE.md) is the deep reference behind them (and is loaded automatically if
-you work with an AI coding agent). Questions or bug reports are also happy at
-[nodeterm.dev/support](https://nodeterm.dev/support) / support@nodeterm.dev. nodeterm is licensed under the
-[Business Source License 1.1](https://mariadb.com/bsl11/) — you can use, modify,
-and redistribute it freely, including in production, except offering it as a
-competing product or service (see [License](#-license)).
-
-By submitting a contribution (pull request, patch, or code snippet), you agree
-that it is licensed under the same [BUSL-1.1](./LICENSE) terms as the rest of
-the project, and that the project may continue to relicense future versions
-(including your contribution) as part of its normal licensing model.
-
-## 📜 License
-
-**[BUSL-1.1](./LICENSE)** ([Business Source License](https://mariadb.com/bsl11/)): you may
-copy, modify, redistribute, and — under the Additional Use Grant — make **production
-use** of nodeterm; the one thing you may not do is offer it (hosted, embedded, or as a
-standalone product/service) in a way that **competes** with nodeterm or with the
-Licensor's products built on it. Each release automatically becomes plain **MIT** four
-years after it is published. See [`LICENSE`](./LICENSE) for the full terms and
-[`THIRD-PARTY-NOTICES.md`](./THIRD-PARTY-NOTICES.md) for the bundled open-source
-components. For a commercial license beyond the grant, contact eneskirca@gmail.com.
-
-> "Claude" and "Claude Code" are trademarks of Anthropic, and "Trello" is a trademark of
-> Atlassian; nodeterm is not affiliated with or endorsed by either.
+See [`THIRD-PARTY-NOTICES.md`](./THIRD-PARTY-NOTICES.md) for bundled open-source components and
+their notices.

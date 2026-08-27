@@ -1,68 +1,62 @@
 # AWS core-service managers
 
-The AWS core-service node is a guided canvas manager for S3, EC2, IAM, STS, Lambda, CloudWatch, and
-CloudWatch Logs. It uses the installed AWS CLI v2 through the privileged core boundary. The renderer
-never accepts a shell command, raw argument vector, or credential value.
+The AWS core-service routes mount on the existing AWS Resource Explorer manager node and shared AWS
+CLI service. The AWS Shop exposes one entry each for S3, EC2, IAM, STS, Lambda, CloudWatch, and
+CloudWatch Logs. There is no second profile store, credential stack, or raw command editor.
 
-## Behaviour
+## Guided operations
 
-Create **AWS core services manager** from the Node Catalog inside an AWS Universe. Choose a service
-tab, then choose one of the operations supplied for that service. Operations are typed and validate
-their fields before the CLI is started. Read-only operations show a preview and then run. Create,
-start, stop, and other mutating operations state their risk; destructive operations use the existing
-two-key confirmation surface. Results are JSON rows with bounded pagination, searchable with plain
-text by default and an adjacent anchored full regex builder. Long requests expose started,
-completed, failed, cancelled, and timeout state at the node that started them.
+Choose **Core services** in the manager, then select the service and an operation. The typed routes
+are:
 
-The current operation set is:
-
-| Service | Guided operations |
+| Service | Operations |
 | --- | --- |
 | S3 | List buckets, list objects, create bucket, delete bucket |
-| EC2 | Describe instances, describe security groups, start, stop, terminate instances |
-| IAM | List users, list roles, get user, get role, create user, delete user |
-| STS | Get caller identity |
-| Lambda | List functions, get function, delete function |
-| CloudWatch | List metrics, get metric data |
-| CloudWatch Logs | Describe log groups, describe log streams, get log events, filter log events |
+| EC2 | Describe instances and security groups, start, stop, terminate instances |
+| IAM | List users and roles, inspect a user or role, create or delete a user |
+| STS | Get caller identity only. Session credentials are never returned to the renderer. |
+| Lambda | List, inspect, or delete a function |
+| CloudWatch | List metrics or request metric data |
+| CloudWatch Logs | Describe groups or streams, read events, or filter events |
 
-## Local binding and portability
+Every request is previewed with its service, operation, profile, region, endpoint, generated
+argument vector, pagination, retry policy, and risk. Write operations are labelled. Destructive
+operations use the existing two-key confirmation surface. Results are bounded and paginated where
+the AWS CLI supports a continuation token. Started, completed, failed, cancelled, and timeout
+states are sent through the existing AWS progress channel and rendered at the node that started the
+operation.
 
-The node's project data contains only service, operation, region intent, and safe operation fields.
-The selected AWS profile, account session, endpoint, CLI path, output, request tokens, process state,
-and credentials live under the local application data directory in
-`aws/core-service-bindings.json`. Importing a project never invokes the CLI, contacts AWS, starts a
-process, or changes a provider. A new computer shows an unbound manager until the user chooses a
-local profile and region. Endpoint URLs must use HTTPS, except for an explicit loopback development
-endpoint, and may not contain credentials.
+The result list has a plain-text-first search and its own adjacent anchored full regex builder.
+Service and operation choices are real keyboard-operable tabs with visible focus. Empty, missing,
+unavailable, invalid, and provider-refused states retain their exact reason and next action.
 
-## Security and failure modes
+## Portable and local state
 
-The core uses `execFile` with an argument array and never invokes a shell. The runtime resolver
-prefers a packaged AWS CLI, then a user-scoped application-data copy, then the system executable;
-the visible status names the selected origin. Missing or unhealthy CLI state disables execution and
-names the next action. Profile and region input is bounded and revalidated at the host boundary.
-Provider refusal, malformed JSON, timeout, cancellation, and unavailable credentials are reported
-without exposing command output as a secret or storing credentials in the project file.
+The node projection stores only AWS mode, service, operation, region intent, and bounded safe input
+fields. Profile names, account bindings, role sessions, endpoints, request tokens, CLI paths,
+provider results, process state, and credentials stay in the machine-local
+`aws/resource-manager-bindings.json` and transient operation state. Importing a project does not
+contact AWS, invoke the CLI, launch a process, or mutate provider state. Reopening on another
+computer presents the explicit local profile and region binding path.
 
-## UI and accessibility
+## Failure and security behaviour
 
-Service tabs are real keyboard-operable tabs with visible focus and a selected state. Profile choices
-are a listbox populated from the local CLI rather than a blank free-text field. Operation fields are
-created from the operation's typed schema. Results have an independent search field and anchored
-regex builder, internally scroll at narrow widths, and expose a live status message for progress.
-The node uses project Material Design 3 tokens and the existing destructive confirmation component.
+The shared core resolves the verified bundled AWS CLI first, then its declared host resolver and
+system fallback. A missing runtime remains visibly unavailable with a repair action. All commands
+use `spawn` with `shell: false` and an argument array. Inputs are bounded and revalidated in the
+core. Output is capped and must be valid JSON. Endpoint URLs reject embedded credentials and allow
+HTTP only for loopback development. STS never exposes temporary credentials.
 
 ## Verification boundary
 
-This implementation lane intentionally ran no tests, type checks, lint, review, security or
-accessibility checks, builds, packaging, installer execution, runtime interaction, or UI captures.
-Those are follow-up Chuts for the integration and release lane. The source changes are therefore
-implemented but not runtime-verified.
+This PR-preparation lane intentionally ran no tests, type checks, lint, builds, packaging, runtime
+interaction, reviews, security or accessibility audits, or HuiShots. The source is mounted and
+dewed for the parent integration lane, where those Chuts and built-surface checks remain pending.
 
 ## Suggested articles
 
+- [AWS managers](../aws/README.md)
+- [AWS identity manager](./aws-identity.md)
+- [AWS CLI model documentation](./aws-cli-model-documentation.md)
 - [Special-universe Shop nodes](./aws-universe-shop.md)
 - [Portable canvas projection](../projects/portable-canvas-projection.md)
-- [Node Catalog](../canvas/node-catalog.md)
-- [Portable Node Universes and Hosting Program](../../plans/2026-08-26-portable-node-universes-and-hosting-program.md)

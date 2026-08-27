@@ -34,7 +34,7 @@
       <p>nodeterm ships as a native Windows desktop app with detected native and WSL shell profiles, real ConPTY terminals, and a standalone session host that keeps them alive across app restarts.</p>
 
       <h2>Behaviour</h2>
-      <p>The Windows build uses a frameless window with its own Material-Design title bar rather than the OS default chrome, matching the macOS and Linux builds. Local shells are hosted directly through ConPTY; nodeterm does not embed Microsoft Windows Terminal.</p>
+      <p>The Windows build uses a frameless window with its own Material-Design title bar rather than the operating system's default chrome. Local shells are hosted directly through ConPTY; nodeterm does not embed Microsoft Windows Terminal.</p>
       <p>On stock Windows, where there is no native tmux, nodeterm's standalone session host owns each live PTY and a headless terminal buffer. Closing or crashing the desktop app detaches its clients while the host and shell keep running. Relaunching the app reattaches to the same named session and reconstructs its screen. A tmux installed only inside WSL is not treated as a native Windows tmux.</p>
 
       <h2>Configuration</h2>

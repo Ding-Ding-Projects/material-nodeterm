@@ -18,7 +18,8 @@ not point back symmetrically.
 ## Portability and privacy
 
 Schema 3 stores only safe intent: door id, containing and target canvas ids, pair id, role, label,
-and the door-only access marker. It stores no credential, passphrase, process state, navigation
+and the door-only access marker. A door may also carry a schema 3 entry policy naming numeric-code
+or passphrase rules, but never the value itself. It stores no credential, passphrase, process state, navigation
 history, machine path, provider session, host identity, cache, or generated runtime data. Import
 validates the full pair before publishing the projection and performs no external action.
 

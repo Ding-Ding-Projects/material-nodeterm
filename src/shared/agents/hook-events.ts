@@ -94,6 +94,20 @@ export const COPILOT_HOOK_EVENTS = [
   'SessionEnd'
 ] as const
 
+/** Devin CLI 3000.4.25 lifecycle hooks. Devin's `.devin/hooks.v1.json` is a direct event map,
+ * unlike the settings wrappers used by Claude-family installers. The managed installer owns only
+ * this observer command; it never returns a permission decision or rewrites tool input. */
+export const DEVIN_HOOK_EVENTS = [
+  'PreToolUse',
+  'PostToolUse',
+  'PermissionRequest',
+  'UserPromptSubmit',
+  'Stop',
+  'PostCompaction',
+  'SessionStart',
+  'SessionEnd'
+] as const
+
 /**
  * Grok hook events (→ normalizeGrok). Grok's shipped 1.0.0 docs list fourteen
  * (`~/.grok/docs/user-guide/10-hooks.md:84-101`); nine are subscribed — the ones `normalizeGrok` has

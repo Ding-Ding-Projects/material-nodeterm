@@ -143,6 +143,51 @@ export interface ConverterAdapterDescriptor {
   /** Hard ceiling on the SOURCE file size this adapter will accept, in bytes. A source over this
    *  limit is refused up front with a clear message rather than partially read. */
   maxInputBytes: number
+  /** Safe, portable operation identity. It contains no path, credential, process, host, cache,
+   *  provider-session, or generated-output state. Local source/destination binding is always
+   *  performed explicitly after import. */
+  pipeline?: {
+    family: 'media' | 'archive' | 'pdf' | 'ocr' | 'structured-data'
+    operation: string
+    resourceProfile: 'small' | 'medium' | 'large'
+  }
+}
+
+export interface PortableAdvancedPipelineIntent {
+  schemaVersion: 1
+  adapterId: string
+  family: 'media' | 'archive' | 'pdf' | 'ocr' | 'structured-data'
+  operation: string
+  sourceKind: ConverterKind
+  targetKind: ConverterKind
+  resourceProfile: 'small' | 'medium' | 'large'
+  bindingState: 'unbound'
+  destinationActions: Array<'configure' | 'rebind' | 'adopt' | 'deploy' | 'locate-asset' | 'leave-unbound'>
+  omissions: string[]
+}
+
+const PORTABLE_PIPELINE_OMISSIONS = [
+  'source and destination paths',
+  'credentials and provider sessions',
+  'process, host, and machine identifiers',
+  'runtime caches and generated output'
+]
+
+export function portableAdvancedPipelineIntent(adapterId: string): PortableAdvancedPipelineIntent {
+  const adapter = converterAdapterById(adapterId)
+  if (!adapter?.pipeline || !adapter.available) throw new Error(`Adapter "${adapterId}" has no portable pipeline intent.`)
+  return {
+    schemaVersion: 1,
+    adapterId: adapter.id,
+    family: adapter.pipeline.family,
+    operation: adapter.pipeline.operation,
+    sourceKind: adapter.fromKind,
+    targetKind: adapter.toKind,
+    resourceProfile: adapter.pipeline.resourceProfile,
+    bindingState: 'unbound',
+    destinationActions: ['configure', 'rebind', 'adopt', 'deploy', 'locate-asset', 'leave-unbound'],
+    omissions: [...PORTABLE_PIPELINE_OMISSIONS]
+  }
 }
 
 const MB = 1024 * 1024
@@ -205,12 +250,30 @@ function buildStructuredMesh(): ConverterAdapterDescriptor[] {
         lossyNotes: notes,
         sourceExt: from.ext,
         targetExt: to.ext[0],
-        maxInputBytes: 64 * MB
+        maxInputBytes: 64 * MB,
+        pipeline: { family: 'structured-data', operation: `${from.kind}-to-${to.kind}`, resourceProfile: 'medium' }
       })
     }
   }
   return rows
 }
+
+const STRUCTURED_PIPELINE_ROWS: ConverterAdapterDescriptor[] = [
+  {
+    id: 'json-canonicalize',
+    category: 'data',
+    fromKind: 'json',
+    toKind: 'json',
+    label: 'JSON → deterministic key order',
+    bundled: true,
+    available: true,
+    lossy: false,
+    sourceExt: ['.json'],
+    targetExt: '.canonical.json',
+    maxInputBytes: 64 * MB,
+    pipeline: { family: 'structured-data', operation: 'canonicalize-json', resourceProfile: 'medium' }
+  }
+]
 
 function disabled(row: {
   id: string
@@ -445,16 +508,20 @@ const ARCHIVE_ROWS: ConverterAdapterDescriptor[] = [
     targetExt: '.out',
     maxInputBytes: 128 * MB
   },
-  disabled({
-    id: 'zip-extract',
+  {
+    id: 'zip-to-manifest',
     category: 'archives',
     fromKind: 'zip',
-    toKind: 'any',
-    label: 'ZIP → extracted files',
+    toKind: 'json',
+    label: 'ZIP → bounded entry manifest',
+    bundled: true,
+    available: true,
+    lossy: false,
     sourceExt: ['.zip'],
-    targetExt: '.out',
-    reason: 'requires a ZIP container library (e.g. adm-zip), not bundled in this build'
-  }),
+    targetExt: '.manifest.json',
+    maxInputBytes: 256 * MB,
+    pipeline: { family: 'archive', operation: 'inspect-zip', resourceProfile: 'large' }
+  },
   disabled({
     id: 'zip-create',
     category: 'archives',
@@ -488,16 +555,121 @@ const ARCHIVE_ROWS: ConverterAdapterDescriptor[] = [
 ]
 
 const DOCUMENT_ROWS: ConverterAdapterDescriptor[] = [
-  disabled({
+  {
     id: 'pdf-to-text',
     category: 'documents',
     fromKind: 'pdf',
     toKind: 'text',
     label: 'PDF → plain text',
+    bundled: true,
+    available: true,
+    lossy: true,
+    lossyNotes: ['Page layout, fonts, vector content, annotations, and images are omitted.'],
     sourceExt: ['.pdf'],
     targetExt: '.txt',
-    reason: 'requires a PDF text-extraction library (e.g. pdf-parse), not bundled in this build'
-  }),
+    maxInputBytes: 128 * MB,
+    pipeline: { family: 'pdf', operation: 'extract-text', resourceProfile: 'large' }
+  },
+  {
+    id: 'pdf-to-manifest',
+    category: 'documents',
+    fromKind: 'pdf',
+    toKind: 'json',
+    label: 'PDF → page and metadata manifest',
+    bundled: true,
+    available: true,
+    lossy: false,
+    sourceExt: ['.pdf'],
+    targetExt: '.manifest.json',
+    maxInputBytes: 128 * MB,
+    pipeline: { family: 'pdf', operation: 'inspect', resourceProfile: 'medium' }
+  },
+  {
+    id: 'pdf-rotate-clockwise',
+    category: 'documents',
+    fromKind: 'pdf',
+    toKind: 'pdf',
+    label: 'PDF → rotate every page clockwise',
+    bundled: true,
+    available: true,
+    lossy: false,
+    sourceExt: ['.pdf'],
+    targetExt: '.rotated.pdf',
+    maxInputBytes: 128 * MB,
+    pipeline: { family: 'pdf', operation: 'rotate-clockwise', resourceProfile: 'large' }
+  },
+  {
+    id: 'pdf-remove-metadata',
+    category: 'documents',
+    fromKind: 'pdf',
+    toKind: 'pdf',
+    label: 'PDF → remove document metadata',
+    bundled: true,
+    available: true,
+    lossy: true,
+    lossyNotes: ['Title, author, subject, keywords, creator, producer, and document dates are removed.'],
+    sourceExt: ['.pdf'],
+    targetExt: '.sanitized.pdf',
+    maxInputBytes: 128 * MB,
+    pipeline: { family: 'pdf', operation: 'remove-metadata', resourceProfile: 'large' }
+  },
+  {
+    id: 'pdf-split-pages',
+    category: 'documents',
+    fromKind: 'pdf',
+    toKind: 'zip',
+    label: 'PDF → one PDF per page in ZIP',
+    bundled: true,
+    available: true,
+    lossy: false,
+    sourceExt: ['.pdf'],
+    targetExt: '.pages.zip',
+    maxInputBytes: 128 * MB,
+    pipeline: { family: 'pdf', operation: 'split-pages', resourceProfile: 'large' }
+  },
+  {
+    id: 'pdf-extract-first-page',
+    category: 'documents',
+    fromKind: 'pdf',
+    toKind: 'pdf',
+    label: 'PDF → extract first page',
+    bundled: true,
+    available: true,
+    lossy: true,
+    lossyNotes: ['Every page after the first is omitted from the output.'],
+    sourceExt: ['.pdf'],
+    targetExt: '.page-1.pdf',
+    maxInputBytes: 128 * MB,
+    pipeline: { family: 'pdf', operation: 'extract-first-page', resourceProfile: 'large' }
+  },
+  {
+    id: 'pdf-reverse-pages',
+    category: 'documents',
+    fromKind: 'pdf',
+    toKind: 'pdf',
+    label: 'PDF → reverse page order',
+    bundled: true,
+    available: true,
+    lossy: false,
+    sourceExt: ['.pdf'],
+    targetExt: '.reversed.pdf',
+    maxInputBytes: 128 * MB,
+    pipeline: { family: 'pdf', operation: 'reverse-pages', resourceProfile: 'large' }
+  },
+  {
+    id: 'zip-pdfs-to-pdf',
+    category: 'documents',
+    fromKind: 'zip',
+    toKind: 'pdf',
+    label: 'ZIP of PDFs → merged PDF',
+    bundled: true,
+    available: true,
+    lossy: false,
+    sourceExt: ['.zip'],
+    targetExt: '.merged.pdf',
+    maxInputBytes: 256 * MB,
+    pipeline: { family: 'pdf', operation: 'merge-pdfs', resourceProfile: 'large' }
+  },
   disabled({
     id: 'docx-to-markdown',
     category: 'documents',
@@ -553,17 +725,47 @@ const IMAGE_ROWS: ConverterAdapterDescriptor[] = (
     ['heic', 'jpeg']
   ] as [ConverterKind, ConverterKind][]
 ).map(([from, to]) =>
-  disabled({
+  ({
     id: `${from}-to-${to}`,
     category: 'images',
     fromKind: from,
     toKind: to,
     label: `${CONVERTER_KIND_LABELS[from]} → ${CONVERTER_KIND_LABELS[to]}`,
+    bundled: !['heic', 'ico'].includes(from),
+    available: !['heic', 'ico'].includes(from),
+    unavailableReason: ['heic', 'ico'].includes(from)
+      ? 'the bundled image codec does not provide a stable decoder for this format in the active build'
+      : undefined,
+    lossy: to === 'jpeg' || from === 'gif',
+    lossyNotes: to === 'jpeg'
+      ? ['Transparency and animation are flattened; JPEG compression can change pixels.']
+      : from === 'gif'
+        ? ['Only the first frame is converted.']
+        : undefined,
     sourceExt: [`.${from}`],
     targetExt: `.${to === 'jpeg' ? 'jpg' : to}`,
-    reason: 'requires an image codec (e.g. sharp/libvips), not bundled in this build'
+    maxInputBytes: 128 * MB,
+    pipeline: !['heic', 'ico'].includes(from)
+      ? { family: 'media' as const, operation: `${from}-to-${to}`, resourceProfile: 'large' as const }
+      : undefined
   })
 )
+
+const OCR_ROWS: ConverterAdapterDescriptor[] = (['png', 'jpeg', 'webp', 'bmp'] as ConverterKind[]).map((from) => ({
+  id: `${from}-ocr-to-text`,
+  category: 'documents',
+  fromKind: from,
+  toKind: 'text',
+  label: `${CONVERTER_KIND_LABELS[from]} → English OCR text`,
+  bundled: true,
+  available: true,
+  lossy: true,
+  lossyNotes: ['OCR is an interpretation of visible pixels and may contain recognition errors.'],
+  sourceExt: [`.${from}`],
+  targetExt: '.ocr.txt',
+  maxInputBytes: 32 * MB,
+  pipeline: { family: 'ocr', operation: 'recognize-english', resourceProfile: 'large' }
+}))
 
 const AUDIO_ROWS: ConverterAdapterDescriptor[] = (
   [
@@ -607,11 +809,13 @@ const VIDEO_ROWS: ConverterAdapterDescriptor[] = (
 
 export const CONVERTER_CATALOG: ConverterAdapterDescriptor[] = [
   ...DOCUMENT_ROWS,
+  ...OCR_ROWS,
   ...IMAGE_ROWS,
   ...AUDIO_ROWS,
   ...VIDEO_ROWS,
   ...ARCHIVE_ROWS,
   ...buildStructuredMesh(),
+  ...STRUCTURED_PIPELINE_ROWS,
   ...CODE_TEXT_ROWS,
   ...BINARY_ROWS
 ]

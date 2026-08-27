@@ -28,7 +28,7 @@ adding a localized string there too.
 
 **The funny level changes VOICE, never FACTS.** It applies to every category of message with no
 exemptions — including destructive actions, security prompts, accessibility copy, and error text.
-At any level 1–5 a message must still name, in unambiguous words, what happened, what is
+At any level 1–10 a message must still name, in unambiguous words, what happened, what is
 affected, and what the user's options are: which file, which account, which action is
 irreversible, what the error actually was. Wrap those facts in whatever humour the level calls
 for; never replace, soften, or omit them.
@@ -66,21 +66,19 @@ delete action, still the destructive button, still danger-styled. What it must n
 
 ## 3. Funny levels
 
-`FunnyLevel = 1 | 2 | 3 | 4 | 5`. Level 1 is fully professional; level 5 is maximum playfulness.
+`FunnyLevel = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10`. Level 1 is fully professional; level 10 is maximum playfulness.
 There are **two independent sliders**, `funnyLevelEn` and `funnyLevelYue` — a user can want plain
 English with playful Cantonese, or the reverse, and the sliders don't have to agree.
 
-**Default is level 2, not 5.** The reasoning is in a comment beside `DEFAULT_SETTINGS` in
-`src/shared/types.ts`: the default install is a developer tool a stranger just downloaded, and a
-maximally-playful error message is the wrong first impression for someone who hasn't yet chosen to
-have fun with their terminal manager. Level 2 keeps copy mostly plain with a little character.
-Users who want more crank both sliders themselves, in Settings → Interface → Language.
+**New installations default both sliders to level 10.** Existing values are preserved by settings
+schema version 2, so an established level 1–5 choice is never silently remapped. Missing or
+malformed hand-edited values use the honest level-10 shipped default. Users can adjust or reset
+both sliders independently in Settings → Interface → Language.
 
-Catalogue entries carry **five variants per language** (`FiveVariants`, a fixed-length tuple), one
-per level. A level may repeat a neighbour's text verbatim when a distinct joke would add nothing —
-a plain noun like "Terminal" has no meaningfully funnier level-5 form — but the array must always
-have all five entries so a slider move never resolves to nothing. `flat(text)` in `catalog.ts` is
-the helper for that case.
+Catalogue entries carry **ten variants per language** (`FunnyVariants`, a fixed-length tuple), one
+per level. Legacy five-slot rows remain readable during migration because levels 6–10 add distinct
+voice-only flourishes after the level-5 fact. `flat(text)` deliberately repeats a factual label
+across all ten levels where adding a joke would damage clarity.
 
 ## 4. The resolver
 
@@ -206,7 +204,7 @@ whole app in a single change.
 |---|---|
 | Catalogue id not found | Resolves to the caller's `fallback` in every mode; bilingual mode shows no secondary line. |
 | Cantonese variant empty at the active level | Falls back to the English variant at that same level. Never renders blank. |
-| `funnyLevelEn`/`funnyLevelYue` outside 1–5 in a hand-edited `settings.json` | Not defended against at the type level (the setting is typed `FunnyLevel`); an out-of-range number falls through to `entry.en[levels.en - 1] || entry.en[0] || fallback`, so an invalid index reads `undefined`, the `||` chain falls through to `entry.en[0]` (level 1), never to nothing. |
+| `funnyLevelEn`/`funnyLevelYue` outside 1–10 in a hand-edited `settings.json` | Runtime normalization rejects fractional, non-numeric, and out-of-range values and uses level 10. Valid choices remain unchanged, and the Language settings rows identify the saved base or scheduled override. |
 | `languageMode` set to something other than `en`/`yue`/`bilingual` | Not merge-guarded specially (unlike, say, `terminalGpuRendering`'s legacy-boolean migration) — an unrecognized mode reaching the `switch` in `resolve.ts`'s `t()` has no matching case and TypeScript's exhaustiveness check would catch a *new* mode at compile time, but a hand-edited garbage string in `settings.json` falls through with `undefined` return, which the caller's optional-chaining / `?? fallback` sites do not currently guard against. If you hit this, treat it as a settings-store validation gap worth closing rather than a resolver bug — see the `terminalGpuRendering` migration in `src/core/settings-store.ts` for the pattern to copy. |
 | Placeholder token with no matching `params` entry | `formatText` leaves the literal `{token}` in the string (see the regex replacer's fallback branch) rather than silently dropping it — a visible bug beats an invisible one. |
 
@@ -218,6 +216,5 @@ whole app in a single change.
   oversight to paper over — searching localized *and* English text at once needs its own design
   (do you search the currently-displayed language, or always both?) rather than a quick patch.
 - The command palette, node context menus, and most per-node dialogs are entirely unconverted.
-- There's no runtime validation of `languageMode`/`funnyLevelEn`/`funnyLevelYue` in
-  `SettingsStore.mergeSettings` the way there is for `terminalGpuRendering`'s legacy boolean — see
-  the failure-modes table above.
+- Runtime validation and the versioned funny-level migration now live in `SettingsStore.mergeSettings`
+  and the shared `normalizeFunnyLevel` helper; scheduled values use the same ten-level validator.

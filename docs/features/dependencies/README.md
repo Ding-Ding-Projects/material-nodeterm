@@ -9,4 +9,5 @@ unavailable, offer **Install and continue**, and resume the interrupted flow aft
 | Article | Scope |
 | --- | --- |
 | [Automatic node dependency installation](./automatic-node-dependencies.md) | Manifest fields, bounded lifecycle, installation, repair, and host integration. |
+| [Bundled AWS CLI v2](./aws-cli-v2.md) | Pinned MSI resource, verified fallback, version probe, and installed model inventory. |
 

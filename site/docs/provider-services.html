@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Shared provider services, nodeterm</title>
+    <meta name="description" content="Shared provider accounts, sealed credentials, OAuth PKCE callbacks, verified resources, and local bindings." />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+  </head>
+  <body>
+    <div class="doc-topbar"><a href="./index.html">← Documentation</a></div>
+    <article class="doc-body">
+      <p class="doc-kicker">Integrations</p>
+      <h1>Shared provider services</h1>
+      <p>Desktop and Server Edition use one core service for provider catalogs, connected account metadata, sealed credentials, OAuth PKCE callbacks, resource discovery, and destination-only bindings.</p>
+      <h2>Guided provider setup</h2>
+      <p>The binding wizard shows connected accounts and provider-verified resources as searchable lists. Each list has its own adjacent regex builder. Missing adapters remain visible with the exact reason, and unavailable controls do not pretend to connect.</p>
+      <h2>Local secrets and portable intent</h2>
+      <p>Credentials, provider sessions, OAuth state, callback data, machine paths, host identity, caches, and runtime data stay in private application storage. Projects carry only safe feature intent, layout, relationships, capabilities, and settings. Import never starts sign-in, calls a provider, deploys, downloads, launches a process, or binds a resource.</p>
+      <h2>Callback safety</h2>
+      <p>OAuth adapters use authorization-code PKCE with a high-entropy verifier, SHA-256 challenge, single-use state, a ten-minute expiry, an exact loopback callback route, and a bounded waiting ledger. Callback state is consumed before exchange so it cannot be replayed.</p>
+      <h2>Implementation status</h2>
+      <p>The shared contracts and core service are in <code>src/shared/provider-services.ts</code> and <code>src/core/provider-services.ts</code>. This ultra-speed lane did not run tests, type checks, lint, reviews, security or accessibility checks, builds, packaging, installer execution, runtime interaction, or UI captures. Provider-specific adapters remain separate delivery lanes.</p>
+    </article>
+  </body>
+</html>
