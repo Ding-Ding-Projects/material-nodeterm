@@ -470,6 +470,7 @@ const REQUIRED_DOC_SLUGS = [
   'projects-and-tabs',
   'node-kinds',
   'agent-support',
+  'linked-agent-inbox-notifications',
   'canvas-lifecycle',
   'source-control-worktrees',
   'kanban-board',

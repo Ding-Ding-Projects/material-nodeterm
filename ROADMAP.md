@@ -313,6 +313,12 @@ intentionally unchecked because this task publishes the plan only.
 ### Clean-room features and upstream parity
 
 - [ ] Add clean-room browser, kiosk, PWA, proxy, and read-only diagnostics nodes.
+- [ ] **Program 57 / #68, linked-agent inbox notifications.** The source path already carries the
+      upstream PR #98 intent through the authenticated `notify --node <id>` route, project-local
+      consent, runtime ownership checks, fixed application-authored text, and the bounded
+      deliver-on-idle queue. Feature documentation, the offline bundle, the documentation site,
+      and the completeness inventory are recorded in this lane. Tests, builds, packaging, runtime
+      interaction, and UI captures remain pending under the explicit ultra-speed boundary.
 - [ ] Implement the outstanding upstream behavior from the planned issue and pull-request parity map.
 - [ ] Split the PR #422 behavior into independent link, endpoint, navigation, grouping, agent, and
       account lanes.
