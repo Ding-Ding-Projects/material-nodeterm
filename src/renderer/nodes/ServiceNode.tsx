@@ -10,6 +10,7 @@ import { MinecraftServerPanel } from '../components/minecraft/MinecraftServerPan
 import { DockerHostManagerPanel } from '../components/docker/DockerHostManagerPanel'
 import { HomeAssistantPanel } from '../components/home-assistant/HomeAssistantPanel'
 import { CloudflareZeroTrustPanel } from '../components/cloudflare/CloudflareZeroTrustPanel'
+import { NextcloudAioPanel } from '../components/nextcloud/NextcloudAioPanel'
 import { EditableNodeTitle } from '../components/EditableNodeTitle'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { mapAroundExactFacts } from './nodeVocabulary'
@@ -54,7 +55,8 @@ const ENDPOINT_PLACEHOLDER: Record<ServiceNodeKind, string> = {
   gitlab: 'https://gitlab.example.com',
   homeassistant: 'http://homeassistant.local:8123',
   freepbx: 'https://pbx.local',
-  'cloudflare-zero-trust': 'https://api.cloudflare.com'
+  'cloudflare-zero-trust': 'https://api.cloudflare.com',
+  'nextcloud-aio': 'http://127.0.0.1:8080'
 }
 
 /**
@@ -236,6 +238,7 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
 
         {!collapsed && kind === 'minecraft' && <MinecraftServerPanel nodeId={id} />}
         {!collapsed && kind === 'dockerhost' && <DockerHostManagerPanel />}
+        {!collapsed && kind === 'nextcloud-aio' && <NextcloudAioPanel nodeId={id} config={data.nextcloudAioConfig} onConfigChange={(nextcloudAioConfig) => updateNodeData(id, { nextcloudAioConfig })} />}
 
         {!collapsed && kind === 'homeassistant' && (
           <HomeAssistantPanel
@@ -255,7 +258,7 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
           />
         )}
 
-        {!collapsed && kind !== 'minecraft' && kind !== 'dockerhost' && kind !== 'homeassistant' && kind !== 'cloudflare-zero-trust' && (
+        {!collapsed && kind !== 'minecraft' && kind !== 'dockerhost' && kind !== 'homeassistant' && kind !== 'cloudflare-zero-trust' && kind !== 'nextcloud-aio' && (
           <div className="service-node__body">
             <label className="service-node__field" htmlFor={`${id}-endpoint`}>
               <span className="service-node__field-label">{vocab('Address')}</span>
