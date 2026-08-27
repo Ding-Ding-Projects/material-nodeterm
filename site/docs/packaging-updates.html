@@ -31,13 +31,13 @@
     <article class="doc-body">
       <p class="doc-kicker">Releases</p>
       <h1>Packaging &amp; auto-update</h1>
-      <p>Windows builds ship as an unsigned Squirrel set: Setup.exe, RELEASES, and a full package. The current stable release is <strong>v0.4.117</strong>, published 2026-08-26 from commit <code>727287b8eddd5c30f98306ea442a2584945668d0</code>. The installed app checks the stable GitHub Release in the background and never interrupts active work.</p>
+      <p>Windows builds ship as one unsigned Squirrel.Windows set: Setup.exe, RELEASES, one full package, and any matching delta package emitted for the candidate. ZIP, NSIS-only, MSI-only, MSIX-only, and portable-only parallel installer routes are not supported. The current stable release is <strong>v0.4.120</strong>, published 2026-08-26 from commit <code>c682073037fe7b7e34d19568ced6e3d3a9037e22</code>. The installed app checks the stable GitHub Release in the background and never interrupts active work.</p>
 
       <h2>Behaviour</h2>
-      <p>Windows uses Electron's built-in Squirrel updater. While a newer package downloads, the minimizable card shows an indeterminate state because Squirrel does not expose byte progress. Once ready, <strong>Restart to update</strong> is your explicit way to restart immediately and can run only once. A downloaded update may instead apply on the next normal app launch even when that button is unused. macOS and Linux deliberately retain their existing updater path.</p>
+      <p>Windows uses Electron's built-in Squirrel updater. While a newer package downloads, the minimizable card shows an indeterminate state because Squirrel does not expose byte progress. Once ready, <strong>Restart to update</strong> is your explicit way to restart immediately and can run only once. A downloaded update may instead apply on the next normal app launch even when that button is unused. Historical non-Windows updater paths are outside the active delivery scope.</p>
 
       <h2>Current Squirrel release</h2>
-      <p>The published Windows release contains the complete Squirrel set for v0.4.117: <code>nodeterm-Setup-0.4.117.exe</code>, <code>RELEASES</code>, and <code>node-terminal-0.4.117-full.nupkg</code>. The release is non-draft and non-prerelease. Older NSIS-only migration wording is historical and is no longer the current update route.</p>
+      <p>The published Windows release contains the complete Squirrel set for v0.4.120: <code>nodeterm-Setup-0.4.120.exe</code>, <code>RELEASES</code>, and <code>node-terminal-0.4.120-full.nupkg</code>. The release is non-draft and non-prerelease. Older NSIS-only migration wording is historical and is no longer the current update route.</p>
 
       <h2>Release channel</h2>
       <p>The stable feed is the project's latest GitHub Release asset root. The release workflow runs for every push to the <code>main</code> branch and for <code>workflow_dispatch</code>, and it accepts only the <code>main</code> branch for a stable publication. Feature-branch and prerelease builds do not belong in the stable feed. The workflow builds and packages the unsigned Squirrel set, then publishes one uniquely versioned release after the required asset checks.</p>
@@ -52,7 +52,7 @@
       <p>The Server Edition has no desktop installer, and the separately maintained mobile companion does not consume Squirrel packages. This Windows desktop updater is therefore not applicable to those surfaces.</p>
 
       <h2>Verification status</h2>
-      <p>Deterministic checks cover feed selection, version advancement, wrong-channel diagnostics, failure degradation, and one-shot immediate restart. The v0.4.117 release metadata and complete Squirrel asset set are verified. A separate real-installed-app transition run is still required to prove update discovery, download, restart, and settings persistence end to end; this page does not claim that runtime proof has completed.</p>
+      <p>Deterministic checks cover feed selection, version advancement, wrong-channel diagnostics, failure degradation, and one-shot immediate restart. The v0.4.120 release metadata and complete Squirrel asset set are verified. A separate real-installed-app transition run is still required to prove update discovery, download, restart, and settings persistence end to end; this page does not claim that runtime proof has completed.</p>
 
       <section class="doc-suggested">
         <h2>Suggested articles</h2>

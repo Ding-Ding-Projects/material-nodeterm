@@ -209,7 +209,7 @@ function isBuiltinAgentId(id: AgentId): id is BuiltinAgentId {
 
 function validPromptMode(value: unknown): value is PromptInjectionMode {
   return (
-    value === "argv" || value === "flag-prompt" || value === "stdin-after-start"
+    value === "argv" || value === "flag-prompt" || value === "flag-interactive" || value === "stdin-after-start"
   );
 }
 
@@ -352,6 +352,8 @@ function logicalLaunch(
         ? ["resume", intent.sessionId]
         : config.id === "opencode"
           ? ["--session", intent.sessionId]
+          : config.id === "devin"
+            ? ["-r", intent.sessionId]
           : ["--resume", intent.sessionId];
     return { executable, args: [...baseArgs, ...resumeArgs, ...modeFlags] };
   }

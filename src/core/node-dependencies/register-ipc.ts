@@ -1,6 +1,7 @@
 import { IPC } from '../../shared/ipc'
 import type { CorePlatform } from '../platform'
 import { NodeDependencyService } from './service'
+import { AwsWizardModelService } from '../aws-wizard/service'
 
 /** Register the node-feature dependency foundation on both privileged shells. The browser client
  * never performs installation itself: ServerPlatform executes this on its own host, while the
@@ -10,6 +11,7 @@ export function registerNodeDependencyIpc(platform: CorePlatform): NodeDependenc
     (value) => platform.broadcast(IPC.nodeDependencyState, value),
     (value) => platform.broadcast(IPC.nodeDependencyProgress, value)
   )
+  const awsWizardModels = new AwsWizardModelService(service)
 
   platform.handle(IPC.nodeDependencyCatalog, () => service.catalog())
   platform.handle(IPC.nodeDependencyStatus, (id: string) => service.status(id))
@@ -18,6 +20,9 @@ export function registerNodeDependencyIpc(platform: CorePlatform): NodeDependenc
   platform.handle(IPC.nodeDependencyCancel, (operationId: string) => service.cancel(operationId))
   platform.handle(IPC.nodeDependencyRepair, (id: string) => service.repair(id))
   platform.handle(IPC.nodeDependencyReconcile, () => service.reconcile())
+  platform.handle(IPC.awsWizardCatalog, () => awsWizardModels.catalog())
+  platform.handle(IPC.awsWizardCommands, (serviceId: string) => awsWizardModels.commands(serviceId))
+  platform.handle(IPC.awsWizardSource, (serviceId: string, commandName: string) => awsWizardModels.source(serviceId, commandName))
 
   // Reconcile only machine-local records. It is deliberately non-blocking for boot and does not
   // claim readiness until the persisted path and executable health probe both succeed.

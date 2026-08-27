@@ -9,6 +9,7 @@
 // docs/scheduled-settings.md for the full contract this module implements.
 
 import type { Settings } from './types'
+import { isFunnyLevel } from './i18n'
 
 export const SCHEDULED_SETTINGS_SCHEMA_VERSION = 1 as const
 
@@ -41,7 +42,9 @@ export const SCHEDULABLE_SETTING_KEYS = [
   'cursorBlink',
   'terminalLineHeight',
   'terminalLetterSpacing',
-  'terminalGpuRendering'
+  'terminalGpuRendering',
+  'funnyLevelEn',
+  'funnyLevelYue'
 ] as const satisfies readonly (keyof Settings)[]
 
 export type SchedulableSettingKey = (typeof SCHEDULABLE_SETTING_KEYS)[number]
@@ -72,7 +75,9 @@ const FIELD_VALIDATORS: Record<SchedulableSettingKey, FieldValidator> = {
   cursorBlink: (v) => typeof v === 'boolean',
   terminalLineHeight: (v) => typeof v === 'number' && Number.isFinite(v) && v >= 0.5 && v <= 3,
   terminalLetterSpacing: (v) => typeof v === 'number' && Number.isFinite(v) && v >= -5 && v <= 20,
-  terminalGpuRendering: (v) => v === 'auto' || v === 'on' || v === 'off' || v === 'shared'
+  terminalGpuRendering: (v) => v === 'auto' || v === 'on' || v === 'off' || v === 'shared',
+  funnyLevelEn: isFunnyLevel,
+  funnyLevelYue: isFunnyLevel
 }
 
 /** Drop any key not in `SCHEDULABLE_SETTING_KEYS` and any value that fails its validator. Used for
