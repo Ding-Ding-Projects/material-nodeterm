@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { SpeechModelInfo } from '@shared/types'
-import { modelAfterDelete, modelAfterDownload } from '@shared/speech'
 import { DEFAULT_SETTINGS } from '@shared/types'
 import { hasSpeechModel, modelAfterDelete, modelAfterDownload, SPEECH_MODEL_NONE } from '@shared/speech'
-import { formatShortcut, isHoldChord } from '@shared/shortcut'
 import { dictationBinding } from '../../../lib/keybindingOverrides'
 import { useSettings } from '../../../state/settings'
 import { SettingsSection } from '../SettingsSection'
@@ -16,7 +14,6 @@ import { SegmentedPill } from '@renderer/ui/SegmentedPill'
 import { Button } from '@renderer/ui/Button'
 import { formatShortcut, isHoldChord } from '@shared/shortcut'
 import { ShortcutCaptureField } from '../ShortcutCaptureField'
-import { Radio } from '@renderer/ui/md3'
 import type { SettingsSectionId } from '../nav'
 
 const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
@@ -270,8 +267,7 @@ export function SpeechSection({ isActive }: { isActive: boolean }): React.JSX.El
                   in the same radio group — not a missing selection the heal helpers would fix. */}
               <div className="flex items-center justify-between gap-3 rounded-md border border-border p-3">
                 <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3">
-                  <input
-                    type="radio"
+                  <Radio
                     name="speech-model"
                     className="shrink-0"
                     checked={!hasSpeechModel(settings.speech.model)}
