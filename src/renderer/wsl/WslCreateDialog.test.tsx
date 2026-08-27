@@ -175,6 +175,7 @@ describe('WslCreateDialog', () => {
     expect(document.body.textContent).toContain(parserDetail)
     expect(document.body.textContent).toContain('The WSL operation reported an error:')
     expect(document.body.textContent).toContain('wsl.exe could not create "my-project" from "Ubuntu 24.04 LTS".')
+  })
   it('renders a typed catalogue failure with mapped authored text around literal executable facts', () => {
     usePersonalVocabulary.setState({
       entries: { 'Could not load available distributions:': 'Catalogue unavailable:', 'could not be fetched': 'could not be read' },
@@ -208,7 +209,6 @@ describe('WslCreateDialog', () => {
 
   it('suppresses uploaded vocabulary in School mode without hiding WSL facts', () => {
     usePersonalVocabulary.setState({
-      entries: { 'New {brand} instance': 'Secret {brand} workspace', 'Filter distributions': 'Secret filter' },
       entries: { 'New WSL instance': 'Secret workspace', 'Filter distributions': 'Secret filter', WSL: 'Linux' },
       status: 'loaded',
       entryCount: 2,
@@ -239,10 +239,11 @@ describe('WslCreateDialog', () => {
     for (const id of ids) {
       expect(CATALOG[id]?.en, id).toHaveLength(5)
       expect(CATALOG[id]?.yue, id).toHaveLength(5)
+    }
     expect(WSL_COPY_INVENTORY.length).toBeGreaterThan(0)
-    const ids = WSL_COPY_INVENTORY.map((entry) => entry.id)
-    expect(new Set(ids).size).toBe(ids.length)
-    expect(Object.keys(CATALOG).filter((id) => id.startsWith('wsl.create.')).sort()).toEqual([...ids].sort())
+    const inventoryIds = WSL_COPY_INVENTORY.map((entry) => entry.id)
+    expect(new Set(inventoryIds).size).toBe(inventoryIds.length)
+    expect(Object.keys(CATALOG).filter((id) => id.startsWith('wsl.create.')).sort()).toEqual([...inventoryIds].sort())
     for (const entry of WSL_COPY_INVENTORY) {
       expect(CATALOG[entry.id]?.en, entry.id).toHaveLength(5)
       expect(CATALOG[entry.id]?.yue, entry.id).toHaveLength(5)
@@ -328,28 +329,21 @@ describe('WslCreateDialog', () => {
     act(() => {
       onProgress?.({
         operationId: createdOperationId,
-    const created = onCreate.mock.calls[0]?.[0] as { operationId: string } | undefined
-    expect(created?.operationId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i)
-    act(() => {
-      onProgress?.({
-        operationId: created!.operationId,
         stage: 'installing',
         step: 3,
         steps: 4,
         determinate: false,
         elapsedMs: 2500,
-        message: `Installing Ubuntu 24.04 LTS for my-project, operation ${createdOperationId}.`
         message: {
           id: 'installing',
-          params: { name: 'my-project', catalogue: 'Ubuntu 24.04 LTS', operationId: created!.operationId },
-          facts: ['wsl.exe', 'my-project', 'Ubuntu 24.04 LTS', created!.operationId]
+          params: { name: 'my-project', catalogue: 'Ubuntu 24.04 LTS', operationId: createdOperationId },
+          facts: ['wsl.exe', 'my-project', 'Ubuntu 24.04 LTS', createdOperationId]
         }
       })
     })
     expect(document.body.textContent).toContain('Ubuntu 24.04 LTS')
     expect(document.body.textContent).toContain('my-project')
     expect(document.body.textContent).toContain(createdOperationId)
-    expect(document.body.textContent).toContain(created!.operationId)
     expect(document.querySelector('[aria-label="WSL creation phase progress"]')).not.toBeNull()
     expect(document.querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow')).toBe('3')
   })

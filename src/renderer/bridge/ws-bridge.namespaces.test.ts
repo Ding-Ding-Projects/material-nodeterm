@@ -12,11 +12,6 @@ import {
   saveUploadBlobOverHttp,
   saveUploadOverHttp
 } from './ws-bridge'
-  buildClaudeAccountsApi,
-  buildFilesApi,
-  buildRealApi,
-  buildSessionMemoryApi
-} from './ws-bridge'
 import { buildStubApi } from './stubs'
 import { E_UNSUPPORTED } from '../../shared/rpc'
 import { IPC } from '../../shared/ipc'
@@ -400,7 +395,7 @@ describe('buildRealApi: host platform', () => {
       { kind: 'request', method: IPC.ptyRecycle, args: ['node-2'] }
     ])
   })
-describe('buildRealApi: host platform', () => {
+
   it('keeps a failed host read unknown instead of inventing Linux from the browser bridge', async () => {
     const c = fakeClient()
     c.request = (method: string, ...args: unknown[]) => {

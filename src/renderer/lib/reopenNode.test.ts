@@ -24,7 +24,6 @@ const baseCtx = () => ({
   project: undefined,
   resolveAccountId: (id: string | undefined) => id,
   permissionModeFor: (agentId: AgentId) => launchPlan(agentId)
-  permissionModeFor: () => undefined
 })
 
 describe('snapshotNode', () => {

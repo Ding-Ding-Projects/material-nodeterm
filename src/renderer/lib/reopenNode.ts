@@ -105,12 +105,6 @@ export interface RecreateContext {
    * `agentLaunchPlanForProject` in `state/permissionMode.ts`, the only other place a branded
    * plan may be minted).
    */
-  permissionModeFor: (agentId: AgentId) => ActiveAgentLaunchPlan
-}
-
-const COSMETIC_KEYS = [
-  'title', 'titleAuto', 'color', 'group', 'tags', 'collapsed', 'expandedHeight', 'shell', 'torrentMagnet'
-  permissionModeFor: (agentId: AgentId) => AgentPermissionMode | undefined
 }
 
 const COSMETIC_KEYS = [
@@ -256,7 +250,6 @@ export function recreateNodeFromSnapshot(
   snapshot: ReopenNodeSnapshot,
   ctx: RecreateContext
 ): CanvasNode | null {
-export function recreateNodeFromSnapshot(snapshot: ReopenNodeSnapshot, ctx: RecreateContext): CanvasNode | null {
   const base = buildBase(snapshot, ctx)
   if (!base) return null
   const node = withCosmetics(base, snapshot.data)
