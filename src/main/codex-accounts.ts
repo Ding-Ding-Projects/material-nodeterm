@@ -32,7 +32,6 @@ import {
   type CodexRolloutExposurePlan
 } from '../core/codex-accounts-core'
 import { readCodexAccountAt, readCodexThreadAt } from '../core/codex-session-name'
-import { ensureCodexRelayRoot } from './codex-relay-daemon'
 import { platform } from '../core/platform'
 import { findInLoginPath } from '../core/pty-manager'
 import type { SshProjectManager } from './remote-ssh/ssh-project'
@@ -51,26 +50,8 @@ const SHARED_ENTRIES = [
 ]
 const SWITCH_RESERVATION_TTL_MS = 60_000
 const waiters = new Map<string, { cancelled: boolean }>()
-/** Non-secret runtime assets symlinked from the system home into each managed home: shared
- *  installation, never a credential or the thread SQLite DB. */
-const SHARED_ENTRIES = ['config.toml', 'AGENTS.md', 'skills', 'plugins', 'packages', 'rules', 'hooks.json']
-const SWITCH_RESERVATION_TTL_MS = 60_000
 /** A threadId that could reach the filesystem as a path component. Same shape as ACCOUNT_ID_RE. */
 const SAFE_THREAD_ID = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
-
-/** PR 6 provides this on the SSH manager. Typed structurally here so PR 5 can hand the source leg
- *  off without depending on PR 6's implementation. */
-type CodexSshImporter = {
-  remoteCodexImportThread?(
-    projectId: string,
-    accountId: string | undefined,
-    threadId: string,
-    sessionsRelativePath: string,
-    localRolloutPath: string
-  ): Promise<{ imported: boolean }>
-}
-
-const waiters = new Map<string, { cancelled: boolean }>()
 
 /**
  * One in-flight switch reservation. Holds the planned (but maybe not yet committed) exposure, the
@@ -97,9 +78,7 @@ function releasePendingSwitch(token: string): void {
   clearTimeout(pending.timer)
   if (!pending.owner.isDestroyed())
     pending.owner.removeListener('destroyed', pending.ownerDestroyed)
-  if (!pending.owner.isDestroyed()) pending.owner.removeListener('destroyed', pending.ownerDestroyed)
 }
-
 export function localCodexAccountHome(accountId: string): string {
   return codexAccountHome(platform().userDataDir, accountId)
 }
@@ -189,12 +168,21 @@ async function existingManagedIdentity(id: string): Promise<{ email: string | nu
 }
 
 export function initCodexAccounts(getSshManager?: () => SshProjectManager | undefined): void {
-  const remoteFor = (ctx?: {
-    projectId?: string
-  }): { mgr: SshProjectManager; projectId: string } | null => {
-    const projectId = ctx?.projectId
+  const remoteFor = (ctx: unknown): { mgr: SshProjectManager; projectId: string } | null => {
+    if (ctx === undefined) return null
+    if (
+      ctx === null ||
+      typeof ctx !== 'object' ||
+      Object.getPrototypeOf(ctx) !== Object.prototype
+    ) {
+      throw new Error('Invalid SSH Codex account context')
+    }
+    const projectId = (ctx as { projectId?: unknown }).projectId
+    if (projectId === undefined) return null
+    if (typeof projectId !== 'string' || !SAFE_THREAD_ID.test(projectId)) {
+      throw new Error('Invalid SSH Codex account context')
+    }
     const mgr = getSshManager?.()
-    if (!projectId) return null
     if (!mgr) throw new Error('SSH Codex account manager is unavailable')
     return { mgr, projectId }
   }
@@ -247,70 +235,6 @@ export function initCodexAccounts(getSshManager?: () => SshProjectManager | unde
       }
     }
   )
-/**
- * THREE SURFACES (global-constraint 5), stated explicitly:
- *
- *  - **Desktop (Electron)** — the full feature. This module registers its IPC over `electron`'s
- *    `ipcMain`, and owner-authorization keys off `event.sender.id` (a WebContents). `src/main/
- *    index.ts` is the ONLY caller.
- *  - **Server Edition (headless / an SSH host)** — this IPC surface is deliberately **N/A** here,
- *    and PR 5 does NOT wire it. The verbs are `ipcMain.handle` + WebContents-owner semantics, which
- *    the headless CorePlatform bridge does not provide, so `startServer` never calls
- *    `initCodexAccounts`. This is not a silent gap: managed Codex logins **on an SSH host** are
- *    driven by the DESKTOP over SSH / `RemoteHooks` (the remote account-add / device-login / import
- *    legs), which is **PR 6's** work — the host runs the relay + import, not its own copy of this
- *    IPC. The Server Edition still arms the codex identity *record secret* (src/server/
- *    node-identity-arm.ts) so records sign; it just does not host the account-management verbs.
- *    **PR 6 obligation:** if the remote leg needs SE-side handlers, PR 6 wires them through the
- *    server bridge — PR 5 intentionally left that unbuilt. Nothing in PR 5 assumes an SE IPC
- *    surface exists.
- *  - **Mobile (phone)** — never originates an add/switch/copy; it drives via relay→IPC and reads
- *    state. No mint here.
- *
- * @param getSshManager Lazily resolves the SSH project manager (created after this init in
- * index.ts). Only the local→SSH transfer SOURCE leg uses it today; local account ops never do.
- */
-export function initCodexAccounts(getSshManager?: () => SshProjectManager | undefined): void {
-  // Ensure `~/.nodeterm` exists before any relay/daemon reach (carried PR-4 obligation: only the
-  // relay's detached serve() created it before, so a first reach from this process could race a
-  // missing root).
-  ensureCodexRelayRoot()
-  // Synchronous, BEFORE renderer hydration / PTY restore: a legacy long CODEX_HOME cannot host the
-  // app-server Unix socket, and an already-persisted managed node must see its migrated home on its
-  // very first spawn.
-  migrateLegacyCodexAccountHomes(platform().userDataDir)
-
-  ipcMain.handle(IPC.codexAccountsAdd, async () => {
-    const id = randomUUID()
-    return { id, home: await initializeAccountHome(id) }
-  })
-
-  ipcMain.handle(IPC.codexAccountsWaitLogin, async (_event, id: string) => {
-    assertCodexAccountId(id)
-    const home = localCodexAccountHome(id)
-    const waiter = { cancelled: false }
-    waiters.set(id, waiter)
-    const deadline = Date.now() + LOGIN_TIMEOUT_MS
-    try {
-      while (!waiter.cancelled && Date.now() < deadline) {
-        try {
-          // The login gate: a REAL file, never a symlink. A device login writes auth.json into the
-          // managed home; a symlink here would mean the account is riding the system credential.
-          const auth = await fs.lstat(path.join(home, 'auth.json'))
-          if (auth.isFile() && !auth.isSymbolicLink()) {
-            const identity = await accountIdentity(id)
-            if (identity) return identity
-          }
-        } catch {
-          // No credential file yet, or its daemon is not ready — keep polling.
-        }
-        await new Promise((resolve) => setTimeout(resolve, LOGIN_POLL_MS))
-      }
-      return null
-    } finally {
-      waiters.delete(id)
-    }
-  })
 
   ipcMain.handle(IPC.codexAccountsCancelWait, (_event, id: string) => {
     const waiter = waiters.get(id)
@@ -450,183 +374,4 @@ export function initCodexAccounts(getSshManager?: () => SshProjectManager | unde
     const pending = pendingSwitchExposures.get(token)
     if (pending?.owner.id === event.sender.id) releasePendingSwitch(token)
   })
-  ipcMain.handle(IPC.codexAccountsIdentity, (_event, id: string) => existingManagedIdentity(id))
-
-  // No ctx ⇒ this Mac's system identity. A `{ projectId }` ctx asks for a remote HOST's system
-  // identity, which this build does not yet resolve — fail closed to `null` rather than returning
-  // THIS Mac's login, so a remote machine panel never fabricates/borrows a local identity
-  // (§5 "system-account discovery must not fabricate an account"). Remote resolution is a follow-up.
-  ipcMain.handle(
-    IPC.codexAccountsSystemIdentity,
-    (_event, ctx?: { projectId?: string }) =>
-      ctx?.projectId ? Promise.resolve(null) : accountIdentity()
-  )
-
-  ipcMain.handle(IPC.codexAccountsRemove, async (_event, id: string) => {
-    assertCodexAccountId(id)
-    // Property 10 — race/use-safe removal. Refuse while a switch reservation holds this account, or
-    // while a concurrent removal is already in flight.
-    if (
-      [...pendingSwitchExposures.values()].some(
-        (pending) => pending.sourceAccountId === id || pending.targetAccountId === id
-      )
-    ) {
-      throw new Error('Codex account is reserved by an account switch')
-    }
-    if (removingCodexAccounts.has(id)) throw new Error('Codex account removal is already in progress')
-    removingCodexAccounts.add(id)
-    try {
-      const waiter = waiters.get(id)
-      if (waiter) waiter.cancelled = true
-      try {
-        const codex = await findInLoginPath('codex')
-        if (codex) {
-          await execFileP(codex, ['app-server', 'daemon', 'stop'], {
-            cwd: os.homedir(),
-            env: { ...process.env, CODEX_HOME: localCodexAccountHome(id) },
-            timeout: 10_000,
-            maxBuffer: 1024 * 1024
-          })
-        }
-      } catch {
-        // A stopped/missing daemon is already the desired state.
-      }
-      const home = localCodexAccountHome(id)
-      const legacy = legacyCodexAccountHome(platform().userDataDir, id)
-      await fs.rm(home, { recursive: true, force: true })
-      if (legacy !== home) await fs.rm(legacy, { recursive: true, force: true })
-    } finally {
-      removingCodexAccounts.delete(id)
-    }
-  })
-
-  // ---- The three-phase, owner-authorized, TTL-bounded switch (§4.1 / Properties 5, 10) ----------
-
-  ipcMain.handle(
-    IPC.codexAccountsSwitchThread,
-    async (
-      event,
-      threadId: string,
-      cwd: string,
-      sourceAccountId?: string,
-      targetAccountId?: string
-    ) => {
-      if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(threadId) || !path.isAbsolute(cwd)) {
-      if (!SAFE_THREAD_ID.test(threadId) || !path.isAbsolute(cwd)) {
-        throw new Error('Invalid Codex account switch request')
-      }
-      if (sourceAccountId) assertCodexAccountId(sourceAccountId)
-      if (targetAccountId) assertCodexAccountId(targetAccountId)
-      if (sourceAccountId === targetAccountId) return { threadId }
-      if (
-        (sourceAccountId && removingCodexAccounts.has(sourceAccountId)) ||
-        (targetAccountId && removingCodexAccounts.has(targetAccountId))
-      ) {
-        throw new Error('Codex account removal is in progress')
-      }
-      const rollbackToken = randomUUID()
-      const ownerDestroyed = (): void => releasePendingSwitch(rollbackToken)
-      const timer = setTimeout(() => releasePendingSwitch(rollbackToken), SWITCH_RESERVATION_TTL_MS)
-      timer.unref?.()
-      event.sender.once('destroyed', ownerDestroyed)
-      // Reserve BEFORE planning so a concurrent removal of either account is already blocked while
-      // we read the app-server and plan the exposure.
-      pendingSwitchExposures.set(rollbackToken, {
-        sourceAccountId,
-        targetAccountId,
-        committed: false,
-        owner: event.sender,
-        ownerDestroyed,
-        timer
-      })
-      try {
-        await ensureCodexAccountDaemon(sourceAccountId)
-        await ensureCodexAccountDaemon(targetAccountId)
-        const source = await readCodexThreadAt(localCodexSocket(sourceAccountId), threadId, 5000)
-        if (!source?.path) throw new Error('Source Codex conversation is unavailable')
-        const exposure = planCodexRolloutExposure(
-          codexHomeForAccount(platform().userDataDir, sourceAccountId),
-          codexHomeForAccount(platform().userDataDir, targetAccountId),
-          source.path,
-          threadId
-        )
-        const pending = pendingSwitchExposures.get(rollbackToken)
-        if (!pending) throw new Error('Codex account switch preparation expired')
-        pending.exposure = exposure
-        return { threadId, rollbackToken }
-      } catch (error) {
-        releasePendingSwitch(rollbackToken)
-        throw error
-      }
-    }
-  )
-
-  ipcMain.handle(IPC.codexAccountsCommitSwitch, (event, token: string) => {
-    const pending = pendingSwitchExposures.get(token)
-    // Owner-authorized: only the WebContents that reserved the switch may commit it.
-    if (!pending?.exposure || pending.owner.id !== event.sender.id) {
-      throw new Error('Codex account switch preparation expired')
-    }
-    commitCodexRolloutExposure(pending.exposure)
-    pending.committed = true
-  })
-
-  ipcMain.handle(IPC.codexAccountsFinishSwitch, (event, token: string) => {
-    const pending = pendingSwitchExposures.get(token)
-    if (!pending?.committed || pending.owner.id !== event.sender.id) {
-      throw new Error('Codex account switch was not committed')
-    }
-    releasePendingSwitch(token)
-  })
-
-  ipcMain.handle(IPC.codexAccountsRollbackSwitch, (event, token: string) => {
-    const pending = pendingSwitchExposures.get(token)
-    if (pending?.owner.id === event.sender.id) releasePendingSwitch(token)
-  })
-
-  // ---- Local → SSH transfer SOURCE leg (§4.2b, Task 5.3). The remote landing is PR 6 ------------
-
-  ipcMain.handle(
-    IPC.codexAccountsTransferThreadToSsh,
-    async (
-      _event,
-      threadId: string,
-      cwd: string,
-      projectId: string,
-      targetAccountId?: string,
-      sourceAccountId?: string
-    ) => {
-      if (!SAFE_THREAD_ID.test(threadId) || !path.isAbsolute(cwd) || !projectId) {
-        throw new Error('Invalid Codex transfer request')
-      }
-      if (sourceAccountId) assertCodexAccountId(sourceAccountId)
-      if (targetAccountId) assertCodexAccountId(targetAccountId)
-      await ensureCodexAccountDaemon(sourceAccountId)
-      const source = await readCodexThreadAt(localCodexSocket(sourceAccountId), threadId, 5000)
-      if (!source?.path) throw new Error('Source Codex conversation is unavailable')
-      // STRICT SOURCE CONTAINMENT before any upload: reuse PR 3's `planCodexRolloutExposure`
-      // (source-side half) rather than re-implementing the guards. It refuses a source that is not a
-      // regular file, whose basename does not end `<threadId>.jsonl`, or that escapes
-      // `<sourceHome>/sessions/` (realpath + containment + no symlinked segment). Passing the source
-      // home as the target home is safe: only the SOURCE fields are read here, the local rollout is
-      // never linked/moved (it stays fully usable — §4.2 step 6).
-      const sourceHome = codexHomeForAccount(platform().userDataDir, sourceAccountId)
-      const plan = planCodexRolloutExposure(sourceHome, sourceHome, source.path, threadId)
-      const sessionsRelativePath = path.posix.join('sessions', plan.targetRelativePath.split(path.sep).join('/'))
-      // Hand the actual upload + atomic remote install to PR 6's importer. Absent (not yet wired /
-      // no live SSH manager) fails closed with a named error rather than silently succeeding.
-      const importer = getSshManager?.() as (SshProjectManager & CodexSshImporter) | undefined
-      if (!importer?.remoteCodexImportThread) {
-        throw new Error('Remote Codex import is unavailable')
-      }
-      const result = await importer.remoteCodexImportThread(
-        projectId,
-        targetAccountId,
-        threadId,
-        sessionsRelativePath,
-        plan.sourcePath
-      )
-      return { threadId, imported: result.imported }
-    }
-  )
 }

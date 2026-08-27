@@ -13,13 +13,11 @@ import { isSafeNodeId } from '../core/remote-safety'
  * one (`CardModal`) — both mounting `BrowserSurface` with the SAME nodeId, so a reverse lookup by
  * node id picks arbitrarily. The field is recorded here first; threading it from both mount sites
  * is its own change.
- * node id picks arbitrarily.
  */
 export type BrowserSurfaceKind = 'canvas' | 'modal'
 
 export interface BrowserGuest {
   nodeId: string
-  surface: BrowserSurfaceKind
   /**
    * ABSENT until both mount sites are threaded, and absent is the only honest value: neither of
    * them sends a surface yet, so this field is `undefined` for every registration the app makes
@@ -59,13 +57,13 @@ export function registerBrowserGuest(
   guests: Map<number, BrowserGuest>,
   webContentsId: unknown,
   nodeId: unknown,
-  surface: unknown,
+  surface: BrowserSurfaceKind | undefined,
   lookup: WebContentsLookup
 ): boolean {
   if (typeof webContentsId !== 'number' || !Number.isInteger(webContentsId) || webContentsId <= 0)
     return false
   if (typeof nodeId !== 'string' || !isSafeNodeId(nodeId)) return false
-  if (surface !== 'canvas' && surface !== 'modal') return false
+  if (surface !== undefined && surface !== 'canvas' && surface !== 'modal') return false
   // Either lookup or inspection can throw when destruction races registration. A guest that
   // cannot be inspected all the way through is not a guest.
   let contents: { getType(): string } | null = null
@@ -75,7 +73,7 @@ export function registerBrowserGuest(
   } catch {
     return false
   }
-  guests.set(webContentsId, { nodeId, surface })
+  guests.set(webContentsId, surface === undefined ? { nodeId } : { nodeId, surface })
   return true
 }
 
@@ -88,10 +86,8 @@ export interface BrowserGuestRegistrationRefusal {
 /**
  * Handle the renderer-facing registration request through the validation boundary.
  *
- * `surface` remains optional on the wire for compatibility with the original two-argument
- * registration. Only absence defaults to `canvas`; a present invalid value is refused. Keeping the
- * compatibility decision beside `registerBrowserGuest` makes the production IPC callback a thin
- * transport adapter and lets the complete request behavior run without importing Electron.
+ * `surface` remains optional on the wire for compatibility with callers that cannot identify the
+ * mount site. Absence stays unknown; a present invalid value is refused.
  */
 export function registerBrowserGuestRequest(
   guests: Map<number, BrowserGuest>,
@@ -101,36 +97,15 @@ export function registerBrowserGuestRequest(
   lookup: WebContentsLookup,
   onRefused: (details: BrowserGuestRegistrationRefusal) => void
 ): boolean {
-  const kind = surface === undefined ? 'canvas' : surface
-  const accepted = registerBrowserGuest(guests, webContentsId, nodeId, kind, lookup)
+  const accepted = registerBrowserGuest(
+    guests,
+    webContentsId,
+    nodeId,
+    surface as BrowserSurfaceKind | undefined,
+    lookup
+  )
   if (!accepted) onRefused({ webContentsId, nodeId, surface })
   return accepted
-}
-
-  webContentsId: number,
-  nodeId: string,
-  /** `undefined` = the caller does not know which surface this is; see {@link BrowserGuest.surface}.
-   *  A value that is PRESENT and unrecognised is refused rather than treated as unknown. */
-  surface: BrowserSurfaceKind | undefined,
-  lookup: WebContentsLookup
-): boolean {
-  if (!Number.isInteger(webContentsId) || webContentsId <= 0) return false
-  if (!isSafeNodeId(nodeId)) return false
-  if (surface !== undefined && surface !== 'canvas' && surface !== 'modal') return false
-  // The lookup can throw for a destroyed id (Electron's own accessors do); a guest that cannot be
-  // looked at is not a guest.
-  let contents: { getType(): string } | null = null
-  try {
-    contents = lookup(webContentsId)
-  } catch {
-    return false
-  }
-  if (!contents || contents.getType() !== 'webview') return false
-  // The key is only written when it is known: an entry with no `surface` says "unknown", an entry
-  // with `surface: undefined` written explicitly says the same thing, and neither ever says
-  // "canvas" on a guess.
-  guests.set(webContentsId, surface === undefined ? { nodeId } : { nodeId, surface })
-  return true
 }
 
 /**
