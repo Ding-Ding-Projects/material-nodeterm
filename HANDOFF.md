@@ -3890,3 +3890,30 @@ lane commit follows the exact `origin/main` tip after merge resolution. No tests
 reviews, security or accessibility checks, builds, packaging, installer execution, runtime
 interaction, or screenshots were run. The parent owns the final integrated default branch, release
 evidence, and any later verification.
+# WSL copy coverage CRLF mutation repair
+
+## Current status
+
+The release run `33124056912` reached the WSL copy coverage check after packaging and
+personal-vocabulary coverage succeeded. It reported two failures in the check's deliberate
+negative mutation: the mutation did not remove an exact inventory row, and exact-row matching
+was not proven.
+
+## Cause and repair
+
+The `red-wsl-copy-luna` checkout is a Windows checkout whose `src/renderer/wsl/wslCopy.ts` content
+uses CRLF line endings. The checker
+constructed an LF-terminated replacement string, so `String.replace` found no match and the
+negative mutation silently left the source unchanged.
+
+The repair in `scripts/check-wsl-copy-coverage.mjs` splits on CRLF, LF, or CR, locates exactly one
+complete inventory row by whole-line equality, removes that indexed line, rebuilds with the
+source's detected separator, and asserts that the resulting source differs. This keeps the
+existing inventory and coverage checks unchanged while making the negative mutation independent
+of checkout line endings.
+
+## Verification boundary
+
+No production checker, tests, lint, typecheck, build, package, runtime interaction, review,
+audit, or screenshot was run in this ultra-speed repair lane. The change is committed and pushed
+on the feature branch for the coordinating task to integrate after review.
