@@ -132,6 +132,9 @@ primitive fails closed. Only `item.overwriteAllowed === true` — set by an expl
 
 - Every adapter declares `maxInputBytes`; a source over that limit is refused up front with an
   exact byte-count message, never partially read.
+- Advanced adapters cap produced output at 512 MiB and reject archive entry names longer than 4 KiB
+  before publication. An over-limit result remains a failed queue item and cannot replace the
+  destination.
 - The runner reads a whole file into memory per item (bounded by that limit), converts, then
   **validates the output before writing it** — every bundled adapter's `validate()` round-trips the
   produced bytes back through the target format's own parser (or, for gzip/brotli, decompresses

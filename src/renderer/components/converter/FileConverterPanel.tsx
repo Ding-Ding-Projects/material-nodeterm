@@ -20,7 +20,6 @@ import { useActiveSessionApi } from '../../session/session'
 import { mapLocalVocabularyText } from '../../lib/personalVocabulary/hostMessage'
 import { MaterialSymbol, type MaterialSymbolName } from '../MaterialSymbol'
 import { AdapterCatalog } from './AdapterCatalog'
-import { Checkbox } from '@renderer/ui/md3'
 import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 import { copy, fact, mapOwnedSentence } from '../../lib/personalVocabulary/ownedCopy'
 
@@ -217,7 +216,6 @@ function QueueRow({
  * concurrency queue with pause/resume/cancel/retry.
  *
  * Known gaps versus the full house contract, left for a follow-up (see docs/file-converter.md):
- * the per-category search boxes are plain substring search, not the full anchored regex builder;
  * the overwrite/lossy gate is the app's existing ConfirmDialog-style inline confirm rather than the
  * full two-key destructive-action slider; and the queue list here shows the first page only (no
  * pager control yet) — the engine itself is already paginated (converter.state(offset, limit)).

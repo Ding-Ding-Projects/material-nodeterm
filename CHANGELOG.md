@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Harden advanced pipeline publication with a 512 MiB produced-output ceiling and a 4 KiB ZIP
+  entry-name bound. Repair the issue lane's package manifest so the pinned PDF, OCR, and image
+  dependencies remain installable as valid JSON. This source-only correction intentionally did not run
+  tests, type checks, lint, builds, packaging, installer execution, runtime interaction, reviews,
+  audits, or UI captures.
+
 - Add bounded advanced file pipelines to the existing guided converter: packaged PDF inspection,
   text extraction, split, merge, first-page extraction, reverse ordering, page rotation, and
   metadata removal; supported Sharp image conversion; local

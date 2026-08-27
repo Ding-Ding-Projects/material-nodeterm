@@ -30,8 +30,11 @@ remains the destructive decision boundary.
 
 - Image decoding is capped at 40 million pixels, one frame, and the adapter byte limit.
 - PDF work is capped at 500 pages and the adapter byte limit. Output PDFs are reopened before use.
-- ZIP inventory is capped at 2,048 entries and 512 MiB of declared expanded data. Traversal and
-  absolute entry names are refused. Inventory never extracts or executes an entry.
+- ZIP inventory is capped at 2,048 entries, 4 KiB per entry name, and 512 MiB of declared expanded
+  data. Traversal and absolute entry names are refused. Inventory never extracts or executes an
+  entry.
+- Every advanced adapter also caps produced bytes at 512 MiB before publication. Oversized output
+  is reported as a failed queue item, leaving the destination untouched.
 - OCR uses the packaged English training data through a local path. It does not fetch language data
   from a network service. The reported confidence is a review warning, never a correctness claim.
 - Structured data is capped at 64 MiB and the existing parsers retain their documented format

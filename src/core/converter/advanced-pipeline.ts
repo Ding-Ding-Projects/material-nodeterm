@@ -11,9 +11,21 @@ const MAX_IMAGE_PIXELS = 40_000_000
 const MAX_PDF_PAGES = 500
 const MAX_ARCHIVE_ENTRIES = 2_048
 const MAX_ARCHIVE_EXPANDED_BYTES = 512 * 1024 * 1024
+const MAX_ARCHIVE_ENTRY_NAME_BYTES = 4_096
+const MAX_PIPELINE_OUTPUT_BYTES = 512 * 1024 * 1024
 
 function nonEmpty(output: Buffer): string | null {
-  return output.length === 0 ? 'Produced empty output' : null
+  if (output.length === 0) return 'Produced empty output'
+  return output.length > MAX_PIPELINE_OUTPUT_BYTES
+    ? `Produced output exceeds the ${MAX_PIPELINE_OUTPUT_BYTES.toLocaleString()}-byte processing limit.`
+    : null
+}
+
+function boundedOutput(output: Buffer, label: string): Buffer {
+  if (output.length > MAX_PIPELINE_OUTPUT_BYTES) {
+    throw new Error(`${label} exceeds the ${MAX_PIPELINE_OUTPUT_BYTES.toLocaleString()}-byte processing limit.`)
+  }
+  return output
 }
 
 async function loadPdf(input: Buffer): Promise<PDFDocument> {
@@ -98,7 +110,7 @@ export const pdfToTextAdapter: ConverterAdapter = {
         pages.push(`Page ${pageNumber}\n${text}`)
         page.cleanup()
       }
-      return { output: Buffer.from(`${pages.join('\n\n')}\n`, 'utf8'), warnings: [] }
+      return { output: boundedOutput(Buffer.from(`${pages.join('\n\n')}\n`, 'utf8'), 'Extracted PDF text'), warnings: [] }
     } finally {
       await document.destroy()
     }
@@ -111,7 +123,7 @@ export const pdfRotateClockwiseAdapter: ConverterAdapter = {
     const document = await loadPdf(input)
     for (const page of document.getPages()) page.setRotation(degrees((page.getRotation().angle + 90) % 360))
     const output = await document.save({ useObjectStreams: false, addDefaultPage: false })
-    return { output: Buffer.from(output), warnings: [] }
+    return { output: boundedOutput(Buffer.from(output), 'Rotated PDF'), warnings: [] }
   },
   validate: validatePdf
 }
@@ -129,7 +141,7 @@ export const pdfRemoveMetadataAdapter: ConverterAdapter = {
     document.setModificationDate(new Date(0))
     const output = await document.save({ useObjectStreams: false, addDefaultPage: false, updateFieldAppearances: false })
     return {
-      output: Buffer.from(output),
+      output: boundedOutput(Buffer.from(output), 'Metadata-free PDF'),
       warnings: ['Document information fields were cleared. Embedded file content and visible page text were not redacted.']
     }
   },
@@ -141,7 +153,7 @@ async function copySelectedPages(input: Buffer, indices: number[]): Promise<Buff
   const output = await PDFDocument.create()
   const pages = await output.copyPages(source, indices)
   pages.forEach((page) => output.addPage(page))
-  return Buffer.from(await output.save({ useObjectStreams: false, addDefaultPage: false }))
+  return boundedOutput(Buffer.from(await output.save({ useObjectStreams: false, addDefaultPage: false })), 'PDF page selection')
 }
 
 export const pdfExtractFirstPageAdapter: ConverterAdapter = {
@@ -191,6 +203,9 @@ export const mergePdfsFromZipAdapter: ConverterAdapter = {
     let expandedBytes = 0
     for (const entry of candidates) {
       const path = entry.path.replace(/\\/g, '/')
+      if (Buffer.byteLength(path, 'utf8') > MAX_ARCHIVE_ENTRY_NAME_BYTES) {
+        throw new Error(`ZIP entry path exceeds the ${MAX_ARCHIVE_ENTRY_NAME_BYTES.toLocaleString()}-byte limit.`)
+      }
       if (sanitizeZipPath(path) !== path) throw new Error(`ZIP contains an unsafe entry path: ${path}`)
       expandedBytes += Number(entry.vars.uncompressedSize)
       if (!Number.isSafeInteger(expandedBytes) || expandedBytes > MAX_ARCHIVE_EXPANDED_BYTES) {
@@ -202,7 +217,7 @@ export const mergePdfsFromZipAdapter: ConverterAdapter = {
       const pages = await output.copyPages(source, source.getPageIndices())
       pages.forEach((page) => output.addPage(page))
     }
-    return { output: Buffer.from(await output.save({ useObjectStreams: false, addDefaultPage: false })), warnings: [] }
+    return { output: boundedOutput(Buffer.from(await output.save({ useObjectStreams: false, addDefaultPage: false })), 'Merged PDF'), warnings: [] }
   },
   validate: validatePdf
 }
@@ -225,7 +240,7 @@ export function imageAdapter(target: 'png' | 'jpeg' | 'webp'): ConverterAdapter 
         : target === 'jpeg'
           ? await pipeline.flatten({ background: '#ffffff' }).jpeg({ quality: 90, mozjpeg: true }).toBuffer()
           : await pipeline.webp({ quality: 90, alphaQuality: 100 }).toBuffer()
-      return { output, warnings: [] }
+      return { output: boundedOutput(output, `Converted ${target.toUpperCase()} image`), warnings: [] }
     },
     async validate(output): Promise<string | null> {
       try {
@@ -271,6 +286,9 @@ export const zipToManifestAdapter: ConverterAdapter = {
     let total = 0
     const entries = directory.files.map((entry) => {
       const path = entry.path.replace(/\\/g, '/')
+      if (Buffer.byteLength(path, 'utf8') > MAX_ARCHIVE_ENTRY_NAME_BYTES) {
+        throw new Error(`ZIP entry path exceeds the ${MAX_ARCHIVE_ENTRY_NAME_BYTES.toLocaleString()}-byte limit.`)
+      }
       if (sanitizeZipPath(path) !== path) throw new Error(`ZIP contains an unsafe entry path: ${path}`)
       const size = Number(entry.vars.uncompressedSize)
       if (!Number.isSafeInteger(size) || size < 0) throw new Error(`ZIP entry has an invalid size: ${path}`)
@@ -281,7 +299,10 @@ export const zipToManifestAdapter: ConverterAdapter = {
       return { path, type: entry.type, uncompressedBytes: size }
     })
     return {
-      output: Buffer.from(`${JSON.stringify({ schemaVersion: 1, entryCount: entries.length, totalUncompressedBytes: total, entries }, null, 2)}\n`, 'utf8'),
+      output: boundedOutput(
+        Buffer.from(`${JSON.stringify({ schemaVersion: 1, entryCount: entries.length, totalUncompressedBytes: total, entries }, null, 2)}\n`, 'utf8'),
+        'ZIP manifest'
+      ),
       warnings: ['The archive was inspected only. No entry was extracted or executed.']
     }
   },
