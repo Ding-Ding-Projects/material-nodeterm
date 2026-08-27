@@ -1,5 +1,26 @@
 # Handoff
 
+## 2026-08-27, personal vocabulary producer and save-notification repair
+
+Release run `33121962513` at `9c5cbc2883c0218ff159cf39874d5e94c1db45c4` executed the coverage checker
+and reported eight base failures: the canonical producer mismatch, Canvas notification count and
+title/body ownership mismatches, incorrect Project save cancelled and Project save failed marker
+counts, the speech-settings marker, and duplicate producer IDs. The complete-fixture check added
+one aggregate failure.
+
+The repair keeps one producer row per ID and preserves the strongest boundary for each duplicate:
+the exact `const vocab = useVocabularyMapper()` row for `password-manager` and
+`authenticator-settings`, the single catalog row for `converter-adapter-catalog`, and the actual
+`SettingsText` row for `speech-settings`. The canonical producer list now matches the resulting
+126 unique producer rows in exact order. Canvas save handling now emits one cancellation notification
+from the cancelled branch and one failure notification from the failure branch, with title and body
+ownership retained.
+
+This lane intentionally ran no production checker, scripts, tests, lint, type checks, builds,
+packaging, installer execution, runtime interaction, reviews, audits, or UI captures. The repair
+remains unverified by those activities until the integration owner evaluates the exact merged
+commit.
+
 ## 2026-08-27, personal vocabulary coverage parser repair
 
 Release run `33119050796` reached application build after the source identity, resource, icon,
