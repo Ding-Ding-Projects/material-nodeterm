@@ -25,6 +25,7 @@ import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { nodeHeaderFillStyle } from '../lib/nodeColor'
 import { openDestructiveGate } from '../state/destructiveGate'
+import { CdkManagerPanel } from '../components/aws/CdkManagerPanel'
 
 const REGION_OPTIONS = [
   'us-east-1', 'us-east-2', 'us-west-1', 'us-west-2', 'ca-central-1', 'eu-west-1', 'eu-west-2',
@@ -114,7 +115,7 @@ export default function AwsResourceNode({ id, data, selected }: NodeProps<Canvas
   const api = useActiveSessionApi()
   const vocab = useVocabularyMapper()
   const nodeIntent = data.awsManagerIntent
-  const [mode, setMode] = useState<AwsManagerMode>(nodeIntent?.mode === 'cloud-control' ? 'cloud-control' : nodeIntent?.mode === 'core-services' ? 'core-services' : nodeIntent?.mode === 'cloudformation' ? 'cloudformation' : 'resource-explorer')
+  const [mode, setMode] = useState<AwsManagerMode>(nodeIntent?.mode === 'cloud-control' ? 'cloud-control' : nodeIntent?.mode === 'core-services' ? 'core-services' : nodeIntent?.mode === 'cloudformation' ? 'cloudformation' : nodeIntent?.mode === 'cdk' ? 'cdk' : 'resource-explorer')
   const [coreService, setCoreService] = useState<AwsCoreServiceId>(nodeIntent?.coreService ?? 's3')
   const [operation, setOperation] = useState<AwsManagerOperation>(mode === 'cloud-control' ? CLOUD_OPERATIONS[0] : mode === 'core-services' ? (nodeIntent?.coreOperation ?? AWS_CORE_OPERATIONS.s3[0]) : mode === 'cloudformation' ? CLOUDFORMATION_OPERATIONS[0] : RESOURCE_OPERATIONS[0])
   const [coreInput, setCoreInput] = useState<Record<string, unknown>>(nodeIntent?.coreInput ?? {})
@@ -175,9 +176,9 @@ export default function AwsResourceNode({ id, data, selected }: NodeProps<Canvas
     })
   }, [api.awsResource, id, load])
 
-  const operations: readonly AwsManagerOperation[] = mode === 'cloud-control' ? CLOUD_OPERATIONS : mode === 'core-services' ? AWS_CORE_OPERATIONS[coreService] : mode === 'cloudformation' ? CLOUDFORMATION_OPERATIONS : RESOURCE_OPERATIONS
+  const operations: readonly AwsManagerOperation[] = mode === 'cloud-control' ? CLOUD_OPERATIONS : mode === 'core-services' ? AWS_CORE_OPERATIONS[coreService] : mode === 'cloudformation' ? CLOUDFORMATION_OPERATIONS : mode === 'cdk' ? [] : RESOURCE_OPERATIONS
   useEffect(() => {
-    if (!operations.includes(operation)) setOperation(operations[0])
+    if (operations.length > 0 && !operations.includes(operation)) setOperation(operations[0])
   }, [mode, operation, operations])
 
   const filteredRows = useMemo(() => {
@@ -185,7 +186,7 @@ export default function AwsResourceNode({ id, data, selected }: NodeProps<Canvas
     return rows.filter((row) => resultSearch.test(resultCorpus(row)))
   }, [result, resultSearch])
 
-  const persistIntent = (nextMode: AwsManagerMode = mode, overrides: Partial<Pick<AwsManagerPortableIntent, 'regionIntent' | 'resourceQuery' | 'cloudControlTypeName' | 'coreService' | 'coreOperation' | 'coreInput'>> = {}): void => {
+  const persistIntent = (nextMode: AwsManagerMode = mode, overrides: Partial<Pick<AwsManagerPortableIntent, 'regionIntent' | 'resourceQuery' | 'cloudControlTypeName' | 'coreService' | 'coreOperation' | 'coreInput' | 'cdk'>> = {}): void => {
     updateNodeData(id, {
       awsManagerIntent: {
         schemaVersion: 1,
@@ -196,7 +197,8 @@ export default function AwsResourceNode({ id, data, selected }: NodeProps<Canvas
         coreService: overrides.coreService ?? coreService,
         coreOperation: overrides.coreOperation ?? (operation as AwsCoreOperation),
         coreInput: overrides.coreInput ?? coreInput as AwsManagerPortableIntent['coreInput'],
-        ...(nextMode === 'cloudformation' ? { cloudFormation: { schemaVersion: 1, stackName: stackName.trim(), changeSetType, parameterKeys: cfParameters.map((item) => item.key).filter(Boolean), capabilities: cfCapabilities } } : {})
+        ...(nextMode === 'cloudformation' ? { cloudFormation: { schemaVersion: 1, stackName: stackName.trim(), changeSetType, parameterKeys: cfParameters.map((item) => item.key).filter(Boolean), capabilities: cfCapabilities } } : {}),
+        ...(nextMode === 'cdk' && (overrides.cdk ?? nodeIntent?.cdk) ? { cdk: overrides.cdk ?? nodeIntent?.cdk } : {})
       }
     })
   }
@@ -243,7 +245,7 @@ export default function AwsResourceNode({ id, data, selected }: NodeProps<Canvas
   }
 
   const fill = nodeHeaderFillStyle(data.color)
-  const title = data.title || (mode === 'cloud-control' ? 'AWS Cloud Control' : mode === 'core-services' ? `${CORE_SERVICE_LABELS[coreService]} manager` : mode === 'cloudformation' ? 'AWS CloudFormation' : 'AWS Resource Explorer')
+  const title = data.title || (mode === 'cloud-control' ? 'AWS Cloud Control' : mode === 'core-services' ? `${CORE_SERVICE_LABELS[coreService]} manager` : mode === 'cloudformation' ? 'AWS CloudFormation' : mode === 'cdk' ? 'AWS CDK' : 'AWS Resource Explorer')
   const note = runtime?.available ? `AWS CLI ${runtime.origin}${runtime.version ? `: ${runtime.version}` : ''}` : runtime ? runtime.disabledReason ?? 'AWS CLI is unavailable.' : 'Checking AWS CLI availability…'
 
   return (
@@ -261,6 +263,7 @@ export default function AwsResourceNode({ id, data, selected }: NodeProps<Canvas
           <button type="button" role="tab" aria-selected={mode === 'cloud-control'} onClick={() => { setMode('cloud-control'); persistIntent('cloud-control') }}>Cloud Control</button>
           <button type="button" role="tab" aria-selected={mode === 'core-services'} onClick={() => { setMode('core-services'); setCoreService('s3'); setOperation(AWS_CORE_OPERATIONS.s3[0]); setCoreInput({}); persistIntent('core-services', { coreService: 's3', coreOperation: AWS_CORE_OPERATIONS.s3[0], coreInput: {} }) }}>Core services</button>
           <button type="button" role="tab" aria-selected={mode === 'cloudformation'} onClick={() => { setMode('cloudformation'); setOperation(CLOUDFORMATION_OPERATIONS[0]); persistIntent('cloudformation') }}>CloudFormation</button>
+          <button type="button" role="tab" aria-selected={mode === 'cdk'} onClick={() => { setMode('cdk'); persistIntent('cdk') }}>CDK</button>
         </div>
         <section className="aws-resource-node__binding" aria-label="Local AWS binding">
           <div className="aws-resource-node__binding-grid">
@@ -281,6 +284,11 @@ export default function AwsResourceNode({ id, data, selected }: NodeProps<Canvas
             <span className="aws-resource-node__binding-state">{binding ? `Bound to ${binding.profileName} in ${binding.region}` : 'Not bound. Choose a local profile and region.'}</span>
           </div>
         </section>
+        {mode === 'cdk' ? <CdkManagerPanel
+          api={{ cdk: api.cdk, dialog: api.dialog }}
+          awsBinding={binding ? { profileName: binding.profileName, region: binding.region } : null}
+          onIntentChange={(intent) => updateNodeData(id, { awsManagerIntent: { ...AWS_MANAGER_DEFAULT_INTENT, ...nodeIntent, mode: 'cdk', cdk: intent } })}
+        /> : <>
         {mode === 'core-services' && <div className="aws-resource-node__operations" role="tablist" aria-label="AWS core services">
           {AWS_CORE_SERVICES.map((item) => <button key={item} type="button" role="tab" aria-selected={coreService === item} className={coreService === item ? 'is-selected' : ''} onClick={() => { setCoreService(item); const next = AWS_CORE_OPERATIONS[item][0]; setOperation(next); setCoreInput({}); setPreview(null); persistIntent('core-services', { coreService: item, coreOperation: next, coreInput: {} }) }}>{CORE_SERVICE_LABELS[item]}</button>)}
         </div>}
@@ -333,6 +341,7 @@ export default function AwsResourceNode({ id, data, selected }: NodeProps<Canvas
           {result.nextToken && <button type="button" onClick={() => setNextToken(result.nextToken ?? '')}>Use next page token</button>}
           {result.requestToken && <button type="button" onClick={() => setRequestToken(result.requestToken ?? '')}>Use request token</button>}
         </section>}
+        </>}
         <p className="aws-resource-node__hint">Portable project data keeps only the selected mode, region intent, and query. Profiles, endpoints, request tokens, result rows, CLI paths, and credentials stay local to this computer.</p>
       </div>
     </div>

@@ -4724,6 +4724,8 @@ export interface NodeTerminalApi {
   speech: SpeechApi
   /** Universal file converter — docs/file-converter.md. */
   converter: import('./converter').ConverterApi
+  /** Local AWS CDK manager. The browser bridge exposes an explicit unsupported response. */
+  cdk: import('./cdk').CdkApi
   /** Shared automatic dependency lifecycle for node-feature installers. */
   nodeDependencies: import('./node-dependencies').NodeDependenciesApi
   /** Current installed AWS CLI model source for the AWS Shop operation wizard. */

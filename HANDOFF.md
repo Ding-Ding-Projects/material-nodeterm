@@ -1,5 +1,32 @@
 # Handoff
 
+## 2026-08-27, AWS CDK manager, issue #48 PR preparation
+
+The issue branch was reconciled with the exact remote `origin/main` tip
+`54164b84dce0b7e62787b1de2885405ff4ed821c`. The CDK manager is now mounted as the `cdk` mode of
+the existing `aws-resource` node and is available through the existing AWS Shop row `aws-cdk`; no
+duplicate catalog, profile, credential, or AWS resource manager stack was added.
+
+`src/main/aws/cdk-manager.ts` runs only fixed CDK synth, diff, and deploy actions with a validated
+local folder, a bounded trust review, explicit in-memory trust and diff-review tokens, bounded
+output and timeout handling, request-id cancellation, and the shared AWS profile and region binding.
+`src/renderer/components/aws/CdkManagerPanel.tsx` provides the native folder picker, executable
+project-script review, stack selection, local search with its anchored full regex builder, progress,
+unavailable states, and the existing two-key confirmation for risky deploys. `src/shared/cdk.ts` and
+`src/shared/aws-resource.ts` keep only safe CDK app and stack intent portable; the selected folder,
+provider session, generated templates, process state, and credentials remain local.
+
+Direct documentation is `docs/features/integrations/cdk-manager.md`, indexed from both the
+Integrations and AWS category READMEs, with a matching `site/docs/cdk-manager.html` page. The
+offline `src/shared/docs-data.ts` bundle was not regenerated in this preparation lane. The parent
+must regenerate it and verify the generated article before integration.
+
+Commit `b376e55d23d5021b7199629e06b4c58dbd507629` was the earlier pushed feature tip. This follow-up
+reconciliation and mounting work is uncommitted in the current checkout until the parent
+reviews the merge result. No tests, type checks, lint, builds, packaging, runtime interaction,
+reviews, accessibility or security audits, or screen captures were run. The parent owns the next checks,
+the downstream and upstream PRs, issue comments and closure, and the final default-branch integration.
+
 ## 2026-08-27, AWS core-service managers, issue #46 PR preparation
 
 The issue jer was reconciled with the exact `origin/main` tip `2472cf23b99559005476841d3db5e6bc4691ac06`.

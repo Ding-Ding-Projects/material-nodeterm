@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Mount the AWS CDK manager through the shared AWS resource node and AWS Shop. The guided route
+  uses the existing local profile and region binding, a native project-folder picker, bounded
+  trust review of `cdk.json` and dependency manifests, fixed synth and diff actions, stack search
+  with an anchored regex builder, cancellation, and a reviewed deploy path with destructive
+  confirmation for removal or replacement changes. Portable intent contains only safe app and stack
+  intent. This issue #48 preparation lane did not run tests, type checks, lint, builds, packaging,
+  runtime interaction, reviews, accessibility or security checks, or screen captures.
+
 - Mount the seven AWS core-service routes on the shared AWS manager: S3, EC2, IAM, STS, Lambda,
   CloudWatch, and CloudWatch Logs. Typed operation controls now cover bounded reads, selected writes,
   destructive confirmation, pagination, cancellation, and progress while reusing the current local

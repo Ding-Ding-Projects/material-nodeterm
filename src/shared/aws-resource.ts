@@ -9,9 +9,10 @@ import type {
   CloudFormationCapability,
   CloudFormationChangeSetType
 } from './cloudformation'
+import { normalizeCdkPortableBlueprint, type CdkPortableBlueprint } from './cdk'
 
 export type AwsManagerMode = 'resource-explorer' | 'cloud-control' | 'core-services'
-  | 'cloudformation'
+  | 'cloudformation' | 'cdk'
 
 /** Core AWS services use the same binding, preview, pagination and progress seam as the
  * Resource Explorer and Cloud Control managers. Keeping one operation contract avoids a second
@@ -34,6 +35,7 @@ export interface AwsManagerPortableIntent {
     parameterKeys: string[]
     capabilities: CloudFormationCapability[]
   }
+  cdk?: CdkPortableBlueprint
 }
 
 export interface AwsCliRuntimeStatus {
@@ -213,7 +215,9 @@ export function normalizeAwsPortableIntent(value: unknown): AwsManagerPortableIn
       ? 'core-services'
       : raw.mode === 'cloudformation'
         ? 'cloudformation'
-        : 'resource-explorer'
+        : raw.mode === 'cdk'
+          ? 'cdk'
+          : 'resource-explorer'
   const regionIntent = isAwsRegion(raw.regionIntent) ? raw.regionIntent.trim() : AWS_MANAGER_DEFAULT_INTENT.regionIntent
   const resourceQuery = typeof raw.resourceQuery === 'string' && raw.resourceQuery.length <= 1024
     ? raw.resourceQuery
@@ -244,6 +248,7 @@ export function normalizeAwsPortableIntent(value: unknown): AwsManagerPortableIn
           : []
       }
     : undefined
-  return { schemaVersion: 1, mode, regionIntent, resourceQuery, cloudControlTypeName, coreService, coreOperation, coreInput, ...(cloudFormation ? { cloudFormation } : {}) }
+  const cdk = normalizeCdkPortableBlueprint(raw.cdk)
+  return { schemaVersion: 1, mode, regionIntent, resourceQuery, cloudControlTypeName, coreService, coreOperation, coreInput, ...(cloudFormation ? { cloudFormation } : {}), ...(cdk ? { cdk } : {}) }
 }
 

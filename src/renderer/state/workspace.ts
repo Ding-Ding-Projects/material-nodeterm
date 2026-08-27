@@ -1516,7 +1516,7 @@ export function createAwsResourceNode(index: number, mode: AwsManagerMode = 'res
     height: AWS_RESOURCE_SIZE.height,
     style: { width: AWS_RESOURCE_SIZE.width, height: AWS_RESOURCE_SIZE.height },
     data: {
-      title: mode === 'cloud-control' ? 'AWS Cloud Control' : mode === 'core-services' ? `${coreService?.toUpperCase() ?? 'AWS'} manager` : 'AWS Resource Explorer',
+      title: mode === 'cloud-control' ? 'AWS Cloud Control' : mode === 'core-services' ? `${coreService?.toUpperCase() ?? 'AWS'} manager` : mode === 'cloudformation' ? 'AWS CloudFormation' : mode === 'cdk' ? 'AWS CDK' : 'AWS Resource Explorer',
       color: '#ff9900',
       group: null,
       awsManagerIntent: { ...AWS_MANAGER_DEFAULT_INTENT, mode, ...(coreService ? { coreService, coreOperation: import('@shared/aws-resource').AWS_CORE_OPERATIONS[coreService][0] } : {}) }

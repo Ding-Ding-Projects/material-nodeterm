@@ -754,6 +754,15 @@ export const IPC = {
   // stubbed `async () => true` in src/server/index.ts (browser mic permission is the browser's
   // own prompt, not ours to gate).
   speechMicConsent: 'speech:mic-consent',
+  // Local AWS CDK manager. The desktop shell owns the local CLI process and the explicit trust
+  // and diff-review tokens; no project path or generated runtime state enters a portable file.
+  cdkStatus: 'cdk:status',
+  cdkInspectProject: 'cdk:inspect-project',
+  cdkApproveTrust: 'cdk:approve-trust',
+  cdkSynth: 'cdk:synth',
+  cdkDiff: 'cdk:diff',
+  cdkDeploy: 'cdk:deploy',
+  cdkCancel: 'cdk:cancel',
   // Universal file converter (docs/file-converter.md). converterItem/converterSummary are pushed
   // by the core engine whenever an item or the queue-wide facts change — the renderer never polls.
   converterCatalog: 'converter:catalog',

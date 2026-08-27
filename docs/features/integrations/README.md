@@ -13,6 +13,7 @@ substrate described in CLAUDE.md rather than inventing a surface each.
 | [Minecraft server](minecraft-server.md) | research only: cited constraints, not implemented |
 | [Research findings](research-findings.md) | all seven subjects, adversarially checked |
 | [Special-universe Shop nodes](aws-universe-shop.md) | implemented deterministic, scope-bound Shop coordinator and catalog surface; AWS executors remain visibly unavailable until their later lanes |
+| [AWS CDK manager](cdk-manager.md) | local folder picker, trust review, synth, diff, and reviewed deploy implementation; focused verification remains unrun in the ultra-speed lane |
 | [CloudFormation manager](cloudformation-manager.md) | guided local template inspection and AWS CloudFormation change-set preview; runtime evidence is intentionally unverified in the ultra-speed lane |
 | [AWS CLI model documentation index](aws-cli-model-documentation.md) | platform-free bounded index for official service, command, option, paginator, waiter, input, output, and skeleton metadata; runtime verification remains unrun |
 | [AWS identity manager](aws-identity.md) | guided local profile, IAM Identity Center, role, MFA, region, and service-endpoint controls with safe portable intent and machine-local bindings; host CLI actions remain visibly unavailable until the fixed operation runner is connected |

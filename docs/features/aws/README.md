@@ -9,6 +9,7 @@ endpoints, request state, result pages, and credentials on the current computer.
 - [Resource Explorer](./resource-explorer.md)
 - [Cloud Control](./cloud-control.md)
 - [AWS core-service managers](../integrations/aws-core-services.md)
+- [AWS CDK manager](../integrations/cdk-manager.md)
 
 ## Shared behavior
 

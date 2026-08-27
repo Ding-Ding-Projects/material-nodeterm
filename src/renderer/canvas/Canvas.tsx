@@ -5711,6 +5711,7 @@ export function Canvas() {
             }
             if (catalogEntry.id === 'aws-resource-explorer') return createAwsResourceNode(index, 'resource-explorer', center)
             if (catalogEntry.id === 'aws-cloud-control') return createAwsResourceNode(index, 'cloud-control', center)
+            if (catalogEntry.id === 'aws-cdk') return createAwsResourceNode(index, 'cdk', center)
             const awsCoreCatalogServices = { 'aws-s3': 's3', 'aws-ec2': 'ec2', 'aws-iam': 'iam', 'aws-sts': 'sts', 'aws-lambda': 'lambda', 'aws-cloudwatch': 'cloudwatch', 'aws-logs': 'logs' } as const
             if (catalogEntry.id in awsCoreCatalogServices) return createAwsResourceNode(index, 'core-services', center, awsCoreCatalogServices[catalogEntry.id as keyof typeof awsCoreCatalogServices])
             if (catalogEntry.id === 'cloudflare-core-managers') return createCloudflareCoreManagersNode(index, center)
