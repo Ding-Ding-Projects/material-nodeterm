@@ -200,6 +200,13 @@
   travel, and a breadcrumb return route. Implementation commit:
   `451605b314c709da56c67bc176c78424898ecc26`. This lane did not run tests, lint, type checks,
   builds, packaging, runtime interaction, reviews, audits, or captures.
+- Add the guided same-repository branch dependency operation contract for issue #86. Project-owned
+  branch links now have bounded plans for setting and clearing parents, rebasing a child, proposing
+  a pull request against its parent, and fast-forward shipping into the parent checkout. The typed
+  Git service and bridges expose queued, running, completed, failed, cancelled, and unavailable
+  states, reject cross-project or mismatched-link requests, bound paths, refs, arguments, and output,
+  and never accept arbitrary shell text. This source lane intentionally did not run tests, type
+  checks, lint, builds, packaging, runtime interaction, reviews, audits, or captures.
 
 - Mount the seven AWS core-service routes on the shared AWS manager: S3, EC2, IAM, STS, Lambda,
   CloudWatch, and CloudWatch Logs. Typed operation controls now cover bounded reads, selected writes,

@@ -164,6 +164,13 @@ later commit, since this file will not be kept in lockstep with every merge).
       the ultra-speed lane. The feature ref is reconciled with `origin/main` at
       `54164b84dce0b7e62787b1de2885405ff4ed821c` with merge commit
       `538fe6a5b4cbf0384a35ff9edc1a1d59d87df431`.
+- [ ] **Guided branch dependency operations, issue #86**: project-owned same-repository branch
+      links now have bounded typed plans for setting and clearing parents, syncing a child by
+      rebase, proposing a pull request against its parent, and fast-forward shipping into the
+      parent checkout. Progress, cancellation, unavailable states, ownership checks, bounded
+      output, and no-arbitrary-shell arguments are present in `src/shared/dependency-operations.ts`
+      and `src/core/git-service.ts`; tests, type checks, lint, builds, packaging, runtime
+      interaction, reviews, audits, and captures remain pending.
 - [ ] **Full Material Design 3 surface audit (#91)**: source-level inventory and remediation are
       recorded in `docs/features/appearance/material-3-audit.md` and checked by
       `scripts/check-material-audit.mjs` (201 rows, including every desktop shell, node,

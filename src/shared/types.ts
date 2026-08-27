@@ -3638,6 +3638,26 @@ export interface GitApi {
   worktreeRemovalProof(repoPath: string, wtPath: string): Promise<GitWorktreeRemovalProofResult>
   /** Registration-only pruning or proof-bound live-directory removal. */
   worktreeRemove(repoPath: string, wtPath: string, request: GitWorktreeRemovalRequest): Promise<GitResult>
+  /** Store the parent branch for a dependency link in the shared git config. */
+  setBranchParent(repoPath: string, child: string, parent: string): Promise<GitResult>
+  /** Remove the parent branch projection for a dependency link. */
+  unsetBranchParent(repoPath: string, child: string): Promise<GitResult>
+  /** Rebase one dependency child branch onto its configured parent. */
+  syncBranch(cwd: string, child: string): Promise<GitResult>
+  /** Open a pull request for one dependency child branch against its configured parent. */
+  proposeBranch(cwd: string, child: string): Promise<GitResult>
+  /** Fast-forward a dependency parent branch to its child when the parent is current. */
+  shipBranch(cwd: string, child: string, parent: string): Promise<GitResult>
+  /** Execute one owned dependency link operation through the bounded typed operation plan. */
+  dependencyOperation(
+    request: import('./dependency-operations').DependencyOperationRequest
+  ): Promise<import('./dependency-operations').DependencyOperationResult>
+  /** Cancel an operation that has not started executing. */
+  cancelDependencyOperation(operationId: string): Promise<boolean>
+  /** Subscribe to dependency operation progress and terminal states. */
+  onDependencyOperationProgress(
+    listener: (progress: import('./dependency-operations').DependencyOperationProgress) => void
+  ): () => void
   /** Scope remote git routing to the active project: pass its id to route git over that SSH
    *  project's master, or null for a local project so all git ops run locally. */
   setActiveRemote(projectId: string | null): Promise<void>
