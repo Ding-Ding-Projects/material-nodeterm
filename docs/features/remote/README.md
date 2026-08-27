@@ -8,6 +8,9 @@ Two different ways nodeterm reaches a machine that isn't the one in front of you
   browser over plain HTTP/WebSocket.
 - [Docker host manager](./docker-host.md) - guided local and SSH context management for containers,
   images, volumes, networks, Compose profiles, statistics, logs, and fixed typed tasks.
+- [Kiosk and PWA sessions](./kiosk-pwa-sessions.md) - guided secure URL and installed web-app
+  sessions with isolated local profiles, portable intent, explicit permissions, lifecycle recovery,
+  and honest unavailable states.
 
 See also [Agents](../agents/README.md) for how agent hooks and permission modes work across an
 SSH connection, and [Packaging](../packaging/README.md) for how the headless notification host

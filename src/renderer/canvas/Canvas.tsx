@@ -151,6 +151,8 @@ import {
 } from '../lib/projectMenuActions'
 import { CommandPalette, type Command } from '../components/CommandPalette'
 import { NodeCatalogDialog } from '../components/NodeCatalogDialog'
+import { KioskPwaSetupDialog } from '../components/KioskPwaSetupDialog'
+import type { KioskPwaAppCandidate, PortableKioskPwaIntent } from '@shared/kiosk-pwa'
 import {
   NODE_CATALOG,
   nodeCatalogAvailability,
@@ -700,6 +702,7 @@ import {
   createAgentNode,
   createCanvasControlTerminalNode,
   createBrowserNode,
+  createKioskPwaNode,
   defaultBrowserTabs,
   createDinoNode,
   createRecoveryGameNode,
@@ -5407,6 +5410,7 @@ export function Canvas() {
             if (catalogEntry.id === 'sticky') return createStickyNode(index, center)
             if (catalogEntry.id === 'group') return createGroupNode(center, undefined, index)
             if (catalogEntry.id === 'browser') return createBrowserNode(index, '', center)
+            if (catalogEntry.id === 'kiosk-session' || catalogEntry.id === 'pwa-session') return null
             if (catalogEntry.id === 'web') return createWebNode(index, { url: '' }, center)
             if (catalogEntry.id === 'authenticator') return createAuthenticatorNode(index, center)
             if (catalogEntry.id === 'dino') return createDinoNode(index, center)
@@ -15567,6 +15571,14 @@ export function Canvas() {
     candidates: PortableMediaCandidate[]
     resolve: (plan: PortableMediaExportPlan | null) => void
   } | null>(null)
+  const [kioskPwaDialog, setKioskPwaDialog] = useState<{
+    at?: { x: number; y: number }
+    groupId?: string
+    mode: 'kiosk' | 'pwa'
+  } | null>(null)
+  // Installed app discovery is host-owned. Until that inventory is provided, the PWA picker
+  // remains honestly empty instead of inventing app choices.
+  const kioskPwaApps: readonly KioskPwaAppCandidate[] = []
   const choosePortableMedia = useCallback(async (project: Project): Promise<PortableMediaExportPlan | null> => {
     const selected = await window.nodeTerminal.dialog.selectFiles()
     if (!selected || selected.length === 0) return null
@@ -17715,13 +17727,43 @@ export function Canvas() {
             hasShopNode: false
           }}
           terminalProfileChoices={terminalProfileMenuChoices}
-          onCreate={(entry, creationEventId, options) =>
+          onCreate={(entry, creationEventId, options) => {
+            if (entry.id === 'kiosk-session' || entry.id === 'pwa-session') {
+              setNodeCatalog(null)
+              setKioskPwaDialog({
+                at: nodeCatalog.at,
+                groupId: nodeCatalog.groupId,
+                mode: entry.id === 'pwa-session' ? 'pwa' : 'kiosk'
+              })
+              return
+            }
             createCatalogNode(entry, creationEventId, nodeCatalog.at, nodeCatalog.groupId, options)
-          }
+          }}
           onOpenDocumentation={(path) => {
             setNodeCatalog(null)
             setDocsInitialPath(path)
             setDocsOpen(true)
+          }}
+        />
+      )}
+
+      {kioskPwaDialog && (
+        <KioskPwaSetupDialog
+          open
+          apps={kioskPwaApps}
+          initialMode={kioskPwaDialog.mode}
+          onClose={() => setKioskPwaDialog(null)}
+          onSubmit={(intent: PortableKioskPwaIntent) => {
+            const setup = kioskPwaDialog
+            setKioskPwaDialog(null)
+            setNodes((existing) => {
+              const node = createKioskPwaNode(existing.length, intent, setup.at ?? emptyNodePos())
+              const candidate = setup.groupId ? parentInto(node, setup.groupId) : node
+              const appended = nodeCreationCoordinatorRef.current.appendNode(existing, candidate)
+              if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+              return appended.nodes
+            })
+            markDirty()
           }}
         />
       )}

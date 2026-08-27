@@ -27,6 +27,7 @@ import {
 import type { PlannerSchedule } from '../shared/planner-occurrences'
 import { normalizeRecoveryGameSnapshot, RECOVERY_ENERGY_KEYS, type RecoveryGameSnapshot } from '../shared/recovery-game'
 import { repairPortablePortals, validatePortablePortals, type PortablePortalV3 } from './portal-lifecycle'
+import { portableKioskPwaIntent, type PortableKioskPwaIntent } from '../shared/kiosk-pwa'
 
 export type PortableCanvasScope = 'root' | 'multiverse' | 'aws-universe'
 
@@ -63,6 +64,7 @@ export interface PortableCanvasNodeV3 {
   text?: string
   url?: string
   browserTabs?: Array<{ id: string; url?: string; title: string }>
+  kioskPwaIntent?: PortableKioskPwaIntent
   serviceLabel?: string
   /** Safe public-catalog identity and display copy. Image bytes and network state are excluded. */
   wildDimSumDish?: PublicDimSumSelection
@@ -149,6 +151,7 @@ const ALLOWED_NODE = new Set([
   'id', 'kind', 'creationEventId', 'position', 'size', 'title', 'color', 'group',
   'universeCanvasId', 'universeScope', 'universeDepth', 'nonDeletable', 'shopSelection',
   'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel',
+  'kioskPwaIntent',
   'wildDimSumDish', 'homeAssistantIntent', 'homeAssistantControlConfig', 'homeAssistantSensorConfig',
   'alarmSchedule', 'alarmTimeZone', 'alarmEnabled', 'alarmSnoozeMinutes',
   'alarmSoundEnabled', 'alarmNarratorEnabled', 'alarmHistory', 'mediaAssets',
@@ -261,6 +264,11 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
     exactKeys(node.homeAssistantControlConfig, ALLOWED_HOME_ASSISTANT_CONTROL, 'Home Assistant control intent')
   }
   if (strict && node.browserTabs !== undefined && !Array.isArray(node.browserTabs)) throw new PortableProjectV3Error('manifest', 'Portable browser tabs must be an array.')
+  if (node.kioskPwaIntent !== undefined) {
+    const intent = portableKioskPwaIntent(node.kioskPwaIntent)
+    if (!intent) throw new PortableProjectV3Error('manifest', 'Portable kiosk/PWA intent is invalid.')
+    out.kioskPwaIntent = intent
+  }
   if (node.collapsed !== undefined) out.collapsed = node.collapsed
   if (node.universeCanvasId !== undefined) out.universeCanvasId = text(node.universeCanvasId, 'universe canvas id')
   if (node.universeScope !== undefined) out.universeScope = node.universeScope
@@ -629,6 +637,7 @@ export function portableCanvasProjectionToProject(
     ...(node.text !== undefined ? { text: node.text } : {}),
     ...(node.url !== undefined ? { url: node.url } : {}),
     ...(node.browserTabs ? { browserTabs: node.browserTabs.map((tab) => ({ ...tab })) } : {}),
+    ...(node.kioskPwaIntent ? { kioskPwaIntent: { ...node.kioskPwaIntent, target: { ...node.kioskPwaIntent.target }, requestedPermissions: [...node.kioskPwaIntent.requestedPermissions] } } : {}),
     ...(node.serviceLabel !== undefined ? { serviceLabel: node.serviceLabel } : {}),
     ...(node.mediaAssets ? { mediaAssets: node.mediaAssets.map((asset) => ({ ...asset })) } : {}),
     ...(node.mediaActiveAssetId !== undefined ? { mediaActiveAssetId: node.mediaActiveAssetId } : {}),

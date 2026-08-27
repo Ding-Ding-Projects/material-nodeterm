@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add guided Kiosk and PWA browser sessions. Schema 3 stores only validated secure target intent,
+  display name, mode, and requested permission names, while browser profile state, grants, cookies,
+  process state, and host identifiers remain local. Kiosk sessions deny popups and insecure targets;
+  PWA sessions require a real installed-app inventory and show an honest unavailable state when it
+  is missing. Exit, Retry, ownership checks, and lifecycle failure states are explicit. This
+  ultra-speed lane intentionally did not run tests, type checks, lint, reviews, security checks,
+  accessibility checks, builds, packaging, installer execution, runtime interaction, or captures.
+
 - Complete the Express File Converter flow with queue-wide collision-safe destination names,
   visible rename disclosure, final atomic no-clobber publication, and a completed-output action that
   opens the exact result in Visual Studio Code through the active project API. The converter queue

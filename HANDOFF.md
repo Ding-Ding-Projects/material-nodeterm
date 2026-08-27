@@ -1,5 +1,31 @@
 # Handoff
 
+## 2026-08-27, Kiosk and PWA sessions implementation, issue #64
+
+The implementation lane is `feat/program-53-kiosk-pwa`, refreshed to `origin/main` at
+`30e73b7e4a518d46a2f64887a3eb4eadec907caa` before edits. The lane adds the shared kiosk/PWA intent
+contract in `src/shared/kiosk-pwa.ts`, a host-neutral owner-scoped lifecycle manager in
+`src/core/kiosk-pwa.ts`, and `KioskPwaNode` plus `KioskPwaSetupDialog` for the browser-backed canvas
+surface. The Node Catalog now exposes Kiosk session and PWA session entries, and browser node
+serialization carries only validated portable intent.
+
+Secure URLs reject credentials, unsafe schemes, control characters, and non-loopback HTTP. PWA
+choices come only from an installed-app inventory, so an unavailable inventory stays visibly empty.
+Popups are disabled and permission events are denied by default. Local profile keys and runtime
+lifecycle stay outside the project projection. Exit, Retry, owner checks, unavailable states, and
+recovery copy are explicit.
+
+Direct documentation is in `docs/features/remote/kiosk-pwa-sessions.md`, its category index, the
+generated offline article record, and `site/docs/kiosk-pwa-sessions.html`. `CHANGELOG.md` and
+`ROADMAP.md` record the same delivery boundary.
+
+This ultra-speed lane intentionally ran no tests, type checks, lint, reviews, security or
+accessibility checks, builds, packaging, installer execution, runtime interaction, or captures.
+The documentation-bundle generator was attempted but could not run because this checkout has no
+installed `esbuild` package. The offline article record was updated manually to keep the committed
+bundle aligned with the new article; the integration lane should regenerate and compare it after
+bootstrapping dependencies.
+
 ## 2026-08-27, Express File Converter completion, issue #21
 
 The implementation lane is `feat/program-10-file-converter`, refreshed by fast-forward before edits

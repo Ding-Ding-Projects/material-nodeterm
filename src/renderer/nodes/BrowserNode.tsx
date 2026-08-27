@@ -9,6 +9,8 @@ import { useProjects } from '../state/projects'
 import { BrowserSurface } from './BrowserSurface'
 import { BrowserProfilePicker } from './BrowserProfilePicker'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import KioskPwaNode from './KioskPwaNode'
+import { portableKioskPwaIntent } from '@shared/kiosk-pwa'
 
 /** Debounce for persisting a tab's live URL/title while the user navigates — matches the SSH
  *  mirror's 5s write-throttle intent (this repo's established pattern for "don't rewrite the
@@ -160,6 +162,12 @@ export default function BrowserNode({ id, data, selected }: NodeProps<CanvasNode
 
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? tabs[0]
   const ghost = data.ghost === true
+  const kioskIntent = portableKioskPwaIntent(data.kioskPwaIntent)
+
+  // Kiosk/PWA sessions share the browser node id and project partition, but use their own
+  // lifecycle surface without an address bar or popup path. Invalid intent stays in the ordinary
+  // browser shell so the user can recover it rather than losing the node.
+  if (kioskIntent) return <KioskPwaNode {...({ id, data: { ...data, kioskPwaIntent: kioskIntent }, selected } as NodeProps<CanvasNode>)} />
 
   return (
     <div className={`term-node browser-node${selected ? ' selected' : ''}`} style={{ borderTopColor: data.color }}>
