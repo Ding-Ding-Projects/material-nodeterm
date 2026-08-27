@@ -4,8 +4,8 @@ nodeterm is a pluggable multi-agent system. Claude Code, Codex, Gemini, opencode
 Cognition Devin are built in; any other CLI can be added as a custom agent.
 
 - [Agent support](./agent-support.md) — the shared status model, hook-driven detection,
-  permission modes, managed accounts, and the capability system that decides which agent gets
-  which feature.
+  restart-safe display continuity, workflow-state sidebar grouping, permission modes, managed
+  accounts, and the capability system that decides which agent gets which feature.
 - [Devin CLI](./devin-cli.md) — measured Cognition Devin CLI 3000.4.25 launch forms, lifecycle
   hooks, status mapping, notification fallback, and capability boundaries.
 - [Linked-agent inbox notifications](./linked-agent-inbox-notifications.md) — the fixed,
