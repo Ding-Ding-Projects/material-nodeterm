@@ -6,11 +6,12 @@
 
 import { registerListRoom } from '../core/engine.js'
 import { DOCS, REPO_BLOB_DOCS } from '../shared/data.js'
+import { vocabularyAllowed } from '../shared/i18n.js'
 
 export function registerDocs(store, deps, registerAction, registerBinding) {
   registerListRoom('docs', {
-    getRows: () =>
-      DOCS.map((d, i) => ({
+    getRows: (s) =>
+      DOCS.filter((d) => vocabularyAllowed(s) || d[2] !== 'personal-vocabulary').map((d, i) => ({
         id: 'doc' + i,
         title: d[0],
         body: d[1] + ' — read the full article at docs/' + d[2] + '.html',

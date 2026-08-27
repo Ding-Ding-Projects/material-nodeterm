@@ -9,6 +9,7 @@ import { HUD_BRAND_PULSE_CLASS, brandPulseBackground, brandPulsePlan } from '../
 import { createGrokMarkSvg } from '../lib/grokMark'
 import { orderIndicatorAgents } from './indicator'
 import codexPet from '../assets/pet-codex.webp'
+import { mapLocalVocabularyText, setHostVocabularySchoolState } from '../lib/personalVocabulary/hostMessage'
 
 // Local mirror of the preload's HUD contract (src/preload/hud.ts) — kept self-contained so this
 // renderer entry has no cross-project (main/preload) type dependency.
@@ -31,6 +32,8 @@ interface HudRow {
 }
 interface HudPush {
   rows: HudRow[]
+  schoolModeEnabled: boolean
+  schoolModeHydrated: boolean
   bar: number
   width: number
   notchWidth: number
@@ -53,6 +56,7 @@ declare global {
 }
 
 const root = document.getElementById('hud') as HTMLDivElement
+document.title = mapLocalVocabularyText('nodeterm HUD')
 
 // One black rounded-bottom surface — the DynamicNotch capsule — fused to the physical notch. It IS
 // the interactive hotspot: the walking mascots live INSIDE it (collapsed), and clicking it grows
@@ -291,7 +295,7 @@ function buildRow(row: HudRow): HTMLElement {
   sub.className = 'hud-row__sub'
   if (row.prompt) {
     const b = document.createElement('b')
-    b.textContent = 'You: '
+    b.textContent = mapLocalVocabularyText('You: ')
     sub.append(b, document.createTextNode(row.prompt))
   } else if (row.activity) {
     sub.textContent = row.activity
@@ -315,15 +319,15 @@ function buildRow(row: HudRow): HTMLElement {
 
   const close = document.createElement('button')
   close.className = 'hud-row__close'
-  close.title = 'Remove from HUD'
-  close.setAttribute('aria-label', 'Remove from HUD')
+  close.title = mapLocalVocabularyText('Remove from HUD')
+  close.setAttribute('aria-label', mapLocalVocabularyText('Remove from HUD'))
   close.textContent = '×'
   close.addEventListener('click', dismiss)
   el.append(close)
 
   const go = document.createElement('button')
   go.className = 'hud-row__go'
-  go.textContent = 'Go'
+  go.textContent = mapLocalVocabularyText('Go')
   go.addEventListener('click', (e) => {
     e.stopPropagation()
     window.hud.focusNode(row.nodeId)
@@ -335,10 +339,10 @@ function buildRow(row: HudRow): HTMLElement {
 }
 
 function stateLabel(state: HudRow['state']): string {
-  if (state === 'working') return 'Working…'
-  if (state === 'needsYou') return 'Needs you'
-  if (state === 'done') return 'Finished'
-  return 'Idle'
+  if (state === 'working') return mapLocalVocabularyText('Working…')
+  if (state === 'needsYou') return mapLocalVocabularyText('Needs you')
+  if (state === 'done') return mapLocalVocabularyText('Finished')
+  return mapLocalVocabularyText('Idle')
 }
 
 function buildSubs(row: HudRow): HTMLElement {
@@ -347,7 +351,8 @@ function buildSubs(row: HudRow): HTMLElement {
   const isOpen = openSubs.has(row.nodeId)
   const toggle = document.createElement('div')
   toggle.className = 'hud-subs__toggle'
-  toggle.textContent = `${isOpen ? '▾' : '▸'} ${row.subagents.length} subagent${row.subagents.length === 1 ? '' : 's'}`
+  const noun = row.subagents.length === 1 ? mapLocalVocabularyText('subagent') : mapLocalVocabularyText('subagents')
+  toggle.textContent = `${isOpen ? '▾' : '▸'} ${row.subagents.length} ${noun}`
   toggle.addEventListener('click', (e) => {
     e.stopPropagation()
     if (openSubs.has(row.nodeId)) openSubs.delete(row.nodeId)
@@ -399,6 +404,8 @@ function render(rows: HudRow[]): void {
 }
 
 function applyGeometry(push: HudPush): void {
+  setHostVocabularySchoolState({ enabled: push.schoolModeEnabled, hydrated: push.schoolModeHydrated })
+  document.title = mapLocalVocabularyText('nodeterm HUD')
   const rs = document.documentElement.style
   rs.setProperty('--bar', `${push.bar}px`)
   if (typeof push.notchWidth === 'number') {

@@ -1,6 +1,6 @@
 # Material Design 3 desktop surface audit
 
-Status: source audit and remediation completed against the current `origin/main` baseline `c6820730`. This lane's edits are uncommitted on `feat/full-app-material3-reconciliation`, so no lane commit SHA exists yet. Built-artifact launch, pixel measurement, test execution, and capture were not run because this task is limited to source inspection and edits.
+Status: this is the shared source inventory for the current Material Design 3 reconciliation. Its rows are maintained by the owning linked lanes; lane-specific commit SHAs and runtime evidence belong in each lane's handoff. Built-artifact launch, pixel measurement, test execution, and capture remain separate evidence and are not claimed by this inventory.
 
 This document is the hand-written surface inventory required by issue #91. The executable companion is `scripts/check-material-audit.mjs`; its required identifier list is intentionally independent from the rows it validates, so deleting a row turns the check red rather than shrinking the inventory and the check together.
 
@@ -339,6 +339,7 @@ Every listed renderer producer has an explicit local mapper boundary. Commands, 
 | `appearance-font-preview-fact` | Font preview name ownership | `src/renderer/components/appearance/AppearanceEditor.tsx` | `quoteFamily(primary ||` |
 | `docs-section-copy` | Documentation section metadata | `src/renderer/components/DocsBrowser.tsx` | `vocab(section.label)` |
 | `history-restore-segments` | History restore target ownership | `src/renderer/components/LocalHistoryPanel.tsx` | `messageSegments={[` |
+| `converter-upload-limit` | Converter upload limit message | `src/renderer/components/converter/FileConverterPanel.tsx` | `mapLocalVocabularyText(` |
 | `minecraft-backups` | Minecraft backups | `src/renderer/components/minecraft/MinecraftBackupsPanel.tsx` | `useVocabularyMapper()` |
 | `minecraft-players` | Minecraft players | `src/renderer/components/minecraft/MinecraftPlayersPanel.tsx` | `useVocabularyMapper()` |
 | `minecraft-properties` | Minecraft properties | `src/renderer/components/minecraft/MinecraftPropertiesEditor.tsx` | `useVocabularyMapper()` |
@@ -348,6 +349,18 @@ Every listed renderer producer has an explicit local mapper boundary. Commands, 
 | `personal-vocabulary-surface-mapper` | Structured surface mapper | `src/renderer/lib/personalVocabulary/surfaces.ts` | `applyVocabularyToMenuItems` |
 | `personal-vocabulary-application` | Replacement engine | `src/renderer/lib/personalVocabulary/apply.ts` | `export function applyVocabulary` |
 | `typed-copy-fact-boundary` | Typed application-copy versus exact-fact segments | `src/renderer/lib/personalVocabulary/ownedCopy.ts` | `mapOwnedSentence` |
+| `personal-vocabulary-host-message` | Typed authored/fact host message boundary | `src/renderer/lib/personalVocabulary/hostMessage.ts` | `formatHostMessage(` |
+| `widget-entrypoint` | Detached widget entrypoint | `src/renderer/widget/WidgetApp.tsx` | `useVocabularyMapper()` |
+| `hud-entrypoint` | Vanilla DOM HUD entrypoint | `src/renderer/hud/main.ts` | `mapLocalVocabularyText(` |
+| `dialog-picker-root` | Browser dialog-picker root | `src/renderer/bridge/dialog-picker.tsx` | `useVocabularyMapper()` |
+| `ws-reconnect-overlay` | Browser reconnect overlay | `src/renderer/bridge/ws-bridge.ts` | `mapLocalVocabularyText(` |
+| `browser-bridge-stubs` | Browser bridge stub messages | `src/renderer/bridge/stubs.ts` | `formatHostMessage(` |
+| `notification-body-classification` | Typed authored versus fact notification body | `src/renderer/state/notifications.ts` | `bodyKind` |
+| `site-vocabulary-json` | Landing-page JSON upload | `site/app/features/vocabulary.js` | `validateVocabularyJson(` |
+| `site-vocabulary-cache` | Landing-page cache envelope | `site/app/shared/vocabulary-state.js` | `validateVocabularyCacheJson(` |
+| `native-notification-canvas` | Native notification fact route | `src/renderer/canvas/Canvas.tsx` | `mapNativeNotification(` |
+| `native-notification-onboarding` | Native authored notification route | `src/renderer/components/onboarding/OnboardingFlow.tsx` | `mapNativeNotification(` |
+| `native-notification-settings` | Native authored notification route | `src/renderer/components/settings/sections/NotificationsSection.tsx` | `mapNativeNotification(` |
 
 ## Complete production surface classification
 
@@ -416,10 +429,35 @@ single React element cannot reach the descendants produced by a component.
 | ssh-project-dialog | src/renderer/components/SshProjectDialog.tsx | mapped-callsite |
 | phone-pair-popover | src/renderer/components/PhonePairPopover.tsx | mapped-callsite |
 | dictation-overlay | src/renderer/components/DictationOverlay.tsx | mapped-callsite |
+| bulk-action-bar | src/renderer/components/BulkActionBar.tsx | unmapped-callsite-pending |
+| pty-pressure | src/renderer/components/PtyPressureBanner.tsx | unmapped-callsite-pending |
+| update-card | src/renderer/components/UpdateCard.tsx | unmapped-callsite-pending |
+| resume-card | src/renderer/components/ResumeCard.tsx | unmapped-callsite-pending |
+| widget-entrypoint | src/renderer/widget/WidgetApp.tsx | mapped-callsite |
+| hud-entrypoint | src/renderer/hud/main.ts | mapped-callsite |
+| dialog-picker-root | src/renderer/bridge/dialog-picker.tsx | mapped-callsite |
+| ws-reconnect-overlay | src/renderer/bridge/ws-bridge.ts | mapped-callsite |
+| browser-bridge-stubs | src/renderer/bridge/stubs.ts | mapped-callsite |
 
 ## Documentation site data refresh
 
 The site stylesheet was not changed by this audit. The stale packaging article was corrected to describe the current push-triggered release workflow and current Squirrel artifact language. The page remains in its existing Kids-mode visual style. No desktop styling rule is copied into the site.
+
+## Vocabulary entrypoint reconciliation
+
+The personal-vocabulary inventory now has independent canonical producer and surface manifests in
+`scripts/check-personal-vocabulary-coverage.mjs`. The manifests are separate from mutable evidence
+rows, and the executable check mutates copied real files and copied inventory arrays to prove that
+removing a mapper, producer row, surface row, or audit row is rejected. The host-entrypoint lane
+covers the detached widget, HUD, browser picker, reconnect overlay, bridge stubs, notification
+body classification, native notification producers, converter upload limit messages, and
+landing-page JSON/cache validators. The site renderer also has an independent per-string ownership
+manifest with file-backed removal mutations. Runtime facts such as paths, IDs, model names,
+provider errors, visible commands, brand names, license text, and shortcut text remain outside the
+authored-copy mapper. Canvas notifications classify every direct body as authored or fact, and the
+landing-page file reader keeps rejected reads visible instead of treating them as successful input.
+The per-string checker parses the arguments of each copy call, while the delegated file-change
+tests exercise size rejection, read failure, picker reset, valid binding, and the resulting render.
 
 ## Verification
 

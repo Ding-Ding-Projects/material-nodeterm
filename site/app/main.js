@@ -16,9 +16,11 @@ import {
   getRoom, allSettingsCards, registerListRoom, fmtWhen,
 } from './core/engine.js'
 import { registerFeatures } from './features/index.js'
+import { handleVocabularyFileChange } from './features/vocabulary.js'
 import { SECTIONS, FEATURES, DOCS, COVERAGE, RX_TOKENS, DISHES } from './shared/data.js'
 import { listVoices, findVoice } from './shared/narrator-state.js'
 import { createBulkList } from './shared/bulkList.js'
+import { VOCAB_MAX_FILE_BYTES } from './shared/vocabulary-state.js'
 
 const bulkList = createBulkList()
 
@@ -109,6 +111,7 @@ function removeRows(ids) {
 function wipe() {
   try {
     localStorage.removeItem('nodeterm-playground.v1')
+    localStorage.removeItem('nodeterm-playground.vocabulary.v1')
   } catch (_err) {}
   const nowIso = new Date().toISOString()
   store.setState(
@@ -117,7 +120,7 @@ function wipe() {
       locks: {}, unlocked: {}, picked: {}, auth: [], cart: {},
       theme: 'day', lang: 'en', funnyEn: 2, funnyYue: 3, emoji: true, bigText: false, sound: false,
       accent: '#ffd93d', nick: '', logo: '', preset: 'playground',
-      school: false, schoolPin: '', narrate: false, voice: '', rate: 3, vocab: '', schedOn: false, schedTime: '19:00', schedTheme: 'night',
+      school: false, schoolHydrated: true, schoolPin: '', narrate: false, voice: '', rate: 3, vocab: '', vocabEntries: Object.create(null), vocabSavedAt: 0, vocabStatus: 'no-file', vocabError: '', schedOn: false, schedTime: '19:00', schedTheme: 'night',
     },
     { persist: false },
   )
@@ -335,7 +338,15 @@ root.addEventListener('input', (e) => {
 })
 root.addEventListener('change', (e) => {
   const t = e.target
-  if (t.dataset && t.dataset.bindSelect) runFeatureBind(t.dataset.bindSelect, t.dataset.id, t.value)
+  if (t.dataset && t.dataset.bindFile) {
+    const file = t.files && t.files[0]
+    if (!file) return
+    void handleVocabularyFileChange(t, {
+      onTooLarge: (size) => toastX('❌', 'That did not fit', `The selected file is over the ${VOCAB_MAX_FILE_BYTES}-byte limit.`),
+      onText: (text) => runFeatureBind(t.dataset.bindFile, t.dataset.id, text),
+      onReadError: () => toastX('❌', 'Could not read file', 'The selected JSON file could not be read.')
+    })
+  } else if (t.dataset && t.dataset.bindSelect) runFeatureBind(t.dataset.bindSelect, t.dataset.id, t.value)
   else if (t.dataset && t.dataset.bindTextChange) runFeatureBind(t.dataset.bindTextChange, t.dataset.id, t.value)
   else if (t.dataset && t.dataset.bindRangeChange) runFeatureBind(t.dataset.bindRangeChange, t.dataset.id, t.value)
   else if (t.dataset && t.dataset.bind) store.setState({ [t.dataset.bind]: t.value }, { persist: t.dataset.bind === 'vocab' || t.dataset.bind === 'nick' })

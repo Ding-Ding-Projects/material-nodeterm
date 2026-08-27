@@ -14,6 +14,7 @@ import {
   type RpcMessage
 } from '../../shared/rpc'
 import { IPC } from '../../shared/ipc'
+import { mapLocalVocabularyText } from '../lib/personalVocabulary/hostMessage'
 import type { GitHubControlApi, GitHubIssuesApi } from '../../shared/github-issues'
 import type { ConverterApi } from '../../shared/converter'
 import type { OllamaApi } from '../../shared/ollama'
@@ -154,7 +155,9 @@ async function postUploadOverHttp(
   })
   const result = (await response.json().catch(() => null)) as UploadHttpSuccess | UploadHttpError | null
   if (!response.ok) {
-    const message = result && 'message' in result ? result.message : 'The server refused the upload.'
+    const message = result && 'message' in result
+      ? result.message
+      : mapLocalVocabularyText('The server refused the upload.')
     throw new Error(message)
   }
   return result && 'path' in result && typeof result.path === 'string' ? result.path : null
@@ -172,18 +175,18 @@ export async function saveUploadOverHttp(
 ): Promise<string | null> {
   if (typeof dataBase64 !== 'string' || dataBase64.length === 0) return null
   if (dataBase64.length > UPLOAD_MAX_BASE64_CHARS) {
-    throw new Error(UPLOAD_TOO_LARGE_MESSAGE)
+    throw new Error(mapLocalVocabularyText(UPLOAD_TOO_LARGE_MESSAGE))
   }
 
   let binary: string
   try {
     binary = atob(dataBase64)
   } catch {
-    throw new Error('The selected file could not be decoded for upload.')
+    throw new Error(mapLocalVocabularyText('The selected file could not be decoded for upload.'))
   }
   if (binary.length === 0) return null
   if (binary.length > UPLOAD_MAX_BYTES) {
-    throw new Error(UPLOAD_TOO_LARGE_MESSAGE)
+    throw new Error(mapLocalVocabularyText(UPLOAD_TOO_LARGE_MESSAGE))
   }
 
   const bytes = new Uint8Array(binary.length)
@@ -204,7 +207,7 @@ export async function saveUploadBlobOverHttp(
   // Blob.size is cheap browser metadata. The authenticated receiver still counts untrusted bytes
   // again, because this renderer-side guard is an allocation optimization, not a trust boundary.
   if (data.size === 0) return null
-  if (data.size > UPLOAD_MAX_BYTES) throw new Error(UPLOAD_TOO_LARGE_MESSAGE)
+  if (data.size > UPLOAD_MAX_BYTES) throw new Error(mapLocalVocabularyText(UPLOAD_TOO_LARGE_MESSAGE))
   return postUploadOverHttp(name, data, fetchImpl)
 }
 
@@ -374,8 +377,8 @@ export function buildRealApi(
       client.request(IPC.ptyDestroy, persistKey, opts?.everySocket === true) as Promise<void>,
     recycle: (persistKey) => client.request(IPC.ptyRecycle, persistKey) as Promise<void>,
     // No server handler — degrade gracefully (never reject the boot path).
-    generateName: () => Promise.resolve(AI_NAMING_UNAVAILABLE),
-    generateGroupName: () => Promise.resolve(AI_NAMING_UNAVAILABLE),
+    generateName: () => Promise.resolve({ ...AI_NAMING_UNAVAILABLE, message: mapLocalVocabularyText(AI_NAMING_UNAVAILABLE.message) }),
+    generateGroupName: () => Promise.resolve({ ...AI_NAMING_UNAVAILABLE, message: mapLocalVocabularyText(AI_NAMING_UNAVAILABLE.message) }),
     capture: (persistKey, full) =>
       client.request(IPC.ptyCapture, persistKey, full).catch(() => '') as Promise<string>,
     readScrollback: (persistKey) =>
@@ -446,11 +449,11 @@ export function buildRealApi(
       client.request(IPC.workspaceJoinParts, cwd) as ReturnType<WorkspaceApi['joinParts']>,
     exportProject: async () => ({
       ok: false,
-      error: 'Project archive export is available in the Windows desktop app.'
+      error: mapLocalVocabularyText('Project archive export is available in the Windows desktop app.')
     }),
     importProject: async () => ({
       ok: false,
-      error: 'Project archive import is available in the Windows desktop app.'
+      error: mapLocalVocabularyText('Project archive import is available in the Windows desktop app.')
     }),
     portableBindings: {
       state: async (input: { nodeId: string; featureId: string; displayLabel: string; hasMissingAssets?: boolean }) => [{
@@ -474,7 +477,7 @@ export function buildRealApi(
       budgetLeft: 0,
       waitMs: 0,
       challenge: null,
-      message: 'Project archives are available in the Windows desktop app.'
+      message: mapLocalVocabularyText('Project archives are available in the Windows desktop app.')
     }),
     // REAL: core broadcasts IPC.workspaceMigrated after a v2→v3 migration (workspace-store.ts).
     onMigrated: (cb) => client.subscribe(IPC.workspaceMigrated, cb as Listener),
@@ -557,7 +560,7 @@ export function buildRealApi(
     start: async () => ({
       ok: false,
       state: 'failed' as const,
-      error: 'Deployment is controlled by the Windows desktop app.'
+      error: mapLocalVocabularyText('Deployment is controlled by the Windows desktop app.')
     }),
     currentTotp: async () => '',
     status: async () => ({ running: false }),
@@ -1393,7 +1396,7 @@ export function showReconnectOverlay(): void {
     'position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;' +
     'justify-content:center;background:var(--md-scrim,rgba(0,0,0,0.6));color:var(--md-on-surface,#E6E0E9);' +
     'font:15px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;text-align:center;padding:24px'
-  el.textContent = 'Connection lost — reconnecting…'
+  el.textContent = mapLocalVocabularyText('Connection lost — reconnecting…')
   document.body.appendChild(el)
 }
 

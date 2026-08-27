@@ -17,6 +17,15 @@ export function getEmojiEnabled(state) {
   return !!state.emoji
 }
 
+export function vocabularyAllowed(state) {
+  return state.schoolHydrated !== false && !state.school
+}
+
+export function shapeCopy(state, text) {
+  const value = String(text)
+  return vocabularyAllowed(state) ? applyReplacements(value, state.vocabEntries) : value
+}
+
 // The effective language/funny-level: School mode forces plain English at
 // the most serious funny level, regardless of the user's own saved choice
 // (which stays saved underneath, untouched, and comes straight back the
@@ -38,27 +47,13 @@ function stripEmoji(text) {
   return text.replace(/[^\x00-\x7F]/g, '').trimEnd()
 }
 
-// Apply the user's word=newword swaps (comma or newline separated) to a
-// piece of friendly UI copy. Only whole-word, case-insensitive matches are
-// replaced, and this is only ever called on the friendly sentences — never
-// on a command, a file path, or a piece of code.
-export function applyReplacements(text, vocabText) {
-  const raw = String(vocabText || '').trim()
-  if (!raw) return text
-  let out = String(text)
-  raw.split(/[,\n]/).forEach((pair) => {
-    const bits = pair.split('=')
-    if (bits.length !== 2) return
-    const from = bits[0].trim()
-    const to = bits[1].trim()
-    if (!from) return
-    try {
-      out = out.replace(new RegExp('\\b' + from.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'gi'), to)
-    } catch (_err) {
-      /* an unbuildable pattern is simply skipped */
-    }
-  })
-  return out
+// Apply the validated JSON entries to friendly UI copy. Dynamic facts, commands,
+// paths, identifiers, and code never pass through this helper.
+export function applyReplacements(text, entries) {
+  if (!entries || typeof entries !== 'object' || Array.isArray(entries)) return text
+  return Object.keys(entries)
+    .sort((a, b) => b.length - a.length)
+    .reduce((out, from) => out.split(from).join(entries[from]), String(text))
 }
 
 // Shape one fact into the current language + funny level + emoji setting.
@@ -68,11 +63,11 @@ export function shapeVoice(state, fact) {
   const lvl = effFunnyEn(state)
   const en = fact + (getEmojiEnabled(state) ? EN_TAILS[lvl - 1] || '' : stripEmoji(EN_TAILS[lvl - 1] || ''))
   const lang = effLang(state)
-  if (lang === 'en') return applyReplacements(en, state.vocab)
+  if (lang === 'en') return shapeCopy(state, en)
   const yueFact = YUE[fact] || fact
   const yueLvl = effFunnyYue(state)
-  if (lang === 'yue') return applyReplacements(yueFact + (YUE_TAILS[yueLvl - 1] || ''), state.vocab)
-  return applyReplacements(en + ' / ' + yueFact, state.vocab)
+  if (lang === 'yue') return shapeCopy(state, yueFact + (YUE_TAILS[yueLvl - 1] || ''))
+  return shapeCopy(state, en + ' / ' + yueFact)
 }
 
 // The title of a room, honouring language mode (but never the funny tail —
@@ -81,5 +76,5 @@ export function shapeTitle(state, title) {
   const lang = effLang(state)
   const yue = YUE[title] || title
   const out = lang === 'yue' ? yue : lang === 'bi' ? title + ' / ' + yue : title
-  return applyReplacements(out, state.vocab)
+  return shapeCopy(state, out)
 }

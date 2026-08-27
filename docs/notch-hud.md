@@ -43,7 +43,7 @@ HUD-specific preload.
 - `assertRegularDockPresence()` is a documented no-op survivor of the macOS Dock guard; it stays
   exported only because `src/main/index.ts` still calls it. Remove both together.
 
-## Data (main-side controller, no core changes)
+## Data (main-side controller and shared mode snapshot)
 
 Subscribes to the SAME seams push-notify uses (`agent-status-mirror.ts`): `onNodeStateChange`
 (working/needsYou/done edges), `onNodeNowChange` (activity + context%), `onMirrorFlush` (full
@@ -57,8 +57,15 @@ Row shape sent to the HUD:
 ```ts
 { nodeId, agentId, title, model?, state: 'working'|'needsYou'|'done'|'idle',
   prompt?, activity?, contextPercent?,
-  subagents: [{ id, label?, state: 'working'|'done' }] }
+  subagents: [{ id, label?, state: 'working'|'done' }],
+  schoolModeEnabled, schoolModeHydrated }
 ```
+
+The main controller includes the shared School-mode snapshot with every push. The HUD maps its
+authored labels only after `schoolModeHydrated` is true and `schoolModeEnabled` is false. Before a
+successful read, it keeps the original wording, and turning the mode on immediately restores the
+original wording on the next push. Node titles, prompts, activity, model names, IDs, and timestamps
+are runtime facts and are never rewritten by personal vocabulary.
 - **done latch + clear**: `done` state is latched by the mirror already. Clearing is **strictly per
   row**: clicking/Go-ing a row (`hudFocusNode` → `model.noteFocus`) clears THAT node, and reading
   the session inside nodeterm clears it through the mirror's read-ack (`state:'done', ack:true`).

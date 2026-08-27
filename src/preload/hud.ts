@@ -24,6 +24,9 @@ export interface HudRow {
 }
 export interface HudPush {
   rows: HudRow[]
+  /** Shared School-mode state. Unhydrated means vocabulary substitutions stay off. */
+  schoolModeEnabled: boolean
+  schoolModeHydrated: boolean
   /** Notch/menu-bar strip height in px (the capsule's fused top zone; content sits below it). */
   bar: number
   /** Primary-display width in px. */
