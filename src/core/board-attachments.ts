@@ -12,6 +12,9 @@ import {
   type BoardAttachmentRef
 } from '../shared/comment-attachments'
 
+// Keep the byte-derived detector available to portable import callers through the core attachment boundary.
+export { detectBoardAttachmentKind }
+
 export const BOARD_ATTACHMENTS_DIR = '.nodeterm/board-attachments'
 
 export interface BoardAttachmentMaterialized {

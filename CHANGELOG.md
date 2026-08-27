@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Restore the core board-attachment detector export used by portable project import. The detector
+  remains byte-derived and shared, preserving MIME and extension classification, bounded attachment
+  carriers, path safety, and archive integrity validation while restoring the correct core import
+  boundary. This ultra-speed repair ran no tests, type checks, lint, reviews, audits, builds,
+  packaging, runtime interaction, or screen captures.
+
+  Merge leftovers 清走晒：board attachment detector 重新由 core boundary export，portable import
+  可以继续用同一套 byte classification，path safety 同 archive integrity 都原封不動。今次
+  ultra-speed repair 沒有執行 tests、type checks、lint、reviews、audits、builds、packaging、runtime
+  interaction 或 screen captures。
+
 - Restore the Cloudflare Tunnel route planner after a merge retained the closing brace from a
   block-bodied conflict branch beside the one-line return from another version. Route ownership
   conflicts and DNS-only conflicts now remain inside the same guarded planning operation, with the
