@@ -10,6 +10,18 @@
   ran no tests, type checks, lint, reviews, audits, builds, packaging, runtime interaction, or screen
   captures.
 
+- Remove residual duplicate declarations in the PTY manager, shared settings defaults, and torrent
+  service. The PTY manager now has one complete end-session implementation, the Windows terminal
+  font fallback keeps the current Consolas and Cascadia Mono stack, speech keeps its explicit no-
+  dictation default, and the torrent service keeps its public task subscription method without a
+  class-member name collision. A single-file esbuild transform reported `PARSE_OK` for each changed
+  source file. This ultra-speed repair ran no tests, type checks, lint, reviews, audits, builds,
+  packaging, runtime interaction, or screen captures.
+
+  Merge leftovers 清走晒：PTY 收返一份完整收尾流程，Windows 字型保留現行 fallback，speech 繼續
+  支援明確停用 dictation，torrent listener 唔再同 callback 撞名。三個 source file 各自通過
+  `PARSE_OK` syntax evidence；其餘 checks 今次 ultra-speed repair 沒有執行。
+
 - Reconcile stale merge fragments in `src/main/index.ts`. The main process now keeps one import
   declaration per duplicated filesystem, Electron, SSH, account, and notification helper; one quit-confirmation
   declaration and detail; one configurable-shortcut interception path; one native-notification

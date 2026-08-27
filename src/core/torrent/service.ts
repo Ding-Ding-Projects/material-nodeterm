@@ -140,7 +140,7 @@ export class TorrentService implements TorrentApi {
   private readonly handles = new Map<string, TorrentLike>()
   private readonly seedTimers = new Map<string, ReturnType<typeof setTimeout>>()
   private readonly listeners = new Set<(task: TorrentTaskState) => void>()
-  private readonly onTask?: (task: TorrentTaskState) => void
+  private readonly taskCallback?: (task: TorrentTaskState) => void
   private client: WebTorrentClientLike | null = null
   private runtimeInfo: Awaited<ReturnType<TorrentApi['runtime']>> | null = null
   private initPromise: Promise<void>
@@ -149,7 +149,7 @@ export class TorrentService implements TorrentApi {
   constructor(private readonly options: TorrentServiceOptions) {
     this.storeFile = join(options.userDataDir, 'torrent-downloader', 'tasks.json')
     this.runtimeRoot = join(options.userDataDir, 'torrent-downloader', 'webtorrent-runtime')
-    this.onTask = options.onTask
+    this.taskCallback = options.onTask
     this.initPromise = this.load()
   }
 
@@ -187,7 +187,7 @@ export class TorrentService implements TorrentApi {
     const normalized = safeTask(task)
     normalized.updatedAt = Date.now()
     this.tasks.set(normalized.id, normalized)
-    this.onTask?.(normalized)
+    this.taskCallback?.(normalized)
     for (const listener of this.listeners) listener(normalized)
     void this.persist()
   }
