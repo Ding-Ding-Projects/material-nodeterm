@@ -314,6 +314,243 @@ contain no audio and do not replace the full-resolution still captures as eviden
 ![Animated use of the Settings destination](docs/assets/recordings/site/site-room-settings.gif)
 
 </details>
+The full inventory of what nodeterm writes where (and what the script keeps, like the
+`.nodeterm/` canvas folders inside your own repos) is documented in
+[docs/uninstall.md](docs/uninstall.md).
+
+## 🛠 Build from source
+
+### The canvas
+
+Right-click to open a **terminal** or an **agent** node. Alongside them live **sticky notes**
+(link one to a terminal to feed it context on demand), **Monaco editors**, **diff views**, web and
+browser views, annotations, and a family of **service managers** — Minecraft, Docker host,
+Proxmox, GitLab, Home Assistant and FreePBX — each an ordinary node you drag, colour, group and
+persist like any other, because a managed service is something you arrange beside the terminals
+working on it, not a modal you visit.
+
+The canvas also includes a **Torrent Downloader** node for explicit local WebTorrent tasks, with
+magnet or `.torrent` intake, safe destination selection, file-level metadata choices, live transfer
+progress, restart recovery, and a bounded per-task seeding policy.
+
+**Group** nodes are real containers that nest inside each other and can bind to a git worktree, so
+every node created inside one inherits that worktree's directory. Quit the app and the persistent
+backend reattaches to the live session; reboot the machine and cold restore rebuilds the node,
+replays saved scrollback and resumes a supported agent CLI — it does not preserve the original OS
+process, and says so.
+
+Each Multiverse and AWS Universe child canvas also owns one fixed **Shop** node. It opens the
+scope-bound catalog, keeps a deterministic identity across import, hydration, undo and peer replay,
+and refuses deletion, duplication, grouping, or movement. Live choices are handed to the unified
+Node Catalog creation coordinator with immutable event ids and collision-free placement. The root
+canvas has no Shop. See the
+[special-universe Shop article](./docs/features/integrations/aws-universe-shop.md) for the
+portable metadata, repair records, disabled AWS entries, and verification boundary.
+
+The AWS Universe navigator creates unlimited AWS-only child canvases in the project root. Each
+instance starts with one fixed scoped Shop, supports guided local search with an adjacent regex
+builder, and preserves safe schema 3 intent without carrying credentials or local runtime state.
+See the [AWS Universe portal article](./docs/features/canvas/aws-universe.md).
+
+A project can now create and navigate a scoped **Multiverse canvas hierarchy** from the canvas app
+bar. The guided parent picker searches names, depths, and identifiers with its adjacent regex
+builder, explains why depth-8 parents cannot accept another child, and preserves each child canvas
+through ordinary project files and portable schema 3 import and export. See the
+[Multiverse child canvases article](./docs/features/canvas/multiverse-canvases.md).
+
+### Agent support — Claude Code, Codex, Gemini, opencode, Grok, or your own
+
+An **agent** node is a terminal preset that launches an agent CLI as its first command. Status
+comes from each agent's own hooks — never from scraping terminal output — so you get pulsing
+**RUNNING / NEEDS YOU** badges, a per-node context-window meter, subagent cards with live
+transcripts, and, for capable agents, session renaming and conversation branching. A custom
+command works too, with basic process/title status.
+
+Capabilities are per agent and none are assumed: see
+[`docs/features/agents/agent-support.md`](./docs/features/agents/agent-support.md) for exactly what
+each one has, and what it does not.
+
+### One project, two views — the kanban board
+
+Every project is a canvas **and** a Trello-style board. Cards *are* your live session nodes,
+derived from the same data on every render — drag one across columns while its agent keeps
+running, or open a card into a live modal holding the real session plus members, due date,
+priority and comments. The canvas stays mounted underneath, so switching views never interrupts
+anything.
+
+### Session continuity
+
+Every terminal runs inside a persistent [tmux](https://github.com/tmux/tmux) session on macOS and
+Linux, so a shell — and anything in it, including an in-flight agent turn — survives closing a
+node, switching projects and quitting the app. **Windows has no tmux binary to bundle**, so
+nodeterm ships a from-scratch equivalent: the [Windows session host](#windows), a standalone
+process that owns the real PTYs and outlives the app. See [Windows](#windows) for its two honest
+caveats.
+
+### Remote & SSH, and the Server Edition
+
+Point a project at a folder on a remote host and every terminal, file operation, git command and
+even the kanban board for that project runs there while the canvas stays local — session
+continuity applies remotely too. Or run the **Server Edition**: the same renderer served headless
+over HTTP/WebSocket from a host you own, reached from any browser, with passkey or password auth.
+One command (`./host.sh`, or `host.bat` on Windows) builds and starts it in a container. Phone
+pairing is a free feature, not a paywalled one.
+
+### Source control and git worktrees
+
+A full git panel — stage/unstage, discard, diff nodes, branch switch/create, commit (with an
+optional AI-generated message from a local agent CLI you already have), push/sync, `gh` sign-in.
+**Worktrees bind to group frames**: create one from the panel or the command palette and every
+node opened inside that frame runs in that worktree, so an agent per branch is just a group per
+branch.
+
+### ADHD modes
+
+This README has always said nodeterm is built for scattered workflows. These are the part you
+can actually switch on — five accommodations, independently, all off by default:
+**Focus** (fades everything but the node you are in), **Low stimulation** (less motion, quieter
+colour, and only the notifications that need an answer), **Time awareness** (elapsed time on the
+node, not in a menu), **One thing at a time** (one next action, in your words), and **Momentum**
+(a note when something has sat untouched).
+
+Independent on purpose: someone may want a quieter interface without time nudges, or want the
+nudges precisely because they are hyperfocusing. Behind one master switch, most people turn the
+lot off to escape the single part that does not suit them.
+
+Focus **dims and never hides** — nothing becomes unreachable, at any setting. The copy states
+facts and never verdicts: no streaks, no scores, no congratulation. And none of it is presented
+as medical: these are interface accommodations, not assessment or advice, and nothing is
+recorded or sent anywhere. See [`docs/adhd-modes.md`](./docs/adhd-modes.md).
+
+### Dictation
+
+Voice-to-text for any terminal or agent node, transcribed entirely on-device with
+[Whisper](https://github.com/openai/whisper) — nothing you say leaves your machine. Hold the
+chord, speak, then choose **Send** (submits) or **Insert** (drops it in without submitting).
+Identical on desktop and in the browser.
+
+<details>
+<summary><strong>More — language modes, the regex builder, toy locks, exports, and everything else this fork adds</strong></summary>
+
+- **Language modes & funny-level sliders** — English, playful Hong Kong-style Cantonese, or
+  bilingual, plus two independent funny-level sliders (one per language) that style every
+  dialog and message box without changing what they actually say. See
+  [`docs/language-modes.md`](./docs/language-modes.md).
+- **Regex builder** — a real, in-app pattern builder wired into every search field in the app,
+  not a link to an external site. Plain text by default, regex an explicit opt-in. See
+  [`docs/regex-builder.md`](./docs/regex-builder.md).
+- **School mode** — a shared, renamable focus switch that, while on, presents the app in plain
+  English with Cantonese, funny levels, the dim-sum surprise and personal vocabulary treated as
+  not installed. A user-experience switch, not a security boundary. See
+  [`docs/school-mode.md`](./docs/school-mode.md).
+- **Personal vocabulary** — upload a small local JSON file of your own `term → replacement`
+  pairs and the app's own prose adopts your wording. Local and private; nothing is ever
+  uploaded anywhere. See [`docs/personal-vocabulary.md`](./docs/personal-vocabulary.md).
+- **Narrator** — an opt-in spoken TTS narrator for app events (an agent finishing, needing
+  attention, or erroring), off by default. See [`docs/narrator.md`](./docs/narrator.md).
+- **Toy locks & the built-in authenticator** — a purely-for-fun password/TOTP gate you can put
+  on a project tab, a canvas node, or an appearance setting, plus a local offline place to keep
+  arbitrary TOTP secrets and read live codes. Explicitly *not* a security boundary — see
+  [`docs/toy-locks.md`](./docs/toy-locks.md) and [`docs/authenticator.md`](./docs/authenticator.md).
+- **Exports & bulk actions** — every record, view, list and generated artifact nodeterm owns is
+  exportable in whatever formats can faithfully represent it, and every list/table/grid
+  supports select-all, bulk delete/export/move with a reviewable preview first. See
+  [`docs/exports.md`](./docs/exports.md) and [`docs/bulk-actions.md`](./docs/bulk-actions.md).
+- **Universal file converter** — a local, offline conversion surface (documents/PDF, images,
+  audio, video, archives, structured data, code/text, binary encodings) reachable from the nav
+  rail's Tools destination or the command palette. It reserves collision-safe output names,
+  publishes validated output atomically, reports partial batch outcomes, and opens completed files
+  directly in Visual Studio Code. See
+  [`docs/file-converter.md`](./docs/file-converter.md).
+- **Automatic node dependency installation** — a shared manifest and privileged, machine-local
+  lifecycle for canonical HTTPS downloads, SHA-256 verification, portable user-scoped installs,
+  cache reuse, repair, cancellation, and restart reconciliation. Node Catalog `Install and
+  continue` wiring and focused verification remain in progress. See
+  [`docs/features/dependencies/automatic-node-dependencies.md`](./docs/features/dependencies/automatic-node-dependencies.md).
+- **Shared hosted-resource backup and restore** — versioned, edition-aware, ownership-reviewed
+  archives with bounded ZIP validation, explicit omissions, progress, cancellation, atomic
+  publication, and rollback contracts for hosted-service nodes. See
+  [`docs/features/integrations/backup-restore.md`](./docs/features/integrations/backup-restore.md).
+- **Local Ollama suite manager** — a local manager for [Ollama](https://ollama.com) that talks
+  only to its documented local HTTP API, never a cloud service. See
+  [`docs/ollama-manager.md`](./docs/ollama-manager.md).
+- **Torrent Downloader** — local WebTorrent downloads with magnet and `.torrent` intake,
+  metadata/file selection, safe destination preflight, progress, pause/resume/cancel/retry,
+  restart reconciliation, and bounded per-task seeding. See
+  [`docs/features/torrents/torrent-downloader.md`](./docs/features/torrents/torrent-downloader.md).
+- **Calendar nodes** — local calendars and ICS import, with guided CalDAV, Google Calendar, and
+  Microsoft 365 account/calendar pickers, recurrence and timezone views, offline cache, and
+  reviewable create/edit/delete actions. Provider credentials remain in the trusted shell's vault;
+  project files carry only portable selection intent. See
+  [`docs/features/canvas/node-kinds.md`](./docs/features/canvas/node-kinds.md).
+- **Scheduled settings** — rules that automatically overlay appearance/customization settings
+  for a date+time window ("dark theme after 22:00"), with an optional Home Assistant boolean
+  source. See [`docs/scheduled-settings.md`](./docs/scheduled-settings.md).
+- **Appearance editor & infinite colour picker** — a non-modal, anchored editor that can
+  re-typeset a tab, a node title, or a piece of app chrome, backed everywhere by one continuous
+  colour field (never a fixed swatch list) with a colour-space translator. See
+  [`docs/appearance.md`](./docs/appearance.md) and [`docs/colour-picker.md`](./docs/colour-picker.md).
+- **The dim-sum surprise** — a 10% chance at startup of a small, non-blocking card showing one
+  randomly chosen dim-sum dish, bilingual name and all. Entirely optional, never gates
+  anything. See [`docs/dim-sum.md`](./docs/dim-sum.md).
+- **Command palette** — `Ctrl+Shift+F` (and `Cmd/Ctrl+K`, unchanged) opens a palette over every
+  command, setting and destination in the app. See [`docs/command-palette.md`](./docs/command-palette.md).
+
+</details>
+## Windows
+
+Windows is a first-class desktop target: a native **Squirrel.Windows** installer, a
+Windows-shaped default shell (PowerShell/cmd, not `bash`), and a Material title bar with native
+window buttons.
+
+**The installer is unsigned.** Code signing is permanently out of scope for this project (see
+`CLAUDE.md`'s "Permanent no-signing policy"), so Windows SmartScreen will very likely show a
+**"Windows protected your PC"** interstitial the first time you run `Setup.exe` — click **More
+info**, then **Run anyway**. This is expected of every unsigned installer from any publisher; it
+is not a sign of a corrupted download, and it is not something this project will ever silently
+work around by acquiring a certificate.
+
+**Session continuity works, through a Windows-aware resolver.** The desktop searches `PATH` for
+`tmux` first and then the tmux-compatible `psmux` executable, using `PATHEXT` so `.exe` and package
+manager shims are discovered just like native Windows commands. When neither is installed,
+terminals use the **Windows session host** instead — a standalone Node process, built on the same
+`node-pty` this app already depends on plus a headless `xterm.js` for server-side screen state,
+that owns the real PTYs and outlives the Electron app. Close the app, reopen it, and terminals —
+and any in-flight agent CLI turn — remain available with scrollback and the selected persistence
+backend.
+
+Two honest caveats, in the spirit of tmux's own trade-offs:
+
+- **If the session-host process itself dies, its sessions die with it.** It is a standalone
+  process this project maintains, not a decades-old, independently-shipped C daemon — a weaker
+  guarantee than real tmux, stated plainly rather than glossed over.
+- **A machine reboot ends every session either way** — that is true of tmux too. What survives a
+  reboot is the **cold-restore path**: a periodically saved scrollback snapshot is replayed into
+  the freshly reattached terminal, and a resumable agent CLI is automatically relaunched with
+  its own `--resume`/equivalent flag, so you land back roughly where you left off even though
+  the underlying process itself did not survive.
+
+If you want tmux-grade durability instead, install `psmux` with Windows Package Manager
+(`winget install -e --id marlocarlo.psmux`) or place a compatible `tmux.exe` on your Windows
+`PATH` — nodeterm prefers `tmux`, then `psmux`, over its own session host every time one is found.
+Full detail, architecture, and the protocol table: [`docs/windows-session-host.md`](./docs/windows-session-host.md) and
+[`docs/windows.md`](./docs/windows.md).
+
+## Install / build
+
+Three scripts live at the repository root, each with a Windows `.bat` and a POSIX `.sh`
+sibling. A checkout with nothing installed should reach a running app (or a real installer) by
+running one of them:
+
+| Script | Windows | macOS / Linux | What it does |
+| --- | --- | --- | --- |
+| Dependencies | `download-dependencies.bat` | `download-dependencies.sh` | Installs Node.js (if missing) and every npm dependency, from canonical upstreams into a user-scoped location. |
+| Build | `build.bat` | `build.sh` | Runs the dependency script, builds `out/`, then offers to launch the app. |
+| Installer | `build-installer.bat` | `build-installer.sh` | Runs the dependency script, then packages and verifies the real platform installer (Squirrel on Windows, `.dmg`/`.zip` on macOS, `.AppImage`/`.deb` on Linux). |
+
+All three accept a silent flag (`/s` / `--silent` on Windows, `-s` / `--silent` elsewhere, or a
+`SILENT=1` environment variable) for unattended use, and exit non-zero on the first real
+failure. None of them ever installs a secret, a credential, or a code-signing certificate.
 
 <details>
 <summary><strong>Every settings feature card</strong></summary>

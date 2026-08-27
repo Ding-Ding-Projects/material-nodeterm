@@ -5,14 +5,33 @@ import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
 import { AnchoredRegexBuilder } from './regex/AnchoredRegexBuilder'
 import { AnchoredPopover } from '../ui/AnchoredPopover'
 import { useLocalizedVocabularyText } from '../lib/personalVocabulary/useLocalizedVocabularyText'
+import { DoorConstructionDialog } from './DoorConstructionDialog'
+import { createPortableDoorConstruction, type PortableDoorConstructionV3 } from '@shared/door-construction'
+
+interface PendingDoorConstruction {
+  parentCanvasId: string
+  childCanvasId: string
+  entryDoorId: string
+  returnDoorId: string
+  title: string
+}
 
 interface MultiverseNavigatorProps {
   onNavigate: (canvasId: string) => void
   onCreate: (parentCanvasId: string, title: string) => { canvasId?: string; reason?: string }
+  onConstructDoor: (input: {
+    parentCanvasId: string
+    childCanvasId: string
+    entryDoorId: string
+    returnDoorId: string
+    title: string
+    entryConstruction: PortableDoorConstructionV3
+    returnConstruction: PortableDoorConstructionV3
+  }) => { portalId?: string; reason?: string }
 }
 
 /** Guided hierarchy picker for root plus scoped Multiverse canvases. */
-export function MultiverseNavigator({ onNavigate, onCreate }: MultiverseNavigatorProps): React.JSX.Element | null {
+export function MultiverseNavigator({ onNavigate, onCreate, onConstructDoor }: MultiverseNavigatorProps): React.JSX.Element | null {
   const ts = useLocalizedVocabularyText()
   const project = useProjects((state) => state.projects.find((item) => item.id === state.activeProjectId))
   const [open, setOpen] = useState(false)
@@ -20,6 +39,7 @@ export function MultiverseNavigator({ onNavigate, onCreate }: MultiverseNavigato
   const [parentCanvasId, setParentCanvasId] = useState(ROOT_CANVAS_ID)
   const [title, setTitle] = useState('New Multiverse canvas')
   const [message, setMessage] = useState<string | null>(null)
+  const [pendingDoor, setPendingDoor] = useState<PendingDoorConstruction | null>(null)
   const anchorRef = useRef<HTMLButtonElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   const parentSearchRef = useRef<HTMLInputElement>(null)
@@ -63,7 +83,38 @@ export function MultiverseNavigator({ onNavigate, onCreate }: MultiverseNavigato
     }
     setMessage(ts('multiverse.created', 'Child canvas created.'))
     setCreateOpen(false)
-    onNavigate(result.canvasId)
+    const entryDoorId = `door-${result.canvasId}-entry`
+    const returnDoorId = `door-${result.canvasId}-return`
+    setPendingDoor({ parentCanvasId, childCanvasId: result.canvasId, entryDoorId, returnDoorId, title: title.trim() })
+  }
+
+  const finishDoorConstruction = (entryConstruction: PortableDoorConstructionV3): void => {
+    if (!pendingDoor) return
+    const returnConstruction = createPortableDoorConstruction({
+      doorId: pendingDoor.returnDoorId,
+      canvasId: pendingDoor.childCanvasId,
+      targetCanvasId: pendingDoor.parentCanvasId,
+      pairedDoorId: pendingDoor.entryDoorId,
+      label: `Return to ${entryConstruction.label}`,
+      frame: entryConstruction.frame,
+      hinges: entryConstruction.hinges,
+      panel: entryConstruction.panel,
+      handle: entryConstruction.handle,
+      activationCore: { ...entryConstruction.activationCore, armed: true }
+    })
+    const result = onConstructDoor({
+      ...pendingDoor,
+      entryConstruction,
+      returnConstruction
+    })
+    if (!result.portalId) {
+      setMessage(result.reason ?? ts('multiverse.door.failed', 'The door could not be attached to the new canvas.'))
+      return
+    }
+    setPendingDoor(null)
+    setOpen(false)
+    setMessage(ts('multiverse.door.created', 'Door constructed and paired.'))
+    onNavigate(pendingDoor.childCanvasId)
   }
 
   return (
@@ -170,6 +221,16 @@ export function MultiverseNavigator({ onNavigate, onCreate }: MultiverseNavigato
         </div>
         {message && <p className="multiverse-nav__message" role="status">{message}</p>}
       </AnchoredPopover>
+      <DoorConstructionDialog
+        open={pendingDoor !== null}
+        onClose={() => setPendingDoor(null)}
+        canvasId={pendingDoor?.parentCanvasId ?? ROOT_CANVAS_ID}
+        targetCanvasId={pendingDoor?.childCanvasId ?? ''}
+        doorId={pendingDoor?.entryDoorId ?? 'door-pending-entry'}
+        pairedDoorId={pendingDoor?.returnDoorId ?? 'door-pending-return'}
+        initialLabel={pendingDoor?.title}
+        onConstruct={finishDoorConstruction}
+      />
     </>
   )
 }

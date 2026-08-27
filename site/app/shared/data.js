@@ -41,6 +41,7 @@ export const FEATURES = [
 
 export const DOCS = [
   ['Agent support', 'Claude, Codex, Gemini, opencode, Grok', 'agent-support'],
+  ['Linked-agent inbox notifications', 'fixed prompts between verified linked agents', 'linked-agent-inbox-notifications'],
   ['Canvas & node lifecycle', 'how blocks are born and cleaned up', 'canvas-lifecycle'],
   ['Changelog viewer', 'the date picker and the commit links', 'changelog-viewer'],
   ['Dim sum surprise', 'the little treat that shows up one visit in ten', 'dim-sum-surprise'],

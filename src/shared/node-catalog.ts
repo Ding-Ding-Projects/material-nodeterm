@@ -153,6 +153,28 @@ const plannedEntry = (
   }
 })
 
+const awsUniverseEntry: NodeCatalogEntry = {
+  id: 'aws-universe',
+  nodeKind: 'aws-universe',
+  category: 'universes',
+  label: 'AWS Universe',
+  description: 'Create an AWS-only child canvas with a dedicated Shop node.',
+  keywords: ['aws', 'cloud', 'universe', 'portal', 'canvas'],
+  documentationPath: 'docs/features/canvas/aws-universe.md',
+  safeDefaults: { scope: 'aws-universe', depth: 1 },
+  dependencies: [],
+  status: 'available',
+  availabilityMode: 'configure-later',
+  scope: 'root',
+  availability: (context) => context.universeScope === 'root'
+    ? { available: true }
+    : {
+        available: false,
+        reason: 'AWS Universe portals can only be created from the root canvas.',
+        dependencyIds: ['canvas-scope:root']
+      }
+}
+
 /**
  * The one source of truth for user-created node intents. Labels and descriptions deliberately stay
  * neutral English here; the renderer resolves them through the normal i18n catalogue, while this
@@ -430,6 +452,18 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
     availability: alwaysAvailable
   },
   {
+    id: 'service:cloudflare-zero-trust',
+    nodeKind: 'cloudflare-zero-trust',
+    category: 'managers',
+    label: 'Cloudflare managers',
+    description: 'Open typed Access, Zero Trust, Workers, Pages, R2, D1 and Queues managers.',
+    keywords: ['service', 'cloudflare', 'access', 'zero trust', 'workers', 'pages', 'r2', 'd1', 'queues'],
+    documentationPath: 'docs/features/integrations/cloudflare-zero-trust-managers.md',
+    safeDefaults: { serviceLabel: '' },
+    dependencies: ['cloudflare-api'],
+    availability: alwaysAvailable
+  },
+  {
     id: 'editor',
     nodeKind: 'editor',
     category: 'files',
@@ -523,8 +557,26 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
   },
   plannedEntry('planner', 'automation', 'Planner', 'Create a planner occurrence definition with explicit local binding.', 'planner-service'),
   plannedEntry('multiverse-portal', 'universes', 'Multiverse portal', 'Create a door-only Multiverse canvas below the depth limit.', 'multiverse-service', 'multiverse', 8),
-  plannedEntry('aws-universe', 'universes', 'AWS Universe', 'Create an AWS-only child canvas with a dedicated Shop node.', 'aws-cli-v2', 'aws-universe'),
-  plannedEntry('aws-service', 'universes', 'AWS service node', 'Create a typed AWS service blueprint from installed CLI models.', 'aws-cli-v2', 'aws-universe'),
+  awsUniverseEntry,
+  {
+    ...plannedEntry('aws-service', 'universes', 'AWS service node', 'Create a typed AWS service blueprint from installed CLI models.', 'aws-cli-v2', 'aws-universe'),
+    documentationPath: 'docs/features/integrations/aws-cli-model-documentation.md'
+  },
+  {
+    id: 'cloudflare-core-managers',
+    nodeKind: 'cloudflare-core-managers',
+    category: 'managers',
+    label: 'Cloudflare core managers',
+    description: 'Manage accounts, zones, DNS, SSL/TLS, rulesets, redirects, cache, and analytics with typed operations.',
+    keywords: ['cloudflare', 'account', 'zone', 'dns', 'ssl', 'tls', 'ruleset', 'redirect', 'cache', 'analytics', 'manager'],
+    documentationPath: 'docs/features/integrations/cloudflare-core-managers.md',
+    safeDefaults: { manager: 'account', operation: 'account-list' },
+    dependencies: [],
+    status: 'available',
+    availabilityMode: 'configure-later',
+    scope: 'any',
+    availability: alwaysAvailable
+  },
   plannedEntry('cloudflare-hosting', 'hosting', 'Cloudflare hosting', 'Create a private-first hosting blueprint with explicit tunnel exposure later.', 'hosting-adapter'),
   plannedEntry('gitlab-hosting', 'hosting', 'GitLab hosting', 'Create a guided GitLab hosting blueprint with local credentials later.', 'hosting-adapter'),
   plannedEntry('nextcloud-hosting', 'hosting', 'Nextcloud hosting', 'Create a managed Nextcloud hosting blueprint with local binding later.', 'hosting-adapter'),
@@ -567,6 +619,7 @@ export const NODE_CATALOG_COMPLETENESS: readonly NodeCatalogCompletenessRecord[]
   { id: 'service:gitlab', state: 'current', scope: 'any', reason: 'service manager node' },
   { id: 'service:homeassistant', state: 'current', scope: 'any', reason: 'service manager node' },
   { id: 'service:freepbx', state: 'current', scope: 'any', reason: 'service manager node' },
+  { id: 'service:cloudflare-zero-trust', state: 'current', scope: 'any', reason: 'typed Cloudflare manager node' },
   { id: 'subagent', state: 'ephemeral', scope: 'none', reason: 'hook-derived render-only card' },
   { id: 'loop-card', state: 'ephemeral', scope: 'none', reason: 'schedule-derived render-only card' },
   { id: 'photo', state: 'planned', scope: 'any', reason: 'photo adapter not implemented' },
@@ -581,8 +634,9 @@ export const NODE_CATALOG_COMPLETENESS: readonly NodeCatalogCompletenessRecord[]
   { id: 'alarm', state: 'current', scope: 'any', reason: 'persisted Alarm Clock node with host planner' },
   { id: 'planner', state: 'planned', scope: 'any', reason: 'planner service not implemented' },
   { id: 'multiverse-portal', state: 'planned', scope: 'multiverse', reason: 'Multiverse portal not implemented' },
-  { id: 'aws-universe', state: 'planned', scope: 'aws-universe', reason: 'AWS Universe not implemented' },
+  { id: 'aws-universe', state: 'current', scope: 'root', reason: 'AWS-only Universe portal and child canvas' },
   { id: 'aws-service', state: 'planned', scope: 'aws-universe', reason: 'AWS service node not implemented' },
+  { id: 'cloudflare-core-managers', state: 'current', scope: 'any', reason: 'typed Cloudflare account, zone, DNS, SSL/TLS, ruleset, redirect, cache, and analytics managers' },
   { id: 'cloudflare-hosting', state: 'planned', scope: 'any', reason: 'Cloudflare hosting not implemented' },
   { id: 'gitlab-hosting', state: 'planned', scope: 'any', reason: 'GitLab hosting not implemented' },
   { id: 'nextcloud-hosting', state: 'planned', scope: 'any', reason: 'Nextcloud hosting not implemented' },

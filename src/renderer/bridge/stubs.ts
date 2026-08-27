@@ -179,6 +179,7 @@ export function buildStubApi(): Omit<
   | 'toylock'
   | 'authenticator'
   | 'passwordManager'
+  | 'universeDoorEntry'
 > {
   const api = {
     providerServices: {
@@ -188,6 +189,19 @@ export function buildStubApi(): Omit<
       beginOAuth: (providerId: string) => Promise.resolve({ status: 'unsupported' as const, providerId, authorizationUrl: null, redirectUri: null, expiresAt: null, reason: mapLocalVocabularyText('Provider accounts are not connected on this surface.') }),
       completeOAuth: () => Promise.resolve({ status: 'rejected' as const, account: null, reason: mapLocalVocabularyText('Provider callbacks are not accepted on this surface.') }),
       removeAccount: () => Promise.resolve({ ok: false as const, error: mapLocalVocabularyText('Provider accounts are not connected on this surface.') })
+    },
+    cloudflareCoreManagers: {
+      runtime: U('cloudflareCoreManagers.runtime'),
+      credentials: U('cloudflareCoreManagers.credentials'),
+      saveCredential: U('cloudflareCoreManagers.saveCredential'),
+      removeCredential: U('cloudflareCoreManagers.removeCredential'),
+      binding: U('cloudflareCoreManagers.binding'),
+      bind: U('cloudflareCoreManagers.bind'),
+      unbind: U('cloudflareCoreManagers.unbind'),
+      preview: U('cloudflareCoreManagers.preview'),
+      execute: U('cloudflareCoreManagers.execute'),
+      cancel: U('cloudflareCoreManagers.cancel'),
+      onProgress: noopUnsub
     },
     ssh: {
       list: U('ssh.list'),
@@ -664,11 +678,24 @@ export function buildStubApi(): Omit<
     nodeDependencies: {
       catalog: U('nodeDependencies.catalog'),
       status: U('nodeDependencies.status'),
+      details: U('nodeDependencies.details'),
       install: U('nodeDependencies.install'),
       cancel: U('nodeDependencies.cancel'),
       repair: U('nodeDependencies.repair'),
       reconcile: U('nodeDependencies.reconcile'),
       onState: noopUnsub,
+      onProgress: noopUnsub
+    },
+    cloudflareZeroTrust: {
+      catalog: U('cloudflareZeroTrust.catalog'),
+      accounts: U('cloudflareZeroTrust.accounts'),
+      configure: U('cloudflareZeroTrust.configure'),
+      removeAccount: U('cloudflareZeroTrust.removeAccount'),
+      binding: U('cloudflareZeroTrust.binding'),
+      saveBinding: U('cloudflareZeroTrust.saveBinding'),
+      resources: U('cloudflareZeroTrust.resources'),
+      execute: U('cloudflareZeroTrust.execute'),
+      cancel: U('cloudflareZeroTrust.cancel'),
       onProgress: noopUnsub
     },
     ollama: {
@@ -817,6 +844,7 @@ export function buildStubApi(): Omit<
     | 'toylock'
     | 'authenticator'
     | 'passwordManager'
+    | 'universeDoorEntry'
     | 'fs'
     | 'git'
     | 'files'

@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Linked-agent inbox notifications - nodeterm docs</title>
+    <meta name="description" content="How nodeterm sends a fixed, bounded coordination prompt between verified linked agent nodes." />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+  </head>
+  <body>
+    <div class="doc-topbar">
+      <a href="../index.html">← nodeterm</a>
+      <span aria-hidden="true">/</span>
+      <a href="./index.html">Docs</a>
+    </div>
+    <article class="doc-body">
+      <p class="doc-kicker">Agents</p>
+      <h1>Linked-agent inbox notifications</h1>
+      <p>One verified agent node can ask another linked agent to reread shared coordination context. The notification is a fixed application message, not a free-form terminal write.</p>
+
+      <h2>Behaviour</h2>
+      <p><code>notify --node &lt;id&gt;</code> names the target and carries no message text. nodeterm supplies the complete prompt, then sends it through the same authenticated, receipt-aware path used by ordinary agent messaging. The target must be an agent node that supports context links, share a persisted link with the source, and belong to the same project.</p>
+      <p>A permitted notification aimed at a busy agent is queued for delivery when the target becomes verified idle. The queue is FIFO, bounded to 16 entries per target, and expires entries after five minutes. Expiry, queue-full, delivery, and refusal outcomes are reported instead of disappearing.</p>
+
+      <h2>Configuration</h2>
+      <p>Open <strong>Settings → Agents</strong> and enable <strong>Let agents message other agents in this project</strong> for the active project. The shared <code>agentMessaging</code> switch is off by default. The local consent answer is kept in the project index, so a cloned project file cannot silently grant this capability on a different machine.</p>
+      <p>Turning the switch off is read live. It refuses new attempts and also prevents a queued notification from being delivered if consent or the capability changes while it waits.</p>
+
+      <h2>Failure modes</h2>
+      <ul>
+        <li>A missing capability, missing local consent, or a different project returns a named refusal before any pane write.</li>
+        <li>An unlinked node, a plain terminal, an unsupported agent, or a target whose runtime owner cannot be proven is refused.</li>
+        <li>A busy or between-turn target returns <code>queued</code> only after the safety checks pass. The later flush rechecks the complete route.</li>
+        <li>A full queue returns <code>queueFull</code> without dropping an earlier item. A timed-out item returns <code>expired</code>.</li>
+        <li>The Server Edition reports that this desktop-only control is unsupported rather than claiming a notification was sent.</li>
+      </ul>
+
+      <h2>Security and portability</h2>
+      <p>The fixed prompt is substituted in the main process, so even a hostile renderer request cannot change it. Verified node identity, same-project scope, runtime pane ownership, flow budgets, framed transport, and delivery traces protect the route. Trace metadata omits message bodies and credentials, and the body never travels in a shell argument.</p>
+      <p>Portable project files retain safe nodes and relationships only. Credentials, hook secrets, machine paths, process state, pane ownership records, caches, and queued runtime messages stay local. A project reopened on another computer must create fresh sessions and establish local consent before notifications can work.</p>
+
+      <h2>Upstream provenance</h2>
+      <p>The design originated in <a href="https://github.com/eneskirca/nodeterm/pull/98">upstream PR #98</a>, with design commit <a href="https://github.com/eneskirca/nodeterm/commit/43f58420297965b986334206780e01ad7b393636"><code>43f58420</code></a> and prototype commit <a href="https://github.com/eneskirca/nodeterm/commit/8d3b00b36a39a3bdeaa274da8236e4f5eba6ff29"><code>8d3b00b3</code></a>. This fork uses the later authenticated main-process delivery and deliver-on-idle implementation, which supersedes the prototype's direct renderer write.</p>
+
+      <h2>Verification status</h2>
+      <p>This Program 57 source lane is intentionally ultra-speed. It did not run tests, type checks, lint, reviews, security or accessibility checks, builds, packaging, installer execution, runtime interaction, or UI captures. The source and provenance links are the implementation record; packaged behavior remains unverified until the integration lane runs its own checks.</p>
+
+      <section class="doc-suggested">
+        <h2>Suggested articles</h2>
+        <ul>
+          <li><a href="./agent-support.html">Agent support</a></li>
+          <li><a href="./projects-and-tabs.html">Projects and tabs</a></li>
+          <li><a href="./terminal-sessions.html">Terminal sessions and continuity</a></li>
+          <li><a href="./server-edition.html">Server Edition</a></li>
+        </ul>
+      </section>
+    </article>
+  </body>
+</html>

@@ -350,6 +350,16 @@ export const IPC = {
   providerBeginOAuth: 'provider-services:begin-oauth',
   providerCompleteOAuth: 'provider-services:complete-oauth',
   providerRemoveAccount: 'provider-services:remove-account',
+  cloudflareCatalog: 'cloudflare-zero-trust:catalog',
+  cloudflareAccounts: 'cloudflare-zero-trust:accounts',
+  cloudflareConfigure: 'cloudflare-zero-trust:configure',
+  cloudflareRemoveAccount: 'cloudflare-zero-trust:remove-account',
+  cloudflareBinding: 'cloudflare-zero-trust:binding',
+  cloudflareSaveBinding: 'cloudflare-zero-trust:save-binding',
+  cloudflareResources: 'cloudflare-zero-trust:resources',
+  cloudflareExecute: 'cloudflare-zero-trust:execute',
+  cloudflareCancel: 'cloudflare-zero-trust:cancel',
+  cloudflareProgress: 'cloudflare-zero-trust:progress',
   projectArchiveProgress: 'project-archive:progress',
   projectArchiveCancel: 'project-archive:cancel',
   /** The unlock ladder for a protected project file's password prompt — issue a challenge, and
@@ -656,6 +666,19 @@ export const IPC = {
   dockerHostManagerRun: 'docker-host-manager:run',
   dockerHostManagerCancel: 'docker-host-manager:cancel',
   dockerHostManagerProgress: 'docker-host-manager:progress',
+  // Guided Cloudflare account, zone, DNS, SSL/TLS, ruleset, redirect, cache, and analytics managers.
+  // Tokens stay in the host credential vault; canvas data carries only safe intent.
+  cloudflareCoreRuntime: 'cloudflare-core:runtime',
+  cloudflareCoreCredentials: 'cloudflare-core:credentials',
+  cloudflareCoreSaveCredential: 'cloudflare-core:save-credential',
+  cloudflareCoreRemoveCredential: 'cloudflare-core:remove-credential',
+  cloudflareCoreBinding: 'cloudflare-core:binding',
+  cloudflareCoreBind: 'cloudflare-core:bind',
+  cloudflareCoreUnbind: 'cloudflare-core:unbind',
+  cloudflareCorePreview: 'cloudflare-core:preview',
+  cloudflareCoreExecute: 'cloudflare-core:execute',
+  cloudflareCoreCancel: 'cloudflare-core:cancel',
+  cloudflareCoreProgress: 'cloudflare-core:progress',
   // Team Access (multi-seat): `relayHostInvite` ADDS a seat (invoke, `{ projectId?, email? }` →
   // `{ offer }`, cap-checked → rejects `E_SEATS_FULL`); `relayHostRevoke` (send, `{ id }`) cuts one
   // bridged peer's live session. `relayHostPeerPending`/`relayHostOpen` now also carry the seat
@@ -728,6 +751,7 @@ export const IPC = {
   // readiness metadata and never writes them into projects.
   nodeDependencyCatalog: 'node-dependency:catalog',
   nodeDependencyStatus: 'node-dependency:status',
+  nodeDependencyDetails: 'node-dependency:details',
   nodeDependencyInstall: 'node-dependency:install',
   nodeDependencyCancel: 'node-dependency:cancel',
   nodeDependencyRepair: 'node-dependency:repair',
@@ -914,5 +938,10 @@ export const IPC = {
   passwordManagerCredentialCode: 'password-manager:credential-code',
   /** Every credential in one manager as non-secret metadata. Closes the gap that left a
    *  credential from an earlier session visible only as a number. */
-  passwordManagerListCredentials: 'password-manager:list-credentials'
+  passwordManagerListCredentials: 'password-manager:list-credentials',
+  // Multiverse portal-door credentials are host-owned and separate from toy locks. Values are
+  // accepted only for an immediate configure or verify request and never returned to the project.
+  universeDoorEntryConfigure: 'universe-door-entry:configure',
+  universeDoorEntryVerify: 'universe-door-entry:verify',
+  universeDoorEntryRemove: 'universe-door-entry:remove'
 } as const

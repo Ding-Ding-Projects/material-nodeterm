@@ -36,8 +36,10 @@ import type { WslCreateProgress } from '../shared/wsl'
 import type { TorrentTaskState } from '../shared/torrent'
 import type { VirtualMachineEvent } from '../shared/virtual-machine'
 import type { CalendarProvider } from '../shared/calendar'
+import type { CloudflareProgress } from '../shared/cloudflare-core-managers'
 import type { HomeAssistantClientEvent } from '../shared/home-assistant'
 import type { ProjectConsentRequest, ProjectSetupEvent } from '../shared/project-settings'
+import type { CloudflareApi, CloudflareCatalog, CloudflareExecutionProgress, CloudflareExecutionResult } from '../shared/cloudflare-zero-trust'
 
 // Fan a single ipcRenderer listener per channel out to many renderer subscribers. Without
 // this, every node that subscribes (e.g. Cmd+M markdown toggle on each terminal/editor) adds
@@ -91,7 +93,9 @@ const subscribeNodeDependencyState = subscribe<[NodeDependencyAvailability]>(IPC
 const subscribeNodeDependencyProgress = subscribe<[NodeDependencyProgress]>(IPC.nodeDependencyProgress)
 const subscribeTorrentTask = subscribe<[TorrentTaskState]>(IPC.torrentTask)
 const subscribeVirtualMachineEvent = subscribe<[VirtualMachineEvent]>(IPC.virtualMachineEvent)
+const subscribeCloudflareCoreProgress = subscribe<[CloudflareProgress]>(IPC.cloudflareCoreProgress)
 const subscribeHomeAssistantEvent = subscribe<[HomeAssistantClientEvent]>(IPC.homeAssistantEvent)
+const subscribeCloudflareProgress = subscribe<[CloudflareExecutionProgress & { nodeId: string }]>(IPC.cloudflareProgress)
 const subscribeWidgetState = subscribe<[CanvasWidgetLiveState]>(IPC.widgetStateChanged)
 
 const subscribeRelayPeerPending = subscribe<[RelayPeerPending]>(IPC.relayHostPeerPending)
@@ -208,6 +212,21 @@ const api: NodeTerminalApi = {
     completeOAuth: (callbackUrl: string) => ipcRenderer.invoke(IPC.providerCompleteOAuth, callbackUrl),
     removeAccount: (accountId: string) => ipcRenderer.invoke(IPC.providerRemoveAccount, accountId)
   },
+  cloudflareZeroTrust: {
+    catalog: () => ipcRenderer.invoke(IPC.cloudflareCatalog) as Promise<CloudflareCatalog>,
+    accounts: () => ipcRenderer.invoke(IPC.cloudflareAccounts),
+    configure: (input) => ipcRenderer.invoke(IPC.cloudflareConfigure, input),
+    removeAccount: (id) => ipcRenderer.invoke(IPC.cloudflareRemoveAccount, id),
+    binding: (nodeId) => ipcRenderer.invoke(IPC.cloudflareBinding, nodeId),
+    saveBinding: (nodeId, binding) => ipcRenderer.invoke(IPC.cloudflareSaveBinding, nodeId, binding),
+    resources: (nodeId, manager) => ipcRenderer.invoke(IPC.cloudflareResources, nodeId, manager),
+    execute: (nodeId, request, onProgress) => {
+      const unsubscribe = subscribeCloudflareProgress((progress) => { if (progress.nodeId === nodeId) onProgress(progress) })
+      return (ipcRenderer.invoke(IPC.cloudflareExecute, nodeId, request) as Promise<CloudflareExecutionResult>).finally(unsubscribe)
+    },
+    cancel: (nodeId) => ipcRenderer.invoke(IPC.cloudflareCancel, nodeId),
+    onProgress: (listener) => subscribeCloudflareProgress(listener)
+  } satisfies CloudflareApi,
   workspace: {
     load: () => ipcRenderer.invoke(IPC.workspaceLoad),
     save: (workspace: Workspace) => ipcRenderer.invoke(IPC.workspaceSave, workspace),
@@ -765,6 +784,11 @@ const api: NodeTerminalApi = {
     listCredentials: (projectId, managerId) =>
       ipcRenderer.invoke(IPC.passwordManagerListCredentials, projectId, managerId)
   },
+  universeDoorEntry: {
+    configure: (input) => ipcRenderer.invoke(IPC.universeDoorEntryConfigure, input),
+    verify: (input) => ipcRenderer.invoke(IPC.universeDoorEntryVerify, input),
+    remove: (doorId) => ipcRenderer.invoke(IPC.universeDoorEntryRemove, doorId)
+  },
   context: {
     onUpdate: (listener) => {
       const handler = (_e: unknown, payload: Parameters<typeof listener>[0]) => listener(payload)
@@ -1114,6 +1138,7 @@ const api: NodeTerminalApi = {
   nodeDependencies: {
     catalog: () => ipcRenderer.invoke(IPC.nodeDependencyCatalog),
     status: (id) => ipcRenderer.invoke(IPC.nodeDependencyStatus, id),
+    details: (id) => ipcRenderer.invoke(IPC.nodeDependencyDetails, id),
     install: (id) => ipcRenderer.invoke(IPC.nodeDependencyInstall, id) as Promise<NodeDependencyInstallResult>,
     cancel: (operationId) => ipcRenderer.invoke(IPC.nodeDependencyCancel, operationId),
     repair: (id) => ipcRenderer.invoke(IPC.nodeDependencyRepair, id) as Promise<NodeDependencyInstallResult>,
@@ -1150,6 +1175,19 @@ const api: NodeTerminalApi = {
     chatSend: (id, text) => ipcRenderer.invoke(IPC.ollamaChatSend, id, text),
     chatStop: (id) => ipcRenderer.invoke(IPC.ollamaChatStop, id),
     onChatStream: (listener) => subscribeOllamaChatStream(listener)
+  },
+  cloudflareCoreManagers: {
+    runtime: () => ipcRenderer.invoke(IPC.cloudflareCoreRuntime),
+    credentials: () => ipcRenderer.invoke(IPC.cloudflareCoreCredentials),
+    saveCredential: (input) => ipcRenderer.invoke(IPC.cloudflareCoreSaveCredential, input),
+    removeCredential: (credentialId) => ipcRenderer.invoke(IPC.cloudflareCoreRemoveCredential, credentialId),
+    binding: (nodeId) => ipcRenderer.invoke(IPC.cloudflareCoreBinding, nodeId),
+    bind: (input) => ipcRenderer.invoke(IPC.cloudflareCoreBind, input),
+    unbind: (nodeId) => ipcRenderer.invoke(IPC.cloudflareCoreUnbind, nodeId),
+    preview: (nodeId, request) => ipcRenderer.invoke(IPC.cloudflareCorePreview, nodeId, request),
+    execute: (nodeId, request) => ipcRenderer.invoke(IPC.cloudflareCoreExecute, nodeId, request),
+    cancel: (operationId) => ipcRenderer.invoke(IPC.cloudflareCoreCancel, operationId),
+    onProgress: (listener) => subscribeCloudflareCoreProgress(listener)
   },
   minecraft: {
     versions: () => ipcRenderer.invoke(IPC.minecraftVersions),

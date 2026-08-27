@@ -98,6 +98,14 @@ later commit, since this file will not be kept in lockstep with every merge).
       an honest Server Edition boundary. Tests, build/package evidence, generated docs bundle,
       runtime interaction, and captures remain outstanding.
 
+- [ ] **Cloudflare core managers, issue #57**: typed account, zone, DNS, SSL/TLS, ruleset, redirect,
+      cache, and analytics operations are implemented in the shared contract, host service, Desktop
+      and Server Edition bridges, and canvas node. Local sealed credentials, bounded output,
+      cancellation, safe previews, destructive confirmation, explicit unavailable states, and safe
+      schema 3 intent are present. Tests, type checks, lint, reviews, security or accessibility
+      checks, builds, packaging, installer execution, runtime interaction, and captures remain
+      unverified under the ultra-speed lane.
+
 - [ ] **ADHD modes** — Focus, Low stimulation, Time awareness, One thing at a time, and Momentum
       are all specced in `docs/adhd-modes.md`. Time awareness, Momentum, and the
       notification-filtering half of Low stimulation were wired 2026-08-20 (`d697f78f`). Still
@@ -271,8 +279,18 @@ intentionally unchecked because this task publishes the plan only.
 - [ ] Add interactive door construction and numeric or passphrase entry. Source components and
       portable intent are present; live navigator wiring remains pending.
 - [x] Add the top-down recovery game with three energy keys, hazards, core activation, and portable state. Source implementation is complete; built-artifact verification remains for integration.
-- [ ] Add unlimited AWS Universes with AWS-only scope and AWS Shop nodes.
-- [ ] Bundle AWS CLI v2 and maintain verified model and documentation indexing.
+- [x] Add unlimited AWS Universes with AWS-only scope, guided navigation, and AWS Shop nodes.
+      Source implementation and delivery records are present; tests, type checks, builds,
+      packaging, runtime interaction, and captures remain explicitly unrun under issue #39's
+      ultra-speed boundary.
+- [ ] Bundle AWS CLI v2 and maintain verified model and documentation indexing. The pinned MSI,
+      verified fallback, version details route, bounded installed-model inventory, feature article,
+      and offline documentation entry are present on the issue #41 jer. Tests, builds, packaging,
+      installer execution, runtime interaction, and HuiShots remain pending, so this item stays
+      unticked.
+- [x] Add the platform-free AWS CLI model documentation index for services, commands, options,
+      paginators, waiters, input and output shapes, and input skeletons. Tests, builds, runtime
+      interaction, and packaged verification remain unrun under issue #42's lane boundary.
 - [ ] Generate interactive wizard forms for every AWS service, command, option, paginator, waiter,
       skeleton, input, and output described by the installed CLI models.
 - [ ] Add AWS identity, SSO, role, MFA, Resource Explorer, Cloud Control, S3, EC2, IAM, STS,
@@ -281,16 +299,30 @@ intentionally unchecked because this task publishes the plan only.
 
 ### Hosting and Cloudflare
 
+- [x] Add the shared hosted-resource backup and restore framework with version, edition, resource,
+      ownership, archive-safety, progress, cancellation, atomic publication, restore-review, and
+      rollback contracts. Source and direct documentation are present; tests, builds, packaging,
+      runtime interaction, and captures remain explicitly unrun under issue #55's ultra-speed boundary.
 - [ ] Add GitLab Server CE and EE hosting profiles with backup and restore.
 - [ ] Add Nextcloud AIO and managed no-socket hosting profiles.
 - [ ] Add Open WebUI hosting with existing Ollama reuse and honest bootstrap states.
 - [ ] Add Cloudflare account, zone, DNS, security, Workers, Pages, storage, queue, Access, and
       analytics managers.
+- [x] Add typed Cloudflare Access, Zero Trust, Workers, Pages, R2, D1, and Queues managers with
+      local protected credentials, portable neutral intent, bounded fixed-route API calls,
+      progress/cancellation, per-field regex builders, and destructive confirmation. Verification
+      remains intentionally unrun in the ultra-speed lane.
 - [ ] Add one-click Cloudflare Tunnel setup with private-first routing and connector choices.
 
 ### Clean-room features and upstream parity
 
 - [ ] Add clean-room browser, kiosk, PWA, proxy, and read-only diagnostics nodes.
+- [ ] **Program 57 / #68, linked-agent inbox notifications.** The source path already carries the
+      upstream PR #98 intent through the authenticated `notify --node <id>` route, project-local
+      consent, runtime ownership checks, fixed application-authored text, and the bounded
+      deliver-on-idle queue. Feature documentation, the offline bundle, the documentation site,
+      and the completeness inventory are recorded in this lane. Tests, builds, packaging, runtime
+      interaction, and UI captures remain pending under the explicit ultra-speed boundary.
 - [ ] Implement the outstanding upstream behavior from the planned issue and pull-request parity map.
 - [ ] Split the PR #422 behavior into independent link, endpoint, navigation, grouping, agent, and
       account lanes.
