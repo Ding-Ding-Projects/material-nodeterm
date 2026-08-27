@@ -2,7 +2,7 @@
 
 ## 2026-08-27, AWS platform managers, issue #49
 
-The issue jer was reconciled non-destructively with exact `origin/main` tip
+The issue branch was reconciled non-destructively with exact `origin/main` tip
 `54164b84dce0b7e62787b1de2885405ff4ed821c`. Upstream already supplied the canonical AWS stack in
 `src/shared/aws-resource.ts`, `src/core/aws-resource-manager.ts`, `src/core/aws-resource-register-ipc.ts`,
 and `src/renderer/nodes/AwsResourceNode.tsx`. The earlier duplicate plural manager stack was retained
@@ -23,9 +23,9 @@ category/index links, and `site/docs/aws-container-database-cost-managers.html`.
 offline docs bundle was not regenerated because this lane forbids builds.
 
 Verification boundary: no tests, lint, type checks, builds, packaging, runtime interaction, reviews,
-security or accessibility audits, installer execution, or HuiShots were run. No issue mutation, PR,
-main integration, deletion, or Cup Chun was performed. The feature jer was dewed only to
-`origin/feat/program-38-aws-containers`.
+security or accessibility checks, installer execution, or UI captures were run. No issue, pull
+request, default-branch, or cleanup mutation was performed. The feature branch was pushed to
+`origin/feat/program-38-aws-containers` and retained for downstream integration.
 
 ## 2026-08-27, AWS core-service managers, issue #46 PR preparation
 
