@@ -174,6 +174,39 @@ current v0.4.117 release and push-triggered release workflow.
 - No tests, builds, runtime launches, pixel measurements, or captures were run in this lane. The
   source-only checker passes with 1,634 assertions, and the result must be re-read after
   integration.
+## 2026-08-26, portable media assets and Include/Omit/Locate Later
+
+Implemented `src/core/portable-media-assets.ts` with bounded image, audio, and video collection,
+signature-based type detection, SHA-256 content addressing, regular-file validation, explicit
+Include/Omit/Locate Later decisions, omission records, unresolved placeholders, and strict schema 3
+manifest validation. Source paths are consumed only during local collection and are never retained
+in portable records. Extended `src/core/portable-canvas-projection.ts` with an optional validated
+media manifest field. Added the guided searchable decision surface at
+`src/renderer/components/PortableMediaDecisionDialog.tsx`, plus the categorized article,
+documentation index, Pages article, roadmap note, and changelog entry.
+
+This lane deliberately did not run tests, type checking, linting, reviews, security checks, builds,
+packaging, installer execution, runtime interaction, or captures. Archive entry production/import
+wiring, destination Locate Asset handling, and built-artifact evidence remain pending. No commit or
+dew was made by this lane.
+
+## 2026-08-26, portable media validation and guided export follow-up
+
+Strengthened the media contract with exact allowlisted keys and reconstructed normalized output for
+assets, omissions, and manifests. Unknown, unsafe, authority-bearing, `sourcePath`, and
+`sourceName` fields cannot survive validation. Added bounded omission counts, duplicate and
+case-collision refusal, included-versus-omitted contradiction checks, stable ordering, fatal UTF-8
+manifest parsing, and bounded stable serialization. Media collection now hashes through a bounded
+stream, retains only a small signature prefix, accepts an optional AbortSignal, and returns a
+machine-local stream source rather than allocating a 512 MiB input. EBML is accepted only when its
+bounded prefix identifies WebM; Matroska is refused.
+
+The real project archive export route now opens the native multi-file media picker before saving,
+shows the searchable Include/Omit/Locate Later decision surface, and leaves the existing archive
+operation untouched when the picker is cancelled. The selected source path and source name remain
+transient renderer state only. The archive writer still needs a follow-up adapter to consume the
+selected streaming sources and emit schema 3 media entries; no portable record claims those paths.
+No tests, builds, type checks, captures, commits, or dews were made.
 
 ## 2026-08-26, portable canvas projection implementation
 

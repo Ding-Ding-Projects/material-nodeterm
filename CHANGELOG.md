@@ -37,6 +37,9 @@
   documentation page, with a fail-closed source checker and shared numeric, radio, progress,
   keyboard-roving tabs, tooltip, and shape-token remediation. Built-artifact clipping and pixel evidence remain pending;
   the documentation and landing site stays in its existing Kids-mode visual style.
+- Add the schema 3 portable media contract: content-addressed image, audio, and video assets,
+  byte/signature validation, explicit Include/Omit/Locate Later decisions, unresolved placeholders,
+  and machine-local source-path exclusion. Archive wiring and verification remain pending.
 
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and

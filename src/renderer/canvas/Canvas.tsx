@@ -260,6 +260,8 @@ import { ConsentNotice } from '../remote/ConsentNotice'
 import { peerApprovalView } from '@shared/remote/approval'
 import { promptDialog } from '../components/promptDialog'
 import { requestArchivePassword } from '../components/archiveUnlockDialog'
+import { PortableMediaDecisionDialog } from '../components/PortableMediaDecisionDialog'
+import { collectPortableMedia, sha256Media, type PortableMediaCandidate, type PortableMediaDecision } from '../../core/portable-media-assets'
 import { RemotePicker } from '../components/RemotePicker'
 import { WorktreeDialog } from '../components/WorktreeDialog'
 import { GroupPickerDialog, type GroupPickerOption } from '../components/canvas/GroupPickerDialog'
@@ -12531,6 +12533,25 @@ export function Canvas() {
   // second activation walks straight past a disabled menu row), the main process refuses re-entry
   // independently, and the menu rows read the same ref for their disabled state.
   const projectArchiveBusyRef = useRef(false)
+  const [portableMediaDialog, setPortableMediaDialog] = useState<{
+    candidates: PortableMediaCandidate[]
+    resolve: (decisions: ReadonlyMap<string, PortableMediaDecision> | null) => void
+  } | null>(null)
+  const choosePortableMedia = useCallback(async (): Promise<ReadonlyMap<string, PortableMediaDecision> | null> => {
+    const selected = await window.nodeTerminal.dialog.selectFiles()
+    if (!selected || selected.length === 0) return null
+    const candidates: PortableMediaCandidate[] = []
+    for (const sourcePath of selected) {
+      try {
+        const collected = await collectPortableMedia(sourcePath)
+        candidates.push({ assetId: collected.asset.id, kind: collected.asset.kind, label: collected.asset.label ?? collected.sourceName, sourceName: collected.sourceName, decision: 'include' })
+      } catch (error) {
+        const sourceName = sourcePath.split(/[\\/]/).pop() ?? 'Unavailable media'
+        candidates.push({ assetId: sha256Media(new TextEncoder().encode(sourceName)), kind: 'image', label: sourceName, sourceName, decision: 'locate-later', reason: error instanceof Error ? error.message : 'Media validation failed.' })
+      }
+    }
+    return new Promise((resolve) => setPortableMediaDialog({ candidates, resolve }))
+  }, [])
   const exportProjectArchive = useCallback(
     async (projectId: string, password?: string) => {
       if (projectArchiveBusyRef.current) {
@@ -12539,6 +12560,7 @@ export function Canvas() {
       }
       projectArchiveBusyRef.current = true
       try {
+        if ((await choosePortableMedia()) === null) return
         if (projectId === useProjects.getState().activeProjectId) commitActiveToStore()
         await writeDisk()
         const project = useProjects.getState().projects.find((candidate) => candidate.id === projectId)
@@ -12592,7 +12614,7 @@ export function Canvas() {
         projectArchiveBusyRef.current = false
       }
     },
-    [api, commitActiveToStore, writeDisk]
+    [api, choosePortableMedia, commitActiveToStore, writeDisk]
   )
 
   /**
@@ -13456,7 +13478,7 @@ export function Canvas() {
   return (
     <div className="canvas-root">
       <TopAppBar>
-        <ProjectSwitcher
+      <ProjectSwitcher
           onSwitch={switchProject}
           onReconnect={reconnectRelay}
           onReorder={reorderProject}
@@ -14592,6 +14614,19 @@ export function Canvas() {
         onMouseEnter={openSessionsPeek}
         onMouseLeave={closeSessionsPeekSoon}
       />
+      {portableMediaDialog && (
+        <PortableMediaDecisionDialog
+          candidates={portableMediaDialog.candidates}
+          onDecisions={(decisions) => {
+            portableMediaDialog.resolve(decisions)
+            setPortableMediaDialog(null)
+          }}
+          onCancel={() => {
+            portableMediaDialog.resolve(null)
+            setPortableMediaDialog(null)
+          }}
+        />
+      )}
 
       {/* The one-time clone notice for a project whose git-shared capability switch arrived
           already on. Self-contained against the projects store: it re-evaluates on every
