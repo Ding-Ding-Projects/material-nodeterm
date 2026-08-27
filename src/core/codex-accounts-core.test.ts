@@ -157,6 +157,12 @@ describe('per-session Codex env', () => {
     expect(needsCodexAccountScope(undefined, undefined, isCodex)).toBe(false)
     expect(needsCodexAccountScope('bash', undefined, isCodex)).toBe(false)
   })
+
+  it('keeps the two-argument specialized Codex contract for PTY callers', () => {
+    expect(needsCodexAccountScope(undefined, 'account-a')).toBe(true)
+    expect(needsCodexAccountScope(undefined, undefined)).toBe(false)
+    expect(needsCodexAccountScope('codex', undefined)).toBe(true)
+  })
 })
 
 describe('remote managed Codex homes', () => {
