@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add first-class Cognition Devin CLI support from the measured `devin 3000.4.25 (7e8e528a)`
+  contract: builtin registry and mark, argv/interactive prompt forms, prompt-file and print
+  helpers, resume and continue commands, project-level `.devin/hooks.v1.json` lifecycle hooks,
+  structured status normalization, and BEL/OSC notification fallback. Context usage, permission
+  control, titles, subagents, transfer, canvas control, and structured transcripts remain explicitly
+  unavailable until measured. The real Devin CLI was not available, so this ultra-speed lane ran no
+  tests, lint, type checks, builds, packaging, runtime interaction, reviews, audits, or HuiShots.
 - Add a shared 40 ms burst budget for plain-wheel canvas zoom and a persisted 0.2×–2.0× wheel
   zoom speed control. The historical 1.0× feel remains the default; modifier zoom and trackpad
   pinch keep their fixed behavior. Hand-edited values are clamped at the point of use, and the

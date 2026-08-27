@@ -61,6 +61,11 @@ later commit, since this file will not be kept in lockstep with every merge).
       agreement checks, and a Windows-only release workflow triggered by pushes to `main` and
       manual dispatch. ZIP, NSIS-only, MSI-only, MSIX-only, and portable-only parallel installer
       routes are retired.
+- [ ] Cognition Devin CLI support (#106): source-level builtin registry, launch forms, project
+      hook installation, status normalization, and notification fallback are implemented on
+      `feat/devin-cli-support`. The real `devin 3000.4.25` binary was unavailable in this lane, so
+      runtime launch, availability, hook delivery, Desktop, Server Edition, SSH, and packaged
+      evidence remain unverified.
 
 ## In progress / partially landed
 
