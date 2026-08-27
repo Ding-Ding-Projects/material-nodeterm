@@ -277,6 +277,7 @@ export function FabMenu({
                 <button role="menuitem" onClick={pick(onAddTimer)}>
                   <span aria-hidden="true">◷</span>
                   <span>Timer</span>
+                </button>
                 <button role="menuitem" onClick={pick(onAddAlarmClock)}>
                   <AlarmIcon />
                   <span>Alarm Clock</span>
@@ -293,9 +294,6 @@ export function FabMenu({
                   <IconLock />
                   <span>Authenticator</span>
                 </button>
-                <button role="menuitem" onClick={pick(onAddDino)}>
-                  <DinoIcon />
-                  <span>Dino Game</span>
                 <button role="menuitem" onClick={pick(onOpenCatalog)}>
                   <CatalogIcon />
                   <span>Browse node catalog…</span>
