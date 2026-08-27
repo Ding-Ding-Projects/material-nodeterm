@@ -198,7 +198,12 @@ intentionally unchecked because this task publishes the plan only.
       runtime and built-artifact verification remain pending under issue #17's explicit
       no-tests/no-builds/no-captures boundary.
 - [ ] Add shared account, credential-vault, OAuth callback, and provider-binding services.
-- [ ] Add guided Docker host management for local and SSH contexts.
+- [ ] Add guided Docker host management for local and SSH contexts. The typed manager, local and
+      saved SSH context discovery, guided resource operations, safe portable blueprint, progress,
+      cancellation, destructive confirmation, documentation, offline article, and site article are
+      implemented on issue #19's feature branch. Tests, type checks, lint, reviews, security and
+      accessibility checks, builds, packaging, runtime interaction, and captures remain unrun under
+      the ultra-speed boundary, so this roadmap claim remains unchecked.
 
 ### Media, torrents, virtual machines, and planning
 

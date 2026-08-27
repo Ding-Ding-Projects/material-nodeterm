@@ -750,3 +750,40 @@ export const DOC_ARTICLES: DocArticle[] = [
     body: "# Linux ISO VM node\n\nThe Linux ISO VM is a one-shot canvas node for starting a real Linux guest from a local ISO. It is separate from WSL: WSL selects a distribution-backed shell, while this node starts an isolated QEMU virtual machine with its own virtual hardware and lifecycle.\n\n## Creating and configuring\n\nChoose **Managers → New manager… → Linux ISO VM** from the canvas menu. The node provides native file pickers for the ISO and, in persistent install mode, the disk image. It does not accept a raw QEMU command line or arbitrary arguments.\n\nTwo modes are available: **Disposable live** starts the ISO with QEMU snapshot mode and discards writes when it stops. **Persistent install** requires a selected qcow2 or raw disk and keeps it after shutdown. Memory is bounded to 512–32768 MiB and CPUs to 1–16. Network is disabled by default and only user-mode networking can be enabled explicitly.\n\n## Lifecycle and display\n\nStarting constructs a fixed validated argument vector containing the machine type, accelerator, memory, CPU count, ISO, optional disk, snapshot mode, a loopback VNC display, and a loopback QMP control socket. The process is spawned with `shell: false`; no user text is interpolated into a shell command. Stop sends QMP `quit`, waits for exit, and uses bounded termination if needed. Snapshots use bounded names with QMP `savevm` and `loadvm`.\n\n## Portability and recovery\n\nMode, resource limits, network choice, disk-size hint, and acceleration preference are portable project settings. ISO and disk paths are machine-local. A clone on another computer remains present and asks the user to locate those assets again. Import performs no process launch, download, or network call. Missing assets and missing bundled tools remain visible as actionable errors.\n\n## Security and availability\n\nQEMU and qemu-img are invoked only as bundled executables through argv arrays. The manager validates identifiers, absolute paths, resource limits, and configuration before starting. It never accepts arbitrary flags, shell fragments, bridged networking, or host paths from a shared project file. The desktop shell and Server Edition expose the real bounded lifecycle; mobile can show portable intent and an unbound state.\n\n## Verification boundary\n\nThe ultra-speed delivery lane intentionally did not run tests, type checks, lint, reviews, security checks, accessibility checks, installer execution, runtime interaction checks, or UI captures. Build and packaging evidence proves artifact production only.\n\n## Suggested articles\n\n- [Node kinds](../canvas/node-kinds.md)\n- [Portable schema 3](../projects/portable-schema3.md)\n- [WSL instances](../wsl/wsl-instances.md)"
   },
 ]
+
+/* The ultra-speed implementation lane cannot run the bundle generator. Keep the directly related
+ * article current in the shipped reader; the next ordinary docs generation folds the same source
+ * text back into the generated array above. */
+const dockerHostManagerArticle = DOC_ARTICLES.find((article) => article.path === 'docs/features/remote/docker-host.md')
+if (dockerHostManagerArticle) {
+  dockerHostManagerArticle.title = 'Docker host manager'
+  dockerHostManagerArticle.section = 'Remote'
+  dockerHostManagerArticle.body = `# Docker host manager
+
+The Docker host canvas node discovers local and saved SSH Docker CLI contexts on this computer. It
+provides searchable containers, images, volumes, networks, Compose projects, bounded statistics,
+redacted logs, and fixed typed container tasks. Every search starts in plain-text mode and has an
+adjacent anchored regex builder.
+
+## Guided operations
+
+Container creation accepts only the built-in image catalog. It applies a generated ownership label,
+CPU, memory and PID limits, dropped capabilities, no-new-privileges, a read-only root by default,
+bounded temporary storage, and no network by default. The renderer submits only a closed action and
+discovered resource id. The desktop main process revalidates values and invokes Docker with argument
+arrays, never a shell string. Destructive removal uses the two-key confirmation flow, and long jobs
+report real progress and cancellation.
+
+## Portability and recovery
+
+Portable schema 3 data carries only neutral image, network, read-only and resource-bound intent.
+Endpoints, SSH identities, credentials, Compose paths, live ids, statistics, logs and process state
+remain local. Import never contacts or changes a host. An unavailable context or failed resource
+command remains distinct from an empty list. Repair the named context and retry from the same node.
+Server Edition reports this desktop-owned capability as unsupported.
+
+## Verification
+
+This ultra-speed implementation lane did not run tests, type checking, lint, review, security or
+accessibility checks, builds, packaging, installer execution, runtime interaction, or captures.`
+}
