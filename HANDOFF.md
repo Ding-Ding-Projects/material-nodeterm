@@ -16,6 +16,10 @@ resource searches each carrying an adjacent anchored regex builder. Only manager
 through the workspace projection; account sessions, credentials, endpoints, live resource ids, and
 job state remain local.
 
+Follow-up `ba6984f6b0471e6fcdc2715f66c74422ce20a120` routes destructive operations through the
+existing two-key confirmation surface and validates EKS capacity and cost-report date ranges before
+the adapter call.
+
 Documentation was added at `docs/features/integrations/aws-resource-managers.md` and
 `site/docs/aws-resource-managers.html`, with category and documentation-index links. The generated
 offline documentation bundle was not regenerated in this ultra-speed lane and must be refreshed by
