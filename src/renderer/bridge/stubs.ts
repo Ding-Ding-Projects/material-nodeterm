@@ -648,6 +648,7 @@ export function buildStubApi(): Omit<
     nodeDependencies: {
       catalog: U('nodeDependencies.catalog'),
       status: U('nodeDependencies.status'),
+      details: U('nodeDependencies.details'),
       install: U('nodeDependencies.install'),
       cancel: U('nodeDependencies.cancel'),
       repair: U('nodeDependencies.repair'),

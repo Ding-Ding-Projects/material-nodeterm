@@ -1087,6 +1087,7 @@ export function buildNodeDependenciesApi(client: RpcClient): Pick<NodeTerminalAp
   const nodeDependencies: NodeDependenciesApi = {
     catalog: () => client.request(IPC.nodeDependencyCatalog) as ReturnType<NodeDependenciesApi['catalog']>,
     status: (id) => client.request(IPC.nodeDependencyStatus, id) as ReturnType<NodeDependenciesApi['status']>,
+    details: (id) => client.request(IPC.nodeDependencyDetails, id) as ReturnType<NodeDependenciesApi['details']>,
     install: (id) => client.request(IPC.nodeDependencyInstall, id) as ReturnType<NodeDependenciesApi['install']>,
     cancel: (operationId) => client.request(IPC.nodeDependencyCancel, operationId) as ReturnType<NodeDependenciesApi['cancel']>,
     repair: (id) => client.request(IPC.nodeDependencyRepair, id) as ReturnType<NodeDependenciesApi['repair']>,
