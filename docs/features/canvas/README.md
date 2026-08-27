@@ -31,6 +31,8 @@ The pan/zoom surface nodeterm is built around, and everything that lives on it.
 - [Multiverse door entry](./door-entry.md) — guided numeric-code and passphrase entry, separate
   from toy locks, with schema 3 portability and local credential omission rules.
 - [Top-down recovery game](./recovery-game.md) — a portable three-key route through hazards to an activation core.
+- [Canvas annotations](./annotations.md) — visual-only lines and arrows with optional labels and
+  bounded editable stroke thickness.
 
 See also [Terminals](../terminals/README.md) for how a terminal node's own session survives
 independently of the canvas, and [Projects](../projects/README.md) for how a whole canvas is

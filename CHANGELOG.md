@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add optional labels and bounded editable line thickness to canvas annotations. Labels, stroke
+  widths, variants, and diagonals now persist through ordinary project files and schema 3 portable
+  projections with validation at the import boundary. Issue #76's ultra-speed lane intentionally
+  did not run tests, type checks, lint, reviews, security or accessibility checks, builds, packaging,
+  installer execution, runtime interaction, or UI captures.
+
 - Add the bundled AWS CLI v2 dependency lane. Windows packaging now stages the pinned official
   `2.36.32` MSI, verifies its SHA-256, falls back through a verified local cache or canonical
   HTTPS download, extracts it into application-local storage, exposes the installed version, and

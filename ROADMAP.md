@@ -163,9 +163,9 @@ Feature requests open on GitHub with no landed implementation yet, newest first:
 - [ ] **#289** — Custom sounds for agent alerts.
 - [ ] **#286** — Named terminal profiles (start directory).
 - [ ] **#284** — Per-terminal independent "repo context".
-- [ ] **#145** — Basic annotation tools (colored frame, lines, arrows) — note: an `annotation`
-      node kind already exists in `NodeKind` per CLAUDE.md; verify against #145 before assuming
-      this is unstarted.
+- [ ] **#145 / #76** — Annotation tools now include visual-only lines and arrows, optional labels,
+      bounded editable stroke thickness, ordinary project persistence, and schema 3 portable
+      intent. Runtime, packaged, and capture verification remain pending in the integration lane.
 - [ ] **#119** — Opt-in lead-pane-width preference (Claude Code agent teams squeeze the lead
       pane to ~30%).
 - [ ] **#78** — Owner's own tracked roadmap of 4 bug fixes + 4 features (grouped meta-issue;

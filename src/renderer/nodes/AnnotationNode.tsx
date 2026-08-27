@@ -4,9 +4,15 @@ import { NODE_COLORS, type CanvasNode } from '../state/workspace'
 import { annotationEndpoints, type AnnotationDiagonal, type AnnotationVariant } from '../lib/annotation'
 import { ColorMenu } from '../components/color/ColorMenu'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import {
+  ANNOTATION_DEFAULT_THICKNESS,
+  ANNOTATION_MAX_LABEL_LENGTH,
+  ANNOTATION_MIN_THICKNESS,
+  normalizeAnnotationLabel,
+  normalizeAnnotationThickness
+} from '@shared/annotation'
 
-/** Line thickness and arrowhead size, both in the node's own local px space (see AnnotationNode). */
-const STROKE_WIDTH = 3
+/** Arrowhead size in the node's own local px space (see AnnotationNode). */
 const ARROW_MARKER_PX = 9
 /** Fallback box when React Flow has not yet reported a measured/explicit size (never hit for a
  *  node this factory always creates with an explicit width/height — defensive only). */
@@ -44,6 +50,8 @@ export function AnnotationNode({ id, data, selected, width, height }: NodeProps<
   const midX = (from.x + to.x) / 2
   const midY = (from.y + to.y) / 2
   const color = (data.color as string) || NODE_COLORS[0]
+  const label = normalizeAnnotationLabel(data.annotationLabel)
+  const thickness = normalizeAnnotationThickness(data.annotationThickness ?? ANNOTATION_DEFAULT_THICKNESS)
   const markerId = `annotation-arrowhead-${id}`
 
   return (
@@ -77,14 +85,21 @@ export function AnnotationNode({ id, data, selected, width, height }: NodeProps<
           x2={to.x}
           y2={to.y}
           stroke={color}
-          strokeWidth={STROKE_WIDTH}
+          strokeWidth={thickness}
           strokeLinecap="round"
           markerEnd={variant === 'arrow' ? `url(#${markerId})` : undefined}
         />
       </svg>
 
-      {/* A small floating toolbar at the line's midpoint — same idea as GroupNode's label pill,
-          scaled down since an annotation carries no name. Shown on hover/selected only (CSS). */}
+      {label && (
+        <div className="annotation-node__label nodrag" title={label}>
+          {label}
+        </div>
+      )}
+
+      {/* A small floating toolbar at the line's midpoint — same idea as GroupNode's label pill.
+          It exposes the annotation's colour, optional label, stroke width, variant, and delete
+          actions while remaining hidden until hover or selection. */}
       <div
         className="annotation-node__toolbar nodrag"
         style={{ left: midX, top: midY }}
@@ -107,6 +122,31 @@ export function AnnotationNode({ id, data, selected, width, height }: NodeProps<
             onClose={() => setColorAnchor(null)}
           />
         )}
+        <input
+          className="annotation-node__label-input"
+          type="text"
+          value={(data.annotationLabel as string) ?? ''}
+          maxLength={ANNOTATION_MAX_LABEL_LENGTH}
+          placeholder={vocab('Label (optional)')}
+          aria-label={vocab('Annotation label')}
+          title={vocab('Optional annotation label')}
+          onChange={(e) => updateNodeData(id, { annotationLabel: e.currentTarget.value })}
+          onBlur={(e) => updateNodeData(id, { annotationLabel: normalizeAnnotationLabel(e.currentTarget.value) })}
+        />
+        <label className="annotation-node__thickness-control">
+          <span className="sr-only">{vocab('Line thickness')}</span>
+          <input
+            type="range"
+            min={ANNOTATION_MIN_THICKNESS}
+            max={ANNOTATION_MAX_THICKNESS}
+            step={1}
+            value={thickness}
+            aria-label={vocab('Line thickness')}
+            title={vocab('Line thickness')}
+            onChange={(e) => updateNodeData(id, { annotationThickness: normalizeAnnotationThickness(Number(e.currentTarget.value)) })}
+          />
+          <output aria-label={vocab('Line thickness value')}>{thickness}</output>
+        </label>
         <button
           className="annotation-node__variant"
           title={vocab(variant === 'arrow' ? 'Arrowhead on — click for a plain line' : 'Plain line — click to add an arrowhead')}

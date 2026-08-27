@@ -270,9 +270,9 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
     nodeKind: 'annotation',
     category: 'canvas',
     label: 'Drawing annotation',
-    description: 'Arm the drawing tool, then drag a line or arrow on the canvas.',
-    keywords: ['draw', 'line', 'arrow', 'annotation'],
-    documentationPath: 'docs/features/canvas/canvas-and-lifecycle.md',
+    description: 'Arm the drawing tool, then drag a line or arrow with an optional label and editable thickness.',
+    keywords: ['draw', 'line', 'arrow', 'annotation', 'label', 'thickness'],
+    documentationPath: 'docs/features/canvas/annotations.md',
     safeDefaults: {},
     dependencies: ['canvas-drag'],
     availability: unavailableUntilPicked(

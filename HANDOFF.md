@@ -2395,3 +2395,22 @@ This ultra-speed lane intentionally ran no tests, type checks, lint, builds, pac
 interaction, accessibility or security audits, reviews, or captures. The parent integration lane
 must supply every verification verdict and release evidence before describing the feature as
 verified.
+
+# Issue #76: Annotation labels and line thickness
+
+The `feat/program-65-annotation-labels` lane extends the existing annotation node from upstream
+commit `c1507bea` with an optional bounded label and an editable stroke-thickness control. The
+label renders beside the visual-only line or arrow, while the slider changes the SVG stroke width
+from 1 through 16 local pixels with a default of 3. The annotation remains a canvas node with no
+source, target, or connection handles.
+
+The new presentation fields are normalized in `src/shared/annotation.ts`, carried through
+`CanvasNodeState`, and serialized by `src/renderer/state/workspace.ts`. Schema 3 portable projection
+now preserves and validates annotation variant, diagonal, label, and thickness in
+`src/core/portable-canvas-projection.ts`. The feature article is
+`docs/features/canvas/annotations.md`.
+
+Issue #76's ultra-speed boundary intentionally did not run tests, type checks, lint, reviews,
+security or accessibility checks, builds, packaging, installer execution, runtime interaction, or
+UI captures. The parent integration lane must provide those verdicts before this feature is called
+fully verified.

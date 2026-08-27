@@ -51,6 +51,7 @@ import { useSettings } from './settings'
 import type { SessionSource } from '../session/session'
 import { supportsWindowsTerminalProfiles } from './terminal-profiles'
 import type { AnnotationRect, AnnotationVariant } from '../lib/annotation'
+import { ANNOTATION_DEFAULT_THICKNESS, normalizeAnnotationLabel, normalizeAnnotationThickness } from '@shared/annotation'
 import { newUniverseCreationEventId, shopNodeIdForCanvas } from '../../core/universe-shop'
 import { TORRENT_NODE_CATALOG_ENTRY } from '@shared/torrent'
 import { DEFAULT_VIRTUAL_MACHINE_CONFIG } from '@shared/virtual-machine'
@@ -325,6 +326,10 @@ export interface NodeData {
   annotationVariant?: 'line' | 'arrow'
   /** annotation-only: which corner-to-corner diagonal of the node's box the line/arrow follows. */
   annotationDir?: 'tl-br' | 'tr-bl'
+  /** annotation-only: optional user-authored label rendered beside the stroke. */
+  annotationLabel?: string
+  /** annotation-only: bounded SVG stroke width in local px space. */
+  annotationThickness?: number
   [key: string]: unknown
 }
 
@@ -1810,7 +1815,8 @@ export function createAnnotationNode(
       color: NODE_COLORS[index % NODE_COLORS.length],
       group: null,
       annotationVariant: variant,
-      annotationDir: rect.dir
+      annotationDir: rect.dir,
+      annotationThickness: ANNOTATION_DEFAULT_THICKNESS
     }
   }
 }
@@ -2788,7 +2794,13 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         sshFs: n.sshFs,
         worktree: n.worktree,
         annotationVariant: n.annotationVariant,
-        annotationDir: n.annotationDir
+        annotationDir: n.annotationDir,
+        ...(n.kind === 'annotation' && normalizeAnnotationLabel(n.annotationLabel) !== undefined
+          ? { annotationLabel: normalizeAnnotationLabel(n.annotationLabel) }
+          : {}),
+        ...(n.kind === 'annotation'
+          ? { annotationThickness: normalizeAnnotationThickness(n.annotationThickness) }
+          : {})
       }
     }
   })
@@ -2918,6 +2930,12 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         worktree: n.data.worktree,
         annotationVariant: n.data.annotationVariant,
         annotationDir: n.data.annotationDir,
+        ...(kind === 'annotation' && normalizeAnnotationLabel(n.data.annotationLabel) !== undefined
+          ? { annotationLabel: normalizeAnnotationLabel(n.data.annotationLabel) }
+          : {}),
+        ...(kind === 'annotation'
+          ? { annotationThickness: normalizeAnnotationThickness(n.data.annotationThickness) }
+          : {}),
         premaxRect: n.data.premaxRect
       }
     })
