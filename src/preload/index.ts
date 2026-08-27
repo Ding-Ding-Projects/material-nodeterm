@@ -429,6 +429,15 @@ const api: NodeTerminalApi = {
     saveToken: (token) => ipcRenderer.invoke(IPC.githubControlSaveToken, token),
     clearToken: () => ipcRenderer.invoke(IPC.githubControlClearToken)
   },
+  githubCliAccounts: {
+    list: () => ipcRenderer.invoke(IPC.githubCliAccountsList),
+    switchActive: (host, login) => ipcRenderer.invoke(IPC.githubCliAccountsSwitch, host, login),
+    signOut: (host, login) => ipcRenderer.invoke(IPC.githubCliAccountsSignOut, host, login),
+    startLogin: () => ipcRenderer.invoke(IPC.githubCliAccountsStartLogin),
+    loginStatus: (id) => ipcRenderer.invoke(IPC.githubCliAccountsLoginStatus, id),
+    cancelLogin: (id) => ipcRenderer.invoke(IPC.githubCliAccountsCancelLogin, id),
+    refreshAuthorization: (input) => ipcRenderer.invoke(IPC.githubCliAccountsRefresh, input)
+  },
   speech: {
     // IPC carries the raw Float32 samples as an ArrayBuffer (structured clone; decodePcmPayload's
     // ArrayBuffer branch reads it directly, no re-encoding). A Float32Array view doesn't always

@@ -22,6 +22,7 @@ substrate described in CLAUDE.md rather than inventing a surface each.
 | [Home Assistant controls](home-assistant-controls.md) | implemented schema-driven entity controls with machine-local connections and portable selection intent; verification intentionally unrun |
 | [Home Assistant sensor displays](home-assistant-sensor-display.md) | implemented portable entity/display intent with machine-local sealed binding, discovery, bounded observations, and typed value/state/gauge/trend/event/weather/calendar/attribute views |
 | [Cloudflare core managers](cloudflare-core-managers.md) | typed account, zone, DNS, SSL/TLS, ruleset, redirect, cache, and analytics operations with local sealed credentials, bounded results, previews, cancellation, and portable safe intent |
+| [GitHub CLI account selector](github-cli-accounts.md) | host-owned discovery, guided device-flow login, active-account switching, scope refresh, and per-account sign-out without exposing credentials |
 | [Cloudflare Access, Zero Trust, Workers, Pages, R2, D1 and Queues](cloudflare-zero-trust-managers.md) | typed fixed-route API managers with local protected credentials, portable neutral intent, bounded responses, progress, cancellation, and destructive confirmation; verification intentionally unrun |
 
 Planned, not yet researched here:

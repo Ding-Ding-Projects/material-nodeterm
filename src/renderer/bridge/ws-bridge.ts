@@ -15,7 +15,7 @@ import {
 } from '../../shared/rpc'
 import { IPC } from '../../shared/ipc'
 import { mapLocalVocabularyText } from '../lib/personalVocabulary/hostMessage'
-import type { GitHubControlApi, GitHubIssuesApi } from '../../shared/github-issues'
+import type { GitHubCliAccountsApi, GitHubControlApi, GitHubIssuesApi } from '../../shared/github-issues'
 import type { ConverterApi } from '../../shared/converter'
 import type { OllamaApi } from '../../shared/ollama'
 import type { MinecraftApi } from '../../shared/minecraft'
@@ -681,7 +681,7 @@ export function buildRealApi(
 
 export function buildGitHubApi(
   client: RpcClient
-): Pick<NodeTerminalApi, 'githubIssues' | 'githubControl'> {
+): Pick<NodeTerminalApi, 'githubIssues' | 'githubControl' | 'githubCliAccounts'> {
   const githubIssues: GitHubIssuesApi = {
     subscribe: (projectId) =>
       client.request(IPC.githubIssuesSubscribe, { projectId }) as ReturnType<
@@ -727,7 +727,17 @@ export function buildGitHubApi(
       client.request(IPC.githubControlClearToken) as ReturnType<GitHubControlApi['clearToken']>
   }
 
-  return { githubIssues, githubControl }
+  const githubCliAccounts: GitHubCliAccountsApi = {
+    list: () => client.request(IPC.githubCliAccountsList) as ReturnType<GitHubCliAccountsApi['list']>,
+    switchActive: (host, login) => client.request(IPC.githubCliAccountsSwitch, host, login) as ReturnType<GitHubCliAccountsApi['switchActive']>,
+    signOut: (host, login) => client.request(IPC.githubCliAccountsSignOut, host, login) as ReturnType<GitHubCliAccountsApi['signOut']>,
+    startLogin: () => client.request(IPC.githubCliAccountsStartLogin) as ReturnType<GitHubCliAccountsApi['startLogin']>,
+    loginStatus: (id) => client.request(IPC.githubCliAccountsLoginStatus, id) as ReturnType<GitHubCliAccountsApi['loginStatus']>,
+    cancelLogin: (id) => client.request(IPC.githubCliAccountsCancelLogin, id) as ReturnType<GitHubCliAccountsApi['cancelLogin']>,
+    refreshAuthorization: (input) => client.request(IPC.githubCliAccountsRefresh, input) as ReturnType<GitHubCliAccountsApi['refreshAuthorization']>
+  }
+
+  return { githubIssues, githubControl, githubCliAccounts }
 }
 
 export function buildProviderServicesApi(
