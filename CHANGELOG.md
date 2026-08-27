@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add a bounded, platform-free AWS CLI model documentation index for official services, commands,
+  options, paginators, waiters, input and output shapes, and deterministic input skeletons. The
+  index exposes guided picker states, local plain-text or explicit regex search, official AWS
+  documentation links, and a schema-3-safe selection projection while excluding credentials,
+  machine paths, model caches, provider state, and command execution. This lane intentionally did
+  not run tests, type checks, lint, reviews, security or accessibility checks, builds, packaging,
+  installer execution, runtime interaction, or UI captures.
+
 - Add a source-only desktop Material Design 3 audit with a hand-written inventory of 212 rendered
   surfaces, including onboarding, profile picking, conversion, password management, Minecraft
   management, dialogs, find bars, and notifications. Shared NumberField, Radio, Progress, and Tabs

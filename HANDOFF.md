@@ -1,5 +1,34 @@
 # Handoff
 
+## 2026-08-27, AWS CLI model documentation index
+
+Implemented issue #42 on `feat/program-31-aws-model-docs` from base
+`7c14db981f9e130cda2b9100285805f9646d7e58`. The new platform-free
+`src/core/aws-model-documentation.ts` module consumes bounded decoded official AWS CLI service,
+paginator, and waiter models and projects them into deterministic service, command, option,
+paginator, waiter, input, output, and input-skeleton documentation records. It generates official
+`docs.aws.amazon.com` CLI reference links, accepts only allowlisted optional API reference URLs,
+flattens documentation text, detects duplicate identities, bounds every collection and recursive
+skeleton, and performs no file, process, network, credential, provider, or command operation.
+
+The module also provides local plain-text or explicit regular-expression search, guided service,
+command, and section picker models with exact disabled-state reasons, and a strict portable
+selection projection. Only `serviceId`, `commandName`, and the selected documentation section can
+enter schema 3 intent. Installed executable paths, decoded model caches, generated runtime indexes,
+credentials, profiles, provider sessions, account or role identity, endpoints, pagination cursors,
+waiter progress, results, and process state are explicitly omitted.
+
+Direct records were added in `docs/features/integrations/aws-cli-model-documentation.md`, the
+integrations index, `src/shared/node-catalog.ts`, `CHANGELOG.md`, `ROADMAP.md`, and this handoff. The
+AWS service catalog row remains planned for the later executor and typed-wizard lanes, but now links
+to the implemented documentation-index article rather than only the program plan.
+
+This lane intentionally did not run tests, type checks, lint, reviews, security checks,
+accessibility checks, builds, packaging, installer execution, runtime interaction, or UI captures.
+No runtime, accessibility, packaged-artifact, or visual correctness verdict is claimed. The later
+AWS CLI inventory lane must supply decoded official models, and the later wizard lane must render
+the picker and shape records as typed controls without adding a blank command textbox.
+
 ## 2026-08-26, desktop Material Design 3 and personal vocabulary reconciliation
 
 This source-only lane is on feat/full-app-material3-reconciliation at the current integration tip.
