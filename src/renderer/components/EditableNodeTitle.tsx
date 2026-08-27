@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 /**
  * The one click-to-rename title control every node header uses.
@@ -74,6 +75,7 @@ export function EditableNodeTitle({
   appearanceId,
   onEditingChange
 }: EditableNodeTitleProps) {
+  const vocab = useVocabularyMapper()
   const [editing, setEditingState] = useState(false)
   const setEditing = (next: boolean) => {
     setEditingState(next)
@@ -109,7 +111,7 @@ export function EditableNodeTitle({
         value={value}
         spellCheck={false}
         autoFocus
-        aria-label={ariaLabel ?? 'Rename'}
+        aria-label={vocab(ariaLabel ?? 'Rename')}
         onChange={(e) => onChange(e.target.value)}
         onBlur={(e) => finishEdit(e.currentTarget.value)}
         onKeyDown={(e) => {
@@ -130,12 +132,12 @@ export function EditableNodeTitle({
     <button
       type="button"
       className={`nodrag${baseTriggerClassName ? ` ${baseTriggerClassName}` : ''}${triggerClassName ? ` ${triggerClassName}` : ''}`}
-      title={title}
-      aria-label={ariaLabel ? `${ariaLabel}: ${value || 'untitled'}` : undefined}
+      title={vocab(title)}
+      aria-label={ariaLabel ? `${vocab(ariaLabel)}: ${value || 'untitled'}` : undefined}
       data-appearance-id={appearanceId}
       onClick={startEdit}
     >
-      {value || emptyLabel || 'Untitled'}
+      {value || (typeof emptyLabel === 'string' ? vocab(emptyLabel) : emptyLabel) || vocab('Untitled')}
     </button>
   )
 }

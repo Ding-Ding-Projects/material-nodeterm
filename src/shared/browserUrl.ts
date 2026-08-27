@@ -4,6 +4,11 @@
 // scheme check rather than re-deriving it — one place decides "is this an http(s) URL", so the
 // address bar and the allowlist can never drift into disagreeing about
 // `javascript:`/`file:`/`data:`.
+// Address-bar normalization, in `src/shared` because BOTH shells need it: the renderer's address bar
+// (re-exported from `renderer/nodes/browserUrl.ts`, so no existing import path changes) and main's
+// CDP allowlist, whose `Page.navigate` validator reuses THIS scheme check rather than re-deriving it
+// — one place decides "is this an http(s) URL", so the address bar and the allowlist can never drift
+// into disagreeing about `javascript:`/`file:`/`data:`.
 
 // Normalize an address-bar entry into an http(s) URL, or null when it can't be one.
 // Blocks file:/javascript:/data:/custom schemes; adds https:// to a bare host. No search fallback.

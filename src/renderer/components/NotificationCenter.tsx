@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNotifications, type AppNotification, type NotificationKind } from '../state/notifications'
 import { Checkbox } from '@renderer/ui/md3'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 type FilterKind = 'all' | 'unread' | NotificationKind
 
@@ -21,10 +22,23 @@ function matchesFilter(n: AppNotification, f: FilterKind): boolean {
   return n.kind === f
 }
 
-function matchesQuery(n: AppNotification, q: string): boolean {
+export interface NotificationCopyView {
+  title: string
+  body?: string
+}
+
+export function mapNotificationCopy(n: AppNotification, vocab: (value: string) => string): NotificationCopyView {
+  return {
+    title: n.titleKind === 'authored' ? vocab(n.title) : n.title,
+    body: n.bodyKind === 'authored' && n.body ? vocab(n.body) : n.body
+  }
+}
+
+export function matchesQuery(n: AppNotification, q: string, vocab: (value: string) => string = (value) => value): boolean {
   if (!q.trim()) return true
+  const copy = mapNotificationCopy(n, vocab)
   const s = q.toLowerCase()
-  return n.title.toLowerCase().includes(s) || (n.body ?? '').toLowerCase().includes(s)
+  return copy.title.toLowerCase().includes(s) || (copy.body ?? '').toLowerCase().includes(s)
 }
 
 function relTime(ts: number): string {
@@ -38,13 +52,21 @@ function relTime(ts: number): string {
   return `${Math.round(h / 24)}d ago`
 }
 
-function toMarkdown(items: AppNotification[]): string {
+export function toMarkdown(items: AppNotification[], vocab: (value: string) => string = (value) => value): string {
   return items
     .map((n) => {
       const state = n.dismissedAt == null ? 'active' : 'dismissed'
-      return `- **[${n.kind}]** ${n.title}${n.body ? ` — ${n.body}` : ''} _(${state}, ${new Date(n.createdAt).toISOString()})_`
+      const copy = mapNotificationCopy(n, vocab)
+      return `- **[${n.kind}]** ${copy.title}${copy.body ? ` — ${copy.body}` : ''} _(${state}, ${new Date(n.createdAt).toISOString()})_`
     })
     .join('\n')
+}
+
+export function notificationToExportRecord(
+  n: AppNotification,
+  vocab: (value: string) => string = (value) => value
+): Record<string, unknown> {
+  return { ...n, ...mapNotificationCopy(n, vocab), actions: undefined }
 }
 
 function downloadText(filename: string, text: string, mime: string): void {
@@ -75,6 +97,7 @@ export function NotificationCenter({
   onClose,
   onRequestBulkDelete
 }: NotificationCenterProps): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   const items = useNotifications((s) => s.items)
   const dismiss = useNotifications((s) => s.dismiss)
   const dismissMany = useNotifications((s) => s.dismissMany)
@@ -86,8 +109,8 @@ export function NotificationCenter({
   const [selected, setSelected] = useState<Set<string>>(new Set())
 
   const filtered = useMemo(
-    () => items.filter((n) => matchesFilter(n, filter) && matchesQuery(n, query)),
-    [items, filter, query]
+    () => items.filter((n) => matchesFilter(n, filter) && matchesQuery(n, query, vocab)),
+    [items, filter, query, vocab]
   )
   const filteredIds = useMemo(() => filtered.map((n) => n.id), [filtered])
   const allFilteredSelected = filteredIds.length > 0 && filteredIds.every((id) => selected.has(id))
@@ -138,8 +161,8 @@ export function NotificationCenter({
     if (format === 'json') {
       downloadText(
         `notifications-${Date.now()}.json`,
-        JSON.stringify(
-          scoped.map((n) => ({ ...n, actions: undefined })),
+          JSON.stringify(
+            scoped.map((n) => notificationToExportRecord(n, vocab)),
           null,
           2
         ),
@@ -152,10 +175,10 @@ export function NotificationCenter({
 
   return createPortal(
     <div className="drawer-overlay" onClick={onClose}>
-      <div className="notif-center" onClick={(e) => e.stopPropagation()}>
+      <div className="notif-center" data-easter-surface="notifications" onClick={(e) => e.stopPropagation()}>
         <div className="notif-center__head">
-          <h2>Notifications</h2>
-          <button className="drawer__close" onClick={onClose} aria-label="Close">
+          <h2>{vocab('Notifications')}</h2>
+          <button className="drawer__close" onClick={onClose} aria-label={vocab('Close')}>
             ×
           </button>
         </div>
@@ -165,7 +188,7 @@ export function NotificationCenter({
             placeholder="Search notifications…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            aria-label="Search notifications"
+            aria-label={vocab('Search notifications')}
           />
           <div className="notif-center__filters" role="group" aria-label="Filter by kind">
             {FILTERS.map((f) => (
@@ -209,7 +232,9 @@ export function NotificationCenter({
         </div>
         <div className="notif-center__list" role="listbox" aria-label="Notifications" aria-multiselectable="true">
           {filtered.length === 0 && <div className="notif-center__empty">No matching notifications.</div>}
-          {filtered.map((n) => (
+          {filtered.map((n) => {
+            const copy = mapNotificationCopy(n, vocab)
+            return (
             <div
               key={n.id}
               className={`notif-center__row${n.read ? '' : ' unread'}${n.deliveredSilently ? ' quieted' : ''}`}
@@ -219,11 +244,11 @@ export function NotificationCenter({
               <Checkbox
                 checked={selected.has(n.id)}
                 onChange={() => toggleOne(n.id)}
-                aria-label={`Select: ${n.title}`}
+                aria-label={`Select: ${copy.title}`}
               />
               <div className="notif-center__row-body">
-                <div className="notif-center__row-title">{n.title}</div>
-                {n.body && <div className="notif-center__row-text">{n.body}</div>}
+                <div className="notif-center__row-title">{copy.title}</div>
+                {copy.body && <div className="notif-center__row-text">{copy.body}</div>}
                 <div className="notif-center__row-meta">
                   <span>{n.kind}</span>
                   <span>{relTime(n.createdAt)}</span>
@@ -235,7 +260,7 @@ export function NotificationCenter({
                 <button className="notif-center__row-dismiss" onClick={() => dismiss(n.id)}>
                   Dismiss
                 </button>
-              ) : (
+      ) : (
                 <button className="notif-center__row-dismiss" onClick={() => restore(n.id)}>
                   Restore
                 </button>
@@ -248,7 +273,8 @@ export function NotificationCenter({
                 Delete
               </button>
             </div>
-          ))}
+            )
+          })}
         </div>
       </div>
     </div>,

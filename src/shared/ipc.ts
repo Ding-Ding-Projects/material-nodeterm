@@ -31,12 +31,19 @@ export const IPC = {
    *  it, resizes pane 0 — both in one call so a poller pays one round-trip per tick. Resolves
    *  `true` only when it actually resized something; tmux-backed local sessions only. */
   ptyCorrectTeamPaneWidth: 'pty:correct-team-pane-width',
+  /** Renderer → core: SIGTERM the non-shell foreground process group in this node's pane.
+   *  Model switching uses this instead of typing an exit slash-command into an agent composer. */
+  ptyTerminateForeground: 'pty:terminate-foreground',
   ptyReadSessionName: 'pty:read-session-name',
   /** Shell → renderer: this MACHINE's pty-device pressure band changed (core/pty-pressure.ts).
    *  Payload: `PtyPressure` — `{ level, usage, ceiling }`. Sent on band CHANGES only, and re-sent
    *  for a held band at most once every five minutes; `level: 'none'` is what clears the banner.
    *  Desktop only — see the Server Edition note beside the monitor in src/server/index.ts. */
   ptyPressure: 'pty:pressure',
+  /** Main → renderer: a trackpad scroll or pinch opened or closed on the main window. The main
+   *  ledger emits only edge transitions, not the raw pointer-packet stream. Server Edition keeps
+   *  its renderer heuristic because a browser has no equivalent raw input source. */
+  canvasTrackpadGesture: 'canvas:trackpad-gesture',
   /** Renderer → main: the user clicked "Fix automatically…" on the pty-pressure banner. Raises
    *  `kern.tty.ptmx_max` now AND installs a LaunchDaemon so it survives reboot, via ONE
    *  administrator-privileges osascript (macOS's own password dialog). Resolves
@@ -44,6 +51,17 @@ export const IPC = {
   ptyRaiseDeviceLimit: 'pty:raise-device-limit',
   terminalProfilesList: 'terminal-profiles:list',
   terminalProfilesRefresh: 'terminal-profiles:refresh',
+  virtualMachineTools: 'virtual-machine:tools',
+  virtualMachineStatus: 'virtual-machine:status',
+  virtualMachineConfigure: 'virtual-machine:configure',
+  virtualMachineCreateDisk: 'virtual-machine:create-disk',
+  virtualMachineStart: 'virtual-machine:start',
+  virtualMachineStop: 'virtual-machine:stop',
+  virtualMachineSnapshot: 'virtual-machine:snapshot',
+  virtualMachineRestore: 'virtual-machine:restore',
+  virtualMachineOpenDisplay: 'virtual-machine:open-display',
+  virtualMachineReset: 'virtual-machine:reset',
+  virtualMachineEvent: 'virtual-machine:event',
   claudeReadTranscript: 'claude:read-transcript',
   chatReadTranscript: 'chat:read-transcript',
   claudeAccountsAdd: 'claude-accounts:add',
@@ -61,12 +79,41 @@ export const IPC = {
   codexAccountsCommitSwitch: 'codex-accounts:commit-switch',
   codexAccountsFinishSwitch: 'codex-accounts:finish-switch',
   codexAccountsRollbackSwitch: 'codex-accounts:rollback-switch',
+  // Machine-scoped managed Codex accounts (S6). Add/device-login/removal, plus the three-phase,
+  // owner-authorized account switch (resume the SAME conversation id, never fork) and the
+  // source-side leg of moving an idle conversation to an SSH account. See main/codex-accounts.ts.
+  codexAccountsAdd: 'codex-accounts:add',
+  codexAccountsWaitLogin: 'codex-accounts:wait-login',
+  codexAccountsCancelWait: 'codex-accounts:cancel-wait',
+  codexAccountsIdentity: 'codex-accounts:identity',
+  codexAccountsSystemIdentity: 'codex-accounts:system-identity',
+  codexAccountsRemove: 'codex-accounts:remove',
+  codexAccountsSwitchThread: 'codex-accounts:switch-thread',
+  codexAccountsCommitSwitch: 'codex-accounts:commit-switch',
+  codexAccountsFinishSwitch: 'codex-accounts:finish-switch',
+  codexAccountsRollbackSwitch: 'codex-accounts:rollback-switch',
+  codexAccountsTransferThreadToSsh: 'codex-accounts:transfer-thread-to-ssh',
   claudeCliCaps: 'claude-cli:caps',
   /** Can a node on this machine get a managed Codex identity? See core/codex-identity-caps.ts. */
   codexIdentityCaps: 'codex-identity:caps',
   /** main/server → renderer: a Codex node's identity mode changed ('shared' | 'plain'). The
    *  'plain' events are what make the launcher's fallback visible instead of silent. */
   codexIdentity: 'codex-identity:event',
+  /** Renderer → main: a snapshot of the main process's `process.env`, used to expand `${env:VAR}`
+   *  tokens in custom-agent launch commands and the Settings preview (the renderer has no
+   *  `process.env` of its own). Values are strings; undefined entries are omitted.
+   *  DESKTOP-WINDOW-ONLY: registered via raw `ipcMain.handle`, never `platform().handle` — a
+   *  peer-dispatchable full-env dump is the credential-leak class PR #195 closed. The
+   *  browser/relay bridges answer `{}` locally and expansion degrades to the missing-env
+   *  refusal. */
+  envSnapshot: 'env:snapshot',
+  /** Renderer → core: fetch an OpenAI-compatible model catalogue without browser CORS. */
+  agentDiscoverModels: 'agent:discover-models',
+  /** Renderer → core secret boundary for a literal model-gateway API key. The value is write-only;
+   *  status returns only presence + storage protection. */
+  agentGatewayCredentialStatus: 'agent:gateway-credential-status',
+  agentGatewayCredentialSave: 'agent:gateway-credential-save',
+  agentGatewayCredentialClear: 'agent:gateway-credential-clear',
   transcriptSearch: 'transcript:search',
   appToggleMarkdown: 'app:toggle-markdown',
   appCloseNode: 'app:close-node',
@@ -74,7 +121,25 @@ export const IPC = {
    *  Electron's default View menu binds that accelerator to `resetZoom`, which resets the WINDOW's
    *  page zoom rather than the canvas's. */
   appZoomActualSize: 'app:zoom-actual-size',
+  /** Renderer → main: the Settings shortcut recorder is armed (`true`) or disarmed (`false`).
+   *  While armed the main window's `before-input-event` intercepts above stand down entirely, so
+   *  the chord the user is recording — ⌘W and ⌘M among them — reaches the recorder instead of
+   *  closing their selected nodes. Fire-and-forget `send`; desktop-only (a browser tab has no
+   *  application menu to steal a chord back from, so the Server Edition stubs it). */
+  uiShortcutRecording: 'ui:shortcut-recording',
+  /** Renderer → main: an xterm does (`true`) / does not (`false`) currently hold keyboard focus.
+   *  A MIRROR, not a request: under the `terminal-first` shortcut policy the intercepts above must
+   *  stand down while the user is typing in a terminal, and `before-input-event` fires before any
+   *  renderer handler could tell main so — the answer has to already be there. Change-deduped by
+   *  the sender, fire-and-forget `send`, and read fail-safe: main starts at `false` and every way
+   *  the page can stop existing resets it there, so a stale mirror means intercepts ON (the
+   *  pre-policy app), never a window whose ⌘W has silently gone back to the application menu.
+   *  Desktop-only, for the same reason as the recording bit — the Server Edition stubs it. */
+  uiTerminalFocus: 'ui:terminal-focus',
   appCloseWindow: 'app:close-window',
+  /** Main → renderer: the native application menu's "Settings…" item (⌘,) was clicked. The
+   *  renderer opens the settings page — same path as the in-canvas gear button / Cmd+, keydown. */
+  appOpenSettings: 'app:open-settings',
   appFocusWindow: 'app:focus-window',
   /** Canvas widget mode (`main/canvas-widget-window.ts`, `core/canvas-widget.ts`, `renderer/widget/
    *  WidgetApp.tsx`): pop one terminal node's live tmux/session-host session into its own
@@ -91,6 +156,12 @@ export const IPC = {
   widgetSetAlwaysOnTop: 'widget:set-always-on-top',
   widgetGetState: 'widget:get-state',
   widgetStateChanged: 'widget:state-changed',
+  /** Native View menu → renderer: toggle the Snap-to-Grid arrange mode. */
+  appToggleAutoAlign: 'app:toggle-auto-align',
+  /** Native View menu → renderer: fit the canvas to its nodes. */
+  appFitView: 'app:fit-view',
+  /** Native View menu → renderer: toggle the kanban / canvas view. */
+  appToggleKanban: 'app:toggle-kanban',
   /** Write text to the system clipboard from the MAIN process. Renderer-side `clipboard` access is
    *  deprecated in Electron; resolves true only after MAIN completes the write. */
   clipboardWrite: 'clipboard:write',
@@ -126,12 +197,18 @@ export const IPC = {
   /** hud → main: a HUD row was clicked — focus the node in nodeterm + clear its done latch.
    *  Arg: `nodeId: string`. Reuses the notification-click focus path. */
   hudFocusNode: 'hud:focus-node',
-  /** hud → main: the panel expanded/collapsed. `true` clears every done latch (you looked). */
+  /** hud → main: the panel expanded/collapsed. Arg: `expanded: boolean`. Marks NOTHING as read —
+   *  the handler is deliberately a no-op (notch-hud.ts `onExpanded`). It used to clear every done
+   *  latch ("you looked"), which with three finished sessions waiting meant opening the panel and
+   *  clicking one silently swallowed the other two. Read is strictly per row: `hudFocusNode` clears
+   *  that row, `hudDismiss` hides one by hand. Still wired because the expand state may drive more
+   *  main-side behavior later. */
   hudExpanded: 'hud:expanded',
   /** hud → main: dismiss one HUD row by hand (a stuck session). Arg: `nodeId: string`. */
   hudDismiss: 'hud:dismiss',
   agentControl: 'agent:control',
   agentControlResult: 'agent:control-result',
+  agentMessageDeliver: 'agent:message-deliver',
   /** Canvas sync: a client casts its local node mutations here; the core reflector
    *  (src/core/canvas-sync.ts) stamps each with the total order (`seq`) and sends it back out on the
    *  SAME channel to EVERY attached client — the sender included, whose copy is its ack (see
@@ -141,6 +218,16 @@ export const IPC = {
   contextLinkInfo: 'context-link:info',
   /** Board-log (`.nodeterm/board-log.jsonl`): request/response append + read, routed per project
    *  (local cwd / desktop-ssh / unsupported) in core/board-log-handlers.ts. */
+  /** Debug log panel (issue #78) — invoke: the whole ring (LogRecord[]) for the initial fill. */
+  logSnapshot: 'log:snapshot',
+  /** Fire-and-forget ref-counted subscribe/unsubscribe for the batched logBatch pushes. */
+  logSubscribe: 'log:subscribe',
+  logUnsubscribe: 'log:unsubscribe',
+  /** main→renderer push: a LogRecord[] batch. Flows only while ≥1 panel is subscribed AND the
+   *  debugLogPanel setting is on; the client dedupes by seq. */
+  logBatch: 'log:batch',
+  /** Fire-and-forget: empty the ring. */
+  logClear: 'log:clear',
   boardLogAppend: 'board-log:append',
   boardLogRead: 'board-log:read',
   /** Fire-and-forget ref-counted subscribe/unsubscribe: the first subscriber for a project starts
@@ -163,6 +250,8 @@ export const IPC = {
   licenseStatus: 'license:status',
   licenseChanged: 'license:changed',
   licenseUpgrade: 'license:upgrade',
+  licenseDetail: 'license:detail',
+  licenseRelease: 'license:release',
   appRestartToUpdate: 'app:restart-to-update',
   announcementsFetch: 'announcements:fetch',
   usageFetch: 'usage:fetch',
@@ -241,6 +330,10 @@ export const IPC = {
    *  rather than reset on it. */
   ptyResync: (sessionId: string) => `pty:resync:${sessionId}`,
   workspaceLoad: 'workspace:load',
+  timerOccurrencesLoad: 'timer:occurrences-load',
+  timerOccurrenceSchedule: 'timer:occurrence-schedule',
+  timerOccurrenceTransition: 'timer:occurrence-transition',
+  timerOccurrenceLap: 'timer:occurrence-lap',
   workspaceSave: 'workspace:save',
   workspaceProbeFolder: 'workspace:probe-folder',
   /** Explicit split/join for a local project's storage encoding (project-parts.ts). See
@@ -251,6 +344,30 @@ export const IPC = {
   workspaceHasPartsManifest: 'workspace:has-parts-manifest',
   projectArchiveExport: 'project-archive:export',
   projectArchiveImport: 'project-archive:import',
+  portableMediaPrepare: 'portable-media:prepare',
+  portableMediaDiscard: 'portable-media:discard',
+  boardLogAppendWithAttachments: 'board-log:append-with-attachments',
+  boardLogReadAttachment: 'board-log:read-attachment',
+  portableBindingState: 'portable-binding:state',
+  portableBindingApply: 'portable-binding:apply',
+  providerCatalog: 'provider-services:catalog',
+  providerAccounts: 'provider-services:accounts',
+  providerResources: 'provider-services:resources',
+  providerBeginOAuth: 'provider-services:begin-oauth',
+  providerCompleteOAuth: 'provider-services:complete-oauth',
+  providerRemoveAccount: 'provider-services:remove-account',
+  cloudflareCatalog: 'cloudflare-zero-trust:catalog',
+  cloudflareAccounts: 'cloudflare-zero-trust:accounts',
+  cloudflareConfigure: 'cloudflare-zero-trust:configure',
+  cloudflareRemoveAccount: 'cloudflare-zero-trust:remove-account',
+  cloudflareBinding: 'cloudflare-zero-trust:binding',
+  cloudflareSaveBinding: 'cloudflare-zero-trust:save-binding',
+  cloudflareResources: 'cloudflare-zero-trust:resources',
+  cloudflareExecute: 'cloudflare-zero-trust:execute',
+  cloudflareCancel: 'cloudflare-zero-trust:cancel',
+  cloudflareProgress: 'cloudflare-zero-trust:progress',
+  projectArchiveProgress: 'project-archive:progress',
+  projectArchiveCancel: 'project-archive:cancel',
   /** The unlock ladder for a protected project file's password prompt — issue a challenge, and
    *  grade an answer core-side against its one-shot nonce. Never touches the password itself:
    *  clearing a rung ends the WAIT and nothing else (core/archive-unlock-guard.ts). */
@@ -262,6 +379,54 @@ export const IPC = {
   /** Main → renderer event (not invoke/handle): one `ServerDeploymentStage` per emission, sent
    *  while a `serverDeployment.start()` call is in flight. */
   serverDeploymentProgress: 'server-deployment:progress',
+  /** Is a folder's .nodeterm/project.json present / absent / unreadable — the distinction
+   *  `probeFolder`'s null collapses. Recovery of an `unavailable` project needs it (issue #385). */
+  workspaceProjectFileState: 'workspace:project-file-state',
+  projectSettingsRead: 'project-settings:read',
+  projectSettingsWriteShared: 'project-settings:write-shared',
+  projectSettingsUpdateLocal: 'project-settings:update-local',
+  /** Resolved settings + per-family trust verdict for one project (`ProjectLaunchInfo`), the single
+   *  read a launcher warms before it may consume a shared-sourced value — answers `null` for an
+   *  unknown project id, same as projectSettingsRead. */
+  projectSettingsLaunchInfo: 'project-settings:launch-info',
+  /** main→renderer broadcast: `{projectId}` after ANY family approval changes for that project (a
+   *  consent dialog answered, a trust record revoked). Emitted by
+   *  `ProjectSetupService.ensureFamilyTrusted` on an approval — for EVERY project that asked, not
+   *  just the one that raised the prompt (two canvas nodes can share one location). */
+  projectTrustChanged: 'project-trust:changed',
+  /** Run a project's setup/archive script. Args: (projectId, kind, worktreePath?) — NO rootPath/
+   *  projectName/ssh: the handler derives those itself from its own workspace index by projectId,
+   *  never the caller (project-setup-handlers.ts). Answers a ProjectSetupRunResult — `started` only
+   *  means the run was admitted (gated + single-flight), not that it finished; progress arrives on
+   *  projectSetupEvent. */
+  projectSetupRun: 'project-setup:run',
+  projectSetupCancel: 'project-setup:cancel',
+  /** Ask for one project's `agents`/`shell` family to be trusted, prompting if it is not. Args:
+   *  `(projectId, family)` — nothing path-shaped: the handler derives the location from its own
+   *  workspace index, same as projectSetupRun. Answers `true` only when the family is trusted at
+   *  that location (nothing shared to gate, an existing grant, or a fresh approval); `false` covers
+   *  skip, expiry and every failure. HOST-ONLY (`shared/host-control.ts`): it raises the host's own
+   *  dialog. `setup` is deliberately NOT accepted here — that family is gated by the runner. */
+  projectSetupRequestTrust: 'project-setup:request-trust',
+  /** Renderer's answer to a projectSetupConsentRequest ('approve' | 'skip'). A stale/unknown
+   *  requestId is a silent no-op — an expired prompt can never be approved late. */
+  projectSetupConsentSubmit: 'project-setup:consent-submit',
+  /** main→renderer: raise the trust dialog (payload: ProjectConsentRequest — tagged by family, the
+   *  `setup` arm being the script-runner's own request). */
+  projectSetupConsentRequest: 'project-setup:consent-request',
+  /** main→renderer: close a prompt nobody answered (payload: { requestId }). */
+  projectSetupConsentDismiss: 'project-setup:consent-dismiss',
+  /** Per-project push carrying a ProjectSetupEvent (mirrors the boardLogChanged naming). */
+  projectSetupEvent: (projectId: string) => `project-setup:event:${projectId}`,
+  projectSetupSubscribe: 'project-setup:subscribe',
+  projectSetupUnsubscribe: 'project-setup:unsubscribe',
+  /** Renderer → core: symlink a project's `sharedPaths` from its repo root into a freshly-created
+   *  git worktree. Args carry ONLY `(projectId, worktreePath)` — NEVER the path list, which the
+   *  handler reads itself by projectId (the list is untrusted from a renderer). The handler
+   *  validates `worktreePath` is that project's rootPath or one of its actual git worktrees, and
+   *  refuses an SSH project (local-only this PR); an unknown/invalid input answers `[]`. Resolves
+   *  `SharedPathResult[]`. See core/worktree-shared-paths-handlers.ts. */
+  worktreeMaterializeShared: 'worktree:materialize-shared',
   // main → renderer events
   workspaceMigrated: 'workspace:migrated',
   /** Payload: the `workspace.json.corrupt-<ts>` filename the unreadable index was preserved as. */
@@ -275,16 +440,31 @@ export const IPC = {
   githubIssuesCreateLabels: 'githubIssues:create-labels',
   githubIssuesClearCache: 'githubIssues:clear-cache',
   githubIssuesChanged: (projectId: string) => `githubIssues:changed:${projectId}`,
+  githubProjectAvatar: 'github:projectAvatar',
   githubControlStatus: 'githubControl:status',
+  githubCliAccountsList: 'githubCliAccounts:list',
+  githubCliAccountsSwitch: 'githubCliAccounts:switch',
+  githubCliAccountsSignOut: 'githubCliAccounts:sign-out',
+  githubCliAccountsStartLogin: 'githubCliAccounts:start-login',
+  githubCliAccountsLoginStatus: 'githubCliAccounts:login-status',
+  githubCliAccountsCancelLogin: 'githubCliAccounts:cancel-login',
+  githubCliAccountsRefresh: 'githubCliAccounts:refresh',
   githubControlApprove: 'githubControl:approve',
   githubControlRevoke: 'githubControl:revoke',
   githubControlSelectProvider: 'githubControl:select-provider',
   githubControlSaveToken: 'githubControl:save-token',
   githubControlClearToken: 'githubControl:clear-token',
+  // Guided GitHub REST and GraphQL capabilities. The request carries an operation id and
+  // semantic parameters only. Credentials and endpoint construction remain host-side.
+  githubApiCapabilities: 'githubApi:capabilities',
+  githubApiExecute: 'githubApi:execute',
+  githubApiCancel: 'githubApi:cancel',
+  githubApiProgress: 'githubApi:progress',
   dialogSelectFolder: 'dialog:select-folder',
   dialogSelectFile: 'dialog:select-file',
   shellReveal: 'shell:reveal',
   shellOpenPath: 'shell:open-path',
+  shellPickProjectIcon: 'shell:pick-project-icon',
   fsList: 'fs:list',
   fsRead: 'fs:read',
   fsReadBinary: 'fs:read-binary',
@@ -345,6 +525,22 @@ export const IPC = {
   /** main/server → renderer broadcast: the resolved schedule changed (a new rule became active, an
    *  external source's fetch completed, or none apply anymore). Payload: ScheduledSettingsActiveState. */
   scheduledSettingsActiveChange: 'scheduled-settings:active-change',
+  // Planner occurrences remain in the host process while the UI is closed. The service persists
+  // schedules and occurrence history locally, then broadcasts only bounded, non-secret event data.
+  plannerLoad: 'planner:load',
+  plannerSave: 'planner:save',
+  plannerHistory: 'planner:history',
+  plannerExport: 'planner:export',
+  plannerConfigure: 'planner:configure',
+  plannerOccurrence: 'planner:occurrence',
+  // Alarm Clock nodes keep portable schedule intent in project data and mirror active execution
+  // into a bounded, machine-local host snapshot. Due events carry no path or host identity.
+  alarmPlannerState: 'alarm:planner-state',
+  alarmPlannerUpsert: 'alarm:planner-upsert',
+  alarmPlannerRemove: 'alarm:planner-remove',
+  alarmPlannerSnooze: 'alarm:planner-snooze',
+  alarmPlannerDismiss: 'alarm:planner-dismiss',
+  alarmPlannerDue: 'alarm:planner-due',
   sshList: 'ssh:list',
   sshSave: 'ssh:save',
   sshDelete: 'ssh:delete',
@@ -431,12 +627,27 @@ export const IPC = {
   browserExtensionsAdd: 'browser:extensions-add',
   browserExtensionsRemove: 'browser:extensions-remove',
   browserExtensionsPickDir: 'browser:extensions-pick-dir',
+  // Browser control indicator + Stop (S8 PR 6). Main pushes the current driven-lease set to the
+  // renderer (the chip / rope / kill row); the renderer asks main to revoke — per node, all, or a
+  // whole project's — and main detaches the debugger + drops the ledger entry for real.
+  browserLeaseChanged: 'browser:lease-changed',
+  browserStop: 'browser:stop-control',
+  browserStopAll: 'browser:stop-control-all',
+  browserStopProject: 'browser:stop-control-project',
+  // The `browser` VERB resolve round-trip (S8 PR 7). Main intercepts `browser` and asks the renderer
+  // the two things ONLY it knows — which project owns the source node, whether that source is a
+  // control-capable agent, and whether the per-project capability is on RIGHT NOW — over the same
+  // routing every verb uses. Main makes the security decision (owner + capability + CDP gate) and
+  // does the CDP work itself; the renderer never runs a CDP command.
+  browserControlResolve: 'browser:control-resolve',
+  browserControlResolveResult: 'browser:control-resolve-result',
   remoteHostStart: 'remote:host:start',
   remoteHostStop: 'remote:host:stop',
   // Connection approval gate: main → renderer when a client finishes the handshake (carries the
   // SAS to display); renderer → main to approve/reject. Until approved, the host serves no
   // pty/fs RPCs or input frames, so a leaked offer cannot grant silent access.
   remoteHostPeerPending: 'remote:host:peer-pending',
+  remoteHostPeerPendingCleared: 'remote:host:peer-pending-cleared',
   remoteHostApprove: 'remote:host:approve',
   remoteHostReject: 'remote:host:reject',
   // Host canvas mirror: renderer pushes its serialized active-project canvas to main;
@@ -468,6 +679,34 @@ export const IPC = {
   // main → renderer when a bridged peer becomes a live client / drops (payload `{ id }`).
   relayHostStart: 'relay:host:start',
   relayHostDockerContexts: 'relay:host:docker-contexts',
+  dockerHostManagerContexts: 'docker-host-manager:contexts',
+  dockerHostManagerSnapshot: 'docker-host-manager:snapshot',
+  dockerHostManagerLogs: 'docker-host-manager:logs',
+  dockerHostManagerRun: 'docker-host-manager:run',
+  dockerHostManagerCancel: 'docker-host-manager:cancel',
+  dockerHostManagerProgress: 'docker-host-manager:progress',
+  dockerHostManagerGitlabStatus: 'docker-host-manager:gitlab-status',
+  dockerHostManagerGitlabBackups: 'docker-host-manager:gitlab-backups',
+  dockerHostManagerGitlabCredential: 'docker-host-manager:gitlab-credential',
+  dockerHostManagerGitlabRun: 'docker-host-manager:gitlab-run',
+  nextcloudAioContexts: 'nextcloud-aio:contexts',
+  nextcloudAioSnapshot: 'nextcloud-aio:snapshot',
+  nextcloudAioRun: 'nextcloud-aio:run',
+  nextcloudAioCancel: 'nextcloud-aio:cancel',
+  nextcloudAioProgress: 'nextcloud-aio:progress',
+  // Guided Cloudflare account, zone, DNS, SSL/TLS, ruleset, redirect, cache, and analytics managers.
+  // Tokens stay in the host credential vault; canvas data carries only safe intent.
+  cloudflareCoreRuntime: 'cloudflare-core:runtime',
+  cloudflareCoreCredentials: 'cloudflare-core:credentials',
+  cloudflareCoreSaveCredential: 'cloudflare-core:save-credential',
+  cloudflareCoreRemoveCredential: 'cloudflare-core:remove-credential',
+  cloudflareCoreBinding: 'cloudflare-core:binding',
+  cloudflareCoreBind: 'cloudflare-core:bind',
+  cloudflareCoreUnbind: 'cloudflare-core:unbind',
+  cloudflareCorePreview: 'cloudflare-core:preview',
+  cloudflareCoreExecute: 'cloudflare-core:execute',
+  cloudflareCoreCancel: 'cloudflare-core:cancel',
+  cloudflareCoreProgress: 'cloudflare-core:progress',
   // Team Access (multi-seat): `relayHostInvite` ADDS a seat (invoke, `{ projectId?, email? }` →
   // `{ offer }`, cap-checked → rejects `E_SEATS_FULL`); `relayHostRevoke` (send, `{ id }`) cuts one
   // bridged peer's live session. `relayHostPeerPending`/`relayHostOpen` now also carry the seat
@@ -540,6 +779,7 @@ export const IPC = {
   // readiness metadata and never writes them into projects.
   nodeDependencyCatalog: 'node-dependency:catalog',
   nodeDependencyStatus: 'node-dependency:status',
+  nodeDependencyDetails: 'node-dependency:details',
   nodeDependencyInstall: 'node-dependency:install',
   nodeDependencyCancel: 'node-dependency:cancel',
   nodeDependencyRepair: 'node-dependency:repair',
@@ -607,6 +847,61 @@ export const IPC = {
   // Shell → renderer: one multiplexed status/console stream, like ollama:chat-stream above.
   // Payload: MinecraftEvent. A listener filters to the instance id it owns.
   minecraftEvent: 'minecraft:event',
+  // Local WebTorrent downloader. Task state remains machine-local; only explicit task events cross
+  // the shell bridge. See shared/torrent.ts and core/torrent/.
+  torrentRuntime: 'torrent:runtime',
+  torrentList: 'torrent:list',
+  torrentInspect: 'torrent:inspect',
+  torrentAdd: 'torrent:add',
+  torrentChooseFiles: 'torrent:choose-files',
+  torrentSetDestination: 'torrent:set-destination',
+  torrentPreflight: 'torrent:preflight',
+  torrentStart: 'torrent:start',
+  torrentPause: 'torrent:pause',
+  torrentResume: 'torrent:resume',
+  torrentCancel: 'torrent:cancel',
+  torrentRetry: 'torrent:retry',
+  torrentRemove: 'torrent:remove',
+  torrentSetSeedPolicy: 'torrent:set-seed-policy',
+  torrentReconcile: 'torrent:reconcile',
+  torrentTask: 'torrent:task',
+  // Calendar nodes. Secrets never travel through these metadata/event channels; the core owns
+  // OAuth callbacks and seals provider tokens in the OS vault.
+  calendarStatus: 'calendar:status',
+  calendarAccounts: 'calendar:accounts',
+  calendarCalendars: 'calendar:calendars',
+  calendarEvents: 'calendar:events',
+  calendarImportIcs: 'calendar:import-ics',
+  calendarRefresh: 'calendar:refresh',
+  calendarBeginOAuth: 'calendar:begin-oauth',
+  calendarConnectCalDav: 'calendar:connect-caldav',
+  calendarDisconnectAccount: 'calendar:disconnect-account',
+  calendarCreate: 'calendar:create',
+  calendarUpdate: 'calendar:update',
+  calendarRemove: 'calendar:remove',
+  // Home Assistant multi-instance client. Instance metadata and credentials remain machine-local;
+  // only bounded entity metadata and progress events cross the renderer boundary.
+  homeAssistantInstances: 'home-assistant:instances',
+  homeAssistantSaveInstance: 'home-assistant:save-instance',
+  homeAssistantRemoveInstance: 'home-assistant:remove-instance',
+  homeAssistantDiscover: 'home-assistant:discover',
+  homeAssistantCancel: 'home-assistant:cancel',
+  homeAssistantEvent: 'home-assistant:event',
+  homeAssistantConnections: 'home-assistant-control:connections',
+  homeAssistantConfigure: 'home-assistant-control:configure',
+  homeAssistantBind: 'home-assistant-control:bind',
+  homeAssistantStatus: 'home-assistant-control:status',
+  homeAssistantEntities: 'home-assistant-control:entities',
+  homeAssistantServices: 'home-assistant-control:services',
+  homeAssistantCall: 'home-assistant-control:call',
+  homeAssistantControlCancel: 'home-assistant-control:cancel',
+  // Home Assistant sensor nodes. Shared projects carry only entity/presentation intent; these
+  // channels operate on a machine-local binding whose credential never crosses back to the UI.
+  homeAssistantSensorBinding: 'home-assistant-sensor:binding',
+  homeAssistantSensorConfigure: 'home-assistant-sensor:configure',
+  homeAssistantSensorLeaveUnbound: 'home-assistant-sensor:leave-unbound',
+  homeAssistantSensorDiscover: 'home-assistant-sensor:discover',
+  homeAssistantSensorRefresh: 'home-assistant-sensor:refresh',
   // "Open in Visual Studio Code" (src/core/vscode-detect.ts, src/core/vscode-handlers.ts).
   // Registered on BOTH shells via the generic `platform.handle` seam, so it opens VS Code on
   // whichever machine is actually running the shell (this desktop, or the Server Edition host).
@@ -671,5 +966,10 @@ export const IPC = {
   passwordManagerCredentialCode: 'password-manager:credential-code',
   /** Every credential in one manager as non-secret metadata. Closes the gap that left a
    *  credential from an earlier session visible only as a number. */
-  passwordManagerListCredentials: 'password-manager:list-credentials'
+  passwordManagerListCredentials: 'password-manager:list-credentials',
+  // Multiverse portal-door credentials are host-owned and separate from toy locks. Values are
+  // accepted only for an immediate configure or verify request and never returned to the project.
+  universeDoorEntryConfigure: 'universe-door-entry:configure',
+  universeDoorEntryVerify: 'universe-door-entry:verify',
+  universeDoorEntryRemove: 'universe-door-entry:remove'
 } as const

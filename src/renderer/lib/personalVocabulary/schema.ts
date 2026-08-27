@@ -6,7 +6,7 @@ import { scanJson } from './jsonScan'
  *
  * Shape:
  *   {
- *     "version": 1,            // or "schemaVersion": 1 — both spellings are accepted
+ *     "version": 1,
  *     "entries": { "<term the app would otherwise show>": "<replacement text>", ... }
  *   }
  *
@@ -14,28 +14,19 @@ import { scanJson } from './jsonScan'
  * boundary (`applyVocabulary`) is a literal text replacement, so a nested or non-string value
  * would have no defined meaning there.
  *
- * TWO ALTERNATIVE PAYLOADS are also accepted, because a real dictionary is maintained in more
- * than one file and a loader that only reads the one shape it was written against is a loader
- * that rejects the user's actual data:
+ * Only the versioned entries payload is accepted. Documentation exports and alternate shapes are
+ * rejected instead of being partially interpreted:
  *
- *   { "terms": [ { "replaces": "<ordinary word>", "alias": "<what to show instead>" }, ... ] }
- *   { "requiredPhrases": [ ... ] }     // carries no term→replacement pairs; accepted, applies none
- *
- * VERSION HANDLING. A version that is PRESENT must be exactly VOCAB_SCHEMA_VERSION — a future or
- * older format is still refused rather than guessed at. A version that is ABSENT is accepted and
- * the payload identified by shape. That is a deliberate relaxation of the original
- * reject-if-missing rule: files that predate the field are otherwise unreadable forever, and the
- * shape check below is what actually establishes the data is meaningful. Every bound, the
- * string-only rule and the prototype-pollution refusal are unchanged and still apply to all three.
+ * VERSION HANDLING. A version must be present and exactly VOCAB_SCHEMA_VERSION. Future, older,
+ * and missing versions are refused rather than guessed at.
  */
 export const VOCAB_SCHEMA_VERSION = 1
 /** Hard file-size ceiling, checked on the raw bytes before any parsing. */
 export const VOCAB_MAX_FILE_BYTES = 256 * 1024
 /**
- * `entries` needs 3 (root → object → string) and the `terms` list needs 4 (root → array → term
- * object → string field). The ceiling is well above both because a real vocabulary folder also
- * holds its own JSON Schema document, and those legitimately nest ~9 deep; refusing to even parse
- * one made the picker report "not valid JSON" about a perfectly valid file.
+ * Uploads need only a few levels, while the persisted cache envelope and hand-authored future
+ * metadata can legitimately nest deeper. The ceiling is finite so a pathological document still
+ * cannot recurse without limit.
  *
  * Depth was never the real protection anyway — VOCAB_MAX_NODES and VOCAB_MAX_FILE_BYTES are what
  * actually bound the work, and both are unchanged. This stays finite so a pathological document
@@ -51,14 +42,59 @@ export const VOCAB_MAX_VALUE_LENGTH = 500
  *  and returned dictionary have null prototypes, because the file is untrusted input and this is
  *  a cheap, unconditional guarantee that survives future refactors. */
 const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
+const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/
 
 export interface PersonalVocabularyEntries {
   [term: string]: string
 }
 
+export interface PersonalVocabularyCacheEnvelope {
+  version: typeof VOCAB_SCHEMA_VERSION
+  entries: PersonalVocabularyEntries
+  entryCount: number
+  savedAt: number
+}
+
 export type VocabValidationResult =
   | { ok: true; entries: PersonalVocabularyEntries; entryCount: number }
   | { ok: false; error: string }
+
+function validateEntriesValue(entriesRaw: unknown): VocabValidationResult {
+  if (entriesRaw === null || typeof entriesRaw !== 'object' || Array.isArray(entriesRaw)) {
+    return {
+      ok: false,
+      error: 'no usable vocabulary found — expected "entries" (term → replacement)'
+    }
+  }
+  const entriesObj = entriesRaw as Record<string, unknown>
+  const keys = Object.keys(entriesObj)
+  if (keys.length === 0) {
+    return { ok: false, error: 'no usable vocabulary found — "entries" must contain at least one pair' }
+  }
+  if (keys.length > VOCAB_MAX_ENTRIES) {
+    return { ok: false, error: `more than ${VOCAB_MAX_ENTRIES} entries (${keys.length})` }
+  }
+
+  const entries = Object.create(null) as PersonalVocabularyEntries
+  for (const key of keys) {
+    if (UNSAFE_KEYS.has(key)) return { ok: false, error: `"${key}" is not an allowed key` }
+    if (key.length === 0) return { ok: false, error: 'an entry has an empty key' }
+    if (CONTROL_CHARACTERS.test(key)) return { ok: false, error: 'an entry key contains a control character' }
+    if (key.length > VOCAB_MAX_KEY_LENGTH) {
+      return { ok: false, error: `a key is longer than ${VOCAB_MAX_KEY_LENGTH} characters` }
+    }
+    const value = entriesObj[key]
+    if (typeof value !== 'string') {
+      return { ok: false, error: `the value for "${key}" is not a string (only string replacements are allowed)` }
+    }
+    if (CONTROL_CHARACTERS.test(value)) return { ok: false, error: `the value for "${key}" contains a control character` }
+    if (value.length > VOCAB_MAX_VALUE_LENGTH) {
+      return { ok: false, error: `the value for "${key}" is longer than ${VOCAB_MAX_VALUE_LENGTH} characters` }
+    }
+    entries[key] = value
+  }
+  return { ok: true, entries, entryCount: keys.length }
+}
 
 function byteLength(text: string): number {
   // TextEncoder is the exact "bytes on disk" measure a hard file-size limit means; text.length
@@ -66,41 +102,8 @@ function byteLength(text: string): number {
   return new TextEncoder().encode(text).length
 }
 
-/**
- * `terms: [{ replaces, alias }]` → `{ [replaces]: alias }`.
- *
- * Rows without both strings are SKIPPED rather than rejecting the file: a dictionary export
- * legitimately carries documentation-only rows (notes, categories, open questions) alongside the
- * real pairs, and failing the whole upload over one of those would make the user's actual file
- * unusable. Every bound and refusal that applies to `entries` applies identically here.
- */
-function entriesFromTerms(terms: unknown[]): VocabValidationResult {
-  if (terms.length > VOCAB_MAX_ENTRIES) {
-    return { ok: false, error: `more than ${VOCAB_MAX_ENTRIES} terms (${terms.length})` }
-  }
-  const entries = Object.create(null) as PersonalVocabularyEntries
-  let count = 0
-  for (const row of terms) {
-    if (row === null || typeof row !== 'object' || Array.isArray(row)) continue
-    const rowObj = row as Record<string, unknown>
-    const replaces = Object.hasOwn(rowObj, 'replaces') ? rowObj.replaces : undefined
-    const alias = Object.hasOwn(rowObj, 'alias') ? rowObj.alias : undefined
-    if (typeof replaces !== 'string' || typeof alias !== 'string') continue
-    if (replaces.length === 0 || alias.length === 0) continue
-    if (UNSAFE_KEYS.has(replaces)) {
-      return { ok: false, error: `"${replaces}" is not an allowed key` }
-    }
-    // Over-long rows are skipped for the same reason malformed ones are: a dictionary export
-    // carries prose rows (a sentence in `replaces`, a whole explanation in `alias`) beside the
-    // real pairs, and failing the upload over one of those makes the user's file unusable while
-    // telling them nothing they can act on. The bound still holds — such a row is never applied.
-    if (replaces.length > VOCAB_MAX_KEY_LENGTH) continue
-    if (alias.length > VOCAB_MAX_VALUE_LENGTH) continue
-    entries[replaces] = alias
-    count += 1
-  }
-  return { ok: true, entries, entryCount: count }
-}
+// Alternate payloads are intentionally unsupported; the strict validator below is the only
+// entry point so malformed rows can never be silently skipped.
 
 /**
  * Validate the COMPLETE payload before anything derived from it is displayed or cached. Never
@@ -131,89 +134,65 @@ export function validateVocabularyValue(root: unknown): VocabValidationResult {
     if (UNSAFE_KEYS.has(key)) return { ok: false, error: `top-level key "${key}" is not allowed` }
   }
 
-  // Accept either spelling of the version field. Present ⇒ must match; absent ⇒ identified by
-  // shape below (see the header note on why missing is no longer fatal). These are deliberately
-  // own-property reads: inherited values are not part of the uploaded JSON contract.
-  const declaredVersions = [
-    ...(Object.hasOwn(rootObj, 'version') ? [rootObj.version] : []),
-    ...(Object.hasOwn(rootObj, 'schemaVersion') ? [rootObj.schemaVersion] : [])
-  ]
-  const unsupportedVersion = declaredVersions.find(
-    (value) => value !== undefined && value !== VOCAB_SCHEMA_VERSION
-  )
-  if (unsupportedVersion !== undefined) {
-    return {
-      ok: false,
-      error: `unsupported schema version ${JSON.stringify(unsupportedVersion)} (expected ${VOCAB_SCHEMA_VERSION}; a future/older format is rejected rather than guessed at)`
+  // Accept exactly one versioned upload shape. Companion documents and terms lists are not
+  // substitution files, and silently skipping malformed rows makes a rejected upload look
+  // partially successful.
+  if (!Object.hasOwn(rootObj, 'version') || rootObj.version !== VOCAB_SCHEMA_VERSION) {
+    return { ok: false, error: 'unsupported or missing schema version (expected exactly ' + VOCAB_SCHEMA_VERSION + ')' }
+  }
+  const unknownUploadFields = Object.keys(rootObj).filter((key) => key !== 'version' && key !== 'entries')
+  if (unknownUploadFields.length > 0) {
+    return { ok: false, error: 'unknown top-level field "' + unknownUploadFields[0] + '"' }
+  }
+  if (!Object.hasOwn(rootObj, 'entries')) {
+    return { ok: false, error: 'missing "entries" (term → replacement)' }
+  }
+  return validateEntriesValue(rootObj.entries)
+}
+
+/** Validate the private localStorage envelope. The cache has its own exact shape because adding
+ * persistence metadata to an upload would otherwise make a valid upload look like an unknown
+ * schema. This parser is shared by the renderer and non-React entrypoints such as the HUD. */
+export function validateVocabularyCachePayload(raw: string):
+  | { ok: true; cache: PersonalVocabularyCacheEnvelope }
+  | { ok: false; error: string } {
+  if (byteLength(raw) > VOCAB_MAX_FILE_BYTES) {
+    return { ok: false, error: 'cached vocabulary exceeds the file-size limit' }
+  }
+  const scanned = scanJson(raw, { maxDepth: VOCAB_MAX_DEPTH, maxNodes: VOCAB_MAX_NODES })
+  if (!scanned.ok) return { ok: false, error: `not valid JSON — ${scanned.error}` }
+  const root = scanned.value
+  if (root === null || typeof root !== 'object' || Array.isArray(root)) {
+    return { ok: false, error: 'cached vocabulary must be a JSON object' }
+  }
+  const rootObj = root as Record<string, unknown>
+  for (const key of Object.keys(rootObj)) {
+    if (UNSAFE_KEYS.has(key)) return { ok: false, error: `top-level key "${key}" is not allowed` }
+  }
+  const expected = ['version', 'entries', 'entryCount', 'savedAt']
+  const unknown = Object.keys(rootObj).find((key) => !expected.includes(key))
+  if (unknown) return { ok: false, error: `unknown cache field "${unknown}"` }
+  if (!Object.hasOwn(rootObj, 'version') || rootObj.version !== VOCAB_SCHEMA_VERSION) {
+    return { ok: false, error: 'unsupported or missing cache schema version' }
+  }
+  if (!Object.hasOwn(rootObj, 'entryCount') || typeof rootObj.entryCount !== 'number' || !Number.isInteger(rootObj.entryCount)) {
+    return { ok: false, error: 'cached entryCount must be an integer' }
+  }
+  if (!Object.hasOwn(rootObj, 'savedAt') || typeof rootObj.savedAt !== 'number' || !Number.isFinite(rootObj.savedAt)) {
+    return { ok: false, error: 'cached savedAt must be a finite number' }
+  }
+  const entries = validateEntriesValue(rootObj.entries)
+  if (!entries.ok) return entries
+  if (rootObj.entryCount !== entries.entryCount) {
+    return { ok: false, error: 'cached entryCount does not match entries' }
+  }
+  return {
+    ok: true,
+    cache: {
+      version: VOCAB_SCHEMA_VERSION,
+      entries: entries.entries,
+      entryCount: entries.entryCount,
+      savedAt: rootObj.savedAt
     }
   }
-
-  const hasEntries = Object.hasOwn(rootObj, 'entries')
-  // `terms` list form: [{ replaces, alias }] → { replaces: alias }. A row missing either string
-  // is skipped rather than failing the file: these exports carry documentation-only rows too.
-  if (!hasEntries && Object.hasOwn(rootObj, 'terms') && Array.isArray(rootObj.terms)) {
-    return entriesFromTerms(rootObj.terms)
-  }
-
-  // Two companion documents carry no term→replacement pairs at all: a required-phrases file
-  // (an object OR a list, depending on which generation wrote it) and the folder's own JSON
-  // Schema. Both are valid files with nothing to substitute, so accepting them with zero
-  // entries is the honest answer — reporting an error would say the file is broken when it is
-  // simply not a substitution table.
-  const hasPhrases =
-    Object.hasOwn(rootObj, 'requiredPhrases') &&
-    rootObj.requiredPhrases !== null &&
-    rootObj.requiredPhrases !== undefined
-  const isJsonSchemaDoc =
-    Object.hasOwn(rootObj, '$schema') &&
-    typeof rootObj.$schema === 'string' &&
-    Object.hasOwn(rootObj, 'properties') &&
-    rootObj.properties !== undefined
-  if (!hasEntries && (hasPhrases || isJsonSchemaDoc)) {
-    return { ok: true, entries: {}, entryCount: 0 }
-  }
-
-  if (!hasEntries) {
-    return {
-      ok: false,
-      error: 'no usable vocabulary found — expected "entries" (term → replacement), a "terms" list, or "requiredPhrases"'
-    }
-  }
-  const entriesRaw = rootObj.entries
-  if (entriesRaw === null || typeof entriesRaw !== 'object' || Array.isArray(entriesRaw)) {
-    return {
-      ok: false,
-      error: 'no usable vocabulary found — expected "entries" (term → replacement), a "terms" list, or "requiredPhrases"'
-    }
-  }
-  const entriesObj = entriesRaw as Record<string, unknown>
-  const keys = Object.keys(entriesObj)
-  if (keys.length > VOCAB_MAX_ENTRIES) {
-    return { ok: false, error: `more than ${VOCAB_MAX_ENTRIES} entries (${keys.length})` }
-  }
-
-  // Keep the validated result prototype-free too. The scanner already made every input key an
-  // own property; returning an ordinary `{}` here would reintroduce the `__proto__` setter at the
-  // final copy boundary if the rejection above were ever weakened.
-  const entries = Object.create(null) as PersonalVocabularyEntries
-  for (const key of keys) {
-    if (UNSAFE_KEYS.has(key)) return { ok: false, error: `"${key}" is not an allowed key` }
-    if (key.length === 0) return { ok: false, error: 'an entry has an empty key' }
-    if (key.length > VOCAB_MAX_KEY_LENGTH) {
-      return { ok: false, error: `a key is longer than ${VOCAB_MAX_KEY_LENGTH} characters` }
-    }
-    const value = entriesObj[key]
-    if (typeof value !== 'string') {
-      return { ok: false, error: `the value for "${key}" is not a string (only string replacements are allowed)` }
-    }
-    if (value.length > VOCAB_MAX_VALUE_LENGTH) {
-      return { ok: false, error: `the value for "${key}" is longer than ${VOCAB_MAX_VALUE_LENGTH} characters` }
-    }
-    entries[key] = value
-  }
-
-  // Unknown top-level fields are tolerated (forward-compatible additions), but nothing outside
-  // `version`/`entries` may carry a real vocabulary value — the schema only ever reads these two.
-
-  return { ok: true, entries, entryCount: keys.length }
 }

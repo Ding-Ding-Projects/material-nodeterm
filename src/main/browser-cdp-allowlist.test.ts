@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
 import { checkCdpCommand, type CdpContext } from './browser-cdp-allowlist'
+import { checkCdpCommand, COOKIE_WRITE_METHODS, type CdpContext } from './browser-cdp-allowlist'
 import { NT_SCRIPTS } from './browser-nt-scripts'
 
 const ctx: CdpContext = { viewport: { width: 1280, height: 800 } }
@@ -55,6 +56,27 @@ describe('checkCdpCommand', () => {
     expect(checkCdpCommand('Input.insertText', { text: 'x'.repeat(8193) }, ctx)).toBe(false)
   })
 
+  it('Input.dispatchKeyEvent is a FIXED-TABLE key, or a fixed editing command — never free key injection (Tasks 8.2-8.3)', () => {
+    // A --press key from the table (the same set the verb parser gates on).
+    expect(checkCdpCommand('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter' }, ctx)).toBe(true)
+    expect(checkCdpCommand('Input.dispatchKeyEvent', { type: 'keyUp', key: 'ArrowDown' }, ctx)).toBe(true)
+    // A key OUTSIDE the table is refused — no arbitrary key injection.
+    expect(checkCdpCommand('Input.dispatchKeyEvent', { type: 'keyDown', key: 'a' }, ctx)).toBe(false)
+    expect(checkCdpCommand('Input.dispatchKeyEvent', { type: 'keyDown', key: 'F5' }, ctx)).toBe(false)
+    // The two --clear editing commands are allowed; anything else is refused.
+    expect(checkCdpCommand('Input.dispatchKeyEvent', { type: 'keyDown', commands: ['selectAll'] }, ctx)).toBe(true)
+    expect(checkCdpCommand('Input.dispatchKeyEvent', { type: 'keyDown', commands: ['deleteBackward'] }, ctx)).toBe(true)
+    expect(checkCdpCommand('Input.dispatchKeyEvent', { type: 'keyDown', commands: ['insertText'] }, ctx)).toBe(false)
+    expect(checkCdpCommand('Input.dispatchKeyEvent', { type: 'keyDown', commands: ['delete', 'selectAll'] }, ctx)).toBe(false)
+    expect(checkCdpCommand('Input.dispatchKeyEvent', { type: 'keyDown', commands: [] }, ctx)).toBe(false)
+    // `text` is FORBIDDEN outright — a character that reaches the page is Input.insertText's job.
+    expect(checkCdpCommand('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', text: '\r' }, ctx)).toBe(false)
+    expect(checkCdpCommand('Input.dispatchKeyEvent', { type: 'char', text: 'q' }, ctx)).toBe(false)
+    // A meaningless empty event (no key, no commands) is refused; a bad type is refused.
+    expect(checkCdpCommand('Input.dispatchKeyEvent', { type: 'keyDown' }, ctx)).toBe(false)
+    expect(checkCdpCommand('Input.dispatchKeyEvent', { type: 'keyDrag', key: 'Enter' }, ctx)).toBe(false)
+  })
+
   it('cookie READS take one explicit domain; the jar-emptying call does not exist here', () => {
     expect(checkCdpCommand('Network.getCookies', { urls: ['https://github.com/'] }, ctx)).toBe(true)
     expect(checkCdpCommand('Network.getCookies', {}, ctx)).toBe(false)      // no domain ⇒ the whole jar
@@ -67,6 +89,29 @@ describe('checkCdpCommand', () => {
     // get the value, and what stops it planting accounts.google.com so a later human visit is a
     // login the attacker controls?
     expect(checkCdpCommand('Network.setCookie', { name: 'a', value: 'b', domain: 'x.test' }, ctx)).toBe(true)
+    // verb reaches them (browser-cookie-write-guard.test.ts), because a write verb needs a design
+    // nobody has done: where does the agent get the value, and what stops it planting
+    // accounts.google.com so a later human visit is a login the attacker controls?
+    expect(checkCdpCommand('Network.setCookie', { name: 'a', value: 'b', domain: 'x.test' }, ctx)).toBe(true)
+    // The jar-mutating set is enumerated in one place; setCookie is the only one the ALLOW table
+    // admits, and it is unreachable from every verb (the reachability guard proves that).
+    expect(COOKIE_WRITE_METHODS).toContain('Network.setCookie')
+    expect(COOKIE_WRITE_METHODS).toContain('Network.deleteCookies')
+    expect(COOKIE_WRITE_METHODS).toContain('Storage.setCookies')
+  })
+
+  it('a screenshot is PNG-only, and its clip must be a numeric rectangle we authored (Task 9.1)', () => {
+    expect(checkCdpCommand('Page.captureScreenshot', {}, ctx)).toBe(true)
+    expect(checkCdpCommand('Page.captureScreenshot', { format: 'png' }, ctx)).toBe(true)
+    // No jpeg/pdf surface — a caller cannot pick the format (and never supplies params anyway).
+    expect(checkCdpCommand('Page.captureScreenshot', { format: 'jpeg' }, ctx)).toBe(false)
+    expect(checkCdpCommand('Page.captureScreenshot', { format: 'pdf' }, ctx)).toBe(false)
+    // A well-formed numeric clip (our own box model) passes; a structured/garbage clip is refused.
+    expect(
+      checkCdpCommand('Page.captureScreenshot', { clip: { x: 0, y: 0, width: 100, height: 50, scale: 1 } }, ctx)
+    ).toBe(true)
+    expect(checkCdpCommand('Page.captureScreenshot', { clip: { x: 0, y: 0, width: 100 } }, ctx)).toBe(false)
+    expect(checkCdpCommand('Page.captureScreenshot', { clip: 'whole-page' }, ctx)).toBe(false)
   })
 
   it('an unknown method is refused with NO per-method detail', () => {
@@ -135,6 +180,27 @@ describe('debugger.sendCommand has exactly one call site among the agent-driving
       if (!f.endsWith('.ts') || f.endsWith('.test.ts')) continue
       if (f === 'browser-cdp-send.ts') continue
       if (KNOWN_UNGATED_EXCEPTIONS.has(f)) continue
+ * Structural pin (the analogue of Task 4.4's second half). `checkCdpCommand` is only THE gate if it
+ * is unbypassable: every `sendCommand(` in `src/main` must live inside the one wrapper,
+ * `browser-cdp-send.ts`, which calls this function. A direct `debugger.sendCommand` anywhere else is
+ * arbitrary CDP that never met the allowlist.
+ *
+ * WIDENED IN PR 7 (carried obligation, PR 5/#306 MINOR-1). Until the `browser` VERB existed, the only
+ * CDP callers were `browser-*.ts` files and the grep scanned only those. PR 7 adds the drive path
+ * (`browser-drive.ts`, `browser-actions.ts`) and wires the real `webContents.debugger` into a
+ * `BrowserSession` from `index.ts` — so a stray `sendCommand` could now be introduced in a
+ * non-`browser-`prefixed main file too. The grep therefore scans ALL of `src/main`, so the single-gate
+ * property is enforced across the whole surface the verb path now touches, not just the files that
+ * happen to be named `browser-*`.
+ */
+describe('debugger.sendCommand has exactly one call site in ALL of src/main', () => {
+  const mainDir = path.resolve(__dirname)
+
+  it('every sendCommand( in src/main is inside browser-cdp-send.ts', () => {
+    const offenders: string[] = []
+    for (const f of fs.readdirSync(mainDir)) {
+      if (!f.endsWith('.ts') || f.endsWith('.test.ts')) continue
+      if (f === 'browser-cdp-send.ts') continue
       const src = fs.readFileSync(path.join(mainDir, f), 'utf8')
       // Strip comments so a mention in prose is not a false positive; a real call is not a comment.
       const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')

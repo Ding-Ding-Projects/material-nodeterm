@@ -1,3 +1,6 @@
+import { projectSectionId } from './project-settings-targets'
+import type { ProjectIcon } from '@shared/project-icon'
+
 export type SettingsSectionId =
   | 'terminal'
   | 'shell'
@@ -10,12 +13,14 @@ export type SettingsSectionId =
   | 'phone'
   | 'speech'
   | 'schedule'
+  | 'planner'
   | 'adhd-modes'
   | 'shortcuts'
   | 'agents'
   | 'usage'
   | 'accounts'
   | 'custom-agents'
+  | 'model-gateway'
   | 'notifications'
   | 'narrator'
   | 'commit'
@@ -37,12 +42,26 @@ export type SettingsSectionId =
   | 'toylocks'
   | 'authenticator'
   | 'support'
+  | 'debug'
+  | `project-${string}`
+
+export interface ProjectNavItem {
+  id: string
+  name: string
+  color: string
+  icon?: ProjectIcon
+}
 
 export interface SettingsSectionRef {
   id: SettingsSectionId
   title: string
   /** Only meaningful on macOS (the notch capsule) — hidden elsewhere by `visibleSettingsGroups`. */
   macOnly?: boolean
+  /** Project-section rows only (`project-${string}` ids): the project's own color/icon, so the
+   *  sidebar can render its `ProjectGlyph` beside the title instead of the generic folder glyph
+   *  every project section used to share. Absent on every static section. */
+  color?: string
+  icon?: ProjectIcon
 }
 
 export interface SettingsGroup {
@@ -61,6 +80,7 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
       { id: 'agents', title: 'Agents' },
       { id: 'accounts', title: 'Accounts' },
       { id: 'custom-agents', title: 'Custom agents' },
+      { id: 'model-gateway', title: 'Model gateway' },
       { id: 'usage', title: 'Usage' },
       { id: 'commit', title: 'Commit messages' }
     ]
@@ -90,8 +110,11 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
       { id: 'narrator', title: 'Narrator' },
       { id: 'speech', title: 'Speech' },
       { id: 'schedule', title: 'Schedule' },
+      { id: 'planner', title: 'Planner' },
       { id: 'adhd-modes', title: 'ADHD modes' },
       { id: 'shortcuts', title: 'Shortcuts' }
+      { id: 'speech', title: 'Speech' },
+      { id: 'shortcuts', title: 'Keyboard Shortcuts' }
     ]
   },
   {
@@ -125,14 +148,20 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
       { id: 'toylocks', title: 'Toy locks' },
       { id: 'authenticator', title: 'Authenticator' },
       { id: 'support', title: 'Support Tickets' }
+      { id: 'debug', title: 'Debug' }
     ]
   }
 ]
 
 export const FIRST_SECTION_ID: SettingsSectionId = 'agents'
 
+/** Single source of truth for section identity, shared by navigation and SettingsPage routing. */
+export const SETTINGS_SECTION_REGISTRY: readonly SettingsSectionRef[] = SETTINGS_GROUPS.flatMap(
+  (group) => group.sections
+)
+
 export function allSectionIds(): SettingsSectionId[] {
-  return SETTINGS_GROUPS.flatMap((g) => g.sections.map((s) => s.id))
+  return SETTINGS_SECTION_REGISTRY.map((section) => section.id)
 }
 
 /**
@@ -150,4 +179,24 @@ export function visibleSettingsGroups(
       (s) => (isMac || !s.macOnly) && (schoolModeAllowsLanguage || s.id !== 'language')
     )
   })).filter((g) => g.sections.length > 0)
+}
+
+/**
+ * Render-time only — deliberately NOT part of `SETTINGS_GROUPS`. Open projects change at
+ * runtime, so this builds a group from the current project list on every render instead of
+ * baking project ids into the static nav (which would break the `nav.test.ts` section-count
+ * pins). Returns null when there are no open projects, so callers can skip rendering the group.
+ */
+export function projectsSettingsGroup(projects: ProjectNavItem[]): SettingsGroup | null {
+  if (projects.length === 0) return null
+  return {
+    id: 'projects',
+    title: 'Projects',
+    sections: projects.map((p) => ({
+      id: projectSectionId(p.id),
+      title: p.name,
+      color: p.color,
+      icon: p.icon
+    }))
+  }
 }

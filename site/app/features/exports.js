@@ -12,12 +12,12 @@ import { esc, attr } from '../core/dom.js'
 
 export function datasetRecords(store, id) {
   const s = store.state
-  if (id === 'notes') return s.notes.map((n) => ({ title: n.title, body: n.body, tag: n.tag, when: n.when }))
+  if (id === 'notes') return s.notes.map((n) => ({ title: n.title, body: n.body, titleKind: n.titleKind || 'authored', bodyKind: n.bodyKind || 'authored', tag: n.tag, when: n.when }))
   if (id === 'history') return s.history.map((h) => ({ title: h.title, body: h.body, when: h.when }))
   if (id === 'coverage') return COVERAGE.map((c) => ({ promise: c[0], where: c[1], state: c[2] }))
   return [
     { setting: 'theme', value: s.theme }, { setting: 'language', value: s.lang },
-    { setting: 'silliness (English)', value: s.funnyEn }, { setting: 'silliness (Cantonese)', value: s.funnyYue },
+    { setting: 'silliness (English)', value: s.funnyEn, range: '1–10', schemaVersion: s.funnySchemaVersion }, { setting: 'silliness (Cantonese)', value: s.funnyYue, range: '1–10', schemaVersion: s.funnySchemaVersion },
     { setting: 'emoji', value: s.emoji }, { setting: 'bigger text', value: s.bigText },
     { setting: 'sounds', value: s.sound }, { setting: 'favourite colour', value: s.accent },
     { setting: 'nickname', value: s.nick }, { setting: 'school mode', value: s.school },

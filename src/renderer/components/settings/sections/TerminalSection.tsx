@@ -1,5 +1,6 @@
 import { useSettings } from '../../../state/settings'
 import { SettingsSection } from '../SettingsSection'
+import { SettingsText } from '../SettingsText'
 import { SearchableRow } from '../SearchableRow'
 import { FieldRow } from '../FieldRow'
 import { TerminalPreview } from '../TerminalPreview'
@@ -71,6 +72,10 @@ const ROWS = {
   middleClickPaste: {
     title: 'Middle-click paste',
     keywords: ['middle', 'click', 'mouse', 'paste', 'primary', 'selection', 'x11', 'linux', 'wheel']
+  },
+  wordSeparator: {
+    title: 'Word selection',
+    keywords: ['word', 'separator', 'selection', 'double click', 'identifier', 'hyphen']
   },
   boldBright: {
     title: 'Bold text uses bright colours',
@@ -146,13 +151,15 @@ const MIN_CONTRAST_OPTIONS: { value: number; label: string }[] = [
  *  every row in the group takes the heading with it. */
 function GroupHeading({ children }: { children: React.ReactNode }): React.JSX.Element {
   return (
-    <h4 className="text-[11px] font-semibold uppercase tracking-wide text-muted-2">{children}</h4>
+    <h4 className="text-[11px] font-semibold uppercase tracking-wide text-muted-2">
+      {typeof children === 'string' ? <SettingsText>{children}</SettingsText> : children}
+    </h4>
   )
 }
 
 /** A secondary label between two controls sharing one row ("13 · bold 700"). */
 function Sub({ children }: { children: React.ReactNode }): React.JSX.Element {
-  return <span className="text-[13px] text-muted">{children}</span>
+  return <span className="text-[13px] text-muted">{typeof children === 'string' ? <SettingsText>{children}</SettingsText> : children}</span>
 }
 
 export function TerminalSection({ isActive }: { isActive: boolean }): React.JSX.Element {
@@ -343,7 +350,7 @@ export function TerminalSection({ isActive }: { isActive: boolean }): React.JSX.
           <GroupHeading>Advanced</GroupHeading>
           <FieldRow
             label="Middle click pastes the selection"
-            description="Linux only. Off by default: the paste comes from the browser rather than from the terminal, so it ignores the desktop's own middle-click setting and can drop text into a running agent's prompt by accident. tmux's own middle-click paste is unaffected either way."
+            description="Linux only. Off by default — and off makes the middle button do nothing at all inside a terminal, tmux's own middle-click paste included: the paste happens beyond the app (tmux, or the running program reading the selection), so the only way to stop it is to swallow the click before the terminal forwards it. On, a stray middle click can drop whatever was last selected into a running agent's prompt."
             control={
               <Switch
                 checked={settings.terminalMiddleClickPaste}
@@ -353,6 +360,21 @@ export function TerminalSection({ isActive }: { isActive: boolean }): React.JSX.
             }
           />
         </div>
+      </SearchableRow>
+
+      <SearchableRow {...ROWS.wordSeparator}>
+        <FieldRow
+          label="Word separators"
+          description="Characters that end a word when you double-click terminal text. Remove a character to keep it inside selections; for example, leave hyphen out to select a full issue ID."
+          control={
+            <Input
+              className="w-48 font-mono"
+              value={settings.terminalWordSeparator}
+              onChange={(e) => update({ terminalWordSeparator: e.target.value })}
+              aria-label="Terminal word separators"
+            />
+          }
+        />
       </SearchableRow>
 
       <SearchableRow {...ROWS.boldBright}>

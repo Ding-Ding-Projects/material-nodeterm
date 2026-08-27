@@ -1,6 +1,8 @@
 import { forwardRef, type ButtonHTMLAttributes } from 'react'
 import { MaterialSymbol, type MaterialSymbolName } from '../../components/MaterialSymbol'
 import { cn } from '../cn'
+import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
+import type { VocabularyTextMode } from '../../lib/personalVocabulary/useVocabularyText'
 
 export interface FabProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'> {
   'aria-label': string
@@ -12,6 +14,7 @@ export interface FabProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 
   /** @default 'default' — 56px, r16, `primary-container` (HANDOFF's literal FAB recipe).
    *  `'small'` is the 40px M3 also defines. */
   size?: 'default' | 'small'
+  vocabularyMode?: VocabularyTextMode
 }
 
 /**
@@ -20,17 +23,20 @@ export interface FabProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 
  * FAB.
  */
 export const Fab = forwardRef<HTMLButtonElement, FabProps>(function Fab(
-  { icon, children, open = false, size = 'default', className, type = 'button', ...rest },
+  { icon, children, open = false, size = 'default', className, type = 'button', vocabularyMode = 'authored', ...rest },
   ref
 ) {
+  const vocab = useVocabularyMapper()
   return (
     <button
       ref={ref}
       type={type}
       className={cn('md3-fab', size === 'small' && 'mdx-fab--small', open && 'is-open', className)}
       {...rest}
+      aria-label={vocabularyMode === 'authored' ? vocab(rest['aria-label']) : rest['aria-label']}
+      title={vocabularyMode === 'authored' ? vocab(rest.title) : rest.title}
     >
-      {icon ? <MaterialSymbol name={icon} size={size === 'small' ? 20 : 26} /> : children}
+      {icon ? <MaterialSymbol name={icon} size={size === 'small' ? 20 : 26} /> : vocabularyMode === 'authored' && typeof children === 'string' ? vocab(children) : children}
     </button>
   )
 })

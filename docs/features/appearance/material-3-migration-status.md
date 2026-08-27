@@ -4,6 +4,14 @@ Written because "the GUI is not fully Material yet" is true but not actionable. 
 taken from the tree, and the document has already been wrong once — see the correction at the end,
 which is kept because the way it was wrong is the interesting part.
 
+**Source audit update (2026-08-26):** the complete per-surface inventory is now maintained in
+[Material Design 3 desktop surface audit](./material-3-audit.md), with an executable
+`scripts/check-material-audit.mjs` check. The audit covers every desktop shell, node, destination,
+settings section, overlay, status, empty state, error state, and checked-in site page. It also
+records the remaining runtime verification and ownership conflicts rather than treating source
+markers as pixel evidence. The documentation and landing site runs in Kids mode by default, so its
+existing visual style remains unchanged; only stale site facts or behavior may be corrected.
+
 **Update (palette re-derivation landed):** everything from "What is there" through "Why step one
 stops at the surface ramp" originally described the FIRST pass — a pure vocabulary bridge, where
 every `--md-` colour role aliased onto the app's pre-existing palette and therefore rendered the

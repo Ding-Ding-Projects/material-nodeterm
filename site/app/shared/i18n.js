@@ -13,8 +13,25 @@ export const LANGUAGE_MODES = [
   { id: 'bi', label: 'Both at once' },
 ]
 
+export const FUNNY_LEVEL_MIN = 1
+export const FUNNY_LEVEL_MAX = 10
+export const DEFAULT_FUNNY_LEVEL = 10
+
+export function normalizeFunnyLevel(value, fallback = DEFAULT_FUNNY_LEVEL) {
+  return Number.isInteger(value) && value >= FUNNY_LEVEL_MIN && value <= FUNNY_LEVEL_MAX ? value : fallback
+}
+
 export function getEmojiEnabled(state) {
   return !!state.emoji
+}
+
+export function vocabularyAllowed(state) {
+  return state.schoolHydrated !== false && !state.school
+}
+
+export function shapeCopy(state, text) {
+  const value = String(text)
+  return vocabularyAllowed(state) ? applyReplacements(value, state.vocabEntries) : value
 }
 
 // The effective language/funny-level: School mode forces plain English at
@@ -25,40 +42,48 @@ export function effLang(state) {
   return state.school ? 'en' : state.lang
 }
 export function effFunnyEn(state) {
-  return state.school ? 1 : state.funnyEn
+  return state.school ? 1 : normalizeFunnyLevel(state.funnyEn)
 }
 export function effFunnyYue(state) {
-  return state.school ? 1 : state.funnyYue
+  return state.school ? 1 : normalizeFunnyLevel(state.funnyYue)
 }
 
-const EN_TAILS = ['', '', ' Neat, right?', ' Ta-da! 🎉', ' Zoom zoom, wheeeee! 🚀']
-const YUE_TAILS = ['', '', ' 幾好呀！', ' 好正呀！🎉', ' 勁到飛起呀！🚀']
+const EN_TAILS = [
+  '',
+  '',
+  ' Neat, right?',
+  ' Ta-da! 🎉',
+  ' Zoom zoom, wheeeee! 🚀',
+  ' A little extra sparkle, with the facts still firmly in charge.',
+  ' The copy has found a tasteful confetti button, and nothing factual moved.',
+  ' More whimsy has entered the room; the action and its consequences stay exact.',
+  ' Maximum playful voice engaged, while every useful detail remains on duty.',
+  ' Full comedy overdrive: same facts, same choices, spectacularly sillier delivery.'
+]
+const YUE_TAILS = [
+  '',
+  '',
+  ' 幾好呀！',
+  ' 好正呀！🎉',
+  ' 勁到飛起呀！🚀',
+  ' 加少少生氣，事實照樣企得穩陣。',
+  ' 文字掂咗下靚靚紙碎，重要資料一粒都冇郁。',
+  ' 多啲玩味入場，動作同後果仍然原原本本。',
+  ' 玩味開到盡，所有有用細節繼續當值。',
+  ' 全速搞笑模式：事實一樣，選擇一樣，語氣就放飛喇。'
+]
 
 function stripEmoji(text) {
   return text.replace(/[^\x00-\x7F]/g, '').trimEnd()
 }
 
-// Apply the user's word=newword swaps (comma or newline separated) to a
-// piece of friendly UI copy. Only whole-word, case-insensitive matches are
-// replaced, and this is only ever called on the friendly sentences — never
-// on a command, a file path, or a piece of code.
-export function applyReplacements(text, vocabText) {
-  const raw = String(vocabText || '').trim()
-  if (!raw) return text
-  let out = String(text)
-  raw.split(/[,\n]/).forEach((pair) => {
-    const bits = pair.split('=')
-    if (bits.length !== 2) return
-    const from = bits[0].trim()
-    const to = bits[1].trim()
-    if (!from) return
-    try {
-      out = out.replace(new RegExp('\\b' + from.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'gi'), to)
-    } catch (_err) {
-      /* an unbuildable pattern is simply skipped */
-    }
-  })
-  return out
+// Apply the validated JSON entries to friendly UI copy. Dynamic facts, commands,
+// paths, identifiers, and code never pass through this helper.
+export function applyReplacements(text, entries) {
+  if (!entries || typeof entries !== 'object' || Array.isArray(entries)) return text
+  return Object.keys(entries)
+    .sort((a, b) => b.length - a.length)
+    .reduce((out, from) => out.split(from).join(entries[from]), String(text))
 }
 
 // Shape one fact into the current language + funny level + emoji setting.
@@ -68,11 +93,11 @@ export function shapeVoice(state, fact) {
   const lvl = effFunnyEn(state)
   const en = fact + (getEmojiEnabled(state) ? EN_TAILS[lvl - 1] || '' : stripEmoji(EN_TAILS[lvl - 1] || ''))
   const lang = effLang(state)
-  if (lang === 'en') return applyReplacements(en, state.vocab)
+  if (lang === 'en') return shapeCopy(state, en)
   const yueFact = YUE[fact] || fact
   const yueLvl = effFunnyYue(state)
-  if (lang === 'yue') return applyReplacements(yueFact + (YUE_TAILS[yueLvl - 1] || ''), state.vocab)
-  return applyReplacements(en + ' / ' + yueFact, state.vocab)
+  if (lang === 'yue') return shapeCopy(state, yueFact + (YUE_TAILS[yueLvl - 1] || ''))
+  return shapeCopy(state, en + ' / ' + yueFact)
 }
 
 // The title of a room, honouring language mode (but never the funny tail —
@@ -81,5 +106,5 @@ export function shapeTitle(state, title) {
   const lang = effLang(state)
   const yue = YUE[title] || title
   const out = lang === 'yue' ? yue : lang === 'bi' ? title + ' / ' + yue : title
-  return applyReplacements(out, state.vocab)
+  return shapeCopy(state, out)
 }

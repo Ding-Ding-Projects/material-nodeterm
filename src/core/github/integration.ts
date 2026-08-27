@@ -7,10 +7,15 @@ import { GitHubIssuesClient } from './client'
 import { GitHubIssueCache } from './cache'
 import { GitHubRequestCoordinator } from './request-coordinator'
 import { GitHubAvatarFetcher } from './avatar-fetcher'
+import { resolveProjectAvatarForProject } from './project-avatar'
 import { GitHubHostController } from './host'
 import { GitHubIssueService } from './service'
 import { registerGitHubIssueHandlers } from './handlers'
+import { GitHubApiService } from './api-service'
+import { registerGitHubApiHandlers } from './api-handlers'
 import { IPC } from '../../shared/ipc'
+import { GitHubCliAccountService } from './cli-accounts'
+import type { GitHubCliAccountsApi } from '../../shared/github-issues'
 
 type Dependencies = {
   platform: CorePlatform
@@ -24,6 +29,8 @@ type Dependencies = {
 export function registerGitHubIntegration(dependencies: Dependencies): {
   controller: GitHubHostController
   service: GitHubIssueService
+  api: GitHubApiService
+  cliAccounts: GitHubCliAccountsApi
 } {
   const validateToken = async (token: string) => {
     try {
@@ -66,5 +73,42 @@ export function registerGitHubIntegration(dependencies: Dependencies): {
       dependencies.platform.sendTo(uiId, IPC.githubIssuesChanged(projectId), changedIssueNumbers)
   })
   registerGitHubIssueHandlers(dependencies.platform, service)
-  return { controller, service }
+  const cliAccounts = new GitHubCliAccountService(
+    dependencies.run,
+    dependencies.platform.openExternal
+  ).register(dependencies.platform)
+
+  const api = new GitHubApiService({
+    platform: dependencies.platform,
+    contextForProject: (projectId) => controller.contextForProject(projectId),
+    credential: async () => {
+      const state = await controls.load()
+      const resolved = await resolver.resolve(state.authProvider)
+      return resolved ? { token: resolved.token, userId: resolved.userId } : null
+    },
+    client: (token) => new GitHubIssuesClient({ token })
+  })
+  registerGitHubApiHandlers(dependencies.platform, api)
+
+  // Project org/user avatar. The handler receives only a projectId: it derives the owner host-side
+  // from the project's own GitHub origin (a renderer never supplies a slug/owner) and resolves a
+  // token via the shared credential resolver. Independent of kanban approval — an avatar is public —
+  // and never throws: any failure (no origin, no auth, fetch failed, SSH host unreachable) is null.
+  dependencies.platform.handle(IPC.githubProjectAvatar, async (projectId: string) => {
+    try {
+      const record = await dependencies.project(projectId)
+      if (!record) return null
+      const state = await controls.load()
+      const credential = await resolver.resolve(state.authProvider)
+      return await resolveProjectAvatarForProject({
+        project: record.project,
+        detectRepository: dependencies.detectRepository,
+        token: credential?.token
+      })
+    } catch {
+      return null
+    }
+  })
+
+  return { controller, service, api, cliAccounts }
 }

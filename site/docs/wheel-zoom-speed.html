@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bounded wheel zoom and speed — nodeterm docs</title>
+    <meta name="description" content="How nodeterm bounds high-resolution wheel bursts and persists a plain-wheel zoom speed control." />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+  </head>
+  <body>
+    <div class="doc-topbar">
+      <a href="../index.html">← nodeterm</a>
+      <span aria-hidden="true">/</span>
+      <a href="./index.html">Docs</a>
+    </div>
+    <article class="doc-body">
+      <p class="doc-kicker">Canvas</p>
+      <h1>Bounded wheel zoom and speed</h1>
+      <p>The desktop and Server Edition canvas use one bounded wheel-zoom path, so a high-resolution ratchet wheel cannot turn one physical click into several compounded zoom steps.</p>
+
+      <h2>Behaviour</h2>
+      <p>Packets arriving within 40 ms share one ±50 <code>deltaY</code> budget. A packet after the burst window starts a fresh budget. Reversing direction after the budget is exhausted returns no free counter-step, because that packet is treated as device jitter.</p>
+      <p><strong>Wheel zoom speed</strong> applies only to plain-wheel input. The persisted range is 0.2× through 2.0×, and 1.0× preserves the historical zoom exponent. Modifier wheel zoom and trackpad pinch retain the fixed multiplier.</p>
+
+      <h2>Configuration</h2>
+      <p>Open <strong>Settings → Behavior</strong>, enable <strong>Scroll wheel zooms</strong>, and adjust <strong>Wheel zoom speed</strong>. The slider uses 0.1× steps and reports its current value to assistive technology. Its explanation and provenance line follow the selected language mode and shared funny-level 1–10 voice while the numeric multiplier stays factual.</p>
+
+      <h2>Failure modes</h2>
+      <p>Hand-edited settings are validated where they are consumed. Missing, non-numeric, and non-finite values use 1.0×. Finite values below 0.2 are clamped to 0.2, and values above 2 are clamped to 2. Reading the setting does not rewrite the file, so the original value remains inspectable.</p>
+
+      <h2>Security considerations</h2>
+      <p>The multiplier and burst state contain no credentials, paths, session data, or user content. Raw wheel packets stay local to the renderer. Server Edition receives the same bounded settings value and never receives wheel-event data.</p>
+
+      <h2>Verification</h2>
+      <p>The implementation lane intentionally did not run tests, lint, type checks, builds, packaging, runtime interaction, reviews, audits, or captures. The integration lane should exercise an oversized packet, a multi-packet detent, a split-budget burst, a post-window refill, an exhausted reversal, malformed values, persistence, and unchanged modifier/pinch behavior in the built surfaces.</p>
+
+      <section class="doc-suggested">
+        <h2>Suggested articles</h2>
+        <ul>
+          <li><a href="./canvas-lifecycle.html">Canvas &amp; node lifecycle</a></li>
+          <li><a href="./projects-and-tabs.html">Projects &amp; tabs</a></li>
+          <li><a href="./language-modes.html">Language modes</a></li>
+        </ul>
+      </section>
+    </article>
+  </body>
+</html>

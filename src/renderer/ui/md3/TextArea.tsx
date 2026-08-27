@@ -1,5 +1,6 @@
 import { forwardRef, type TextareaHTMLAttributes } from 'react'
 import { cn } from '../cn'
+import { useVocabularyMapper, type VocabularyTextMode } from '../../lib/personalVocabulary/useVocabularyText'
 
 export interface TextAreaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
   /** Grows with its content instead of scrolling, up to `maxRows`. Off by default because a box
@@ -7,6 +8,7 @@ export interface TextAreaProps extends TextareaHTMLAttributes<HTMLTextAreaElemen
    *  for a comment field. */
   autoGrow?: boolean
   maxRows?: number
+  vocabularyMode?: VocabularyTextMode
 }
 
 /**
@@ -17,9 +19,10 @@ export interface TextAreaProps extends TextareaHTMLAttributes<HTMLTextAreaElemen
  * multi-line fields in the app agreed on what a focused field looks like.
  */
 export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(function TextArea(
-  { autoGrow = false, maxRows = 12, className, onInput, style, ...rest },
+  { autoGrow = false, maxRows = 12, className, onInput, style, vocabularyMode = 'authored', ...rest },
   ref
 ) {
+  const vocab = useVocabularyMapper()
   return (
     <textarea
       ref={ref}
@@ -36,6 +39,9 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(function 
         onInput?.(e)
       }}
       {...rest}
+      aria-label={vocabularyMode === 'authored' ? vocab(rest['aria-label']) : rest['aria-label']}
+      title={vocabularyMode === 'authored' ? vocab(rest.title) : rest.title}
+      placeholder={vocabularyMode === 'authored' ? vocab(rest.placeholder) : rest.placeholder}
     />
   )
 })

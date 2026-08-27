@@ -72,6 +72,7 @@ describe('defaults and durability', () => {
   it('starts off, with the shipped name, when nothing has ever been written', async () => {
     const s = await fresh()
     expect(s.get()).toEqual({ version: 1, enabled: false, name: DEFAULT_SCHOOL_MODE_NAME })
+    expect(s.isHydrated()).toBe(true)
     s.dispose()
   })
 
@@ -82,6 +83,7 @@ describe('defaults and durability', () => {
     await fs.writeFile(path.join(sharedDir(), 'school-mode.json'), '{ not json at all')
     const s = await fresh()
     expect(s.get().enabled).toBe(false)
+    expect(s.isHydrated()).toBe(true)
     s.dispose()
   })
 

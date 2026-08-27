@@ -1,6 +1,7 @@
 import { forwardRef, type InputHTMLAttributes } from 'react'
 import './md3/primitives.css'
 import { cn } from './cn'
+import { useVocabularyMapper, type VocabularyTextMode } from '../lib/personalVocabulary/useVocabularyText'
 
 /**
  * The app's dense text input, on Material Design 3's outlined-field anatomy
@@ -11,8 +12,18 @@ import { cn } from './cn'
  * standalone form. This stays 32px because its call sites are settings rows built around that
  * height, and it is the same M3 outlined field at a dense size, not a different control.
  */
-export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(
-  function Input({ className, ...rest }, ref) {
-    return <input ref={ref} className={cn('mdx-input', className)} {...rest} />
+export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement> & { vocabularyMode?: VocabularyTextMode }>(
+  function Input({ className, vocabularyMode = 'authored', ...rest }, ref) {
+    const vocab = useVocabularyMapper()
+    return (
+      <input
+        ref={ref}
+        className={cn('mdx-input', className)}
+        {...rest}
+        aria-label={vocabularyMode === 'authored' ? vocab(rest['aria-label']) : rest['aria-label']}
+        title={vocabularyMode === 'authored' ? vocab(rest.title) : rest.title}
+        placeholder={vocabularyMode === 'authored' ? vocab(rest.placeholder) : rest.placeholder}
+      />
+    )
   }
 )

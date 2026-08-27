@@ -9,6 +9,8 @@ import {
   registerBrowserGuest,
   registerBrowserGuestRequest,
   type BrowserGuest
+  type BrowserGuest,
+  type BrowserSurfaceKind
 } from './browser-guest-registry'
 
 const lookup =
@@ -75,6 +77,7 @@ describe('registerBrowserGuest', () => {
       return { getType: () => 'webview' }
     }
     for (const id of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, '7', null]) {
+    for (const id of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
       expect(registerBrowserGuest(m, id, 'browser-1', 'canvas', anything), `${id}`).toBe(false)
     }
     expect(m.size).toBe(0)
@@ -87,6 +90,8 @@ describe('registerBrowserGuest', () => {
       expect(registerBrowserGuest(m, 7, bad, 'canvas', lookup({ 7: 'webview' })), String(bad)).toBe(
         false
       )
+    for (const bad of ['../etc', '', '.', '..', 'a/b', 'a b', 'x'.repeat(200)]) {
+      expect(registerBrowserGuest(m, 7, bad, 'canvas', lookup({ 7: 'webview' })), bad).toBe(false)
     }
     expect(m.size).toBe(0)
   })
@@ -97,10 +102,29 @@ describe('registerBrowserGuest', () => {
     for (const bad of ['modal ', 'CANVAS', '', undefined, null, 1]) {
       expect(
         registerBrowserGuest(m, 7, 'browser-1', bad, lookup({ 7: 'webview' })),
+  it('refuses a surface value that is present and unrecognised', () => {
+    const m = new Map<number, BrowserGuest>()
+    // The renderer is the more attackable half; `surface` is what selects a debugger target later.
+    for (const bad of ['modal ', 'CANVAS', '', null, 1]) {
+      expect(
+        registerBrowserGuest(m, 7, 'browser-1', bad as unknown as BrowserSurfaceKind, lookup({ 7: 'webview' })),
         String(bad)
       ).toBe(false)
     }
     expect(m.size).toBe(0)
+  })
+
+  it('records an ABSENT surface as unknown — never as canvas', () => {
+    // Both mount sites still call the 2-argument preload, so this is what every registration in
+    // the app looks like today. Defaulting to 'canvas' would file the kanban modal's guest as a
+    // canvas guest: a false claim, indistinguishable from the real thing, and two 'canvas' entries
+    // for one node id — the exact collision the field exists to prevent.
+    const m = new Map<number, BrowserGuest>()
+    expect(registerBrowserGuest(m, 7, 'browser-1', undefined, lookup({ 7: 'webview' }))).toBe(true)
+    const guest = m.get(7)
+    expect(guest?.nodeId).toBe('browser-1')
+    expect(guest?.surface).toBeUndefined()
+    expect(Object.prototype.hasOwnProperty.call(guest, 'surface')).toBe(false)
   })
 
   it('accepts the modal surface, and keeps both of a node`s guests apart', () => {
@@ -190,5 +214,25 @@ describe('the IPC handler is wired through it', () => {
     const src = readFileSync(resolve(__dirname, 'index.ts'), 'utf8').replace(/\r\n/g, '\n')
     expect(src).toContain('registerBrowserGuestRequest(\n        browserGuests')
     expect(src).not.toContain('browserGuests.set(')
+  })
+/**
+ * The guard is only worth anything if it is on the path. `ipcMain.on` cannot be exercised without
+ * Electron, so this one claim — every write to `browserGuests` goes through the guard — is checked
+ * against the source. It is the failure a pure unit test cannot see: a guard nobody calls.
+ */
+describe('the IPC handler is wired through it', () => {
+  it('main never writes to browserGuests directly', () => {
+    const src = readFileSync(resolve(__dirname, 'index.ts'), 'utf8')
+    expect(src).toContain('registerBrowserGuest(browserGuests')
+    // `.set(` anywhere on this map would be a second, unguarded door.
+    expect(src).not.toContain('browserGuests.set(')
+  })
+
+  it('passes the surface through, absent and all — no default at the boundary either', () => {
+    // The unit test above pins the registry; this pins the caller. A `surface ?? 'canvas'` here
+    // would reintroduce the false claim one layer up, where no unit test can see it.
+    const src = readFileSync(resolve(__dirname, 'index.ts'), 'utf8')
+    expect(src).toContain('nodeId, surface, (id)')
+    expect(src).not.toMatch(/surface\s*(\?\?|\|\|)/)
   })
 })

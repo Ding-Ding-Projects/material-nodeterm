@@ -3,19 +3,24 @@ import { createPortal } from 'react-dom'
 import { useMenuFlip } from '../ui/useMenuFlip'
 import { isTopDialog, nextDialogId, popDialog, pushDialog } from './dialog-stack'
 import { Slider } from '@renderer/ui/md3'
+import { useVocabularyMapper, useVocabularyTemplate } from '../lib/personalVocabulary/useVocabularyText'
 
 export interface DestructiveConfirmGateProps {
   /** The exact destructive action, in plain words — "Delete 3 nodes", "Delete project
    *  permanently". Never a euphemism; the funny-level/localization rules apply to copy
    *  ELSEWHERE in the app, never to this sentence. */
   title: string
+  /** Optional substitutions for title prose. Values are displayed exactly and never mapped. */
+  titleParams?: Record<string, string>
   /** What will be affected and why it cannot be undone. Kept as plain, unambiguous prose —
    *  animation and styling below this line may not obscure what it says. */
   description: string
+  /** Optional substitutions for description prose. Values are displayed exactly and never mapped. */
+  descriptionParams?: Record<string, string>
   /** Optional named list of the exact items affected (node titles, a project name, …) — so the
    *  user approves what they were actually shown, not whichever item a race condition left
    *  behind. */
-  affected?: string[]
+  affected?: readonly string[]
   confirmLabel?: string
   /** Screen coordinates of the control that triggered this — renders an ANCHORED card beside
    *  it (via useMenuFlip) instead of a dead-center modal, per the "prefer anchored" rule. Omit
@@ -39,7 +44,9 @@ function prefersReducedMotion(): boolean {
  */
 export function DestructiveConfirmGate({
   title,
+  titleParams,
   description,
+  descriptionParams,
   affected,
   confirmLabel = 'Delete',
   anchor,
@@ -47,6 +54,10 @@ export function DestructiveConfirmGate({
   onConfirm,
   onCancel
 }: DestructiveConfirmGateProps): React.JSX.Element {
+  const vocab = useVocabularyMapper()
+  const visibleConfirmLabel = vocab(confirmLabel)
+  const visibleTitle = useVocabularyTemplate(title, titleParams) ?? title
+  const visibleDescription = useVocabularyTemplate(description, descriptionParams) ?? description
   const idRef = useRef<string>()
   if (!idRef.current) idRef.current = nextDialogId()
   const id = idRef.current
@@ -138,10 +149,10 @@ export function DestructiveConfirmGate({
         </span>
         <div>
           <div className="destgate__title" id={titleId}>
-            {title}
+            {visibleTitle}
           </div>
           <div className="destgate__desc" id={descId}>
-            {description}
+            {visibleDescription}
           </div>
         </div>
       </div>
@@ -186,7 +197,7 @@ export function DestructiveConfirmGate({
 
           <div className="destgate__slider-wrap">
             <div className="destgate__slider-label">
-              <span>Slide to confirm</span>
+              <span>{vocab('Slide to confirm')}</span>
               <span>{value}%</span>
             </div>
             <Slider
@@ -196,8 +207,8 @@ export function DestructiveConfirmGate({
               step={1}
               value={value}
               disabled={!bothArmed}
-              aria-label={`Slide fully across to confirm: ${title}`}
-              aria-valuetext={`${value} percent${bothArmed ? '' : ' — both keys required first'}`}
+              aria-label={`${vocab('Slide fully across to confirm')}: ${visibleTitle}`}
+              aria-valuetext={`${value} percent${bothArmed ? '' : ` — ${vocab('both keys required first')}`}`}
               onChange={(e) => armAndMaybeFire(Number(e.target.value))}
               onKeyUp={(e) => {
                 // Keyboard users can drag with arrow keys; End jumps straight to 100 exactly like
@@ -212,23 +223,23 @@ export function DestructiveConfirmGate({
             />
             <div className="destgate__hint">
               {bothArmed
-                ? 'Drag all the way to the right to authorize.'
-                : 'Arm both keys above to unlock the slider.'}
+                ? vocab('Drag all the way to the right to authorize.')
+                : vocab('Arm both keys above to unlock the slider.')}
             </div>
           </div>
 
           <div className="destgate__actions">
             <button type="button" className="destgate__exit" onClick={handleCancel}>
-              Emergency exit
+              {vocab('Emergency exit')}
             </button>
-            <span className="destgate__hint">{confirmLabel} requires both keys + full slide</span>
+            <span className="destgate__hint">{visibleConfirmLabel} {vocab('requires both keys + full slide')}</span>
           </div>
         </>
       )}
 
       {completing && (
         <div className="destgate__complete" role="status" aria-live="assertive">
-          <span aria-hidden>✓</span> Authorized — {confirmLabel.toLowerCase()}ing…
+          <span aria-hidden>✓</span> {vocab('Authorized')} — {visibleConfirmLabel.toLowerCase()}ing…
         </div>
       )}
     </div>

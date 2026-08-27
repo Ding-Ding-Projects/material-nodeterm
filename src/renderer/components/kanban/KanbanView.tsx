@@ -1,7 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { KanbanLabel, ProjectKanban } from '@shared/types'
 import { AGENT_CONFIG, BUILTIN_AGENT_IDS, type AgentId } from '@shared/agents/config'
-import { useAgentStatus } from '../../state/agentStatus'
 import { useViewMode } from '../../state/viewMode'
 import { useProjects } from '../../state/projects'
 import { useSettings } from '../../state/settings'
@@ -45,6 +44,7 @@ import {
 } from '../icons'
 import type { GitHubIssueCardView } from '@shared/github-issues'
 import { useGitHubIssues } from '../../state/githubIssues'
+import { useAgentStatus } from '../../state/agentStatus'
 import { useSession } from '../../session/session'
 import { KanbanSourceFilter, type KanbanSource } from './KanbanSourceFilter'
 import { GitHubIssueSummaryModal } from './GitHubIssueSummaryModal'
@@ -74,12 +74,18 @@ export interface KanbanSession {
   agentId?: string
   /** Sticky note body — shown in the expanded detail row. */
   text?: string
+  /** Sticky-only: last canvas-control `sticky` write (cleared on hand edits) — the modal's stamp. */
+  textUpdatedAt?: number
+  textUpdatedBy?: string
   /** Browser node URL (kind 'browser' only) — shown on the card, opened in the modal webview. */
   url?: string
   /** Browser node profile id (kind 'browser' only) — the modal's live webview must use the same
    *  isolated session (cookies/storage) the canvas node uses, or navigating in one view would not
    *  be the same login as the other. See `shared/browser-profiles.ts`. */
   browserProfileId?: string
+  /** Browser node session partition (kind 'browser' only) — threaded to the modal webview so it
+   *  shares the canvas node's jar (`browser-partition-parity.test.tsx`). Absent = default session. */
+  partition?: string
   /** The subset of the node's `data` the card modal's co-attach terminal needs to spawn/join the
    *  same session (kind 'terminal' only; sticky passes `{}`). */
   spawn: ModalSpawn
@@ -252,8 +258,8 @@ export const KanbanView = memo(function KanbanView({
   )
   const toggleFilter = (id: string): void =>
     setLabelFilter((f) => (f.includes(id) ? f.filter((x) => x !== id) : [...f, id]))
-  // Opening a card = you're looking at that session: clear its unread badge, and report the open
-  // node to the canvas (dictation shortcut targeting).
+  // Report the open node to the canvas (dictation shortcut targeting) and mark its completion read.
+  // This clears notification affordances only; the live `done` state remains waiting for a prompt.
   useEffect(() => {
     onModalNodeChange(modalNodeId)
     if (modalNodeId) useAgentStatus.getState().clearUnread(modalNodeId)

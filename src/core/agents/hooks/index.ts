@@ -6,6 +6,8 @@ import { installCodexHooks, removeCodexHooks } from './codex'
 import { installGeminiHooks, removeGeminiHooks } from './gemini'
 import { installOpencodeHooks, removeOpencodeHooks } from './opencode'
 import { installGrokHooks, removeGrokHooks } from './grok'
+import { installCopilotHooks, removeCopilotHooks } from './copilot'
+import { installDevinHooksInto } from './devin'
 
 type HookInstaller = readonly [string, () => void]
 
@@ -14,7 +16,8 @@ export const MANAGED_HOOK_INSTALLERS: readonly HookInstaller[] = [
   ['codex', installCodexHooks],
   ['gemini', installGeminiHooks],
   ['opencode', installOpencodeHooks],
-  ['grok', installGrokHooks]
+  ['grok', installGrokHooks],
+  ['copilot', installCopilotHooks]
 ]
 
 export const MANAGED_HOOK_REMOVERS: readonly HookInstaller[] = [
@@ -22,8 +25,14 @@ export const MANAGED_HOOK_REMOVERS: readonly HookInstaller[] = [
   ['codex', removeCodexHooks],
   ['gemini', removeGeminiHooks],
   ['opencode', removeOpencodeHooks],
-  ['grok', removeGrokHooks]
+  ['grok', removeGrokHooks],
+  ['copilot', removeCopilotHooks]
 ]
+
+// Devin is project-scoped: `.devin/hooks.v1.json` is discovered from the workspace root, so it
+// cannot be installed by the machine-wide registry without knowing which project is launching.
+// The PTY creation path calls this helper with the trusted local cwd for Devin nodes.
+export { installDevinHooksInto }
 
 export function installManagedAgentHooks(): void {
   for (const [agent, install] of MANAGED_HOOK_INSTALLERS) {

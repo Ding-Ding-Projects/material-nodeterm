@@ -1,13 +1,23 @@
 import { useCallback, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import type { SpeechModelInfo } from '@shared/types'
+import { DEFAULT_SETTINGS, type SpeechModelInfo } from '@shared/types'
 import { AGENT_CONFIG, BUILTIN_AGENT_IDS, type BuiltinAgentId } from '@shared/agents/config'
-import { isHoldChord, shortcutKeyParts } from '@shared/shortcut'
+import { isHoldChord, matchesShortcut, shortcutKeyParts } from '@shared/shortcut'
+import { hasSpeechModel, SPEECH_MODEL_NONE } from '@shared/speech'
 import { keyLabel } from '@shared/platform-utils'
 import { resolveAppDisplayName } from '@shared/appIdentity'
+import {
+  chipFor,
+  commandKeys,
+  dictationBinding,
+  effectiveBindings
+} from '../../lib/keybindingOverrides'
+import { IOS_APP_STORE_URL } from '../../lib/links'
 import { useSettings } from '../../state/settings'
 import { Switch } from '@renderer/ui/Switch'
 import { AgentIcon } from '../../lib/agentIcons'
+import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
+import { mapNativeNotification } from '../../lib/personalVocabulary/hostMessage'
 import {
   OnbBrandMark,
   OnbCheck,
@@ -15,6 +25,7 @@ import {
   SceneAgents,
   SceneDictation,
   SceneKanban,
+  SceneKeepAwake,
   SceneNotch,
   SceneNotify,
   ScenePhone
@@ -43,6 +54,7 @@ const STEPS = [
   'dictation',
   'kanban',
   'notify',
+  'keepawake',
   ...(isMac ? (['notch'] as const) : []),
   'phone'
 ] as const
@@ -57,6 +69,7 @@ const STEP_COUNT = STEPS.length
  * launch; rerunnable via the ⌘K "Setup tour" command.
  */
 export function OnboardingFlow({ onClose }: { onClose: () => void }) {
+  const vocab = useVocabularyMapper()
   const settings = useSettings((s) => s.settings)
   const update = useSettings((s) => s.update)
   const [step, setStep] = useState(0)
@@ -104,14 +117,20 @@ export function OnboardingFlow({ onClose }: { onClose: () => void }) {
     }
   }
 
-  // ---- kanban try-it: catch a real ⌘⇧B while the step is up (capture phase, so the
-  // canvas's own toggle handler never fires under the tour) ----
+  // ---- kanban try-it: catch the REAL kanban-toggle chord while the step is up (capture phase,
+  // so the canvas's own toggle handler never fires under the tour). Matched through the registry
+  // rather than by hand, so a remapped chord is what the tour accepts — and so the acceptance is
+  // exactly as strict as dispatch. The old test was LAX in two directions: `metaKey || ctrlKey`
+  // accepted Ctrl+Shift+B on a mac (where the command is ⌘⇧B) and Cmd+Shift+B on Linux, and it
+  // ignored `altKey` entirely, so ⌘⌥⇧B — a different chord — also lit the checkmark. Narrowing
+  // it means the tour can only be satisfied by the key that actually toggles the board. ----
   const [kanbanTried, setKanbanTried] = useState(false)
   const [kanbanPulse, setKanbanPulse] = useState(0)
   useEffect(() => {
     if (STEPS[step] !== 'kanban') return
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'b') {
+      // Read at event time, not at effect setup: a remap mid-tour takes effect immediately.
+      if (effectiveBindings('view.kanbanToggle').some((s) => matchesShortcut(e, s, isMac))) {
         e.preventDefault()
         e.stopPropagation()
         setKanbanTried(true)
@@ -135,12 +154,14 @@ export function OnboardingFlow({ onClose }: { onClose: () => void }) {
   const chooseNotifications = (enable: boolean): void => {
     update({ notifyOnClaudeDone: enable, notifyConsentAsked: true })
     if (enable) {
-      void window.nodeTerminal.notify({
+      void window.nodeTerminal.notify(mapNativeNotification({
         title: 'Notifications enabled',
         body: "You'll be told when an agent finishes in the background.",
         nodeId: '',
-        force: true
-      })
+        force: true,
+        titleKind: 'authored',
+        bodyKind: 'authored'
+      }, vocab))
     }
     setStep((s) => Math.min(s + 1, STEP_COUNT - 1))
   }
@@ -150,8 +171,19 @@ export function OnboardingFlow({ onClose }: { onClose: () => void }) {
     ? (settings.defaultAgent as BuiltinAgentId)
     : 'claude'
   const agent = AGENT_CONFIG[agentId]
-  const dictKeys = shortcutKeyParts(settings.speech.shortcut, isMac)
-  const dictHold = isHoldChord(settings.speech.shortcut)
+  // The registry's dictation chord. `''` (the user unbound it) falls back to the DEFAULT chord
+  // with the copy unchanged: the tour TEACHES the feature, and a fresh install — the only place
+  // this flow runs on its own — cannot have it disabled. Telling a first-run user "dictation is
+  // off" on a screen whose whole job is to introduce dictation would be a worse lie than the
+  // chord being stale for the one user who re-opened the tour after unbinding it.
+  const dictationChord = useSettings(() => dictationBinding()) || DEFAULT_SETTINGS.speech.shortcut
+  const dictKeys = shortcutKeyParts(dictationChord, isMac)
+  const dictHold = isHoldChord(dictationChord)
+  // Both read through the SAME `settings` subscription above (`useSettings((s) => s.settings)`
+  // re-renders this component on every settings write, a remap included), so these plain calls
+  // are live. `''` / `[]` mean the command is unbound — each site below says what it does then.
+  const newAgentChip = chipFor('node.newAgent')
+  const kanbanKeys = commandKeys('view.kanbanToggle')
 
   const stepId: StepId = STEPS[step] ?? 'cover'
   const next = () => setStep((s) => Math.min(s + 1, STEP_COUNT - 1))
@@ -161,7 +193,7 @@ export function OnboardingFlow({ onClose }: { onClose: () => void }) {
     <div className="onb">
       {stepId === 'cover' && <OnbGhostCanvas />}
       <button className="onb-skip" onClick={onClose}>
-        Skip setup
+        {vocab('Skip setup')}
       </button>
 
       {stepId === 'cover' ? (
@@ -184,7 +216,10 @@ export function OnboardingFlow({ onClose }: { onClose: () => void }) {
                 <circle cx="12" cy="12" r="3" />
                 <path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
               </svg>
-              <span>AI agents are first-class nodes — Claude, Codex, Gemini, opencode</span>
+              <span>
+                AI agents are first-class nodes —{' '}
+                {BUILTIN_AGENT_IDS.map((id) => AGENT_CONFIG[id].label).join(', ')}
+              </span>
             </div>
             <div className="onb-prop">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -206,6 +241,9 @@ export function OnboardingFlow({ onClose }: { onClose: () => void }) {
             {stepId === 'dictation' && <SceneDictation keys={dictKeys.map((k) => keyLabel(k, isMac))} hold={dictHold} />}
             {stepId === 'kanban' && <SceneKanban pulseKey={kanbanPulse} />}
             {stepId === 'notify' && <SceneNotify />}
+            {stepId === 'keepawake' && (
+              <SceneKeepAwake agentId={agentId} label={agent.label} color={agent.color} />
+            )}
             {stepId === 'notch' && <SceneNotch />}
             {stepId === 'phone' && <ScenePhone />}
           </div>
@@ -220,7 +258,11 @@ export function OnboardingFlow({ onClose }: { onClose: () => void }) {
                   its own persistent tmux session.
                 </p>
                 <div className="onb-label">
-                  Default agent (what {isMac ? '⌘⇧C' : 'Ctrl+Shift+C'} opens)
+                  {/* Follows a remap of `node.newAgent`. When the user unbound it there is no
+                      key to name, so the label drops the parenthetical instead of promising a
+                      chord that no longer fires — the setting itself still matters (the pane
+                      menu, the dock and ⌘K all open the default agent). */}
+                  {newAgentChip ? `Default agent (what ${newAgentChip} opens)` : 'Default agent'}
                 </div>
                 <div className="onb-agent-grid">
                   {BUILTIN_AGENT_IDS.map((id) => (
@@ -253,8 +295,22 @@ export function OnboardingFlow({ onClose }: { onClose: () => void }) {
                   anywhere to dictate — on-device Whisper turns speech into text. Nothing is
                   sent to the cloud, and nothing auto-submits.
                 </p>
-                <div className="onb-label">Whisper model</div>
+                <div className="onb-label">Whisper model — optional</div>
                 <div className="onb-models">
+                  {/* A real "I don't use dictation" choice (issue #143), not just the generic Next:
+                      selects None, downloads nothing. It is also the DEFAULT, so doing nothing on
+                      this step is the same honest opt-out. */}
+                  <button
+                    className={`onb-model ${!hasSpeechModel(settings.speech.model) ? 'is-selected' : ''}`}
+                    onClick={() => {
+                      setModelHint('')
+                      update({ speech: { ...settings.speech, model: SPEECH_MODEL_NONE } })
+                    }}
+                  >
+                    <span className="onb-model__radio" />
+                    <span className="onb-model__name">No dictation</span>
+                    <span className="onb-model__size">nothing downloads</span>
+                  </button>
                   {models.map((m) => {
                     const selected = settings.speech.model === m.id
                     const pct = progress[m.id]
@@ -292,22 +348,30 @@ export function OnboardingFlow({ onClose }: { onClose: () => void }) {
                   Every project is a canvas — and also a kanban board. Cards are your live
                   sessions: drag them across columns, open them, comment on them.
                 </p>
-                <div className={`onb-tryit ${kanbanTried ? 'is-done' : ''}`}>
-                  {kanbanTried ? (
-                    <>
-                      <OnbCheck /> That's the toggle — it works in any project.
-                    </>
-                  ) : (
-                    <>
-                      Try it now — press{' '}
-                      {['⌘', '⇧', 'B'].map((k, i) => (
-                        <kbd key={i} className="kbd">
-                          {keyLabel(k, isMac)}
-                        </kbd>
-                      ))}
-                    </>
-                  )}
-                </div>
+                {/* No chord to press when the user unbound the toggle, so the try-it PROMPT is
+                    dropped — the scene, the copy and the default-view choice all stay. (Kept
+                    while `kanbanTried` so an unbind mid-tour doesn't retract a checkmark the
+                    user already earned; nothing can set it once unbound.) The chips are
+                    `commandKeys`, which already renders platform-correct parts — no keyLabel
+                    rewrite on top. */}
+                {(kanbanKeys.length > 0 || kanbanTried) && (
+                  <div className={`onb-tryit ${kanbanTried ? 'is-done' : ''}`}>
+                    {kanbanTried ? (
+                      <>
+                        <OnbCheck /> That's the toggle — it works in any project.
+                      </>
+                    ) : (
+                      <>
+                        Try it now — press{' '}
+                        {kanbanKeys.map((k, i) => (
+                          <kbd key={i} className="kbd">
+                            {k}
+                          </kbd>
+                        ))}
+                      </>
+                    )}
+                  </div>
+                )}
                 <div className="onb-defaultview">
                   <span className="onb-defaultview__label">Open new projects as</span>
                   <div className="onb-seg" role="group" aria-label="Default view">
@@ -342,6 +406,29 @@ export function OnboardingFlow({ onClose }: { onClose: () => void }) {
                   </button>
                   <div className="onb-fineprint">…or just hit Next to leave them off.</div>
                 </div>
+              </>
+            )}
+
+            {stepId === 'keepawake' && (
+              <>
+                <h2>Long runs survive your lunch break</h2>
+                <p>
+                  While an agent is working, nodeterm keeps this machine from idle-sleeping —
+                  and lets go the moment it finishes.
+                </p>
+                <p>
+                  Closing the lid still sleeps the machine — keep it open and plugged in for
+                  overnight runs.
+                </p>
+                <div className="onb-toggle-row">
+                  <Switch
+                    checked={settings.keepAwakeWhileAgentsWork}
+                    ariaLabel="Keep awake while agents work"
+                    onChange={(on) => update({ keepAwakeWhileAgentsWork: on })}
+                  />
+                  <span>Keep awake while agents work</span>
+                </div>
+                <div className="onb-fineprint">Change any time in Settings → Behavior.</div>
               </>
             )}
 

@@ -1,11 +1,13 @@
 import { forwardRef, type HTMLAttributes } from 'react'
 import { cn } from '../cn'
+import { useVocabularyMapper, type VocabularyTextMode } from '../../lib/personalVocabulary/useVocabularyText'
 
 export interface MenuProps extends HTMLAttributes<HTMLDivElement> {
   /** @default false — r28 `surface-container-high` (HANDOFF's "Menu surface r28
    *  surface-container-high"), matching the command-palette panel. Set for the tighter r20 shape
    *  a compact context menu uses instead (measured off the Overlays prototype's context menu). */
   compact?: boolean
+  vocabularyMode?: VocabularyTextMode
 }
 
 /**
@@ -15,6 +17,7 @@ export interface MenuProps extends HTMLAttributes<HTMLDivElement> {
  * This component is the panel's chrome only, so it composes with that positioning rather than
  * duplicating it.
  */
-export const Menu = forwardRef<HTMLDivElement, MenuProps>(function Menu({ compact = false, className, role = 'menu', ...rest }, ref) {
-  return <div ref={ref} role={role} className={cn('mdx-menu', compact && 'mdx-menu--compact', className)} {...rest} />
+export const Menu = forwardRef<HTMLDivElement, MenuProps>(function Menu({ compact = false, className, role = 'menu', vocabularyMode = 'authored', ...rest }, ref) {
+  const vocab = useVocabularyMapper()
+  return <div ref={ref} role={role} className={cn('mdx-menu', compact && 'mdx-menu--compact', className)} {...rest} aria-label={vocabularyMode === 'authored' ? vocab(rest['aria-label']) : rest['aria-label']} title={vocabularyMode === 'authored' ? vocab(rest.title) : rest.title} />
 })

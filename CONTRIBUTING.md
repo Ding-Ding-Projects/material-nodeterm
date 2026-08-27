@@ -123,6 +123,9 @@ need it too, and wire it in the same change.
 - **Anything path-shaped: read `docs/windows-support.md` first.** Windows is the delivery target
   and most of this was written on macOS, so the recurring defect is code that is genuinely correct
   on POSIX — `split('/')`, `startsWith('/')` as an is-absolute test, a bare `fs.rename`. Use
+- **Anything path-shaped: Windows is a delivery target.** Most of this was written on
+  macOS/Linux, so the recurring defect is code that is genuinely correct on POSIX —
+  `split('/')`, `startsWith('/')` as an is-absolute test, a bare `fs.rename`. Use
   `path.basename`/`join`/`sep`, publish files with `renameAtomic`, and write at least one test with
   a real `C:\`-shaped input. Guards enforce some of this and will fail your PR. In the Server
   Edition and relay tabs, the browser's OS is NOT the filesystem's OS: obtain the dialect from the
@@ -142,12 +145,12 @@ need it too, and wire it in the same change.
   Close every running instance of the app first: Windows will not delete a DLL a live process has
   loaded, so a dev window you forgot about makes the build die with an `EPERM` about a `.node`
   file that says nothing about the real cause. The bootstrap detects the
-  **Spectre-mitigated MSVC libs** and repairs them through the separately elevated helper-only
-  command when needed — node-pty asks for the mitigation in its own `binding.gyp`, and without them
-  the build dies minutes in with `MSB8040`. Visual Studio changes require elevation; the script
-  never triggers UAC, so an unelevated run exits access-denied and prints one exact
-  **helper-only** command. Run only that helper elevated, close the Administrator prompt, then rerun
-  the root BAT normally — npm lifecycle scripts must never inherit elevation. The BAT also ensures
+  **Spectre-mitigated MSVC libs** and repairs them through the narrowly scoped elevated helper when
+  needed — node-pty asks for the mitigation in its own `binding.gyp`, and without them the build
+  dies minutes in with `MSB8040`. Visual Studio changes require elevation; an interactive run hands
+  only that helper to UAC, waits for its result, and reruns normal-user verification. A silent run
+  stays prompt-free and exits access-denied with the exact helper route. The root BAT and npm
+  lifecycle scripts never inherit elevation. The BAT also ensures
   x86/x64 are always checked and ARM64 is added on ARM64 hosts. The BAT also ensures a supported
   per-user Python for node-gyp, with SHA-pinned fallbacks for machines without winget, and exports
   the verified interpreter through every node-gyp precedence channel.
@@ -177,6 +180,7 @@ need it too, and wire it in the same change.
   route is still pending; do not weaken the production wrapper's clean-tree/exact-commit guard to
   create fixture artifacts. The Server Edition and mobile companion do not use this desktop
   installer.
+  unless the owning filesystem is known to be Windows.
 
 - **Never publish a file with a bare `fs.rename`.** Use `renameAtomic` or `writeFileAtomic` from
   `src/core/fs-atomic.ts`. On Windows a rename fails with `EPERM` whenever anything has the
@@ -216,6 +220,20 @@ need it too, and wire it in the same change.
   `void store.save(...)` turns a failed advisory snapshot into a dead main process — attach a
   handler that reports the loss instead. Both are reachable on the delivery platform: `renameAtomic`
   exists because Windows fails a publish with `EPERM` while a scanner holds the target.
+  temp/part staging name must also be unique per call across processes and cleaned by its owner —
+  including paths embedded in generated SSH commands or handed to scp, which the `fs` scan cannot
+  see. Keep a remote temp's own leaf bounded: extending an already-valid maximum-length target leaf
+  with a UUID suffix turns an atomic write into a guaranteed `ENAMETOOLONG` failure.
+
+- **Never unmount, move or re-key a browser/web node's element.** An Electron `<webview>`'s guest
+  process dies on DOM detach — and a detach includes any `insertBefore`/`appendChild` MOVE of an
+  attached element, which React performs whenever a kept child's relative order among kept keyed
+  children changes. That is why webview-hosting nodes render in one stable pool region at the tail
+  of the `<ReactFlow>` nodes prop (`renderer/lib/webviewKeepAlive.ts` — read its header before
+  touching the merge, the node array swap in Canvas's load effect, or anything that reorders
+  nodes), and why a background project's pages stay mounted as hidden ghosts instead of
+  unmounting. `display:none` is safe (measured: state, scroll and viewport size survive); a reorder
+  or unmount reloads the user's page and loses their in-page state.
 
 These are the ones that come up in review most often. Each exists because its absence caused a real
 bug.
@@ -394,11 +412,24 @@ three times.
 screen. A previous design moved that into the emulator and failed structurally; `CLAUDE.md` explains
 why in detail.
 
-**A new keyboard chord has to survive the shells, not just the renderer.** Electron's default
-application menu is live (we never replace it) and owns ⌘0, ⌘M, ⌘W, ⌘Q, ⌘R and friends — a menu
-accelerator is handled before the page, so your `keydown` branch simply never runs. Steal it back in
-`main/index.ts`'s `before-input-event` and forward it, like the three already there. Browsers own a
-different set. And any chord that reaches the canvas needs the two refusals every canvas shortcut
+**A spawn-env write does not reach a tmux session on its own.** The shared tmux server takes each
+new session's env from its own GLOBAL env (inherited from whichever client *started* the server) —
+the creating client's process env only matters for names listed in `update-environment` (or passed
+as non-secret `-e` pairs). Setting `env.FOO` in `pty-manager` therefore works for the plain-shell
+fallback and for the one client that happens to start the server, and silently does nothing (or
+worse, leaks the server-starter's value into everyone else) after that. That is how issue #419
+shipped: managed-account `CLAUDE_CONFIG_DIR` leaked into system-account sessions. New per-session
+env either joins `ACCOUNT_SCOPE_UPDATE_ENV` / the gateway list, or rides `-e` — and gets a
+real-tmux test (`account-env.realtmux.test.ts` is the pattern).
+
+**A new keyboard chord has to survive the shells, not just the renderer.** The application menu is
+ours (`buildAppMenu` in `main/index.ts`), but its command-style accelerators — ⌘Q, ⌘M, ⌘W, ⌘0, ⌘⇧B,
+⌘, — are still handled above the page, so your `keydown` branch simply never runs: steal the chord
+back in `main/keydown-intercept.ts`'s `before-input-event` allowlist and forward it, like the three
+already there. Two legs stand the menu down instead of stealing — the terminal-first policy and an
+armed shortcut recorder (`menuStandsDown` → `menuItemIdsToSuspend`, since a disabled item suppresses
+its accelerator) — and Reload (⌘R / ⌘⇧R) is the named exception that always stays with the app,
+because it is the crash-recovery lever. Browsers own a different set. And any chord that reaches the canvas needs the two refusals every canvas shortcut
 here has: not while the kanban board covers it, not while the user is typing.
 
 **Every agent launch carries a branded launch plan.** Add a new production surface to
@@ -454,6 +485,34 @@ scans the whole `styles.md3.css` file for balanced comment/brace counts (a merge
 app ever fetches a font over the network; every glyph and every typeface is a committed local
 asset.
 
+**Material Design 3 conformance is required for every rendered element.** This includes nested
+node controls, menus, dialogs, fields, buttons, tabs, progress and error states, settings,
+documentation surfaces, accessibility-only labels, and all separately mounted renderer entrypoints.
+A Material container does not exempt a legacy, browser-default, or unstyled child control. Use the
+shared tokens and primitives for colour roles, typography, shape, elevation, motion, state layers,
+focus, target sizing, responsive containment, and reduced-motion behavior. Add the element to the
+hand-written completeness inventory and keep its implementation, documentation, localization,
+focused interaction coverage, built-artifact record, and visual evidence current. A marker-only
+check is insufficient because it can pass while another element in the same file remains outside
+the design system.
+
+The existing Kids-mode-default documentation and landing site is the one visual-style exception.
+Preserve its established appearance and do not restyle it to match the desktop application. This
+exception is limited to appearance: stale facts, broken links, missing or decorative controls,
+localization, personal-vocabulary behavior, accessibility, clipping, responsive behavior, and all
+other functional contracts still need to be corrected and kept current within that visual style.
+**The complete desktop Material Design 3 inventory is `docs/features/appearance/material-3-audit.md`.**
+`scripts/check-material-audit.mjs` fails closed when any named screen, node, dialog, panel, menu,
+dropdown, picker, tab, settings section, overlay, status, empty state, error state, or style
+marker disappears. Every rendered Windows desktop element must use the shared Material Design 3
+primitives and project tokens for color, typography, shape, tonal elevation, state layers, focus,
+motion, density, scaling, and accessibility. Legacy controls and custom lookalikes are defects,
+not exemptions. The audit is source-level until a later permitted built-artifact verification pass.
+
+The documentation and landing site runs in Kids mode by default and its current visual style is
+preserved. Site changes are limited to stale facts, data, releases, links, features,
+accessibility, and broken behavior. Do not restyle the site as part of a desktop audit.
+
 **A new icon is a `MaterialSymbol` call, not another one-off inline `<svg>`.**
 `components/MaterialSymbol.tsx` renders one glyph from the app's own locally bundled, subsetted
 Material Symbols Rounded font (`src/renderer/assets/fonts/material-symbols/`, regenerated by
@@ -495,6 +554,27 @@ two traps it exists for: **a submenu cannot contain a submenu** (`ContextMenu` r
 second-level flyout — a nested trigger is skipped, so the rows vanish silently), and every group you
 collapse removes a top-level row, which can drop the menu under `FILTER_THRESHOLD` and take the
 filter field away with it.
+**A generated sh client reads its node token through the one resolver.** Every POSIX-sh client we
+emit (the managed hook script, `nodeterm.sh`, `context.sh`) presents this node's per-node identity by
+calling `nt_read_node_token` from `core/agents/node-token-sh.ts` — never by re-typing
+`head -n 1 "$NODETERM_NODE_TOKEN_DIR/$NODETERM_NODE_ID"`. That copy was issue #384: a session is
+pinned for life to the endpoint FILE path it got at tmux creation, so a client that trusts only what
+that file advertises presents nothing forever when the file is old or unreadable — and because the
+hook script alone could heal itself, the same node proved itself through one client and was refused
+through another for the life of the session.
+
+**A stream error is not a throw you can catch.** When a write to `process.stdout`/`stderr` fails —
+`EPIPE` down a closed pipe, `EIO` after macOS revokes a closed terminal's tty — node reports it by
+emitting `'error'` on the stream a tick later, and the default for an unhandled `'error'` event is
+to kill the process. The stack it carries was captured at the write, so the crash *reads* as if it
+happened synchronously at your `console.log`, and wrapping that call in `try/catch` changes nothing
+(measured on node 22). If you write to a stream that can go away, attach an `'error'` listener and
+latch the writer off — `installLogSink` (`src/core/log-sink.ts`) is the worked example. Issue #382.
+
+**Agent features attach to base harness capabilities, not frontend allowlists.** A custom agent can
+inherit a builtin harness, so add the capability and its one shared leaf (`src/shared/agents`) and
+let every UI ask the helper. Repeating Claude/Codex/etc. cases in menus breaks that inheritance and
+eventually drifts.
 
 ## Testing
 
@@ -641,6 +721,20 @@ image selections guided, validate again at use, bound CPU/memory/PIDs, drop capa
 privileged and socket mounts, default network to none and the project bind to read-only, and remove
 only the labelled random-name container the session created. Relay PTYs must be `docker exec`, never
 the local profile with a Docker-looking label painted over it.
+
+### Hosted-resource backup and restore
+
+Use `src/shared/backup-restore.ts` for every hosted-service backup contract. A manifest must record
+the framework schema, product, resource id and kind, edition, source, ownership evidence, version,
+payload hashes, byte totals, and explicit omissions. Credentials, provider sessions, machine paths,
+host identifiers, process state, caches, and generated runtime data never travel in the archive.
+
+Use `src/core/backup-restore.ts` for bounded ZIP framing and atomic local publication. Restore code
+must show the compatibility and ownership review before calling a provider, stage and validate
+before publication, report byte-aware progress and cancellation, and retain an expiry-bound rollback
+contract. Every list and picker added by a hosting node gets its own plain-text search and adjacent
+anchored regex builder, with a concrete disabled reason when verified metadata or review is absent.
+The framework intentionally does not deploy or mutate a provider on import.
 
 Two files, two audiences:
 

@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Linux ISO VM node: nodeterm</title>
+    <meta name="description" content="Run a bounded Linux ISO VM with bundled QEMU, WHPX preference, loopback display, and persistent or disposable storage." />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+  </head>
+  <body>
+    <div class="doc-topbar"><a href="../index.html">← nodeterm</a></div>
+    <article class="doc-body">
+      <p class="doc-kicker">Integrations</p>
+      <h1>Linux ISO VM node</h1>
+      <p>The Linux ISO VM is a one-shot canvas node for a real Linux guest. It is separate from WSL: WSL provides a distribution-backed shell, while this node starts an isolated QEMU machine.</p>
+      <h2>Guided setup</h2>
+      <p>Choose Managers → New manager… → Linux ISO VM. Use the native file picker for the ISO and, for persistent install mode, a qcow2 or raw disk. The node accepts no arbitrary QEMU flags or shell commands.</p>
+      <p>The mode picker has its own plain-text filter and adjacent anchored regex builder.</p>
+      <ul><li><strong>Disposable live</strong> is the default. QEMU snapshot mode sends writes to a throwaway overlay.</li><li><strong>Persistent install</strong> keeps the selected disk so an installer can create a guest that returns later.</li></ul>
+      <p>Memory is bounded to 512–32768 MiB and CPUs to 1–16. Network is off by default and only user-mode networking can be enabled explicitly.</p>
+      <p>Persistent install mode includes a folder picker that checks free space and creates a qcow2 disk with bundled <code>qemu-img</code>. Existing disks are detected from their bytes as qcow2 or raw. An optional expected ISO SHA-256 is checked before startup, with expected and actual values shown in the node.</p>
+      <h2>Lifecycle</h2>
+      <p>The bundled QEMU process receives a fixed validated argument vector. WHPX is probed by the emulator itself, with TCG reported as the fallback. The QEMU VNC display number is mapped to its real loopback TCP port. Startup waits for QMP and the loopback VNC display sockets before reporting running. Stop remains available during startup, sends QMP <code>quit</code> after startup, and uses bounded escalation if needed. A failed QMP stop remains an error after termination. Desktop users can open the loopback display; Server Edition never exposes a misleading browser-localhost URL.</p>
+      <p>Snapshot restore selects from the machine-local saved-name catalogue. Its plain-text filter and adjacent anchored regex builder have isolated state, so a stored name is selected instead of retyped.</p>
+      <h2>Portability and recovery</h2>
+      <p>Mode, resource limits, network choice, and acceleration preference are portable project settings. ISO and disk paths are machine-local. A clone on another computer remains present and asks the user to locate those assets again. Import performs no process launch, download, or network call.</p>
+      <p>Missing assets and missing bundled tools remain visible as actionable errors. Corrupt or unreadable local VM state is reported as an error rather than absence. Runtime process state, QMP ports, overlays, and generated data never enter the project projection.</p>
+      <h2>Verification boundary</h2>
+      <p>The ultra-speed delivery lane intentionally did not run tests, type checks, lint, reviews, security checks, accessibility checks, installer execution, runtime interaction checks, or UI captures. Build and packaging evidence proves artifact production only.</p>
+      <h2>Suggested articles</h2>
+      <ul><li><a href="./windows-support.html">Windows support</a></li><li><a href="./node-kinds.html">Node kinds</a></li><li><a href="./canvas-lifecycle.html">Canvas and node lifecycle</a></li></ul>
+    </article>
+  </body>
+</html>
+

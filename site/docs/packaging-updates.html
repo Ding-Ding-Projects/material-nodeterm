@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Packaging &amp; auto-update — nodeterm docs</title>
-    <meta name="description" content="Windows uses its unsigned Squirrel packages and an honest indeterminate update card; stable releases are manual and main-only." />
+    <meta name="description" content="Windows uses its unsigned Squirrel packages and an honest indeterminate update card; stable releases are published from main pushes and manual dispatch." />
     <link rel="icon" href="../assets/nodeterm.png" />
     <link rel="stylesheet" href="../styles.css" />
     <link rel="stylesheet" href="./assets/docs.css" />
@@ -31,16 +31,16 @@
     <article class="doc-body">
       <p class="doc-kicker">Releases</p>
       <h1>Packaging &amp; auto-update</h1>
-      <p>Windows builds ship as an unsigned Squirrel set: Setup.exe, RELEASES, and a full package. The installed app checks the stable GitHub Release in the background and never interrupts active work.</p>
+      <p>Windows builds ship as one unsigned Squirrel.Windows set: Setup.exe, RELEASES, one full package, and any matching delta package emitted for the candidate. ZIP, NSIS-only, MSI-only, MSIX-only, and portable-only parallel installer routes are not supported. The current stable release is <strong>v0.4.120</strong>, published 2026-08-26 from commit <code>c682073037fe7b7e34d19568ced6e3d3a9037e22</code>. The installed app checks the stable GitHub Release in the background and never interrupts active work.</p>
 
       <h2>Behaviour</h2>
-      <p>Windows uses Electron's built-in Squirrel updater. While a newer package downloads, the minimizable card shows an indeterminate state because Squirrel does not expose byte progress. Once ready, <strong>Restart to update</strong> is your explicit way to restart immediately and can run only once. A downloaded update may instead apply on the next normal app launch even when that button is unused. macOS and Linux deliberately retain their existing updater path.</p>
+      <p>Windows uses Electron's built-in Squirrel updater. While a newer package downloads, the minimizable card shows an indeterminate state because Squirrel does not expose byte progress. Once ready, <strong>Restart to update</strong> is your explicit way to restart immediately and can run only once. A downloaded update may instead apply on the next normal app launch even when that button is unused. Historical non-Windows updater paths are outside the active delivery scope.</p>
 
-      <h2>One-time 0.3.0 migration</h2>
-      <p>Windows 0.3.0 cannot discover 0.4.0: its updater expected NSIS metadata at the old generic feed, while the Windows release contains Squirrel packages, so a one-time manual 0.4.0 Setup is required. Closing 0.3.0 first is only the provisional recommendation. The final real-Windows proof must exercise Setup with the old app both closed and running, then publish the supported sequence.</p>
+      <h2>Current Squirrel release</h2>
+      <p>The published Windows release contains the complete Squirrel set for v0.4.120: <code>nodeterm-Setup-0.4.120.exe</code>, <code>RELEASES</code>, and <code>node-terminal-0.4.120-full.nupkg</code>. The release is non-draft and non-prerelease. Older NSIS-only migration wording is historical and is no longer the current update route.</p>
 
       <h2>Release channel</h2>
-      <p>The stable feed is the project's latest GitHub Release asset root. Its authority is enforced when publishing: the workflow is manual-only, accepts only the main branch, and requires a newly advanced stable package version. Feature-branch and prerelease builds do not belong in the stable feed. Automatic publication is disabled; the workflow remains manually dispatchable, version 0.4.0 is only a candidate, and manual publication remains pending the real packaged transition interactions.</p>
+      <p>The stable feed is the project's latest GitHub Release asset root. The release workflow runs for every push to the <code>main</code> branch and for <code>workflow_dispatch</code>, and it accepts only the <code>main</code> branch for a stable publication. Feature-branch and prerelease builds do not belong in the stable feed. The workflow builds and packages the unsigned Squirrel set, then publishes one uniquely versioned release after the required asset checks.</p>
 
       <h2>Failure modes</h2>
       <p>If the feed is offline or returns 404, nodeterm keeps the installed version running and retries scheduled checks normally. A check you request reports the error without blocking the app; it never turns a failed read into “no update exists.” Duplicate checks and restart requests are coalesced.</p>
@@ -51,8 +51,8 @@
       <h2>Surface scope</h2>
       <p>The Server Edition has no desktop installer, and the separately maintained mobile companion does not consume Squirrel packages. This Windows desktop updater is therefore not applicable to those surfaces.</p>
 
-      <h2>Verification still pending</h2>
-      <p>Deterministic checks cover feed selection, version advancement, wrong-channel diagnostics, failure degradation, and one-shot immediate restart. Two real proofs remain distinct: production 0.3.0 to 0.4.0 must prove the one-time manual Setup migration, while a uniquely named 0.4.0-fixture.1 to .2 pair must prove the new updater through a loopback feed in a disposable Windows Sandbox or VM. The fixture's app versions keep the dots even though Squirrel normalizes its NuGet package names to 0.4.0-fixture1 and 0.4.0-fixture2. That proof must wait out first run, relaunch the dynamically located installed executable, verify Settings → Updates and executable/package version metadata plus settings persistence, quit the exact fixture process, then uninstall only that fixture identity.</p>
+      <h2>Verification status</h2>
+      <p>Deterministic checks cover feed selection, version advancement, wrong-channel diagnostics, failure degradation, and one-shot immediate restart. The v0.4.120 release metadata and complete Squirrel asset set are verified. A separate real-installed-app transition run is still required to prove update discovery, download, restart, and settings persistence end to end; this page does not claim that runtime proof has completed.</p>
 
       <section class="doc-suggested">
         <h2>Suggested articles</h2>

@@ -7,6 +7,7 @@ import {
   deriveRepoDirName,
   type CloneProgress
 } from '@shared/clone-url'
+import { Progress } from '@renderer/ui/md3'
 
 const PARENT_KEY = 'nodeterm.cloneParent'
 
@@ -174,12 +175,12 @@ export function CloneRepoDialog({ open, onClose, onCloned }: CloneRepoDialogProp
             <div className="clone-dialog__progress-label">
               {progress ? `${progress.phase}… ${progress.percent}%` : 'Starting clone…'}
             </div>
-            <div className="clone-dialog__progress-track">
-              <div
-                className="clone-dialog__progress-bar"
-                style={{ width: `${progress?.percent ?? 3}%` }}
-              />
-            </div>
+            <Progress
+              value={progress?.percent ?? null}
+              label="Repository clone progress"
+              className="clone-dialog__progress-track"
+              barClassName="clone-dialog__progress-bar"
+            />
           </div>
         )}
         <div className="confirm__actions">

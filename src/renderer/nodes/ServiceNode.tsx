@@ -7,16 +7,23 @@ import { safeServiceEndpoint } from '@shared/node-exec'
 import { nodeBorderStyle, nodeColorStyle } from '../lib/nodeColor'
 import { ColorMenu } from '../components/color/ColorMenu'
 import { MinecraftServerPanel } from '../components/minecraft/MinecraftServerPanel'
+import { DockerHostManagerPanel } from '../components/docker/DockerHostManagerPanel'
+import { HomeAssistantPanel } from '../components/home-assistant/HomeAssistantPanel'
+import { CloudflareZeroTrustPanel } from '../components/cloudflare/CloudflareZeroTrustPanel'
+import { NextcloudAioPanel } from '../components/nextcloud/NextcloudAioPanel'
 import { EditableNodeTitle } from '../components/EditableNodeTitle'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { mapAroundExactFacts } from './nodeVocabulary'
 
 /**
  * One component for the whole service family — Minecraft, Docker, Proxmox, GitLab, Home Assistant
  * and FreePBX. They differ in what they will eventually manage, not in how they behave as canvas
  * objects, so six near-identical components would be six copies of one rule waiting to drift.
  *
- * WHAT THIS DELIBERATELY DOES NOT DO for five of the six kinds, and why the emptiness is the point:
+ * WHAT THIS DELIBERATELY DOES NOT DO for four of the six kinds, and why the emptiness is the point:
  *
- * Docker/Proxmox/GitLab/Home Assistant/FreePBX are not connected to anything yet. CLAUDE.md is
+ * Proxmox/GitLab/FreePBX are not connected to anything yet. Home Assistant is implemented
+ * by HomeAssistantPanel through the host-owned REST/WebSocket client. CLAUDE.md is
  * explicit that a control which is styled as operable while being inert is a defect rather than a
  * placeholder — "any icon, preview, mock window, toolbar control, card, tab, badge, illustration,
  * affordance ... presented as if it can be used must perform its labeled action". So there is no
@@ -28,11 +35,11 @@ import { EditableNodeTitle } from '../components/EditableNodeTitle'
  * rather than implying a connection. Storing where you would connect is a real, useful thing on
  * its own; pretending it connects would not be.
  *
- * `minecraft` IS the lane that wires a real connection — see `MinecraftServerPanel`
+ * `minecraft` and `dockerhost` are the lanes that wire real managers. See `MinecraftServerPanel`
  * (docs/minecraft-server-manager.md). It runs a real local `java -jar server.jar` process on the
- * machine this shell is running on, not a remote connection reached through an address, so it
- * replaces the generic address field entirely rather than growing a fake "Connect" button beside
- * it. When a future lane wires one of the other five kinds, it follows the same pattern: real
+ * and `DockerHostManagerPanel`. Both replace the generic address field entirely rather than growing
+ * a fake "Connect" button beside it. When a future lane wires one of the other four kinds, it follows
+ * the same pattern: real
  * controls that do exactly what they say, added beside this honest copy rather than instead of it.
  */
 /**
@@ -47,7 +54,9 @@ const ENDPOINT_PLACEHOLDER: Record<ServiceNodeKind, string> = {
   proxmox: 'https://proxmox.local:8006',
   gitlab: 'https://gitlab.example.com',
   homeassistant: 'http://homeassistant.local:8123',
-  freepbx: 'https://pbx.local'
+  freepbx: 'https://pbx.local',
+  'cloudflare-zero-trust': 'https://api.cloudflare.com',
+  'nextcloud-aio': 'http://127.0.0.1:8080'
 }
 
 /**
@@ -78,27 +87,28 @@ const LOCAL_DOCKER_ENDPOINT = 'ssh://localhost'
  * conclude the field is broken and go looking for a workaround — which in practice means finding
  * somewhere else to put the password.
  */
-function describeEndpointProblem(value: string): string {
+function describeEndpointProblem(value: string, map: (text: string) => string = (text) => text): string {
   const trimmed = value.trim()
   let url: URL | null = null
   try {
     url = new URL(trimmed)
   } catch {
-    return 'That is not an address yet. It needs a scheme, like https://host or ssh://user@host.'
+    return map('That is not an address yet. It needs a scheme, like https://host or ssh://user@host.')
   }
   if (url.password !== '') {
-    return 'Remove the password from the address. It would be saved as plain text, so a password belongs in the system keychain instead — the address itself is stored, the secret is not.'
+    return map('Remove the password from the address. It would be saved as plain text, so a password belongs in the system keychain instead — the address itself is stored, the secret is not.')
   }
   if (url.username !== '' && url.protocol !== 'ssh:') {
-    return 'Remove the username from the address. Only ssh:// addresses carry one, because there it names the target rather than an identity to log in with.'
+    return map('Remove the username from the address. Only ssh:// addresses carry one, because there it names the target rather than an identity to log in with.')
   }
   if (!['http:', 'https:', 'ssh:'].includes(url.protocol)) {
-    return `${url.protocol} addresses are not supported here. Use http://, https:// or ssh://.`
+    return `${url.protocol} ${map('addresses are not supported here. Use http://, https:// or ssh://.')}`
   }
-  if (url.hostname === '') return 'That address has no host.'
-  return 'That address cannot be used.'
+  if (url.hostname === '') return map('That address has no host.')
+  return map('That address cannot be used.')
 }
 export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>) {
+  const vocab = useVocabularyMapper()
   const { updateNodeData, setNodes } = useReactFlow()
   /** Viewport anchor for the colour surface, or null when closed — coordinates rather than a
   *  boolean because ColorMenu is a body portal. */
@@ -147,6 +157,7 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
   const rootBorder = nodeBorderStyle(data.color)
   const headerTint = nodeColorStyle(data.color, 0.2)
   const productName = kind ? SERVICE_NODE_LABELS[kind] : data.title || 'Service'
+  const displayProductName = kind ? productName : data.title ? productName : vocab('Service')
   const label = data.serviceLabel ?? ''
 
   const toggleCollapse = () =>
@@ -174,7 +185,7 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
         className={`service-node${selected ? ' selected' : ''}${collapsed ? ' collapsed' : ''} ${rootBorder.className}`}
         style={rootBorder.style}
         role="group"
-        aria-label={label ? `${productName}: ${label}` : `${productName}, no name set`}
+        aria-label={label ? `${displayProductName}: ${label}` : `${displayProductName}, ${vocab('no name set')}`}
       >
         <NodeResizer minWidth={320} minHeight={220} isVisible={selected && !collapsed} color={data.color} />
 
@@ -187,13 +198,13 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
           className={`service-node__header ${headerTint.className}`}
           style={headerTint.style}
         >
-          <button className="term-node__collapse" title={collapsed ? 'Expand' : 'Collapse'} onClick={toggleCollapse}>
+          <button className="term-node__collapse" title={vocab(collapsed ? 'Expand' : 'Collapse')} onClick={toggleCollapse}>
             {collapsed ? '▸' : '▾'}
           </button>
           <button
             className="term-node__color"
             style={{ background: data.color }}
-            title="Color"
+            title={vocab('Color')}
             onClick={(e) => {
               const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
               setColorAnchor((a) => (a ? null : { x: r.left, y: r.bottom }))
@@ -209,28 +220,48 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
             />
           )}
 
-          <span className="service-node__product">{productName}</span>
+          <span className="service-node__product">{displayProductName}</span>
 
           <EditableNodeTitle
             value={label}
             onChange={(next) => updateNodeData(id, { serviceLabel: next })}
-            ariaLabel={`Name for this ${productName}`}
-            title="Rename"
+            ariaLabel={`${vocab('Name for this')} ${displayProductName}`}
+            title={vocab('Rename')}
             baseTriggerClassName=""
             triggerClassName="service-node__label-text"
             emptyLabel={
-              <span className="service-node__label-empty">Name this {productName.toLowerCase()}…</span>
+              <span className="service-node__label-empty">{vocab('Name this')} {displayProductName.toLowerCase()}…</span>
             }
             rejectEmpty={false}
           />
         </div>
 
         {!collapsed && kind === 'minecraft' && <MinecraftServerPanel nodeId={id} />}
+        {!collapsed && kind === 'dockerhost' && <DockerHostManagerPanel />}
+        {!collapsed && kind === 'nextcloud-aio' && <NextcloudAioPanel nodeId={id} config={data.nextcloudAioConfig} onConfigChange={(nextcloudAioConfig) => updateNodeData(id, { nextcloudAioConfig })} />}
 
-        {!collapsed && kind !== 'minecraft' && (
+        {!collapsed && kind === 'homeassistant' && (
+          <HomeAssistantPanel
+            nodeId={id}
+            boundEndpoint={data.serviceConnection?.endpoint ?? null}
+            onBind={(endpoint) => updateNodeData(id, { serviceConnection: endpoint ? { endpoint } : undefined })}
+            intent={data.homeAssistantIntent}
+            onIntentChange={(homeAssistantIntent) => updateNodeData(id, { homeAssistantIntent })}
+          />
+        )}
+
+        {!collapsed && kind === 'cloudflare-zero-trust' && (
+          <CloudflareZeroTrustPanel
+            nodeId={id}
+            intent={data.cloudflareZeroTrustIntent ?? { schemaVersion: 1, manager: null, operation: null, accountHint: null, resourceHint: null, values: {} }}
+            onIntentChange={(cloudflareZeroTrustIntent) => updateNodeData(id, { cloudflareZeroTrustIntent })}
+          />
+        )}
+
+        {!collapsed && kind !== 'minecraft' && kind !== 'dockerhost' && kind !== 'homeassistant' && kind !== 'cloudflare-zero-trust' && kind !== 'nextcloud-aio' && (
           <div className="service-node__body">
             <label className="service-node__field" htmlFor={`${id}-endpoint`}>
-              <span className="service-node__field-label">Address</span>
+              <span className="service-node__field-label">{vocab('Address')}</span>
               <div className="service-node__field-row">
                 <input
                   id={`${id}-endpoint`}
@@ -266,12 +297,12 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
                     disabled={isLocalEndpointSet}
                     title={
                       isLocalEndpointSet
-                        ? 'Address is already set to the local Docker host'
-                        : 'Fill the address with the local Docker host, reached over SSH'
+                        ? mapAroundExactFacts('Address is already set to the local Docker host', ['Docker'], vocab)
+                        : mapAroundExactFacts('Fill the address with the local Docker host, reached over SSH', ['Docker', 'SSH'], vocab)
                     }
                     onClick={() => commitEndpoint(localEndpoint)}
                   >
-                    Use localhost
+                    {vocab('Use localhost')}
                   </button>
                 )}
               </div>
@@ -283,21 +314,22 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
                 know that rather than assume the field is broken. */}
             <p id={`${id}-endpoint-note`} className="service-node__note">
               {endpointDraft === '' ? (
-                <>Not connected. Enter the address of your {productName.toLowerCase()}.</>
+                <>{mapAroundExactFacts(`Not connected. Enter the address of your ${productName.toLowerCase()}.`, [productName], vocab)}</>
               ) : endpointOk ? (
                 <>
-                  Saved on this machine only — an address is never written into the shared canvas
-                  file, so it does not travel to anyone who clones the repository.
+                  {vocab('Saved on this machine only — an address is never written into the shared canvas file, so it does not travel to anyone who clones the repository.')}
                 </>
               ) : (
-                <>{describeEndpointProblem(endpointDraft)}</>
+                <>{describeEndpointProblem(endpointDraft, vocab)}</>
               )}
             </p>
 
             <p className="service-node__hint">
-              Talking to a real {productName} is not built yet, so this node stores where it would
-              connect and nothing more. There is deliberately no button here that looks like it
-              would connect.
+              {mapAroundExactFacts(
+                `Talking to a real ${productName} is not built yet, so this node stores where it would connect and nothing more. There is deliberately no button here that looks like it would connect.`,
+                [productName],
+                vocab
+              )}
             </p>
           </div>
         )}

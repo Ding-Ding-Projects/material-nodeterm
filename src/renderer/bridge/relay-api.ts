@@ -105,6 +105,8 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
       joinParts: () => relayUnsupported('workspace.joinParts')
     },
     userDataDir: real.userDataDir, // the host's writable base — worktree default paths live there
+    workspace: real.workspace, // the host's canvas/project files
+    userDataDir: real.userDataDir, // the host's writable base
     fs: files.fs,
     git: {
       ...files.git,
@@ -116,6 +118,21 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     context: files.context,
     githubIssues: github.githubIssues,
     githubControl: local.githubControl,
+    // GitHub account bindings are host-local. A relay tab cannot accidentally use the viewer's
+    // credential or expose the host's account-wide API surface, so this namespace refuses clearly.
+    githubApi: {
+      capabilities: () => relayUnsupported('githubApi.capabilities'),
+      execute: () => relayUnsupported('githubApi.execute'),
+      cancel: () => relayUnsupported('githubApi.cancel'),
+      onProgress: () => () => {}
+    },
+    // Account credentials are scoped to the viewing desktop's local CLI store. They are never
+    // relayed to the project host, and the host-only prefix prevents a peer from requesting them.
+    githubCliAccounts: local.githubCliAccounts,
+    // A relay tab must never launch a VM on the viewer's machine when its canvas is hosted
+    // elsewhere. VM paths and process state are machine-local; until a scoped relay route exists,
+    // keep the operation visibly unavailable rather than silently using this desktop's QEMU.
+    virtualMachine: stub.virtualMachine,
     ...buildAgentApi(client), // onAgentStatus / onSubagentActivity — the host's agent hooks
     ...buildCanvasApi(client), // canvas sync against the host's reflector
     ...buildPresenceApi(client), // the host's presence hub
@@ -154,6 +171,8 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     // `onChanged` casts subscribe/unsubscribe (fire-and-forget, no reject) and rides the host push.
     boardLog: {
       append: (projectId, entry) => files.boardLog.append(projectId, entry).catch(() => false),
+      appendWithAttachments: (projectId, entry, attachments) => files.boardLog.appendWithAttachments(projectId, entry, attachments).catch(() => ({ ok: false, reason: 'unsupported', message: 'This relay host does not support comment attachments.' })),
+      readAttachment: (projectId, attachment) => files.boardLog.readAttachment(projectId, attachment).catch(() => ({ ok: false, reason: 'unsupported', message: 'This relay host does not support comment attachments.' })),
       read: (projectId, opts) =>
         files.boardLog.read(projectId, opts).catch(() => ({ entries: [], unsupported: true })),
       onChanged: (projectId, cb) => files.boardLog.onChanged(projectId, cb)
@@ -204,12 +223,36 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     // (E_UNSUPPORTED) rather than either wrong-machine option; a future pass can route these to the
     // host the same way `fs`/`git` are routed above.
     converter: stub.converter,
+    // Cloudflare account credentials and provider mutations are local to the host application.
+    // Relay v1 has no remote-routed manager channel, so refuse rather than contacting the viewer.
+    cloudflareZeroTrust: stub.cloudflareZeroTrust,
     ollama: stub.ollama,
     // Same reasoning as converter/ollama immediately above: creating and running a Minecraft
     // server is ONE machine's filesystem/java/process table, and there is no remote-routed core
     // call for it yet. Refuse cleanly rather than silently provisioning/spawning on the WRONG
     // machine (`...local` would run java on the VIEWER, not the host it joined).
-    minecraft: stub.minecraft
+    minecraft: stub.minecraft,
+    torrent: stub.torrent,
+    calendar: stub.calendar,
+    // Home Assistant bindings, access tokens, sockets, and entity caches are machine-local. A
+    // relay project must not silently discover against the viewer's instance registry.
+    homeAssistant: stub.homeAssistant,
+    homeAssistantControl: stub.homeAssistantControl,
+    // A relay viewer must not contact or rebind Home Assistant on its own machine.
+    homeAssistantSensor: stub.homeAssistantSensor,
+    // A relay viewer never receives or submits the host's door credentials. Keep this explicit
+    // refusal rather than falling through to the viewer's own local vault.
+    universeDoorEntry: {
+      configure: () => relayUnsupported('universeDoorEntry.configure'),
+      verify: () => relayUnsupported('universeDoorEntry.verify'),
+      remove: () => relayUnsupported('universeDoorEntry.remove')
+    },
+    // Browser control never rides the relay either (no CDP off the desktop) — inert no-ops.
+    onBrowserControlResolve: stub.onBrowserControlResolve,
+    sendBrowserControlResolveResult: stub.sendBrowserControlResolveResult,
+    // Messaging rides the same decision: the browser client is never a sender (constraint 5 of
+    // the messaging plan — the phone drives canvas control over relay→IPC, not /control/*).
+    agentMessage: stub.agentMessage
   } satisfies NodeTerminalApi
 
   return {

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useProjects } from '../../../state/projects'
 import { hostShareOptions } from '../../../lib/relayHostShare'
 import { SettingsSection } from '../SettingsSection'
+import { SettingsText } from '../SettingsText'
 import { SearchableRow } from '../SearchableRow'
 import { FieldRow } from '../FieldRow'
 import { Button } from '@renderer/ui/Button'
@@ -105,7 +106,7 @@ export function RemoteSection({
     >
       <SearchableRow {...ROWS.allow}>
         <div className="space-y-3">
-          <h4 className="text-[13px] font-medium text-text">Allow remote access</h4>
+          <h4 className="text-[13px] font-medium text-text"><SettingsText>Allow remote access</SettingsText></h4>
           <p className="text-sm text-muted" role="status">{dockerStatus}</p>
           <FieldRow label="Docker context" control={
             <Select className="w-72" value={dockerHost.context} onChange={(e) => patchDocker({ context: e.target.value })}>
@@ -133,9 +134,9 @@ export function RemoteSection({
             </Select>
           } />
           <div className="grid gap-2 sm:grid-cols-3">
-            <label className="text-sm text-muted">CPU limit<Input type="number" min={0.25} max={8} step={0.25} value={dockerHost.cpus} onChange={(e) => patchDocker({ cpus: Number(e.target.value) })} /></label>
-            <label className="text-sm text-muted">Memory MB<Input type="number" min={256} max={16384} step={256} value={dockerHost.memoryMb} onChange={(e) => patchDocker({ memoryMb: Number(e.target.value) })} /></label>
-            <label className="text-sm text-muted">PID limit<Input type="number" min={32} max={4096} step={32} value={dockerHost.pidsLimit} onChange={(e) => patchDocker({ pidsLimit: Number(e.target.value) })} /></label>
+            <label className="text-sm text-muted"><SettingsText>CPU limit</SettingsText><Input type="number" min={0.25} max={8} step={0.25} value={dockerHost.cpus} onChange={(e) => patchDocker({ cpus: Number(e.target.value) })} /></label>
+            <label className="text-sm text-muted"><SettingsText>Memory MB</SettingsText><Input type="number" min={256} max={16384} step={256} value={dockerHost.memoryMb} onChange={(e) => patchDocker({ memoryMb: Number(e.target.value) })} /></label>
+            <label className="text-sm text-muted"><SettingsText>PID limit</SettingsText><Input type="number" min={32} max={4096} step={32} value={dockerHost.pidsLimit} onChange={(e) => patchDocker({ pidsLimit: Number(e.target.value) })} /></label>
           </div>
           {hostOffer ? (
               <div className="space-y-2">
@@ -194,7 +195,7 @@ export function RemoteSection({
       </SearchableRow>
       <SearchableRow {...ROWS.connect}>
         <div className="mt-4 space-y-3">
-          <h4 className="text-[13px] font-medium text-text">Connect to a host</h4>
+          <h4 className="text-[13px] font-medium text-text"><SettingsText>Connect to a host</SettingsText></h4>
           <FieldRow
             label="Pairing code"
             control={
@@ -209,7 +210,7 @@ export function RemoteSection({
           <Button disabled={connecting || !clientCode.trim()} onClick={() => void connectToHost()}>
             {connecting ? (
               <>
-                <span className="ui-spinner" aria-hidden /> Connecting…
+                <span className="ui-spinner" aria-hidden /> <SettingsText>Connecting…</SettingsText>
               </>
             ) : (
               'Connect'

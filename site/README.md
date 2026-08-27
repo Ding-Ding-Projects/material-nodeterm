@@ -5,6 +5,11 @@ The project's GitHub Pages site for this fork
 served at `https://ding-ding-projects.github.io/material-nodeterm/`. Static, no build step,
 no third-party requests: plain HTML/CSS and vanilla ES modules only.
 
+The documentation and landing site runs in Kids mode by default. Its current visual style is
+intentional and must be preserved. Site changes are limited to stale facts, data, releases,
+links, features, accessibility, and broken behavior. Desktop Material Design 3 work must not
+restyle this site.
+
 ```
 site/
   index.html          the whole page's shell — everything else is rendered by app/main.js
@@ -18,7 +23,9 @@ site/
     features/           one module per canonical feature, each registering its own
                          room and/or settings card (see app/features/index.js)
     shared/             pure data tables and logic shared by the features above
-  content/changelog.json  real changelog data (generated from this fork's CHANGELOG.md)
+  content/changelog.json  Windows-scope history derived from this fork's CHANGELOG.md,
+                          plus a verified current-release overlay for the latest stable build;
+                          CHANGELOG.md remains the complete canonical audit record
   docs/                one article per feature, plus docs/index.html
   assets/              logo + hero illustration + fonts/ (Outfit, Roboto Mono — the exact
                         committed .woff2 files the desktop app bundles, copied byte-for-byte)

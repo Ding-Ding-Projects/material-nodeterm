@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { headingSlug, resolveDocLink, type DocArticle, type DocLinkTarget } from '@shared/docs'
 import { renderMarkdown } from '../../lib/markdown'
+import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 
 interface DocsArticleViewProps {
   article: DocArticle
@@ -34,6 +35,7 @@ export function DocsArticleView({
   scrollTo,
   onNavigate
 }: DocsArticleViewProps): JSX.Element {
+  const vocab = useVocabularyMapper()
   const bodyRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const html = useMemo(() => renderMarkdown(article.body), [article.body])
@@ -58,11 +60,11 @@ export function DocsArticleView({
       a.dataset.docLink = target.kind
       // A hover title that says where a click actually goes — the href is a repo path and means
       // nothing to a reader.
-      if (target.kind === 'article') a.title = `Open ${target.path} in the documentation browser`
-      else if (target.kind === 'missing') a.title = `${target.path} is not part of the offline bundle`
-      else if (target.kind === 'external') a.title = `Open ${target.href} in your browser`
+      if (target.kind === 'article') a.title = vocab('Open this article in the documentation browser')
+      else if (target.kind === 'missing') a.title = vocab('This article is not part of the offline bundle')
+      else if (target.kind === 'external') a.title = vocab('Open this link in your browser')
     })
-  }, [html, article.path, known])
+  }, [html, article.path, known, vocab])
 
   // Scroll: to the requested heading, else back to the top when the article changes. Without the
   // reset, following a link leaves the reader half-way down a page they have not seen.

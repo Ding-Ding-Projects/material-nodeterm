@@ -7,6 +7,7 @@ import type {
 } from '@shared/github-issues'
 import { useProjects } from '../../../state/projects'
 import { SettingsSection } from '../SettingsSection'
+import { SettingsText } from '../SettingsText'
 import { SearchableRow } from '../SearchableRow'
 import { useSettingsSearch } from '../context'
 import { FieldRow } from '../FieldRow'
@@ -16,6 +17,7 @@ import { Input } from '@renderer/ui/Input'
 import { Select } from '@renderer/ui/Select'
 import { Switch } from '@renderer/ui/Switch'
 import { describeGitHubAuth, tokenFieldIsPrimary } from '../../../lib/githubAuthView'
+import { GitHubCliAccountsPanel } from './GitHubCliAccountsPanel'
 
 const ROWS = {
   enable: {
@@ -30,6 +32,11 @@ const ROWS = {
   authentication: {
     title: 'Authentication',
     keywords: ['github', 'token', 'personal access token', 'cli', 'authentication']
+  },
+  accounts: {
+    title: 'GitHub CLI accounts',
+    description: 'Discover, sign in, switch, refresh, and sign out GitHub CLI accounts.',
+    keywords: ['github', 'cli', 'accounts', 'account', 'owner', 'organization', 'scope', 'login']
   },
   mapping: {
     title: 'Column labels',
@@ -158,7 +165,8 @@ export function GitHubIssuesSection({ isActive }: { isActive: boolean }): React.
   if (!projectId || !project) {
     return (
       <SettingsSection id="github-issues" title="GitHub Issues" isActive={isActive} searchEntries={ENTRIES}>
-        <p className="text-sm text-muted">Open a project to configure GitHub Issues.</p>
+        <GitHubCliAccountsPanel />
+        <p className="text-sm text-muted"><SettingsText>Open a project to configure GitHub Issues.</SettingsText></p>
       </SettingsSection>
     )
   }
@@ -166,7 +174,8 @@ export function GitHubIssuesSection({ isActive }: { isActive: boolean }): React.
   if (project.remote) {
     return (
       <SettingsSection id="github-issues" title="GitHub Issues" isActive={isActive} searchEntries={ENTRIES}>
-        <p className="text-sm text-muted">Configure GitHub Issues on the computer hosting this project.</p>
+        <GitHubCliAccountsPanel />
+        <p className="text-sm text-muted"><SettingsText>Configure GitHub Issues on the computer hosting this project.</SettingsText></p>
       </SettingsSection>
     )
   }
@@ -174,7 +183,8 @@ export function GitHubIssuesSection({ isActive }: { isActive: boolean }): React.
   if (!board) {
     return (
       <SettingsSection id="github-issues" title="GitHub Issues" isActive={isActive} searchEntries={ENTRIES}>
-        <p className="text-sm text-muted">Create this project’s Kanban board before enabling GitHub Issues.</p>
+        <GitHubCliAccountsPanel />
+        <p className="text-sm text-muted"><SettingsText>Create this project’s Kanban board before enabling GitHub Issues.</SettingsText></p>
       </SettingsSection>
     )
   }
@@ -230,6 +240,7 @@ export function GitHubIssuesSection({ isActive }: { isActive: boolean }): React.
             className="w-56"
             value={token}
             placeholder={view?.auth.tokenPresent ? 'Token saved' : 'github_pat_…'}
+            vocabularyMode="factual"
             onChange={(event) => setToken(event.target.value)}
           />
           <Button
@@ -290,6 +301,7 @@ export function GitHubIssuesSection({ isActive }: { isActive: boolean }): React.
       isActive={isActive}
       searchEntries={ENTRIES}
     >
+      <GitHubCliAccountsPanel />
       <SearchableRow {...ROWS.enable}>
         <FieldRow
           label="Include GitHub issues"
@@ -320,6 +332,7 @@ export function GitHubIssuesSection({ isActive }: { isActive: boolean }): React.
                       className="w-56"
                       value={repositoryDraft}
                       placeholder={view?.project?.detectedRepository ?? 'owner/repository'}
+                      vocabularyMode="factual"
                       onChange={(event) => setRepositoryDraft(event.target.value)}
                     />
                     <Button
@@ -377,30 +390,29 @@ export function GitHubIssuesSection({ isActive }: { isActive: boolean }): React.
                 {!auth ? (
                   // Unknown, not signed out — the status read has not landed (or could not run).
                   <p className="text-[13px] text-muted">
-                    GitHub authentication has not been checked yet.
+                    <SettingsText>GitHub authentication has not been checked yet.</SettingsText>
                   </p>
                 ) : ghActive ? (
                   // Happy path: the CLI already authenticates every request — no token, no dropdown.
                   <p className="text-[13px] text-text">
-                    ✓ Signed in via GitHub CLI{auth.login ? ` as @${auth.login}` : ''}. No token needed.
-                    {auth.tokenPresent ? ' A saved token is kept as a fallback.' : ''}
+                    ✓ <SettingsText>Signed in via GitHub CLI</SettingsText>{auth.login ? ` as @${auth.login}` : ''}. <SettingsText>No token needed.</SettingsText>
+                    {auth.tokenPresent ? <> <SettingsText>A saved token is kept as a fallback.</SettingsText></> : ''}
                   </p>
                 ) : activeProvider === 'token' ? (
                   <p className="text-[13px] text-text">
-                    ✓ Signed in with the saved personal access token{auth.login ? ` as @${auth.login}` : ''}.
+                    ✓ <SettingsText>Signed in with the saved personal access token</SettingsText>{auth.login ? ` as @${auth.login}` : ''}.
                   </p>
                 ) : selectedProvider === 'gh' ? (
                   <p className="text-[13px] text-muted">
-                    GitHub CLI is not signed in. Run <code>gh auth login</code> in a terminal.
+                    <SettingsText>GitHub CLI is not signed in. Run</SettingsText>{' '}<code>gh auth login</code>{' '}<SettingsText>in a terminal.</SettingsText>
                   </p>
                 ) : selectedProvider === 'token' ? (
                   <p className="text-[13px] text-muted">
-                    No valid personal access token is saved. Paste one below.
+                    <SettingsText>No valid personal access token is saved. Paste one below.</SettingsText>
                   </p>
                 ) : (
                   <p className="text-[13px] text-muted">
-                    GitHub CLI is not signed in. Run <code>gh auth login</code> in a terminal, or paste a
-                    personal access token below.
+                    <SettingsText>GitHub CLI is not signed in. Run</SettingsText>{' '}<code>gh auth login</code>{' '}<SettingsText>in a terminal, or paste a personal access token below.</SettingsText>
                   </p>
                 )}
                 {/* The hint above tells the user to run a command in a terminal, so it needs a way
@@ -449,7 +461,7 @@ export function GitHubIssuesSection({ isActive }: { isActive: boolean }): React.
           <SearchableRow {...ROWS.mapping}>
             <div className="space-y-4">
               <div>
-                <h3 className="text-sm font-medium text-text">Column labels</h3>
+                <h3 className="text-sm font-medium text-text"><SettingsText>Column labels</SettingsText></h3>
                 <p className="mt-1 text-[13px] leading-relaxed text-muted">
                   Each issue must have exactly one of these labels. Matching is case insensitive and labels are written with the exact spelling below.
                 </p>
@@ -466,6 +478,7 @@ export function GitHubIssuesSection({ isActive }: { isActive: boolean }): React.
                       value={mappings.get(column.id) ?? ''}
                       maxLength={50}
                       placeholder={`status:${column.title.toLocaleLowerCase('en-US')}`}
+                      vocabularyMode="factual"
                       onChange={(event) => {
                         const label = event.target.value
                         const next = githubConfig.columnMappings

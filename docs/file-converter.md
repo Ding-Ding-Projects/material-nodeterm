@@ -1,7 +1,7 @@
 # Universal file converter
 
-A local, offline file-conversion surface reachable from the converter icon in the canvas'
-controls cluster, the command palette ("File converter"), or `⌘K` → *File converter*. It runs
+A local, offline file-conversion surface reachable from the navigation rail's Tools destination or
+the command palette (`Ctrl+Shift+F` → *File converter*). It runs
 identically on Desktop (Electron) and the Server Edition (browser) — the whole engine lives in
 `src/core/converter/*`, registered once via `registerConverterIpc()` and consumed by both shells
 (`src/main/index.ts`, `src/server/handlers/index.ts`).
@@ -17,6 +17,7 @@ src/core/converter/
   structured-codec.ts          hand-rolled JSON/YAML/TOML/XML/CSV/TSV parse+serialize
   text-codec.ts                line-ending + text-encoding + Markdown→HTML adapters
   binary-codec.ts              base64/hex encode-decode + gzip/brotli (Node's own zlib)
+  advanced-pipeline.ts         bounded PDF, image, local OCR, and ZIP-inventory adapters
   registry.ts                  adapter id → real implementation; assertRegistryMatchesCatalog()
                                 fails loudly at boot if the catalog and the registry ever drift
   fs-scan.ts                   paged, constant-memory directory walk for "Add folder…"
@@ -48,9 +49,10 @@ preflight, queue mutation, cancellation and retry.
 ## The bundled rule
 
 Every row in `CONVERTER_CATALOG` declares `bundled` and `available` explicitly. A row is
-`bundled: true` **only** when `src/core/converter/registry.ts` has a real, offline, zero-new-
-dependency implementation for it — no PATH discovery, no developer-machine tool, no network call,
-no optional dependency that might not be installed. `assertRegistryMatchesCatalog()` runs once at
+`bundled: true` **only** when `src/core/converter/registry.ts` has a real offline implementation and
+every required package is in the application manifest and lockfile. There is no PATH discovery,
+developer-machine tool, network service, or optional dependency that might not be installed.
+`assertRegistryMatchesCatalog()` runs once at
 boot and throws if the catalog and the registry ever disagree, so a mismatch is a loud startup
 failure rather than a button that silently does nothing.
 
@@ -76,14 +78,23 @@ genuinely bundled adapters are the ones expressible in pure JS/Node with zero ne
   DOMPurify; raw HTML embedded in the Markdown source passes through unsanitized into the file,
   which is disclosed as a lossy note).
 - **Binary Encodings** — any file ⇄ Base64 text, any file ⇄ hex text (plain `Buffer` encodings).
-- **Archives** — any file ⇄ `.gz` and any file ⇄ `.br`, via Node's built-in `zlib`. Full ZIP/TAR/
-  7-Zip container support is **listed, disabled** (`requires a ZIP container library…`, etc.) —
-  none of those are bundled in this pass.
+- **Archives** — any file ⇄ `.gz` and any file ⇄ `.br`, via Node's built-in `zlib`, plus bounded
+  ZIP entry inventory through the bundled container reader. ZIP inventory rejects unsafe entry
+  names and size/count excess before emitting JSON; it never extracts or executes entries. ZIP
+  creation, TAR, and 7-Zip remain visible and disabled.
+- **Documents/PDF** — text extraction, page/metadata manifest, split-to-ZIP, merge-from-ZIP,
+  first-page extraction, reverse ordering, clockwise page rotation, and document-metadata removal
+  through the packaged PDF libraries. PDF work is capped at 500 pages, and produced PDF bytes are
+  reopened before publication.
+- **Images and OCR** — packaged Sharp conversions among supported PNG, JPEG, WebP, SVG, GIF, and
+  BMP inputs, capped at 40 million pixels and one frame, plus local English OCR using the packaged
+  language data. OCR does not fall back to a CDN.
+- **Advanced structured data** — deterministic recursive JSON key ordering in addition to the
+  directed format mesh. Array order is preserved.
 
-**Documents/PDF, Images, Audio and Video have no bundled adapters at all** — every row in those
-categories is listed disabled with its exact missing dependency (e.g. `pdf-to-text` needs
-`pdf-parse`, `png-to-jpeg` needs an image codec such as `sharp`, `mp3-to-wav` needs `ffmpeg`).
-Adding real support for any of these is a good next-pass target — see "Known gaps" below.
+**Audio and Video have no bundled transcode adapters.** Every row remains visible and disabled with
+the exact missing packaged transcoder reason. HEIC and ICO inputs also remain disabled because the
+active packaged image codec does not provide a stable decoder for them.
 
 ## Detection
 
@@ -106,21 +117,28 @@ of objects survives the round trip through a spreadsheet shape") and requires an
 queue as `needs-confirm` (reason `lossy`) rather than running; resolving that reason (per item, via
 `converter.resolvePending`) is what allows the queue runner to pick it up.
 
-## Overwrite protection
+## Collision-safe names and overwrite protection
 
-A destination path that already exists is never silently overwritten. The item is queued as
-`needs-confirm` (reason `overwrite`); the queue runner re-checks before writing for a quick prompt,
-but that check is not the safety boundary because another writer can still create the path one
-instruction later. An unapproved conversion publishes its completed, same-directory temporary file
-with an atomic no-clobber hard link. Exactly one of two racing writers can claim an absent name; the
-other receives `EEXIST` and returns to `needs-confirm`. A filesystem that cannot provide that
-primitive fails closed. Only `item.overwriteAllowed === true` — set by an explicit
-`resolvePending(id, { overwrite: true })` — permits replacement through `renameAtomic`.
+When a file enters the queue, the service reserves the first unused name in the familiar sequence
+`name.ext`, `name (2).ext`, `name (3).ext`, and so on. It checks both the destination directory and
+every current queue reservation. The second reservation check after the asynchronous filesystem
+probe prevents two simultaneous add requests from selecting the same absent path. The chosen suffix
+is shown on the queue item, so avoiding a collision never looks like a mysterious rename.
+
+The queue runner re-checks immediately before writing because another program can still create the
+reserved path after admission. An unapproved conversion publishes its completed, same-directory
+temporary file with an atomic no-clobber hard link. Exactly one of two racing writers can claim an
+absent name; the other receives `EEXIST` and returns to `needs-confirm`. A filesystem that cannot
+provide that primitive fails closed. Only `item.overwriteAllowed === true`, set by an explicit
+`resolvePending(id, { overwrite: true })`, permits replacement through `renameAtomic`.
 
 ## Resource bounds
 
 - Every adapter declares `maxInputBytes`; a source over that limit is refused up front with an
   exact byte-count message, never partially read.
+- Advanced adapters cap produced output at 512 MiB and reject archive entry names longer than 4 KiB
+  before publication. An over-limit result remains a failed queue item and cannot replace the
+  destination.
 - The runner reads a whole file into memory per item (bounded by that limit), converts, then
   **validates the output before writing it** — every bundled adapter's `validate()` round-trips the
   produced bytes back through the target format's own parser (or, for gzip/brotli, decompresses
@@ -174,18 +192,37 @@ unavailable, file missing, over the size limit, not a regular file). Every queue
 state is one of `done | failed | cancelled | skipped`, each shown distinctly in the panel — a
 partially-successful batch is never presented as a uniform success or a uniform failure.
 
-## Known gaps (deliberately out of scope this pass)
+## Completed-output handoff
 
-- **No document/image/audio/video adapters are bundled.** Every row in those four categories is
-  listed disabled. Adding real ones (e.g. `pdf-parse` for PDF text extraction, `sharp` for images,
-  `ffmpeg`/`fluent-ffmpeg` for audio/video) is real, valuable follow-up work — but each is a new
-  native or sizeable dependency and was out of scope for this pass's "no new dependency" bundled
-  rule.
-- **No ZIP/TAR/7-Zip container support**, bundled or otherwise — listed disabled with their exact
-  missing library.
-- **Per-category search is plain substring matching**, not the full anchored regex-builder popover
-  described in the house UI contract. A future pass should give each category's search field (and
-  every other search field in these two panels) a real regex-builder affordance.
+Every completed queue row offers **Open in Visual Studio Code**. The action uses the active
+project's API rather than the viewer-global bridge, so switching projects cannot send a stale path
+to the wrong machine. The desktop shell opens the output on the local computer. Server Edition asks
+the server process to open the path there. Relay sessions retain their explicit unsupported result
+until converter and editor routing are carried over the relay together. If Visual Studio Code is not
+installed or cannot open the path, the existing detector's exact result is shown as a non-blocking
+error notification. Desktop rows also retain **Reveal** for the operating system file manager.
+
+## Portable project boundary
+
+The converter is a global tool, not a canvas node. Its source paths, destinations, queue status,
+progress, errors, temporary names, and editor-launch results are machine-local runtime state stored
+under `<userData>/converter/queue.json`. None of those fields enter the schema 3 project projection,
+and importing a project performs no file detection, conversion, folder creation, process launch, or
+editor launch. Because no node is created, there is no converter node identity, layout, relationship,
+or creation-event id to serialize. The omission is deliberate and keeps project import side-effect
+free while the same project can use a different local queue on each computer.
+
+## Known gaps
+
+- **Audio/video transcoding, ZIP creation/extraction, TAR, 7-Zip, DOCX, HEIC, and ICO remain
+  unavailable** until a verified packaged offline adapter exists. The catalog shows each gap and
+  its reason instead of hiding it.
+- **PDF rasterization and arbitrary page-range editing are not included.** The shipped PDF rows
+  inspect, extract text, split, merge, extract the first page, reverse, rotate all pages, or remove
+  metadata. They do not claim rendering parity,
+  redaction, signature preservation, or recovery of encrypted documents.
+- **OCR ships English data only.** Other languages stay unavailable rather than being downloaded
+  from a service during a conversion.
 - **The overwrite/lossy confirmation is the app's existing inline `ConfirmDialog`-style flow**
   (a message + explicit acknowledgement), not the full two-key, slider-gated destructive-action
   super-confirmation used elsewhere in the codebase for irreversible actions. Overwriting a file is
@@ -198,3 +235,6 @@ partially-successful batch is never presented as a uniform success or a uniform 
   browser path requires a separate resource/memory decision rather than weakening either guard.
 - **Relay (remote-desktop) tabs do not route the converter to the host.** The visible
   `E_UNSUPPORTED` refusal is intentional until that core namespace is carried over the relay.
+
+The detailed operation, portability, resource, privacy, and verification boundary is in
+[`features/converter/advanced-pipelines.md`](features/converter/advanced-pipelines.md).

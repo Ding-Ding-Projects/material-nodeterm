@@ -1,5 +1,6 @@
 import { useSettings } from '../../../state/settings'
 import { SettingsSection } from '../SettingsSection'
+import { SettingsText } from '../SettingsText'
 import { SearchableRow } from '../SearchableRow'
 import { FieldRow } from '../FieldRow'
 import { Select } from '@renderer/ui/Select'
@@ -79,7 +80,7 @@ export function CommitSection({ isActive }: { isActive: boolean }): React.JSX.El
       )}
       <SearchableRow {...ROWS.extra}>
         <div className="py-2.5">
-          <label className="block text-[13px] text-text">Extra prompt (optional)</label>
+              <label className="block text-[13px] text-text"><SettingsText>Extra prompt (optional)</SettingsText></label>
           <TextArea
             value={settings.commitExtraPrompt}
             placeholder="e.g. Use Conventional Commits with gitmoji"

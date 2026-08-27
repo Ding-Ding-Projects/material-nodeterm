@@ -41,6 +41,15 @@ export async function terminateWindowsProcessTree(
   if (!Number.isSafeInteger(pid) || pid <= 0 || pid === process.pid) {
     throw new Error(`Refusing to terminate invalid Windows process id ${String(pid)}`)
   }
+  // The pid guards come BEFORE the platform check so they hold on every platform — the test
+  // proves on POSIX that this helper can never be aimed at the host process, which a
+  // platform-first ordering would leave unprovable anywhere but Windows.
+  if (!Number.isSafeInteger(pid) || pid <= 0 || pid === process.pid) {
+    throw new Error(`Refusing to terminate invalid Windows process id ${String(pid)}`)
+  }
+  if (process.platform !== 'win32') {
+    throw new Error('Windows process-tree termination is unavailable on this platform')
+  }
 
   const systemRoot = process.env.SystemRoot
   if (!systemRoot || !path.win32.isAbsolute(systemRoot)) {

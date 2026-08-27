@@ -7,10 +7,12 @@ import { create } from 'zustand'
 export interface DestructiveGateRequest {
   /** The exact destructive action, in plain words. Never a euphemism. */
   title: string
+  titleParams?: Record<string, string>
   /** What will be affected and why it cannot be undone. */
   description: string
+  descriptionParams?: Record<string, string>
   /** The exact items affected, so the user approves what they were shown. */
-  affected?: string[]
+  affected?: readonly string[]
   confirmLabel?: string
   /** Screen coordinates of the control that triggered this — anchors the card beside it. */
   anchor?: { x: number; y: number }

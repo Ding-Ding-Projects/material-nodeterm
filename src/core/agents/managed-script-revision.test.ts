@@ -78,6 +78,7 @@ describe('the hook server can now tell a stale script from a missing token', () 
     hookServer.setListener(() => {})
     hookServer.stop()
     rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+    rmSync(dir, { recursive: true, force: true })
   })
 
   beforeEach(() => {

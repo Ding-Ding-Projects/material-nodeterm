@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Portable media assets — nodeterm</title>
+    <meta name="description" content="Schema 3 portable media, content addressing, validation, and Include, Omit, Locate Later decisions." />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+  </head>
+  <body>
+    <div class="doc-topbar"><a href="./index.html">← Documentation</a></div>
+    <article class="doc-body">
+      <p class="doc-kicker">Projects</p>
+      <h1>Portable media assets</h1>
+      <p>Schema 3 project saves carry validated project-owned media by SHA-256 content address. Local source paths, credentials, provider state, and process state stay on the source computer.</p>
+      <h2>Three explicit choices</h2>
+      <ul>
+        <li><strong>Include</strong> copies validated bytes into the portable archive.</li>
+        <li><strong>Omit</strong> leaves bytes out and records the user's choice.</li>
+        <li><strong>Locate Later</strong> records an unresolved placeholder so another computer can choose the file explicitly.</li>
+      </ul>
+      <h2>Validation</h2>
+      <p>Collection checks a regular file, bounded bytes, known signatures, normalised MIME and extension, and SHA-256. Include additionally requires parser-proved display facts: decoded image dimensions and frame count, WAV timing from its chunks, or MP4 and QuickTime timing plus video dimensions. A recognised format without a bundled parser remains available for Locate Later or Omit. Import repeats the signature, hash, size, and parser proof against the real archive bytes before any write.</p>
+      <h2>Privacy and side effects</h2>
+      <p>Import makes no network request, deployment, process launch, download, or provider mutation. Source paths are used only by the local picker. The guided picker has plain-text search and an adjacent anchored regex builder, accessible decision buttons, and an honest no-match state.</p>
+      <h2>Implementation and verification</h2>
+      <p>The typed desktop bridge prepares path-free candidates, then carries bounded decisions into the archive service. Included bytes live under <code>assets/media/</code>, are covered by the schema 3 hashes, and stage atomically with the imported project. The contract is implemented in <code>src/core/portable-media-assets.ts</code>, <code>src/core/portable-project-import.ts</code>, <code>src/shared/portable-media.ts</code>, and the guided renderer component. This lane did not run tests, type checks, lint, reviews, security or accessibility checks, builds, packaging, installer execution, runtime interaction, or captures. The source is implemented but unverified.</p>
+    </article>
+  </body>
+</html>

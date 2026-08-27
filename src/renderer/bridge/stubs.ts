@@ -11,9 +11,12 @@
 // benign value, and everything else rejects with a coded error.
 //
 // The object is `satisfies Omit<NodeTerminalApi, 'pty' | 'workspace' | 'settings' |
-// 'scheduledSettings' | 'fs' | 'git' | 'files' | 'context' | 'boardLog' | 'dialog'>`, so the
+// 'scheduledSettings' | 'planner' | 'fs' | 'git' | 'files' | 'context' | 'boardLog' | 'dialog'>`, so the
 // TypeScript compiler is the completeness test: if `NodeTerminalApi` gains a member, this file
 // fails to typecheck until the stub is declared.
+// The object is `satisfies Omit<NodeTerminalApi, 'pty' | 'workspace' | 'settings' | 'fs' | 'git'
+// | 'files' | 'context' | 'boardLog' | 'logs' | 'dialog'>`, so the TypeScript compiler is the completeness test: if
+// `NodeTerminalApi` gains a member, this file fails to typecheck until the stub is declared.
 
 import {
   UNKNOWN_CLAUDE_CLI_CAPS,
@@ -25,11 +28,16 @@ import {
 } from '../../shared/types'
 import type { HistoryListResult } from '../../shared/local-history'
 import { E_UNSUPPORTED } from '../../shared/rpc'
+import { formatHostMessage, hostFact, hostText, mapLocalVocabularyText, mapNativeNotification } from '../lib/personalVocabulary/hostMessage'
 
 /** Reject with a coded error the RPC layer + renderer recognize (renderer degrades silently). */
 export function unsupported(name: string): Promise<never> {
+  const message = formatHostMessage(
+    [hostFact(name), hostText(' is not supported in the browser build')],
+    mapLocalVocabularyText
+  )
   return Promise.reject(
-    Object.assign(new Error(`${name} is not supported in the browser build`), {
+    Object.assign(new Error(message), {
       code: E_UNSUPPORTED
     })
   )
@@ -112,8 +120,8 @@ function copyViaExecCommand(text: string, reportFailure: boolean): boolean {
           detail: {
             kind: 'error',
             message: secure
-              ? 'Copy failed — the browser denied clipboard access. Click the page and try again.'
-              : 'Copy failed — the browser blocks clipboard access over plain http. Use https or localhost.'
+              ? mapLocalVocabularyText('Copy failed — the browser denied clipboard access. Click the page and try again.')
+              : mapLocalVocabularyText('Copy failed — the browser blocks clipboard access over plain http. Use https or localhost.')
           }
         })
       )
@@ -136,11 +144,13 @@ export function buildStubApi(): Omit<
   NodeTerminalApi,
   | 'pty'
   | 'workspace'
+  | 'timer'
   | 'serverDeployment'
   | 'settings'
   | 'schoolMode'
   | 'kidsMode'
   | 'scheduledSettings'
+  | 'planner'
   | 'toylock'
   | 'authenticator'
   | 'fs'
@@ -148,8 +158,11 @@ export function buildStubApi(): Omit<
   | 'files'
   | 'context'
   | 'boardLog'
+  | 'logs'
   | 'githubIssues'
   | 'githubControl'
+  | 'githubApi'
+  | 'githubCliAccounts'
   | 'canvas'
   | 'dialog'
   | 'onAgentStatus'
@@ -168,8 +181,30 @@ export function buildStubApi(): Omit<
   | 'toylock'
   | 'authenticator'
   | 'passwordManager'
+  | 'universeDoorEntry'
 > {
   const api = {
+    providerServices: {
+      catalog: () => Promise.resolve([]),
+      accounts: () => Promise.resolve([]),
+      resources: () => Promise.resolve([]),
+      beginOAuth: (providerId: string) => Promise.resolve({ status: 'unsupported' as const, providerId, authorizationUrl: null, redirectUri: null, expiresAt: null, reason: mapLocalVocabularyText('Provider accounts are not connected on this surface.') }),
+      completeOAuth: () => Promise.resolve({ status: 'rejected' as const, account: null, reason: mapLocalVocabularyText('Provider callbacks are not accepted on this surface.') }),
+      removeAccount: () => Promise.resolve({ ok: false as const, error: mapLocalVocabularyText('Provider accounts are not connected on this surface.') })
+    },
+    cloudflareCoreManagers: {
+      runtime: U('cloudflareCoreManagers.runtime'),
+      credentials: U('cloudflareCoreManagers.credentials'),
+      saveCredential: U('cloudflareCoreManagers.saveCredential'),
+      removeCredential: U('cloudflareCoreManagers.removeCredential'),
+      binding: U('cloudflareCoreManagers.binding'),
+      bind: U('cloudflareCoreManagers.bind'),
+      unbind: U('cloudflareCoreManagers.unbind'),
+      preview: U('cloudflareCoreManagers.preview'),
+      execute: U('cloudflareCoreManagers.execute'),
+      cancel: U('cloudflareCoreManagers.cancel'),
+      onProgress: noopUnsub
+    },
     ssh: {
       list: U('ssh.list'),
       save: U('ssh.save'),
@@ -226,7 +261,10 @@ export function buildStubApi(): Omit<
       // The one browser-native member: open the URL in a new tab.
       openExternal: (url: string): void => {
         window.open(url, '_blank', 'noopener')
-      }
+      },
+      // Picking + re-encoding an icon needs the main process (native dialog + sharp); a browser
+      // client has neither, so this degrades to "cancelled" rather than opening anything.
+      pickProjectIcon: async () => null
     },
     // "Escape to widget" opens a real OS window (`main/canvas-widget-window.ts`) — there is no
     // such thing in a browser tab, so every call is a documented, coded refusal rather than a
@@ -244,7 +282,10 @@ export function buildStubApi(): Omit<
       // the project's ControlMaster). Resolve a typed refusal instead of rejecting so the
       // VideoNode shows the reason rather than a generic load failure.
       allowSsh: (): Promise<{ ok: false; error: string }> =>
-        Promise.resolve({ ok: false, error: 'Playing videos from an SSH host is not available in the browser.' }),
+        Promise.resolve({
+          ok: false,
+          error: mapLocalVocabularyText('Playing videos from an SSH host is not available in the browser.')
+        }),
       writeHtml: U('media.writeHtml')
     },
     browser: {
@@ -260,6 +301,12 @@ export function buildStubApi(): Omit<
         add: U('browser.extensions.add'),
         remove: U('browser.extensions.remove')
       }
+      // Browser control does not exist off the desktop shell (no <webview>, no CDP), so there is no
+      // lease to push and nothing to stop — the chip simply never appears.
+      onLeaseChanged: noopUnsub,
+      stop: noop,
+      stopAll: noop,
+      stopProject: noop
     },
     updates: {
       onAvailable: noopUnsub,
@@ -286,6 +333,10 @@ export function buildStubApi(): Omit<
       deactivate: U('license.deactivate'),
       // Renderer has no catch here and silently degrades to the free tier on rejection.
       getStatus: U('license.getStatus'),
+      // Server Edition has no license layer at all (initLicense runs only in src/main), so these
+      // reject rather than answer a fabricated "0 devices" — the same degrade as getStatus above.
+      detail: U('license.detail'),
+      releaseOthers: U('license.releaseOthers'),
       onChange: noopUnsub
     },
     contextLink: {
@@ -363,7 +414,7 @@ export function buildStubApi(): Omit<
       // `ok`, and without it the object literal's `ok: false` would widen to plain `boolean` and
       // stop matching either union member.
       list: (): Promise<HistoryListResult> =>
-        Promise.resolve({ ok: false, error: 'History is not connected yet.' }),
+        Promise.resolve({ ok: false, error: mapLocalVocabularyText('History is not connected yet.') }),
       restore: U('history.restore')
     },
     codex: {
@@ -378,6 +429,49 @@ export function buildStubApi(): Omit<
       // fail-open caps (never rejects) because the permission-mode gate reads it on the boot path.
       cliCaps: () => Promise.resolve(UNKNOWN_CLAUDE_CLI_CAPS),
       readTranscript: U('claude.readTranscript')
+    },
+    agent: {
+      // No env snapshot outside the desktop window: the stub (and ws-bridge, identically) answers
+      // an empty env, so `${env:VAR}` expansion reports every referenced var as missing and the
+      // launch/preview paths degrade to the missing-env refusal instead of a host-env dump.
+      envSnapshot: () => Promise.resolve({}),
+      discoverModels: () => Promise.resolve({ models: [], error: 'Model discovery is unavailable.' }),
+      gatewayCredentialStatus: () =>
+        Promise.resolve({ hasStoredKey: false, storage: 'unavailable' }),
+      saveGatewayCredential: U('agent.saveGatewayCredential'),
+      clearGatewayCredential: U('agent.clearGatewayCredential')
+    },
+    projectSettings: {
+      // Overridden by the real WS-backed namespace in ws-bridge (same registerIpc() call as
+      // `workspace`); this fallback only matters if some future assembly spreads the stub alone.
+      // Fail-closed rather than reject: an unknown/unreachable project reads as "no settings" and
+      // a write/update as "did not happen", matching the real handlers' contract for an unknown id.
+      read: () => Promise.resolve(null),
+      writeShared: () => Promise.resolve(false),
+      updateLocal: () => Promise.resolve(false),
+      launchInfo: () => Promise.resolve(null),
+      onTrustChanged: noopUnsub
+    },
+    projectSetup: {
+      // Same fallback story as `projectSettings` above — real over the bridge
+      // (`buildRealApi`'s `projectSetup`); this only matters if some future assembly spreads the
+      // stub alone. `run` fails closed with the SAME shape a real "nothing to run" answer uses, so
+      // a caller needs no extra branch to handle the stub differently from the real thing.
+      run: () => Promise.resolve({ status: 'skipped', reason: 'unavailable' }),
+      cancel: () => Promise.resolve(false),
+      consent: pnoop,
+      // Fails closed, like `run`: no bridge means no way to ask a human, and an unasked question
+      // is never an approval.
+      requestTrust: () => Promise.resolve(false),
+      onConsentRequest: noopUnsub,
+      onConsentDismiss: noopUnsub,
+      onEvent: noopUnsub
+    },
+    worktree: {
+      // Real over the bridge (`buildRealApi`'s `worktree`); this fallback only matters if some
+      // future assembly spreads the stub alone. Fails closed with the SAME empty-result shape a
+      // real "nothing was linked" answer uses, so a caller needs no extra branch.
+      materializeShared: () => Promise.resolve([])
     },
     chat: {
       readTranscript: U('chat.readTranscript')
@@ -400,6 +494,14 @@ export function buildStubApi(): Omit<
       commitSwitch: U('codexAccounts.commitSwitch'),
       finishSwitch: U('codexAccounts.finishSwitch'),
       rollbackSwitch: U('codexAccounts.rollbackSwitch')
+      identity: U('codexAccounts.identity'),
+      systemIdentity: U('codexAccounts.systemIdentity'),
+      remove: U('codexAccounts.remove'),
+      switchThread: U('codexAccounts.switchThread'),
+      commitSwitch: U('codexAccounts.commitSwitch'),
+      finishSwitch: U('codexAccounts.finishSwitch'),
+      rollbackSwitch: U('codexAccounts.rollbackSwitch'),
+      transferThreadToSsh: U('codexAccounts.transferThreadToSsh')
     },
     transcripts: {
       search: U('transcripts.search')
@@ -410,6 +512,7 @@ export function buildStubApi(): Omit<
       sendCanvasState: noop,
       onApplyMutation: noopUnsub,
       onPeerPending: noopUnsub,
+      onPeerPendingCleared: noopUnsub,
       approve: (_id: string) => {},
       reject: (_id: string) => {},
       setPhoneAccess: noop
@@ -421,6 +524,27 @@ export function buildStubApi(): Omit<
     // inert no-ops (there is no connectionId to act on) and the subscriptions are no-op unsubscribes.
     relayHost: {
       dockerContexts: U('relayHost.dockerContexts'),
+      manager: {
+        contexts: U('relayHost.manager.contexts'),
+        snapshot: U('relayHost.manager.snapshot'),
+        logs: U('relayHost.manager.logs'),
+        run: U('relayHost.manager.run'),
+        gitlab: {
+          status: U('relayHost.manager.gitlab.status'),
+          backups: U('relayHost.manager.gitlab.backups'),
+          handoffInitialCredential: U('relayHost.manager.gitlab.handoffInitialCredential'),
+          run: U('relayHost.manager.gitlab.run')
+        },
+        cancel: noop,
+        onProgress: noopUnsub
+      },
+      nextcloudAio: {
+        contexts: U('relayHost.nextcloudAio.contexts'),
+        snapshot: U('relayHost.nextcloudAio.snapshot'),
+        run: U('relayHost.nextcloudAio.run'),
+        cancel: noop,
+        onProgress: noopUnsub
+      },
       start: U('relayHost.start'),
       invite: U('relayHost.invite'),
       stop: U('relayHost.stop'),
@@ -467,12 +591,29 @@ export function buildStubApi(): Omit<
       supported: false,
       list: U('relayPeers.list'),
       revoke: U('relayPeers.revoke')
+    shortcuts: {
+      // Deliberate no-op (not a gap): the recording bit exists to stand the DESKTOP's
+      // `before-input-event` intercepts down, and a browser tab has no application menu to steal
+      // ⌘W/⌘M/⌘0 back from — nothing intercepts here, so there is nothing to suspend. The
+      // recorder's own preventDefault/stopPropagation is the whole path in this shell.
+      setRecording: noop,
+      // Deliberate no-op for the same reason, one step further: the mirror exists so the DESKTOP's
+      // intercepts can stand down under `terminal-first`, and there are no intercepts here to
+      // stand down. The policy itself still works in the browser — it is enforced by the
+      // renderer's own dispatcher (`keyDispatchContextFor`), which reads focus directly.
+      setTerminalFocused: noop
     },
     onMarkdownToggle: noopUnsub,
     onCloseNode: noopUnsub,
     // Deliberate no-op (not a gap): a browser tab has no application menu to steal ⌘0, so the
     // renderer's own keydown handler is the whole path there.
     onZoomActualSize: noopUnsub,
+    // Native app-menu events (desktop-only — the Server Edition has no native menu). Stubs so the
+    // bridge satisfies NodeTerminalApi; the canvas only wires real listeners on desktop.
+    onToggleAutoAlign: noopUnsub,
+    onFitView: noopUnsub,
+    onToggleKanban: noopUnsub,
+    onOpenSettings: noopUnsub,
     closeWindow: noop,
     // Best-effort: a browser tab can't force itself frontmost the way the desktop BrowserWindow
     // can, but `window.focus()` still helps when the page is merely blurred (not another OS app).
@@ -484,11 +625,20 @@ export function buildStubApi(): Omit<
       }
     },
     setBadgeCount: noop,
+    // UI scale is page zoom, and a browser page cannot set its own — the browser already owns the
+    // identical mechanism (Cmd/Ctrl+±, persisted per site). Intentionally inert; the Settings row
+    // is disabled with this reason on the Server Edition (AppearanceSection's browser branch).
+    setUiZoomFactor: noop,
     getPathForFile: (): string => '',
     notify: async (payload: NotifyPayload): Promise<'shown' | 'failed' | 'skipped'> => {
+      // Keep the browser equivalent honest too: native and browser notifications share the
+      // same authored/fact ownership contract, and authored fields are mapped before display.
+      if (payload.titleKind !== 'authored' && payload.titleKind !== 'fact') return 'failed'
+      if (payload.bodyKind !== 'authored' && payload.bodyKind !== 'fact') return 'failed'
+      const copy = mapNativeNotification(payload, mapLocalVocabularyText)
       if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
         try {
-          new Notification(payload.title, { body: payload.body })
+          new Notification(copy.title, { body: copy.body })
           return 'shown'
         } catch {
           return 'skipped'
@@ -510,9 +660,12 @@ export function buildStubApi(): Omit<
     // here (see the note beside createPtyPressureMonitor in src/server/index.ts). The fix itself
     // rejects rather than pretending, so a stray call can never look like it worked.
     onPtyPressure: noopUnsub,
+    // A browser tab has no raw input stream. Keep the documented renderer heuristic instead of
+    // inventing a device-fact event that this shell cannot observe.
+    onCanvasTrackpadGesture: noopUnsub,
     raisePtyDeviceLimit: async () => ({
       ok: false as const,
-      error: 'Raising the terminal limit must be done on the machine running the server.'
+      error: mapLocalVocabularyText('Raising the terminal limit must be done on the machine running the server.')
     }),
     onAgentControl: noopUnsub,
     sendAgentControlResult: noop,
@@ -543,11 +696,24 @@ export function buildStubApi(): Omit<
     nodeDependencies: {
       catalog: U('nodeDependencies.catalog'),
       status: U('nodeDependencies.status'),
+      details: U('nodeDependencies.details'),
       install: U('nodeDependencies.install'),
       cancel: U('nodeDependencies.cancel'),
       repair: U('nodeDependencies.repair'),
       reconcile: U('nodeDependencies.reconcile'),
       onState: noopUnsub,
+      onProgress: noopUnsub
+    },
+    cloudflareZeroTrust: {
+      catalog: U('cloudflareZeroTrust.catalog'),
+      accounts: U('cloudflareZeroTrust.accounts'),
+      configure: U('cloudflareZeroTrust.configure'),
+      removeAccount: U('cloudflareZeroTrust.removeAccount'),
+      binding: U('cloudflareZeroTrust.binding'),
+      saveBinding: U('cloudflareZeroTrust.saveBinding'),
+      resources: U('cloudflareZeroTrust.resources'),
+      execute: U('cloudflareZeroTrust.execute'),
+      cancel: U('cloudflareZeroTrust.cancel'),
       onProgress: noopUnsub
     },
     ollama: {
@@ -598,26 +764,115 @@ export function buildStubApi(): Omit<
       restoreBackup: U('minecraft.restoreBackup'),
       deleteBackup: U('minecraft.deleteBackup'),
       onEvent: noopUnsub
+    },
+    torrent: {
+      runtime: U('torrent.runtime'),
+      list: U('torrent.list'),
+      inspect: U('torrent.inspect'),
+      add: U('torrent.add'),
+      chooseFiles: U('torrent.chooseFiles'),
+      setDestination: U('torrent.setDestination'),
+      preflight: U('torrent.preflight'),
+      start: U('torrent.start'),
+      pause: U('torrent.pause'),
+      resume: U('torrent.resume'),
+      cancel: U('torrent.cancel'),
+      retry: U('torrent.retry'),
+      remove: U('torrent.remove'),
+      setSeedPolicy: U('torrent.setSeedPolicy'),
+      reconcile: U('torrent.reconcile'),
+      onTask: noopUnsub,
+    },
+    virtualMachine: {
+      tools: U('virtualMachine.tools'),
+      status: U('virtualMachine.status'),
+      configure: U('virtualMachine.configure'),
+      createDisk: U('virtualMachine.createDisk'),
+      start: U('virtualMachine.start'),
+      stop: U('virtualMachine.stop'),
+      snapshot: U('virtualMachine.snapshot'),
+      restore: U('virtualMachine.restore'),
+      openDisplay: U('virtualMachine.openDisplay'),
+      reset: U('virtualMachine.reset'),
+      onEvent: noopUnsub,
+    },
+    calendar: {
+      status: U('calendar.status'),
+      accounts: U('calendar.accounts'),
+      calendars: U('calendar.calendars'),
+      events: U('calendar.events'),
+      importIcs: U('calendar.importIcs'),
+      refresh: U('calendar.refresh'),
+      beginOAuth: U('calendar.beginOAuth'),
+      connectCalDav: U('calendar.connectCalDav'),
+      disconnectAccount: U('calendar.disconnectAccount'),
+      create: U('calendar.create'),
+      update: U('calendar.update'),
+      remove: U('calendar.remove')
+    },
+    homeAssistant: {
+      instances: U('homeAssistant.instances'),
+      saveInstance: U('homeAssistant.saveInstance'),
+      removeInstance: U('homeAssistant.removeInstance'),
+      discover: U('homeAssistant.discover'),
+      cancel: U('homeAssistant.cancel'),
+      onEvent: noopUnsub
+    },
+    homeAssistantControl: {
+      connections: U('homeAssistantControl.connections'),
+      configure: U('homeAssistantControl.configure'),
+      bind: U('homeAssistantControl.bind'),
+      status: U('homeAssistantControl.status'),
+      entities: U('homeAssistantControl.entities'),
+      services: U('homeAssistantControl.services'),
+      call: U('homeAssistantControl.call'),
+      cancel: U('homeAssistantControl.cancel')
+    },
+    homeAssistantSensor: {
+      binding: U('homeAssistantSensor.binding'),
+      configure: U('homeAssistantSensor.configure'),
+      leaveUnbound: U('homeAssistantSensor.leaveUnbound'),
+      discover: U('homeAssistantSensor.discover'),
+      refresh: U('homeAssistantSensor.refresh')
+    },
+    // Browser control is desktop-only (no <webview>, no CDP on the Server Edition / relay), so the
+    // resolve round-trip is inert here — the verb is refused by name before it reaches a handler.
+    onBrowserControlResolve: noopUnsub,
+    sendBrowserControlResolveResult: noop,
+    // Messaging never runs in the browser: `onAgentControl` above is inert here, so no dispatch
+    // can ever reach this. It answers the honest terminal refusal all the same, so a stray call
+    // can never look like it delivered.
+    agentMessage: {
+      deliver: async () => ({
+        ok: false as const,
+        error: 'Agent messaging is only available in the desktop app. Do not retry.'
+      })
     }
   } satisfies Omit<
     NodeTerminalApi,
     | 'pty'
     | 'workspace'
+    | 'timer'
     | 'serverDeployment'
     | 'settings'
     | 'schoolMode'
   | 'kidsMode'
     | 'scheduledSettings'
+    | 'planner'
     | 'toylock'
     | 'authenticator'
     | 'passwordManager'
+    | 'universeDoorEntry'
     | 'fs'
     | 'git'
     | 'files'
     | 'context'
     | 'boardLog'
+    | 'logs'
     | 'githubIssues'
     | 'githubControl'
+    | 'githubApi'
+    | 'githubCliAccounts'
     | 'canvas'
     | 'dialog'
     | 'onAgentStatus'

@@ -3,6 +3,7 @@ import { NodeResizer, useReactFlow, type NodeProps } from '@xyflow/react'
 import { NODE_COLORS, type CanvasNode } from '../state/workspace'
 import { annotationEndpoints, type AnnotationDiagonal, type AnnotationVariant } from '../lib/annotation'
 import { ColorMenu } from '../components/color/ColorMenu'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 /** Line thickness and arrowhead size, both in the node's own local px space (see AnnotationNode). */
 const STROKE_WIDTH = 3
@@ -30,6 +31,7 @@ const FALLBACK_SIZE = { width: 240, height: 160 }
  * same interaction language as a sticky note or a group frame, not a connection.
  */
 export function AnnotationNode({ id, data, selected, width, height }: NodeProps<CanvasNode>) {
+  const vocab = useVocabularyMapper()
   const { updateNodeData, deleteElements } = useReactFlow()
   /** Viewport anchor for the colour surface, or null when closed — coordinates rather than a
    *  boolean because ColorMenu is a body portal. */
@@ -90,7 +92,7 @@ export function AnnotationNode({ id, data, selected, width, height }: NodeProps<
         <button
           className="annotation-node__dot"
           style={{ background: color }}
-          title="Color"
+          title={vocab('Color')}
           onClick={(e) => {
             const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
             setColorAnchor((a) => (a ? null : { x: r.left, y: r.bottom }))
@@ -107,7 +109,7 @@ export function AnnotationNode({ id, data, selected, width, height }: NodeProps<
         )}
         <button
           className="annotation-node__variant"
-          title={variant === 'arrow' ? 'Arrowhead on — click for a plain line' : 'Plain line — click to add an arrowhead'}
+          title={vocab(variant === 'arrow' ? 'Arrowhead on — click for a plain line' : 'Plain line — click to add an arrowhead')}
           onClick={() =>
             updateNodeData(id, { annotationVariant: variant === 'arrow' ? 'line' : 'arrow' })
           }
@@ -116,7 +118,7 @@ export function AnnotationNode({ id, data, selected, width, height }: NodeProps<
         </button>
         <button
           className="annotation-node__close"
-          title="Delete"
+          title={vocab('Delete')}
           onClick={() => deleteElements({ nodes: [{ id }] })}
         >
           ×

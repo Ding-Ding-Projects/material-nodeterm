@@ -8,6 +8,8 @@ import { useKidsMode } from '../../../state/kidsMode'
 import { FieldRow } from '../FieldRow'
 import { SearchableRow } from '../SearchableRow'
 import { SettingsSection } from '../SettingsSection'
+import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
+import { SettingsText } from '../SettingsText'
 
 const ROWS = {
   toggle: {
@@ -44,6 +46,7 @@ function onlyDigits4(value: string): string {
  * a test asserts — a second copy would be one edit away from promising more than the mode does.
  */
 export function KidsModeSection({ isActive }: { isActive: boolean }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   const enabled = useKidsMode((s) => s.enabled)
   const name = useKidsMode((s) => s.name)
   const hasCredential = useKidsMode((s) => s.hasCredential)
@@ -94,8 +97,7 @@ export function KidsModeSection({ isActive }: { isActive: boolean }): React.JSX.
                   Turn off
                 </Button>
                 <p className="max-w-[22rem] text-right text-[12px] text-muted">
-                  No grown-up PIN was ever set on this machine, so none is needed to turn {name}{' '}
-                  off. Set one when you turn it back on if you want it to stay on.
+                  <SettingsText segments={[{ kind: 'copy', value: 'No grown-up PIN was ever set on this machine, so none is needed to turn ' }, { kind: 'fact', value: name }, { kind: 'copy', value: ' off. Set one when you turn it back on if you want it to stay on.' }]} />
                 </p>
               </div>
             ) : enabled ? (
@@ -107,9 +109,9 @@ export function KidsModeSection({ isActive }: { isActive: boolean }): React.JSX.
                     setUnlockPin(e.target.value)
                     setError(null)
                   }}
-                  placeholder="Grown-up PIN"
+                  placeholder={vocab('Grown-up PIN')}
                   className="w-40"
-                  aria-label={`Grown-up PIN to turn ${name} off`}
+                  aria-label={`${vocab('Grown-up PIN to turn')} ${name} ${vocab('off')}`}
                 />
                 <Button
                   disabled={busy || unlockPin.length === 0}
@@ -137,7 +139,7 @@ export function KidsModeSection({ isActive }: { isActive: boolean }): React.JSX.
                       inputMode="numeric"
                       value={pin}
                       onChange={(e) => setPin(onlyDigits4(e.target.value))}
-                      placeholder="Choose a 4-digit PIN"
+                      placeholder={vocab('Choose a 4-digit PIN')}
                       className="w-32"
                       aria-label="Choose a grown-up PIN"
                     />
@@ -146,7 +148,7 @@ export function KidsModeSection({ isActive }: { isActive: boolean }): React.JSX.
                       inputMode="numeric"
                       value={pinConfirm}
                       onChange={(e) => setPinConfirm(onlyDigits4(e.target.value))}
-                      placeholder="Confirm PIN"
+                    placeholder={vocab('Confirm PIN')}
                       className="w-32"
                       aria-label="Confirm the grown-up PIN"
                     />
@@ -174,11 +176,12 @@ export function KidsModeSection({ isActive }: { isActive: boolean }): React.JSX.
             )
           }
         />
-        {error ? <p className="text-[12px] leading-relaxed text-[color:var(--warn)]">{error}</p> : null}
-        <p className="text-[12px] leading-relaxed text-muted-2">
-          Forgot the PIN? There is no reset flow — delete this machine&apos;s{' '}
-          <code>~/.nodeterm/shared</code> folder to turn the mode off and clear it.
-        </p>
+        {error ? <p className="text-[12px] leading-relaxed text-[color:var(--warn)]"><SettingsText segments={[{ kind: 'fact', value: error }]} /></p> : null}
+        <p className="text-[12px] leading-relaxed text-muted-2"><SettingsText segments={[
+          { kind: 'copy', value: "Forgot the PIN? There is no reset flow — delete this machine's " },
+          { kind: 'fact', value: <code>~/.nodeterm/shared</code> },
+          { kind: 'copy', value: ' folder to turn the mode off and clear it.' }
+        ]} /></p>
       </SearchableRow>
 
       <SearchableRow {...ROWS.limits}>
@@ -186,16 +189,13 @@ export function KidsModeSection({ isActive }: { isActive: boolean }): React.JSX.
             `.md3-kids-disclosure` class as the Home screen and the rail's enable dialog, so the
             one sentence this app makes no promise beyond looks identical everywhere it appears. */}
         <p className="md3-kids-disclosure md3-kids-disclosure--settings">{KIDS_DISCLOSURE}</p>
-        <p className="mt-3 text-[12px] leading-relaxed text-muted">
-          While it is on, an agent cannot be started in these modes:
-        </p>
+        <p className="mt-3 text-[12px] leading-relaxed text-muted"><SettingsText>While it is on, an agent cannot be started in these modes:</SettingsText></p>
         <ul className="mt-1 space-y-1 text-[12px] leading-relaxed text-muted">
           {Object.entries(KIDS_REFUSED_PERMISSION_MODES).map(([mode, why]) => (
             <li key={mode}>
               <strong className="text-text">
                 {PERMISSION_MODE_LABELS[mode as keyof typeof PERMISSION_MODE_LABELS] ?? mode}
-              </strong>{' '}
-              — {why}. It falls back to asking every time.
+              </strong>{' '}<SettingsText segments={[{ kind: 'copy', value: ' — ' }, { kind: 'fact', value: why }, { kind: 'copy', value: '. It falls back to asking every time.' }]} />
             </li>
           ))}
         </ul>
@@ -223,7 +223,7 @@ export function KidsModeSection({ isActive }: { isActive: boolean }): React.JSX.
                   setRenameSaved(true)
                 }}
               >
-                {renameSaved ? 'Saved' : 'Save'}
+                <SettingsText>{renameSaved ? 'Saved' : 'Save'}</SettingsText>
               </Button>
             </div>
           }
@@ -243,7 +243,7 @@ export function KidsModeSection({ isActive }: { isActive: boolean }): React.JSX.
                   setCurrentPinDraft(e.target.value)
                   setPinChangeMsg(null)
                 }}
-                placeholder="Current"
+                placeholder={vocab('Current')}
                 className="w-32"
                 aria-label="Current grown-up PIN"
               />
@@ -255,7 +255,7 @@ export function KidsModeSection({ isActive }: { isActive: boolean }): React.JSX.
                   setNextPinDraft(onlyDigits4(e.target.value))
                   setPinChangeMsg(null)
                 }}
-                placeholder="New (4 digits)"
+                placeholder={vocab('New (4 digits)')}
                 className="w-32"
                 aria-label="New grown-up PIN"
               />

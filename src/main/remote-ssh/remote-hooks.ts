@@ -13,6 +13,11 @@ import { hookServer } from '../../core/agents/hook-server'
 import { remoteAtomicWrite } from '../remote-atomic-write'
 import { curlHeaderConfigLine } from '../../core/agents/hook-curl-config-sh'
 import { buildManagedScript } from '../../core/agents/hooks/managed-script'
+import {
+  buildCopilotHookConfig,
+  COPILOT_HOOK_FILE,
+  isSafeRemoteCopilotHome
+} from '../../core/agents/hooks/copilot'
 
 /**
  * Remote hook scripts get NO Codex thread-identity root.
@@ -224,6 +229,8 @@ export class RemoteHooks {
       await this.installCodexRemote(conn, controlPath, home, remoteDir)
       // 5. grok: our own file in its hooks DIRECTORY, under the HOST's $GROK_HOME.
       await this.installGrokRemote(conn, controlPath, home, remoteDir)
+      // 6. copilot: its own file/grammar under the HOST's $COPILOT_HOME hooks directory.
+      await this.installCopilotRemote(conn, controlPath, home, remoteDir)
       return { endpointPath: endpoint }
     } catch {
       return null // fail-open: agent runs without hooks
@@ -498,6 +505,51 @@ export class RemoteHooks {
     }
   }
 
+  /** Install Copilot's owned hook file using the same config builder as the local installer. */
+  private async installCopilotRemote(
+    conn: SshConnection,
+    controlPath: string,
+    home: string,
+    remoteDir: string
+  ): Promise<void> {
+    try {
+      const copilotHome = await this.resolveCopilotHome(conn, controlPath, home)
+      const config = `${copilotHome.replace(/\/$/, '')}/hooks/${COPILOT_HOOK_FILE}`
+      const script = `${remoteDir}/agent-hooks/copilot.sh`
+      await this.r.run(
+        childArgs(
+          conn,
+          controlPath,
+          `mkdir -p ${posixQuote(`${remoteDir}/agent-hooks`)} && cat > ${posixQuote(script)} && chmod 755 ${posixQuote(script)}`
+        ),
+        buildManagedScript('copilot', REMOTE_IDENTITY_ROOT)
+      )
+      await this.r.run(
+        childArgs(
+          conn,
+          controlPath,
+          `mkdir -p "$(dirname ${posixQuote(config)})" && cat > ${posixQuote(config)}`
+        ),
+        `${JSON.stringify(buildCopilotHookConfig(buildManagedHookCommand(script)), null, 2)}\n`
+      )
+    } catch {
+      /* fail-open: the remote copilot session simply runs without status hooks */
+    }
+  }
+
+  private async resolveCopilotHome(
+    conn: SshConnection,
+    controlPath: string,
+    home: string
+  ): Promise<string> {
+    const { stdout } = await this.r.run(
+      childArgs(conn, controlPath, 'printf %s "${COPILOT_HOME:-}"')
+    )
+    const reported = stdout.trim()
+    const stripped = reported.replace(/\/+$/, '') || '/'
+    return isSafeRemoteCopilotHome(reported) ? stripped : `${home}/.copilot`
+  }
+
   /**
    * Merge the managed claude hook into a REMOTE managed-account config dir's `settings.json`, so an
    * agent that runs under `CLAUDE_CONFIG_DIR=<accountDir>` reports status like the default
@@ -579,6 +631,11 @@ export class RemoteHooks {
       const targets: { pathExpr: string; prelude?: string }[] = [
         { pathExpr: posixQuote(`${remoteHome}/.codex/AGENTS.md`) },
         { pathExpr: posixQuote(`${remoteHome}/.gemini/GEMINI.md`) },
+        {
+          pathExpr: posixQuote(
+            `${await this.resolveCopilotHome(conn, controlPath, remoteHome)}/copilot-instructions.md`
+          )
+        },
         openCodeInstructionsTarget(remoteHome)
       ]
       for (const t of targets) {
@@ -605,13 +662,16 @@ export class RemoteHooks {
       // Idempotently (re)write the shim: installCanvasControl may not have run (fail-open) yet.
       await this.writeRemoteShim(conn, controlPath, shim, CONTROL_SHIM_SCRIPT)
       const accountDir = `${remoteHome}/.nodeterm/claude-accounts/${accountId}`
+      // Keep the managed account's skill view live with the user's complete host skill set. The
+      // generated skill is written to the system directory first, then the account points there.
       await this.writeRemoteSkill(
         conn,
         controlPath,
-        accountDir,
+        `${remoteHome}/.claude`,
         'manage-nodeterm-canvas',
         buildCanvasSkillBody(shim)
       )
+      await this.ensureRemoteClaudeSkillsLink(conn, controlPath, remoteHome, accountDir)
     } catch {
       /* fail-open */
     }
@@ -663,13 +723,15 @@ export class RemoteHooks {
     try {
       const shim = `${remoteHome}/.nodeterm/context.sh`
       await this.writeRemoteShim(conn, controlPath, shim, CONTEXT_SHIM_SCRIPT)
+      const accountDir = `${remoteHome}/.nodeterm/claude-accounts/${accountId}`
       await this.writeRemoteSkill(
         conn,
         controlPath,
-        `${remoteHome}/.nodeterm/claude-accounts/${accountId}`,
+        `${remoteHome}/.claude`,
         'get-linked-context',
         buildContextLinkSkillBody(shim)
       )
+      await this.ensureRemoteClaudeSkillsLink(conn, controlPath, remoteHome, accountDir)
     } catch {
       /* fail-open */
     }
@@ -686,6 +748,36 @@ export class RemoteHooks {
       childArgs(conn, controlPath, `mkdir -p ${posixQuote(dirnameOf(shim))} && cat > ${q} && chmod 755 ${q}`),
       body
     )
+  }
+
+  /**
+   * Link a remote managed Claude account's skills directory to the host user's complete skills
+   * directory. Existing account-local content is moved to a unique backup before linking, so a
+   * managed account cannot hide user-installed skills while still allowing recovery of old files.
+   */
+  private async ensureRemoteClaudeSkillsLink(
+    conn: SshConnection,
+    controlPath: string,
+    remoteHome: string,
+    accountDir: string
+  ): Promise<void> {
+    const shared = `${remoteHome}/.claude/skills`
+    const target = `${accountDir}/skills`
+    const backupBase = `${target}.bak-`
+    const qShared = posixQuote(shared)
+    const qTarget = posixQuote(target)
+    const qBackup = posixQuote(`${target}.bak`)
+    const qBackupBase = posixQuote(backupBase)
+    const cmd =
+      `mkdir -p ${qShared} ${posixQuote(accountDir)} && ` +
+      `if [ -L ${qTarget} ] && [ "$(readlink -f ${qTarget} 2>/dev/null)" = "$(readlink -f ${qShared} 2>/dev/null)" ]; then :; ` +
+      `elif [ -e ${qTarget} ] || [ -L ${qTarget} ]; then ` +
+      `backup=${qBackup}; i=0; while [ -e "$backup" ] || [ -L "$backup" ]; do i=$((i + 1)); backup=${qBackupBase}$i; done; ` +
+      `if mv ${qTarget} "$backup" && ln -s ${qShared} ${qTarget}; then :; ` +
+      `else if [ ! -e ${qTarget} ] && [ ! -L ${qTarget} ] && { [ -e "$backup" ] || [ -L "$backup" ]; }; then mv "$backup" ${qTarget}; fi; exit 73; fi; ` +
+      `else ln -s ${qShared} ${qTarget}; fi`
+    const result = await this.r.run(childArgs(conn, controlPath, cmd))
+    if (result.code !== 0) throw new Error('remote Claude skills link could not be installed')
   }
 
   private async writeRemoteSkill(

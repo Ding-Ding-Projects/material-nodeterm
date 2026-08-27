@@ -3,6 +3,7 @@ import { SettingsSection } from '../SettingsSection'
 import { SearchableRow } from '../SearchableRow'
 import { FieldRow } from '../FieldRow'
 import { Button } from '@renderer/ui/Button'
+import { SettingsText } from '../SettingsText'
 
 const ROWS = {
   updates: { title: 'Updates', keywords: ['update', 'version', 'check', 'upgrade'] }
@@ -30,7 +31,7 @@ export function UpdatesSection({ isActive }: { isActive: boolean }): React.JSX.E
           >
             Check for updates
           </Button>
-          <p className="text-sm text-muted">Results appear in the update card at the bottom-right.</p>
+          <p className="text-sm text-muted"><SettingsText>Results appear in the update card at the bottom-right.</SettingsText></p>
         </div>
       </SearchableRow>
     </SettingsSection>

@@ -15,6 +15,8 @@ dist/
 /.nodeterm-env-*
 
 build/icon.png
+build/icon.ico
+build/icon.icns
 
 # bundled tmux — a ~2MB universal binary, built by scripts/build-tmux.mjs (the source of truth)
 # and copied into the app by electron-builder's mac extraResources. Never committed.
@@ -24,6 +26,7 @@ build/icon.png
 
 # concurrent-session worktrees / local agent state
 .claude/
+.worktrees/
 
 # backend lives in its own repo
 /nodebaseserver/
@@ -45,3 +48,4 @@ build/icon.png
 /dictation-tour.mp4
 /canvas-tour.mp4
 /hero-tour.mp4
+nodeterm.worktrees/

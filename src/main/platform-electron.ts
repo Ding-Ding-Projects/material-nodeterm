@@ -2,6 +2,7 @@ import { app, ipcMain, safeStorage, shell, webContents } from 'electron'
 import type { CorePlatform } from '../core/platform'
 import { mainWindowClientIds, sendToMain } from './main-window'
 import { peerRegistry } from './peer-registry'
+import { HOST_ONLY_REFUSAL, isHostOnlyChannel } from '../shared/host-control'
 import { E_NO_HANDLER, type RpcErr, type RpcOk, type RpcRequest } from '../shared/rpc'
 import { IPC } from '../shared/ipc'
 import { stripSharedNodeExec } from '../shared/node-exec'
@@ -13,6 +14,13 @@ import { relayCastAllowed, relayEventAllowed, relayRequestAllowed } from './rela
 
 type Handler = { fn: (...args: any[]) => unknown; withSender: boolean }
 type Listener = { fn: (...args: any[]) => void; withSender: boolean }
+
+/** How often a REFUSED host-control cast may be logged. The refusal itself is unconditional; only
+ *  the log line is throttled, because the rate is chosen by the peer: a guest casting in a loop
+ *  would otherwise turn the host's log into its own amplifier. One line per window is the whole
+ *  diagnostic — that it happened at all. */
+const REFUSAL_LOG_INTERVAL_MS = 60_000
+let lastRefusalLog = 0
 
 /**
  * Machine-local desktop state that a relay peer must never read or mutate. Keep this check at the
@@ -159,12 +167,14 @@ export function electronPlatform(options: ElectronPlatformOptions = {}): Electro
         }
       }
       if (req.method.startsWith('githubControl:')) {
+    async dispatch(clientId, req) {
+      // Host-control admission, from the ONE shared list (src/shared/host-control.ts) rather than a
+      // prefix test written out here — the second shell copying a stale copy of that test is the
+      // failure mode this closes.
+      if (isHostOnlyChannel(req.method)) {
         return {
           t: 'res', id: req.id, ok: false,
-          error: {
-            code: 'E_FORBIDDEN',
-            message: 'host-control method is not available to relay peers'
-          }
+          error: { code: 'E_FORBIDDEN', message: HOST_ONLY_REFUSAL }
         }
       }
       if (!relayRequestAllowed(req.method)) {
@@ -236,6 +246,18 @@ export function electronPlatform(options: ElectronPlatformOptions = {}): Electro
       // rule as dispatch before even looking up a listener: registering a future machine-global
       // listener must not silently create a peer-reachable mutation path.
       if (!relayCastAllowed(method)) return
+      // The SAME admission as dispatch, because a cast is a second door into the same table. Gating
+      // dispatch alone would still admit `project-setup:consent-submit`, which the renderer sends as
+      // a cast (ws-bridge.ts) — i.e. a guest could not start a run but could still answer the host's
+      // trust prompt for it. A cast has no reply channel, so a refusal can only be dropped + logged.
+      if (isHostOnlyChannel(method)) {
+        const now = Date.now()
+        if (now - lastRefusalLog >= REFUSAL_LOG_INTERVAL_MS) {
+          lastRefusalLog = now
+          console.warn(`[peer] refused host-control cast ${method} from peer ${clientId}`)
+        }
+        return
+      }
       const set = listeners.get(method)
       if (!set) return
       for (const l of set) {

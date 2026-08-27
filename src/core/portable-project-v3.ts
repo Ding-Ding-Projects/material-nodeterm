@@ -13,7 +13,10 @@ export const PORTABLE_PROJECT_ARCHIVE_REQUIRED_ENTRIES = ['manifest.json', 'proj
 export const PORTABLE_PROJECT_REQUIRED_ENTRIES = ['project.json', 'history.bundle'] as const
 export const PORTABLE_PROJECT_OPTIONAL_ENTRIES = [
   'repository.bundle',
-  'files/'
+  'files/',
+  'assets/media/',
+  'assets/attachments/',
+  'comments/'
 ] as const
 
 export const PORTABLE_PROJECT_LIMITS = {
@@ -69,6 +72,8 @@ export type PortableProjectValidationErrorCode =
   | 'raw-limit'
   | 'compressed-limit'
   | 'hash'
+  | 'destination-collision'
+  | 'cancelled'
 
 export class PortableProjectV3Error extends Error {
   readonly code: PortableProjectValidationErrorCode
@@ -97,14 +102,22 @@ export function validatePortableArchivePath(value: string): string {
   if (utf8Bytes(value) > PORTABLE_PROJECT_LIMITS.maxPathBytes) {
     throw new PortableProjectV3Error('unsafe-path', `Archive entry path exceeds ${PORTABLE_PROJECT_LIMITS.maxPathBytes} bytes.`)
   }
-  if (value.includes('\\') || value.startsWith('/') || /^[A-Za-z]:/.test(value)) {
+  const normalized = value.normalize('NFC')
+  if (normalized !== value || value.includes('\\') || value.startsWith('/') || /^[A-Za-z]:/.test(value)) {
     throw new PortableProjectV3Error('unsafe-path', `Archive entry path is not relative: ${value}`)
   }
   const parts = value.split('/')
-  if (parts.some((part) => part.length === 0 || part === '.' || part === '..')) {
+  const reserved = /^(?:con|prn|aux|nul|clock\$|com[1-9]|lpt[1-9])(?:\..*)?$/i
+  if (parts.some((part) => part.length === 0 || part === '.' || part === '..' || /[ .]$/.test(part) || part.includes(':') || reserved.test(part))) {
     throw new PortableProjectV3Error('unsafe-path', `Archive entry path contains an unsafe segment: ${value}`)
   }
   return value
+}
+
+/** Canonical comparison key shared by archive and omission collision checks. */
+export function portableArchivePathKey(value: string): string {
+  validatePortableArchivePath(value)
+  return value.normalize('NFC').toLocaleLowerCase('en-US')
 }
 
 function isOptionalPath(path: string): boolean {
@@ -143,7 +156,7 @@ function validateManifestShape(value: unknown): asserts value is PortableProject
   const omissionPaths = new Set<string>()
   const omissionFolded = new Set<string>()
   for (const omission of value.omissions) {
-    const key = omission.path.toLocaleLowerCase('en-US')
+    const key = portableArchivePathKey(omission.path)
     if (omissionPaths.has(omission.path)) throw new PortableProjectV3Error('duplicate-entry', `Duplicate omission path: ${omission.path}`)
     if (omissionFolded.has(key)) throw new PortableProjectV3Error('case-collision', `Case-colliding omission path: ${omission.path}`)
     omissionPaths.add(omission.path)
@@ -169,7 +182,7 @@ export function validatePortableProjectV3Manifest(value: unknown): PortableProje
     }
     validatePortableArchivePath(item.path)
     if (seen.has(item.path)) throw new PortableProjectV3Error('duplicate-entry', `Duplicate manifest entry: ${item.path}`)
-    const key = item.path.toLocaleLowerCase('en-US')
+    const key = portableArchivePathKey(item.path)
     if (folded.has(key)) throw new PortableProjectV3Error('case-collision', `Case-colliding manifest entry: ${item.path}`)
     seen.add(item.path)
     folded.add(key)
@@ -205,7 +218,7 @@ export async function validatePortableProjectV3Entries(
   const folded = new Set<string>()
   for (const entry of entries) {
     const path = validatePortableArchivePath(entry.path)
-    const key = path.toLocaleLowerCase('en-US')
+    const key = portableArchivePathKey(path)
     if (byPath.has(path)) throw new PortableProjectV3Error('duplicate-entry', `Duplicate archive entry: ${path}`)
     if (folded.has(key)) throw new PortableProjectV3Error('case-collision', `Case-colliding archive entry: ${path}`)
     byPath.set(path, entry)
@@ -353,7 +366,7 @@ export function validatePortableArchiveInventory(paths: readonly string[]): Port
   const folded = new Set<string>()
   for (const raw of paths) {
     const path = validatePortableArchivePath(raw)
-    const key = path.toLocaleLowerCase('en-US')
+    const key = portableArchivePathKey(path)
     if (seen.has(path)) throw new PortableProjectV3Error('duplicate-entry', `Duplicate archive entry: ${path}`)
     if (folded.has(key)) throw new PortableProjectV3Error('case-collision', `Case-colliding archive entry: ${path}`)
     seen.add(path)

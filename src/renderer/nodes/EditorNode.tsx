@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Handle, NodeResizer, Position, useReactFlow, type NodeProps } from '@xyflow/react'
+import { NODE_MIN_SIZES } from '../lib/nodeSizing'
 import { monaco } from '../editor/monaco-setup'
 import { monacoTheme } from '../lib/appTheme'
 import { useAppTheme } from '../state/useAppTheme'
@@ -11,8 +12,11 @@ import { useSession } from '../session/session'
 import type { CanvasNode } from '../state/workspace'
 import { tooLargeSize, formatBytes } from '@shared/fsLimits'
 import { hintLabel } from '@shared/platform-utils'
+import { chipFor, commandTooltip } from '../lib/keybindingOverrides'
 import { pdfBlobUrl } from '../lib/pdfBlob'
 import { nodeHeaderFillStyle } from '../lib/nodeColor'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { MaximizeButton } from './MaximizeButton'
 
 // Image extensions get a visual preview instead of the Monaco text editor.
 const IMAGE_MIME: Record<string, string> = {
@@ -33,6 +37,7 @@ const IMAGE_MIME: Record<string, string> = {
  * preview instead of being opened as (binary) text.
  */
 export function EditorNode({ id, data, selected }: NodeProps<CanvasNode>) {
+  const vocab = useVocabularyMapper()
   const { deleteElements } = useReactFlow()
   const bodyRef = useRef<HTMLDivElement>(null)
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
@@ -69,7 +74,8 @@ export function EditorNode({ id, data, selected }: NodeProps<CanvasNode>) {
   // ControlMaster; otherwise the session's fs.
   const activeProjectId = useProjects((s) => s.activeProjectId)
   const fs = data.sshFs && activeProjectId ? sshFs(activeProjectId) : api.fs
-  const fileName = filePath.split('/').pop() || 'untitled'
+  const fileName = filePath.split('/').pop() || ''
+  const displayFileName = fileName || vocab('untitled')
   const ext = fileName.includes('.') ? fileName.split('.').pop()!.toLowerCase() : ''
   const isImage = ext in IMAGE_MIME
   // PDFs go to the platform's own viewer (zoom / search / pages / print all come for free)
@@ -240,6 +246,9 @@ export function EditorNode({ id, data, selected }: NodeProps<CanvasNode>) {
   }), [])
 
   const headerFill = nodeHeaderFillStyle(data.color)
+  // Whatever the markdown toggle is bound to; '' when the user unbound it, in which case the
+  // preview's hint names the action instead of promising a chord that never fires.
+  const mdChip = chipFor('node.toggleMarkdown')
 
   return (
     <div
@@ -248,7 +257,7 @@ export function EditorNode({ id, data, selected }: NodeProps<CanvasNode>) {
       onMouseEnter={() => (hoveredRef.current = true)}
       onMouseLeave={() => (hoveredRef.current = false)}
     >
-      <NodeResizer minWidth={320} minHeight={200} isVisible={selected} color={data.color} />
+      <NodeResizer minWidth={NODE_MIN_SIZES.editor.width} minHeight={NODE_MIN_SIZES.editor.height} isVisible={selected} color={data.color} />
       {/* Invisible target handle so a rope from an agent node that opened this can attach. */}
       <Handle
         id="flow-in"
@@ -265,7 +274,7 @@ export function EditorNode({ id, data, selected }: NodeProps<CanvasNode>) {
         style={headerFill.style}
       >
         <span className="term-node__title-text" title={filePath}>
-          {fileName}
+          {displayFileName}
           {!isImage && !isPdf && dirty ? ' ●' : ''}
         </span>
         <span className="term-node__spacer" />
@@ -275,24 +284,26 @@ export function EditorNode({ id, data, selected }: NodeProps<CanvasNode>) {
           <>
             <button
               className="editor-node__toggle"
-              title={hintLabel('Toggle markdown preview (⌘M)')}
+              title={hintLabel(`${vocab('Toggle markdown preview')} (⌘M)`)}
+              title={commandTooltip('Toggle markdown preview', 'node.toggleMarkdown')}
               onClick={togglePreview}
             >
-              {preview ? 'Edit' : 'Preview'}
+              {vocab(preview ? 'Edit' : 'Preview')}
             </button>
             <button
               className="editor-node__save"
               disabled={!dirty}
-              title={hintLabel('Save (⌘S)')}
+              title={hintLabel(`${vocab('Save')} (⌘S)`)}
               onClick={save}
             >
-              Save
+              {vocab('Save')}
             </button>
           </>
         )}
+        <MaximizeButton id={id} maximized={!!data.premaxRect} />
         <button
           className="term-node__close"
-          title="Close"
+          title={vocab('Close')}
           onClick={() => deleteElements({ nodes: [{ id }] })}
         >
           ×
@@ -303,7 +314,7 @@ export function EditorNode({ id, data, selected }: NodeProps<CanvasNode>) {
         {fileMissing ? (
           <div className="editor-node__image nodrag">
             <span className="editor-node__loading">
-              This file’s worktree was removed — it no longer exists.
+              {vocab('This file’s worktree was removed — it no longer exists.')}
             </span>
           </div>
         ) : isImage ? (
@@ -311,14 +322,14 @@ export function EditorNode({ id, data, selected }: NodeProps<CanvasNode>) {
             {imageSrc ? (
               <img
                 src={imageSrc}
-                alt={fileName}
+                alt={displayFileName}
                 onLoad={(e) => {
                   const img = e.currentTarget
                   if (img.naturalWidth) setImageDims(`${img.naturalWidth} × ${img.naturalHeight}`)
                 }}
               />
             ) : (
-              <span className="editor-node__loading">{imageError || 'Loading…'}</span>
+              <span className="editor-node__loading">{imageError ? vocab(imageError) : vocab('Loading…')}</span>
             )}
           </div>
         ) : isPdf ? (
@@ -327,14 +338,14 @@ export function EditorNode({ id, data, selected }: NodeProps<CanvasNode>) {
           // Server Edition) — no bundled PDF engine of ours to keep patched.
           <div className="editor-node__pdf nodrag nowheel">
             {pdfSrc ? (
-              <iframe src={pdfSrc} title={fileName} />
+              <iframe src={pdfSrc} title={displayFileName} />
             ) : (
-              <span className="editor-node__loading">{pdfError || 'Loading…'}</span>
+              <span className="editor-node__loading">{pdfError ? vocab(pdfError) : vocab('Loading…')}</span>
             )}
           </div>
         ) : loadError ? (
           <div className="editor-node__image nodrag">
-            <span className="editor-node__loading">{loadError}</span>
+            <span className="editor-node__loading">{vocab(loadError)}</span>
           </div>
         ) : (
           <>
@@ -342,8 +353,10 @@ export function EditorNode({ id, data, selected }: NodeProps<CanvasNode>) {
             {preview && (
               <div className="term-md nodrag nowheel">
                 <div className="term-md__bar">
+                  <span>{vocab('Preview')}</span>
+                  <span className="term-md__hint">{hintLabel(`⌘M ${vocab('to edit')}`)}</span>
                   <span>Preview</span>
-                  <span className="term-md__hint">{hintLabel('⌘M to edit')}</span>
+                  <span className="term-md__hint">{mdChip ? `${mdChip} to edit` : 'Edit'}</span>
                 </div>
                 <div
                   className="term-md__content"

@@ -7,6 +7,8 @@ import type { ToyLockCredentialKind, ToyLockRecord } from '@shared/toylock'
 import { useToyLocks } from '../../../state/toylocks'
 import { ConfirmDialog } from '../../ConfirmDialog'
 import { SettingsSection } from '../SettingsSection'
+import { SettingsText } from '../SettingsText'
+import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
 import { SearchableRow } from '../SearchableRow'
 import { Checkbox } from '@renderer/ui/md3'
 
@@ -51,6 +53,7 @@ function durationLabel(record: ToyLockRecord): string {
 }
 
 export function ToyLocksSection({ isActive }: { isActive: boolean }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   const records = useToyLocks((s) => s.records)
   const loaded = useToyLocks((s) => s.loaded)
   const loadError = useToyLocks((s) => s.loadError)
@@ -109,7 +112,7 @@ export function ToyLocksSection({ isActive }: { isActive: boolean }): React.JSX.
           <div className="flex items-center gap-2">
             <input
               type="text"
-              placeholder="Filter locks…"
+              placeholder={vocab('Filter locks…')}
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               className="min-w-0 flex-1 rounded-lg border border-border bg-transparent px-3 py-1.5 text-[13px] text-text placeholder:text-muted"
@@ -126,12 +129,12 @@ export function ToyLocksSection({ isActive }: { isActive: boolean }): React.JSX.
           </div>
 
           {!loaded ? (
-            <p className="text-[13px] text-muted">Loading…</p>
+            <p className="text-[13px] text-muted"><SettingsText>Loading…</SettingsText></p>
           ) : loadError ? null : filtered.length === 0 ? (
             <p className="text-[13px] text-muted">
-              {records.length === 0
-                ? "Nothing is locked yet. Right-click a tab, a node, or the Accent setting and choose “Lock this…”."
-                : 'No locks match that filter.'}
+              <SettingsText>{records.length === 0
+                ? 'Nothing is locked yet. Right-click a tab, a node, or the Accent setting and choose “Lock this…”.'
+                : 'No locks match that filter.'}</SettingsText>
             </p>
           ) : (
             <ul className="divide-y divide-border/60">
@@ -140,7 +143,7 @@ export function ToyLocksSection({ isActive }: { isActive: boolean }): React.JSX.
                   <Checkbox
                     checked={selected.has(r.id)}
                     onChange={() => toggle(r.id)}
-                    aria-label={`Select ${r.target.label} lock`}
+                    aria-label={`${vocab('Select')} ${r.target.label} ${vocab('lock')}`}
                   />
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-[13px] font-medium text-text">
@@ -148,8 +151,13 @@ export function ToyLocksSection({ isActive }: { isActive: boolean }): React.JSX.
                       <span className="font-normal text-muted">({targetKindLabel(r.target.kind)})</span>
                     </div>
                     <div className="text-[12px] text-muted">
-                      {CREDENTIAL_KIND_LABELS[r.credentialKind]} ·{' '}
-                      {durationLabel(r)} · {r.lockedOnLaunch ? 'locked on launch' : 'stays as unlocked as you left it'}
+                      <SettingsText segments={[
+                        { kind: 'copy', value: CREDENTIAL_KIND_LABELS[r.credentialKind] },
+                        { kind: 'copy', value: ' · ' },
+                        { kind: 'fact', value: durationLabel(r) },
+                        { kind: 'copy', value: ' · ' },
+                        { kind: 'copy', value: r.lockedOnLaunch ? 'locked on launch' : 'stays as unlocked as you left it' }
+                      ]} />
                     </div>
                   </div>
                   <button

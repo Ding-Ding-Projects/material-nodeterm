@@ -3,6 +3,7 @@ import { MANAGED_PROPERTY_FIELDS, type MinecraftPropertyFieldSpec as PropertyFie
 import { useSession } from '../../session/session'
 import { Checkbox } from '@renderer/ui/md3'
 import { Select } from '@renderer/ui/Select'
+import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 
 /** True while the server is running — server.properties is only read at startup, so editing it
  *  live would silently do nothing until a restart. The manager itself refuses the write for the
@@ -95,6 +96,7 @@ function FieldControl({
  *  Reads and writes the real file through the same manager the console/EULA/create flows use;
  *  nothing here is a mock of the file's contents. */
 export function MinecraftPropertiesEditor({ nodeId, phase }: { nodeId: string; phase: string }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   const { api } = useSession()
   const [record, setRecord] = useState<Record<string, string> | null>(null)
   const [draft, setDraft] = useState<Record<string, string>>({})
@@ -119,7 +121,7 @@ export function MinecraftPropertiesEditor({ nodeId, phase }: { nodeId: string; p
 
   const live = isServerLive(phase)
 
-  if (loading) return <p className="service-node__note">Loading server.properties…</p>
+  if (loading) return <p className="service-node__note">{vocab('Loading server.properties…')}</p>
   if (record === null) {
     return <p className="service-node__note">This server hasn't been installed yet, so there is no server.properties to edit.</p>
   }

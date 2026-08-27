@@ -8,9 +8,10 @@ rem ============================================================================
 rem download-dependencies.bat -- obtains every dependency nodeterm needs to build, run and test,
 rem from canonical upstreams, into per-project or user-scoped locations wherever one exists. It
 rem never requires administrator rights when a dependency supports a user-scoped path.
-rem Visual Studio Build Tools has no user-scoped install; if it is missing or needs modification,
-rem this script stops with the exact helper-only command to run elevated, then resumes from a
-rem normal prompt. The root bootstrap and npm lifecycle scripts must never run as Administrator.
+rem Visual Studio Build Tools has no user-scoped install. On an interactive run, if it is missing
+rem or needs modification, this script hands only the exact helper to UAC, waits, then verifies from
+rem the normal prompt. Silent mode reports the elevated-only requirement without opening UAC. The
+rem root bootstrap and npm lifecycle scripts must never run as Administrator.
 rem
 rem Full contract: docs/building.md
 rem
@@ -151,10 +152,11 @@ call :phase_end "Node.js runtime"
 
 rem ---------------------------------------------------------------------------------------------
 rem Phase 2: native Windows build toolchain. Visual Studio has no per-user installation path and
-rem Microsoft's quiet/passive modes require an already-elevated caller. The helper never triggers
-rem UAC and refuses an elevated ROOT bootstrap; it exits access-denied with the exact helper-only
-rem command to run elevated. This MUST precede Python/preflight so a missing component is repaired
-rem rather than merely diagnosed without ever handing npm an Administrator token.
+rem Microsoft's quiet/passive modes require an already-elevated caller. The helper refuses an
+rem elevated ROOT bootstrap. Interactive mode may elevate only the helper, while silent mode stays
+rem prompt-free and reports the exact elevated-only requirement. This MUST precede Python/preflight
+rem so a missing component is repaired rather than merely diagnosed without ever handing npm an
+rem Administrator token.
 rem ---------------------------------------------------------------------------------------------
 call :phase_begin "Visual Studio C++ build toolchain"
 if "%NODETERM_SILENT%"=="1" (
@@ -163,7 +165,13 @@ if "%NODETERM_SILENT%"=="1" (
     call node "%NODETERM_ROOT%\scripts\ensure-windows-build-toolchain.mjs"
 )
 set "TOOLCHAIN_EXIT=%ERRORLEVEL%"
+rem The Visual Studio installer is the one declared dependency that genuinely needs elevation.
+rem An interactive one-click run may hand only this narrowly-scoped helper to UAC, wait for its
+rem result, and then return to the normal-user process. Silent mode must never open UAC or hang;
+rem the helper's exact elevated-only recovery text remains the honest result there.
+if "%TOOLCHAIN_EXIT%"=="5" if not "%NODETERM_SILENT%"=="1" goto :elevate_toolchain
 if not "%TOOLCHAIN_EXIT%"=="0" exit /b %TOOLCHAIN_EXIT%
+:toolchain_phase_complete
 call :phase_end "Visual Studio C++ build toolchain"
 
 rem ---------------------------------------------------------------------------------------------
@@ -313,6 +321,52 @@ set "NODETERM_RETURN_NODE_HOME=%NODETERM_NODE_HOME%"
 set "NODETERM_RETURN_PYTHON=%PYTHON%"
 endlocal & set "PATH=%NODETERM_RETURN_PATH%" & set "NODETERM_NODE_HOME=%NODETERM_RETURN_NODE_HOME%" & set "PYTHON=%NODETERM_RETURN_PYTHON%" & set "NODE_GYP_FORCE_PYTHON=%NODETERM_RETURN_PYTHON%" & set "npm_config_python=%NODETERM_RETURN_PYTHON%"
 exit /b 0
+
+:elevate_toolchain
+set "NODETERM_NODE_EXE="
+for /f "usebackq delims=" %%N in (`where node 2^>nul`) do if not defined NODETERM_NODE_EXE set "NODETERM_NODE_EXE=%%N"
+if not defined NODETERM_NODE_EXE (
+    echo.
+    echo [FAILED] Visual Studio C++ build toolchain
+    echo   Dependency : elevated helper handoff
+    echo   Constraint : a verified node.exe is required to run the narrow UAC helper
+    echo   Source     : PATH lookup for node.exe
+    echo   Error      : node.exe could not be resolved after the initial toolchain probe
+    exit /b 1
+)
+set "NODETERM_ELEVATED_NODE=%NODETERM_NODE_EXE%"
+set "NODETERM_ELEVATED_HELPER=%NODETERM_ROOT%\scripts\ensure-windows-build-toolchain.mjs"
+echo.
+echo --- Elevating only the Visual Studio toolchain helper ---
+echo A UAC prompt may appear for the Microsoft Visual Studio dependency. No npm or repository
+echo lifecycle command runs in that elevated process.
+%NODETERM_SYSTEM_POWERSHELL% -NoProfile -NonInteractive -Command "$ErrorActionPreference='Stop'; try { $args=[string]::Concat([char]34,$env:NODETERM_ELEVATED_HELPER,[char]34,' --elevated-toolchain-only'); $p=Start-Process -FilePath $env:NODETERM_ELEVATED_NODE -ArgumentList $args -Verb RunAs -Wait -PassThru; exit $p.ExitCode } catch { Write-Error $_; exit 1 }"
+set "ELEVATED_TOOLCHAIN_EXIT=%ERRORLEVEL%"
+set "NODETERM_ELEVATED_NODE="
+set "NODETERM_ELEVATED_HELPER="
+if not "%ELEVATED_TOOLCHAIN_EXIT%"=="0" (
+    echo.
+    echo [FAILED] Visual Studio C++ build toolchain
+    echo   Dependency : elevated Visual Studio workload helper
+    echo   Constraint : the UAC helper must complete successfully before npm runs
+    echo   Source     : "%NODETERM_ROOT%\scripts\ensure-windows-build-toolchain.mjs"
+    echo   Error      : elevated helper exited with code %ELEVATED_TOOLCHAIN_EXIT%
+    exit /b %ELEVATED_TOOLCHAIN_EXIT%
+)
+echo --- Elevated helper completed; verifying from the normal user process ---
+call node "%NODETERM_ROOT%\scripts\ensure-windows-build-toolchain.mjs"
+set "TOOLCHAIN_VERIFY_EXIT=%ERRORLEVEL%"
+if not "%TOOLCHAIN_VERIFY_EXIT%"=="0" (
+    echo.
+    echo [FAILED] Visual Studio C++ build toolchain
+    echo   Dependency : post-UAC Visual Studio workload verification
+    echo   Constraint : the normal user process must independently rediscover the workload and Spectre libraries
+    echo   Source     : "%NODETERM_ROOT%\scripts\ensure-windows-build-toolchain.mjs"
+    echo   Error      : verification exited with code %TOOLCHAIN_VERIFY_EXIT%
+    exit /b %TOOLCHAIN_VERIFY_EXIT%
+)
+call :phase_end "Visual Studio C++ build toolchain"
+goto :toolchain_phase_complete
 
 :refresh_path
 rem A package manager (winget) writes PATH into the registry for FUTURE processes only -- the

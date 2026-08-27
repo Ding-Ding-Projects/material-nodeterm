@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { Handle, NodeResizer, Position, type NodeProps } from '@xyflow/react'
+import { NODE_MIN_SIZES } from '../lib/nodeSizing'
 import type { CanvasNode } from '../state/workspace'
 import { useAgentNodes } from '../state/agentNodes'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { ContextMeter } from '../components/ContextMeter'
+import { contextSourceKey } from '../state/contextWindow'
 
 function fmtDur(ms: number): string {
   const s = Math.round(ms / 1000)
@@ -19,6 +23,7 @@ function fmtTokens(n: number): string {
  * its live transcript in a terminal-styled panel (subagents have no PTY).
  */
 export function SubagentNode({ id, data, selected }: NodeProps<CanvasNode>) {
+  const vocab = useVocabularyMapper()
   const working = data.subagentState !== 'done'
   const startedAt = (data.subagentStartedAt as number) || 0
   const durationMs = data.subagentDurationMs as number | undefined
@@ -30,6 +35,7 @@ export function SubagentNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const activity = useAgentNodes((s) => s.activityById[id]) || ''
   const body = activity || result
   const expanded = !!data.ephExpanded
+  const typeLabel = typeof data.subagentType === 'string' && data.subagentType ? data.subagentType : vocab('subagent')
   const bodyRef = useRef<HTMLDivElement>(null)
   const toggle = () => useAgentNodes.getState().toggleExpanded(id)
 
@@ -47,8 +53,8 @@ export function SubagentNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const elapsed = working && startedAt ? fmtDur(now - startedAt) : durationMs ? fmtDur(durationMs) : ''
   const meta = [
     elapsed,
-    tokens != null ? `↓ ${fmtTokens(tokens)} tokens` : null,
-    toolUses ? `${toolUses} tool${toolUses === 1 ? '' : 's'}` : null
+    tokens != null ? `↓ ${fmtTokens(tokens)} ${vocab('tokens')}` : null,
+    toolUses ? `${toolUses} ${vocab(toolUses === 1 ? 'tool' : 'tools')}` : null
   ]
     .filter(Boolean)
     .join(' · ')
@@ -59,12 +65,12 @@ export function SubagentNode({ id, data, selected }: NodeProps<CanvasNode>) {
 
   return (
     <div onPointerDownCapture={select} className={`subagent-node${working ? ' working' : ' done'}`}>
-      <NodeResizer isVisible={selected} minWidth={180} minHeight={84} color="#d97757" />
+      <NodeResizer isVisible={selected} minWidth={NODE_MIN_SIZES.subagent.width} minHeight={NODE_MIN_SIZES.subagent.height} color="#d97757" />
       <Handle type="target" position={Position.Top} isConnectable={false} />
       <div className="subagent-node__head nodrag" onClick={toggle} style={{ cursor: 'pointer' }}>
         <button
           className="subagent-node__expand"
-          title={expanded ? 'Collapse' : 'Open output'}
+          title={vocab(expanded ? 'Collapse' : 'Open output')}
           onClick={(e) => {
             e.stopPropagation()
             toggle()
@@ -73,15 +79,16 @@ export function SubagentNode({ id, data, selected }: NodeProps<CanvasNode>) {
           {expanded ? '▾' : '▸'}
         </button>
         <span className="subagent-node__dot" />
-        <span className="subagent-node__type">{(data.subagentType as string) || 'subagent'}</span>
-        <span className="subagent-node__state">{working ? 'working' : 'done'}</span>
+        <span className="subagent-node__type">{typeLabel}</span>
+        <span className="subagent-node__state">{vocab(working ? 'working' : 'done')}</span>
+        <ContextMeter sessionId={null} agentId={typeLabel} sourceKey={contextSourceKey(typeLabel)} />
       </div>
       {data.title && !expanded && <div className="subagent-node__task">{data.title as string}</div>}
       {meta && <div className="subagent-node__meta">{meta}</div>}
       {expanded && (
         <div className="subagent-node__term nodrag nowheel" ref={bodyRef}>
           {data.title ? <div className="subagent-node__result-task">{data.title as string}</div> : null}
-          {body || (working ? 'Working… (live output appears here)' : 'No output.')}
+          {body || (working ? vocab('Working… (live output appears here)') : vocab('No output.'))}
         </div>
       )}
     </div>

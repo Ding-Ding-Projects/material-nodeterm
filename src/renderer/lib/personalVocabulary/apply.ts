@@ -22,3 +22,28 @@ export function applyVocabulary(text: string, entries: PersonalVocabularyEntries
   }
   return result
 }
+
+/**
+ * Map only the prose portions of a template, then insert dynamic facts unchanged. Parsing the
+ * placeholders instead of mapping a formatted string is important: a user's term may be a path,
+ * id, count, provider name, or even a placeholder key, but those values are not this feature's
+ * prose and must never be rewritten.
+ */
+export function applyVocabularyToTemplate(
+  text: string,
+  entries: PersonalVocabularyEntries,
+  params?: Record<string, string>
+): string {
+  if (!params) return applyVocabulary(text, entries)
+  const placeholder = /\{(\w+)\}/g
+  let output = ''
+  let cursor = 0
+  for (const match of text.matchAll(placeholder)) {
+    const index = match.index ?? cursor
+    output += applyVocabulary(text.slice(cursor, index), entries)
+    const key = match[1]
+    output += Object.prototype.hasOwnProperty.call(params, key) ? params[key] : match[0]
+    cursor = index + match[0].length
+  }
+  return output + applyVocabulary(text.slice(cursor), entries)
+}

@@ -3,9 +3,11 @@ import { renderMarkdown } from '../lib/markdown'
 import { useAgentStatus } from '../state/agentStatus'
 import { useSession } from '../session/session'
 import type { ChatMessage } from '@shared/types'
-import { hintLabel } from '@shared/platform-utils'
+import { chipFor } from '../lib/keybindingOverrides'
 import { E_UNSUPPORTED } from '@shared/rpc'
 import { TextArea } from '@renderer/ui/md3'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { mapAroundExactFacts } from './nodeVocabulary'
 
 // Memoized bubble: marked+DOMPurify re-ran for EVERY message on each ChatPanel render (each
 // turn-finish reload, each keystroke re-render). Text is stable per message, so cache per text.
@@ -58,6 +60,7 @@ const EMPTY_TEXT: Record<LoadState, { title: string; detail?: string }> = {
  * (working -> idle); live streaming is a later phase. Replaces the markdown-of-output overlay.
  */
 export function ChatPanel({ nodeId, sessionId, cwd, accountId }: ChatPanelProps) {
+  const vocab = useVocabularyMapper()
   // This node's core api (stable for the session — the chat transcript and the tmux session
   // both live on the core this panel's project belongs to).
   const { api } = useSession()
@@ -122,22 +125,28 @@ export function ChatPanel({ nodeId, sessionId, cwd, accountId }: ChatPanelProps)
     }
   }
 
+  // Whatever the markdown/chat toggle is bound to; '' when unbound, in which case the bar names
+  // the action instead of promising a chord that never fires.
+  const mdChip = chipFor('node.toggleMarkdown')
+
   return (
     <div className="term-chat nodrag nowheel">
       <div className="term-chat__bar">
+        <span>{vocab('Chat')}</span>
+        <span className="term-chat__hint">{hintLabel(`⌘M ${vocab('to exit')}`)}</span>
         <span>Chat</span>
-        <span className="term-chat__hint">{hintLabel('⌘M to exit')}</span>
+        <span className="term-chat__hint">{mdChip ? `${mdChip} to exit` : 'Exit'}</span>
       </div>
       <div className="term-chat__msgs" ref={msgsRef}>
         {messages.length === 0 && loadState !== 'loading' && (
           <div className="term-chat__empty">
-            <div>{EMPTY_TEXT[loadState].title}</div>
+            <div>{vocab(EMPTY_TEXT[loadState].title)}</div>
             {EMPTY_TEXT[loadState].detail && (
-              <div className="term-chat__empty-detail">{EMPTY_TEXT[loadState].detail}</div>
+              <div className="term-chat__empty-detail">{vocab(EMPTY_TEXT[loadState].detail)}</div>
             )}
             {loadState !== 'unsupported' && loadState !== 'ok' && (
               <button className="term-chat__retry" onClick={load}>
-                Retry
+                {vocab('Retry')}
               </button>
             )}
           </div>
@@ -168,10 +177,10 @@ export function ChatPanel({ nodeId, sessionId, cwd, accountId }: ChatPanelProps)
           onKeyDown={onKeyDown}
           placeholder={
             readonly
-              ? "Can't write to this session"
+              ? vocab("Can't write to this session")
               : working
-                ? 'Claude is working…'
-                : 'Message Claude…  (Enter to send)'
+                ? mapAroundExactFacts('Claude is working…', ['Claude'], vocab)
+                : mapAroundExactFacts('Message Claude…  (Enter to send)', ['Claude', 'Enter'], vocab)
           }
           disabled={readonly || working}
           rows={2}

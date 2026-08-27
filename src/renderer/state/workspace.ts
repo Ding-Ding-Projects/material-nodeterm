@@ -1,6 +1,17 @@
 import type { Node } from '@xyflow/react'
 import type { AgentLaunchIntent, BrowserTab, CanvasMutation, CanvasNodeState, ClaudeAccount, NodeKind, PendingLaunch, Project, ServiceNodeKind } from '@shared/types'
+import { normalizeMediaReference, type MediaAssetReference } from '@shared/media-catalog'
+import { normalizePublicDimSumSelection, type PublicDimSumSelection } from '@shared/public-dim-sum'
+import type { CalendarNodeConfig } from '@shared/calendar'
+import type { HomeAssistantNodeIntent } from '@shared/home-assistant'
+import { DEFAULT_HOME_ASSISTANT_NODE_INTENT } from '@shared/home-assistant'
+import type { HomeAssistantControlConfig } from '@shared/home-assistant-control'
+import { DEFAULT_HOME_ASSISTANT_CONTROL_CONFIG, validateHomeAssistantControlConfig } from '@shared/home-assistant-control'
+import { DEFAULT_HOME_ASSISTANT_SENSOR_CONFIG, type HomeAssistantSensorConfig } from '@shared/home-assistant-sensor'
+import type { AlarmOccurrence, AlarmRecurrence } from '@shared/alarm-clock'
 import type { ServiceConnection } from '@shared/node-exec'
+import { DEFAULT_GITLAB_HOSTING_CONFIG, type GitLabHostingConfig } from '@shared/gitlab-hosting'
+import { NEXTCLOUD_AIO_DEFAULT_CONFIG } from '@shared/nextcloud-aio'
 import type { NsisLocalPaths, NsisSpec } from '@shared/nsis-form-types'
 import { defaultNsisLocalPaths, defaultNsisSpec } from '@shared/nsis-form-types'
 import type { AgentId, AgentPermissionMode, BuiltinAgentId } from '@shared/agents/config'
@@ -19,18 +30,42 @@ import {
   permissionModeFromLaunchPlan,
   type ActiveAgentLaunchPlan
 } from './permissionMode'
+import type {
+  CanvasMutation,
+  CanvasNodeState,
+  ClaudeAccount,
+  NodeKind,
+  PendingLaunch,
+  Project,
+  Settings
+} from '@shared/types'
+import type { AgentId, AgentPermissionMode, BuiltinAgentId } from '@shared/agents/config'
+import { agentConfig, supportsSessionIdFlag } from '@shared/agents/config'
+import { assembleLaunchCommand } from '@shared/agents/launch'
+import { agentEnvSnapshot } from '../lib/agentEnv'
+import { uuid } from '@renderer/lib/uuid'
+import { claudeCliCapsNow } from './permissionMode'
+import { projectLaunchInfoNow } from './projectLaunchInfo'
+import { isAgentEnabled, launchableDefaultAgent } from './agentAvailability'
 import { codexSharedIdentity } from './codexIdentity'
 import { sshHostKey } from '@shared/ssh'
 import { useSettings } from './settings'
 import type { SessionSource } from '../session/session'
 import { supportsWindowsTerminalProfiles } from './terminal-profiles'
 import type { AnnotationRect, AnnotationVariant } from '../lib/annotation'
+import { newUniverseCreationEventId, shopNodeIdForCanvas } from '../../core/universe-shop'
+import { TORRENT_NODE_CATALOG_ENTRY } from '@shared/torrent'
+import { DEFAULT_VIRTUAL_MACHINE_CONFIG } from '@shared/virtual-machine'
+import { TIMER_DEFAULT_DURATION_MS, type TimerNodeData } from '@shared/timer'
+import { createRecoveryGameSnapshot, normalizeRecoveryGameSnapshot, type RecoveryGameSnapshot } from '@shared/recovery-game'
+import { CLOUDFLARE_DEFAULT_INTENT, type CloudflarePortableIntent } from '@shared/cloudflare-core-managers'
 
 // Re-exported so Canvas (and anything else in the renderer) keeps importing it from here, while the
 // single implementation lives in src/shared and is shared with the relay host + the canvas-sync
 // reflector.
 export { applyCanvasMutation } from '@shared/canvas-mutations'
 import { acceptNewInboundNode, sanitizeInboundNode } from '@shared/node-exec'
+import { newCreationEventId } from '@shared/node-catalog'
 
 /** Preset color palette — macOS system colors (dark mode). */
 export const NODE_COLORS = [
@@ -53,10 +88,20 @@ export const WORKTREE_GROUP_SIZE = { width: 760, height: 540 }
 const EDITOR_SIZE = { width: 660, height: 460 }
 const DIFF_SIZE = { width: 860, height: 500 }
 const DINO_SIZE = { width: 600, height: 200 }
+const RECOVERY_GAME_SIZE = { width: 540, height: 620 }
 const VIDEO_SIZE = { width: 640, height: 420 }
+const PHOTO_SIZE = { width: 560, height: 440 }
+const GALLERY_SIZE = { width: 760, height: 520 }
+const WILD_DIM_SUM_SIZE = { width: 560, height: 560 }
 const WEB_SIZE = { width: 720, height: 520 }
 const BROWSER_SIZE = { width: 800, height: 560 }
 const NATIVE_LOOP_SIZE = { width: 340, height: 280 }
+const SHOP_SIZE = { width: 480, height: 420 }
+export const TORRENT_SIZE = { width: 620, height: 520 }
+export const CLOUDFLARE_CORE_MANAGERS_SIZE = { width: 760, height: 680 }
+const LINUX_VM_SIZE = { width: 760, height: 560 }
+const TIMER_SIZE = { width: 380, height: 360 }
+const ALARM_SIZE = { width: 380, height: 360 }
 /** Fallback bounding box `flowToNodeStates` uses if an annotation node somehow has no live
  *  width/height at all (every production creation path draws a real rect — see createAnnotationNode
  *  — so this is a defensive floor, matching how every other kind gets a fallback in `sizeFor`). */
@@ -80,6 +125,8 @@ export const COLLAPSED_HEIGHT = 40
 
 /** User data carried in the React Flow node's data field. */
 export interface NodeData {
+  /** Immutable creation event key. Hydration reads it but never mints a replacement event. */
+  creationEventId?: string
   /** A live canvas object that was never asked to survive the session — today only a browser
    *  popup. `flowToNodeStates` drops it, so it is absent from project.json, the SSH mirror and the
    *  export archive alike; the node's own "Keep" action clears the flag to promote it. */
@@ -107,8 +154,24 @@ export interface NodeData {
   loopNextRunAt?: number
   loopLastRunAt?: number
   loopTargetIds?: string[]
+  /** Alarm Clock node intent and machine-local planner projection. */
+  alarmSchedule?: { recurrence: AlarmRecurrence; date?: string; time: string; weekdays?: number[]; monthDay?: number }
+  alarmTimeZone?: string
+  alarmEnabled?: boolean
+  alarmSnoozeMinutes?: number
+  alarmSoundEnabled?: boolean
+  alarmNarratorEnabled?: boolean
+  alarmNextOccurrenceAt?: number
+  alarmHistory?: AlarmOccurrence[]
+  /** Agent nodes only: when true, this node's subagent/loop fan-out cards are hidden. */
+  hideFanout?: boolean
   /** Expanded height to restore when un-collapsing (kept out of the persisted size). */
   expandedHeight?: number
+  /**
+   * Set while the node is maximized to the viewport (issue #399): the ROOT-space rect the
+   * restore toggle gives back. Persisted — see CanvasNodeState.premaxRect.
+   */
+  premaxRect?: { x: number; y: number; width: number; height: number }
   /** One-shot command run once when the terminal first opens (not persisted). */
   initialCommand?: string
   /**
@@ -127,6 +190,9 @@ export interface NodeData {
   pendingLaunchError?: string
   /** Whether a retry may mint a new id (`confirmed`) or must query the same host ledger (`unknown`). */
   pendingLaunchErrorKind?: 'confirmed' | 'unknown'
+  /** Ownership of the displayed pending-launch error, so authored recovery copy never gets
+   * accidentally treated as an external diagnostic merely because both are strings. */
+  pendingLaunchErrorOwnership?: 'authored' | 'external-factual'
   /**
    * Transient respawn trigger: bumping this number tears down a terminal node's session and
    * recreates it (used to move an existing terminal into a worktree cwd). Not persisted —
@@ -142,7 +208,13 @@ export interface NodeData {
   terminalProfileId?: string
   cwd?: string
   text?: string
+  /** sticky-only: last canvas-control `sticky` write (when / by which agent node). Cleared on a
+   *  hand edit — the stamp means "an agent synced this", not "last touched". */
+  textUpdatedAt?: number
+  textUpdatedBy?: string
   filePath?: string
+  /** Wild dim sum only: validated portable selection from the public catalog. */
+  wildDimSumDish?: PublicDimSumSelection
   /**
    * editor/diff-only: true once this node's `filePath` was confirmed gone — e.g. a worktree
    * that contained it was removed (`displacedByWorktree` in @shared/worktree sweeps these up
@@ -163,22 +235,68 @@ export interface NodeData {
   browserTabs?: BrowserTab[]
   /** Browser-only: which `browserTabs[].id` is currently shown. Undefined = the first tab. */
   browserActiveTabId?: string
+  /**
+   * browser-only: the Electron session partition for this <webview>. Set ONCE at creation for an
+   * AGENT-opened node (`agentBrowserPartition`, `persist:nt-agent-browser-<projectId>`) and never
+   * mutated — [MEASURED, Electron 42.8.1] `partition` is honoured only at attach. Absent (undefined)
+   * for a USER-opened node, which keeps the default session (no migration, no lost logins). Carried
+   * through persistence untouched on Server Edition / mobile, where a browser node has no <webview>.
+   */
+  partition?: string
+  /**
+   * browser/web-only, NEVER persisted: this node object is a background KEEP-ALIVE GHOST — a
+   * `display:none` stand-in merged into the `<ReactFlow>` prop so the `<webview>` of a project the
+   * user switched away from stays mounted (its guest process dies on DOM detach). Ghosts live only
+   * in `state/webviewKeepAlive.ts` pool entries; Canvas state, persistence, undo and the wire never
+   * hold one. The surfaces read it to route their callbacks at the pool instead of React Flow.
+   */
+  ghost?: boolean
   diffStaged?: boolean
   commitOid?: string
   /** dino-only: best score reached in the T-Rex Runner game. */
   highScore?: number
+  /** recovery-game-only: bounded portable progress. */
+  recoveryGame?: RecoveryGameSnapshot
   /** service-kinds only: the display name the user gave this manager. See `CanvasNodeState`. */
   serviceLabel?: string
+  gitlabHostingConfig?: GitLabHostingConfig
+  /** Nextcloud AIO safe deployment intent; live Docker bindings remain outside project data. */
+  nextcloudAioConfig?: import('@shared/nextcloud-aio').NextcloudAioConfig
+  /** Cloudflare manager safe intent; local credential and provider state never enters project data. */
+  cloudflareCoreIntent?: CloudflarePortableIntent
+  /** Access, Zero Trust, Workers, Pages, R2, D1 and Queues intent; account state stays local. */
+  cloudflareZeroTrustIntent?: import('@shared/cloudflare-zero-trust').CloudflarePortableIntent
+  homeAssistantIntent?: HomeAssistantNodeIntent
+  /** Safe ownership metadata for a special-universe Shop node. */
+  universeCanvasId?: string
+  universeScope?: 'multiverse' | 'aws-universe'
+  /** The Shop is permanently owned by its universe canvas. */
+  nonDeletable?: boolean
+  /** Last catalog choice is safe user intent only, not an execution or provider binding. */
+  shopSelection?: string
+  /** Portable Linux ISO VM intent and machine-local asset bindings. */
+  virtualMachineConfig?: import('@shared/virtual-machine').VirtualMachineConfig
+  virtualMachineLocalPaths?: import('@shared/virtual-machine').VirtualMachineLocalPaths
   /** service-kinds only, MACHINE-LOCAL: where this node reaches its service. Stripped from the
    *  shared document and from inbound peers; see shared/node-exec.ts. */
   serviceConnection?: ServiceConnection
+  /** Safe torrent magnet intent shared with the canvas. */
+  torrentMagnet?: string
   /** nsis-only, GIT-SHARED: the installer's description. See `NsisSpec`. */
   nsisSpec?: NsisSpec
   /** nsis-only, MACHINE-LOCAL: absolute source/license/icon paths on this machine. Stripped
    *  from the shared document and from inbound peers; see shared/node-exec.ts. */
   nsisLocalPaths?: NsisLocalPaths
+  /** calendar-only, portable selection intent; local cache and credentials are never here. */
+  calendarConfig?: CalendarNodeConfig
+  /** Home Assistant control portable intent. Local connection state belongs to the host service. */
+  homeAssistantControlConfig?: HomeAssistantControlConfig
+  /** Home Assistant sensor-only portable entity and display intent. */
+  homeAssistantSensorConfig?: HomeAssistantSensorConfig
   /** Which agent runs in this terminal node (claude/codex/gemini/custom). */
   agentId?: AgentId
+  /** Model selected for this node through the shared model gateway. */
+  agentModel?: string
   /**
    * Claude nodes only: the managed Claude account (config-dir isolated) this node runs under.
    * Persisted so cold-restore resume reads the transcript from the right account dir.
@@ -224,10 +342,11 @@ export interface NodeData {
 /** React Flow node type string mirrors the persisted NodeKind. */
 export type CanvasNode = Node<NodeData, NodeKind>
 
-/** Single-quote a string for safe use as one shell argument (POSIX). */
-export function shellSingleQuote(s: string): string {
-  return `'${s.replace(/'/g, `'\\''`)}'`
-}
+/** Single-quote a string for safe use as one shell argument (POSIX).
+ *  Imported from `@shared/shell-quote` so the renderer and the shared command-assembly layer share
+ *  one definition, and re-exported so the renderer keeps its historical import path. */
+import { shellSingleQuote } from '@shared/shell-quote'
+export { shellSingleQuote }
 
 /**
  * 8 hex characters of CSPRNG — the unique tail of every node and project id.
@@ -395,6 +514,121 @@ export function createSshTerminalNode(
   }
 }
 
+/** The user's OWN global launch-command override, with no project layered over it. */
+function globalLaunchOverride(agentId: AgentId): string | undefined {
+  const raw = useSettings.getState().settings.agentLaunchCommands?.[agentId as BuiltinAgentId]
+  const cmd = typeof raw === 'string' ? raw.trim() : ''
+  return cmd || undefined
+}
+
+/**
+ * Projects whose SHARED `agents` family we have already asked the human to trust this session.
+ * The ask is fire-and-forget from a synchronous launch path (a launch is never blocked on it), so
+ * without this every single launch in an untrusted project would re-raise the dialog. Once per
+ * project is enough: an approval makes main fire `projectSettings.onTrustChanged`, Canvas
+ * invalidates that project's launch-info cache, and the NEXT launch reads the fresh verdict and
+ * picks the shared launchCmd up on its own.
+ */
+const agentsTrustAsked = new Set<string>()
+
+/** Test seam: forget which projects have already been asked (see `agentsTrustAsked`). */
+export function resetLaunchTrustAsksForTests(): void {
+  agentsTrustAsked.clear()
+}
+
+/** Raise the `agents` trust prompt for a project, at most once per project per session. Never
+ *  awaited and never allowed to throw: this runs inside a synchronous launch resolution, and the
+ *  answer (if any) arrives via the trust-changed invalidation, not via this call. */
+function askAgentsTrustOnce(projectId: string): void {
+  if (agentsTrustAsked.has(projectId)) return
+  agentsTrustAsked.add(projectId)
+  try {
+    // The preload leg REJECTS when the main handler throws (the ws-bridge leg maps that to false),
+    // so the `.catch` is load-bearing — an unhandled rejection here would surface as a renderer
+    // error on a path whose whole contract is "the launch does not care about the answer".
+    void window.nodeTerminal?.projectSetup?.requestTrust(projectId, 'agents').catch(() => {})
+  } catch {
+    // No bridge leg at all (older relay host, a stub) — the launch proceeds on the global value.
+  }
+}
+
+/**
+ * The launch-command override for an agent, or undefined when nothing overrides the bare CLI.
+ * This is the ONE place launch commands are read; every launch site (new node, cold restore,
+ * in-place restart, hibernation wake, transcript resume) either calls this or receives its result
+ * — shared/agents/config.ts cannot read settings (layering), so the renderer resolves the override
+ * and passes it down (`resumeCommand`'s `base` param).
+ *
+ * Three layers, most specific first, with `projectId` naming the project that OWNS the node:
+ *  1. the project's LOCAL `.nodeterm/settings.json` `agents.launchCmd` — this machine's own file,
+ *     the user's own typing, never gated;
+ *  2. the project's git-SHARED `agents.launchCmd`, but ONLY while that family is trusted at this
+ *     location. Falling PAST an untrusted one raises the trust prompt (once per project, see
+ *     `askAgentsTrustOnce`) and resolves on the layer below meanwhile — a launch is never blocked,
+ *     never delayed, and never runs a shared command the human has not seen;
+ *  3. the user's global Settings → Agents → Launch commands entry (builtin-keyed: custom agents
+ *     index past it to undefined — they already own their launchCmd).
+ *
+ * SCOPE: the project's launchCmd applies ONLY to the agent that project ITSELF names —
+ * `projectDefaultAgent`, its own valid `agents.defaultAgentId`, never the global default. The
+ * family holds one launchCmd, not one per agent id, and the panel's copy is "Overrides how the
+ * default agent is launched", so it needs an agent to be about; the pair is what makes it
+ * meaningful. Falling back to the GLOBAL default here would have been a cross-agent misfire that
+ * the builtin-KEYED global map made structurally impossible: a doc shipping only `launchCmd` would
+ * follow whatever this user's mutable global default happens to be, so `nix develop -c claude`
+ * could end up typed into a codex node, differently on each teammate's machine, and could change
+ * under a node on cold restore after an unrelated Settings change.
+ *
+ * So an UNPAIRED launchCmd (a project that sets no valid `defaultAgentId` of its own) is a dead
+ * setting: never consumed for any agent, and never prompts for trust. The Agents panel says so
+ * on the row itself (`ProjectSettingsFamilies.tsx`) rather than leaving it silently inert.
+ *
+ * Fails OPEN in the ordinary sense: no project id, or no warm snapshot for it
+ * (`projectLaunchInfoNow` is synchronous by design — see its module doc), resolves layer 3 alone,
+ * byte-identical to the behavior before per-project settings existed.
+ */
+export function agentLaunchOverride(agentId: AgentId, projectId?: string): string | undefined {
+  const global = globalLaunchOverride(agentId)
+  if (!projectId) return global
+  const info = projectLaunchInfoNow(projectId)
+  if (!info) return global
+  const entry = info.resolved.agents.launchCmd
+  if (!entry) return global
+  // Scope check BEFORE anything else: an agent this project does not name consumes nothing here,
+  // so it must not even raise a trust prompt about a value it would never use.
+  const target = projectDefaultAgent(projectId, useSettings.getState().settings)
+  if (!target || target !== agentId) return global
+  // `.nodeterm/settings.json` is hand-editable, git-shared, hostile input (see @shared/project-settings):
+  // a non-string that slipped through is simply not a launch command.
+  const cmd = typeof entry.value === 'string' ? entry.value.trim() : ''
+  if (!cmd) return global
+  // LITERAL ONLY — the same rule the project's ENV already obeys (`ProjectSpawnOverrides.env`:
+  // "`${env:VAR}` is NOT expanded here"), and for the same reason. The assembler expands
+  // `${env:…}` in whatever `launchCmdOverride` it is handed (`shared/agents/launch.ts`
+  // `expandedProgram`) — a CUSTOM-AGENT feature, where the value is the local user's own typing and
+  // Settings previews the expansion. Inheriting it for a project document would turn a hand-edited,
+  // git-shared settings.json into a read of THIS machine's environment, laundered past a consent
+  // dialog that rendered the token verbatim. Nor is honoring it literally an option: `${env:X}` is a
+  // bad substitution at bash/zsh, so the typed line would fail anyway. So a project launchCmd
+  // carrying a token is not a launch command — the same verdict, and the same fall-through, as the
+  // non-string case above. Checked BEFORE the trust branch so a value that can never be consumed
+  // never raises a question about itself, exactly like the out-of-scope agent check.
+  //
+  // BOTH halves, local as well as shared — the deliberate overreach `isReservedSpawnEnvKey` explains
+  // for the env list: one auditable rule beats a provenance check at every launch. The cost is that
+  // a local overlay cannot use expansion either; the global Settings → Agents override (which does
+  // expand, and is previewed) is where a wrapper that needs `${env:…}` belongs.
+  if (cmd.includes('${env:')) return global
+  if (entry.source === 'local') return cmd
+  // NOTE (carried from Task 2's review): the trust-changed invalidation this ask relies on is
+  // keyed by projectId while the grant itself is keyed by LOCATION — two projects pointing at the
+  // same folder each keep their own cached verdict, so the sibling stays cold until its own
+  // refresh. Known and deliberate; the cost is one extra prompt, never a wrong grant.
+  if (info.trusted.agents) return cmd
+  askAgentsTrustOnce(projectId)
+  return global
+}
+
 /**
  * The user's launch-command override for a builtin agent (Settings → Agents → Launch commands),
  * or undefined when unset/blank. This is the ONE place the setting is read; every launch site
@@ -422,6 +656,50 @@ export function agentLaunchOverride(agentId: AgentId): string | undefined {
  */
 export function claudeLaunchCommand(): string {
   return agentLaunchOverride('claude') ?? 'claude'
+ * `projectId` layers that project's own launchCmd over the global one (`agentLaunchOverride`).
+ */
+export function claudeLaunchCommand(projectId?: string): string {
+  return agentLaunchOverride('claude', projectId) ?? 'claude'
+}
+
+/**
+ * The agent THIS PROJECT names as its own default (`agents.defaultAgentId`), or undefined when it
+ * names none — deliberately WITHOUT any global fallback, so a caller can tell "the project chose
+ * this agent" from "nobody chose, so the app's default applies". `agentLaunchOverride`'s scoping
+ * turns on exactly that difference; `resolveNewNodeAgent` adds the fallback on top.
+ *
+ * VALIDATED against what this machine can actually launch — a known builtin, or a custom agent the
+ * user still has — and against `disabledAgents`: `.nodeterm/settings.json` is git-shared and
+ * hand-editable, so it may name an agent that was removed, never existed, or that this user
+ * deliberately switched off, and none of those may become the id typed into a shell
+ * (`resolveAgent`'s unknown-id fallback launches the id itself — the same failure
+ * `launchableDefaultAgent` exists to prevent for the global setting).
+ *
+ * Deliberately NOT trust-gated: naming which of the user's own installed agents to open is not
+ * executable content (`projectTrustContent('agents', …)` hashes launchCmd + env, not this), and
+ * every id it can select resolves to a command the user already configured themselves.
+ */
+function projectDefaultAgent(
+  projectId: string | undefined,
+  settings: Settings
+): AgentId | undefined {
+  const raw = projectId ? projectLaunchInfoNow(projectId)?.resolved.agents.defaultAgentId : undefined
+  const id = typeof raw?.value === 'string' ? raw.value.trim() : ''
+  if (!id) return undefined
+  const known = !!agentConfig(id) || settings.customAgents.some((c) => c.id === id)
+  return known && isAgentEnabled(settings, id) ? id : undefined
+}
+
+/**
+ * The agent a NEW node launches: an explicit pick always wins, then the project's own validated
+ * `agents.defaultAgentId` (`projectDefaultAgent`), then the global default.
+ */
+export function resolveNewNodeAgent(
+  explicit: AgentId | undefined,
+  projectId: string | undefined,
+  settings: Settings
+): AgentId {
+  return explicit ?? projectDefaultAgent(projectId, settings) ?? launchableDefaultAgent(settings)
 }
 
 /** Fallback color for custom / unknown agents that have no config-provided color. */
@@ -475,15 +753,32 @@ export function sshAccountsHint(
     : null
 }
 
-/** Account for a NEW Claude node: explicit pick, else the project default, else system. */
+/**
+ * Account for a NEW Claude node: explicit pick, else the project default, else system.
+ *
+ * `explicit === null` is an EXPLICIT "System account" pick and short-circuits past the project
+ * default. Before it existed, the submenu row wearing the user's system email launched the
+ * PROJECT DEFAULT account — the clearest "picked X, ran as Y" in issue #419 — because "no
+ * account passed" and "system picked" were the same value.
+ *
+ * Validation runs against the accounts ELIGIBLE for this project (`accountsForProject`), not the
+ * raw list, mirroring what every picker offers. The raw list also holds `pending` rows (their dir
+ * exists but no login lives in it yet) and accounts pinned to ANOTHER machine's host (their dir
+ * exists only over there) — a `defaultAccountId` pointing at either used to be stamped onto the
+ * node, whose spawn then fell into the missing/empty-dir fallback and silently ran under a
+ * different identity (#419 again). Ineligible ⇒ undefined ⇒ the honest system default.
+ */
 export function resolveNewNodeAccount(
-  explicit: string | undefined,
-  project: { defaultAccountId?: string } | undefined,
+  explicit: string | null | undefined,
+  project:
+    | { defaultAccountId?: string; ssh?: { server: { host: string; user: string } } }
+    | undefined,
   accounts: ClaudeAccount[]
 ): string | undefined {
+  if (explicit === null) return undefined
   const id = explicit ?? project?.defaultAccountId
   // A stale default (account since removed) must not stamp dead ids onto new nodes.
-  return id && accounts.some((a) => a.id === id) ? id : undefined
+  return id && accountsForProject(accounts, project).some((a) => a.id === id) ? id : undefined
 }
 
 /**
@@ -540,6 +835,22 @@ export function createAgentNode(
       ? `${baseCmd} --prompt ${promptArg}`
       : `${baseCmd} ${promptArg}`
     : baseCmd
+  permissionMode?: AgentPermissionMode,
+  projectId?: string,
+  /** Per-node model override for a MODEL_SWITCH_CAPABLE agent (claude/codex/copilot, base-resolved).
+   *  Applied through the effective base harness via `withAgentModel` (a no-op for a non-capable
+   *  agent, so passing a model for one is harmless — it's simply not appended). Persisted as
+   *  `data.agentModel` so cold-restore and later restarts keep the model. Trails `projectId`: every
+   *  existing caller passes that ninth argument, so the model is the one that had to move. */
+  model?: string
+): CanvasNode {
+  const { label, color } = resolveAgent(agentId)
+  // The launch-command override (this project's `.nodeterm/settings.json` first, then Settings →
+  // Agents → Launch commands — see `agentLaunchOverride`) replaces the bare CLI in the assembled
+  // command. Threaded into the shared assembler below as `launchCmdOverride` so fresh launch,
+  // cold-restore resume and in-place restart all pick it up identically. Custom agents already own
+  // their `launchCmd`, so the global layer returns undefined for them.
+  const launchCmdOverride = agentLaunchOverride(agentId, projectId)
   // The session id is DECIDED here rather than learned from a hook later, so this node always has
   // something to resume with — see SESSION_ID_CAPABLE for the failure this closes. `uuid()` (not
   // crypto.randomUUID) because the Server Edition serves plain HTTP on a LAN, where randomUUID is
@@ -587,6 +898,54 @@ export function createAgentNode(
     ...(permissionMode ? { permissionMode } : {}),
     ...(mintedSessionId ? { newSessionId: mintedSessionId } : {})
   }
+  // learning its id from hooks exactly as before. Inheritance-aware: a custom agent with
+  // baseAgent:'claude' mints an id too (capabilityAgentId resolves it to claude).
+  const cliCaps = claudeCliCapsNow()
+  const sessionIdFlagSupported = supportsSessionIdFlag(agentId, cliCaps.sessionIdFlag)
+  const mintedSessionId = sessionIdFlagSupported ? uuid() : undefined
+  // Command assembly is delegated to the ONE shared builder (src/shared/agents/launch.ts), used by
+  // fresh launch AND cold-restore resume, so a custom agent's baseAgent/args/expansion are applied
+  // identically in both paths. ${env:...} in launchCmd/args expands against the boot-time env
+  // snapshot (lib/agentEnv.ts) — the SAME object the Settings preview expands against, so the
+  // typed line is the previewed line. Env-var VALUES (the env map) are separate: pty-manager
+  // injects them as process env main-side, never into the typed command. For a builtin with no
+  // custom args this is byte-identical to the old hand-built command line.
+  const customAgent = agentConfig(agentId)
+    ? undefined
+    : useSettings.getState().settings.customAgents.find((c) => c.id === agentId)
+  const { command: initialCommand, missingEnv } = assembleLaunchCommand(
+    {
+      agentId,
+      customAgent,
+      initialPrompt,
+      permissionMode,
+      sessionId: mintedSessionId,
+      sessionIdFlagSupported,
+      // A per-builtin launch-command override (Settings → Agents → Launch commands) replaces the
+      // program in the assembled line; undefined for a builtin with no override and for custom
+      // agents (they own their launchCmd). Wins over the shared-identity launcher, like a custom
+      // launchCmd — an explicit "launch it exactly like this".
+      launchCmdOverride,
+      // A SHARED_IDENTITY_CAPABLE agent (codex) launches through its managed launcher when this
+      // machine actually has one — otherwise the bare CLI, byte-identical to before. `codexSharedIdentity`
+      // folds in the SSH answer (a host has no launcher installed yet, so a remote node stays bare).
+      sharedIdentity: codexSharedIdentity(ssh),
+      // A model picked at creation (e.g. Transfer-to-agent-with-model). `withAgentModel` appends
+      // `--model <value>` for a switch-capable agent and no-ops otherwise, so the line stays
+      // byte-identical when no model is chosen.
+      model
+    },
+    // The boot-time snapshot of the desktop env (empty on browser/relay by design, where the
+    // missing-env warning below is the honest outcome — the same markers the preview shows).
+    agentEnvSnapshot()
+  )
+  if (missingEnv.length) {
+    // A missing var in the typed command (launchCmd/args) would launch with a blank — surface it,
+    // matching the preview. Env-var VALUES (the env map) are merged main-side and warned there.
+    console.warn(
+      `[custom-agent] ${label}: ${missingEnv.map((m) => '${env:' + m + '}').join(', ')} unset in launch command — expanded to empty.`
+    )
+  }
   const size = terminalNodeSize()
   const terminalProfileId = terminalProfileForNewNode(ssh, options)
   return {
@@ -609,6 +968,18 @@ export function createAgentNode(
       // a cold restore months later still knows which conversation this node owns.
       ...(mintedSessionId ? { agentSessionId: mintedSessionId } : {}),
       ...(accountId && agentId === 'codex' ? { codexAccountId: accountId } : {}),
+      // Managed accounts bind to the builtin Claude and Codex agents (S6) — never to another
+      // builtin, and never to a custom agent even when it inherits one of those bases. A custom
+      // agent inheriting claude/codex is still its own agent; account binding stays with the
+      // builtin the account picker offered it for. The Codex spawn side honours `data.accountId`
+      // (resolveCodexSessionScope), the same field Claude uses.
+      ...(accountId && (agentId === 'claude' || agentId === 'codex') ? { accountId } : {}),
+      // Persisted alongside the node (unlike initialCommand, which is consumed on first open), so
+      // a cold restore months later still knows which conversation this node owns.
+      ...(mintedSessionId ? { agentSessionId: mintedSessionId } : {}),
+      // A model chosen at creation (Transfer-to-agent-with-model). Persisted so cold-restore and
+      // later restarts keep it; `withAgentModel` re-applies it on relaunch. Only stamped when set.
+      ...(model ? { agentModel: model } : {}),
       cwd: ssh ? ssh.remoteCwd : cwd,
       initialCommand,
       agentLaunchIntent,
@@ -720,6 +1091,63 @@ export function createAccountLoginNode(
     title: 'Claude login',
     accountId,
     accountLogin: true,
+    initialCommand: 'claude /login'
+  }
+  return node
+}
+
+/**
+ * Terminal node used to log a new managed CODEX account in — the sibling of
+ * `createAccountLoginNode`. The session runs under that account's `CODEX_HOME` (S6 §2.1 env
+ * injection, gated by `needsCodexAccountScope` asking whether the id is a managed Codex one), so
+ * `codex login` writes `auth.json` into the managed home rather than the user's system `~/.codex`.
+ * That file is exactly what `codexAccounts.waitLogin` polls for, so without this node the add flow
+ * waits on a credential nothing is writing (issue #346).
+ *
+ * A plain terminal (not an agent node), like the Claude one: no session-name tracking, and the
+ * agent-less shape is what keeps the node out of the Codex AGENT paths while still being scoped.
+ * Local only — `codexAccounts.add()` mints on THIS machine, so there is no ssh binding to pass.
+ */
+export function createCodexAccountLoginNode(
+  accountId: string,
+  index: number,
+  center?: { x: number; y: number }
+): CanvasNode {
+  const node = createTerminalNode(index, undefined, center)
+  node.data = {
+    ...node.data,
+    title: 'Codex login',
+    accountId,
+    initialCommand: 'codex login'
+  }
+  return node
+}
+
+/**
+ * Terminal node that SWITCHES the system (~/.claude) Claude identity — the usage popover's
+ * "Switch account" action (issue #420). Runs `claude /login` with NO `accountId`, so the spawn
+ * env is bit-for-bit the plain-terminal one and the OAuth writes the system `~/.claude` —
+ * which is the point: every system-scope session follows the new org, exactly as a hand-typed
+ * `claude /login` would make them. Deliberately a SEPARATE factory from
+ * `createAccountLoginNode`: that one REQUIRES an accountId because config-dir scoping is its
+ * purpose, and its 'Claude login' title is the durable signature `isAccountLoginNode` keys on
+ * to destroy login nodes together with their removed account — a sweep this node must never be
+ * caught by (both destroy paths also gate on accountId equality, and this node has none).
+ *
+ * The docblock hazard on `isAccountLoginNode` — a respawned `claude /login` overwriting the
+ * system identity — is only a hazard when it happens UNASKED. Here the overwrite is the feature,
+ * and "once" is structural rather than promised: `initialCommand` is consumed on first mount and
+ * never serialized (`flowToNodeStates` drops it), so after an app restart or a machine reboot
+ * this node is an inert plain terminal, not a login prompt nobody requested.
+ *
+ * Local only, on purpose: on an SSH project a system login would rewrite THAT host's ~/.claude,
+ * so the popover does not offer the action there (see UsageIndicator).
+ */
+export function createSystemLoginNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  const node = createTerminalNode(index, undefined, center)
+  node.data = {
+    ...node.data,
+    title: 'Switch Claude account',
     initialCommand: 'claude /login'
   }
   return node
@@ -847,6 +1275,31 @@ export function createVideoNode(
   }
 }
 
+export function createPhotoNode(index: number, filePath: string, center?: { x: number; y: number }, sshFs?: boolean): CanvasNode {
+  return {
+    id: nextId('photo'), type: 'photo', position: placeAt(center, index, PHOTO_SIZE.width, PHOTO_SIZE.height),
+    width: PHOTO_SIZE.width, height: PHOTO_SIZE.height, style: { width: PHOTO_SIZE.width, height: PHOTO_SIZE.height },
+    data: { title: filePath.split(/[\\/]/).pop() || 'photo', color: '#4db6ac', group: null, filePath, ...(sshFs ? { sshFs: true } : {}) }
+  }
+}
+
+export function createGalleryNode(index: number, assets: MediaAssetReference[] = [], center?: { x: number; y: number }): CanvasNode {
+  return {
+    id: nextId('gallery'), type: 'gallery', position: placeAt(center, index, GALLERY_SIZE.width, GALLERY_SIZE.height),
+    width: GALLERY_SIZE.width, height: GALLERY_SIZE.height, style: { width: GALLERY_SIZE.width, height: GALLERY_SIZE.height },
+    data: { title: 'Gallery', color: '#ff9f0a', group: null, mediaAssets: assets, mediaActiveAssetId: assets[0]?.assetId }
+  }
+}
+
+export function createWildDimSumNode(index: number, selection?: PublicDimSumSelection, center?: { x: number; y: number }): CanvasNode {
+  const dish = normalizePublicDimSumSelection(selection)
+  return {
+    id: nextId('wild-dim-sum'), type: 'wild-dim-sum', position: placeAt(center, index, WILD_DIM_SUM_SIZE.width, WILD_DIM_SUM_SIZE.height),
+    width: WILD_DIM_SUM_SIZE.width, height: WILD_DIM_SUM_SIZE.height, style: { width: WILD_DIM_SUM_SIZE.width, height: WILD_DIM_SUM_SIZE.height },
+    data: { title: dish ? `Wild dim sum · ${dish.name.en}` : 'Wild dim sum', color: '#f59e0b', group: null, ...(dish ? { wildDimSumDish: dish } : {}) }
+  }
+}
+
 /** Creates a web (webview) node showing a live URL or a local html file. */
 export function createWebNode(
   index: number,
@@ -873,7 +1326,15 @@ export function createWebNode(
   }
 }
 
-/** Creates a navigable browser node (Electron <webview>) starting at `url` ('' = blank). */
+/**
+ * Creates a navigable browser node (Electron <webview>) starting at `url` ('' = blank).
+ *
+ * `partition` is set ONLY for an AGENT-opened node (`open-browser`), to its per-project session jar
+ * (`agentBrowserPartition`). A USER-opened node passes none and keeps the default session, unchanged
+ * — the zero-migration path, so nobody loses a login on upgrade. It is written once here and never
+ * mutated: [MEASURED, Electron 42.8.1] `<webview partition>` is honoured only at attach, so a later
+ * change would be a silent no-op anyway (docs/superpowers/probes/2026-08-browser-partition.md).
+ */
 export function createBrowserNode(
   index: number,
   url: string,
@@ -886,6 +1347,7 @@ export function createBrowserNode(
    *  ordinary persisted node. See `flowToNodeStates`, which is where the promise is actually
    *  kept. */
   temporary?: boolean
+  partition?: string
 ): CanvasNode {
   const title = url ? url.replace(/^https?:\/\//, '').slice(0, 40) : 'Browser'
   return {
@@ -903,6 +1365,7 @@ export function createBrowserNode(
       ...(ownerNodeId ? { browserOwnerNodeId: ownerNodeId } : {}),
       ...(profileId ? { browserProfileId: profileId } : {}),
       ...(temporary ? { temporary: true } : {})
+      ...(partition ? { partition } : {})
     }
   }
 }
@@ -937,6 +1400,9 @@ export function createDiffNode(
 
 /** Creates a new sticky note. */
 const AUTHENTICATOR_SIZE = { width: 340, height: 260 }
+const CALENDAR_SIZE = { width: 620, height: 520 }
+const HOME_ASSISTANT_CONTROL_SIZE = { width: 620, height: 620 }
+const HOME_ASSISTANT_SENSOR_SIZE = { width: 660, height: 560 }
 const NSIS_SIZE = { width: 460, height: 520 }
 
 /**
@@ -962,6 +1428,119 @@ export function createAuthenticatorNode(index: number, center?: { x: number; y: 
   }
 }
 
+/** Creates the permanent catalog surface for a special-universe child canvas. */
+export function createShopNode(
+  canvasId: string,
+  scope: 'multiverse' | 'aws-universe',
+  index = 0,
+  center?: { x: number; y: number },
+  options: { existingNodeIds?: readonly string[]; creationEventId?: string; universeDepth?: number } = {}
+): CanvasNode {
+  if (typeof options.universeDepth !== 'number' || !Number.isInteger(options.universeDepth) || options.universeDepth < 1 || (scope === 'multiverse' && options.universeDepth > 8)) {
+    throw new Error('A Shop needs a valid persisted universe depth.')
+  }
+  const id = shopNodeIdForCanvas(canvasId, options.existingNodeIds ?? [])
+  return {
+    id,
+    type: 'shop',
+    position: placeAt(center, index, SHOP_SIZE.width, SHOP_SIZE.height),
+    width: SHOP_SIZE.width,
+    height: SHOP_SIZE.height,
+    style: { width: SHOP_SIZE.width, height: SHOP_SIZE.height },
+    draggable: false,
+    selectable: true,
+    data: {
+      title: 'Shop',
+      color: '#6750a4',
+      group: null,
+      universeCanvasId: canvasId,
+      universeScope: scope,
+      universeDepth: options.universeDepth,
+      nonDeletable: true,
+      tags: ['universe-shop', scope],
+      creationEventId: options.creationEventId ?? newUniverseCreationEventId()
+/** Creates a torrent downloader node. Magnet intent is safe project content; task state, source
+ * file paths, destinations and runtime handles remain on the owning machine. */
+export function createTorrentNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  return {
+    id: nextId('torrent'),
+    type: 'torrent',
+    position: placeAt(center, index, TORRENT_SIZE.width, TORRENT_SIZE.height),
+    width: TORRENT_SIZE.width,
+    height: TORRENT_SIZE.height,
+    style: { width: TORRENT_SIZE.width, height: TORRENT_SIZE.height },
+    data: {
+      title: TORRENT_NODE_CATALOG_ENTRY.label,
+      color: NODE_COLORS[(index + 2) % NODE_COLORS.length],
+      group: null,
+      torrentMagnet: ''
+/** Creates a calendar node with a safe local source as the guided starting point. */
+export function createCalendarNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  return {
+    id: nextId('calendar'),
+    type: 'calendar',
+    position: placeAt(center, index, CALENDAR_SIZE.width, CALENDAR_SIZE.height),
+    width: CALENDAR_SIZE.width,
+    height: CALENDAR_SIZE.height,
+    style: { width: CALENDAR_SIZE.width, height: CALENDAR_SIZE.height },
+    data: {
+      title: 'Calendar',
+      color: NODE_COLORS[index % NODE_COLORS.length],
+      group: null,
+      calendarConfig: { provider: 'local', accountId: null, calendarId: null, timezone: 'local', view: 'agenda', showWeekends: true, cacheEnabled: true }
+    }
+  }
+export function createTimerNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  const data: TimerNodeData = {
+    title: 'Timer', color: NODE_COLORS[index % NODE_COLORS.length], group: null,
+    timerMode: 'countdown', durationMs: TIMER_DEFAULT_DURATION_MS, remainingMs: TIMER_DEFAULT_DURATION_MS,
+    elapsedMs: 0, running: false, paused: false, repeatCount: 0, repeatRemaining: 0,
+    sequence: [], sequenceIndex: 0, lapsMs: [], occurrenceState: 'scheduled', alarmEnabled: true,
+    alarmTone: 'chime', missedCount: 0
+  }
+  return { id: nextId('timer'), type: 'timer', position: placeAt(center, index, TIMER_SIZE.width, TIMER_SIZE.height), width: TIMER_SIZE.width, height: TIMER_SIZE.height, style: { width: TIMER_SIZE.width, height: TIMER_SIZE.height }, data }
+}
+
+/** Creates a root portal card for one AWS-only child canvas. */
+export function createAwsUniversePortalNode(index: number, canvasId: string, title: string, center?: { x: number; y: number }): CanvasNode {
+  const size = NODE_START_SIZE['aws-universe']
+  return {
+    id: nextId('aws-universe'),
+    type: 'aws-universe',
+    position: placeAt(center, index, size.width, size.height),
+    width: size.width,
+    height: size.height,
+    style: { width: size.width, height: size.height },
+    data: {
+      title,
+      color: '#7d5260',
+      group: null,
+      universeCanvasId: canvasId,
+      universeScope: 'aws-universe',
+      universeDepth: 1,
+      tags: ['aws-universe', 'universe-portal']
+    }
+  }
+}
+
+/** Creates an unbound Home Assistant control. Import and creation perform no network request. */
+export function createHomeAssistantControlNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  return {
+    id: nextId('homeassistant-control'),
+    type: 'homeassistant-control',
+    position: placeAt(center, index, HOME_ASSISTANT_CONTROL_SIZE.width, HOME_ASSISTANT_CONTROL_SIZE.height),
+    width: HOME_ASSISTANT_CONTROL_SIZE.width,
+    height: HOME_ASSISTANT_CONTROL_SIZE.height,
+    style: { width: HOME_ASSISTANT_CONTROL_SIZE.width, height: HOME_ASSISTANT_CONTROL_SIZE.height },
+    data: {
+      title: 'Home Assistant control',
+      color: NODE_COLORS[index % NODE_COLORS.length],
+      group: null,
+      homeAssistantControlConfig: { ...DEFAULT_HOME_ASSISTANT_CONTROL_CONFIG }
+    }
+  }
+}
+
 export function createStickyNode(index: number, center?: { x: number; y: number }): CanvasNode {
   return {
     id: nextId('sticky'),
@@ -979,6 +1558,24 @@ export function createStickyNode(index: number, center?: { x: number; y: number 
   }
 }
 
+/** Creates an unbound Home Assistant sensor display. Importing it performs no network action. */
+export function createHomeAssistantSensorNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  return {
+    id: nextId('homeassistant-sensor'),
+    type: 'homeassistant-sensor',
+    position: placeAt(center, index, HOME_ASSISTANT_SENSOR_SIZE.width, HOME_ASSISTANT_SENSOR_SIZE.height),
+    width: HOME_ASSISTANT_SENSOR_SIZE.width,
+    height: HOME_ASSISTANT_SENSOR_SIZE.height,
+    style: { width: HOME_ASSISTANT_SENSOR_SIZE.width, height: HOME_ASSISTANT_SENSOR_SIZE.height },
+    data: {
+      title: 'Home Assistant sensors',
+      color: NODE_COLORS[(index + 4) % NODE_COLORS.length],
+      group: null,
+      homeAssistantSensorConfig: { ...DEFAULT_HOME_ASSISTANT_SENSOR_CONFIG, entities: [] }
+    }
+  }
+}
+
 /**
  * Human-readable name and default title per service kind. One table, so the menu row, the node
  * header and any future palette entry cannot disagree about what a kind is called.
@@ -989,7 +1586,9 @@ export const SERVICE_NODE_LABELS: Record<ServiceNodeKind, string> = {
   proxmox: 'Proxmox',
   gitlab: 'GitLab',
   homeassistant: 'Home Assistant',
-  freepbx: 'FreePBX'
+  freepbx: 'FreePBX',
+  'cloudflare-zero-trust': 'Cloudflare managers',
+  'nextcloud-aio': 'Nextcloud AIO'
 }
 
 /**
@@ -1024,7 +1623,68 @@ export function createServiceNode(
       title: SERVICE_NODE_LABELS[kind],
       color: NODE_COLORS[index % NODE_COLORS.length],
       group: null,
-      serviceLabel: ''
+      serviceLabel: '',
+      ...(kind === 'homeassistant' ? { homeAssistantIntent: { ...DEFAULT_HOME_ASSISTANT_NODE_INTENT } } : {}),
+      ...(kind === 'cloudflare-zero-trust' ? { cloudflareZeroTrustIntent: { schemaVersion: 1, manager: null, operation: null, accountHint: null, resourceHint: null, values: {} } } : {}),
+      ...(kind === 'nextcloud-aio' ? { nextcloudAioConfig: { ...NEXTCLOUD_AIO_DEFAULT_CONFIG } } : {})
+    }
+  }
+}
+
+/** Creates a portable GitLab hosting blueprint. Deployment, context, volumes, and credentials
+ * remain machine-local until the user chooses a guided operation on the node. */
+export function createGitLabHostingNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  const size = { width: 700, height: 620 }
+  return {
+    id: nextId('gitlab-hosting'),
+    type: 'gitlab-hosting',
+    position: placeAt(center, index, size.width, size.height),
+    width: size.width,
+    height: size.height,
+    style: { width: size.width, height: size.height },
+    data: {
+      title: 'GitLab hosting',
+      color: NODE_COLORS[(index + 1) % NODE_COLORS.length],
+      group: null,
+      gitlabHostingConfig: { ...DEFAULT_GITLAB_HOSTING_CONFIG }
+    }
+  }
+}
+
+/** Creates an unbound Cloudflare manager. Only typed safe operation intent is portable. */
+export function createCloudflareCoreManagersNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  return {
+    id: nextId('cloudflare-core-managers'),
+    type: 'cloudflare-core-managers',
+    position: placeAt(center, index, CLOUDFLARE_CORE_MANAGERS_SIZE.width, CLOUDFLARE_CORE_MANAGERS_SIZE.height),
+    width: CLOUDFLARE_CORE_MANAGERS_SIZE.width,
+    height: CLOUDFLARE_CORE_MANAGERS_SIZE.height,
+    style: { width: CLOUDFLARE_CORE_MANAGERS_SIZE.width, height: CLOUDFLARE_CORE_MANAGERS_SIZE.height },
+    data: {
+      title: 'Cloudflare managers',
+      color: '#f38020',
+      group: null,
+      cloudflareCoreIntent: { ...CLOUDFLARE_DEFAULT_INTENT, input: {} },
+      tags: ['cloudflare', 'account', 'zone', 'dns', 'ssl-tls', 'ruleset', 'redirect', 'cache', 'analytics']
+    }
+  }
+}
+
+/** Creates a Linux ISO VM node. The node is a canvas object, not a WSL terminal profile. */
+export function createVirtualMachineNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  return {
+    id: nextId('linux-vm'),
+    type: 'linux-vm',
+    position: placeAt(center, index, LINUX_VM_SIZE.width, LINUX_VM_SIZE.height),
+    width: LINUX_VM_SIZE.width,
+    height: LINUX_VM_SIZE.height,
+    style: { width: LINUX_VM_SIZE.width, height: LINUX_VM_SIZE.height },
+    data: {
+      title: 'Linux ISO VM',
+      color: NODE_COLORS[index % NODE_COLORS.length],
+      group: null,
+      virtualMachineConfig: { ...DEFAULT_VIRTUAL_MACHINE_CONFIG },
+      virtualMachineLocalPaths: {}
     }
   }
 }
@@ -1079,6 +1739,32 @@ export function createNativeLoopNode(index: number, center?: { x: number; y: num
   }
 }
 
+/** Creates a durable Alarm Clock node. Recurring values are wall-clock intent, never fixed offsets. */
+export function createAlarmClockNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  const now = new Date()
+  const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  return {
+    id: nextId('alarm'),
+    type: 'alarm',
+    position: placeAt(center, index, ALARM_SIZE.width, ALARM_SIZE.height),
+    width: ALARM_SIZE.width,
+    height: ALARM_SIZE.height,
+    style: { width: ALARM_SIZE.width, height: ALARM_SIZE.height },
+    data: {
+      title: 'Alarm Clock',
+      color: '#ef9a9a',
+      group: null,
+      alarmSchedule: { recurrence: 'once', date, time: '09:00' },
+      alarmTimeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+      alarmEnabled: false,
+      alarmSnoozeMinutes: 10,
+      alarmSoundEnabled: true,
+      alarmNarratorEnabled: true,
+      alarmHistory: []
+    }
+  }
+}
+
 /** Creates a new dino (T-Rex Runner) game node, seeded with the project's record. */
 export function createDinoNode(
   index: number,
@@ -1097,6 +1783,28 @@ export function createDinoNode(
       color: '#a2a2a2',
       group: null,
       highScore
+    }
+  }
+}
+
+/** Creates the deterministic three-key recovery game without launching any external operation. */
+export function createRecoveryGameNode(
+  index: number,
+  center?: { x: number; y: number },
+  recoveryGame: RecoveryGameSnapshot = createRecoveryGameSnapshot()
+): CanvasNode {
+  return {
+    id: nextId('recovery-game'),
+    type: 'recovery-game',
+    position: placeAt(center, index, RECOVERY_GAME_SIZE.width, RECOVERY_GAME_SIZE.height),
+    width: RECOVERY_GAME_SIZE.width,
+    height: RECOVERY_GAME_SIZE.height,
+    style: { width: RECOVERY_GAME_SIZE.width, height: RECOVERY_GAME_SIZE.height },
+    data: {
+      title: 'Recovery game',
+      color: NODE_COLORS[index % NODE_COLORS.length],
+      group: null,
+      recoveryGame
     }
   }
 }
@@ -1377,6 +2085,107 @@ function fitAncestorChain(nodes: CanvasNode[], groupId: string | undefined): Can
 }
 
 /**
+ * Maximize (issue #399): resize `nodeId` to occupy `rect` — the visible viewport in ROOT/flow
+ * coordinates, computed by the caller from the camera (`maximizeTargetRect`) — remembering the
+ * node's own rect in `data.premaxRect` so `restoreMaximizedNode` can put everything back. This is
+ * a real resize, not a camera move: the node goes through its normal resize path, so a terminal
+ * reflows and the pty gets its new cols/rows.
+ *
+ * Grouped nodes work too: the new position is written parent-relative and every ancestor frame is
+ * re-fitted (`fitAncestorChain`) in the SAME transform — `extent:'parent'` would otherwise clamp a
+ * child bigger than its frame into an inverted range (the snap `groupSelectedNodes` documents).
+ *
+ * Refused (returned unchanged): unknown id, a group frame (maximizing the container would drag its
+ * whole subtree), a collapsed node (header-only; expand first), and a node already maximized.
+ */
+export function maximizeNodeToRect(
+  nodes: CanvasNode[],
+  nodeId: string,
+  rect: { x: number; y: number; width: number; height: number }
+): CanvasNode[] {
+  const node = nodes.find((n) => n.id === nodeId)
+  if (!node || node.type === 'group' || node.data.collapsed || node.data.premaxRect) return nodes
+  // The remembered position is ROOT-space, not parent-relative: re-fitting the frame around the
+  // maximized child MOVES the frame's origin (it hugs), so a parent-relative restore would come
+  // back a few px off — and root-space also survives the frame being ungrouped meanwhile.
+  const root = rootPosition(node, nodes)
+  const premaxRect = {
+    x: root.x,
+    y: root.y,
+    width: nodeW(node) || (node.style?.width as number) || 0,
+    height: nodeH(node) || (node.style?.height as number) || 0
+  }
+  if (!(premaxRect.width > 0) || !(premaxRect.height > 0)) return nodes
+  return withNodeRect(nodes, node, rect, { premaxRect })
+}
+
+/**
+ * Zone snap (issue #394 v1): place `nodeId` at `rect` — a zone of the visible viewport in
+ * ROOT/flow coordinates (`zoneTargetRect`). Plain placement, no toggle state: unlike maximize it
+ * writes no `premaxRect` (a node sent to "left half" has simply been MOVED, exactly as if by
+ * hand) and an existing `premaxRect` is left alone, so a maximized node snapped into a zone still
+ * restores to its pre-maximize spot. Refusals match the maximize matrix minus already-maximized:
+ * unknown id, group frame, collapsed node.
+ */
+export function placeNodeInRect(
+  nodes: CanvasNode[],
+  nodeId: string,
+  rect: { x: number; y: number; width: number; height: number }
+): CanvasNode[] {
+  const node = nodes.find((n) => n.id === nodeId)
+  if (!node || node.type === 'group' || node.data.collapsed) return nodes
+  return withNodeRect(nodes, node, rect, {})
+}
+
+/**
+ * The shared placement core: put `node` at the ROOT-space `rect` (converted to parent-relative),
+ * patch its data, and re-fit the ancestor frames in the same transform — `extent:'parent'` would
+ * otherwise clamp a child bigger than its frame into an inverted range (the snap
+ * `groupSelectedNodes` documents).
+ */
+function withNodeRect(
+  nodes: CanvasNode[],
+  node: CanvasNode,
+  rect: { x: number; y: number; width: number; height: number },
+  dataPatch: Partial<NodeData>
+): CanvasNode[] {
+  // rect is root-space; a grouped node's position is relative to its frame, so subtract the
+  // ancestor origins (root position minus own offset = the parent chain's origin).
+  const root = rootPosition(node, nodes)
+  const originX = root.x - node.position.x
+  const originY = root.y - node.position.y
+  const next = nodes.map((n) =>
+    n.id === node.id
+      ? {
+          ...n,
+          position: { x: rect.x - originX, y: rect.y - originY },
+          width: rect.width,
+          height: rect.height,
+          style: { ...n.style, width: rect.width, height: rect.height },
+          // Drop the stale measurement in the same tick: flowToNodeStates prefers `measured` over
+          // `width`/`height`, and a commit racing the re-measure would persist the OLD size.
+          measured: undefined,
+          data: { ...n.data, expandedHeight: rect.height, ...dataPatch }
+        }
+      : n
+  )
+  return fitAncestorChain(next, node.parentId)
+}
+
+/**
+ * The toggle's second click: give the node back the rect `maximizeNodeToRect` remembered — the
+ * exact canvas spot it occupied, converted from root-space into wherever its parent chain sits
+ * now — and re-fit the ancestor frames back down around it. No-op when the node is missing or
+ * not maximized.
+ */
+export function restoreMaximizedNode(nodes: CanvasNode[], nodeId: string): CanvasNode[] {
+  const node = nodes.find((n) => n.id === nodeId)
+  const prev = node?.data.premaxRect
+  if (!node || !prev) return nodes
+  return withNodeRect(nodes, node, prev, { premaxRect: undefined })
+}
+
+/**
  * Wraps nodes that share ONE container in a new group frame. The members may themselves be
  * frames, so this is how a nested tree is built. The frame is created beside its members inside
  * their current parent and every root-space position stays fixed. Mixed containers and
@@ -1399,6 +2208,9 @@ export function groupSelectedNodes(
   if (members.length === 0 || new Set(members.map((n) => n.parentId ?? null)).size !== 1) {
     return nodes
   }
+  // A Shop is the fixed catalog entry point for its universe. Grouping it would make the
+  // supposedly permanent surface inherit a user frame and become movable with that frame.
+  if (members.some((member) => member.type === 'shop' || member.data.nonDeletable === true)) return nodes
   if (
     members.some((member) =>
       members.some((other) => other.id !== member.id && isDescendant(nodes, other.id, member.id))
@@ -1448,10 +2260,17 @@ export function groupSelectedNodes(
 const NODE_KIND_TABLE: Record<NodeKind, true> = {
   terminal: true,
   authenticator: true,
+  calendar: true,
+  'homeassistant-control': true,
+  timer: true,
+  alarm: true,
   sticky: true,
   group: true,
   editor: true,
   diff: true,
+  photo: true,
+  gallery: true,
+  'wild-dim-sum': true,
   video: true,
   web: true,
   browser: true,
@@ -1459,14 +2278,24 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   loop: true,
   scheduler: true,
   dino: true,
+  'recovery-game': true,
   annotation: true,
   minecraft: true,
   dockerhost: true,
   proxmox: true,
   gitlab: true,
   homeassistant: true,
+  'homeassistant-sensor': true,
   freepbx: true,
-  nsis: true
+  'nextcloud-aio': true,
+  'gitlab-hosting': true,
+  'cloudflare-zero-trust': true,
+  'cloudflare-core-managers': true,
+  nsis: true,
+  shop: true,
+  'aws-universe': true,
+  torrent: true,
+  'linux-vm': true
 }
 
 /**
@@ -1485,10 +2314,17 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
 const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   terminal: TERMINAL_SIZE,
   authenticator: AUTHENTICATOR_SIZE,
+  calendar: CALENDAR_SIZE,
+  'homeassistant-control': HOME_ASSISTANT_CONTROL_SIZE,
+  timer: TIMER_SIZE,
+  alarm: ALARM_SIZE,
   sticky: STICKY_SIZE,
   group: GROUP_SIZE,
   editor: EDITOR_SIZE,
   diff: DIFF_SIZE,
+  photo: PHOTO_SIZE,
+  gallery: GALLERY_SIZE,
+  'wild-dim-sum': WILD_DIM_SUM_SIZE,
   video: VIDEO_SIZE,
   web: WEB_SIZE,
   browser: BROWSER_SIZE,
@@ -1498,14 +2334,24 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   loop: NATIVE_LOOP_SIZE,
   scheduler: NATIVE_LOOP_SIZE,
   dino: DINO_SIZE,
+  'recovery-game': RECOVERY_GAME_SIZE,
   annotation: ANNOTATION_SIZE,
   minecraft: SERVICE_CONSOLE_SIZE,
   dockerhost: SERVICE_CONSOLE_SIZE,
   proxmox: SERVICE_CONSOLE_SIZE,
   gitlab: SERVICE_SUMMARY_SIZE,
   homeassistant: SERVICE_SUMMARY_SIZE,
+  'homeassistant-sensor': HOME_ASSISTANT_SENSOR_SIZE,
   freepbx: SERVICE_SUMMARY_SIZE,
-  nsis: NSIS_SIZE
+  'nextcloud-aio': SERVICE_CONSOLE_SIZE,
+  'gitlab-hosting': { width: 700, height: 620 },
+  'cloudflare-zero-trust': SERVICE_CONSOLE_SIZE,
+  'cloudflare-core-managers': CLOUDFLARE_CORE_MANAGERS_SIZE,
+  nsis: NSIS_SIZE,
+  shop: SHOP_SIZE,
+  'aws-universe': { width: 320, height: 220 },
+  torrent: TORRENT_SIZE,
+  'linux-vm': LINUX_VM_SIZE
 }
 
 /** A `Set`, not `type in NODE_KIND_TABLE`: `in` walks the prototype, so `'constructor'` and
@@ -1549,6 +2395,9 @@ function duplicateKind(type: string | undefined): NodeKind {
  * make the copy claim a deleted file is there and try to read it.
  */
 export function duplicateNode(node: CanvasNode, offset = 28): CanvasNode {
+  if (node.type === 'shop' || node.data.nonDeletable === true) {
+    throw new Error('Shop nodes are permanent and cannot be duplicated.')
+  }
   const kind = duplicateKind(node.type)
   // Mirrors the factories exactly: `createTerminalNode` mints `term-…` and every other factory
   // uses its own kind as the prefix (`editor-`, `diff-`, `video-`, `web-`, `browser-`, `sticky-`,
@@ -1567,11 +2416,14 @@ export function duplicateNode(node: CanvasNode, offset = 28): CanvasNode {
     extent: undefined,
     data: {
       ...node.data,
+      // A duplicate is a new user creation event, never a second owner of the source event.
+      creationEventId: newCreationEventId(),
       initialCommand: undefined,
       agentLaunchIntent: undefined,
       pendingLaunch: undefined,
       pendingLaunchError: undefined,
       pendingLaunchErrorKind: undefined,
+      pendingLaunchErrorOwnership: undefined,
       agentSessionId: undefined,
       // One-shot respawn trigger, never serialized: the number means something only as a CHANGE,
       // so a copy born holding the source's counter is stale from birth.
@@ -1591,7 +2443,14 @@ export function duplicateNode(node: CanvasNode, offset = 28): CanvasNode {
       // config, so they go with it.
       loopEnabled: undefined,
       loopNextRunAt: undefined,
-      loopLastRunAt: undefined
+      loopLastRunAt: undefined,
+      // A duplicate owns a fresh VM identity and must never inherit another VM's ISO or disk.
+      virtualMachineLocalPaths: undefined,
+      ...(kind === 'timer' ? {
+        running: false, paused: false, elapsedMs: 0, remainingMs: (node.data as TimerNodeData).durationMs,
+        lapsMs: [], sequenceIndex: 0, repeatRemaining: 0, occurrenceId: undefined,
+        occurrenceState: 'scheduled', missedCount: 0, wallAnchorMs: undefined, monotonicAnchorMs: undefined
+      } : {})
     }
   }
 }
@@ -1725,6 +2584,7 @@ export function reparentNode(
 ): CanvasNode[] {
   const node = nodes.find((n) => n.id === nodeId)
   if (!node) return nodes
+  if (node.type === 'shop' || node.data.nonDeletable === true) return nodes
   if ((node.parentId ?? null) === groupId) return nodes
   if (groupId === nodeId || (groupId && isDescendant(nodes, groupId, nodeId))) return nodes
 
@@ -1747,7 +2607,7 @@ export function addSelectionToGroup(
   const selected = new Set(selectedIds)
   const byId = new Map(nodes.map((node) => [node.id, node]))
   const roots = nodes.filter((node) => {
-    if (node.id === groupId || !selected.has(node.id)) return false
+    if (node.id === groupId || !selected.has(node.id) || node.type === 'shop' || node.data.nonDeletable === true) return false
     const seen = new Set<string>()
     let parentId = node.parentId
     while (parentId && !seen.has(parentId)) {
@@ -1775,7 +2635,7 @@ export function reorderGroupWithinParent<T extends { id: string; parentId?: stri
 ): T[] {
   if (draggedId === beforeId) return nodes
   const dragged = nodes.find((node) => node.id === draggedId)
-  if (!dragged || (dragged.parentId ?? null) !== parentId) return nodes
+  if (!dragged || (dragged.parentId ?? null) !== parentId || (dragged as { type?: string }).type === 'shop') return nodes
   const before = beforeId ? nodes.find((node) => node.id === beforeId) : undefined
   if (beforeId && (!before || (before.parentId ?? null) !== parentId)) return nodes
 
@@ -1815,7 +2675,7 @@ export function reorderNodeBefore(
   if (draggedId === beforeId) return nodes
   const dragged = nodes.find((n) => n.id === draggedId)
   const before = nodes.find((n) => n.id === beforeId)
-  if (!dragged || !before || dragged.type === 'group') return nodes
+  if (!dragged || !before || dragged.type === 'group' || dragged.type === 'shop' || dragged.data.nonDeletable === true) return nodes
 
   const targetParent = before.parentId ?? null
   const moved =
@@ -1895,6 +2755,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
       style: { width: n.size.width, height },
       ...(n.parentId ? { parentId: n.parentId, extent: 'parent' as const } : {}),
       data: {
+        creationEventId: n.creationEventId,
         title: n.title,
         // Default true for older agent nodes saved before titleAuto existed, so they start
         // tracking the session name; non-agent nodes ignore it.
@@ -1903,6 +2764,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         group: n.group,
         tags: n.tags,
         collapsed,
+        hideFanout: n.hideFanout,
         expandedHeight: n.size.height,
         loopTask: n.loopTask,
         loopIntervalMs: n.loopIntervalMs,
@@ -1910,24 +2772,77 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         loopNextRunAt: n.loopNextRunAt,
         loopLastRunAt: n.loopLastRunAt,
         loopTargetIds: n.loopTargetIds,
+        timerMode: n.timerMode ?? n.timerMode,
+        timerDurationMs: n.timerDurationMs ?? n.durationMs,
+        timerRemainingMs: n.timerRemainingMs ?? n.remainingMs,
+        timerElapsedMs: n.timerElapsedMs ?? n.elapsedMs,
+        timerRunning: n.timerRunning ?? n.running,
+        timerPaused: n.timerPaused ?? n.paused,
+        timerRepeatCount: n.timerRepeatCount ?? n.repeatCount,
+        timerRepeatRemaining: n.timerRepeatRemaining ?? n.repeatRemaining,
+        timerSequence: n.timerSequence ?? n.sequence,
+        timerSequenceIndex: n.timerSequenceIndex ?? n.sequenceIndex,
+        timerLapsMs: n.timerLapsMs ?? n.lapsMs,
+        timerNextOccurrenceAt: n.timerNextOccurrenceAt ?? n.nextOccurrenceAt,
+        timerOccurrenceId: n.timerOccurrenceId ?? n.occurrenceId,
+        timerOccurrenceState: n.timerOccurrenceState ?? n.occurrenceState,
+        timerAlarmEnabled: n.timerAlarmEnabled ?? n.alarmEnabled,
+        timerAlarmTone: n.timerAlarmTone ?? n.alarmTone,
+        timerMissedCount: n.timerMissedCount ?? n.missedCount,
+        alarmSchedule: n.alarmSchedule,
+        alarmTimeZone: n.alarmTimeZone,
+        alarmEnabled: n.alarmEnabled,
+        alarmSnoozeMinutes: n.alarmSnoozeMinutes,
+        alarmSoundEnabled: n.alarmSoundEnabled,
+        alarmNarratorEnabled: n.alarmNarratorEnabled,
+        alarmNextOccurrenceAt: n.alarmNextOccurrenceAt,
+        alarmHistory: n.alarmHistory,
+        premaxRect: n.premaxRect,
         shell: n.shell,
         terminalProfileId: n.ssh ? undefined : n.terminalProfileId,
         cwd: n.cwd,
         text: n.text,
         serviceLabel: n.serviceLabel,
+        gitlabHostingConfig: n.gitlabHostingConfig,
+        nextcloudAioConfig: n.nextcloudAioConfig,
+        homeAssistantIntent: n.homeAssistantIntent,
+        universeCanvasId: n.universeCanvasId,
+        universeScope: n.universeScope,
+        universeDepth: n.universeDepth,
+        nonDeletable: n.nonDeletable,
+        creationEventId: n.creationEventId,
+        shopSelection: (n as CanvasNodeState & { shopSelection?: string }).shopSelection,
+        torrentMagnet: n.torrentMagnet,
         serviceConnection: n.serviceConnection,
+        cloudflareZeroTrustIntent: n.cloudflareZeroTrustIntent,
+        cloudflareCoreIntent: n.cloudflareCoreIntent,
         nsisSpec: n.nsisSpec,
         nsisLocalPaths: n.nsisLocalPaths,
+        virtualMachineConfig: n.virtualMachineConfig,
+        virtualMachineLocalPaths: n.virtualMachineLocalPaths,
+        calendarConfig: n.calendarConfig,
+        homeAssistantControlConfig: n.kind === 'homeassistant-control' ? validateHomeAssistantControlConfig(n.homeAssistantControlConfig) : undefined,
+        homeAssistantSensorConfig: n.homeAssistantSensorConfig,
+        textUpdatedAt: n.textUpdatedAt,
+        textUpdatedBy: n.textUpdatedBy,
         filePath: n.filePath,
+        mediaAssets: n.mediaAssets?.map(normalizeMediaReference).filter((reference): reference is MediaAssetReference => !!reference),
+        mediaActiveAssetId: n.mediaActiveAssetId,
+        wildDimSumDish: normalizePublicDimSumSelection(n.wildDimSumDish) ?? undefined,
         fileMissing: n.fileMissing,
         url: n.url,
         browserProfileId: n.browserProfileId,
         browserTabs,
         browserActiveTabId,
+        partition: n.partition,
         diffStaged: n.diffStaged,
         commitOid: n.commitOid,
         highScore: n.highScore,
+        // The recovery board is project-portable intent, so normalize legacy or hand-edited
+        // snapshots at the load boundary instead of letting malformed coordinates reach the UI.
+        recoveryGame: n.recoveryGame ? normalizeRecoveryGameSnapshot(n.recoveryGame) : undefined,
         agentId,
+        agentModel: n.agentModel,
         accountId: n.accountId,
         // Migrate the old title-only identity into an explicit true/false on the next save.
         accountLogin: n.accountLogin ?? isAccountLoginNode(n),
@@ -1964,6 +2879,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
       return {
         id: n.id,
         kind,
+        creationEventId: n.data.creationEventId,
         position: n.position,
         size: {
           width: n.measured?.width ?? n.width ?? sizeFor(kind).width,
@@ -1984,25 +2900,83 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         loopNextRunAt: n.data.loopNextRunAt,
         loopLastRunAt: n.data.loopLastRunAt,
         loopTargetIds: n.data.loopTargetIds,
+        timerMode: n.data.timerMode,
+        timerDurationMs: n.data.timerDurationMs ?? (n.data as TimerNodeData).durationMs,
+        timerRemainingMs: n.data.timerRemainingMs ?? (n.data as TimerNodeData).remainingMs,
+        timerElapsedMs: n.data.timerElapsedMs ?? (n.data as TimerNodeData).elapsedMs,
+        timerRunning: n.data.timerRunning ?? (n.data as TimerNodeData).running,
+        timerPaused: n.data.timerPaused ?? (n.data as TimerNodeData).paused,
+        timerRepeatCount: n.data.timerRepeatCount ?? (n.data as TimerNodeData).repeatCount,
+        timerRepeatRemaining: n.data.timerRepeatRemaining ?? (n.data as TimerNodeData).repeatRemaining,
+        timerSequence: n.data.timerSequence ?? (n.data as TimerNodeData).sequence,
+        timerSequenceIndex: n.data.timerSequenceIndex ?? (n.data as TimerNodeData).sequenceIndex,
+        timerLapsMs: n.data.timerLapsMs ?? (n.data as TimerNodeData).lapsMs,
+        timerNextOccurrenceAt: n.data.timerNextOccurrenceAt ?? (n.data as TimerNodeData).nextOccurrenceAt,
+        timerOccurrenceId: n.data.timerOccurrenceId ?? (n.data as TimerNodeData).occurrenceId,
+        timerOccurrenceState: n.data.timerOccurrenceState ?? (n.data as TimerNodeData).occurrenceState,
+        timerAlarmEnabled: n.data.timerAlarmEnabled ?? (n.data as TimerNodeData).alarmEnabled,
+        timerAlarmTone: n.data.timerAlarmTone ?? (n.data as TimerNodeData).alarmTone,
+        timerMissedCount: n.data.timerMissedCount ?? (n.data as TimerNodeData).missedCount,
+        alarmSchedule: n.data.alarmSchedule,
+        alarmTimeZone: n.data.alarmTimeZone,
+        alarmEnabled: n.data.alarmEnabled,
+        alarmSnoozeMinutes: n.data.alarmSnoozeMinutes,
+        alarmSoundEnabled: n.data.alarmSoundEnabled,
+        alarmNarratorEnabled: n.data.alarmNarratorEnabled,
+        alarmNextOccurrenceAt: n.data.alarmNextOccurrenceAt,
+        alarmHistory: n.data.alarmHistory,
+        hideFanout: n.data.hideFanout,
         parentId: n.parentId,
         shell: n.data.shell,
         terminalProfileId: n.data.ssh ? undefined : n.data.terminalProfileId,
         cwd: n.data.cwd,
         text: n.data.text,
         serviceLabel: n.data.serviceLabel,
+        gitlabHostingConfig: n.data.gitlabHostingConfig,
+        nextcloudAioConfig: n.data.nextcloudAioConfig,
+        homeAssistantIntent: n.data.homeAssistantIntent,
+        universeCanvasId: n.data.universeCanvasId,
+        universeScope: n.data.universeScope,
+        universeDepth: n.data.universeDepth,
+        nonDeletable: n.data.nonDeletable,
+        creationEventId: n.data.creationEventId,
+        shopSelection: n.data.shopSelection,
+        torrentMagnet: n.data.torrentMagnet,
         serviceConnection: n.data.serviceConnection,
+        cloudflareZeroTrustIntent: n.data.cloudflareZeroTrustIntent,
+        cloudflareCoreIntent: n.data.cloudflareCoreIntent,
         nsisSpec: n.data.nsisSpec,
         nsisLocalPaths: n.data.nsisLocalPaths,
+        // Media paths remain in the live node long enough for the machine-local index to retain
+        // them. The shared-file boundary strips them in `stripSharedNodeExec`, while portable
+        // content references continue into the transferable projection.
         filePath: n.data.filePath,
+        mediaAssets: n.data.mediaAssets?.map((reference) => ({ ...reference })),
+        mediaActiveAssetId: n.data.mediaActiveAssetId,
+        wildDimSumDish: normalizePublicDimSumSelection(n.data.wildDimSumDish) ?? undefined,
+        virtualMachineConfig: n.data.virtualMachineConfig,
+        virtualMachineLocalPaths: n.data.virtualMachineLocalPaths,
+        calendarConfig: n.data.calendarConfig,
+        homeAssistantControlConfig: kind === 'homeassistant-control' ? validateHomeAssistantControlConfig(n.data.homeAssistantControlConfig) : undefined,
+        homeAssistantSensorConfig: n.data.homeAssistantSensorConfig,
         fileMissing: n.data.fileMissing,
         url: n.data.url,
         browserProfileId: n.data.browserProfileId,
         browserTabs: n.data.browserTabs,
         browserActiveTabId: n.data.browserActiveTabId,
+        textUpdatedAt: n.data.textUpdatedAt,
+        textUpdatedBy: n.data.textUpdatedBy,
+        fileMissing: n.data.fileMissing,
+        url: n.data.url,
+        partition: n.data.partition,
         diffStaged: n.data.diffStaged,
         commitOid: n.data.commitOid,
         highScore: n.data.highScore,
+        // Persist only the bounded board snapshot. It contains no path, process, host, or account
+        // state, and normalization keeps old project files safe to reopen on another computer.
+        recoveryGame: n.data.recoveryGame ? normalizeRecoveryGameSnapshot(n.data.recoveryGame) : undefined,
         agentId: n.data.agentId,
+        agentModel: n.data.agentModel,
         accountId: n.data.accountId,
         accountLogin: n.data.accountLogin,
         agentSessionId: n.data.agentSessionId,
@@ -2013,7 +2987,8 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         sshFs: n.data.sshFs,
         worktree: n.data.worktree,
         annotationVariant: n.data.annotationVariant,
-        annotationDir: n.data.annotationDir
+        annotationDir: n.data.annotationDir,
+        premaxRect: n.data.premaxRect
       }
     })
 }

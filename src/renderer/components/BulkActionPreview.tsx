@@ -4,9 +4,18 @@
 // every other confirmation in the app, rather than a bespoke modal.
 
 import { ConfirmDialog } from './ConfirmDialog'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { copy, fact } from '../lib/personalVocabulary/ownedCopy'
+
+export function bulkPreviewMessageSegments(title: string, willChange: number, totalSelected: number) {
+  return totalSelected === willChange
+    ? [copy(title), copy(': '), fact(String(willChange)), copy(` item${willChange === 1 ? '' : 's'}.`)]
+    : [copy(title), copy(': '), fact(String(willChange)), copy(' of '), fact(String(totalSelected)), copy(' selected will change.')]
+}
 
 export interface BulkActionPreviewProps<T> {
   title: string
+  titleSegments?: readonly ReturnType<typeof copy>[]
   items: T[]
   describe: (item: T) => string
   excluded: { item: T; reason: string }[]
@@ -20,6 +29,7 @@ const MAX_LISTED = 12
 
 export function BulkActionPreview<T>({
   title,
+  titleSegments,
   items,
   describe,
   excluded,
@@ -28,19 +38,21 @@ export function BulkActionPreview<T>({
   onConfirm,
   onCancel
 }: BulkActionPreviewProps<T>): JSX.Element {
+  const vocab = useVocabularyMapper()
   const willChange = items.length
   const totalSelected = willChange + excluded.length
   const listed = items.slice(0, MAX_LISTED)
   const hiddenCount = items.length - listed.length
 
-  const message =
-    totalSelected === willChange
-      ? `${title}: ${willChange} item${willChange === 1 ? '' : 's'}.`
-      : `${title}: ${willChange} of ${totalSelected} selected will change.`
+  const titleCopy = titleSegments ?? [copy(title)]
+  const messageSegments = totalSelected === willChange
+    ? [...titleCopy, copy(': '), fact(String(willChange)), copy(` item${willChange === 1 ? '' : 's'}.`)]
+    : [...titleCopy, copy(': '), fact(String(willChange)), copy(' of '), fact(String(totalSelected)), copy(' selected will change.')]
 
   return (
     <ConfirmDialog
-      message={message}
+      message=""
+      messageSegments={messageSegments}
       confirmLabel={busy ? 'Working…' : title}
       // The label alone never stopped a second submit — pass it through so the button disables.
       busy={busy}
@@ -57,13 +69,13 @@ export function BulkActionPreview<T>({
               {listed.map((item, i) => (
                 <li key={i}>{describe(item)}</li>
               ))}
-              {hiddenCount > 0 && <li className="bulk-preview__more">+{hiddenCount} more</li>}
+                {hiddenCount > 0 && <li className="bulk-preview__more">+{hiddenCount} {vocab('more')}</li>}
             </ul>
           )}
           {excluded.length > 0 && (
             <div className="bulk-preview__excluded">
               <div className="bulk-preview__excluded-title">
-                {excluded.length} excluded — will NOT change:
+                {excluded.length} {vocab('excluded — will NOT change:')}
               </div>
               <ul className="bulk-preview__list bulk-preview__list--excluded">
                 {excluded.slice(0, MAX_LISTED).map(({ item, reason }, i) => (

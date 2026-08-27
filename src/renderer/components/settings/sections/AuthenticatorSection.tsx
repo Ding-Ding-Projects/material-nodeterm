@@ -16,8 +16,11 @@ import {
 } from '../../../lib/authenticatorRemoval'
 import type { DestructiveAuthorization } from '../../../lib/destructiveAuthorization'
 import { SettingsSection } from '../SettingsSection'
+import { SettingsText } from '../SettingsText'
 import { SearchableRow } from '../SearchableRow'
 import { Select } from '@renderer/ui/Select'
+import { Radio } from '@renderer/ui/md3'
+import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
 
 const ROW = {
   title: 'Authenticator',
@@ -31,6 +34,7 @@ function groupDigits(code: string): string {
 }
 
 function AddEntryForm({ onAdded }: { onAdded: (entry: AuthenticatorEntry) => void }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   const [mode, setMode] = useState<'uri' | 'manual'>('uri')
   const [uri, setUri] = useState('')
   const [issuer, setIssuer] = useState('')
@@ -68,25 +72,30 @@ function AddEntryForm({ onAdded }: { onAdded: (entry: AuthenticatorEntry) => voi
     <div className="toylock-add-entry">
       <div className="toylock-radio-row">
         <label>
-          <input type="radio" checked={mode === 'uri'} onChange={() => setMode('uri')} /> Paste a URI
+          <Radio name="authenticator-entry-mode" checked={mode === 'uri'} onChange={() => setMode('uri')} /> <SettingsText>Paste a URI</SettingsText>
         </label>
         <label>
-          <input type="radio" checked={mode === 'manual'} onChange={() => setMode('manual')} /> Enter manually
+          <Radio name="authenticator-entry-mode" checked={mode === 'manual'} onChange={() => setMode('manual')} /> Enter manually
+          <Radio checked={mode === 'uri'} onChange={() => setMode('uri')} /> Paste a URI
+        </label>
+        <label>
+          <Radio checked={mode === 'manual'} onChange={() => setMode('manual')} /> Enter manually
+          <Radio name="authenticator-entry-mode" checked={mode === 'manual'} onChange={() => setMode('manual')} /> <SettingsText>Enter manually</SettingsText>
         </label>
       </div>
       {mode === 'uri' ? (
         <input
           type="text"
           className="toylock-input"
-          placeholder="otpauth://totp/Issuer:you@example.com?secret=…"
+          placeholder={vocab('otpauth://totp/Issuer:you@example.com?secret=…')}
           value={uri}
           onChange={(e) => setUri(e.target.value)}
         />
       ) : (
         <div className="toylock-manual-grid">
-          <input type="text" className="toylock-input" placeholder="Issuer (e.g. GitHub)" value={issuer} onChange={(e) => setIssuer(e.target.value)} />
-          <input type="text" className="toylock-input" placeholder="Account (e.g. you@example.com)" value={account} onChange={(e) => setAccount(e.target.value)} />
-          <input type="text" className="toylock-input" placeholder="Secret (base32)" value={secret} onChange={(e) => setSecret(e.target.value)} />
+          <input type="text" className="toylock-input" placeholder={vocab('Issuer (e.g. GitHub)')} value={issuer} onChange={(e) => setIssuer(e.target.value)} />
+          <input type="text" className="toylock-input" placeholder={vocab('Account (e.g. you@example.com)')} value={account} onChange={(e) => setAccount(e.target.value)} />
+          <input type="text" className="toylock-input" placeholder={vocab('Secret (base32)')} value={secret} onChange={(e) => setSecret(e.target.value)} />
           <Select className="toylock-select" value={algorithm} onChange={(e) => setAlgorithm(e.target.value as OtpAlgorithm)}>
             {OTP_ALGORITHMS.map((a) => (
               <option key={a} value={a}>
@@ -107,13 +116,13 @@ function AddEntryForm({ onAdded }: { onAdded: (entry: AuthenticatorEntry) => voi
             min={1}
             value={period}
             onChange={(e) => setPeriod(Math.max(1, Number(e.target.value) || 30))}
-            aria-label="Period in seconds"
+            aria-label={vocab('Period in seconds')}
           />
         </div>
       )}
-      {error && <div className="toylock-error">{error}</div>}
+      {error && <div className="toylock-error"><SettingsText segments={[{ kind: 'fact', value: error }]} /></div>}
       <button className="toylock-btn toylock-btn--primary" disabled={busy} onClick={() => void submit()}>
-        {busy ? 'Adding…' : 'Add'}
+        <SettingsText>{busy ? 'Adding…' : 'Add'}</SettingsText>
       </button>
     </div>
   )
@@ -136,6 +145,7 @@ function EntryRow({
   onRefreshed: (entries: AuthenticatorEntry[]) => void
   onRemovalError: (error: string | null) => void
 }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   const [confirmRemove, setConfirmRemove] = useState<{
     message: string
     onConfirm: () => void
@@ -253,8 +263,8 @@ function EntryRow({
       <div className="toylock-auth-row__id">
         {renaming ? (
           <div className="toylock-manual-grid toylock-manual-grid--2col">
-            <input className="toylock-input" value={issuer} onChange={(e) => setIssuer(e.target.value)} placeholder="Issuer" />
-            <input className="toylock-input" value={account} onChange={(e) => setAccount(e.target.value)} placeholder="Account" />
+            <input className="toylock-input" value={issuer} onChange={(e) => setIssuer(e.target.value)} placeholder={vocab('Issuer')} />
+            <input className="toylock-input" value={account} onChange={(e) => setAccount(e.target.value)} placeholder={vocab('Account')} />
           </div>
         ) : (
           <>
@@ -274,8 +284,8 @@ function EntryRow({
             <button
               className="toylock-code-text"
               onClick={copyCode}
-              aria-label={`Copy current code ${code.code}`}
-              title="Copy code"
+              aria-label={`${vocab('Copy current code')} ${code.code}`}
+              title={vocab('Copy code')}
             >
               <span aria-live="polite">{groupDigits(code.code)}</span>
             </button>
@@ -285,7 +295,7 @@ function EntryRow({
             <span className="sr-only" aria-live="off">
               New code in {secondsRemaining} seconds
             </span>
-            {copied && <span className="toylock-hint">Copied</span>}
+            {copied && <span className="toylock-hint"><SettingsText>Copied</SettingsText></span>}
             {code.clockWarning && <div className="toylock-warn">{code.clockWarning}</div>}
           </>
         ) : (
@@ -296,36 +306,41 @@ function EntryRow({
         {renaming ? (
           <>
             <button className="toylock-btn toylock-btn--sm" onClick={() => void saveRename()}>
-              Save
+              <SettingsText>Save</SettingsText>
             </button>
             <button className="toylock-btn toylock-btn--sm" onClick={() => setRenaming(false)}>
-              Cancel
+              <SettingsText>Cancel</SettingsText>
             </button>
           </>
         ) : (
           <>
             <button className="toylock-btn toylock-btn--sm" onClick={() => setRenaming(true)}>
-              Rename
+              <SettingsText>Rename</SettingsText>
             </button>
             <button className="toylock-btn toylock-btn--sm" onClick={() => void reveal()}>
-              Reveal secret
+              <SettingsText>Reveal secret</SettingsText>
             </button>
             <button
               className="toylock-btn toylock-btn--sm"
               disabled={removing}
               onClick={() => requestRemoval(entry)}
             >
-              {removing ? 'Removing…' : 'Remove'}
+              <SettingsText>{removing ? 'Removing…' : 'Remove'}</SettingsText>
             </button>
           </>
         )}
       </div>
       {revealed && (
         <div className="toylock-manual-secret">
-          <span className="toylock-field__label">Secret for {entry.issuer} — {entry.account}</span>
+          <span className="toylock-field__label"><SettingsText segments={[
+            { kind: 'copy', value: 'Secret for ' },
+            { kind: 'fact', value: entry.issuer },
+            { kind: 'copy', value: ' — ' },
+            { kind: 'fact', value: entry.account }
+          ]} /></span>
           <code className="toylock-secret-text">{revealed.secretBase32.replace(/(.{4})/g, '$1 ').trim()}</code>
           <button className="toylock-btn toylock-btn--sm" onClick={() => setRevealed(null)}>
-            Hide
+            <SettingsText>Hide</SettingsText>
           </button>
         </div>
       )}
@@ -349,6 +364,7 @@ function EntryRow({
 }
 
 export function AuthenticatorSection({ isActive }: { isActive: boolean }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   const [entries, setEntries] = useState<AuthenticatorEntry[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
   const [mutationError, setMutationError] = useState<string | null>(null)
@@ -434,20 +450,20 @@ export function AuthenticatorSection({ isActive }: { isActive: boolean }): React
           )}
           {mutationError && (
             <div role="alert" className="toylock-error">
-              {mutationError}
+              <SettingsText segments={[{ kind: 'fact', value: mutationError }]} />
             </div>
           )}
           <AddEntryForm onAdded={(e) => setEntries((cur) => [...cur, e])} />
           <input
             type="text"
-            placeholder="Filter entries…"
+            placeholder={vocab('Filter entries…')}
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             className="md3-authenticator__filter"
-            aria-label="Filter authenticator entries"
+            aria-label={vocab('Filter authenticator entries')}
           />
           {loadError ? null : filtered.length === 0 ? (
-            <p className="md3-authenticator__empty">No entries yet.</p>
+            <p className="md3-authenticator__empty"><SettingsText>No entries yet.</SettingsText></p>
           ) : (
             <ul className="toylock-auth-list">
               {filtered.map((e) => (
@@ -467,14 +483,13 @@ export function AuthenticatorSection({ isActive }: { isActive: boolean }): React
 
           {entries.length > 0 && (
             <div className="toylock-export-section">
-              <h4 className="md3-authenticator__export-title">Export secrets</h4>
+              <h4 className="md3-authenticator__export-title"><SettingsText>Export secrets</SettingsText></h4>
               <p className="md3-authenticator__export-body">
-                Ordinary exports (backups, sharing) never include these secrets. This is the ONE
-                deliberate action that writes them out, in the clear, behind a real two-key gate.
+                <SettingsText>Ordinary exports (backups, sharing) never include these secrets. This is the ONE deliberate action that writes them out, in the clear, behind a real two-key gate.</SettingsText>
               </p>
               {!showExportGate ? (
                 <button className="toylock-btn" onClick={() => setShowExportGate(true)}>
-                  Export all secrets…
+                  <SettingsText>Export all secrets…</SettingsText>
                 </button>
               ) : (
                 <TwoKeyExportGate

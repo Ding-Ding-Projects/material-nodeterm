@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { BrowserExtensionInfo } from '@shared/types'
 import { E_UNSUPPORTED } from '@shared/rpc'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 interface BrowserExtensionsPanelProps {
   /** The profile's Electron session partition (undefined = default session) — see
@@ -17,6 +18,7 @@ interface BrowserExtensionsPanelProps {
  * not just in a code comment nobody reading the app ever sees).
  */
 export function BrowserExtensionsPanel({ partition, onClose }: BrowserExtensionsPanelProps) {
+  const vocab = useVocabularyMapper()
   const [extensions, setExtensions] = useState<BrowserExtensionInfo[] | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -101,29 +103,27 @@ export function BrowserExtensionsPanel({ partition, onClose }: BrowserExtensions
       className="browser-ext-panel nodrag nowheel"
       ref={rootRef}
       role="dialog"
-      aria-label="Browser extensions"
+      aria-label={vocab('Browser extensions')}
     >
       <div className="browser-ext-panel__header">
-        <span>Extensions (unpacked, Electron subset)</span>
-        <button className="browser-node__btn" onClick={onClose} aria-label="Close">
+        <span>{vocab('Extensions (unpacked, Electron subset)')}</span>
+        <button className="browser-node__btn" onClick={onClose} aria-label={vocab('Close')}>
           ✕
         </button>
       </div>
       <p className="browser-ext-panel__note">
-        Loads an unpacked extension directory into this profile. No Chrome Web Store install, and
-        Electron implements only a subset of chrome.* APIs — an extension may partly not work.
+        {vocab('Loads an unpacked extension directory into this profile. No Chrome Web Store install, and Electron implements only a subset of chrome.* APIs — an extension may partly not work.')}
       </p>
       {unsupported && (
         <p className="browser-ext-panel__error">
-          Extensions are desktop-only — this session (Server Edition or a shared browser tab) has
-          no Chromium extension host to load one into.
+          {vocab('Extensions are desktop-only — this session (Server Edition or a shared browser tab) has no Chromium extension host to load one into.')}
         </p>
       )}
       {!unsupported && error && <div className="browser-ext-panel__error">{error}</div>}
       <ul className="browser-ext-panel__list">
-        {!unsupported && extensions === null && <li className="browser-ext-panel__empty">Loading…</li>}
+        {!unsupported && extensions === null && <li className="browser-ext-panel__empty">{vocab('Loading…')}</li>}
         {!unsupported && extensions !== null && extensions.length === 0 && (
-          <li className="browser-ext-panel__empty">No extensions loaded into this profile.</li>
+          <li className="browser-ext-panel__empty">{vocab('No extensions loaded into this profile.')}</li>
         )}
         {!unsupported &&
           extensions?.map((ext) => (
@@ -138,8 +138,8 @@ export function BrowserExtensionsPanel({ partition, onClose }: BrowserExtensions
                 className="browser-node__btn"
                 disabled={busy}
                 onClick={() => void handleRemove(ext.path)}
-                aria-label={`Remove ${ext.name}`}
-                title="Remove"
+                aria-label={`${vocab('Remove')} ${ext.name}`}
+                title={vocab('Remove')}
               >
                 ✕
               </button>
@@ -148,7 +148,7 @@ export function BrowserExtensionsPanel({ partition, onClose }: BrowserExtensions
       </ul>
       {!unsupported && (
         <button className="browser-ext-panel__add" disabled={busy} onClick={() => void handleAdd()}>
-          + Load unpacked extension…
+          {vocab('+ Load unpacked extension…')}
         </button>
       )}
     </div>

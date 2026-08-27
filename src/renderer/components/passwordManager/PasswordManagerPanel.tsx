@@ -33,6 +33,7 @@ import { MaterialSymbol } from '../MaterialSymbol'
 import { Button } from '@renderer/ui/Button'
 import { Input } from '@renderer/ui/Input'
 import { Select } from '@renderer/ui/Select'
+import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 
 export interface PasswordManagerGroupOption {
   id: string
@@ -1193,6 +1194,7 @@ function PasswordManagerPanelInner({
   initialIntent: 'default' | 'new-credential'
   onClose: () => void
 }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   const [status, setStatus] = useState<VaultStatus | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -1264,7 +1266,7 @@ function PasswordManagerPanelInner({
 
   return createPortal(
     <div className="drawer-overlay md3-passwordmanager" onClick={onClose}>
-      <aside className="drawer passwordmanager" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Password manager">
+      <aside className="drawer passwordmanager" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={vocab('Password manager')}>
         <div className="drawer__head">
           <h2 className="pwm-head-title">
             {unlocked ? <IconUnlock /> : <IconLock />}

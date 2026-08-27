@@ -1,6 +1,7 @@
 import { forwardRef, type ButtonHTMLAttributes } from 'react'
 import { Button as Md3Button, type ButtonVariant, type ButtonSize } from './md3'
 import { cn } from './cn'
+import type { VocabularyTextMode } from '../lib/personalVocabulary/useVocabularyText'
 
 /** The app's historical variant names. Kept so no call site has to change. */
 type Variant = 'default' | 'primary' | 'ghost'
@@ -33,8 +34,10 @@ const VARIANTS: Record<Variant, ButtonVariant> = {
 
 export const Button = forwardRef<
   HTMLButtonElement,
-  ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant; size?: ButtonSize; danger?: boolean }
+  ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant; size?: ButtonSize; danger?: boolean; vocabularyMode?: VocabularyTextMode }
 >(function Button({ variant = 'default', size = 'small', danger = false, className, ...rest }, ref) {
+  // This compatibility wrapper deliberately owns no second vocabulary boundary. Md3Button is
+  // the one producer for its children, aria-label and title, preventing replacement cascades.
   return (
     <Md3Button
       ref={ref}

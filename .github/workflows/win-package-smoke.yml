@@ -1,0 +1,82 @@
+name: Windows package smoke
+
+# Manual-only packaging smoke test for the Windows target:
+# proves that `npm run dist:win` produces the complete unsigned Squirrel.Windows set from a clean
+# checkout on windows-latest, whose runner image already ships the Visual Studio Build Tools +
+# Python that node-pty/smart-whisper compilation needs.
+#
+# BUILD ONLY — this workflow must NEVER publish. `dist:win` passes `--publish never`, nothing
+# here uploads to an update feed or creates a release, and the produced installer is unsigned.
+# The release workflow publishes the same Squirrel.Windows set after its own asset and signature
+# checks. There is no NSIS, MSI-only, MSIX-only, portable-only, or ZIP-only parallel route.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package-win:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      # postinstall patches node-pty and rebuilds node-pty + smart-whisper against Electron's
+      # ABI — the same install the quality-windows CI job already proves green on this image.
+      - name: Install dependencies
+        run: npm ci
+
+      # make-icon (build/icon.png + build/icon.ico) + electron-vite build + electron-builder
+      # --win squirrel --x64 --publish never. Unsigned by design: no signing secrets are exposed.
+      - name: Package (Squirrel.Windows, never published)
+        run: npm run dist:win
+
+      # The complete Squirrel inventory is the contract: a silent target/artifactName regression
+      # should fail here, not on a release day. RELEASES must agree with every package row.
+      - name: Verify expected artifacts
+        shell: bash
+        run: |
+          ls -la dist/squirrel-windows
+          version=$(node -p "require('./package.json').version")
+          test -f "dist/squirrel-windows/nodeterm-Setup-${version}.exe" || { echo "::error::Squirrel Setup.exe missing"; exit 1; }
+          test -f "dist/squirrel-windows/RELEASES" || { echo "::error::Squirrel RELEASES missing"; exit 1; }
+          test -f "dist/squirrel-windows/node-terminal-${version}-full.nupkg" || { echo "::error::Squirrel full nupkg missing"; exit 1; }
+          if compgen -G "dist/squirrel-windows/*-win.zip" > /dev/null; then echo "::error::ZIP is not a supported Windows release route"; exit 1; fi
+
+      # Preserve safe package output even when an earlier build or inventory check fails. Never
+      # upload source, dependency directories, caches, credentials, or user profile data.
+      - name: Collect safe package output
+        if: ${{ always() }}
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $out = Join-Path $env:RUNNER_TEMP 'squirrel-package-output'
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          @(
+            "run_id=$env:GITHUB_RUN_ID"
+            "commit=$env:GITHUB_SHA"
+            "ref=$env:GITHUB_REF"
+            "job_status=${{ job.status }}"
+            "runner_os=$env:RUNNER_OS"
+          ) | Set-Content -Encoding utf8 (Join-Path $out 'run-context.txt')
+          if (Test-Path -LiteralPath 'dist/squirrel-windows') {
+            Copy-Item -Recurse -Force 'dist/squirrel-windows' (Join-Path $out 'squirrel-windows')
+          }
+          if (Test-Path -LiteralPath 'dist/windows-icon-contract.json') {
+            Copy-Item -Force 'dist/windows-icon-contract.json' $out
+          }
+
+      - name: Upload safe package output
+        if: ${{ always() }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-package-smoke-${{ github.run_number }}
+          path: ${{ runner.temp }}/squirrel-package-output
+          if-no-files-found: warn
+          retention-days: 14

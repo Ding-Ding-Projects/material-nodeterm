@@ -2,19 +2,24 @@ import { useCallback, useEffect, useState } from 'react'
 import type { SpeechModelInfo } from '@shared/types'
 import { modelAfterDelete, modelAfterDownload } from '@shared/speech'
 import { DEFAULT_SETTINGS } from '@shared/types'
+import { hasSpeechModel, modelAfterDelete, modelAfterDownload, SPEECH_MODEL_NONE } from '@shared/speech'
+import { formatShortcut, isHoldChord } from '@shared/shortcut'
+import { dictationBinding } from '../../../lib/keybindingOverrides'
 import { useSettings } from '../../../state/settings'
 import { SettingsSection } from '../SettingsSection'
+import { SettingsText } from '../SettingsText'
 import { SearchableRow } from '../SearchableRow'
 import { FieldRow } from '../FieldRow'
 import { Select } from '@renderer/ui/Select'
+import { Radio } from '@renderer/ui/md3'
 import { SegmentedPill } from '@renderer/ui/SegmentedPill'
 import { Button } from '@renderer/ui/Button'
 import { formatShortcut, isHoldChord } from '@shared/shortcut'
 import { ShortcutCaptureField } from '../ShortcutCaptureField'
+import { Radio } from '@renderer/ui/md3'
 import type { SettingsSectionId } from '../nav'
 
 const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
-const DEFAULT_SHORTCUT = DEFAULT_SETTINGS.speech.shortcut
 
 const ROWS = {
   engine: {
@@ -27,7 +32,21 @@ const ROWS = {
   },
   models: {
     title: 'Whisper models',
-    keywords: ['whisper', 'model', 'download', 'delete', 'tiny', 'base', 'small', 'large', 'pro']
+    keywords: [
+      'whisper',
+      'model',
+      'download',
+      'delete',
+      'tiny',
+      'base',
+      'small',
+      'large',
+      'pro',
+      'none',
+      'off',
+      'disable',
+      'no dictation'
+    ]
   },
   language: {
     title: 'Language',
@@ -78,6 +97,11 @@ function modelLabel(id: string): string {
 export function SpeechSection({ isActive }: { isActive: boolean }): React.JSX.Element {
   const settings = useSettings((s) => s.settings)
   const update = useSettings((s) => s.update)
+  // The chord's single source is the registry override (`speech.shortcut` is only the legacy
+  // downgrade mirror), and a string selector keeps an unrelated settings write from re-rendering
+  // this section. `''` = the user disabled dictation's shortcut.
+  const dictationChord = useSettings(() => dictationBinding())
+  const isPremium = useEntitlement((s) => s.isPremium)
 
   const [models, setModels] = useState<SpeechModelInfo[]>([])
   const [progress, setProgress] = useState<Record<string, number>>({})
@@ -126,9 +150,6 @@ export function SpeechSection({ isActive }: { isActive: boolean }): React.JSX.El
   }
   const setLanguage = (language: string): void => {
     update({ speech: { ...settings.speech, language } })
-  }
-  const setShortcut = (shortcut: string): void => {
-    update({ speech: { ...settings.speech, shortcut } })
   }
 
   // No gate: every model is free to pick and free to download. The larger ones simply cost more
@@ -214,11 +235,18 @@ export function SpeechSection({ isActive }: { isActive: boolean }): React.JSX.El
       <SearchableRow {...ROWS.shortcut}>
         <FieldRow
           label="Shortcut"
-          description="Press a combo — with a key = toggle (press to start, press again to stop and insert); modifiers only = hold to talk (hold to record, release to stop and insert). The Dock mic uses the same shortcut."
+          description="Dictation's shortcut is managed with every other keyboard shortcut."
           note={
-            isHoldChord(settings.speech.shortcut)
-              ? `Currently hold-to-talk: hold ${formatShortcut(settings.speech.shortcut, isMac)}.`
-              : `Currently toggle: press ${formatShortcut(settings.speech.shortcut, isMac)}.`
+            dictationChord === ''
+              ? 'Currently disabled.'
+              : isHoldChord(dictationChord)
+                ? `Currently hold-to-talk: hold ${formatShortcut(dictationChord, isMac)}.`
+                : `Currently toggle: press ${formatShortcut(dictationChord, isMac)}.`
+          }
+          control={
+            <Button variant="ghost" onClick={() => onNavigate('shortcuts')}>
+              Open Keyboard Shortcuts
+            </Button>
           }
           control={
             <ShortcutCaptureField
@@ -233,11 +261,31 @@ export function SpeechSection({ isActive }: { isActive: boolean }): React.JSX.El
 
       <SearchableRow {...ROWS.models}>
         <div className="space-y-3">
-          <h4 className="text-[13px] font-medium text-text">Whisper models</h4>
+          <h4 className="text-[13px] font-medium text-text"><SettingsText>Whisper models</SettingsText></h4>
           {models.length === 0 ? (
-            <p className="text-[12px] text-muted">Loading models…</p>
+            <p className="text-[12px] text-muted"><SettingsText>Loading models…</SettingsText></p>
           ) : (
             <div className="space-y-2">
+              {/* The honest off switch (issue #143): dictation is optional, and None is a real row
+                  in the same radio group — not a missing selection the heal helpers would fix. */}
+              <div className="flex items-center justify-between gap-3 rounded-md border border-border p-3">
+                <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3">
+                  <input
+                    type="radio"
+                    name="speech-model"
+                    className="shrink-0"
+                    checked={!hasSpeechModel(settings.speech.model)}
+                    onChange={() => update({ speech: { ...settings.speech, model: SPEECH_MODEL_NONE } })}
+                  />
+                  <div className="min-w-0">
+                    <span className="text-[13px] font-medium text-text">None</span>
+                    <p className="text-[12px] text-muted">
+                      Dictation off — the shortcut and the Dock mic explain instead of recording.
+                      Downloading a model below turns it on.
+                    </p>
+                  </div>
+                </label>
+              </div>
               {models.map((m) => {
                 const pct = progress[m.id]
                 const downloading = busy[m.id] && pct !== undefined
@@ -247,10 +295,8 @@ export function SpeechSection({ isActive }: { isActive: boolean }): React.JSX.El
                     className="flex items-center justify-between gap-3 rounded-md border border-border p-3"
                   >
                     <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3">
-                      <input
-                        type="radio"
+                      <Radio
                         name="speech-model"
-                        className="shrink-0"
                         checked={settings.speech.model === m.id}
                         onChange={() => selectModel(m)}
                       />

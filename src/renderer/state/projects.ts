@@ -1,12 +1,13 @@
 import { create } from 'zustand'
 import type { AgentPermissionMode } from '@shared/agents/config'
 import type {
-  BridgeLink,
   BrowserProfile,
   CanvasMutation,
   CanvasNodeState,
+  Link,
   NavStop,
   Project,
+  ProjectAwsUniverseCanvas,
   ProjectKanban,
   Viewport,
   Workspace
@@ -16,6 +17,20 @@ import type { ProjectCapability } from '@shared/project-capabilities'
 import { recordCapabilityAck, type CapabilityAnswer } from '@shared/project-capability-consent'
 import { applyEdgeMutation } from '@shared/canvas-mutations'
 import { collisionSeed, derivedProjectId } from '@shared/project-id'
+import {
+  canvasDepth,
+  MAX_MULTIVERSE_CANVASES,
+  MAX_MULTIVERSE_DEPTH,
+  ROOT_CANVAS_ID
+} from '@shared/multiverse-canvases'
+import { createSpecialUniverseCanvas } from '../../core/universe-shop'
+import { AWS_UNIVERSE_ROOT_ID, MAX_AWS_UNIVERSE_INSTANCES, nextAwsUniverseId } from '@shared/aws-universes'
+import type { PortableDoorConstructionV3 } from '@shared/door-construction'
+import { deletePortablePortal, navigatePortablePortal } from '../../core/portal-lifecycle'
+import { portableCanvasProjectionToProject, projectToPortableCanvasV3 } from '../../core/portable-canvas-projection'
+import type { ProjectCapability } from '@shared/project-capabilities'
+import type { ProjectIcon } from '@shared/project-icon'
+import { recordCapabilityAck, type CapabilityAnswer } from '@shared/project-capability-consent'
 import { applyCanvasMutation, createProject, reorderGroupWithinParent } from './workspace'
 import { markWorkspaceDirty } from './workspaceDirty'
 
@@ -41,6 +56,30 @@ interface ProjectsState {
   getProject(id: string): Project | undefined
 
   setActive(id: string): void
+  /** Opens the root or one persisted Multiverse child canvas and requests an in-place reload. */
+  openMultiverseCanvas(projectId: string, canvasId: string): boolean
+  /** Creates one safe child canvas. The caller decides when to navigate to it. */
+  createMultiverseCanvas(projectId: string, parentCanvasId: string, title: string): {
+    canvasId?: string
+    reason?: string
+  }
+  /** Opens the root or one AWS-only child canvas through the shared active-canvas runtime path. */
+  openAwsUniverseCanvas(projectId: string, canvasId: string): boolean
+  /** Creates one AWS-only child canvas and its root portal intent. */
+  createAwsUniverseCanvas(projectId: string, title: string): { canvasId?: string; reason?: string }
+  /** Attach one validated construction to both sides of a newly-created Multiverse portal. */
+  attachMultiverseDoor(projectId: string, input: {
+    parentCanvasId: string
+    childCanvasId: string
+    entryDoorId: string
+    returnDoorId: string
+    title: string
+    entryConstruction: PortableDoorConstructionV3
+    returnConstruction: PortableDoorConstructionV3
+  }): { portalId?: string; reason?: string }
+  setPortalStatus(projectId: string, portalId: string, status: 'open' | 'closed'): boolean
+  deletePortal(projectId: string, portalId: string): { ok: true; preservedNodeIds: string[] } | { ok: false; reason: string }
+  openPortal(projectId: string, portalId: string, fromCanvasId: string): { ok: true; canvasId: string; returnDoorId: string } | { ok: false; reason: string }
   /** Adds a new project and returns it (caller commits the current canvas first). */
   addProject(name?: string, cwd?: string, ssh?: Project['ssh']): Project
   /** "Open folder…": a folder maps to one project. Reuses the existing project with that
@@ -63,6 +102,8 @@ interface ProjectsState {
   renameProject(id: string, name: string): void
   /** Sets a project's sidebar/monogram accent color. No-op for an unknown id. */
   setProjectColor(id: string, color: string): void
+  /** Sets (or clears, with undefined = fall back to the color monogram) the project's icon. Stored
+   *  on `Project.icon` and git-shared via project.json like name/color. No-op for an unknown id. */
   setProjectIcon(id: string, icon: ProjectIcon | undefined): void
   setProjectCwd(id: string, cwd: string): void
   /** Grey (or un-grey) a project tab as "unavailable" WITHOUT dropping it — runtime-only, never
@@ -83,6 +124,19 @@ interface ProjectsState {
    * MACHINE-LOCAL by construction: `Project.capabilityAck` rides `IndexEntryV3.capabilityAck`
    * and is never serialized into the shared project file. Records the clone notice's answer.
    */
+  /**
+   * THE strict per-project capability setter (@shared/project-capabilities). `on` writes the
+   * literal `true` the validators accept AND records this machine's 'kept' answer — setting a
+   * switch yourself is its own consent, so the clone notice never fires on your own decision.
+   * `off` deletes the field outright (an off capability adds no bytes to the shared file) AND
+   * records 'declined': if a teammate's (or a hostile) `true` re-arrives via git, the capability
+   * is refused and re-noticed rather than silently re-granted (PR #213 C1/M-2). */
+  setProjectCapability(id: string, cap: ProjectCapability, on: boolean): void
+  /**
+   * Records this machine's ANSWER ('kept' | 'declined') to the one-time clone notice.
+   * MACHINE-LOCAL by construction: `Project.capabilityAck` rides `IndexEntryV3.capabilityAck`
+   * through splitWorkspace on the next save and is never written into .nodeterm/project.json
+   * (workspace-files.test.ts pins the file bytes; capability-notice.test.tsx pins this path). */
   recordProjectCapabilityAck(id: string, cap: ProjectCapability, answer: CapabilityAnswer): void
   /** Raises the project's dino high score (never lowers it). */
   setDinoHighScore(id: string, score: number): void
@@ -94,14 +148,8 @@ interface ProjectsState {
   /** Replaces the project's browser-profile list (create/rename/remove all funnel through this).
    *  See `BrowserProfile` in @shared/types and `shared/browser-profiles.ts`. */
   setProjectBrowserProfiles(id: string, browserProfiles: BrowserProfile[]): void
-  /** Writes the serialized canvas (nodes + viewport + bridge links + control ropes) back into a project. */
-  commitCanvas(
-    id: string,
-    nodes: CanvasNodeState[],
-    viewport: Viewport,
-    bridges?: BridgeLink[],
-    ropes?: BridgeLink[]
-  ): void
+  /** Writes the serialized canvas (nodes + viewport + unified links) back into a project. */
+  commitCanvas(id: string, nodes: CanvasNodeState[], viewport: Viewport, links?: Link[]): void
   /**
    * Applies ONE peer canvas mutation to a project's serialized nodes — the path for a project
    * that is loaded but NOT active (React Flow only holds the active project's nodes). Returns
@@ -156,6 +204,30 @@ interface ProjectsState {
   closeProject(id: string): string
   /** Restores a closed project and makes it active. No-op if the id is unknown. */
   reopenProject(id: string): void
+
+  /**
+   * Registers (or finds) the project for a local directory WITHOUT activating it — the store half
+   * of the `open-project` control verb (issue #338, spec §2.1 steps 2–4). The human paths
+   * (`openFolderProject`/`adoptProject`/`reopenProject`) all set `activeProjectId`; an agent verb
+   * must not travel the user's view (spec P6), so this action NEVER writes it, in any branch.
+   *
+   * `resolvedCwd` is main's already-validated, `path.resolve`d form (spec P7) — this action only
+   * re-applies the trailing-slash normalization so the exact-string dedupe cannot be split by a
+   * cosmetic slash. Branches, in order:
+   *  - idempotent hit (B1): a project with this cwd is returned as-is; a `closed` one is
+   *    un-closed (its tab reappears) without activation. `name`/`color` are NOT applied — an
+   *    existing project's identity is never mutated on an agent's say-so.
+   *  - adopt: `probed` (the folder's own .nodeterm/project.json, from `probeFolder`) is added,
+   *    defending against an id collision exactly as `adoptProject` does (derived id, nodes kept).
+   *  - create: the same `createProject` factory `addProject` uses; `name` defaults to the folder
+   *    basename, `color` applies on create only.
+   */
+  registerProject(input: {
+    resolvedCwd: string
+    name?: string
+    color?: string
+    probed?: Project
+  }): { project: Project; created: boolean; adopted: boolean }
 
   toWorkspace(): Workspace
 }
@@ -248,7 +320,49 @@ function mapProjectNodes(
   projectId: string,
   fn: (nodes: CanvasNodeState[]) => CanvasNodeState[]
 ): Project[] {
-  return projects.map((p) => (p.id === projectId ? { ...p, nodes: fn(p.nodes) } : p))
+  return projects.map((p) => {
+    if (p.id !== projectId) return p
+    if (!p.activeCanvasId) return { ...p, nodes: fn(p.nodes) }
+    const multiverseCanvases = p.multiverseCanvases?.map((canvas) =>
+      canvas.id === p.activeCanvasId ? { ...canvas, nodes: fn(canvas.nodes) } : canvas
+    )
+    const childCanvases = p.childCanvases?.map((canvas) =>
+      canvas.id === p.activeCanvasId && canvas.scope === 'aws-universe' ? { ...canvas, nodes: fn(canvas.nodes) } : canvas
+    )
+    return { ...p, multiverseCanvases, childCanvases }
+  })
+}
+
+function withoutActiveCanvas(project: Project): Project {
+  const copy = { ...project }
+  delete copy.activeCanvasId
+  return copy
+}
+
+function newMultiverseCanvasId(project: Project): string {
+  const used = new Set((project.multiverseCanvases ?? []).map((canvas) => canvas.id))
+  const base = `multiverse-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+  if (!used.has(base)) return base
+  for (let suffix = 2; suffix <= MAX_MULTIVERSE_CANVASES; suffix += 1) {
+    const candidate = `${base}-${suffix}`
+    if (!used.has(candidate)) return candidate
+  }
+  return base
+}
+
+/** Apply a portal projection back onto the live project while retaining machine-local fields and
+ * the current project identity. Portable conversion owns only canvases, nodes, links, and portal
+ * intent, so settings, bindings, and session metadata never get replaced by a dialog action. */
+function withPortalProjection(project: Project, projection: ReturnType<typeof projectToPortableCanvasV3>): Project {
+  const hydrated = portableCanvasProjectionToProject(projection, { id: project.id, ...(project.cwd ? { cwd: project.cwd } : {}) })
+  return {
+    ...project,
+    nodes: hydrated.nodes,
+    viewport: hydrated.viewport,
+    multiverseCanvases: hydrated.multiverseCanvases,
+    portals: hydrated.portals,
+    ...(hydrated.childCanvases ? { childCanvases: hydrated.childCanvases } : {})
+  }
 }
 
 export const useProjects = create<ProjectsState>((set, get) => ({
@@ -257,7 +371,7 @@ export const useProjects = create<ProjectsState>((set, get) => ({
   reloadNonce: 0,
 
   hydrate(ws) {
-    set({ projects: withUniqueIds(ws.projects), activeProjectId: ws.activeProjectId })
+    set({ projects: withUniqueIds(ws.projects.map(withoutActiveCanvas)), activeProjectId: ws.activeProjectId })
   },
 
   requestReload() {
@@ -270,6 +384,227 @@ export const useProjects = create<ProjectsState>((set, get) => ({
 
   setActive(id) {
     set({ activeProjectId: id })
+  },
+
+  openMultiverseCanvas(projectId, canvasId) {
+    const project = get().projects.find((item) => item.id === projectId)
+    if (!project) return false
+    const activeCanvasId = canvasId === ROOT_CANVAS_ID
+      ? undefined
+      : project.multiverseCanvases?.some((canvas) => canvas.id === canvasId)
+        ? canvasId
+        : null
+    if (activeCanvasId === null) return false
+    set((state) => ({
+      projects: state.projects.map((item) => item.id === projectId ? { ...item, activeCanvasId } : item),
+      reloadNonce: state.reloadNonce + 1
+    }))
+    return true
+  },
+
+  createMultiverseCanvas(projectId, parentCanvasId, rawTitle) {
+    const project = get().projects.find((item) => item.id === projectId)
+    if (!project) return { reason: 'Choose an open project before creating a child canvas.' }
+    const title = rawTitle.trim()
+    if (!title || title.length > 160) return { reason: 'Enter a canvas name from 1 to 160 characters.' }
+    const parentDepth = canvasDepth(project, parentCanvasId)
+    if (parentDepth === null) return { reason: 'Choose an existing parent canvas.' }
+    const depth = parentDepth + 1
+    if (depth > MAX_MULTIVERSE_DEPTH) return { reason: `Depth ${MAX_MULTIVERSE_DEPTH} is the deepest Multiverse canvas.` }
+    if ((project.multiverseCanvases?.length ?? 0) >= MAX_MULTIVERSE_CANVASES) return { reason: 'This project has reached the bounded child-canvas limit.' }
+    const canvasId = newMultiverseCanvasId(project)
+    const created = createSpecialUniverseCanvas({
+      id: canvasId,
+      scope: 'multiverse',
+      parentCanvasId,
+      depth,
+      title,
+      order: project.multiverseCanvases?.length ?? 0,
+      viewport: { x: 0, y: 0, zoom: 1 }
+    })
+    if (created.refused || !created.canvas || !created.shop) {
+      return { reason: created.reason ?? 'The child canvas could not be created.' }
+    }
+    const shop: CanvasNodeState = { ...created.shop, kind: 'shop' }
+    const portalId = `portal-${created.canvas!.id}`
+    const entryDoorId = `door-${created.canvas!.id}-entry`
+    const returnDoorId = `door-${created.canvas!.id}-return`
+    set((state) => ({
+      projects: state.projects.map((item) => item.id === projectId
+        ? {
+            ...item,
+            multiverseCanvases: [...(item.multiverseCanvases ?? []), {
+              id: created.canvas!.id,
+              title: created.canvas!.title,
+              parentCanvasId: created.canvas!.parentCanvasId!,
+              depth: created.canvas!.depth!,
+              order: created.canvas!.order,
+              viewport: created.canvas!.viewport ?? { x: 0, y: 0, zoom: 1 },
+               nodes: [shop]
+             }],
+            portals: [...(item.portals ?? []), {
+              id: portalId,
+              parentCanvasId,
+              childCanvasId: created.canvas!.id,
+              entryDoorId,
+              returnDoorId,
+              title,
+              depth,
+              status: 'open' as const
+            }]
+          }
+        : item
+      )
+    }))
+    return { canvasId }
+  },
+
+  openAwsUniverseCanvas(projectId, canvasId) {
+    const project = get().projects.find((item) => item.id === projectId)
+    if (!project) return false
+    const activeCanvasId = canvasId === AWS_UNIVERSE_ROOT_ID
+      ? undefined
+      : project.childCanvases?.some((canvas) => canvas.scope === 'aws-universe' && canvas.id === canvasId)
+        ? canvasId
+        : null
+    if (activeCanvasId === null) return false
+    set((state) => ({
+      projects: state.projects.map((item) => item.id === projectId ? { ...item, activeCanvasId } : item),
+      reloadNonce: state.reloadNonce + 1
+    }))
+    return true
+  },
+
+  createAwsUniverseCanvas(projectId, rawTitle) {
+    const project = get().projects.find((item) => item.id === projectId)
+    if (!project) return { reason: 'Choose an open project before creating an AWS Universe.' }
+    const title = rawTitle.trim()
+    if (!title || title.length > 160) return { reason: 'Enter a Universe name from 1 to 160 characters.' }
+    const existing = (project.childCanvases ?? []).filter((canvas): canvas is ProjectAwsUniverseCanvas => canvas.scope === 'aws-universe' && canvas.parentCanvasId === AWS_UNIVERSE_ROOT_ID && canvas.depth === 1 && !!canvas.viewport)
+    if (existing.length >= MAX_AWS_UNIVERSE_INSTANCES) return { reason: 'The portable resource safety bound has been reached.' }
+    const id = nextAwsUniverseId(existing)
+    let shop: CanvasNodeState
+    try {
+      shop = createUniverseShopNode({ id, scope: 'aws-universe', depth: 1 }) as CanvasNodeState
+    } catch (error) {
+      return { reason: error instanceof Error ? error.message : 'The AWS Universe Shop could not be created.' }
+    }
+    const portal: CanvasNodeState = {
+      id: `aws-universe-portal-${id}`,
+      kind: 'aws-universe',
+      position: { x: 80 + (existing.length % 4) * 460, y: 80 + Math.floor(existing.length / 4) * 300 },
+      size: { width: 420, height: 260 },
+      title,
+      color: '#7d5260',
+      group: null,
+      universeCanvasId: id,
+      universeScope: 'aws-universe',
+      universeDepth: 1,
+      tags: ['aws-universe', 'universe-portal']
+    }
+    const child = {
+      id,
+      scope: 'aws-universe' as const,
+      title,
+      parentCanvasId: AWS_UNIVERSE_ROOT_ID,
+      depth: 1,
+      order: existing.length,
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [shop]
+    }
+    set((state) => ({
+      projects: state.projects.map((item) => item.id !== projectId ? item : {
+        ...item,
+        nodes: [...item.nodes, portal],
+        childCanvases: [...(item.childCanvases ?? []), child]
+      })
+    }))
+    return { canvasId: id }
+  },
+
+  attachMultiverseDoor(projectId, input) {
+    const project = get().projects.find((item) => item.id === projectId)
+    if (!project) return { reason: 'Choose an open project before attaching a door.' }
+    const child = project.multiverseCanvases?.find((canvas) => canvas.id === input.childCanvasId)
+    const parent = input.parentCanvasId === ROOT_CANVAS_ID || project.multiverseCanvases?.some((canvas) => canvas.id === input.parentCanvasId)
+    if (!child || !parent) return { reason: 'The selected parent or child canvas is no longer available.' }
+    if (child.parentCanvasId !== input.parentCanvasId) return { reason: 'The child canvas is not beneath the selected parent.' }
+    if (input.entryConstruction.doorId !== input.entryDoorId || input.entryConstruction.canvasId !== input.parentCanvasId || input.entryConstruction.targetCanvasId !== input.childCanvasId || input.entryConstruction.pairedDoorId !== input.returnDoorId) {
+      return { reason: 'The entry construction identity does not match the selected door route.' }
+    }
+    if (input.returnConstruction.doorId !== input.returnDoorId || input.returnConstruction.canvasId !== input.childCanvasId || input.returnConstruction.targetCanvasId !== input.parentCanvasId || input.returnConstruction.pairedDoorId !== input.entryDoorId) {
+      return { reason: 'The return construction identity does not match the selected door route.' }
+    }
+    const portalId = `portal-${input.childCanvasId}`
+    if (project.portals?.some((portal) => portal.childCanvasId === input.childCanvasId || portal.id === portalId)) {
+      return { reason: 'This child canvas already has a portal.' }
+    }
+    set((state) => ({
+      projects: state.projects.map((item) => item.id !== projectId ? item : {
+        ...item,
+        portals: [...(item.portals ?? []), {
+          id: portalId,
+          parentCanvasId: input.parentCanvasId,
+          childCanvasId: input.childCanvasId,
+          entryDoorId: input.entryDoorId,
+          returnDoorId: input.returnDoorId,
+          title: input.title,
+          depth: child.depth,
+          status: 'open' as const,
+          entryConstruction: input.entryConstruction,
+          returnConstruction: input.returnConstruction
+        }]
+      })
+    }))
+    return { portalId }
+  },
+
+  setPortalStatus(projectId, portalId, status) {
+    const project = get().projects.find((item) => item.id === projectId)
+    if (!project || !(project.portals ?? []).some((portal) => portal.id === portalId)) return false
+    set((state) => ({
+      projects: state.projects.map((item) => item.id === projectId
+        ? { ...item, portals: (item.portals ?? []).map((portal) => portal.id === portalId ? { ...portal, status } : portal) }
+        : item
+      )
+    }))
+    return true
+  },
+
+  openPortal(projectId, portalId, fromCanvasId) {
+    const project = get().projects.find((item) => item.id === projectId)
+    if (!project) return { ok: false, reason: 'Choose an open project before entering a portal.' }
+    let projection: ReturnType<typeof projectToPortableCanvasV3>
+    try {
+      projection = projectToPortableCanvasV3(project)
+    } catch (error) {
+      return { ok: false, reason: error instanceof Error ? error.message : 'Portal data could not be read.' }
+    }
+    const decision = navigatePortablePortal(projection, portalId, fromCanvasId)
+    if (!decision.allowed) return { ok: false, reason: `${decision.reason} ${decision.nextAction}` }
+    if (!get().openMultiverseCanvas(projectId, decision.targetCanvasId)) return { ok: false, reason: 'The portal target canvas is no longer available.' }
+    return { ok: true, canvasId: decision.targetCanvasId, returnDoorId: decision.returnDoorId }
+  },
+
+  deletePortal(projectId, portalId) {
+    const project = get().projects.find((item) => item.id === projectId)
+    if (!project) return { ok: false, reason: 'Choose an open project before deleting a portal.' }
+    try {
+      const result = deletePortablePortal(projectToPortableCanvasV3(project), portalId)
+      if (result.refused || !result.projection) return { ok: false, reason: result.reason ?? 'Portal deletion was refused.' }
+      const next = withPortalProjection(project, result.projection)
+      const activeRemoved = !!project.activeCanvasId && result.removedCanvasIds.includes(project.activeCanvasId)
+      set((state) => ({
+        projects: state.projects.map((item) => item.id === projectId
+          ? { ...next, ...(activeRemoved ? { activeCanvasId: undefined } : {}) }
+          : item
+        ),
+        reloadNonce: state.reloadNonce + 1
+      }))
+      return { ok: true, preservedNodeIds: result.preservedNodeIds }
+    } catch (error) {
+      return { ok: false, reason: error instanceof Error ? error.message : 'Portal deletion was refused.' }
+    }
   },
 
   addProject(name, cwd, ssh) {
@@ -353,6 +688,12 @@ export const useProjects = create<ProjectsState>((set, get) => ({
     }))
   },
 
+  setProjectIcon(id, icon) {
+    set((s) => ({
+      projects: s.projects.map((p) => (p.id === id ? { ...p, icon } : p))
+    }))
+  },
+
   setProjectCwd(id, cwd) {
     set((s) => ({
       projects: s.projects.map((p) => (p.id === id ? { ...p, cwd } : p))
@@ -392,6 +733,9 @@ export const useProjects = create<ProjectsState>((set, get) => ({
     // The setter owns the persist: its call sites (the AgentsSection toggle, the clone notice's
     // decline) schedule no save of their own, so without this the choice would be lost on
     // restart unless an unrelated canvas edit happened to dirty the workspace afterwards.
+    // The setter owns the persist (issue #318): its call sites — the AgentsSection toggle, the
+    // clone notice's decline — schedule no save of their own, so without this the choice was lost
+    // on restart unless an unrelated canvas edit happened to dirty the workspace afterwards.
     markWorkspaceDirty()
   },
 
@@ -441,13 +785,29 @@ export const useProjects = create<ProjectsState>((set, get) => ({
     }))
   },
 
-  commitCanvas(id, nodes, viewport, bridges, ropes) {
+  commitCanvas(id, nodes, viewport, links) {
     set((s) => ({
-      projects: s.projects.map((p) =>
-        p.id === id
-          ? { ...p, nodes, viewport, ...(bridges ? { bridges } : {}), ...(ropes ? { ropes } : {}) }
-          : p
-      )
+      projects: s.projects.map((p) => {
+        if (p.id !== id) return p
+        if (!p.activeCanvasId) {
+          const { bridges: _bridges, ropes: _ropes, ...rest } = p
+          return { ...rest, nodes, viewport, ...(links ? { links } : {}) }
+        }
+        if (!p.multiverseCanvases?.some((canvas) => canvas.id === p.activeCanvasId)) {
+          return {
+            ...p,
+            childCanvases: p.childCanvases?.map((canvas) => canvas.id === p.activeCanvasId && canvas.scope === 'aws-universe'
+              ? { ...canvas, nodes, viewport }
+              : canvas)
+          }
+        }
+        return {
+          ...p,
+          multiverseCanvases: p.multiverseCanvases?.map((canvas) => canvas.id === p.activeCanvasId
+            ? { ...canvas, nodes, viewport }
+            : canvas)
+        }
+      })
     }))
   },
 
@@ -466,8 +826,12 @@ export const useProjects = create<ProjectsState>((set, get) => ({
     set((s) => ({
       projects: s.projects.map((p) => {
         if (p.id !== projectId) return p
-        const bridgeInput = p.bridges ?? []
-        const ropeInput = p.ropes ?? []
+        const selected = p.activeCanvasId ? p.multiverseCanvases?.find((canvas) => canvas.id === p.activeCanvasId) : undefined
+        const child = !selected && p.activeCanvasId
+          ? p.childCanvases?.find((canvas) => canvas.id === p.activeCanvasId && canvas.scope === 'aws-universe')
+          : undefined
+        const bridgeInput = selected?.bridges ?? child?.bridges ?? p.bridges ?? []
+        const ropeInput = selected?.ropes ?? child?.ropes ?? p.ropes ?? []
         const bridges = applyEdgeMutation(bridgeInput, 'bridge', mutation)
         const ropes = applyEdgeMutation(ropeInput, 'rope', mutation)
         // `applyEdgeMutation` returns the SAME array when the mutation is not about that list, so
@@ -478,6 +842,22 @@ export const useProjects = create<ProjectsState>((set, get) => ({
         // array, defeats the identity test, and dirties a rope-only project with `bridges: []`.
         const nextBridges = bridges === bridgeInput ? p.bridges : bridges
         const nextRopes = ropes === ropeInput ? p.ropes : ropes
+        if (selected) {
+          return {
+            ...p,
+            multiverseCanvases: p.multiverseCanvases?.map((canvas) => canvas.id === selected.id
+              ? { ...canvas, bridges: nextBridges, ropes: nextRopes }
+              : canvas)
+          }
+        }
+        if (child) {
+          return {
+            ...p,
+            childCanvases: p.childCanvases?.map((canvas) => canvas.id === child.id
+              ? { ...canvas, bridges: nextBridges, ropes: nextRopes }
+              : canvas)
+          }
+        }
         if (nextBridges === p.bridges && nextRopes === p.ropes) return p
         return { ...p, bridges: nextBridges, ropes: nextRopes }
       })
@@ -489,7 +869,9 @@ export const useProjects = create<ProjectsState>((set, get) => ({
     set((s) => ({
       projects: mapProjectNodes(s.projects, projectId, (nodes) =>
         // An explicit rename means the user owns the name now: stop auto-tracking the session.
-        nodes.map((n) => (n.id === nodeId ? { ...n, title, titleAuto: false } : n))
+        nodes.map((n) => n.id === nodeId && n.kind !== 'shop' && n.nonDeletable !== true
+          ? { ...n, title, titleAuto: false }
+          : n)
       )
     }))
   },
@@ -505,7 +887,9 @@ export const useProjects = create<ProjectsState>((set, get) => ({
   removeNode(projectId, nodeId) {
     set((s) => ({
       projects: mapProjectNodes(s.projects, projectId, (nodes) =>
-        nodes.filter((n) => n.id !== nodeId)
+        nodes.some((n) => n.id === nodeId && (n.kind === 'shop' || n.nonDeletable === true))
+          ? nodes
+          : nodes.filter((n) => n.id !== nodeId)
       )
     }))
   },
@@ -514,7 +898,7 @@ export const useProjects = create<ProjectsState>((set, get) => ({
     set((s) => ({
       projects: mapProjectNodes(s.projects, projectId, (nodes) => {
         const src = nodes.find((n) => n.id === nodeId)
-        if (!src) return nodes
+        if (!src || src.kind === 'shop' || src.nonDeletable === true) return nodes
         const copy = {
           ...src,
           id: `${src.kind}-${Math.random().toString(36).slice(2, 10)}`,
@@ -527,7 +911,8 @@ export const useProjects = create<ProjectsState>((set, get) => ({
           agentSessionId: undefined,
           pendingLaunch: undefined,
           pendingLaunchError: undefined,
-          pendingLaunchErrorKind: undefined
+          pendingLaunchErrorKind: undefined,
+          pendingLaunchErrorOwnership: undefined
         }
         return [...nodes, copy]
       })
@@ -538,7 +923,7 @@ export const useProjects = create<ProjectsState>((set, get) => ({
     set((s) => ({
       projects: mapProjectNodes(s.projects, projectId, (nodes) => {
         const node = nodes.find((n) => n.id === nodeId)
-        if (!node) return nodes
+        if (!node || node.kind === 'shop' || node.nonDeletable === true) return nodes
         if ((node.parentId ?? null) === groupId) return nodes
         // A frame may be moved into another frame, but never into itself or its own subtree.
         if (groupId === nodeId || (groupId && stateIsDescendant(nodes, groupId, nodeId))) {
@@ -557,7 +942,7 @@ export const useProjects = create<ProjectsState>((set, get) => ({
         if (draggedId === beforeId) return nodes
         const dragged = nodes.find((n) => n.id === draggedId)
         const before = nodes.find((n) => n.id === beforeId)
-        if (!dragged || !before || dragged.kind === 'group') return nodes
+        if (!dragged || !before || dragged.kind === 'group' || dragged.kind === 'shop' || dragged.nonDeletable === true) return nodes
         const targetParent = before.parentId ?? null
         const moved =
           (dragged.parentId ?? null) === targetParent
@@ -636,11 +1021,58 @@ export const useProjects = create<ProjectsState>((set, get) => ({
     })
   },
 
+  registerProject({ resolvedCwd, name, color, probed }) {
+    // The same exact-match rule as `openFolderProject` (a folder maps to one project), with the
+    // trailing slash stripped so `/a/b/` and `/a/b` cannot mint two tabs for one directory.
+    // Root stays '/': stripping it to '' would match every cwd-less project.
+    const cwd = resolvedCwd.length > 1 ? resolvedCwd.replace(/\/+$/, '') : resolvedCwd
+    const existing = get().projects.find((p) => p.cwd === cwd)
+    if (existing) {
+      if (existing.closed) {
+        // Un-close WITHOUT activation — reopenProject also activates, which is the exact
+        // mutation the register tests are checked against (spec P6).
+        set((s) => ({
+          projects: s.projects.map((p) => (p.id === existing.id ? { ...p, closed: false } : p))
+        }))
+      }
+      return {
+        project: get().projects.find((p) => p.id === existing.id) ?? existing,
+        created: false,
+        adopted: false
+      }
+    }
+    if (probed) {
+      // adoptProject's collision defense verbatim (deterministic in (id, folder)) — but appended
+      // WITHOUT the `activeProjectId` write that makes adoptProject a human path.
+      const taken = get().projects.some((p) => p.id === probed.id)
+      const adopted = taken
+        ? {
+            ...probed,
+            id: derivedProjectId(probed.id, collisionSeed(probed), (c) =>
+              get().projects.some((p) => p.id === c))
+          }
+        : probed
+      set((s) => ({ projects: [...s.projects, adopted] }))
+      return { project: adopted, created: false, adopted: true }
+    }
+    const fallbackName = cwd.split('/').filter(Boolean).pop() || 'Project'
+    const project = {
+      ...createProject(get().projects.length, name ?? fallbackName, cwd),
+      ...(color ? { color } : {})
+    }
+    set((s) => ({ projects: [...s.projects, project] }))
+    return { project, created: true, adopted: false }
+  },
+
   toWorkspace() {
     const { projects, activeProjectId } = get()
     // A relay tab (`remote`) is a live connection to another machine's project, never a
     // workspace on this disk — exclude it so it can't be written into this client's
     // workspace.json (the disk writer skips it too; see core/workspace-files.ts).
-    return { version: 2, activeProjectId, projects: projects.filter((p) => !p.remote) }
+    return {
+      version: 2,
+      activeProjectId,
+      projects: projects.filter((project) => !project.remote).map(withoutActiveCanvas)
+    }
   }
 }))

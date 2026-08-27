@@ -25,6 +25,7 @@ import {
   unlinkSync
 } from 'fs'
 import { randomUUID } from 'crypto'
+import { renameAtomicSync } from '../../fs-atomic'
 import { buildManagedScript } from './managed-script'
 import {
   computeTrustedHash,
@@ -38,13 +39,19 @@ import {
 } from './codex-trust'
 import { renameAtomicSync } from '../../fs-atomic'
 
-// Confirmed codex event set.
+// Confirmed codex event set. SubagentStart/SubagentStop drive the subagent fan-out cards
+// (codex's spawn_agent collaboration tool) — measured live on codex-cli 0.146.0: SubagentStart
+// carries `agent_id`/`agent_type` and its `transcript_path` is the CHILD's rollout; SubagentStop
+// adds `agent_transcript_path` + `last_assistant_message`. Older codex versions skip hook event
+// names they don't recognize, so subscribing these on a pre-subagent CLI is inert, not an error.
 export const CODEX_EVENTS = [
   'SessionStart',
   'UserPromptSubmit',
   'PreToolUse',
   'PermissionRequest',
   'PostToolUse',
+  'SubagentStart',
+  'SubagentStop',
   'Stop'
 ] as const
 
@@ -58,6 +65,8 @@ export const CODEX_EVENT_LABEL: Record<(typeof CODEX_EVENTS)[number], CodexEvent
   PreToolUse: 'pre_tool_use',
   PermissionRequest: 'permission_request',
   PostToolUse: 'post_tool_use',
+  SubagentStart: 'subagent_start',
+  SubagentStop: 'subagent_stop',
   Stop: 'stop'
 }
 

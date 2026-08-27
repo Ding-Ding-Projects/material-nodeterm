@@ -64,6 +64,16 @@
       "repairStrategy": { "kind": "reinstall-from-cache-or-source", "description": "Reverify the cached archive, then republish a fresh user-scoped installation." }
     }
   ],
+  "awsCliV2": {
+    "version": "2.36.32",
+    "platform": "windows-x64",
+    "source": "https://awscli.amazonaws.com/AWSCLIV2-User-2.36.32.msi",
+    "sha256": "bc695531b7fd83490e02741777dfda109cfab7fd9bef85fa1d5db21684cbaee2",
+    "maxDownloadBytes": 67108864,
+    "signer": "Amazon Web Services, Inc.",
+    "payload": ["aws.exe", "awscli/data/ac.index"],
+    "notes": "The release bootstrap stages the official versioned current-user MSI as an app resource. Runtime verifies the pinned SHA-256 before app-local administrative extraction and never mutates PATH or the system installation."
+  },
   "python": {
     "version": "3.13.15",
     "winget": {
@@ -101,5 +111,18 @@
         "libraryArchitectures": ["x86", "x64", "arm64"]
       }
     }
+  },
+  "qemu": {
+    "version": "10.1.0",
+    "platform": "windows-x64",
+    "source": "https://qemu.weilnetz.de/w64/2025/qemu-w64-setup-20250826.exe",
+    "checksumSource": "https://qemu.weilnetz.de/w64/2025/qemu-w64-setup-20250826.sha512",
+    "sha512": "5e6b88318ab1233e6d9cea187f657a8d69c5007fbaaee18c57383abbadf080c2731ccdcfe5c12b021b344b285b4bf2d69f6c80124714a2ac7d5f6a46b7297ccc",
+    "installerSizeDisclosure": "approximately 172 MiB, verify Content-Length before accepting",
+    "payload": [
+      { "path": "qemu/qemu-system-x86_64.exe", "required": true },
+      { "path": "qemu/qemu-img.exe", "required": true }
+    ],
+    "notes": "The installer is downloaded only by the release dependency bootstrap, verified against the published SHA-512, and extracted into the package resources boundary. Runtime never falls back to PATH."
   }
 }

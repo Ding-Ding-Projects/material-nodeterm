@@ -11,6 +11,7 @@
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
+import { writeFileAtomic } from '../fs-atomic'
 import { normalizeClaude, type NormalizedAgentEvent } from '../../shared/agents/normalize'
 import { renameAtomic, tempNameFor } from '../fs-atomic'
 
@@ -56,9 +57,12 @@ export async function writePendingAnswerLocal(
     await fs.promises.mkdir(dir, { recursive: true, mode: 0o700 })
     await fs.promises.writeFile(tmp, decision, { mode: 0o600 })
     await renameAtomic(tmp, file)
+  try {
+    await fs.promises.mkdir(dir, { recursive: true, mode: 0o700 })
+    // writeFileAtomic: unique tmp + retrying rename (core/fs-atomic.ts); removes its temp on failure.
+    await writeFileAtomic(file, decision, { mode: 0o600 })
     return true
   } catch {
-    await fs.promises.rm(tmp, { force: true }).catch(() => {})
     return false
   }
 }

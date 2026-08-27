@@ -26,6 +26,19 @@ before payload handling. `parsePortableProjectV3Manifest` uses fatal UTF-8 decod
 bytes cannot become replacement characters and pass JSON parsing. Omission paths are unique,
 case-collision checked, and cannot contradict included entries.
 
+`src/core/portable-project-import.ts` uses the same inventory for the complete archive read. It
+validates every payload hash before migration or staging, refuses destination collisions, and
+publishes an optional destination from an import-owned sibling stage. The staged runtime file is
+re-readable by the workspace store, while the original schema 3 projection is retained beside it
+for future canvas scopes.
+
+Planner schedules are represented by the optional `planner` projection member. It contains the
+validated schema 1 planner definition and its user-authored schedule intent only. Occurrence
+history, last-tick state, credentials, process state, paths, and provider state remain excluded.
+Import returns this definition without applying it. The completed import notification provides the
+explicit Configure route, which merges the definitions into the destination host store only after
+the user chooses it.
+
 ## Migration boundary
 
 Pure V1 and V2 migration removes exact identity fields such as `id`, paths, account references,
@@ -37,8 +50,9 @@ machine-local state as a side effect.
 
 ## Verification status
 
-The schema 3 validator and manifest builder live in `src/core/portable-project-v3.ts` and are
-re-exported by `src/core/project-archive.ts`. This implementation lane intentionally did not run
+The schema 3 validator, manifest builder, and atomic import seam live in
+`src/core/portable-project-v3.ts`, `src/core/portable-project-import.ts`, and are re-exported by
+`src/core/project-archive.ts`. This implementation lane intentionally did not run
 tests, type checking, linting, builds, packaging, or runtime captures. Those checks remain required
 before the roadmap item is marked complete.
 

@@ -12,6 +12,13 @@ node scripts/check-app-contract.mjs
 npm run check:app-contract
 ```
 
+The dedicated Material Design 3 source audit runs with
+`node scripts/check-material-audit.mjs` or `npm run check:material-audit`. It owns the exhaustive
+per-surface inventory in [`docs/features/appearance/material-3-audit.md`](features/appearance/material-3-audit.md),
+including every desktop shell, node, destination, settings section, overlay, status, empty/error
+state, and checked-in documentation page. It is intentionally source-only until a permitted
+built-artifact pass supplies runtime clipping and pixel evidence.
+
 Not wired into any GitHub Actions workflow — this project runs no gating checks in CI by policy
 (see `CLAUDE.md`'s "Continuous integration and releases" section). This is a **local tool**: run
 it yourself before considering a desktop-app feature change finished.

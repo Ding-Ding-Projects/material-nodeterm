@@ -9,6 +9,8 @@
 #
 # Enable with:  git config core.hooksPath .githooks
 node "$(dirname "$0")/../scripts/check-vocabulary.mjs" || exit $?
+node "$(dirname "$0")/../scripts/check-material-audit.mjs" || exit $?
+node "$(dirname "$0")/../scripts/check-personal-vocabulary-coverage.mjs" || exit $?
 
 # The stale docs bundle is here because it is the ONLY thing that has ever turned this repository's
 # release red: twice, on two different commits, each time because somebody added or edited an

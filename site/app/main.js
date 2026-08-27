@@ -16,9 +16,12 @@ import {
   getRoom, allSettingsCards, registerListRoom, fmtWhen,
 } from './core/engine.js'
 import { registerFeatures } from './features/index.js'
+import { handleVocabularyFileChange } from './features/vocabulary.js'
 import { SECTIONS, FEATURES, DOCS, COVERAGE, RX_TOKENS, DISHES } from './shared/data.js'
+import { DIM_SUM_TOAST_OWNERSHIP } from './features/dimsum.js'
 import { listVoices, findVoice } from './shared/narrator-state.js'
 import { createBulkList } from './shared/bulkList.js'
+import { VOCAB_MAX_FILE_BYTES } from './shared/vocabulary-state.js'
 
 const bulkList = createBulkList()
 
@@ -42,8 +45,8 @@ function speak(text) {
     /* speechSynthesis unavailable */
   }
 }
-function toastX(icon, title, body, sub) {
-  toast(store, icon, title, body, sub, speak)
+function toastX(icon, title, body, sub, ownership) {
+  toast(store, icon, title, body, sub, speak, ownership)
 }
 
 function enterDoor(id) {
@@ -109,6 +112,7 @@ function removeRows(ids) {
 function wipe() {
   try {
     localStorage.removeItem('nodeterm-playground.v1')
+    localStorage.removeItem('nodeterm-playground.vocabulary.v1')
   } catch (_err) {}
   const nowIso = new Date().toISOString()
   store.setState(
@@ -117,7 +121,7 @@ function wipe() {
       locks: {}, unlocked: {}, picked: {}, auth: [], cart: {},
       theme: 'day', lang: 'en', funnyEn: 2, funnyYue: 3, emoji: true, bigText: false, sound: false,
       accent: '#ffd93d', nick: '', logo: '', preset: 'playground',
-      school: false, schoolPin: '', narrate: false, voice: '', rate: 3, vocab: '', schedOn: false, schedTime: '19:00', schedTheme: 'night',
+      school: false, schoolHydrated: true, schoolPin: '', narrate: false, voice: '', rate: 3, vocab: '', vocabEntries: Object.create(null), vocabSavedAt: 0, vocabStatus: 'no-file', vocabError: '', schedOn: false, schedTime: '19:00', schedTheme: 'night',
     },
     { persist: false },
   )
@@ -176,9 +180,6 @@ root.addEventListener('click', (e) => {
       return
     case 'close-palette':
       if (e.target === el) store.setState({ paletteOpen: false }, { persist: false })
-      return
-    case 'copy-brew':
-      copyToClipboard(store, 'brew install --cask nodeterm')
       return
     case 'go-room':
       goRoom(id)
@@ -335,7 +336,15 @@ root.addEventListener('input', (e) => {
 })
 root.addEventListener('change', (e) => {
   const t = e.target
-  if (t.dataset && t.dataset.bindSelect) runFeatureBind(t.dataset.bindSelect, t.dataset.id, t.value)
+  if (t.dataset && t.dataset.bindFile) {
+    const file = t.files && t.files[0]
+    if (!file) return
+    void handleVocabularyFileChange(t, {
+      onTooLarge: (size) => toastX('❌', 'That did not fit', `The selected file is over the ${VOCAB_MAX_FILE_BYTES}-byte limit.`),
+      onText: (text) => runFeatureBind(t.dataset.bindFile, t.dataset.id, text),
+      onReadError: () => toastX('❌', 'Could not read file', 'The selected JSON file could not be read.')
+    })
+  } else if (t.dataset && t.dataset.bindSelect) runFeatureBind(t.dataset.bindSelect, t.dataset.id, t.value)
   else if (t.dataset && t.dataset.bindTextChange) runFeatureBind(t.dataset.bindTextChange, t.dataset.id, t.value)
   else if (t.dataset && t.dataset.bindRangeChange) runFeatureBind(t.dataset.bindRangeChange, t.dataset.id, t.value)
   else if (t.dataset && t.dataset.bind) store.setState({ [t.dataset.bind]: t.value }, { persist: t.dataset.bind === 'vocab' || t.dataset.bind === 'nick' })
@@ -370,7 +379,7 @@ export function registerBinding(name, fn) {
 }
 function runFeatureAction(name, id, el) {
   const fn = featureActions.get(name)
-  if (fn) fn(store, id, el, { toast: toastX, notify: (t, b, tag) => notify(store, t, b, tag), save: (p, n) => save(store, p, n), speak, applyTheme: () => applyTheme(store.state), askConfirm: (t, b, w, r) => askConfirm(store, t, b, w, r) })
+  if (fn) fn(store, id, el, { toast: toastX, notify: (t, b, tag, ownership) => notify(store, t, b, tag, ownership), save: (p, n) => save(store, p, n), speak, applyTheme: () => applyTheme(store.state), askConfirm: (t, b, w, r) => askConfirm(store, t, b, w, r) })
 }
 function runFeatureBind(name, id, value) {
   const fn = featureBindings.get(name)
@@ -392,7 +401,7 @@ function registerCoreRooms() {
   // app/core/engine.js#notify/#log. Both rooms are still registered
   // through the same list-room contract every feature room uses.
   registerListRoom('notes', {
-    getRows: (s) => s.notes.map((n) => ({ id: n.id, title: n.title, body: n.body, tag: n.tag, meta: fmtWhen(n.when), right: '' })),
+    getRows: (s) => s.notes.map((n) => ({ id: n.id, title: n.title, body: n.body, titleKind: n.titleKind || 'authored', bodyKind: n.bodyKind || 'authored', tag: n.tag, meta: fmtWhen(n.when), right: '' })),
     emptyText: 'No messages. Lovely and quiet. 🌤',
     remove: (store2, ids) => {
       const set = new Set(ids)
@@ -418,7 +427,7 @@ function registerCoreRooms() {
 
 async function boot() {
   registerCoreRooms()
-  registerFeatures({ store, deps: { toast: toastX, notify: (t, b, tag) => notify(store, t, b, tag), save: (p, n) => save(store, p, n), speak, applyTheme: () => applyTheme(store.state), download: (n, t) => download(store, n, t), copy: (t) => copyToClipboard(store, t), askConfirm: (t, b, w, r) => askConfirm(store, t, b, w, r), refreshCodes: () => refreshCodes(store), log: (t, b) => log(store, t, b), undoEntry: (id) => undoEntry(store, id) }, registerAction, registerBinding })
+  registerFeatures({ store, deps: { toast: toastX, notify: (t, b, tag, ownership) => notify(store, t, b, tag, ownership), save: (p, n) => save(store, p, n), speak, applyTheme: () => applyTheme(store.state), download: (n, t) => download(store, n, t), copy: (t) => copyToClipboard(store, t), askConfirm: (t, b, w, r) => askConfirm(store, t, b, w, r), refreshCodes: () => refreshCodes(store), log: (t, b) => log(store, t, b), undoEntry: (id) => undoEntry(store, id) }, registerAction, registerBinding })
 
   applyTheme(store.state)
   store.state.dishIdx = Math.floor(Math.random() * DISHES.length)
@@ -426,7 +435,7 @@ async function boot() {
 
   if (!store.state.school && Math.random() < 0.1) {
     const d = DISHES[store.state.dishIdx]
-    toastX('🥟', 'The trolley rolled by!', d.en + ' · ' + d.yue, d.body)
+    toastX('🥟', 'The trolley rolled by!', d.en + ' · ' + d.yue, '', DIM_SUM_TOAST_OWNERSHIP)
   }
 
   refreshCodes(store)

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { scanJson } from './jsonScan'
-import { validateVocabularyPayload, validateVocabularyValue } from './schema'
+import { validateVocabularyCachePayload, validateVocabularyPayload, validateVocabularyValue } from './schema'
 
 describe('personal vocabulary object ownership', () => {
   it('parses every JSON key as own data on a null-prototype object', () => {
@@ -58,5 +58,34 @@ describe('personal vocabulary object ownership', () => {
     expect(Object.getPrototypeOf(result.entries)).toBeNull()
     expect(Object.keys(result.entries)).toEqual(['飲茶 🫖', 'quote"key'])
     expect(result.entries['飲茶 🫖']).toBe('yum cha')
+  })
+
+  it('rejects an empty entries object instead of treating the presence of the field as usable data', () => {
+    const result = validateVocabularyPayload('{"version":1,"entries":{}}')
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toContain('at least one pair')
+  })
+
+  it('rejects escaped control characters so replacements cannot inject terminal sequences', () => {
+    expect(validateVocabularyPayload('{"version":1,"entries":{"terminal":"line\\u001b[31m"}}').ok).toBe(false)
+    expect(validateVocabularyPayload('{"version":1,"entries":{"term\\nkey":"safe"}}').ok).toBe(false)
+  })
+
+  it('validates the persisted cache envelope independently from the upload shape', () => {
+    const result = validateVocabularyCachePayload(
+      '{"version":1,"entries":{"terminal":"shell box"},"entryCount":1,"savedAt":1700000000000}'
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.cache.entryCount).toBe(1)
+    expect(result.cache.entries.terminal).toBe('shell box')
+  })
+
+  it.each([
+    '{"version":1,"entries":{"terminal":"shell box"},"entryCount":2,"savedAt":1700000000000}',
+    '{"version":1,"entries":{"terminal":"shell box"},"entryCount":1,"savedAt":1700000000000,"extra":true}',
+    '{"version":1,"entries":{},"entryCount":0,"savedAt":1700000000000}'
+  ])('rejects malformed persisted cache envelopes: %s', (raw) => {
+    expect(validateVocabularyCachePayload(raw).ok).toBe(false)
   })
 })

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import {
   CONVERTER_CATALOG,
   converterAdapterById,
+  portableAdvancedPipelineIntent,
   type ConvertQueueItem,
   type ConverterAdapterDescriptor,
   type ConverterDetectionResult,
@@ -16,9 +17,16 @@ import { isBrowserRuntime } from '../../bridge/runtime'
 import { formatBytes } from '../../lib/bytesFormat'
 import { bytesToBase64 } from '../../lib/browserBytes'
 import { useActiveSessionApi } from '../../session/session'
+import { mapLocalVocabularyText } from '../../lib/personalVocabulary/hostMessage'
 import { MaterialSymbol, type MaterialSymbolName } from '../MaterialSymbol'
 import { AdapterCatalog } from './AdapterCatalog'
-import { Checkbox } from '@renderer/ui/md3'
+import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
+import { copy, fact, mapOwnedSentence } from '../../lib/personalVocabulary/ownedCopy'
+import { Checkbox, Progress } from '@renderer/ui/md3'
+
+export function detectionSummarySegments(note: string, confidence: 'high' | 'medium' | 'low') {
+  return [copy('Detection: '), fact(note), copy(' (confidence: '), fact(confidence), copy(')')]
+}
 
 export interface FileConverterPanelProps {
   onClose: () => void
@@ -68,7 +76,7 @@ async function uploadBrowserFiles(filesApi: NodeTerminalApi['files'], files: Fil
   for (const file of Array.from(files)) {
     // File.size is browser-owned metadata. Refuse before either carrier reads the file; the
     // receiver still enforces the same shared ceiling against untrusted bytes.
-    if (file.size > UPLOAD_MAX_BYTES) throw new Error(UPLOAD_TOO_LARGE_MESSAGE)
+    if (file.size > UPLOAD_MAX_BYTES) throw new Error(mapLocalVocabularyText(UPLOAD_TOO_LARGE_MESSAGE))
     const path = filesApi.saveUploadBlob
       ? // Server Edition owns this same-origin capability. Passing the File by identity lets fetch
         // stream its backing store without ArrayBuffer + base64 + atob + Uint8Array copies.
@@ -111,7 +119,8 @@ function QueueRow({
   onRetry,
   onRemove,
   onResolve,
-  onReveal
+  onReveal,
+  onOpenInEditor
 }: {
   item: ConvertQueueItem
   onCancel: (id: string) => void
@@ -119,7 +128,9 @@ function QueueRow({
   onRemove: (id: string) => void
   onResolve: (id: string, opts: { overwrite?: boolean; lossyAcknowledged?: boolean }) => void
   onReveal: (path: string) => void
+  onOpenInEditor: (path: string) => void
 }) {
+  const vocab = useVocabularyMapper()
   const pct = item.totalBytes > 0 ? Math.round((item.progressBytes / item.totalBytes) * 100) : 0
   return (
     <li className={`cv-item cv-item--${item.status}`}>
@@ -137,59 +148,72 @@ function QueueRow({
           {item.destPath.split(/[\\/]/).pop()}
         </span>
         <span className="cv-item__size">{formatBytes(item.sourceBytes)}</span>
-        <span className="cv-item__status">{item.status.replace('-', ' ')}</span>
+        <span className="cv-item__status">{vocab(item.status.replace('-', ' '))}</span>
       </div>
       {item.status === 'running' && (
-        <div className="cv-progress" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
-          <div className="cv-progress__bar" style={{ width: `${pct}%` }} />
-        </div>
+        <Progress
+          value={pct}
+          label={`Conversion progress for ${item.sourceName}`}
+          className="cv-progress"
+          barClassName="cv-progress__bar"
+        />
       )}
       {item.status === 'needs-confirm' && (
         <div className="cv-confirm">
           {item.confirmReasons?.includes('overwrite') && (
             <div className="cv-confirm__row">
-              <span>Destination file already exists.</span>
+              <span>{vocab('Destination file already exists.')}</span>
               <button className="sc-btn" onClick={() => onResolve(item.id, { overwrite: true })}>
-                Overwrite
+                {vocab('Overwrite')}
               </button>
             </div>
           )}
           {item.confirmReasons?.includes('lossy') && (
             <div className="cv-confirm__row">
-              <span>This conversion can lose information — see the catalog row for details.</span>
+              <span>{vocab('This conversion can lose information — see the catalog row for details.')}</span>
               <button className="sc-btn" onClick={() => onResolve(item.id, { lossyAcknowledged: true })}>
-                Convert anyway
+                {vocab('Convert anyway')}
               </button>
             </div>
           )}
           <button className="cv-item__link" onClick={() => onCancel(item.id)}>
-            Skip this file
+            {vocab('Skip this file')}
           </button>
         </div>
       )}
       {item.error && <p className="cv-item__error">{item.error}</p>}
+      {item.destinationCollisionIndex !== undefined && item.destinationCollisionIndex > 1 && (
+        <p className="cv-item__warning">
+          {vocab('Name adjusted to avoid replacing an existing or queued file.')}
+        </p>
+      )}
       {item.warnings && item.warnings.length > 0 && (
         <p className="cv-item__warning">{item.warnings.join(' ')}</p>
       )}
       <div className="cv-item__actions">
         {(item.status === 'queued' || item.status === 'running' || item.status === 'paused') && (
           <button className="cv-item__link" onClick={() => onCancel(item.id)}>
-            Cancel
+            {vocab('Cancel')}
           </button>
         )}
         {(item.status === 'failed' || item.status === 'cancelled') && (
           <button className="cv-item__link" onClick={() => onRetry(item.id)}>
-            Retry
+            {vocab('Retry')}
           </button>
         )}
         {item.status === 'done' && !isBrowserRuntime() && (
           <button className="cv-item__link" onClick={() => onReveal(item.destPath)}>
-            Reveal
+            {vocab('Reveal')}
+          </button>
+        )}
+        {item.status === 'done' && (
+          <button className="cv-item__link" onClick={() => onOpenInEditor(item.destPath)}>
+            {vocab('Open in Visual Studio Code')}
           </button>
         )}
         {(item.status === 'done' || item.status === 'failed' || item.status === 'cancelled') && (
           <button className="cv-item__link" onClick={() => onRemove(item.id)}>
-            Remove
+            {vocab('Remove')}
           </button>
         )}
       </div>
@@ -204,7 +228,6 @@ function QueueRow({
  * concurrency queue with pause/resume/cancel/retry.
  *
  * Known gaps versus the full house contract, left for a follow-up (see docs/file-converter.md):
- * the per-category search boxes are plain substring search, not the full anchored regex builder;
  * the overwrite/lossy gate is the app's existing ConfirmDialog-style inline confirm rather than the
  * full two-key destructive-action slider; and the queue list here shows the first page only (no
  * pager control yet) — the engine itself is already paginated (converter.state(offset, limit)).
@@ -224,6 +247,7 @@ function FileConverterPanelForApi({
   onClose,
   api
 }: FileConverterPanelProps & { api: NodeTerminalApi }) {
+  const vocab = useVocabularyMapper()
   const [catalog, setCatalog] = useState<ConverterAdapterDescriptor[]>(CONVERTER_CATALOG)
   const [selectedAdapterId, setSelectedAdapterId] = useState<string | null>(null)
   const [pending, setPending] = useState<PickedFile[]>([])
@@ -345,6 +369,15 @@ function FileConverterPanelForApi({
     () => (selectedAdapterId ? converterAdapterById(selectedAdapterId) ?? catalog.find((a) => a.id === selectedAdapterId) : null),
     [selectedAdapterId, catalog]
   )
+
+  const selectedPipelineIntent = useMemo(() => {
+    if (!selectedAdapter?.pipeline) return null
+    try {
+      return portableAdvancedPipelineIntent(selectedAdapter.id)
+    } catch {
+      return null
+    }
+  }, [selectedAdapter])
 
   const suggestedIds = useMemo(() => {
     const ids = new Set<string>()
@@ -497,6 +530,20 @@ function FileConverterPanelForApi({
     runConverterAction(api, () => (summary.running ? api.converter.pause() : api.converter.start()))
   }, [api, runConverterAction, summary.running])
 
+  const handleOpenInEditor = useCallback(async (path: string) => {
+    const operationApi = api
+    if (!apiStillActive(operationApi)) return
+    try {
+      const result = await operationApi.vscode.open(path)
+      if (!apiStillActive(operationApi)) return
+      if (!result.ok) toast(result.error || 'Visual Studio Code could not open this output.', 'error')
+    } catch (cause) {
+      if (apiStillActive(operationApi)) {
+        toast(errorMessage(cause, 'Visual Studio Code could not open this output.'), 'error')
+      }
+    }
+  }, [api, apiStillActive])
+
   const counts = useMemo(() => {
     const c = { queued: 0, running: 0, done: 0, failed: 0, cancelled: 0, needsConfirm: 0 }
     for (const i of queue) {
@@ -512,10 +559,10 @@ function FileConverterPanelForApi({
 
   return createPortal(
     <div className="drawer-overlay md3-converter" onClick={onClose}>
-      <aside className="drawer converter" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="File converter">
+      <aside className="drawer converter" data-easter-surface="converter" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={vocab('File converter')}>
         <div className="drawer__head">
-          <h2>File converter</h2>
-          <button className="drawer__close" onClick={onClose} aria-label="Close">
+          <h2>{vocab('File converter')}</h2>
+          <button className="drawer__close" onClick={onClose} aria-label={vocab('Close')}>
             <MaterialSymbol name="close" size={18} />
           </button>
         </div>
@@ -534,18 +581,18 @@ function FileConverterPanelForApi({
           />
 
           <section>
-            <h3>1. Choose files</h3>
+            <h3>{vocab('1. Choose files')}</h3>
             <div className="cv-actions">
               <button className="sc-btn" onClick={() => void handlePickFiles()}>
-                Add files…
+                {vocab('Add files…')}
               </button>
               <button className="sc-btn" onClick={() => void handlePickFolder()}>
-                Add folder…
+                {vocab('Add folder…')}
               </button>
             </div>
             {pending.length === 0 && (
               <p className="cv-empty-note">
-                No files selected yet. Pick one or more files, or a whole folder, to get started.
+                {vocab('No files selected yet. Pick one or more files, or a whole folder, to get started.')}
               </p>
             )}
             {pending.length > 0 && (
@@ -554,12 +601,14 @@ function FileConverterPanelForApi({
                   <li key={f.path}>
                     <span className="cv-pending__name">{f.path.split(/[\\/]/).pop()}</span>
                     <span className="cv-pending__meta">
-                      {f.detection ? `${f.detection.note} (${f.detection.confidence})` : 'inspecting…'}
+                      {f.detection
+                        ? mapOwnedSentence(vocab, detectionSummarySegments(f.detection.note, f.detection.confidence))
+                        : vocab('inspecting…')}
                       {f.detection ? ` · ${formatBytes(f.detection.sizeBytes)}` : ''}
                     </span>
                     <button
                       className="cv-item__link"
-                      aria-label={`Remove ${f.path}`}
+                      aria-label={vocab('Remove selected file')}
                       onClick={() => setPending((prev) => prev.filter((p) => p.path !== f.path))}
                     >
                       ×
@@ -571,7 +620,7 @@ function FileConverterPanelForApi({
           </section>
 
           <section>
-            <h3>2. Choose a target format</h3>
+            <h3>{vocab('2. Choose a target format')}</h3>
             <AdapterCatalog
               catalog={catalog}
               selectedId={selectedAdapterId}
@@ -581,41 +630,61 @@ function FileConverterPanelForApi({
               }}
               suggestedIds={suggestedIds}
             />
+            {selectedPipelineIntent && (
+              <div className="cv-pipeline-intent" aria-label={vocab('Portable pipeline intent')}>
+                <p>
+                  <MaterialSymbol name="database" size={16} />
+                  <strong>{vocab('Portable pipeline intent')}</strong>
+                </p>
+                <p>
+                  {mapOwnedSentence(vocab, [
+                    copy('Operation: '), fact(selectedPipelineIntent.operation),
+                    copy(' · Resource profile: '), fact(selectedPipelineIntent.resourceProfile)
+                  ])}
+                </p>
+                <p>
+                  {vocab('A transferred project keeps only this safe operation intent. Import does not read a file, start processing, create output, or contact a service.')}
+                </p>
+                <p>
+                  {vocab('On another computer choose Configure, Rebind, Adopt, Deploy, Locate Asset, or Leave Unbound. Source and destination paths, credentials, sessions, process state, host identifiers, caches, and generated output are omitted.')}
+                </p>
+              </div>
+            )}
             {selectedAdapter && selectedAdapter.lossy && (
               <div className="cv-lossy">
                 <p>
                   <MaterialSymbol name="warning" size={16} />
-                  <strong>This conversion can lose information:</strong>
+                  <strong>{vocab('This conversion can lose information:')}</strong>
                 </p>
                 <ul>
                   {(selectedAdapter.lossyNotes ?? []).map((n) => (
-                    <li key={n}>{n}</li>
+                    <li key={n}>{vocab(n)}</li>
                   ))}
                 </ul>
                 <label className="cv-lossy__ack">
                   <Checkbox checked={lossyAck} onChange={(e) => setLossyAck(e.target.checked)} />
-                  I understand — convert anyway
+                  {vocab('I understand — convert anyway')}
                 </label>
               </div>
             )}
           </section>
 
           <section>
-            <h3>3. Destination</h3>
+            <h3>{vocab('3. Destination')}</h3>
             <div className="cv-actions">
               <button className="sc-btn" onClick={() => void handleChooseDest()}>
-                {destDir ? 'Change folder…' : 'Choose folder…'}
+                {vocab(destDir ? 'Change folder…' : 'Choose folder…')}
               </button>
               {destDir && <span className="cv-destdir" title={destDir}>{destDir}</span>}
             </div>
             {preflight && (
               <p className="cv-preflight">
-                {preflight.destDirExists ? '' : 'Will be created. '}
-                {preflight.writable ? '' : 'Not writable — check permissions. '}
-                Free space:{' '}
-                {preflight.freeBytes === null ? 'unknown' : formatBytes(preflight.freeBytes)}. Estimated need:{' '}
+                {preflight.destDirExists ? '' : vocab('Will be created. ')}
+                {preflight.writable ? '' : vocab('Not writable — check permissions. ')}
+                {vocab('Free space:')}{' '}
+                {preflight.freeBytes === null ? vocab('unknown') : formatBytes(preflight.freeBytes)}{vocab('. Estimated need:')}{' '}
                 {formatBytes(preflight.estimatedNeededBytes)}.
-                {preflight.sufficient === false && ' This may not be enough free space.'}
+                {preflight.sufficient === false && vocab(' This may not be enough free space.')}
               </p>
             )}
             <button
@@ -623,18 +692,18 @@ function FileConverterPanelForApi({
               disabled={pending.length === 0 || !selectedAdapter || !destDir}
               onClick={() => void handleAddToQueue()}
             >
-              Add {pending.length || ''} file{pending.length === 1 ? '' : 's'} to queue
+              {mapOwnedSentence(vocab, [copy('Add '), fact(pending.length ? String(pending.length) : ''), copy(` file${pending.length === 1 ? '' : 's'} to queue`)])}
             </button>
           </section>
 
           <section>
-            <h3>4. Queue</h3>
+            <h3>{vocab('4. Queue')}</h3>
             <div className="cv-queue-controls">
               <button className="sc-btn" onClick={toggleRunning} disabled={queue.length === 0}>
-                {summary.running ? 'Pause' : 'Start'}
+                {vocab(summary.running ? 'Pause' : 'Start')}
               </button>
               <label className="cv-concurrency">
-                Parallel:
+                {vocab('Parallel:')}
                 <input
                   type="number"
                   min={1}
@@ -649,22 +718,25 @@ function FileConverterPanelForApi({
                 className="cv-item__link"
                 onClick={() => runConverterAction(api, () => api.converter.cancelAll())}
               >
-                Cancel all
+                {vocab('Cancel all')}
               </button>
               <button
                 className="cv-item__link"
                 onClick={() => runConverterAction(api, () => api.converter.clearFinished())}
               >
-                Clear finished
+                {vocab('Clear finished')}
               </button>
-              {summary.scanning && <span className="cv-scanning">Scanning folder…</span>}
+              {summary.scanning && <span className="cv-scanning">{vocab('Scanning folder…')}</span>}
             </div>
             <p className="cv-summary-counts">
-              {counts.queued} queued · {counts.running} running · {counts.needsConfirm} need attention ·{' '}
-              {counts.done} done · {counts.failed} failed · {counts.cancelled} cancelled
+              {mapOwnedSentence(vocab, [
+                fact(String(counts.queued)), copy(' queued · '), fact(String(counts.running)), copy(' running · '),
+                fact(String(counts.needsConfirm)), copy(' need attention · '), fact(String(counts.done)), copy(' done · '),
+                fact(String(counts.failed)), copy(' failed · '), fact(String(counts.cancelled)), copy(' cancelled')
+              ])}
             </p>
             {queue.length === 0 ? (
-              <p className="cv-empty-note">Nothing in the queue yet.</p>
+              <p className="cv-empty-note">{vocab('Nothing in the queue yet.')}</p>
             ) : (
               <ul className="cv-items">
                 {queue.map((item) => (
@@ -678,6 +750,7 @@ function FileConverterPanelForApi({
                       runConverterAction(api, () => api.converter.resolvePending([id], opts))
                     }
                     onReveal={(path) => api.shell.reveal(path)}
+                    onOpenInEditor={(path) => void handleOpenInEditor(path)}
                   />
                 ))}
               </ul>

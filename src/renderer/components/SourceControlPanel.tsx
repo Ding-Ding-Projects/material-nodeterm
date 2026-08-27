@@ -25,6 +25,9 @@ import { hintLabel } from '@shared/platform-utils'
 import { MaterialSymbol } from './MaterialSymbol'
 import { gitStatusBadgeClass } from '../lib/gitStatusBadge'
 import { TextArea } from '@renderer/ui/md3'
+import { chipFor, effectiveBindings } from '../lib/keybindingOverrides'
+import { matchesShortcut } from '@shared/shortcut'
+import { isMacPlatform } from '@shared/platform-utils'
 
 export interface SourceControlPanelProps {
   onClose: () => void
@@ -44,6 +47,17 @@ export interface SourceControlPanelProps {
 }
 
 const AUTO_FETCH_MS = 180_000
+
+/** Which physical modifier the registry's abstract `Cmd` resolves to for the commit chord. */
+const isMac = isMacPlatform()
+
+const STATUS_COLOR: Record<string, string> = {
+  M: '#ffd60a',
+  A: '#32d74b',
+  D: '#ff453a',
+  R: '#bf5af2',
+  U: '#6ac4dc'
+}
 
 function DiffStat({ added, deleted }: { added: number; deleted: number }) {
   if (!added && !deleted) return null
@@ -431,9 +445,14 @@ export function SourceControlPanel({
     )
   }
 
+  // Whatever Commit is bound to; '' when unbound — in which case the box is just "Message" AND
+  // the keyboard path below is disabled with it (no binding to match), so the placeholder never
+  // promises a chord the textarea would ignore. The Commit button is the fallback either way.
+  const commitChip = chipFor('scm.commit')
+
   return createPortal(
     <div className="drawer-overlay" onClick={onClose}>
-      <aside className="drawer scm md3-source-control" onClick={(e) => e.stopPropagation()}>
+      <aside className="drawer scm md3-source-control" data-easter-surface="source-control" onClick={(e) => e.stopPropagation()}>
         <div className="drawer__head">
           <h2>Source Control</h2>
           <button className="drawer__close" aria-label="Close" onClick={onClose}>
@@ -534,12 +553,19 @@ export function SourceControlPanel({
                 <div className="scm-compose">
                   <TextArea
                     className="scm-message"
-                    placeholder={hintLabel('Message (⌘↵ to commit)')}
+                    placeholder={commitChip ? `Message (${commitChip} to commit)` : 'Message'}
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                     onKeyDown={(e) => {
                       const commitShortcut = useSettings.getState().settings.shortcuts.commitStaged
                       if (matchesShortcut(e, commitShortcut, isMac)) commitAndPush()
+                      // Registry-driven (L2: a local listener reads its binding from the registry),
+                      // so a remapped scm.commit changes the KEY as well as the placeholder above.
+                      // Matching is exact on all four modifiers, unlike the old
+                      // `metaKey || ctrlKey` — see the named losses in the keybindings notes.
+                      if (effectiveBindings('scm.commit').some((s) => matchesShortcut(e, s, isMac))) {
+                        commitAndPush()
+                      }
                     }}
                   />
                   <button

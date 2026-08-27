@@ -20,7 +20,9 @@ export function DestructiveGateHost(): React.JSX.Element | null {
   return (
     <DestructiveConfirmGate
       title={request.title}
+      titleParams={request.titleParams}
       description={request.description}
+      descriptionParams={request.descriptionParams}
       affected={request.affected}
       confirmLabel={request.confirmLabel}
       anchor={request.anchor}

@@ -1,4 +1,6 @@
 import { cn } from '../cn'
+import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
+import type { VocabularyTextMode } from '../../lib/personalVocabulary/useVocabularyText'
 
 export interface SegmentedButtonProps<T extends string> {
   value: T
@@ -6,6 +8,7 @@ export interface SegmentedButtonProps<T extends string> {
   onChange: (v: T) => void
   ariaLabel?: string
   className?: string
+  vocabularyMode?: VocabularyTextMode
 }
 
 /**
@@ -23,10 +26,12 @@ export function SegmentedButton<T extends string>({
   options,
   onChange,
   ariaLabel,
-  className
+  className,
+  vocabularyMode = 'authored'
 }: SegmentedButtonProps<T>): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   return (
-    <div className={cn('mdx-seg', className)} role="radiogroup" aria-label={ariaLabel}>
+    <div className={cn('mdx-seg', className)} role="radiogroup" aria-label={vocabularyMode === 'authored' ? vocab(ariaLabel) : ariaLabel}>
       {options.map((opt) => (
         <button
           key={opt.value}
@@ -39,7 +44,7 @@ export function SegmentedButton<T extends string>({
             if (opt.value !== value) onChange(opt.value)
           }}
         >
-          {opt.label}
+          {vocabularyMode === 'authored' ? vocab(opt.label) : opt.label}
         </button>
       ))}
     </div>

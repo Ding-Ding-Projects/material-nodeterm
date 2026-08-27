@@ -1,8 +1,13 @@
 import type { SettingsSectionId } from './nav'
+import { parseProjectSectionId } from './project-settings-targets'
+
+/** The closed part of `SettingsSectionId` — everything except the dynamic `project-${string}`
+ *  ids, which don't get their own icon (see the fallback in `SectionIcon`). */
+type StaticSettingsSectionId = Exclude<SettingsSectionId, `project-${string}`>
 
 /** One small line glyph per settings section, used in the sidebar nav.
  *  16×16, currentColor stroke — color is driven by the parent (active = accent). */
-const PATHS: Record<SettingsSectionId, React.JSX.Element> = {
+const PATHS: Record<StaticSettingsSectionId, React.JSX.Element> = {
   terminal: (
     <>
       <rect x="2" y="3" width="12" height="10" rx="2" />
@@ -64,6 +69,11 @@ const PATHS: Record<SettingsSectionId, React.JSX.Element> = {
     <>
       <rect x="2.2" y="4" width="11.6" height="8" rx="1.8" />
       <path d="M5.4 8h.01M8 8h.01M10.6 8h.01" />
+  // A keyboard: the outline, two key rows, and a wide space bar.
+  shortcuts: (
+    <>
+      <rect x="1.5" y="4" width="13" height="8" rx="1.8" />
+      <path d="M4 6.5h.01M6.5 6.5h.01M9 6.5h.01M11.5 6.5h.01M4 9.6h8" />
     </>
   ),
   agents: (
@@ -85,6 +95,14 @@ const PATHS: Record<SettingsSectionId, React.JSX.Element> = {
     <>
       <rect x="2.5" y="2.5" width="11" height="11" rx="2.5" />
       <path d="M8 5.5v5M5.5 8h5" />
+    </>
+  ),
+  'model-gateway': (
+    <>
+      <circle cx="4" cy="8" r="1.6" />
+      <circle cx="12" cy="4" r="1.6" />
+      <circle cx="12" cy="12" r="1.6" />
+      <path d="M5.6 7.4 10.4 4.6M5.6 8.6l4.8 2.8" />
     </>
   ),
   notifications: (
@@ -215,6 +233,12 @@ const PATHS: Record<SettingsSectionId, React.JSX.Element> = {
       <path d="M8 8.4v2l1.4.9" />
     </>
   ),
+  planner: (
+    <>
+      <circle cx="8" cy="8" r="5.5" />
+      <path d="M8 4.5v3.8l2.4 1.4M4 2.8v2M12 2.8v2" />
+    </>
+  ),
   'school-mode': (
     <>
       <path d="M2.4 5.6 8 3l5.6 2.6L8 8.2 2.4 5.6Z" />
@@ -234,11 +258,23 @@ const PATHS: Record<SettingsSectionId, React.JSX.Element> = {
     <>
       <path d="M4 3h6.4L13 5.6V13H4z" />
       <path d="M10.4 3v2.6H13M6 8h4M6 10.4h4" />
+  // A tiny bug (the debug section).
+  debug: (
+    <>
+      <circle cx="8" cy="9" r="3.5" />
+      <path d="M8 5.5V3.5M4.9 6.6 3.4 5.1M11.1 6.6l1.5-1.5M4.5 9H2.5M13.5 9h-2M4.9 11.4l-1.5 1.5M11.1 11.4l1.5 1.5" />
     </>
   )
 }
 
+// A small folder glyph, used for project sections — those ids are dynamic (one per open
+// project), so there's no per-project entry in `PATHS`.
+const PROJECT_FALLBACK: React.JSX.Element = (
+  <path d="M2.5 4.8A1.3 1.3 0 0 1 3.8 3.5h2.6l1.3 1.5h4.5a1.3 1.3 0 0 1 1.3 1.3v5A1.3 1.3 0 0 1 12.2 12.6H3.8a1.3 1.3 0 0 1-1.3-1.3Z" />
+)
+
 export function SectionIcon({ id }: { id: SettingsSectionId }): React.JSX.Element {
+  const path = parseProjectSectionId(id) !== null ? PROJECT_FALLBACK : PATHS[id as StaticSettingsSectionId]
   return (
     <svg
       width="16"
@@ -251,7 +287,7 @@ export function SectionIcon({ id }: { id: SettingsSectionId }): React.JSX.Elemen
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      {PATHS[id]}
+      {path}
     </svg>
   )
 }

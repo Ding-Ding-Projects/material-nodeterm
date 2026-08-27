@@ -1,7 +1,7 @@
 name: Build check
 
-# Non-publishing validation only: on a pull request, confirm the electron-vite build still
-# compiles, and nothing else. This workflow runs NO tests, NO type-check, and NO lint — see
+# Non-publishing build feedback only: on a pull request, confirm the Windows electron-vite build
+# still compiles, and nothing else. This workflow runs NO tests, NO type-check, and NO lint — see
 # docs/ci-and-releases.md for the full policy. It does not gate anything: there is no
 # `needs:` chain from here to release.yml, and merging is not conditioned on this workflow.
 # It exists purely as fast, disposable feedback on a PR; a superseded push cancels the
@@ -23,7 +23,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
         with:
@@ -44,3 +44,33 @@ jobs:
 
       - name: Build (electron-vite)
         run: npm run build
+
+      # Keep safe build output for diagnosis even when a prior step fails. This excludes source,
+      # dependencies, caches, credentials, and any user-owned profile data.
+      - name: Collect safe build output
+        if: ${{ always() }}
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $out = Join-Path $env:RUNNER_TEMP 'windows-build-output'
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          @(
+            "run_id=$env:GITHUB_RUN_ID"
+            "commit=$env:GITHUB_SHA"
+            "ref=$env:GITHUB_REF"
+            "job_status=${{ job.status }}"
+            "runner_os=$env:RUNNER_OS"
+          ) | Set-Content -Encoding utf8 (Join-Path $out 'run-context.txt')
+          if (Test-Path -LiteralPath 'out') {
+            Copy-Item -Recurse -Force 'out' (Join-Path $out 'out')
+          }
+
+      - name: Upload safe build output
+        if: ${{ always() }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build-check-${{ github.run_number }}
+          path: ${{ runner.temp }}/windows-build-output
+          if-no-files-found: warn
+          retention-days: 14

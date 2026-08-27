@@ -11,18 +11,88 @@ import type {
   BridgeLink,
   BrowserProfile,
   CanvasNodeState,
+  Link,
   NavStop,
   Project,
+  ProjectMultiverseCanvas,
+  ProjectChildCanvas,
+  ProjectPortalState,
   ProjectKanban,
   Viewport,
   Workspace
 } from '../shared/types'
+import { sanitizeMultiverseCanvases } from '../shared/multiverse-canvases'
 import { projectCapabilityFields, readProjectCapabilities } from '../shared/project-capabilities'
 import type { CapabilityAckMap } from '../shared/project-capability-consent'
 import { sanitizeProjectIcon, type ProjectIcon } from '../shared/project-icon'
+import type { BridgeLink, CanvasNodeState, NavStop, Project, ProjectKanban, Viewport, Workspace } from '../shared/types'
+import { projectCapabilityFields, readProjectCapabilities } from '../shared/project-capabilities'
+import { loadedAgentBrowserPartition } from '../shared/browser-partition'
+import { sanitizeProjectIcon, type ProjectIcon } from '../shared/project-icon'
+import { validatePortableDoorConstruction } from '../shared/door-construction'
+import { validateCalendarConfig } from '../shared/calendar'
+
+/**
+ * Drop a browser node's persisted `partition` unless it is exactly the jar THIS project (its
+ * machine-local id) would mint. `project.json` is hostile input and `partition` is copied straight
+ * to `<webview partition>`, so a foreign/cloned/unsafe stored value is jar forgery; it falls back to
+ * the un-owned default session. Non-browser nodes and un-partitioned browser nodes are untouched.
+ * See `loadedAgentBrowserPartition`. Pure and side-effect free (only clones the nodes it changes).
+ */
+function sanitizeBrowserPartitions(nodes: CanvasNodeState[], projectId: string): CanvasNodeState[] {
+  return nodes.map((n) => {
+    if (n.kind !== 'browser' || n.partition === undefined) return n
+    const safe = loadedAgentBrowserPartition(n.partition, projectId)
+    if (safe === n.partition) return n
+    const { partition: _dropped, ...rest } = n
+    return safe === undefined ? rest : { ...rest, partition: safe }
+  })
+}
+
+/** Keep calendar node data to the portable allowlist at every project-file boundary. */
+function sanitizeCalendarConfigs(nodes: CanvasNodeState[]): CanvasNodeState[] {
+  return nodes.map((n) => n.kind === 'calendar' && n.calendarConfig
+    ? { ...n, calendarConfig: validateCalendarConfig(n.calendarConfig) }
+    : n)
+}
 
 export const PROJECT_DIR = '.nodeterm'
 export const PROJECT_FILE = 'project.json'
+
+/**
+ * Lift legacy bridge and rope arrays into the unified link substrate while reading a project.
+ *
+ * Bridge ids and rope ids remain unchanged so existing edge identity and deduplication survive
+ * the migration. Ropes are explicitly marked display-only, preserving their historical
+ * non-context semantics. An already-written links array wins over stale legacy fields, and an
+ * empty legacy canvas stays empty so loading it does not create a needless file change.
+ */
+export function migrateLinks(f: {
+  links?: Link[]
+  bridges?: BridgeLink[]
+  ropes?: BridgeLink[]
+}): Link[] | undefined {
+  if (f.links) return f.links
+  const out: Link[] = []
+  for (const bridge of f.bridges ?? []) {
+    out.push({
+      id: bridge.id,
+      kind: 'context',
+      source: { ref: 'node', nodeId: bridge.source },
+      target: { ref: 'node', nodeId: bridge.target }
+    })
+  }
+  for (const rope of f.ropes ?? []) {
+    out.push({
+      id: rope.id,
+      kind: 'lineage',
+      source: { ref: 'node', nodeId: rope.source },
+      target: { ref: 'node', nodeId: rope.target },
+      meta: { displayOnly: true }
+    })
+  }
+  return out.length > 0 ? out : undefined
+}
 
 /**
  * On-disk shape of <cwd>/.nodeterm/project.json — a GIT-SHARED document (users are asked to
@@ -56,6 +126,8 @@ export interface ProjectFileV1 {
   /** Sanitized on the way in (`fileToProject`) and only ever emitted when valid
    *  (`projectToFile`) — see `sanitizeProjectIcon`. An off/invalid icon adds no bytes to the
    *  committed file. */
+  /** Sanitized on the way in (`fileToProject`) and only ever emitted when valid (`projectToFile`) —
+   *  see `sanitizeProjectIcon`. An off/invalid icon adds no bytes to the committed file. */
   icon?: ProjectIcon
   /**
    * NOT a camera any more — a SUGGESTED one, derived from where the canvas's own nodes sit
@@ -72,7 +144,16 @@ export interface ProjectFileV1 {
    */
   viewport?: Viewport
   nodes: CanvasNodeState[]
+  /** Unified typed links written by current builds. Legacy arrays remain read-only migration input. */
+  links?: Link[]
+  /** Safe shared hierarchy. Runtime selection remains machine-local and is never written here. */
+  multiverseCanvases?: ProjectMultiverseCanvas[]
+  /** Schema 3 child-canvas content. These fields contain safe presentation only. */
+  childCanvases?: ProjectChildCanvas[]
+  portals?: ProjectPortalState[]
+  /** LEGACY read-only migration source; new writes emit `links` instead. */
   bridges?: BridgeLink[]
+  /** LEGACY read-only migration source; new writes emit `links` instead. */
   ropes?: BridgeLink[]
   /**
    * LEGACY (read-only), same rule as `viewport`: a managed Claude account id names a credential
@@ -88,6 +169,9 @@ export interface ProjectFileV1 {
    * (`readProjectCapabilities`, literal `true` only) and why the switch alone grants nothing.
    */
   agentBrowserControl?: boolean
+  /** Per-project capability switch (@shared/project-capabilities): agents may message other agent
+   *  nodes in this project. Git-shared like `agentBrowserControl`, read with the same strictness. */
+  agentMessaging?: boolean
   dinoHighScore?: number
   kanban?: ProjectKanban
   /** Named browser profiles — see `BrowserProfile` in `../shared/types` and
@@ -129,6 +213,15 @@ export interface IndexEntryV3 {
   breadcrumbs?: NavStop[]
   /** Sparse machine-local project settings overlay. Never serialized into ProjectFileV1. */
   settingsOverrides?: Project['settingsOverrides']
+   * MACHINE-LOCAL record that this machine's user has acknowledged each capability switch for THIS
+   * entry (the one-time clone notice, @shared/project-capability-consent). Never copied into the
+   * shared project file — a repo must not be able to carry its own consent — and keyed to the
+   * entry, so a second worktree of the same repo (a second entry) notifies again, on purpose.
+   */
+  capabilityAck?: import('../shared/project-capability-consent').CapabilityAckMap
+  /** MACHINE-LOCAL camera navigation history for a ref'd project. Same rule as `viewport`: this
+   *  user's "where was I" is not something a repo shares. See NavStop. */
+  breadcrumbs?: NavStop[]
   cwd?: string
   ssh?: Project['ssh']
   cache?: ProjectFileV1
@@ -144,6 +237,23 @@ export interface IndexEntryV3 {
    * and therefore could be loaded through the strip boundary and rewritten without machine-local
    * execution fields. No value is harvested from that file; only a pre-existing `localExec` above
    * is trusted.
+   * MACHINE-LOCAL settings overlay for this entry — the half of the project settings that is NOT
+   * git-shared (`.nodeterm/settings.json` is the shared half). Same rule as `localExec`: it lives in
+   * userData because a shell, a launch command or an env var this user chose for THIS checkout is
+   * not something a repo may carry — and, read the other way, a repo may not put values here.
+   * Re-sanitized on every load (`sanitizeProjectLocalSettings`): workspace.json is hand-editable,
+   * so what comes back out of it is input, not state we wrote.
+   */
+  localSettings?: import('../shared/project-settings').ProjectLocalSettings
+  /** The last shared settings.json seen for an SSH entry — the settings twin of `cache`, used while
+   *  the server is unreachable. Never set for a local/inline entry (their shared doc is one disk
+   *  read away). Validated on load by re-parsing it, exactly like a file read off the remote host:
+   *  what sits in workspace.json is no more trusted than what sits on the server. */
+  settingsCache?: import('../shared/project-settings').ProjectSettingsFileV1
+  /**
+   * The one-time exec migration has run for this entry: its project file has been searched once for
+   * the exec values it carried from BEFORE the trust boundary existed (a jump host's `ProxyCommand`
+   * put there by `createSshTerminalNode`), and they were hoisted into `localExec` above.
    *
    * Absent = not migrated yet. Set on the first save after the upgrade for every entry whose file we
    * could actually READ — an entry that was unavailable at that moment stays unmarked, so its file
@@ -187,7 +297,7 @@ export function resolveNodes(nodes: CanvasNodeState[], root: string): CanvasNode
  * Dropped on the way out, because a second machine opening the same repo would legitimately
  * disagree about them: the project `id` (identity — see `IndexEntryV3.id`), the `viewport` (this
  * user's camera) and `defaultAccountId` (a credential dir under this userData). Kept, because a
- * team genuinely shares them: name, color, nodes, bridges/ropes, the kanban board, the permission
+ * team genuinely shares them: name, color, nodes, links, the kanban board, the permission
  * default, the dino record.
  *
  * The two fields a pre-change build cannot do without are still emitted, as machine-INDEPENDENT
@@ -206,8 +316,18 @@ export function projectToFile(
   // The project file is a SHARED document (git, or the remote host). Exec-enabling node fields
   // (`shell`, `ssh.extraArgs`) never leave this machine in it — they ride the machine-local index
   // entry instead (`localNodeExec` / `IndexEntryV3.localExec`). See @shared/node-exec.
-  const nodes = stripSharedNodeExec(p.cwd ? toPortableNodes(p.nodes, p.cwd) : p.nodes)
+  const nodes = sanitizeCalendarConfigs(stripSharedNodeExec(p.cwd ? toPortableNodes(p.nodes, p.cwd) : p.nodes))
+  const multiverseCanvases = sanitizeMultiverseCanvases(p.multiverseCanvases)?.map((canvas) => ({
+    ...canvas,
+    nodes: sanitizeCalendarConfigs(stripSharedNodeExec(p.cwd ? toPortableNodes(canvas.nodes, p.cwd) : canvas.nodes))
+  }))
+  const childCanvases = p.childCanvases?.map((canvas) => ({
+    ...canvas,
+    ...(canvas.viewport ? { viewport: { ...canvas.viewport } } : {}),
+    nodes: sanitizeCalendarConfigs(stripSharedNodeExec(p.cwd ? toPortableNodes(canvas.nodes, p.cwd) : canvas.nodes))
+  }))
   const icon = sanitizeProjectIcon(p.icon)
+  const links = p.links ?? migrateLinks(p)
   return {
     version: 1,
     rev,
@@ -217,9 +337,11 @@ export function projectToFile(
     color: p.color,
     viewport: framingViewport(nodes),
     nodes,
+    ...(multiverseCanvases ? { multiverseCanvases } : {}),
+    ...(childCanvases && childCanvases.length > 0 ? { childCanvases } : {}),
+    ...(p.portals && p.portals.length > 0 ? { portals: p.portals.map((portal) => ({ ...portal })) } : {}),
     ...(icon ? { icon } : {}),
-    ...(p.bridges ? { bridges: p.bridges } : {}),
-    ...(p.ropes ? { ropes: p.ropes } : {}),
+    ...(links ? { links } : {}),
     ...(p.defaultPermissionMode ? { defaultPermissionMode: p.defaultPermissionMode } : {}),
     // Strict-normalised (literal true only, known keys only) and omitted when off — an off
     // capability adds no bytes to the committed file. `capabilityAck` is deliberately NOT here:
@@ -260,6 +382,61 @@ export function validBrowserProfiles(v: unknown): BrowserProfile[] | undefined {
   return cleaned.length > 0 ? cleaned : undefined
 }
 
+/** Tolerant reader for imported child-canvas content. A malformed child record is omitted as an
+ * unavailable optional section, while valid sibling canvases and their nodes remain usable. */
+function validChildCanvases(value: unknown, _projectId: string): ProjectChildCanvas[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const result: ProjectChildCanvas[] = []
+  for (const item of value) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue
+    const candidate = item as Partial<ProjectChildCanvas>
+    if (
+      typeof candidate.id !== 'string' || !candidate.id ||
+      (candidate.scope !== 'multiverse' && candidate.scope !== 'aws-universe') ||
+      typeof candidate.parentCanvasId !== 'string' || !candidate.parentCanvasId ||
+      typeof candidate.depth !== 'number' || !Number.isInteger(candidate.depth) || candidate.depth < 1 ||
+      typeof candidate.title !== 'string' || !candidate.title ||
+      typeof candidate.order !== 'number' || !Number.isFinite(candidate.order) ||
+      !Array.isArray(candidate.nodes)
+    ) continue
+    if (candidate.scope === 'aws-universe' && (candidate.parentCanvasId !== 'root' || candidate.depth !== 1)) continue
+    const viewport = candidate.viewport && typeof candidate.viewport === 'object' &&
+      typeof candidate.viewport.x === 'number' && Number.isFinite(candidate.viewport.x) &&
+      typeof candidate.viewport.y === 'number' && Number.isFinite(candidate.viewport.y) &&
+      typeof candidate.viewport.zoom === 'number' && Number.isFinite(candidate.viewport.zoom)
+      ? { x: candidate.viewport.x, y: candidate.viewport.y, zoom: candidate.viewport.zoom }
+      : undefined
+    result.push({
+      id: candidate.id,
+      scope: candidate.scope,
+      parentCanvasId: candidate.parentCanvasId,
+      depth: candidate.depth,
+      title: candidate.title,
+      order: candidate.order,
+      ...(viewport ? { viewport } : {}),
+      nodes: candidate.nodes.filter((node): node is CanvasNodeState => !!node && typeof node === 'object' && typeof node.id === 'string' && typeof node.kind === 'string'),
+      ...(Array.isArray(candidate.bridges) ? { bridges: candidate.bridges } : {}),
+      ...(Array.isArray(candidate.ropes) ? { ropes: candidate.ropes } : {})
+    })
+  }
+  return result.length > 0 ? result : undefined
+}
+
+function validPortals(value: unknown): value is ProjectPortalState[] {
+  return Array.isArray(value) && value.every((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return false
+    const portal = item as Partial<ProjectPortalState>
+    if (![portal.id, portal.parentCanvasId, portal.childCanvasId, portal.entryDoorId, portal.returnDoorId, portal.title].every((part) => typeof part === 'string' && part.length > 0) ||
+      typeof portal.depth !== 'number' || !Number.isInteger(portal.depth) || portal.depth <= 0 ||
+      (portal.status !== 'open' && portal.status !== 'closed')) return false
+    try {
+      if (portal.entryConstruction !== undefined) validatePortableDoorConstruction(portal.entryConstruction)
+      if (portal.returnConstruction !== undefined) validatePortableDoorConstruction(portal.returnConstruction)
+      return true
+    } catch { return false }
+  })
+}
+
 /**
  * The shared file plus this machine's own half of the project.
  *
@@ -286,6 +463,10 @@ export function fileToProject(
     /** This machine's navigation history for this entry (never from the file). */
     breadcrumbs?: NavStop[]
     settingsOverrides?: Project['settingsOverrides']
+    /** This machine's clone-notice acknowledgments for this entry (never from the file). */
+    capabilityAck?: import('../shared/project-capability-consent').CapabilityAckMap
+    /** This machine's navigation history for this entry (never from the file). */
+    breadcrumbs?: NavStop[]
     /** This machine's own exec values for these nodes (from the local index entry). A file read
      *  WITHOUT them — an adopted/cloned folder, a probe — gets the safe defaults, never the file's
      *  own `shell`/`ssh.extraArgs`. */
@@ -294,7 +475,16 @@ export function fileToProject(
 ): Project {
   const defaultAccountId = base.defaultAccountId ?? f.defaultAccountId
   const browserProfiles = validBrowserProfiles(f.browserProfiles)
+  const multiverseCanvases = sanitizeMultiverseCanvases(f.multiverseCanvases)?.map((canvas) => ({
+    ...canvas,
+    nodes: sanitizeBrowserPartitions(
+      applyLocalNodeExec(base.cwd ? resolveNodes(canvas.nodes, base.cwd) : canvas.nodes, base.localExec),
+      base.id
+    )
+  }))
+  const childCanvases = validChildCanvases(f.childCanvases, base.id)
   const icon = sanitizeProjectIcon(f.icon)
+  const links = migrateLinks(f)
   return {
     id: base.id,
     name: f.name,
@@ -302,10 +492,27 @@ export function fileToProject(
     ...(icon ? { icon } : {}),
     viewport: base.viewport ?? f.viewport ?? framingViewport(f.nodes),
     // applyLocalNodeExec DROPS whatever the file carried in the exec fields (it is not ours) and
-    // re-attaches only what this machine typed. See @shared/node-exec.
-    nodes: applyLocalNodeExec(base.cwd ? resolveNodes(f.nodes, base.cwd) : f.nodes, base.localExec),
-    ...(f.bridges ? { bridges: f.bridges } : {}),
-    ...(f.ropes ? { ropes: f.ropes } : {}),
+    // re-attaches only what this machine typed. See @shared/node-exec. `sanitizeBrowserPartitions`
+    // is the same "the file is hostile input" treatment for a browser node's session jar: a stored
+    // `partition` survives only when it is exactly the one THIS project (base.id, machine-local)
+    // would mint — a foreign/cloned/unsafe one drops to un-owned default session. See
+    // loadedAgentBrowserPartition; without it a cloned project.json forges another project's jar.
+    nodes: sanitizeBrowserPartitions(
+      sanitizeCalendarConfigs(applyLocalNodeExec(base.cwd ? resolveNodes(f.nodes, base.cwd) : f.nodes, base.localExec)),
+      base.id
+    ),
+    ...(multiverseCanvases ? { multiverseCanvases } : {}),
+    ...(childCanvases ? {
+      childCanvases: childCanvases.map((canvas) => ({
+        ...canvas,
+        nodes: sanitizeBrowserPartitions(
+          sanitizeCalendarConfigs(applyLocalNodeExec(base.cwd ? resolveNodes(canvas.nodes, base.cwd) : canvas.nodes, base.localExec)),
+          base.id
+        )
+      }))
+    } : {}),
+    ...(validPortals(f.portals) ? { portals: f.portals.map((portal) => ({ ...portal })) } : {}),
+    ...(links ? { links } : {}),
     ...(defaultAccountId ? { defaultAccountId } : {}),
     ...(base.settingsOverrides ? { settingsOverrides: base.settingsOverrides } : {}),
     // Machine-local, from the index entry ONLY: a file field named `breadcrumbs` is a forgery
@@ -324,6 +531,10 @@ export function fileToProject(
     // Machine-local, from the index entry ONLY: a file field named `capabilityAck` is a forgery
     // attempt (the shared file cannot carry this machine's consent) and is simply never read.
     ...(base.capabilityAck ? { capabilityAck: base.capabilityAck } : {})
+    ...(base.capabilityAck ? { capabilityAck: base.capabilityAck } : {}),
+    // Machine-local, from the index entry ONLY: a file field named `breadcrumbs` is a forgery
+    // attempt (the shared file cannot carry this machine's navigation history) and is never read.
+    ...(base.breadcrumbs?.length ? { breadcrumbs: base.breadcrumbs } : {})
   }
 }
 
@@ -415,6 +626,10 @@ export function splitWorkspace(
       ...(p.capabilityAck ? { capabilityAck: p.capabilityAck } : {}),
       ...(p.breadcrumbs?.length ? { breadcrumbs: p.breadcrumbs } : {}),
       ...(p.settingsOverrides ? { settingsOverrides: p.settingsOverrides } : {})
+      // The clone-notice acknowledgment rides the machine-local entry, never the shared file
+      // (projectToFile does not emit it — pinned by project-capability-consent.test.ts).
+      ...(p.capabilityAck ? { capabilityAck: p.capabilityAck } : {}),
+      ...(p.breadcrumbs?.length ? { breadcrumbs: p.breadcrumbs } : {})
     }
     if (p.unavailable) {
       // Placeholder (folder missing / server unreachable at load): its nodes:[] is not real
@@ -430,7 +645,10 @@ export function splitWorkspace(
     }
     // Exec-enabling node fields are stripped from every project file / ssh cache; the local user's
     // own values are preserved HERE, in the machine-local index (@shared/node-exec).
-    const local = localNodeExec(p.nodes)
+    const local = localNodeExec([
+      ...p.nodes,
+      ...(p.multiverseCanvases ?? []).flatMap((canvas) => canvas.nodes)
+    ])
     const localRef = local ? { localExec: local } : {}
     if (p.ssh) {
       entries.push({
@@ -470,5 +688,11 @@ export function splitWorkspace(
  * file could be adopted and then mirrored back with its execution fields intact.
  */
 export function serializeProjectFile(f: ProjectFileV1): string {
-  return JSON.stringify({ ...f, nodes: stripSharedNodeExec(f.nodes) }, null, 2)
+  return JSON.stringify({
+    ...f,
+    nodes: sanitizeCalendarConfigs(stripSharedNodeExec(f.nodes)),
+    ...(f.multiverseCanvases
+      ? { multiverseCanvases: f.multiverseCanvases.map((canvas) => ({ ...canvas, nodes: sanitizeCalendarConfigs(stripSharedNodeExec(canvas.nodes)) })) }
+      : {})
+  }, null, 2)
 }

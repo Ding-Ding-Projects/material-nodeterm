@@ -2,7 +2,8 @@
 
 The portable canvas projection is the platform-free `project.json` payload used by schema 3
 export and import work. It preserves the project display metadata, root canvas, future Multiverse
-and AWS Universe canvas scopes, node presentation, grouping, relationships, and ordering. It does
+and AWS Universe canvas scopes, node presentation, grouping, relationships, ordering, and immutable
+creation-event ids. It does
 not open files, start processes, hydrate sessions, or contact a provider.
 
 ## Preserved data
@@ -10,6 +11,10 @@ not open files, start processes, hydrate sessions, or contact a provider.
 The projection contains a stable schema identifier and version, project name, colour and safe icon,
 canvas identifiers and scope, node geometry, kind, title, colour, group, collapse state, tags,
 safe text and browser tab presentation, service labels, bridge and rope relationships, and an
+immutable `creationEventId` for idempotent user and automation creation events. The id is safe intent
+metadata only and carries no machine identity or runtime handle. The projection also carries an
+safe text and browser tab presentation, service labels, deterministic universe Shop metadata,
+bridge and rope relationships, and an
 optional bounded global appearance record. Per-element appearance is postponed until its typed
 schema exists. Child canvases are represented now so later universe and portal
 features can add their own records without changing the root contract. A universe scope is either
@@ -36,7 +41,10 @@ the project, icon, canvas, viewport, node, geometry, browser-tab, relationship, 
 records. Canvas parent cycles, duplicate membership, duplicate relationship identifiers, and
 out-of-range numeric values are rejected. HTTP and HTTPS URLs are normalized and accepted without
 credentials; local-file, executable, credential-bearing, and control-character URLs are refused.
-Empty user content, such as a sticky note or browser-tab title, remains valid while required
+Universe Shop records are repaired after import through `src/core/universe-shop.ts`: each special
+child canvas gets exactly one `shop-<canvas-id>` record, while root canvases receive none. The
+repair is pure and records missing, duplicate, normalized, and invalid-scope cases without network
+or provider side effects. Empty user content, such as a sticky note or browser-tab title, remains valid while required
 identifiers and labels stay non-empty. Empty URLs are omitted, and per-element appearance records
 are not accepted in this lane.
 
@@ -51,3 +59,4 @@ catalog, Shop creation, portals, provider adapters, and UI remain separate imple
 - [Portable project schema 3](./portable-schema3.md)
 - [Project history and archives](./project-history-and-archives.md)
 - [Projects and tabs](./projects-and-tabs.md)
+- [Unified Node Catalog](../canvas/node-catalog.md)
