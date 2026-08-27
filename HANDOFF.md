@@ -1,5 +1,27 @@
 # Handoff
 
+## 2026-08-27, per-account node colour and binding, issue #71
+
+This lane is implemented on `feat/program-60-account-node-color`. It ports the account colour and
+single binding decisions from upstream PRs #283 and #319, extended for the current Claude and Codex
+account model. `ClaudeAccount.color` and `CodexAccount.color` are optional settings values. The
+Accounts section writes them through one shared swatch component, and new nodes capture the colour
+from the account list owned by their builtin agent. Matching ids in the Claude and Codex lists stay
+independent. Empty, malformed, stale, or missing values fall back to the builtin agent colour.
+
+`src/shared/agents/account-binding.ts` provides the shared predicate for the persisted account id.
+`src/core/project-node-append.ts` and the host bridge apply the same account binding and use the
+host-resolved colour for phone-registered nodes. Account colour remains presentation-only and is
+not a credential, path, process, or portable execution field. Existing nodes keep their stored
+colour when an account setting changes.
+
+The lane intentionally did not run tests, type checks, lint, reviews, security or accessibility
+checks, builds, packaging, installer execution, runtime interaction, or screen captures. The lane
+has not been integrated into `main`, published, or cleaned up. The next owner must inspect the
+current merged tree, reconcile the existing duplicate account-surface definitions, run the focused
+checks, update the offline documentation bundle, and verify the built application before calling
+the feature complete.
+
 ## 2026-08-27, bundled AWS CLI v2 lane, issue #41
 
 Issue #41 is implemented on `feat/program-30-bundled-aws-cli`, reconciled with

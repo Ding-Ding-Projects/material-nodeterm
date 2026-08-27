@@ -9,6 +9,7 @@
 // an unsafe id (it becomes a tmux session name).
 
 import { agentConfig } from '../shared/agents/config'
+import { boundAccountId } from '../shared/agents/account-binding'
 import { isSafeAccountId } from './claude-accounts-core'
 
 /** What the phone is allowed to choose; everything else is host-derived. */
@@ -25,6 +26,8 @@ export interface RemoteNodeInput {
    * root, and a cold restore resumed the conversation under the wrong identity.
    */
   accountId?: string
+  /** Host-resolved default color for the account, never a phone-selected presentation value. */
+  accountColor?: string
 }
 
 /** The desktop id shape (`term-<base36 ms>-<token>`). Anything else is refused — the id is
@@ -118,7 +121,11 @@ export function appendProjectNode(raw: string, input: RemoteNodeInput, now: Date
   // An agent node looks exactly like one minted by the canvas (createAgentNode): the agent's
   // label as the starting title and the agent's color — titleAuto then lets the agent's own
   // session name take over, same as desktop. A plain terminal keeps the mobile defaults.
-  const agent = typeof input.agentId === 'string' ? agentConfig(input.agentId) : undefined
+  const agentId = typeof input.agentId === 'string' ? input.agentId : undefined
+  const bound = boundAccountId(input.accountId, agentId)
+  const agent = agentId !== undefined ? agentConfig(agentId) : undefined
+  const accountColor =
+    bound && typeof input.accountColor === 'string' ? input.accountColor.trim() || undefined : undefined
   const node: Record<string, unknown> = {
     id: input.id,
     kind: 'terminal',
@@ -129,15 +136,15 @@ export function appendProjectNode(raw: string, input: RemoteNodeInput, now: Date
         ? input.title.slice(0, TITLE_MAX)
         : (agent?.label ?? 'Mobile session'),
     titleAuto: true,
-    color: agent?.color ?? '#7aa2f7',
+    color: accountColor ?? agent?.color ?? '#7aa2f7',
     group: null,
     tags: [],
     collapsed: false,
     // Sibling nodes carry the project's portable cwd (usually "./…").
     cwd: typeof sibling?.cwd === 'string' ? sibling.cwd : '.'
   }
-  if (typeof input.agentId === 'string') node.agentId = input.agentId
-  if (typeof input.accountId === 'string') node.accountId = input.accountId
+  if (agentId !== undefined) node.agentId = agentId
+  if (bound) node.accountId = bound
   // Desktop remote nodes carry the connection spec PER NODE — a sibling terminal in the same
   // project has the right portable connection values. Machine-local execution fields were
   // stripped above and therefore cannot be copied onto the new node.

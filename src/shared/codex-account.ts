@@ -21,6 +21,8 @@ export interface CodexAccount {
   pending?: boolean
   /** Set only for remote (SSH) accounts: the ssh host this account's home lives on. */
   host?: string
+  /** Optional default node color for nodes opened under this account. */
+  color?: string
 }
 
 /**

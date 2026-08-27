@@ -57,6 +57,11 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## In progress / partially landed
 
+- [ ] **Per-account node colour and binding, issue #71 / Program 60**: managed Claude and Codex
+      accounts now carry an optional default node colour that new nodes capture at creation, with
+      host-resolved colour applied to phone-registered nodes. Tests, builds, packaging, runtime
+      interaction, and screen captures remain pending for this lane.
+
 - [ ] **Shared provider services, issue #18**: provider catalog, account metadata, sealed
       credential payloads, bounded one-time OAuth PKCE callbacks, adapter-owned resource discovery,
       and shared Desktop/Server local bindings are implemented in source. Individual provider

@@ -40,6 +40,8 @@ import type {
 import type { AgentId, AgentPermissionMode, BuiltinAgentId } from '@shared/agents/config'
 import { agentConfig, supportsSessionIdFlag } from '@shared/agents/config'
 import { assembleLaunchCommand } from '@shared/agents/launch'
+import { agentAccountColor } from '@shared/agents/account-color'
+import { boundAccountId } from '@shared/agents/account-binding'
 import { agentEnvSnapshot } from '../lib/agentEnv'
 import { uuid } from '@renderer/lib/uuid'
 import { claudeCliCapsNow } from './permissionMode'
@@ -61,6 +63,7 @@ import { createRecoveryGameSnapshot, normalizeRecoveryGameSnapshot, type Recover
 // single implementation lives in src/shared and is shared with the relay host + the canvas-sync
 // reflector.
 export { applyCanvasMutation } from '@shared/canvas-mutations'
+export { accountNodeColor, agentAccountColor } from '@shared/agents/account-color'
 import { acceptNewInboundNode, sanitizeInboundNode } from '@shared/node-exec'
 import { newCreationEventId } from '@shared/node-catalog'
 
@@ -787,7 +790,14 @@ export function createAgentNode(
   launchPlanOrPermission?: ActiveAgentLaunchPlan | AgentPermissionMode,
   options?: TerminalNodeCreationOptions
 ): CanvasNode {
-  const { label, color, launchCmd } = resolveAgent(agentId)
+  const { label, color: agentColor, launchCmd } = resolveAgent(agentId)
+  const settings = useSettings.getState().settings
+  const bound = boundAccountId(accountId, agentId)
+  const color =
+    agentAccountColor(agentId, bound, {
+      claude: settings.claudeAccounts,
+      codex: settings.codexAccounts
+    }) ?? agentColor
   // A SHARED_IDENTITY_CAPABLE agent (codex) launches through its managed launcher when this
   // machine actually has one — otherwise the bare CLI, byte-identical to before. Asked through the
   // capability helper, never `agentId === 'codex'`; `codexSharedIdentity` folds in the SSH answer
@@ -833,7 +843,14 @@ export function createAgentNode(
    *  existing caller passes that ninth argument, so the model is the one that had to move. */
   model?: string
 ): CanvasNode {
-  const { label, color } = resolveAgent(agentId)
+  const { label, color: agentColor } = resolveAgent(agentId)
+  const settings = useSettings.getState().settings
+  const bound = boundAccountId(accountId, agentId)
+  const color =
+    agentAccountColor(agentId, bound, {
+      claude: settings.claudeAccounts,
+      codex: settings.codexAccounts
+    }) ?? agentColor
   // The launch-command override (this project's `.nodeterm/settings.json` first, then Settings →
   // Agents → Launch commands — see `agentLaunchOverride`) replaces the bare CLI in the assembled
   // command. Threaded into the shared assembler below as `launchCmdOverride` so fresh launch,
@@ -952,7 +969,7 @@ export function createAgentNode(
       group: null,
       tags: [],
       agentId,
-      ...(accountId && agentId === 'claude' ? { accountId } : {}),
+      ...(bound ? { accountId: bound } : {}),
       // Persisted alongside the node (unlike initialCommand, which is consumed on first open), so
       // a cold restore months later still knows which conversation this node owns.
       ...(mintedSessionId ? { agentSessionId: mintedSessionId } : {}),
@@ -962,7 +979,7 @@ export function createAgentNode(
       // agent inheriting claude/codex is still its own agent; account binding stays with the
       // builtin the account picker offered it for. The Codex spawn side honours `data.accountId`
       // (resolveCodexSessionScope), the same field Claude uses.
-      ...(accountId && (agentId === 'claude' || agentId === 'codex') ? { accountId } : {}),
+      ...(bound ? { accountId: bound } : {}),
       // Persisted alongside the node (unlike initialCommand, which is consumed on first open), so
       // a cold restore months later still knows which conversation this node owns.
       ...(mintedSessionId ? { agentSessionId: mintedSessionId } : {}),

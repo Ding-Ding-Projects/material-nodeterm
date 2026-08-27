@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add per-account default node colours for managed Claude and Codex accounts. Settings exposes
+  shared colour swatches, new nodes capture the owning account's colour at creation, and phone-
+  registered nodes use the host-resolved account colour. Claude and Codex account ids are resolved
+  against their own lists, malformed or empty values fall back to the builtin agent colour, and
+  existing nodes remain unchanged. This ultra-speed lane intentionally did not run tests, type
+  checks, lint, reviews, security or accessibility checks, builds, packaging, installer execution,
+  runtime interaction, or screen captures.
+
 - Add the bundled AWS CLI v2 dependency lane. Windows packaging now stages the pinned official
   `2.36.32` MSI, verifies its SHA-256, falls back through a verified local cache or canonical
   HTTPS download, extracts it into application-local storage, exposes the installed version, and

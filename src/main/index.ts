@@ -283,6 +283,7 @@ import { codexContextParse } from '../core/codex-session'
 import { createCodexSubagentFormatter } from '../core/codex-subagent-format'
 import { codexHome } from '../core/usage/codex-usage'
 import { grokRawFields, isAsyncSubagentLaunch, type NormalizedAgentEvent } from '../shared/agents/normalize'
+import { agentAccountColor } from '../shared/agents/account-color'
 import { grokSessionDir, grokSessionsDir } from '../core/agents/grok-paths'
 import { forgetGrokSession, rememberGrokSessionDir } from '../core/grok-session'
 import {
@@ -4412,12 +4413,25 @@ app.whenReady().then(async () => {
   // (cwd-jailed to the shared canvas roots inside the handlers) and phone node registration
   // through the workspace store (written as an outside edit, so the watcher broadcasts it and
   // the canvas adopts the node live).
+  const accountColorForRemoteNode = (node: {
+    agentId?: string
+    accountId?: string
+  }): string | undefined => {
+    const settings = settingsStore.get()
+    return agentAccountColor(node.agentId, node.accountId, {
+      claude: settings.claudeAccounts ?? [],
+      codex: settings.codexAccounts ?? []
+    })
+  }
   const hostBridge = {
     git: gitService,
-    registerNode: (projectId: string, node: { id: string; title?: string; agentId?: string }) =>
+    registerNode: (
+      projectId: string,
+      node: { id: string; title?: string; agentId?: string; accountId?: string }
+    ) =>
       workspaceStore.appendRemoteNode(
         projectId,
-        node,
+        { ...node, accountColor: accountColorForRemoteNode(node) },
         undefined,
         process.platform === 'win32' ? settingsStore.get().defaultTerminalProfileId : undefined
       ),
@@ -4426,7 +4440,10 @@ app.whenReady().then(async () => {
     registerNode: (
       projectId: string,
       node: { id: string; title?: string; agentId?: string; accountId?: string }
-    ) => workspaceStore.appendRemoteNode(projectId, node),
+    ) => workspaceStore.appendRemoteNode(projectId, {
+      ...node,
+      accountColor: accountColorForRemoteNode(node)
+    }),
     // "End session" from the phone (`pty.destroy`): the SAME two steps the desktop × performs —
     // kill the tmux session on every socket it could live on (the sweep may have seen it on either
     // — see the session-memory panel's kill rule), then take the node off its project's canvas
