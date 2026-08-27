@@ -31,13 +31,6 @@
  * `core/project-capability-consent.ts` re-exports these for main/core callers, and its test pins
  * that the two paths are the same function objects.
  */
-import { projectCapabilityFlagInFile, type ProjectCapability } from './project-capabilities'
- * Each rule is pinned by `project-capability-consent.test.ts`.
- *
- * Lives in `src/shared` for the same reason as `safe-id.ts`: the renderer raises the dialog and may
- * not import `src/core`; `core/project-capability-consent.ts` re-exports these for main/core
- * callers, and its test pins that the two paths are the same function objects.
- */
 import {
   projectCapabilityFlagInFile,
   type ProjectCapability
@@ -48,8 +41,6 @@ export type CapabilityAnswer = 'kept' | 'declined'
 
 /** The machine-local answer record, keyed like the capability fields but never written to the
  *  shared project file (`projectToFile` does not know this shape exists). */
- *  shared project file (`projectToFile` does not know this shape exists — pinned by the consent
- *  test with an ack-carrying project as input). */
 export type CapabilityAckMap = Partial<Record<ProjectCapability, CapabilityAnswer>>
 
 export interface CapabilityConsentState {
@@ -112,8 +103,6 @@ export function projectCapabilityGrantedFor(
 
 /** This machine's recorded answer, own properties only: an in-process object must not inherit
  *  consent through its prototype; JSON never produces one, but callers are not only JSON. */
-/** This machine's recorded answer, own properties only (M-1: an in-process object must not inherit
- *  consent through its prototype; JSON never produces one, but callers are not only JSON). */
 export function capabilityAnswerOf(
   p: { capabilityAck?: CapabilityAckMap } | undefined | null,
   cap: ProjectCapability

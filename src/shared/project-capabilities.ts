@@ -46,11 +46,6 @@
  * row. A future browser-control port consumes `projectCapabilityGrantedFor` exactly as documented
  * in @shared/project-capability-consent; it must not reimplement any of this.
  */
-export type ProjectCapability = 'agentBrowserControl'
-
-export const PROJECT_CAPABILITIES: readonly ProjectCapability[] = ['agentBrowserControl'] as const
- * trigger, written down where the decision is, not only in the design doc.
- */
 export type ProjectCapability = 'agentBrowserControl' | 'agentMessaging'
 
 export const PROJECT_CAPABILITIES: readonly ProjectCapability[] = [
@@ -76,13 +71,6 @@ export const PROJECT_CAPABILITY_COPY: Record<ProjectCapability, ProjectCapabilit
       'never in browser nodes you opened. Any page an agent reads can try to steer it: a page can ' +
       'contain instructions, and the same agent can navigate anywhere and type anywhere. Nodes an ' +
       'agent opens use their own logged-out session, separate from your own browsing.',
-      'never in browser nodes you opened, and never in your own browsing (an agent’s nodes use a ' +
-      'separate session jar). Any page an agent reads can try to steer it: reading a page puts its ' +
-      'text straight into the agent’s context, and that same agent can navigate anywhere, type ' +
-      'anywhere and read the jar’s cookies. That is untrusted content, whatever the agent has ' +
-      'logged the jar into, and a path back out — all in one switch. Reading is shaped to reveal ' +
-      'less per call, but nothing here closes that channel. Cookie reads are traced and there is no ' +
-      'cookie-write; a badge on the node shows when one is being driven, with a Stop button.',
     cloneWarning:
       'This setting is saved in the project file (.nodeterm/project.json), so if you commit it, ' +
       'everyone who clones the repo gets it too.'
@@ -130,7 +118,6 @@ export function projectCapabilityFlagInFile(
 
 /** The capability half of a ProjectFileV1, normalised: known keys only, literal `true` only,
  *  own properties only (no consent inherited through a prototype chain). */
- *  own properties only (M-1: no consent inherited through a prototype chain). */
 export function readProjectCapabilities(f: unknown): Partial<Record<ProjectCapability, true>> {
   const out: Partial<Record<ProjectCapability, true>> = {}
   if (!f || typeof f !== 'object') return out

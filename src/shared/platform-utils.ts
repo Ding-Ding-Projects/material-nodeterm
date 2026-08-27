@@ -40,9 +40,6 @@ export function isWindowsPlatform(): boolean {
  * passes a ⌘/⇧ string this is an identity function and can be dropped along with its callers.
  */
 export function hintLabel(text: string): string {
-/** Rewrite mac chord notation in a hint string for the current platform. */
-export function hintLabel(text: string, isMac: boolean = isMacPlatform()): string {
-  if (isMac) return text
   return text
     .replace(/⌘⇧/g, 'Ctrl+Shift+')
     .replace(/⌘(?=[A-Za-z0-9,/↵])/g, 'Ctrl+')

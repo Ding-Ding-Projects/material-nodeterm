@@ -749,7 +749,7 @@ export interface CanvasNodeState {
   browserTabs?: BrowserTab[]
   /** browser-only: which `browserTabs[].id` is currently shown. Absent = the first tab. */
   browserActiveTabId?: string
-   * browser-only: the Electron session partition for an AGENT-opened browser node
+  /** browser-only: the Electron session partition for an AGENT-opened browser node
    * (`persist:nt-agent-browser-<projectId>`), set once at creation and never mutated. Absent for a
    * USER-opened node (default session, no migration). Persisted so the jar survives reopen; carried
    * through untouched on Server Edition / mobile, where a browser node renders with no <webview>.
@@ -1038,6 +1038,7 @@ export interface NavStop {
   nodeId: string
   at: number
   note: string
+}
 /** One captured debug-log line (issue #78). `seq` is monotonic across the process lifetime so
  *  subscribers can dedupe batches against the snapshot they filled from. */
 export interface LogRecord {
@@ -1708,6 +1709,7 @@ export interface ServerDeploymentApi {
    *  at most one — `start()` dedupes concurrent callers onto a single run). Returns an
    *  unsubscribe function. */
   onProgress(cb: (stage: ServerDeploymentStage) => void): () => void
+}
 export interface ProjectSettingsApi {
   /** `{shared, local, conflict?}` for a known project id, or null for an unknown one. */
   read(projectId: string): Promise<import('./project-settings').ProjectSettingsSnapshot | null>
@@ -1977,8 +1979,8 @@ export interface BrowserApi {
   extensions: BrowserExtensionsApi
 }
 
-/** A user-defined agent (BYO CLI). In no capability list, so it gets only spawn +
- * terminal-title + process status (no hooks/branch/loop/bridge). */
+/** Browser control operations for the agent-driven browser node surface. */
+export interface BrowserControlApi {
   /** Push: the current set of browser nodes an agent is driving (chip / rope / kill row). `stopped`
    *  ids drop from the chip immediately, skipping the anti-flicker linger. */
   onLeaseChanged(listener: (push: BrowserLeasePush) => void): () => void
@@ -4012,13 +4014,14 @@ export interface CodexAccountsApi {
   /** Identity of the system ~/.codex account, read through account/read. */
   systemIdentity(ctx?: AccountSshCtx): Promise<{ email: string | null } | null>
   /** Rebind an idle conversation to another login without changing its thread identity. */
-/**
- * Machine-scoped managed Codex accounts (S6). LOCAL accounts on this Mac are reachable through
+}
+ /**
+  * Machine-scoped managed Codex accounts (S6). LOCAL accounts on this Mac are reachable through
  * PR 5; SSH remote accounts land in PR 6. The account LIST is renderer-owned in `settings.json`
  * (`codexAccounts`), exactly like `claudeAccounts`; main owns only the fs + daemon lifecycle and
  * the switch protocol.
  */
-export interface CodexAccountsApi {
+ export interface LegacyCodexAccountsApi {
   /** Mint a new managed account: create its private CODEX_HOME (0700) and symlink the shared,
    *  non-secret runtime assets in. Returns the new id + its home. */
   add(): Promise<{ id: string; home: string }>
@@ -4676,6 +4679,7 @@ export interface TimerApi {
   schedule(timerId: string, scheduledAt: number): Promise<import('./timer').TimerOccurrence | null>
   transition(id: string, state: import('./timer').TimerOccurrenceState): Promise<import('./timer').TimerOccurrence | null>
   lap(id: string, elapsedMs: number): Promise<number[] | null>
+}
 /** Keyboard-shortcut plumbing the RENDERER cannot do for itself. */
 export interface ShortcutsApi {
   /** Tell the shell that a shortcut recorder is armed (`true`) or released (`false`), so the

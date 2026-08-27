@@ -6,15 +6,6 @@
  * objects.
  */
 export {
-  needsCapabilityNotice,
-  projectCapabilityGranted,
-  projectCapabilityGrantedFor,
-  capabilityAnswerOf,
- * `src/core`; this re-export exists so core/main callers (agent-messaging PR 6 Task 6.2 among
- * them) have a core-local name without a second implementation.
- * `project-capability-consent.test.ts` pins that both paths are the same function objects.
- */
-export {
   capabilityAnswerOf,
   needsCapabilityNotice,
   projectCapabilityGranted,

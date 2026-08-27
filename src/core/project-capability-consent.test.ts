@@ -9,6 +9,8 @@ describe('core re-exports the SAME functions the renderer imports from @shared â
     expect(core.projectCapabilityGrantedFor).toBe(shared.projectCapabilityGrantedFor)
     expect(core.capabilityAnswerOf).toBe(shared.capabilityAnswerOf)
     expect(core.recordCapabilityAck).toBe(shared.recordCapabilityAck)
+  })
+})
 import type { Project } from '../shared/types'
 import {
   needsCapabilityNotice,

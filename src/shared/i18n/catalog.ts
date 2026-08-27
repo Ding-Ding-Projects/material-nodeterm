@@ -1705,21 +1705,6 @@ export const CATALOG: Catalog = {
       '趁 {brand} 進度巡遊未變大龍先取消佢…'
     ]
   },
-  'wsl.create.progress.validating': { en: flat('Validating the selected distribution and name.'), yue: flat('正在驗證所選發行版同名稱。') },
-  'wsl.create.progress.checking': { en: flat('Checking {brand} availability.'), yue: flat('正在檢查 {brand} 可用性。') },
-  'wsl.create.progress.installing': { en: flat('Installing the selected distribution through {exe}.'), yue: flat('正透過 {exe} 安裝所選發行版。') },
-  'wsl.create.progress.recording': { en: flat('Recording the new local {brand} instance.'), yue: flat('正在記錄新嘅本機 {brand} 實例。') },
-  'wsl.create.progress.completed': { en: flat('{brand} creation completed.'), yue: flat('{brand} 建立完成。') },
-  'wsl.create.progress.failed': { en: flat('{brand} creation failed.'), yue: flat('{brand} 建立失敗。') },
-  'wsl.create.progress.cancelled': { en: flat('{brand} creation was cancelled.'), yue: flat('{brand} 建立已取消。') },
-  'wsl.create.progress.step': { en: flat('Step'), yue: flat('步驟') },
-  'wsl.create.progress.of': { en: flat('of'), yue: flat('共') },
-  'wsl.create.progress.aria': { en: flat('{brand} creation phase progress'), yue: flat('{brand} 建立階段進度') },
-  'wsl.create.progress.elapsed': { en: flat('Elapsed time:'), yue: flat('已用時間：') },
-  'wsl.create.progress.seconds': { en: flat('seconds.'), yue: flat('秒。') },
-  'wsl.create.progress.telemetry': {
-    en: flat('Installation progress is reported by phase because {exe} provides no byte or percentage telemetry.'),
-    yue: flat('由於 {exe} 沒有提供位元組或百分比遙測，安裝進度會按階段報告。')
   'wsl.create.progress.checking': {
     en: ['Checking WSL availability and the current distribution list.', 'Checking WSL and the current distribution list.', 'Checking WSL availability and the current list.', 'Checking whether WSL and the list are behaving.', 'Checking WSL and asking the list to keep its shoes on.'],
     yue: ['正在檢查 WSL 可用狀態同目前發行版清單。', '正在檢查 WSL 同目前發行版清單。', '正在檢查 WSL 可用狀態同目前清單。', '睇吓 WSL 同清單係咪乖乖運作緊。', '檢查 WSL，同清單講聲唔好周街甩鞋。']
@@ -1782,7 +1767,6 @@ export const CATALOG: Catalog = {
   'wsl.create.validation.length': { en: flat('Name must be 64 characters or fewer.'), yue: flat('名稱最多 64 個字元。') },
   'wsl.create.validation.characters': { en: flat('Name contains characters that are not allowed.'), yue: flat('名稱包含唔容許嘅字元。') },
   'wsl.create.validation.shape': { en: flat('Use letters, numbers, spaces, dots, hyphens, or underscores, starting and ending with a letter or number.'), yue: flat('請用字母、數字、空格、句點、連字號或底線，而且要由字母或數字開頭同結尾。') },
-  'wsl.create.validation.duplicate': { en: flat('A {brand} instance with this name already exists.'), yue: flat('已經有一個同名嘅 {brand} 實例。') },
-  'wsl.create.validation.chooseDistribution': { en: flat('Choose a distribution.'), yue: flat('請揀一個發行版。') }
+  'wsl.create.validation.chooseDistribution': { en: flat('Choose a distribution.'), yue: flat('請揀一個發行版。') },
   'wsl.create.validation.duplicate': { en: flat('A WSL instance with this name already exists.'), yue: flat('已經有一個同名嘅 WSL 實例。') }
 }
