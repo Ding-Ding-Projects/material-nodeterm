@@ -68,6 +68,8 @@ export interface HomeAssistantSensorSnapshot {
   fetchedAt: number
   complete: boolean
   partial: boolean
+  /** True when these entities came from the last successful local observation, not this request. */
+  stale: boolean
   entities: HomeAssistantEntityState[]
   history: HomeAssistantHistoryPoint[]
   missingEntityIds: string[]

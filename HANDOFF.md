@@ -11,7 +11,9 @@ and a Material Design 3 canvas surface.
 Portable project state stores selected entity ids, display modes, reviewed gauge ranges, selected
 attribute keys, refresh timing, history limits, and normal node layout. Instance URLs, credentials,
 provider sessions, local paths, host identity, fetched values, cache, and runtime state stay in
-`<app-data>/home-assistant-sensor-nodes/`. Importing a node has no network, deployment, process, or
+`<app-data>/home-assistant-sensor-nodes/`. The machine-local record keeps the last successful selected
+entities, so a temporary outage can show an explicitly stale observation without claiming a live
+response. Importing a node has no network, deployment, process, or
 download side effect and opens unbound with explicit Configure, Rebind, Adopt, Deploy, Locate
 Asset, and Leave Unbound routes.
 

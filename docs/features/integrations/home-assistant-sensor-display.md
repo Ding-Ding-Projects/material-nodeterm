@@ -46,9 +46,11 @@ truthful availability reasons.
 ## Persistence
 
 Portable intent is carried by `CanvasNodeState.homeAssistantSensorConfig`. Machine-local bindings
-are stored below the app data directory in `home-assistant-sensor-nodes/<node-id>.json`. Desktop
-uses the platform secret-sealing hooks. A headless Server Edition host without a credential vault
-uses the documented owner-only file fallback. The renderer never receives a stored credential.
+are stored below the app data directory in `home-assistant-sensor-nodes/<node-id>.json`. The record
+keeps the last successful selected-entity observation beside the bounded history, so a temporary
+outage can show stale values without claiming that the live instance answered. Desktop uses the
+platform secret-sealing hooks. A headless Server Edition host without a credential vault uses the
+documented owner-only file fallback. The renderer never receives a stored credential.
 
 Each machine-local record retains at most 720 observations. The configured per-entity history
 limit narrows that further. Entity catalogs accept at most 10,000 entries and one response is
@@ -90,7 +92,7 @@ into the display or notification text.
 | Node imported on another computer | Opens unbound. Use Configure, Rebind, or Adopt. |
 | Credential refused | Binding is not saved. Verify the credential and try again. |
 | Redirect or unsafe URL | Request is refused without following it. Review the base URL. |
-| Timeout or offline instance | The last observed values remain on screen and the notification records the failure. |
+| Timeout or offline instance | The last successful selected-entity observation remains on screen, is marked stale, and the warning notification names the live failure. Refresh retries the instance. |
 | Missing selected entity | Other returned entities remain visible and the partial result names the missing count. |
 | Non-numeric gauge or trend state | The exact state stays visible, and no fabricated numeric sample is added. |
 | Local binding cannot be read | The node reports binding unavailable rather than claiming it is unbound. |

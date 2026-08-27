@@ -5,6 +5,7 @@ import type { CorePlatform } from '../platform'
 import { validateFetchUrl } from '../../shared/scheduled-settings'
 import {
   isHomeAssistantNodeId,
+  isHomeAssistantEntityId,
   validateHomeAssistantSensorConfig,
   type HomeAssistantBindingStatus,
   type HomeAssistantConfigureInput,
@@ -18,6 +19,7 @@ import {
 const MAX_RESPONSE_BYTES = 5 * 1024 * 1024
 const MAX_ENTITIES = 10_000
 const MAX_HISTORY = 720
+const MAX_CACHED_ENTITIES = 48
 const REQUEST_TIMEOUT_MS = 12_000
 
 interface StoredBinding {
@@ -29,6 +31,7 @@ interface StoredBinding {
   tokenValue: string
   updatedAt: number
   lastSuccessfulAt: number | null
+  lastEntities: HomeAssistantEntityState[]
   history: HomeAssistantHistoryPoint[]
 }
 
@@ -65,7 +68,7 @@ function entityState(value: unknown): HomeAssistantEntityState | null {
     ? raw.attributes as Record<string, unknown>
     : {}
   const options = Array.isArray(sourceAttributes.options)
-    ? sourceAttributes.options.filter((option): option is string => typeof option === 'string').map((option) => option.slice(0, 120)).slice(0, 100)
+    ? sourceAttributes.options.map((option) => safeString(option, 120)).filter((option): option is string => option !== null).slice(0, 100)
     : []
   const friendlyName = safeString(sourceAttributes.friendly_name, 200) ?? entityId
   return {
@@ -81,6 +84,16 @@ function entityState(value: unknown): HomeAssistantEntityState | null {
     lastChanged,
     lastUpdated
   }
+}
+
+function historyPoint(value: unknown): HomeAssistantHistoryPoint | null {
+  if (!value || typeof value !== 'object') return null
+  const candidate = value as Partial<HomeAssistantHistoryPoint>
+  if (!isHomeAssistantEntityId(candidate.entityId)) return null
+  if (typeof candidate.state !== 'string' || candidate.state.length > 1000 || /[\u0000-\u001f]/.test(candidate.state)) return null
+  if (typeof candidate.observedAt !== 'number' || !Number.isFinite(candidate.observedAt)) return null
+  const numericValue = candidate.numericValue === null ? null : typeof candidate.numericValue === 'number' && Number.isFinite(candidate.numericValue) ? candidate.numericValue : null
+  return { entityId: candidate.entityId, state: candidate.state, numericValue, observedAt: candidate.observedAt }
 }
 
 function validToken(value: string): boolean {
@@ -150,7 +163,8 @@ export class HomeAssistantSensorService implements HomeAssistantSensorApi {
         tokenValue: parsed.tokenValue,
         updatedAt: typeof parsed.updatedAt === 'number' && Number.isFinite(parsed.updatedAt) ? parsed.updatedAt : 0,
         lastSuccessfulAt: typeof parsed.lastSuccessfulAt === 'number' && Number.isFinite(parsed.lastSuccessfulAt) ? parsed.lastSuccessfulAt : null,
-        history: Array.isArray(parsed.history) ? parsed.history.filter((point): point is HomeAssistantHistoryPoint => !!point && typeof point === 'object' && typeof (point as HomeAssistantHistoryPoint).entityId === 'string' && typeof (point as HomeAssistantHistoryPoint).state === 'string' && typeof (point as HomeAssistantHistoryPoint).observedAt === 'number').slice(-MAX_HISTORY) : []
+        lastEntities: Array.isArray(parsed.lastEntities) ? parsed.lastEntities.map(entityState).filter((entity): entity is HomeAssistantEntityState => !!entity).slice(-MAX_CACHED_ENTITIES) : [],
+        history: Array.isArray(parsed.history) ? parsed.history.map(historyPoint).filter((point): point is HomeAssistantHistoryPoint => !!point).slice(-MAX_HISTORY) : []
       }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
@@ -219,7 +233,7 @@ export class HomeAssistantSensorService implements HomeAssistantSensorApi {
     const label = requestedLabel.slice(0, 120)
     const sealed = !!this.platform.sealSecret
     const value = sealed ? this.platform.sealSecret!(Buffer.from(input.token, 'utf8')).toString('base64') : input.token
-    const binding: StoredBinding = { version: 1, nodeId: input.nodeId, baseUrl, instanceLabel: label, tokenFormat: sealed ? 'sealed' : 'raw', tokenValue: value, updatedAt: Date.now(), lastSuccessfulAt: null, history: [] }
+    const binding: StoredBinding = { version: 1, nodeId: input.nodeId, baseUrl, instanceLabel: label, tokenFormat: sealed ? 'sealed' : 'raw', tokenValue: value, updatedAt: Date.now(), lastSuccessfulAt: null, lastEntities: [], history: [] }
     await this.requestStates(binding)
     binding.lastSuccessfulAt = Date.now()
     await this.write(binding)
@@ -245,16 +259,30 @@ export class HomeAssistantSensorService implements HomeAssistantSensorApi {
     const config = validateHomeAssistantSensorConfig(value)
     const binding = await this.read(nodeId)
     if (!binding) throw new Error('This Home Assistant sensor node is unbound on this computer.')
-    const catalog = await this.requestStates(binding)
+    let catalog: HomeAssistantEntityState[]
+    let stale = false
+    let reason: string | null = null
+    try {
+      catalog = await this.requestStates(binding)
+    } catch (error) {
+      catalog = binding.lastEntities
+      stale = catalog.length > 0
+      reason = error instanceof Error ? error.message : 'The Home Assistant instance could not be refreshed.'
+      if (!stale) throw error
+    }
     const byId = new Map(catalog.map((entity) => [entity.entityId, entity]))
     const entities = config.entities.map((entry) => byId.get(entry.entityId)).filter((entity): entity is HomeAssistantEntityState => !!entity)
     const missingEntityIds = config.entities.filter((entry) => !byId.has(entry.entityId)).map((entry) => entry.entityId)
     const observedAt = Date.now()
-    const points = entities.map((entity): HomeAssistantHistoryPoint => ({ entityId: entity.entityId, state: entity.state, numericValue: Number.isFinite(Number(entity.state)) ? Number(entity.state) : null, observedAt }))
+    const points = stale ? [] : entities.map((entity): HomeAssistantHistoryPoint => ({ entityId: entity.entityId, state: entity.state, numericValue: Number.isFinite(Number(entity.state)) ? Number(entity.state) : null, observedAt }))
     const selected = new Set(config.entities.map((entity) => entity.entityId))
     binding.history = [...binding.history.filter((point) => selected.has(point.entityId)), ...points].slice(-Math.min(MAX_HISTORY, config.historyLimit * Math.max(1, selected.size)))
-    binding.lastSuccessfulAt = observedAt
+    if (!stale) {
+      binding.lastEntities = entities.slice(0, MAX_CACHED_ENTITIES)
+      binding.lastSuccessfulAt = observedAt
+    }
     await this.write(binding)
-    return { nodeId, fetchedAt: observedAt, complete: missingEntityIds.length === 0, partial: missingEntityIds.length > 0 && entities.length > 0, entities, history: binding.history, missingEntityIds, reason: missingEntityIds.length ? `${missingEntityIds.length} selected entity id${missingEntityIds.length === 1 ? '' : 's'} were not returned.` : null }
+    const missingReason = missingEntityIds.length ? `${missingEntityIds.length} selected entity id${missingEntityIds.length === 1 ? '' : 's'} were not returned.` : null
+    return { nodeId, fetchedAt: stale ? (binding.lastSuccessfulAt ?? binding.updatedAt) : observedAt, complete: !stale && missingEntityIds.length === 0, partial: stale || (missingEntityIds.length > 0 && entities.length > 0), stale, entities, history: binding.history, missingEntityIds, reason: [reason, missingReason].filter(Boolean).join(' ') || null }
   }
 }

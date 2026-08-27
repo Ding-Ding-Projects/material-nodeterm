@@ -7,7 +7,8 @@
   weather, calendar, and selected-attribute presentations; bounded machine-local observations;
   schema 3 portable display intent; sealed machine-local credentials; desktop and Server Edition
   host services; and an explicit relay refusal. This ultra-speed implementation lane intentionally
-  did not run tests, type checks, lint, reviews, security checks, accessibility checks, builds,
+  keeps the last successful selected-entity observation visible and marked stale during a live
+  outage, and intentionally did not run tests, type checks, lint, reviews, security checks, accessibility checks, builds,
   packaging, installer execution, runtime interaction, or UI captures.
 
 - Add a source-only desktop Material Design 3 audit with a hand-written inventory of 212 rendered
