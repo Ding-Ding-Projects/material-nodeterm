@@ -374,6 +374,8 @@ export type NodeKind =
   | 'video'
   | 'web'
   | 'browser'
+  /** A persisted canvas node showing one directory listing. */
+  | 'files'
   | 'subagent'
   | 'loop'
   | 'scheduler'

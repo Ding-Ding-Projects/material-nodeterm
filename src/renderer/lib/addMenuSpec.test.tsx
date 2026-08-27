@@ -14,6 +14,7 @@ const handlers = (overrides: Partial<AddHandlers> = {}): AddHandlers => ({
   browser: noop,
   web: noop,
   sticky: noop,
+  files: noop,
   dino: noop,
   openFile: noop,
   newFile: noop,
@@ -28,6 +29,7 @@ const allKinds: AddItem['kind'][] = [
   'browser',
   'web',
   'sticky',
+  'files',
   'dino',
   'open-file',
   'new-file',
@@ -55,12 +57,21 @@ describe('contentAddItemsToMenuItems', () => {
       'New browser',
       'New web view…',
       'New sticky note',
+      'New file manager',
       'New dino game',
       'Open file…',
       'New file…',
       'Spawn a team…',
       'New worktree…'
     ])
+  })
+
+  it('hides "New file manager" when the project has no cwd', () => {
+    const items = contentAddItemsToMenuItems(CONTENT_ADD_ITEMS, handlers(), {
+      hasCwd: false,
+      isSshProject: false
+    })
+    expect(items.some((i) => 'label' in i && i.label === 'New file manager')).toBe(false)
   })
 
   it('hides "New file…" when the project has no cwd', () => {
@@ -116,6 +127,7 @@ describe('contentAddItemsToDockRows', () => {
       'browser',
       'web',
       'sticky',
+      'files',
       'dino',
       'open-file',
       'new-file',
@@ -124,6 +136,14 @@ describe('contentAddItemsToDockRows', () => {
     ])
     expect(rows.some((r) => r.kind === 'terminal')).toBe(false)
     expect(rows.some((r) => r.kind === 'remote')).toBe(false)
+  })
+
+  it('hides "files" when there is no cwd', () => {
+    const rows = contentAddItemsToDockRows(CONTENT_ADD_ITEMS, handlers(), {
+      hasCwd: false,
+      isSshProject: false
+    })
+    expect(rows.some((r) => r.kind === 'files')).toBe(false)
   })
 
   it('hides "new-file" when there is no cwd', () => {

@@ -105,6 +105,7 @@ import { VIRTUAL_MACHINE_NODE_CATALOG } from '@shared/virtual-machine'
 import type { ProjectIcon } from '@shared/project-icon'
 import type { PortableDoorConstructionV3 } from '@shared/door-construction'
 import BrowserNode from '../nodes/BrowserNode'
+import { FilesNode } from '../nodes/FilesNode'
 import { ServiceNode } from '../nodes/ServiceNode'
 import VirtualMachineNode from '../nodes/VirtualMachineNode'
 import NsisInstallerNode from '../nodes/NsisInstallerNode'
@@ -709,6 +710,7 @@ import {
   createRecoveryGameNode,
   createDiffNode,
   createEditorNode,
+  createFilesNode,
   createGroupNode,
   createNativeLoopNode,
   createTimerNode,
@@ -2081,6 +2083,7 @@ export function Canvas() {
       video: withNodeBoundary(VideoNode),
       web: withNodeBoundary(WebNode),
       browser: withNodeBoundary(BrowserNode),
+      files: withNodeBoundary(FilesNode),
       // The service family. One component for all six: they differ in what they manage, not in how
       // they behave as canvas objects, and React Flow hands each its own `type` so the component can
       // tell them apart without six registrations of six near-identical files.
@@ -5048,13 +5051,19 @@ export function Canvas() {
       const d = (e as CustomEvent<{ path: string }>).detail
       if (d?.path) revealProjectFile(d.path)
     }
+    const onOpenTerminal = (e: Event): void => {
+      const d = (e as CustomEvent<{ cwd?: string }>).detail
+      if (d?.cwd) addTerminal(undefined, undefined, undefined, d.cwd)
+    }
     window.addEventListener('nodeterm:open-file', onOpen)
     window.addEventListener('nodeterm:reveal-file', onReveal)
+    window.addEventListener('nodeterm:open-terminal', onOpenTerminal)
     return () => {
       window.removeEventListener('nodeterm:open-file', onOpen)
       window.removeEventListener('nodeterm:reveal-file', onReveal)
+      window.removeEventListener('nodeterm:open-terminal', onOpenTerminal)
     }
-  }, [openFile, revealProjectFile])
+  }, [openFile, revealProjectFile, addTerminal])
 
   // Mic button on a terminal node's header (TerminalNode dispatches this — same
   // no-direct-line-to-canvas pattern as nodeterm:open-file above). Unlike toggleDictation's
@@ -5417,6 +5426,29 @@ export function Canvas() {
       })
     },
     [setNodes, markDirty, emptyNodePos]
+  )
+
+  /** Add a directory-listing node rooted at the active project or bound group folder. */
+  const addFiles = useCallback(
+    (center?: { x: number; y: number }, groupId?: string) => {
+      const project = useProjects.getState().getProject(activeProjectId)
+      const cwd = cwdForNewNodeIn(groupId) ?? project?.ssh?.remoteCwd ?? project?.cwd
+      if (!cwd) {
+        setCopyError('This canvas has no folder yet — open one from the project tab first.')
+        return
+      }
+      setNodes((ns) => {
+        const node = createFilesNode(ns.length, cwd, center ?? emptyNodePos(), !!project?.ssh)
+        const appended = nodeCreationCoordinatorRef.current.appendNode(
+          ns,
+          groupId ? parentInto(node, groupId) : node
+        )
+        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        return appended.nodes
+      })
+      markDirty()
+    },
+    [setNodes, markDirty, activeProjectId, emptyNodePos, cwdForNewNodeIn, parentInto]
   )
 
   /**
@@ -11132,6 +11164,7 @@ export function Canvas() {
       browser: (at) => addBrowser(at),
       web: (at) => void addWebView(at),
       sticky: (at) => addSticky(at),
+      files: (at) => addFiles(at),
       dino: (at) => addDino(at),
       openFile: (at) => void openFileDialog(at),
       newFile: (at) => void newProjectFile(at),
@@ -11144,6 +11177,7 @@ export function Canvas() {
       addBrowser,
       addWebView,
       addSticky,
+      addFiles,
       addDino,
       openFileDialog,
       newProjectFile,
@@ -16230,6 +16264,9 @@ export function Canvas() {
             icon: <IconNote />,
             run: () => addSticky()
           },
+          ...(newFileHasCwd
+            ? [{ id: 'new-files', label: 'New file manager', icon: <IconExplorer />, run: () => addFiles() }]
+            : []),
           { id: 'new-gallery', label: 'New media gallery', icon: <IconEditor />, run: () => addGallery() },
           {
             id: 'new-loop',
@@ -16677,6 +16714,7 @@ export function Canvas() {
     addDino,
     addWebView,
     addBrowser,
+    addFiles,
     openFileDialog,
     openWorktreeDialog,
     isSshProject,
@@ -18357,6 +18395,7 @@ export function Canvas() {
         onAddSticky={addSticky}
         onSpawnTeam={() => setSpawnTeamDialog({})}
         onAddDino={addDino}
+        onAddFiles={() => addFiles()}
         onAddAgent={(aid, accountId) => addAgentNode(aid, undefined, undefined, accountId)}
         onOpenFile={() => void openFileDialog()}
         onAddRemote={() => openRemotePicker({ x: window.innerWidth / 2, y: window.innerHeight / 2 })}
