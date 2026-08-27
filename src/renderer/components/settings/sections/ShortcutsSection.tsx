@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { DEFAULT_SETTINGS } from '@shared/types'
 import {
   findShortcutConflicts,
@@ -6,42 +6,6 @@ import {
   type ShortcutAction,
   type ShortcutDef
 } from '@shared/shortcuts'
-/**
- * The Keyboard Shortcuts settings section: one dense row per registry command, with its live
- * chips, a per-chip ×, and hover-revealed Record / Add / Disable / Reset icon controls, under a
- * filter rail (a local query + a status pill carrying live counts).
- *
- * **The rail's filtering is LOCAL and additive to the global settings search.** A row is on
- * screen only when all three agree: the settings search (`SearchableRow`, unchanged), the rail's
- * query (`matchesShortcutQuery` — which also searches the CHORDS, something the global search
- * cannot see) and the status filter. The rail's counts deliberately ignore the status filter, so
- * they describe the buckets rather than the current selection. Groups get one wrapper each,
- * because the shell's body is `divide-y [&>*]:py-5` and a row per direct child made 21 dividers.
- *
- * **The pre-save gate is `commitCandidate`, and it is where the refusal messages are decided.**
- * Design D3 is "same detector, different surfacing": `sanitizeKeybindingOverrides` applies what
- * survives on LOAD, while this section refuses a bad candidate BEFORE anything is written, so the
- * user learns which chord was refused and why instead of watching a saved shortcut disappear on
- * the next launch. The checks run in this order, and the order is the whole dedupe:
- *   1. `normalizeBindingForCommand` — already inside `ShortcutRecorderButton`, so an invalid chord
- *      never reaches `onCommit` (its own hint is shown in the recorder button itself).
- *   2. `findKeybindingConflicts` over the candidate map — a same-bucket collision.
- *   3. `findMainInterceptShadowing` — a CROSS-bucket hit the conflict check cannot see.
- *   4. REVERSE shadowing — the same collision seen from the non-intercepted side.
- *   5. The two DICTATION overlap gates — the one overlap `conflictBucket` deliberately does not
- *      report, refused here in both directions, but only for `app`/`canvas`-scope commands: the
- *      keyed gesture has a focus gate, so a terminal- or scm-scope command never competes with it
- *      (see the block itself for why).
- * (2) returns early, so a candidate that trips both detectors (a main-intercepted command taking
- * a chord another GLOBAL command already holds — `node.close` ← `Cmd+K`) produces exactly ONE
- * message. The shadow message is reserved for what only it can see: `node.close` ← `Cmd+F`, where
- * the two commands live in different buckets and nothing collides, yet main swallows the key
- * before the terminal surface is ever offered it.
- *
- * Writes go through `setKeybindingOverride` (the single write path — it also mirrors
- * `speech.dictation` into the legacy `settings.speech.shortcut` field for one release).
- */
-import { useMemo, useState } from 'react'
 import {
   bindingIdentity,
   COMMANDS_BY_ID,
@@ -70,6 +34,20 @@ import { SearchableRow } from '../SearchableRow'
 import { FieldRow } from '../FieldRow'
 import { ShortcutCaptureField } from '../ShortcutCaptureField'
 import { SettingsText } from '../SettingsText'
+import { ShortcutRecorderButton } from '../ShortcutRecorderButton'
+import { IconDisableSlash, IconPlusSmall, IconResetArrow } from '../ShortcutRowIcons'
+import { Tooltip } from '../../Tooltip'
+import { Input } from '@renderer/ui/Input'
+import { SegmentedPill } from '@renderer/ui/SegmentedPill'
+import { useSettingsSearch } from '../context'
+import { matchesQuery, type SettingsSearchEntry } from '../search'
+import {
+  matchesShortcutQuery,
+  rowPassesStatus,
+  shortcutRowStatus,
+  type ShortcutRowStatus,
+  type ShortcutStatusFilter
+} from '../shortcutFilter'
 
 const DEFAULT_MAP = DEFAULT_SETTINGS.shortcuts
 
@@ -102,29 +80,6 @@ function shortcutName(defs: ShortcutDef[], id: ShortcutAction): string {
  * section body divides and pads every DIRECT child, so each group arrives as a single node
  * (SearchableRow) containing an h4 heading and its rows in a left-bordered sub-list.
  */
-export function ShortcutsSection({ isActive }: { isActive: boolean }): React.JSX.Element {
-  const settings = useSettings((s) => s.settings)
-  const update = useSettings((s) => s.update)
-
-  const conflicts = useMemo(() => conflictsByCombo(settings.shortcuts), [settings.shortcuts])
-  const allDefs = shortcutGroups().flatMap((g) => g.defs)
-
-  const setShortcut = (id: ShortcutAction, combo: string): void => {
-    update({ shortcuts: { ...settings.shortcuts, [id]: combo } })
-import { ShortcutRecorderButton } from '../ShortcutRecorderButton'
-import { IconDisableSlash, IconPlusSmall, IconResetArrow } from '../ShortcutRowIcons'
-import { Tooltip } from '../../Tooltip'
-import { Input } from '@renderer/ui/Input'
-import { SegmentedPill } from '@renderer/ui/SegmentedPill'
-import { useSettingsSearch } from '../context'
-import { matchesQuery, type SettingsSearchEntry } from '../search'
-import {
-  matchesShortcutQuery,
-  rowPassesStatus,
-  shortcutRowStatus,
-  type ShortcutRowStatus,
-  type ShortcutStatusFilter
-} from '../shortcutFilter'
 
 /** Per-command help text. Only commands whose BEHAVIOR needs explaining get one — a row that
  *  merely repeats its own title is noise in a 20-row list. */
@@ -637,69 +592,10 @@ export function ShortcutsSection({ isActive }: { isActive: boolean }): React.JSX
   return (
     <SettingsSection
       id="shortcuts"
-      title="Shortcuts"
-      description="Every hotkey in the app, with the key it is bound to. Click a combo to capture a new one; Reset restores the shipped default. Mouse gestures (right-click, drags, double-click, ⌘ wheel) are fixed and listed in the Shortcuts panel (⌘/)."
-      isActive={isActive}
-      searchEntries={shortcutGroups().flatMap((g) => ({
-        title: g.title,
-        keywords: g.defs.flatMap((d) => [d.label, ...d.keywords])
-      }))}
-    >
-      {shortcutGroups().map((group) => (
-        <SearchableRow
-          key={group.title}
-          title={group.title}
-          keywords={group.defs.flatMap((d) => [d.label, ...d.keywords])}
-        >
-          <div>
-            <h4 className="text-[13px] font-medium text-text"><SettingsText>{group.title}</SettingsText></h4>
-            <div className="mt-3 space-y-3 border-l border-border pl-4">
-              {group.defs.map((d) => {
-                const clash = conflicts.get(settings.shortcuts[d.id])
-                const clashLabel =
-                  clash && clash.length > 1
-                    ? clash
-                        .filter((other) => other !== d.id)
-                        .map((id) => shortcutName(allDefs, id))
-                        .join(', ')
-                    : ''
-                return (
-                  <FieldRow
-                    key={d.id}
-                    label={d.label}
-                    htmlFor={`shortcut-${d.id}`}
-                    description={
-                      clashLabel
-                        ? 'Also bound to: {clash}. The first one to match wins — pick a different key.'
-                        : undefined
-                    }
-                    descriptionParams={clashLabel ? { clash: clashLabel } : undefined}
-                    control={
-                      <ShortcutCaptureField
-                        value={settings.shortcuts[d.id]}
-                        onChange={(combo) => setShortcut(d.id, combo)}
-                        defaultValue={DEFAULT_MAP[d.id]}
-                      />
-                    }
-                  />
-                )
-              })}
-            </div>
-          </div>
-        </SearchableRow>
-      ))}
       title="Keyboard Shortcuts"
-      // The one remaining limitation is the application MENU's, not macOS's: its accelerators are
-      // handled above the page on every platform. While a recorder is armed main now suspends the
-      // items in `menuItemIdsToSuspend` (Minimize, Toggle Kanban Board, Settings, off-mac Close),
-      // so those chords reach the recorder — but RELOAD is deliberately never suspended, because it
-      // is the crash-recovery lever. See `src/main/keydown-intercept.ts`.
-      // The residual clause is the KNOWN GAP `menuItemIdsToSuspend` documents: one list drives
-      // both stand-downs, so the always-on app roles are deliberately left unsuspended and still
-      // act while recording. The ruling stands; the user is simply told.
-      description="Remap any command. Overrides are stored in settings.json under `keybindings`; Disable turns a command's shortcut off, Reset restores its default. Reload (⌘R / ⌘⇧R) cannot be recorded — it always stays with the app; the system-level chords the menu keeps — ⌘Q (Quit), ⌘H (Hide) and the developer roles — also act while recording, so don't try to bind them."
       isActive={isActive}
       searchEntries={entries}
+      description="Remap any command. Overrides are stored in settings.json under `keybindings`; Disable turns a command's shortcut off, Reset restores its default. Reload (⌘R / ⌘⇧R) cannot be recorded — it always stays with the app; the system-level chords the menu keeps — ⌘Q (Quit), ⌘H (Hide) and the developer roles — also act while recording, so don't try to bind them."
     >
       <SearchableRow {...POLICY_ROW}>
         <div data-setting="terminal-shortcut-policy">
