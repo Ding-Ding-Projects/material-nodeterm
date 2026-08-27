@@ -69,6 +69,10 @@
   consumes a provider interface for the unified Node Catalog and remains creation-disabled until
   that dependency is available. Tests, builds, packaging, runtime interaction, and captures were
   not run under issue #17's explicit verification boundary.
+- Add the issue #20 media catalogue and Photo, Video, and mixed-media Gallery canvas node kinds.
+  Local media is routed through the existing allowlisted protocol, gallery references carry bounded
+  portable metadata, and missing assets remain visible instead of disappearing. Verification is
+  pending in the parent integration lane.
 
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and

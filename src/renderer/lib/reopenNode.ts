@@ -8,6 +8,8 @@ import {
   createAgentNode,
   createEditorNode,
   createVideoNode,
+  createPhotoNode,
+  createGalleryNode,
   createWebNode,
   createBrowserNode,
   createDiffNode,
@@ -166,6 +168,10 @@ function buildBase(snapshot: ReopenNodeSnapshot, ctx: RecreateContext): CanvasNo
       return d.filePath ? createEditorNode(0, d.filePath, undefined, d.sshFs) : null
     case 'video':
       return d.filePath ? createVideoNode(0, d.filePath, undefined, d.sshFs) : null
+    case 'photo':
+      return d.filePath ? createPhotoNode(0, d.filePath, undefined, d.sshFs) : null
+    case 'gallery':
+      return createGalleryNode(0, (d.mediaAssets as import('@shared/media-catalog').MediaAssetReference[]) ?? [])
     case 'diff':
       return d.cwd && d.filePath
         ? createDiffNode(0, d.cwd, d.filePath, !!d.diffStaged, undefined, d.commitOid)

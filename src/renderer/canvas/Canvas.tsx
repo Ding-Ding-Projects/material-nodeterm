@@ -104,6 +104,8 @@ import NsisInstallerNode from '../nodes/NsisInstallerNode'
 import ShopNode from '../nodes/ShopNode'
 import { normalizeAddress } from '../nodes/browserUrl'
 import VideoNode from '../nodes/VideoNode'
+import PhotoNode from '../nodes/PhotoNode'
+import GalleryNode from '../nodes/GalleryNode'
 import WebNode from '../nodes/WebNode'
 import { NativeLoopNode, setNativeLoopRunHandler } from '../nodes/NativeLoopNode'
 import {
@@ -594,6 +596,8 @@ import {
   createServiceNode,
   SERVICE_NODE_LABELS,
   createVideoNode,
+  createPhotoNode,
+  createGalleryNode,
   createWebNode,
   isVideoFile,
   duplicateNode,
@@ -1825,6 +1829,8 @@ export function Canvas() {
       loop: withNodeBoundary(LoopNode),
       scheduler: withNodeBoundary(NativeLoopNode),
       dino: withNodeBoundary(DinoNode),
+      photo: withNodeBoundary(PhotoNode),
+      gallery: withNodeBoundary(GalleryNode),
       video: withNodeBoundary(VideoNode),
       web: withNodeBoundary(WebNode),
       browser: withNodeBoundary(BrowserNode),
@@ -4241,7 +4247,7 @@ export function Canvas() {
   const openFile = useCallback(
     (filePath: string, center?: { x: number; y: number }, sshFs?: boolean) => {
       const existing = nodesRef.current.find(
-        (n) => (n.type === 'editor' || n.type === 'video') && n.data?.filePath === filePath
+        (n) => (n.type === 'editor' || n.type === 'video' || n.type === 'photo') && n.data?.filePath === filePath
       )
       if (existing) {
         focusNodeRef.current(existing.id)
@@ -4251,7 +4257,9 @@ export function Canvas() {
         const created = {
           ...(isVideoFile(filePath)
             ? createVideoNode(ns.length, filePath, center ?? viewCenter(), sshFs)
-            : createEditorNode(ns.length, filePath, center ?? viewCenter(), sshFs)),
+            : /\.(png|jpe?g|gif|webp|bmp)$/i.test(filePath)
+              ? createPhotoNode(ns.length, filePath, center ?? viewCenter(), sshFs)
+              : createEditorNode(ns.length, filePath, center ?? viewCenter(), sshFs)),
           selected: true
         }
         const appended = nodeCreationCoordinatorRef.current.appendNode(
@@ -4645,6 +4653,17 @@ export function Canvas() {
         if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
         return appended.nodes
       })
+    },
+    [setNodes, markDirty, emptyNodePos, parentInto]
+  )
+
+  const addGallery = useCallback(
+    (center?: { x: number; y: number }, groupId?: string) => {
+      setNodes((ns) => {
+        const node = createGalleryNode(ns.length, [], center ?? emptyNodePos())
+        return [...ns, groupId ? parentInto(node, groupId) : node]
+      })
+      markDirty()
     },
     [setNodes, markDirty, emptyNodePos, parentInto]
   )
@@ -9026,6 +9045,13 @@ export function Canvas() {
       groupHasWorktree,
       openWorktreeDialog,
       isSshProject,
+      addTerminal,
+      terminalProfileCreationItems,
+      agentCreationItems,
+      addSticky,
+      addGallery,
+      addAuthenticator,
+      addNativeLoop,
       addToExistingGroup,
       groupSelection
     ]
@@ -9110,6 +9136,75 @@ export function Canvas() {
                 } as MenuItem
               ]
             : []),
+          // Stays flat-with-a-heading exactly as before whenever an agent row is an account
+          // picker (Claude/Codex with ≥1 account); one row when a single agent is enabled.
+          ...paneMenuGroup('Agents', <IconAgent />, agentItems),
+          // Managers for things outside this app. A group with ONE row that opens a submenu,
+          // rather than six product rows: six names spliced into an already long pane menu is the
+          // clutter the menu filter exists to avoid, and a submenu still matches on its children’s
+          // labels, so typing “prox” reaches Proxmox from the top level anyway.
+          ...paneMenuGroup('Managers', <IconRemote />, [
+            {
+              type: 'submenu' as const,
+              label: 'New manager…',
+              icon: <IconRemote />,
+              children: SERVICE_NODE_KINDS.map((kind) => ({
+                label: SERVICE_NODE_LABELS[kind],
+                onClick: () => addService(kind, at)
+              }))
+            }
+          ]),
+          ...paneMenuGroup('Canvas objects', <IconShapes />, [
+            {
+              label: 'New browser',
+              icon: <IconRemote />,
+              onClick: () => addBrowser(at)
+            },
+            {
+              label: 'New sticky note',
+              icon: <IconNote />,
+              onClick: () => addSticky(at)
+            },
+            {
+              label: 'New media gallery',
+              icon: <IconEditor />,
+              onClick: () => addGallery(at)
+            },
+            {
+              label: 'New Loop',
+              icon: <IconReload />,
+              onClick: () => addNativeLoop(at)
+            },
+            {
+              label: 'New authenticator',
+              icon: <IconLock />,
+              onClick: () => addAuthenticator(at)
+            },
+            {
+              label: 'New NSIS installer…',
+              icon: <IconEditor />,
+              onClick: () => addNsis(at)
+            },
+            {
+              label: 'New dino game',
+              icon: <IconDino />,
+              onClick: () => addDino(at)
+            },
+            {
+              label: 'Open file…',
+              icon: <IconEditor />,
+              onClick: () => void openFileDialog(at)
+            },
+            ...(hasCwd
+              ? [
+                  {
+                    label: 'New file…',
+                    icon: <IconEditor />,
+                    onClick: () => void newProjectFile(at)
+                  } as MenuItem
+                ]
+              : [])
+          ]),
           // One row, so `paneMenuGroup` keeps it top level: a submenu would add a hover to reach
           // exactly one thing, and "New worktree…" already says what the group heading said.
           // A worktree lands as a group frame bound to it; nodes created inside inherit its path.
@@ -13253,6 +13348,7 @@ export function Canvas() {
             icon: <IconNote />,
             run: () => addSticky()
           },
+          { id: 'new-gallery', label: 'New media gallery', icon: <IconEditor />, run: () => addGallery() },
           {
             id: 'new-loop',
             label: 'New Loop',
@@ -13646,6 +13742,7 @@ export function Canvas() {
     terminalProfileMenuChoices,
     addAgentNode,
     addSticky,
+    addGallery,
     addNsis,
     addNativeLoop,
     addDino,

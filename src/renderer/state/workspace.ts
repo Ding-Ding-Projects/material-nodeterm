@@ -1,5 +1,6 @@
 import type { Node } from '@xyflow/react'
 import type { AgentLaunchIntent, BrowserTab, CanvasMutation, CanvasNodeState, ClaudeAccount, NodeKind, PendingLaunch, Project, ServiceNodeKind } from '@shared/types'
+import { normalizeMediaReference, type MediaAssetReference } from '@shared/media-catalog'
 import type { ServiceConnection } from '@shared/node-exec'
 import type { NsisLocalPaths, NsisSpec } from '@shared/nsis-form-types'
 import { defaultNsisLocalPaths, defaultNsisSpec } from '@shared/nsis-form-types'
@@ -56,6 +57,8 @@ const EDITOR_SIZE = { width: 660, height: 460 }
 const DIFF_SIZE = { width: 860, height: 500 }
 const DINO_SIZE = { width: 600, height: 200 }
 const VIDEO_SIZE = { width: 640, height: 420 }
+const PHOTO_SIZE = { width: 560, height: 440 }
+const GALLERY_SIZE = { width: 760, height: 520 }
 const WEB_SIZE = { width: 720, height: 520 }
 const BROWSER_SIZE = { width: 800, height: 560 }
 const NATIVE_LOOP_SIZE = { width: 340, height: 280 }
@@ -862,6 +865,22 @@ export function createVideoNode(
   }
 }
 
+export function createPhotoNode(index: number, filePath: string, center?: { x: number; y: number }, sshFs?: boolean): CanvasNode {
+  return {
+    id: nextId('photo'), type: 'photo', position: placeAt(center, index, PHOTO_SIZE.width, PHOTO_SIZE.height),
+    width: PHOTO_SIZE.width, height: PHOTO_SIZE.height, style: { width: PHOTO_SIZE.width, height: PHOTO_SIZE.height },
+    data: { title: filePath.split(/[\\/]/).pop() || 'photo', color: '#4db6ac', group: null, filePath, ...(sshFs ? { sshFs: true } : {}) }
+  }
+}
+
+export function createGalleryNode(index: number, assets: MediaAssetReference[] = [], center?: { x: number; y: number }): CanvasNode {
+  return {
+    id: nextId('gallery'), type: 'gallery', position: placeAt(center, index, GALLERY_SIZE.width, GALLERY_SIZE.height),
+    width: GALLERY_SIZE.width, height: GALLERY_SIZE.height, style: { width: GALLERY_SIZE.width, height: GALLERY_SIZE.height },
+    data: { title: 'Gallery', color: '#ff9f0a', group: null, mediaAssets: assets, mediaActiveAssetId: assets[0]?.assetId }
+  }
+}
+
 /** Creates a web (webview) node showing a live URL or a local html file. */
 export function createWebNode(
   index: number,
@@ -1505,6 +1524,8 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   group: true,
   editor: true,
   diff: true,
+  photo: true,
+  gallery: true,
   video: true,
   web: true,
   browser: true,
@@ -1543,6 +1564,8 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   group: GROUP_SIZE,
   editor: EDITOR_SIZE,
   diff: DIFF_SIZE,
+  photo: PHOTO_SIZE,
+  gallery: GALLERY_SIZE,
   video: VIDEO_SIZE,
   web: WEB_SIZE,
   browser: BROWSER_SIZE,
@@ -1988,6 +2011,8 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         nsisSpec: n.nsisSpec,
         nsisLocalPaths: n.nsisLocalPaths,
         filePath: n.filePath,
+        mediaAssets: n.mediaAssets?.map(normalizeMediaReference).filter((reference): reference is MediaAssetReference => !!reference),
+        mediaActiveAssetId: n.mediaActiveAssetId,
         fileMissing: n.fileMissing,
         url: n.url,
         browserProfileId: n.browserProfileId,
@@ -2069,7 +2094,11 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         serviceConnection: n.data.serviceConnection,
         nsisSpec: n.data.nsisSpec,
         nsisLocalPaths: n.data.nsisLocalPaths,
-        filePath: n.data.filePath,
+        // Photo/Gallery media is project-portable by reference; absolute paths remain machine-local.
+        filePath: kind === 'photo' ? undefined : n.data.filePath,
+        // `sourcePath` is a machine-local resolver hint and must never enter project.json.
+        mediaAssets: n.data.mediaAssets?.map(({ sourcePath: _sourcePath, ...reference }) => reference),
+        mediaActiveAssetId: n.data.mediaActiveAssetId,
         fileMissing: n.data.fileMissing,
         url: n.data.url,
         browserProfileId: n.data.browserProfileId,
