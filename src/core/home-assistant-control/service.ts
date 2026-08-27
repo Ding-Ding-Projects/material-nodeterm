@@ -37,6 +37,30 @@ function validToken(token: string): boolean {
   return token.trim() === token && token.length > 0 && token.length <= 8192 && !/[\r\n\0]/u.test(token)
 }
 
+function boundedSelector(value: unknown, depth = 0): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || depth > 3) return null
+  const entries = Object.entries(value).slice(0, 24)
+  const result: Record<string, unknown> = {}
+  for (const [key, raw] of entries) {
+    if (!/^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/u.test(key)) continue
+    if (raw === null || typeof raw === 'string' || typeof raw === 'boolean' || (typeof raw === 'number' && Number.isFinite(raw))) {
+      result[key] = typeof raw === 'string' ? raw.slice(0, 500) : raw
+      continue
+    }
+    if (Array.isArray(raw)) {
+      result[key] = raw.slice(0, 128).flatMap((item) =>
+        item === null || typeof item === 'string' || typeof item === 'boolean' || (typeof item === 'number' && Number.isFinite(item))
+          ? [typeof item === 'string' ? item.slice(0, 300) : item]
+          : []
+      )
+      continue
+    }
+    const nested = boundedSelector(raw, depth + 1)
+    if (nested) result[key] = nested
+  }
+  return result
+}
+
 function summary(entry: SealedEntry<ConnectionMeta>): HomeAssistantConnectionSummary {
   return { id: entry.meta.id, label: entry.meta.label, origin: entry.meta.origin, tokenStored: true }
 }
@@ -49,9 +73,7 @@ function fieldList(value: unknown): HomeAssistantServiceField[] {
       name: name.slice(0, 100),
       description: typeof field.description === 'string' ? field.description.slice(0, 500) : '',
       required: field.required === true,
-      selector: field.selector && typeof field.selector === 'object' && !Array.isArray(field.selector)
-        ? field.selector as Record<string, unknown>
-        : null
+      selector: boundedSelector(field.selector)
     }
   })
 }
@@ -96,10 +118,12 @@ export class HomeAssistantControlService implements HomeAssistantControlApi {
   }
 
   async configure(input: HomeAssistantConnectionInput): Promise<HomeAssistantConnectionSummary> {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Home Assistant connection details are invalid.')
+    if (typeof input.label !== 'string' || typeof input.baseUrl !== 'string') throw new Error('Home Assistant connection name and URL are required.')
     const label = input.label.trim()
     if (!label || label.length > 120) throw new Error('Connection name must be between 1 and 120 characters.')
     const origin = normalizeOrigin(input.baseUrl)
-    if (!input.token || !validToken(input.token)) throw new Error('Enter a valid long-lived access token. It stays in this computer credential store.')
+    if (typeof input.token !== 'string' || !validToken(input.token)) throw new Error('Enter a valid long-lived access token. It stays in this computer credential store.')
     const id = input.id && /^[0-9a-f-]{36}$/u.test(input.id) ? input.id : randomUUID()
     return this.store.mutate((entries) => {
       const next: SealedEntry<ConnectionMeta> = { meta: { id, label, origin }, secretEnc: this.store.seal({ token: input.token } satisfies ConnectionSecret) }
@@ -112,6 +136,7 @@ export class HomeAssistantControlService implements HomeAssistantControlApi {
 
   async bind(nodeId: string, connectionId: string | null): Promise<HomeAssistantControlStatus> {
     if (!NODE_ID_RE.test(nodeId)) throw new Error('Home Assistant control node id is invalid.')
+    if (connectionId !== null && typeof connectionId !== 'string') throw new Error('Choose a valid local Home Assistant connection.')
     if (connectionId && !(await this.store.load()).some((entry) => entry.meta.id === connectionId)) throw new Error('Choose a connection available on this computer.')
     await this.mutateBindings(async (bindings) => {
       if (connectionId) bindings.nodes[nodeId] = connectionId
@@ -191,6 +216,7 @@ export class HomeAssistantControlService implements HomeAssistantControlApi {
   }
 
   async call(input: HomeAssistantCallInput): Promise<HomeAssistantCallResult> {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('The Home Assistant action is invalid.')
     if (!validHomeAssistantServiceName(input.domain) || !validHomeAssistantServiceName(input.service) || !validHomeAssistantEntityId(input.entityId)) throw new Error('The Home Assistant action is invalid.')
     if (!input.data || typeof input.data !== 'object' || Array.isArray(input.data) || Object.keys(input.data).length > 64) throw new Error('The Home Assistant action fields are invalid.')
     for (const [key, value] of Object.entries(input.data)) {

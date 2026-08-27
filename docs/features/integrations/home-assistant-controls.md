@@ -7,9 +7,13 @@ Status: **implemented, with source verification intentionally unrun in this deli
 A Home Assistant control node binds to one connection stored on the computer running the shell,
 discovers the instance's real entity registry and service catalog, and renders controls from those
 facts. Switches, lights, fans, media players, automations, covers, locks, climate devices, numeric
-entities, buttons, scenes, and scripts receive domain-specific controls. Every other domain falls
-back to a service picker generated from Home Assistant's reported field schemas. There is no raw
-request editor and no guessed service.
+entities, buttons, scenes, scripts, vacuums, alarm panels, humidifiers, and water heaters receive
+domain-specific controls. Every other domain falls back to a service picker generated from Home
+Assistant's reported field schemas. Schema selectors become matching local controls: booleans use
+checkboxes, bounded numbers use a range plus numeric entry, options use a picker, entity and target
+selectors use the discovered entity list, date and time selectors use native date/time controls,
+and multiline text uses a bounded text area. Unknown selectors remain visible as bounded text with
+the schema description. There is no raw request editor and no guessed service.
 
 Connection, entity, and service collections each have their own plain-text-first local search and
 adjacent anchored regex builder. Disabled controls state the missing condition. Discovery and
@@ -58,6 +62,9 @@ request.
   retry, cancel, or rebind.
 - **Unknown domain:** use the verified schema fallback. Unsupported fields remain ordinary bounded
   inputs whose final validation belongs to Home Assistant.
+- **Unsupported selector details:** the schema description stays visible and the field remains
+  bounded. Selector metadata is limited to a finite object and list shape before it reaches the
+  renderer, so a malformed or oversized service response cannot create an unbounded control.
 
 ## Surfaces
 
@@ -80,4 +87,3 @@ or captures. The implementation and documentation are present; those verdicts re
 - [Service nodes](service-nodes.md)
 - [Scheduled settings](../../scheduled-settings.md)
 - [Portable project schema](../projects/portable-project-schema.md)
-

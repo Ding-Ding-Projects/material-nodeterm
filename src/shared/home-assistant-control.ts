@@ -101,9 +101,9 @@ const ENTITY_ID_RE = /^[a-z_][a-z0-9_]*\.[a-z0-9_]+$/
 const SERVICE_RE = /^[a-z_][a-z0-9_]*$/
 
 export function validHomeAssistantEntityId(value: string): boolean {
-  return value.length <= 255 && ENTITY_ID_RE.test(value)
+  return typeof value === 'string' && value.length <= 255 && ENTITY_ID_RE.test(value)
 }
 
 export function validHomeAssistantServiceName(value: string): boolean {
-  return value.length <= 64 && SERVICE_RE.test(value)
+  return typeof value === 'string' && value.length <= 64 && SERVICE_RE.test(value)
 }

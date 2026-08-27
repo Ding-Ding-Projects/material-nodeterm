@@ -216,7 +216,7 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     // call for it yet. Refuse cleanly rather than silently provisioning/spawning on the WRONG
     // machine (`...local` would run java on the VIEWER, not the host it joined).
     minecraft: stub.minecraft,
-    torrent: stub.torrent
+    torrent: stub.torrent,
     calendar: stub.calendar,
     homeAssistantControl: stub.homeAssistantControl,
     // Browser control never rides the relay either (no CDP off the desktop) — inert no-ops.
