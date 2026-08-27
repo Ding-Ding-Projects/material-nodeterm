@@ -181,9 +181,6 @@ root.addEventListener('click', (e) => {
     case 'close-palette':
       if (e.target === el) store.setState({ paletteOpen: false }, { persist: false })
       return
-    case 'copy-brew':
-      copyToClipboard(store, 'brew install --cask nodeterm')
-      return
     case 'go-room':
       goRoom(id)
       return

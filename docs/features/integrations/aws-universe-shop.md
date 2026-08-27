@@ -27,13 +27,17 @@ The Shop's catalog is scope-bound:
 | canvas scope | entries |
 | --- | --- |
 | `multiverse` | general terminal, sticky note, editor, browser, and authenticator entries, plus another portal while the depth is below 8 |
-| `aws-universe` | AWS identity, Resource Explorer, S3, and EC2 entries; unavailable AWS executors remain visible with their reason until their implementation lane ships |
+| `aws-universe` | AWS identity, Resource Explorer, Cloud Control, S3, EC2, IAM, STS, Lambda, CloudWatch, CloudWatch Logs, CloudFormation, CDK, ECR, ECS, EKS, RDS, databases, VPC, Route 53, cost management, and all-service entries; unavailable AWS executors remain visible with their reason until their implementation lane ships |
 | `root` | no Shop and no Shop catalog |
 
 Catalog search is local, bounded, plain text by default, and supports an explicit regular-expression
-mode. Invalid patterns leave the scoped entries visible and expose the parser error instead of
-silently hiding the catalog. If the unified catalog provider is unavailable, the Shop stays visible
-but disables creation with an explicit dependency message; it does not carry a copied label registry.
+mode through the anchored builder beside the Shop field. Invalid patterns leave the scoped entries
+visible and expose the parser error instead of silently hiding the catalog. The AWS list is an
+explicit allowlisted projection of the unified Node Catalog, so a general or Multiverse row cannot
+leak into an AWS Shop. Creation resolves the selected id again at the execution boundary and
+rechecks scope, depth, and availability before forwarding the immutable event id to the live
+coordinator. If the unified catalog provider is unavailable, the Shop stays visible but disables
+creation with an explicit dependency message; it does not carry a copied label registry.
 
 ## Refused actions
 
@@ -73,16 +77,19 @@ narrow widths.
   child owner still receives its own Shop.
 - A malformed or unavailable regex pattern keeps the full scoped list visible and reports the exact
   parser failure.
-- An AWS catalog entry without an implemented executor stays visible as unavailable with an honest
-  disabled state. It is not presented as a working provider operation.
+- Every AWS catalog entry remains visible as a distinct row, including the later-wave managers, and
+  an entry without an implemented executor stays unavailable with its exact reason. It is never
+  presented as a working provider operation.
+- A stale, out-of-scope, malformed, or unavailable creation request is refused at the platform-free
+  boundary. No node is appended and no provider side effect is attempted.
 
 ## Verification status
 
 This lane intentionally did not run tests, type checking, lint, security checks, builds, packaging,
 runtime interaction, or captures. The implementation is present in the platform-free coordinator,
 portable node metadata, renderer node registration, mutation boundaries, and offline documentation
-bundle. Runtime and built-artifact evidence remain unverified under the lane's explicit verification
-boundary.
+bundle. Runtime and built-artifact evidence remain unverified under issue #40's explicit
+ultra-speed boundary.
 
 ## Suggested articles
 

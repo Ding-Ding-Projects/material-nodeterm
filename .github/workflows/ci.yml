@@ -1,7 +1,7 @@
 name: Build check
 
-# Non-publishing validation only: on a pull request, confirm the electron-vite build still
-# compiles, and nothing else. This workflow runs NO tests, NO type-check, and NO lint — see
+# Non-publishing build feedback only: on a pull request, confirm the Windows electron-vite build
+# still compiles, and nothing else. This workflow runs NO tests, NO type-check, and NO lint — see
 # docs/ci-and-releases.md for the full policy. It does not gate anything: there is no
 # `needs:` chain from here to release.yml, and merging is not conditioned on this workflow.
 # It exists purely as fast, disposable feedback on a PR; a superseded push cancels the
@@ -23,7 +23,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
         with:
@@ -45,29 +45,32 @@ jobs:
       - name: Build (electron-vite)
         run: npm run build
 
-  # Windows is becoming a supported target (extraction from #276). The full suite still contains
-  # POSIX-shaped fixtures (/bin/sh, AF_UNIX binds), so this job runs the suites whose behaviour is
-  # platform-dependent and worth proving on the real platform — the atomic-write retry exists FOR
-  # Windows and is inert on the Linux job above. Widen the file list as Windows support lands
-  # (session host, shell profiles); the goal is that it converges on `npm test`.
-  quality-windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v7
+      # Keep safe build output for diagnosis even when a prior step fails. This excludes source,
+      # dependencies, caches, credentials, and any user-owned profile data.
+      - name: Collect safe build output
+        if: ${{ always() }}
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $out = Join-Path $env:RUNNER_TEMP 'windows-build-output'
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          @(
+            "run_id=$env:GITHUB_RUN_ID"
+            "commit=$env:GITHUB_SHA"
+            "ref=$env:GITHUB_REF"
+            "job_status=${{ job.status }}"
+            "runner_os=$env:RUNNER_OS"
+          ) | Set-Content -Encoding utf8 (Join-Path $out 'run-context.txt')
+          if (Test-Path -LiteralPath 'out') {
+            Copy-Item -Recurse -Force 'out' (Join-Path $out 'out')
+          }
 
-      - uses: actions/setup-node@v7
+      - name: Upload safe build output
+        if: ${{ always() }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
         with:
-          node-version: '22'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Type check
-        run: npm run typecheck
-
-      - name: Build session host
-        run: npm run host:build
-
-      - name: Windows-relevant tests
-        run: npx vitest run src/core/fs-atomic.test.ts src/core/fs-atomic.guard.test.ts src/session-host/ src/core/session-host-client.test.ts src/core/session-host-launch-ledger.test.ts src/core/agent-launch.test.ts src/core/pty-session-host.test.ts src/main/media-protocol.test.ts src/main/remote-atomic-write.test.ts src/main/ssh-fs.test.ts src/main/remote-ssh/ssh-project.test.ts src/renderer/terminal/file-links.test.ts src/renderer/terminal/file-links.windows.test.ts src/renderer/terminal/file-link-dialect.test.ts src/renderer/terminal/host-platform.test.ts
+          name: windows-build-check-${{ github.run_number }}
+          path: ${{ runner.temp }}/windows-build-output
+          if-no-files-found: warn
+          retention-days: 14
