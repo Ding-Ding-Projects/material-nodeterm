@@ -20,6 +20,22 @@ execution, runtime interaction, reviews, audits, or UI captures. The repaired so
 remains unverified by those activities, and the integration owner must evaluate the exact merged
 commit before treating the release workflow as recovered.
 
+## 2026-08-27, personal vocabulary mutation fixture repair
+
+Release run `33120352944` at `4becb8deb1ee520ebccabcb3bd1d43293c60af00` passed every packaging-wrapper
+and icon phase, then failed during application build while parsing
+`scripts/check-personal-vocabulary-coverage.mjs:515` with
+`SyntaxError: Identifier 'titleMutationCalls' has already been declared`.
+
+The repair removes the obsolete duplicate title and body mutation fixture checks that used the
+older object-shape filter. One title mutation and one body mutation now remain, both using the
+same production `kind` plus `title` object-payload filter as the main Canvas inventory. No adjacent
+duplicate declaration or missing fixture boundary was found after the edit.
+
+This lane intentionally ran no scripts, tests, checkers, lint, type checks, builds, packaging,
+installer execution, runtime interaction, reviews, audits, or UI captures. The repair remains
+unverified by those activities until the integration owner evaluates the exact merged commit.
+
 ## 2026-08-27, Squirrel packaging asynchronous exit repair
 
 The Windows packaging wrapper now keeps its top-level asynchronous entrypoint alive until every
