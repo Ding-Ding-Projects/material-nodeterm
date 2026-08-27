@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add first-class Cognition Devin CLI support from the measured `devin 3000.4.25 (7e8e528a)`
+  contract: builtin registry and mark, argv/interactive prompt forms, prompt-file and print
+  helpers, resume and continue commands, project-level `.devin/hooks.v1.json` lifecycle hooks,
+  structured status normalization, and BEL/OSC notification fallback. Context usage, permission
+  control, titles, subagents, transfer, canvas control, and structured transcripts remain explicitly
+  unavailable until measured. The real Devin CLI was not available, so this ultra-speed lane ran no
+  tests, lint, type checks, builds, packaging, runtime interaction, reviews, audits, or HuiShots.
+
 - Rebuild the README from the ground up around the current Windows delivery path, genuine product
   captures, explicit evidence boundaries, and a compact top-level index. Keep 9 current key
   screenshots visible without disclosure controls, add 25 committed feature GIF recordings for

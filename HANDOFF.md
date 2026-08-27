@@ -1,5 +1,34 @@
 # Handoff
 
+## 2026-08-27, Cognition Devin CLI lane, issue #106
+
+Issue #106 is implemented on `feat/devin-cli-support` from the measured upstream contract in
+[`eneskirca/nodeterm#447`](https://github.com/eneskirca/nodeterm/issues/447). The source lane adds
+the `devin` builtin registry entry and inline mark, argv prompt handling with the required `--`
+separator, prompt-file and single-turn print command helpers, `-r` resume and `-c` continue forms,
+and `devin` foreground-process recognition.
+
+Devin's direct project hook format is implemented in `src/core/agents/hooks/devin.ts`. It preserves
+foreign definitions while installing one managed observer command for `PreToolUse`, `PostToolUse`,
+`PermissionRequest`, `UserPromptSubmit`, `Stop`, `PostCompaction`, `SessionStart`, and `SessionEnd`
+in `.devin/hooks.v1.json`. The trusted local spawn path calls this installer for local Desktop and
+Server Edition projects. SSH projects are deliberately left without this write because the current
+remote protocol has no safe project-root file-write route.
+
+`normalizeDevin` maps measured lifecycle events to the shared status model, while
+`parseDevinTerminalNotification` treats BEL, OSC 9, and OSC 777 as a fallback only. A bare BEL is
+unknown, and no terminal text is promoted into a fabricated structured event. Context and billing
+usage, permission-mode mutation, title read/rename, subagents, transfer, branching, canvas control,
+shared identity, and transcript rendering remain out of the capability lists until their Devin
+contracts are measured.
+
+The real Devin CLI was unavailable in this lane. No tests, lint, type checks, builds, packaging,
+debugging, reviews, audits, runtime interaction, or HuiShots were run. The docs bundle generator
+was attempted but could not start because this isolated Gerk Tong Hui has no `esbuild` installation;
+the source Markdown article, indexes, changelog, roadmap, and this handoff are updated, while
+`src/shared/docs-data.ts` still needs regeneration in an environment with the declared See Fut.
+The feature jer remains separate and is not integrated, dewed, or cleaned here.
+
 ## 2026-08-27, bundled AWS CLI v2 lane, issue #41
 
 Issue #41 is implemented on `feat/program-30-bundled-aws-cli`, reconciled with

@@ -54,6 +54,11 @@ later commit, since this file will not be kept in lockstep with every merge).
 - [x] Windows packaging path: Squirrel.Windows via `scripts/windows-installer.mjs`, unsigned by
       permanent policy, with ICO regeneration/verification, nupkg/RELEASES agreement checks, and
       a manual-dispatch-only `main`-only release workflow.
+- [ ] Cognition Devin CLI support (#106): source-level builtin registry, launch forms, project
+      hook installation, status normalization, and notification fallback are implemented on
+      `feat/devin-cli-support`. The real `devin 3000.4.25` binary was unavailable in this lane, so
+      runtime launch, availability, hook delivery, Desktop, Server Edition, SSH, and packaged
+      evidence remain unverified.
 
 ## In progress / partially landed
 
