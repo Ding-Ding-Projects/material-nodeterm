@@ -14,7 +14,9 @@ export const PORTABLE_PROJECT_REQUIRED_ENTRIES = ['project.json', 'history.bundl
 export const PORTABLE_PROJECT_OPTIONAL_ENTRIES = [
   'repository.bundle',
   'files/',
-  'assets/media/'
+  'assets/media/',
+  'assets/attachments/',
+  'comments/'
 ] as const
 
 export const PORTABLE_PROJECT_LIMITS = {

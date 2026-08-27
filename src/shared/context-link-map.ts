@@ -5,7 +5,22 @@
 // (Canvas.tsx). The Server Edition has no renderer holding a canvas — it derives the whole map
 // from persisted project files instead (src/server/context-link.ts). Same rules either way, so
 // they belong in one place rather than two that drift.
-import type { BridgeLink, CanvasNodeState, ContextLinkInfo, ContextLinkMap } from './types'
+import type { CanvasNodeState, ContextLinkInfo, ContextLinkMap, Link } from './types'
+
+/**
+ * Return only local node-to-node context links. Branch endpoints and cross-project endpoints do
+ * not identify a transcript pair for this route, while lineage links are display-only.
+ */
+export function contextNodeEdges(links: readonly Link[] | undefined): Array<{ source: string; target: string }> {
+  if (!links?.length) return []
+  const out: Array<{ source: string; target: string }> = []
+  for (const link of links) {
+    if (link.kind !== 'context') continue
+    if (link.source.ref !== 'node' || link.target.ref !== 'node') continue
+    out.push({ source: link.source.nodeId, target: link.target.nodeId })
+  }
+  return out
+}
 
 export interface LinkNodeInfo {
   id: string
@@ -53,7 +68,7 @@ export function buildLinkMap(
 }
 
 /**
- * Link maps built from serialized nodes + bridges, for every project EXCEPT `activeProjectId`.
+ * Link maps built from serialized nodes + links, for every project EXCEPT `activeProjectId`.
  *
  * On the desktop the active project's map is built live from React Flow and this covers the rest,
  * because writeLinkFiles clears ALL link files before writing the pushed map — pushing only the
@@ -70,16 +85,18 @@ export function buildLinkMap(
  * running inside.
  */
 export function buildBackgroundLinkMaps(
-  projects: Array<{ id: string; nodes: CanvasNodeState[]; bridges?: BridgeLink[] }>,
+  projects: Array<{ id: string; nodes: CanvasNodeState[]; links?: Link[] }>,
   activeProjectId: string | null,
   sessionIdOf: (nodeId: string) => string | undefined,
   agentIdOf?: (nodeId: string) => string | undefined
 ): ContextLinkMap {
   const map: ContextLinkMap = {}
   for (const p of projects) {
-    if (p.id === activeProjectId || !p.bridges?.length) continue
+    if (p.id === activeProjectId || !p.links?.length) continue
     const byId = new Map(p.nodes.map((n) => [n.id, n]))
-    const edges = p.bridges.filter((e) => byId.has(e.source) && byId.has(e.target))
+    const edges = contextNodeEdges(p.links).filter(
+      (edge) => byId.has(edge.source) && byId.has(edge.target)
+    )
     const infoOf = (id: string): LinkNodeInfo => {
       const n = byId.get(id)!
       const sticky = n.kind === 'sticky'
