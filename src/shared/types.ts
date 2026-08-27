@@ -4709,6 +4709,8 @@ export interface NodeTerminalApi {
   logs: LogApi
   githubIssues: import('./github-issues').GitHubIssuesApi
   githubControl: import('./github-issues').GitHubControlApi
+  /** Host-owned GitHub CLI account discovery and selection. Credential material never crosses this boundary. */
+  githubCliAccounts: import('./github-issues').GitHubCliAccountsApi
   usage: UsageApi
   sessionMemory: SessionMemoryApi
   vscode: VsCodeApi

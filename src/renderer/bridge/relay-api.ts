@@ -118,6 +118,9 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     context: files.context,
     githubIssues: github.githubIssues,
     githubControl: local.githubControl,
+    // Account credentials are scoped to the viewing desktop's local CLI store. They are never
+    // relayed to the project host, and the host-only prefix prevents a peer from requesting them.
+    githubCliAccounts: local.githubCliAccounts,
     // A relay tab must never launch a VM on the viewer's machine when its canvas is hosted
     // elsewhere. VM paths and process state are machine-local; until a scoped relay route exists,
     // keep the operation visibly unavailable rather than silently using this desktop's QEMU.
