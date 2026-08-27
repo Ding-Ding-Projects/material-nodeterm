@@ -586,6 +586,12 @@ export const IPC = {
   gitWorktreeMerge: 'git:worktree-merge',
   gitWorktreeRemovalProof: 'git:worktree-removal-proof',
   gitWorktreeRemove: 'git:worktree-remove',
+  /** Branch dependency operations use the shared git-town parent-key convention. */
+  gitSetBranchParent: 'git:set-branch-parent',
+  gitUnsetBranchParent: 'git:unset-branch-parent',
+  gitSyncBranch: 'git:sync-branch',
+  gitProposeBranch: 'git:propose-branch',
+  gitShipBranch: 'git:ship-branch',
   gitSetActiveRemote: 'git:set-active-remote',
   shellOpenExternal: 'shell:open-external',
   commitGenerate: 'commit:generate',

@@ -3400,6 +3400,16 @@ export interface GitApi {
   worktreeRemovalProof(repoPath: string, wtPath: string): Promise<GitWorktreeRemovalProofResult>
   /** Registration-only pruning or proof-bound live-directory removal. */
   worktreeRemove(repoPath: string, wtPath: string, request: GitWorktreeRemovalRequest): Promise<GitResult>
+  /** Store the parent branch for a dependency link in the shared git config. */
+  setBranchParent(repoPath: string, child: string, parent: string): Promise<GitResult>
+  /** Remove the parent branch projection for a dependency link. */
+  unsetBranchParent(repoPath: string, child: string): Promise<GitResult>
+  /** Rebase one dependency child branch onto its configured parent. */
+  syncBranch(cwd: string, child: string): Promise<GitResult>
+  /** Open a pull request for one dependency child branch against its configured parent. */
+  proposeBranch(cwd: string, child: string): Promise<GitResult>
+  /** Fast-forward a dependency parent branch to its child when the parent is current. */
+  shipBranch(cwd: string, child: string, parent: string): Promise<GitResult>
   /** Scope remote git routing to the active project: pass its id to route git over that SSH
    *  project's master, or null for a local project so all git ops run locally. */
   setActiveRemote(projectId: string | null): Promise<void>

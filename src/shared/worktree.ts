@@ -88,6 +88,18 @@ export function isValidGitRef(name: string): boolean {
   return !/[\s~^:?*[\\]|\.\.|^\/|\/$|@\{/.test(n)
 }
 
+/**
+ * Return the shared git-town parent key for a valid child branch.
+ *
+ * The dependency operation lane adopts git-town's config convention without requiring the
+ * git-town executable. Keeping this helper in the shared, Electron-free module means every
+ * caller revalidates a hand-editable branch name before interpolating it into a config key.
+ */
+export function branchParentConfigKey(child: string): string | null {
+  const name = child.trim()
+  return isValidGitRef(name) ? `git-town-branch.${name}.parent` : null
+}
+
 /** Flatten a branch name into a filesystem-safe, flag-safe slug. */
 export function sanitizeWorktreeBranch(input: string): string {
   return input

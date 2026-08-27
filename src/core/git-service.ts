@@ -16,6 +16,7 @@ import type {
 import { loadGitHistoryFromExecutor } from '../shared/git-history'
 import * as worktreeOps from '../shared/worktree-ops'
 import type { WorktreeListResult } from '../shared/worktree'
+import { branchParentConfigKey, isValidGitRef } from '../shared/worktree'
 import type { GitHistoryOptions, GitHistoryResult } from '../shared/git-history'
 import { resolveGitRemote, runRemoteGit } from './remote-ssh/remote-git'
 import { platform } from './platform'
@@ -358,6 +359,17 @@ export class GitService {
     platform().handle(IPC.gitWorktreeRemove, (repoPath: string, wtPath: string, request: GitWorktreeRemovalRequest) =>
       this.worktreeRemove(repoPath, wtPath, request)
     )
+    platform().handle(IPC.gitSetBranchParent, (repoPath: string, child: string, parent: string) =>
+      this.setBranchParent(repoPath, child, parent)
+    )
+    platform().handle(IPC.gitUnsetBranchParent, (repoPath: string, child: string) =>
+      this.unsetBranchParent(repoPath, child)
+    )
+    platform().handle(IPC.gitSyncBranch, (cwd: string, child: string) => this.syncBranch(cwd, child))
+    platform().handle(IPC.gitProposeBranch, (cwd: string, child: string) => this.proposeBranch(cwd, child))
+    platform().handle(IPC.gitShipBranch, (cwd: string, child: string, parent: string) =>
+      this.shipBranch(cwd, child, parent)
+    )
   }
 
   repoRoot(cwd: string) {
@@ -525,6 +537,129 @@ export class GitService {
         message: `${error instanceof Error ? error.message : 'The worktree could not be revalidated.'} Nothing was removed.`
       }
     }
+  }
+
+  /**
+   * Store a branch dependency in the repository's shared config. The config key is derived only
+   * after both branch values pass the same Git ref validation used by ordinary branch operations.
+   */
+  async setBranchParent(repoPath: string, child: string, parent: string): Promise<GitResult> {
+    const key = branchParentConfigKey(child)
+    const parentName = parent.trim()
+    if (!key || !isValidGitRef(parentName)) return { ok: false, message: 'Invalid branch name.' }
+    const result = await git(repoPath, ['config', key, parentName])
+    return result.ok
+      ? { ok: true, message: `Set ${child.trim()} parent to ${parentName}.` }
+      : fail(result)
+  }
+
+  /** Clear a branch dependency projection. Clearing an absent key is idempotent. */
+  async unsetBranchParent(repoPath: string, child: string): Promise<GitResult> {
+    const key = branchParentConfigKey(child)
+    if (!key) return { ok: false, message: 'Invalid branch name.' }
+    const result = await git(repoPath, ['config', '--unset', key])
+    if (result.ok || /exit code 5|not found/i.test(result.err)) {
+      return { ok: true, message: `Cleared parent of ${child.trim()}.` }
+    }
+    return fail(result)
+  }
+
+  /** Rebase one child branch onto the parent recorded by its dependency projection. */
+  async syncBranch(cwd: string, child: string): Promise<GitResult> {
+    const childName = child.trim()
+    const key = branchParentConfigKey(childName)
+    if (!key) return { ok: false, message: 'Invalid branch name.' }
+    const parentResult = await git(cwd, ['config', '--get', key])
+    const parentName = parentResult.out.trim()
+    if (!parentResult.ok || !parentName) {
+      return {
+        ok: false,
+        message: `No parent configured for ${childName}. Declare the dependency first.`
+      }
+    }
+    if (!isValidGitRef(parentName)) return { ok: false, message: 'Invalid parent branch.' }
+    const result = await git(cwd, ['rebase', parentName])
+    if (result.ok) return { ok: true, message: result.out || `Rebased ${childName} onto ${parentName}.` }
+    if (/conflict|could not apply|merge/i.test(result.err)) {
+      return {
+        ok: false,
+        message:
+          'Rebase stopped on a conflict. Resolve it in this terminal, then run ' +
+          '`git rebase --continue` (or `git rebase --abort` to give up). ' +
+          `Parent: ${parentName}.`
+      }
+    }
+    return fail(result)
+  }
+
+  /** Open a pull request from the dependency child to its configured parent. */
+  async proposeBranch(cwd: string, child: string): Promise<GitResult> {
+    const childName = child.trim()
+    const key = branchParentConfigKey(childName)
+    if (!key) return { ok: false, message: 'Invalid branch name.' }
+    if (!GH_PATH) return { ok: false, message: 'GitHub CLI (gh) not found.' }
+    const parentResult = await git(cwd, ['config', '--get', key])
+    const parentName = parentResult.out.trim()
+    if (!parentResult.ok || !parentName) {
+      return {
+        ok: false,
+        message: `No parent configured for ${childName}. Declare the dependency first.`
+      }
+    }
+    if (!isValidGitRef(parentName)) return { ok: false, message: 'Invalid parent branch.' }
+
+    const env: NodeJS.ProcessEnv = { ...GIT_ENV }
+    if (!(await ghAuthed())) {
+      const token = await githubTokenFromGitCredentials(cwd)
+      if (!token) return { ok: false, message: 'Sign in to GitHub to propose.', needsAuth: true }
+      env.GH_TOKEN = token
+    }
+    try {
+      await run(
+        GH_PATH,
+        [
+          'pr',
+          'create',
+          '--base',
+          parentName,
+          '--head',
+          childName,
+          '--title',
+          childName,
+          '--body',
+          `This pull request stacks ${childName} on ${parentName}.`
+        ],
+        { cwd, env, maxBuffer: 10 * 1024 * 1024 }
+      )
+      return { ok: true, message: `Opened a pull request for ${childName} against ${parentName}.` }
+    } catch (error) {
+      const detail = error as { stderr?: string; message?: string }
+      const message = (detail.stderr || detail.message || 'gh failed').trim()
+      if (/\balready exists/i.test(message)) {
+        return { ok: false, message: 'A pull request already exists for this branch.' }
+      }
+      if (/\b(401|403)\b|unauthor|forbidden|auth|token|scope|HTTP 4/i.test(message)) {
+        return { ok: false, message, needsAuth: true }
+      }
+      return { ok: false, message }
+    }
+  }
+
+  /** Fast-forward the configured parent checkout to the child branch. */
+  async shipBranch(cwd: string, child: string, parent: string): Promise<GitResult> {
+    const childName = child.trim()
+    const parentName = parent.trim()
+    if (!isValidGitRef(childName) || !isValidGitRef(parentName)) {
+      return { ok: false, message: 'Invalid branch name.' }
+    }
+    const head = await git(cwd, ['rev-parse', '--abbrev-ref', 'HEAD'])
+    if (!head.ok || head.out.trim() !== parentName) {
+      return { ok: false, message: `The target checkout is not on parent branch ${parentName}.` }
+    }
+    const result = await git(cwd, ['merge', '--ff-only', childName])
+    return result.ok
+      ? { ok: true, message: result.out || `Shipped ${childName} into ${parentName} by fast-forward.` }
+      : fail(result)
   }
 
   async status(cwd: string): Promise<GitStatus> {
