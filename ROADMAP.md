@@ -14,6 +14,11 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## Shipped and verified
 
+- [ ] Easter egg catalog (#103): 60 local, bounded, accessible desktop surprises are implemented
+      in `src/shared/easter-eggs.ts` and `src/renderer/components/EasterEggs.tsx`, with the
+      cabinet and documentation in place. Runtime interaction, tests, builds, and captures remain
+      intentionally unverified under the issue's no-check boundary.
+
 - [x] Three-process architecture (main / core / renderer) with the `CorePlatform` seam, so
       Server Edition (`src/server`) boots the same core services as Desktop.
 - [x] Terminal session continuity via tmux (macOS/Linux) and the standalone Windows session host,

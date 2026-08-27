@@ -2438,3 +2438,10 @@ git tag --sort=-creatordate
 or on GitHub's [tags](https://github.com/eneskirca/nodeterm/tags) and
 [releases](https://github.com/eneskirca/nodeterm/releases) pages.
 
+# Unreleased
+
+- Add issue #103's local Easter egg cabinet with 60 stable, non-blocking surprises across the
+  desktop surfaces. Each entry has English and Cantonese copy, ten funny levels, keyboard and
+  touch discovery, reduced-motion behavior, local discovery-only persistence, reset support, and
+  complete School-mode suppression. No tests, builds, runtime interaction, or captures were run in
+  this lane by explicit scope.

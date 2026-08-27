@@ -28,7 +28,7 @@ export interface NavRailProps extends FabMenuProps {
  */
 export function NavRail({ destinations, kidsLabel, onOpenKids, ...fab }: NavRailProps) {
   return (
-    <nav className="md3-nav-rail" aria-label="Primary navigation" data-canvas-chrome>
+    <nav className="md3-nav-rail" aria-label="Primary navigation" data-canvas-chrome data-easter-surface="canvas">
       <FabMenu {...fab} />
       <div className="md3-nav-rail__items">
         {destinations.map((d) => (
