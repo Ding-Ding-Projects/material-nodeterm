@@ -119,8 +119,9 @@ import VirtualMachineNode from '../nodes/VirtualMachineNode'
 import NsisInstallerNode from '../nodes/NsisInstallerNode'
 import OpenWebUiHostingNode from '../nodes/OpenWebUiHostingNode'
 import ShopNode from '../nodes/ShopNode'
-import { AwsUniversePortalNode } from '../nodes/AwsUniversePortalNode'
 import TorrentNode from '../nodes/TorrentNode'
+import WindowsDiagnosticsNode from '../nodes/WindowsDiagnosticsNode'
+import { AwsUniversePortalNode } from '../nodes/AwsUniversePortalNode'
 import { normalizeAddress } from '../nodes/browserUrl'
 import VideoNode from '../nodes/VideoNode'
 import PhotoNode from '../nodes/PhotoNode'
@@ -746,9 +747,10 @@ import {
   nodeSshFor,
   createServiceNode,
   createOpenWebUiNode,
+  createVirtualMachineNode,
+  createWindowsDiagnosticsNode,
   createGitLabHostingNode,
   createCloudflareCoreManagersNode,
-  createVirtualMachineNode,
   SERVICE_NODE_LABELS,
   createVideoNode,
   createPhotoNode,
@@ -2127,6 +2129,7 @@ export function Canvas() {
       'open-webui-hosting': withNodeBoundary(OpenWebUiHostingNode),
       'cloudflare-tunnel': withNodeBoundary(ServiceNode),
       'linux-vm': withNodeBoundary(VirtualMachineNode),
+      'windows-diagnostics': withNodeBoundary(WindowsDiagnosticsNode)
       awsidentity: withNodeBoundary(ServiceNode),
       'gitlab-hosting': withNodeBoundary(GitLabHostingNode),
       'cloudflare-zero-trust': withNodeBoundary(ServiceNode),
@@ -5720,6 +5723,7 @@ export function Canvas() {
             if (catalogEntry.id.startsWith('service:')) {
               return createServiceNode(catalogEntry.nodeKind as ServiceNodeKind, index, center)
             }
+            if (catalogEntry.id === 'windows-diagnostics') return createWindowsDiagnosticsNode(index, center)
             if (catalogEntry.id === 'gitlab-hosting') return createGitLabHostingNode(index, center)
             if (catalogEntry.id === 'nextcloud-hosting') return createServiceNode('nextcloud-aio', index, center)
             if (catalogEntry.id === 'nextcloud-managed-hosting') return createServiceNode('nextcloud-managed', index, center)
@@ -5734,6 +5738,9 @@ export function Canvas() {
             const awsPlatformCatalogServices = { 'aws-ecr': 'ecr', 'aws-ecs': 'ecs', 'aws-eks': 'eks', 'aws-rds': 'rds', 'aws-databases': 'database', 'aws-vpc': 'vpc', 'aws-route53': 'route53', 'aws-cost': 'cost' } as const
             if (catalogEntry.id in awsPlatformCatalogServices) return createAwsResourceNode(index, 'platform-managers', center, undefined, awsPlatformCatalogServices[catalogEntry.id as keyof typeof awsPlatformCatalogServices])
             if (catalogEntry.id === 'cloudflare-core-managers') return createCloudflareCoreManagersNode(index, center)
+            if (catalogEntry.id.startsWith('service:')) {
+              return createServiceNode(catalogEntry.nodeKind as ServiceNodeKind, index, center)
+            }
             // File and diff rows stay visible but disabled until their picker prerequisites exist.
             return null
           },

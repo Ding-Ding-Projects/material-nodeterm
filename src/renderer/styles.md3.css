@@ -3240,6 +3240,28 @@ button.term-node__title-text:focus-visible {
 .virtual-machine-node :is(button,input,select):focus-visible { outline:2px solid var(--md-primary); outline-offset:2px; }
 @media (max-width:560px) { .virtual-machine-node__grid { grid-template-columns:1fr; } .virtual-machine-node__actions,.virtual-machine-node__snapshot { flex-wrap:wrap; } }
 
+.windows-diagnostics-node { display:flex; flex-direction:column; width:100%; height:100%; overflow:hidden; color:var(--md-on-surface,#f2f2f7); background:var(--md-surface-container); border:1px solid var(--md-outline-variant,#3a3a3c); border-radius:var(--md-shape-medium); }
+.windows-diagnostics-node.selected { box-shadow:0 0 0 2px var(--md-primary,#0a84ff); }
+.windows-diagnostics-node__body { display:flex; flex:1; flex-direction:column; gap:8px; min-height:0; padding:12px; overflow:auto; }
+.windows-diagnostics-node__status,.windows-diagnostics-node__hint,.windows-diagnostics-node__error { margin:0; font-size:11px; line-height:1.4; }
+.windows-diagnostics-node__hint { color:var(--md-on-surface-variant,#9a9a9e); }
+.windows-diagnostics-node__status { color:var(--md-primary,#0a84ff); }
+.windows-diagnostics-node__status.is-error,.windows-diagnostics-node__error { color:var(--md-error,#ffb4ab); }
+.windows-diagnostics-node__tabs { display:flex; flex-wrap:wrap; gap:4px; }
+.windows-diagnostics-node__tabs button { min-height:40px; padding:0 10px; color:var(--md-on-surface); background:var(--md-surface-container-high); border:1px solid var(--md-outline-variant); border-radius:var(--md-shape-small); cursor:pointer; }
+.windows-diagnostics-node__tabs button.is-active { color:var(--md-on-primary-container); background:var(--md-primary-container); }
+.windows-diagnostics-node__search { display:flex; align-items:center; gap:4px; }
+.windows-diagnostics-node__search input { flex:1; min-height:40px; padding:6px 9px; color:inherit; background:var(--md-surface); border:1px solid var(--md-outline); border-radius:var(--md-shape-small); }
+.windows-diagnostics-node__panel { min-height:0; overflow:auto; }
+.windows-diagnostics-node__table { display:flex; flex-direction:column; gap:6px; }
+.windows-diagnostics-node__row { display:flex; flex-direction:column; gap:4px; padding:8px; background:var(--md-surface-container-high); border:1px solid var(--md-outline-variant); border-radius:var(--md-shape-small); }
+.windows-diagnostics-node__row > div { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:4px 10px; }
+.windows-diagnostics-node__row span { display:flex; flex-direction:column; gap:2px; min-width:0; font-size:10px; }
+.windows-diagnostics-node__row b { color:var(--md-on-surface-variant); font-size:9px; font-weight:600; }
+.windows-diagnostics-node__row code { overflow-wrap:anywhere; color:var(--md-on-surface); font:inherit; }
+.windows-diagnostics-node :is(button,input):focus-visible { outline:2px solid var(--md-primary); outline-offset:2px; }
+@media (max-width:620px) { .windows-diagnostics-node__tabs button { flex:1 1 140px; } .windows-diagnostics-node__row > div { grid-template-columns:1fr; } }
+
 /* ============================================================================================
    MD3: Kanban board (Board lane — design/v2/MD3 Board.dc.html)
 

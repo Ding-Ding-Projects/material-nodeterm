@@ -215,6 +215,34 @@ The documentation-bundle generator was attempted but could not run because this 
 installed `esbuild` package. The offline article record was updated manually to keep the committed
 bundle aligned with the new article; the integration lane should regenerate and compare it after
 bootstrapping dependencies.
+## 2026-08-27, read-only Windows diagnostics, issue #66
+
+The implementation lane is `feat/program-55-windows-diagnostics` in the linked checkout
+`C:\Users\cntow\Documents\GitHub\material-nodeterm-worktrees\issue-66`. It adds the
+`windows-diagnostics` node kind, the typed `windowsDiagnostics` bridge, and a core snapshot service
+that invokes only one fixed, read-only PowerShell script. The script reports drives/storage,
+services, startup entries, scheduled tasks, updates, network state, and bounded System/Application
+event summaries. It has a fifteen-second query deadline, a four MiB response bound, and a 1,000-row
+per-section bound. Non-Windows hosts, missing providers, command failures, and malformed responses
+remain explicit unavailable/error states instead of empty success.
+
+The canvas node exposes a tab for each section, a local plain-text-first filter, and the adjacent
+anchored full regex builder. It contains only refresh and rename interactions; no host mutation
+control is present. Snapshot output and host-specific facts remain runtime-local and are not added
+to portable project data. Direct documentation is in
+`docs/features/windows/windows-diagnostics.md`, with the category index at
+`docs/features/windows/README.md`; the offline bundle has a corresponding article entry in
+`src/shared/docs-data.ts`.
+
+This feature ref was non-destructively reconciled with the exact `origin/main` tip
+`54164b84dce0b7e62787b1de2885405ff4ed821c` in merge commit
+`538fe6a5b4cbf0384a35ff9edc1a1d59d87df431`, preserving the diagnostics lane and incoming default
+branch work. The reconciled commit was published to `origin/feat/program-55-windows-diagnostics`,
+and its ancestry was verified with `git merge-base --is-ancestor`.
+
+Verification boundary: this ultra-speed lane intentionally ran no tests, lint, type checks, builds,
+packaging, installer execution, reviews, security or accessibility checks, runtime interaction, or
+captures. The parent integration lane must keep those verdicts unverified.
 ## 2026-08-27, AWS core-service managers, issue #46 PR preparation
 
 The issue jer was reconciled with the exact `origin/main` tip `2472cf23b99559005476841d3db5e6bc4691ac06`.

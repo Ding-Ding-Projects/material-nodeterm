@@ -544,6 +544,18 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
     availability: alwaysAvailable
   },
   {
+    id: 'windows-diagnostics',
+    nodeKind: 'windows-diagnostics',
+    category: 'managers',
+    label: 'Windows diagnostics',
+    description: 'Inspect drives, services, startup, scheduled tasks, updates, network state, and event summaries without changing the host.',
+    keywords: ['windows', 'diagnostics', 'drives', 'storage', 'services', 'startup', 'scheduled tasks', 'updates', 'network', 'events', 'read only'],
+    documentationPath: 'docs/features/windows/windows-diagnostics.md',
+    safeDefaults: {},
+    dependencies: ['powershell-read-only'],
+    availability: alwaysAvailable
+  },
+  {
     id: 'service:cloudflare-zero-trust',
     nodeKind: 'cloudflare-zero-trust',
     category: 'managers',
@@ -870,6 +882,7 @@ export const NODE_CATALOG_COMPLETENESS: readonly NodeCatalogCompletenessRecord[]
   { id: 'service:homeassistant', state: 'current', scope: 'any', reason: 'service manager node' },
   { id: 'service:freepbx', state: 'current', scope: 'any', reason: 'service manager node' },
   { id: 'service:cloudflare-tunnel', state: 'current', scope: 'any', reason: 'typed Cloudflare Tunnel inventory and reviewed DNS adoption' },
+  { id: 'windows-diagnostics', state: 'current', scope: 'any', reason: 'read-only host diagnostics with fixed queries' },
   { id: 'service:cloudflare-zero-trust', state: 'current', scope: 'any', reason: 'typed Cloudflare manager node' },
   { id: 'service:awsidentity', state: 'current', scope: 'aws-universe', reason: 'guided AWS identity manager node' },
   { id: 'subagent', state: 'ephemeral', scope: 'none', reason: 'hook-derived render-only card' },

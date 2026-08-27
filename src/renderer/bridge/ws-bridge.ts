@@ -1450,6 +1450,14 @@ export function buildWslApi(client: RpcClient): Pick<NodeTerminalApi, 'wsl'> {
   }
 }
 
+export function buildWindowsDiagnosticsApi(client: RpcClient): Pick<NodeTerminalApi, 'windowsDiagnostics'> {
+  return {
+    windowsDiagnostics: {
+      snapshot: () => client.request(IPC.windowsDiagnosticsSnapshot) as ReturnType<NodeTerminalApi['windowsDiagnostics']['snapshot']>
+    }
+  }
+}
+
 export function buildVsCodeApi(client: RpcClient): Pick<NodeTerminalApi, 'vscode'> {
   return {
     vscode: {
@@ -1842,6 +1850,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildSessionMemoryApi(client),
     ...buildVsCodeApi(client),
     ...buildWslApi(client),
+    ...buildWindowsDiagnosticsApi(client),
     ...buildLocalHistoryApi(client),
     ...buildToylockApi(client),
     ...buildAuthenticatorApi(client),

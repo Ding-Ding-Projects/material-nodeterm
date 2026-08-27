@@ -519,6 +519,14 @@ Identical on desktop and in the browser.
 </details>
 ## Windows
 
+### Read-only Windows diagnostics
+
+The Windows diagnostics node gives a bounded, read-only snapshot of drives and storage, services,
+startup entries, scheduled tasks, updates, network state, and System/Application event summaries.
+Each area has its own tab and a local plain-text-first filter with an adjacent anchored full regex
+builder. It never mutates host state, and a missing provider or non-Windows host produces an honest
+unavailable state. See [Read-only Windows diagnostics](docs/features/windows/windows-diagnostics.md).
+
 Windows is a first-class desktop target: a native **Squirrel.Windows** installer, a
 Windows-shaped default shell (PowerShell/cmd, not `bash`), and a Material title bar with native
 window buttons.
