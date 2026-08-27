@@ -159,7 +159,7 @@ required cheap Lowlevel MCP headless Windows route.
 
 The named-profile implementation in issue #77 is intentionally recorded separately from the
 existing detected-profile evidence. This lane did not run tests, type checks, lint, builds,
-packaging, runtime interaction, or captures. Those Chuts remain open for the named-profile form,
+packaging, runtime interaction, or captures. Those checks remain open for the named-profile form,
 creation picker, local overlay, and startup-command sequencing.
 
 Packaged-app interaction **is** exercised, by `npm run check:wired` against the real built

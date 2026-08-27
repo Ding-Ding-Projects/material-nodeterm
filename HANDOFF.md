@@ -2,7 +2,7 @@
 
 ## 2026-08-27, named terminal profiles, issue #77 and upstream issue #286
 
-The feature jer was reconciled with the exact `origin/main` tip
+The feature branch was reconciled with the exact `origin/main` tip
 `54164b84dce0b7e62787b1de2885405ff4ed821c`. The named-profile implementation remains in
 `68277d44f8ac6000e723c9cd85a6acbeef8e40bf`, with the portability correction in
 `8d40fb8ec9312d8e0a5ee922556a7601b4e8494f`.
@@ -23,8 +23,8 @@ an Agent launch runs after the named startup command.
 Direct documentation is `docs/features/terminals/windows-shell-profiles.md`, indexed from
 `docs/features/terminals/README.md`. `CHANGELOG.md` and `ROADMAP.md` record the same scope and
 verification boundary. Tests, lint, type checks, builds, packaging, runtime interaction, reviews,
-audits, and captures were not run in this lane. The parent integration lane owns those Chuts,
-generated documentation refresh, issue comments, final default-jer integration, and release work.
+audits, and captures were not run in this lane. The parent integration lane owns those checks,
+generated documentation refresh, issue comments, final default-branch integration, and release work.
 
 ## 2026-08-27, AWS core-service managers, issue #46 PR preparation
 
