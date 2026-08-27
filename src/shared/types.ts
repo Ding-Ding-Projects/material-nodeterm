@@ -2926,6 +2926,19 @@ export interface PlannerApi {
   onOccurrence(listener: (occurrence: import('./planner-occurrences').PlannerOccurrence) => void): () => void
 }
 
+/** Machine-local Alarm Clock execution. Project data remains the portable source of safe intent;
+ * this mirror keeps due evaluation alive when the renderer closes. */
+export interface AlarmApi {
+  state(): Promise<import('./alarm-clock').AlarmPlannerSnapshot>
+  upsert(
+    alarm: Omit<import('./alarm-clock').AlarmDefinition, 'createdAt' | 'updatedAt'> & { id?: string }
+  ): Promise<import('./alarm-clock').AlarmPlannerSnapshot>
+  remove(alarmId: string): Promise<boolean>
+  snooze(occurrenceId: string, minutes: number): Promise<import('./alarm-clock').AlarmPlannerSnapshot>
+  dismiss(occurrenceId: string): Promise<import('./alarm-clock').AlarmPlannerSnapshot>
+  onDue(listener: (event: import('./alarm-clock').AlarmDueEvent) => void): () => void
+}
+
 /** A downloadable whisper model plus its on-disk status, as returned by `speech.models()`. */
 export interface SpeechModelInfo extends WhisperModelInfo {
   downloaded: boolean
@@ -4487,6 +4500,9 @@ export interface NodeTerminalApi {
   kidsMode: KidsModeApi
   scheduledSettings: ScheduledSettingsApi
   planner: PlannerApi
+  /** Desktop exposes the host Alarm Clock mirror. Other shells may omit it and retain the
+   * renderer-local fallback until their bridge supplies the same namespace. */
+  alarm?: AlarmApi
   speech: SpeechApi
   /** Universal file converter — docs/file-converter.md. */
   converter: import('./converter').ConverterApi

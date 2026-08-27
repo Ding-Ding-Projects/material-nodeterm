@@ -24,6 +24,7 @@ import type {
 } from '../shared/types'
 import type { ScheduledSettingsActiveState, ScheduledSettingsFile } from '../shared/scheduled-settings'
 import type { PlannerFile, PlannerLoadState, PlannerOccurrence } from '../shared/planner-occurrences'
+import type { AlarmDefinition, AlarmDueEvent } from '../shared/alarm-clock'
 import type { HistoryFilters } from '../shared/local-history'
 import type { ClientId, PeerDiff, PeerIdentity, PeerState } from '../shared/presence'
 import type { ConvertQueueItem, ConverterQueueState } from '../shared/converter'
@@ -101,6 +102,7 @@ const subscribeScheduledSettingsActive = subscribe<[ScheduledSettingsActiveState
   IPC.scheduledSettingsActiveChange
 )
 const subscribePlannerOccurrence = subscribe<[PlannerOccurrence]>(IPC.plannerOccurrence)
+const subscribeAlarmDue = subscribe<[AlarmDueEvent]>(IPC.alarmPlannerDue)
 // Project setup/archive (SDD: 2026-08-19-project-settings-trust): global (not per-project) main →
 // renderer prompts, fanned out the same way as the relay events above.
 const subscribeProjectSetupConsentRequest = subscribe<[ProjectConsentRequest]>(
@@ -353,6 +355,16 @@ const api: NodeTerminalApi = {
     history: () => ipcRenderer.invoke(IPC.plannerHistory),
     export: (format: 'json' | 'csv') => ipcRenderer.invoke(IPC.plannerExport, format),
     onOccurrence: subscribePlannerOccurrence
+  },
+  alarm: {
+    state: () => ipcRenderer.invoke(IPC.alarmPlannerState),
+    upsert: (alarm: Omit<AlarmDefinition, 'createdAt' | 'updatedAt'> & { id?: string }) =>
+      ipcRenderer.invoke(IPC.alarmPlannerUpsert, alarm),
+    remove: (alarmId: string) => ipcRenderer.invoke(IPC.alarmPlannerRemove, alarmId),
+    snooze: (occurrenceId: string, minutes: number) =>
+      ipcRenderer.invoke(IPC.alarmPlannerSnooze, occurrenceId, minutes),
+    dismiss: (occurrenceId: string) => ipcRenderer.invoke(IPC.alarmPlannerDismiss, occurrenceId),
+    onDue: subscribeAlarmDue
   },
   githubIssues: {
     subscribe: (projectId) => ipcRenderer.invoke(IPC.githubIssuesSubscribe, { projectId }),
