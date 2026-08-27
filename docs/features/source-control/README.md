@@ -5,7 +5,7 @@ frames — so "an agent per branch" is just a group per branch.
 
 - [Source control & worktrees](./source-control-and-worktrees.md) — stage/unstage, diff,
   branch, commit, push; worktree creation, scoping, reconciliation, and safe removal.
-- [Branch dependency operations](./dependency-operations.md) — project-owned same-repository
+- [Branch dependency operations](./dependency-operations.md): project-owned same-repository
   branch relationships, bounded typed sync/propose/ship operations, progress, cancellation, and
   honest unavailable states.
 
