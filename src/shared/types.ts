@@ -985,6 +985,20 @@ export interface LogRecord {
   msg: string
 }
 
+/** A portable child canvas inside one project. Root canvas content remains on Project itself. */
+export interface ProjectMultiverseCanvas {
+  id: string
+  title: string
+  parentCanvasId: string
+  /** Persisted depth from the project root. Multiverse canvases are limited to 1 through 8. */
+  depth: number
+  order: number
+  viewport: Viewport
+  nodes: CanvasNodeState[]
+  bridges?: BridgeLink[]
+  ropes?: BridgeLink[]
+}
+
 export interface LogApi {
   /** The whole ring, oldest-first — the panel's initial fill. */
   snapshot(): Promise<LogRecord[]>
@@ -1031,6 +1045,10 @@ export interface Project {
   ssh?: { server: import('./ssh').SshConnection; remoteCwd: string }
   viewport: Viewport
   nodes: CanvasNodeState[]
+  /** Safe, git-shared child canvases. Credentials, paths and runtime bindings stay on nodes' local overlays. */
+  multiverseCanvases?: ProjectMultiverseCanvas[]
+  /** Runtime-only selection. The shared project file stores hierarchy, never one person's current view. */
+  activeCanvasId?: string
   /** Default managed Claude account for new Claude/chat nodes in this project. */
   defaultAccountId?: string
   /** Permission mode for new Claude TERMINAL (CLI) sessions in this project. SDK chat nodes are

@@ -258,6 +258,12 @@ canvas has no Shop. See the
 [special-universe Shop article](./docs/features/integrations/aws-universe-shop.md) for the
 portable metadata, repair records, disabled AWS entries, and verification boundary.
 
+A project can now create and navigate a scoped **Multiverse canvas hierarchy** from the canvas app
+bar. The guided parent picker searches names, depths, and identifiers with its adjacent regex
+builder, explains why depth-8 parents cannot accept another child, and preserves each child canvas
+through ordinary project files and portable schema 3 import and export. See the
+[Multiverse child canvases article](./docs/features/canvas/multiverse-canvases.md).
+
 ### Agent support — Claude Code, Codex, Gemini, opencode, Grok, or your own
 
 An **agent** node is a terminal preset that launches an agent CLI as its first command. Status

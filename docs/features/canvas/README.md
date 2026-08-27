@@ -12,6 +12,8 @@ The pan/zoom surface nodeterm is built around, and everything that lives on it.
   doors, shared refusal of tab and direct-selection bypasses, and safe schema 3 intent.
 - [Wild dim sum node](./wild-dim-sum-node.md) — bounded public-catalog browsing, random published
   dish selection, portable display intent, and published-photo recovery without vendored images.
+- [Multiverse child canvases](./multiverse-canvases.md) - scoped nested canvases, guided hierarchy
+  navigation, the depth-8 boundary, persistence, and portable schema 3 projection.
 - [Alarm Clock nodes](../../alarm-clock.md) — one-shot and recurring reminders with timezone,
   daylight-saving, snooze, dismiss, and missed-occurrence handling.
 - [Canvas & node lifecycle](./canvas-and-lifecycle.md) — how nodes mount, unmount, park, and

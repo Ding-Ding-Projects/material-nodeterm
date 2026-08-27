@@ -47,6 +47,7 @@ export const DOCS = [
   ['File converter', 'local adapters, safe names, and editor handoff', 'file-converter'],
   ['Kanban board', 'live session cards', 'kanban-board'],
   ['Language modes, funny levels & emoji', 'English, Cantonese, or both', 'language-modes'],
+  ['Multiverse child canvases', 'nested scoped canvases through depth 8', 'multiverse-canvases'],
   ['Narrator', 'the page reads itself out loud', 'narrator'],
   ['Node kinds', 'terminal, agent, sticky, group, editor, diff, web', 'node-kinds'],
   ['Packaging & auto-update', 'how builds are made and shipped', 'packaging-updates'],

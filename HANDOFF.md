@@ -160,6 +160,39 @@ ultra-speed boundary, no tests, type checks, lint, builds, packaging, installer 
 interaction, reviews, security or accessibility audits, or UI captures were run. Those verdicts and
 the packaged adapter presence remain unverified.
 
+## 2026-08-27, scoped Multiverse child canvases and hierarchy
+
+Issue #33 is implemented on `feat/program-22-multiverse-canvases`. Projects now persist a bounded
+hierarchy of Multiverse child canvases through `Project.multiverseCanvases`, while
+`Project.activeCanvasId` remains runtime-only navigation state. Each child owns its viewport, nodes,
+bridges, ropes, parent, order, and exact depth. Creation uses the shared deterministic
+special-universe coordinator, so each child begins with one scoped Shop and the root remains without
+one.
+
+The canvas app bar now exposes a Material Design 3 hierarchy control. Its canvas list and guided
+parent picker each have isolated plain-text-first search and an adjacent anchored regex builder.
+Depth-8 parents remain visible with an exact disabled reason. Switching canvases commits the outgoing
+view, reloads the selected scope, and guards against a delayed commit writing the prior canvas over
+the new one.
+
+Workspace files and portable schema 3 preserve the hierarchy, scoped nodes, and canvas-owned
+relationships. Import validates bounded counts, identifiers, titles, parent-before-child ordering,
+exact depth, node arrays, and viewports. Machine-local terminal execution settings remain outside
+the shared file, and importing performs no process launch, download, network request, or provider
+operation.
+
+Changed implementation paths include `src/shared/types.ts`, `src/shared/multiverse-canvases.ts`,
+`src/core/workspace-files.ts`, `src/core/portable-canvas-projection.ts`,
+`src/renderer/state/projects.ts`, `src/renderer/components/MultiverseNavigator.tsx`,
+`src/renderer/canvas/Canvas.tsx`, and `src/renderer/styles.md3.css`. Directly related README,
+feature documentation, offline documentation, site documentation, roadmap, changelog, and handoff
+records accompany the implementation.
+
+This lane intentionally did not run tests, type checks, lint, builds, packaging, installer
+execution, reviews, audits, runtime interaction, accessibility checks, security checks, or captures.
+The owning integration lane must preserve that honest unverified state and run only the checks its
+own scope authorizes.
+
 ## 2026-08-26, desktop Material Design 3 and personal vocabulary reconciliation
 
 This source-only lane is on feat/full-app-material3-reconciliation at the current integration tip.

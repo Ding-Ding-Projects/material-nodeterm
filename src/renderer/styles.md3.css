@@ -82,6 +82,190 @@
   flex: 1;
 }
 
+.multiverse-nav__trigger {
+  -webkit-app-region: no-drag;
+  display: grid;
+  grid-template-columns: auto minmax(80px, 220px) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  max-width: 420px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 20px;
+  color: var(--md-on-surface-variant);
+  background: var(--md-surface-container-high);
+}
+
+.multiverse-nav__trigger:hover,
+.multiverse-nav__trigger:focus-visible {
+  color: var(--md-on-secondary-container);
+  background: var(--md-secondary-container);
+}
+
+.multiverse-nav__path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.multiverse-nav__depth {
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.multiverse-nav__popover h2,
+.multiverse-nav__popover p {
+  margin: 0;
+}
+
+.multiverse-nav__header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+}
+
+.multiverse-nav__header p,
+.multiverse-nav__create p,
+.multiverse-nav__search > span,
+.multiverse-nav__message {
+  color: var(--md-on-surface-variant);
+  font-size: 12px;
+}
+
+.multiverse-nav__search,
+.multiverse-nav__create {
+  display: grid;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--md-outline-variant);
+}
+
+.multiverse-nav__search-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.multiverse-nav__search input,
+.multiverse-nav__create input {
+  min-height: 40px;
+  min-width: 0;
+  border: 1px solid var(--md-outline);
+  border-radius: 12px;
+  padding: 0 12px;
+  color: var(--md-on-surface);
+  background: var(--md-surface-container-lowest);
+}
+
+.multiverse-nav__parent-list {
+  display: grid;
+  gap: 4px;
+  max-height: 168px;
+  overflow: auto;
+  padding: 4px;
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-medium);
+  background: var(--md-surface-container-low);
+}
+
+.multiverse-nav__parent-list button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  min-height: 44px;
+  align-items: center;
+  border: 0;
+  border-radius: var(--md-shape-small);
+  padding: 8px 12px;
+  background: transparent;
+  color: var(--md-on-surface);
+  text-align: start;
+}
+
+.multiverse-nav__parent-list button:hover,
+.multiverse-nav__parent-list button:focus-visible,
+.multiverse-nav__parent-list button.is-selected {
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+
+.multiverse-nav__parent-list button[aria-disabled='true'] {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
+.multiverse-nav__parent-list button span:last-child {
+  max-width: 220px;
+  color: var(--md-on-surface-variant);
+  font-size: 0.75rem;
+  text-align: end;
+}
+
+.multiverse-nav__create button,
+.multiverse-nav__header button {
+  min-height: 40px;
+  border: 0;
+  border-radius: 20px;
+  padding: 0 16px;
+  color: var(--md-on-primary);
+  background: var(--md-primary);
+}
+
+.multiverse-nav__create button:disabled {
+  color: var(--md-on-surface);
+  background: color-mix(in srgb, var(--md-on-surface) 12%, transparent);
+  opacity: 0.7;
+}
+
+.multiverse-nav__error {
+  color: var(--md-error) !important;
+}
+
+.multiverse-nav__list {
+  display: grid;
+  padding: 8px;
+  border-top: 1px solid var(--md-outline-variant);
+}
+
+.multiverse-nav__list button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  border: 0;
+  border-radius: 12px;
+  padding-inline-end: 14px;
+  color: var(--md-on-surface);
+  background: transparent;
+  text-align: left;
+}
+
+.multiverse-nav__list button:hover,
+.multiverse-nav__list button:focus-visible,
+.multiverse-nav__list button.is-active {
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+
+.multiverse-nav__message {
+  padding: 10px 16px 16px;
+}
+
+@media (max-width: 980px) {
+  .multiverse-nav__trigger {
+    grid-template-columns: auto auto;
+    padding-inline: 12px;
+  }
+  .multiverse-nav__path {
+    display: none;
+  }
+}
+
 /* The docked search bar re-themes the EXISTING `.cluster-search` button (kept verbatim — same
    class, same title="Command palette" — so the packaged-app driver script needs no changes). */
 .cluster-search {

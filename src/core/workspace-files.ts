@@ -13,10 +13,12 @@ import type {
   CanvasNodeState,
   NavStop,
   Project,
+  ProjectMultiverseCanvas,
   ProjectKanban,
   Viewport,
   Workspace
 } from '../shared/types'
+import { sanitizeMultiverseCanvases } from '../shared/multiverse-canvases'
 import { projectCapabilityFields, readProjectCapabilities } from '../shared/project-capabilities'
 import type { CapabilityAckMap } from '../shared/project-capability-consent'
 import { sanitizeProjectIcon, type ProjectIcon } from '../shared/project-icon'
@@ -103,6 +105,8 @@ export interface ProjectFileV1 {
    */
   viewport?: Viewport
   nodes: CanvasNodeState[]
+  /** Safe shared hierarchy. Runtime selection remains machine-local and is never written here. */
+  multiverseCanvases?: ProjectMultiverseCanvas[]
   bridges?: BridgeLink[]
   ropes?: BridgeLink[]
   /**
@@ -267,6 +271,10 @@ export function projectToFile(
   // (`shell`, `ssh.extraArgs`) never leave this machine in it — they ride the machine-local index
   // entry instead (`localNodeExec` / `IndexEntryV3.localExec`). See @shared/node-exec.
   const nodes = sanitizeCalendarConfigs(stripSharedNodeExec(p.cwd ? toPortableNodes(p.nodes, p.cwd) : p.nodes))
+  const multiverseCanvases = sanitizeMultiverseCanvases(p.multiverseCanvases)?.map((canvas) => ({
+    ...canvas,
+    nodes: sanitizeCalendarConfigs(stripSharedNodeExec(p.cwd ? toPortableNodes(canvas.nodes, p.cwd) : canvas.nodes))
+  }))
   const icon = sanitizeProjectIcon(p.icon)
   return {
     version: 1,
@@ -277,6 +285,7 @@ export function projectToFile(
     color: p.color,
     viewport: framingViewport(nodes),
     nodes,
+    ...(multiverseCanvases ? { multiverseCanvases } : {}),
     ...(icon ? { icon } : {}),
     ...(p.bridges ? { bridges: p.bridges } : {}),
     ...(p.ropes ? { ropes: p.ropes } : {}),
@@ -358,6 +367,13 @@ export function fileToProject(
 ): Project {
   const defaultAccountId = base.defaultAccountId ?? f.defaultAccountId
   const browserProfiles = validBrowserProfiles(f.browserProfiles)
+  const multiverseCanvases = sanitizeMultiverseCanvases(f.multiverseCanvases)?.map((canvas) => ({
+    ...canvas,
+    nodes: sanitizeBrowserPartitions(
+      applyLocalNodeExec(base.cwd ? resolveNodes(canvas.nodes, base.cwd) : canvas.nodes, base.localExec),
+      base.id
+    )
+  }))
   const icon = sanitizeProjectIcon(f.icon)
   return {
     id: base.id,
@@ -371,10 +387,11 @@ export function fileToProject(
     // `partition` survives only when it is exactly the one THIS project (base.id, machine-local)
     // would mint — a foreign/cloned/unsafe one drops to un-owned default session. See
     // loadedAgentBrowserPartition; without it a cloned project.json forges another project's jar.
-      nodes: sanitizeBrowserPartitions(
-        sanitizeCalendarConfigs(applyLocalNodeExec(base.cwd ? resolveNodes(f.nodes, base.cwd) : f.nodes, base.localExec)),
-        base.id
-      ),
+    nodes: sanitizeBrowserPartitions(
+      sanitizeCalendarConfigs(applyLocalNodeExec(base.cwd ? resolveNodes(f.nodes, base.cwd) : f.nodes, base.localExec)),
+      base.id
+    ),
+    ...(multiverseCanvases ? { multiverseCanvases } : {}),
     ...(f.bridges ? { bridges: f.bridges } : {}),
     ...(f.ropes ? { ropes: f.ropes } : {}),
     ...(defaultAccountId ? { defaultAccountId } : {}),
@@ -509,7 +526,10 @@ export function splitWorkspace(
     }
     // Exec-enabling node fields are stripped from every project file / ssh cache; the local user's
     // own values are preserved HERE, in the machine-local index (@shared/node-exec).
-    const local = localNodeExec(p.nodes)
+    const local = localNodeExec([
+      ...p.nodes,
+      ...(p.multiverseCanvases ?? []).flatMap((canvas) => canvas.nodes)
+    ])
     const localRef = local ? { localExec: local } : {}
     if (p.ssh) {
       entries.push({
@@ -549,5 +569,11 @@ export function splitWorkspace(
  * file could be adopted and then mirrored back with its execution fields intact.
  */
 export function serializeProjectFile(f: ProjectFileV1): string {
-  return JSON.stringify({ ...f, nodes: sanitizeCalendarConfigs(stripSharedNodeExec(f.nodes)) }, null, 2)
+  return JSON.stringify({
+    ...f,
+    nodes: sanitizeCalendarConfigs(stripSharedNodeExec(f.nodes)),
+    ...(f.multiverseCanvases
+      ? { multiverseCanvases: f.multiverseCanvases.map((canvas) => ({ ...canvas, nodes: sanitizeCalendarConfigs(stripSharedNodeExec(canvas.nodes)) })) }
+      : {})
+  }, null, 2)
 }
