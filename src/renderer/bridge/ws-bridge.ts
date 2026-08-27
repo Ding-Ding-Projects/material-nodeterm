@@ -23,6 +23,7 @@ import type { NodeDependenciesApi } from '../../shared/node-dependencies'
 import type { TorrentApi, TorrentTaskState } from '../../shared/torrent'
 import type { VirtualMachineApi } from '../../shared/virtual-machine'
 import type { CalendarApi, CalendarProvider } from '../../shared/calendar'
+import type { CloudflareCoreManagersApi } from '../../shared/cloudflare-core-managers'
 import type { HomeAssistantApi } from '../../shared/home-assistant'
 import type { HomeAssistantControlApi } from '../../shared/home-assistant-control'
 import type { HomeAssistantSensorApi } from '../../shared/home-assistant-sensor'
@@ -1101,6 +1102,24 @@ export function buildOllamaApi(client: RpcClient): Pick<NodeTerminalApi, 'ollama
   return { ollama }
 }
 
+/** Guided Cloudflare managers over the authenticated WS bridge. */
+export function buildCloudflareCoreManagersApi(client: RpcClient): Pick<NodeTerminalApi, 'cloudflareCoreManagers'> {
+  const cloudflareCoreManagers: CloudflareCoreManagersApi = {
+    runtime: () => client.request(IPC.cloudflareCoreRuntime) as ReturnType<CloudflareCoreManagersApi['runtime']>,
+    credentials: () => client.request(IPC.cloudflareCoreCredentials) as ReturnType<CloudflareCoreManagersApi['credentials']>,
+    saveCredential: (input) => client.request(IPC.cloudflareCoreSaveCredential, input) as ReturnType<CloudflareCoreManagersApi['saveCredential']>,
+    removeCredential: (credentialId) => client.request(IPC.cloudflareCoreRemoveCredential, credentialId) as ReturnType<CloudflareCoreManagersApi['removeCredential']>,
+    binding: (nodeId) => client.request(IPC.cloudflareCoreBinding, nodeId) as ReturnType<CloudflareCoreManagersApi['binding']>,
+    bind: (input) => client.request(IPC.cloudflareCoreBind, input) as ReturnType<CloudflareCoreManagersApi['bind']>,
+    unbind: (nodeId) => client.request(IPC.cloudflareCoreUnbind, nodeId) as ReturnType<CloudflareCoreManagersApi['unbind']>,
+    preview: (nodeId, request) => client.request(IPC.cloudflareCorePreview, nodeId, request) as ReturnType<CloudflareCoreManagersApi['preview']>,
+    execute: (nodeId, request) => client.request(IPC.cloudflareCoreExecute, nodeId, request) as ReturnType<CloudflareCoreManagersApi['execute']>,
+    cancel: (operationId) => client.request(IPC.cloudflareCoreCancel, operationId) as ReturnType<CloudflareCoreManagersApi['cancel']>,
+    onProgress: (listener) => client.subscribe(IPC.cloudflareCoreProgress, listener as Listener)
+  }
+  return { cloudflareCoreManagers }
+}
+
 /** Automatic node-feature dependency lifecycle over the authenticated server RPC. Downloads and
  * installation remain on the server host, so the browser never uses its own PATH as proof. */
 export function buildNodeDependenciesApi(client: RpcClient): Pick<NodeTerminalApi, 'nodeDependencies'> {
@@ -1717,6 +1736,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildConverterApi(client),
     ...buildNodeDependenciesApi(client),
     ...buildOllamaApi(client),
+    ...buildCloudflareCoreManagersApi(client),
     ...buildMinecraftApi(client),
     ...buildTorrentApi(client),
     ...buildVirtualMachineApi(client),

@@ -19,6 +19,7 @@ substrate described in CLAUDE.md rather than inventing a surface each.
 | [Shared hosted-resource backup and restore](backup-restore.md) | versioned, edition-aware, ownership-reviewed archives with bounded validation, progress, cancellation, atomic publication, and rollback contracts |
 | [Home Assistant controls](home-assistant-controls.md) | implemented schema-driven entity controls with machine-local connections and portable selection intent; verification intentionally unrun |
 | [Home Assistant sensor displays](home-assistant-sensor-display.md) | implemented portable entity/display intent with machine-local sealed binding, discovery, bounded observations, and typed value/state/gauge/trend/event/weather/calendar/attribute views |
+| [Cloudflare core managers](cloudflare-core-managers.md) | typed account, zone, DNS, SSL/TLS, ruleset, redirect, cache, and analytics operations with local sealed credentials, bounded results, previews, cancellation, and portable safe intent |
 
 Planned, not yet researched here:
 
