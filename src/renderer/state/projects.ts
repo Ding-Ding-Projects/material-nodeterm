@@ -320,6 +320,17 @@ function withoutActiveCanvas(project: Project): Project {
   return copy
 }
 
+function newMultiverseCanvasId(project: Project): string {
+  const used = new Set((project.multiverseCanvases ?? []).map((canvas) => canvas.id))
+  const base = `multiverse-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+  if (!used.has(base)) return base
+  for (let suffix = 2; suffix <= MAX_MULTIVERSE_CANVASES; suffix += 1) {
+    const candidate = `${base}-${suffix}`
+    if (!used.has(candidate)) return candidate
+  }
+  return base
+}
+
 export const useProjects = create<ProjectsState>((set, get) => ({
   projects: [],
   activeProjectId: '',
@@ -367,7 +378,7 @@ export const useProjects = create<ProjectsState>((set, get) => ({
     const depth = parentDepth + 1
     if (depth > MAX_MULTIVERSE_DEPTH) return { reason: `Depth ${MAX_MULTIVERSE_DEPTH} is the deepest Multiverse canvas.` }
     if ((project.multiverseCanvases?.length ?? 0) >= MAX_MULTIVERSE_CANVASES) return { reason: 'This project has reached the bounded child-canvas limit.' }
-    const canvasId = `multiverse-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+    const canvasId = newMultiverseCanvasId(project)
     const created = createSpecialUniverseCanvas({
       id: canvasId,
       scope: 'multiverse',

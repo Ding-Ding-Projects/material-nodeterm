@@ -34,7 +34,20 @@ export function projectCanvasView(project: Project): ProjectCanvasView {
 
 export function canvasDepth(project: Project, canvasId: string): number | null {
   if (canvasId === ROOT_CANVAS_ID) return 0
-  return project.multiverseCanvases?.find((canvas) => canvas.id === canvasId)?.depth ?? null
+  const byId = new Map((project.multiverseCanvases ?? []).map((canvas) => [canvas.id, canvas]))
+  const seen = new Set<string>()
+  const measure = (id: string): number | null => {
+    if (id === ROOT_CANVAS_ID) return 0
+    if (seen.has(id)) return null
+    const canvas = byId.get(id)
+    if (!canvas) return null
+    seen.add(id)
+    const parentDepth = measure(canvas.parentCanvasId)
+    seen.delete(id)
+    if (parentDepth === null || canvas.depth !== parentDepth + 1) return null
+    return parentDepth + 1
+  }
+  return measure(canvasId)
 }
 
 export function multiverseCanvasPath(project: Project, canvasId: string): ProjectCanvasView[] {
@@ -67,7 +80,9 @@ export function sanitizeMultiverseCanvases(value: unknown): ProjectMultiverseCan
       typeof item.parentCanvasId !== 'string' || !ids.has(item.parentCanvasId) ||
       typeof item.depth !== 'number' || !Number.isInteger(item.depth) || item.depth < 1 || item.depth > MAX_MULTIVERSE_DEPTH ||
       typeof item.order !== 'number' || !Number.isFinite(item.order) ||
-      !item.viewport || typeof item.viewport.x !== 'number' || typeof item.viewport.y !== 'number' || typeof item.viewport.zoom !== 'number' ||
+      !item.viewport || typeof item.viewport.x !== 'number' || !Number.isFinite(item.viewport.x) ||
+      typeof item.viewport.y !== 'number' || !Number.isFinite(item.viewport.y) ||
+      typeof item.viewport.zoom !== 'number' || !Number.isFinite(item.viewport.zoom) || item.viewport.zoom <= 0 ||
       !Array.isArray(item.nodes)
     ) continue
     const parentDepth = item.parentCanvasId === ROOT_CANVAS_ID
