@@ -31,6 +31,7 @@ substrate described in CLAUDE.md rather than inventing a surface each.
 | [GitHub CLI account selector](github-cli-accounts.md) | host-owned discovery, guided device-flow login, active-account switching, scope refresh, and per-account sign-out without exposing credentials |
 | [Cloudflare Access, Zero Trust, Workers, Pages, R2, D1 and Queues](cloudflare-zero-trust-managers.md) | typed fixed-route API managers with local protected credentials, portable neutral intent, bounded responses, progress, cancellation, and destructive confirmation; verification intentionally unrun |
 | [Guided GitHub API capabilities](github-api.md) | typed REST and GraphQL operation catalog with host-resolved credentials, approved-project scoping, bounded pagination, progress, cancellation, rate-limit state, and destructive confirmation; verification intentionally unrun |
+| [GitHub work-item canvas nodes](github-work-items.md) | safe issue and pull-request projections with guided selection, factual status, shared Markdown rendering, explicit session attachment, and Desktop/Server Edition bridge parity; verification intentionally unrun |
 
 Planned, not yet researched here:
 

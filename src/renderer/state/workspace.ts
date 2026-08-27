@@ -14,6 +14,7 @@ import { OPEN_WEBUI_DEFAULT_INTENT, type OpenWebUiIntent, type OpenWebUiLocalBin
 import { DEFAULT_GITLAB_HOSTING_CONFIG, type GitLabHostingConfig } from '@shared/gitlab-hosting'
 import { NEXTCLOUD_AIO_DEFAULT_CONFIG } from '@shared/nextcloud-aio'
 import { DEFAULT_NEXTCLOUD_MANAGED_INTENT, type NextcloudManagedBinding, type NextcloudManagedIntent } from '@shared/nextcloud-managed'
+import { GITHUB_WORK_ITEM_NODE_SIZE } from '@shared/github-work-items'
 import type { NsisLocalPaths, NsisSpec } from '@shared/nsis-form-types'
 import { defaultNsisLocalPaths, defaultNsisSpec } from '@shared/nsis-form-types'
 import type { AgentId, AgentPermissionMode, BuiltinAgentId } from '@shared/agents/config'
@@ -1677,6 +1678,12 @@ export function createServiceNode(
   }
 }
 
+/** Creates a safe, unconfigured GitHub issue or pull-request work-item node. */
+export function createGitHubWorkItemNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  const size = GITHUB_WORK_ITEM_NODE_SIZE
+  return { id: nextId('github-work-item'), type: 'github-work-item', position: placeAt(center, index, size.width, size.height), width: size.width, height: size.height, style: { width: size.width, height: size.height }, data: { title: 'GitHub work item', color: NODE_COLORS[(index + 2) % NODE_COLORS.length], group: null, githubWorkItem: { schemaVersion: 1, kind: 'issue', repository: '', number: 1, title: '', bodyMarkdown: '', state: 'unknown', author: null, labels: [], htmlUrl: '', sessionIds: [], refreshState: 'never' } } }
+}
+
 /** Creates a portable GitLab hosting blueprint. Deployment, context, volumes, and credentials
  * remain machine-local until the user chooses a guided operation on the node. */
 export function createGitLabHostingNode(index: number, center?: { x: number; y: number }): CanvasNode {
@@ -2363,7 +2370,8 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   'aws-resource': true,
   torrent: true,
   'linux-vm': true,
-  'open-webui-hosting': true
+  'open-webui-hosting': true,
+  'github-work-item': true
 }
 
 /**
@@ -2423,7 +2431,8 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   'aws-resource': AWS_RESOURCE_SIZE,
   torrent: TORRENT_SIZE,
   'linux-vm': LINUX_VM_SIZE,
-  'open-webui-hosting': OPEN_WEBUI_SIZE
+  'open-webui-hosting': OPEN_WEBUI_SIZE,
+  'github-work-item': GITHUB_WORK_ITEM_NODE_SIZE
 }
 
 /** A `Set`, not `type in NODE_KIND_TABLE`: `in` walks the prototype, so `'constructor'` and
@@ -2901,6 +2910,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         nsisLocalPaths: n.nsisLocalPaths,
         virtualMachineConfig: n.virtualMachineConfig,
         virtualMachineLocalPaths: n.virtualMachineLocalPaths,
+        githubWorkItem: n.githubWorkItem,
         calendarConfig: n.calendarConfig,
         homeAssistantControlConfig: n.kind === 'homeassistant-control' ? validateHomeAssistantControlConfig(n.homeAssistantControlConfig) : undefined,
         homeAssistantSensorConfig: n.homeAssistantSensorConfig,
@@ -3043,6 +3053,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         wildDimSumDish: normalizePublicDimSumSelection(n.data.wildDimSumDish) ?? undefined,
         virtualMachineConfig: n.data.virtualMachineConfig,
         virtualMachineLocalPaths: n.data.virtualMachineLocalPaths,
+        githubWorkItem: n.data.githubWorkItem,
         calendarConfig: n.data.calendarConfig,
         homeAssistantControlConfig: kind === 'homeassistant-control' ? validateHomeAssistantControlConfig(n.data.homeAssistantControlConfig) : undefined,
         homeAssistantSensorConfig: n.data.homeAssistantSensorConfig,

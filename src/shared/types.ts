@@ -443,6 +443,7 @@ export type NodeKind =
   | 'torrent'
   /** One-shot Linux ISO virtual machine, distinct from the WSL terminal profile. */
   | 'linux-vm'
+  | 'github-work-item'
 
 /**
  * The service kinds, as a runtime list. Exported because both the renderer (menu rows, one shared
@@ -695,6 +696,7 @@ export interface CanvasNodeState {
   virtualMachineConfig?: import('./virtual-machine').VirtualMachineConfig
   /** Linux ISO/disk selections stored only in the machine-local execution overlay. */
   virtualMachineLocalPaths?: import('./virtual-machine').VirtualMachineLocalPaths
+  githubWorkItem?: import('./github-work-items').GitHubWorkItem
   /**
    * service-kinds only, and MACHINE-LOCAL: where this node reaches its service. Stripped from
    * every project file we write and from every node arriving over the wire, then restored from the

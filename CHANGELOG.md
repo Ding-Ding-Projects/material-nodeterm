@@ -2540,3 +2540,10 @@ or on GitHub's [tags](https://github.com/eneskirca/nodeterm/tags) and
   touch discovery, reduced-motion behavior, local discovery-only persistence, reset support, and
   complete School-mode suppression. No tests, builds, runtime interaction, or captures were run in
   this lane by explicit scope.
+# Unreleased
+
+## Added
+
+- Add first-class GitHub issue and pull-request canvas work-item nodes with safe persistence and
+  shared API/account integration. Source-only implementation for upstream #462 and downstream #132;
+  verification remains unrun.

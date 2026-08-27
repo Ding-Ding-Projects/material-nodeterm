@@ -415,3 +415,4 @@ intentionally unchecked because this task publishes the plan only.
 *This file is a snapshot, not a live feed. Re-derive it from `git log`, `HANDOFF.md`,
 `node scripts/check-app-contract.mjs`, and `gh issue list` rather than trusting it silently once
 enough commits have landed since it was last written.*
+- [ ] GitHub issue and pull-request canvas work-item nodes, source implementation landed in `feat/github-pr-issue-canvas`; integration verification remains open.

@@ -128,6 +128,7 @@ import GalleryNode from '../nodes/GalleryNode'
 import WildDimSumNode from '../nodes/WildDimSumNode'
 import WebNode from '../nodes/WebNode'
 import AwsResourceNode from '../nodes/AwsResourceNode'
+import GitHubWorkItemNode from '../nodes/GitHubWorkItemNode'
 import { NativeLoopNode, setNativeLoopRunHandler } from '../nodes/NativeLoopNode'
 import TimerNode from '../nodes/TimerNode'
 import AlarmClockNode from '../nodes/AlarmClockNode'
@@ -752,6 +753,7 @@ import {
   createWildDimSumNode,
   createWebNode,
   createAwsResourceNode,
+  createGitHubWorkItemNode,
   isVideoFile,
   duplicateNode,
   flowToNodeStates,
@@ -2127,7 +2129,8 @@ export function Canvas() {
       'nextcloud-managed': withNodeBoundary(ServiceNode),
       'cloudflare-core-managers': withNodeBoundary(CloudflareCoreManagersNode),
       'linux-vm': withNodeBoundary(VirtualMachineNode),
-      'aws-resource': withNodeBoundary(AwsResourceNode)
+      'aws-resource': withNodeBoundary(AwsResourceNode),
+      'github-work-item': withNodeBoundary(GitHubWorkItemNode)
     }),
     []
   )
@@ -5699,6 +5702,7 @@ export function Canvas() {
             if (catalogEntry.id === 'browser') return createBrowserNode(index, '', center)
             if (catalogEntry.id === 'web') return createWebNode(index, { url: '' }, center)
             if (catalogEntry.id === 'authenticator') return createAuthenticatorNode(index, center)
+            if (catalogEntry.id === 'github-work-item') return createGitHubWorkItemNode(index, center)
             if (catalogEntry.id === 'dino') return createDinoNode(index, center)
             if (catalogEntry.id === 'recovery-game') return createRecoveryGameNode(index, center)
             if (catalogEntry.id === 'loop') return createNativeLoopNode(index, center)

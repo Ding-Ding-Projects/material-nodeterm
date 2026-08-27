@@ -355,6 +355,18 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
     availability: alwaysAvailable
   },
   {
+    id: 'github-work-item',
+    nodeKind: 'github-work-item',
+    category: 'canvas',
+    label: 'GitHub work item',
+    description: 'Choose a repository and issue or pull request to keep visible on the canvas.',
+    keywords: ['github', 'issue', 'pull request', 'pr', 'review', 'checks'],
+    documentationPath: 'docs/features/integrations/github-work-items.md',
+    safeDefaults: { kind: 'issue', repository: '', number: 1 },
+    dependencies: ['github-account', 'github-api'],
+    availability: alwaysAvailable
+  },
+  {
     id: 'dino',
     nodeKind: 'dino',
     category: 'tools',
@@ -776,6 +788,7 @@ export const NODE_CATALOG_COMPLETENESS: readonly NodeCatalogCompletenessRecord[]
   { id: 'editor', state: 'current', scope: 'any', reason: 'project file picker required' },
   { id: 'diff', state: 'current', scope: 'any', reason: 'project file picker required' },
   { id: 'authenticator', state: 'current', scope: 'any', reason: 'local authenticator node' },
+  { id: 'github-work-item', state: 'current', scope: 'any', reason: 'safe issue or pull-request canvas work item' },
   { id: 'dino', state: 'current', scope: 'any', reason: 'local dino node' },
   { id: 'recovery-game', state: 'current', scope: 'any', reason: 'portable local recovery game' },
   { id: 'loop', state: 'current', scope: 'any', reason: 'persisted scheduler node' },
