@@ -1964,7 +1964,8 @@ function groupsFirst(nodes: CanvasNode[]): CanvasNode[] {
   return [...groups, ...nodes.filter((node) => node.type !== 'group')]
 }
 
-function rootPosition(node: CanvasNode, nodes: CanvasNode[]): { x: number; y: number } {
+/** Resolve a node's position in root canvas coordinates, walking every live group ancestor. */
+export function rootPosition(node: CanvasNode, nodes: CanvasNode[]): { x: number; y: number } {
   const byId = new Map(nodes.map((candidate) => [candidate.id, candidate]))
   const seen = new Set<string>([node.id])
   let x = node.position.x
@@ -1979,6 +1980,50 @@ function rootPosition(node: CanvasNode, nodes: CanvasNode[]): { x: number; y: nu
     parentId = parent.parentId
   }
   return { x, y }
+}
+
+/**
+ * Build the transient single-node canvas used by project-aware focus navigation.
+ * A nested node is promoted into root coordinates while its persisted parent relationship stays
+ * untouched in the source array. Missing ids return an empty view instead of inventing a node.
+ */
+export function drillSingleNode(
+  nodes: CanvasNode[],
+  nodeId: string
+): { flow: CanvasNode[]; found: boolean } {
+  const node = nodes.find((candidate) => candidate.id === nodeId)
+  if (!node) return { flow: [], found: false }
+  return {
+    flow: [{ ...node, parentId: undefined, extent: undefined, position: rootPosition(node, nodes) }],
+    found: true
+  }
+}
+
+/**
+ * Merge the edited focused node back into the full live canvas. React Flow displays the focused
+ * node in root coordinates, while persistence stores nested positions relative to its parent.
+ * Siblings remain intact, and a node removed from the source set is never resurrected.
+ */
+export function mergeSingleNode(
+  fullStored: CanvasNodeState[],
+  focusedState: CanvasNodeState,
+  fullNodesForRoot: CanvasNode[]
+): CanvasNodeState[] {
+  const original = fullStored.find((state) => state.id === focusedState.id)
+  if (!original) return fullStored
+  const parentId = original.parentId
+  let position = focusedState.position
+  if (parentId) {
+    const parent = fullNodesForRoot.find((node) => node.id === parentId)
+    const parentRoot = parent ? rootPosition(parent, fullNodesForRoot) : { x: 0, y: 0 }
+    position = {
+      x: focusedState.position.x - parentRoot.x,
+      y: focusedState.position.y - parentRoot.y
+    }
+  }
+  return fullStored.map((state) =>
+    state.id === focusedState.id ? { ...focusedState, parentId, position } : state
+  )
 }
 
 function isDescendant(nodes: CanvasNode[], candidateId: string, ancestorId: string): boolean {
