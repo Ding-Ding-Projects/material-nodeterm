@@ -753,10 +753,15 @@ const FEATURES = [
   {
     id: 'funny-levels',
     label: 'Funny levels (English + Cantonese sliders)',
-    files: ['src/shared/types.ts'],
+    files: ['src/shared/types.ts', 'src/shared/i18n/types.ts', 'src/shared/i18n/resolve.ts', 'src/renderer/components/settings/sections/LanguageSection.tsx', 'site/app/shared/i18n.js', 'site/app/features/language-settings.js'],
     contentChecks: [
       ['src/shared/types.ts', 'funnyLevelEn'],
       ['src/shared/types.ts', 'funnyLevelYue'],
+      ['src/shared/i18n/types.ts', 'FUNNY_LEVEL_MAX = 10'],
+      ['src/shared/i18n/resolve.ts', 'Five-slot legacy rows receive a deliberate extra'],
+      ['src/renderer/components/settings/sections/LanguageSection.tsx', 'max={FUNNY_LEVEL_MAX}'],
+      ['site/app/shared/i18n.js', 'export const FUNNY_LEVEL_MAX = 10'],
+      ['site/app/features/language-settings.js', 'max: FUNNY_LEVEL_MAX'],
     ],
     settingsSection: 'language',
     docs: ['docs/language-modes.md'],

@@ -8,23 +8,17 @@ import type {
   ListIssueOptions,
   UpdateIssueInput
 } from '../../shared/github-issues'
+import type { GitHubApiRequest, GitHubApiResult } from '../../shared/github-api'
+import { decodeGitHubApiResponse, buildGitHubApiPlan } from './api-client'
+import { GitHubClientError } from './client-error'
+
+export { GitHubClientError } from './client-error'
 import { parseGitHubRepository } from './config'
 
 const API_ORIGIN = 'https://api.github.com'
 const API_VERSION = '2022-11-28'
 const DEFAULT_MAX_RESPONSE = 8 * 1024 * 1024
 const MAX_ERROR_METADATA_BYTES = 4 * 1024
-
-export class GitHubClientError extends Error {
-  constructor(
-    readonly code: 'invalid-request' | 'malformed-response' | 'response-too-large' |
-      'request-failed' | 'rate-limited' | 'insufficient-permission',
-    readonly status?: number,
-    readonly retryAt?: number
-  ) {
-    super(code)
-  }
-}
 
 type ClientOptions = {
   token: string
@@ -309,11 +303,77 @@ export class GitHubIssuesClient {
     return { ...base, description: item.description }
   }
 
+  /** Execute one operation from the guided API inventory. The caller cannot supply a path,
+   * headers, GraphQL document, or shell command. Repository scope is passed by the trusted host
+   * after it resolves the approved project context. */
+  async executeApi(
+    request: GitHubApiRequest,
+    repository?: string,
+    signal?: AbortSignal
+  ): Promise<GitHubApiResult> {
+    if (request.operation === 'account.profile') {
+      const response = await this.request('/graphql', {
+        method: 'POST',
+        body: JSON.stringify({
+          query: 'query Viewer { viewer { id login name url avatarUrl bio } rateLimit { limit cost remaining resetAt } }'
+        }),
+        ...(signal ? { signal } : {})
+      })
+      const value = await this.json(response)
+      const envelope = object(value)
+      if (!envelope || (Array.isArray(envelope.errors) && envelope.errors.length > 0)) {
+        throw new GitHubClientError('malformed-response')
+      }
+      const data = object(envelope.data)
+      if (!data) throw new GitHubClientError('malformed-response')
+      const result = decodeGitHubApiResponse(request.operation, 'graphql', data, 1)
+      const limit = object(data.rateLimit)
+      if (limit) result.rateLimit = {
+        remaining: typeof limit.remaining === 'number' ? limit.remaining : null,
+        limit: typeof limit.limit === 'number' ? limit.limit : null,
+        resetAt: typeof limit.resetAt === 'string' && !Number.isNaN(Date.parse(limit.resetAt))
+          ? Date.parse(limit.resetAt) : null
+      }
+      return result
+    }
+    const plan = buildGitHubApiPlan(request, repository)
+    const response = await this.request(plan.path, {
+      method: plan.method,
+      ...(plan.body ? { body: plan.body } : {}),
+      ...(signal ? { signal } : {})
+    })
+    if (response.status === 204) {
+      return { operation: request.operation, transport: 'rest', items: [], page: request.page ?? 1, partial: false }
+    }
+    const value = await this.json(response)
+    const result = decodeGitHubApiResponse(
+      request.operation,
+      'rest',
+      value,
+      request.page ?? 1,
+      nextPage(response.headers.get('link'))
+    )
+    const remaining = Number(response.headers.get('x-ratelimit-remaining'))
+    const limit = Number(response.headers.get('x-ratelimit-limit'))
+    const reset = Number(response.headers.get('x-ratelimit-reset'))
+    if (Number.isFinite(remaining) || Number.isFinite(limit) || Number.isFinite(reset)) {
+      result.rateLimit = {
+        remaining: Number.isFinite(remaining) ? remaining : null,
+        limit: Number.isFinite(limit) ? limit : null,
+        resetAt: Number.isFinite(reset) && reset > 0 ? reset * 1_000 : null
+      }
+    }
+    return result
+  }
+
   private async request(path: string, init: RequestInit): Promise<Response> {
     const url = new URL(path, API_ORIGIN)
     if (url.origin !== API_ORIGIN) throw new GitHubClientError('invalid-request')
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), this.timeoutMs)
+    const abort = () => controller.abort()
+    if (init.signal?.aborted) controller.abort()
+    else init.signal?.addEventListener('abort', abort, { once: true })
     let response: Response
     try {
       response = await this.fetcher(url, {
@@ -332,6 +392,7 @@ export class GitHubIssuesClient {
       throw new GitHubClientError('request-failed')
     } finally {
       clearTimeout(timer)
+      init.signal?.removeEventListener('abort', abort)
     }
     if (response.status === 304) return response
     if (response.status === 403 || response.status === 429) {

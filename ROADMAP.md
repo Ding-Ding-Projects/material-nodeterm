@@ -14,6 +14,11 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## Shipped and verified
 
+- [ ] Easter egg catalog (#103): 60 local, bounded, accessible desktop surprises are implemented
+      in `src/shared/easter-eggs.ts` and `src/renderer/components/EasterEggs.tsx`, with the
+      cabinet and documentation in place. Runtime interaction, tests, builds, and captures remain
+      intentionally unverified under the issue's no-check boundary.
+
 - [x] Three-process architecture (main / core / renderer) with the `CorePlatform` seam, so
       Server Edition (`src/server`) boots the same core services as Desktop.
 - [x] Terminal session continuity via tmux (macOS/Linux) and the standalone Windows session host,
@@ -52,8 +57,10 @@ later commit, since this file will not be kept in lockstep with every merge).
       (`scripts/check-app-contract.mjs`), 1,101 assertions across 59 features, run clean except
       for the one pending item below.
 - [x] Windows packaging path: Squirrel.Windows via `scripts/windows-installer.mjs`, unsigned by
-      permanent policy, with ICO regeneration/verification, nupkg/RELEASES agreement checks, and
-      a manual-dispatch-only `main`-only release workflow.
+      permanent policy, with ICO regeneration/verification, Setup.exe plus nupkg/RELEASES
+      agreement checks, and a Windows-only release workflow triggered by pushes to `main` and
+      manual dispatch. ZIP, NSIS-only, MSI-only, MSIX-only, and portable-only parallel installer
+      routes are retired.
 - [ ] Cognition Devin CLI support (#106): source-level builtin registry, launch forms, project
       hook installation, status normalization, and notification fallback are implemented on
       `feat/devin-cli-support`. The real `devin 3000.4.25` binary was unavailable in this lane, so
@@ -61,6 +68,24 @@ later commit, since this file will not be kept in lockstep with every merge).
       evidence remain unverified.
 
 ## In progress / partially landed
+
+- [ ] **Bounded wheel zoom and persisted wheel speed, issue #107**: the renderer now shares a ±50
+      `deltaY` budget across each 40 ms burst and applies a persisted 0.2×–2.0× multiplier only to
+      plain-wheel zoom. The Behavior setting has localized copy, point-of-use validation, and
+      provenance text. Server Edition shares the same renderer and settings record. Tests, type
+      checks, lint, builds, packaging, runtime interaction, reviews, audits, and captures remain
+      unrun in this implementation lane; the generated offline-doc bundle awaits the normal docs
+      generation step in integration.
+- [ ] **Ten-level funny controls, issue #113**: source and localization range now covers independent
+      English and Cantonese levels 1–10, schema-versioned settings migration, scheduled values,
+      site storage, exports, provenance copy, Easter eggs, and feature resolvers. This implementation
+      lane intentionally has no tests, type checks, lint, builds, packaging, runtime interaction,
+      reviews, audits, or captures; integrated verification remains pending.
+- [ ] **Desktop trackpad gesture facts, issue #108**: main-process scroll and pinch edges now feed
+      a depth-safe typed bridge so macOS desktop wheel routing distinguishes a precise-pixel mouse
+      from a trackpad, including the bounded momentum-gap linger. Server Edition keeps its browser
+      heuristic and mobile is not applicable. This implementation lane intentionally has no tests,
+      lint, type checks, builds, packaging, runtime interaction, reviews, audits, or captures yet.
 
 - [ ] **Shared provider services, issue #18**: provider catalog, account metadata, sealed
       credential payloads, bounded one-time OAuth PKCE callbacks, adapter-owned resource discovery,
@@ -103,6 +128,13 @@ later commit, since this file will not be kept in lockstep with every merge).
       an honest Server Edition boundary. Tests, build/package evidence, generated docs bundle,
       runtime interaction, and captures remain outstanding.
 
+- [ ] **Nextcloud AIO hosting, issue #52**: the guided pinned official image profile is implemented
+      on `feat/program-41-nextcloud-aio` with explicit Docker socket authority disclosure, no
+      privileged mode, local loopback/private binding, fixed lifecycle operations, health and
+      progress states, backup/restore/rollback records, portable safe intent, localized copy, and
+      dedicated docs. Tests, type checks, builds, packaging, runtime interaction, reviews, and
+      captures remain outstanding under the issue's ultra-speed boundary.
+
 - [ ] **Cloudflare core managers, issue #57**: typed account, zone, DNS, SSL/TLS, ruleset, redirect,
       cache, and analytics operations are implemented in the shared contract, host service, Desktop
       and Server Edition bridges, and canvas node. Local sealed credentials, bounded output,
@@ -110,6 +142,14 @@ later commit, since this file will not be kept in lockstep with every merge).
       schema 3 intent are present. Tests, type checks, lint, reviews, security or accessibility
       checks, builds, packaging, installer execution, runtime interaction, and captures remain
       unverified under the ultra-speed lane.
+
+- [ ] **Guided GitHub API capabilities, issue #101**: typed REST and fixed GraphQL operations now
+      cover repository, source-control, collaboration, Actions, release, organization, account,
+      search, security, ruleset, webhook, and app resources. The host resolves approved project
+      scope and local credentials, validates semantic inputs, bounds pagination and response data,
+      reports progress and rate limits, supports cancellation, and requires exact destructive
+      confirmation. Tests, type checks, lint, reviews, builds, packaging, runtime interaction, and
+      captures remain unverified on the dedicated feature branch.
 
 - [ ] **ADHD modes** — Focus, Low stimulation, Time awareness, One thing at a time, and Momentum
       are all specced in `docs/adhd-modes.md`. Time awareness, Momentum, and the

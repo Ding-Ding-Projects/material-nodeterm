@@ -161,6 +161,8 @@ export function buildStubApi(): Omit<
   | 'logs'
   | 'githubIssues'
   | 'githubControl'
+  | 'githubApi'
+  | 'githubCliAccounts'
   | 'canvas'
   | 'dialog'
   | 'onAgentStatus'
@@ -536,6 +538,13 @@ export function buildStubApi(): Omit<
         cancel: noop,
         onProgress: noopUnsub
       },
+      nextcloudAio: {
+        contexts: U('relayHost.nextcloudAio.contexts'),
+        snapshot: U('relayHost.nextcloudAio.snapshot'),
+        run: U('relayHost.nextcloudAio.run'),
+        cancel: noop,
+        onProgress: noopUnsub
+      },
       start: U('relayHost.start'),
       invite: U('relayHost.invite'),
       stop: U('relayHost.stop'),
@@ -651,6 +660,9 @@ export function buildStubApi(): Omit<
     // here (see the note beside createPtyPressureMonitor in src/server/index.ts). The fix itself
     // rejects rather than pretending, so a stray call can never look like it worked.
     onPtyPressure: noopUnsub,
+    // A browser tab has no raw input stream. Keep the documented renderer heuristic instead of
+    // inventing a device-fact event that this shell cannot observe.
+    onCanvasTrackpadGesture: noopUnsub,
     raisePtyDeviceLimit: async () => ({
       ok: false as const,
       error: mapLocalVocabularyText('Raising the terminal limit must be done on the machine running the server.')
@@ -859,6 +871,8 @@ export function buildStubApi(): Omit<
     | 'logs'
     | 'githubIssues'
     | 'githubControl'
+    | 'githubApi'
+    | 'githubCliAccounts'
     | 'canvas'
     | 'dialog'
     | 'onAgentStatus'

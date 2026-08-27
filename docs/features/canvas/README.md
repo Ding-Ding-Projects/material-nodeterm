@@ -23,7 +23,11 @@ The pan/zoom surface nodeterm is built around, and everything that lives on it.
 - [Alarm Clock nodes](../../alarm-clock.md) — one-shot and recurring reminders with timezone,
   daylight-saving, snooze, dismiss, and missed-occurrence handling.
 - [Canvas & node lifecycle](./canvas-and-lifecycle.md) — how nodes mount, unmount, park, and
-  release memory as you pan around a large canvas; context menus, undo/redo, and selection.
+  release memory as you pan around a large canvas; context menus, undo/redo, selection, and
+  bounded wheel zoom speed.
+- [Bounded wheel zoom and speed](./wheel-zoom-speed.md) — the shared 40 ms burst budget, plain-
+  wheel-only speed multiplier, point-of-use validation, persistence, and verification boundary.
+  desktop trackpad gesture facts for wheel routing.
 - [Terminal sharpness under pan and zoom](./terminal-sharpness.md) — why terminal text goes soft on
   a fractional-dpr display, the two independent causes, and what the app does about each.
 - [Timer nodes](./timer-nodes.md) — countdowns, stopwatches, work/rest sequences, laps, repeats,

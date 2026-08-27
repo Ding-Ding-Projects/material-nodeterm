@@ -40,6 +40,10 @@ export const IPC = {
    *  for a held band at most once every five minutes; `level: 'none'` is what clears the banner.
    *  Desktop only — see the Server Edition note beside the monitor in src/server/index.ts. */
   ptyPressure: 'pty:pressure',
+  /** Main → renderer: a trackpad scroll or pinch opened or closed on the main window. The main
+   *  ledger emits only edge transitions, not the raw pointer-packet stream. Server Edition keeps
+   *  its renderer heuristic because a browser has no equivalent raw input source. */
+  canvasTrackpadGesture: 'canvas:trackpad-gesture',
   /** Renderer → main: the user clicked "Fix automatically…" on the pty-pressure banner. Raises
    *  `kern.tty.ptmx_max` now AND installs a LaunchDaemon so it survives reboot, via ONE
    *  administrator-privileges osascript (macOS's own password dialog). Resolves
@@ -436,11 +440,24 @@ export const IPC = {
   githubIssuesChanged: (projectId: string) => `githubIssues:changed:${projectId}`,
   githubProjectAvatar: 'github:projectAvatar',
   githubControlStatus: 'githubControl:status',
+  githubCliAccountsList: 'githubCliAccounts:list',
+  githubCliAccountsSwitch: 'githubCliAccounts:switch',
+  githubCliAccountsSignOut: 'githubCliAccounts:sign-out',
+  githubCliAccountsStartLogin: 'githubCliAccounts:start-login',
+  githubCliAccountsLoginStatus: 'githubCliAccounts:login-status',
+  githubCliAccountsCancelLogin: 'githubCliAccounts:cancel-login',
+  githubCliAccountsRefresh: 'githubCliAccounts:refresh',
   githubControlApprove: 'githubControl:approve',
   githubControlRevoke: 'githubControl:revoke',
   githubControlSelectProvider: 'githubControl:select-provider',
   githubControlSaveToken: 'githubControl:save-token',
   githubControlClearToken: 'githubControl:clear-token',
+  // Guided GitHub REST and GraphQL capabilities. The request carries an operation id and
+  // semantic parameters only. Credentials and endpoint construction remain host-side.
+  githubApiCapabilities: 'githubApi:capabilities',
+  githubApiExecute: 'githubApi:execute',
+  githubApiCancel: 'githubApi:cancel',
+  githubApiProgress: 'githubApi:progress',
   dialogSelectFolder: 'dialog:select-folder',
   dialogSelectFile: 'dialog:select-file',
   shellReveal: 'shell:reveal',
@@ -670,6 +687,11 @@ export const IPC = {
   dockerHostManagerGitlabBackups: 'docker-host-manager:gitlab-backups',
   dockerHostManagerGitlabCredential: 'docker-host-manager:gitlab-credential',
   dockerHostManagerGitlabRun: 'docker-host-manager:gitlab-run',
+  nextcloudAioContexts: 'nextcloud-aio:contexts',
+  nextcloudAioSnapshot: 'nextcloud-aio:snapshot',
+  nextcloudAioRun: 'nextcloud-aio:run',
+  nextcloudAioCancel: 'nextcloud-aio:cancel',
+  nextcloudAioProgress: 'nextcloud-aio:progress',
   // Guided Cloudflare account, zone, DNS, SSL/TLS, ruleset, redirect, cache, and analytics managers.
   // Tokens stay in the host credential vault; canvas data carries only safe intent.
   cloudflareCoreRuntime: 'cloudflare-core:runtime',
