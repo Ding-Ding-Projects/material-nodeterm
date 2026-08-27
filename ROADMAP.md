@@ -229,6 +229,9 @@ intentionally unchecked because this task publishes the plan only.
 
 ### Multiverse and AWS
 
+- [x] Add scoped Multiverse child canvases with guided hierarchy navigation and a depth-8 boundary.
+      Source implementation and delivery records are present; tests, type checks, builds, packaging,
+      runtime interaction, and captures remain explicitly unrun under issue #33's delivery boundary.
 - [ ] Add door-only Multiverse canvases to depth 8.
 - [ ] Add interactive door construction, numeric or passphrase entry, and recovery game.
 - [ ] Add unlimited AWS Universes with AWS-only scope and AWS Shop nodes.

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add scoped Multiverse child canvases with a searchable hierarchy navigator, a guided searchable
+  parent picker, exact depth-8 refusal reasons, independent viewport and graph state, deterministic
+  scoped Shops, ordinary project persistence, and portable schema 3 projection. Import validates
+  hierarchy structure and reconstructs data without launching external work. Tests, type checks,
+  lint, builds, packaging, reviews, audits, runtime interaction, and captures remain unrun under
+  issue #33's ultra-speed boundary.
+
 - Add a source-only desktop Material Design 3 audit with a hand-written inventory of 212 rendered
   surfaces, including onboarding, profile picking, conversion, password management, Minecraft
   management, dialogs, find bars, and notifications. Shared NumberField, Radio, Progress, and Tabs

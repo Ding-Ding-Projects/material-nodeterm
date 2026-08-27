@@ -45,6 +45,7 @@ export const DOCS = [
   ['Exports, notifications & local history', 'ten shapes, one honest warning', 'exports-and-history'],
   ['Kanban board', 'live session cards', 'kanban-board'],
   ['Language modes, funny levels & emoji', 'English, Cantonese, or both', 'language-modes'],
+  ['Multiverse child canvases', 'nested scoped canvases through depth 8', 'multiverse-canvases'],
   ['Narrator', 'the page reads itself out loud', 'narrator'],
   ['Node kinds', 'terminal, agent, sticky, group, editor, diff, web', 'node-kinds'],
   ['Packaging & auto-update', 'how builds are made and shipped', 'packaging-updates'],
