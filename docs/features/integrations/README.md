@@ -20,6 +20,7 @@ substrate described in CLAUDE.md rather than inventing a surface each.
 | [AWS identity manager](aws-identity.md) | guided local profile, IAM Identity Center, role, MFA, region, and service-endpoint controls with safe portable intent and machine-local bindings; host CLI actions remain visibly unavailable until the fixed operation runner is connected |
 | [AWS managers](../aws/README.md) | Resource Explorer and Cloud Control manager nodes with local bindings, operation previews, bounded results, cancellation, and destructive confirmation |
 | [AWS core-service managers](aws-core-services.md) | S3, EC2, IAM, STS, Lambda, CloudWatch, and CloudWatch Logs mounted on the shared AWS manager with typed actions and local bindings; integration Chuts remain pending |
+| [AWS container, database, network, DNS, and cost managers](aws-container-database-cost-managers.md) | ECR, ECS, EKS, RDS, database, VPC, Route 53, and cost operations mounted on the shared AWS manager with typed previews, bounded inputs, and local bindings |
 | [Torrent Downloader](../torrents/torrent-downloader.md) | local WebTorrent downloads with safe machine-local task state |
 | [Linux ISO VM](linux-iso-vm.md) | implemented canvas node with bundled QEMU, WHPX preference, QMP lifecycle, loopback display, persistent/disposable modes, and network-off default |
 | [Planner occurrences](planner-occurrences.md) | host-owned durable recurrence, timezone/DST handling, missed history, UI-closure continuity, and schema 3 definition transfer with explicit destination Configure |

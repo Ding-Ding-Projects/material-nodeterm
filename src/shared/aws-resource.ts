@@ -12,12 +12,13 @@ import type {
 import { normalizeCdkPortableBlueprint, type CdkPortableBlueprint } from './cdk'
 
 export type AwsManagerMode = 'resource-explorer' | 'cloud-control' | 'core-services'
-  | 'cloudformation' | 'cdk'
+  | 'cloudformation' | 'cdk' | 'platform-managers'
 
 /** Core AWS services use the same binding, preview, pagination and progress seam as the
  * Resource Explorer and Cloud Control managers. Keeping one operation contract avoids a second
  * credential or CLI stack. */
 export type AwsCoreServiceId = 's3' | 'ec2' | 'iam' | 'sts' | 'lambda' | 'cloudwatch' | 'logs'
+export type AwsPlatformServiceId = 'ecr' | 'ecs' | 'eks' | 'rds' | 'database' | 'vpc' | 'route53' | 'cost'
 
 export interface AwsManagerPortableIntent {
   schemaVersion: 1
@@ -28,6 +29,9 @@ export interface AwsManagerPortableIntent {
   coreService?: AwsCoreServiceId
   coreOperation?: AwsCoreOperation
   coreInput?: Record<string, string | number | boolean>
+  platformService?: AwsPlatformServiceId
+  platformOperation?: AwsPlatformOperation
+  platformInput?: Record<string, string | number | boolean>
   cloudFormation?: {
     schemaVersion: 1
     stackName: string
@@ -60,7 +64,6 @@ export interface AwsManagerBinding {
 
 export type AwsManagerOperation =
   | 'resource-list-views'
-  | 'resource-search'
   | 'cloud-list-types'
   | 'cloud-list-resources'
   | 'cloud-get-resource'
@@ -81,15 +84,36 @@ export type AwsManagerOperation =
   | 'lambda-list-functions' | 'lambda-get-function' | 'lambda-delete-function'
   | 'cloudwatch-list-metrics' | 'cloudwatch-get-metric-data'
   | 'logs-describe-log-groups' | 'logs-describe-log-streams' | 'logs-get-log-events' | 'logs-filter-log-events'
+  | 'ecr-list-repositories' | 'ecr-describe-images' | 'ecr-create-repository' | 'ecr-delete-repository'
+  | 'ecs-list-clusters' | 'ecs-list-services' | 'ecs-update-service' | 'ecs-delete-service'
+  | 'eks-list-clusters' | 'eks-describe-cluster' | 'eks-update-nodegroup' | 'eks-delete-cluster'
+  | 'rds-describe-db-instances' | 'rds-create-db-instance' | 'rds-create-db-snapshot' | 'rds-delete-db-instance'
+  | 'database-list-tables' | 'database-create-table' | 'database-delete-table'
+  | 'vpc-describe-vpcs' | 'vpc-create-vpc' | 'vpc-create-subnet' | 'vpc-delete-vpc'
+  | 'route53-list-hosted-zones' | 'route53-change-record' | 'route53-delete-hosted-zone'
+  | 'cost-get-cost-and-usage' | 'cost-create-budget'
+
+export type AwsPlatformOperation = Extract<AwsManagerOperation, `${AwsPlatformServiceId}-${string}`>
 
 export type AwsCoreOperation = Exclude<AwsManagerOperation,
   'resource-list-views' | 'resource-search' | 'cloud-list-types' | 'cloud-list-resources' |
   'cloud-get-resource' | 'cloud-create-resource' | 'cloud-update-resource' | 'cloud-delete-resource' |
   'cloud-request-status' | 'cloudformation-validate-template' | 'cloudformation-list-stacks' |
   'cloudformation-create-change-set' | 'cloudformation-describe-change-set' |
-  'cloudformation-execute-change-set' | 'cloudformation-delete-change-set'>
+  'cloudformation-execute-change-set' | 'cloudformation-delete-change-set' | AwsPlatformOperation>
 
 export const AWS_CORE_SERVICES: readonly AwsCoreServiceId[] = ['s3', 'ec2', 'iam', 'sts', 'lambda', 'cloudwatch', 'logs']
+export const AWS_PLATFORM_SERVICES: readonly AwsPlatformServiceId[] = ['ecr', 'ecs', 'eks', 'rds', 'database', 'vpc', 'route53', 'cost']
+export const AWS_PLATFORM_OPERATIONS: readonly AwsPlatformOperation[] = [
+  'ecr-list-repositories', 'ecr-describe-images', 'ecr-create-repository', 'ecr-delete-repository',
+  'ecs-list-clusters', 'ecs-list-services', 'ecs-update-service', 'ecs-delete-service',
+  'eks-list-clusters', 'eks-describe-cluster', 'eks-update-nodegroup', 'eks-delete-cluster',
+  'rds-describe-db-instances', 'rds-create-db-instance', 'rds-create-db-snapshot', 'rds-delete-db-instance',
+  'database-list-tables', 'database-create-table', 'database-delete-table',
+  'vpc-describe-vpcs', 'vpc-create-vpc', 'vpc-create-subnet', 'vpc-delete-vpc',
+  'route53-list-hosted-zones', 'route53-change-record', 'route53-delete-hosted-zone',
+  'cost-get-cost-and-usage', 'cost-create-budget'
+]
 export const AWS_CORE_OPERATIONS: Record<AwsCoreServiceId, readonly AwsCoreOperation[]> = {
   s3: ['s3-list-buckets', 's3-list-objects', 's3-create-bucket', 's3-delete-bucket'],
   ec2: ['ec2-describe-instances', 'ec2-describe-security-groups', 'ec2-start-instances', 'ec2-stop-instances', 'ec2-terminate-instances'],
@@ -102,7 +126,7 @@ export const AWS_CORE_OPERATIONS: Record<AwsCoreServiceId, readonly AwsCoreOpera
 
 export interface AwsManagerRequest {
   operation: AwsManagerOperation
-  service?: AwsCoreServiceId
+  service?: AwsCoreServiceId | AwsPlatformServiceId
   input?: Record<string, unknown>
   query?: string
   viewArn?: string
@@ -126,7 +150,7 @@ export interface AwsManagerRequest {
 export type AwsOperationRisk = 'read-only' | 'write' | 'destructive'
 
 export interface AwsOperationPreview {
-  service: AwsCoreServiceId | 'resource-explorer-2' | 'cloudcontrol' | 'cloudformation'
+  service: AwsCoreServiceId | AwsPlatformServiceId | 'resource-explorer-2' | 'cloudcontrol' | 'cloudformation'
   operation: string
   profileName: string
   region: string
@@ -156,6 +180,17 @@ export const AWS_CORE_OPERATION_LABELS: Record<AwsCoreOperation, string> = {
   'lambda-list-functions': 'Lambda: List functions', 'lambda-get-function': 'Lambda: Get function', 'lambda-delete-function': 'Lambda: Delete function',
   'cloudwatch-list-metrics': 'CloudWatch: List metrics', 'cloudwatch-get-metric-data': 'CloudWatch: Get metric data',
   'logs-describe-log-groups': 'Logs: Describe log groups', 'logs-describe-log-streams': 'Logs: Describe log streams', 'logs-get-log-events': 'Logs: Get log events', 'logs-filter-log-events': 'Logs: Filter log events'
+}
+
+export const AWS_PLATFORM_OPERATION_LABELS: Record<AwsPlatformOperation, string> = {
+  'ecr-list-repositories': 'ECR: List repositories', 'ecr-describe-images': 'ECR: Describe images', 'ecr-create-repository': 'ECR: Create repository', 'ecr-delete-repository': 'ECR: Delete repository',
+  'ecs-list-clusters': 'ECS: List clusters', 'ecs-list-services': 'ECS: List services', 'ecs-update-service': 'ECS: Update service', 'ecs-delete-service': 'ECS: Delete service',
+  'eks-list-clusters': 'EKS: List clusters', 'eks-describe-cluster': 'EKS: Describe cluster', 'eks-update-nodegroup': 'EKS: Update node group', 'eks-delete-cluster': 'EKS: Delete cluster',
+  'rds-describe-db-instances': 'RDS: Describe databases', 'rds-create-db-instance': 'RDS: Create database', 'rds-create-db-snapshot': 'RDS: Create snapshot', 'rds-delete-db-instance': 'RDS: Delete database',
+  'database-list-tables': 'Database: List tables', 'database-create-table': 'Database: Create table', 'database-delete-table': 'Database: Delete table',
+  'vpc-describe-vpcs': 'VPC: Describe networks', 'vpc-create-vpc': 'VPC: Create network', 'vpc-create-subnet': 'VPC: Create subnet', 'vpc-delete-vpc': 'VPC: Delete network',
+  'route53-list-hosted-zones': 'Route 53: List hosted zones', 'route53-change-record': 'Route 53: Change record', 'route53-delete-hosted-zone': 'Route 53: Delete hosted zone',
+  'cost-get-cost-and-usage': 'Cost: Get usage report', 'cost-create-budget': 'Cost: Create budget'
 }
 
 export interface AwsManagerProgress {
@@ -214,9 +249,11 @@ export function normalizeAwsPortableIntent(value: unknown): AwsManagerPortableIn
     : raw.mode === 'core-services'
       ? 'core-services'
       : raw.mode === 'cloudformation'
-        ? 'cloudformation'
-        : raw.mode === 'cdk'
-          ? 'cdk'
+      ? 'cloudformation'
+      : raw.mode === 'cdk'
+        ? 'cdk'
+        : raw.mode === 'platform-managers'
+          ? 'platform-managers'
           : 'resource-explorer'
   const regionIntent = isAwsRegion(raw.regionIntent) ? raw.regionIntent.trim() : AWS_MANAGER_DEFAULT_INTENT.regionIntent
   const resourceQuery = typeof raw.resourceQuery === 'string' && raw.resourceQuery.length <= 1024
@@ -227,6 +264,16 @@ export function normalizeAwsPortableIntent(value: unknown): AwsManagerPortableIn
     : ''
   const coreService = AWS_CORE_SERVICES.includes(raw.coreService as AwsCoreServiceId) ? raw.coreService as AwsCoreServiceId : 's3'
   const coreOperation = AWS_CORE_OPERATIONS[coreService].includes(raw.coreOperation as AwsCoreOperation) ? raw.coreOperation as AwsCoreOperation : AWS_CORE_OPERATIONS[coreService][0]
+  const platformService = AWS_PLATFORM_SERVICES.includes(raw.platformService as AwsPlatformServiceId) ? raw.platformService as AwsPlatformServiceId : 'ecr'
+  const platformOperation = AWS_PLATFORM_OPERATIONS.filter((item) => item.startsWith(`${platformService}-`)).includes(raw.platformOperation as AwsPlatformOperation)
+    ? raw.platformOperation as AwsPlatformOperation
+    : AWS_PLATFORM_OPERATIONS.find((item) => item.startsWith(`${platformService}-`))
+  const platformInput: Record<string, string | number | boolean> = {}
+  if (raw.platformInput && typeof raw.platformInput === 'object' && !Array.isArray(raw.platformInput)) {
+    for (const [key, value] of Object.entries(raw.platformInput as Record<string, unknown>).slice(0, 32)) {
+      if ((typeof value === 'string' && value.length <= 2048) || typeof value === 'number' || typeof value === 'boolean') platformInput[key] = value as string | number | boolean
+    }
+  }
   const coreInput: Record<string, string | number | boolean> = {}
   if (raw.coreInput && typeof raw.coreInput === 'object' && !Array.isArray(raw.coreInput)) {
     for (const [key, value] of Object.entries(raw.coreInput as Record<string, unknown>).slice(0, 32)) {
@@ -249,6 +296,6 @@ export function normalizeAwsPortableIntent(value: unknown): AwsManagerPortableIn
       }
     : undefined
   const cdk = normalizeCdkPortableBlueprint(raw.cdk)
-  return { schemaVersion: 1, mode, regionIntent, resourceQuery, cloudControlTypeName, coreService, coreOperation, coreInput, ...(cloudFormation ? { cloudFormation } : {}), ...(cdk ? { cdk } : {}) }
+  return { schemaVersion: 1, mode, regionIntent, resourceQuery, cloudControlTypeName, coreService, coreOperation, coreInput, platformService, ...(platformOperation ? { platformOperation } : {}), platformInput, ...(cloudFormation ? { cloudFormation } : {}), ...(cdk ? { cdk } : {}) }
 }
 

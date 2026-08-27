@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { NodeResizer, useReactFlow, type NodeProps } from '@xyflow/react'
+import {
+  AWS_CORE_OPERATIONS,
+  AWS_CORE_OPERATION_LABELS,
+  AWS_CORE_SERVICES,
+  AWS_PLATFORM_OPERATIONS,
+  AWS_PLATFORM_OPERATION_LABELS,
+  AWS_PLATFORM_SERVICES
+} from '@shared/aws-resource'
 import type {
   AwsManagerBinding,
   AwsManagerMode,
@@ -12,9 +20,8 @@ import type {
   AwsProfileChoice,
   AwsCoreOperation,
   AwsCoreServiceId,
-  AWS_CORE_OPERATIONS,
-  AWS_CORE_OPERATION_LABELS,
-  AWS_CORE_SERVICES
+  AwsPlatformOperation,
+  AwsPlatformServiceId
 } from '@shared/aws-resource'
 import { CLOUDFORMATION_CAPABILITIES, type CloudFormationCapability, type CloudFormationChangeSetType } from '@shared/cloudformation'
 import type { CanvasNode } from '../state/workspace'
@@ -60,12 +67,13 @@ const OPERATION_LABELS: Record<AwsManagerOperation, string> = {
   'cloudformation-describe-change-set': 'Describe change set',
   'cloudformation-execute-change-set': 'Execute change set',
   'cloudformation-delete-change-set': 'Delete change set',
-  ...AWS_CORE_OPERATION_LABELS
+  ...AWS_CORE_OPERATION_LABELS,
+  ...AWS_PLATFORM_OPERATION_LABELS
 }
 
 function operationRisk(operation: AwsManagerOperation): 'read-only' | 'write' | 'destructive' {
-  if (['cloud-delete-resource', 's3-delete-bucket', 'ec2-terminate-instances', 'iam-delete-user', 'lambda-delete-function', 'cloudformation-delete-change-set'].includes(operation)) return 'destructive'
-  if (['cloud-create-resource', 'cloud-update-resource', 's3-create-bucket', 'ec2-start-instances', 'ec2-stop-instances', 'iam-create-user'].includes(operation)) return 'write'
+  if (['cloud-delete-resource', 's3-delete-bucket', 'ec2-terminate-instances', 'iam-delete-user', 'lambda-delete-function', 'cloudformation-delete-change-set', ...AWS_PLATFORM_OPERATIONS.filter((item) => item.includes('delete-'))].includes(operation)) return 'destructive'
+  if (['cloud-create-resource', 'cloud-update-resource', 's3-create-bucket', 'ec2-start-instances', 'ec2-stop-instances', 'iam-create-user', ...AWS_PLATFORM_OPERATIONS.filter((item) => item.includes('create-') || item.includes('update-') || item === 'route53-change-record')].includes(operation)) return 'write'
   return 'read-only'
 }
 
@@ -117,8 +125,9 @@ export default function AwsResourceNode({ id, data, selected }: NodeProps<Canvas
   const nodeIntent = data.awsManagerIntent
   const [mode, setMode] = useState<AwsManagerMode>(nodeIntent?.mode === 'cloud-control' ? 'cloud-control' : nodeIntent?.mode === 'core-services' ? 'core-services' : nodeIntent?.mode === 'cloudformation' ? 'cloudformation' : nodeIntent?.mode === 'cdk' ? 'cdk' : 'resource-explorer')
   const [coreService, setCoreService] = useState<AwsCoreServiceId>(nodeIntent?.coreService ?? 's3')
-  const [operation, setOperation] = useState<AwsManagerOperation>(mode === 'cloud-control' ? CLOUD_OPERATIONS[0] : mode === 'core-services' ? (nodeIntent?.coreOperation ?? AWS_CORE_OPERATIONS.s3[0]) : mode === 'cloudformation' ? CLOUDFORMATION_OPERATIONS[0] : RESOURCE_OPERATIONS[0])
-  const [coreInput, setCoreInput] = useState<Record<string, unknown>>(nodeIntent?.coreInput ?? {})
+  const [platformService, setPlatformService] = useState<AwsPlatformServiceId>(nodeIntent?.platformService ?? 'ecr')
+  const [operation, setOperation] = useState<AwsManagerOperation>(mode === 'cloud-control' ? CLOUD_OPERATIONS[0] : mode === 'core-services' ? (nodeIntent?.coreOperation ?? AWS_CORE_OPERATIONS.s3[0]) : mode === 'cloudformation' ? CLOUDFORMATION_OPERATIONS[0] : mode === 'platform-managers' ? (nodeIntent?.platformOperation ?? AWS_PLATFORM_OPERATIONS[0]) : RESOURCE_OPERATIONS[0])
+  const [coreInput, setCoreInput] = useState<Record<string, unknown>>(nodeIntent?.platformInput ?? nodeIntent?.coreInput ?? {})
   const [runtime, setRuntime] = useState<{ available: boolean; origin: string; version: string | null; disabledReason: string | null } | null>(null)
   const [profiles, setProfiles] = useState<AwsProfileChoice[]>([])
   const [binding, setBinding] = useState<AwsManagerBinding | null>(null)
@@ -176,7 +185,7 @@ export default function AwsResourceNode({ id, data, selected }: NodeProps<Canvas
     })
   }, [api.awsResource, id, load])
 
-  const operations: readonly AwsManagerOperation[] = mode === 'cloud-control' ? CLOUD_OPERATIONS : mode === 'core-services' ? AWS_CORE_OPERATIONS[coreService] : mode === 'cloudformation' ? CLOUDFORMATION_OPERATIONS : mode === 'cdk' ? [] : RESOURCE_OPERATIONS
+  const operations: readonly AwsManagerOperation[] = mode === 'cloud-control' ? CLOUD_OPERATIONS : mode === 'core-services' ? AWS_CORE_OPERATIONS[coreService] : mode === 'cloudformation' ? CLOUDFORMATION_OPERATIONS : mode === 'cdk' ? [] : mode === 'platform-managers' ? AWS_PLATFORM_OPERATIONS.filter((item) => item.startsWith(`${platformService}-`)) : RESOURCE_OPERATIONS
   useEffect(() => {
     if (operations.length > 0 && !operations.includes(operation)) setOperation(operations[0])
   }, [mode, operation, operations])
@@ -186,7 +195,7 @@ export default function AwsResourceNode({ id, data, selected }: NodeProps<Canvas
     return rows.filter((row) => resultSearch.test(resultCorpus(row)))
   }, [result, resultSearch])
 
-  const persistIntent = (nextMode: AwsManagerMode = mode, overrides: Partial<Pick<AwsManagerPortableIntent, 'regionIntent' | 'resourceQuery' | 'cloudControlTypeName' | 'coreService' | 'coreOperation' | 'coreInput' | 'cdk'>> = {}): void => {
+  const persistIntent = (nextMode: AwsManagerMode = mode, overrides: Partial<Pick<AwsManagerPortableIntent, 'regionIntent' | 'resourceQuery' | 'cloudControlTypeName' | 'coreService' | 'coreOperation' | 'coreInput' | 'platformService' | 'platformOperation' | 'platformInput' | 'cdk'>> = {}): void => {
     updateNodeData(id, {
       awsManagerIntent: {
         schemaVersion: 1,
@@ -197,8 +206,11 @@ export default function AwsResourceNode({ id, data, selected }: NodeProps<Canvas
         coreService: overrides.coreService ?? coreService,
         coreOperation: overrides.coreOperation ?? (operation as AwsCoreOperation),
         coreInput: overrides.coreInput ?? coreInput as AwsManagerPortableIntent['coreInput'],
-        ...(nextMode === 'cloudformation' ? { cloudFormation: { schemaVersion: 1, stackName: stackName.trim(), changeSetType, parameterKeys: cfParameters.map((item) => item.key).filter(Boolean), capabilities: cfCapabilities } } : {}),
-        ...(nextMode === 'cdk' && (overrides.cdk ?? nodeIntent?.cdk) ? { cdk: overrides.cdk ?? nodeIntent?.cdk } : {})
+        platformService: overrides.platformService ?? platformService,
+        platformOperation: overrides.platformOperation ?? (operation as AwsPlatformOperation),
+        platformInput: overrides.platformInput ?? coreInput as AwsManagerPortableIntent['platformInput'],
+        ...(nextMode === 'cloudformation' ? { cloudFormation: { schemaVersion: 1, stackName: stackName.trim(), changeSetType, parameterKeys: cfParameters.map((item) => item.key).filter(Boolean), capabilities: cfCapabilities } } : {})
+        ,...(nextMode === 'cdk' && (overrides.cdk ?? nodeIntent?.cdk) ? { cdk: overrides.cdk ?? nodeIntent?.cdk } : {})
       }
     })
   }
@@ -214,9 +226,15 @@ export default function AwsResourceNode({ id, data, selected }: NodeProps<Canvas
     } finally { setBusy(false) }
   }
 
-  const buildRequest = (confirmed = false): AwsManagerRequest => mode === 'core-services'
-    ? { operation, service: coreService, input: coreInput, nextToken: nextToken.trim() || undefined, maxResults, confirmed }
+  const buildRequest = (confirmed = false): AwsManagerRequest => mode === 'core-services' || mode === 'platform-managers'
+    ? { operation, service: mode === 'core-services' ? coreService : platformService, input: coreInput, nextToken: nextToken.trim() || undefined, maxResults, confirmed }
     : requestFor(operation, { query, viewArn, typeName, identifier, desiredState, patchDocument, requestToken, nextToken, maxResults, templatePath, stackName, changeSetName, changeSetType, parameters: cfParameters, capabilities: cfCapabilities, confirmed })
+
+  const updatePlatformInput = (key: string, value: string | number | boolean): void => {
+    const next = { ...coreInput, [key]: value }
+    setCoreInput(next)
+    persistIntent('platform-managers', { platformService, platformOperation: operation as AwsPlatformOperation, platformInput: next })
+  }
 
   const makePreview = async (): Promise<void> => {
     if (!api.awsResource) return
@@ -245,7 +263,7 @@ export default function AwsResourceNode({ id, data, selected }: NodeProps<Canvas
   }
 
   const fill = nodeHeaderFillStyle(data.color)
-  const title = data.title || (mode === 'cloud-control' ? 'AWS Cloud Control' : mode === 'core-services' ? `${CORE_SERVICE_LABELS[coreService]} manager` : mode === 'cloudformation' ? 'AWS CloudFormation' : mode === 'cdk' ? 'AWS CDK' : 'AWS Resource Explorer')
+  const title = data.title || (mode === 'cloud-control' ? 'AWS Cloud Control' : mode === 'core-services' ? `${CORE_SERVICE_LABELS[coreService]} manager` : mode === 'cloudformation' ? 'AWS CloudFormation' : mode === 'cdk' ? 'AWS CDK' : mode === 'platform-managers' ? `${platformService.toUpperCase()} manager` : 'AWS Resource Explorer')
   const note = runtime?.available ? `AWS CLI ${runtime.origin}${runtime.version ? `: ${runtime.version}` : ''}` : runtime ? runtime.disabledReason ?? 'AWS CLI is unavailable.' : 'Checking AWS CLI availability…'
 
   return (
@@ -264,6 +282,7 @@ export default function AwsResourceNode({ id, data, selected }: NodeProps<Canvas
           <button type="button" role="tab" aria-selected={mode === 'core-services'} onClick={() => { setMode('core-services'); setCoreService('s3'); setOperation(AWS_CORE_OPERATIONS.s3[0]); setCoreInput({}); persistIntent('core-services', { coreService: 's3', coreOperation: AWS_CORE_OPERATIONS.s3[0], coreInput: {} }) }}>Core services</button>
           <button type="button" role="tab" aria-selected={mode === 'cloudformation'} onClick={() => { setMode('cloudformation'); setOperation(CLOUDFORMATION_OPERATIONS[0]); persistIntent('cloudformation') }}>CloudFormation</button>
           <button type="button" role="tab" aria-selected={mode === 'cdk'} onClick={() => { setMode('cdk'); persistIntent('cdk') }}>CDK</button>
+          <button type="button" role="tab" aria-selected={mode === 'platform-managers'} onClick={() => { setMode('platform-managers'); setPlatformService('ecr'); setOperation(AWS_PLATFORM_OPERATIONS[0]); setCoreInput({}); persistIntent('platform-managers', { platformService: 'ecr', platformOperation: AWS_PLATFORM_OPERATIONS[0], platformInput: {} }) }}>Containers, data and cost</button>
         </div>
         <section className="aws-resource-node__binding" aria-label="Local AWS binding">
           <div className="aws-resource-node__binding-grid">
@@ -291,6 +310,9 @@ export default function AwsResourceNode({ id, data, selected }: NodeProps<Canvas
         /> : <>
         {mode === 'core-services' && <div className="aws-resource-node__operations" role="tablist" aria-label="AWS core services">
           {AWS_CORE_SERVICES.map((item) => <button key={item} type="button" role="tab" aria-selected={coreService === item} className={coreService === item ? 'is-selected' : ''} onClick={() => { setCoreService(item); const next = AWS_CORE_OPERATIONS[item][0]; setOperation(next); setCoreInput({}); setPreview(null); persistIntent('core-services', { coreService: item, coreOperation: next, coreInput: {} }) }}>{CORE_SERVICE_LABELS[item]}</button>)}
+        </div>}
+        {mode === 'platform-managers' && <div className="aws-resource-node__operations" role="tablist" aria-label="AWS platform managers">
+          {AWS_PLATFORM_SERVICES.map((item) => <button key={item} type="button" role="tab" aria-selected={platformService === item} className={platformService === item ? 'is-selected' : ''} onClick={() => { setPlatformService(item); const next = AWS_PLATFORM_OPERATIONS.find((candidate) => candidate.startsWith(`${item}-`))!; setOperation(next); setCoreInput({}); setPreview(null); persistIntent('platform-managers', { platformService: item, platformOperation: next, platformInput: {} }) }}>{item.toUpperCase()}</button>)}
         </div>}
         {mode === 'cloudformation' && <section className="aws-resource-node__inputs" aria-label="CloudFormation change-set inputs">
           <label>Template file
@@ -320,6 +342,26 @@ export default function AwsResourceNode({ id, data, selected }: NodeProps<Canvas
             {['logs-describe-log-streams', 'logs-get-log-events', 'logs-filter-log-events'].includes(operation) && <label>Log group name<input value={String(coreInput.logGroupName ?? '')} onChange={(event) => { const next = { ...coreInput, logGroupName: event.target.value }; setCoreInput(next); persistIntent('core-services', { coreInput: next as AwsManagerPortableIntent['coreInput'] }) }} /></label>}
             {['logs-get-log-events'].includes(operation) && <label>Log stream name<input value={String(coreInput.logStreamName ?? '')} onChange={(event) => { const next = { ...coreInput, logStreamName: event.target.value }; setCoreInput(next); persistIntent('core-services', { coreInput: next as AwsManagerPortableIntent['coreInput'] }) }} /></label>}
             {['logs-filter-log-events'].includes(operation) && <label>Filter pattern<input value={String(coreInput.filterPattern ?? '')} onChange={(event) => { const next = { ...coreInput, filterPattern: event.target.value }; setCoreInput(next); persistIntent('core-services', { coreInput: next as AwsManagerPortableIntent['coreInput'] }) }} /></label>}
+          </>}
+          {mode === 'platform-managers' && <>
+            {['ecr-describe-images', 'ecr-create-repository', 'ecr-delete-repository'].includes(operation) && <label>Repository name<input value={String(coreInput.repositoryName ?? '')} onChange={(event) => updatePlatformInput('repositoryName', event.target.value)} placeholder="Choose a repository name" /></label>}
+            {operation === 'ecr-create-repository' && <label>Tag mutability<select value={String(coreInput.tagMutability ?? 'IMMUTABLE')} onChange={(event) => updatePlatformInput('tagMutability', event.target.value)}><option value="IMMUTABLE">Immutable</option><option value="MUTABLE">Mutable</option></select></label>}
+            {['ecs-list-services', 'ecs-update-service', 'ecs-delete-service'].includes(operation) && <label>Cluster name<input value={String(coreInput.cluster ?? '')} onChange={(event) => updatePlatformInput('cluster', event.target.value)} placeholder="Choose a discovered cluster" /></label>}
+            {['ecs-update-service', 'ecs-delete-service'].includes(operation) && <label>Service name<input value={String(coreInput.service ?? '')} onChange={(event) => updatePlatformInput('service', event.target.value)} /></label>}
+            {operation === 'ecs-update-service' && <label>Desired task count<input type="number" min={0} max={1000} step={1} value={Number(coreInput.desiredCount ?? 1)} onChange={(event) => updatePlatformInput('desiredCount', Math.max(0, Math.min(1000, Number(event.target.value) || 0)))} /></label>}
+            {['eks-describe-cluster', 'eks-update-nodegroup', 'eks-delete-cluster'].includes(operation) && <label>Cluster name<input value={String(coreInput.clusterName ?? '')} onChange={(event) => updatePlatformInput('clusterName', event.target.value)} /></label>}
+            {operation === 'eks-update-nodegroup' && <><label>Node group name<input value={String(coreInput.nodegroupName ?? '')} onChange={(event) => updatePlatformInput('nodegroupName', event.target.value)} /></label><label>Minimum nodes<input type="number" min={0} max={1000} value={Number(coreInput.minimum ?? 1)} onChange={(event) => updatePlatformInput('minimum', Math.max(0, Math.min(1000, Number(event.target.value) || 0)))} /></label><label>Desired nodes<input type="number" min={0} max={1000} value={Number(coreInput.desired ?? 2)} onChange={(event) => updatePlatformInput('desired', Math.max(0, Math.min(1000, Number(event.target.value) || 0)))} /></label><label>Maximum nodes<input type="number" min={1} max={1000} value={Number(coreInput.maximum ?? 4)} onChange={(event) => updatePlatformInput('maximum', Math.max(1, Math.min(1000, Number(event.target.value) || 1)))} /></label></>}
+            {['rds-describe-db-instances', 'rds-create-db-instance', 'rds-create-db-snapshot', 'rds-delete-db-instance'].includes(operation) && <label>Database identifier<input value={String(coreInput.identifier ?? '')} onChange={(event) => updatePlatformInput('identifier', event.target.value)} /></label>}
+            {operation === 'rds-create-db-instance' && <><label>Instance class<input value={String(coreInput.instanceClass ?? 'db.t3.micro')} onChange={(event) => updatePlatformInput('instanceClass', event.target.value)} /></label><label>Engine<select value={String(coreInput.engine ?? 'postgres')} onChange={(event) => updatePlatformInput('engine', event.target.value)}><option value="postgres">PostgreSQL</option><option value="mysql">MySQL</option><option value="aurora-postgresql">Aurora PostgreSQL</option><option value="aurora-mysql">Aurora MySQL</option></select></label><label>Allocated storage (GiB)<input type="number" min={20} max={65536} value={Number(coreInput.storageGiB ?? 20)} onChange={(event) => updatePlatformInput('storageGiB', Math.max(20, Math.min(65536, Number(event.target.value) || 20)))} /></label><label>Backup retention (days)<input type="number" min={0} max={35} value={Number(coreInput.backupDays ?? 7)} onChange={(event) => updatePlatformInput('backupDays', Math.max(0, Math.min(35, Number(event.target.value) || 0)))} /></label></>}
+            {operation === 'rds-create-db-snapshot' && <label>Snapshot identifier<input value={String(coreInput.snapshotIdentifier ?? '')} onChange={(event) => updatePlatformInput('snapshotIdentifier', event.target.value)} /></label>}
+            {['database-list-tables', 'database-create-table', 'database-delete-table'].includes(operation) && <label>Table name<input value={String(coreInput.tableName ?? '')} onChange={(event) => updatePlatformInput('tableName', event.target.value)} /></label>}
+            {operation === 'database-create-table' && <><label>Attribute definitions JSON<textarea value={String(coreInput.attributeDefinitions ?? 'AttributeName=id,AttributeType=S')} onChange={(event) => updatePlatformInput('attributeDefinitions', event.target.value)} /></label><label>Key schema JSON<textarea value={String(coreInput.keySchema ?? 'AttributeName=id,KeyType=HASH')} onChange={(event) => updatePlatformInput('keySchema', event.target.value)} /></label></>}
+            {['vpc-describe-vpcs', 'vpc-create-subnet', 'vpc-delete-vpc'].includes(operation) && <label>VPC id<input value={String(coreInput.vpcId ?? '')} onChange={(event) => updatePlatformInput('vpcId', event.target.value)} /></label>}
+            {['vpc-create-vpc', 'vpc-create-subnet'].includes(operation) && <label>IPv4 CIDR<input value={String(coreInput.cidr ?? '')} onChange={(event) => updatePlatformInput('cidr', event.target.value)} placeholder="10.0.0.0/16" /></label>}
+            {operation === 'route53-change-record' && <><label>Hosted zone id<input value={String(coreInput.hostedZoneId ?? '')} onChange={(event) => updatePlatformInput('hostedZoneId', event.target.value)} /></label><label>Change batch JSON<textarea value={String(coreInput.changeBatch ?? '{"Changes":[]}')} onChange={(event) => updatePlatformInput('changeBatch', event.target.value)} /></label></>}
+            {operation === 'route53-delete-hosted-zone' && <label>Hosted zone id<input value={String(coreInput.hostedZoneId ?? '')} onChange={(event) => updatePlatformInput('hostedZoneId', event.target.value)} /></label>}
+            {operation === 'cost-get-cost-and-usage' && <><label>Time period JSON<textarea value={String(coreInput.timePeriod ?? '{"Start":"2026-01-01","End":"2026-02-01"}')} onChange={(event) => updatePlatformInput('timePeriod', event.target.value)} /></label><label>Granularity<select value={String(coreInput.granularity ?? 'MONTHLY')} onChange={(event) => updatePlatformInput('granularity', event.target.value)}><option value="DAILY">Daily</option><option value="MONTHLY">Monthly</option></select></label><label>Metrics<input value={String(coreInput.metrics ?? 'UnblendedCost')} onChange={(event) => updatePlatformInput('metrics', event.target.value)} /></label></>}
+            {operation === 'cost-create-budget' && <><label>Account id<input value={String(coreInput.accountId ?? '')} onChange={(event) => updatePlatformInput('accountId', event.target.value)} /></label><label>Budget JSON<textarea value={String(coreInput.budget ?? '{"BudgetLimit":{"Amount":"100","Unit":"USD"},"BudgetName":"monthly-budget","BudgetType":"COST","TimeUnit":"MONTHLY"}')} onChange={(event) => updatePlatformInput('budget', event.target.value)} /></label></>}
           </>}
           {operation === 'resource-search' && <label>Resource query<input value={query} onChange={(event) => { setQuery(event.target.value); persistIntent(mode, { resourceQuery: event.target.value }) }} placeholder="Use Resource Explorer query syntax" /></label>}
           {operation === 'resource-list-views' && <label>View ARN (optional)<input value={viewArn} onChange={(event) => setViewArn(event.target.value)} placeholder="Use the default view when empty" /></label>}

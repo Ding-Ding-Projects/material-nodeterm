@@ -1,4 +1,5 @@
 import type { NodeKind } from './types'
+import type { AwsPlatformServiceId } from './aws-resource'
 import { DOCKER_HOST_PORTABLE_BLUEPRINT } from './docker-host-manager'
 import { OPEN_WEBUI_DEFAULT_INTENT } from './open-webui-hosting'
 import { NEXTCLOUD_AIO_PORTABLE_BLUEPRINT } from './nextcloud-aio'
@@ -174,6 +175,22 @@ const awsCoreEntry = (id: string, service: string, label: string, description: s
     const scope = inScope('aws-universe')(context)
     return scope.available ? unsupportedInRelay(context) : scope
   }
+})
+
+const awsPlatformEntry = (id: string, service: AwsPlatformServiceId, label: string, description: string, documentationPath: string): NodeCatalogEntry => ({
+  id,
+  nodeKind: 'aws-resource',
+  category: 'managers',
+  label,
+  description,
+  keywords: ['aws', service, 'guided', 'manager'],
+  documentationPath,
+  safeDefaults: { mode: 'platform-managers', platformService: service, regionIntent: 'us-east-1' },
+  dependencies: ['aws-cli-v2'],
+  status: 'available',
+  availabilityMode: 'configure-later',
+  scope: 'aws-universe',
+  availability: unsupportedInRelay
 })
 
 const awsUniverseEntry: NodeCatalogEntry = {
@@ -672,14 +689,14 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
     scope: 'aws-universe',
     availability: unsupportedInRelay
   },
-  plannedEntry('aws-ecr', 'managers', 'Amazon ECR', 'Manage container repositories and images through typed controls.', 'aws-container-and-network-managers', 'aws-universe'),
-  plannedEntry('aws-ecs', 'managers', 'Amazon ECS', 'Inspect clusters, services, tasks, and deployments through guided controls.', 'aws-container-and-network-managers', 'aws-universe'),
-  plannedEntry('aws-eks', 'managers', 'Amazon EKS', 'Inspect clusters and workloads through explicit model-backed controls.', 'aws-container-and-network-managers', 'aws-universe'),
-  plannedEntry('aws-rds', 'managers', 'Amazon RDS', 'Manage database instances and clusters through guided controls.', 'aws-container-and-network-managers', 'aws-universe'),
-  plannedEntry('aws-databases', 'managers', 'AWS databases', 'Browse supported AWS database services through typed service models.', 'aws-container-and-network-managers', 'aws-universe'),
-  plannedEntry('aws-vpc', 'managers', 'Amazon VPC', 'Inspect networks, subnets, routes, gateways, and security groups through guided controls.', 'aws-container-and-network-managers', 'aws-universe'),
-  plannedEntry('aws-route53', 'managers', 'Amazon Route 53', 'Manage hosted zones, records, and health checks through reviewed operations.', 'aws-container-and-network-managers', 'aws-universe'),
-  plannedEntry('aws-cost', 'managers', 'AWS cost management', 'Explore cost and usage data with explicit account, period, and grouping controls.', 'aws-container-and-network-managers', 'aws-universe'),
+  awsPlatformEntry('aws-ecr', 'ecr', 'Amazon ECR', 'Manage repositories and images through guided controls.', 'docs/features/integrations/aws-resource-managers.md'),
+  awsPlatformEntry('aws-ecs', 'ecs', 'Amazon ECS', 'Inspect clusters, services, tasks, and deployments through guided controls.', 'docs/features/integrations/aws-resource-managers.md'),
+  awsPlatformEntry('aws-eks', 'eks', 'Amazon EKS', 'Inspect clusters and workloads through explicit model-backed controls.', 'docs/features/integrations/aws-resource-managers.md'),
+  awsPlatformEntry('aws-rds', 'rds', 'Amazon RDS', 'Manage database instances and snapshots through guided controls.', 'docs/features/integrations/aws-resource-managers.md'),
+  awsPlatformEntry('aws-databases', 'database', 'AWS databases', 'Browse supported AWS database services through typed service models.', 'docs/features/integrations/aws-resource-managers.md'),
+  awsPlatformEntry('aws-vpc', 'vpc', 'Amazon VPC', 'Inspect networks, subnets, routes, gateways, and security groups through guided controls.', 'docs/features/integrations/aws-resource-managers.md'),
+  awsPlatformEntry('aws-route53', 'route53', 'Amazon Route 53', 'Manage hosted zones and records through reviewed operations.', 'docs/features/integrations/aws-resource-managers.md'),
+  awsPlatformEntry('aws-cost', 'cost', 'AWS cost management', 'Explore cost and usage data with explicit account, period, and grouping controls.', 'docs/features/integrations/aws-resource-managers.md'),
   {
     ...plannedEntry('aws-service', 'universes', 'All AWS services', 'Create a typed AWS service workspace from installed CLI models without a raw command fallback.', 'aws-all-services-manager', 'aws-universe'),
     documentationPath: 'docs/features/integrations/aws-cli-model-documentation.md'
@@ -827,14 +844,14 @@ export const NODE_CATALOG_COMPLETENESS: readonly NodeCatalogCompletenessRecord[]
   { id: 'aws-logs', state: 'current', scope: 'aws-universe', reason: 'guided CloudWatch Logs operations through shared AWS manager' },
   { id: 'aws-cloudformation', state: 'current', scope: 'aws-universe', reason: 'AWS CloudFormation uses the shared AWS resource manager' },
   { id: 'aws-cdk', state: 'current', scope: 'aws-universe', reason: 'guided CDK folder, trust, synth, diff, and deploy manager' },
-  { id: 'aws-ecr', state: 'planned', scope: 'aws-universe', reason: 'Amazon ECR manager not implemented' },
-  { id: 'aws-ecs', state: 'planned', scope: 'aws-universe', reason: 'Amazon ECS manager not implemented' },
-  { id: 'aws-eks', state: 'planned', scope: 'aws-universe', reason: 'Amazon EKS manager not implemented' },
-  { id: 'aws-rds', state: 'planned', scope: 'aws-universe', reason: 'Amazon RDS manager not implemented' },
-  { id: 'aws-databases', state: 'planned', scope: 'aws-universe', reason: 'AWS database managers not implemented' },
-  { id: 'aws-vpc', state: 'planned', scope: 'aws-universe', reason: 'Amazon VPC manager not implemented' },
-  { id: 'aws-route53', state: 'planned', scope: 'aws-universe', reason: 'Amazon Route 53 manager not implemented' },
-  { id: 'aws-cost', state: 'planned', scope: 'aws-universe', reason: 'AWS cost manager not implemented' },
+  { id: 'aws-ecr', state: 'current', scope: 'aws-universe', reason: 'guided ECR operations through shared AWS manager' },
+  { id: 'aws-ecs', state: 'current', scope: 'aws-universe', reason: 'guided ECS operations through shared AWS manager' },
+  { id: 'aws-eks', state: 'current', scope: 'aws-universe', reason: 'guided EKS operations through shared AWS manager' },
+  { id: 'aws-rds', state: 'current', scope: 'aws-universe', reason: 'guided RDS operations through shared AWS manager' },
+  { id: 'aws-databases', state: 'current', scope: 'aws-universe', reason: 'guided database operations through shared AWS manager' },
+  { id: 'aws-vpc', state: 'current', scope: 'aws-universe', reason: 'guided VPC operations through shared AWS manager' },
+  { id: 'aws-route53', state: 'current', scope: 'aws-universe', reason: 'guided Route 53 operations through shared AWS manager' },
+  { id: 'aws-cost', state: 'current', scope: 'aws-universe', reason: 'guided cost operations through shared AWS manager' },
   { id: 'aws-service', state: 'planned', scope: 'aws-universe', reason: 'All-service AWS manager not implemented' },
   { id: 'cloudflare-core-managers', state: 'current', scope: 'any', reason: 'typed Cloudflare account, zone, DNS, SSL/TLS, ruleset, redirect, cache, and analytics managers' },
   { id: 'cloudflare-hosting', state: 'planned', scope: 'any', reason: 'Cloudflare hosting not implemented' },

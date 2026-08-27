@@ -104,6 +104,12 @@ function coreInputText(request: AwsManagerRequest, key: string, label: string, m
   return text(coreInput(request)[key], label, max)
 }
 
+function coreInputNumber(request: AwsManagerRequest, key: string, label: string, minimum: number, maximum: number): number {
+  const value = coreInput(request)[key]
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < minimum || value > maximum) throw new Error(`${label} must be an integer from ${minimum} to ${maximum}.`)
+  return value
+}
+
 function localTemplate(value: unknown): string {
   const file = text(value, 'Template path', 4096)
   if (!isAbsolute(file)) throw new Error('Choose a local CloudFormation template with the Browse control.')
@@ -294,6 +300,40 @@ function operationSpec(request: AwsManagerRequest): CommandSpec {
     case 'logs-describe-log-streams': return { service: 'logs', operation: request.operation, args: ['logs', 'describe-log-streams', '--log-group-name', coreInputText(request, 'logGroupName', 'Log group name')], risk: 'read-only', pagination: 'none' }
     case 'logs-get-log-events': return { service: 'logs', operation: request.operation, args: ['logs', 'get-log-events', '--log-group-name', coreInputText(request, 'logGroupName', 'Log group name'), '--log-stream-name', coreInputText(request, 'logStreamName', 'Log stream name'), '--limit', String(maxResults(request.maxResults)), ...(token ? ['--next-token', token] : [])], risk: 'read-only', pagination: 'manual-next-token' }
     case 'logs-filter-log-events': return { service: 'logs', operation: request.operation, args: ['logs', 'filter-log-events', '--log-group-name', coreInputText(request, 'logGroupName', 'Log group name'), '--filter-pattern', coreInputText(request, 'filterPattern', 'Filter pattern'), '--limit', String(maxResults(request.maxResults)), ...(token ? ['--next-token', token] : [])], risk: 'read-only', pagination: 'manual-next-token' }
+    case 'ecr-list-repositories': return { service: 'ecr', operation: request.operation, args: ['ecr', 'describe-repositories', '--max-results', String(maxResults(request.maxResults)), ...(token ? ['--next-token', token] : [])], risk: 'read-only', pagination: 'manual-next-token' }
+    case 'ecr-describe-images': return { service: 'ecr', operation: request.operation, args: ['ecr', 'describe-images', '--repository-name', coreInputText(request, 'repositoryName', 'Repository name'), '--max-results', String(maxResults(request.maxResults)), ...(token ? ['--next-token', token] : [])], risk: 'read-only', pagination: 'manual-next-token' }
+    case 'ecr-create-repository': return { service: 'ecr', operation: request.operation, args: ['ecr', 'create-repository', '--repository-name', coreInputText(request, 'repositoryName', 'Repository name', 256), '--image-tag-mutability', coreInputText(request, 'tagMutability', 'Tag mutability', 16)], risk: 'write', pagination: 'none' }
+    case 'ecr-delete-repository': return { service: 'ecr', operation: request.operation, args: ['ecr', 'delete-repository', '--repository-name', coreInputText(request, 'repositoryName', 'Repository name', 256), '--force'], risk: 'destructive', pagination: 'none' }
+    case 'ecs-list-clusters': return { service: 'ecs', operation: request.operation, args: ['ecs', 'list-clusters', '--max-results', String(maxResults(request.maxResults)), ...(token ? ['--next-token', token] : [])], risk: 'read-only', pagination: 'manual-next-token' }
+    case 'ecs-list-services': return { service: 'ecs', operation: request.operation, args: ['ecs', 'list-services', '--cluster', coreInputText(request, 'cluster', 'Cluster name'), '--max-results', String(maxResults(request.maxResults)), ...(token ? ['--next-token', token] : [])], risk: 'read-only', pagination: 'manual-next-token' }
+    case 'ecs-update-service': return { service: 'ecs', operation: request.operation, args: ['ecs', 'update-service', '--cluster', coreInputText(request, 'cluster', 'Cluster name'), '--service', coreInputText(request, 'service', 'Service name'), '--desired-count', String(coreInputNumber(request, 'desiredCount', 'Desired task count', 0, 1000))], risk: 'write', pagination: 'none' }
+    case 'ecs-delete-service': return { service: 'ecs', operation: request.operation, args: ['ecs', 'delete-service', '--cluster', coreInputText(request, 'cluster', 'Cluster name'), '--service', coreInputText(request, 'service', 'Service name'), '--force'], risk: 'destructive', pagination: 'none' }
+    case 'eks-list-clusters': return { service: 'eks', operation: request.operation, args: ['eks', 'list-clusters', '--max-results', String(maxResults(request.maxResults)), ...(token ? ['--next-token', token] : [])], risk: 'read-only', pagination: 'manual-next-token' }
+    case 'eks-describe-cluster': return { service: 'eks', operation: request.operation, args: ['eks', 'describe-cluster', '--name', coreInputText(request, 'clusterName', 'Cluster name')], risk: 'read-only', pagination: 'none' }
+    case 'eks-update-nodegroup': {
+      const minimum = coreInputNumber(request, 'minimum', 'Minimum nodes', 0, 1000)
+      const desired = coreInputNumber(request, 'desired', 'Desired nodes', 0, 1000)
+      const maximum = coreInputNumber(request, 'maximum', 'Maximum nodes', 1, 1000)
+      if (minimum > desired || desired > maximum) throw new Error('Node group capacity must satisfy minimum ≤ desired ≤ maximum.')
+      return { service: 'eks', operation: request.operation, args: ['eks', 'update-nodegroup-config', '--cluster-name', coreInputText(request, 'clusterName', 'Cluster name'), '--nodegroup-name', coreInputText(request, 'nodegroupName', 'Node group name'), '--scaling-config', `minSize=${minimum},maxSize=${maximum},desiredSize=${desired}`], risk: 'write', pagination: 'none' }
+    }
+    case 'eks-delete-cluster': return { service: 'eks', operation: request.operation, args: ['eks', 'delete-cluster', '--name', coreInputText(request, 'clusterName', 'Cluster name')], risk: 'destructive', pagination: 'none' }
+    case 'rds-describe-db-instances': return { service: 'rds', operation: request.operation, args: ['rds', 'describe-db-instances', ...(coreInput(request).identifier ? ['--db-instance-identifier', coreInputText(request, 'identifier', 'Database identifier')] : [])], risk: 'read-only', pagination: 'none' }
+    case 'rds-create-db-instance': return { service: 'rds', operation: request.operation, args: ['rds', 'create-db-instance', '--db-instance-identifier', coreInputText(request, 'identifier', 'Database identifier', 63), '--db-instance-class', coreInputText(request, 'instanceClass', 'Instance class'), '--engine', coreInputText(request, 'engine', 'Database engine'), '--allocated-storage', String(coreInputNumber(request, 'storageGiB', 'Allocated storage', 20, 65536)), '--backup-retention-period', String(coreInputNumber(request, 'backupDays', 'Backup retention', 0, 35)), '--storage-encrypted'], risk: 'write', pagination: 'none' }
+    case 'rds-create-db-snapshot': return { service: 'rds', operation: request.operation, args: ['rds', 'create-db-snapshot', '--db-instance-identifier', coreInputText(request, 'identifier', 'Database identifier'), '--db-snapshot-identifier', coreInputText(request, 'snapshotIdentifier', 'Snapshot identifier', 255)], risk: 'write', pagination: 'none' }
+    case 'rds-delete-db-instance': return { service: 'rds', operation: request.operation, args: ['rds', 'delete-db-instance', '--db-instance-identifier', coreInputText(request, 'identifier', 'Database identifier'), '--skip-final-snapshot'], risk: 'destructive', pagination: 'none' }
+    case 'database-list-tables': return { service: 'dynamodb', operation: request.operation, args: ['dynamodb', 'list-tables', '--limit', String(maxResults(request.maxResults)), ...(token ? ['--exclusive-start-table-name', token] : [])], risk: 'read-only', pagination: 'manual-next-token' }
+    case 'database-create-table': return { service: 'dynamodb', operation: request.operation, args: ['dynamodb', 'create-table', '--table-name', coreInputText(request, 'tableName', 'Table name', 255), '--billing-mode', 'PAY_PER_REQUEST', '--attribute-definitions', coreInputText(request, 'attributeDefinitions', 'Attribute definitions', 16_384), '--key-schema', coreInputText(request, 'keySchema', 'Key schema', 16_384)], risk: 'write', pagination: 'none' }
+    case 'database-delete-table': return { service: 'dynamodb', operation: request.operation, args: ['dynamodb', 'delete-table', '--table-name', coreInputText(request, 'tableName', 'Table name', 255)], risk: 'destructive', pagination: 'none' }
+    case 'vpc-describe-vpcs': return { service: 'vpc', operation: request.operation, args: ['ec2', 'describe-vpcs', ...(coreInput(request).vpcId ? ['--vpc-ids', coreInputText(request, 'vpcId', 'VPC id')] : [])], risk: 'read-only', pagination: 'none' }
+    case 'vpc-create-vpc': return { service: 'vpc', operation: request.operation, args: ['ec2', 'create-vpc', '--cidr-block', coreInputText(request, 'cidr', 'IPv4 CIDR')], risk: 'write', pagination: 'none' }
+    case 'vpc-create-subnet': return { service: 'vpc', operation: request.operation, args: ['ec2', 'create-subnet', '--vpc-id', coreInputText(request, 'vpcId', 'VPC id'), '--cidr-block', coreInputText(request, 'cidr', 'Subnet IPv4 CIDR')], risk: 'write', pagination: 'none' }
+    case 'vpc-delete-vpc': return { service: 'vpc', operation: request.operation, args: ['ec2', 'delete-vpc', '--vpc-id', coreInputText(request, 'vpcId', 'VPC id')], risk: 'destructive', pagination: 'none' }
+    case 'route53-list-hosted-zones': return { service: 'route53', operation: request.operation, args: ['route53', 'list-hosted-zones', '--max-items', String(maxResults(request.maxResults)), ...(token ? ['--starting-token', token] : [])], risk: 'read-only', pagination: 'manual-next-token' }
+    case 'route53-change-record': return { service: 'route53', operation: request.operation, args: ['route53', 'change-resource-record-sets', '--hosted-zone-id', coreInputText(request, 'hostedZoneId', 'Hosted zone id'), '--change-batch', jsonDocument(coreInput(request).changeBatch, 'Change batch', 'object')], risk: 'write', pagination: 'none' }
+    case 'route53-delete-hosted-zone': return { service: 'route53', operation: request.operation, args: ['route53', 'delete-hosted-zone', '--id', coreInputText(request, 'hostedZoneId', 'Hosted zone id')], risk: 'destructive', pagination: 'none' }
+    case 'cost-get-cost-and-usage': return { service: 'ce', operation: request.operation, args: ['ce', 'get-cost-and-usage', '--time-period', jsonDocument(coreInput(request).timePeriod, 'Cost report time period', 'object'), '--granularity', coreInputText(request, 'granularity', 'Cost granularity', 16), '--metrics', coreInputText(request, 'metrics', 'Cost metrics', 256)], risk: 'read-only', pagination: 'manual-next-token' }
+    case 'cost-create-budget': return { service: 'budgets', operation: request.operation, args: ['budgets', 'create-budget', '--account-id', coreInputText(request, 'accountId', 'AWS account id'), '--budget', jsonDocument(coreInput(request).budget, 'Budget', 'object')], risk: 'write', pagination: 'none' }
     default:
       throw new Error('The AWS manager operation is not supported.')
   }
@@ -326,10 +366,18 @@ function rowsFor(operation: AwsManagerOperation, payload: Record<string, unknown
     'sts-get-caller-identity': 'ResponseMetadata',
     'lambda-list-functions': 'Functions', 'lambda-get-function': 'Configuration', 'lambda-delete-function': 'ResponseMetadata',
     'cloudwatch-list-metrics': 'Metrics', 'cloudwatch-get-metric-data': 'MetricDataResults',
-    'logs-describe-log-groups': 'logGroups', 'logs-describe-log-streams': 'logStreams', 'logs-get-log-events': 'events', 'logs-filter-log-events': 'events'
+    'logs-describe-log-groups': 'logGroups', 'logs-describe-log-streams': 'logStreams', 'logs-get-log-events': 'events', 'logs-filter-log-events': 'events',
+    'ecr-list-repositories': 'repositories', 'ecr-describe-images': 'imageDetails', 'ecr-create-repository': 'repository', 'ecr-delete-repository': 'ResponseMetadata',
+    'ecs-list-clusters': 'clusterArns', 'ecs-list-services': 'serviceArns', 'ecs-update-service': 'service', 'ecs-delete-service': 'service',
+    'eks-list-clusters': 'clusters', 'eks-describe-cluster': 'cluster', 'eks-update-nodegroup': 'update', 'eks-delete-cluster': 'cluster',
+    'rds-describe-db-instances': 'DBInstances', 'rds-create-db-instance': 'DBInstance', 'rds-create-db-snapshot': 'DBSnapshot', 'rds-delete-db-instance': 'DBInstance',
+    'database-list-tables': 'TableNames', 'database-create-table': 'TableDescription', 'database-delete-table': 'TableDescription',
+    'vpc-describe-vpcs': 'Vpcs', 'vpc-create-vpc': 'Vpc', 'vpc-create-subnet': 'Subnet', 'vpc-delete-vpc': 'ResponseMetadata',
+    'route53-list-hosted-zones': 'HostedZones', 'route53-change-record': 'ChangeInfo', 'route53-delete-hosted-zone': 'ChangeInfo',
+    'cost-get-cost-and-usage': 'ResultsByTime', 'cost-create-budget': 'ResponseMetadata'
   }
   const value = payload[keys[operation]]
-  if (Array.isArray(value)) return value.filter((item): item is Record<string, unknown> => !!item && typeof item === 'object' && !Array.isArray(item))
+  if (Array.isArray(value)) return value.slice(0, MAX_RESULTS).map((item) => item && typeof item === 'object' && !Array.isArray(item) ? item as Record<string, unknown> : { value: item })
   if (value && typeof value === 'object' && !Array.isArray(value)) return [value as Record<string, unknown>]
   return []
 }

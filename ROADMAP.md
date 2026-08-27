@@ -69,6 +69,13 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## In progress / partially landed
 
+- [ ] **AWS platform managers, issue #49**: ECR, ECS, EKS, RDS, database, VPC, Route 53, and cost
+      operations are mounted on the existing shared AWS resource manager and AWS Shop. The node
+      now carries typed previews, fixed argv with `shell: false`, bounded inputs and output,
+      pagination, progress, cancellation, retry, local credential binding, safe portable intent,
+      and destructive confirmation. Tests, type checks, lint, builds, packaging, runtime
+      interaction, reviews, audits, and captures remain intentionally unrun in this lane.
+
 - [ ] **Portable Comment and Activity attachments, issue #94**: source support is present in
       `src/shared/comment-attachments.ts`, `src/core/board-attachments.ts`, the board-log bridge,
       composer queue, and schema 3 comment carriers. Tests, type checks, lint, builds, packaging,

@@ -51,6 +51,32 @@ security or accessibility checks, builds, packaging, installer execution, runtim
 UI captures were run. The docs bundle generator was attempted but could not run because `esbuild`
 is absent from this checkout; the generated offline article entry was updated directly and remains
 subject to the owning integration lane's normal bundle check.
+## 2026-08-27, AWS platform managers, issue #49
+
+The issue branch was reconciled non-destructively with exact `origin/main` tip
+`54164b84dce0b7e62787b1de2885405ff4ed821c`. Upstream already supplied the canonical AWS stack in
+`src/shared/aws-resource.ts`, `src/core/aws-resource-manager.ts`, `src/core/aws-resource-register-ipc.ts`,
+and `src/renderer/nodes/AwsResourceNode.tsx`. The earlier duplicate plural manager stack was retained
+in its historical commits but is not used by the resulting tree.
+
+Program 38 is now mounted through that shared manager. `src/shared/aws-resource.ts` adds typed
+platform-manager modes and operations for ECR, ECS, EKS, RDS, database, VPC, Route 53, and cost
+management. `src/core/aws-resource-manager.ts` builds fixed argument arrays with `shell: false`,
+validates bounded values, parses bounded JSON, handles pagination and primitive list results, and
+redacts response fields before renderer delivery. `src/renderer/nodes/AwsResourceNode.tsx` adds
+the platform-manager mode, service tabs, typed controls, generated previews, result search with
+its anchored regex builder, progress, cancellation, retry, and the existing two-key destructive
+confirmation. `src/shared/node-catalog.ts`, `Canvas.tsx`, and `workspace.ts` make the eight rows
+current AWS Universe entries that create the shared `aws-resource` node with portable safe intent.
+
+Direct documentation is `docs/features/integrations/aws-container-database-cost-managers.md`, its
+category/index links, and `site/docs/aws-container-database-cost-managers.html`. The generated
+offline docs bundle was not regenerated because this lane forbids builds.
+
+Verification boundary: no tests, lint, type checks, builds, packaging, runtime interaction, reviews,
+security or accessibility checks, installer execution, or UI captures were run. No issue, pull
+request, default-branch, or cleanup mutation was performed. The feature branch was pushed to
+`origin/feat/program-38-aws-containers` and retained for downstream integration.
 
 ## 2026-08-27, AWS core-service managers, issue #46 PR preparation
 

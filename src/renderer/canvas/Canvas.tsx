@@ -5726,6 +5726,8 @@ export function Canvas() {
             if (catalogEntry.id === 'aws-cdk') return createAwsResourceNode(index, 'cdk', center)
             const awsCoreCatalogServices = { 'aws-s3': 's3', 'aws-ec2': 'ec2', 'aws-iam': 'iam', 'aws-sts': 'sts', 'aws-lambda': 'lambda', 'aws-cloudwatch': 'cloudwatch', 'aws-logs': 'logs' } as const
             if (catalogEntry.id in awsCoreCatalogServices) return createAwsResourceNode(index, 'core-services', center, awsCoreCatalogServices[catalogEntry.id as keyof typeof awsCoreCatalogServices])
+            const awsPlatformCatalogServices = { 'aws-ecr': 'ecr', 'aws-ecs': 'ecs', 'aws-eks': 'eks', 'aws-rds': 'rds', 'aws-databases': 'database', 'aws-vpc': 'vpc', 'aws-route53': 'route53', 'aws-cost': 'cost' } as const
+            if (catalogEntry.id in awsPlatformCatalogServices) return createAwsResourceNode(index, 'platform-managers', center, undefined, awsPlatformCatalogServices[catalogEntry.id as keyof typeof awsPlatformCatalogServices])
             if (catalogEntry.id === 'cloudflare-core-managers') return createCloudflareCoreManagersNode(index, center)
             // File and diff rows stay visible but disabled until their picker prerequisites exist.
             return null

@@ -10,6 +10,7 @@ endpoints, request state, result pages, and credentials on the current computer.
 - [Cloud Control](./cloud-control.md)
 - [AWS core-service managers](../integrations/aws-core-services.md)
 - [AWS CDK manager](../integrations/cdk-manager.md)
+- [AWS container, database, network, DNS, and cost managers](../integrations/aws-container-database-cost-managers.md)
 
 ## Shared behavior
 

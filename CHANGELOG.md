@@ -22,6 +22,13 @@
   reporting, guided backup and restore snapshots, explicit update rollback sequencing, and no Docker
   socket or privileged mode. Machine-local paths and secret-key names stay out of portable project
   data. This ultra-speed lane intentionally did not run tests, type checks, lint, builds, packaging,
+  runtime interaction, reviews, accessibility or security checks, or captures.
+- Add Program 38 AWS platform-manager operations to the shared AWS ResourceNode: ECR, ECS, EKS,
+  RDS, database, VPC, Route 53, and cost management. Typed previews, fixed argument arrays,
+  bounded inputs and output, pagination, progress, cancellation, retry, local profile binding,
+  portable safe intent, credential redaction, and destructive confirmation all reuse the existing
+  manager. This issue #49 lane intentionally did not run tests, type checks, lint, builds,
+  packaging, runtime interaction, reviews, accessibility or security checks, or captures.
 
 - Mount the seven AWS core-service routes on the shared AWS manager: S3, EC2, IAM, STS, Lambda,
   CloudWatch, and CloudWatch Logs. Typed operation controls now cover bounded reads, selected writes,
