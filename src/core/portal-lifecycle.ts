@@ -14,6 +14,11 @@ import {
   type PortableUniverseDoorV3,
   validatePortableUniverseDoors
 } from './universe-door-navigation'
+import {
+  createPortableUniverseDoorEntry,
+  validatePortableUniverseDoorEntry,
+  type PortableUniverseDoorEntryV3
+} from './universe-door-entry'
 
 export const PORTAL_SCOPE = 'multiverse' as const
 export const MAX_PORTAL_DEPTH = 8
@@ -29,6 +34,9 @@ export interface PortablePortalV3 {
   title: string
   depth: number
   status: PortalLifecycleStatus
+  /** Safe entry intent. Values remain in the host-owned local credential vault. */
+  entryPolicy?: PortableUniverseDoorEntryV3
+  returnEntryPolicy?: PortableUniverseDoorEntryV3
 }
 
 export interface PortalRepairRecord {
@@ -56,6 +64,8 @@ export interface PortalCreateRequest {
   title: string
   entryDoorId?: string
   returnDoorId?: string
+  entryPolicy?: PortableUniverseDoorEntryV3
+  returnEntryPolicy?: PortableUniverseDoorEntryV3
   position?: { x: number; y: number }
 }
 
@@ -147,7 +157,7 @@ export function validatePortablePortals(
   const result: PortablePortalV3[] = []
   for (const value of input) {
     if (!record(value)) throw new Error('Portable portal record is invalid.')
-    const allowed = new Set(['id', 'parentCanvasId', 'childCanvasId', 'entryDoorId', 'returnDoorId', 'title', 'depth', 'status'])
+    const allowed = new Set(['id', 'parentCanvasId', 'childCanvasId', 'entryDoorId', 'returnDoorId', 'title', 'depth', 'status', 'entryPolicy', 'returnEntryPolicy'])
     for (const key of Object.keys(value)) if (!allowed.has(key)) throw new Error(`Portable portal contains an unknown field: ${key}`)
     const portal: PortablePortalV3 = {
       id: text(value.id, 'Portal id', ID_LIMIT),
@@ -157,7 +167,9 @@ export function validatePortablePortals(
       returnDoorId: text(value.returnDoorId, 'Portal return door id', ID_LIMIT),
       title: text(value.title, 'Portal title', TITLE_LIMIT),
       depth: value.depth as number,
-      status: value.status as PortalLifecycleStatus
+      status: value.status as PortalLifecycleStatus,
+      ...(value.entryPolicy !== undefined ? { entryPolicy: validatePortableUniverseDoorEntry(value.entryPolicy) } : {}),
+      ...(value.returnEntryPolicy !== undefined ? { returnEntryPolicy: validatePortableUniverseDoorEntry(value.returnEntryPolicy) } : {})
     }
     if (seen.has(portal.id)) throw new Error(`Duplicate portable portal: ${portal.id}`)
     seen.add(portal.id)
@@ -171,19 +183,27 @@ export function validatePortablePortals(
       throw new Error(`Portable portal ${portal.id} has an invalid hierarchy depth.`)
     }
     if (portal.status !== 'open' && portal.status !== 'closed') throw new Error(`Portable portal ${portal.id} status is invalid.`)
+    if (portal.entryPolicy && portal.entryPolicy.doorId !== portal.entryDoorId) throw new Error(`Portable portal ${portal.id} entry policy does not match its entry door.`)
+    if (portal.returnEntryPolicy && portal.returnEntryPolicy.doorId !== portal.returnDoorId) throw new Error(`Portable portal ${portal.id} return policy does not match its return door.`)
     result.push(portal)
   }
   return result.sort((left, right) => left.id.localeCompare(right.id))
 }
 
-function portalDoors(portal: PortablePortalV3): [PortableUniverseDoorV3, PortableUniverseDoorV3] {
+function portalDoors(portal: PortablePortalV3, existingDoors: readonly PortableUniverseDoorV3[] = []): [PortableUniverseDoorV3, PortableUniverseDoorV3] {
+  const existingEntry = existingDoors.find((door) => door.id === portal.entryDoorId)
+  const existingReturn = existingDoors.find((door) => door.id === portal.returnDoorId)
   return createPortableUniverseDoorPair({
     entryDoorId: portal.entryDoorId,
     returnDoorId: portal.returnDoorId,
     parentCanvasId: portal.parentCanvasId,
     childCanvasId: portal.childCanvasId,
     entryLabel: portal.title,
-    returnLabel: `Return to ${portal.title}`
+    returnLabel: `Return to ${portal.title}`,
+    ...(existingEntry?.construction ? { entryConstruction: existingEntry.construction } : {}),
+    ...(existingReturn?.construction ? { returnConstruction: existingReturn.construction } : {}),
+    entryPolicy: portal.entryPolicy,
+    returnEntryPolicy: portal.returnEntryPolicy
   })
 }
 
@@ -203,7 +223,7 @@ export function repairPortablePortals(input: PortableCanvasProjectionV3): Portal
       continue
     }
     portalByChild.add(portal.childCanvasId)
-    const [entry, exit] = portalDoors(portal)
+    const [entry, exit] = portalDoors(portal, existingDoors)
     const entryPresent = existingDoors.some((door) => door.id === entry.id && door.canvasId === entry.canvasId && door.targetCanvasId === entry.targetCanvasId && door.pairedDoorId === entry.pairedDoorId)
     const exitPresent = existingDoors.some((door) => door.id === exit.id && door.canvasId === exit.canvasId && door.targetCanvasId === exit.targetCanvasId && door.pairedDoorId === exit.pairedDoorId)
     doors.push(entry, exit)
@@ -247,7 +267,13 @@ export function createPortablePortal(input: PortableCanvasProjectionV3, request:
     if ((projection.portals ?? []).some((portal) => portal.id === portalId)) return { projection: null, portal: null, refused: true, reason: 'That portal id is already in use.' }
     const entryDoorId = nextId(request.entryDoorId ?? `door-${portalId}-entry`, new Set([...(projection.doors ?? []).map((door) => door.id), ...occupiedNodes]))
     const returnDoorId = nextId(request.returnDoorId ?? `door-${portalId}-return`, new Set([...(projection.doors ?? []).map((door) => door.id), entryDoorId, ...occupiedNodes]))
-    const portal: PortablePortalV3 = { id: portalId, parentCanvasId: parent.id, childCanvasId, entryDoorId, returnDoorId, title, depth: childDepth, status: 'closed' }
+    const entryPolicy = request.entryPolicy
+      ? validatePortableUniverseDoorEntry(request.entryPolicy)
+      : createPortableUniverseDoorEntry({ doorId: entryDoorId, methods: ['numeric-code', 'passphrase'], defaultMethod: 'numeric-code', numericCodeDigits: 6, passphraseMinLength: 12 })
+    const returnEntryPolicy = request.returnEntryPolicy
+      ? validatePortableUniverseDoorEntry(request.returnEntryPolicy)
+      : createPortableUniverseDoorEntry({ doorId: returnDoorId, methods: ['numeric-code', 'passphrase'], defaultMethod: 'numeric-code', numericCodeDigits: 6, passphraseMinLength: 12 })
+    const portal: PortablePortalV3 = { id: portalId, parentCanvasId: parent.id, childCanvasId, entryDoorId, returnDoorId, title, depth: childDepth, status: 'closed', entryPolicy, returnEntryPolicy }
     const child: PortableCanvasV3 = { id: childCanvasId, scope: PORTAL_SCOPE, parentCanvasId: parent.id, depth: childDepth, title, order: projection.canvases.length, viewport: { x: 0, y: 0, zoom: 1 }, nodeIds: [] }
     const [entry, exit] = portalDoors(portal)
     const next = { ...projection, canvases: [...projection.canvases, child], portals: [...(projection.portals ?? []), portal], doors: [...(projection.doors ?? []), entry, exit] }
