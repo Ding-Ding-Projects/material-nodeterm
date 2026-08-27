@@ -22,7 +22,7 @@ records are `src/shared/types.ts`, `src/renderer/lib/sfx.ts`,
 
 This ultra-speed lane intentionally did not run tests, type checks, lint, reviews, security or
 accessibility checks, builds, packaging, installer execution, runtime interaction, or UI captures.
-The feature jer was not integrated into `main`, no release was published, and no cleanup was
+The feature branch was not integrated into `main`, no release was published, and no cleanup was
 performed in this lane.
 
 ## 2026-08-27, AWS core-service managers, issue #46 PR preparation
