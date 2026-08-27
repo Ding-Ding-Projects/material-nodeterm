@@ -111,6 +111,7 @@ import VideoNode from '../nodes/VideoNode'
 import PhotoNode from '../nodes/PhotoNode'
 import GalleryNode from '../nodes/GalleryNode'
 import WebNode from '../nodes/WebNode'
+import AwsResourceNode from '../nodes/AwsResourceNode'
 import { NativeLoopNode, setNativeLoopRunHandler } from '../nodes/NativeLoopNode'
 import TimerNode from '../nodes/TimerNode'
 import AlarmClockNode from '../nodes/AlarmClockNode'
@@ -717,6 +718,7 @@ import {
   createPhotoNode,
   createGalleryNode,
   createWebNode,
+  createAwsResourceNode,
   isVideoFile,
   duplicateNode,
   flowToNodeStates,
@@ -2065,7 +2067,8 @@ export function Canvas() {
       gitlab: withNodeBoundary(ServiceNode),
       homeassistant: withNodeBoundary(ServiceNode),
       freepbx: withNodeBoundary(ServiceNode),
-      'linux-vm': withNodeBoundary(VirtualMachineNode)
+      'linux-vm': withNodeBoundary(VirtualMachineNode),
+      'aws-resource': withNodeBoundary(AwsResourceNode)
     }),
     []
   )
@@ -5366,6 +5369,8 @@ export function Canvas() {
             if (catalogEntry.id.startsWith('service:')) {
               return createServiceNode(catalogEntry.nodeKind as ServiceNodeKind, index, center)
             }
+            if (catalogEntry.id === 'aws-resource-explorer') return createAwsResourceNode(index, 'resource-explorer', center)
+            if (catalogEntry.id === 'aws-cloud-control') return createAwsResourceNode(index, 'cloud-control', center)
             // File and diff rows stay visible but disabled until their picker prerequisites exist.
             return null
           },

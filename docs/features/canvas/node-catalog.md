@@ -18,7 +18,10 @@ media, managers, automation, and tools. Rows that cannot be created in the curre
 visible and explain the exact missing capability and the next action. An editor or diff row, for
 example, waits for a project file picker instead of accepting an arbitrary path.
 
-The registry also carries explicit disabled blueprint rows for planned Photo, Gallery, Torrent,
+The registry carries active AWS Resource Explorer and Cloud Control manager rows. They open guided
+manager nodes with local AWS profile and region binding, generated-operation previews, explicit
+read, write, and destructive risk states, bounded results, and cancellation. The registry also
+carries explicit disabled blueprint rows for planned Photo, Gallery, Torrent,
 Linux VM, wild dim sum, Home Assistant control and sensor, Calendar, Timer, Alarm Clock, Planner,
 Multiverse, AWS Universe, AWS service, Cloudflare hosting, GitLab hosting, Nextcloud hosting, and
 Open WebUI hosting nodes. A planned row is never mistaken for an available feature. Remote terminal

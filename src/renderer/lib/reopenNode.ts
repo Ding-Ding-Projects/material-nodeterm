@@ -20,6 +20,7 @@ import {
   createTorrentNode,
   createCalendarNode,
   createTimerNode,
+  createAwsResourceNode,
   isAccountLoginNode
 } from '@renderer/state/workspace'
 import { absolutePosition, type FocusableNode } from './nodeFocus'
@@ -109,7 +110,7 @@ const COSMETIC_KEYS = [
 }
 
 const COSMETIC_KEYS = [
-  'title', 'titleAuto', 'color', 'group', 'tags', 'collapsed', 'expandedHeight', 'shell', 'agentModel'
+  'title', 'titleAuto', 'color', 'group', 'tags', 'collapsed', 'expandedHeight', 'shell', 'agentModel', 'awsManagerIntent'
 ] as const
 
 function withCosmetics(node: CanvasNode, data: NodeData): CanvasNode {
@@ -205,6 +206,11 @@ function buildBase(snapshot: ReopenNodeSnapshot, ctx: RecreateContext): CanvasNo
     }
     case 'torrent':
       return createTorrentNode(0)
+    case 'aws-resource': {
+      const intent = d.awsManagerIntent
+      const node = createAwsResourceNode(0, intent?.mode === 'cloud-control' ? 'cloud-control' : 'resource-explorer')
+      return { ...node, data: { ...node.data, awsManagerIntent: intent ?? node.data.awsManagerIntent } }
+    }
     case 'calendar':
       return createCalendarNode(0)
     case 'timer': {

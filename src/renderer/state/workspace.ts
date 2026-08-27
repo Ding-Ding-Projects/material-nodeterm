@@ -2148,9 +2148,10 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   homeassistant: true,
   freepbx: true,
   nsis: true,
-  shop: true
-  torrent: true
-  'linux-vm': true
+  shop: true,
+  torrent: true,
+  'linux-vm': true,
+  'aws-resource': true
 }
 
 /**
@@ -2195,9 +2196,10 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   homeassistant: SERVICE_SUMMARY_SIZE,
   freepbx: SERVICE_SUMMARY_SIZE,
   nsis: NSIS_SIZE,
-  shop: SHOP_SIZE
-  torrent: TORRENT_SIZE
-  'linux-vm': LINUX_VM_SIZE
+  shop: SHOP_SIZE,
+  torrent: TORRENT_SIZE,
+  'linux-vm': LINUX_VM_SIZE,
+  'aws-resource': AWS_RESOURCE_SIZE
 }
 
 /** A `Set`, not `type in NODE_KIND_TABLE`: `in` walks the prototype, so `'constructor'` and

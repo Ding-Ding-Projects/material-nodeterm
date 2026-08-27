@@ -417,6 +417,30 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
     availability: alwaysAvailable
   },
   {
+    id: 'aws-resource-explorer',
+    nodeKind: 'aws-resource',
+    category: 'managers',
+    label: 'AWS Resource Explorer',
+    description: 'Search AWS resources and inspect configured Resource Explorer views.',
+    keywords: ['aws', 'resource explorer', 'resources', 'search', 'views'],
+    documentationPath: 'docs/features/aws/resource-explorer.md',
+    safeDefaults: { mode: 'resource-explorer', regionIntent: 'us-east-1', resourceQuery: '*' },
+    dependencies: ['aws-cli-v2'],
+    availability: alwaysAvailable
+  },
+  {
+    id: 'aws-cloud-control',
+    nodeKind: 'aws-resource',
+    category: 'managers',
+    label: 'AWS Cloud Control',
+    description: 'List, inspect, create, update, and delete typed Cloud Control resources.',
+    keywords: ['aws', 'cloud control', 'cloudcontrol', 'resources', 'types'],
+    documentationPath: 'docs/features/aws/cloud-control.md',
+    safeDefaults: { mode: 'cloud-control', regionIntent: 'us-east-1', cloudControlTypeName: '' },
+    dependencies: ['aws-cli-v2'],
+    availability: alwaysAvailable
+  },
+  {
     id: 'editor',
     nodeKind: 'editor',
     category: 'files',
@@ -504,6 +528,8 @@ export const NODE_CATALOG_COMPLETENESS: readonly NodeCatalogCompletenessRecord[]
   { id: 'service:gitlab', state: 'current', scope: 'any', reason: 'service manager node' },
   { id: 'service:homeassistant', state: 'current', scope: 'any', reason: 'service manager node' },
   { id: 'service:freepbx', state: 'current', scope: 'any', reason: 'service manager node' },
+  { id: 'aws-resource-explorer', state: 'current', scope: 'any', reason: 'guided Resource Explorer manager' },
+  { id: 'aws-cloud-control', state: 'current', scope: 'any', reason: 'guided Cloud Control manager' },
   { id: 'subagent', state: 'ephemeral', scope: 'none', reason: 'hook-derived render-only card' },
   { id: 'loop-card', state: 'ephemeral', scope: 'none', reason: 'schedule-derived render-only card' },
   { id: 'photo', state: 'planned', scope: 'any', reason: 'photo adapter not implemented' },
