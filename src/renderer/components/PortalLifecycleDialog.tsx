@@ -8,6 +8,7 @@ import {
   type PortablePortalV3
 } from '../../core/portal-lifecycle'
 import {
+  decideUniverseDoorNavigation,
   verifyUniverseDoorEntry,
   type UniverseDoorEntrySubmission
 } from '../../core/universe-door-navigation'
@@ -102,6 +103,17 @@ export function PortalLifecycleDialog({
       setEntryPortal(null)
       return
     }
+    const pairedDecision = decideUniverseDoorNavigation(projection.doors ?? [], {
+      source: 'door',
+      fromCanvasId: currentCanvasId,
+      targetCanvasId: portal.childCanvasId,
+      doorId: portal.entryDoorId
+    })
+    if (!pairedDecision.allowed) {
+      setEntryError(pairedDecision.reason)
+      setEntryPortal(null)
+      return
+    }
     if (!door.entryPolicy) {
       setEntryError('This door has no entry policy configured on this computer.')
       setEntryPortal(null)
@@ -125,6 +137,16 @@ export function PortalLifecycleDialog({
         setEntryError(decision.reason)
         return
       }
+      const pairedDecision = decideUniverseDoorNavigation(projection.doors ?? [], {
+        source: 'door',
+        fromCanvasId: currentCanvasId,
+        targetCanvasId: entryPortal.childCanvasId,
+        doorId: entryPortal.entryDoorId
+      })
+      if (!pairedDecision.allowed) {
+        setEntryError(pairedDecision.reason)
+        return
+      }
       const verifyWithHost = onVerifyEntry ?? (async (doorId: string, value: UniverseDoorEntrySubmission): Promise<boolean> => {
         const result = await window.nodeTerminal.universeDoorEntry.verify({ doorId, method: value.method, value: value.value })
         return result.verified
@@ -136,7 +158,7 @@ export function PortalLifecycleDialog({
       }
       setEntryPortal(null)
       setEntryError(null)
-      onOpenCanvas(decision.targetCanvasId, decision.returnDoorId)
+      onOpenCanvas(pairedDecision.targetCanvasId, pairedDecision.matchingExitDoorId)
     } catch (error) {
       setEntryError(error instanceof Error ? error.message : 'The door entry could not be verified.')
     } finally {
