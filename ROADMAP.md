@@ -225,7 +225,11 @@ intentionally unchecked because this task publishes the plan only.
       collision-safe destination reservations, atomic publication, resumable progress, cancellation,
       partial outcomes, per-category regex builders, and completed-output editor handoff; this
       ultra-speed lane intentionally left tests, builds, runtime interaction, and captures unrun.
-- [ ] Add advanced media, archive-container, PDF-operation, and OCR pipelines.
+- [ ] Add advanced media, archive, PDF, OCR, and
+      structured-data pipelines. Issue #22 source implementation now provides packaged PDF,
+      supported image, local English OCR, bounded ZIP inventory, deterministic JSON, portable
+      unbound intent, queue progress, cancellation, retry, and recovery. The item remains unticked
+      until the required tests, built-artifact interaction, packaging, and capture evidence run.
 - [ ] Add the bundled WebTorrent downloader with resumable per-task lifecycle. The implementation
       lane now contains ESM-compatible local runtime loading, guided inspect-then-start intake,
       searchable metadata and seeding controls, progress controls, restart reconciliation,

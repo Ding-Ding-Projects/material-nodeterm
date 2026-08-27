@@ -9620,6 +9620,26 @@ button.term-node__title-text:focus-visible {
   color: var(--md-on-warning-container);
 }
 
+.md3-converter .cv-pipeline-intent {
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-md);
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+  padding: 12px;
+  font-family: var(--font-ui);
+}
+.md3-converter .cv-pipeline-intent p {
+  margin: 0 0 8px;
+}
+.md3-converter .cv-pipeline-intent p:first-child {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.md3-converter .cv-pipeline-intent p:last-child {
+  margin-bottom: 0;
+}
+
 .md3-converter .cv-destdir,
 .md3-converter .cv-preflight {
   color: var(--md-on-surface-variant);

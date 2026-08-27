@@ -132,6 +132,34 @@ security checks, accessibility checks, builds, packaging, installer execution, r
 or UI captures. The next integration owner must run the appropriate verification and obtain real
 built-artifact evidence before changing any roadmap or release claim to verified.
 
+## 2026-08-27, advanced file pipelines
+
+Issue #22 source implementation is on `feat/program-11-advanced-pipelines`. The existing converter
+catalog and persistent queue now expose packaged PDF inspection, text extraction, split-to-ZIP,
+merge-from-ZIP, first-page extraction, reverse ordering, all-page clockwise rotation, metadata
+removal, supported Sharp image conversions, local English OCR, bounded ZIP entry
+inventory, deterministic JSON key ordering, and the existing structured-data mesh. Audio, video,
+TAR, 7-Zip, DOCX, HEIC, and ICO remain visible with honest unavailable reasons when no stable
+packaged adapter exists.
+
+`src/core/converter/advanced-pipeline.ts` owns the 40-million-pixel image bound, 500-page PDF bound,
+2,048-entry and 512 MiB declared-expanded ZIP bounds, packaged OCR language path, output reopening,
+and no-extraction ZIP inventory. `src/shared/converter.ts` carries safe portable pipeline intent with
+explicit Configure, Rebind, Adopt, Deploy, Locate Asset, and Leave Unbound actions. It excludes
+paths, credentials, provider sessions, process and host identity, machine identifiers, caches, and
+generated output. Import is descriptive and side-effect free.
+
+The renderer reuses the existing Material Design 3 converter drawer, file/folder pickers,
+plain-text-first category searches with adjacent anchored regex builders, lossy acknowledgement,
+destination preflight, bounded queue progress, pause, cancel, retry, partial outcomes, atomic output,
+and notification path. It now explains portable intent before queueing.
+
+Documentation is in `docs/features/converter/advanced-pipelines.md`, the offline bundle, and
+`site/docs/advanced-file-pipelines.html`. The roadmap remains unticked. Under the explicit
+ultra-speed boundary, no tests, type checks, lint, builds, packaging, installer execution, runtime
+interaction, reviews, security or accessibility audits, or UI captures were run. Those verdicts and
+the packaged adapter presence remain unverified.
+
 ## 2026-08-26, desktop Material Design 3 and personal vocabulary reconciliation
 
 This source-only lane is on feat/full-app-material3-reconciliation at the current integration tip.
