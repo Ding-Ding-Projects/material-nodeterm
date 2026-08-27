@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Reconstruct the Codex relay daemon after a merge retained incompatible fragments from several
+  implementations. The daemon now keeps one descriptor-based process-lock inspection, one relay
+  root and server path, one quote-aware endpoint parser per request helper, one synchronous thread
+  reservation path, and one response-error rewrite. The existing stdin capability registration,
+  strict account validation, atomic rollout exposure, and native-thread outcome remain intact. A
+  single-file esbuild transform recorded syntax-only evidence. This ultra-speed repair ran no
+  tests, type checks, lint, reviews, audits, builds, packaging, runtime interaction, or screen
+  captures.
+
 - Repair WSL copy coverage for the validation phase. The catalogue now supplies ten English and
   Cantonese variants for `wsl.create.progress.validating`, with a factual level-one fallback and
   bilingual resolution. The coverage regression removes the first parsed inventory row using exact

@@ -1,5 +1,27 @@
 # Handoff
 
+## 2026-08-27, Codex relay daemon merge reconstruction
+
+`src/main/codex-relay-daemon.ts` retained incompatible fragments from several historical
+implementations. The repair removes the old path-based process-lock read and keeps the
+descriptor-based implementation from `68112546591f6fa9fe34b60ae46b60239109a7d9`, including the
+same-descriptor modification time used for incomplete-directory grace. It also removes the orphan
+function opener that nested `ensureCodexRelayRoot`, retaining the top-level root helper and single
+server function from `59be08f0df637533e7cf3d50af6e048639af7f02`.
+
+The hook request helpers now use only the shared quote-aware endpoint parser introduced by
+`11a30fc60d43267110165cd50b78af17d151be76`. The daemon keeps one exported endpoint-options helper,
+one synchronous thread-reservation primitive, and one response-error rewrite through
+`relayThreadResponseError`. The dotted node capability format, strict account predicate,
+stdin-based registration, atomic cross-account rollout publication, native outcome, and final
+command wrapper remain unchanged.
+
+The exact implementation file and direct records are `src/main/codex-relay-daemon.ts`,
+`CHANGELOG.md`, `ROADMAP.md`, and this handoff. A single-file esbuild transform returned
+`PARSE_OK` after the source edit. This is syntax-only evidence. No tests, type checks, lint,
+reviews, audits, builds, packaging, runtime interaction, or screen captures were run. The parent
+integration lane owns the combined pull request, release workflow, and final verification.
+
 ## 2026-08-27, WSL copy coverage repair
 
 The WSL copy coverage lane repaired two merge-recovery defects in the exact task-owned files.

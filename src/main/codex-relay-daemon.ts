@@ -372,12 +372,6 @@ export function acquireProcessLock(lock: string): boolean {
     }
   }
   if (attempt()) return true
-  let owner = 0
-  let directory = false
-  try {
-    directory = statSync(lock).isDirectory()
-    owner = Number(readFileSync(directory ? path.join(lock, 'owner') : lock, 'utf8').trim())
-  } catch {}
   // Read the lock's type, mtime and (legacy-file) owner from ONE descriptor, and the directory
   // owner file from ONE open+read — never a `statSync(path)` followed by a `readFileSync(path)` on
   // the same path (that check-then-use is a real fs race; here the fd IS the check-and-use, one
@@ -425,12 +419,6 @@ export function acquireProcessLock(lock: string): boolean {
   }
   if (directory && owner <= 0) {
     // A missing owner is the tiny post-mkdir/pre-write window of a live contender. Only reclaim it
-    // after it has remained incomplete long enough that the creator demonstrably died.
-    try {
-      if (Date.now() - statSync(lock).mtimeMs < 10_000) return false
-    } catch {
-      return false
-    }
     // after it has remained incomplete long enough that the creator demonstrably died. `lockMtimeMs`
     // came from the same `fstatSync` above — no extra stat, no new race.
     if (Date.now() - lockMtimeMs < 10_000) return false
@@ -504,7 +492,6 @@ export function relayControlPost(
   })
 }
 
-async function ensureServer(): Promise<State> {
 /**
  * Create the `~/.nodeterm` relay root, mode `0o700`, idempotently. `serve()` already makes it, but
  * that runs in the DETACHED daemon child — a caller reaching for the relay from the app process
@@ -701,7 +688,6 @@ function indexedName(socketPath: string, threadId?: string): string | undefined 
   }
 }
 
-function hookEndpointOptions(
 /**
  * Read + parse the local endpoint env file for `hookRequest`/`hookJsonRequest`. Values are
  * `posixQuote`d since #351, so this must go through the shared quote-aware parser — a naive
@@ -732,15 +718,6 @@ function hookRequest(
   return new Promise((resolve, reject) => {
     let env: Record<string, string>
     try {
-      env = Object.fromEntries(
-        readFileSync(route.hookEndpoint, 'utf8')
-          .split('\n')
-          .filter(Boolean)
-          .map((l) => {
-            const i = l.indexOf('=')
-            return i > 0 ? [l.slice(0, i), l.slice(i + 1)] : ['', '']
-          })
-      )
       env = readHookEndpointEnv(route.hookEndpoint)
     } catch (error) {
       reject(error)
@@ -779,15 +756,6 @@ function hookJsonRequest<T>(route: Route, pathname: string): Promise<T> {
   return new Promise((resolve, reject) => {
     let env: Record<string, string>
     try {
-      env = Object.fromEntries(
-        readFileSync(route.hookEndpoint, 'utf8')
-          .split('\n')
-          .filter(Boolean)
-          .map((line) => {
-            const separator = line.indexOf('=')
-            return separator > 0 ? [line.slice(0, separator), line.slice(separator + 1)] : ['', '']
-          })
-      )
       env = readHookEndpointEnv(route.hookEndpoint)
     } catch (error) {
       reject(error)
@@ -1315,10 +1283,6 @@ function serve(): void {
             // Global by thread id and synchronous before catalog/read awaits: neither another
             // account nor a native/foreign routing difference may open the rollout concurrently.
             if (
-              !requestId ||
-              !reservationKey ||
-              requestReservations.has(requestId) ||
-              reservations.has(reservationKey)
               !tryReserveRelayThread(
                 reservations,
                 requestReservations,
@@ -1340,8 +1304,6 @@ function serve(): void {
               }
               return
             }
-            reservations.set(reservationKey, reservationOwner)
-            requestReservations.set(requestId, reservationKey)
             try {
               let location: RelayThreadLocation
               try {
@@ -1476,14 +1438,6 @@ function serve(): void {
           }
           const observed = resolveRelayThreadResponse(pending, message)
           if (observed && !observed.ok) {
-            outbound = Buffer.from(
-              JSON.stringify({
-                id: message.id,
-                error: {
-                  code: -32004,
-                  message: 'Codex changed the conversation id during account switch'
-                }
-              })
             // Distinguish the silent-fork case (-32004) from a plain malformed-id response — see
             // relayThreadResponseError. Both used to be labelled "changed the conversation id".
             outbound = Buffer.from(
