@@ -7,6 +7,35 @@ import { DEFAULT_ACCENT, DEFAULT_SETTINGS, SETTINGS_SCHEMA_VERSION, type CanvasW
 import { DEFAULT_FUNNY_LEVEL, normalizeFunnyLevel, normalizeLanguageMode } from '../shared/i18n'
 import type { HistoryAction } from '../shared/local-history'
 import { mergeCanvasWidgetState } from './canvas-widget'
+const NAMED_PROFILE_ID = /^named:[^\u0000-\u001f\u007f]{1,159}$/u
+
+function normalizeNamedTerminalProfiles(value: unknown): Settings['namedTerminalProfiles'] {
+  if (!Array.isArray(value)) return []
+  const seen = new Set<string>()
+  const result: Settings['namedTerminalProfiles'] = []
+  for (const candidate of value) {
+    if (!candidate || typeof candidate !== 'object') continue
+    const record = candidate as Record<string, unknown>
+    const id = typeof record.id === 'string' && NAMED_PROFILE_ID.test(record.id) ? record.id : undefined
+    const name = typeof record.name === 'string' ? record.name.trim() : ''
+    const cwd = typeof record.cwd === 'string' ? record.cwd.trim() : ''
+    const startupCommand = typeof record.startupCommand === 'string' ? record.startupCommand : undefined
+    if (
+      !id ||
+      seen.has(id) ||
+      !name ||
+      name.length > 120 ||
+      !cwd ||
+      cwd.length > 4096 ||
+      startupCommand === undefined ||
+      startupCommand.length > 8192 ||
+      [...name, ...cwd, ...startupCommand].some((character) => character <= '\u001f' || character === '\u007f')
+    ) continue
+    seen.add(id)
+    result.push({ id, name, cwd, startupCommand })
+  }
+  return result
+}
 
 /** Merge partial and legacy settings while preserving nested user choices. */
 function mergeSettings(saved: Partial<Settings> | null | undefined): Settings {
@@ -34,6 +63,15 @@ function mergeSettings(saved: Partial<Settings> | null | undefined): Settings {
     merged.wheelZoom = true
     merged.canvasDragMode = 'pan'
   }
+  merged.namedTerminalProfiles = normalizeNamedTerminalProfiles(saved?.namedTerminalProfiles)
+  const defaultNamedProfileId = saved?.defaultNamedTerminalProfileId
+  merged.defaultNamedTerminalProfileId =
+    defaultNamedProfileId === null ||
+    (typeof defaultNamedProfileId === 'string' &&
+      defaultNamedProfileId.length <= 160 &&
+      !/[\u0000-\u001f\u007f]/u.test(defaultNamedProfileId))
+      ? defaultNamedProfileId
+      : null
   return merged
 }
 

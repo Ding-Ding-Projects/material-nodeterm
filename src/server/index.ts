@@ -60,6 +60,7 @@ import { makeLocalSetupRunner } from '../core/project-setup-runner-local'
 import { LogBuffer } from '../core/log-buffer'
 import { installLogSink } from '../core/log-sink'
 import { registerLogHandlers } from '../core/log-handlers'
+import { registerAgentStatusHandlers } from '../core/agent-status-handlers'
 import os from 'os'
 import { hookServer } from '../core/agents/hook-server'
 import { serverEditionControlHandler } from './control-unsupported'
@@ -95,6 +96,7 @@ import { createAckSweeper } from '../core/ack-sweep'
 import { createSessionReaper } from '../core/session-budget'
 import { startSessionMemoryService, sshScopePredicate } from '../core/session-memory-service'
 import { startWslService, defaultWslRuntime, fileWslOwnershipStore } from '../core/wsl'
+import { registerWindowsDiagnosticsIpc } from '../core/windows-diagnostics'
 import { startToyLockService } from '../core/toylocks/toylock-service'
 import { startAuthenticatorService } from '../core/toylocks/authenticator-service'
 import { startUniverseDoorEntryService } from '../core/universe-door-entry-service'
@@ -433,6 +435,9 @@ export async function startServer(
   // scripts → start the loopback hook server. The hook server binds its own port independent of
   // the main HTTP server below.
   initAgentStatusMirror()
+  registerAgentStatusHandlers(platform, {
+    accountIdForNode: (nodeId) => workspaceStore.getNode(nodeId)?.accountId
+  })
 
   // Keep every agent node's session name fresh in the mirror — including nodes no canvas has
   // mounted (the phone lists them all; see core/session-name-sweep.ts).
@@ -763,6 +768,7 @@ export async function startServer(
     runtime: defaultWslRuntime(),
     ownership: fileWslOwnershipStore(path.join(config.dataDir, 'wsl-owned-distributions.json'))
   })
+  registerWindowsDiagnosticsIpc()
 
   // Toy locks + the built-in authenticator (docs/toy-locks.md, docs/authenticator.md). No
   // headless/relay-specific behaviour — the plain core-bound service, same as src/main/index.ts.

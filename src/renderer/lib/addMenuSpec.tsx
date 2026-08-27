@@ -24,6 +24,7 @@ import {
   IconBranch,
   IconDino,
   IconEditor,
+  IconExplorer,
   IconGroup,
   IconNote,
   IconRemote,
@@ -45,6 +46,7 @@ export type AddItem =
   | { kind: 'browser' }
   | { kind: 'web' }
   | { kind: 'sticky' }
+  | { kind: 'files' } // requiresCwd
   | { kind: 'dino' }
   | { kind: 'open-file' }
   | { kind: 'new-file' } // requiresCwd
@@ -64,6 +66,7 @@ export const CONTENT_ADD_ITEMS: readonly AddItem[] = [
   { kind: 'browser' },
   { kind: 'web' },
   { kind: 'sticky' },
+  { kind: 'files' },
   { kind: 'dino' },
   { kind: 'open-file' },
   { kind: 'new-file' },
@@ -93,6 +96,7 @@ export interface AddHandlers {
   browser: (at?: AddPos) => void
   web: (at?: AddPos) => void
   sticky: (at?: AddPos) => void
+  files: (at?: AddPos) => void
   dino: (at?: AddPos) => void
   openFile: (at?: AddPos) => void
   newFile: (at?: AddPos) => void
@@ -140,6 +144,13 @@ export function contentAddItemsToMenuItems(
         break
       case 'sticky':
         out.push({ label: 'New sticky note', icon: <IconNote />, onClick: () => handlers.sticky(at) })
+        break
+      case 'files':
+        // Needs a directory to root itself in — hidden on a cwd-less canvas for the same reason
+        // "New file…" is: an affordance that can only report "there is no folder" is not one.
+        if (ctx.hasCwd) {
+          out.push({ label: 'New file manager', icon: <IconExplorer />, onClick: () => handlers.files(at) })
+        }
         break
       case 'dino':
         out.push({ label: 'New dino game', icon: <IconDino />, onClick: () => handlers.dino(at) })
@@ -215,6 +226,11 @@ export function contentAddItemsToDockRows(
         break
       case 'sticky':
         out.push({ kind: 'sticky', label: 'Sticky Note', icon: <IconNote />, onClick: () => handlers.sticky() })
+        break
+      case 'files':
+        if (ctx.hasCwd) {
+          out.push({ kind: 'files', label: 'File Manager', icon: <IconExplorer />, onClick: () => handlers.files() })
+        }
         break
       case 'dino':
         out.push({ kind: 'dino', label: 'Dino Game', icon: <IconDino />, onClick: () => handlers.dino() })

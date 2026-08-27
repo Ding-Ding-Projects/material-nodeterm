@@ -30,16 +30,21 @@ import type { ClientId, PeerDiff, PeerIdentity, PeerState } from '../shared/pres
 import type { ConvertQueueItem, ConverterQueueState } from '../shared/converter'
 import type { PullQueueItem, PullQueueState } from '../shared/ollama'
 import type { DockerHostAction, DockerHostJobProgress } from '../shared/docker-host-manager'
+import type { OpenWebUiApi, OpenWebUiIntent, OpenWebUiOperationInput, OpenWebUiJobProgress } from '../shared/open-webui-hosting'
 import type { GitLabHostingAction } from '../shared/gitlab-hosting'
 import type { NextcloudAioAction, NextcloudAioJobProgress } from '../shared/nextcloud-aio'
+import type { NextcloudManagedAction, NextcloudManagedBinding, NextcloudManagedProgress } from '../shared/nextcloud-managed'
 import type { MinecraftEvent } from '../shared/minecraft'
 import type { NodeDependencyAvailability, NodeDependencyProgress, NodeDependencyInstallResult } from '../shared/node-dependencies'
 import type { WslCreateProgress } from '../shared/wsl'
+import type { WindowsDiagnosticsApi } from '../shared/windows-diagnostics'
 import type { TorrentTaskState } from '../shared/torrent'
 import type { VirtualMachineEvent } from '../shared/virtual-machine'
 import type { CalendarProvider } from '../shared/calendar'
 import type { CloudflareProgress } from '../shared/cloudflare-core-managers'
+import type { TunnelFacet, TunnelLiveState } from '../shared/tunnel-state'
 import type { HomeAssistantClientEvent } from '../shared/home-assistant'
+import type { CloudflareTunnelProgress, CloudflareTunnelRouteInput, CloudflareDnsAdoptionInput } from '../shared/cloudflare-tunnels'
 import type { ProjectConsentRequest, ProjectSetupEvent } from '../shared/project-settings'
 import type { CdkDeployResult, CdkDiffResult, CdkOperationInput, CdkProjectInput, CdkSynthesisResult, CdkStatus, CdkTrustInput, CdkTrustReview } from '../shared/cdk'
 import type { CloudflareApi, CloudflareCatalog, CloudflareExecutionProgress, CloudflareExecutionResult } from '../shared/cloudflare-zero-trust'
@@ -84,6 +89,7 @@ const subscribePeerPendingCleared = subscribe<[{ id: string | null; pub?: string
 // New relay tunnel (Stage 4). Non-per-id host events reuse the fan-out helper; per-connection
 // client events (sas/approved/frame/closed) attach directly per connectionId.
 const subscribeConverterItem = subscribe<[ConvertQueueItem]>(IPC.converterItem)
+const subscribeCloudflareTunnelProgress = subscribe<[CloudflareTunnelProgress]>(IPC.cloudflareTunnelProgress)
 const subscribeConverterSummary = subscribe<
   [Pick<ConverterQueueState, 'running' | 'scanning' | 'concurrency' | 'total'>]
 >(IPC.converterSummary)
@@ -94,12 +100,14 @@ const subscribeOllamaPullSummary = subscribe<[Pick<PullQueueState, 'running' | '
 const subscribeOllamaChatStream = subscribe<
   [{ sessionId: string; kind: 'token' | 'done' | 'error' | 'stopped'; delta?: string; error?: string }]
 >(IPC.ollamaChatStream)
+const subscribeOpenWebUiProgress = subscribe<[OpenWebUiJobProgress]>(IPC.openWebUiProgress)
 const subscribeMinecraftEvent = subscribe<[MinecraftEvent]>(IPC.minecraftEvent)
 const subscribeNodeDependencyState = subscribe<[NodeDependencyAvailability]>(IPC.nodeDependencyState)
 const subscribeNodeDependencyProgress = subscribe<[NodeDependencyProgress]>(IPC.nodeDependencyProgress)
 const subscribeTorrentTask = subscribe<[TorrentTaskState]>(IPC.torrentTask)
 const subscribeVirtualMachineEvent = subscribe<[VirtualMachineEvent]>(IPC.virtualMachineEvent)
 const subscribeCloudflareCoreProgress = subscribe<[CloudflareProgress]>(IPC.cloudflareCoreProgress)
+const subscribeCloudflareTunnelState = subscribe<[TunnelLiveState & { nodeId: string }]>(IPC.cloudflareCoreTunnelStateChanged)
 const subscribeHomeAssistantEvent = subscribe<[HomeAssistantClientEvent]>(IPC.homeAssistantEvent)
 const subscribeCloudflareProgress = subscribe<[CloudflareExecutionProgress & { nodeId: string }]>(IPC.cloudflareProgress)
 const subscribeAwsResourceProgress = subscribe<[AwsManagerProgress]>(IPC.awsResourceProgress)
@@ -218,6 +226,16 @@ const api: NodeTerminalApi = {
     beginOAuth: (providerId: string) => ipcRenderer.invoke(IPC.providerBeginOAuth, providerId),
     completeOAuth: (callbackUrl: string) => ipcRenderer.invoke(IPC.providerCompleteOAuth, callbackUrl),
     removeAccount: (accountId: string) => ipcRenderer.invoke(IPC.providerRemoveAccount, accountId)
+  },
+  cloudflareTunnels: {
+    zones: (accountId: string) => ipcRenderer.invoke(IPC.cloudflareTunnelZones, accountId),
+    inventory: (accountId: string, zoneId?: string) => ipcRenderer.invoke(IPC.cloudflareTunnelInventory, accountId, zoneId),
+    planRoute: (input: CloudflareTunnelRouteInput) => ipcRenderer.invoke(IPC.cloudflareTunnelPlanRoute, input),
+    planDnsAdoption: (input: CloudflareDnsAdoptionInput) => ipcRenderer.invoke(IPC.cloudflareTunnelPlanDnsAdoption, input),
+    saveRoute: (input: CloudflareTunnelRouteInput) => ipcRenderer.invoke(IPC.cloudflareTunnelSaveRoute, input),
+    adoptDnsRecord: (input: CloudflareDnsAdoptionInput) => ipcRenderer.invoke(IPC.cloudflareTunnelAdoptDnsRecord, input),
+    cancel: (operationId: string) => ipcRenderer.send(IPC.cloudflareTunnelCancel, operationId),
+    onProgress: (listener: (progress: CloudflareTunnelProgress) => void) => subscribeCloudflareTunnelProgress(listener)
   },
   cloudflareZeroTrust: {
     catalog: () => ipcRenderer.invoke(IPC.cloudflareCatalog) as Promise<CloudflareCatalog>,
@@ -497,6 +515,10 @@ const api: NodeTerminalApi = {
       ipcRenderer.invoke(IPC.sshUploadFile, projectId, localPath, fileName),
     downloadFile: (projectId, remotePath, destDir) =>
       ipcRenderer.invoke(IPC.sshDownloadFile, projectId, remotePath, destDir),
+    forwardOAuthCallback: (projectId, port) =>
+      ipcRenderer.invoke(IPC.sshOAuthForward, projectId, port),
+    cancelOAuthCallback: (projectId, port) =>
+      ipcRenderer.invoke(IPC.sshOAuthForwardCancel, projectId, port),
     onStatus: (cb) => {
       const h = (_e: unknown, e: unknown) => cb(e as never)
       ipcRenderer.on(IPC.sshProjectStatus, h)
@@ -569,6 +591,7 @@ const api: NodeTerminalApi = {
     branchAt: (cwd, name, oid) => ipcRenderer.invoke(IPC.gitBranchAt, cwd, name, oid),
     checkoutCommit: (cwd, oid) => ipcRenderer.invoke(IPC.gitCheckoutCommit, cwd, oid),
     repoRoot: (cwd) => ipcRenderer.invoke(IPC.gitRepoRoot, cwd),
+    discoverNestedRepos: (cwd) => ipcRenderer.invoke(IPC.gitDiscoverNestedRepos, cwd),
     worktreeList: (repoPath) => ipcRenderer.invoke(IPC.gitWorktreeList, repoPath),
     worktreeAdd: (repoPath, wtPath, branch, baseRef, isNew) =>
       ipcRenderer.invoke(IPC.gitWorktreeAdd, repoPath, wtPath, branch, baseRef, isNew),
@@ -623,8 +646,8 @@ const api: NodeTerminalApi = {
     writeHtml: (html: string) => ipcRenderer.invoke(IPC.mediaWriteHtml, html)
   },
   browser: {
-    register: (webContentsId: number, nodeId: string, ownerNodeId?: string) =>
-      ipcRenderer.send(IPC.browserRegister, webContentsId, nodeId, ownerNodeId),
+    register: (webContentsId: number, nodeId: string, ownerNodeId?: string, surface?: 'canvas' | 'modal') =>
+      ipcRenderer.send(IPC.browserRegister, webContentsId, nodeId, ownerNodeId, surface),
     unregister: (webContentsId: number) => ipcRenderer.send(IPC.browserUnregister, webContentsId),
     onBrowserNewWindow: (listener) => {
       const handler = (_e: unknown, ev: { url: string; sourceNodeId: string }) => listener(ev)
@@ -635,7 +658,10 @@ const api: NodeTerminalApi = {
       list: (partition) => ipcRenderer.invoke(IPC.browserExtensionsList, partition),
       pickDir: () => ipcRenderer.invoke(IPC.browserExtensionsPickDir),
       add: (partition, dirPath) => ipcRenderer.invoke(IPC.browserExtensionsAdd, partition, dirPath),
-       remove: (partition, dirPath) => ipcRenderer.invoke(IPC.browserExtensionsRemove, partition, dirPath)
+      remove: (partition, dirPath) => ipcRenderer.invoke(IPC.browserExtensionsRemove, partition, dirPath)
+    },
+    profile: {
+      reset: (partition) => ipcRenderer.invoke(IPC.browserProfileReset, partition)
     },
     onLeaseChanged: (listener) => {
       const handler = (_e: unknown, push: Parameters<typeof listener>[0]) => listener(push)
@@ -742,6 +768,9 @@ const api: NodeTerminalApi = {
     wake: (name: string) => ipcRenderer.invoke(IPC.wslWake, name),
     delete: (name: string) => ipcRenderer.invoke(IPC.wslDelete, name)
   },
+  windowsDiagnostics: {
+    snapshot: () => ipcRenderer.invoke(IPC.windowsDiagnosticsSnapshot)
+  } satisfies WindowsDiagnosticsApi,
   vscode: {
     detect: () => ipcRenderer.invoke(IPC.vscodeDetect),
     open: (path: string) => ipcRenderer.invoke(IPC.vscodeOpen, path)
@@ -951,6 +980,16 @@ const api: NodeTerminalApi = {
         return () => ipcRenderer.removeListener(IPC.nextcloudAioProgress, handler)
       }
     },
+    nextcloudManaged: {
+      snapshots: (binding: NextcloudManagedBinding) => ipcRenderer.invoke(IPC.nextcloudManagedSnapshots, binding),
+      run: (action: NextcloudManagedAction) => ipcRenderer.invoke(IPC.nextcloudManagedRun, action),
+      cancel: (jobId: string) => ipcRenderer.send(IPC.nextcloudManagedCancel, jobId),
+      onProgress: (listener: (progress: NextcloudManagedProgress) => void) => {
+        const handler = (_event: unknown, progress: NextcloudManagedProgress) => listener(progress)
+        ipcRenderer.on(IPC.nextcloudManagedProgress, handler)
+        return () => ipcRenderer.removeListener(IPC.nextcloudManagedProgress, handler)
+      }
+    },
     start: (projectId?: string) => ipcRenderer.invoke(IPC.relayHostStart, projectId),
     invite: (opts?: { projectId?: string; email?: string }) =>
       ipcRenderer.invoke(IPC.relayHostInvite, opts ?? {}),
@@ -1139,6 +1178,7 @@ const api: NodeTerminalApi = {
     ipcRenderer.on(IPC.agentStatus, handler)
     return () => ipcRenderer.removeListener(IPC.agentStatus, handler)
   },
+  agentStatusSnapshot: () => ipcRenderer.invoke(IPC.agentStatusSnapshot),
   onSubagentActivity: (listener) => {
     const handler = (_e: unknown, payload: Parameters<typeof listener>[0]) => listener(payload)
     ipcRenderer.on(IPC.agentSubagentActivity, handler)
@@ -1218,6 +1258,14 @@ const api: NodeTerminalApi = {
     chatStop: (id) => ipcRenderer.invoke(IPC.ollamaChatStop, id),
     onChatStream: (listener) => subscribeOllamaChatStream(listener)
   },
+  openWebUi: {
+    contexts: () => ipcRenderer.invoke(IPC.openWebUiContexts),
+    state: (nodeId: string, intent: OpenWebUiIntent) => ipcRenderer.invoke(IPC.openWebUiState, nodeId, intent),
+    health: (nodeId: string, intent: OpenWebUiIntent) => ipcRenderer.invoke(IPC.openWebUiState, nodeId, intent),
+    run: (input: OpenWebUiOperationInput) => ipcRenderer.invoke(IPC.openWebUiRun, input),
+    cancel: (jobId: string) => ipcRenderer.send(IPC.openWebUiCancel, jobId),
+    onProgress: (listener) => subscribeOpenWebUiProgress(listener)
+  } satisfies OpenWebUiApi,
   cloudflareCoreManagers: {
     runtime: () => ipcRenderer.invoke(IPC.cloudflareCoreRuntime),
     credentials: () => ipcRenderer.invoke(IPC.cloudflareCoreCredentials),
@@ -1229,7 +1277,11 @@ const api: NodeTerminalApi = {
     preview: (nodeId, request) => ipcRenderer.invoke(IPC.cloudflareCorePreview, nodeId, request),
     execute: (nodeId, request) => ipcRenderer.invoke(IPC.cloudflareCoreExecute, nodeId, request),
     cancel: (operationId) => ipcRenderer.invoke(IPC.cloudflareCoreCancel, operationId),
-    onProgress: (listener) => subscribeCloudflareCoreProgress(listener)
+    onProgress: (listener) => subscribeCloudflareCoreProgress(listener),
+    tunnelState: (nodeId) => ipcRenderer.invoke(IPC.cloudflareCoreTunnelState, nodeId),
+    probeTunnelFacet: (nodeId, facet: TunnelFacet) => ipcRenderer.invoke(IPC.cloudflareCoreTunnelProbe, nodeId, facet),
+    cancelTunnelProbe: (nodeId) => ipcRenderer.invoke(IPC.cloudflareCoreTunnelCancel, nodeId),
+    onTunnelState: (listener) => subscribeCloudflareTunnelState(listener)
   },
   minecraft: {
     versions: () => ipcRenderer.invoke(IPC.minecraftVersions),

@@ -32,8 +32,11 @@ import {
   childArgs,
   scpArgs,
   scpDownArgs,
+  oauthForwardArgs,
+  oauthForwardCancelArgs,
   RMT_TMUX_SOCKET
 } from '../../core/remote-ssh/control-master'
+import { isRemoteOAuthPort, REMOTE_OAUTH_TTL_MS } from '../../shared/remote-oauth'
 import { claudeVersionProbeCommand, parseClaudeVersionProbe } from '../../core/remote-ssh/claude-version-probe'
 import { RemoteHooks } from './remote-hooks'
 import { hookServer } from '../../core/agents/hook-server'
@@ -373,6 +376,12 @@ interface Conn {
   remoteClaudeVersion?: string | null
 }
 
+interface OAuthForward {
+  port: number
+  expiresAt: number
+  timer: ReturnType<typeof setTimeout>
+}
+
 /**
  * Resolve an absolute ssh path; GUI apps don't inherit the shell PATH.
  * Mirrors findSsh() in pty-manager.ts: subprocess-free (the old sync login-shell probe + `-V`
@@ -411,6 +420,8 @@ function sshWordSeparators(r: Runners): string {
 export class SshProjectManager {
   private conns = new Map<string, Conn>()
   private remoteHooks: RemoteHooks
+  /** One temporary local callback forward per project. Callback URLs never enter this map. */
+  private oauthForwards = new Map<string, OAuthForward>()
   /** Projects whose agent-status mirror was actually pushed, gates the disconnect cleanup so a
    *  transient folder-picker browse (never pushed) doesn't pay an extra rm round-trip. */
   private statusPushed = new Set<string>()
@@ -1235,6 +1246,54 @@ export class SshProjectManager {
    */
   sshRun(args: string[], stdin?: string): Promise<{ code: number; stdout: string }> {
     return this.r.run(args, stdin)
+  }
+
+  /**
+   * Add a short-lived local SSH forward for a loopback OAuth callback emitted by a remote pane.
+   * The renderer passes only the detector's numeric port. The destination remains fixed at the
+   * remote host's loopback, and the manager replaces any older forward for this project.
+   */
+  async forwardOAuthCallback(
+    projectId: string,
+    port: number
+  ): Promise<{ ok: true; port: number; expiresAt: number } | { ok: false; error: string }> {
+    if (!isRemoteOAuthPort(port)) return { ok: false, error: 'The OAuth callback port is invalid.' }
+    const connection = this.conns.get(projectId)
+    if (!connection) return { ok: false, error: 'The SSH project is not connected.' }
+    const current = this.oauthForwards.get(projectId)
+    if (current?.port === port && current.expiresAt > Date.now()) {
+      return { ok: true, port, expiresAt: current.expiresAt }
+    }
+    if (current) await this.cancelOAuthCallback(projectId, current.port)
+    let result: { code: number }
+    try {
+      result = await this.r.run(oauthForwardArgs(connection.conn, connection.controlPath, port))
+    } catch {
+      return { ok: false, error: 'The SSH callback forward could not be created.' }
+    }
+    if (result.code !== 0) return { ok: false, error: 'The SSH callback forward was refused.' }
+    const expiresAt = Date.now() + REMOTE_OAUTH_TTL_MS
+    const timer = setTimeout(() => {
+      void this.cancelOAuthCallback(projectId, port)
+    }, REMOTE_OAUTH_TTL_MS)
+    timer.unref?.()
+    this.oauthForwards.set(projectId, { port, expiresAt, timer })
+    return { ok: true, port, expiresAt }
+  }
+
+  /** Cancel a project's exact OAuth forward, normally after consent or its bounded expiry. */
+  async cancelOAuthCallback(projectId: string, expectedPort?: number): Promise<boolean> {
+    const current = this.oauthForwards.get(projectId)
+    if (!current || (expectedPort !== undefined && current.port !== expectedPort)) return false
+    clearTimeout(current.timer)
+    this.oauthForwards.delete(projectId)
+    const connection = this.conns.get(projectId)
+    if (!connection) return false
+    try {
+      return (await this.r.run(oauthForwardCancelArgs(connection.conn, connection.controlPath, current.port))).code === 0
+    } catch {
+      return false
+    }
   }
 
   /**
@@ -2185,6 +2244,7 @@ export class SshProjectManager {
   async disconnect(projectId: string, opts?: { keepInFlight?: boolean; final?: boolean }): Promise<void> {
     const c = this.conns.get(projectId)
     if (!c) {
+      await this.cancelOAuthCallback(projectId)
       // No registered master, but an attempt may still be in flight for this id, inside
       // connectOnce's pre-registration probes. Dropping its coalescing entry is what cancels
       // it: connectOnce re-checks its ticket before registering the master. Returning without
@@ -2203,6 +2263,9 @@ export class SshProjectManager {
         .run(childArgs(c.conn, c.controlPath, `rm -f ${quoteRemotePath(f)} ${quoteRemotePath(`${f}.tmp`)}`))
         .catch(() => {})
     }
+    // Cancel the temporary OAuth forward while the ControlMaster is still alive. The callback URL
+    // itself never enters the manager; only this validated port is retained for teardown.
+    await this.cancelOAuthCallback(projectId)
     // Cancel the reverse hook tunnel (over the still-live master) BEFORE tearing the master down.
     await this.remoteHooks.teardown(projectId, c.conn, c.controlPath)
     void this.r.run(exitMasterArgs(c.conn, c.controlPath))
@@ -2242,6 +2305,8 @@ export class SshProjectManager {
    */
   disconnectAll(): void {
     this.stopWatchdog()
+    for (const forward of this.oauthForwards.values()) clearTimeout(forward.timer)
+    this.oauthForwards.clear()
     for (const projectId of [...this.conns.keys()]) {
       const c = this.conns.get(projectId)
       if (!c) continue
@@ -2540,6 +2605,12 @@ export function initSshProject(
   // arbitrary local write target for a remote payload.
   ipcMain.handle(IPC.sshDownloadFile, (_e, projectId: string, remotePath: string, destDir?: string) =>
     mgr.downloadFile(projectId, remotePath, destDir || app.getPath('downloads'))
+  )
+  ipcMain.handle(IPC.sshOAuthForward, (_e, projectId: string, port: number) =>
+    mgr.forwardOAuthCallback(projectId, port)
+  )
+  ipcMain.handle(IPC.sshOAuthForwardCancel, (_e, projectId: string, port?: number) =>
+    mgr.cancelOAuthCallback(projectId, port)
   )
   // A VideoNode in an SSH project plays a HOST file: pull it into the local media cache over the
   // ControlMaster, allowlist the cached copy, and hand back its nt-media:// URL.

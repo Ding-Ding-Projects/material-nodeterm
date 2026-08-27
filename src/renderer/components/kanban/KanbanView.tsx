@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { KanbanLabel, ProjectKanban } from '@shared/types'
+import type { NodeIcon } from '@shared/node-icon'
 import { AGENT_CONFIG, BUILTIN_AGENT_IDS, type AgentId } from '@shared/agents/config'
 import { useViewMode } from '../../state/viewMode'
 import { useProjects } from '../../state/projects'
@@ -86,6 +87,8 @@ export interface KanbanSession {
   /** Browser node session partition (kind 'browser' only) — threaded to the modal webview so it
    *  shares the canvas node's jar (`browser-partition-parity.test.tsx`). Absent = default session. */
   partition?: string
+  /** User-chosen terminal-session mark, shared with the canvas and sidebar. */
+  icon?: NodeIcon
   /** The subset of the node's `data` the card modal's co-attach terminal needs to spawn/join the
    *  same session (kind 'terminal' only; sticky passes `{}`). */
   spawn: ModalSpawn
@@ -139,6 +142,8 @@ export interface KanbanViewProps {
   onModalNodeChange: (nodeId: string | null) => void
   /** Persist a browser card's navigation (url/title) from the modal webview to the node. */
   onBrowserNav: (nodeId: string, patch: { url?: string; title?: string }) => void
+  /** Set or clear a terminal session icon. */
+  onSetIcon: (nodeId: string, icon: NodeIcon | undefined) => void
   /**
    * Begin the destructive profile-switch gate for a local terminal or agent card. The card menu's
    * exact screen anchor travels with the request so Canvas never reuses a stale menu position.
@@ -174,6 +179,7 @@ export const KanbanView = memo(function KanbanView({
   onDeleteNode,
   onModalNodeChange,
   onBrowserNav,
+  onSetIcon,
   onRestartNodeWithProfile,
   assessRestartNodeWithProfile,
   terminalProfileRestartPending
@@ -920,6 +926,7 @@ export const KanbanView = memo(function KanbanView({
           onRename={(t) => onRenameNode(modalNodeId, t)}
           onEditSticky={(t) => onEditSticky(modalNodeId, t)}
           onBrowserNav={(patch) => onBrowserNav(modalNodeId, patch)}
+          onSetIcon={(icon) => onSetIcon(modalNodeId, icon)}
           terminalProfile={modalTerminalProfile}
         />
       )}

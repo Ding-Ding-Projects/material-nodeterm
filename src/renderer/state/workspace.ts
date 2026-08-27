@@ -1,5 +1,5 @@
 import type { Node } from '@xyflow/react'
-import type { AgentLaunchIntent, BrowserTab, CanvasMutation, CanvasNodeState, ClaudeAccount, NodeKind, PendingLaunch, Project, ServiceNodeKind } from '@shared/types'
+import type { AgentLaunchIntent, BrowserTab, CanvasMutation, CanvasNodeState, ClaudeAccount, NamedTerminalProfile, NodeKind, PendingLaunch, Project, ServiceNodeKind } from '@shared/types'
 import { normalizeMediaReference, type MediaAssetReference } from '@shared/media-catalog'
 import { normalizePublicDimSumSelection, type PublicDimSumSelection } from '@shared/public-dim-sum'
 import type { CalendarNodeConfig } from '@shared/calendar'
@@ -10,8 +10,11 @@ import { DEFAULT_HOME_ASSISTANT_CONTROL_CONFIG, validateHomeAssistantControlConf
 import { DEFAULT_HOME_ASSISTANT_SENSOR_CONFIG, type HomeAssistantSensorConfig } from '@shared/home-assistant-sensor'
 import type { AlarmOccurrence, AlarmRecurrence } from '@shared/alarm-clock'
 import type { ServiceConnection } from '@shared/node-exec'
+import { OPEN_WEBUI_DEFAULT_INTENT, type OpenWebUiIntent, type OpenWebUiLocalBinding } from '@shared/open-webui-hosting'
 import { DEFAULT_GITLAB_HOSTING_CONFIG, type GitLabHostingConfig } from '@shared/gitlab-hosting'
 import { NEXTCLOUD_AIO_DEFAULT_CONFIG } from '@shared/nextcloud-aio'
+import { DEFAULT_NEXTCLOUD_MANAGED_INTENT, type NextcloudManagedBinding, type NextcloudManagedIntent } from '@shared/nextcloud-managed'
+import { GITHUB_WORK_ITEM_NODE_SIZE } from '@shared/github-work-items'
 import type { NsisLocalPaths, NsisSpec } from '@shared/nsis-form-types'
 import { defaultNsisLocalPaths, defaultNsisSpec } from '@shared/nsis-form-types'
 import type { AgentId, AgentPermissionMode, BuiltinAgentId } from '@shared/agents/config'
@@ -42,6 +45,8 @@ import type {
 import type { AgentId, AgentPermissionMode, BuiltinAgentId } from '@shared/agents/config'
 import { agentConfig, supportsSessionIdFlag } from '@shared/agents/config'
 import { assembleLaunchCommand } from '@shared/agents/launch'
+import { agentAccountColor } from '@shared/agents/account-color'
+import { boundAccountId } from '@shared/agents/account-binding'
 import { agentEnvSnapshot } from '../lib/agentEnv'
 import { uuid } from '@renderer/lib/uuid'
 import { claudeCliCapsNow } from './permissionMode'
@@ -50,22 +55,29 @@ import { isAgentEnabled, launchableDefaultAgent } from './agentAvailability'
 import { codexSharedIdentity } from './codexIdentity'
 import { sshHostKey } from '@shared/ssh'
 import { useSettings } from './settings'
+import { rotatedClaudeAccount } from '../lib/usageAccountRotation'
 import type { SessionSource } from '../session/session'
 import { supportsWindowsTerminalProfiles } from './terminal-profiles'
+import { namedTerminalProfileForId } from '../lib/named-terminal-profiles'
 import type { AnnotationRect, AnnotationVariant } from '../lib/annotation'
+import { ANNOTATION_DEFAULT_THICKNESS, normalizeAnnotationLabel, normalizeAnnotationThickness } from '@shared/annotation'
 import { newUniverseCreationEventId, shopNodeIdForCanvas } from '../../core/universe-shop'
 import { TORRENT_NODE_CATALOG_ENTRY } from '@shared/torrent'
 import { DEFAULT_VIRTUAL_MACHINE_CONFIG } from '@shared/virtual-machine'
 import { TIMER_DEFAULT_DURATION_MS, type TimerNodeData } from '@shared/timer'
 import { normalizeAwsIdentityIntent } from '@shared/aws-identity'
 import { createRecoveryGameSnapshot, normalizeRecoveryGameSnapshot, type RecoveryGameSnapshot } from '@shared/recovery-game'
+import type { PortableKioskPwaIntent } from '@shared/kiosk-pwa'
+import { normalizeNodeIcon } from '@shared/node-icon'
 import { CLOUDFLARE_DEFAULT_INTENT, type CloudflarePortableIntent } from '@shared/cloudflare-core-managers'
 import { AWS_MANAGER_DEFAULT_INTENT, type AwsManagerMode, type AwsManagerPortableIntent } from '@shared/aws-resource'
+import type { TunnelPortableIntent } from '@shared/tunnel-state'
 
 // Re-exported so Canvas (and anything else in the renderer) keeps importing it from here, while the
 // single implementation lives in src/shared and is shared with the relay host + the canvas-sync
 // reflector.
 export { applyCanvasMutation } from '@shared/canvas-mutations'
+export { accountNodeColor, agentAccountColor } from '@shared/agents/account-color'
 import { acceptNewInboundNode, sanitizeInboundNode } from '@shared/node-exec'
 import { newCreationEventId } from '@shared/node-catalog'
 
@@ -97,14 +109,17 @@ const GALLERY_SIZE = { width: 760, height: 520 }
 const WILD_DIM_SUM_SIZE = { width: 560, height: 560 }
 const WEB_SIZE = { width: 720, height: 520 }
 const BROWSER_SIZE = { width: 800, height: 560 }
+const FILES_SIZE = { width: 520, height: 460 }
 const NATIVE_LOOP_SIZE = { width: 340, height: 280 }
 const SHOP_SIZE = { width: 480, height: 420 }
 export const AWS_RESOURCE_SIZE = { width: 720, height: 580 }
 export const TORRENT_SIZE = { width: 620, height: 520 }
 export const CLOUDFLARE_CORE_MANAGERS_SIZE = { width: 760, height: 680 }
 const LINUX_VM_SIZE = { width: 760, height: 560 }
+const WINDOWS_DIAGNOSTICS_SIZE = { width: 760, height: 560 }
 const TIMER_SIZE = { width: 380, height: 360 }
 const ALARM_SIZE = { width: 380, height: 360 }
+const OPEN_WEBUI_SIZE = { width: 680, height: 560 }
 /** Fallback bounding box `flowToNodeStates` uses if an annotation node somehow has no live
  *  width/height at all (every production creation path draws a real rect — see createAnnotationNode
  *  — so this is a defensive floor, matching how every other kind gets a fallback in `sizeFor`). */
@@ -149,6 +164,8 @@ export interface NodeData {
   color: string
   group: string | null
   tags?: string[]
+  /** User-chosen terminal-session mark, validated before entering or leaving live state. */
+  icon?: import('@shared/node-icon').NodeIcon
   collapsed?: boolean
   /** Native persisted Loop node fields (type='scheduler'). */
   loopTask?: string
@@ -238,6 +255,8 @@ export interface NodeData {
   browserTabs?: BrowserTab[]
   /** Browser-only: which `browserTabs[].id` is currently shown. Undefined = the first tab. */
   browserActiveTabId?: string
+  /** Portable kiosk/PWA launch intent only. Host profiles and runtime lifecycle are local. */
+  kioskPwaIntent?: PortableKioskPwaIntent
   /**
    * browser-only: the Electron session partition for this <webview>. Set ONCE at creation for an
    * AGENT-opened node (`agentBrowserPartition`, `persist:nt-agent-browser-<projectId>`) and never
@@ -265,11 +284,17 @@ export interface NodeData {
   gitlabHostingConfig?: GitLabHostingConfig
   /** Nextcloud AIO safe deployment intent; live Docker bindings remain outside project data. */
   nextcloudAioConfig?: import('@shared/nextcloud-aio').NextcloudAioConfig
+  nextcloudManagedIntent?: NextcloudManagedIntent
+  nextcloudManagedBinding?: NextcloudManagedBinding
   /** Cloudflare manager safe intent; local credential and provider state never enters project data. */
   cloudflareCoreIntent?: CloudflarePortableIntent
+  /** Cloudflare Tunnel route intent; local observations and provider bindings stay outside project data. */
+  cloudflareTunnelIntent?: TunnelPortableIntent
   /** Access, Zero Trust, Workers, Pages, R2, D1 and Queues intent; account state stays local. */
   cloudflareZeroTrustIntent?: import('@shared/cloudflare-zero-trust').CloudflarePortableIntent
   homeAssistantIntent?: HomeAssistantNodeIntent
+  /** Safe Cloudflare Tunnel routing intent; provider and local runtime state stays machine-local. */
+  cloudflareTunnelIntent?: import('@shared/cloudflare-tunnel-handoff').CloudflareTunnelIntent
   /** Safe ownership metadata for a special-universe Shop node. */
   universeCanvasId?: string
   universeScope?: 'multiverse' | 'aws-universe'
@@ -283,6 +308,9 @@ export interface NodeData {
   /** service-kinds only, MACHINE-LOCAL: where this node reaches its service. Stripped from the
    *  shared document and from inbound peers; see shared/node-exec.ts. */
   serviceConnection?: ServiceConnection
+  /** Open WebUI safe provider/port intent is project-portable; the live binding stays local. */
+  openWebUiIntent?: OpenWebUiIntent
+  openWebUiLocalBinding?: OpenWebUiLocalBinding
   /** Safe torrent magnet intent shared with the canvas. */
   torrentMagnet?: string
   /** AWS Resource Explorer and Cloud Control safe portable intent. */
@@ -341,6 +369,10 @@ export interface NodeData {
   annotationVariant?: 'line' | 'arrow'
   /** annotation-only: which corner-to-corner diagonal of the node's box the line/arrow follows. */
   annotationDir?: 'tl-br' | 'tr-bl'
+  /** annotation-only: optional user-authored label rendered beside the stroke. */
+  annotationLabel?: string
+  /** annotation-only: bounded SVG stroke width in local px space. */
+  annotationThickness?: number
   [key: string]: unknown
 }
 
@@ -435,6 +467,8 @@ export interface TerminalNodeCreationOptions {
   sessionSource: SessionSource
   /** Explicit selection from a profile picker; omitted means snapshot the current default. */
   terminalProfileId?: string
+  /** Explicit user-owned named profile; omitted means the saved default named profile. */
+  namedTerminalProfileId?: string
 }
 
 /**
@@ -450,6 +484,16 @@ function terminalProfileForNewNode(
   return options?.terminalProfileId ?? useSettings.getState().settings.defaultTerminalProfileId
 }
 
+function namedTerminalProfileForNewNode(
+  ssh: Project['ssh'] | undefined,
+  options: TerminalNodeCreationOptions | undefined
+): NamedTerminalProfile | undefined {
+  if (ssh || options?.sessionSource !== 'local' || !supportsWindowsTerminalProfiles()) return undefined
+  const settings = useSettings.getState().settings
+  const id = options?.namedTerminalProfileId ?? settings.defaultNamedTerminalProfileId
+  return namedTerminalProfileForId(id, settings.namedTerminalProfiles)
+}
+
 export function createTerminalNode(
   index: number,
   cwd?: string,
@@ -460,6 +504,10 @@ export function createTerminalNode(
 ): CanvasNode {
   const size = terminalNodeSize()
   const terminalProfileId = terminalProfileForNewNode(ssh, options)
+  const namedProfile = namedTerminalProfileForNewNode(ssh, options)
+  const effectiveCwd = namedProfile?.cwd ?? (ssh ? ssh.remoteCwd : cwd)
+  const effectiveInitialCommand =
+    initialCommand ?? (namedProfile?.startupCommand || undefined)
   return {
     id: nextId('term'),
     type: 'terminal',
@@ -472,9 +520,10 @@ export function createTerminalNode(
       color: NODE_COLORS[index % NODE_COLORS.length],
       group: null,
       tags: [],
-      cwd: ssh ? ssh.remoteCwd : cwd,
-      initialCommand,
+      cwd: effectiveCwd,
+      initialCommand: effectiveInitialCommand,
       ...(terminalProfileId !== undefined ? { terminalProfileId } : {}),
+      ...(namedProfile ? { namedTerminalProfileId: namedProfile.id } : {}),
       accountLogin: false,
       ...(ssh ? { ssh: ssh.server, sshRemoteTmux: true } : {})
     }
@@ -783,7 +832,16 @@ export function resolveNewNodeAccount(
   if (explicit === null) return undefined
   const id = explicit ?? project?.defaultAccountId
   // A stale default (account since removed) must not stamp dead ids onto new nodes.
-  return id && accountsForProject(accounts, project).some((a) => a.id === id) ? id : undefined
+  const selected = id && accountsForProject(accounts, project).some((a) => a.id === id) ? id : undefined
+  // An explicit account pick is a pin and must never be moved by the rotation policy. Only the
+  // project default is eligible, and the policy is consulted synchronously from the latest
+  // usage-indicator snapshots so node creation remains a single atomic canvas update.
+  if (explicit !== undefined || !useSettings.getState().settings.claudeUsageRotationEnabled) {
+    return selected
+  }
+  const rawThreshold = Number(useSettings.getState().settings.claudeUsageRotationThreshold)
+  const threshold = Number.isFinite(rawThreshold) ? Math.max(1, Math.min(100, rawThreshold)) : 90
+  return rotatedClaudeAccount(selected, accounts, threshold)
 }
 
 /**
@@ -803,7 +861,14 @@ export function createAgentNode(
   launchPlanOrPermission?: ActiveAgentLaunchPlan | AgentPermissionMode,
   options?: TerminalNodeCreationOptions
 ): CanvasNode {
-  const { label, color, launchCmd } = resolveAgent(agentId)
+  const { label, color: agentColor, launchCmd } = resolveAgent(agentId)
+  const settings = useSettings.getState().settings
+  const bound = boundAccountId(accountId, agentId)
+  const color =
+    agentAccountColor(agentId, bound, {
+      claude: settings.claudeAccounts,
+      codex: settings.codexAccounts
+    }) ?? agentColor
   // A SHARED_IDENTITY_CAPABLE agent (codex) launches through its managed launcher when this
   // machine actually has one — otherwise the bare CLI, byte-identical to before. Asked through the
   // capability helper, never `agentId === 'codex'`; `codexSharedIdentity` folds in the SSH answer
@@ -849,7 +914,14 @@ export function createAgentNode(
    *  existing caller passes that ninth argument, so the model is the one that had to move. */
   model?: string
 ): CanvasNode {
-  const { label, color } = resolveAgent(agentId)
+  const { label, color: agentColor } = resolveAgent(agentId)
+  const settings = useSettings.getState().settings
+  const bound = boundAccountId(accountId, agentId)
+  const color =
+    agentAccountColor(agentId, bound, {
+      claude: settings.claudeAccounts,
+      codex: settings.codexAccounts
+    }) ?? agentColor
   // The launch-command override (this project's `.nodeterm/settings.json` first, then Settings →
   // Agents → Launch commands — see `agentLaunchOverride`) replaces the bare CLI in the assembled
   // command. Threaded into the shared assembler below as `launchCmdOverride` so fresh launch,
@@ -953,6 +1025,13 @@ export function createAgentNode(
   }
   const size = terminalNodeSize()
   const terminalProfileId = terminalProfileForNewNode(ssh, options)
+  const namedProfile = namedTerminalProfileForNewNode(ssh, options)
+  const effectiveCwd = namedProfile?.cwd ?? (ssh ? ssh.remoteCwd : cwd)
+  const effectiveInitialCommand = namedProfile?.startupCommand
+    ? initialCommand
+      ? `${namedProfile.startupCommand}\n${initialCommand}`
+      : namedProfile.startupCommand
+    : initialCommand
   return {
     id: nextId('term'),
     type: 'terminal',
@@ -968,7 +1047,7 @@ export function createAgentNode(
       group: null,
       tags: [],
       agentId,
-      ...(accountId && agentId === 'claude' ? { accountId } : {}),
+      ...(bound ? { accountId: bound } : {}),
       // Persisted alongside the node (unlike initialCommand, which is consumed on first open), so
       // a cold restore months later still knows which conversation this node owns.
       ...(mintedSessionId ? { agentSessionId: mintedSessionId } : {}),
@@ -978,17 +1057,18 @@ export function createAgentNode(
       // agent inheriting claude/codex is still its own agent; account binding stays with the
       // builtin the account picker offered it for. The Codex spawn side honours `data.accountId`
       // (resolveCodexSessionScope), the same field Claude uses.
-      ...(accountId && (agentId === 'claude' || agentId === 'codex') ? { accountId } : {}),
+      ...(bound ? { accountId: bound } : {}),
       // Persisted alongside the node (unlike initialCommand, which is consumed on first open), so
       // a cold restore months later still knows which conversation this node owns.
       ...(mintedSessionId ? { agentSessionId: mintedSessionId } : {}),
       // A model chosen at creation (Transfer-to-agent-with-model). Persisted so cold-restore and
       // later restarts keep it; `withAgentModel` re-applies it on relaunch. Only stamped when set.
       ...(model ? { agentModel: model } : {}),
-      cwd: ssh ? ssh.remoteCwd : cwd,
-      initialCommand,
+      cwd: effectiveCwd,
+      initialCommand: effectiveInitialCommand,
       agentLaunchIntent,
       ...(terminalProfileId !== undefined ? { terminalProfileId } : {}),
+      ...(namedProfile ? { namedTerminalProfileId: namedProfile.id } : {}),
       ...(ssh ? { ssh: ssh.server, sshRemoteTmux: true } : {})
     }
   }
@@ -1245,6 +1325,34 @@ export function createEditorNode(
   }
 }
 
+/** Creates a persisted directory-listing node rooted at `cwd`. */
+export function createFilesNode(
+  index: number,
+  cwd: string,
+  center?: { x: number; y: number },
+  sshFs?: boolean
+): CanvasNode {
+  return {
+    id: nextId('files'),
+    type: 'files',
+    position: placeAt(center, index, FILES_SIZE.width, FILES_SIZE.height),
+    width: FILES_SIZE.width,
+    height: FILES_SIZE.height,
+    style: { width: FILES_SIZE.width, height: FILES_SIZE.height },
+    data: {
+      title: folderTitleForNode(cwd),
+      color: '#6ac4dc',
+      group: null,
+      cwd,
+      ...(sshFs ? { sshFs: true } : {})
+    }
+  }
+}
+
+function folderTitleForNode(path: string): string {
+  return path.split('/').filter(Boolean).pop() ?? '/'
+}
+
 const VIDEO_EXTS = ['mp4', 'webm', 'mov', 'm4v', 'mkv', 'ogv', 'avi']
 
 /** True when a path looks like a playable video file (by extension). */
@@ -1369,8 +1477,32 @@ export function createBrowserNode(
       ...(url ? { url } : {}),
       ...(ownerNodeId ? { browserOwnerNodeId: ownerNodeId } : {}),
       ...(profileId ? { browserProfileId: profileId } : {}),
-      ...(temporary ? { temporary: true } : {})
+      ...(temporary ? { temporary: true } : {}),
       ...(partition ? { partition } : {})
+    }
+  }
+}
+
+/** Creates a browser-kind canvas node with a portable kiosk/PWA intent. Runtime profile state is
+ * deliberately not part of the project record and is created by KioskPwaNode on this host. */
+export function createKioskPwaNode(
+  index: number,
+  intent: PortableKioskPwaIntent,
+  center?: { x: number; y: number }
+): CanvasNode {
+  return {
+    id: nextId('kiosk-pwa'),
+    type: 'browser',
+    position: placeAt(center, index, BROWSER_SIZE.width, BROWSER_SIZE.height),
+    width: BROWSER_SIZE.width,
+    height: BROWSER_SIZE.height,
+    style: { width: BROWSER_SIZE.width, height: BROWSER_SIZE.height },
+    data: {
+      title: intent.displayName,
+      color: '#6ac4dc',
+      group: null,
+      kioskPwaIntent: intent,
+      url: intent.target.kind === 'url' ? intent.target.url : intent.target.startUrl
     }
   }
 }
@@ -1507,7 +1639,7 @@ export function createTimerNode(index: number, center?: { x: number; y: number }
 }
 
 /** Creates one guided AWS manager node; local profiles and provider state remain in core. */
-export function createAwsResourceNode(index: number, mode: AwsManagerMode = 'resource-explorer', center?: { x: number; y: number }, coreService?: import('@shared/aws-resource').AwsCoreServiceId): CanvasNode {
+export function createAwsResourceNode(index: number, mode: AwsManagerMode = 'resource-explorer', center?: { x: number; y: number }, coreService?: import('@shared/aws-resource').AwsCoreServiceId, platformService?: import('@shared/aws-resource').AwsPlatformServiceId): CanvasNode {
   return {
     id: nextId('aws-resource'),
     type: 'aws-resource',
@@ -1516,10 +1648,10 @@ export function createAwsResourceNode(index: number, mode: AwsManagerMode = 'res
     height: AWS_RESOURCE_SIZE.height,
     style: { width: AWS_RESOURCE_SIZE.width, height: AWS_RESOURCE_SIZE.height },
     data: {
-      title: mode === 'cloud-control' ? 'AWS Cloud Control' : mode === 'core-services' ? `${coreService?.toUpperCase() ?? 'AWS'} manager` : mode === 'cloudformation' ? 'AWS CloudFormation' : mode === 'cdk' ? 'AWS CDK' : 'AWS Resource Explorer',
+      title: mode === 'cloud-control' ? 'AWS Cloud Control' : mode === 'core-services' ? `${coreService?.toUpperCase() ?? 'AWS'} manager` : mode === 'cloudformation' ? 'AWS CloudFormation' : mode === 'cdk' ? 'AWS CDK' : mode === 'platform-managers' ? `${platformService?.toUpperCase() ?? 'AWS'} manager` : 'AWS Resource Explorer',
       color: '#ff9900',
       group: null,
-      awsManagerIntent: { ...AWS_MANAGER_DEFAULT_INTENT, mode, ...(coreService ? { coreService, coreOperation: import('@shared/aws-resource').AWS_CORE_OPERATIONS[coreService][0] } : {}) }
+      awsManagerIntent: { ...AWS_MANAGER_DEFAULT_INTENT, mode, ...(coreService ? { coreService, coreOperation: import('@shared/aws-resource').AWS_CORE_OPERATIONS[coreService][0] } : {}), ...(platformService ? { platformService, platformOperation: import('@shared/aws-resource').AWS_PLATFORM_OPERATIONS.find((item) => item.startsWith(`${platformService}-`)) } : {}) }
     }
   }
 }
@@ -1610,9 +1742,11 @@ export const SERVICE_NODE_LABELS: Record<ServiceNodeKind, string> = {
   gitlab: 'GitLab',
   homeassistant: 'Home Assistant',
   freepbx: 'FreePBX',
+  'cloudflare-tunnel': 'Cloudflare Tunnel',
   awsidentity: 'AWS identity',
   'cloudflare-zero-trust': 'Cloudflare managers',
-  'nextcloud-aio': 'Nextcloud AIO'
+  'nextcloud-aio': 'Nextcloud AIO',
+  'nextcloud-managed': 'Managed Nextcloud'
 }
 
 /**
@@ -1662,9 +1796,16 @@ export function createServiceNode(
         : {}),
       ...(kind === 'homeassistant' ? { homeAssistantIntent: { ...DEFAULT_HOME_ASSISTANT_NODE_INTENT } } : {}),
       ...(kind === 'cloudflare-zero-trust' ? { cloudflareZeroTrustIntent: { schemaVersion: 1, manager: null, operation: null, accountHint: null, resourceHint: null, values: {} } } : {}),
-      ...(kind === 'nextcloud-aio' ? { nextcloudAioConfig: { ...NEXTCLOUD_AIO_DEFAULT_CONFIG } } : {})
+      ...(kind === 'nextcloud-aio' ? { nextcloudAioConfig: { ...NEXTCLOUD_AIO_DEFAULT_CONFIG } } : {}),
+      ...(kind === 'nextcloud-managed' ? { nextcloudManagedIntent: { ...DEFAULT_NEXTCLOUD_MANAGED_INTENT } } : {})
     }
   }
+}
+
+/** Creates a safe, unconfigured GitHub issue or pull-request work-item node. */
+export function createGitHubWorkItemNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  const size = GITHUB_WORK_ITEM_NODE_SIZE
+  return { id: nextId('github-work-item'), type: 'github-work-item', position: placeAt(center, index, size.width, size.height), width: size.width, height: size.height, style: { width: size.width, height: size.height }, data: { title: 'GitHub work item', color: NODE_COLORS[(index + 2) % NODE_COLORS.length], group: null, githubWorkItem: { schemaVersion: 1, kind: 'issue', repository: '', number: 1, title: '', bodyMarkdown: '', state: 'unknown', author: null, labels: [], htmlUrl: '', sessionIds: [], refreshState: 'never' } } }
 }
 
 /** Creates a portable GitLab hosting blueprint. Deployment, context, volumes, and credentials
@@ -1706,6 +1847,24 @@ export function createCloudflareCoreManagersNode(index: number, center?: { x: nu
   }
 }
 
+/** Creates a guided Open WebUI hosting node. Only safe provider intent enters the project file. */
+export function createOpenWebUiNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  return {
+    id: nextId('open-webui-hosting'),
+    type: 'open-webui-hosting',
+    position: placeAt(center, index, OPEN_WEBUI_SIZE.width, OPEN_WEBUI_SIZE.height),
+    width: OPEN_WEBUI_SIZE.width,
+    height: OPEN_WEBUI_SIZE.height,
+    style: { width: OPEN_WEBUI_SIZE.width, height: OPEN_WEBUI_SIZE.height },
+    data: {
+      title: 'Open WebUI hosting',
+      color: '#6ac4dc',
+      group: null,
+      openWebUiIntent: { ...OPEN_WEBUI_DEFAULT_INTENT }
+    }
+  }
+}
+
 /** Creates a Linux ISO VM node. The node is a canvas object, not a WSL terminal profile. */
 export function createVirtualMachineNode(index: number, center?: { x: number; y: number }): CanvasNode {
   return {
@@ -1721,6 +1880,23 @@ export function createVirtualMachineNode(index: number, center?: { x: number; y:
       group: null,
       virtualMachineConfig: { ...DEFAULT_VIRTUAL_MACHINE_CONFIG },
       virtualMachineLocalPaths: {}
+    }
+  }
+}
+
+/** Creates a read-only host diagnostics node. Host state is queried live and never persisted. */
+export function createWindowsDiagnosticsNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  return {
+    id: nextId('windows-diagnostics'),
+    type: 'windows-diagnostics',
+    position: placeAt(center, index, WINDOWS_DIAGNOSTICS_SIZE.width, WINDOWS_DIAGNOSTICS_SIZE.height),
+    width: WINDOWS_DIAGNOSTICS_SIZE.width,
+    height: WINDOWS_DIAGNOSTICS_SIZE.height,
+    style: { width: WINDOWS_DIAGNOSTICS_SIZE.width, height: WINDOWS_DIAGNOSTICS_SIZE.height },
+    data: {
+      title: 'Windows diagnostics',
+      color: NODE_COLORS[0],
+      group: null
     }
   }
 }
@@ -1900,7 +2076,8 @@ export function createAnnotationNode(
       color: NODE_COLORS[index % NODE_COLORS.length],
       group: null,
       annotationVariant: variant,
-      annotationDir: rect.dir
+      annotationDir: rect.dir,
+      annotationThickness: ANNOTATION_DEFAULT_THICKNESS
     }
   }
 }
@@ -2310,6 +2487,7 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   video: true,
   web: true,
   browser: true,
+  files: true,
   subagent: true,
   loop: true,
   scheduler: true,
@@ -2325,6 +2503,7 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   freepbx: true,
   awsidentity: true,
   'nextcloud-aio': true,
+  'nextcloud-managed': true,
   'gitlab-hosting': true,
   'cloudflare-zero-trust': true,
   'cloudflare-core-managers': true,
@@ -2333,7 +2512,10 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   'aws-universe': true,
   'aws-resource': true,
   torrent: true,
-  'linux-vm': true
+  'linux-vm': true,
+  'open-webui-hosting': true,
+  'github-work-item': true,
+  'windows-diagnostics': true
 }
 
 /**
@@ -2366,6 +2548,7 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   video: VIDEO_SIZE,
   web: WEB_SIZE,
   browser: BROWSER_SIZE,
+  files: FILES_SIZE,
   // Ephemeral kinds are never persisted (they are derived from live hook events), so these are
   // defensive floors rather than values a project.json will ever carry.
   subagent: TERMINAL_SIZE,
@@ -2381,8 +2564,10 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   homeassistant: SERVICE_SUMMARY_SIZE,
   'homeassistant-sensor': HOME_ASSISTANT_SENSOR_SIZE,
   freepbx: SERVICE_SUMMARY_SIZE,
+  'cloudflare-tunnel': SERVICE_CONSOLE_SIZE,
   awsidentity: SERVICE_CONSOLE_SIZE,
   'nextcloud-aio': SERVICE_CONSOLE_SIZE,
+  'nextcloud-managed': SERVICE_CONSOLE_SIZE,
   'gitlab-hosting': { width: 700, height: 620 },
   'cloudflare-zero-trust': SERVICE_CONSOLE_SIZE,
   'cloudflare-core-managers': CLOUDFLARE_CORE_MANAGERS_SIZE,
@@ -2391,7 +2576,10 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   'aws-universe': { width: 320, height: 220 },
   'aws-resource': AWS_RESOURCE_SIZE,
   torrent: TORRENT_SIZE,
-  'linux-vm': LINUX_VM_SIZE
+  'linux-vm': LINUX_VM_SIZE,
+  'open-webui-hosting': OPEN_WEBUI_SIZE,
+  'github-work-item': GITHUB_WORK_ITEM_NODE_SIZE,
+  'windows-diagnostics': WINDOWS_DIAGNOSTICS_SIZE
 }
 
 /** A `Set`, not `type in NODE_KIND_TABLE`: `in` walks the prototype, so `'constructor'` and
@@ -2807,6 +2995,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         group: n.group,
         tags: n.tags,
         collapsed,
+        icon: normalizeNodeIcon(n.icon),
         hideFanout: n.hideFanout,
         expandedHeight: n.size.height,
         loopTask: n.loopTask,
@@ -2843,13 +3032,19 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         premaxRect: n.premaxRect,
         shell: n.shell,
         terminalProfileId: n.ssh ? undefined : n.terminalProfileId,
+        namedTerminalProfileId: n.ssh ? undefined : n.namedTerminalProfileId,
         cwd: n.cwd,
         text: n.text,
         serviceLabel: n.serviceLabel,
+        openWebUiIntent: n.openWebUiIntent,
+        openWebUiLocalBinding: n.openWebUiLocalBinding,
+        nextcloudManagedIntent: n.nextcloudManagedIntent,
+        nextcloudManagedBinding: n.nextcloudManagedBinding,
         awsIdentityIntent: normalizeAwsIdentityIntent(n.awsIdentityIntent) ?? undefined,
         gitlabHostingConfig: n.gitlabHostingConfig,
         nextcloudAioConfig: n.nextcloudAioConfig,
         homeAssistantIntent: n.homeAssistantIntent,
+        cloudflareTunnelIntent: n.cloudflareTunnelIntent,
         universeCanvasId: n.universeCanvasId,
         universeScope: n.universeScope,
         universeDepth: n.universeDepth,
@@ -2861,10 +3056,12 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         serviceConnection: n.serviceConnection,
         cloudflareZeroTrustIntent: n.cloudflareZeroTrustIntent,
         cloudflareCoreIntent: n.cloudflareCoreIntent,
+        cloudflareTunnelIntent: n.cloudflareTunnelIntent,
         nsisSpec: n.nsisSpec,
         nsisLocalPaths: n.nsisLocalPaths,
         virtualMachineConfig: n.virtualMachineConfig,
         virtualMachineLocalPaths: n.virtualMachineLocalPaths,
+        githubWorkItem: n.githubWorkItem,
         calendarConfig: n.calendarConfig,
         homeAssistantControlConfig: n.kind === 'homeassistant-control' ? validateHomeAssistantControlConfig(n.homeAssistantControlConfig) : undefined,
         homeAssistantSensorConfig: n.homeAssistantSensorConfig,
@@ -2879,6 +3076,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         browserProfileId: n.browserProfileId,
         browserTabs,
         browserActiveTabId,
+        kioskPwaIntent: n.kioskPwaIntent,
         partition: n.partition,
         diffStaged: n.diffStaged,
         commitOid: n.commitOid,
@@ -2899,7 +3097,13 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         sshFs: n.sshFs,
         worktree: n.worktree,
         annotationVariant: n.annotationVariant,
-        annotationDir: n.annotationDir
+        annotationDir: n.annotationDir,
+        ...(n.kind === 'annotation' && normalizeAnnotationLabel(n.annotationLabel) !== undefined
+          ? { annotationLabel: normalizeAnnotationLabel(n.annotationLabel) }
+          : {}),
+        ...(n.kind === 'annotation'
+          ? { annotationThickness: normalizeAnnotationThickness(n.annotationThickness) }
+          : {})
       }
     }
   })
@@ -2939,6 +3143,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         group: n.data.group,
         tags: n.data.tags,
         collapsed: n.data.collapsed,
+        icon: normalizeNodeIcon(n.data.icon),
         loopTask: n.data.loopTask,
         loopIntervalMs: n.data.loopIntervalMs,
         loopEnabled: n.data.loopEnabled,
@@ -2974,13 +3179,19 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         parentId: n.parentId,
         shell: n.data.shell,
         terminalProfileId: n.data.ssh ? undefined : n.data.terminalProfileId,
+        namedTerminalProfileId: n.data.ssh ? undefined : n.data.namedTerminalProfileId,
         cwd: n.data.cwd,
         text: n.data.text,
         serviceLabel: n.data.serviceLabel,
+        openWebUiIntent: n.data.openWebUiIntent,
+        openWebUiLocalBinding: n.data.openWebUiLocalBinding,
+        nextcloudManagedIntent: n.data.nextcloudManagedIntent,
+        nextcloudManagedBinding: n.data.nextcloudManagedBinding,
         awsIdentityIntent: normalizeAwsIdentityIntent(n.data.awsIdentityIntent) ?? undefined,
         gitlabHostingConfig: n.data.gitlabHostingConfig,
         nextcloudAioConfig: n.data.nextcloudAioConfig,
         homeAssistantIntent: n.data.homeAssistantIntent,
+        cloudflareTunnelIntent: n.data.cloudflareTunnelIntent,
         universeCanvasId: n.data.universeCanvasId,
         universeScope: n.data.universeScope,
         universeDepth: n.data.universeDepth,
@@ -2992,6 +3203,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         serviceConnection: n.data.serviceConnection,
         cloudflareZeroTrustIntent: n.data.cloudflareZeroTrustIntent,
         cloudflareCoreIntent: n.data.cloudflareCoreIntent,
+        cloudflareTunnelIntent: n.data.cloudflareTunnelIntent,
         nsisSpec: n.data.nsisSpec,
         nsisLocalPaths: n.data.nsisLocalPaths,
         // Media paths remain in the live node long enough for the machine-local index to retain
@@ -3003,6 +3215,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         wildDimSumDish: normalizePublicDimSumSelection(n.data.wildDimSumDish) ?? undefined,
         virtualMachineConfig: n.data.virtualMachineConfig,
         virtualMachineLocalPaths: n.data.virtualMachineLocalPaths,
+        githubWorkItem: n.data.githubWorkItem,
         calendarConfig: n.data.calendarConfig,
         homeAssistantControlConfig: kind === 'homeassistant-control' ? validateHomeAssistantControlConfig(n.data.homeAssistantControlConfig) : undefined,
         homeAssistantSensorConfig: n.data.homeAssistantSensorConfig,
@@ -3011,6 +3224,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         browserProfileId: n.data.browserProfileId,
         browserTabs: n.data.browserTabs,
         browserActiveTabId: n.data.browserActiveTabId,
+        kioskPwaIntent: n.data.kioskPwaIntent,
         textUpdatedAt: n.data.textUpdatedAt,
         textUpdatedBy: n.data.textUpdatedBy,
         fileMissing: n.data.fileMissing,
@@ -3035,6 +3249,12 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         worktree: n.data.worktree,
         annotationVariant: n.data.annotationVariant,
         annotationDir: n.data.annotationDir,
+        ...(kind === 'annotation' && normalizeAnnotationLabel(n.data.annotationLabel) !== undefined
+          ? { annotationLabel: normalizeAnnotationLabel(n.data.annotationLabel) }
+          : {}),
+        ...(kind === 'annotation'
+          ? { annotationThickness: normalizeAnnotationThickness(n.data.annotationThickness) }
+          : {}),
         premaxRect: n.data.premaxRect
       }
     })
@@ -3106,6 +3326,7 @@ export function applyMutationToFlow(
       ...incoming.data,
       shell: prev.data.shell,
       terminalProfileId: incoming.data.ssh ? undefined : prev.data.terminalProfileId,
+      namedTerminalProfileId: incoming.data.ssh ? undefined : prev.data.namedTerminalProfileId,
       // The peer's pending launch was stripped at ingress. Preserve the already-held local typed
       // intent exactly like the other machine-local exec fields, or a harmless peer drag would
       // silently disarm this station before its dependencies finish.

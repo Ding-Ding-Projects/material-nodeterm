@@ -107,19 +107,27 @@ import { annotationEndpoints } from '../lib/annotation'
 import { LazyEditorNode, LazyDiffNode } from '../nodes/lazyMonacoNodes'
 import { DinoNode } from '../nodes/DinoNode'
 import RecoveryGameNode from '../nodes/RecoveryGameNode'
-import { SERVICE_NODE_KINDS, type ServiceNodeKind, type ProjectArchiveContents } from '@shared/types'
+import {
+  SERVICE_NODE_KINDS,
+  type ServiceNodeKind,
+  type ProjectArchiveContents,
+  type GitNestedRepositoryDiscovery
+} from '@shared/types'
 import { VIRTUAL_MACHINE_NODE_CATALOG } from '@shared/virtual-machine'
 import type { ProjectIcon } from '@shared/project-icon'
 import type { PortableDoorConstructionV3 } from '@shared/door-construction'
 import BrowserNode from '../nodes/BrowserNode'
+import { FilesNode } from '../nodes/FilesNode'
 import { ServiceNode } from '../nodes/ServiceNode'
 import GitLabHostingNode from '../nodes/GitLabHostingNode'
 import CloudflareCoreManagersNode from '../nodes/CloudflareCoreManagersNode'
 import VirtualMachineNode from '../nodes/VirtualMachineNode'
 import NsisInstallerNode from '../nodes/NsisInstallerNode'
+import OpenWebUiHostingNode from '../nodes/OpenWebUiHostingNode'
 import ShopNode from '../nodes/ShopNode'
-import { AwsUniversePortalNode } from '../nodes/AwsUniversePortalNode'
 import TorrentNode from '../nodes/TorrentNode'
+import WindowsDiagnosticsNode from '../nodes/WindowsDiagnosticsNode'
+import { AwsUniversePortalNode } from '../nodes/AwsUniversePortalNode'
 import { normalizeAddress } from '../nodes/browserUrl'
 import VideoNode from '../nodes/VideoNode'
 import PhotoNode from '../nodes/PhotoNode'
@@ -127,6 +135,7 @@ import GalleryNode from '../nodes/GalleryNode'
 import WildDimSumNode from '../nodes/WildDimSumNode'
 import WebNode from '../nodes/WebNode'
 import AwsResourceNode from '../nodes/AwsResourceNode'
+import GitHubWorkItemNode from '../nodes/GitHubWorkItemNode'
 import { NativeLoopNode, setNativeLoopRunHandler } from '../nodes/NativeLoopNode'
 import TimerNode from '../nodes/TimerNode'
 import AlarmClockNode from '../nodes/AlarmClockNode'
@@ -165,6 +174,8 @@ import {
 } from '../lib/projectMenuActions'
 import { CommandPalette, type Command } from '../components/CommandPalette'
 import { NodeCatalogDialog } from '../components/NodeCatalogDialog'
+import { KioskPwaSetupDialog } from '../components/KioskPwaSetupDialog'
+import type { KioskPwaAppCandidate, PortableKioskPwaIntent } from '@shared/kiosk-pwa'
 import {
   NODE_CATALOG,
   nodeCatalogAvailability,
@@ -334,6 +345,10 @@ import { SpawnTeamDialog } from '../components/SpawnTeamDialog'
 import { conductorPrompt } from '../lib/spawnTeamPrompt'
 import { NotifyConsentDialog } from '../components/NotifyConsentDialog'
 import { SessionsSidebar } from '../components/SessionsSidebar'
+import { nodeIconDialog } from '../components/NodeIconPicker'
+import { applyIconChoice } from '../lib/nodeIconChoice'
+import type { NodeIcon } from '@shared/node-icon'
+import { MaterialSymbol } from '../components/MaterialSymbol'
 import type { SessionNodeInput } from '../lib/sessionList'
 import { liveProjectJumpTarget, projectJumpDigit } from '../lib/projectJump'
 import {
@@ -719,11 +734,13 @@ import {
   createAgentNode,
   createCanvasControlTerminalNode,
   createBrowserNode,
+  createKioskPwaNode,
   defaultBrowserTabs,
   createDinoNode,
   createRecoveryGameNode,
   createDiffNode,
   createEditorNode,
+  createFilesNode,
   createGroupNode,
   createNativeLoopNode,
   createTimerNode,
@@ -740,9 +757,11 @@ import {
   createTerminalNode,
   nodeSshFor,
   createServiceNode,
+  createOpenWebUiNode,
+  createVirtualMachineNode,
+  createWindowsDiagnosticsNode,
   createGitLabHostingNode,
   createCloudflareCoreManagersNode,
-  createVirtualMachineNode,
   SERVICE_NODE_LABELS,
   createVideoNode,
   createPhotoNode,
@@ -750,6 +769,7 @@ import {
   createWildDimSumNode,
   createWebNode,
   createAwsResourceNode,
+  createGitHubWorkItemNode,
   isVideoFile,
   duplicateNode,
   flowToNodeStates,
@@ -1122,6 +1142,7 @@ function toKanbanSession(n: CanvasNode): KanbanSession | null {
     color: (n.data.color as string) ?? NODE_COLORS[0],
     kind: 'terminal',
     agentId: n.data.agentId as string | undefined,
+    icon: n.data.icon as NodeIcon | undefined,
     // What the card modal's co-attach terminal needs to join THIS node's session the same way the
     // canvas TerminalNode does.
     spawn: {
@@ -1138,11 +1159,13 @@ const NO_KANBAN_SESSIONS: KanbanSession[] = []
  * this capability fact to snapshot Windows profiles only for local desktop sessions. */
 function terminalCreationOptionsFor(
   projectId: string | null | undefined,
-  terminalProfileId?: string
+  terminalProfileId?: string,
+  namedTerminalProfileId?: string
 ): TerminalNodeCreationOptions {
   return {
     sessionSource: sessionForProject(projectId ?? '').source,
-    ...(terminalProfileId ? { terminalProfileId } : {})
+    ...(terminalProfileId ? { terminalProfileId } : {}),
+    ...(namedTerminalProfileId ? { namedTerminalProfileId } : {})
   }
 }
 
@@ -1671,9 +1694,72 @@ export function Canvas() {
   const activeProjectName = useProjects(
     (s) => s.projects.find((p) => p.id === s.activeProjectId)?.name
   )
+  const activeProjectIsSsh = useProjects(
+    (s) => !!s.projects.find((p) => p.id === s.activeProjectId)?.ssh
+  )
+  const [nestedRepoDiscovery, setNestedRepoDiscovery] = useState<GitNestedRepositoryDiscovery | null>(null)
+  const refreshNestedRepoDiscovery = useCallback(() => {
+    if (!activeProjectCwd || activeProjectIsSsh) {
+      setNestedRepoDiscovery(null)
+      return
+    }
+    let cancelled = false
+    setNestedRepoDiscovery(null)
+    void (async () => {
+      let cursor: string | undefined
+      let pageCount = 0
+      let result: GitNestedRepositoryDiscovery | null = null
+      const repositories: GitNestedRepositoryDiscovery['repositories'] = []
+      do {
+        result = await api.git.discoverNestedRepos(activeProjectCwd, { cursor, limit: 64 })
+        repositories.push(...result.repositories)
+        cursor = result.ok ? result.nextCursor ?? undefined : undefined
+        pageCount += 1
+      } while (result.ok && cursor && pageCount < 8)
+      if (result && pageCount >= 8 && cursor) {
+        result = {
+          ...result,
+          limited: true,
+          nextCursor: cursor,
+          message: result.message ?? 'Nested repository discovery returned more pages than the UI can display.'
+        }
+      }
+      if (result) {
+        result = { ...result, repositories }
+      }
+      return result
+    })().then((result) => {
+      if (!cancelled && result) setNestedRepoDiscovery(result)
+    }).catch((error: unknown) => {
+      if (!cancelled) {
+        setNestedRepoDiscovery({
+          ok: false,
+          repositories: [],
+          scannedDirectories: 0,
+          limited: false,
+          nextCursor: null,
+          message: error instanceof Error ? error.message : 'Nested repositories could not be scanned.'
+        })
+      }
+    })
+    // The caller owns this one-shot scan. Cleanup only prevents a stale project result from
+    // replacing the current project's scopes after a fast project switch.
+    return () => {
+      cancelled = true
+    }
+  }, [activeProjectCwd, activeProjectIsSsh, api])
+  useEffect(() => {
+    if (!scOpen) return
+    const cleanup = refreshNestedRepoDiscovery()
+    return cleanup
+  }, [refreshNestedRepoDiscovery, scOpen])
   const scmScopeList = useMemo(
-    () => scmScopes({ cwd: activeProjectCwd, name: activeProjectName ?? 'repo' }, boundGroupList),
-    [activeProjectCwd, activeProjectName, boundGroupList]
+    () => scmScopes(
+      { cwd: activeProjectCwd, name: activeProjectName ?? 'repo' },
+      boundGroupList,
+      nestedRepoDiscovery?.repositories
+    ),
+    [activeProjectCwd, activeProjectName, boundGroupList, nestedRepoDiscovery]
   )
   // The group the selection points at (pure + tested in @shared/scm-scope). That group's scope is
   // what Source Control opens on (same selection source — `n.selected` — the context-menu/delete
@@ -2104,6 +2190,7 @@ export function Canvas() {
       video: withNodeBoundary(VideoNode),
       web: withNodeBoundary(WebNode),
       browser: withNodeBoundary(BrowserNode),
+      files: withNodeBoundary(FilesNode),
       // The service family. One component for all six: they differ in what they manage, not in how
       // they behave as canvas objects, and React Flow hands each its own `type` so the component can
       // tell them apart without six registrations of six near-identical files.
@@ -2117,14 +2204,18 @@ export function Canvas() {
       gitlab: withNodeBoundary(ServiceNode),
       homeassistant: withNodeBoundary(ServiceNode),
       freepbx: withNodeBoundary(ServiceNode),
+      'open-webui-hosting': withNodeBoundary(OpenWebUiHostingNode),
+      'cloudflare-tunnel': withNodeBoundary(ServiceNode),
       'linux-vm': withNodeBoundary(VirtualMachineNode),
+      'windows-diagnostics': withNodeBoundary(WindowsDiagnosticsNode)
       awsidentity: withNodeBoundary(ServiceNode),
       'gitlab-hosting': withNodeBoundary(GitLabHostingNode),
       'cloudflare-zero-trust': withNodeBoundary(ServiceNode),
       'nextcloud-aio': withNodeBoundary(ServiceNode),
+      'nextcloud-managed': withNodeBoundary(ServiceNode),
       'cloudflare-core-managers': withNodeBoundary(CloudflareCoreManagersNode),
-      'linux-vm': withNodeBoundary(VirtualMachineNode),
-      'aws-resource': withNodeBoundary(AwsResourceNode)
+      'aws-resource': withNodeBoundary(AwsResourceNode),
+      'github-work-item': withNodeBoundary(GitHubWorkItemNode)
     }),
     []
   )
@@ -2833,6 +2924,7 @@ export function Canvas() {
               kind: (n.type ?? 'terminal') as SessionNodeInput['kind'],
               title: n.data.title ?? n.id,
               color: n.data.color ?? '#888',
+              icon: n.data.icon as NodeIcon | undefined,
               agentId: n.data.agentId,
               cwd: n.data.cwd,
               ssh: n.data.ssh,
@@ -5238,13 +5330,19 @@ export function Canvas() {
       const d = (e as CustomEvent<{ path: string }>).detail
       if (d?.path) revealProjectFile(d.path)
     }
+    const onOpenTerminal = (e: Event): void => {
+      const d = (e as CustomEvent<{ cwd?: string }>).detail
+      if (d?.cwd) addTerminal(undefined, undefined, undefined, d.cwd)
+    }
     window.addEventListener('nodeterm:open-file', onOpen)
     window.addEventListener('nodeterm:reveal-file', onReveal)
+    window.addEventListener('nodeterm:open-terminal', onOpenTerminal)
     return () => {
       window.removeEventListener('nodeterm:open-file', onOpen)
       window.removeEventListener('nodeterm:reveal-file', onReveal)
+      window.removeEventListener('nodeterm:open-terminal', onOpenTerminal)
     }
-  }, [openFile, revealProjectFile])
+  }, [openFile, revealProjectFile, addTerminal])
 
   // Mic button on a terminal node's header (TerminalNode dispatches this — same
   // no-direct-line-to-canvas pattern as nodeterm:open-file above). Unlike toggleDictation's
@@ -5609,6 +5707,29 @@ export function Canvas() {
     [setNodes, markDirty, emptyNodePos]
   )
 
+  /** Add a directory-listing node rooted at the active project or bound group folder. */
+  const addFiles = useCallback(
+    (center?: { x: number; y: number }, groupId?: string) => {
+      const project = useProjects.getState().getProject(activeProjectId)
+      const cwd = cwdForNewNodeIn(groupId) ?? project?.ssh?.remoteCwd ?? project?.cwd
+      if (!cwd) {
+        setCopyError('This canvas has no folder yet — open one from the project tab first.')
+        return
+      }
+      setNodes((ns) => {
+        const node = createFilesNode(ns.length, cwd, center ?? emptyNodePos(), !!project?.ssh)
+        const appended = nodeCreationCoordinatorRef.current.appendNode(
+          ns,
+          groupId ? parentInto(node, groupId) : node
+        )
+        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        return appended.nodes
+      })
+      markDirty()
+    },
+    [setNodes, markDirty, activeProjectId, emptyNodePos, cwdForNewNodeIn, parentInto]
+  )
+
   /**
    * One catalog executor for the FAB, pane context menu, and command palette. The existing fast
    * paths remain available, but they all converge on the same typed factory table here when a
@@ -5621,7 +5742,7 @@ export function Canvas() {
       creationEventId: string,
       at?: { x: number; y: number },
       groupId?: string,
-      options?: { terminalProfileId?: string },
+      options?: { terminalProfileId?: string; namedTerminalProfileId?: string },
       universeContext?: Pick<
         NodeCatalogAvailabilityContext,
         'universeScope' | 'universeId' | 'universeDepth' | 'hasShopNode' | 'parentCanvasId'
@@ -5662,7 +5783,7 @@ export function Canvas() {
                 center,
                 undefined,
                 project?.ssh,
-                terminalCreationOptionsFor(activeProjectId, options?.terminalProfileId)
+                terminalCreationOptionsFor(activeProjectId, options?.terminalProfileId, options?.namedTerminalProfileId)
               )
             }
             if (catalogEntry.id.startsWith('agent:')) {
@@ -5688,14 +5809,16 @@ export function Canvas() {
                 ssh,
                 selectedAccount,
                 activeAgentLaunchPlan('canvas-new-agent', agentId),
-                terminalCreationOptionsFor(activeProjectId)
+                terminalCreationOptionsFor(activeProjectId, options?.terminalProfileId, options?.namedTerminalProfileId)
               )
             }
             if (catalogEntry.id === 'sticky') return createStickyNode(index, center)
             if (catalogEntry.id === 'group') return createGroupNode(center, undefined, index)
             if (catalogEntry.id === 'browser') return createBrowserNode(index, '', center)
+            if (catalogEntry.id === 'kiosk-session' || catalogEntry.id === 'pwa-session') return null
             if (catalogEntry.id === 'web') return createWebNode(index, { url: '' }, center)
             if (catalogEntry.id === 'authenticator') return createAuthenticatorNode(index, center)
+            if (catalogEntry.id === 'github-work-item') return createGitHubWorkItemNode(index, center)
             if (catalogEntry.id === 'dino') return createDinoNode(index, center)
             if (catalogEntry.id === 'recovery-game') return createRecoveryGameNode(index, center)
             if (catalogEntry.id === 'loop') return createNativeLoopNode(index, center)
@@ -5704,8 +5827,14 @@ export function Canvas() {
             if (catalogEntry.id === 'wild-dim-sum') return createWildDimSumNode(index, undefined, center)
             if (catalogEntry.id === 'homeassistant-control') return createHomeAssistantControlNode(index, center)
             if (catalogEntry.id === 'homeassistant-sensor') return createHomeAssistantSensorNode(index, center)
+            if (catalogEntry.id === 'open-webui-hosting') return createOpenWebUiNode(index, center)
+            if (catalogEntry.id.startsWith('service:')) {
+              return createServiceNode(catalogEntry.nodeKind as ServiceNodeKind, index, center)
+            }
+            if (catalogEntry.id === 'windows-diagnostics') return createWindowsDiagnosticsNode(index, center)
             if (catalogEntry.id === 'gitlab-hosting') return createGitLabHostingNode(index, center)
             if (catalogEntry.id === 'nextcloud-hosting') return createServiceNode('nextcloud-aio', index, center)
+            if (catalogEntry.id === 'nextcloud-managed-hosting') return createServiceNode('nextcloud-managed', index, center)
             if (catalogEntry.id.startsWith('service:')) {
               return createServiceNode(catalogEntry.nodeKind as ServiceNodeKind, index, center)
             }
@@ -5714,7 +5843,12 @@ export function Canvas() {
             if (catalogEntry.id === 'aws-cdk') return createAwsResourceNode(index, 'cdk', center)
             const awsCoreCatalogServices = { 'aws-s3': 's3', 'aws-ec2': 'ec2', 'aws-iam': 'iam', 'aws-sts': 'sts', 'aws-lambda': 'lambda', 'aws-cloudwatch': 'cloudwatch', 'aws-logs': 'logs' } as const
             if (catalogEntry.id in awsCoreCatalogServices) return createAwsResourceNode(index, 'core-services', center, awsCoreCatalogServices[catalogEntry.id as keyof typeof awsCoreCatalogServices])
+            const awsPlatformCatalogServices = { 'aws-ecr': 'ecr', 'aws-ecs': 'ecs', 'aws-eks': 'eks', 'aws-rds': 'rds', 'aws-databases': 'database', 'aws-vpc': 'vpc', 'aws-route53': 'route53', 'aws-cost': 'cost' } as const
+            if (catalogEntry.id in awsPlatformCatalogServices) return createAwsResourceNode(index, 'platform-managers', center, undefined, awsPlatformCatalogServices[catalogEntry.id as keyof typeof awsPlatformCatalogServices])
             if (catalogEntry.id === 'cloudflare-core-managers') return createCloudflareCoreManagersNode(index, center)
+            if (catalogEntry.id.startsWith('service:')) {
+              return createServiceNode(catalogEntry.nodeKind as ServiceNodeKind, index, center)
+            }
             // File and diff rows stay visible but disabled until their picker prerequisites exist.
             return null
           },
@@ -9308,6 +9442,29 @@ export function Canvas() {
     [setNodes, markDirty]
   )
 
+  /** One write funnel for the session icon across the canvas and board surfaces. */
+  const setNodeIcon = useCallback(
+    (nodeId: string, icon: NodeIcon | undefined): void => {
+      setNodes((ns) => ns.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, icon } } : n)))
+      markDirty()
+    },
+    [setNodes, markDirty]
+  )
+
+  /** The picker is single-session by design: an icon identifies one terminal at a glance. */
+  const pickNodeIcon = useCallback(
+    (nodeId: string): void => {
+      const node = nodesRef.current.find((n) => n.id === nodeId)
+      if (!node || node.type !== 'terminal') return
+      void nodeIconDialog({
+        nodeId,
+        title: (node.data.title as string) ?? '',
+        icon: node.data.icon as NodeIcon | undefined
+      }).then((choice) => applyIconChoice(choice, (icon) => setNodeIcon(nodeId, icon)))
+    },
+    [setNodeIcon]
+  )
+
   const alignToGrid = useCallback(
     (ids: string[]) => {
       const g = useSettings.getState().settings.gridSize || GRID
@@ -10364,6 +10521,19 @@ export function Canvas() {
         // `ids[0]` alone announced one node's colour as the group's, and the first drag then
         // moved every other node away from a value it was never on.
         : ([{ type: 'colors', value: seedColor(ids.map((nid) => nodesRef.current.find((n) => n.id === nid)?.data.color as string | undefined)), onPick: (c) => setNodesColor(ids, c) }] as MenuItem[])),
+      ...(ids.length === 1 &&
+      !isHidden('icon', hidden) &&
+      nodesRef.current.find((n) => n.id === ids[0])?.type === 'terminal'
+        ? ([
+            {
+              label: nodesRef.current.find((n) => n.id === ids[0])?.data.icon
+                ? 'Change icon…'
+                : 'Set icon…',
+              icon: <MaterialSymbol name="palette" size={18} />,
+              onClick: () => pickNodeIcon(ids[0])
+            }
+          ] as MenuItem[])
+        : []),
       { type: 'separator' },
       ...(isHidden('duplicate', hidden)
         ? []
@@ -10929,6 +11099,7 @@ export function Canvas() {
     setGroupPicker,
     removeFromGroup,
     setNodesColor,
+    pickNodeIcon,
     duplicateNodes,
     branchClaude,
     requestDeleteNodes,
@@ -11380,6 +11551,7 @@ export function Canvas() {
       browser: (at) => addBrowser(at),
       web: (at) => void addWebView(at),
       sticky: (at) => addSticky(at),
+      files: (at) => addFiles(at),
       dino: (at) => addDino(at),
       openFile: (at) => void openFileDialog(at),
       newFile: (at) => void newProjectFile(at),
@@ -11392,6 +11564,7 @@ export function Canvas() {
       addBrowser,
       addWebView,
       addSticky,
+      addFiles,
       addDino,
       openFileDialog,
       newProjectFile,
@@ -12507,32 +12680,50 @@ export function Canvas() {
           reply({ ok: false, error: 'source node is not a control-capable agent' })
           return
         }
-        // The SAME per-node lock every renderer-driven run that types into the target pane takes
-        // (restart, hibernate-exit, wake-resume, the confirmed `write`). Main serialises
-        // deliveries against each other; this lock serialises them against those runs — a
-        // delivery must never land inside a wake's un-submitted resume line.
-        let delivered: { ok: boolean; message?: string; result?: unknown; error?: string } | null =
-          null
-        const outcome = await guardConcurrentRestart(targetId, async () => {
-          delivered = await api.agentMessage.deliver({
-            verb,
-            sourceNodeId,
-            targetNodeId: targetId,
-            body: args.text ?? ''
-          })
-          return 'done' as const
-        })()
-        if (outcome === 'not-eligible') {
-          // The guard's own word for "that node is mid-restart/mid-wake": a retryable refusal in
-          // the same dialect main renders, so the caller learns the same way in both cases.
-          reply({
-            ok: false,
-            error:
-              'targetBusy: the target is mid-restart or mid-wake. Retryable — wait, then try once more.'
+        const deliverAgentMessage = async (): Promise<void> => {
+          let delivered: { ok: boolean; message?: string; result?: unknown; error?: string } | null =
+            null
+          const outcome = await guardConcurrentRestart(targetId, async () => {
+            delivered = await api.agentMessage.deliver({
+              verb,
+              sourceNodeId,
+              targetNodeId: targetId,
+              body: args.text ?? ''
+            })
+            return 'done' as const
+          })()
+          if (outcome === 'not-eligible') {
+            reply({
+              ok: false,
+              error:
+                'targetBusy: the target is mid-restart or mid-wake. Retryable — wait, then try once more.'
+            })
+            return
+          }
+          reply(delivered ?? { ok: false, error: 'delivery produced no reply' })
+        }
+        // The global setting is an explicit opt-in for the confirmation-free route. `notify` is
+        // app-owned text and remains non-blocking; send/reply still require the ordinary dialog
+        // unless the user enabled seamless messaging. The project capability and main-side
+        // delivery gates remain in force in either route.
+        if (verb !== 'notify' && !useSettings.getState().settings.agentSeamlessWrites) {
+          if (confirmBusy()) {
+            reply({ ok: false, error: 'a confirmation is already pending — try again' })
+            return
+          }
+          setConfirm({
+            message: `Agent "${srcTitle}" wants to send to ${targetId}:\n\n${args.text ?? ''}`,
+            confirmLabel: 'Send',
+            requestedBy: srcTitle,
+            onConfirm: async () => {
+              setConfirm(null)
+              await deliverAgentMessage()
+            },
+            onCancel: () => reply({ ok: false, error: 'denied by user' })
           })
           return
         }
-        reply(delivered ?? { ok: false, error: 'delivery produced no reply' })
+        await deliverAgentMessage()
         return
       }
 
@@ -13784,14 +13975,6 @@ export function Canvas() {
               reply({ ok: false, error: 'open-browser requires a valid http(s) --url' })
               return
             }
-            const id = addAndConnect(
-              createBrowserNode(nodesRef.current.length, browserUrl, placeBelow(), sourceNodeId)
-            )
-            reply({
-              ok: true,
-              message: `opened browser ${id}`,
-              result: { id }
-            })
             // An agent-opened browser gets its OWN per-project session jar — never the default
             // session the user's own browsing lives in (Probe A: a partition-less <webview> shares
             // session.defaultSession). The project id becomes a persisted storage key, so it must
@@ -13802,7 +13985,9 @@ export function Canvas() {
               reply({ ok: false, error: "open-browser: this project's id cannot be used as a browser session key" })
               return
             }
-            const id = addAndConnect(createBrowserNode(nodesRef.current.length, browserUrl, placeBelow(), partition))
+            const id = addAndConnect(
+              createBrowserNode(nodesRef.current.length, browserUrl, placeBelow(), sourceNodeId, undefined, false, partition)
+            )
             // Return the project id + partition so main can record ownership in its in-memory
             // ledger (browser-control-ledger.ts). Main gates the claim on its OWN `verified` verdict
             // and keys it to the verified caller — these fields are descriptive (release-by-project,
@@ -15281,9 +15466,9 @@ export function Canvas() {
       const t = (s ?? '').replace(/\s+/g, ' ').trim()
       return t.length <= max ? t : `${t.slice(0, max - 1)}…`
     }
-    return api.onAgentStatus((e: NormalizedAgentEvent) => {
+    const unsubscribe = api.onAgentStatus((e: NormalizedAgentEvent) => {
       const cs = useAgentStatus.getState()
-      if (e.sessionId) cs.setSessionId(e.nodeId, e.sessionId)
+      if (e.sessionId && e.kind !== 'session') cs.setSessionId(e.nodeId, e.sessionId)
       const agentLabel = agentConfig(e.agentId)?.label ?? 'Agent'
       // "<folder> — Claude finished" + last assistant message as the body.
       const alert = (statusText: string, fallbackBody: string, sound: 'done' | 'needsYou') => {
@@ -15426,7 +15611,7 @@ export function Canvas() {
         case 'session':
           if (e.sessionTitle) cs.setSession(e.nodeId, e.sessionTitle)
           if (e.sessionPhase === 'start') {
-            cs.setState(e.nodeId, undefined, e.agentId)
+            cs.setSessionBoundary(e.nodeId, 'start', e.agentId, e.sessionId)
             // A SessionStart is proof a CLI just LAUNCHED in that pane, so a hibernated flag on
             // this node is now false — our own `/exit` produces a SessionEnd, never a
             // SessionStart. This is the residual `setState`'s live-state self-heal cannot reach:
@@ -15438,7 +15623,7 @@ export function Canvas() {
             cs.setHibernated(e.nodeId, false)
           }
           if (e.sessionPhase === 'end') {
-            cs.setState(e.nodeId, undefined, e.agentId)
+            cs.setSessionBoundary(e.nodeId, 'end', e.agentId, e.sessionId)
             // In-session /loop dies with its session; cron (and scheduled cloud routines)
             // keep running after it — their cards stay until CronDelete / manual dismiss.
             const kind = cs.byId[e.nodeId]?.loop?.kind
@@ -15455,6 +15640,20 @@ export function Canvas() {
         void flushMailbox(e.nodeId)
       }
     })
+    // Subscribe before requesting the snapshot so a live hook arriving during the request wins.
+    let cancelled = false
+    void api
+      .agentStatusSnapshot()
+      .then((snapshot) => {
+        if (!cancelled) useAgentStatus.getState().hydrateSnapshot(snapshot)
+      })
+      .catch(() => {
+        // Best-effort continuity: an older or disconnected host leaves this run's Unknown state.
+      })
+    return () => {
+      cancelled = true
+      unsubscribe()
+    }
   }, [api, flushMailbox])
 
   // Safety net for a lost Stop POST / crashed CLI: decay working entries that saw no hook
@@ -15908,6 +16107,14 @@ export function Canvas() {
     candidates: PortableMediaCandidate[]
     resolve: (plan: PortableMediaExportPlan | null) => void
   } | null>(null)
+  const [kioskPwaDialog, setKioskPwaDialog] = useState<{
+    at?: { x: number; y: number }
+    groupId?: string
+    mode: 'kiosk' | 'pwa'
+  } | null>(null)
+  // Installed app discovery is host-owned. Until that inventory is provided, the PWA picker
+  // remains honestly empty instead of inventing app choices.
+  const kioskPwaApps: readonly KioskPwaAppCandidate[] = []
   const [portalLifecycleOpen, setPortalLifecycleOpen] = useState(false)
   const choosePortableMedia = useCallback(async (project: Project): Promise<PortableMediaExportPlan | null> => {
     const selected = await window.nodeTerminal.dialog.selectFiles()
@@ -16486,6 +16693,9 @@ export function Canvas() {
             icon: <IconNote />,
             run: () => addSticky()
           },
+          ...(newFileHasCwd
+            ? [{ id: 'new-files', label: 'New file manager', icon: <IconExplorer />, run: () => addFiles() }]
+            : []),
           { id: 'new-gallery', label: 'New media gallery', icon: <IconEditor />, run: () => addGallery() },
           {
             id: 'new-loop',
@@ -16933,6 +17143,7 @@ export function Canvas() {
     addDino,
     addWebView,
     addBrowser,
+    addFiles,
     openFileDialog,
     openWorktreeDialog,
     isSshProject,
@@ -17296,6 +17507,7 @@ export function Canvas() {
           onDeleteNode={deleteNodeFromKanban}
           onModalNodeChange={setKanbanModalNode}
           onBrowserNav={browserNavFromKanban}
+          onSetIcon={setNodeIcon}
           onRestartNodeWithProfile={(nodeId, profile, anchor) =>
             requestRestartWithTerminalProfile(nodeId, profile.id, profile.label, anchor)
           }
@@ -18072,9 +18284,19 @@ export function Canvas() {
             hasShopNode: false
           }}
           terminalProfileChoices={terminalProfileMenuChoices}
-          onCreate={(entry, creationEventId, options) =>
+          namedTerminalProfiles={offersTerminalProfiles ? settings.namedTerminalProfiles : []}
+          onCreate={(entry, creationEventId, options) => {
+            if (entry.id === 'kiosk-session' || entry.id === 'pwa-session') {
+              setNodeCatalog(null)
+              setKioskPwaDialog({
+                at: nodeCatalog.at,
+                groupId: nodeCatalog.groupId,
+                mode: entry.id === 'pwa-session' ? 'pwa' : 'kiosk'
+              })
+              return
+            }
             createCatalogNode(entry, creationEventId, nodeCatalog.at, nodeCatalog.groupId, options)
-          }
+          }}
           onOpenDocumentation={(path) => {
             setNodeCatalog(null)
             setDocsInitialPath(path)
@@ -18082,7 +18304,26 @@ export function Canvas() {
           }}
         />
       )}
-
+      {kioskPwaDialog && (
+        <KioskPwaSetupDialog
+          open
+          apps={kioskPwaApps}
+          initialMode={kioskPwaDialog.mode}
+          onClose={() => setKioskPwaDialog(null)}
+          onSubmit={(intent: PortableKioskPwaIntent) => {
+            const setup = kioskPwaDialog
+            setKioskPwaDialog(null)
+            setNodes((existing) => {
+              const node = createKioskPwaNode(existing.length, intent, setup.at ?? emptyNodePos())
+              const candidate = setup.groupId ? parentInto(node, setup.groupId) : node
+              const appended = nodeCreationCoordinatorRef.current.appendNode(existing, candidate)
+              if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+              return appended.nodes
+            })
+            markDirty()
+          }}
+        />
+      )}
       {portalLifecycleOpen && portalProjection && activeProject && (
         <PortalLifecycleDialog
           open
@@ -18206,6 +18447,8 @@ export function Canvas() {
           onExplainCommit={explainCommit}
           scopes={scmScopeList}
           defaultScope={defaultScmScope(scmScopeList, selectedGroupIdForScm)}
+          nestedRepoDiscovery={nestedRepoDiscovery}
+          onRefreshNestedRepos={refreshNestedRepoDiscovery}
           onNewWorktree={() => openWorktreeDialog(null)}
         />
       )}
@@ -18613,6 +18856,7 @@ export function Canvas() {
         onAddSticky={addSticky}
         onSpawnTeam={() => setSpawnTeamDialog({})}
         onAddDino={addDino}
+        onAddFiles={() => addFiles()}
         onAddAgent={(aid, accountId) => addAgentNode(aid, undefined, undefined, accountId)}
         onOpenFile={() => void openFileDialog()}
         onAddRemote={() => openRemotePicker({ x: window.innerWidth / 2, y: window.innerHeight / 2 })}

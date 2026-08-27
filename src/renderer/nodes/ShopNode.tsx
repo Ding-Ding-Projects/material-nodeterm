@@ -20,6 +20,13 @@ import { Button } from '../ui/Button'
 import { AwsOperationWizard } from '../components/aws/AwsOperationWizard'
 import { buildAwsWizardDefinition, type AwsWizardModelSource } from '@shared/aws-wizard'
 import type { AwsWizardCommandOption, AwsWizardServiceOption } from '@shared/aws-wizard'
+import type { AwsManagerRequest, AwsManagerResult, AwsOperationPreview, AwsManagerProgress } from '@shared/aws-resource'
+import { useActiveSessionApi } from '../session/session'
+import { openDestructiveGate } from '../state/destructiveGate'
+
+function newOperationId(): string {
+  return globalThis.crypto?.randomUUID?.() ?? `aws-operation-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+}
 
 /**
  * The permanent catalog surface owned by a Multiverse or AWS Universe child canvas.
@@ -31,6 +38,7 @@ import type { AwsWizardCommandOption, AwsWizardServiceOption } from '@shared/aws
  */
 export function ShopNode({ id, data, selected }: NodeProps<CanvasNode>): React.JSX.Element {
   const { updateNodeData } = useReactFlow()
+  const api = useActiveSessionApi()
   const ts = useLocalizedVocabularyText()
   const search = useRegexSearchField({ mode: 'text' })
   const inputRef = useRef<HTMLInputElement>(null)
@@ -46,6 +54,11 @@ export function ShopNode({ id, data, selected }: NodeProps<CanvasNode>): React.J
   const [wizardServiceId, setWizardServiceId] = useState('')
   const [wizardCommandName, setWizardCommandName] = useState('')
   const [wizardSource, setWizardSource] = useState<AwsWizardModelSource | undefined>(data.awsWizardSource as AwsWizardModelSource | undefined)
+  const [genericPreview, setGenericPreview] = useState<AwsOperationPreview | null>(null)
+  const [genericRequest, setGenericRequest] = useState<AwsManagerRequest | null>(null)
+  const [genericResult, setGenericResult] = useState<AwsManagerResult | null>(null)
+  const [genericProgress, setGenericProgress] = useState<AwsManagerProgress | null>(null)
+  const [genericBusy, setGenericBusy] = useState(false)
   const wizardServiceSearch = useRegexSearchField()
   const wizardCommandSearch = useRegexSearchField()
   const rawScope = data.universeScope
@@ -124,8 +137,73 @@ export function ShopNode({ id, data, selected }: NodeProps<CanvasNode>): React.J
     }).catch((error) => setWizardLoadError(error instanceof Error ? error.message : 'The selected AWS operation model could not be loaded.'))
   }
 
+  const prepareGenericOperation = async (input: Record<string, unknown>): Promise<void> => {
+    if (!api.awsResource || !wizardServiceId || !wizardCommandName) return
+    const request: AwsManagerRequest = {
+      operation: 'generic',
+      generic: { serviceId: wizardServiceId, commandName: wizardCommandName, input },
+      maxResults: 100
+    }
+    setGenericBusy(true)
+    setGenericResult(null)
+    setWizardLoadError(null)
+    try {
+      setGenericPreview(await api.awsResource.preview(id, request))
+      setGenericRequest(request)
+    } catch (error) {
+      setWizardLoadError(error instanceof Error ? error.message : 'The modeled AWS operation could not be prepared.')
+    } finally {
+      setGenericBusy(false)
+    }
+  }
+
+  const runGenericOperation = (): void => {
+    if (!api.awsResource || !genericPreview || !genericRequest || genericBusy) return
+    const run = async (): Promise<void> => {
+      const operationId = newOperationId()
+      setGenericBusy(true)
+      setGenericResult(null)
+      setWizardLoadError(null)
+      try {
+        setGenericResult(await api.awsResource!.execute(id, operationId, { ...genericRequest, confirmed: true }))
+      } catch (error) {
+        setWizardLoadError(error instanceof Error ? error.message : 'The modeled AWS operation failed.')
+      } finally {
+        setGenericBusy(false)
+      }
+    }
+    if (!genericPreview.destructive) {
+      void run()
+      return
+    }
+    const target = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const rect = target?.getBoundingClientRect()
+    openDestructiveGate({
+      title: 'Run destructive AWS operation',
+      description: 'This modeled AWS operation can permanently change or delete provider resources. Review the exact preview before authorizing it.',
+      affected: [`${genericPreview.service} ${genericPreview.operation}`, genericPreview.profileName, genericPreview.region],
+      confirmLabel: 'Run operation',
+      anchor: rect ? { x: rect.left, y: rect.bottom } : undefined,
+      restoreFocusEl: target,
+      onConfirm: () => { void run() }
+    })
+  }
+
+  useEffect(() => api.awsResource?.onProgress((item) => {
+    if (item.nodeId === id) setGenericProgress(item)
+  }), [api.awsResource, id])
+
   const choose = (entry: ShopCatalogEntry): void => {
     if (entry.available === false || !canvasId || !scope || !provider?.create || depth === null) return
+    if (entry.id === 'aws-service') {
+      if (!wizardServiceId || !wizardCommandName) {
+        setWizardLoadError('Choose an AWS service and operation from the current model inventory first.')
+        return
+      }
+      setChosen(entry.id)
+      loadSelectedWizard()
+      return
+    }
     const result = requestUniverseShopCatalogCreation({
       canvasId,
       scope,
@@ -262,12 +340,33 @@ export function ShopNode({ id, data, selected }: NodeProps<CanvasNode>): React.J
           <AwsOperationWizard
             definition={wizardDefinition}
             onCancel={() => setWizardOpen(false)}
-            onSubmit={(value) => {
-              updateNodeData(id, { awsWizardIntent: value })
+            onSubmit={(value, portable) => {
+              updateNodeData(id, { awsWizardIntent: portable.safeIntent })
               setWizardOpen(false)
+              void prepareGenericOperation(value)
             }}
           />
         </AnchoredPopover>
+      )}
+      {genericPreview && (
+        <section className="shop-node__aws-preview" aria-label="AWS operation preview">
+          <h3>Execution preview</h3>
+          <dl>
+            <div><dt>Service</dt><dd>{genericPreview.service}</dd></div>
+            <div><dt>Operation</dt><dd>{genericPreview.operation}</dd></div>
+            <div><dt>Profile</dt><dd>{genericPreview.profileName}</dd></div>
+            <div><dt>Region</dt><dd>{genericPreview.region}</dd></div>
+            <div><dt>Risk</dt><dd>{genericPreview.risk}</dd></div>
+            <div><dt>Pagination</dt><dd>{genericPreview.pagination}</dd></div>
+          </dl>
+          <pre>{genericPreview.argv.join(' ')}</pre>
+          <div className="shop-node__aws-actions">
+            <Button type="button" variant="primary" disabled={genericBusy} onClick={runGenericOperation}>Run modeled operation</Button>
+            {genericProgress?.phase === 'started' && api.awsResource && <Button type="button" onClick={() => void api.awsResource!.cancel(genericProgress.operationId)}>Cancel operation</Button>}
+          </div>
+          {genericProgress && <p role="status">{genericProgress.phase}: {genericProgress.message}</p>}
+          {genericResult && <div role="status"><p>{genericResult.summary}</p><pre>{JSON.stringify(genericResult.rows.slice(0, 20), null, 2)}</pre></div>}
+        </section>
       )}
       {wizardError && <p className="shop-node__creation-error" role="alert">{wizardError}</p>}
     </div>

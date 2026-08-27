@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Open WebUI hosting — nodeterm</title>
+    <meta name="description" content="Guided Open WebUI hosting with persistent data, local Ollama reuse, provider setup, health, backup, restore, update, and rollback." />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+  </head>
+  <body>
+    <div class="doc-topbar"><a href="./index.html">← Documentation</a></div>
+    <article class="doc-body">
+      <p class="doc-kicker">Hosted service node</p>
+      <h1>Open WebUI hosting</h1>
+      <p>Run the pinned official Open WebUI image with persistent data, reuse local Ollama, or choose an OpenAI-compatible provider. This page documents a guided desktop node, not the hosted service itself.</p>
+      <h2>Guided setup</h2>
+      <p>The node starts with local Ollama, model <code>llama3.2</code>, and port <code>3000</code>. Pick a discovered local or SSH Docker context. The context and model searches use plain text by default and each has an adjacent anchored regex builder.</p>
+      <p>Deploy creates a node-owned named volume and container from <code>ghcr.io/open-webui/open-webui:v0.6.37</code>. Local Ollama uses <code>http://host.docker.internal:11434</code>. The OpenAI-compatible choice keeps only a validated base URL locally and completes API-key entry in Open WebUI's own first-user setup.</p>
+      <h2>Health and first-user setup</h2>
+      <p>Health states are explicit: unbound, running, first-user setup required, stopped, unreachable, or failed. The Open page action is enabled only after a verified local response. SSH deployments say when a tunnel is required rather than presenting a local URL as though it were remote.</p>
+      <h2>Persistent data and recovery</h2>
+      <p>Backup selects a local folder and writes a timestamped <code>.tar.gz</code> from the node-owned volume. Restore selects a local archive, validates its paths, and requires the existing two-key confirmation before replacing data. Update records the prior image, while rollback recreates the owned container from that recorded image. Operations report progress, cancellation, and partial failure.</p>
+      <h2>Portable intent</h2>
+      <p>Project files carry provider mode, model, Ollama reuse, and port only. Context names, container and volume identifiers, URLs, local paths, process state, and credential references stay in local application data. Import therefore performs no network call, deployment, pull, provider mutation, process launch, or download.</p>
+      <h2>Verification boundary</h2>
+      <p>The ultra-speed implementation lane intentionally did not run tests, type checks, lint, reviews, security or accessibility checks, builds, packaging, installer execution, runtime interaction, or UI captures. Those checks remain a separate release task.</p>
+      <section class="doc-suggested"><h2>Suggested articles</h2><ul><li><a href="./docker-host-manager.html">Docker host manager</a></li><li><a href="./node-catalog.html">Unified Node Catalog</a></li><li><a href="./server-edition.html">Server Edition</a></li><li><a href="./language-modes.html">Language modes</a></li></ul></section>
+    </article>
+  </body>
+</html>

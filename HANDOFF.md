@@ -27,6 +27,420 @@ reviews the merge result. No tests, type checks, lint, builds, packaging, runtim
 reviews, accessibility or security audits, or screen captures were run. The parent owns the next checks,
 the downstream and upstream PRs, issue comments and closure, and the final default-branch integration.
 
+## 2026-08-27, Open WebUI hosting implementation, issue #54
+
+Issue #54 is implemented on `feat/program-43-open-webui-hosting`. The lane adds the typed
+`open-webui-hosting` node kind, a guided renderer panel, a pinned official Open WebUI image, local
+Ollama reuse, an OpenAI-compatible provider choice, honest first-user setup and health states, and
+fixed-action deploy, backup, restore, update, rollback, and cancellation handling.
+
+Portable project data carries only `openWebUiIntent`: provider mode, model, Ollama reuse, and port.
+The selected Docker context, node-owned container and volume, endpoint, optional provider URL,
+image history, backup timestamp, and credential reference remain in the machine-local
+`open-webui-bindings.json` overlay. Import is data-only and does not contact Docker, pull an image,
+deploy, launch a process, or mutate a provider. Archive restore validates member paths and is gated
+by the existing two-key destructive confirmation. Provider secrets are never accepted in URLs,
+commands, project data, logs, or exports.
+
+Direct documentation is in `docs/features/hosting/open-webui-hosting.md`, its category index,
+`site/docs/open-webui-hosting.html`, the in-app generated `src/shared/docs-data.ts` entry, and the
+canvas node-kind article. `README.md`, `ROADMAP.md`, and `CHANGELOG.md` record the same scope.
+
+The active ultra-speed implementation boundary was honoured: no tests, type checks, lint, reviews,
+security or accessibility checks, builds, packaging, installer execution, runtime interaction, or
+UI captures were run. The docs bundle generator was attempted but could not run because `esbuild`
+is absent from this checkout; the generated offline article entry was updated directly and remains
+subject to the owning integration lane's normal bundle check.
+## 2026-08-27, AWS platform managers, issue #49
+
+The issue branch was reconciled non-destructively with exact `origin/main` tip
+`54164b84dce0b7e62787b1de2885405ff4ed821c`. Upstream already supplied the canonical AWS stack in
+`src/shared/aws-resource.ts`, `src/core/aws-resource-manager.ts`, `src/core/aws-resource-register-ipc.ts`,
+and `src/renderer/nodes/AwsResourceNode.tsx`. The earlier duplicate plural manager stack was retained
+in its historical commits but is not used by the resulting tree.
+
+Program 38 is now mounted through that shared manager. `src/shared/aws-resource.ts` adds typed
+platform-manager modes and operations for ECR, ECS, EKS, RDS, database, VPC, Route 53, and cost
+management. `src/core/aws-resource-manager.ts` builds fixed argument arrays with `shell: false`,
+validates bounded values, parses bounded JSON, handles pagination and primitive list results, and
+redacts response fields before renderer delivery. `src/renderer/nodes/AwsResourceNode.tsx` adds
+the platform-manager mode, service tabs, typed controls, generated previews, result search with
+its anchored regex builder, progress, cancellation, retry, and the existing two-key destructive
+confirmation. `src/shared/node-catalog.ts`, `Canvas.tsx`, and `workspace.ts` make the eight rows
+current AWS Universe entries that create the shared `aws-resource` node with portable safe intent.
+
+Direct documentation is `docs/features/integrations/aws-container-database-cost-managers.md`, its
+category/index links, and `site/docs/aws-container-database-cost-managers.html`. The generated
+offline docs bundle was not regenerated because this lane forbids builds.
+
+Verification boundary: no tests, lint, type checks, builds, packaging, runtime interaction, reviews,
+security or accessibility checks, installer execution, or UI captures were run. No issue, pull
+request, default-branch, or cleanup mutation was performed. The feature branch was pushed to
+`origin/feat/program-38-aws-containers` and retained for downstream integration.
+## 2026-08-27, generic all-service AWS GUI, issue #50
+
+The issue branch is `feat/program-39-aws-all-services`, reconciled with the exact
+`origin/main` tip `54164b84dce0b7e62787b1de2885405ff4ed821c`. The generic lane now uses the current
+AWS Universe Shop and shared AWS resource manager rather than maintaining a second AWS execution
+stack. `ShopNode.tsx` routes the all-service entry to the installed-model service and operation
+pickers, while `AwsOperationWizard.tsx` supplies typed controls for structures, unions, lists, maps,
+enums, booleans, numbers, dates, times, files, and synchronized JSON or YAML views. Every picker
+search has its own anchored regex builder.
+
+`AwsResourceManagerService` accepts a model-generated `generic` operation, reloads and validates the
+current wizard model before generating argv, adds the selected local profile, region, output, and
+bounded pagination settings, and invokes the bundled AWS CLI through the existing `shell: false`
+runner. Previews include the service, operation, profile, region, risk, pagination, retry, endpoint,
+and argv. Destructive operations remain behind the existing two-key confirmation flow. Results are
+bounded and redact credential-shaped fields. Desktop and Server Edition register the same shared
+manager, while relay tabs retain an explicit unsupported state.
+
+The direct records are `docs/features/integrations/aws-all-services.md`,
+`site/docs/aws-all-services.html`, the integrations index, `CHANGELOG.md`, and `ROADMAP.md`. The
+earlier duplicate `src/core/aws-all-services.ts`, `src/shared/aws-all-services.ts`, and standalone
+AWS panel were removed after reconciliation, because they duplicated the existing AWS manager and
+would have allowed the two execution paths to drift.
+
+The implementation lane intentionally ran no tests, type checks, lint, builds, packaging, installer
+execution, runtime interaction, reviews, accessibility or security audits, or screenshots. The parent
+integration lane owns those checks and the default branch merge.
+
+## 2026-08-27, Cloudflare Tunnel inventory implementation, issue #59
+
+Issue #59 is implemented on `feat/program-48-tunnel-inventory` in the isolated task-owned
+worktree. `src/shared/cloudflare-tunnels.ts` defines bounded tunnel, route, DNS, conflict, adoption,
+progress, and schema 3 portable-intent contracts. Route validation rejects wildcard or malformed
+hostnames, unsafe paths, credential-bearing origins, and any attempt to disable existing-route
+preservation. Conflict planning distinguishes an existing route, another tunnel, and an existing
+DNS record. DNS adoption keeps an existing CNAME unchanged unless the user explicitly chooses the
+single-record replacement path and types `ADOPT <hostname>` before the app's two-key confirmation.
+
+`src/core/cloudflare/tunnel-service.ts` owns the HTTPS Cloudflare API calls, bounded pagination and
+response parsing, local route metadata, and token resolution through the existing Cloudflare core
+credential manager. `src/core/cloudflare/
+register-ipc.ts`, `src/shared/ipc.ts`, `src/shared/types.ts`, the preload, Server Edition bridge,
+and relay refusal wire the typed API without exposing a raw request editor or token. The renderer
+manager is `src/renderer/components/cloudflare/CloudflareTunnelInventoryPanel.tsx`, mounted by the
+new `cloudflare-tunnel` service node with independent plain-text-first searches and anchored regex
+builders for tunnels, routes, and DNS records.
+
+Direct documentation is in `docs/features/remote/cloudflare-tunnel-inventory.md`, its category
+index, and `site/docs/cloudflare-tunnel-inventory.html`; the changelog and roadmap record the same
+state. The generated offline documentation bundle was not regenerated in this lane because the
+ultra-speed boundary forbids build work; the integration owner must run the supported docs-bundle
+generation before packaging.
+
+No tests, type checks, lint, reviews, security or accessibility checks, builds, packaging, installer
+execution, runtime interaction, or UI captures were run. The source is therefore unverified at
+runtime and the parent integration lane must run its own checks against the merged commit.
+## 2026-08-27, cloudflared connector runtimes, issue #61
+
+The implementation lane is `feat/program-50-cloudflared-runtimes` in the isolated issue-61
+checkout, reconciled with `origin/main` at `54164b84dce0b7e62787b1de2885405ff4ed821c`. The
+Program 50 commit `051f409d4102f1287759a1686d54fd6cbed36641` defines the typed per-user process,
+Windows service, and Docker connector contracts, fixed argument builders, guided picker inventory,
+disabled reasons, bounded progress and health shapes, local ownership fields, and schema 3 portable
+blueprint. The main-process manager owns discovery, protected credential storage, token-file
+materialization, process/service/container lifecycle, cancellation, restart, health reads, and local
+runtime records. The current HuiFlare Zero Trust and tunnel stack from `origin/main` is preserved.
+
+Direct records remain current in `docs/features/remote/cloudflared-runtimes.md`,
+`site/docs/cloudflared-runtimes.html`, `docs/features/remote/README.md`, `site/docs/index.html`,
+`docs/uh-feature-inventory.md`, `ROADMAP.md`, `CHANGELOG.md`, and this handoff. The offline docs
+bundle entry is updated to the normalized article. Its documented generator could not run because
+this checkout has no installed `esbuild` dependency; the integration lane must regenerate and verify
+the bundle.
+
+No tests, type checks, lint, reviews, security or accessibility checks, builds, packaging, installer
+execution, runtime interaction, or UI captures were run in this ultra-speed implementation lane.
+The owning integration lane must verify the exact merged commit and may not infer those verdicts
+from source inspection.
+
+## 2026-08-27, Cloudflare Tunnel state model implementation
+
+Issue #62 is implemented on `feat/program-51-tunnel-state` at the source level and reconciled with
+`origin/main` at `54164b84dce0b7e62787b1de2885405ff4ed821c`. The shared
+`src/shared/tunnel-state.ts` module keeps API creation, DNS routing, connector health, Access policy,
+origin reachability, and external reachability as six separately timestamped facets. Each facet now
+also carries its source and evidence. Transitions are bounded, reject stale observations, require a
+fresh check after failure, and preserve `unknown` as a distinct state when no trustworthy observation
+exists. Schema 3 intent is limited to the node label, hostname, origin protocol and port, connector
+mode, access-policy intent, and route mode. Provider ids, connector ids, process state, local paths,
+credentials, and observations are local-only.
+
+`src/core/cloudflare-core-managers.ts` now owns local state, per-node generations, cancellation, and
+bounded probe expiry, and publishes complete state events through typed IPC. Desktop preload,
+Server Edition handlers, the WebSocket bridge, and unsupported-surface stubs expose the same API.
+`src/renderer/nodes/CloudflareCoreManagersNode.tsx` mounts
+`src/renderer/components/tunnel/TunnelStatePanel.tsx`, whose plain-text check search and status filter
+each own an adjacent anchored full regex builder. Rows show independent status, bounded detail or
+recovery reason, timestamp, source, evidence, and a retry control with an explicit disabled-state
+reason. The current Cloudflare stack has no tunnel-specific provider or connector probes yet, so a
+configured binding remains visibly `unknown` with source `unavailable`; no binding is `blocked` with
+a Configure recovery action.
+
+Direct documentation is in `docs/features/remote/cloudflare-tunnel-state.md`, indexed from
+`docs/features/remote/README.md`. The static documentation site has the matching
+`site/docs/cloudflare-tunnel-state.html` article and index link. `CHANGELOG.md` and `ROADMAP.md`
+record the source state and the remaining verification boundary. The generated offline docs bundle
+was not rebuilt in this lane because the requested ultra-speed boundary forbids builds and runtime
+work.
+
+The lane intentionally did not run tests, type checks, lint, reviews, security or accessibility
+checks, builds, packaging, installer execution, runtime interaction, or captures. The next owner
+must wire the panel into the Cloudflare tunnel node and host APIs, regenerate the offline bundle,
+then run the appropriate focused verification against the integrated commit.
+## 2026-08-27, Kiosk and PWA sessions implementation, issue #64
+
+The implementation lane is `feat/program-53-kiosk-pwa`, refreshed to `origin/main` at
+`30e73b7e4a518d46a2f64887a3eb4eadec907caa` before edits. The lane adds the shared kiosk/PWA intent
+contract in `src/shared/kiosk-pwa.ts`, a host-neutral owner-scoped lifecycle manager in
+`src/core/kiosk-pwa.ts`, and `KioskPwaNode` plus `KioskPwaSetupDialog` for the browser-backed canvas
+surface. The Node Catalog now exposes Kiosk session and PWA session entries, and browser node
+serialization carries only validated portable intent.
+
+Secure URLs reject credentials, unsafe schemes, control characters, and non-loopback HTTP. PWA
+choices come only from an installed-app inventory, so an unavailable inventory stays visibly empty.
+Popups are disabled and permission events are denied by default. Local profile keys and runtime
+lifecycle stay outside the project projection. Exit, Retry, owner checks, unavailable states, and
+recovery copy are explicit.
+
+Direct documentation is in `docs/features/remote/kiosk-pwa-sessions.md`, its category index, the
+generated offline article record, and `site/docs/kiosk-pwa-sessions.html`. `CHANGELOG.md` and
+`ROADMAP.md` record the same delivery boundary.
+
+This ultra-speed lane intentionally ran no tests, type checks, lint, reviews, security or
+accessibility checks, builds, packaging, installer execution, runtime interaction, or captures.
+The documentation-bundle generator was attempted but could not run because this checkout has no
+installed `esbuild` package. The offline article record was updated manually to keep the committed
+bundle aligned with the new article; the integration lane should regenerate and compare it after
+bootstrapping dependencies.
+## 2026-08-27, read-only Windows diagnostics, issue #66
+
+The implementation lane is `feat/program-55-windows-diagnostics` in the linked checkout
+`C:\Users\cntow\Documents\GitHub\material-nodeterm-worktrees\issue-66`. It adds the
+`windows-diagnostics` node kind, the typed `windowsDiagnostics` bridge, and a core snapshot service
+that invokes only one fixed, read-only PowerShell script. The script reports drives/storage,
+services, startup entries, scheduled tasks, updates, network state, and bounded System/Application
+event summaries. It has a fifteen-second query deadline, a four MiB response bound, and a 1,000-row
+per-section bound. Non-Windows hosts, missing providers, command failures, and malformed responses
+remain explicit unavailable/error states instead of empty success.
+
+The canvas node exposes a tab for each section, a local plain-text-first filter, and the adjacent
+anchored full regex builder. It contains only refresh and rename interactions; no host mutation
+control is present. Snapshot output and host-specific facts remain runtime-local and are not added
+to portable project data. Direct documentation is in
+`docs/features/windows/windows-diagnostics.md`, with the category index at
+`docs/features/windows/README.md`; the offline bundle has a corresponding article entry in
+`src/shared/docs-data.ts`.
+
+This feature ref was non-destructively reconciled with the exact `origin/main` tip
+`54164b84dce0b7e62787b1de2885405ff4ed821c` in merge commit
+`538fe6a5b4cbf0384a35ff9edc1a1d59d87df431`, preserving the diagnostics lane and incoming default
+branch work. The reconciled commit was published to `origin/feat/program-55-windows-diagnostics`,
+and its ancestry was verified with `git merge-base --is-ancestor`.
+
+Verification boundary: this ultra-speed lane intentionally ran no tests, lint, type checks, builds,
+packaging, installer execution, reviews, security or accessibility checks, runtime interaction, or
+captures. The parent integration lane must keep those verdicts unverified.
+## 2026-08-27, seamless agent messaging, issue #69 / Program 58
+
+This lane adds `Settings.agentSeamlessWrites`, defaulting to `false`, and a searchable Settings →
+Agents row. Agent `send` and `reply` requests use the existing confirmation surface while the
+switch is off. When enabled, they call the same main-process mailbox delivery path without opening
+the repeated per-message confirmation. Project capability consent, source and target scope checks,
+idle-target checks, restart serialization, rate limits, bounded queue outcomes, and delivery traces
+remain in force. Node closing remains confirmation-gated.
+
+The upstream PR #113 receive-phase defect was already refined on this base to the bounded
+`CONTROL_CEILING_MS` handoff. This lane preserves that ceiling rather than disarming the socket.
+
+Changed implementation and documentation paths include `src/renderer/canvas/Canvas.tsx`,
+`src/renderer/components/settings/sections/AgentsSection.tsx`, `src/shared/types.ts`,
+`docs/features/agents/agent-messaging.md`, `docs/features/agents/README.md`,
+`src/shared/docs-data.ts`, `CHANGELOG.md`, and `ROADMAP.md`.
+
+The canonical docs generator could not start because this isolated checkout has no `esbuild`
+installation. The offline bundle entry was reconciled manually. This ultra-speed lane intentionally
+did not run tests, type checks, lint, reviews, security checks, accessibility checks, builds,
+packaging, installer execution, runtime interaction, or UI captures. The feature branch was not
+merged into `main` and no cleanup was performed in this lane.
+## 2026-08-27, per-account node colour and binding, issue #71
+
+This lane is implemented on `feat/program-60-account-node-color`, reconciled with the exact
+`origin/main` tip `54164b84dce0b7e62787b1de2885405ff4ed821c`. It ports the account colour and single
+binding decisions from upstream PRs #283 and #319 for the current Claude and Codex account model.
+`ClaudeAccount.color` and `CodexAccount.color` are optional settings values. The Accounts section
+writes them through one shared swatch component, and new nodes capture the colour from the account
+list owned by their builtin agent. Matching ids in the Claude and Codex lists stay independent.
+Empty, malformed, stale, or missing values fall back to the builtin agent colour.
+
+`src/shared/agents/account-binding.ts` provides the shared predicate for the persisted account id.
+`src/core/project-node-append.ts` and the host bridge apply the same account binding and use the
+host-resolved colour for phone-registered nodes. Account colour remains presentation-only and is
+not a credential, path, process, or portable execution field. Existing nodes keep their stored
+colour when an account setting changes.
+
+This source lane intentionally did not run tests, lint, type checks, builds, packaging, installer
+execution, runtime interaction, reviews, security or accessibility audits, or captures. The offline
+documentation bundle was not regenerated. The parent integration lane must verify the merged tree,
+run focused checks, regenerate `src/shared/docs-data.ts`, handle issue progress and closure, and
+keep the account feature's unverified state honest until those checks land. No release or cleanup
+was performed in this lane.
+## 2026-08-27, per-session emoji and picture icons, issue #72
+
+The session-icon lane is on `feat/program-61-session-icons` at merge commit
+`49ddccd40f37f57c11f4eb330d7f870fb92f4a9f`, which reconciles the feature with exact `origin/main`
+tip `54164b84dce0b7e62787b1de2885405ff4ed821c`. The implementation follows upstream PR #293 and
+issue #291, adapted to this repository's current renderer and session APIs.
+
+`src/shared/node-icon.ts` defines the bounded emoji and image-path contract. It keeps one grapheme,
+removes control characters, accepts only known image extensions, refuses relative traversal, and
+supports both POSIX and Windows absolute paths. Project-local images are stored as safe `./`
+paths; SSH, cwd-less, and local fallback images remain absolute and local. The value is normalized
+when persisted project data becomes live state and again when live state is serialized.
+
+The shared picker and image loader are in `src/renderer/components/NodeIconPicker.tsx`,
+`src/renderer/components/NodeIcon.tsx`, `src/renderer/lib/nodeIconChoice.ts`, and
+`src/renderer/lib/nodeIconImage.ts`. The same mark renders in the canvas terminal header, Kanban
+card, card modal, and sessions sidebar row. Terminal context menus expose Set icon or Change icon,
+and Remove versus Cancel remain distinct outcomes. The card modal and header controls expose
+accessible labels, while the picker keeps keyboard focus on its input and uses the existing local
+file picker and durable canvas-image writer.
+
+Direct documentation is `docs/features/canvas/node-icons.md`, indexed from the Canvas category.
+`CHANGELOG.md` and `ROADMAP.md` record the same source-only boundary. The generated offline docs
+bundle was not regenerated. No tests, lint, type checks, builds, packaging, runtime interaction,
+reviews, audits, or UI captures were run. The parent integration lane owns those checks, the
+dedicated pull request, issue comments and closure, and any later bundle regeneration.
+## 2026-08-27, first-class Files node, issue #73
+
+The Files node lane is being reconciled on `feat/program-62-files-node` against the exact
+`origin/main` tip `54164b84dce0b7e62787b1de2885405ff4ed821c`. The implementation source commit is
+`d00d7c6c483a51468eb431a070a6b3032e5aadd4`, based on upstream PR #294 commit
+`462182664e3339792424f55f7b81764b48c68c12`.
+
+The canvas now has a persisted `files` node with one directory listing, breadcrumb and parent
+navigation, refresh, local file and folder creation, path copy, local file-manager reveal, file
+opening through the existing canvas routing event, and a terminal-in-folder action. Its search is
+plain-text-first and uses the shared adjacent anchored regex builder with bounded candidate
+matching. Loading, read failure, empty directory, and no-match states remain distinct. SSH and
+relay listings stay on their owning filesystem, remote paths never reach the local operating-system
+opener, and worktree removal displaces stale directory nodes by path.
+
+The feature is documented in `docs/features/files/files-node.md` and indexed from
+`docs/features/files/README.md`. `CHANGELOG.md` records the same scope and verification boundary.
+The current origin/main reconciliation also carries the latest shared filesystem bridge and shell
+changes without changing the Files node's local path or portability semantics.
+
+This ultra-speed lane intentionally did not run tests, lint, type checks, builds, packaging,
+installer execution, runtime interaction, reviews, audits, security or accessibility checks, or
+UI captures. The parent integration lane owns those checks, offline documentation regeneration,
+main integration, release evidence, and issue records. No issue or pull request mutation was done
+by this lane.
+## 2026-08-27, display-only agent-state recovery and workflow grouping, issue #74
+
+The implementation is on `feat/program-63-agent-state-recovery`. It was reconciled with the exact
+`origin/main` tip `54164b84dce0b7e62787b1de2885405ff4ed821c` in merge commit `82b2dcde6525f7831f0e7bd44c2fd33634b2650e`.
+The feature commit is `90c8d0d9f7b6d355448f2c357bf6376583929667`.
+
+The core mirror now keeps a lifecycle-bound `lastKnown` display snapshot separate from expiring
+operational state. Claude and Gemini transcript tails, plus Codex app-server thread status, can be
+inspected through the shared `agent-status-snapshot` handler. Recovery is bounded and fail-safe:
+missing, malformed, stale, unsupported, or remote evidence does not become a guessed completion.
+Recovered state is explicitly display-only and cannot drive notifications, authorization, process
+control, or hibernation. A live hook event always wins the request race, and session boundaries
+preserve only same-conversation display continuity.
+
+Desktop preload, Server Edition, and the WebSocket bridge expose the snapshot route. Renderer rows
+label recovered ages as `last known`, and the hibernation policy refuses recovered rows until live
+evidence arrives. The sessions sidebar groups by workflow state in the order Need attention, Done,
+Unknown, and Running. Unread stays a row-level notification affordance, so it does not move a row
+out of its actual workflow section.
+
+Directly related source files include `src/core/agent-status-recovery.ts`,
+`src/core/agent-status-handlers.ts`, `src/core/agent-status-mirror.ts`,
+`src/shared/agents/status-snapshot.ts`, the Desktop and Server bridge registrations,
+`src/renderer/state/agentStatus.ts`, `src/renderer/lib/sessionList.ts`,
+`src/renderer/terminal/hibernation-policy.ts`, and the corresponding focused test records and
+fixture. Public documentation is current in `docs/features/agents/agent-support.md` and
+`docs/features/agents/README.md`; the root changelog carries the same scope and boundary.
+
+The generated offline documentation bundle was not regenerated because this lane explicitly forbids
+builds and checks. The parent integration lane must regenerate it before claiming offline docs are
+current. This lane also did not run tests, type checks, lint, builds, packaging, runtime
+interaction, reviews, security or accessibility checks, or captures. No issue, pull request,
+release, default branch merge, deletion, or cleanup mutation was performed by this lane.
+## 2026-08-27, named terminal profiles, issue #77 and upstream issue #286
+
+The feature branch was reconciled with the exact `origin/main` tip
+`54164b84dce0b7e62787b1de2885405ff4ed821c`. The named-profile implementation remains in
+`68277d44f8ac6000e723c9cd85a6acbeef8e40bf`, with the portability correction in
+`8d40fb8ec9312d8e0a5ee922556a7601b4e8494f`.
+
+Settings now stores bounded named profiles containing a display name, initial directory, and
+optional startup command. The Settings → Shell surface provides create, edit, remove, default
+selection, native folder browsing, and local search with an adjacent regex builder. The node
+catalog offers the saved profiles when creating Terminal and Agent nodes. Existing detected shell
+profiles remain intact and continue to enumerate PowerShell 7, Windows PowerShell, Command Prompt,
+Git Bash, WSL distributions, and custom executables.
+
+Named profile ids and directories use the machine-local execution overlay. Named directories are
+removed from portable project content and peer traffic, while the local overlay restores the
+selected directory for the owning machine. SSH, relay, Server Edition, and non-Windows surfaces do
+not apply the local named-profile picker. Startup commands remain local one-shot launch intent, and
+an Agent launch runs after the named startup command.
+
+Direct documentation is `docs/features/terminals/windows-shell-profiles.md`, indexed from
+`docs/features/terminals/README.md`. `CHANGELOG.md` and `ROADMAP.md` record the same scope and
+verification boundary. Tests, lint, type checks, builds, packaging, runtime interaction, reviews,
+audits, and captures were not run in this lane. The parent integration lane owns those checks,
+generated documentation refresh, issue comments, final default-branch integration, and release work.
+## 2026-08-27, custom alert sounds lane, issue #78
+
+Issue #78 implements the requested custom per-event alert sounds from upstream issue #289 on
+`feat/program-67-custom-alert-sounds`. The existing synthesized `done` and `needsYou` cues remain
+the fallback. `src/shared/types.ts` adds bounded custom sound records to persisted settings, while
+`src/renderer/lib/sfx.ts` reads, decodes, caches, and plays a selected file without allowing a
+missing or corrupt file to break the alert path. `src/renderer/components/settings/sections/NotificationsSection.tsx`
+adds a real per-event audio picker, filename state, preview, replacement, reset, and precise
+validation copy. Sound bytes are stored in the app's settings data rather than a path local to the
+browser client, so Server Edition can replay them on its host through the same renderer.
+
+Implementation source tip: `c54c4e1944bd86b02afa2543291cdfc8377b2a5e`.
+
+The accepted input bound is 8 MB and 30 seconds. Empty, non-audio, malformed, undecodable, and
+overlong selections are rejected without replacing the last valid selection. Clearing an entry
+returns immediately to the built-in synthesized cue. The direct implementation and documentation
+records are `src/shared/types.ts`, `src/renderer/lib/sfx.ts`,
+`src/renderer/components/settings/sections/NotificationsSection.tsx`,
+`docs/notifications.md`, `CHANGELOG.md`, and `ROADMAP.md`.
+
+This ultra-speed lane intentionally did not run tests, type checks, lint, reviews, security or
+accessibility checks, builds, packaging, installer execution, runtime interaction, or UI captures.
+The feature branch was not integrated into `main`, no release was published, and no cleanup was
+performed in this lane.
+## 2026-08-27, nested Git repository discovery, issue #79
+
+The nested repository discovery lane is being reconciled with the exact `origin/main` tip
+`54164b84dce0b7e62787b1de2885405ff4ed821c`. The implementation from `4cefe4afd5a0eff695833f8e5d72c90a1c669b3b`
+adds a read-only, three-level scan for child Git checkouts, typed IPC and relay routing, and
+Source Control scopes for verified child paths. The reconciled update adds opaque paging, a 512
+directory traversal limit, explicit scan metadata, lexical containment checks, and a lstat plus
+realpath boundary that skips symbolic links, junctions, and other reparse-point paths before
+traversal. Discovery never initializes, mutates, deletes, or publishes a repository.
+
+The Source Control panel exposes the child scopes through the shared searchable picker and shows
+partial-read or safety-limit results separately from an empty scan. SSH projects retain an honest
+unsupported state because a local process cannot inspect the remote filesystem. Direct documentation
+is `docs/features/source-control/source-control-and-worktrees.md`, indexed from the Source Control
+category; `CHANGELOG.md` and `ROADMAP.md` carry the same scope and verification boundary.
+
+No tests, type checks, lint, builds, packaging, runtime interaction, reviews, audits, or screen captures
+were run in this ultra-speed lane. The generated `src/shared/docs-data.ts` bundle remains pending
+because `esbuild` is absent from this checkout and this lane does not install dependencies or run
+builds. The parent owns the final current-main integration, offline-bundle regeneration, release
+evidence, and any later verification.
 ## 2026-08-27, AWS core-service managers, issue #46 PR preparation
 
 The issue jer was reconciled with the exact `origin/main` tip `2472cf23b99559005476841d3db5e6bc4691ac06`.
@@ -269,6 +683,22 @@ No tests, type checks, lint, reviews, security or accessibility checks, builds, 
 installer execution, runtime interaction, or captures were run in this ultra-speed lane. The source
 is committed for the parent integration lane to verify against the exact integrated commit.
 
+## 2026-08-27, Usage popover default account selection, issue #70
+
+The implementation lane is `feat/program-59-usage-default-account`, based on the exact default branch tip `54164b84dce0b7e62787b1de2885405ff4ed821c`. Implementation commit `95e8eb8e19e4a568bf7286b35a9cdf789a6983ac` and documentation commit `1665f63d96d9d95e2f1d11cde9aa04763ddff997` are present on the feature branch.
+
+The usage popover in `src/renderer/components/UsageIndicator.tsx` now exposes local and SSH Claude identity rows as independently selectable radio actions labelled `Use for new sessions`. The selection changes only the active project's default account, preserves the account identity of existing nodes and running sessions, treats stale saved identities as System, and keeps rows from other hosts read-only. Arrow keys, Home, End, Escape focus return, accessible names, and pressed state are included. The existing provider identity rendering, duplicate-row reduction, and system-account switch action remain present. `src/renderer/styles.css` contains the selection and focus treatment.
+
+Direct documentation is `docs/features/integrations/usage-popover-default-account.md`, indexed from the integrations category. The changelog and roadmap carry the same scope and verification boundary.
+
+This source lane intentionally did not run tests, lint, type checks, builds, packaging, runtime interaction, reviews, accessibility checks, security audits, or UI captures. The parent integration lane owns those checks, generated documentation bundles, the dedicated pull request, issue progress and closure, main integration, and release work.
+
+### Handoff facts
+
+- Base: `origin/main` at `54164b84dce0b7e62787b1de2885405ff4ed821c`.
+- Tip: `1665f63d96d9d95e2f1d11cde9aa04763ddff997`, verified equal to `refs/heads/feat/program-59-usage-default-account` on origin. The implementation commit remains `95e8eb8e19e4a568bf7286b35a9cdf789a6983ac`.
+- Working tree: clean after the commit.
+- No merge into main, release, deletion, or cleanup was performed.
 ## 2026-08-27, bundled AWS CLI v2 lane, issue #41
 
 Issue #41 is implemented on `feat/program-30-bundled-aws-cli`, reconciled with
@@ -381,6 +811,38 @@ category index, roadmap, and changelog entries updated. No tests, type checks, l
 or accessibility checks, builds, packaging, installer execution, runtime interaction, or UI captures
 were run in this ultra-speed lane. The owning integration lane must verify the exact integrated
 commit and regenerate the offline documentation bundle after review.
+## 2026-08-27, Browser Portal record refresh, issue #63
+
+The Browser Portal records were refreshed after fetching and inspecting the exact `origin/main`
+tip `54164b84dce0b7e62787b1de2885405ff4ed821c`. The feature article, site article, and offline
+article now state the no-profile-borrowing boundary, exact canvas/modal guest ownership, bounded
+navigation states, safe close/restart/crash recovery, and the Server Edition and mobile limitations.
+The roadmap remains unticked because built-artifact evidence is still pending.
+
+This pass did not merge the diverged 128-commit `origin/main` history into the feature branch and did
+not rewrite the existing Browser Portal commit. No tests, lint, type checks, builds, packaging,
+runtime interaction, reviews, audits, or screenshots were run.
+
+## 2026-08-27, Browser Portal implementation, issue #63
+
+The Browser Portal lane is implemented on `feat/program-52-browser-portal`. The browser profile
+picker now validates guided names, rejects duplicates, offers a destructive-confirmed local reset,
+and distinguishes removing a project label from clearing local session data. Browser guests carry an
+explicit canvas or modal surface identity, and the agent-opened route now creates its node with the
+validated per-project partition instead of accidentally treating that partition as the owner id.
+Temporary popup and final-tab lifecycle behavior remains explicit, while the keep-alive ghost mounts
+only its one hidden surface.
+
+Schema 3 now carries the selected `browserProfileId` as safe project intent while retaining cookies,
+local storage, cache, extension paths, process state, and debugger handles on the machine. The new
+categorized article, offline bundle entry, documentation page, and browser category index document
+the portability and unsupported Server Edition/mobile boundaries.
+
+Verification boundary: this ultra-speed implementation lane intentionally ran no tests, type checks,
+lint, reviews, security or accessibility checks, builds, packaging, installer execution, runtime
+interaction, or captures. The documentation bundle generator was attempted but could not run because
+the checkout has no `esbuild` package installed; the offline entry was updated manually and must be
+regenerated by the verification lane before release.
 
 ## 2026-08-27, Express File Converter completion, issue #21
 
@@ -1263,6 +1725,29 @@ This lane deliberately did not run tests, type checking, linting, reviews, secur
 packaging, installer execution, UI interaction, or captures. The roadmap item remains unchecked
 until archive production/import wiring and those verification activities land. No commit or push was
 made by this lane.
+
+## 2026-08-27, managed Nextcloud no-socket hosting lane
+
+Issue #53 is implemented on feature branch `feat/program-42-nextcloud-managed` at pushed commit
+`9f1406a9dd9758471b6ebad77aed662f1cc22850`. The new `nextcloud-managed` node kind uses a fixed
+PostgreSQL, Redis, and Nextcloud Apache stack, an internal network, loopback-only web binding,
+generated local secret files, and no Docker socket mount or privileged mode. The renderer exposes
+verified Docker context selection, native data and backup folder pickers, bounded project name and
+port controls, separate operation and snapshot search fields with adjacent anchored regex builders,
+progress, cancellation, and two-key recovery confirmation. The host process owns the closed Docker
+argument vector and sequences deploy, update, backup, restore, and rollback operations.
+
+Portable schema 3 carries only `nextcloudManagedIntent`. Machine-local `nextcloudManagedBinding`
+holds the selected context, folders, loopback port, and opaque secret-key names through the local
+execution overlay. Import does not call Docker, write secrets, deploy, launch, or download.
+Updated source and direct documentation include `src/shared/nextcloud-managed.ts`,
+`src/main/remote/nextcloud-managed.ts`, the Nextcloud renderer panel, node registration, portable
+projection handling, `docs/features/integrations/nextcloud-managed.md`, and the offline article
+entry.
+
+This ultra-speed lane intentionally ran no tests, type checks, lint, reviews, security or
+accessibility checks, builds, packaging, installer execution, runtime interaction, or captures.
+Those verification results remain unrun. Default-branch integration is pending.
 
 ## 2026-08-26, portable Node Universes and hosting program plan
 
@@ -2766,6 +3251,63 @@ This ultra-speed lane intentionally ran no tests, type checks, lint, builds, pac
 interaction, accessibility or security audits, reviews, or captures. The parent integration lane
 must supply every verification verdict and release evidence before describing the feature as
 verified.
+# Issue #60, Cloudflare Tunnel wizard source lane
+
+The isolated `feat/program-49-tunnel-wizard` lane adds the bounded wizard contract in
+`src/shared/cloudflare-tunnel-wizard.ts` and the Material Design 3 renderer surface in
+`src/renderer/components/cloudflare/CloudflareTunnelWizard.tsx`. It presents populated account,
+zone, hostname, host, discovered container, network, port, and verified-origin choices; each picker
+has isolated local search and an anchored regex builder. The host boundary receives only opaque
+selection ids and the generated hostname, while the portable intent keeps desired labels and
+network-independent values separate from local provider binding.
+
+The direct article is `docs/features/remote/cloudflare-tunnel-wizard.md`, with the remote category
+index, roadmap, and changelog updated. Progress, cancellation, retry, stale-selection refusal,
+route review, and local vault-key binding are represented in the source contract. No tests, type
+checks, lint, review, security or accessibility checks, builds, packaging, installer execution,
+runtime interaction, or captures were run under the issue's ultra-speed boundary. Provider adapter
+wiring and integration into the Cloudflare manager remain for the parent integration lane.
+## Hosted-service Cloudflare Tunnel handoff lane, issue #56
+
+The isolated `feat/program-45-hosted-cloudflare-handoff` lane adds the shared contract in
+`src/shared/cloudflare-tunnel-handoff.ts`, the core sequencing and machine-local binding coordinator
+in `src/core/cloudflare-tunnel-handoff.ts`, and the guided renderer surface in
+`src/renderer/components/CloudflareTunnelHandoffPanel.tsx`. The handoff verifies a selected loopback
+origin before provider mutation, checks that tunnel creation, connector startup, and external
+verification are advertised by the provider capability record, requires an explicit exposure
+confirmation, resolves the credential only inside the provider adapter, and separates local health,
+connector state, DNS or tunnel state, and external reachability.
+
+Portable state is limited to validated service and routing intent. Cloudflare account, zone, tunnel,
+connector, credential, local endpoint, host identity, process state, and cache data stay in the
+machine-local binding store. The reviewed loopback host, port, and origin are passed only as validated
+local input and never become portable state. A failed external reachability check returns a partial
+result and does not claim that the route is verified. A missing capability or provider adapter remains
+visibly unavailable instead of being simulated.
+
+This ultra-speed lane intentionally ran no tests, type checks, lint, builds, packaging, reviews,
+security or accessibility checks, installer execution, runtime interaction, or captures. The parent
+integration lane must wire the provider adapter and supply all build, packaging, runtime, and release
+evidence before calling the feature verified.
+
+# Issue #76: Annotation labels and line thickness
+
+The `feat/program-65-annotation-labels` lane extends the existing annotation node from upstream
+commit `c1507bea` with an optional bounded label and an editable stroke-thickness control. The
+label renders beside the visual-only line or arrow, while the slider changes the SVG stroke width
+from 1 through 16 local pixels with a default of 3. The annotation remains a canvas node with no
+source, target, or connection handles.
+
+The new presentation fields are normalized in `src/shared/annotation.ts`, carried through
+`CanvasNodeState`, and serialized by `src/renderer/state/workspace.ts`. Schema 3 portable projection
+now preserves and validates annotation variant, diagonal, label, and thickness in
+`src/core/portable-canvas-projection.ts`. The feature article is
+`docs/features/canvas/annotations.md`.
+
+Issue #76's ultra-speed boundary intentionally did not run tests, type checks, lint, reviews,
+security or accessibility checks, builds, packaging, installer execution, runtime interaction, or
+UI captures. The parent integration lane must provide those verdicts before this feature is called
+fully verified.
 ## Issue #58, Cloudflare manager lane
 
 The isolated `feat/program-47-cloudflare-zero-trust` lane adds `src/shared/cloudflare-zero-trust.ts`,
@@ -2852,3 +3394,79 @@ be reused as verification for the combined recovery commit.
 
 Only the three public records in this lane are changed: `CHANGELOG.md`, `ROADMAP.md`, and
 `HANDOFF.md`. No pull request, merge, or push was performed by this lane.
+# 2026-08-27, Easter egg contextual-trigger correction, issue #103
+
+Reconciled the task-owned feature jer with the exact `origin/main` tip
+`54164b84dce0b7e62787b1de2885405ff4ed821c`. Corrected the Easter egg suite so every one of the 60
+entries is a contextual, bounded surprise from natural interaction with its marked real surface.
+Removed the `Ctrl+Alt+Shift+E` opener, all typed/code/chord activation, Alt-click force discovery,
+and direct Try controls. The cabinet now appears only through a discovered status card and contains
+discovery history plus Reset discoveries. The catalog retains ten funny levels, School-mode
+suppression, accessibility, reduced-motion handling, local-only discovery persistence, and the
+no-data-mutation, no-process-launch, no-network, and no-credential-access contract.
+
+The contextual route uses a per-surface interaction counter, a three-interaction threshold, and a
+45-second global cooldown. A discovered status card is non-blocking and offers dismissal plus a
+history route. No new force-trigger affordance was added.
+
+No tests, lint, type checks, builds, packaging, debugging, runtime interaction, reviews, audits, or
+UI captures were run, as required by issue #103. Correction commit
+`63ec24efa96f27880931d4cc3c6424f53f11feb9` was pushed to `feat/easter-egg-suite` and verified by
+exact ref and ancestry checks. The feature branch remains separate from `main`; no PR, issue
+mutation, deletion, or cleanup was performed.
+
+# GitHub work-item canvas lane
+
+Source implementation for upstream issue #462 and downstream issue #132 is on
+`feat/github-pr-issue-canvas`. It adds a typed safe projection, a canvas node, catalog creation,
+serialization, and the categorized article at `docs/features/integrations/github-work-items.md`.
+
+The lane intentionally ran no tests, lint, typecheck, build, packaging, runtime interaction,
+review, audit, debugging, repair, or UI capture. The next owner must verify Desktop and Server Edition
+bridge parity, guided repository/item actions, refresh and permission/offline states, local search
+and anchored regex builder behavior, and real built-artifact interaction.
+## Issue #65, proxy and isolated debugging browser sessions
+
+The issue lane `feat/program-54-proxy-debug-browser` adds a platform-free portable contract in
+`src/shared/browser-debug-sessions.ts`, a host-owned lifecycle manager in
+`src/main/browser-debug-session.ts`, a guided Material Design 3 picker in
+`src/renderer/nodes/BrowserDebugSessionPicker.tsx`, and schema-bound intent fields in
+`src/shared/types.ts`, `src/core/workspace-files.ts`, and
+`src/core/portable-canvas-projection.ts`. Shared intent contains only profile, proxy, certificate
+policy, isolation, and target selection. Local vault references, certificate and executable paths,
+process state, cookies, storage, debugging endpoints, and diagnostic payloads remain local.
+
+The manager refuses invalid or incomplete bindings with an explicit Configure, Rebind, Locate
+certificate, Retry, or Stop action. It never falls back to the ordinary browser. It owns start,
+stop, owner release, bounded diagnostic state, and host-side proxy credential resolution. The picker
+has independent profile and proxy searches, each with its own anchored full regex builder.
+
+Direct documentation is in `docs/features/remote/browser-debug-sessions.md` and the remote category
+index. The offline bundle remains to be regenerated by the release owner. This ultra-speed lane did
+not run tests, type checks, lint, reviews, security checks, accessibility checks, builds, packaging,
+installer execution, runtime interaction, or UI captures. No release or artifact claim is made from
+this lane.
+# 2026-08-27, usage-threshold Claude account rotation, issue #81
+
+The Program 70 implementation is on `feat/program-70-usage-account-rotation`, reconciled with
+`origin/main` at `54164b84dce0b7e62787b1de2885405ff4ed821c`. The lane adds
+`src/renderer/lib/usageAccountRotation.ts`, persisted `claudeUsageRotationEnabled` and
+`claudeUsageRotationThreshold` settings, Usage-section controls, and default-account resolution
+through the existing renderer launch funnel.
+
+The policy is opt-in and defaults to a 90 percent threshold. It considers the highest reported
+Claude limit, selects the account with the most headroom, uses reset time as a tie-breaker, and
+falls back to the least-used known account when all known accounts are above the threshold. Missing,
+stale, unavailable, or errored usage leaves the selected account unchanged. Explicit account picks
+remain pinned, running sessions are never changed, and SSH-host accounts are outside the local
+rotation scope.
+
+Direct documentation is `docs/features/agents/usage-account-rotation.md`, indexed by the Agents
+category. `CHANGELOG.md` and `ROADMAP.md` record the same scope. The generated in-app docs bundle
+was not regenerated because this lane explicitly forbids builds and checks.
+
+The original implementation commit was `414b785805251ab534bccf0a4a924a09d82f97e5`. The reconciled
+lane commit follows the exact `origin/main` tip after merge resolution. No tests, type checks, lint,
+reviews, security or accessibility checks, builds, packaging, installer execution, runtime
+interaction, or screenshots were run. The parent owns the final integrated default branch, release
+evidence, and any later verification.

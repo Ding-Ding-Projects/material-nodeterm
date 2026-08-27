@@ -6366,9 +6366,29 @@ button.group-node__setup:disabled {
   pointer-events: none;
 }
 
-/* Midpoint toolbar: color dot, arrowhead toggle, delete. Same idea as .group-node__label, scaled
-   down (an annotation carries no name to edit). Hidden until hover/selected so a canvas full of
-   small arrows doesn't grow permanent chrome on every one of them. */
+.annotation-node__label {
+  position: absolute;
+  left: 50%;
+  top: calc(50% - 18px);
+  max-width: min(240px, 80%);
+  padding: 2px 7px;
+  overflow: hidden;
+  color: var(--text);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  box-shadow: var(--md-sys-elevation-1, 0 1px 3px #0002);
+  font-size: 12px;
+  line-height: 1.3;
+  text-align: center;
+  text-overflow: ellipsis;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* Midpoint toolbar: colour, label, thickness, arrowhead toggle, and delete. Hidden until
+   hover/selected so a canvas full of small arrows does not grow permanent chrome on every one. */
 .annotation-node__toolbar {
   position: absolute;
   transform: translate(-50%, -50%);
@@ -6410,6 +6430,39 @@ button.group-node__setup:disabled {
   line-height: 1;
   padding: 3px 6px;
   cursor: pointer;
+}
+
+.annotation-node__label-input {
+  width: 110px;
+  min-width: 0;
+  min-height: 28px;
+  padding: 4px 7px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  font: inherit;
+  font-size: 12px;
+}
+
+.annotation-node__thickness-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 28px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.annotation-node__thickness-control input[type='range'] {
+  width: 62px;
+  accent-color: var(--accent);
+}
+
+.annotation-node__thickness-control output {
+  min-width: 1.25em;
+  color: var(--text);
+  text-align: right;
 }
 
 /* The next drag on the canvas creates an area/line/arrow — a crosshair says so before the click. */
@@ -7297,9 +7350,30 @@ button.group-node__setup:disabled {
   border-top: 1px solid rgba(var(--tint-rgb), 0.1);
 }
 .usage-account__label {
+  display: flex;
+  align-items: center;
   font-size: 12px;
   color: rgba(var(--tint-rgb), 0.45);
   margin-bottom: 4px;
+}
+/* Usage account selection is a real radio action, not a label-only affordance. */
+.usage-account__select {
+  margin-top: 10px;
+  padding: 5px 8px;
+  border: 1px solid rgba(var(--tint-rgb), 0.18);
+  border-radius: 6px;
+  background: rgba(var(--tint-rgb), 0.05);
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.usage-account__select:hover {
+  background: rgba(var(--tint-rgb), 0.1);
+}
+.usage-account__select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 /* Host chip on a remote (SSH) account row — the same email can be signed in on several
    machines, so the row has to say WHERE these numbers came from. */
@@ -10101,9 +10175,8 @@ button.group-node__setup:disabled {
 .ss-status__icon--working { background: var(--accent); }
 /* Unread: the same accent-blue as the row's "new for you" check, ringed so the section header
    reads as "these are the unlooked-at ones". */
-.ss-status__icon--unread { background: var(--accent); box-shadow: 0 0 0 2px rgba(var(--tint-rgb), 0.18); }
-/* Idle: a settled, already-seen turn — a quiet filled success dot. */
-.ss-status__icon--idle { background: var(--success); opacity: 0.7; }
+/* Done: a settled turn; unread remains a row-level glow/check, not a workflow section. */
+.ss-status__icon--done { background: var(--success); opacity: 0.7; }
 .ss-status__icon--unknown { background: rgba(var(--tint-rgb), 0.25); }
 .ss-status__rows { padding: 2px 0 2px 2px; }
 
@@ -15413,6 +15486,118 @@ body.focus-mode .dock:hover {
   scrollbar-width: thin;
 }
 
+/* Session icons share one fixed box across the canvas, board, modal and sidebar. */
+.node-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  line-height: 1;
+  overflow: hidden;
+  text-align: center;
+}
+
+.node-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 3px;
+  display: block;
+}
+
+.term-node__icon {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  opacity: 0.95;
+}
+
+.term-node__icon:hover {
+  opacity: 1;
+}
+
+.kanban-card__row > .node-icon.kanban-card__icon {
+  margin-top: 4px;
+}
+
+.kanban-modal__icon {
+  background: none;
+  border: none;
+  padding: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--muted);
+  border-radius: 5px;
+  flex-shrink: 0;
+}
+
+.kanban-modal__icon:hover {
+  background: rgba(var(--tint-rgb), 0.1);
+  color: var(--text);
+}
+
+.kanban-modal__icon--empty {
+  opacity: 0.5;
+}
+
+.kanban-modal__icon--empty:hover {
+  opacity: 1;
+}
+
+.node-icon-dialog {
+  min-width: 340px;
+}
+
+.node-icon-dialog__grid {
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  gap: 2px;
+  margin: 10px 0 4px;
+}
+
+.node-icon-dialog__swatch {
+  background: none;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 0;
+  font-size: 18px;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.node-icon-dialog__swatch:hover {
+  background: rgba(var(--tint-rgb), 0.12);
+}
+
+.node-icon-dialog__swatch.is-current {
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.node-icon-dialog__row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 6px;
+}
+
+.node-icon-dialog__input {
+  flex: 1;
+  min-width: 0;
+}
+
+.node-icon-dialog__error {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--danger);
+}
+
 /* ================================= Focus mode (issue #78) ==================================
    One terminal fills the window. The surface is a fixed opaque layer ABOVE the canvas (z 40 —
    over the sidebar's 12 and the dock's 20, under menus at 46 and dialogs at 55/70), and the
@@ -15536,4 +15721,219 @@ body.focus-mode .dock:hover {
   color: var(--warn);
   border: 1px solid var(--warn);
   background: transparent;
+}
+
+.github-work-item-node { min-height: 300px; overflow: hidden; border: 1px solid var(--md-sys-color-outline); border-radius: 16px; background: var(--md-sys-color-surface-container); color: var(--md-sys-color-on-surface); box-shadow: var(--md-sys-elevation-1); }
+.github-work-item-node__header { display: flex; gap: 10px; align-items: center; padding: 12px 16px; background: var(--md-sys-color-surface-container-high); border-bottom: 1px solid var(--md-sys-color-outline-variant); }
+.github-work-item-node__header span:last-child { margin-left: auto; text-transform: capitalize; }
+.github-work-item-node__body { padding: 14px 16px; overflow: auto; max-height: 370px; }
+.github-work-item-node__body h3 { margin: 0 0 10px; font-size: 1.05rem; }
+.github-work-item-node__body p { margin: 6px 0; }
+.github-work-item-node footer { padding: 8px 16px; color: var(--md-sys-color-on-surface-variant); font-size: .82rem; }
+.aws-manager-panel {
+  gap: 12px;
+  overflow: auto;
+}
+.aws-manager-panel__section,
+.aws-manager-panel__fields {
+  display: grid;
+  gap: 8px;
+}
+.aws-manager-panel__search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.aws-manager-panel__search input {
+  min-width: 0;
+  flex: 1;
+}
+.aws-manager-panel__search button,
+.aws-manager-panel__actions button {
+  min-height: 36px;
+}
+.aws-manager-panel__resources {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 180px;
+  overflow: auto;
+}
+.aws-manager-panel__resources li {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--outline-variant);
+}
+.aws-manager-panel__resources small {
+  color: var(--on-surface-variant);
+}
+.aws-manager-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+/* A directory listing pinned to the canvas. */
+.files-node {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: rgba(var(--card-rgb), 0.96);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, calc(0.35 * var(--shadow-k)));
+}
+.files-node.selected {
+  box-shadow: 0 0 0 1px var(--accent), 0 8px 28px rgba(0, 0, 0, calc(0.4 * var(--shadow-k)));
+}
+.files-node__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  cursor: grab;
+  flex-shrink: 0;
+}
+.files-node__chip {
+  font-size: 10px;
+  letter-spacing: 0.4px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(var(--tint-rgb), 0.12);
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.files-node__btn {
+  min-width: 28px;
+  min-height: 28px;
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.files-node__btn:hover:not(:disabled) {
+  background: rgba(var(--tint-rgb), 0.1);
+  color: var(--text);
+}
+.files-node__btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.files-node__crumbs {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  overflow: hidden;
+  padding: 0 8px 4px;
+  font-size: 11px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.files-node__crumb-wrap {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+.files-node__sep { opacity: 0.4; margin: 0 2px; }
+.files-node__crumb {
+  background: none;
+  border: none;
+  padding: 1px 2px;
+  color: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  border-radius: 3px;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.files-node__crumb:hover {
+  color: var(--text);
+  background: rgba(var(--tint-rgb), 0.1);
+}
+.files-node__filter {
+  margin: 0 8px 6px;
+  min-height: 30px;
+  padding: 3px 7px;
+  background: rgba(var(--tint-rgb), 0.06);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 12px;
+  outline: none;
+  flex-shrink: 0;
+}
+.files-node__filter:focus { border-color: var(--accent); }
+.files-node__search {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 8px 6px;
+  flex-shrink: 0;
+}
+.files-node__search .files-node__filter {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+.files-node__search-error {
+  margin: -2px 8px 6px;
+  color: var(--danger);
+  font-size: 11px;
+}
+.files-node__list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 4px 6px;
+  min-height: 0;
+}
+.files-node__row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 28px;
+  padding: 3px 6px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text);
+}
+.files-node__row:hover { background: rgba(var(--tint-rgb), 0.08); }
+.files-node__row.is-ignored { opacity: 0.45; }
+.files-node__glyph { width: 14px; height: 14px; flex-shrink: 0; color: var(--muted); }
+.files-node__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.files-node__empty { padding: 10px 8px; font-size: 12px; color: var(--muted); }
+.files-node__empty--error { color: var(--danger); }
+.files-node.collapsed .files-node__header { border-bottom: none; }
+
+/* Server Edition's remote OAuth callback completer. It is a non-blocking, bounded surface: the
+   terminal remains usable while the person pastes the one callback URL the detector armed. */
+.md3-remote-oauth-notice {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 80;
+  width: min(460px, calc(100vw - 40px));
+  box-sizing: border-box;
+  display: grid;
+  gap: 10px;
+  padding: 20px;
+  border: 1px solid var(--md-outline-variant, var(--border));
+  border-radius: var(--md-shape-sm, 12px);
+  background: var(--md-surface-container-high, var(--panel));
+  color: var(--md-on-surface, var(--text));
+  box-shadow: var(--md-elevation-3, 0 8px 24px rgba(0, 0, 0, 0.32));
+}
+.md3-remote-oauth-notice h2,
+.md3-remote-oauth-notice p {
+  margin: 0;
+}
+.md3-remote-oauth-notice input {
+  min-width: 0;
 }

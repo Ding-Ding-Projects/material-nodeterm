@@ -21,6 +21,8 @@ import {
 import { AtomicJsonArrayStore } from './atomic-json-store'
 import type { CorePlatform } from './platform'
 import { validateCloudFormationPreviewInput } from '../shared/cloudformation'
+import { buildAwsWizardDefinition, validateAwsWizardValue, type AwsWizardFieldDefinition } from '../shared/aws-wizard'
+import type { AwsWizardModelService } from './aws-wizard/service'
 
 const MAX_OUTPUT_BYTES = 8 * 1024 * 1024
 const MAX_TEXT_BYTES = 128 * 1024
@@ -102,6 +104,40 @@ function coreInput(request: AwsManagerRequest): Record<string, unknown> {
 
 function coreInputText(request: AwsManagerRequest, key: string, label: string, max = 2048): string {
   return text(coreInput(request)[key], label, max)
+}
+
+function coreInputNumber(request: AwsManagerRequest, key: string, label: string, minimum: number, maximum: number): number {
+  const value = coreInput(request)[key]
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < minimum || value > maximum) throw new Error(`${label} must be an integer from ${minimum} to ${maximum}.`)
+  return value
+}
+
+function genericRisk(commandName: string): AwsOperationRisk {
+  const name = commandName.toLowerCase()
+  if (/(delete|deregister|destroy|terminate|revoke|remove|purge|decommission|cancel)/.test(name)) return 'destructive'
+  if (/(create|put|post|update|modify|start|stop|run|attach|detach|register|enable|disable|set|associate|disassociate)/.test(name)) return 'write'
+  return 'read-only'
+}
+
+function kebab(value: string): string {
+  return value.replace(/([A-Z]+)([A-Z][a-z])/gu, '$1-$2').replace(/([a-z0-9])([A-Z])/gu, '$1-$2').replace(/[_\s]+/gu, '-').replace(/-+/gu, '-').replace(/^-|-$/gu, '').toLowerCase()
+}
+
+function genericFieldArgs(field: AwsWizardFieldDefinition, value: unknown, args: string[]): void {
+  if (value === undefined || value === null || value === '') return
+  const option = `--${kebab(field.name)}`
+  if (field.kind === 'boolean') {
+    args.push(value === true ? option : `--no-${kebab(field.name)}`)
+    return
+  }
+  if (field.kind === 'file') {
+    const file = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+    const selected = typeof file.path === 'string' ? file.path : ''
+    if (!selected || !isAbsolute(selected)) throw new Error(`${field.name} must be selected through the local file picker.`)
+    args.push(option, `fileb://${selected}`)
+    return
+  }
+  args.push(option, typeof value === 'object' ? JSON.stringify(value) : String(value))
 }
 
 function localTemplate(value: unknown): string {
@@ -294,6 +330,40 @@ function operationSpec(request: AwsManagerRequest): CommandSpec {
     case 'logs-describe-log-streams': return { service: 'logs', operation: request.operation, args: ['logs', 'describe-log-streams', '--log-group-name', coreInputText(request, 'logGroupName', 'Log group name')], risk: 'read-only', pagination: 'none' }
     case 'logs-get-log-events': return { service: 'logs', operation: request.operation, args: ['logs', 'get-log-events', '--log-group-name', coreInputText(request, 'logGroupName', 'Log group name'), '--log-stream-name', coreInputText(request, 'logStreamName', 'Log stream name'), '--limit', String(maxResults(request.maxResults)), ...(token ? ['--next-token', token] : [])], risk: 'read-only', pagination: 'manual-next-token' }
     case 'logs-filter-log-events': return { service: 'logs', operation: request.operation, args: ['logs', 'filter-log-events', '--log-group-name', coreInputText(request, 'logGroupName', 'Log group name'), '--filter-pattern', coreInputText(request, 'filterPattern', 'Filter pattern'), '--limit', String(maxResults(request.maxResults)), ...(token ? ['--next-token', token] : [])], risk: 'read-only', pagination: 'manual-next-token' }
+    case 'ecr-list-repositories': return { service: 'ecr', operation: request.operation, args: ['ecr', 'describe-repositories', '--max-results', String(maxResults(request.maxResults)), ...(token ? ['--next-token', token] : [])], risk: 'read-only', pagination: 'manual-next-token' }
+    case 'ecr-describe-images': return { service: 'ecr', operation: request.operation, args: ['ecr', 'describe-images', '--repository-name', coreInputText(request, 'repositoryName', 'Repository name'), '--max-results', String(maxResults(request.maxResults)), ...(token ? ['--next-token', token] : [])], risk: 'read-only', pagination: 'manual-next-token' }
+    case 'ecr-create-repository': return { service: 'ecr', operation: request.operation, args: ['ecr', 'create-repository', '--repository-name', coreInputText(request, 'repositoryName', 'Repository name', 256), '--image-tag-mutability', coreInputText(request, 'tagMutability', 'Tag mutability', 16)], risk: 'write', pagination: 'none' }
+    case 'ecr-delete-repository': return { service: 'ecr', operation: request.operation, args: ['ecr', 'delete-repository', '--repository-name', coreInputText(request, 'repositoryName', 'Repository name', 256), '--force'], risk: 'destructive', pagination: 'none' }
+    case 'ecs-list-clusters': return { service: 'ecs', operation: request.operation, args: ['ecs', 'list-clusters', '--max-results', String(maxResults(request.maxResults)), ...(token ? ['--next-token', token] : [])], risk: 'read-only', pagination: 'manual-next-token' }
+    case 'ecs-list-services': return { service: 'ecs', operation: request.operation, args: ['ecs', 'list-services', '--cluster', coreInputText(request, 'cluster', 'Cluster name'), '--max-results', String(maxResults(request.maxResults)), ...(token ? ['--next-token', token] : [])], risk: 'read-only', pagination: 'manual-next-token' }
+    case 'ecs-update-service': return { service: 'ecs', operation: request.operation, args: ['ecs', 'update-service', '--cluster', coreInputText(request, 'cluster', 'Cluster name'), '--service', coreInputText(request, 'service', 'Service name'), '--desired-count', String(coreInputNumber(request, 'desiredCount', 'Desired task count', 0, 1000))], risk: 'write', pagination: 'none' }
+    case 'ecs-delete-service': return { service: 'ecs', operation: request.operation, args: ['ecs', 'delete-service', '--cluster', coreInputText(request, 'cluster', 'Cluster name'), '--service', coreInputText(request, 'service', 'Service name'), '--force'], risk: 'destructive', pagination: 'none' }
+    case 'eks-list-clusters': return { service: 'eks', operation: request.operation, args: ['eks', 'list-clusters', '--max-results', String(maxResults(request.maxResults)), ...(token ? ['--next-token', token] : [])], risk: 'read-only', pagination: 'manual-next-token' }
+    case 'eks-describe-cluster': return { service: 'eks', operation: request.operation, args: ['eks', 'describe-cluster', '--name', coreInputText(request, 'clusterName', 'Cluster name')], risk: 'read-only', pagination: 'none' }
+    case 'eks-update-nodegroup': {
+      const minimum = coreInputNumber(request, 'minimum', 'Minimum nodes', 0, 1000)
+      const desired = coreInputNumber(request, 'desired', 'Desired nodes', 0, 1000)
+      const maximum = coreInputNumber(request, 'maximum', 'Maximum nodes', 1, 1000)
+      if (minimum > desired || desired > maximum) throw new Error('Node group capacity must satisfy minimum ≤ desired ≤ maximum.')
+      return { service: 'eks', operation: request.operation, args: ['eks', 'update-nodegroup-config', '--cluster-name', coreInputText(request, 'clusterName', 'Cluster name'), '--nodegroup-name', coreInputText(request, 'nodegroupName', 'Node group name'), '--scaling-config', `minSize=${minimum},maxSize=${maximum},desiredSize=${desired}`], risk: 'write', pagination: 'none' }
+    }
+    case 'eks-delete-cluster': return { service: 'eks', operation: request.operation, args: ['eks', 'delete-cluster', '--name', coreInputText(request, 'clusterName', 'Cluster name')], risk: 'destructive', pagination: 'none' }
+    case 'rds-describe-db-instances': return { service: 'rds', operation: request.operation, args: ['rds', 'describe-db-instances', ...(coreInput(request).identifier ? ['--db-instance-identifier', coreInputText(request, 'identifier', 'Database identifier')] : [])], risk: 'read-only', pagination: 'none' }
+    case 'rds-create-db-instance': return { service: 'rds', operation: request.operation, args: ['rds', 'create-db-instance', '--db-instance-identifier', coreInputText(request, 'identifier', 'Database identifier', 63), '--db-instance-class', coreInputText(request, 'instanceClass', 'Instance class'), '--engine', coreInputText(request, 'engine', 'Database engine'), '--allocated-storage', String(coreInputNumber(request, 'storageGiB', 'Allocated storage', 20, 65536)), '--backup-retention-period', String(coreInputNumber(request, 'backupDays', 'Backup retention', 0, 35)), '--storage-encrypted'], risk: 'write', pagination: 'none' }
+    case 'rds-create-db-snapshot': return { service: 'rds', operation: request.operation, args: ['rds', 'create-db-snapshot', '--db-instance-identifier', coreInputText(request, 'identifier', 'Database identifier'), '--db-snapshot-identifier', coreInputText(request, 'snapshotIdentifier', 'Snapshot identifier', 255)], risk: 'write', pagination: 'none' }
+    case 'rds-delete-db-instance': return { service: 'rds', operation: request.operation, args: ['rds', 'delete-db-instance', '--db-instance-identifier', coreInputText(request, 'identifier', 'Database identifier'), '--skip-final-snapshot'], risk: 'destructive', pagination: 'none' }
+    case 'database-list-tables': return { service: 'dynamodb', operation: request.operation, args: ['dynamodb', 'list-tables', '--limit', String(maxResults(request.maxResults)), ...(token ? ['--exclusive-start-table-name', token] : [])], risk: 'read-only', pagination: 'manual-next-token' }
+    case 'database-create-table': return { service: 'dynamodb', operation: request.operation, args: ['dynamodb', 'create-table', '--table-name', coreInputText(request, 'tableName', 'Table name', 255), '--billing-mode', 'PAY_PER_REQUEST', '--attribute-definitions', coreInputText(request, 'attributeDefinitions', 'Attribute definitions', 16_384), '--key-schema', coreInputText(request, 'keySchema', 'Key schema', 16_384)], risk: 'write', pagination: 'none' }
+    case 'database-delete-table': return { service: 'dynamodb', operation: request.operation, args: ['dynamodb', 'delete-table', '--table-name', coreInputText(request, 'tableName', 'Table name', 255)], risk: 'destructive', pagination: 'none' }
+    case 'vpc-describe-vpcs': return { service: 'vpc', operation: request.operation, args: ['ec2', 'describe-vpcs', ...(coreInput(request).vpcId ? ['--vpc-ids', coreInputText(request, 'vpcId', 'VPC id')] : [])], risk: 'read-only', pagination: 'none' }
+    case 'vpc-create-vpc': return { service: 'vpc', operation: request.operation, args: ['ec2', 'create-vpc', '--cidr-block', coreInputText(request, 'cidr', 'IPv4 CIDR')], risk: 'write', pagination: 'none' }
+    case 'vpc-create-subnet': return { service: 'vpc', operation: request.operation, args: ['ec2', 'create-subnet', '--vpc-id', coreInputText(request, 'vpcId', 'VPC id'), '--cidr-block', coreInputText(request, 'cidr', 'Subnet IPv4 CIDR')], risk: 'write', pagination: 'none' }
+    case 'vpc-delete-vpc': return { service: 'vpc', operation: request.operation, args: ['ec2', 'delete-vpc', '--vpc-id', coreInputText(request, 'vpcId', 'VPC id')], risk: 'destructive', pagination: 'none' }
+    case 'route53-list-hosted-zones': return { service: 'route53', operation: request.operation, args: ['route53', 'list-hosted-zones', '--max-items', String(maxResults(request.maxResults)), ...(token ? ['--starting-token', token] : [])], risk: 'read-only', pagination: 'manual-next-token' }
+    case 'route53-change-record': return { service: 'route53', operation: request.operation, args: ['route53', 'change-resource-record-sets', '--hosted-zone-id', coreInputText(request, 'hostedZoneId', 'Hosted zone id'), '--change-batch', jsonDocument(coreInput(request).changeBatch, 'Change batch', 'object')], risk: 'write', pagination: 'none' }
+    case 'route53-delete-hosted-zone': return { service: 'route53', operation: request.operation, args: ['route53', 'delete-hosted-zone', '--id', coreInputText(request, 'hostedZoneId', 'Hosted zone id')], risk: 'destructive', pagination: 'none' }
+    case 'cost-get-cost-and-usage': return { service: 'ce', operation: request.operation, args: ['ce', 'get-cost-and-usage', '--time-period', jsonDocument(coreInput(request).timePeriod, 'Cost report time period', 'object'), '--granularity', coreInputText(request, 'granularity', 'Cost granularity', 16), '--metrics', coreInputText(request, 'metrics', 'Cost metrics', 256)], risk: 'read-only', pagination: 'manual-next-token' }
+    case 'cost-create-budget': return { service: 'budgets', operation: request.operation, args: ['budgets', 'create-budget', '--account-id', coreInputText(request, 'accountId', 'AWS account id'), '--budget', jsonDocument(coreInput(request).budget, 'Budget', 'object')], risk: 'write', pagination: 'none' }
     default:
       throw new Error('The AWS manager operation is not supported.')
   }
@@ -305,6 +375,7 @@ function rowsFor(operation: AwsManagerOperation, payload: Record<string, unknown
     return [identity]
   }
   const keys: Record<AwsManagerOperation, string> = {
+    generic: '',
     'resource-list-views': 'Views',
     'resource-search': 'Resources',
     'cloud-list-types': 'TypeSummaries',
@@ -326,10 +397,18 @@ function rowsFor(operation: AwsManagerOperation, payload: Record<string, unknown
     'sts-get-caller-identity': 'ResponseMetadata',
     'lambda-list-functions': 'Functions', 'lambda-get-function': 'Configuration', 'lambda-delete-function': 'ResponseMetadata',
     'cloudwatch-list-metrics': 'Metrics', 'cloudwatch-get-metric-data': 'MetricDataResults',
-    'logs-describe-log-groups': 'logGroups', 'logs-describe-log-streams': 'logStreams', 'logs-get-log-events': 'events', 'logs-filter-log-events': 'events'
+    'logs-describe-log-groups': 'logGroups', 'logs-describe-log-streams': 'logStreams', 'logs-get-log-events': 'events', 'logs-filter-log-events': 'events',
+    'ecr-list-repositories': 'repositories', 'ecr-describe-images': 'imageDetails', 'ecr-create-repository': 'repository', 'ecr-delete-repository': 'ResponseMetadata',
+    'ecs-list-clusters': 'clusterArns', 'ecs-list-services': 'serviceArns', 'ecs-update-service': 'service', 'ecs-delete-service': 'service',
+    'eks-list-clusters': 'clusters', 'eks-describe-cluster': 'cluster', 'eks-update-nodegroup': 'update', 'eks-delete-cluster': 'cluster',
+    'rds-describe-db-instances': 'DBInstances', 'rds-create-db-instance': 'DBInstance', 'rds-create-db-snapshot': 'DBSnapshot', 'rds-delete-db-instance': 'DBInstance',
+    'database-list-tables': 'TableNames', 'database-create-table': 'TableDescription', 'database-delete-table': 'TableDescription',
+    'vpc-describe-vpcs': 'Vpcs', 'vpc-create-vpc': 'Vpc', 'vpc-create-subnet': 'Subnet', 'vpc-delete-vpc': 'ResponseMetadata',
+    'route53-list-hosted-zones': 'HostedZones', 'route53-change-record': 'ChangeInfo', 'route53-delete-hosted-zone': 'ChangeInfo',
+    'cost-get-cost-and-usage': 'ResultsByTime', 'cost-create-budget': 'ResponseMetadata'
   }
   const value = payload[keys[operation]]
-  if (Array.isArray(value)) return value.filter((item): item is Record<string, unknown> => !!item && typeof item === 'object' && !Array.isArray(item))
+  if (Array.isArray(value)) return value.slice(0, MAX_RESULTS).map((item) => item && typeof item === 'object' && !Array.isArray(item) ? item as Record<string, unknown> : { value: item })
   if (value && typeof value === 'object' && !Array.isArray(value)) return [value as Record<string, unknown>]
   return []
 }
@@ -360,7 +439,11 @@ export class AwsResourceManagerService {
   private readonly running = new Map<string, ChildProcessWithoutNullStreams>()
   private runtimeCache: { executable: string; status: AwsCliRuntimeStatus } | null = null
 
-  constructor(private readonly platform: CorePlatform, private readonly resolveAwsCli?: AwsCliResolver) {
+  constructor(
+    private readonly platform: CorePlatform,
+    private readonly resolveAwsCli?: AwsCliResolver,
+    private readonly wizardModels?: AwsWizardModelService
+  ) {
     this.bindings = new AtomicJsonArrayStore(join(platform.userDataDir, 'aws', 'resource-manager-bindings.json'))
   }
 
@@ -412,10 +495,34 @@ export class AwsResourceManagerService {
     return true
   }
 
+  private async genericSpec(request: AwsManagerRequest): Promise<CommandSpec> {
+    if (!this.wizardModels || !request.generic) throw new Error('The generic AWS model manager is unavailable in this build.')
+    const serviceId = text(request.generic.serviceId, 'AWS service', 128)
+    const commandName = text(request.generic.commandName, 'AWS command', 256)
+    const source = await this.wizardModels.source(serviceId, commandName)
+    if (!source) throw new Error('The selected AWS operation is not present in the current model inventory. Refresh and choose it again.')
+    const definition = buildAwsWizardDefinition(source)
+    const validation = validateAwsWizardValue(definition, request.generic.input)
+    if (!validation.ok) throw new Error(validation.issues[0]?.message ?? 'The modeled AWS input is invalid.')
+    const root = validation.value && typeof validation.value === 'object' && !Array.isArray(validation.value)
+      ? validation.value as Record<string, unknown>
+      : {}
+    const args = [serviceId, commandName]
+    for (const field of definition.root.children) genericFieldArgs(field, root[field.name], args)
+    if (source.pagination && request.maxResults !== undefined) args.push('--max-items', String(maxResults(request.maxResults)))
+    return {
+      service: serviceId,
+      operation: commandName,
+      args,
+      risk: genericRisk(commandName),
+      pagination: source.pagination && request.maxResults !== undefined ? 'manual-next-token' : 'none'
+    }
+  }
+
   async preview(nodeId: string, request: AwsManagerRequest): Promise<AwsOperationPreview> {
     const binding = await this.binding(nodeId)
     if (!binding) throw new Error('Configure a local AWS profile and region before running this operation.')
-    const spec = operationSpec(request)
+    const spec = request.operation === 'generic' ? await this.genericSpec(request) : operationSpec(request)
     const argv = [
       ...spec.args,
       '--profile', binding.profileName,
@@ -454,7 +561,7 @@ export class AwsResourceManagerService {
       } catch {
         throw new Error('AWS CLI returned output that was not valid JSON.')
       }
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('AWS CLI returned an unexpected JSON shape.')
+      if (!parsed || typeof parsed !== 'object') throw new Error('AWS CLI returned an unexpected JSON shape.')
       if (request.operation === 'cloudformation-create-change-set') {
         const changeSetId = typeof (parsed as Record<string, unknown>).Id === 'string'
           ? (parsed as Record<string, unknown>).Id as string
@@ -490,10 +597,14 @@ export class AwsResourceManagerService {
         if (!complete) throw new Error('CloudFormation did not finish the change-set preview before the bounded wait expired.')
         parsed = complete
       }
-      const payload = request.operation.startsWith('s3-') || request.operation.startsWith('ec2-') || request.operation.startsWith('iam-') || request.operation.startsWith('sts-') || request.operation.startsWith('lambda-') || request.operation.startsWith('cloudwatch-') || request.operation.startsWith('logs-')
+      const payload = request.operation === 'generic' || request.operation.startsWith('s3-') || request.operation.startsWith('ec2-') || request.operation.startsWith('iam-') || request.operation.startsWith('sts-') || request.operation.startsWith('lambda-') || request.operation.startsWith('cloudwatch-') || request.operation.startsWith('logs-')
         ? redactCorePayload(parsed) as Record<string, unknown>
         : parsed as Record<string, unknown>
-      const rows = rowsFor(request.operation, payload)
+      const rows = request.operation === 'generic'
+        ? (Array.isArray(payload)
+            ? payload.filter((item): item is Record<string, unknown> => !!item && typeof item === 'object' && !Array.isArray(item))
+            : [payload])
+        : rowsFor(request.operation, payload)
       const nextToken = typeof payload.NextToken === 'string' && payload.NextToken.length <= 16_384 ? payload.NextToken : null
       const result: AwsManagerResult = {
         operationId: id,

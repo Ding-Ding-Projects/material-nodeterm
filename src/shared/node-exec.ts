@@ -30,8 +30,10 @@ import { BUILTIN_AGENT_IDS, isPermissionMode } from './agents/config'
 import { sshExtraArgsEnableLocalExec } from './ssh'
 import type { AgentLaunchIntent, CanvasNodeState, PendingLaunch } from './types'
 import type { NsisLocalPaths } from './nsis-form-types'
+import { safeOpenWebUiLocalBinding, type OpenWebUiLocalBinding } from './open-webui-hosting'
 import { normalizeVirtualMachineLocalPaths, safeVirtualMachinePath, type VirtualMachineLocalPaths } from './virtual-machine'
 import { normalizeAwsIdentityBinding, type AwsIdentityBinding } from './aws-identity'
+import { validateNextcloudManagedBinding, type NextcloudManagedBinding } from './nextcloud-managed'
 
 /** Per-node exec values the LOCAL machine typed. Persisted only in the machine-local index. */
 export interface LocalNodeExec {
@@ -39,6 +41,10 @@ export interface LocalNodeExec {
   shell?: string
   /** `NodeState.terminalProfileId` — this machine's snapshotted Windows profile choice. */
   terminalProfileId?: string
+  /** `NodeState.namedTerminalProfileId` — this machine's saved profile choice. */
+  namedTerminalProfileId?: string
+  /** Initial directory paired with the named profile, kept out of portable project content. */
+  namedTerminalProfileCwd?: string
   /** `NodeState.ssh.extraArgs` — raw advanced ssh args for this node's connection. */
   sshExtraArgs?: string
   /** A delayed launch authorized on this machine; never accepted from project files or peers. */
@@ -61,6 +67,10 @@ export interface LocalNodeExec {
    * endpoint with a password embedded in it is refused rather than stored.
    */
   serviceConnection?: ServiceConnection
+  /** Open WebUI container and provider binding, kept in the machine-local index. */
+  openWebUiLocalBinding?: OpenWebUiLocalBinding
+  /** Managed Nextcloud destination paths and vault-key names, kept off shared project data. */
+  nextcloudManagedBinding?: NextcloudManagedBinding
   /** Local AWS profile, region and endpoint binding. Contains no credential bytes. */
   awsIdentityBinding?: AwsIdentityBinding
   /**
@@ -379,8 +389,11 @@ function stripNodeExec(n: CanvasNodeState): CanvasNodeState {
   if (
     withoutMediaPaths.shell === undefined &&
     withoutMediaPaths.terminalProfileId === undefined &&
+    withoutMediaPaths.namedTerminalProfileId === undefined &&
     withoutMediaPaths.pendingLaunch === undefined &&
     withoutMediaPaths.serviceConnection === undefined &&
+    withoutMediaPaths.openWebUiLocalBinding === undefined &&
+    withoutMediaPaths.nextcloudManagedBinding === undefined &&
     withoutMediaPaths.awsIdentityBinding === undefined &&
     withoutMediaPaths.nsisLocalPaths === undefined &&
     withoutMediaPaths.virtualMachineLocalPaths === undefined &&
@@ -389,10 +402,15 @@ function stripNodeExec(n: CanvasNodeState): CanvasNodeState {
   )
     return withoutMediaPaths
   const out: CanvasNodeState = { ...withoutMediaPaths }
+  const namedProfileHasLocalCwd = withoutMediaPaths.namedTerminalProfileId !== undefined
   delete out.shell
   delete out.terminalProfileId
+  delete out.namedTerminalProfileId
+  if (namedProfileHasLocalCwd) delete out.cwd
   delete out.pendingLaunch
   delete out.serviceConnection
+  delete out.openWebUiLocalBinding
+  delete out.nextcloudManagedBinding
   delete out.awsIdentityBinding
   delete out.nsisLocalPaths
   delete out.virtualMachineLocalPaths
@@ -483,29 +501,40 @@ export function carryLocalNodeExec(
   const pendingLaunch = next.kind === 'terminal' ? clonePendingLaunch(prev.pendingLaunch) : undefined
   const nsisPaths = safeNsisLocalPaths(prev.nsisLocalPaths)
   const vmPaths = normalizeVirtualMachineLocalPaths(prev.virtualMachineLocalPaths)
+  const openWebUiBinding = prev.kind === 'open-webui-hosting' ? prev.openWebUiLocalBinding : undefined
   const awsIdentityBinding = normalizeAwsIdentityBinding(prev.awsIdentityBinding)
   const mediaFilePath = safePathString(prev.filePath) ? prev.filePath : undefined
   const mediaSourcePaths = localMediaSourcePaths(prev)
+  const nextcloudBinding = prev.kind === 'nextcloud-managed' && next.kind === 'nextcloud-managed'
+    ? (() => { try { return validateNextcloudManagedBinding(prev.nextcloudManagedBinding) } catch { return undefined } })()
+    : undefined
   if (
     prev.shell === undefined &&
     prev.terminalProfileId === undefined &&
+    prev.namedTerminalProfileId === undefined &&
     extraArgs === undefined &&
     pendingLaunch === undefined &&
     nsisPaths === undefined &&
     awsIdentityBinding === null &&
     Object.keys(vmPaths).length === 0 &&
+    openWebUiBinding === undefined &&
     mediaFilePath === undefined &&
-    mediaSourcePaths === undefined
+    mediaSourcePaths === undefined &&
+    nextcloudBinding === undefined
   )
     return next
   const out: CanvasNodeState = { ...next }
   if (prev.shell !== undefined) out.shell = prev.shell
   if (prev.terminalProfileId !== undefined) out.terminalProfileId = prev.terminalProfileId
+  if (prev.namedTerminalProfileId !== undefined) out.namedTerminalProfileId = prev.namedTerminalProfileId
+  if (prev.namedTerminalProfileId !== undefined && prev.cwd !== undefined) out.cwd = prev.cwd
   if (extraArgs !== undefined && out.ssh)
     out.ssh = { ...out.ssh, extraArgs, execTrusted: prev.ssh?.execTrusted }
   if (pendingLaunch !== undefined) out.pendingLaunch = pendingLaunch
   if (nsisPaths !== undefined) out.nsisLocalPaths = nsisPaths
   if (Object.keys(vmPaths).length > 0) out.virtualMachineLocalPaths = vmPaths
+  if (openWebUiBinding) out.openWebUiLocalBinding = openWebUiBinding
+  if (nextcloudBinding) out.nextcloudManagedBinding = nextcloudBinding
   if (awsIdentityBinding) out.awsIdentityBinding = awsIdentityBinding
   return restoreMediaPaths(out, { mediaFilePath, mediaSourcePaths })
 }
@@ -542,6 +571,10 @@ export function localNodeExec(nodes: CanvasNodeState[]): LocalNodeExecMap | unde
     // node is saved. The trusted core resolver validates it at spawn and reports an unavailable
     // profile rather than silently switching shells. This boundary only decides provenance.
     if (n.terminalProfileId !== undefined) entry.terminalProfileId = n.terminalProfileId
+    if (n.namedTerminalProfileId !== undefined) entry.namedTerminalProfileId = n.namedTerminalProfileId
+    if (n.namedTerminalProfileId !== undefined && safePathString(n.cwd)) {
+      entry.namedTerminalProfileCwd = n.cwd
+    }
     const extraArgs = n.ssh?.extraArgs
     if (extraArgs && (n.ssh?.execTrusted || !sshExtraArgsEnableLocalExec(extraArgs)))
       entry.sshExtraArgs = extraArgs
@@ -551,8 +584,16 @@ export function localNodeExec(nodes: CanvasNodeState[]): LocalNodeExecMap | unde
     // endpoint into the trusted store — the exact laundering `sanitizeInboundNode` exists to stop.
     const conn = safeServiceConnection(n.serviceConnection)
     if (conn) entry.serviceConnection = conn
+    if (n.kind === 'open-webui-hosting') {
+      const openWebUiBinding = safeOpenWebUiLocalBinding(n.openWebUiLocalBinding)
+      if (openWebUiBinding) entry.openWebUiLocalBinding = openWebUiBinding
+    }
     const awsIdentityBinding = normalizeAwsIdentityBinding(n.awsIdentityBinding)
     if (awsIdentityBinding) entry.awsIdentityBinding = awsIdentityBinding
+    const nextcloudBinding = n.kind === 'nextcloud-managed'
+      ? (() => { try { return validateNextcloudManagedBinding(n.nextcloudManagedBinding) } catch { return undefined } })()
+      : undefined
+    if (nextcloudBinding) entry.nextcloudManagedBinding = nextcloudBinding
     const nsisPaths = safeNsisLocalPaths(n.nsisLocalPaths)
     if (nsisPaths) entry.nsisLocalPaths = nsisPaths
     const vmPaths = normalizeVirtualMachineLocalPaths(n.virtualMachineLocalPaths)
@@ -567,10 +608,14 @@ export function localNodeExec(nodes: CanvasNodeState[]): LocalNodeExecMap | unde
     if (
       entry.shell ||
       entry.terminalProfileId !== undefined ||
+      entry.namedTerminalProfileId !== undefined ||
+      entry.namedTerminalProfileCwd !== undefined ||
       entry.sshExtraArgs ||
       entry.pendingLaunch ||
       entry.serviceConnection ||
+      entry.openWebUiLocalBinding ||
       entry.awsIdentityBinding ||
+      entry.nextcloudManagedBinding ||
       entry.nsisLocalPaths ||
       entry.virtualMachineLocalPaths ||
       entry.mediaFilePath ||
@@ -597,6 +642,8 @@ export function applyLocalNodeExec(
     const out: CanvasNodeState = stripNodeExec(n)
     if (mine?.shell) out.shell = mine.shell
     if (mine?.terminalProfileId !== undefined) out.terminalProfileId = mine.terminalProfileId
+    if (mine?.namedTerminalProfileId !== undefined) out.namedTerminalProfileId = mine.namedTerminalProfileId
+    if (mine?.namedTerminalProfileCwd !== undefined) out.cwd = mine.namedTerminalProfileCwd
     if (out.ssh && mine?.sshExtraArgs) {
       // Ours: it came out of the machine-local index, so the exec site may honor an option like
       // ProxyCommand (a jump host is a legitimate thing to have configured).
@@ -611,8 +658,16 @@ export function applyLocalNodeExec(
     // that would be refused today must not be honoured merely because it is already on disk.
     const conn = safeServiceConnection(mine?.serviceConnection)
     if (conn) out.serviceConnection = conn
+    if (n.kind === 'open-webui-hosting') {
+      const openWebUiBinding = safeOpenWebUiLocalBinding(mine?.openWebUiLocalBinding)
+      if (openWebUiBinding) out.openWebUiLocalBinding = openWebUiBinding
+    }
     const awsIdentityBinding = normalizeAwsIdentityBinding(mine?.awsIdentityBinding)
     if (awsIdentityBinding) out.awsIdentityBinding = awsIdentityBinding
+    const nextcloudBinding = out.kind === 'nextcloud-managed'
+      ? (() => { try { return validateNextcloudManagedBinding(mine?.nextcloudManagedBinding) } catch { return undefined } })()
+      : undefined
+    if (nextcloudBinding) out.nextcloudManagedBinding = nextcloudBinding
     const nsisPaths = safeNsisLocalPaths(mine?.nsisLocalPaths)
     if (nsisPaths) out.nsisLocalPaths = nsisPaths
     const vmPaths = normalizeVirtualMachineLocalPaths(mine?.virtualMachineLocalPaths)

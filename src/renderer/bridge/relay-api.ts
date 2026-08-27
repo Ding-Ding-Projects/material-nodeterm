@@ -134,6 +134,10 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     // elsewhere. VM paths and process state are machine-local; until a scoped relay route exists,
     // keep the operation visibly unavailable rather than silently using this desktop's QEMU.
     virtualMachine: stub.virtualMachine,
+    // Host diagnostics describe the machine running the core service. A relay viewer must not
+    // silently replace that with this desktop's local snapshot; until a scoped host route exists,
+    // keep the capability explicitly unavailable.
+    windowsDiagnostics: stub.windowsDiagnostics,
     ...buildAgentApi(client), // onAgentStatus / onSubagentActivity — the host's agent hooks
     ...buildCanvasApi(client), // canvas sync against the host's reflector
     ...buildPresenceApi(client), // the host's presence hub
@@ -232,6 +236,11 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     // Relay v1 has no remote-routed manager channel, so refuse rather than contacting the viewer.
     cloudflareZeroTrust: stub.cloudflareZeroTrust,
     ollama: stub.ollama,
+    openWebUi: stub.openWebUi,
+    // Tunnel credentials and provider state belong to the host machine. Relay v1 does not route
+    // this inventory, so the viewer gets an explicit unsupported surface rather than querying its
+    // own account by accident.
+    cloudflareTunnels: stub.cloudflareTunnels,
     // Same reasoning as converter/ollama immediately above: creating and running a Minecraft
     // server is ONE machine's filesystem/java/process table, and there is no remote-routed core
     // call for it yet. Refuse cleanly rather than silently provisioning/spawning on the WRONG

@@ -17,6 +17,24 @@ a separate window, so the diff sits right next to the terminal you're working in
 worktrees (see below). Selecting a worktree in the canvas automatically preselects it as the
 panel's scope.
 
+**Nested repositories.** When a project folder is not itself a Git checkout, the panel performs a
+bounded read-only scan up to three directory levels deep. It skips dependency and generated-output
+folders, follows real directories only, and verifies each `.git` marker with `git rev-parse
+--show-toplevel` before exposing it. Verified child repositories become additional scopes labelled
+with their project-relative path, so `frontend/` and `backend/` can be managed without creating a
+second nodeterm project. A normal checkout can expose the same child scopes alongside its main
+checkout and bound worktrees.
+
+The scan is capped at 512 directories and returns bounded pages of at most 128 results through an
+opaque cursor. The UI follows those pages up to its own eight-page display bound and keeps the
+cursor and limit explicit in the result. It inspects directory metadata before resolving a child
+path, skips symbolic links and Windows reparse-point paths, and rejects any candidate that is not
+lexically inside the configured project folder. A partial-read or safety-limit result remains
+distinct from an empty result and includes the number of directories examined. SSH projects keep
+the existing remote limitation because a local filesystem scan cannot prove anything about the
+remote host. A retry action is available when the scan cannot read every folder; no repository is
+initialized automatically.
+
 **Worktrees.** A git worktree — a second working copy of the same repository, checked out to a
 different branch — binds to a canvas **group** node. Every terminal or agent node created
 inside that group inherits the worktree's directory as its working directory automatically, so
@@ -69,6 +87,9 @@ politely undone the way a local merge can.
   report "everything is gone" for a perfectly healthy remote repository. This is a stated v1
   limitation, not a silent gap — the affordance shows up disabled with the reason, rather than
   disappearing.
+- **Nested repository discovery cannot read every folder**: the panel keeps any verified results,
+  reports that the scan was incomplete, and offers a retry. It never treats an unreadable folder
+  as proof that no repository exists there.
 - **Another program writes after the final proof check**: nodeterm serializes its own supported
   removal processes and remeasures immediately before invoking Git, but no portable filesystem
   transaction can freeze a non-cooperating editor between that check and `git worktree remove`.
@@ -102,6 +123,10 @@ politely undone the way a local merge can.
   available height, then verify from the built desktop app that the title and actions stay inside
   the painted card, only the list scrolls, and the layout remains usable at narrow widths and
   high display scales. The source repair exists, but this evidence has not been collected yet.
+- **Pending nested-repository verification:** create a project folder containing separate
+  `frontend/` and `backend/` checkouts, open Source Control, select each discovered scope, and
+  confirm status, history, staging, and diffs use the selected child checkout. This lane did not
+  run tests, type checks, lint, builds, packaging, runtime interaction, or captures.
 
 ## Suggested articles
 

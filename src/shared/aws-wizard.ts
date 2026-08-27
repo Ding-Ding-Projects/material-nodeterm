@@ -59,6 +59,8 @@ export interface AwsWizardModelSource {
   commandName: string
   inputShape: string | null
   shapes: readonly AwsWizardSourceShape[] | Readonly<Record<string, Omit<AwsWizardSourceShape, 'name'>>>
+  /** Whether the installed model declares a paginator for this operation. */
+  pagination?: boolean
 }
 
 export interface AwsWizardServiceOption {

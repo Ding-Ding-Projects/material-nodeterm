@@ -20,6 +20,13 @@ import {
   type CloudflarePortableIntent
 } from '@shared/cloudflare-core-managers'
 import type { CanvasNode } from '../state/workspace'
+import { TunnelStatePanel } from '../components/tunnel/TunnelStatePanel'
+import {
+  DEFAULT_TUNNEL_PORTABLE_INTENT,
+  type TunnelFacet,
+  type TunnelLiveState,
+  type TunnelPortableIntent
+} from '@shared/tunnel-state'
 
 const FIELD_NAMES: Partial<Record<CloudflareOperation, string[]>> = {
   'account-get': ['accountId'],
@@ -74,6 +81,12 @@ export default function CloudflareCoreManagersNode({ id, data, selected }: NodeP
   const operationSearchRef = useRef<HTMLInputElement>(null)
   const credentialSearchRef = useRef<HTMLInputElement>(null)
   const api = window.nodeTerminal.cloudflareCoreManagers
+  const tunnelIntent: TunnelPortableIntent = data.cloudflareTunnelIntent ?? {
+    ...DEFAULT_TUNNEL_PORTABLE_INTENT,
+    nodeId: id,
+    displayName: 'Cloudflare Tunnel'
+  }
+  const [tunnelState, setTunnelState] = useState<TunnelLiveState | null>(null)
   const operations = CLOUDFLARE_OPERATIONS_BY_MANAGER[manager]
   const fields = FIELD_NAMES[operation] ?? []
   const resultSearch = { account: accountSearch, zone: zoneSearch, dns: dnsSearch, 'ssl-tls': sslSearch, ruleset: rulesetSearch, redirect: redirectSearch, cache: cacheSearch, analytics: analyticsSearch }[manager]
@@ -109,6 +122,20 @@ export default function CloudflareCoreManagersNode({ id, data, selected }: NodeP
     if (!api) return
     return api.onProgress((progress) => { if (progress.nodeId === id) setOperationState(progress.message) })
   }, [api, id])
+
+  useEffect(() => {
+    if (!api?.tunnelState) return
+    let active = true
+    void api.tunnelState(id).then((state) => { if (active) setTunnelState(state) }).catch(() => { if (active) setTunnelState(null) })
+    const unsubscribe = api.onTunnelState((state) => { if (state.nodeId === id) setTunnelState(state) })
+    return () => { active = false; unsubscribe() }
+  }, [api, id])
+
+  const probeTunnelFacet = async (facet: TunnelFacet): Promise<void> => {
+    if (!api?.probeTunnelFacet) return
+    try { setTunnelState(await api.probeTunnelFacet(id, facet)) }
+    catch { setTunnelState(await api.tunnelState(id)) }
+  }
 
   const saveCredential = async (): Promise<void> => {
     if (!api) return
@@ -183,5 +210,11 @@ export default function CloudflareCoreManagersNode({ id, data, selected }: NodeP
       {visibleRows.length ? <div role="list">{visibleRows.map((row, index) => <article key={index} role="listitem"><pre>{JSON.stringify(row, null, 2)}</pre></article>)}</div> : <p>No Cloudflare results yet. Choose a manager, bind a local credential, and run a guided operation.</p>}
       {result?.nextPage ? <Button disabled={busy} onClick={() => void run()}>Load next page</Button> : null}{busy ? <Button onClick={() => void api?.cancel(result?.operationId ?? '')}>Cancel</Button> : null}
     </section>
+    <TunnelStatePanel
+      intent={tunnelIntent}
+      live={tunnelState}
+      onRetry={api?.probeTunnelFacet ? (facet) => void probeTunnelFacet(facet) : undefined}
+      onCancel={api?.cancelTunnelProbe ? () => void api.cancelTunnelProbe(id) : undefined}
+    />
   </div>
 }

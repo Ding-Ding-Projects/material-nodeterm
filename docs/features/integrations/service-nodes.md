@@ -14,7 +14,7 @@ already-running external GitLab instance and still stores only its safe address 
 
 Service manager node kinds join the canvas's `NodeKind` union
 (`src/shared/types.ts` `SERVICE_NODE_KINDS`): `minecraft`, `dockerhost`, `proxmox`, `gitlab`,
-`homeassistant`, `freepbx`, `cloudflare-zero-trust`, and `nextcloud-aio`. Each shares the same service-node shell,
+`homeassistant`, `freepbx`, `cloudflare-zero-trust`, `nextcloud-aio`, and `nextcloud-managed`. Each shares the same service-node shell,
 `src/renderer/nodes/ServiceNode.tsx` — one component with these callers, because the only thing that
 varies between them is a label and a starting size, and this codebase's most repeated lesson is
 that a duplicated rule drifts from its copies.
@@ -56,6 +56,11 @@ Proxmox from the top level anyway (see the sectioned/filterable pane-menu behavi
 The Cloudflare manager panel provides typed Access, Zero Trust, Workers, Pages, R2, D1 and Queues
 operations with local protected credentials, portable neutral intent, bounded responses, progress,
 cancellation, and destructive confirmation. Other service kinds retain their documented paths.
+
+The `nextcloud-managed` node is the no-socket hosting route. It owns fixed PostgreSQL, Redis, and
+Nextcloud web services, persistent local data, generated secret files, loopback binding, and guided
+update, backup, restore, and rollback sequencing. Its operation surface is documented separately
+in [Managed Nextcloud, no socket](nextcloud-managed.md).
 
 ### What you get, and its starting size
 

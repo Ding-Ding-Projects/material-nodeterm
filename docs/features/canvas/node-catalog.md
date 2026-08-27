@@ -24,7 +24,8 @@ and cancellation. The registry also carries explicit disabled blueprint rows for
 Calendar, Planner,
 Multiverse, AWS Universe, AWS service, Cloudflare hosting, Nextcloud hosting, and Open WebUI
 hosting nodes. GitLab hosting is available as a guided private Server node with a pinned official
-image and local Configure and Deploy flow. A planned row is never mistaken for an available feature. Remote terminal
+image and local Configure and Deploy flow. A managed no-socket Nextcloud row is also available, with fixed PostgreSQL,
+Redis, and web services plus local recovery operations. A planned row is never mistaken for an available feature. Remote terminal
 creation remains disabled until the dedicated saved-connection picker supplies a concrete binding.
 Alarm Clock is active and creates the same paused, timezone-aware node used by the canvas add menu.
 Wild dim sum is also active: it creates a guided public-catalog node whose live network state stays

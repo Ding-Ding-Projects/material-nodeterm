@@ -11,6 +11,13 @@
   and release-workflow checks. The ultra-speed pass does not run tests, reviews, accessibility or
   security checks, runtime interaction, or screen captures after activation.
 
+- Add opt-in Claude account rotation for new default sessions. When the selected account reaches the
+  configured usage threshold, the launch funnel chooses the configured account with the most
+  headroom, preserves explicit account picks and running sessions, and fails safe when usage is
+  unavailable. This ultra-speed lane intentionally did not run tests, type checks, lint, reviews,
+  security or accessibility checks, builds, packaging, installer execution, runtime interaction, or
+  UI captures.
+
 - Mount the AWS CDK manager through the shared AWS resource node and AWS Shop. The guided route
   uses the existing local profile and region binding, a native project-folder picker, bounded
   trust review of `cdk.json` and dependency manifests, fixed synth and diff actions, stack search
@@ -18,6 +25,151 @@
   confirmation for removal or replacement changes. Portable intent contains only safe app and stack
   intent. This issue #48 preparation lane did not run tests, type checks, lint, builds, packaging,
   runtime interaction, reviews, accessibility or security checks, or screen captures.
+
+- Correct issue #103's Easter egg discovery route so all 60 entries are contextual and bounded.
+  Removed keyboard chords, typed codes, Alt-click force discovery, and direct Try controls. The
+  cabinet now contains discovery history and Reset discoveries only, while the 45-second cooldown,
+  School-mode suppression, accessibility, reduced motion, ten funny levels, and local-only safety
+  contract remain in place. This correction lane did not run tests, lint, type checks, builds,
+  packaging, runtime interaction, reviews, audits, or captures.
+
+- Add the managed no-socket Nextcloud hosting node with fixed PostgreSQL, Redis, and web services,
+  persistent local data, generated secret files, loopback-only binding, bounded health and progress
+  reporting, guided backup and restore snapshots, explicit update rollback sequencing, and no Docker
+  socket or privileged mode. Machine-local paths and secret-key names stay out of portable project
+  data. This ultra-speed lane intentionally did not run tests, type checks, lint, builds, packaging,
+  runtime interaction, reviews, accessibility or security checks, or captures.
+- Add Program 38 AWS platform-manager operations to the shared AWS ResourceNode: ECR, ECS, EKS,
+  RDS, database, VPC, Route 53, and cost management. Typed previews, fixed argument arrays,
+  bounded inputs and output, pagination, progress, cancellation, retry, local profile binding,
+  portable safe intent, credential redaction, and destructive confirmation all reuse the existing
+  manager. This issue #49 lane intentionally did not run tests, type checks, lint, builds,
+  packaging, runtime interaction, reviews, accessibility or security checks, or captures.
+
+- Add the generic all-service AWS operation route to the AWS Universe Shop. It reads installed CLI
+  models, opens the shared schema-driven operation wizard with independent anchored regex searches,
+  sends validated input through the shared AWS resource manager, previews fixed argv, bounds output
+  and pagination, supports cancellation and progress, and uses destructive confirmation. No tests,
+  type checks, lint, builds, packaging, runtime interaction, reviews, accessibility or security
+  checks, or captures were run in this ultra-speed lane.
+- Add the typed Cloudflare Tunnel inventory and route manager. It reads bounded tunnel, ingress,
+  and DNS records, preserves existing routes, reports hostname conflicts, and supports explicit
+  CNAME adoption or one-record replacement behind the existing two-key confirmation. Portable
+  schema 3 intent excludes account, zone, tunnel, DNS ids, credentials, provider sessions, paths,
+  caches, and live state. The ultra-speed lane intentionally did not run tests, type checks, lint,
+  reviews, security or accessibility checks, builds, packaging, installer execution, runtime
+  interaction, or UI captures.
+
+- Add the review-first Cloudflare Tunnel wizard with populated account, zone, hostname, host,
+  discovered container, network, port, and origin pickers. Each picker has isolated local search
+  and an anchored regex builder; the host boundary receives only opaque selections, progress is
+  cancellable, failures retain a recovery preview, and local provider credential binding stays
+  separate from schema 3 portable intent. This ultra-speed lane intentionally did not run tests,
+  type checks, lint, reviews, security or accessibility checks, builds, packaging, installer
+  execution, runtime interaction, or UI captures.
+- Add guided `cloudflared` connector runtimes for a per-user process, an owned Windows service,
+  and a pinned Docker connector. The main process validates discovered executables, contexts,
+  networks, tunnel references, and generated ownership names; invokes fixed argument arrays with
+  bounded progress and health; stores tunnel credentials locally; materializes only short-lived
+  token files; and keeps portable schema 3 intent free of paths, credentials, process state, and
+  host identifiers. Tests, type checks, lint, reviews, security or accessibility checks, builds,
+  packaging, installer execution, runtime interaction, and captures were intentionally not run in
+  this ultra-speed implementation lane.
+
+- Add the tunnel state model for six independent observations: API creation, DNS routing, connector
+  health, Access policy, origin reachability, and external reachability. The shared model uses
+  bounded, timestamp-ordered transitions with honest `unknown`, `pending`, `ready`, `failed`, and
+  `blocked` states, plus source and evidence for each observation. The Cloudflare core stack now
+  exposes local state, generation fencing, cancellation, bounded probe expiry, typed IPC, and
+  Desktop/Server Edition parity. Schema 3 carries only safe route intent, while provider ids,
+  connector ids, process state, local paths, and live observations remain local. The guided state
+  panel mounts in the Cloudflare manager with separate plain-text search and status filtering, each
+  with its own adjacent anchored regex builder. Current tunnel-specific probes remain visibly
+  unavailable or unknown until their adapters exist. This ultra-speed implementation lane
+  intentionally did not run tests, type checks, lint, reviews, security or accessibility checks,
+  builds, packaging, installer execution, runtime interaction, or captures.
+- Add a guided hosted-service Cloudflare Tunnel handoff that verifies a loopback origin before any
+  external change, requires explicit exposure confirmation, keeps provider credentials and runtime
+  identifiers machine-local, checks provider capabilities before enabling the action, and reports connector and external reachability as separate states. The
+  ultra-speed lane did not run tests, type checks, lint, builds, packaging, reviews, security or
+  accessibility checks, installer execution, runtime interaction, or captures.
+- Add guided Kiosk and PWA browser sessions. Schema 3 stores only validated secure target intent,
+  display name, mode, and requested permission names, while browser profile state, grants, cookies,
+  process state, and host identifiers remain local. Kiosk sessions deny popups and insecure targets;
+  PWA sessions require a real installed-app inventory and show an honest unavailable state when it
+  is missing. Exit, Retry, ownership checks, and lifecycle failure states are explicit. This
+  ultra-speed lane intentionally did not run tests, type checks, lint, reviews, security checks,
+  accessibility checks, builds, packaging, installer execution, runtime interaction, or captures.
+- Add a read-only Windows diagnostics canvas node with fixed PowerShell queries for drives and
+  storage, services, startup entries, scheduled tasks, updates, network state, and bounded event
+  summaries. Each section has guided tabs and a local filter with an adjacent anchored full regex
+  builder, while unavailable and malformed host responses remain explicit. No tests, type checks,
+  lint, reviews, security or accessibility checks, builds, packaging, installer execution, runtime
+  interaction, or UI captures were run in this ultra-speed lane.
+  The lane was later reconciled with `origin/main` at
+  `54164b84dce0b7e62787b1de2885405ff4ed821c`; the reconciliation merge was recorded on its feature
+  ref and does not change the no-check verification boundary.
+- Add the opt-in **Seamless agent messaging** setting. With it off, agent `send` and `reply`
+  requests use the existing confirmation surface; with it on, they use the same guarded mailbox
+  delivery path without the repeated per-message decision. Project capability consent, idle-target
+  checks, flow limits, delivery traces, bounded queue outcomes, and confirmation for node closing
+  remain unchanged. The bounded hook `CONTROL_CEILING_MS` is preserved. This ultra-speed lane did
+  not run tests, type checks, lint, reviews, security or accessibility checks, builds, packaging,
+  installer execution, runtime interaction, or UI captures.
+- Add per-account default node colours for managed Claude and Codex accounts. Settings exposes
+  shared colour swatches, new nodes capture the owning account's colour at creation, and phone-
+  registered nodes use the host-resolved account colour. Claude and Codex account ids are resolved
+  against their own lists, malformed or empty values fall back to the builtin agent colour, and
+  existing nodes remain unchanged. This ultra-speed lane intentionally did not run tests, type
+  checks, lint, reviews, security or accessibility checks, builds, packaging, installer execution,
+  runtime interaction, or screen captures.
+
+- Add per-session emoji or local image icons. Terminal session icons are validated at both project
+  serialization seams, copied through the durable canvas-image writer, stored portably when the
+  project has a local folder, and rendered consistently in the canvas header, Kanban card, card
+  modal, and sessions sidebar. This source-only Program 61 lane intentionally did not run tests,
+  type checks, lint, builds, packaging, installer execution, runtime interaction, security or
+  accessibility checks, reviews, or UI captures.
+- Add the first-class Files node from upstream PR #294. Each node keeps one persisted directory
+  listing on the canvas with breadcrumb navigation, filtering through the shared anchored regex
+  builder, file and folder creation, path copy, local file-manager reveal, file routing, and a
+  terminal-in-folder action. SSH and relay listings stay on their owning filesystem, worktree
+  removal displaces stale directory nodes, and remote paths never reach the local operating-system
+  opener. This lane intentionally did not run tests, lint, type checks, builds, packaging, runtime
+  interaction, reviews, audits, security or accessibility checks, or UI captures.
+- Add display-only agent-state recovery and workflow-state sidebar grouping for issue #74. The
+  lifecycle-bound snapshot keeps the last known Claude, Gemini, or Codex state available after a
+  restart while expiring operational evidence remains separate. Recovered state cannot trigger
+  notifications, authorization, process control, or hibernation, and fresh hook events take
+  precedence. Unread remains a row-level affordance, so completed and unknown sessions stay in
+  their workflow sections. This ultra-speed lane did not run tests, type checks, lint, builds,
+  packaging, runtime interaction, reviews, security or accessibility checks, or captures.
+- Add optional labels and bounded editable line thickness to canvas annotations. Labels, stroke
+  widths, variants, and diagonals now persist through ordinary project files and schema 3 portable
+  projections with validation at the import boundary. Issue #76's ultra-speed lane intentionally
+  did not run tests, type checks, lint, reviews, security or accessibility checks, builds, packaging,
+  installer execution, runtime interaction, or UI captures.
+
+- Add user-named terminal profiles for the upstream #286 workflow. Settings now stores a bounded
+  name, initial directory, and optional startup command, with a native folder picker, local search,
+  edit/remove/default controls, and creation-time selection for terminal and agent nodes. Stable
+  ids remain in the machine-local execution overlay, while paths and commands stay out of portable
+  project files and peer traffic. Tests, type checks, lint, builds, packaging, runtime interaction,
+  and captures remain unrun under the Program 66 issue boundary.
+- Add independent custom alert sound files for finished-agent and needs-attention events. Settings
+  → Notifications now validates bounded local audio, stores the bytes in app data so Server Edition
+  can replay them on its host, provides per-event preview and reset controls, and falls back to the
+  built-in cues whenever a custom file is missing or cannot be decoded. This ultra-speed lane did
+  not run tests, type checks, lint, reviews, security or accessibility checks, builds, packaging,
+  installer execution, runtime interaction, or UI captures.
+- Add bounded nested Git repository discovery to Source Control. Projects whose configured folder
+  contains child checkouts can select each verified repository as an independent scope, while
+  unreadable scans remain distinct from an empty result and SSH projects retain their explicit
+  remote limitation. Results are paged with an opaque cursor, capped at 512 scanned directories,
+  and guarded against symbolic-link and Windows reparse-point traversal. This ultra-speed
+  implementation lane intentionally did not run tests, type checks, lint, reviews, security or
+  accessibility checks, builds, packaging, installer execution, runtime interaction, or UI
+  captures.
 
 - Mount the seven AWS core-service routes on the shared AWS manager: S3, EC2, IAM, STS, Lambda,
   CloudWatch, and CloudWatch Logs. Typed operation controls now cover bounded reads, selected writes,
@@ -134,6 +286,13 @@
   existing two-key destructive confirmation. This ultra-speed lane intentionally ran no tests, type
   checks, lint, builds, packaging, reviews, security or accessibility checks, installer execution,
   runtime interaction, or UI captures.
+- Add Usage popover default account selection for issue #70 and Program 59. Local and SSH Claude
+  identity rows now offer a real keyboard-accessible choice for future sessions, persist only the
+  active project's default account, keep running sessions unchanged, and fall back to System when
+  a saved identity is stale. This lane is based on origin/main
+  54164b84dce0b7e62787b1de2885405ff4ed821c and recorded in commit 95e8eb8e19e4a568bf7286b35a9cdf789a6983ac.
+  Tests, lint, type checks, builds, packaging, runtime interaction, reviews, accessibility checks,
+  security audits, and UI captures were intentionally not run.
 
 - Add the bundled AWS CLI v2 dependency lane. Windows packaging now stages the pinned official
   `2.36.32` MSI, verifies its SHA-256, falls back through a verified local cache or canonical
@@ -172,6 +331,22 @@
   text search and adjacent anchored full regex builder. Tests, type checks, lint, reviews, security
   and accessibility checks, builds, packaging, installer execution, runtime interaction, and UI
   captures were intentionally not run in this ultra-speed lane.
+- Add Browser Portal lifecycle ownership with guided isolated profile creation, profile reset and
+  removal semantics, explicit canvas/modal guest ownership, safe schema 3 browser-profile intent,
+  and local-only browser data. The implementation lane intentionally ran no tests, type checks,
+  lint, reviews, security or accessibility checks, builds, packaging, runtime interaction, or UI
+  captures.
+
+- Refresh the Browser Portal documentation with the exact no-profile-borrowing boundary, guest
+  process/window ownership, restart and crash recovery, bounded navigation states, and the honest
+  Server Edition and mobile boundaries. This record-only pass reconciled against fetched
+  `origin/main` `54164b84dce0b7e62787b1de2885405ff4ed821c` without rewriting the lane history.
+- Add proxy and isolated debugging browser sessions with guided profile and proxy choices, explicit
+  certificate policies, host-owned lifecycle and recovery, bounded redacted diagnostics, and a
+  separate browser partition. Schema 3 carries only safe intent; credentials, certificates,
+  executable paths, process state, cookies, and debugging data remain local. The ultra-speed lane
+  intentionally ran no tests, type checks, lint, reviews, security or accessibility checks, builds,
+  packaging, installer execution, runtime interaction, or captures.
 
 - Complete the Express File Converter flow with queue-wide collision-safe destination names,
   visible rename disclosure, final atomic no-clobber publication, and a completed-output action that
@@ -2528,8 +2703,18 @@ or on GitHub's [tags](https://github.com/eneskirca/nodeterm/tags) and
 
 # Unreleased
 
+- Add a guided Open WebUI hosting node with persistent data, local Ollama reuse, an
+  OpenAI-compatible provider option, honest first-user setup and health states, backup and restore,
+  pinned-image update and rollback, local-only bindings, and anchored regex search for its pickers.
 - Add issue #103's local Easter egg cabinet with 60 stable, non-blocking surprises across the
   desktop surfaces. Each entry has English and Cantonese copy, ten funny levels, keyboard and
   touch discovery, reduced-motion behavior, local discovery-only persistence, reset support, and
   complete School-mode suppression. No tests, builds, runtime interaction, or captures were run in
   this lane by explicit scope.
+# Unreleased
+
+## Added
+
+- Add first-class GitHub issue and pull-request canvas work-item nodes with safe persistence and
+  shared API/account integration. Source-only implementation for upstream #462 and downstream #132;
+  verification remains unrun.

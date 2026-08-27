@@ -33,6 +33,19 @@ published 2026-08-26 at 17:32:49 UTC.
 > target is Windows x64. The browser-based Server Edition and the separate mobile companion are
 > different surfaces with different deployment and verification boundaries.
 
+## Cloudflare Tunnel inventory
+
+The Cloudflare Tunnel manager offers a bounded, searchable inventory of tunnels, ingress routes,
+and DNS records. Route saves preserve existing ingress rules. Hostname conflicts are shown before
+mutation, and DNS adoption is an explicit reviewed action; replacing one record requires the
+existing two-key confirmation. Portable schema 3 intent carries route choices only, while account
+ids, provider sessions, credentials, paths, caches, and live state remain local. See the
+[Cloudflare Tunnel article](docs/features/remote/cloudflare-tunnel-inventory.md).
+
+This is a fork of [eneskirca/nodeterm](https://github.com/eneskirca/nodeterm). The site's own
+custom domain belongs to the upstream repository, so this fork publishes its documentation at
+[ding-ding-projects.github.io/material-nodeterm](https://ding-ding-projects.github.io/material-nodeterm/)
+instead — note the trailing `/material-nodeterm/`.
 ## Install
 
 The latest verified release baseline for this document is **v0.4.120**:
@@ -325,7 +338,7 @@ The full inventory of what nodeterm writes where (and what the script keeps, lik
 Right-click to open a **terminal** or an **agent** node. Alongside them live **sticky notes**
 (link one to a terminal to feed it context on demand), **Monaco editors**, **diff views**, web and
 browser views, annotations, and a family of **service managers** — Minecraft, Docker host,
-Proxmox, GitLab, Home Assistant and FreePBX — each an ordinary node you drag, colour, group and
+Proxmox, GitLab, Home Assistant, FreePBX and Open WebUI hosting — each an ordinary node you drag, colour, group and
 persist like any other, because a managed service is something you arrange beside the terminals
 working on it, not a modal you visit.
 
@@ -394,6 +407,10 @@ continuity applies remotely too. Or run the **Server Edition**: the same rendere
 over HTTP/WebSocket from a host you own, reached from any browser, with passkey or password auth.
 One command (`./host.sh`, or `host.bat` on Windows) builds and starts it in a container. Phone
 pairing is a free feature, not a paywalled one.
+
+Cloudflare Tunnel connectors can run as a guided per-user process, an owned Windows service, or a
+pinned Docker connector. Tokens stay in local protected storage and are materialized only as
+short-lived token files. See [`docs/features/remote/cloudflared-runtimes.md`](./docs/features/remote/cloudflared-runtimes.md).
 
 ### Source control and git worktrees
 
@@ -473,6 +490,10 @@ Identical on desktop and in the browser.
 - **Local Ollama suite manager** — a local manager for [Ollama](https://ollama.com) that talks
   only to its documented local HTTP API, never a cloud service. See
   [`docs/ollama-manager.md`](./docs/ollama-manager.md).
+- **Open WebUI hosting** — a guided Docker node with persistent data, existing Ollama reuse,
+  an OpenAI-compatible provider option, honest first-user setup, health, backup, restore, update,
+  rollback, and machine-local bindings. See
+  [`docs/features/hosting/open-webui-hosting.md`](./docs/features/hosting/open-webui-hosting.md).
 - **Torrent Downloader** — local WebTorrent downloads with magnet and `.torrent` intake,
   metadata/file selection, safe destination preflight, progress, pause/resume/cancel/retry,
   restart reconciliation, and bounded per-task seeding. See
@@ -497,6 +518,14 @@ Identical on desktop and in the browser.
 
 </details>
 ## Windows
+
+### Read-only Windows diagnostics
+
+The Windows diagnostics node gives a bounded, read-only snapshot of drives and storage, services,
+startup entries, scheduled tasks, updates, network state, and System/Application event summaries.
+Each area has its own tab and a local plain-text-first filter with an adjacent anchored full regex
+builder. It never mutates host state, and a missing provider or non-Windows host produces an honest
+unavailable state. See [Read-only Windows diagnostics](docs/features/windows/windows-diagnostics.md).
 
 Windows is a first-class desktop target: a native **Squirrel.Windows** installer, a
 Windows-shaped default shell (PowerShell/cmd, not `bash`), and a Material title bar with native

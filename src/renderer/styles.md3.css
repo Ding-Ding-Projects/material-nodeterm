@@ -24,6 +24,52 @@
   --nav-rail-w: 88px;
 }
 
+/* Cloudflare Tunnel inventory: all values use the shared MD3 token roles and stay scrollable on
+ * narrow canvases. The panel deliberately presents provider records as typed choices, not a raw
+ * request editor. */
+.cloudflare-tunnel-manager {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  color: var(--md-on-surface);
+  background: var(--md-surface-container-low);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-large);
+  overflow: auto;
+  max-height: 100%;
+}
+.cloudflare-tunnel-manager__status,
+.cloudflare-tunnel-manager__guided-form,
+.cloudflare-tunnel-manager__route-form,
+.cloudflare-tunnel-manager__dns {
+  display: grid;
+  gap: 8px;
+}
+.cloudflare-tunnel-manager__status { padding: 10px 12px; background: var(--md-surface-container); border-radius: var(--md-shape-medium); }
+.cloudflare-tunnel-manager__status span { color: var(--md-on-surface-variant); overflow-wrap: anywhere; }
+.cloudflare-tunnel-manager__guided-form { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); align-items: end; }
+.cloudflare-tunnel-manager__guided-form .service-node__note { grid-column: 1 / -1; }
+.cloudflare-tunnel-manager__search-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.cloudflare-tunnel-manager__search-row > :first-child { flex: 1 1 auto; min-width: 0; }
+.cloudflare-tunnel-manager__pills,
+.cloudflare-tunnel-manager__rows { display: grid; gap: 8px; max-height: 210px; overflow: auto; }
+.cloudflare-tunnel-manager__pills button,
+.cloudflare-tunnel-manager__rows article,
+.cloudflare-tunnel-manager__rows button { display: grid; gap: 3px; text-align: left; padding: 10px 12px; min-height: 48px; color: var(--md-on-surface); background: var(--md-surface-container); border: 1px solid var(--md-outline-variant); border-radius: var(--md-shape-medium); }
+.cloudflare-tunnel-manager__pills button[aria-selected="true"],
+.cloudflare-tunnel-manager__rows button[aria-selected="true"] { border-color: var(--md-primary); background: var(--md-secondary-container); }
+.cloudflare-tunnel-manager__pills small,
+.cloudflare-tunnel-manager__rows span,
+.cloudflare-tunnel-manager__rows small { color: var(--md-on-surface-variant); overflow-wrap: anywhere; }
+.cloudflare-tunnel-manager__route-form { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); border: 1px solid var(--md-outline-variant); border-radius: var(--md-shape-medium); padding: 12px; }
+.cloudflare-tunnel-manager__route-form legend { padding: 0 4px; color: var(--md-on-surface-variant); }
+.cloudflare-tunnel-manager__route-form .cloudflare-tunnel-manager__actions { grid-column: 1 / -1; }
+.cloudflare-tunnel-manager__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.cloudflare-tunnel-manager__warning { color: var(--md-on-error-container); background: var(--md-error-container); border-radius: var(--md-shape-small); padding: 8px; overflow-wrap: anywhere; }
+@media (max-width: 520px) {
+  .cloudflare-tunnel-manager { padding: 10px; }
+.cloudflare-tunnel-manager__actions > * { flex: 1 1 140px; }
+}
 /* AWS operation wizard: generated controls keep the model's exact bounds visible and editable. */
 .aws-wizard {
   width: min(1100px, calc(100vw - 32px));
@@ -72,6 +118,15 @@
 .shop-node__aws-wizard-search { display: flex; gap: 6px; align-items: center; }
 .shop-node__aws-wizard-search input { flex: 1; }
 .shop-node__aws-wizard-popover { width: min(1080px, calc(100vw - 16px)); }
+.shop-node__aws-preview { display: grid; gap: 8px; margin-top: 12px; padding: 12px; border: 1px solid var(--md-outline-variant); border-radius: var(--md-shape-md); background: var(--md-surface-container-high); }
+.shop-node__aws-preview h3, .shop-node__aws-preview p { margin: 0; }
+.shop-node__aws-preview dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 12px; margin: 0; }
+.shop-node__aws-preview dl div { min-width: 0; }
+.shop-node__aws-preview dt { color: var(--md-on-surface-variant); font-size: .75rem; }
+.shop-node__aws-preview dd { margin: 0; overflow-wrap: anywhere; }
+.shop-node__aws-preview pre { max-height: 180px; margin: 0; padding: 8px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--md-surface-container); border-radius: var(--md-shape-sm); }
+.shop-node__aws-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+@media (max-width: 620px) { .shop-node__aws-preview dl { grid-template-columns: 1fr; } }
 @media (max-width: 760px) {
   .aws-wizard { width: calc(100vw - 16px); max-height: calc(100vh - 16px); padding: 16px; }
   .aws-wizard__body { grid-template-columns: 1fr; }
@@ -2730,6 +2785,153 @@ button.term-node__title-text:focus-visible {
   outline-offset: 2px;
 }
 
+/* Cloudflare Tunnel wizard: every discovery list paints its own bounded surface and keeps its
+   local search plus anchored regex affordance usable when the node is narrow. */
+.cloudflare-tunnel-wizard {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-height: min(86vh, 860px);
+  overflow: auto;
+  padding: 18px;
+  background: var(--md-surface);
+  color: var(--md-on-surface);
+}
+.cloudflare-tunnel-wizard__header,
+.cloudflare-tunnel-wizard__preview,
+.cloudflare-tunnel-wizard__progress {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-lg);
+  background: var(--md-surface-container);
+}
+.cloudflare-tunnel-wizard__header h2,
+.cloudflare-tunnel-wizard__preview h3 { margin: 0; }
+.cloudflare-tunnel-wizard__header p,
+.cloudflare-tunnel-wizard__preview p { margin: 0; color: var(--md-on-surface-variant); }
+.cloudflare-tunnel-wizard__form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.cloudflare-tunnel-wizard__picker {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+  margin: 0;
+  padding: 10px;
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-md);
+  background: var(--md-surface-container-low);
+}
+.cloudflare-tunnel-wizard__picker legend { padding: 0 4px; font-weight: 650; }
+.cloudflare-tunnel-wizard__search { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.cloudflare-tunnel-wizard__search > input { min-width: 0; flex: 1 1 auto; }
+.cloudflare-tunnel-wizard__choices {
+  display: grid;
+  gap: 6px;
+  max-height: 150px;
+  overflow: auto;
+  padding: 2px;
+}
+.cloudflare-tunnel-wizard__choices button {
+  display: grid;
+  gap: 2px;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-md);
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+  text-align: left;
+  cursor: pointer;
+}
+.cloudflare-tunnel-wizard__choices button[aria-selected='true'] {
+  border-color: var(--md-primary);
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+.cloudflare-tunnel-wizard__choices button:disabled { cursor: not-allowed; opacity: .65; }
+.cloudflare-tunnel-wizard__choices small { color: var(--md-on-surface-variant); overflow-wrap: anywhere; }
+.cloudflare-tunnel-wizard__error {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--md-shape-md);
+  background: var(--md-error-container);
+  color: var(--md-on-error-container);
+}
+.cloudflare-tunnel-wizard__preview dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 5px 12px; margin: 0; }
+.cloudflare-tunnel-wizard__preview dt { color: var(--md-on-surface-variant); }
+.cloudflare-tunnel-wizard__preview dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.cloudflare-tunnel-wizard__preview ul { margin: 0; padding-left: 20px; }
+.cloudflare-tunnel-wizard__progress { grid-template-columns: max-content minmax(0, 1fr); align-items: center; }
+.cloudflare-tunnel-wizard__progress progress { grid-column: 1 / -1; width: 100%; accent-color: var(--md-primary); }
+.cloudflare-tunnel-wizard__message { margin: 0; color: var(--md-on-surface-variant); }
+.cloudflare-tunnel-wizard__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.cloudflare-tunnel-wizard :is(button, input, select):focus-visible { outline: 2px solid var(--md-primary); outline-offset: 2px; }
+@media (max-width: 700px) {
+  .cloudflare-tunnel-wizard__form { grid-template-columns: minmax(0, 1fr); }
+  .cloudflare-tunnel-wizard__progress { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cloudflare-tunnel-wizard *, .cloudflare-tunnel-wizard *::before, .cloudflare-tunnel-wizard *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+}
+/* Cloudflare Tunnel state panel. Each facet is intentionally its own row so a partial provider
+   outage cannot make the whole route look ready. Search controls keep the builder trigger beside
+   the field, and all interactive targets retain the shared 44px minimum. */
+.tunnel-state-panel {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  padding: 16px;
+  color: var(--md-on-surface);
+  background: var(--md-surface-container);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-large);
+}
+.tunnel-state-panel__header,
+.tunnel-state-panel__row,
+.tunnel-state-panel__search-row,
+.tunnel-state-panel__portable-details > div { display: flex; align-items: center; gap: 12px; }
+.tunnel-state-panel__header,
+.tunnel-state-panel__row { justify-content: space-between; }
+.tunnel-state-panel__title,
+.tunnel-state-panel__row h4 { margin: 0; font-size: 16px; line-height: 24px; font-weight: 500; }
+.tunnel-state-panel__hostname,
+.tunnel-state-panel__explanation,
+.tunnel-state-panel__row p,
+.tunnel-state-panel__row small,
+.tunnel-state-panel__message { margin: 4px 0 0; color: var(--md-on-surface-variant); font-size: 14px; line-height: 20px; }
+.tunnel-state-panel__row small { display: block; font-size: 12px; line-height: 16px; }
+.tunnel-state-panel__filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.tunnel-state-panel__field { display: grid; gap: 6px; min-width: 0; color: var(--md-on-surface-variant); font-size: 14px; line-height: 20px; font-weight: 500; }
+.tunnel-state-panel__search-row > input { min-width: 0; flex: 1; }
+.tunnel-state-panel__search-row > .md3-regex-trigger,
+.tunnel-state-panel__portable-toggle { min-width: 44px; min-height: 44px; }
+.tunnel-state-panel__legend,
+.tunnel-state-panel__rows { display: grid; gap: 8px; }
+.tunnel-state-panel__legend { display: flex; flex-wrap: wrap; gap: 8px; }
+.tunnel-state-panel__row { align-items: flex-start; padding: 12px; background: var(--md-surface-container-high); border: 1px solid var(--md-outline-variant); border-radius: var(--md-shape-medium); }
+.tunnel-state-panel__row-copy { min-width: 0; }
+.tunnel-state-panel__status { display: inline-flex; align-items: center; min-height: 28px; padding: 4px 10px; border-radius: var(--md-shape-full); color: var(--md-on-surface-variant); background: var(--md-surface-container-highest); font-size: 12px; line-height: 16px; font-weight: 500; white-space: nowrap; }
+.tunnel-state-panel__status--ready { color: var(--md-on-success-container); background: var(--md-success-container); }
+.tunnel-state-panel__status--failed { color: var(--md-on-error-container); background: var(--md-error-container); }
+.tunnel-state-panel__status--blocked { color: var(--md-on-warning-container); background: var(--md-warning-container); }
+.tunnel-state-panel__status--pending { color: var(--md-on-primary-container); background: var(--md-primary-container); }
+.tunnel-state-panel__portable { padding-top: 4px; border-top: 1px solid var(--md-outline-variant); }
+.tunnel-state-panel__portable-toggle { color: var(--md-primary); background: transparent; border: 0; border-radius: var(--md-shape-small); font-size: 14px; line-height: 20px; font-weight: 500; cursor: pointer; }
+.tunnel-state-panel__portable-toggle:focus-visible,
+.tunnel-state-panel :is(button, input):focus-visible { outline: 3px solid var(--md-primary); outline-offset: 2px; }
+.tunnel-state-panel__portable-details { display: grid; gap: 8px; margin: 12px 0 0; color: var(--md-on-surface-variant); font-size: 12px; line-height: 16px; }
+.tunnel-state-panel__portable-details dt { min-width: 100px; font-size: 12px; line-height: 16px; font-weight: 500; }
+.tunnel-state-panel__portable-details dd { margin: 0; }
+.tunnel-state-panel__portable-note { align-items: flex-start !important; }
+@media (max-width: 620px) {
+  .tunnel-state-panel__filters { grid-template-columns: 1fr; }
+  .tunnel-state-panel__row { display: grid; }
+}
 /* Guided AWS core-service manager (issue #46). The manager uses the same Material Design roles as the
  * other service panels, with an internal scroll region so long JSON and localized labels never
  * escape the node at narrow widths or high display scales. */
@@ -3037,6 +3239,28 @@ button.term-node__title-text:focus-visible {
 .virtual-machine-node__display code { user-select:all; }
 .virtual-machine-node :is(button,input,select):focus-visible { outline:2px solid var(--md-primary); outline-offset:2px; }
 @media (max-width:560px) { .virtual-machine-node__grid { grid-template-columns:1fr; } .virtual-machine-node__actions,.virtual-machine-node__snapshot { flex-wrap:wrap; } }
+
+.windows-diagnostics-node { display:flex; flex-direction:column; width:100%; height:100%; overflow:hidden; color:var(--md-on-surface,#f2f2f7); background:var(--md-surface-container); border:1px solid var(--md-outline-variant,#3a3a3c); border-radius:var(--md-shape-medium); }
+.windows-diagnostics-node.selected { box-shadow:0 0 0 2px var(--md-primary,#0a84ff); }
+.windows-diagnostics-node__body { display:flex; flex:1; flex-direction:column; gap:8px; min-height:0; padding:12px; overflow:auto; }
+.windows-diagnostics-node__status,.windows-diagnostics-node__hint,.windows-diagnostics-node__error { margin:0; font-size:11px; line-height:1.4; }
+.windows-diagnostics-node__hint { color:var(--md-on-surface-variant,#9a9a9e); }
+.windows-diagnostics-node__status { color:var(--md-primary,#0a84ff); }
+.windows-diagnostics-node__status.is-error,.windows-diagnostics-node__error { color:var(--md-error,#ffb4ab); }
+.windows-diagnostics-node__tabs { display:flex; flex-wrap:wrap; gap:4px; }
+.windows-diagnostics-node__tabs button { min-height:40px; padding:0 10px; color:var(--md-on-surface); background:var(--md-surface-container-high); border:1px solid var(--md-outline-variant); border-radius:var(--md-shape-small); cursor:pointer; }
+.windows-diagnostics-node__tabs button.is-active { color:var(--md-on-primary-container); background:var(--md-primary-container); }
+.windows-diagnostics-node__search { display:flex; align-items:center; gap:4px; }
+.windows-diagnostics-node__search input { flex:1; min-height:40px; padding:6px 9px; color:inherit; background:var(--md-surface); border:1px solid var(--md-outline); border-radius:var(--md-shape-small); }
+.windows-diagnostics-node__panel { min-height:0; overflow:auto; }
+.windows-diagnostics-node__table { display:flex; flex-direction:column; gap:6px; }
+.windows-diagnostics-node__row { display:flex; flex-direction:column; gap:4px; padding:8px; background:var(--md-surface-container-high); border:1px solid var(--md-outline-variant); border-radius:var(--md-shape-small); }
+.windows-diagnostics-node__row > div { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:4px 10px; }
+.windows-diagnostics-node__row span { display:flex; flex-direction:column; gap:2px; min-width:0; font-size:10px; }
+.windows-diagnostics-node__row b { color:var(--md-on-surface-variant); font-size:9px; font-weight:600; }
+.windows-diagnostics-node__row code { overflow-wrap:anywhere; color:var(--md-on-surface); font:inherit; }
+.windows-diagnostics-node :is(button,input):focus-visible { outline:2px solid var(--md-primary); outline-offset:2px; }
+@media (max-width:620px) { .windows-diagnostics-node__tabs button { flex:1 1 140px; } .windows-diagnostics-node__row > div { grid-template-columns:1fr; } }
 
 /* ============================================================================================
    MD3: Kanban board (Board lane — design/v2/MD3 Board.dc.html)
@@ -13322,6 +13546,75 @@ button.term-node__title-text:focus-visible {
   .cdk-manager__folder-row > input,
   .cdk-manager__folder-row > button { width: 100%; flex-basis: 100%; }
 
+.kiosk-pwa-setup-dialog {
+  width: min(680px, calc(100vw - 32px));
+  max-height: min(760px, calc(100vh - 32px));
+  overflow-y: auto;
+}
+
+.kiosk-pwa-setup-dialog__intro,
+.kiosk-pwa-setup-dialog__availability,
+.kiosk-pwa-setup-dialog__error {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.kiosk-pwa-setup-dialog__intro,
+.kiosk-pwa-setup-dialog__availability {
+  color: var(--md-on-surface-variant);
+}
+
+.kiosk-pwa-setup-dialog__error {
+  color: var(--md-error);
+}
+
+.kiosk-pwa-setup-dialog__modes,
+.kiosk-pwa-setup-dialog__target-kind {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.kiosk-pwa-setup-dialog__modes button,
+.kiosk-pwa-setup-dialog__target-kind button,
+.kiosk-pwa-setup-dialog__app-list button {
+  min-height: 40px;
+  border: 1px solid var(--md-outline);
+  border-radius: var(--md-shape-medium);
+  padding: 8px 14px;
+  background: var(--md-surface-container);
+  color: var(--md-on-surface);
+  cursor: pointer;
+}
+
+.kiosk-pwa-setup-dialog__modes button.is-selected,
+.kiosk-pwa-setup-dialog__target-kind button.is-selected,
+.kiosk-pwa-setup-dialog__app-list button.is-selected {
+  border-color: var(--md-primary);
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+
+.kiosk-pwa-setup-dialog__modes button:disabled,
+.kiosk-pwa-setup-dialog__target-kind button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.kiosk-pwa-setup-dialog__app-list {
+  display: grid;
+  gap: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.kiosk-pwa-setup-dialog__app-list button {
+  display: grid;
+  gap: 3px;
+  text-align: left;
+}
+
 /* CloudFormation manager: compact guided controls inside a service node. */
 .cloudformation-manager {
   display: grid;
@@ -13410,6 +13703,61 @@ button.term-node__title-text:focus-visible {
   display: grid;
   gap: 3px;
   text-align: left;
+}
+
+.kiosk-pwa-setup-dialog__app-list small {
+  color: var(--md-on-surface-variant);
+  overflow-wrap: anywhere;
+}
+
+.kiosk-pwa-setup-dialog__permissions {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-large);
+  padding: 12px;
+}
+
+.kiosk-pwa-setup-dialog__permissions label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 40px;
+}
+
+.kiosk-pwa-node__body {
+  position: relative;
+}
+
+.kiosk-pwa-node__message {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  padding: 24px;
+  color: var(--md-on-surface-variant);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.kiosk-pwa-node__mode,
+.kiosk-pwa-node__state {
+  border-radius: var(--md-shape-small);
+  padding: 4px 8px;
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface-variant);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+  .kiosk-pwa-setup-dialog {
+    width: calc(100vw - 24px);
+  }
+
+  .kiosk-pwa-setup-dialog .mdx-dialog__actions > * {
+    flex: 1 1 120px;
+  }
 }
 
 .cloudformation-manager__rows {
@@ -13709,7 +14057,7 @@ button.term-node__title-text:focus-visible {
   .nextcloud-aio-panel *::before,
   .nextcloud-aio-panel *::after {
     animation-duration: 0.01ms !important;
-    transition-duration: 0.01ms !important;
+       transition-duration: 0.01ms !important;
   }
 }
 /* Door construction ---------------------------------------------------------
@@ -13867,6 +14215,33 @@ button.term-node__title-text:focus-visible {
     flex: 1 1 120px;
   }
 }
+/* Open WebUI hosting node: guided controls, explicit state, and anchored search affordances. */
+.open-webui-node { min-width: 0; overflow: hidden; color: var(--md-sys-color-on-surface); background: var(--md-sys-color-surface-container); border-radius: 18px; box-shadow: var(--md-sys-elevation-level2); }
+.open-webui-node__header { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 10px 14px; border-radius: 18px 18px 0 0; }
+.open-webui-node__icon { display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); }
+.open-webui-node__label { min-width: 0; font-weight: 650; }
+.open-webui-node__body { display: grid; gap: 14px; max-height: calc(100% - 52px); overflow: auto; padding: 14px; }
+.open-webui-node__intro, .open-webui-node__hint, .open-webui-node__empty, .open-webui-node__setup { margin: 0; color: var(--md-sys-color-on-surface-variant); font-size: 12px; line-height: 1.45; }
+.open-webui-node__section { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--md-sys-color-outline-variant); border-radius: 14px; background: var(--md-sys-color-surface-container-low); }
+.open-webui-node__section h4, .open-webui-node__state header { margin: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.open-webui-node__field { display: grid; gap: 5px; font-size: 12px; font-weight: 600; }
+.open-webui-node__field small { color: var(--md-sys-color-on-surface-variant); font-weight: 400; }
+.open-webui-node__search { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.open-webui-node__search > *:first-child { flex: 1 1 auto; min-width: 0; }
+.open-webui-node__pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.open-webui-node__pills button { min-height: 36px; padding: 6px 10px; border: 1px solid var(--md-sys-color-outline); border-radius: 999px; background: var(--md-sys-color-surface); color: var(--md-sys-color-on-surface); cursor: pointer; }
+.open-webui-node__pills button.selected, .open-webui-node__pills button[aria-checked=true] { border-color: var(--md-sys-color-primary); background: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); }
+.open-webui-node__pills button:focus-visible, .open-webui-node__actions button:focus-visible { outline: 3px solid var(--md-sys-color-primary); outline-offset: 2px; }
+.open-webui-node__pills button small { display: block; color: var(--md-sys-color-on-surface-variant); }
+.open-webui-node__state > p { margin: 0; font-size: 12px; line-height: 1.45; }
+.open-webui-node__setup { padding: 8px; border-radius: 10px; background: var(--md-sys-color-tertiary-container); color: var(--md-sys-color-on-tertiary-container); }
+.open-webui-node__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.open-webui-node__error { margin: 0; padding: 8px; border-radius: 10px; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); font-size: 12px; }
+.open-webui-node__jobs { display: grid; gap: 8px; }
+.open-webui-node__jobs h4 { margin: 0; }
+.open-webui-node__jobs article { display: grid; gap: 5px; padding: 8px; border-radius: 10px; background: var(--md-sys-color-surface-container-high); font-size: 12px; }
+.open-webui-node__jobs article header { display: flex; justify-content: space-between; gap: 8px; }
+@media (max-width: 640px) { .open-webui-node__body { padding: 10px; } .open-webui-node__actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); } .open-webui-node__actions button { width: 100%; } }
 /* GitLab hosting node: guided lifecycle surface, private binding, and bounded operations. */
 .gitlab-hosting-node { min-width: 560px; min-height: 360px; overflow: hidden; border: 1px solid var(--md-outline-variant); border-radius: 16px; background: var(--md-surface-container); color: var(--md-on-surface); box-shadow: var(--md-elevation-1); }
 .gitlab-hosting-node__header { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 8px 12px; border-bottom: 1px solid var(--md-outline-variant); }
@@ -13949,16 +14324,6 @@ button.term-node__title-text:focus-visible {
 }
 
 .easter-eggs__header > button { padding: 4px 12px; font-size: 1.4rem; }
-.easter-eggs__search { display: grid; gap: 6px; margin-top: 16px; }
-.easter-eggs__search input {
-  min-height: 44px;
-  border: 1px solid var(--md-outline, #938f99);
-  border-radius: 12px;
-  padding: 0 12px;
-  background: var(--md-surface, #1c1b1f);
-  color: inherit;
-}
-
 .easter-eggs__actions { flex-wrap: wrap; justify-content: flex-start; margin-top: 12px; }
 .easter-eggs__list { display: grid; gap: 8px; margin: 12px 0 0; padding: 0; list-style: none; }
 .easter-eggs__row {
@@ -13973,8 +14338,7 @@ button.term-node__title-text:focus-visible {
 .easter-eggs__row small { color: var(--md-on-surface-variant, #cac4d0); }
 .easter-eggs__row code { color: var(--md-primary, #d0bcff); }
 
-.easter-eggs__toast,
-.easter-eggs__armed {
+.easter-eggs__toast {
   position: fixed;
   right: 18px;
   z-index: 121;
@@ -13989,12 +14353,10 @@ button.term-node__title-text:focus-visible {
   box-shadow: var(--md-elevation-2, 0 4px 16px rgb(0 0 0 / 22%));
 }
 .easter-eggs__toast { bottom: 18px; }
-.easter-eggs__armed { top: 76px; }
 .easter-eggs__toast button { justify-self: start; }
 
 @media (prefers-reduced-motion: reduce) {
-  .easter-eggs__toast,
-  .easter-eggs__armed { animation: none; }
+  .easter-eggs__toast { animation: none; }
 }
 @media (max-width: 640px) {
   .easter-eggs__backdrop { place-items: stretch; padding: 12px; }

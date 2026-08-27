@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Read-only Windows diagnostics - nodeterm docs</title>
+    <meta name="description" content="Bounded, read-only Windows host diagnostics in nodeterm." />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+  </head>
+  <body>
+    <div class="doc-topbar"><a href="../index.html">← nodeterm</a><span aria-hidden="true">/</span><a href="./index.html">Docs</a></div>
+    <article class="doc-body">
+      <p class="doc-kicker">Windows</p>
+      <h1>Read-only Windows diagnostics</h1>
+      <p>The Windows diagnostics canvas node shows a bounded snapshot of drives and storage, services, startup entries, scheduled tasks, updates, network state, and System/Application event summaries.</p>
+      <h2>Guided, read-only surface</h2>
+      <p>Each area has its own tab and a local plain-text-first filter with an adjacent anchored full regex builder. The node offers refresh and rename only. It never starts, stops, enables, disables, edits, deletes, installs, or restarts a host resource.</p>
+      <h2>Honest host states</h2>
+      <p>Non-Windows hosts report that the capability is unavailable. Missing providers, failed fixed queries, empty results, and malformed responses stay distinct. Raw event messages are not collected; event data is summarized by log, level, provider, event id, and count.</p>
+      <h2>Privacy and portability</h2>
+      <p>The trusted core runs one fixed read-only PowerShell script with a fifteen-second deadline and bounded output. Snapshot rows, host identifiers, paths, process state, caches, and query output remain local runtime data and do not enter portable project files.</p>
+      <h2>Verification</h2>
+      <p>This ultra-speed implementation lane did not run tests, type checking, lint, review, security or accessibility checks, builds, packaging, installer execution, runtime interaction, or captures.</p>
+      <section class="doc-suggested"><h2>Suggested articles</h2><ul><li><a href="./windows-support.html">Windows support</a></li><li><a href="./node-kinds.html">Node kinds</a></li><li><a href="./node-catalog.html">Unified Node Catalog</a></li></ul></section>
+    </article>
+  </body>
+</html>

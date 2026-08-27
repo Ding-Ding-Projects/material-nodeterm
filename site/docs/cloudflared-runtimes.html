@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>cloudflared connector runtimes - nodeterm docs</title>
+    <meta name="description" content="Guided per-user process, Windows service, and Docker connector runtimes for cloudflared." />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+  </head>
+  <body>
+    <div class="doc-topbar"><a href="../index.html">← nodeterm</a></div>
+    <article class="doc-body">
+      <p class="doc-kicker">Documentation</p>
+      <h1>cloudflared connector runtimes</h1>
+      <p>Choose one guided runtime for a Cloudflare Tunnel connector: a process owned by the current user, an owned Windows service, or a pinned Docker connector.</p>
+
+      <h2>Runtime choices</h2>
+      <ul>
+        <li><strong>Per-user process</strong> runs a discovered <code>cloudflared</code> executable without administrator rights.</li>
+        <li><strong>Windows service</strong> is available only on Windows and may require administrator approval. It creates only a generated service owned by nodeterm.</li>
+        <li><strong>Docker connector</strong> uses the pinned <code>cloudflare/cloudflared</code> image, a discovered context, and a discovered network. The default network is none.</li>
+      </ul>
+      <p>Executable, context, network, service, and runtime lists are guided pickers. Each list has local plain-text search and an adjacent full regular-expression builder. Arbitrary shell, image, entrypoint, environment, and argument input are not accepted.</p>
+
+      <h2>Lifecycle</h2>
+      <p>Each owned connector reports unconfigured, disabled, starting, running, stopping, stopped, or failed. Start, stop, and restart show queued, starting, health-check, running, completed, failed, and cancelled progress. Health is read from the real process, service, or owned container, with a bounded timeout. A disappeared executable, context, network, service, or token produces a specific recovery action.</p>
+
+      <h2>Security and credentials</h2>
+      <p>Tunnel tokens are stored locally through the operating-system credential store when available. A restricted owner-only file is used only when that store is unavailable. The token value never enters command arguments, environment variables, project files, logs, exports, or the browser renderer.</p>
+      <p>The running connector reads a short-lived owner-only token file. Docker mounts only that file read-only, with a read-only root, dropped capabilities, no-new-privileges, bounded CPU, memory and process limits, no Docker socket, and no host network. Stopping the owned connector removes the materialized token file.</p>
+
+      <h2>Portable intent</h2>
+      <p>Project files carry only the selected runtime kind, tunnel reference, auto-start preference, network choice intent, node identity, node layout, and relationships. Credentials, executable and token paths, service names, Docker context and network identifiers, container names, process state, caches, and health results remain local. Import does not discover, launch, download, deploy, or contact a provider. The destination user explicitly configures or rebinds the runtime.</p>
+
+      <h2>Disabled choices</h2>
+      <p>Unavailable choices remain visible with the exact reason, such as missing executable, unavailable Docker, missing context or network, unavailable credential storage, unsupported platform, or required service permission. The next in-app action is shown beside the disabled choice.</p>
+
+      <h2>Verification status</h2>
+      <p>This source-only ultra-speed implementation lane did not run tests, type checks, lint, review, security or accessibility checks, builds, packaging, installer execution, runtime interaction, or UI captures. Those checks remain unverified until the integration lane runs them against the merged commit.</p>
+
+      <h2>Suggested articles</h2>
+      <ul>
+        <li><a href="./docker-host-manager.html">Docker host manager</a></li>
+        <li><a href="./remote-ssh-projects.html">Remote and SSH projects</a></li>
+        <li><a href="./node-catalog.html">Unified Node Catalog</a></li>
+      </ul>
+    </article>
+  </body>
+</html>

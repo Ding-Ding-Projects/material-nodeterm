@@ -166,6 +166,7 @@ export function buildStubApi(): Omit<
   | 'canvas'
   | 'dialog'
   | 'onAgentStatus'
+  | 'agentStatusSnapshot'
   | 'onSubagentActivity'
   | 'onUnreadClear'
   | 'answerPermission'
@@ -192,6 +193,16 @@ export function buildStubApi(): Omit<
       completeOAuth: () => Promise.resolve({ status: 'rejected' as const, account: null, reason: mapLocalVocabularyText('Provider callbacks are not accepted on this surface.') }),
       removeAccount: () => Promise.resolve({ ok: false as const, error: mapLocalVocabularyText('Provider accounts are not connected on this surface.') })
     },
+    cloudflareTunnels: {
+      zones: U('cloudflareTunnels.zones'),
+      inventory: U('cloudflareTunnels.inventory'),
+      planRoute: U('cloudflareTunnels.planRoute'),
+      planDnsAdoption: U('cloudflareTunnels.planDnsAdoption'),
+      saveRoute: U('cloudflareTunnels.saveRoute'),
+      adoptDnsRecord: U('cloudflareTunnels.adoptDnsRecord'),
+      cancel: noop,
+      onProgress: noopUnsub
+    },
     cloudflareCoreManagers: {
       runtime: U('cloudflareCoreManagers.runtime'),
       credentials: U('cloudflareCoreManagers.credentials'),
@@ -203,7 +214,11 @@ export function buildStubApi(): Omit<
       preview: U('cloudflareCoreManagers.preview'),
       execute: U('cloudflareCoreManagers.execute'),
       cancel: U('cloudflareCoreManagers.cancel'),
-      onProgress: noopUnsub
+      onProgress: noopUnsub,
+      tunnelState: U('cloudflareCoreManagers.tunnelState'),
+      probeTunnelFacet: U('cloudflareCoreManagers.probeTunnelFacet'),
+      cancelTunnelProbe: U('cloudflareCoreManagers.cancelTunnelProbe'),
+      onTunnelState: noopUnsub
     },
     ssh: {
       list: U('ssh.list'),
@@ -219,6 +234,8 @@ export function buildStubApi(): Omit<
       mkdir: U('sshProject.mkdir'),
       uploadFile: U('sshProject.uploadFile'),
       downloadFile: U('sshProject.downloadFile'),
+      forwardOAuthCallback: U('sshProject.forwardOAuthCallback'),
+      cancelOAuthCallback: U('sshProject.cancelOAuthCallback'),
       onStatus: noopUnsub,
       submitPassphrase: U('sshProject.submitPassphrase'),
       onPassphraseRequest: noopUnsub,
@@ -300,6 +317,9 @@ export function buildStubApi(): Omit<
         pickDir: U('browser.extensions.pickDir'),
         add: U('browser.extensions.add'),
         remove: U('browser.extensions.remove')
+      },
+      profile: {
+        reset: U('browser.profile.reset')
       },
       // Browser control does not exist off the desktop shell (no <webview>, no CDP), so there is no
       // lease to push and nothing to stop — the chip simply never appears.
@@ -537,6 +557,12 @@ export function buildStubApi(): Omit<
         cancel: noop,
         onProgress: noopUnsub
       },
+      nextcloudManaged: {
+        snapshots: U('relayHost.nextcloudManaged.snapshots'),
+        run: U('relayHost.nextcloudManaged.run'),
+        cancel: noop,
+        onProgress: noopUnsub
+      },
       start: U('relayHost.start'),
       invite: U('relayHost.invite'),
       stop: U('relayHost.stop'),
@@ -759,6 +785,14 @@ export function buildStubApi(): Omit<
       chatStop: U('ollama.chatStop'),
       onChatStream: noopUnsub
     },
+    openWebUi: {
+      contexts: U('openWebUi.contexts'),
+      state: U('openWebUi.state'),
+      health: U('openWebUi.health'),
+      run: U('openWebUi.run'),
+      cancel: noop,
+      onProgress: noopUnsub
+    },
     minecraft: {
       versions: U('minecraft.versions'),
       status: U('minecraft.status'),
@@ -808,6 +842,9 @@ export function buildStubApi(): Omit<
       openDisplay: U('virtualMachine.openDisplay'),
       reset: U('virtualMachine.reset'),
       onEvent: noopUnsub,
+    },
+    windowsDiagnostics: {
+      snapshot: U('windowsDiagnostics.snapshot')
     },
     calendar: {
       status: U('calendar.status'),
@@ -889,6 +926,7 @@ export function buildStubApi(): Omit<
     | 'canvas'
     | 'dialog'
     | 'onAgentStatus'
+    | 'agentStatusSnapshot'
     | 'onSubagentActivity'
     | 'onUnreadClear'
     | 'answerPermission'

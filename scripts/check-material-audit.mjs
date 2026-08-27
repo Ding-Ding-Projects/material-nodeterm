@@ -613,13 +613,19 @@ const evidenceCases = [
     label: 'tooltip role source marker',
     source: text('src/renderer/components/Tooltip.tsx') || '',
     marker: 'role="tooltip"',
-    check: (source) => hasSourceMarker(source, 'role="tooltip"')
+    check: (source) => hasSourceMarker(source, 'role="tooltip"'),
+    mutate: (source) => {
+      const mutated = source.replaceAll('role="tooltip"', '')
+      if (mutated === source) throw new Error('tooltip role mutation target was absent')
+      return mutated
+    }
   },
   {
     label: 'term-node radius owner',
     source: text('src/renderer/styles.md3.css') || '',
     marker: 'var(--md-shape-node)',
-    check: (source) => ownsRadiusToken(source, '.term-node', '--md-shape-node')
+    check: (source) => ownsRadiusToken(source, '.term-node', '--md-shape-node'),
+    mutate: (source) => removeRadiusTokenFromOwner(source, '.term-node', '--md-shape-node')
   },
   {
     label: 'localized language string',
@@ -640,11 +646,38 @@ const evidenceCases = [
     check: (source) => /useVocabularyMapper\s*\(\s*\)/.test(withoutComments(source))
   }
 ]
+
+function removeRadiusTokenFromOwner(css, selector, token) {
+  let start = css.length
+  let ownerStart = -1
+  for (;;) {
+    const candidate = css.lastIndexOf(selector, start - 1)
+    if (candidate < 0) break
+    const next = css[candidate + selector.length] ?? ''
+    if (!/[A-Za-z0-9_-]/.test(next)) {
+      ownerStart = candidate
+      break
+    }
+    start = candidate
+  }
+  if (ownerStart < 0) throw new Error(`radius owner ${selector} was absent`)
+  const open = css.indexOf('{', ownerStart)
+  const close = open < 0 ? -1 : css.indexOf('}', open)
+  if (open < 0 || close < 0) throw new Error(`radius owner ${selector} has no complete block`)
+  const block = css.slice(open, close)
+  const needle = `var(${token})`
+  const first = block.indexOf(needle)
+  if (first < 0 || first !== block.lastIndexOf(needle)) {
+    throw new Error(`radius owner ${selector} does not have one exact ${needle} token`)
+  }
+  return css.slice(0, open) + block.replace(needle, '') + css.slice(close)
+}
+
 for (const evidence of evidenceCases) {
   checked += 1
   if (!evidence.check(evidence.source)) fail(evidence.label + ': required evidence is absent')
   else pass(evidence.label + ': required evidence is present')
-  const mutant = evidence.source.replace(evidence.marker, '')
+  const mutant = evidence.mutate ? evidence.mutate(evidence.source) : evidence.source.replace(evidence.marker, '')
   checked += 1
   if (evidence.check(mutant)) fail(evidence.label + ': negative regression did not detect removed evidence')
   else pass(evidence.label + ': negative regression detects removed evidence')
@@ -666,7 +699,7 @@ try {
   const styleOriginal = text('src/renderer/styles.md3.css') || ''
   const stylePath = join(mutationRoot, 'styles.md3.css')
   copyFileSync(join(ROOT, 'src/renderer/styles.md3.css'), stylePath)
-  writeFileSync(stylePath, styleOriginal.replace('var(--md-shape-node)', ''), 'utf8')
+  writeFileSync(stylePath, removeRadiusTokenFromOwner(styleOriginal, '.term-node', '--md-shape-node'), 'utf8')
   checked += 1
   if (ownsRadiusToken(readFileSync(stylePath, 'utf8'), '.term-node', '--md-shape-node')) fail('real-file style mutation was not detected')
   else pass('real-file style mutation is detected')

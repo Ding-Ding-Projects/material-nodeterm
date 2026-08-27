@@ -4,7 +4,7 @@ import { sshAttachmentId, sshHostKey } from '@shared/ssh'
 import { useSettings } from '../../../state/settings'
 import { useSystemAccount } from '../../../state/systemAccount'
 import { useSystemCodexAccount } from '../../../state/systemCodexAccount'
-import { isAccountLoginNode, isCodexAccountLoginNode } from '../../../state/workspace'
+import { isAccountLoginNode, isCodexAccountLoginNode, NODE_COLORS } from '../../../state/workspace'
 import { useProjects } from '../../../state/projects'
 import { useSshConn } from '../../../state/sshConn'
 import { useSshServers } from '../../../state/sshServers'
@@ -38,6 +38,7 @@ import { SettingsText } from '../SettingsText'
 import { SearchableRow } from '../SearchableRow'
 import { Button } from '@renderer/ui/Button'
 import { Input } from '@renderer/ui/Input'
+import { cn } from '@renderer/ui/cn'
 import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
 
 const ROWS = {
@@ -196,6 +197,52 @@ function AccountRow({
         {details}
       </div>
       {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
+    </div>
+  )
+}
+
+function AccountColorSwatches({
+  account,
+  onChange
+}: {
+  account: { id: string; label: string; color?: string }
+  onChange: (id: string, color?: string) => void
+}): React.JSX.Element {
+  return (
+    <div
+      role="group"
+      aria-label={`Default node color for ${account.label}`}
+      className="flex flex-wrap items-center gap-2 pt-1"
+    >
+      <span className="text-[12px] text-muted">Node color</span>
+      <button
+        type="button"
+        aria-label="Default"
+        aria-pressed={!account.color}
+        title="Use the agent's own color"
+        onClick={() => onChange(account.id, undefined)}
+        className={cn(
+          'flex size-5 items-center justify-center rounded-full border-2 text-[11px] text-muted',
+          account.color ? 'border-transparent bg-fill-weak' : 'border-text bg-fill-weak'
+        )}
+      >
+        ×
+      </button>
+      {NODE_COLORS.map((color) => (
+        <button
+          key={color}
+          type="button"
+          aria-label={color}
+          aria-pressed={account.color === color}
+          title={`Use ${color}`}
+          onClick={() => onChange(account.id, color)}
+          style={{ background: color }}
+          className={cn(
+            'size-5 rounded-full border-2',
+            account.color === color ? 'border-text' : 'border-transparent'
+          )}
+        />
+      ))}
     </div>
   )
 }
@@ -380,8 +427,30 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
   const setLabel = (id: string, label: string): void =>
     applyAccounts((accs) => accs.map((a) => (a.id === id ? { ...a, label } : a)))
 
+  const setColor = (id: string, color?: string): void =>
+    applyAccounts((accs) =>
+      accs.map((account) =>
+        account.id === id
+          ? color === undefined
+            ? { ...account, color: undefined }
+            : { ...account, color }
+          : account
+      )
+    )
+
   const setCodexLabel = (id: string, label: string): void =>
     applyCodexAccounts((accs) => accs.map((a) => (a.id === id ? { ...a, label } : a)))
+
+  const setCodexColor = (id: string, color?: string): void =>
+    applyCodexAccounts((accs) =>
+      accs.map((account) =>
+        account.id === id
+          ? color === undefined
+            ? { ...account, color: undefined }
+            : { ...account, color }
+          : account
+      )
+    )
 
   const setRemoteSystemLabel = (
     provider: 'claude' | 'codex',
@@ -649,6 +718,7 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
                     pending
                   </span>
                 ) : null}
+                <AccountColorSwatches account={account} onChange={setCodexColor} />
               </div>
               <Button
                 variant="ghost"
@@ -989,12 +1059,15 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
                 email={!account.pending ? account.email : undefined}
                 pending={account.pending}
                 labelControl={
+                  <>
                     <Input
                       className="w-56"
                       placeholder="Display name"
                       value={account.label}
                       onChange={(event) => setLabel(account.id, event.target.value)}
                     />
+                    <AccountColorSwatches account={account} onChange={setColor} />
+                  </>
                   }
                   actions={
                     <>
@@ -1045,12 +1118,15 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
               email={account.email}
               pending={account.pending}
               labelControl={
+                <>
                 <Input
                   className="w-56"
                   placeholder="Display name"
                   value={account.label}
                   onChange={(event) => setCodexLabel(account.id, event.target.value)}
                 />
+                <AccountColorSwatches account={account} onChange={setCodexColor} />
+                </>
               }
               actions={
                 <>
@@ -1112,12 +1188,15 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
                   email={!account.pending ? account.email : undefined}
                   pending={account.pending}
                   labelControl={
+                    <>
                     <Input
                       className="w-56"
                       placeholder="Display name"
                       value={account.label}
                       onChange={(event) => setLabel(account.id, event.target.value)}
                     />
+                    <AccountColorSwatches account={account} onChange={setColor} />
+                    </>
                   }
                   actions={
                     <>
@@ -1182,12 +1261,15 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
               email={account.email}
               pending={account.pending}
               labelControl={
+                <>
                 <Input
                   className="w-56"
                   placeholder="Display name"
                   value={account.label}
                   onChange={(event) => setCodexLabel(account.id, event.target.value)}
                 />
+                <AccountColorSwatches account={account} onChange={setCodexColor} />
+                </>
               }
               details={
                 <label className="mt-2 flex max-w-lg items-center gap-2 text-[11px] text-muted">

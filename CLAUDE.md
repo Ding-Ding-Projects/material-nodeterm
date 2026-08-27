@@ -188,11 +188,12 @@ itself. A node's `data`
 carries `title, color, group, tags, collapsed, expandedHeight, shell, terminalProfileId, cwd, text,
 factories (`createTerminalNode`, `createSshTerminalNode`, `createAgentNode(agentId, …)`,
 `createAccountLoginNode`, `createStickyNode`, `createGroupNode`, `createEditorNode`,
-`createDiffNode`, `createVideoNode`, `createWebNode`, `createBrowserNode`, `createDinoNode`), the
+`createDiffNode`, `createVideoNode`, `createWebNode`, `createBrowserNode`, `createFilesNode`,
+`createDinoNode`), the
 group transforms (`groupSelectedNodes`, `ungroupNodes`, `duplicateNode`), and the
 `nodeStatesToFlow` / `flowToNodeStates` serializers. Node kinds (`NodeKind` in
 `src/shared/types.ts`): `terminal | sticky | group | editor | diff | video | web | browser |
-subagent | loop | dino` — `subagent` and `loop` are render-only (ephemeral hook-driven viz) and
+files | subagent | loop | dino` — `subagent` and `loop` are render-only (ephemeral hook-driven viz) and
 never persisted. A node's `data`
 carries `title, color, group, tags, collapsed, expandedHeight, shell, cwd, text,
 initialCommand, filePath, diffStaged`, `agentId` (which agent CLI a terminal node runs —
@@ -940,6 +941,44 @@ offscreenEpoch])` and torn down on unmount. The component persists across re-ren
 - **browser** (`BrowserNode.tsx`) — a navigable Chromium browser wrapping the shared
   `BrowserSurface` (webview + toolbar); the last top-level URL persists to `data.url`, and the same
   surface backs the kanban card modal's browser popup.
+- **files** (`FilesNode.tsx`) — a file-manager node: ONE directory listing (`data.cwd`, persisted),
+  pinned to the canvas beside the terminals working in it. Deliberately not a second Explorer: the
+  drawer is a single tree rooted at the project cwd that covers the canvas, so it gives you one
+  cursor and a lot of scrolling; several of these give you `src/renderer/nodes` next to the agent
+  editing it and another on `docs/`. Navigate in place (breadcrumbs collapse deep paths but every
+  crumb stays clickable), filter, create a file/folder, copy a path, reveal, and open a terminal in
+  the folder shown (a `nodeterm:open-terminal` event, the sibling of `nodeterm:open-file`).
+  - **It adds NO new IPC.** Everything runs on the existing `FsApi` (`list`/`mkdir`/`exists`/
+    `write`) — which is why it works on Desktop, the Server Edition, an SSH project and a relay tab
+    on day one. **Rename/move/delete are the deliberate v1 gap**: each needs a new leaf in
+    `core/fs-ops`, an IPC channel, preload, the ws-bridge, `main/ssh-fs` (remote quoting) and the
+    relay host-service, plus confirm dialogs and dangerous-path guards. That is a separate change
+    with separate risk, not a corner to cut inside this one.
+  - **Which filesystem** is `EditorNode`'s decision, read the same way: `data.sshFs` → the SSH
+    project's host over the ControlMaster; otherwise the node's own SESSION api, which is the local
+    core for a local project and the PEER's for a relay tab. Reading it off `useSession()` rather
+    than `window.nodeTerminal` is the entire reason a relay tab browses the right machine.
+  - **Opening is delegated, never reimplemented**: a file dispatches `nodeterm:open-file`, so
+    editor-vs-video-vs-image routing stays in Canvas's one `openFile` and this node never grows a
+    second opinion about what a `.png` is. `fileOpenTarget` decides only canvas-vs-OS, and a
+    REMOTE listing never reaches the OS branch — `shell.openPath` opens a path on THIS machine, so
+    handing it a host path either does nothing or, if that path exists here too, opens an unrelated
+    local file.
+  - **Four empty states stay four** (loading / could not read / the folder is empty / the filter
+    matches nothing). Collapsing any pair into one blank pane is the failure this file warns about
+    elsewhere, and an empty filter matches everything so select-all+delete cannot blank the list.
+  - The title tracks the folder only while `titleAuto` is unset — the same contract an agent node's
+    session name uses, so navigating never overwrites a name the user typed.
+  - A files node inside a REMOVED worktree is displaced like an editor, not like a terminal
+    (`displacedByWorktree`): it has no session to disturb, so it is caught by path wherever it sits,
+    and it gets its `cwd` re-pointed rather than an editor's `fileMissing` — a directory can be
+    re-pointed, a dead file cannot. Left out, it would show "Could not read this folder" forever
+    AND keep the dead path in `project.json`.
+  - Creation is gated on the project having a directory (`hasCwd`) on every surface — pane menu,
+    Dock, sidebar "+", ⌘K, and the group-frame menu, where it inherits a bound **worktree's** cwd
+    via `cwdForNewNodeIn`, so a frame per branch also means a file tree per branch.
+  - **Mobile**: N/A — *nodeterm mobile* attaches to tmux sessions over the transport protocol and
+    has no canvas or file-browsing concept; adding one means extending that protocol.
 - **dino** (`DinoNode.tsx`) — a small self-contained T-Rex-style runner on a canvas (no PTY);
   high score persists via `data.highScore`.
 - **subagent** / **loop** (`SubagentNode.tsx` / `LoopNode.tsx`) — render-only, hook-driven viz
@@ -1610,7 +1649,7 @@ untrusted|on-request|never`. Two rules the mapping exists to enforce: a mode the
   edge/push/map logic in `renderer/lib/noteLink.ts`.
 - **Managed Claude accounts** (Claude-only) — run several logged-in Claude identities side by
   side by giving each its own config dir. `settings.claudeAccounts` is a list of `ClaudeAccount
-{id, label, email?, host?, pending?, createdAt}` (in `settings.json`; the account **list** is
+{id, label, email?, host?, pending?, color?, createdAt}` (in `settings.json`; the account **list** is
   config, not credentials). Isolation is **config-dir**, not token storage: a local account's dir
   is `{userData}/claude-accounts/<id>` (`claudeConfigDirFor` / pure `accountConfigDir`),
   a **remote** account's is `~/.nodeterm/claude-accounts/<id>` on its `host` (keyed by
@@ -1631,6 +1670,13 @@ untrusted|on-request|never`. Two rules the mapping exists to enforce: a mode the
     the project-default account), and validation runs against `accountsForProject`, not the raw
     list, so a **pending** account or one **pinned to another machine's host** is never stamped
     onto a node it cannot run on (both used to reach the missing-dir fallback at spawn).
+  - **Per-account default node colour**: `ClaudeAccount.color` and `CodexAccount.color` are
+    optional settings values edited by shared Accounts-section swatches. `agentAccountColor`
+    selects the list owned by the builtin agent (`claude` or `codex`) and trims only string values;
+    an empty, malformed, stale, or missing colour falls back to the agent's own colour. The chosen
+    value is baked into `data.color` at creation, so existing nodes and hand-picked node colours do
+    not change when an account setting is edited. Phone-registered nodes receive the same result
+    from host-resolved account lists before the raw project file is rewritten.
   - **Env injection** — `pty-manager` sets `CLAUDE_CONFIG_DIR` in the spawn env AND as a tmux `-e`
     (local); for a remote node it emits an **absolute-path** remote tmux `-e` built from the
     connection-cached `remoteHome` (skipped **fail-open** if home is unresolved). `AUTH_ENV_STRIP`

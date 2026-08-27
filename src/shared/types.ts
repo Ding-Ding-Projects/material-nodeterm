@@ -9,9 +9,11 @@ import { DEFAULT_WORKTREE_PATH_TEMPLATE } from './worktree'
 import type { CloneProgress } from './clone-url'
 import type { KeybindingOverrides, TerminalShortcutPolicy } from './keybindings'
 import type { NormalizedAgentEvent } from './agents/normalize'
+import type { AgentStatusSnapshot } from './agents/status-snapshot'
 import type { AgentId, AgentPermissionMode, BuiltinAgentId, PromptInjectionMode } from './agents/config'
 import type { AgentMessageDeliverRequest, AgentMessageReply } from './agents/agent-messaging'
 import type { BrowserLeasePush } from './browser-indicator'
+import type { DebugBrowserIntent, DebugBrowserProfile } from './browser-debug-sessions'
 import type { GroupWorktree } from './worktree'
 import type { ClientId, DinoSnapshot, PeerDiff, PeerIdentity, PeerState } from './presence'
 import type { WhisperModelInfo } from './speech'
@@ -78,6 +80,7 @@ import type {
   VaultUnlockResult
 } from './password-manager'
 import type { AlarmOccurrence, AlarmRecurrence } from './alarm-clock'
+import type { PortableKioskPwaIntent } from './kiosk-pwa'
 import type { CodexAccount } from './codex-account'
 import type { ProjectIcon, ProjectIconPickResult } from './project-icon'
 import type {
@@ -379,6 +382,8 @@ export type NodeKind =
   | 'video'
   | 'web'
   | 'browser'
+  /** A persisted canvas node showing one directory listing. */
+  | 'files'
   | 'subagent'
   | 'loop'
   | 'scheduler'
@@ -432,14 +437,21 @@ export type NodeKind =
   | 'homeassistant'
   | 'homeassistant-sensor'
   | 'freepbx'
+  | 'open-webui-hosting'
+  | 'cloudflare-tunnel'
   | 'awsidentity'
   | 'nextcloud-aio'
+  /** Managed Nextcloud profile with PostgreSQL, Redis, and no container-runtime socket. */
+  | 'nextcloud-managed'
   | 'cloudflare-zero-trust'
   /** Guided Cloudflare account, zone, DNS, SSL/TLS, ruleset, redirect, cache, and analytics manager. */
   | 'cloudflare-core-managers'
   | 'torrent'
   /** One-shot Linux ISO virtual machine, distinct from the WSL terminal profile. */
   | 'linux-vm'
+  | 'github-work-item'
+  /** Read-only Windows host diagnostics, with no mutation controls. */
+  | 'windows-diagnostics'
 
 /**
  * The service kinds, as a runtime list. Exported because both the renderer (menu rows, one shared
@@ -453,9 +465,11 @@ export const SERVICE_NODE_KINDS = [
   'gitlab',
   'homeassistant',
   'freepbx',
+  'cloudflare-tunnel',
   'awsidentity',
   'cloudflare-zero-trust',
   'nextcloud-aio',
+  'nextcloud-managed',
   'cloudflare-core-managers'
 ] as const
 
@@ -539,6 +553,8 @@ export interface CanvasNodeState {
   tags?: string[]
   /** When true the node body is hidden (header-only). */
   collapsed?: boolean
+  /** User-chosen session mark, validated at both project-file serializer seams. */
+  icon?: import('./node-icon').NodeIcon
   /** scheduler-only: prompt delivered through the persistent inter-agent mailbox. */
   loopTask?: string
   /** scheduler-only: fixed cadence in milliseconds. */
@@ -601,6 +617,8 @@ export interface CanvasNodeState {
   // terminal-only
   /** Machine-local Windows terminal profile selection; never execution arguments. */
   terminalProfileId?: string
+  /** Machine-local named profile selection; its path and command never enter project files. */
+  namedTerminalProfileId?: string
   shell?: string
   cwd?: string
   /** Which agent runs in this terminal node (claude/codex/gemini/custom). */
@@ -660,19 +678,32 @@ export interface CanvasNodeState {
    * `localExec` on the index entry, exactly where the shell and Windows profile already live.
    */
   serviceLabel?: string
+  /** Open WebUI provider and port intent safe to share in schema 3 project files. */
+  openWebUiIntent?: import('./open-webui-hosting').OpenWebUiIntent
+  /** Open WebUI container and provider binding kept only in the machine-local index. */
+  openWebUiLocalBinding?: import('./open-webui-hosting').OpenWebUiLocalBinding
   /** AWS-only portable requirements. Profile/account/role/endpoints remain machine-local. */
   awsIdentityIntent?: import('./aws-identity').AwsIdentityIntent
   /** AWS-only machine binding, stripped into IndexEntryV3.localExec by shared/node-exec.ts. */
   awsIdentityBinding?: import('./aws-identity').AwsIdentityBinding
   /** Nextcloud AIO safe deployment intent. Context, container state, backups, and socket bindings remain local. */
   nextcloudAioConfig?: import('./nextcloud-aio').NextcloudAioConfig
+  /** Managed Nextcloud safe project intent; its destination binding and secret keys stay local. */
+  nextcloudManagedIntent?: import('./nextcloud-managed').NextcloudManagedIntent
+  /** Machine-local destination and vault-key bindings for the managed Nextcloud profile. */
+  nextcloudManagedBinding?: import('./nextcloud-managed').NextcloudManagedBinding
   /** Cloudflare manager selection intent. Account ids, credentials and resource ids stay local. */
   cloudflareZeroTrustIntent?: import('./cloudflare-zero-trust').CloudflarePortableIntent
   /** Cloudflare manager safe intent. Credentials and local bindings stay in the host overlay. */
   cloudflareCoreIntent?: import('./cloudflare-core-managers').CloudflarePortableIntent
+  /** Cloudflare Tunnel route intent. Local observations and provider bindings stay outside project data. */
+  cloudflareTunnelIntent?: import('./tunnel-state').TunnelPortableIntent
   /** Home Assistant node presentation intent safe for schema 3. Hosts, instance ids, credentials,
    *  sessions, and entity caches stay in the machine-local service and binding overlay. */
   homeAssistantIntent?: import('./home-assistant').HomeAssistantNodeIntent
+  /** Safe Cloudflare Tunnel routing intent. Account, zone, tunnel, connector, credentials,
+   *  local origin, and process state remain in the machine-local binding overlay. */
+  cloudflareTunnelIntent?: import('./cloudflare-tunnel-handoff').CloudflareTunnelIntent
   /** GitLab hosting intent. Docker context, container, volumes, credentials, and process state stay local. */
   gitlabHostingConfig?: import('./gitlab-hosting').GitLabHostingConfig
   /** torrent-only: safe display intent shared with the canvas; task state and paths stay local. */
@@ -683,6 +714,7 @@ export interface CanvasNodeState {
   virtualMachineConfig?: import('./virtual-machine').VirtualMachineConfig
   /** Linux ISO/disk selections stored only in the machine-local execution overlay. */
   virtualMachineLocalPaths?: import('./virtual-machine').VirtualMachineLocalPaths
+  githubWorkItem?: import('./github-work-items').GitHubWorkItem
   /**
    * service-kinds only, and MACHINE-LOCAL: where this node reaches its service. Stripped from
    * every project file we write and from every node arriving over the wire, then restored from the
@@ -749,6 +781,10 @@ export interface CanvasNodeState {
   browserTabs?: BrowserTab[]
   /** browser-only: which `browserTabs[].id` is currently shown. Absent = the first tab. */
   browserActiveTabId?: string
+  /** Kiosk/PWA sessions carry only safe launch intent; profile and runtime state stay local. */
+  kioskPwaIntent?: PortableKioskPwaIntent
+  /** Debugging-browser intent only. Certificates, credentials, executable paths and process state stay local. */
+  debugBrowser?: DebugBrowserIntent
   /** browser-only: the Electron session partition for an AGENT-opened browser node
    * (`persist:nt-agent-browser-<projectId>`), set once at creation and never mutated. Absent for a
    * USER-opened node (default session, no migration). Persisted so the jar survives reopen; carried
@@ -769,6 +805,10 @@ export interface CanvasNodeState {
    *  `annotationRectFromPoints` (src/renderer/lib/annotation.ts) from the draw gesture; unaffected
    *  by a later resize, which just stretches the same diagonal to the new box. */
   annotationDir?: 'tl-br' | 'tr-bl'
+  /** annotation-only: optional user-authored label rendered beside the stroke. */
+  annotationLabel?: string
+  /** annotation-only: bounded SVG stroke width in the node's local px space. */
+  annotationThickness?: number
   /**
    * Set while the node is maximized to fill the viewport (issue #399): the rect to give back on
    * the toggle's second click — the node's ROOT-space (absolute canvas) position plus its size.
@@ -894,6 +934,9 @@ export interface BrowserTab {
   url: string
   title: string
 }
+
+/** Named debugging-browser profiles. Only safe proxy and certificate intent is shared. */
+export type { DebugBrowserIntent, DebugBrowserProfile } from './browser-debug-sessions'
 
 /** One kanban board column. Column order = array order in ProjectKanban.columns. */
 export interface KanbanColumn {
@@ -1230,6 +1273,8 @@ export interface Project {
   browserProfiles?: BrowserProfile[]
   /** Unified typed links whose source belongs to this project. */
   links?: Link[]
+  /** Portable debugging-browser profiles. Local credentials, certificates and runtime state are omitted. */
+  debugBrowserProfiles?: DebugBrowserProfile[]
   /** Bridge links between Claude nodes (optional; absent in pre-bridge files). */
   bridges?: BridgeLink[]
   /**
@@ -1343,6 +1388,18 @@ export interface WindowsTerminalProfile {
   kind: WindowsTerminalProfileKind
   available: boolean
   unavailableReason?: string
+}
+
+/** A user-owned local profile for repeatable terminal and agent creation. */
+export interface NamedTerminalProfile {
+  /** Stable local id. This id is safe to persist in machine-local node state. */
+  id: string
+  /** User-facing label shown in Settings and node-creation pickers. */
+  name: string
+  /** Initial directory. It never crosses the portable project-file boundary. */
+  cwd: string
+  /** Optional command sent once after the shell is ready. */
+  startupCommand: string
 }
 
 /** Optional desktop capability for detecting the Windows terminal profiles on this machine. */
@@ -1970,13 +2027,20 @@ export interface BrowserExtensionsApi {
   remove(partition: string | undefined, dirPath: string): Promise<void>
 }
 
+/** Machine-local reset for one browser session. Project tabs and profile names remain portable. */
+export interface BrowserProfileApi {
+  /** Clear cookies, local storage, cache and loaded unpacked extensions for this partition. */
+  reset(partition: string | undefined): Promise<{ ok: true } | { ok: false; error: string }>
+}
+
 export interface BrowserApi {
   /** Map a browser node's <webview> guest to its node id (for new-window capture). */
-  register(webContentsId: number, nodeId: string, ownerNodeId?: string): void
+  register(webContentsId: number, nodeId: string, ownerNodeId?: string, surface?: 'canvas' | 'modal'): void
   unregister(webContentsId: number): void
   /** Fires when a browser guest requested a new window; the renderer opens another browser node. */
   onBrowserNewWindow(listener: (e: { url: string; sourceNodeId: string }) => void): () => void
   extensions: BrowserExtensionsApi
+  profile: BrowserProfileApi
 }
 
 /** Browser control operations for the agent-driven browser node surface. */
@@ -2035,6 +2099,8 @@ export interface ClaudeAccount {
   host?: string
   /** True until `claude /login` completes in the account dir and the email is captured. */
   pending?: boolean
+  /** Optional default node color for nodes opened under this account. */
+  color?: string
   createdAt: number
 }
 
@@ -2065,6 +2131,16 @@ export interface SpeechSettings {
    *  Dock mic tooltip, and the ShortcutsPanel row. */
   shortcut: string
 }
+
+/** A user-selected alert sound kept as bounded base64 data so Desktop and Server Edition can
+ * replay the same bytes without relying on a path from the wrong machine. */
+export interface CustomAlertSound {
+  name: string
+  mime: string
+  dataBase64: string
+}
+
+export type AlertSoundKind = 'done' | 'needsYou'
 
 /** xterm cursor shapes, mirrored here so `Settings` doesn't depend on the xterm typings (which
  *  are renderer-only — `src/shared` is imported by main and the server shell too). */
@@ -2349,6 +2425,10 @@ export interface Settings {
   defaultTerminalProfileId: string
   /** Compatibility field for the custom profile executable. Empty string = no custom executable. */
   defaultShell: string
+  /** User-owned local profiles used when creating terminals or agent nodes. */
+  namedTerminalProfiles: NamedTerminalProfile[]
+  /** Profile selected for one-click local terminal and agent creation, or null for none. */
+  defaultNamedTerminalProfileId: string | null
   gridSize: number
   /** Drag-time snap: while ON, dragging a node rounds its position to the grid. A live editor in
    *  BehaviorSection; the canvas reads it for the React Flow `snapToGrid` prop. Distinct from
@@ -2526,6 +2606,8 @@ export interface Settings {
   soundEffects: boolean
   /** Sound-effect volume, 0..1. */
   soundVolume: number
+  /** Optional per-event sound files. Empty entries use the synthesized built-in sound. */
+  customAlertSounds: Partial<Record<AlertSoundKind, CustomAlertSound>>
   /** User-defined agents (BYO CLI) appended to the Add menus. */
   customAgents: CustomAgent[]
   /** Per-builtin-agent launch command overrides (Settings → Agents → Launch commands). The value
@@ -2584,6 +2666,10 @@ export interface Settings {
    *  have no token counts and fall back to 'used' display). 'remaining' is the historical
    *  default; users coming from other tools expect 'used'. */
   usagePercentMode: 'used' | 'remaining' | 'tokens'
+  /** Rotate new default Claude nodes when the selected account reaches this usage threshold. */
+  claudeUsageRotationEnabled: boolean
+  /** Percentage threshold for default-account rotation, bounded to 1..100 at use time. */
+  claudeUsageRotationThreshold: number
   /** Which agent the ⌘⇧C shortcut / quick-add launches. Always a launchable builtin. */
   defaultAgent: AgentId
   /** The permission mode Claude TERMINAL (CLI) sessions START in — passed as `--permission-mode`
@@ -2675,6 +2761,10 @@ export interface Settings {
    *  hook holds briefly for a phone/canvas Approve/Deny before falling through to the normal
    *  interactive prompt. Off ⇒ the env var is absent ⇒ exact legacy behavior. Claude-only. */
   hookReplyApprovals: boolean
+  /** Seamless agent messaging (opt-in, default off): agent-to-agent send/reply requests deliver
+   *  without the per-message confirmation dialog. The project capability and main-side delivery
+   *  checks still apply, and close always confirms. */
+  agentSeamlessWrites: boolean
   /** Hold an idle-sleep power assertion while a LOCAL agent node is working, so long runs
    *  survive an unattended laptop. Released when the last one stops (or goes stale). Cannot
    *  hold through a closed lid. Asked in the setup tour; Settings → Behavior. */
@@ -2828,6 +2918,8 @@ export const DEFAULT_SETTINGS: Settings = {
   terminalLetterSpacing: 0,
   defaultTerminalProfileId: 'auto',
   defaultShell: '',
+  namedTerminalProfiles: [],
+  defaultNamedTerminalProfileId: null,
   gridSize: 24,
   snapToGrid: false,
   autoAlignGrid: false,
@@ -2875,6 +2967,7 @@ export const DEFAULT_SETTINGS: Settings = {
   notifyConsentAsked: false,
   soundEffects: true,
   soundVolume: 0.5,
+  customAlertSounds: {},
   customAgents: [],
   modelGateway: { baseUrl: '', apiKey: '' },
   agentLaunchCommands: {},
@@ -2895,6 +2988,8 @@ export const DEFAULT_SETTINGS: Settings = {
   // reads as noise to users who navigate by the trail chords/Dock buttons instead.
   showResumeCard: false,
   usagePercentMode: 'remaining',
+  claudeUsageRotationEnabled: false,
+  claudeUsageRotationThreshold: 90,
   defaultAgent: 'claude',
   // Sessions start in auto mode out of the box. Existing users pick this up on hydrate
   // (settings hydrate merges over DEFAULT_SETTINGS) — a deliberate behavior change.
@@ -2920,6 +3015,8 @@ export const DEFAULT_SETTINGS: Settings = {
   // Deterministic hook-reply approvals default ON (existing users pick it up on hydrate). Only
   // affects Claude terminal sessions; off reproduces the pre-feature launch bit-for-bit.
   hookReplyApprovals: true,
+  // Seamless agent messaging is an explicit trust choice, never the default posture.
+  agentSeamlessWrites: false,
   // Keep-awake-while-agents-work default ON (existing users pick it up on hydrate — deliberate,
   // same note style as hookReplyApprovals). Held only while a local agent is actually working.
   keepAwakeWhileAgentsWork: true,
@@ -3223,6 +3320,13 @@ export interface SshProjectApi {
     nodeIds: string[],
     opts?: { everySocket?: boolean }
   ): Promise<void>
+  /** Forward one loopback OAuth callback port from this machine to the connected SSH host. */
+  forwardOAuthCallback(
+    projectId: string,
+    port: number
+  ): Promise<{ ok: true; port: number; expiresAt: number } | { ok: false; error: string }>
+  /** Cancel a temporary OAuth callback forward, if one is active for this project. */
+  cancelOAuthCallback(projectId: string, port?: number): Promise<boolean>
   /** List remote sub-directories of `path` (default ~). */
   listDir(projectId: string, path: string): Promise<{ path: string; dirs: string[] }>
   /** Create a remote directory (mkdir -p). Resolves false when not connected or the mkdir fails. */
@@ -3338,6 +3442,35 @@ export interface GitStatus {
   ghAuthed: boolean
   staged: GitFileChange[]
   changes: GitFileChange[]
+}
+
+/** A verified Git repository found below a project's configured folder. */
+export interface GitNestedRepository {
+  /** Absolute path used as the cwd for scoped Git operations. */
+  path: string
+  /** Project-root-relative display path, always using `/` separators. */
+  relativePath: string
+  /** Folder name used as the compact scope label. */
+  name: string
+}
+
+/** Bounded page request for child-repository discovery. Cursor values are opaque to the renderer. */
+export interface GitNestedRepositoryDiscoveryOptions {
+  cursor?: string
+  limit?: number
+}
+
+/** Result of the bounded nested-repository scan. A failed scan is never an empty success. */
+export interface GitNestedRepositoryDiscovery {
+  ok: boolean
+  repositories: GitNestedRepository[]
+  /** Number of directories examined before this page was produced. */
+  scannedDirectories: number
+  /** True when the safety cap stopped traversal before every directory could be examined. */
+  limited: boolean
+  /** Opaque cursor for another page, or null when this is the final page. */
+  nextCursor?: string | null
+  message?: string
 }
 
 /** Core-owned provenance for one exact physical worktree generation. */
@@ -3470,6 +3603,11 @@ export interface GitApi {
   /** Checkout a commit (detached HEAD). */
   checkoutCommit(cwd: string, oid: string): Promise<GitResult>
   repoRoot(cwd: string): Promise<string | null>
+  /** Find verified child repositories below a project folder without mutating the filesystem. */
+  discoverNestedRepos(
+    cwd: string,
+    options?: GitNestedRepositoryDiscoveryOptions
+  ): Promise<GitNestedRepositoryDiscovery>
   /** `{ ok: false, entries: [] }` when git itself could not be read — which is NOT the same fact as
    *  "this repo has no worktrees", and no caller may treat it as one (see worktree-ops). */
   worktreeList(repoPath: string): Promise<import('./worktree').WorktreeListResult>
@@ -4316,6 +4454,8 @@ export interface RelayHostApi {
   manager: DockerHostManagerApi
   /** Guided Nextcloud AIO lifecycle manager. Desktop-only; the browser shell reports unsupported. */
   nextcloudAio: NextcloudAioManagerApi
+  /** Guided managed Nextcloud profile without a container-runtime socket. */
+  nextcloudManaged: import('./nextcloud-managed').NextcloudManagedApi
   /**
    * Enter host mode over the relay: connect and return a pairing offer string to hand to a client.
    * Rejects when Docker or the configured relay is unavailable. `projectId` is the
@@ -4667,6 +4807,10 @@ export interface NodeTerminalApi {
   workspace: WorkspaceApi
   /** Shared provider-account, credential-vault, OAuth-callback, and resource-picker services. */
   providerServices: import('./provider-services').ProviderServicesApi
+  /** Host-owned Cloudflare tunnel inventory, route preservation, and reviewed DNS adoption. */
+  cloudflareTunnels: import('./cloudflare-tunnels').CloudflareTunnelApi
+  /** Server Edition callback completer; absent on the desktop, which uses sshProject forwarding. */
+  remoteOAuth?: import('./remote-oauth').RemoteOAuthApi
   /** Typed Cloudflare Access, Zero Trust, Workers, Pages, R2, D1 and Queues managers. */
   cloudflareZeroTrust: import('./cloudflare-zero-trust').CloudflareApi
   timer: TimerApi
@@ -4694,6 +4838,8 @@ export interface NodeTerminalApi {
   awsWizardModels: import('./aws-wizard').AwsWizardModelsApi
   /** Local Ollama suite manager — docs/ollama-manager.md. */
   ollama: import('./ollama').OllamaApi
+  /** Guided local Open WebUI hosting with persistent volume and explicit provider setup. */
+  openWebUi: import('./open-webui-hosting').OpenWebUiApi
   /** Guided Cloudflare managers — docs/features/integrations/cloudflare-core-managers.md. */
   cloudflareCoreManagers?: import('./cloudflare-core-managers').CloudflareCoreManagersApi
   /** Local WebTorrent downloader — docs/torrent-downloader.md. */
@@ -4743,6 +4889,8 @@ export interface NodeTerminalApi {
    *  degrades honestly rather than silently: `wsl.exe` missing/unreachable rejects with a
    *  real error, never a fabricated empty list. */
   wsl?: import('./wsl').WslApi
+  /** Read-only host facts for the Windows diagnostics node. No mutation methods are exposed. */
+  windowsDiagnostics: import('./windows-diagnostics').WindowsDiagnosticsApi
   export: ExportApi
   history: LocalHistoryApi
   context: ContextApi
@@ -4858,6 +5006,11 @@ export interface NodeTerminalApi {
   onUnreadClear(listener: (nodeId: string) => void): () => void
   /** Fires on each normalized agent hook event (working/done/waiting/subagent/…). Returns unsubscribe. */
   onAgentStatus(listener: (e: NormalizedAgentEvent) => void): () => void
+  /**
+   * Last-known workflow state retained by the core across restarts. Display-only: entries are not
+   * live evidence and must not drive notifications, authorization, or process control.
+   */
+  agentStatusSnapshot(): Promise<AgentStatusSnapshot>
   /** Fires with live subagent transcript chunks while a subagent runs. Returns unsubscribe. */
   onSubagentActivity(listener: (e: SubagentActivity) => void): () => void
   /** Fires when an agent's `nodeterm` CLI requests a canvas action. Returns unsubscribe. */

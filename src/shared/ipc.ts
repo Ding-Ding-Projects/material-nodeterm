@@ -162,6 +162,8 @@ export const IPC = {
    *  Payload: `'warning' | 'critical'`. Re-fired at most once a minute — see core/memory-pressure. */
   appMemoryPressure: 'app:memory-pressure',
   agentStatus: 'agent:status',
+  /** Renderer → core: display-only last-known status, retained until node deletion. */
+  agentStatusSnapshot: 'agent:status-snapshot',
   /** Renderer → main/server: answer a held Claude permission hook (deterministic approvals).
    *  Payload: `{ nodeId, pendingId, decision: 'allow'|'deny' }`; resolves boolean. See
    *  docs/hook-reply-approvals.md. */
@@ -272,6 +274,8 @@ export const IPC = {
   wslSleep: 'wsl:sleep',
   wslWake: 'wsl:wake',
   wslDelete: 'wsl:delete',
+  /** Desktop and Server Edition host snapshot for the read-only Windows diagnostics node. */
+  windowsDiagnosticsSnapshot: 'windows-diagnostics:snapshot',
   contextUpdate: 'context:update',
   contextEnsure: 'context:ensure',
   // Team presence (docs/team-presence.md). `presence:hello` is a REQUEST: its response tells the
@@ -342,6 +346,14 @@ export const IPC = {
   providerBeginOAuth: 'provider-services:begin-oauth',
   providerCompleteOAuth: 'provider-services:complete-oauth',
   providerRemoveAccount: 'provider-services:remove-account',
+  cloudflareTunnelInventory: 'cloudflare-tunnels:inventory',
+  cloudflareTunnelZones: 'cloudflare-tunnels:zones',
+  cloudflareTunnelPlanRoute: 'cloudflare-tunnels:plan-route',
+  cloudflareTunnelPlanDnsAdoption: 'cloudflare-tunnels:plan-dns-adoption',
+  cloudflareTunnelSaveRoute: 'cloudflare-tunnels:save-route',
+  cloudflareTunnelAdoptDnsRecord: 'cloudflare-tunnels:adopt-dns-record',
+  cloudflareTunnelCancel: 'cloudflare-tunnels:cancel',
+  cloudflareTunnelProgress: 'cloudflare-tunnels:progress',
   cloudflareCatalog: 'cloudflare-zero-trust:catalog',
   cloudflareAccounts: 'cloudflare-zero-trust:accounts',
   cloudflareConfigure: 'cloudflare-zero-trust:configure',
@@ -541,6 +553,16 @@ export const IPC = {
   /** Cache a remote media file locally (scp over the ControlMaster) and allowlist it for
    *  nt-media:// playback — how a VideoNode plays a file that lives on an SSH project's host. */
   sshMediaAllow: 'ssh:media-allow',
+  /** Temporary local forward for a loopback OAuth callback emitted by an SSH-hosted CLI. */
+  sshOAuthForward: 'ssh-project:oauth-forward',
+  /** Cancel the exact temporary OAuth forward, normally after consent or expiry. */
+  sshOAuthForwardCancel: 'ssh-project:oauth-forward-cancel',
+  /** Server Edition: arm the exact localhost callback port observed in terminal output. */
+  remoteOAuthArm: 'remote-oauth:arm',
+  /** Server Edition: fetch one armed callback locally, consuming the arm first. */
+  remoteOAuthComplete: 'remote-oauth:complete',
+  /** Server Edition: cancel the current one-shot callback arm. */
+  remoteOAuthCancel: 'remote-oauth:cancel',
   sshFsList: 'sshFs:list',
   sshFsRead: 'sshFs:read',
   sshFsReadBinary: 'sshFs:read-binary',
@@ -596,6 +618,7 @@ export const IPC = {
   gitBranchAt: 'git:branch-at',
   gitCheckoutCommit: 'git:checkout-commit',
   gitRepoRoot: 'git:repo-root',
+  gitDiscoverNestedRepos: 'git:discover-nested-repos',
   gitWorktreeList: 'git:worktree-list',
   gitWorktreeAdd: 'git:worktree-add',
   gitWorktreeMerge: 'git:worktree-merge',
@@ -613,6 +636,7 @@ export const IPC = {
   browserExtensionsAdd: 'browser:extensions-add',
   browserExtensionsRemove: 'browser:extensions-remove',
   browserExtensionsPickDir: 'browser:extensions-pick-dir',
+  browserProfileReset: 'browser:profile-reset',
   // Browser control indicator + Stop (S8 PR 6). Main pushes the current driven-lease set to the
   // renderer (the chip / rope / kill row); the renderer asks main to revoke — per node, all, or a
   // whole project's — and main detaches the debugger + drops the ledger entry for real.
@@ -680,6 +704,10 @@ export const IPC = {
   nextcloudAioRun: 'nextcloud-aio:run',
   nextcloudAioCancel: 'nextcloud-aio:cancel',
   nextcloudAioProgress: 'nextcloud-aio:progress',
+  nextcloudManagedRun: 'docker-host-manager:nextcloud-managed-run',
+  nextcloudManagedSnapshots: 'docker-host-manager:nextcloud-managed-snapshots',
+  nextcloudManagedCancel: 'docker-host-manager:nextcloud-managed-cancel',
+  nextcloudManagedProgress: 'docker-host-manager:nextcloud-managed-progress',
   // Guided Cloudflare account, zone, DNS, SSL/TLS, ruleset, redirect, cache, and analytics managers.
   // Tokens stay in the host credential vault; canvas data carries only safe intent.
   cloudflareCoreRuntime: 'cloudflare-core:runtime',
@@ -693,6 +721,10 @@ export const IPC = {
   cloudflareCoreExecute: 'cloudflare-core:execute',
   cloudflareCoreCancel: 'cloudflare-core:cancel',
   cloudflareCoreProgress: 'cloudflare-core:progress',
+  cloudflareCoreTunnelState: 'cloudflare-core:tunnel-state',
+  cloudflareCoreTunnelProbe: 'cloudflare-core:tunnel-probe',
+  cloudflareCoreTunnelCancel: 'cloudflare-core:tunnel-cancel',
+  cloudflareCoreTunnelStateChanged: 'cloudflare-core:tunnel-state-changed',
   // Team Access (multi-seat): `relayHostInvite` ADDS a seat (invoke, `{ projectId?, email? }` →
   // `{ offer }`, cap-checked → rejects `E_SEATS_FULL`); `relayHostRevoke` (send, `{ id }`) cuts one
   // bridged peer's live session. `relayHostPeerPending`/`relayHostOpen` now also carry the seat
@@ -830,6 +862,13 @@ export const IPC = {
   /** main/server → renderer: a streamed chat token/finish/error for the session named in the
    *  payload. One shared channel (not per-session) — the renderer filters by sessionId. */
   ollamaChatStream: 'ollama:chat-stream',
+  // Open WebUI hosting node. The renderer submits a closed operation shape; Docker context,
+  // image, volume, archive, and provider secrets are validated and owned by the privileged host.
+  openWebUiContexts: 'open-webui:contexts',
+  openWebUiState: 'open-webui:state',
+  openWebUiRun: 'open-webui:run',
+  openWebUiCancel: 'open-webui:cancel',
+  openWebUiProgress: 'open-webui:progress',
   // Local Minecraft server create-and-manage (docs/minecraft-server-manager.md). Registered on
   // BOTH shells over the same `platform.handle`/`platform.broadcast` seam as Ollama above, so it
   // manages whichever machine is actually running the shell. NOT carried over the relay (a peer

@@ -27,7 +27,7 @@ The Shop's catalog is scope-bound:
 | canvas scope | entries |
 | --- | --- |
 | `multiverse` | general terminal, sticky note, editor, browser, and authenticator entries, plus another portal while the depth is below 8 |
-| `aws-universe` | AWS identity, Resource Explorer, Cloud Control, S3, EC2, IAM, STS, Lambda, CloudWatch, CloudWatch Logs, CloudFormation, CDK, ECR, ECS, EKS, RDS, databases, VPC, Route 53, cost management, and all-service entries; unavailable AWS executors remain visible with their reason until their implementation lane ships |
+| `aws-universe` | AWS identity, Resource Explorer, Cloud Control, S3, EC2, IAM, STS, Lambda, CloudWatch, CloudWatch Logs, CloudFormation, CDK, ECR, ECS, EKS, RDS, databases, VPC, Route 53, cost management, and all-service entries; unavailable later-wave executors remain visible with their reason |
 | `root` | no Shop and no Shop catalog |
 
 Catalog search is local, bounded, plain text by default, and supports an explicit regular-expression
@@ -77,9 +77,10 @@ narrow widths.
   child owner still receives its own Shop.
 - A malformed or unavailable regex pattern keeps the full scoped list visible and reports the exact
   parser failure.
-- Every AWS catalog entry remains visible as a distinct row, including the later-wave managers, and
-  an entry without an implemented executor stays unavailable with its exact reason. It is never
-  presented as a working provider operation.
+- Every AWS catalog entry remains visible as a distinct row, including the later-wave managers. The
+  all-service entry opens the installed-model wizard and routes its validated operation through the
+  shared AWS resource manager. An entry without an implemented executor stays unavailable with its
+  exact reason. It is never presented as a working provider operation.
 - A stale, out-of-scope, malformed, or unavailable creation request is refused at the platform-free
   boundary. No node is appended and no provider side effect is attempted.
 

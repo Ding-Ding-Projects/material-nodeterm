@@ -2,6 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { isTopDialog, nextDialogId, popDialog, pushDialog } from '../dialog-stack'
 import { IconChat, IconMic, IconSearch } from '../icons'
+import { MaterialSymbol } from '../MaterialSymbol'
+import { NodeIconView } from '../NodeIcon'
+import { nodeIconDialog } from '../NodeIconPicker'
+import { applyIconChoice } from '../../lib/nodeIconChoice'
 import { ContextMeter } from '../ContextMeter'
 import { contextSourceKey } from '../../state/contextWindow'
 import { AdhdElapsedChip } from '../AdhdNodeSurfaces'
@@ -17,6 +21,7 @@ import {
 } from '../../state/cardModalSize'
 import { useSession } from '../../session/session'
 import type { ProjectKanban } from '@shared/types'
+import type { NodeIcon } from '@shared/node-icon'
 import { browserPartitionFor } from '@shared/browser-profiles'
 import type { KanbanSession } from './KanbanView'
 import { BoardLogPanel } from './BoardLogPanel'
@@ -50,6 +55,8 @@ interface CardModalProps {
   onEditSticky: (text: string) => void
   /** Browser navigation write-through (only called for kind 'browser'). */
   onBrowserNav: (patch: { url?: string; title?: string }) => void
+  /** Set or clear the session icon from the modal header. */
+  onSetIcon: (icon: NodeIcon | undefined) => void
   /** Trusted profile display data for a local Windows terminal/agent card. */
   terminalProfile?: KanbanTerminalProfilePresentation
 }
@@ -111,6 +118,7 @@ export function CardModal({
   onRename,
   onEditSticky,
   onBrowserNav,
+  onSetIcon,
   terminalProfile
 }: CardModalProps) {
   const { api } = useSession()
@@ -291,6 +299,21 @@ export function CardModal({
           }}
         >
           <span className="kanban-card__nodedot" style={{ background: session.color }} />
+          {session.kind === 'terminal' && (
+            <button
+              type="button"
+              className={`kanban-modal__icon${session.icon ? '' : ' kanban-modal__icon--empty'}`}
+              title={session.icon ? 'Change icon' : 'Set icon'}
+              aria-label={session.icon ? 'Change session icon' : 'Set session icon'}
+              onClick={() =>
+                void nodeIconDialog({ nodeId: session.id, title: session.title, icon: session.icon }).then((choice) =>
+                  applyIconChoice(choice, onSetIcon)
+                )
+              }
+            >
+              {session.icon ? <NodeIconView icon={session.icon} size={16} /> : <MaterialSymbol name="palette" size={18} />}
+            </button>
+          )}
           {editingTitle ? (
             <input
               className="kanban-modal__rename"
@@ -474,7 +497,7 @@ export function CardModal({
                     key={`${session.id}:${browserPartitionFor(projectId, session.browserProfileId) ?? 'default'}`}
                     nodeId={session.id}
                     url={session.url ?? ''}
-                    partition={session.partition}
+                    surface="modal"
                     onUrlChange={(u) => onBrowserNav({ url: u })}
                     onTitleChange={(t) => onBrowserNav({ title: t })}
                     partition={browserPartitionFor(projectId, session.browserProfileId)}

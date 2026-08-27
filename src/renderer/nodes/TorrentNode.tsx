@@ -9,6 +9,7 @@ import { AnchoredRegexBuilder } from '../components/regex/AnchoredRegexBuilder'
 import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
 import { nodeHeaderFillStyle } from '../lib/nodeColor'
 import { openDestructiveGate } from '../state/destructiveGate'
+import { Radio } from '../ui/md3'
 
 function bytes(value: number): string {
   if (!Number.isFinite(value) || value <= 0) return '0 B'
@@ -152,7 +153,7 @@ function TorrentTaskCard({ task, busy, destination, torrent, run }: TorrentTaskC
         <div className="torrent-node__seed-options" role="radiogroup" aria-label={`Seeding policy for ${taskLabel(task)}`}>
           {visibleSeedChoices.length === 0 ? <p className="torrent-node__empty">No seeding policies match this filter.</p> : visibleSeedChoices.map((choice) => (
             <label key={choice.id}>
-              <input type="radio" name={`${task.id}-seed-policy`} checked={task.seedPolicy.kind === choice.id} disabled={busy} onChange={() => updatePolicy(choice.policy)} />
+              <Radio name={`${task.id}-seed-policy`} checked={task.seedPolicy.kind === choice.id} disabled={busy} onChange={() => updatePolicy(choice.policy)} />
               <span><strong>{choice.label}</strong><small>{choice.description}</small></span>
             </label>
           ))}

@@ -186,6 +186,7 @@ The concrete source remediations in this pass are:
 | `site-home` | Landing page home | `site/index.html` | `<body` | site preservation boundary | Preserve current Kids mode visual style; stale facts only |
 | `site-docs-index` | Documentation index page | `site/docs/index.html` | `<article` | site preservation boundary | Preserve current Kids mode visual style; stale facts only |
 | `site-docs-agent-support` | Agent support article | `site/docs/agent-support.html` | `Agent support` | site preservation boundary | Preserve current Kids mode visual style; stale facts only |
+| `site-docs-linked-agent-inbox` | Linked-agent inbox notifications article | `site/docs/linked-agent-inbox-notifications.html` | `Linked-agent inbox notifications` | site preservation boundary | Preserve current Kids mode visual style; stale facts only |
 | `site-docs-canvas-lifecycle` | Canvas lifecycle article | `site/docs/canvas-lifecycle.html` | `Canvas &amp; node lifecycle` | site preservation boundary | Preserve current Kids mode visual style; stale facts only |
 | `site-docs-changelog` | Changelog article | `site/docs/changelog-viewer.html` | `Changelog viewer` | site preservation boundary | Preserve current Kids mode visual style; stale facts only |
 | `site-docs-dim-sum` | Dim sum article | `site/docs/dim-sum-surprise.html` | `Dim sum surprise` | site preservation boundary | Preserve current Kids mode visual style; stale facts only |
@@ -264,9 +265,9 @@ Every listed renderer producer has an explicit local mapper boundary. Commands, 
 | --- | --- | --- | --- |
 | `settings-fields` | FieldRow | `src/renderer/components/settings/FieldRow.tsx` | `useVocabularyMapper()` |
 | `settings-sections` | SettingsSection | `src/renderer/components/settings/SettingsSection.tsx` | `useVocabularyMapper()` |
-| `settings-page` | Settings scope and every production section host | `src/renderer/components/settings/SettingsPage.tsx` | `useLocalizedVocabularyText()` |
+| `settings-page-vocabulary-boundary` | Settings scope and every production section host | `src/renderer/components/settings/SettingsPage.tsx` | `useLocalizedVocabularyText()` |
 | `settings-page-registration` | Settings page vocabulary section registration | `src/renderer/components/settings/SettingsPage.tsx` | `<PersonalVocabularySection` |
-| `settings-sidebar` | Settings group and section navigation | `src/renderer/components/settings/SettingsSidebar.tsx` | `useI18n()` shared vocabulary boundary |
+| `settings-sidebar-vocabulary-boundary` | Settings group and section navigation | `src/renderer/components/settings/SettingsSidebar.tsx` | `useI18n()` shared vocabulary boundary |
 | `settings-sidebar-registration` | Settings sidebar section registry | `src/renderer/components/settings/SettingsSidebar.tsx` | `visibleSettingsGroups(` |
 | `settings-search-corpus` | Settings search matches visible replacements and shipped aliases | `src/renderer/components/settings/SearchableRow.tsx` | `useVocabularyMapper()` |
 | `settings-inline-copy` | Explicit prose boundary for settings inline text | `src/renderer/components/settings/SettingsText.tsx` | `useVocabularyMapper()` |

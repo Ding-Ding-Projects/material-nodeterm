@@ -19,6 +19,7 @@ import {
   createDinoNode,
   createRecoveryGameNode,
   createVirtualMachineNode,
+  createWindowsDiagnosticsNode,
   createTorrentNode,
   createCalendarNode,
   createHomeAssistantControlNode,
@@ -206,6 +207,8 @@ function buildBase(snapshot: ReopenNodeSnapshot, ctx: RecreateContext): CanvasNo
         }
       }
     }
+    case 'windows-diagnostics':
+      return createWindowsDiagnosticsNode(0)
     case 'torrent':
       return createTorrentNode(0)
     case 'aws-resource': {

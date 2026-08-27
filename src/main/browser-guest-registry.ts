@@ -23,11 +23,8 @@ export interface BrowserGuest {
    * them sends a surface yet, so this field is `undefined` for every registration the app makes
    * today.
    *
-   * It is deliberately NOT defaulted to `'canvas'`. Defaulting would record the kanban card
-   * modal's guest as a canvas guest — a positive false claim, indistinguishable from the real
-   * thing, producing two `'canvas'` entries for one node id: exactly the bug the field exists to
-   * prevent. `undefined` is detectable, so a future reverse lookup can refuse to guess. A consumer
-   * must treat it as "unknown", never as "canvas".
+   * New mounts identify canvas versus modal explicitly. Omitted values remain unknown for older
+   * renderers rather than being silently reclassified as canvas.
    */
   surface?: BrowserSurfaceKind
 }

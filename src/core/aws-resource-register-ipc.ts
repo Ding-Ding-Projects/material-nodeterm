@@ -2,9 +2,10 @@ import { IPC } from '../shared/ipc'
 import type { AwsManagerRequest } from '../shared/aws-resource'
 import type { CorePlatform } from './platform'
 import { AwsResourceManagerService, type AwsCliResolver } from './aws-resource-manager'
+import type { AwsWizardModelService } from './aws-wizard/service'
 
-export function registerAwsResourceIpc(platform: CorePlatform, resolveAwsCli?: AwsCliResolver): AwsResourceManagerService {
-  const service = new AwsResourceManagerService(platform, resolveAwsCli)
+export function registerAwsResourceIpc(platform: CorePlatform, resolveAwsCli?: AwsCliResolver, wizardModels?: AwsWizardModelService): AwsResourceManagerService {
+  const service = new AwsResourceManagerService(platform, resolveAwsCli, wizardModels)
   platform.handle(IPC.awsResourceRuntime, () => service.runtime())
   platform.handle(IPC.awsResourceProfiles, () => service.profiles())
   platform.handle(IPC.awsResourceBinding, (nodeId: string) => service.binding(nodeId))

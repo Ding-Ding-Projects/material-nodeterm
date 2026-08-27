@@ -353,7 +353,7 @@ export const CATALOG: Catalog = {
   'nodeCatalog.entry.group.label': { en: flat('Group frame'), yue: flat('群組框') },
   'nodeCatalog.entry.group.description': { en: flat('Add an empty frame for organizing related nodes.'), yue: flat('加個空框，整理相關節點。') },
   'nodeCatalog.entry.annotation.label': { en: flat('Drawing annotation'), yue: flat('繪圖註解') },
-  'nodeCatalog.entry.annotation.description': { en: flat('Arm the drawing tool, then drag a line or arrow on the canvas.'), yue: flat('啟用繪圖工具，再喺畫布拖出直線或箭嘴。') },
+  'nodeCatalog.entry.annotation.description': { en: flat('Arm the drawing tool, then drag a line or arrow with an optional label and editable thickness.'), yue: flat('啟用繪圖工具，再喺畫布拖出直線或箭嘴，仲可以加標籤同調校粗幼。') },
   'nodeCatalog.entry.browser.label': { en: flat('Browser'), yue: flat('瀏覽器') },
   'nodeCatalog.entry.browser.description': { en: flat('Open a browser node with a blank address bar.'), yue: flat('開個有空白網址列嘅瀏覽器節點。') },
   'nodeCatalog.entry.authenticator.label': { en: flat('Authenticator'), yue: flat('驗證器') },
@@ -524,6 +524,43 @@ export const CATALOG: Catalog = {
   'nodeCatalog.entry.homeassistant-sensor.description': { en: flat('Display selected Home Assistant values, states, gauges, trends, events, weather, calendars, and attributes through a local binding.'), yue: flat('用本機綁定顯示揀好嘅 Home Assistant 數值、狀態、儀表、趨勢、事件、天氣、日曆同屬性。') },
   'nodeCatalog.entry.service.freepbx.label': { en: flat('FreePBX manager'), yue: flat('FreePBX 管理器') },
   'nodeCatalog.entry.service.freepbx.description': { en: flat('Open a typed manager for a saved FreePBX connection.'), yue: flat('開已儲存 FreePBX 連線嘅有類型管理器。') },
+  'nodeCatalog.entry.open-webui-hosting.label': { en: flat('Open WebUI hosting'), yue: flat('Open WebUI 託管') },
+  'nodeCatalog.entry.open-webui-hosting.description': { en: flat('Run Open WebUI with persistent data, local Ollama reuse, and a guided provider choice.'), yue: flat('用持久資料、本機 Ollama 重用同引導式供應商選擇執行 Open WebUI。') },
+  'nodeCatalog.entry.nextcloud-hosting.label': { en: flat('Managed Nextcloud'), yue: flat('託管 Nextcloud') },
+  'nodeCatalog.entry.nextcloud-hosting.description': { en: flat('Create a guided no-socket Nextcloud stack with PostgreSQL, Redis, secret files, and local recovery operations.'), yue: flat('建立有引導、無 socket 嘅 Nextcloud stack，用 PostgreSQL、Redis、秘密檔案同本機復原操作。') },
+  'nextcloudManaged.title': { en: flat('Managed Nextcloud hosting'), yue: flat('託管 Nextcloud 主機') },
+  'nextcloudManaged.intro': { en: flat('This profile manages PostgreSQL, Redis, and a Nextcloud web service without a container-runtime socket or privileged mode. Importing a project never deploys anything.'), yue: flat('呢個 profile 管理 PostgreSQL、Redis 同 Nextcloud 網頁服務，唔用 container runtime socket 或 privileged mode。匯入專案永遠唔會部署。') },
+  'nextcloudManaged.context': { en: flat('Docker context'), yue: flat('Docker 環境') },
+  'nextcloudManaged.chooseContext': { en: flat('Choose a verified context'), yue: flat('揀已驗證環境') },
+  'nextcloudManaged.projectName': { en: flat('Managed project name'), yue: flat('託管專案名稱') },
+  'nextcloudManaged.dataFolder': { en: flat('Data folder'), yue: flat('資料資料夾') },
+  'nextcloudManaged.backupFolder': { en: flat('Backup folder'), yue: flat('備份資料夾') },
+  'nextcloudManaged.chooseFolder': { en: flat('Choose a local folder'), yue: flat('揀本機資料夾') },
+  'nextcloudManaged.browse': { en: flat('Browse'), yue: flat('瀏覽') },
+  'nextcloudManaged.port': { en: flat('Loopback port'), yue: flat('本機回送埠') },
+  'nextcloudManaged.searchServices': { en: flat('Search managed services'), yue: flat('搜尋託管服務') },
+  'nextcloudManaged.regexServices': { en: flat('Regex builder for managed service search'), yue: flat('託管服務搜尋正則建立器') },
+  'nextcloudManaged.services': { en: flat('Fixed managed services'), yue: flat('固定託管服務') },
+  'nextcloudManaged.searchOperations': { en: flat('Search managed operations'), yue: flat('搜尋託管操作') },
+  'nextcloudManaged.regexOperations': { en: flat('Regex builder for managed operation search'), yue: flat('託管操作搜尋正則建立器') },
+  'nextcloudManaged.operations': { en: flat('Managed operation choices'), yue: flat('託管操作選擇') },
+  'nextcloudManaged.operation.deploy': { en: flat('Deploy managed Nextcloud'), yue: flat('部署託管 Nextcloud') },
+  'nextcloudManaged.operation.update': { en: flat('Update web service'), yue: flat('更新網頁服務') },
+  'nextcloudManaged.operation.backup': { en: flat('Create backup'), yue: flat('建立備份') },
+  'nextcloudManaged.operation.restore': { en: flat('Restore snapshot'), yue: flat('還原快照') },
+  'nextcloudManaged.operation.rollback': { en: flat('Rollback update'), yue: flat('回復更新') },
+  'nextcloudManaged.sequence': { en: flat('Sequence'), yue: flat('次序') },
+  'nextcloudManaged.sequenceHint': { en: flat('Every step is fixed by the profile and can be cancelled while the host reports progress.'), yue: flat('每一步都由 profile 固定，主機報告進度時可以取消。') },
+  'nextcloudManaged.searchSnapshots': { en: flat('Search verified snapshots'), yue: flat('搜尋已驗證快照') },
+  'nextcloudManaged.regexSnapshots': { en: flat('Regex builder for snapshot search'), yue: flat('快照搜尋正則建立器') },
+  'nextcloudManaged.snapshots': { en: flat('Verified snapshots'), yue: flat('已驗證快照') },
+  'nextcloudManaged.noSnapshots': { en: flat('No verified snapshots are available yet. Create a backup first.'), yue: flat('暫時冇已驗證快照，先建立備份。') },
+  'nextcloudManaged.busy': { en: flat('An operation is already running.'), yue: flat('已有操作進行中。') },
+  'nextcloudManaged.missingBinding': { en: flat('Choose a Docker context and both local folders first.'), yue: flat('先揀 Docker 環境同兩個本機資料夾。') },
+  'nextcloudManaged.missingSnapshot': { en: flat('Choose a verified snapshot first.'), yue: flat('先揀已驗證快照。') },
+  'nextcloudManaged.working': { en: flat('Working…'), yue: flat('處理緊…') },
+  'nextcloudManaged.portableIntent': { en: flat('Portable intent'), yue: flat('可攜意圖') },
+  'nextcloudManaged.localOnly': { en: flat('Context, folders, secret keys, process state, and generated runtime data stay on this computer. The project file carries only the no-socket profile choice.'), yue: flat('Docker 環境、資料夾、秘密 key、程序狀態同生成嘅 runtime 資料只留喺呢部電腦。專案檔只帶無 socket profile 選擇。') },
   'nodeCatalog.entry.editor.label': { en: flat('Editor'), yue: flat('編輯器') },
   'nodeCatalog.entry.editor.description': { en: flat('Open a selected project file in the embedded editor.'), yue: flat('喺內置編輯器開揀好嘅項目檔案。') },
   'nodeCatalog.entry.diff.label': { en: flat('Diff viewer'), yue: flat('差異檢視器') },
@@ -1151,6 +1188,102 @@ export const CATALOG: Catalog = {
     yue: flat('揀執行檔…')
   },
 
+  'terminalProfiles.named.heading': {
+    en: flat('Named terminal profiles'),
+    yue: flat('已命名終端機設定檔')
+  },
+  'terminalProfiles.named.description': {
+    en: flat('Save a name, initial directory, and optional startup command for new terminal or agent nodes. These values stay on this computer and are not written to shared project files.'),
+    yue: flat('為新終端機或代理節點儲存名稱、初始目錄同可選啟動指令。呢啲值只留喺呢部電腦，唔會寫入共享項目檔案。')
+  },
+  'terminalProfiles.named.search': {
+    en: flat('Search named profiles'),
+    yue: flat('搜尋已命名設定檔')
+  },
+  'terminalProfiles.named.listLabel': {
+    en: flat('Saved named terminal profiles'),
+    yue: flat('已儲存嘅已命名終端機設定檔')
+  },
+  'terminalProfiles.named.empty': {
+    en: flat('No named profiles match this search. Create one below.'),
+    yue: flat('冇已命名設定檔符合呢次搜尋。可以喺下面建立一個。')
+  },
+  'terminalProfiles.named.noStartup': {
+    en: flat('No startup command'),
+    yue: flat('冇啟動指令')
+  },
+  'terminalProfiles.named.default': {
+    en: flat('Default'),
+    yue: flat('預設')
+  },
+  'terminalProfiles.named.useDefault': {
+    en: flat('Use for new nodes'),
+    yue: flat('用於新節點')
+  },
+  'terminalProfiles.named.defaultStatus': {
+    en: flat('{profile} is used for one-click new nodes.'),
+    yue: flat('{profile} 會用於一按建立嘅新節點。')
+  },
+  'terminalProfiles.named.edit': {
+    en: flat('Edit'),
+    yue: flat('編輯')
+  },
+  'terminalProfiles.named.remove': {
+    en: flat('Remove'),
+    yue: flat('移除')
+  },
+  'terminalProfiles.named.confirmRemove': {
+    en: flat('Confirm remove'),
+    yue: flat('確認移除')
+  },
+  'terminalProfiles.named.editorTitle': {
+    en: flat('Create named profile'),
+    yue: flat('建立已命名設定檔')
+  },
+  'terminalProfiles.named.nameLabel': {
+    en: flat('Name'),
+    yue: flat('名稱')
+  },
+  'terminalProfiles.named.nameDescription': {
+    en: flat('A short label shown in profile pickers.'),
+    yue: flat('喺設定檔選擇器顯示嘅簡短標籤。')
+  },
+  'terminalProfiles.named.cwdLabel': {
+    en: flat('Initial directory'),
+    yue: flat('初始目錄')
+  },
+  'terminalProfiles.named.cwdDescription': {
+    en: flat('The directory opened before the startup command runs.'),
+    yue: flat('啟動指令執行之前先開啟嘅目錄。')
+  },
+  'terminalProfiles.named.browse': {
+    en: flat('Browse…'),
+    yue: flat('瀏覽…')
+  },
+  'terminalProfiles.named.commandLabel': {
+    en: flat('Startup command'),
+    yue: flat('啟動指令')
+  },
+  'terminalProfiles.named.commandDescription': {
+    en: flat('Optional text sent once after the shell is ready. It is user-authored and runs locally.'),
+    yue: flat('Shell 準備好之後可選擇傳送一次嘅文字。由使用者撰寫，並喺本機執行。')
+  },
+  'terminalProfiles.named.invalid': {
+    en: flat('Enter a name and initial directory. Keep each value within its stated limit.'),
+    yue: flat('請輸入名稱同初始目錄，每個值都要符合旁邊列出嘅限制。')
+  },
+  'terminalProfiles.named.cancel': {
+    en: flat('Cancel'),
+    yue: flat('取消')
+  },
+  'terminalProfiles.named.saveChanges': {
+    en: flat('Save changes'),
+    yue: flat('儲存更改')
+  },
+  'terminalProfiles.named.create': {
+    en: flat('Create profile'),
+    yue: flat('建立設定檔')
+  },
   'terminalProfiles.create.menuLabel': {
     en: flat('New terminal with profile…'),
     yue: flat('用設定檔新增終端機…')

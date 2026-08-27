@@ -27,10 +27,21 @@ import {
 import type { PlannerSchedule } from '../shared/planner-occurrences'
 import { normalizeRecoveryGameSnapshot, RECOVERY_ENERGY_KEYS, type RecoveryGameSnapshot } from '../shared/recovery-game'
 import { repairPortablePortals, validatePortablePortals, type PortablePortalV3 } from './portal-lifecycle'
+import { validateCloudflareTunnelIntent, type CloudflareTunnelIntent } from '../shared/cloudflare-tunnel-handoff'
+import { portableKioskPwaIntent, type PortableKioskPwaIntent } from '../shared/kiosk-pwa'
+import {
+  ANNOTATION_MAX_LABEL_LENGTH,
+  ANNOTATION_MAX_THICKNESS,
+  ANNOTATION_MIN_THICKNESS,
+  normalizeAnnotationLabel
+} from '../shared/annotation'
 import { normalizeCloudflareIntent as normalizeCloudflareZeroTrustIntent, type CloudflarePortableIntent as CloudflareZeroTrustPortableIntent } from '../shared/cloudflare-zero-trust'
 import { normalizeCloudflareIntent as normalizeCloudflareCoreIntent, type CloudflarePortableIntent as CloudflareCorePortableIntent } from '../shared/cloudflare-core-managers'
+import { sanitizeTunnelPortableIntent, type TunnelPortableIntent } from '../shared/tunnel-state'
 import { normalizeNextcloudAioConfig, type NextcloudAioConfig } from '../shared/nextcloud-aio'
+import { validateNextcloudManagedIntent, type NextcloudManagedIntent } from '../shared/nextcloud-managed'
 import type { AwsManagerPortableIntent } from '../shared/aws-resource'
+import { normalizeDebugBrowserIntent, normalizeDebugBrowserProfiles, type DebugBrowserIntent, type DebugBrowserProfile } from '../shared/browser-debug-sessions'
 
 export type PortableCanvasScope = 'root' | 'multiverse' | 'aws-universe'
 
@@ -66,15 +77,23 @@ export interface PortableCanvasNodeV3 {
   tags?: string[]
   text?: string
   url?: string
+  /** Safe project intent naming the selected browser profile; its local session stays on-device. */
+  browserProfileId?: string
   browserTabs?: Array<{ id: string; url?: string; title: string }>
+  kioskPwaIntent?: PortableKioskPwaIntent
+  /** Safe debugging-browser intent. Local credentials, certificates and runtime state are excluded. */
+  debugBrowser?: DebugBrowserIntent
   serviceLabel?: string
   /** Safe AWS manager intent; local bindings and provider state remain outside the project file. */
   awsManagerIntent?: AwsManagerPortableIntent
   /** Typed Cloudflare operation intent only; credentials and provider bindings are local. */
   cloudflareZeroTrustIntent?: CloudflareZeroTrustPortableIntent
   cloudflareCoreIntent?: CloudflareCorePortableIntent
+  /** Safe Tunnel route intent. Provider ids, credentials, local bindings and observations stay local. */
+  cloudflareTunnelIntent?: TunnelPortableIntent
   /** Safe Nextcloud AIO hosting intent; Docker context and live state remain local. */
   nextcloudAioConfig?: NextcloudAioConfig
+  nextcloudManagedIntent?: NextcloudManagedIntent
   /** Safe public-catalog identity and display copy. Image bytes and network state are excluded. */
   wildDimSumDish?: PublicDimSumSelection
   homeAssistantIntent?: { transport: 'rest' | 'websocket'; domain: string }
@@ -92,6 +111,11 @@ export interface PortableCanvasNodeV3 {
   homeAssistantSensorConfig?: HomeAssistantSensorConfig
   /** Portable recovery-game progress only. It contains board intent, never host or process state. */
   recoveryGame?: RecoveryGameSnapshot
+  /** Annotation drawing intent, including its diagonal, optional label, and stroke width. */
+  annotationVariant?: 'line' | 'arrow'
+  annotationDir?: 'tl-br' | 'tr-bl'
+  annotationLabel?: string
+  annotationThickness?: number
 }
 
 export interface PortableRelationshipV3 {
@@ -126,6 +150,8 @@ export interface PortableCanvasProjectionV3 {
   media?: PortableMediaManifest
   /** Safe schedule intent only. Occurrences and host state stay machine-local. */
   planner?: PortablePlannerDefinitions
+  /** Safe debugging-browser profile intent. Local credentials and bindings are excluded. */
+  debugBrowserProfiles?: DebugBrowserProfile[]
 }
 
 export interface PortableCanvasProjectionInput {
@@ -151,7 +177,7 @@ export const PORTABLE_CANVAS_LIMITS = {
 } as const
 
 const UNSAFE_KEYS = new Set(['__proto__', 'prototype', 'constructor'])
-const ALLOWED_TOP = new Set(['format', 'schemaVersion', 'project', 'rootCanvasId', 'canvases', 'nodes', 'relationships', 'doors', 'portals', 'appearance', 'media', 'planner'])
+const ALLOWED_TOP = new Set(['format', 'schemaVersion', 'project', 'rootCanvasId', 'canvases', 'nodes', 'relationships', 'doors', 'portals', 'appearance', 'media', 'planner', 'debugBrowserProfiles'])
 const ALLOWED_PROJECT = new Set(['name', 'color', 'icon'])
 const ALLOWED_ICON = new Set(['type', 'name'])
 const ALLOWED_CANVAS = new Set(['id', 'scope', 'parentCanvasId', 'depth', 'title', 'order', 'viewport', 'nodeIds'])
@@ -159,11 +185,16 @@ const ALLOWED_VIEWPORT = new Set(['x', 'y', 'zoom'])
 const ALLOWED_NODE = new Set([
   'id', 'kind', 'creationEventId', 'position', 'size', 'title', 'color', 'group',
   'universeCanvasId', 'universeScope', 'universeDepth', 'nonDeletable', 'shopSelection',
-  'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel', 'awsManagerIntent',
-  'wildDimSumDish', 'homeAssistantIntent', 'homeAssistantControlConfig', 'homeAssistantSensorConfig', 'cloudflareZeroTrustIntent', 'cloudflareCoreIntent', 'nextcloudAioConfig',
+  'collapsed', 'parentId', 'tags', 'text', 'url', 'browserProfileId', 'browserTabs', 'serviceLabel',
+  'wildDimSumDish', 'homeAssistantIntent', 'homeAssistantControlConfig', 'homeAssistantSensorConfig',
+  'awsManagerIntent', 'cloudflareZeroTrustIntent', 'cloudflareCoreIntent', 'cloudflareTunnelIntent',
+  'nextcloudAioConfig', 'nextcloudManagedIntent',
+  'kioskPwaIntent',
+  'debugBrowser',
   'alarmSchedule', 'alarmTimeZone', 'alarmEnabled', 'alarmSnoozeMinutes',
   'alarmSoundEnabled', 'alarmNarratorEnabled', 'alarmHistory', 'mediaAssets',
-  'mediaActiveAssetId', 'recoveryGame'
+  'mediaActiveAssetId', 'recoveryGame',
+  'annotationVariant', 'annotationDir', 'annotationLabel', 'annotationThickness'
 ])
 const ALLOWED_HOME_ASSISTANT_INTENT = new Set(['transport', 'domain'])
 const ALLOWED_RECOVERY_GAME = new Set(['player', 'energizedKeys', 'coreActivated', 'hazardHits'])
@@ -268,11 +299,18 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
   if (strict && node.text !== undefined && typeof node.text !== 'string') throw new PortableProjectV3Error('manifest', 'Portable node text is invalid.')
   if (strict && node.serviceLabel !== undefined && typeof node.serviceLabel !== 'string') throw new PortableProjectV3Error('manifest', 'Portable service label is invalid.')
   if (strict && node.cloudflareZeroTrustIntent !== undefined && !normalizeCloudflareZeroTrustIntent(node.cloudflareZeroTrustIntent)) throw new PortableProjectV3Error('manifest', 'Portable Cloudflare manager intent is invalid.')
+  if (strict && node.cloudflareTunnelIntent !== undefined && !sanitizeTunnelPortableIntent(node.cloudflareTunnelIntent)) throw new PortableProjectV3Error('manifest', 'Portable Cloudflare Tunnel intent is invalid.')
   if (strict && node.homeAssistantControlConfig !== undefined) {
     if (!record(node.homeAssistantControlConfig)) throw new PortableProjectV3Error('manifest', 'Portable Home Assistant control intent is invalid.')
     exactKeys(node.homeAssistantControlConfig, ALLOWED_HOME_ASSISTANT_CONTROL, 'Home Assistant control intent')
   }
   if (strict && node.browserTabs !== undefined && !Array.isArray(node.browserTabs)) throw new PortableProjectV3Error('manifest', 'Portable browser tabs must be an array.')
+  if (strict && node.browserProfileId !== undefined && (typeof node.browserProfileId !== 'string' || !/^[A-Za-z0-9._-]{1,128}$/.test(node.browserProfileId))) throw new PortableProjectV3Error('manifest', 'Portable browser profile id is invalid.')
+  if (node.kioskPwaIntent !== undefined) {
+    const intent = portableKioskPwaIntent(node.kioskPwaIntent)
+    if (!intent) throw new PortableProjectV3Error('manifest', 'Portable kiosk/PWA intent is invalid.')
+    out.kioskPwaIntent = intent
+  }
   if (node.collapsed !== undefined) out.collapsed = node.collapsed
   if (node.universeCanvasId !== undefined) out.universeCanvasId = text(node.universeCanvasId, 'universe canvas id')
   if (node.universeScope !== undefined) out.universeScope = node.universeScope
@@ -283,7 +321,26 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
   if (node.tags !== undefined) { if (node.tags.length > 1024) throw new PortableProjectV3Error('entry-limit', 'Portable tag count exceeds its bound.'); out.tags = node.tags.map((tag) => text(tag, 'node tag')).sort() }
   if (node.text !== undefined) out.text = content(node.text, 'node text')
   if (node.url !== undefined) { const url = safeUrl(node.url, 'node URL'); if (url) out.url = url }
+  if (node.browserProfileId !== undefined) out.browserProfileId = text(node.browserProfileId, 'browser profile id')
   if (node.serviceLabel !== undefined) out.serviceLabel = text(node.serviceLabel, 'service label')
+  if (node.annotationVariant !== undefined) {
+    if (!['line', 'arrow'].includes(String(node.annotationVariant))) throw new PortableProjectV3Error('manifest', 'Portable annotation variant is invalid.')
+    out.annotationVariant = node.annotationVariant
+  }
+  if (node.annotationDir !== undefined) {
+    if (!['tl-br', 'tr-bl'].includes(String(node.annotationDir))) throw new PortableProjectV3Error('manifest', 'Portable annotation diagonal is invalid.')
+    out.annotationDir = node.annotationDir
+  }
+  if (node.annotationLabel !== undefined) {
+    if (typeof node.annotationLabel !== 'string' || node.annotationLabel.length > ANNOTATION_MAX_LABEL_LENGTH) throw new PortableProjectV3Error('manifest', 'Portable annotation label is invalid.')
+    const label = normalizeAnnotationLabel(node.annotationLabel)
+    if (!label || label !== node.annotationLabel) throw new PortableProjectV3Error('manifest', 'Portable annotation label must be trimmed and non-empty.')
+    out.annotationLabel = label
+  }
+  if (node.annotationThickness !== undefined) {
+    if (typeof node.annotationThickness !== 'number' || !Number.isInteger(node.annotationThickness) || node.annotationThickness < ANNOTATION_MIN_THICKNESS || node.annotationThickness > ANNOTATION_MAX_THICKNESS) throw new PortableProjectV3Error('manifest', 'Portable annotation thickness is invalid.')
+    out.annotationThickness = node.annotationThickness
+  }
   if (node.awsManagerIntent !== undefined) {
     const intent = node.awsManagerIntent
     if (!record(intent) || intent.schemaVersion !== 1 || !['resource-explorer', 'cloud-control', 'core-services'].includes(intent.mode)) throw new PortableProjectV3Error('manifest', 'Portable AWS manager intent is invalid.')
@@ -305,10 +362,23 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
     if (strict && (node.cloudflareCoreIntent.schemaVersion !== 1 || normalized.manager !== node.cloudflareCoreIntent.manager || normalized.operation !== node.cloudflareCoreIntent.operation)) throw new PortableProjectV3Error('manifest', 'Portable Cloudflare manager intent is unsupported.')
     out.cloudflareCoreIntent = normalized
   }
+  if (node.cloudflareTunnelIntent !== undefined) {
+    const normalized = sanitizeTunnelPortableIntent(node.cloudflareTunnelIntent)
+    if (!normalized) throw new PortableProjectV3Error('manifest', 'Portable Cloudflare Tunnel intent is invalid.')
+    out.cloudflareTunnelIntent = normalized
+  }
   if (node.nextcloudAioConfig !== undefined) {
     const normalized = normalizeNextcloudAioConfig(node.nextcloudAioConfig)
     if (node.kind !== 'nextcloud-aio' || !normalized || (strict && JSON.stringify(normalized) !== JSON.stringify(node.nextcloudAioConfig))) throw new PortableProjectV3Error('manifest', 'Portable Nextcloud AIO intent is invalid or exceeds its bounds.')
     out.nextcloudAioConfig = normalized
+  }
+  if (node.nextcloudManagedIntent !== undefined) {
+    try {
+      if (node.kind !== 'nextcloud-managed') throw new Error('wrong kind')
+      out.nextcloudManagedIntent = validateNextcloudManagedIntent(node.nextcloudManagedIntent)
+    } catch {
+      throw new PortableProjectV3Error('manifest', 'Portable managed Nextcloud intent is invalid or exceeds its bounds.')
+    }
   }
   if (node.wildDimSumDish !== undefined) {
     const dish = normalizePublicDimSumSelection(node.wildDimSumDish)
@@ -367,6 +437,11 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
   if (node.browserTabs !== undefined) {
     if (node.browserTabs.length > 1024) throw new PortableProjectV3Error('entry-limit', 'Portable browser tab count exceeds its bound.')
     out.browserTabs = node.browserTabs.map((tab) => { if (!record(tab)) throw new PortableProjectV3Error('manifest', 'Portable browser tab is invalid.'); exactKeys(tab, ALLOWED_TAB, 'browser tab'); const url = safeUrl(tab.url, 'browser tab URL'); return { id: text(tab.id, 'browser tab id'), ...(url ? { url } : {}), title: content(tab.title, 'browser tab title') } })
+  }
+  if (node.debugBrowser !== undefined) {
+    const intent = normalizeDebugBrowserIntent(node.debugBrowser)
+    if (!intent) throw new PortableProjectV3Error('manifest', 'Portable debugging-browser intent is invalid.')
+    out.debugBrowser = intent
   }
   if (node.mediaAssets !== undefined) {
     if (!['photo', 'video', 'gallery'].includes(node.kind)) throw new PortableProjectV3Error('manifest', 'Only media nodes may carry portable media references.')
@@ -493,7 +568,8 @@ export function projectToPortableCanvasV3(project: Project, input: PortableCanva
   const planner = input.planner === undefined ? undefined : plannerDefinitionsToPortable(input.planner)
   const portalInput = input.portals ?? project.portals
   const portals = portalInput === undefined ? undefined : validatePortablePortals(portalInput, canvases)
-  const result: PortableCanvasProjectionV3 = { format: PORTABLE_PROJECT_SCHEMA, schemaVersion: PORTABLE_PROJECT_SCHEMA_VERSION, project: { name: text(project.name, 'project name'), color: text(project.color, 'project color'), ...(portableIcon ? { icon: portableIcon } : {}) }, rootCanvasId: 'root', canvases, nodes, relationships: relationships(project), ...(doors ? { doors } : {}), ...(portals ? { portals } : {}), ...(input.appearance ? { appearance: safeAppearance(input.appearance) as Record<string, unknown> } : {}), ...(media ? { media } : {}), ...(planner ? { planner } : {}) }
+  const debugBrowserProfiles = normalizeDebugBrowserProfiles(project.debugBrowserProfiles)
+  const result: PortableCanvasProjectionV3 = { format: PORTABLE_PROJECT_SCHEMA, schemaVersion: PORTABLE_PROJECT_SCHEMA_VERSION, project: { name: text(project.name, 'project name'), color: text(project.color, 'project color'), ...(portableIcon ? { icon: portableIcon } : {}) }, rootCanvasId: 'root', canvases, nodes, relationships: relationships(project), ...(doors ? { doors } : {}), ...(portals ? { portals } : {}), ...(input.appearance ? { appearance: safeAppearance(input.appearance) as Record<string, unknown> } : {}), ...(media ? { media } : {}), ...(planner ? { planner } : {}), ...(debugBrowserProfiles ? { debugBrowserProfiles } : {}) }
   if (result.relationships.length > PORTABLE_CANVAS_LIMITS.maxRelationships) throw new PortableProjectV3Error('entry-limit', 'Portable relationship count exceeds its bound.')
   return repairPortablePortals(repairUniverseShops(validatePortableCanvasProjectionV3(result)).projection).projection
 }
@@ -618,8 +694,10 @@ export function validatePortableCanvasProjectionV3(value: unknown): PortableCanv
   const media = value.media === undefined ? undefined : validatePortableMediaManifest(value.media)
   const mediaNodes = reconcileMediaReferences(normalizedNodes, media)
   const planner = value.planner === undefined ? undefined : validatePortablePlannerDefinitions(value.planner)
+  const debugBrowserProfiles = value.debugBrowserProfiles === undefined ? undefined : normalizeDebugBrowserProfiles(value.debugBrowserProfiles)
+  if (value.debugBrowserProfiles !== undefined && !debugBrowserProfiles) throw new PortableProjectV3Error('manifest', 'Portable debugging-browser profiles are invalid.')
   const portals = value.portals === undefined ? undefined : validatePortablePortals(value.portals, normalizedCanvases)
-  return { format: PORTABLE_PROJECT_SCHEMA, schemaVersion: 3, project: { name: value.project.name, color: value.project.color, ...(icon ? { icon } : {}) }, rootCanvasId: value.rootCanvasId, canvases: normalizedCanvases, nodes: mediaNodes, relationships: normalizedRelationships, ...(doors ? { doors } : {}), ...(portals ? { portals } : {}), ...(value.appearance !== undefined ? { appearance: safeAppearance(value.appearance) as Record<string, unknown> } : {}), ...(media ? { media } : {}), ...(planner ? { planner } : {}) }
+  return { format: PORTABLE_PROJECT_SCHEMA, schemaVersion: 3, project: { name: value.project.name, color: value.project.color, ...(icon ? { icon } : {}) }, rootCanvasId: value.rootCanvasId, canvases: normalizedCanvases, nodes: mediaNodes, relationships: normalizedRelationships, ...(doors ? { doors } : {}), ...(portals ? { portals } : {}), ...(value.appearance !== undefined ? { appearance: safeAppearance(value.appearance) as Record<string, unknown> } : {}), ...(media ? { media } : {}), ...(planner ? { planner } : {}), ...(debugBrowserProfiles ? { debugBrowserProfiles } : {}) }
 }
 
 export function parsePortableCanvasProjectionV3(bytes: Uint8Array): PortableCanvasProjectionV3 {
@@ -675,19 +753,28 @@ export function portableCanvasProjectionToProject(
     ...(node.tags ? { tags: [...node.tags] } : {}),
     ...(node.text !== undefined ? { text: node.text } : {}),
     ...(node.url !== undefined ? { url: node.url } : {}),
+    ...(node.browserProfileId !== undefined ? { browserProfileId: node.browserProfileId } : {}),
     ...(node.browserTabs ? { browserTabs: node.browserTabs.map((tab) => ({ ...tab })) } : {}),
+    ...(node.kioskPwaIntent ? { kioskPwaIntent: { ...node.kioskPwaIntent, target: { ...node.kioskPwaIntent.target }, requestedPermissions: [...node.kioskPwaIntent.requestedPermissions] } } : {}),
+    ...(node.debugBrowser ? { debugBrowser: { ...node.debugBrowser, proxy: { ...node.debugBrowser.proxy, ...(node.debugBrowser.proxy.bypass ? { bypass: [...node.debugBrowser.proxy.bypass] } : {}) } } } : {}),
     ...(node.serviceLabel !== undefined ? { serviceLabel: node.serviceLabel } : {}),
     ...(node.awsManagerIntent !== undefined ? { awsManagerIntent: { ...node.awsManagerIntent } } : {}),
     ...(node.cloudflareZeroTrustIntent !== undefined ? { cloudflareZeroTrustIntent: normalizeCloudflareZeroTrustIntent(node.cloudflareZeroTrustIntent)! } : {}),
     ...(node.cloudflareCoreIntent !== undefined ? { cloudflareCoreIntent: normalizeCloudflareCoreIntent(node.cloudflareCoreIntent) } : {}),
+    ...(node.cloudflareTunnelIntent !== undefined ? { cloudflareTunnelIntent: sanitizeTunnelPortableIntent(node.cloudflareTunnelIntent)! } : {}),
     ...(node.nextcloudAioConfig !== undefined ? { nextcloudAioConfig: normalizeNextcloudAioConfig(node.nextcloudAioConfig) } : {}),
+    ...(node.nextcloudManagedIntent !== undefined ? { nextcloudManagedIntent: validateNextcloudManagedIntent(node.nextcloudManagedIntent) } : {}),
     ...(node.mediaAssets ? { mediaAssets: node.mediaAssets.map((asset) => ({ ...asset })) } : {}),
     ...(node.mediaActiveAssetId !== undefined ? { mediaActiveAssetId: node.mediaActiveAssetId } : {}),
     ...(node.wildDimSumDish !== undefined ? { wildDimSumDish: node.wildDimSumDish } : {}),
     ...(node.homeAssistantIntent !== undefined ? { homeAssistantIntent: { ...node.homeAssistantIntent } } : {}),
     ...(node.homeAssistantControlConfig !== undefined ? { homeAssistantControlConfig: validateHomeAssistantControlConfig(node.homeAssistantControlConfig) } : {}),
     ...(node.homeAssistantSensorConfig !== undefined ? { homeAssistantSensorConfig: validateHomeAssistantSensorConfig(node.homeAssistantSensorConfig) } : {}),
-    ...(node.recoveryGame !== undefined ? { recoveryGame: normalizeRecoveryGameSnapshot(node.recoveryGame) } : {})
+    ...(node.recoveryGame !== undefined ? { recoveryGame: normalizeRecoveryGameSnapshot(node.recoveryGame) } : {}),
+    ...(node.annotationVariant !== undefined ? { annotationVariant: node.annotationVariant } : {}),
+    ...(node.annotationDir !== undefined ? { annotationDir: node.annotationDir } : {}),
+    ...(node.annotationLabel !== undefined ? { annotationLabel: node.annotationLabel } : {}),
+    ...(node.annotationThickness !== undefined ? { annotationThickness: node.annotationThickness } : {})
   })
   const nodeById = new Map(value.nodes.map((node) => [node.id, runtimeNode(node)]))
   const rootCanvas = value.canvases.find((canvas) => canvas.id === value.rootCanvasId)!

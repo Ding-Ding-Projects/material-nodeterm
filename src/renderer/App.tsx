@@ -3,6 +3,7 @@ import { rainbowDurationSeconds } from './lib/nodeColor'
 import { ReactFlowProvider } from '@xyflow/react'
 import { Canvas } from './canvas/Canvas'
 import { PromptDialogHost } from './components/promptDialog'
+import { NodeIconDialogHost } from './components/NodeIconPicker'
 import { ArchiveUnlockDialogHost } from './components/archiveUnlockDialog'
 import { DestructiveGateHost } from './components/DestructiveGateHost'
 import { DimSumSurprise } from './components/DimSumSurprise'
@@ -31,6 +32,7 @@ import { AppearanceEditorHost } from './components/appearance/AppearanceEditor'
 import { resolveAppDisplayName } from '../shared/appIdentity'
 import { applyAccentTokens } from './lib/accentTokens'
 import { adhdCssVars, anyAdhdModeOn, normalizeAdhdModes } from './lib/adhdModes'
+import { RemoteOAuthCallbackNotice } from './components/RemoteOAuthCallbackNotice'
 import { EasterEggs } from './components/EasterEggs'
 
 export default function App() {
@@ -174,6 +176,7 @@ export default function App() {
         )}
         {/* In-app window.prompt replacement (Electron has no prompt); driven by promptDialog(). */}
         <PromptDialogHost />
+        <NodeIconDialogHost />
         <ArchiveUnlockDialogHost />
       {/* Mounted at the root so every surface can reach the super gate, and so an open one
           survives a project switch beneath it. See state/destructiveGate.ts. Kids mode upgrades
@@ -190,6 +193,7 @@ export default function App() {
             unconditionally so it is reachable the moment a rail lane wires the destination up,
             regardless of whether Kids mode is currently on. Renders nothing while closed. */}
         <EnableKidsModeDialogHost />
+        <RemoteOAuthCallbackNotice />
         <EasterEggs />
       </ReactFlowProvider>
       {/* Kids mode explicitly KEEPS the dim-sum surprise (see kids-mode.ts's header) — it is not

@@ -78,6 +78,24 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## In progress / partially landed
 
+- [ ] **AWS platform managers, issue #49**: ECR, ECS, EKS, RDS, database, VPC, Route 53, and cost
+      operations are mounted on the existing shared AWS resource manager and AWS Shop. The node
+      now carries typed previews, fixed argv with `shell: false`, bounded inputs and output,
+      pagination, progress, cancellation, retry, local credential binding, safe portable intent,
+      and destructive confirmation. Tests, type checks, lint, builds, packaging, runtime
+      interaction, reviews, audits, and captures remain intentionally unrun in this lane.
+- [ ] **Seamless agent messaging, issue #69 / Program 58**: global confirmation-free `send` and
+      `reply` delivery is now opt-in through Settings → Agents, while the default keeps the
+      existing confirmation surface. The current mailbox, project capability consent, idle and
+      flow gates, bounded queue, and trace path remain shared by both routes. Offline documentation
+      and the feature article are updated. Tests, type checks, lint, reviews, security checks,
+      builds, packaging, runtime interaction, and captures remain pending under the ultra-speed
+      boundary.
+- [ ] **Per-account node colour and binding, issue #71 / Program 60**: managed Claude and Codex
+      accounts now carry an optional default node colour that new nodes capture at creation, with
+      host-resolved colour applied to phone-registered nodes. Tests, builds, packaging, runtime
+      interaction, and screen captures remain pending for this lane.
+
 - [ ] **Portable Comment and Activity attachments, issue #94**: source support is present in
       `src/shared/comment-attachments.ts`, `src/core/board-attachments.ts`, the board-log bridge,
       composer queue, and schema 3 comment carriers. Tests, type checks, lint, builds, packaging,
@@ -113,6 +131,14 @@ later commit, since this file will not be kept in lockstep with every merge).
       from a trackpad, including the bounded momentum-gap linger. Server Edition keeps its browser
       heuristic and mobile is not applicable. This implementation lane intentionally has no tests,
       lint, type checks, builds, packaging, runtime interaction, reviews, audits, or captures yet.
+- [ ] **Usage popover default account selection, issue #70**: the active local or SSH project can
+      choose the Claude identity used by future sessions from the usage popover. Selection is
+      keyboard-accessible, persisted through the project default-account path, keeps running
+      sessions unchanged, and treats stale identities as System. The implementation is on
+      `feat/program-59-usage-default-account` at `95e8eb8e19e4a568bf7286b35a9cdf789a6983ac`,
+      based on `origin/main` `54164b84dce0b7e62787b1de2885405ff4ed821c`. Tests, lint, type checks,
+      builds, packaging, runtime interaction, reviews, accessibility checks, security audits, and
+      UI captures remain unrun in this source lane.
 
 - [ ] **Shared provider services, issue #18**: provider catalog, account metadata, sealed
       credential payloads, bounded one-time OAuth PKCE callbacks, adapter-owned resource discovery,
@@ -135,6 +161,13 @@ later commit, since this file will not be kept in lockstep with every merge).
       cancellable operation plumbing and duplicate-submit protection in `src/core/wsl/`,
       `src/shared/wsl.ts`, the bridges, and `src/renderer/wsl/WslCreateDialog.tsx`. Focused
       verification and real built-artifact interaction remain pending.
+- [ ] **Read-only Windows diagnostics, issue #66**: the canvas node and fixed host snapshot route
+      cover drives/storage, services, startup entries, scheduled tasks, updates, network state,
+      and bounded event summaries. Tests, type checks, lint, reviews, security/accessibility
+      checks, builds, packaging, runtime interaction, and captures remain intentionally unrun in
+      the ultra-speed lane. The feature ref is reconciled with `origin/main` at
+      `54164b84dce0b7e62787b1de2885405ff4ed821c` with merge commit
+      `538fe6a5b4cbf0384a35ff9edc1a1d59d87df431`.
 - [ ] **Full Material Design 3 surface audit (#91)**: source-level inventory and remediation are
       recorded in `docs/features/appearance/material-3-audit.md` and checked by
       `scripts/check-material-audit.mjs` (201 rows, including every desktop shell, node,
@@ -154,6 +187,11 @@ later commit, since this file will not be kept in lockstep with every merge).
       Configure/Rebind/Adopt/Deploy/Locate Asset/Leave Unbound surface is wired for Desktop with
       an honest Server Edition boundary. Tests, build/package evidence, generated docs bundle,
       runtime interaction, and captures remain outstanding.
+- [ ] **Proxy and isolated debugging browser sessions (issue #65)**: the bounded portable intent,
+      separate debugging partition, host-owned lifecycle manager, guided proxy/certificate profile
+      picker, and explicit recovery states are implemented in the issue lane. Tests, type checks,
+      lint, security review, build/package evidence, runtime interaction, and captures remain
+      intentionally unrun under the ultra-speed boundary.
 
 - [ ] **Nextcloud AIO hosting, issue #52**: the guided pinned official image profile is implemented
       on `feat/program-41-nextcloud-aio` with explicit Docker socket authority disclosure, no
@@ -236,16 +274,26 @@ Feature requests open on GitHub with no landed implementation yet, newest first:
 - [ ] **#347** — Cleanup/uninstall script or portable install.
 - [ ] **#299** — High-DPI UI text scaling setting.
 - [ ] **#295** — Auto-rotate Claude accounts when usage crosses a threshold (default 90%).
+      Implementation landed in the Program 70 lane, but verification and release evidence remain
+      intentionally unrun under the ultra-speed boundary.
 - [ ] **#292** — Auto-handle OAuth localhost callbacks for remote sessions (MCP auth on SSH /
       Server Edition).
-- [ ] **#291** — Node type icons alongside color coding.
-- [ ] **#290** — Source control for monorepos with multiple nested git repos.
-- [ ] **#289** — Custom sounds for agent alerts.
-- [ ] **#286** — Named terminal profiles (start directory).
+- [ ] **#291** — Node type icons alongside color coding. Source implementation is present in the
+      Program 61 lane, while tests, build/package evidence, runtime interaction, and captures remain
+      pending under the stated ultra-speed boundary.
+- [ ] **#290** — Source control for monorepos with multiple nested git repos. Implementation
+      landed in the Program 68 lane, but tests, builds, runtime interaction, and captures remain
+      unrun under the ultra-speed boundary.
+- [ ] **#289** — Custom sounds for agent alerts. Finished-agent and needs-attention events now
+      accept bounded local audio with per-event preview, reset, persistence in app data, and
+      built-in fallback. Tests, builds, packaging, runtime interaction, and captures remain unrun
+      under the ultra-speed lane, so this row stays unchecked.
+- [ ] **#286** — Named terminal profiles (start directory). Implementation is present in the
+      Program 66 lane, with tests, packaged interaction, and capture evidence still pending.
 - [ ] **#284** — Per-terminal independent "repo context".
-- [ ] **#145** — Basic annotation tools (colored frame, lines, arrows) — note: an `annotation`
-      node kind already exists in `NodeKind` per CLAUDE.md; verify against #145 before assuming
-      this is unstarted.
+- [ ] **#145 / #76** — Annotation tools now include visual-only lines and arrows, optional labels,
+      bounded editable stroke thickness, ordinary project persistence, and schema 3 portable
+      intent. Runtime, packaged, and capture verification remain pending in the integration lane.
 - [ ] **#119** — Opt-in lead-pane-width preference (Claude Code agent teams squeeze the lead
       pane to ~30%).
 - [ ] **#78** — Owner's own tracked roadmap of 4 bug fixes + 4 features (grouped meta-issue;
@@ -371,6 +419,10 @@ intentionally unchecked because this task publishes the plan only.
       selection, trust review, synth, diff, reviewed deploy, and safe portable intent. Focused
       focused checks, built interaction, packaging, and screen-capture evidence remain unrun.
 - [ ] Add the generic all-service AWS GUI without a command textbox fallback.
+  The AWS Shop now routes installed-model operations through the shared AWS resource manager, with
+  schema-derived controls, fixed argv previews, bounded output and pagination, cancellation,
+  progress, and destructive confirmation. Focused verification and packaged interaction evidence
+  remain open for issue #50.
 
 ### Hosting and Cloudflare
 
@@ -382,25 +434,54 @@ intentionally unchecked because this task publishes the plan only.
       handoff, update, rollback, four managed volumes, and private binding. Source and docs are
       present in issue #51; tests, builds, packaging, runtime interaction, and captures remain
       unrun under the ultra-speed boundary.
-- [ ] Add Nextcloud AIO and managed no-socket hosting profiles.
-- [ ] Add Open WebUI hosting with existing Ollama reuse and honest bootstrap states.
+- [x] Add Nextcloud AIO and managed no-socket hosting profiles. The managed profile owns fixed
+      PostgreSQL, Redis, and web services, persistent local data, secret files, loopback binding,
+      update, backup, restore, and rollback sequencing; source/runtime verification remains
+      intentionally unrun under the ultra-speed boundary.
+- [x] Add Open WebUI hosting with existing Ollama reuse, OpenAI-compatible provider choice, honest
+  bootstrap states, persistent data, health, backup, restore, update, rollback, and local bindings.
+- [x] Add the hosted-service Cloudflare Tunnel handoff contract after local health verification. The
+      portable routing intent, capability-bound provider seam, and machine-local binding coordinator
+      are present; provider adapter wiring, build, packaging, and runtime evidence remain pending.
 - [ ] Add Cloudflare account, zone, DNS, security, Workers, Pages, storage, queue, Access, and
       analytics managers.
+- [ ] Add one-click Cloudflare Tunnel setup with private-first routing and connector choices. The
+      wizard source surface is implemented in `src/shared/cloudflare-tunnel-wizard.ts` and
+      `src/renderer/components/cloudflare/CloudflareTunnelWizard.tsx`; provider and host adapters,
+      built-artifact verification, and release evidence remain pending.
 - [x] Add typed Cloudflare Access, Zero Trust, Workers, Pages, R2, D1, and Queues managers with
       local protected credentials, portable neutral intent, bounded fixed-route API calls,
       progress/cancellation, per-field regex builders, and destructive confirmation. Verification
       remains intentionally unrun in the ultra-speed lane.
 - [ ] Add one-click Cloudflare Tunnel setup with private-first routing and connector choices.
+- [ ] Add Cloudflare Tunnel inventory, route preservation, hostname conflict review, and explicit
+      DNS record adoption. Issue #59 source implementation is present in the isolated lane, with
+      tests, builds, packaging, runtime interaction, and captures intentionally unrun under the
+      ultra-speed boundary.
+  - [ ] Add per-user process, Windows service, and pinned Docker connector runtimes for `cloudflared`.
+        Source contracts and local credential handling are present in issue #61; tests, builds,
+        packaging, runtime interaction, and capture evidence remain pending.
+- [ ] Add independent Cloudflare Tunnel state observations for API creation, DNS routing, connector
+      health, Access policy, origin reachability, and external reachability. Source model and
+      guided searchable display are present in issue #62; focused verification and runtime evidence
+      remain pending because the ultra-speed lane intentionally did not run them.
 
 ### Clean-room features and upstream parity
 
-- [ ] Add clean-room browser, kiosk, PWA, proxy, and read-only diagnostics nodes.
-- [ ] **Program 57 / #68, linked-agent inbox notifications.** The source path already carries the
+- [ ] Add clean-room browser, proxy, and read-only diagnostics nodes.
+- [x] Add guided clean-room kiosk and PWA sessions with portable intent, isolated local profiles,
+      explicit permissions, lifecycle recovery, and honest unavailable states. Source-only lane,
+      no tests, builds, packaging, runtime interaction, or captures.
+-- [ ] **Program 57 / #68, linked-agent inbox notifications.** The source path already carries the
       upstream PR #98 intent through the authenticated `notify --node <id>` route, project-local
       consent, runtime ownership checks, fixed application-authored text, and the bounded
       deliver-on-idle queue. Feature documentation, the offline bundle, the documentation site,
       and the completeness inventory are recorded in this lane. Tests, builds, packaging, runtime
       interaction, and UI captures remain pending under the explicit ultra-speed boundary.
+- [ ] Add clean-room browser portal profiles and safe lifecycle ownership (implemented in issue #63;
+      direct records refreshed against `origin/main` at `54164b84dce0b7e62787b1de2885405ff4ed821c`;
+      verification and real built-artifact evidence remain pending). Kiosk, PWA, proxy, and
+      read-only diagnostics nodes remain separate lanes.
 - [ ] Implement the outstanding upstream behavior from the planned issue and pull-request parity map.
 - [ ] Split the PR #422 behavior into independent link, endpoint, navigation, grouping, agent, and
       account lanes.
@@ -420,3 +501,4 @@ intentionally unchecked because this task publishes the plan only.
 *This file is a snapshot, not a live feed. Re-derive it from `git log`, `HANDOFF.md`,
 `node scripts/check-app-contract.mjs`, and `gh issue list` rather than trusting it silently once
 enough commits have landed since it was last written.*
+- [ ] GitHub issue and pull-request canvas work-item nodes, source implementation landed in `feat/github-pr-issue-canvas`; integration verification remains open.

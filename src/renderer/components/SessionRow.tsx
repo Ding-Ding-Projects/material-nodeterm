@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { IconBellFilled, IconCircleCheck } from './icons'
+import { NodeIconView } from './NodeIcon'
 import { ProjectGlyph } from './ProjectGlyph'
 import type { SessionRowVM } from '../lib/sessionList'
 import { useSessionNaming } from '../state/sessionNaming'
@@ -92,6 +93,7 @@ export function SessionRow({
       )}
       <div className="ss-row__body">
         <div className="ss-row__titleline">
+          <NodeIconView icon={row.icon} size={13} className="ss-row__icon" projectId={row.projectId} />
           {row.projectColor ? (
             // Status mode: rows are flattened across projects, so each row shows its project's
             // icon (or, absent one, the monogram — colored circle with the project initial)
@@ -170,8 +172,15 @@ export function SessionRow({
             {row.sshHost && <span className="ss-meta__ssh">⇅ {row.sshHost}</span>}
             {row.cwd && <span className="ss-meta__cwd">{dirName(row.cwd)}</span>}
             {stateAgeLabel && (
-              <span className="ss-meta__state-age" title={`Entered this state ${stateAgeLabel}`}>
-                {stateAgeLabel}
+              <span
+                className="ss-meta__state-age"
+                title={
+                  row.statusRestored
+                    ? `Last known state entered ${stateAgeLabel}`
+                    : `Entered this state ${stateAgeLabel}`
+                }
+              >
+                {row.statusRestored ? `last known · ${stateAgeLabel}` : stateAgeLabel}
               </span>
             )}
           </div>

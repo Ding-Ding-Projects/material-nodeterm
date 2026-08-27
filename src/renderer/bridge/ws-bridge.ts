@@ -31,6 +31,7 @@ import type { CloudflareCoreManagersApi } from '../../shared/cloudflare-core-man
 import type { HomeAssistantApi } from '../../shared/home-assistant'
 import type { HomeAssistantControlApi } from '../../shared/home-assistant-control'
 import type { HomeAssistantSensorApi } from '../../shared/home-assistant-sensor'
+import type { CloudflareTunnelApi } from '../../shared/cloudflare-tunnels'
 import type { CloudflareApi, CloudflareExecutionProgress } from '../../shared/cloudflare-zero-trust'
 import {
   UNKNOWN_CLAUDE_CLI_CAPS,
@@ -138,6 +139,7 @@ import type {
 import type { PlannerFile, PlannerLoadState, PlannerOccurrence } from '../../shared/planner-occurrences'
 import type { VsCodeInstall, VsCodeOpenResult } from '../../shared/vscode'
 import type { HistoryFilters, HistoryListResult, HistoryRestoreResult } from '../../shared/local-history'
+import type { RemoteOAuthApi } from '../../shared/remote-oauth'
 import { buildStubApi } from './stubs'
 import { mountPickerRoot, openDirectoryPicker } from './dialog-picker'
 import { encodePcmForWire } from './speech-encode'
@@ -770,6 +772,30 @@ export function buildProviderServicesApi(
   }
 }
 
+/** Cloudflare Tunnel inventory uses the same host-owned core seam in Desktop and Server Edition. */
+export function buildCloudflareTunnelApi(client: RpcClient): Pick<NodeTerminalApi, 'cloudflareTunnels'> {
+  const cloudflareTunnels: CloudflareTunnelApi = {
+    zones: (accountId) => client.request(IPC.cloudflareTunnelZones, accountId) as ReturnType<CloudflareTunnelApi['zones']>,
+    inventory: (accountId, zoneId) => client.request(IPC.cloudflareTunnelInventory, accountId, zoneId) as ReturnType<CloudflareTunnelApi['inventory']>,
+    planRoute: (input) => client.request(IPC.cloudflareTunnelPlanRoute, input) as ReturnType<CloudflareTunnelApi['planRoute']>,
+    planDnsAdoption: (input) => client.request(IPC.cloudflareTunnelPlanDnsAdoption, input) as ReturnType<CloudflareTunnelApi['planDnsAdoption']>,
+    saveRoute: (input) => client.request(IPC.cloudflareTunnelSaveRoute, input) as ReturnType<CloudflareTunnelApi['saveRoute']>,
+    adoptDnsRecord: (input) => client.request(IPC.cloudflareTunnelAdoptDnsRecord, input) as ReturnType<CloudflareTunnelApi['adoptDnsRecord']>,
+    cancel: (operationId) => client.cast(IPC.cloudflareTunnelCancel, operationId),
+    onProgress: (listener) => client.subscribe(IPC.cloudflareTunnelProgress, listener as Listener)
+  }
+  return { cloudflareTunnels }
+}
+/** Server Edition callback completion stays host-local and is scoped to this authenticated WS UI. */
+export function buildRemoteOAuthApi(client: RpcClient): Pick<NodeTerminalApi, 'remoteOAuth'> {
+  const remoteOAuth: RemoteOAuthApi = {
+    arm: (input) => client.request(IPC.remoteOAuthArm, input) as ReturnType<RemoteOAuthApi['arm']>,
+    complete: (callbackUrl) => client.request(IPC.remoteOAuthComplete, callbackUrl) as ReturnType<RemoteOAuthApi['complete']>,
+    cancel: () => client.request(IPC.remoteOAuthCancel) as ReturnType<RemoteOAuthApi['cancel']>
+  }
+  return { remoteOAuth }
+}
+
 /**
  * Build the real `fs` / `git` / `files` / `context` namespaces over an RpcClient, mirroring the
  * preload's invoke(→request) / send(→cast) / on*(→subscribe) split member-for-member. Every
@@ -846,6 +872,8 @@ export function buildFilesApi(
     checkoutCommit: (cwd, oid) =>
       client.request(IPC.gitCheckoutCommit, cwd, oid) as ReturnType<GitApi['checkoutCommit']>,
     repoRoot: (cwd) => client.request(IPC.gitRepoRoot, cwd) as Promise<string | null>,
+    discoverNestedRepos: (cwd) =>
+      client.request(IPC.gitDiscoverNestedRepos, cwd) as ReturnType<GitApi['discoverNestedRepos']>,
     worktreeList: (repoPath) =>
       client.request(IPC.gitWorktreeList, repoPath) as ReturnType<GitApi['worktreeList']>,
     worktreeAdd: (repoPath, wtPath, branch, baseRef, isNew) =>
@@ -973,10 +1001,17 @@ export function buildAgentApi(
   client: RpcClient
 ): Pick<
   NodeTerminalApi,
-  'onAgentStatus' | 'onSubagentActivity' | 'onUnreadClear' | 'answerPermission' | 'ackDone'
+  | 'onAgentStatus'
+  | 'agentStatusSnapshot'
+  | 'onSubagentActivity'
+  | 'onUnreadClear'
+  | 'answerPermission'
+  | 'ackDone'
 > {
   return {
     onAgentStatus: (listener) => client.subscribe(IPC.agentStatus, listener as Listener),
+    agentStatusSnapshot: () =>
+      client.request(IPC.agentStatusSnapshot) as ReturnType<NodeTerminalApi['agentStatusSnapshot']>,
     // Host swept a phone read-ack → drop this browser canvas's unread flag (external clear, no re-ack).
     onUnreadClear: (listener) => client.subscribe(IPC.agentUnreadClear, listener as Listener),
     onSubagentActivity: (listener) =>
@@ -1145,7 +1180,11 @@ export function buildCloudflareCoreManagersApi(client: RpcClient): Pick<NodeTerm
     preview: (nodeId, request) => client.request(IPC.cloudflareCorePreview, nodeId, request) as ReturnType<CloudflareCoreManagersApi['preview']>,
     execute: (nodeId, request) => client.request(IPC.cloudflareCoreExecute, nodeId, request) as ReturnType<CloudflareCoreManagersApi['execute']>,
     cancel: (operationId) => client.request(IPC.cloudflareCoreCancel, operationId) as ReturnType<CloudflareCoreManagersApi['cancel']>,
-    onProgress: (listener) => client.subscribe(IPC.cloudflareCoreProgress, listener as Listener)
+    onProgress: (listener) => client.subscribe(IPC.cloudflareCoreProgress, listener as Listener),
+    tunnelState: (nodeId) => client.request(IPC.cloudflareCoreTunnelState, nodeId) as ReturnType<CloudflareCoreManagersApi['tunnelState']>,
+    probeTunnelFacet: (nodeId, facet) => client.request(IPC.cloudflareCoreTunnelProbe, nodeId, facet) as ReturnType<CloudflareCoreManagersApi['probeTunnelFacet']>,
+    cancelTunnelProbe: (nodeId) => client.request(IPC.cloudflareCoreTunnelCancel, nodeId) as ReturnType<CloudflareCoreManagersApi['cancelTunnelProbe']>,
+    onTunnelState: (listener) => client.subscribe(IPC.cloudflareCoreTunnelStateChanged, listener as Listener)
   }
   return { cloudflareCoreManagers }
 }
@@ -1427,6 +1466,14 @@ export function buildWslApi(client: RpcClient): Pick<NodeTerminalApi, 'wsl'> {
         client.request(IPC.wslWake, name) as ReturnType<import('@shared/wsl').WslApi['wake']>,
       delete: (name) =>
         client.request(IPC.wslDelete, name) as ReturnType<import('@shared/wsl').WslApi['delete']>
+    }
+  }
+}
+
+export function buildWindowsDiagnosticsApi(client: RpcClient): Pick<NodeTerminalApi, 'windowsDiagnostics'> {
+  return {
+    windowsDiagnostics: {
+      snapshot: () => client.request(IPC.windowsDiagnosticsSnapshot) as ReturnType<NodeTerminalApi['windowsDiagnostics']['snapshot']>
     }
   }
 }
@@ -1814,6 +1861,8 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildVirtualMachineApi(client),
     ...buildCalendarApi(client),
     ...buildProviderServicesApi(client),
+    ...buildCloudflareTunnelApi(client),
+    ...buildRemoteOAuthApi(client),
     ...buildHomeAssistantApi(client),
     ...buildHomeAssistantControlApi(client),
     ...buildHomeAssistantSensorApi(client),
@@ -1822,6 +1871,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildSessionMemoryApi(client),
     ...buildVsCodeApi(client),
     ...buildWslApi(client),
+    ...buildWindowsDiagnosticsApi(client),
     ...buildLocalHistoryApi(client),
     ...buildToylockApi(client),
     ...buildAuthenticatorApi(client),

@@ -56,9 +56,11 @@ import { TrackpadGestureLedger } from './trackpad-gesture'
 import { registerConverterIpc } from '../core/converter/register-ipc'
 import { registerNodeDependencyIpc } from '../core/node-dependencies/register-ipc'
 import { registerOllamaIpc } from '../core/ollama/register-ipc'
+import { registerOpenWebUiHosting } from './open-webui-hosting'
 import { registerMinecraftIpc } from '../core/minecraft/register-ipc'
 import { registerAwsIdentityIpc } from '../core/aws-identity'
 import { registerAwsResourceIpc } from '../core/aws-resource-register-ipc'
+import { AwsWizardModelService } from '../core/aws-wizard/service'
 import { registerTorrentIpc } from '../core/torrent/register-ipc'
 import { registerVirtualMachineIpc } from '../core/virtual-machine/register-ipc'
 import { registerCalendarIpc } from '../core/calendar/register-ipc'
@@ -67,6 +69,8 @@ import { registerCloudflareCoreManagersIpc } from '../core/cloudflare-core-manag
 import { registerHomeAssistantIpc } from '../core/home-assistant/register-ipc'
 import { registerHomeAssistantControlIpc } from '../core/home-assistant-control/register-ipc'
 import { registerHomeAssistantSensorIpc } from '../core/home-assistant-sensor/register-ipc'
+import { registerCloudflareTunnelIpc } from '../core/cloudflare/register-ipc'
+import { registerWindowsDiagnosticsIpc } from '../core/windows-diagnostics'
 import { registerCloudflareZeroTrustIpc } from '../core/cloudflare-zero-trust/service'
 import { AtomicJsonArrayStore } from '../core/atomic-json-store'
 import { TimerOccurrenceService } from '../core/timer-service'
@@ -88,7 +92,8 @@ import {
   addExtension,
   listLoadedExtensions,
   reloadPersistedBrowserExtensions,
-  removeExtensionByPath
+  removeExtensionByPath,
+  resetBrowserProfile
 } from './browser-extensions'
 import { registerBoardLogHandlers, type BoardLogRoute } from '../core/board-log-handlers'
 import {
@@ -155,6 +160,7 @@ import { ScheduledSettingsRuntime } from '../core/scheduled-settings-runtime'
 import { PlannerOccurrenceRuntime } from '../core/planner-occurrence-service'
 import { AlarmPlannerRuntime } from '../core/alarm-planner'
 import { registerAgentEnvIpc } from '../core/agent-env-ipc'
+import { registerAgentStatusHandlers } from '../core/agent-status-handlers'
 import { presenceHub } from '../core/presence/hub'
 import { SshStore } from './ssh-store'
 import { GitService } from '../core/git-service'
@@ -285,6 +291,7 @@ import { locateCodex, locateGemini } from '../core/handoff/locate'
 import { createCodexSubagentFormatter } from '../core/codex-subagent-format'
 import { codexHome } from '../core/usage/codex-usage'
 import { grokRawFields, isAsyncSubagentLaunch, type NormalizedAgentEvent } from '../shared/agents/normalize'
+import { agentAccountColor } from '../shared/agents/account-color'
 import { grokSessionDir, grokSessionsDir } from '../core/agents/grok-paths'
 import { forgetGrokSession, rememberGrokSessionDir } from '../core/grok-session'
 import {
@@ -2011,12 +2018,12 @@ app.whenReady().then(async () => {
 
   ipcMain.on(
     IPC.browserRegister,
-    (_e, webContentsId: unknown, nodeId: unknown, ownerNodeId?: unknown) => {
+    (_e, webContentsId: unknown, nodeId: unknown, ownerNodeId?: unknown, surface?: unknown) => {
       const accepted = registerBrowserGuestRequest(
         browserGuests,
         webContentsId,
         nodeId,
-        undefined,
+        surface,
         (id) => webContents.fromId(id) ?? null,
         // Loud, because the symptom otherwise is "popups from this node stopped opening" with
         // nothing anywhere to explain it.
@@ -2057,6 +2064,9 @@ app.whenReady().then(async () => {
   )
   ipcMain.handle(IPC.browserExtensionsRemove, (_e, partition: string | undefined, dirPath: string) =>
     removeExtensionByPath(partition, dirPath)
+  )
+  ipcMain.handle(IPC.browserProfileReset, (_e, partition: string | undefined) =>
+    resetBrowserProfile(partition)
   )
 
   // The naming agent runs LOCALLY on captured output, so it needs a cwd that exists on THIS
@@ -2359,7 +2369,9 @@ app.whenReady().then(async () => {
   // same functions.
   registerConverterIpc(corePlatform)
   const nodeDependencyService = registerNodeDependencyIpc(corePlatform)
+  const awsWizardModels = new AwsWizardModelService(nodeDependencyService)
   registerOllamaIpc(corePlatform)
+  registerOpenWebUiHosting(getMainWindow, app.getPath('userData'))
   minecraftServers = registerMinecraftIpc(corePlatform).manager
   registerAwsIdentityIpc(corePlatform, {
     resolveAwsCli: async () => {
@@ -2370,15 +2382,17 @@ app.whenReady().then(async () => {
   registerAwsResourceIpc(corePlatform, async () => {
     const dependency = await nodeDependencyService.status('aws-cli-v2')
     return { path: dependency.executablePath ?? null, reason: dependency.disabledReason }
-  })
+  }, awsWizardModels)
   registerTorrentIpc(corePlatform)
   virtualMachineManager = registerVirtualMachineIpc(corePlatform).manager
   registerCalendarIpc(corePlatform)
   registerCdkHandlers(ipcMain, process.resourcesPath, app.getPath('userData'))
-  registerCloudflareCoreManagersIpc(corePlatform)
+  const cloudflareCoreManagers = registerCloudflareCoreManagersIpc(corePlatform)
   registerHomeAssistantIpc(corePlatform)
   registerHomeAssistantControlIpc(corePlatform)
   registerHomeAssistantSensorIpc(corePlatform)
+  registerCloudflareTunnelIpc(corePlatform, cloudflareCoreManagers)
+  registerWindowsDiagnosticsIpc()
   registerCloudflareZeroTrustIpc(corePlatform)
 
   const githubSecret = new ElectronGitHubSecretStore(app.getPath('userData'), safeStorage)
@@ -2816,6 +2830,12 @@ app.whenReady().then(async () => {
   })
   // Mirror live agent status to <userData>/agent-status.json for the external mobile host agent.
   initAgentStatusMirror()
+  registerAgentStatusHandlers(corePlatform, {
+    accountIdForNode: (nodeId) => workspaceStore.getNode(nodeId)?.accountId,
+    // Transcripts for SSH-project nodes live on their host; local locators must never inspect a
+    // same-id file under this Mac's home and mistake it for remote evidence.
+    isRemoteNode: (nodeId) => !!workspaceStore.sshProjectIdForNode(nodeId)
+  })
 
   /** The one display-title rule for everything the HOST sends out (push alerts, Live Activity
    *  updates, the notch capsule): the live session name unless the node was hand-renamed. */
@@ -4493,12 +4513,25 @@ app.whenReady().then(async () => {
   // (cwd-jailed to the shared canvas roots inside the handlers) and phone node registration
   // through the workspace store (written as an outside edit, so the watcher broadcasts it and
   // the canvas adopts the node live).
+  const accountColorForRemoteNode = (node: {
+    agentId?: string
+    accountId?: string
+  }): string | undefined => {
+    const settings = settingsStore.get()
+    return agentAccountColor(node.agentId, node.accountId, {
+      claude: settings.claudeAccounts ?? [],
+      codex: settings.codexAccounts ?? []
+    })
+  }
   const hostBridge = {
     git: gitService,
-    registerNode: (projectId: string, node: { id: string; title?: string; agentId?: string }) =>
+    registerNode: (
+      projectId: string,
+      node: { id: string; title?: string; agentId?: string; accountId?: string }
+    ) =>
       workspaceStore.appendRemoteNode(
         projectId,
-        node,
+        { ...node, accountColor: accountColorForRemoteNode(node) },
         undefined,
         process.platform === 'win32' ? settingsStore.get().defaultTerminalProfileId : undefined
       ),
@@ -4507,7 +4540,10 @@ app.whenReady().then(async () => {
     registerNode: (
       projectId: string,
       node: { id: string; title?: string; agentId?: string; accountId?: string }
-    ) => workspaceStore.appendRemoteNode(projectId, node),
+    ) => workspaceStore.appendRemoteNode(projectId, {
+      ...node,
+      accountColor: accountColorForRemoteNode(node)
+    }),
     // "End session" from the phone (`pty.destroy`): the SAME two steps the desktop × performs —
     // kill the tmux session on every socket it could live on (the sweep may have seen it on either
     // — see the session-memory panel's kill rule), then take the node off its project's canvas

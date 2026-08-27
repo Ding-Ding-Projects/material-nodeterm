@@ -1,6 +1,9 @@
 import type { NodeKind } from './types'
+import type { AwsPlatformServiceId } from './aws-resource'
 import { DOCKER_HOST_PORTABLE_BLUEPRINT } from './docker-host-manager'
+import { OPEN_WEBUI_DEFAULT_INTENT } from './open-webui-hosting'
 import { NEXTCLOUD_AIO_PORTABLE_BLUEPRINT } from './nextcloud-aio'
+import { NEXTCLOUD_MANAGED_BLUEPRINT } from './nextcloud-managed'
 
 /** The guided categories shown by the Node Catalog. Keep this list explicit so a new category
  * cannot disappear from the picker simply because no current entry happens to use it. */
@@ -132,10 +135,11 @@ const plannedEntry = (
   description: string,
   dependencyId: string,
   scope: 'root' | 'multiverse' | 'aws-universe' | 'any' = 'any',
-  maxUniverseDepth?: number
+  maxUniverseDepth?: number,
+  nodeKind: NodeKind | null = null
 ): NodeCatalogEntry => ({
   id,
-  nodeKind: null,
+  nodeKind,
   category,
   label,
   description,
@@ -171,6 +175,22 @@ const awsCoreEntry = (id: string, service: string, label: string, description: s
     const scope = inScope('aws-universe')(context)
     return scope.available ? unsupportedInRelay(context) : scope
   }
+})
+
+const awsPlatformEntry = (id: string, service: AwsPlatformServiceId, label: string, description: string, documentationPath: string): NodeCatalogEntry => ({
+  id,
+  nodeKind: 'aws-resource',
+  category: 'managers',
+  label,
+  description,
+  keywords: ['aws', service, 'guided', 'manager'],
+  documentationPath,
+  safeDefaults: { mode: 'platform-managers', platformService: service, regionIntent: 'us-east-1' },
+  dependencies: ['aws-cli-v2'],
+  status: 'available',
+  availabilityMode: 'configure-later',
+  scope: 'aws-universe',
+  availability: unsupportedInRelay
 })
 
 const awsUniverseEntry: NodeCatalogEntry = {
@@ -290,9 +310,9 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
     nodeKind: 'annotation',
     category: 'canvas',
     label: 'Drawing annotation',
-    description: 'Arm the drawing tool, then drag a line or arrow on the canvas.',
-    keywords: ['draw', 'line', 'arrow', 'annotation'],
-    documentationPath: 'docs/features/canvas/canvas-and-lifecycle.md',
+    description: 'Arm the drawing tool, then drag a line or arrow with an optional label and editable thickness.',
+    keywords: ['draw', 'line', 'arrow', 'annotation', 'label', 'thickness'],
+    documentationPath: 'docs/features/canvas/annotations.md',
     safeDefaults: {},
     dependencies: ['canvas-drag'],
     availability: unavailableUntilPicked(
@@ -310,6 +330,34 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
     documentationPath: 'docs/features/remote/README.md',
     safeDefaults: { url: '' },
     dependencies: [],
+    availability: alwaysAvailable
+  },
+  {
+    id: 'kiosk-session',
+    nodeKind: 'browser',
+    category: 'canvas',
+    label: 'Kiosk session',
+    description: 'Open one secure URL in a focused, popup-free kiosk surface.',
+    keywords: ['kiosk', 'fullscreen', 'secure url', 'web session'],
+    documentationPath: 'docs/features/remote/kiosk-pwa-sessions.md',
+    safeDefaults: { mode: 'kiosk', requestedPermissions: [] },
+    dependencies: ['secure-url'],
+    status: 'current',
+    availabilityMode: 'required-for-creation',
+    availability: alwaysAvailable
+  },
+  {
+    id: 'pwa-session',
+    nodeKind: 'browser',
+    category: 'canvas',
+    label: 'PWA session',
+    description: 'Open a host-detected installed web app with isolated local profile state.',
+    keywords: ['pwa', 'installed app', 'web app', 'local profile'],
+    documentationPath: 'docs/features/remote/kiosk-pwa-sessions.md',
+    safeDefaults: { mode: 'pwa', requestedPermissions: [] },
+    dependencies: ['installed-web-app'],
+    status: 'current',
+    availabilityMode: 'configure-later',
     availability: alwaysAvailable
   },
   {
@@ -349,6 +397,18 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
     documentationPath: 'docs/authenticator.md',
     safeDefaults: {},
     dependencies: ['credential-vault'],
+    availability: alwaysAvailable
+  },
+  {
+    id: 'github-work-item',
+    nodeKind: 'github-work-item',
+    category: 'canvas',
+    label: 'GitHub work item',
+    description: 'Choose a repository and issue or pull request to keep visible on the canvas.',
+    keywords: ['github', 'issue', 'pull request', 'pr', 'review', 'checks'],
+    documentationPath: 'docs/features/integrations/github-work-items.md',
+    safeDefaults: { kind: 'issue', repository: '', number: 1 },
+    dependencies: ['github-account', 'github-api'],
     availability: alwaysAvailable
   },
   {
@@ -469,6 +529,30 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
     documentationPath: 'docs/features/canvas/node-kinds.md',
     safeDefaults: { serviceLabel: '' },
     dependencies: ['service-binding'],
+    availability: alwaysAvailable
+  },
+  {
+    id: 'service:cloudflare-tunnel',
+    nodeKind: 'cloudflare-tunnel',
+    category: 'managers',
+    label: 'Cloudflare Tunnel inventory',
+    description: 'Inventory tunnels, preserve routes, resolve hostname conflicts, and review DNS adoption.',
+    keywords: ['service', 'cloudflare', 'tunnel', 'hostname', 'dns', 'route'],
+    documentationPath: 'docs/features/remote/cloudflare-tunnel-inventory.md',
+    safeDefaults: { serviceLabel: '' },
+    dependencies: ['cloudflare-account'],
+    availability: alwaysAvailable
+  },
+  {
+    id: 'windows-diagnostics',
+    nodeKind: 'windows-diagnostics',
+    category: 'managers',
+    label: 'Windows diagnostics',
+    description: 'Inspect drives, services, startup, scheduled tasks, updates, network state, and event summaries without changing the host.',
+    keywords: ['windows', 'diagnostics', 'drives', 'storage', 'services', 'startup', 'scheduled tasks', 'updates', 'network', 'events', 'read only'],
+    documentationPath: 'docs/features/windows/windows-diagnostics.md',
+    safeDefaults: {},
+    dependencies: ['powershell-read-only'],
     availability: alwaysAvailable
   },
   {
@@ -657,17 +741,28 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
     scope: 'aws-universe',
     availability: unsupportedInRelay
   },
-  plannedEntry('aws-ecr', 'managers', 'Amazon ECR', 'Manage container repositories and images through typed controls.', 'aws-container-and-network-managers', 'aws-universe'),
-  plannedEntry('aws-ecs', 'managers', 'Amazon ECS', 'Inspect clusters, services, tasks, and deployments through guided controls.', 'aws-container-and-network-managers', 'aws-universe'),
-  plannedEntry('aws-eks', 'managers', 'Amazon EKS', 'Inspect clusters and workloads through explicit model-backed controls.', 'aws-container-and-network-managers', 'aws-universe'),
-  plannedEntry('aws-rds', 'managers', 'Amazon RDS', 'Manage database instances and clusters through guided controls.', 'aws-container-and-network-managers', 'aws-universe'),
-  plannedEntry('aws-databases', 'managers', 'AWS databases', 'Browse supported AWS database services through typed service models.', 'aws-container-and-network-managers', 'aws-universe'),
-  plannedEntry('aws-vpc', 'managers', 'Amazon VPC', 'Inspect networks, subnets, routes, gateways, and security groups through guided controls.', 'aws-container-and-network-managers', 'aws-universe'),
-  plannedEntry('aws-route53', 'managers', 'Amazon Route 53', 'Manage hosted zones, records, and health checks through reviewed operations.', 'aws-container-and-network-managers', 'aws-universe'),
-  plannedEntry('aws-cost', 'managers', 'AWS cost management', 'Explore cost and usage data with explicit account, period, and grouping controls.', 'aws-container-and-network-managers', 'aws-universe'),
+  awsPlatformEntry('aws-ecr', 'ecr', 'Amazon ECR', 'Manage repositories and images through guided controls.', 'docs/features/integrations/aws-resource-managers.md'),
+  awsPlatformEntry('aws-ecs', 'ecs', 'Amazon ECS', 'Inspect clusters, services, tasks, and deployments through guided controls.', 'docs/features/integrations/aws-resource-managers.md'),
+  awsPlatformEntry('aws-eks', 'eks', 'Amazon EKS', 'Inspect clusters and workloads through explicit model-backed controls.', 'docs/features/integrations/aws-resource-managers.md'),
+  awsPlatformEntry('aws-rds', 'rds', 'Amazon RDS', 'Manage database instances and snapshots through guided controls.', 'docs/features/integrations/aws-resource-managers.md'),
+  awsPlatformEntry('aws-databases', 'database', 'AWS databases', 'Browse supported AWS database services through typed service models.', 'docs/features/integrations/aws-resource-managers.md'),
+  awsPlatformEntry('aws-vpc', 'vpc', 'Amazon VPC', 'Inspect networks, subnets, routes, gateways, and security groups through guided controls.', 'docs/features/integrations/aws-resource-managers.md'),
+  awsPlatformEntry('aws-route53', 'route53', 'Amazon Route 53', 'Manage hosted zones and records through reviewed operations.', 'docs/features/integrations/aws-resource-managers.md'),
+  awsPlatformEntry('aws-cost', 'cost', 'AWS cost management', 'Explore cost and usage data with explicit account, period, and grouping controls.', 'docs/features/integrations/aws-resource-managers.md'),
   {
-    ...plannedEntry('aws-service', 'universes', 'All AWS services', 'Create a typed AWS service workspace from installed CLI models without a raw command fallback.', 'aws-all-services-manager', 'aws-universe'),
-    documentationPath: 'docs/features/integrations/aws-cli-model-documentation.md'
+    id: 'aws-service',
+    nodeKind: null,
+    category: 'universes',
+    label: 'All AWS services',
+    description: 'Open typed controls for every service and command in the installed AWS CLI model inventory.',
+    keywords: ['aws', 'service', 'command', 'model', 'cli', 'all-service'],
+    documentationPath: 'docs/features/integrations/aws-all-services.md',
+    safeDefaults: {},
+    dependencies: ['aws-all-services-manager'],
+    status: 'available',
+    availabilityMode: 'configure-later',
+    scope: 'aws-universe',
+    availability: unsupportedInRelay
   },
   {
     id: 'cloudflare-core-managers',
@@ -713,9 +808,38 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
     status: 'available',
     availabilityMode: 'configure-later',
     scope: 'any',
+    availability: unsupportedInRelay
+  },
+  {
+    id: 'open-webui-hosting',
+    nodeKind: 'open-webui-hosting',
+    category: 'hosting',
+    label: 'Open WebUI hosting',
+    description: 'Create a guided Open WebUI host that reuses local Ollama or an OpenAI-compatible provider.',
+    keywords: ['open webui', 'hosting', 'ollama', 'openai-compatible', 'backup', 'restore', 'rollback'],
+    documentationPath: 'docs/features/hosting/open-webui-hosting.md',
+    safeDefaults: { openWebUiIntent: OPEN_WEBUI_DEFAULT_INTENT },
+    dependencies: ['hosting-adapter', 'docker', 'ollama-or-openai-provider'],
+    status: 'available',
+    availabilityMode: 'configure-later',
+    scope: 'any',
     availability: alwaysAvailable
   },
-  plannedEntry('open-webui-hosting', 'hosting', 'Open WebUI hosting', 'Create an Open WebUI hosting blueprint that can reuse local Ollama.', 'hosting-adapter')
+  {
+    id: 'nextcloud-managed-hosting',
+    nodeKind: 'nextcloud-managed',
+    category: 'hosting',
+    label: 'Managed Nextcloud, no socket',
+    description: 'Deploy a guided PostgreSQL, Redis, and Nextcloud web stack without a Docker socket or privileged mode.',
+    keywords: ['hosting', 'nextcloud', 'managed', 'postgresql', 'redis', 'backup', 'restore', 'rollback', 'no socket'],
+    documentationPath: 'docs/features/integrations/nextcloud-managed.md',
+    safeDefaults: { nextcloudManagedBlueprint: NEXTCLOUD_MANAGED_BLUEPRINT },
+    dependencies: ['docker-cli', 'nextcloud-managed-images'],
+    status: 'available',
+    availabilityMode: 'configure-later',
+    scope: 'any',
+    availability: unsupportedInRelay
+  },
 ] as const
 
 const CATALOG_BY_ID = new Map(NODE_CATALOG.map((entry) => [entry.id, entry]))
@@ -739,11 +863,14 @@ export const NODE_CATALOG_COMPLETENESS: readonly NodeCatalogCompletenessRecord[]
   { id: 'group', state: 'current', scope: 'any', reason: 'persisted group frame' },
   { id: 'annotation', state: 'current', scope: 'none', reason: 'geometry comes from a draw gesture' },
   { id: 'browser', state: 'current', scope: 'any', reason: 'persisted browser node' },
+  { id: 'kiosk-session', state: 'current', scope: 'any', reason: 'guided kiosk URL session' },
+  { id: 'pwa-session', state: 'current', scope: 'any', reason: 'guided installed web-app session' },
   { id: 'web', state: 'current', scope: 'any', reason: 'persisted web view node' },
   { id: 'video', state: 'current', scope: 'any', reason: 'media file picker required' },
   { id: 'editor', state: 'current', scope: 'any', reason: 'project file picker required' },
   { id: 'diff', state: 'current', scope: 'any', reason: 'project file picker required' },
   { id: 'authenticator', state: 'current', scope: 'any', reason: 'local authenticator node' },
+  { id: 'github-work-item', state: 'current', scope: 'any', reason: 'safe issue or pull-request canvas work item' },
   { id: 'dino', state: 'current', scope: 'any', reason: 'local dino node' },
   { id: 'recovery-game', state: 'current', scope: 'any', reason: 'portable local recovery game' },
   { id: 'loop', state: 'current', scope: 'any', reason: 'persisted scheduler node' },
@@ -754,6 +881,8 @@ export const NODE_CATALOG_COMPLETENESS: readonly NodeCatalogCompletenessRecord[]
   { id: 'service:gitlab', state: 'current', scope: 'any', reason: 'service manager node' },
   { id: 'service:homeassistant', state: 'current', scope: 'any', reason: 'service manager node' },
   { id: 'service:freepbx', state: 'current', scope: 'any', reason: 'service manager node' },
+  { id: 'service:cloudflare-tunnel', state: 'current', scope: 'any', reason: 'typed Cloudflare Tunnel inventory and reviewed DNS adoption' },
+  { id: 'windows-diagnostics', state: 'current', scope: 'any', reason: 'read-only host diagnostics with fixed queries' },
   { id: 'service:cloudflare-zero-trust', state: 'current', scope: 'any', reason: 'typed Cloudflare manager node' },
   { id: 'service:awsidentity', state: 'current', scope: 'aws-universe', reason: 'guided AWS identity manager node' },
   { id: 'subagent', state: 'ephemeral', scope: 'none', reason: 'hook-derived render-only card' },
@@ -782,20 +911,21 @@ export const NODE_CATALOG_COMPLETENESS: readonly NodeCatalogCompletenessRecord[]
   { id: 'aws-logs', state: 'current', scope: 'aws-universe', reason: 'guided CloudWatch Logs operations through shared AWS manager' },
   { id: 'aws-cloudformation', state: 'current', scope: 'aws-universe', reason: 'AWS CloudFormation uses the shared AWS resource manager' },
   { id: 'aws-cdk', state: 'current', scope: 'aws-universe', reason: 'guided CDK folder, trust, synth, diff, and deploy manager' },
-  { id: 'aws-ecr', state: 'planned', scope: 'aws-universe', reason: 'Amazon ECR manager not implemented' },
-  { id: 'aws-ecs', state: 'planned', scope: 'aws-universe', reason: 'Amazon ECS manager not implemented' },
-  { id: 'aws-eks', state: 'planned', scope: 'aws-universe', reason: 'Amazon EKS manager not implemented' },
-  { id: 'aws-rds', state: 'planned', scope: 'aws-universe', reason: 'Amazon RDS manager not implemented' },
-  { id: 'aws-databases', state: 'planned', scope: 'aws-universe', reason: 'AWS database managers not implemented' },
-  { id: 'aws-vpc', state: 'planned', scope: 'aws-universe', reason: 'Amazon VPC manager not implemented' },
-  { id: 'aws-route53', state: 'planned', scope: 'aws-universe', reason: 'Amazon Route 53 manager not implemented' },
-  { id: 'aws-cost', state: 'planned', scope: 'aws-universe', reason: 'AWS cost manager not implemented' },
-  { id: 'aws-service', state: 'planned', scope: 'aws-universe', reason: 'All-service AWS manager not implemented' },
+  { id: 'aws-ecr', state: 'current', scope: 'aws-universe', reason: 'guided ECR operations through shared AWS manager' },
+  { id: 'aws-ecs', state: 'current', scope: 'aws-universe', reason: 'guided ECS operations through shared AWS manager' },
+  { id: 'aws-eks', state: 'current', scope: 'aws-universe', reason: 'guided EKS operations through shared AWS manager' },
+  { id: 'aws-rds', state: 'current', scope: 'aws-universe', reason: 'guided RDS operations through shared AWS manager' },
+  { id: 'aws-databases', state: 'current', scope: 'aws-universe', reason: 'guided database operations through shared AWS manager' },
+  { id: 'aws-vpc', state: 'current', scope: 'aws-universe', reason: 'guided VPC operations through shared AWS manager' },
+  { id: 'aws-route53', state: 'current', scope: 'aws-universe', reason: 'guided Route 53 operations through shared AWS manager' },
+  { id: 'aws-cost', state: 'current', scope: 'aws-universe', reason: 'guided cost operations through shared AWS manager' },
+  { id: 'aws-service', state: 'current', scope: 'aws-universe', reason: 'model-driven all-service AWS wizard through the shared manager' },
   { id: 'cloudflare-core-managers', state: 'current', scope: 'any', reason: 'typed Cloudflare account, zone, DNS, SSL/TLS, ruleset, redirect, cache, and analytics managers' },
   { id: 'cloudflare-hosting', state: 'planned', scope: 'any', reason: 'Cloudflare hosting not implemented' },
   { id: 'gitlab-hosting', state: 'current', scope: 'any', reason: 'guided private GitLab Server hosting node' },
   { id: 'nextcloud-hosting', state: 'current', scope: 'any', reason: 'Nextcloud AIO hosting profile' },
-  { id: 'open-webui-hosting', state: 'planned', scope: 'any', reason: 'Open WebUI hosting not implemented' }
+  { id: 'nextcloud-managed-hosting', state: 'current', scope: 'any', reason: 'managed Nextcloud no-socket hosting profile' },
+  { id: 'open-webui-hosting', state: 'current', scope: 'any', reason: 'guided Open WebUI hosting node' }
 ]
 
 /** Completeness guard data is intentionally exact and red when a row is removed, duplicated, or
