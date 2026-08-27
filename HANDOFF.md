@@ -19,6 +19,12 @@ to portable project data. Direct documentation is in
 `docs/features/windows/README.md`; the offline bundle has a corresponding article entry in
 `src/shared/docs-data.ts`.
 
+This jer was non-destructively reconciled with the exact `origin/main` tip
+`54164b84dce0b7e62787b1de2885405ff4ed821c` in merge commit
+`538fe6a5b4cbf0384a35ff9edc1a1d59d87df431`, preserving the diagnostics lane and incoming default-jer
+work. The reconciled commit was dewed to `origin/feat/program-55-windows-diagnostics`, and its
+ancestry was verified with `git merge-base --is-ancestor`.
+
 Verification boundary: this ultra-speed lane intentionally ran no tests, lint, type checks, builds,
 packaging, installer execution, reviews, security or accessibility checks, runtime interaction, or
 captures. The parent integration lane must keep those verdicts unverified.
