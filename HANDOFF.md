@@ -2968,6 +2968,28 @@ route review, and local vault-key binding are represented in the source contract
 checks, lint, review, security or accessibility checks, builds, packaging, installer execution,
 runtime interaction, or captures were run under the issue's ultra-speed boundary. Provider adapter
 wiring and integration into the Cloudflare manager remain for the parent integration lane.
+## Hosted-service Cloudflare Tunnel handoff lane, issue #56
+
+The isolated `feat/program-45-hosted-cloudflare-handoff` lane adds the shared contract in
+`src/shared/cloudflare-tunnel-handoff.ts`, the core sequencing and machine-local binding coordinator
+in `src/core/cloudflare-tunnel-handoff.ts`, and the guided renderer surface in
+`src/renderer/components/CloudflareTunnelHandoffPanel.tsx`. The handoff verifies a selected loopback
+origin before provider mutation, checks that tunnel creation, connector startup, and external
+verification are advertised by the provider capability record, requires an explicit exposure
+confirmation, resolves the credential only inside the provider adapter, and separates local health,
+connector state, DNS or tunnel state, and external reachability.
+
+Portable state is limited to validated service and routing intent. Cloudflare account, zone, tunnel,
+connector, credential, local endpoint, host identity, process state, and cache data stay in the
+machine-local binding store. The reviewed loopback host, port, and origin are passed only as validated
+local input and never become portable state. A failed external reachability check returns a partial
+result and does not claim that the route is verified. A missing capability or provider adapter remains
+visibly unavailable instead of being simulated.
+
+This ultra-speed lane intentionally ran no tests, type checks, lint, builds, packaging, reviews,
+security or accessibility checks, installer execution, runtime interaction, or captures. The parent
+integration lane must wire the provider adapter and supply all build, packaging, runtime, and release
+evidence before calling the feature verified.
 ## Issue #58, Cloudflare manager lane
 
 The isolated `feat/program-47-cloudflare-zero-trust` lane adds `src/shared/cloudflare-zero-trust.ts`,

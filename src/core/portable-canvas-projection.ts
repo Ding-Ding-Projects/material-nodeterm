@@ -27,6 +27,7 @@ import {
 import type { PlannerSchedule } from '../shared/planner-occurrences'
 import { normalizeRecoveryGameSnapshot, RECOVERY_ENERGY_KEYS, type RecoveryGameSnapshot } from '../shared/recovery-game'
 import { repairPortablePortals, validatePortablePortals, type PortablePortalV3 } from './portal-lifecycle'
+import { validateCloudflareTunnelIntent, type CloudflareTunnelIntent } from '../shared/cloudflare-tunnel-handoff'
 import { normalizeCloudflareIntent as normalizeCloudflareZeroTrustIntent, type CloudflarePortableIntent as CloudflareZeroTrustPortableIntent } from '../shared/cloudflare-zero-trust'
 import { normalizeCloudflareIntent as normalizeCloudflareCoreIntent, type CloudflarePortableIntent as CloudflareCorePortableIntent } from '../shared/cloudflare-core-managers'
 import { sanitizeTunnelPortableIntent, type TunnelPortableIntent } from '../shared/tunnel-state'

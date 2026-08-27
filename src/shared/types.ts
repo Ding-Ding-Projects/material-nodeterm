@@ -690,6 +690,9 @@ export interface CanvasNodeState {
   /** Home Assistant node presentation intent safe for schema 3. Hosts, instance ids, credentials,
    *  sessions, and entity caches stay in the machine-local service and binding overlay. */
   homeAssistantIntent?: import('./home-assistant').HomeAssistantNodeIntent
+  /** Safe Cloudflare Tunnel routing intent. Account, zone, tunnel, connector, credentials,
+   *  local origin, and process state remain in the machine-local binding overlay. */
+  cloudflareTunnelIntent?: import('./cloudflare-tunnel-handoff').CloudflareTunnelIntent
   /** GitLab hosting intent. Docker context, container, volumes, credentials, and process state stay local. */
   gitlabHostingConfig?: import('./gitlab-hosting').GitLabHostingConfig
   /** torrent-only: safe display intent shared with the canvas; task state and paths stay local. */

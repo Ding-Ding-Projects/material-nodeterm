@@ -72,6 +72,11 @@
   unavailable or unknown until their adapters exist. This ultra-speed implementation lane
   intentionally did not run tests, type checks, lint, reviews, security or accessibility checks,
   builds, packaging, installer execution, runtime interaction, or captures.
+- Add a guided hosted-service Cloudflare Tunnel handoff that verifies a loopback origin before any
+  external change, requires explicit exposure confirmation, keeps provider credentials and runtime
+  identifiers machine-local, checks provider capabilities before enabling the action, and reports connector and external reachability as separate states. The
+  ultra-speed lane did not run tests, type checks, lint, builds, packaging, reviews, security or
+  accessibility checks, installer execution, runtime interaction, or captures.
 - Mount the seven AWS core-service routes on the shared AWS manager: S3, EC2, IAM, STS, Lambda,
   CloudWatch, and CloudWatch Logs. Typed operation controls now cover bounded reads, selected writes,
   destructive confirmation, pagination, cancellation, and progress while reusing the current local

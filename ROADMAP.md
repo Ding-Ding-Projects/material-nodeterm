@@ -390,6 +390,9 @@ intentionally unchecked because this task publishes the plan only.
       intentionally unrun under the ultra-speed boundary.
 - [x] Add Open WebUI hosting with existing Ollama reuse, OpenAI-compatible provider choice, honest
   bootstrap states, persistent data, health, backup, restore, update, rollback, and local bindings.
+- [x] Add the hosted-service Cloudflare Tunnel handoff contract after local health verification. The
+      portable routing intent, capability-bound provider seam, and machine-local binding coordinator
+      are present; provider adapter wiring, build, packaging, and runtime evidence remain pending.
 - [ ] Add Cloudflare account, zone, DNS, security, Workers, Pages, storage, queue, Access, and
       analytics managers.
 - [ ] Add one-click Cloudflare Tunnel setup with private-first routing and connector choices. The

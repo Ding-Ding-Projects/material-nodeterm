@@ -279,6 +279,8 @@ export interface NodeData {
   /** Access, Zero Trust, Workers, Pages, R2, D1 and Queues intent; account state stays local. */
   cloudflareZeroTrustIntent?: import('@shared/cloudflare-zero-trust').CloudflarePortableIntent
   homeAssistantIntent?: HomeAssistantNodeIntent
+  /** Safe Cloudflare Tunnel routing intent; provider and local runtime state stays machine-local. */
+  cloudflareTunnelIntent?: import('@shared/cloudflare-tunnel-handoff').CloudflareTunnelIntent
   /** Safe ownership metadata for a special-universe Shop node. */
   universeCanvasId?: string
   universeScope?: 'multiverse' | 'aws-universe'
@@ -2900,6 +2902,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         gitlabHostingConfig: n.gitlabHostingConfig,
         nextcloudAioConfig: n.nextcloudAioConfig,
         homeAssistantIntent: n.homeAssistantIntent,
+        cloudflareTunnelIntent: n.cloudflareTunnelIntent,
         universeCanvasId: n.universeCanvasId,
         universeScope: n.universeScope,
         universeDepth: n.universeDepth,
@@ -3037,6 +3040,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         gitlabHostingConfig: n.data.gitlabHostingConfig,
         nextcloudAioConfig: n.data.nextcloudAioConfig,
         homeAssistantIntent: n.data.homeAssistantIntent,
+        cloudflareTunnelIntent: n.data.cloudflareTunnelIntent,
         universeCanvasId: n.data.universeCanvasId,
         universeScope: n.data.universeScope,
         universeDepth: n.data.universeDepth,
