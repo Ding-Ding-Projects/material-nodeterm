@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Consolidate the malformed TypeScript merge recovery into the combined recovery pull request.
+  The implementation lane repairs parser-invalid remnants across core services, host and bridge
+  code, renderer surfaces, shared contracts, account and identity handling, and release workflow
+  wiring. It also adds the source-parse validation path and aligns the Windows installer contract
+  with the unsigned Squirrel.Windows packaging policy. This recovery record is intentionally
+  unverified until the parent integration lane completes its parser, type-check, build, packaging,
+  and release-workflow checks. The ultra-speed pass does not run tests, reviews, accessibility or
+  security checks, runtime interaction, or screen captures after activation.
+
 - Mount the AWS CDK manager through the shared AWS resource node and AWS Shop. The guided route
   uses the existing local profile and region binding, a native project-folder picker, bounded
   trust review of `cdk.json` and dependency manifests, fixed synth and diff actions, stack search
