@@ -396,6 +396,31 @@ Direct documentation is `docs/features/terminals/windows-shell-profiles.md`, ind
 verification boundary. Tests, lint, type checks, builds, packaging, runtime interaction, reviews,
 audits, and captures were not run in this lane. The parent integration lane owns those checks,
 generated documentation refresh, issue comments, final default-branch integration, and release work.
+## 2026-08-27, custom alert sounds lane, issue #78
+
+Issue #78 implements the requested custom per-event alert sounds from upstream issue #289 on
+`feat/program-67-custom-alert-sounds`. The existing synthesized `done` and `needsYou` cues remain
+the fallback. `src/shared/types.ts` adds bounded custom sound records to persisted settings, while
+`src/renderer/lib/sfx.ts` reads, decodes, caches, and plays a selected file without allowing a
+missing or corrupt file to break the alert path. `src/renderer/components/settings/sections/NotificationsSection.tsx`
+adds a real per-event audio picker, filename state, preview, replacement, reset, and precise
+validation copy. Sound bytes are stored in the app's settings data rather than a path local to the
+browser client, so Server Edition can replay them on its host through the same renderer.
+
+Implementation source tip: `c54c4e1944bd86b02afa2543291cdfc8377b2a5e`.
+
+The accepted input bound is 8 MB and 30 seconds. Empty, non-audio, malformed, undecodable, and
+overlong selections are rejected without replacing the last valid selection. Clearing an entry
+returns immediately to the built-in synthesized cue. The direct implementation and documentation
+records are `src/shared/types.ts`, `src/renderer/lib/sfx.ts`,
+`src/renderer/components/settings/sections/NotificationsSection.tsx`,
+`docs/notifications.md`, `CHANGELOG.md`, and `ROADMAP.md`.
+
+This ultra-speed lane intentionally did not run tests, type checks, lint, reviews, security or
+accessibility checks, builds, packaging, installer execution, runtime interaction, or UI captures.
+The feature branch was not integrated into `main`, no release was published, and no cleanup was
+performed in this lane.
+
 ## 2026-08-27, AWS core-service managers, issue #46 PR preparation
 
 The issue jer was reconciled with the exact `origin/main` tip `2472cf23b99559005476841d3db5e6bc4691ac06`.

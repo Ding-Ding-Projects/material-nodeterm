@@ -5,7 +5,13 @@ import { SearchableRow } from '../SearchableRow'
 import { FieldRow } from '../FieldRow'
 import { Switch } from '@renderer/ui/Switch'
 import { Button } from '@renderer/ui/Button'
-import { playSfx } from '@renderer/lib/sfx'
+import {
+  CUSTOM_SFX_MAX_BYTES,
+  CUSTOM_SFX_MAX_SECONDS,
+  playSfx,
+  readCustomAlertSound,
+  type SfxKind
+} from '@renderer/lib/sfx'
 import { Slider } from '@renderer/ui/md3'
 import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
 import { mapNativeNotification } from '../../../lib/personalVocabulary/hostMessage'
@@ -31,6 +37,7 @@ export function NotificationsSection({ isActive }: { isActive: boolean }): React
   const notifyOnClaudeDone = useSettings((s) => s.settings.notifyOnClaudeDone)
   const soundEffects = useSettings((s) => s.settings.soundEffects)
   const soundVolume = useSettings((s) => s.settings.soundVolume)
+  const customAlertSounds = useSettings((s) => s.settings.customAlertSounds)
   const mobilePushEnabled = useSettings((s) => s.settings.mobilePushEnabled)
   const mobilePushNeedsYou = useSettings((s) => s.settings.mobilePushNeedsYou)
   const mobilePushDone = useSettings((s) => s.settings.mobilePushDone)
@@ -40,6 +47,25 @@ export function NotificationsSection({ isActive }: { isActive: boolean }): React
   // The OS refused our test notification (macOS permission denied). macOS never re-prompts
   // once the app's record exists, so the only way back is the System Settings pane.
   const [osBlocked, setOsBlocked] = useState(false)
+  const [soundError, setSoundError] = useState<Record<SfxKind, string>>({ done: '', needsYou: '' })
+
+  const chooseCustomSound = async (kind: SfxKind, file: File): Promise<void> => {
+    setSoundError((errors) => ({ ...errors, [kind]: '' }))
+    const result = await readCustomAlertSound(file)
+    if ('error' in result) {
+      setSoundError((errors) => ({ ...errors, [kind]: result.error }))
+      return
+    }
+    const current = useSettings.getState().settings.customAlertSounds ?? {}
+    update({ customAlertSounds: { ...current, [kind]: result.sound } })
+  }
+
+  const clearCustomSound = (kind: SfxKind): void => {
+    const current = { ...(useSettings.getState().settings.customAlertSounds ?? {}) }
+    delete current[kind]
+    update({ customAlertSounds: current })
+    setSoundError((errors) => ({ ...errors, [kind]: '' }))
+  }
   return (
     <SettingsSection
       id="notifications"
@@ -135,6 +161,51 @@ export function NotificationsSection({ isActive }: { isActive: boolean }): React
               <div className="flex items-center gap-2">
                 <Button onClick={() => playSfx('done', soundVolume)}>Finished</Button>
                 <Button onClick={() => playSfx('needsYou', soundVolume)}>Needs you</Button>
+              </div>
+            }
+          />
+          <FieldRow
+            label="Custom alert sounds"
+            description={`Choose one local audio file for each event. Files are stored in this app's data directory, limited to ${Math.round(CUSTOM_SFX_MAX_BYTES / (1024 * 1024))} MB and ${CUSTOM_SFX_MAX_SECONDS} seconds. A missing or unreadable file falls back to the built-in cue.`}
+            control={
+              <div className="flex min-w-0 flex-col gap-3" aria-label="Custom alert sounds">
+                {([
+                  ['done', 'Finished turn'],
+                  ['needsYou', 'Needs you']
+                ] as const).map(([kind, label]) => {
+                  const selected = customAlertSounds?.[kind]
+                  const inputId = `custom-alert-sound-${kind}`
+                  return (
+                    <div key={kind} className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+                      <span className="min-w-28 text-right text-[12px] text-muted">{label}</span>
+                      <input
+                        id={inputId}
+                        type="file"
+                        accept="audio/*"
+                        className="sr-only"
+                        aria-label={`Choose custom sound for ${label}`}
+                        onChange={(event) => {
+                          const file = event.currentTarget.files?.[0]
+                          if (file) void chooseCustomSound(kind, file)
+                          event.currentTarget.value = ''
+                        }}
+                      />
+                      <Button onClick={() => document.getElementById(inputId)?.click()}>
+                        {selected ? 'Replace file…' : 'Choose file…'}
+                      </Button>
+                      <Button onClick={() => playSfx(kind, soundVolume)}>Preview</Button>
+                      {selected ? <Button onClick={() => clearCustomSound(kind)}>Use built-in</Button> : null}
+                      <span className="max-w-48 truncate text-[12px] text-muted" title={selected?.name}>
+                        {selected?.name ?? 'Built-in cue'}
+                      </span>
+                      {soundError[kind] ? (
+                        <span className="basis-full text-right text-[12px] text-danger" role="alert">
+                          {soundError[kind]}
+                        </span>
+                      ) : null}
+                    </div>
+                  )
+                })}
               </div>
             }
           />

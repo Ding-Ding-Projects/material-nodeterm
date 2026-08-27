@@ -140,6 +140,13 @@
   ids remain in the machine-local execution overlay, while paths and commands stay out of portable
   project files and peer traffic. Tests, type checks, lint, builds, packaging, runtime interaction,
   and captures remain unrun under the Program 66 issue boundary.
+- Add independent custom alert sound files for finished-agent and needs-attention events. Settings
+  → Notifications now validates bounded local audio, stores the bytes in app data so Server Edition
+  can replay them on its host, provides per-event preview and reset controls, and falls back to the
+  built-in cues whenever a custom file is missing or cannot be decoded. This ultra-speed lane did
+  not run tests, type checks, lint, reviews, security or accessibility checks, builds, packaging,
+  installer execution, runtime interaction, or UI captures.
+
 - Mount the seven AWS core-service routes on the shared AWS manager: S3, EC2, IAM, STS, Lambda,
   CloudWatch, and CloudWatch Logs. Typed operation controls now cover bounded reads, selected writes,
   destructive confirmation, pagination, cancellation, and progress while reusing the current local

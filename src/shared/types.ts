@@ -2130,6 +2130,16 @@ export interface SpeechSettings {
   shortcut: string
 }
 
+/** A user-selected alert sound kept as bounded base64 data so Desktop and Server Edition can
+ * replay the same bytes without relying on a path from the wrong machine. */
+export interface CustomAlertSound {
+  name: string
+  mime: string
+  dataBase64: string
+}
+
+export type AlertSoundKind = 'done' | 'needsYou'
+
 /** xterm cursor shapes, mirrored here so `Settings` doesn't depend on the xterm typings (which
  *  are renderer-only — `src/shared` is imported by main and the server shell too). */
 export type TerminalCursorStyle = 'block' | 'bar' | 'underline'
@@ -2594,6 +2604,8 @@ export interface Settings {
   soundEffects: boolean
   /** Sound-effect volume, 0..1. */
   soundVolume: number
+  /** Optional per-event sound files. Empty entries use the synthesized built-in sound. */
+  customAlertSounds: Partial<Record<AlertSoundKind, CustomAlertSound>>
   /** User-defined agents (BYO CLI) appended to the Add menus. */
   customAgents: CustomAgent[]
   /** Per-builtin-agent launch command overrides (Settings → Agents → Launch commands). The value
@@ -2949,6 +2961,7 @@ export const DEFAULT_SETTINGS: Settings = {
   notifyConsentAsked: false,
   soundEffects: true,
   soundVolume: 0.5,
+  customAlertSounds: {},
   customAgents: [],
   modelGateway: { baseUrl: '', apiKey: '' },
   agentLaunchCommands: {},

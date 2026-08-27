@@ -65,6 +65,29 @@ Treat it as a known follow-up: new call sites should use `notify()`; the banner 
 Warnings and errors never auto-dismiss, per the brief. Anything else times out on a schedule that
 scales gently with body length so a longer message isn't cut off before it can be read.
 
+## Custom alert sounds
+
+Settings → Notifications includes an independent file picker for each agent alert:
+
+- **Finished turn** (`done`) plays when an agent turn completes.
+- **Needs you** (`needsYou`) plays when an agent needs permission or a response.
+
+Each picker accepts one local audio file, shows the selected filename, offers a preview, and can be
+reset to the built-in synthesized cue. Files are read as bounded bytes and stored in the app's own
+settings data, not as a path from the machine that happened to choose them. This keeps a browser
+client's sound available to the Server Edition host. The selected file is limited to 8 MB and 30
+seconds, and the UI refuses empty, non-audio, undecodable, or overlong input without replacing the
+previous valid selection.
+
+Playback remains fail-open to silence at the alert boundary. If a selected file is missing,
+malformed, unsupported by the browser, or otherwise cannot be decoded, the corresponding built-in
+cue plays instead. The custom data is never sent to a third-party service. Removing a selection
+immediately restores the synthesized cue, and the existing app-wide sound switch and volume still
+apply to both custom and built-in sounds.
+
+The desktop and Server Edition use the same renderer implementation in `src/renderer/lib/sfx.ts`.
+The mobile companion remains a separate surface with its own notification sound behavior.
+
 ## API
 
 ```ts
