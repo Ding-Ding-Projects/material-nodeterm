@@ -17,8 +17,6 @@ import { createHash } from 'crypto'
 import { readFileSync } from 'fs'
 import { homedir } from 'os'
 import path from 'path'
-import { createHash } from 'crypto'
-import { readFileSync } from 'fs'
 import { WebSocket } from 'ws'
 // Minting a thread is a multi-step conversation with a typically COLD server, so it needs a real
 // budget — and the hook route serving it must raise its socket guard to match (CONTROL_CEILING_MS in hook-server).
@@ -99,6 +97,7 @@ export function relayedCodexSessionName(
   threadId: string,
   home = homedir()
 ): string | null {
+  if (!isSafeThreadId(threadId)) return null
   try {
     const scope = createHash('sha256').update(socketPath).digest('hex').slice(0, 16)
     const value = readFileSync(
@@ -137,7 +136,7 @@ export function rememberCodexSessionName(
   name: unknown,
   socketPath = defaultCodexAppServerSocket()
 ): void {
-  if (!threadId) return
+  if (!isSafeThreadId(threadId)) return
   const value = typeof name === 'string' && name.trim() ? name.trim() : null
   names.set(`${socketPath}\0${threadId}`, { name: value, at: Date.now() })
 }
@@ -626,6 +625,8 @@ export function startCodexThread(cwd: string): Promise<string> {
   return startCodexThreadAt(defaultCodexAppServerSocket(), cwd)
 }
 
+/* MERGE REMNANT BELOW: the canonical implementations above are retained. */
+{
 /**
  * The relay's on-disk fallback for a session name the shared app-server no longer reports.
  *
@@ -635,7 +636,7 @@ export function startCodexThread(cwd: string): Promise<string> {
  * exact path the relay daemon's `nameFile` writes — one definition, kept in step). Read as DATA and
  * capped; a later real `Thread.name` from the server always wins. Fails to `null`.
  */
-export function relayedCodexSessionName(
+ function relayedCodexSessionName(
   socketPath: string,
   threadId: string,
   home = homedir()
@@ -655,7 +656,7 @@ export function relayedCodexSessionName(
 
 /** Seed the in-process name cache from a name observed elsewhere (e.g. a relay bind), so the next
  * sweep serves it without a socket round-trip. A blank name caches an explicit `null`. */
-export function rememberCodexSessionName(
+ function rememberCodexSessionName(
   threadId: string,
   name: unknown,
   socketPath = defaultCodexAppServerSocket()
@@ -668,7 +669,7 @@ export function rememberCodexSessionName(
 /** Read a thread's full identity from an app-server socket: its id (must come back UNCHANGED), name,
  * and absolute rollout path. Used by the cross-account switch to locate a foreign rollout. Fails to
  * `null` rather than throwing into a poll loop. */
-export function readCodexThreadAt(
+ function readCodexThreadAt(
   socketPath: string,
   threadId: string,
   timeoutMs = REQUEST_TIMEOUT_MS
@@ -738,7 +739,7 @@ export function readCodexThreadAt(
 }
 
 /** Read the logged-in account's email from an app-server socket (`account/read`). Fails to `null`. */
-export function readCodexAccountAt(
+ function readCodexAccountAt(
   socketPath: string,
   timeoutMs = REQUEST_TIMEOUT_MS
 ): Promise<{ email: string | null } | null> {
@@ -801,12 +802,6 @@ export function readCodexAccountAt(
   })
 }
 
-/** Drop the memoized/coalesced name state — for tests and for a relay/account-set change. */
-export function forgetCodexSessionNames(): void {
-  names.clear()
-  inflight.clear()
-}
-
 /**
  * The READ leg for `TITLE_READ_CAPABLE`. Memoized for `CACHE_MS` and coalesced, because the
  * session-name sweep asks once a minute PER NODE and every ask is a socket connect.
@@ -814,7 +809,7 @@ export function forgetCodexSessionNames(): void {
  * When the shared app-server reports no name, fall back to the relay's on-disk copy
  * (`relayedCodexSessionName`) so a conversation forked in the TUI still shows its title.
  */
-export function readCodexSessionName(
+ function readCodexSessionName(
   threadId: string,
   socketPath = defaultCodexAppServerSocket()
 ): Promise<string | null> {
@@ -843,7 +838,8 @@ export function readCodexSessionName(
   return request
 }
 
-export function forgetCodexSessionNames(): void {
+ function forgetCodexSessionNames(): void {
   names.clear()
   inflight.clear()
+}
 }

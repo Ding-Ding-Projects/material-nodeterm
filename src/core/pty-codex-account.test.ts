@@ -125,21 +125,14 @@ describe('PTY Codex account isolation', () => {
         email: undefined
       }
     ])
+  })
+})
+
 // Property 4 (S6 §5) / Decision 2: an EXPLICITLY selected managed Codex account whose home is
 // missing REFUSES — it never falls back to the system home. This pins the fail-closed spawn scope
 // at the model layer (`resolveCodexSessionScope`), where the later pty-manager PR consumes it. The
 // PR-1 model ships inert, so this tests the resolver against a REAL temp filesystem rather than a
 // full PtyManager spawn (nothing spawns against the model yet).
-import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'fs'
-import os from 'os'
-import path from 'path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import {
-  codexAccountHome,
-  isCodexScopeRefusal,
-  resolveCodexSessionScope
-} from './codex-accounts-core'
-
 describe('Codex spawn scope resolves fail-closed', () => {
   let userDataDir: string
 

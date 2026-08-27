@@ -170,7 +170,6 @@ function codexArgv(): string[] {
   return fs.readFileSync(argvLog, 'utf8').split('\n').slice(0, -1)
 }
 
-describe('generated Codex launcher', { timeout: REAL_SHELL_TEST_TIMEOUT_MS }, () => {
 /**
  * POST a codex-thread request DIRECTLY, bypassing the launcher's own account-id validation, to
  * exercise the SERVER's gate. Both bearer headers are presented so the request is authenticated and
