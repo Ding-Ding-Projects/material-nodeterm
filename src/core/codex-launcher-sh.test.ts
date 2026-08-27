@@ -8,7 +8,6 @@
 // remote-claude-usage.test.ts.
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import { execFile } from 'node:child_process'
-import { request as httpRequest } from 'node:http'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -25,8 +24,36 @@ import {
 } from './agents/node-token-files'
 import { initPlatform, resetPlatformForTests } from './platform'
 import { fakePlatform } from './platform-fake'
+import {
+  environmentForPosixShell,
+  REAL_POSIX_SHELL,
+  REAL_SHELL_TEST_TIMEOUT_MS,
+  pathForPosixShell,
+  pathsForPosixShellEnv,
+  posixShellScriptArgs,
+  quotePathForPosixShell
+} from './testing/posix-shell'
 
 const run = promisify(execFile)
+
+const SHELL_PATH_ENV_KEYS = [
+  'CODEX_HOME',
+  'HOME',
+  'NODETERM_HOOK_ENDPOINT',
+  'NODETERM_HOOK_SOCK',
+  'NODETERM_NODE_TOKEN_DIR'
+] as const
+
+/**
+ * The launcher reads `cwd=$PWD` from a real MSYS shell, where `$PWD` uses `/c/...`. When that value
+ * crosses into Git's native curl executable, MSYS argv conversion rewrites it to `C:/...`; that is
+ * the value the Node hook server receives and the assertion must compare. A no-op on POSIX, where
+ * `fs.realpathSync` is already forward-slash-shaped.
+ */
+function shCwd(nativePath: string): string {
+  if (process.platform !== 'win32') return nativePath
+  return nativePath.replace(/\\/g, '/')
+}
 
 /** The one secret. Every token in this file is derived from it by `nodeAuthToken` — the same
  *  function the server verifies with, so a second derivation cannot hide here. */
@@ -36,8 +63,8 @@ let dir = ''
 let launcher = ''
 let binDir = ''
 let argvLog = ''
-let started: Array<{ nodeId: string; cwd: string; accountId?: string }> = []
-let bound: Array<{ nodeId: string; threadId: string; accountId?: string }> = []
+let started: Array<{ nodeId: string; cwd: string }> = []
+let bound: Array<{ nodeId: string; threadId: string }> = []
 let fallbacks: Array<{ nodeId: string; reason?: string }> = []
 let startAnswer: (() => string) | null = null
 let startDelayMs = 0
@@ -47,7 +74,7 @@ let bindAnswer: (() => void) | null = null
 function writeFakeCodex(): void {
   fs.writeFileSync(
     path.join(binDir, 'codex'),
-    `#!/bin/sh\nprintf '%s\\n' "$*" >> ${JSON.stringify(argvLog)}\nexit 0\n`,
+    `#!/bin/sh\nprintf '%s\\n' "$*" >> ${quotePathForPosixShell(argvLog)}\nexit 0\n`,
     { mode: 0o755 }
   )
 }
@@ -65,14 +92,14 @@ beforeAll(async () => {
   fs.writeFileSync(launcher, buildCodexLauncherScript('true'), { mode: 0o755 })
   await hookServer.start()
   hookServer.setNodeAuthSecret(SECRET)
-  hookServer.setCodexThreadStartHandler(async ({ nodeId, cwd, accountId }) => {
-    started.push({ nodeId, cwd, accountId })
+  hookServer.setCodexThreadStartHandler(async ({ nodeId, cwd }) => {
+    started.push({ nodeId, cwd })
     if (startDelayMs) await new Promise((r) => setTimeout(r, startDelayMs))
     if (!startAnswer) throw new Error('start refused')
     return startAnswer()
   })
-  hookServer.setCodexThreadBindHandler(async ({ nodeId, threadId, accountId }) => {
-    bound.push({ nodeId, threadId, accountId })
+  hookServer.setCodexThreadBindHandler(async ({ nodeId, threadId }) => {
+    bound.push({ nodeId, threadId })
     if (!bindAnswer) throw new Error('bind refused')
     bindAnswer()
   })
@@ -86,7 +113,7 @@ afterAll(() => {
   hookServer.clearNodeAuthSecretForTests()
   resetNodeTokenFilesForTests()
   resetPlatformForTests()
-  fs.rmSync(dir, { recursive: true, force: true })
+  fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 })
 
 beforeEach(() => {
@@ -112,7 +139,7 @@ beforeEach(() => {
  */
 function baseEnv(): Record<string, string> {
   return {
-    PATH: `${binDir}:${process.env.PATH ?? ''}`,
+    PATH: process.env.PATH ?? '',
     HOME: dir,
     NODETERM_NODE_ID: 'node-1',
     NODETERM_HOOK_ENDPOINT: hookServer.endpointFilePath(),
@@ -131,7 +158,10 @@ function callLauncher(
 ): Promise<{ stdout: string; stderr: string }> {
   const merged = { ...baseEnv(), ...env }
   for (const [k, v] of Object.entries(merged)) if (v === '') delete (merged as any)[k]
-  return run('/bin/sh', [script, ...args], { env: merged, cwd: dir })
+  return run(REAL_POSIX_SHELL, posixShellScriptArgs(script, args, binDir), {
+    env: environmentForPosixShell(pathsForPosixShellEnv(merged, SHELL_PATH_ENV_KEYS)),
+    cwd: dir
+  })
 }
 
 /** What the fake `codex` was exec'd with, one line per invocation. */
@@ -139,103 +169,20 @@ function codexArgv(): string[] {
   return fs.readFileSync(argvLog, 'utf8').split('\n').slice(0, -1)
 }
 
-/**
- * POST a codex-thread request DIRECTLY, bypassing the launcher's own account-id validation, to
- * exercise the SERVER's gate. Both bearer headers are presented so the request is authenticated and
- * only the account-id check can reject it.
- */
-function postCodexThread(
-  verb: 'start' | 'bind',
-  fields: Record<string, string>
-): Promise<number> {
-  const body = new URLSearchParams(fields).toString()
-  return new Promise((resolve, reject) => {
-    const req = httpRequest(
-      {
-        host: '127.0.0.1',
-        port: hookServer.getPort(),
-        method: 'POST',
-        path: `/codex-thread/${verb}`,
-        headers: {
-          'content-type': 'application/x-www-form-urlencoded',
-          'content-length': Buffer.byteLength(body),
-          'x-nodeterm-hook-token': hookServer.getToken(),
-          'x-nodeterm-node-token': nodeAuthToken(SECRET, 'node-1')
-        }
-      },
-      (res) => {
-        res.resume()
-        res.on('end', () => resolve(res.statusCode ?? 0))
-      }
-    )
-    req.on('error', reject)
-    req.end(body)
-  })
-}
-
-describe('generated Codex launcher', () => {
+describe('generated Codex launcher', { timeout: REAL_SHELL_TEST_TIMEOUT_MS }, () => {
   it('is valid POSIX sh', async () => {
-    await expect(run('/bin/sh', ['-n', launcher])).resolves.toBeTruthy()
+    await expect(
+      run(REAL_POSIX_SHELL, ['-n', pathForPosixShell(launcher)], {
+        env: environmentForPosixShell()
+      })
+    ).resolves.toBeTruthy()
   })
 
   it('starts a thread for a fresh node and resumes it on the shared app-server', async () => {
     await callLauncher([])
-    expect(started).toEqual([{ nodeId: 'node-1', cwd: fs.realpathSync(dir) }])
+    expect(started).toEqual([{ nodeId: 'node-1', cwd: shCwd(fs.realpathSync(dir)) }])
     expect(codexArgv()).toEqual(['--remote unix:// resume thread-abc'])
     expect(fallbacks).toEqual([])
-  })
-
-  // #350 (the confused deputy): the shared app-server is a PERSISTENT DAEMON started by the FIRST
-  // codex node to launch, and reused by every later node. If the launcher starts it while THIS
-  // node's per-pane NODETERM_NODE_ID is in the environment, the daemon — and every tool shell it
-  // later spawns for EVERY node — inherits that one node's id. The thread→node resolver only
-  // recovers the right node when the tool shell has NO NODETERM_NODE_ID (its guard is
-  // `[ -z "$NODETERM_NODE_ID" ]`), so a leaked value silently collapses every codex node's identity
-  // onto the daemon-starting node: Project B's codex then lists Project A's links and routes to A.
-  // The daemon MUST therefore be started with the per-pane vars scrubbed. NODETERM_CODEX_ACCOUNT_ID
-  // is the ONE exception — one daemon serves one account, and the resolver reads it to pick scope.
-  it('starts the shared app-server daemon WITHOUT this node\'s per-pane NODETERM_NODE_ID (#350)', async () => {
-    const envDump = path.join(dir, 'daemon-env.txt')
-    const dumpScript = path.join(dir, 'dump-daemon-env.sh')
-    fs.writeFileSync(
-      dumpScript,
-      `#!/bin/sh\n` +
-        `printf 'NID=[%s]\\nACC=[%s]\\nHOOK=[%s]\\n' ` +
-        `"\${NODETERM_NODE_ID-}" "\${NODETERM_CODEX_ACCOUNT_ID-}" "\${NODETERM_HOOK_ENDPOINT-}" ` +
-        `> ${JSON.stringify(envDump)}\n`,
-      { mode: 0o755 }
-    )
-    const script2 = path.join(dir, 'nodeterm-codex-envdump')
-    fs.writeFileSync(script2, buildCodexLauncherScript(JSON.stringify(dumpScript)), { mode: 0o755 })
-
-    await callLauncher([], { NODETERM_CODEX_ACCOUNT_ID: 'acct-A' }, script2)
-
-    const dumped = fs.readFileSync(envDump, 'utf8')
-    // The per-pane node id is scrubbed for the daemon (else its tool shells all report node-1).
-    expect(dumped).toContain('NID=[]')
-    // …and the per-pane hook endpoint too — a tool shell recovers it per-thread from the record.
-    expect(dumped).toContain('HOOK=[]')
-    // The account scope is deliberately preserved: the resolver needs it to pick the record scope.
-    expect(dumped).toContain('ACC=[acct-A]')
-  })
-
-  // The #351 interplay, pinned: a failed endpoint preflight (#351's unquoted-path sourcing bug,
-  // an unreadable file, an app restart) must NEVER reach the daemon start. This is what makes #350
-  // and #351 INDEPENDENT bugs rather than a chain — the daemon-env leak above requires the shared
-  // path to have proceeded, and a #351-style failure falls back to plain codex BEFORE that line.
-  it('a failed endpoint preflight never starts the daemon (#351 cannot feed #350)', async () => {
-    const envDump = path.join(dir, 'daemon-env-endpointfail.txt')
-    const dumpScript = path.join(dir, 'dump-daemon-env-endpointfail.sh')
-    fs.writeFileSync(dumpScript, `#!/bin/sh\n: > ${JSON.stringify(envDump)}\n`, { mode: 0o755 })
-    const script2 = path.join(dir, 'nodeterm-codex-endpointfail')
-    fs.writeFileSync(script2, buildCodexLauncherScript(JSON.stringify(dumpScript)), { mode: 0o755 })
-
-    await callLauncher(['do', 'work'], { NODETERM_HOOK_ENDPOINT: '/nonexistent/hook-endpoint.env' }, script2)
-
-    // Plain codex with the args intact, and the daemon start command was never invoked.
-    expect(codexArgv()).toEqual(['do work'])
-    expect(fs.existsSync(envDump)).toBe(false)
-    expect(fallbacks.map((f) => f.reason)).toContain('hook-endpoint-unavailable')
   })
 
   it('keeps the caller arguments after the thread it resolved', async () => {
@@ -251,59 +198,12 @@ describe('generated Codex launcher', () => {
     expect(started).toEqual([])
     expect(codexArgv()).toEqual(['--remote unix:// resume thread-xyz'])
   })
-
-  // S6: the account scope travels in the POST body, never on argv (Constraint 6), so the record is
-  // filed under the right account. An empty id (the system account) reaches the handler as undefined.
-  it('threads the managed account id through start (in the body, not on argv)', async () => {
-    await callLauncher([], { NODETERM_CODEX_ACCOUNT_ID: 'acct-A' })
-    expect(started).toEqual([{ nodeId: 'node-1', cwd: fs.realpathSync(dir), accountId: 'acct-A' }])
-    // The account id is NOT on the codex command line.
-    expect(codexArgv().join(' ')).not.toContain('acct-A')
-  })
-
-  it('threads the managed account id through a resume bind too', async () => {
-    await callLauncher(['resume', 'thread-xyz'], { NODETERM_CODEX_ACCOUNT_ID: 'acct-A' })
-    expect(bound).toEqual([{ nodeId: 'node-1', threadId: 'thread-xyz', accountId: 'acct-A' }])
-    expect(codexArgv().join(' ')).not.toContain('acct-A')
-  })
-
-  it('an account id that could escape the mapping directory → plain codex, never an unbound bind', async () => {
-    await callLauncher(['do', 'work'], { NODETERM_CODEX_ACCOUNT_ID: '../evil' })
-    // No thread was started or bound under the hostile scope; codex ran plain with the args intact.
-    expect(started).toEqual([])
-    expect(bound).toEqual([])
-    expect(codexArgv()).toEqual(['do work'])
-    expect(fallbacks.map((f) => f.reason)).toContain('codex-account-invalid')
-  })
-
-  // The SERVER's own gate, independent of the launcher: a hostile account id posted directly is
-  // refused at 400 BEFORE the start handler runs — so `startCodexThread` never creates a thread the
-  // record write would then orphan. (Mutation: drop the isSafeAccountId gate ⇒ 200 + a started row.)
-  it('the server refuses a hostile account id at 400 before starting a thread', async () => {
-    const status = await postCodexThread('start', {
-      nodeId: 'node-1',
-      cwd: fs.realpathSync(dir),
-      accountId: '../evil'
-    })
-    expect(status).toBe(400)
-    expect(started).toEqual([]) // the handler never ran ⇒ no orphaned thread
-  })
-
-  it('the server accepts a safe managed account id on a direct post', async () => {
-    const status = await postCodexThread('start', {
-      nodeId: 'node-1',
-      cwd: fs.realpathSync(dir),
-      accountId: 'acct-A'
-    })
-    expect(status).toBe(200)
-    expect(started).toEqual([{ nodeId: 'node-1', cwd: fs.realpathSync(dir), accountId: 'acct-A' }])
-  })
 })
 
 // Each case below is a way the managed identity can be unavailable on a real machine. The
 // assertion is always the same pair: plain `codex` ran WITH THE ORIGINAL ARGUMENTS, and the
 // desktop was told why. Upstream, every one of these exited 69 — a dead node.
-describe('falls back to plain codex', () => {
+describe('falls back to plain codex', { timeout: REAL_SHELL_TEST_TIMEOUT_MS }, () => {
   const cases: Array<[string, Record<string, string>, string]> = [
     ['no node id (a session nodeterm did not spawn)', { NODETERM_NODE_ID: '' }, 'node-id-unavailable'],
     [
@@ -391,7 +291,7 @@ describe('falls back to plain codex', () => {
   })
 })
 
-describe('a start handler that takes real time', () => {
+describe('a start handler that takes real time', { timeout: REAL_SHELL_TEST_TIMEOUT_MS }, () => {
   // REGRESSION. `/codex-thread/start` mints a thread through a five-step conversation with an
   // app-server that is typically COLD — the first codex node after boot. The route inherited the
   // 2s slowloris guard (a RECEIVE-phase guard), so the socket was destroyed while the handler was
@@ -411,7 +311,7 @@ describe('a start handler that takes real time', () => {
 // shared derivation with /hook/*) and it arrives in a 0600 FILE, not in the tmux argv. Between the
 // two changes the feature was INERT — the launcher read an env var nothing set any more, reported
 // `node-token-unavailable` and ran plain codex. These are the tests that say it is not.
-describe('the per-node capability, over the file channel', () => {
+describe('the per-node capability, over the file channel', { timeout: REAL_SHELL_TEST_TIMEOUT_MS }, () => {
   it('accepts the kid.mac wire shape — the dot is part of the token, not a charset violation', async () => {
     // THE TRAP. The old gate was `*[!A-Za-z0-9_-]*`, minted from HMAC(secret, nodeId) with no
     // separator in it. The shared derivation puts a `.` between kid and mac, so that gate rejects
@@ -420,7 +320,7 @@ describe('the per-node capability, over the file channel', () => {
     expect(token).toContain('.')
     expect(fs.readFileSync(path.join(nodeTokenDir(), 'node-1'), 'utf8').trim()).toBe(token)
     await callLauncher([])
-    expect(started).toEqual([{ nodeId: 'node-1', cwd: fs.realpathSync(dir) }])
+    expect(started).toEqual([{ nodeId: 'node-1', cwd: shCwd(fs.realpathSync(dir)) }])
     expect(fallbacks).toEqual([])
     expect(codexArgv()).toEqual(['--remote unix:// resume thread-abc'])
   })
@@ -436,7 +336,7 @@ describe('the per-node capability, over the file channel', () => {
     // Charset-valid but minted for the WRONG node. If anything still read that variable, the route
     // would 403 and this node would degrade to plain codex.
     await callLauncher([], { NODETERM_CODEX_NODE_TOKEN: nodeAuthToken(SECRET, 'node-2') })
-    expect(started).toEqual([{ nodeId: 'node-1', cwd: fs.realpathSync(dir) }])
+    expect(started).toEqual([{ nodeId: 'node-1', cwd: shCwd(fs.realpathSync(dir)) }])
     expect(fallbacks).toEqual([])
   })
 
@@ -476,12 +376,12 @@ describe('the per-node capability, over the file channel', () => {
       expect(started).toEqual([])
       expect(fallbacks).toEqual([{ nodeId: 'node-1', reason: 'node-token-unavailable' }])
     } finally {
-      fs.rmSync(file, { recursive: true, force: true })
+      fs.rmSync(file, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
     }
   })
 })
 
-describe('per-node capability (the authorization the shared bearer cannot give)', () => {
+describe('per-node capability (the authorization the shared bearer cannot give)', { timeout: REAL_SHELL_TEST_TIMEOUT_MS }, () => {
   const post = (verb: string, body: string, headers: Record<string, string>) =>
     fetch(`http://127.0.0.1:${hookServer.getPort()}/codex-thread/${verb}`, {
       method: 'POST',

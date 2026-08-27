@@ -13,20 +13,13 @@
  */
 import { posixQuote } from '../shared/ssh'
 
-/**
- * PROBE U5 (Codex 0.146.0, 2026-08-19 — docs/superpowers/probes/2026-08-codex-tool-shell-env.md):
- * a shared `app-server`-spawned tool shell carries `CODEX_THREAD_ID` (measured — a fresh id per
- * thread) and NOT the per-pane `NODETERM_*` (the tool shell forks from the shared daemon, not the
- * connecting client; corroborated by the deployed S4 resolver that depends on exactly this). The
- * premise HOLDS, so the account-scoped scan below is warranted. Caveat: an in-process app-server
- * (`codex exec`) leaks `NODETERM_*`, but the outer `[ -z "$NODETERM_NODE_ID" ]` guard no-ops there.
- *
- * @param identityRoot absolute path of the thread → node record directory
- *   (`codexThreadIdentityRoot()`, i.e. under `CorePlatform.userDataDir` — NOT `~`).
- */
-export function codexThreadIdentityResolverSh(identityRoot: string): string {
+function buildResolver(
+  rootAssignment: string,
+  legacyMap: string,
+  scopedMap: string
+): string {
   return `# A shared-app-server Codex tool shell inherits CODEX_THREAD_ID, not the TUI client's
-# NODETERM_* env. Recover this thread's exact node binding (account-scoped), or change nothing.
+# NODETERM_* env. Recover this thread's exact node binding, or change nothing at all.
 if [ -z "\${NODETERM_NODE_ID-}" ] && [ -n "\${CODEX_THREAD_ID-}" ]; then
   case "$CODEX_THREAD_ID" in
     # '.' and '..' match the charset but are path segments, so refuse them by name too.
@@ -117,67 +110,25 @@ if [ -z "\${NODETERM_NODE_ID-}" ] && [ -n "\${CODEX_THREAD_ID-}" ]; then
           NODETERM_CANVAS_CONTROL=1
           export NODETERM_NODE_ID NODETERM_HOOK_ENDPOINT NODETERM_AGENT_ID NODETERM_CANVAS_CONTROL
         fi
-      nt_codex_root=${posixQuote(identityRoot)}
-      nt_codex_matches=0
-      nt_codex_node=''
-      nt_codex_endpoint=''
-      # Validate one candidate record file for an expected scope, parsed as DATA. On success it
-      # records the node/endpoint and counts the match. $1=file, $2=expected scope ('' = system).
-      nt_codex_try() {
-        [ -r "$1" ] || return 0
-        nt_a=$(sed -n 's/^accountId=//p' "$1" | head -n 1)
-        # The record's own account line must AGREE with the directory it was found in. A system
-        # record's line is empty or the reserved word 'system'; a managed record's line is its id.
-        case "$2" in
-          '') case "$nt_a" in ''|system) ;; *) return 0 ;; esac ;;
-          *) [ "$nt_a" = "$2" ] || return 0 ;;
-        esac
-        nt_n=$(sed -n 's/^nodeId=//p' "$1" | head -n 1)
-        nt_e=$(sed -n 's/^endpoint=//p' "$1" | head -n 1)
-        case "$nt_n" in ''|*[!A-Za-z0-9._-]*) return 0 ;; esac
-        case "$nt_e" in /*) ;; *) return 0 ;; esac
-        [ "$(printf %s "$nt_e" | tr -cd 'A-Za-z0-9._/ -')" = "$nt_e" ] || return 0
-        nt_codex_node=$nt_n
-        nt_codex_endpoint=$nt_e
-        nt_codex_matches=$((nt_codex_matches + 1))
-      }
-      case "\${NODETERM_CODEX_ACCOUNT_ID-}" in
-        '')
-          # Unknown account: scan every scope, bind only if exactly one candidate matches.
-          nt_codex_try "$nt_codex_root/$CODEX_THREAD_ID" ''
-          for nt_codex_dir in "$nt_codex_root"/*/; do
-            [ -d "$nt_codex_dir" ] || continue
-            nt_codex_scope=\${nt_codex_dir%/}
-            nt_codex_scope=\${nt_codex_scope##*/}
-            case "$nt_codex_scope" in
-              ''|.|..|system|*[!A-Za-z0-9._-]*) continue ;;
-            esac
-            nt_codex_try "$nt_codex_dir$CODEX_THREAD_ID" "$nt_codex_scope"
-          done
-          ;;
-        # A daemon scope that could escape the mapping directory, or the reserved system word used
-        # as a managed id: resolve nothing.
-        .|..|system|*[!A-Za-z0-9._-]*) ;;
-        *)
-          nt_codex_try "$nt_codex_root/\${NODETERM_CODEX_ACCOUNT_ID}/$CODEX_THREAD_ID" \\
-            "$NODETERM_CODEX_ACCOUNT_ID"
-          ;;
-      esac
-      if [ "$nt_codex_matches" -eq 1 ] && [ -n "$nt_codex_node" ] && [ -n "$nt_codex_endpoint" ]
-      then
-        NODETERM_NODE_ID="$nt_codex_node"
-        NODETERM_HOOK_ENDPOINT="$nt_codex_endpoint"
-        NODETERM_AGENT_ID=codex
-        NODETERM_CANVAS_CONTROL=1
-        export NODETERM_NODE_ID NODETERM_HOOK_ENDPOINT NODETERM_AGENT_ID NODETERM_CANVAS_CONTROL
       fi
       ;;
   esac
 fi`
 }
 
-/** `$HOME`-rooted form used by the remote context-link and canvas-control shims. */
-export const CODEX_THREAD_IDENTITY_RESOLVER_SH = codexThreadIdentityResolverSh(
-  '$HOME/.nodeterm/codex-thread-nodes'
-)
+/** Build the resolver for the app-owned identity root supplied by `CorePlatform`. */
+export function codexThreadIdentityResolverSh(identityRoot: string): string {
+  const root = posixQuote(identityRoot)
+  return buildResolver(
+    `nt_codex_root=${root}`,
+    `${root}/"$CODEX_THREAD_ID"`,
+    `${root}/"$nt_codex_scope"/"$CODEX_THREAD_ID"`
+  )
+}
 
+/** `$HOME`-rooted form used by the remote context-link and canvas-control shims. */
+export const CODEX_THREAD_IDENTITY_RESOLVER_SH = buildResolver(
+  'nt_codex_root="$HOME/.nodeterm/codex-thread-nodes"',
+  '"$HOME/.nodeterm/codex-thread-nodes/$CODEX_THREAD_ID"',
+  '"$HOME/.nodeterm/codex-thread-nodes/$nt_codex_scope/$CODEX_THREAD_ID"'
+)
