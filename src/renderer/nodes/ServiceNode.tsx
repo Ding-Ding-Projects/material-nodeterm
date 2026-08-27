@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { NodeResizer, useReactFlow, type NodeProps } from '@xyflow/react'
 import { isServiceNodeKind, type ServiceNodeKind } from '@shared/types'
 import { COLLAPSED_HEIGHT, SERVICE_NODE_LABELS, type CanvasNode } from '../state/workspace'
@@ -8,14 +8,17 @@ import { nodeBorderStyle, nodeColorStyle } from '../lib/nodeColor'
 import { ColorMenu } from '../components/color/ColorMenu'
 import { MinecraftServerPanel } from '../components/minecraft/MinecraftServerPanel'
 import { DockerHostManagerPanel } from '../components/docker/DockerHostManagerPanel'
+import { AwsAllServicesPanel } from '../components/aws/AwsAllServicesPanel'
+import { emptyAwsPortableServiceIntent } from '@shared/aws-all-services'
+import { useSession } from '../session/session'
 import { EditableNodeTitle } from '../components/EditableNodeTitle'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { mapAroundExactFacts } from './nodeVocabulary'
 
 /**
- * One component for the whole service family — Minecraft, Docker, Proxmox, GitLab, Home Assistant
- * and FreePBX. They differ in what they will eventually manage, not in how they behave as canvas
- * objects, so six near-identical components would be six copies of one rule waiting to drift.
+ * One component for the whole service family, including the model-driven AWS service node.
+ * They differ in what they manage, not in how they behave as canvas objects, so separate near-
+ * identical components would be separate copies of one rule waiting to drift.
  *
  * WHAT THIS DELIBERATELY DOES NOT DO for four of the six kinds, and why the emptiness is the point:
  *
@@ -31,7 +34,7 @@ import { mapAroundExactFacts } from './nodeVocabulary'
  * rather than implying a connection. Storing where you would connect is a real, useful thing on
  * its own; pretending it connects would not be.
  *
- * `minecraft` and `dockerhost` are the lanes that wire real managers. See `MinecraftServerPanel`
+ * `minecraft`, `dockerhost`, and `aws-service` are the lanes that wire real managers. See `MinecraftServerPanel`
  * (docs/minecraft-server-manager.md). It runs a real local `java -jar server.jar` process on the
  * and `DockerHostManagerPanel`. Both replace the generic address field entirely rather than growing
  * a fake "Connect" button beside it. When a future lane wires one of the other four kinds, it follows
@@ -50,7 +53,8 @@ const ENDPOINT_PLACEHOLDER: Record<ServiceNodeKind, string> = {
   proxmox: 'https://proxmox.local:8006',
   gitlab: 'https://gitlab.example.com',
   homeassistant: 'http://homeassistant.local:8123',
-  freepbx: 'https://pbx.local'
+  freepbx: 'https://pbx.local',
+  'aws-service': 'https://aws.amazon.com'
 }
 
 /**
@@ -103,6 +107,11 @@ function describeEndpointProblem(value: string, map: (text: string) => string = 
 }
 export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>) {
   const vocab = useVocabularyMapper()
+  const { api } = useSession()
+  const awsClient = useMemo(() => ({
+    ...api.awsAllServices,
+    chooseFile: async (_input: { nodeId: string; fieldId: string; title: string }): Promise<string | null> => api.dialog.selectFile()
+  }), [api])
   const { updateNodeData, setNodes } = useReactFlow()
   /** Viewport anchor for the colour surface, or null when closed — coordinates rather than a
   *  boolean because ColorMenu is a body portal. */
@@ -233,7 +242,16 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
         {!collapsed && kind === 'minecraft' && <MinecraftServerPanel nodeId={id} />}
         {!collapsed && kind === 'dockerhost' && <DockerHostManagerPanel />}
 
-        {!collapsed && kind !== 'minecraft' && kind !== 'dockerhost' && (
+        {!collapsed && kind === 'aws-service' && (
+          <AwsAllServicesPanel
+            nodeId={id}
+            intent={data.awsAllServicesIntent ?? emptyAwsPortableServiceIntent()}
+            onIntentChange={(awsAllServicesIntent) => updateNodeData(id, { awsAllServicesIntent })}
+            client={awsClient}
+          />
+        )}
+
+        {!collapsed && kind !== 'minecraft' && kind !== 'dockerhost' && kind !== 'aws-service' && (
           <div className="service-node__body">
             <label className="service-node__field" htmlFor={`${id}-endpoint`}>
               <span className="service-node__field-label">{vocab('Address')}</span>

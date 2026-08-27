@@ -36,6 +36,7 @@ import type { TorrentTaskState } from '../shared/torrent'
 import type { VirtualMachineEvent } from '../shared/virtual-machine'
 import type { CalendarProvider } from '../shared/calendar'
 import type { ProjectConsentRequest, ProjectSetupEvent } from '../shared/project-settings'
+import type { AwsAllServicesApi, AwsAllServicesCatalog, AwsExecutionProgress, AwsExecutionResult } from '../shared/aws-all-services'
 
 // Fan a single ipcRenderer listener per channel out to many renderer subscribers. Without
 // this, every node that subscribes (e.g. Cmd+M markdown toggle on each terminal/editor) adds
@@ -87,6 +88,7 @@ const subscribeOllamaChatStream = subscribe<
 const subscribeMinecraftEvent = subscribe<[MinecraftEvent]>(IPC.minecraftEvent)
 const subscribeNodeDependencyState = subscribe<[NodeDependencyAvailability]>(IPC.nodeDependencyState)
 const subscribeNodeDependencyProgress = subscribe<[NodeDependencyProgress]>(IPC.nodeDependencyProgress)
+const subscribeAwsAllServicesProgress = subscribe<[AwsExecutionProgress & { nodeId: string }]>(IPC.awsAllServicesProgress)
 const subscribeTorrentTask = subscribe<[TorrentTaskState]>(IPC.torrentTask)
 const subscribeVirtualMachineEvent = subscribe<[VirtualMachineEvent]>(IPC.virtualMachineEvent)
 const subscribeWidgetState = subscribe<[CanvasWidgetLiveState]>(IPC.widgetStateChanged)
@@ -1102,6 +1104,22 @@ const api: NodeTerminalApi = {
     onState: (listener) => subscribeNodeDependencyState(listener),
     onProgress: (listener) => subscribeNodeDependencyProgress(listener)
   },
+  awsAllServices: {
+    catalog: () => ipcRenderer.invoke(IPC.awsAllServicesCatalog) as Promise<AwsAllServicesCatalog>,
+    refreshCatalog: () => ipcRenderer.invoke(IPC.awsAllServicesRefreshCatalog) as Promise<AwsAllServicesCatalog>,
+    binding: (nodeId) => ipcRenderer.invoke(IPC.awsAllServicesBinding, nodeId),
+    saveBinding: (nodeId, binding) => ipcRenderer.invoke(IPC.awsAllServicesSaveBinding, nodeId, binding),
+    profiles: () => ipcRenderer.invoke(IPC.awsAllServicesProfiles),
+    regions: () => ipcRenderer.invoke(IPC.awsAllServicesRegions),
+    execute: (nodeId, request, onProgress) => {
+      const unsubscribe = subscribeAwsAllServicesProgress((progress) => {
+        if (progress.nodeId === nodeId) onProgress(progress)
+      })
+      return (ipcRenderer.invoke(IPC.awsAllServicesExecute, nodeId, request) as Promise<AwsExecutionResult>).finally(unsubscribe)
+    },
+    cancel: (nodeId) => ipcRenderer.invoke(IPC.awsAllServicesCancel, nodeId),
+    onProgress: (listener) => subscribeAwsAllServicesProgress(listener)
+  } satisfies AwsAllServicesApi,
   ollama: {
     status: () => ipcRenderer.invoke(IPC.ollamaStatus),
     models: () => ipcRenderer.invoke(IPC.ollamaModels),

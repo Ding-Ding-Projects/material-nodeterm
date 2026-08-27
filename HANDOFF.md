@@ -1,5 +1,28 @@
 # Handoff
 
+## 2026-08-27, generic all-service AWS GUI, issue #50
+
+The implementation lane is `feat/program-39-aws-all-services`, based on the refreshed
+`origin/main` and preserving the initial model-driven UI in checkpoint commit `116a1213`.
+`src/core/aws-all-services.ts` now discovers bounded AWS CLI service models from the installed
+dependency, validates model shapes, persists only machine-local bindings, rebuilds argv at the
+trusted boundary, and executes with `shell: false` while reporting cancellation and bounded
+redacted output. `src/shared/aws-all-services.ts` carries the portable intent, local-binding
+validation, execution preview, and API contracts. The preload and authenticated Server Edition
+bridge expose the same namespace, and `ServiceNode` renders the generic AWS service node from the
+shared catalog and intent.
+
+The node catalog now exposes `aws-service` in AWS Universe scope. The feature article and static
+documentation page are `docs/features/integrations/aws-all-services.md` and
+`site/docs/aws-all-services.html`; the category index, site index, roadmap, and changelog mention
+the new surface. The in-app generated documentation bundle was not regenerated because this lane's
+explicit boundary forbids builds and generated-output workflows.
+
+The implementation lane intentionally ran no tests, type checks, lint, security or accessibility
+checks, builds, packaging, installer execution, runtime interaction, or captures. The parent
+integration lane must perform those checks against the exact integrated commit and must not infer
+runtime correctness from this source-only result.
+
 ## 2026-08-27, Express File Converter completion, issue #21
 
 The implementation lane is `feat/program-10-file-converter`, refreshed by fast-forward before edits

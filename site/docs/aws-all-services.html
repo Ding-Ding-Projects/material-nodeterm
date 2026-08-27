@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Generic AWS all-service interface: nodeterm docs</title>
+    <meta name="description" content="Model-driven typed AWS service and command controls for newly installed AWS CLI models." />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+  </head>
+  <body>
+    <div class="doc-topbar">
+      <a href="../index.html">← nodeterm</a>
+      <span aria-hidden="true">/</span>
+      <a href="./index.html">Docs</a>
+    </div>
+    <article class="doc-body">
+      <p class="doc-kicker">AWS Universe</p>
+      <h1>Generic AWS all-service interface</h1>
+      <p>The AWS service node reads the installed AWS CLI model inventory. Newly installed services,
+        commands, and input shapes appear through the same typed interface without a new hand-written
+        form.</p>
+      <h2>Guided controls</h2>
+      <p>Services, commands, profiles, regions, waiters, and modeled enum values are searchable
+        pickers. Every search has its own adjacent anchored regex builder. Structures, lists, maps,
+        booleans, numbers, timestamps, and local files use controls matched to their shape. Unsupported
+        model data stays visible as an honest unavailable state.</p>
+      <h2>Review and execution</h2>
+      <p>Before execution, the node shows the service, command, account, role, region, endpoint,
+        pagination, waiter, retry, streaming, output mode, generated argument vector, risk, and
+        portable omissions. The privileged host regenerates the argument vector from the current
+        model and invokes the bundled CLI without a shell. Destructive operations use the existing
+        two-key confirmation surface. Progress, cancellation, partial results, and errors remain
+        visible in the node.</p>
+      <h2>Portability</h2>
+      <p>Project files contain safe service intent only. Profiles, credentials, account sessions,
+        role bindings, endpoints, selected files, CLI paths, and result data stay local to the host.
+        Import performs no provider call and leaves local configuration to an explicit user action.</p>
+      <h2>Honest limits</h2>
+      <p>The implementation lane intentionally did not run tests, type checks, lint, security or
+        accessibility checks, builds, installer execution, runtime interaction, or captures. Those
+        checks remain release work rather than being implied by this documentation.</p>
+      <section class="doc-suggested">
+        <h2>Suggested articles</h2>
+        <ul>
+          <li><a href="./aws-universe-shop.html">AWS Universe Shop</a></li>
+          <li><a href="./provider-services.html">Provider services</a></li>
+        </ul>
+      </section>
+    </article>
+  </body>
+</html>

@@ -59,6 +59,7 @@ import { registerMinecraftIpc } from '../core/minecraft/register-ipc'
 import { registerTorrentIpc } from '../core/torrent/register-ipc'
 import { registerVirtualMachineIpc } from '../core/virtual-machine/register-ipc'
 import { registerCalendarIpc } from '../core/calendar/register-ipc'
+import { registerAwsAllServicesIpc } from '../core/aws-all-services'
 import { AtomicJsonArrayStore } from '../core/atomic-json-store'
 import { TimerOccurrenceService } from '../core/timer-service'
 import type { TimerOccurrence } from '../shared/timer'
@@ -2228,7 +2229,15 @@ app.whenReady().then(async () => {
   // Server Edition gets the identical engine via src/server/handlers/index.ts's own call to these
   // same functions.
   registerConverterIpc(corePlatform)
-  registerNodeDependencyIpc(corePlatform)
+  const nodeDependencyService = registerNodeDependencyIpc(corePlatform)
+  registerAwsAllServicesIpc(corePlatform, async () => {
+    try {
+      const availability = await nodeDependencyService.status('aws-cli-v2')
+      return availability.available ? availability.executablePath : null
+    } catch {
+      return null
+    }
+  })
   registerOllamaIpc(corePlatform)
   minecraftServers = registerMinecraftIpc(corePlatform).manager
   registerTorrentIpc(corePlatform)

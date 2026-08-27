@@ -723,6 +723,18 @@ export const IPC = {
   nodeDependencyReconcile: 'node-dependency:reconcile',
   nodeDependencyState: 'node-dependency:state',
   nodeDependencyProgress: 'node-dependency:progress',
+  // Generic AWS service and command GUI. The model inventory is discovered from the installed
+  // AWS CLI on the privileged side; renderer input becomes argv only after the model is reloaded
+  // and validated again. Bindings remain machine-local and never enter portable project files.
+  awsAllServicesCatalog: 'aws-all-services:catalog',
+  awsAllServicesRefreshCatalog: 'aws-all-services:refresh-catalog',
+  awsAllServicesBinding: 'aws-all-services:binding',
+  awsAllServicesSaveBinding: 'aws-all-services:save-binding',
+  awsAllServicesProfiles: 'aws-all-services:profiles',
+  awsAllServicesRegions: 'aws-all-services:regions',
+  awsAllServicesExecute: 'aws-all-services:execute',
+  awsAllServicesCancel: 'aws-all-services:cancel',
+  awsAllServicesProgress: 'aws-all-services:progress',
   /** Electron only: a multi-file picker (dialog:select-file only returns one path). Browser (Server
    *  Edition) uses a plain `<input type="file" multiple>` + files.saveUpload instead — see
    *  FileConverterPanel.tsx. */

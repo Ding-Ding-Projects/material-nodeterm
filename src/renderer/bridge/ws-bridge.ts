@@ -20,6 +20,7 @@ import type { ConverterApi } from '../../shared/converter'
 import type { OllamaApi } from '../../shared/ollama'
 import type { MinecraftApi } from '../../shared/minecraft'
 import type { NodeDependenciesApi } from '../../shared/node-dependencies'
+import type { AwsAllServicesApi } from '../../shared/aws-all-services'
 import type { TorrentApi, TorrentTaskState } from '../../shared/torrent'
 import type { VirtualMachineApi } from '../../shared/virtual-machine'
 import type { CalendarApi, CalendarProvider } from '../../shared/calendar'
@@ -1105,6 +1106,29 @@ export function buildNodeDependenciesApi(client: RpcClient): Pick<NodeTerminalAp
   return { nodeDependencies }
 }
 
+/** Generic AWS service GUI over the authenticated server RPC. The server-side core owns model
+ * discovery, local bindings, file selection, and argv-only execution. */
+export function buildAwsAllServicesApi(client: RpcClient): Pick<NodeTerminalApi, 'awsAllServices'> {
+  const awsAllServices: AwsAllServicesApi = {
+    catalog: () => client.request(IPC.awsAllServicesCatalog) as ReturnType<AwsAllServicesApi['catalog']>,
+    refreshCatalog: () => client.request(IPC.awsAllServicesRefreshCatalog) as ReturnType<AwsAllServicesApi['refreshCatalog']>,
+    binding: (nodeId) => client.request(IPC.awsAllServicesBinding, nodeId) as ReturnType<AwsAllServicesApi['binding']>,
+    saveBinding: (nodeId, binding) => client.request(IPC.awsAllServicesSaveBinding, nodeId, binding) as ReturnType<AwsAllServicesApi['saveBinding']>,
+    profiles: () => client.request(IPC.awsAllServicesProfiles) as ReturnType<AwsAllServicesApi['profiles']>,
+    regions: () => client.request(IPC.awsAllServicesRegions) as ReturnType<AwsAllServicesApi['regions']>,
+    execute: (nodeId, request, onProgress) => {
+      const unsubscribe = client.subscribe(IPC.awsAllServicesProgress, (value) => {
+        const progress = value as { nodeId?: string }
+        if (progress.nodeId === nodeId) onProgress(value as Parameters<typeof onProgress>[0])
+      })
+      return (client.request(IPC.awsAllServicesExecute, nodeId, request) as ReturnType<AwsAllServicesApi['execute']>).finally(unsubscribe)
+    },
+    cancel: (nodeId) => client.request(IPC.awsAllServicesCancel, nodeId) as ReturnType<AwsAllServicesApi['cancel']>,
+    onProgress: (listener) => client.subscribe(IPC.awsAllServicesProgress, listener as Listener)
+  }
+  return { awsAllServices }
+}
+
 /** Local Minecraft server create-and-manage (docs/minecraft-server-manager.md) — same core engine
  *  as desktop; the server process is the one downloading, spawning and owning `java`, exactly as
  *  main does. */
@@ -1648,6 +1672,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildSpeechApi(client),
     ...buildConverterApi(client),
     ...buildNodeDependenciesApi(client),
+    ...buildAwsAllServicesApi(client),
     ...buildOllamaApi(client),
     ...buildMinecraftApi(client),
     ...buildTorrentApi(client),

@@ -118,6 +118,38 @@ export interface AwsLocalExecutionBinding {
   localFiles?: Record<string, string>
 }
 
+const AWS_BINDING_ID = /^[A-Za-z0-9][A-Za-z0-9_.@:+/-]{0,127}$/
+
+export function normalizeAwsLocalExecutionBinding(input: unknown): AwsLocalExecutionBinding {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('AWS local binding is invalid.')
+  const value = input as Record<string, unknown>
+  const result: AwsLocalExecutionBinding = {}
+  for (const key of ['profileId', 'accountId', 'roleId'] as const) {
+    const candidate = value[key]
+    if (candidate === undefined) continue
+    if (typeof candidate !== 'string' || !AWS_BINDING_ID.test(candidate)) throw new Error(`AWS ${key} is invalid.`)
+    result[key] = candidate
+  }
+  if (value.endpoint !== undefined) {
+    if (typeof value.endpoint !== 'string') throw new Error('AWS endpoint is invalid.')
+    let endpoint: URL
+    try { endpoint = new URL(value.endpoint) } catch { throw new Error('AWS endpoint is invalid.') }
+    const loopback = endpoint.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(endpoint.hostname)
+    if ((endpoint.protocol !== 'https:' && !loopback) || endpoint.username || endpoint.password) throw new Error('AWS endpoint must use HTTPS or loopback HTTP without credentials.')
+    result.endpoint = endpoint.href
+  }
+  if (value.localFiles !== undefined) {
+    if (!value.localFiles || typeof value.localFiles !== 'object' || Array.isArray(value.localFiles)) throw new Error('AWS local file selections are invalid.')
+    const files: Record<string, string> = {}
+    for (const [fieldId, file] of Object.entries(value.localFiles)) {
+      if (!/^[A-Za-z0-9_.:/-]{1,256}$/.test(fieldId) || typeof file !== 'string' || file.length === 0 || file.length > 4_096 || /[\u0000-\u001f\u007f]/.test(file)) throw new Error('AWS local file selections are invalid.')
+      files[fieldId] = file
+    }
+    result.localFiles = files
+  }
+  return result
+}
+
 export interface AwsPortableOmission {
   fieldId: string
   reason: 'credential-or-session' | 'machine-path' | 'runtime-only' | 'model-marked-sensitive'
@@ -148,9 +180,37 @@ export interface AwsExecutionPreview {
 }
 
 export interface AwsExecutionRequest {
+  /** The portable, non-secret values used to regenerate the argv at the trusted boundary. */
+  intent: AwsPortableServiceIntent
   preview: AwsExecutionPreview
   /** Runtime file choices are held separately so project serialization cannot include them. */
   localFiles: Readonly<Record<string, string>>
+}
+
+export interface AwsExecutionProgress {
+  phase: 'preparing' | 'running' | 'waiting' | 'retrying' | 'complete' | 'failed' | 'cancelled'
+  message: string
+  completed?: number
+  total?: number
+  partialResults?: number
+}
+
+export interface AwsExecutionResult {
+  summary: string
+  resultCount: number
+  outputPreview?: string
+}
+
+export interface AwsAllServicesApi {
+  catalog(): Promise<AwsAllServicesCatalog>
+  refreshCatalog(): Promise<AwsAllServicesCatalog>
+  binding(nodeId: string): Promise<AwsLocalExecutionBinding>
+  saveBinding(nodeId: string, binding: AwsLocalExecutionBinding): Promise<void>
+  profiles(): Promise<readonly { id: string; label: string; accountLabel?: string; roleLabel?: string }[]>
+  regions(): Promise<readonly { id: string; label: string }[]>
+  execute(nodeId: string, request: AwsExecutionRequest, onProgress: (progress: AwsExecutionProgress) => void): Promise<AwsExecutionResult>
+  cancel(nodeId: string): Promise<void>
+  onProgress(listener: (value: AwsExecutionProgress & { nodeId: string }) => void): () => void
 }
 
 export function emptyAwsPortableServiceIntent(): AwsPortableServiceIntent {
@@ -165,6 +225,42 @@ export function emptyAwsPortableServiceIntent(): AwsPortableServiceIntent {
     retryMode: 'standard',
     streaming: false,
     outputMode: 'json'
+  }
+}
+
+export function normalizeAwsPortableServiceIntent(input: unknown): AwsPortableServiceIntent | null {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return null
+  const value = input as Record<string, unknown>
+  try {
+    const sourceValues = value.values && typeof value.values === 'object' && !Array.isArray(value.values) ? value.values as Record<string, unknown> : {}
+    const values: Record<string, AwsValue> = {}
+    for (const [key, item] of Object.entries(sourceValues)) {
+      safeId(key, 'AWS field id')
+      values[key] = cloneValue(item as AwsValue)
+    }
+    const paginationValue = value.pagination && typeof value.pagination === 'object' && !Array.isArray(value.pagination) ? value.pagination as Record<string, unknown> : {}
+    const pageSize = typeof paginationValue.pageSize === 'number' && Number.isSafeInteger(paginationValue.pageSize) && paginationValue.pageSize > 0 && paginationValue.pageSize <= 100_000 ? paginationValue.pageSize : undefined
+    const maximumItems = typeof paginationValue.maximumItems === 'number' && Number.isSafeInteger(paginationValue.maximumItems) && paginationValue.maximumItems > 0 && paginationValue.maximumItems <= 1_000_000 ? paginationValue.maximumItems : undefined
+    const serviceId = value.serviceId === null || value.serviceId === undefined ? null : safeId(value.serviceId, 'AWS service id')
+    const commandId = value.commandId === null || value.commandId === undefined ? null : safeId(value.commandId, 'AWS command id')
+    const region = value.region === null || value.region === undefined || value.region === '' ? null : boundedText(value.region, 'AWS region', 128)
+    const waiterId = value.waiterId === null || value.waiterId === undefined || value.waiterId === '' ? null : safeId(value.waiterId, 'AWS waiter id')
+    const retryMode = value.retryMode === 'adaptive' || value.retryMode === 'legacy' ? value.retryMode : 'standard'
+    const outputMode = value.outputMode === 'yaml' || value.outputMode === 'text' || value.outputMode === 'table' ? value.outputMode : 'json'
+    return {
+      schemaVersion: AWS_ALL_SERVICES_SCHEMA_VERSION,
+      serviceId,
+      commandId,
+      region,
+      values,
+      pagination: { enabled: paginationValue.enabled === true, ...(pageSize ? { pageSize } : {}), ...(maximumItems ? { maximumItems } : {}) },
+      waiterId,
+      retryMode,
+      streaming: value.streaming === true,
+      outputMode
+    }
+  } catch {
+    return null
   }
 }
 
@@ -423,25 +519,28 @@ export function buildAwsExecutionPreview(input: {
   command: AwsCommandModel
 }): AwsExecutionRequest {
   const { intent, binding, service, command } = input
+  const safeBinding = normalizeAwsLocalExecutionBinding(binding)
   const errors = validateAwsCommandValues(command, intent.values)
   if (Object.keys(errors).length) throw new Error(Object.values(errors)[0])
   const argv = [service.name, command.name]
-  for (const field of command.fields) appendFieldArg(argv, field, intent.values[field.id], binding.localFiles ?? {})
+  for (const field of command.fields) appendFieldArg(argv, field, intent.values[field.id], safeBinding.localFiles ?? {})
+  if (safeBinding.profileId) argv.push('--profile', safeBinding.profileId)
   if (intent.region) argv.push('--region', intent.region)
-  if (binding.endpoint) argv.push('--endpoint-url', binding.endpoint)
+  if (safeBinding.endpoint) argv.push('--endpoint-url', safeBinding.endpoint)
   if (intent.outputMode) argv.push('--output', intent.outputMode)
   if (intent.pagination.enabled && intent.pagination.pageSize) argv.push('--page-size', String(intent.pagination.pageSize))
   if (intent.pagination.enabled && intent.pagination.maximumItems) argv.push('--max-items', String(intent.pagination.maximumItems))
   const portable = portableAwsIntent(intent, command)
   return {
+    intent: { ...portable.intent },
     preview: {
       serviceId: service.id,
       commandId: command.id,
-      ...(binding.profileId ? { profileId: binding.profileId } : {}),
-      ...(binding.accountId ? { accountId: binding.accountId } : {}),
-      ...(binding.roleId ? { roleId: binding.roleId } : {}),
+      ...(safeBinding.profileId ? { profileId: safeBinding.profileId } : {}),
+      ...(safeBinding.accountId ? { accountId: safeBinding.accountId } : {}),
+      ...(safeBinding.roleId ? { roleId: safeBinding.roleId } : {}),
       ...(intent.region ? { region: intent.region } : {}),
-      ...(binding.endpoint ? { endpoint: binding.endpoint } : {}),
+      ...(safeBinding.endpoint ? { endpoint: safeBinding.endpoint } : {}),
       argv,
       pagination: { ...intent.pagination },
       ...(intent.waiterId ? { waiterId: intent.waiterId } : {}),
@@ -451,7 +550,6 @@ export function buildAwsExecutionPreview(input: {
       risk: command.risk,
       omissions: portable.omissions
     },
-    localFiles: { ...(binding.localFiles ?? {}) }
+    localFiles: { ...(safeBinding.localFiles ?? {}) }
   }
 }
-

@@ -4,6 +4,7 @@ import { normalizeMediaReference, type MediaAssetReference } from '@shared/media
 import type { CalendarNodeConfig } from '@shared/calendar'
 import type { AlarmOccurrence, AlarmRecurrence } from '@shared/alarm-clock'
 import type { ServiceConnection } from '@shared/node-exec'
+import { emptyAwsPortableServiceIntent, normalizeAwsPortableServiceIntent } from '@shared/aws-all-services'
 import type { NsisLocalPaths, NsisSpec } from '@shared/nsis-form-types'
 import { defaultNsisLocalPaths, defaultNsisSpec } from '@shared/nsis-form-types'
 import type { AgentId, AgentPermissionMode, BuiltinAgentId } from '@shared/agents/config'
@@ -106,6 +107,7 @@ const ANNOTATION_SIZE = { width: 240, height: 160 }
  */
 const SERVICE_CONSOLE_SIZE = { width: 720, height: 520 }
 const SERVICE_SUMMARY_SIZE = { width: 520, height: 400 }
+const AWS_SERVICE_SIZE = { width: 860, height: 760 }
 
 /** Height of a node when collapsed (header only). */
 export const COLLAPSED_HEIGHT = 40
@@ -1488,13 +1490,14 @@ export const SERVICE_NODE_LABELS: Record<ServiceNodeKind, string> = {
   proxmox: 'Proxmox',
   gitlab: 'GitLab',
   homeassistant: 'Home Assistant',
-  freepbx: 'FreePBX'
+  freepbx: 'FreePBX',
+  'aws-service': 'AWS service'
 }
 
 /**
  * Creates a service-manager node.
  *
- * ONE factory with six callers rather than six near-identical factories, because the only thing that
+ * ONE factory with seven callers rather than seven near-identical factories, because the only thing that
  * varies is the kind, its starting size and its default title — and this codebase's most repeated
  * lesson is that a duplicated rule drifts from its copies.
  *
@@ -1523,7 +1526,8 @@ export function createServiceNode(
       title: SERVICE_NODE_LABELS[kind],
       color: NODE_COLORS[index % NODE_COLORS.length],
       group: null,
-      serviceLabel: ''
+      serviceLabel: '',
+      ...(kind === 'aws-service' ? { awsAllServicesIntent: emptyAwsPortableServiceIntent() } : {})
     }
   }
 }
@@ -2119,6 +2123,7 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   gitlab: true,
   homeassistant: true,
   freepbx: true,
+  'aws-service': true,
   nsis: true,
   shop: true
   torrent: true
@@ -2166,6 +2171,7 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   gitlab: SERVICE_SUMMARY_SIZE,
   homeassistant: SERVICE_SUMMARY_SIZE,
   freepbx: SERVICE_SUMMARY_SIZE,
+  'aws-service': AWS_SERVICE_SIZE,
   nsis: NSIS_SIZE,
   shop: SHOP_SIZE
   torrent: TORRENT_SIZE
@@ -2621,6 +2627,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         cwd: n.cwd,
         text: n.text,
         serviceLabel: n.serviceLabel,
+        awsAllServicesIntent: normalizeAwsPortableServiceIntent(n.awsAllServicesIntent) ?? undefined,
         universeCanvasId: n.universeCanvasId,
         universeScope: n.universeScope,
         universeDepth: n.universeDepth,
@@ -2739,6 +2746,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         cwd: n.data.cwd,
         text: n.data.text,
         serviceLabel: n.data.serviceLabel,
+        awsAllServicesIntent: normalizeAwsPortableServiceIntent(n.data.awsAllServicesIntent) ?? undefined,
         universeCanvasId: n.data.universeCanvasId,
         universeScope: n.data.universeScope,
         universeDepth: n.data.universeDepth,

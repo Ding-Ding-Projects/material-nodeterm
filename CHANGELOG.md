@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add a generic, model-driven AWS service node. It discovers services and commands from the
+  installed AWS CLI model files, generates typed controls for modeled shapes, provides independent
+  searchable pickers with anchored regex builders, shows a complete execution preview, keeps local
+  bindings out of portable projects, and runs reviewed argv-only operations with cancellation and
+  destructive confirmation. Tests, type checks, lint, security and accessibility checks, builds,
+  packaging, installer execution, runtime interaction, and captures were intentionally not run in
+  this ultra-speed implementation lane.
+
 - Complete the Express File Converter flow with queue-wide collision-safe destination names,
   visible rename disclosure, final atomic no-clobber publication, and a completed-output action that
   opens the exact result in Visual Studio Code through the active project API. The converter queue

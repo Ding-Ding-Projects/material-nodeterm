@@ -414,6 +414,7 @@ export type NodeKind =
   | 'gitlab'
   | 'homeassistant'
   | 'freepbx'
+  | 'aws-service'
   | 'torrent'
   /** One-shot Linux ISO virtual machine, distinct from the WSL terminal profile. */
   | 'linux-vm'
@@ -429,7 +430,8 @@ export const SERVICE_NODE_KINDS = [
   'proxmox',
   'gitlab',
   'homeassistant',
-  'freepbx'
+  'freepbx',
+  'aws-service'
 ] as const
 
 export type ServiceNodeKind = (typeof SERVICE_NODE_KINDS)[number]
@@ -631,6 +633,8 @@ export interface CanvasNodeState {
    * `localExec` on the index entry, exactly where the shell and Windows profile already live.
    */
   serviceLabel?: string
+  /** AWS service and command intent generated from installed CLI models, safe for project files. */
+  awsAllServicesIntent?: import('./aws-all-services').AwsPortableServiceIntent
   /** torrent-only: safe display intent shared with the canvas; task state and paths stay local. */
   torrentMagnet?: string
   /** Linux ISO VM settings stored in the shared project projection. */
@@ -4497,6 +4501,8 @@ export interface NodeTerminalApi {
   converter: import('./converter').ConverterApi
   /** Shared automatic dependency lifecycle for node-feature installers. */
   nodeDependencies: import('./node-dependencies').NodeDependenciesApi
+  /** Generic AWS service and command GUI, generated from the installed AWS CLI model inventory. */
+  awsAllServices: import('./aws-all-services').AwsAllServicesApi
   /** Local Ollama suite manager — docs/ollama-manager.md. */
   ollama: import('./ollama').OllamaApi
   /** Local WebTorrent downloader — docs/torrent-downloader.md. */

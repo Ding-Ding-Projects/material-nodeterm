@@ -671,6 +671,17 @@ export function buildStubApi(): Omit<
       onState: noopUnsub,
       onProgress: noopUnsub
     },
+    awsAllServices: {
+      catalog: () => unsupported('awsAllServices.catalog'),
+      refreshCatalog: () => unsupported('awsAllServices.refreshCatalog'),
+      binding: () => unsupported('awsAllServices.binding'),
+      saveBinding: () => unsupported('awsAllServices.saveBinding'),
+      profiles: () => unsupported('awsAllServices.profiles'),
+      regions: () => unsupported('awsAllServices.regions'),
+      execute: () => unsupported('awsAllServices.execute'),
+      cancel: () => unsupported('awsAllServices.cancel'),
+      onProgress: noopUnsub
+    },
     ollama: {
       status: U('ollama.status'),
       models: U('ollama.models'),

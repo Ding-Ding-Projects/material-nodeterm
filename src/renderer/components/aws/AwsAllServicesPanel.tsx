@@ -299,32 +299,33 @@ function FieldEditor(props: {
 
 function PreviewFacts(props: { request: AwsExecutionRequest }): React.JSX.Element {
   const { preview } = props.request
+  const vocab = useVocabularyMapper()
   return (
     <Card tone="container-high" className="aws-all-services__preview">
       <div className="aws-all-services__preview-head">
-        <h4>Execution preview</h4>
+        <h4>{vocab('Execution preview')}</h4>
         <StatusChip tone={preview.risk === 'destructive' ? 'attention' : preview.risk === 'write' ? 'running' : 'ok'}>{preview.risk}</StatusChip>
       </div>
       <dl>
-        <div><dt>Service</dt><dd>{preview.serviceId}</dd></div>
-        <div><dt>Operation</dt><dd>{preview.commandId}</dd></div>
-        <div><dt>Profile</dt><dd>{preview.profileId ?? 'Choose a profile'}</dd></div>
-        <div><dt>Account</dt><dd>{preview.accountId ?? 'Resolved at run time'}</dd></div>
-        <div><dt>Role</dt><dd>{preview.roleId ?? 'No role selected'}</dd></div>
-        <div><dt>Region</dt><dd>{preview.region ?? 'Profile default'}</dd></div>
-        <div><dt>Endpoint</dt><dd>{preview.endpoint ?? 'AWS default'}</dd></div>
-        <div><dt>Pagination</dt><dd>{preview.pagination.enabled ? 'Enabled' : 'Off'}</dd></div>
-        <div><dt>Waiter</dt><dd>{preview.waiterId ?? 'None'}</dd></div>
-        <div><dt>Retry</dt><dd>{preview.retryMode}</dd></div>
-        <div><dt>Streaming</dt><dd>{preview.streaming ? 'Enabled' : 'Off'}</dd></div>
-        <div><dt>Output</dt><dd>{preview.outputMode}</dd></div>
+        <div><dt>{vocab('Service')}</dt><dd>{preview.serviceId}</dd></div>
+        <div><dt>{vocab('Operation')}</dt><dd>{preview.commandId}</dd></div>
+        <div><dt>{vocab('Profile')}</dt><dd>{preview.profileId ?? vocab('Choose a profile')}</dd></div>
+        <div><dt>{vocab('Account')}</dt><dd>{preview.accountId ?? vocab('Resolved at run time')}</dd></div>
+        <div><dt>{vocab('Role')}</dt><dd>{preview.roleId ?? vocab('No role selected')}</dd></div>
+        <div><dt>{vocab('Region')}</dt><dd>{preview.region ?? vocab('Profile default')}</dd></div>
+        <div><dt>{vocab('Endpoint')}</dt><dd>{preview.endpoint ?? vocab('AWS default')}</dd></div>
+        <div><dt>{vocab('Pagination')}</dt><dd>{preview.pagination.enabled ? vocab('Enabled') : vocab('Off')}</dd></div>
+        <div><dt>{vocab('Waiter')}</dt><dd>{preview.waiterId ?? vocab('None')}</dd></div>
+        <div><dt>{vocab('Retry')}</dt><dd>{preview.retryMode}</dd></div>
+        <div><dt>{vocab('Streaming')}</dt><dd>{preview.streaming ? vocab('Enabled') : vocab('Off')}</dd></div>
+        <div><dt>{vocab('Output')}</dt><dd>{preview.outputMode}</dd></div>
       </dl>
       <div className="aws-all-services__argv" aria-label="Generated argument vector">
         {preview.argv.map((arg, index) => <code key={`${index}-${arg}`}>{arg}</code>)}
       </div>
       {preview.omissions.length ? (
         <details>
-          <summary>{preview.omissions.length} portable omission{preview.omissions.length === 1 ? '' : 's'}</summary>
+        <summary>{preview.omissions.length} {vocab(preview.omissions.length === 1 ? 'portable omission' : 'portable omissions')}</summary>
           <ul>{preview.omissions.map((omission) => <li key={omission.fieldId}><strong>{omission.fieldId}</strong>: {omission.explanation}</li>)}</ul>
         </details>
       ) : null}
@@ -517,4 +518,3 @@ export function AwsAllServicesPanel({ nodeId, intent, onIntentChange, client, un
     </div>
   )
 }
-

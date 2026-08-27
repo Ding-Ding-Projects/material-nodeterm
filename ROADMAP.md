@@ -257,6 +257,8 @@ intentionally unchecked because this task publishes the plan only.
 - [ ] Add AWS identity, SSO, role, MFA, Resource Explorer, Cloud Control, S3, EC2, IAM, STS,
       Lambda, CloudWatch, Logs, CloudFormation, CDK, container, database, networking, and cost tools.
 - [ ] Add the generic all-service AWS GUI without a command textbox fallback.
+  Source implementation and documentation are present in the issue #50 lane; focused verification
+  and packaged interaction evidence remain open.
 
 ### Hosting and Cloudflare
 
