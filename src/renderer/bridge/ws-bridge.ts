@@ -21,6 +21,7 @@ import type { MinecraftApi } from '../../shared/minecraft'
 import type { NodeDependenciesApi } from '../../shared/node-dependencies'
 import type { TorrentApi, TorrentTaskState } from '../../shared/torrent'
 import type { VirtualMachineApi } from '../../shared/virtual-machine'
+import type { CalendarApi, CalendarProvider } from '../../shared/calendar'
 import {
   UNKNOWN_CLAUDE_CLI_CAPS,
   type BoardLogApi,
@@ -1034,6 +1035,21 @@ export function buildVirtualMachineApi(client: RpcClient): Pick<NodeTerminalApi,
     onEvent: (listener) => client.subscribe(IPC.virtualMachineEvent, listener as Listener)
   }
   return { virtualMachine }
+/** Calendar nodes use the same host-owned CorePlatform in the desktop and Server Edition. */
+export function buildCalendarApi(client: RpcClient): Pick<NodeTerminalApi, 'calendar'> {
+  const calendar: CalendarApi = {
+    status: (id, config) => client.request(IPC.calendarStatus, id, config) as ReturnType<CalendarApi['status']>,
+    accounts: () => client.request(IPC.calendarAccounts) as ReturnType<CalendarApi['accounts']>,
+    calendars: (accountId, provider) => client.request(IPC.calendarCalendars, accountId, provider) as ReturnType<CalendarApi['calendars']>,
+    events: (id, config) => client.request(IPC.calendarEvents, id, config) as ReturnType<CalendarApi['events']>,
+    importIcs: (id, text, name) => client.request(IPC.calendarImportIcs, id, text, name) as ReturnType<CalendarApi['importIcs']>,
+    refresh: (id, config) => client.request(IPC.calendarRefresh, id, config) as ReturnType<CalendarApi['refresh']>,
+    beginOAuth: (provider: Exclude<CalendarProvider, 'local' | 'ics'>) => client.request(IPC.calendarBeginOAuth, provider) as ReturnType<CalendarApi['beginOAuth']>,
+    create: (input) => client.request(IPC.calendarCreate, input) as ReturnType<CalendarApi['create']>,
+    update: (input) => client.request(IPC.calendarUpdate, input) as ReturnType<CalendarApi['update']>,
+    remove: (id, eventId) => client.request(IPC.calendarRemove, id, eventId) as ReturnType<CalendarApi['remove']>
+  }
+  return { calendar }
 }
 
 /**
@@ -1462,6 +1478,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildMinecraftApi(client),
     ...buildTorrentApi(client),
     ...buildVirtualMachineApi(client),
+    ...buildCalendarApi(client),
     ...buildUsageApi(client),
     ...buildSessionMemoryApi(client),
     ...buildVsCodeApi(client),

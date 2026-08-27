@@ -215,6 +215,7 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     // machine (`...local` would run java on the VIEWER, not the host it joined).
     minecraft: stub.minecraft,
     torrent: stub.torrent
+    calendar: stub.calendar
   } satisfies NodeTerminalApi
 
   return {

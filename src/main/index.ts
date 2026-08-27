@@ -47,6 +47,7 @@ import { registerOllamaIpc } from '../core/ollama/register-ipc'
 import { registerMinecraftIpc } from '../core/minecraft/register-ipc'
 import { registerTorrentIpc } from '../core/torrent/register-ipc'
 import { registerVirtualMachineIpc } from '../core/virtual-machine/register-ipc'
+import { registerCalendarIpc } from '../core/calendar/register-ipc'
 import { registerVsCodeHandlers } from '../core/vscode-handlers'
 import { LocalHistoryStore } from '../core/local-history'
 import { ProjectArchiveService } from '../core/project-archive'
@@ -1579,6 +1580,7 @@ app.whenReady().then(async () => {
   minecraftServers = registerMinecraftIpc(corePlatform).manager
   registerTorrentIpc(corePlatform)
   virtualMachineManager = registerVirtualMachineIpc(corePlatform).manager
+  registerCalendarIpc(corePlatform)
 
   const githubSecret = new ElectronGitHubSecretStore(app.getPath('userData'), safeStorage)
   const github = registerGitHubIntegration({

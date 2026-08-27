@@ -244,6 +244,11 @@ Identical on desktop and in the browser.
   metadata/file selection, safe destination preflight, progress, pause/resume/cancel/retry,
   restart reconciliation, and bounded per-task seeding. See
   [`docs/features/torrents/torrent-downloader.md`](./docs/features/torrents/torrent-downloader.md).
+- **Calendar nodes** — local calendars and ICS import, with guided CalDAV, Google Calendar, and
+  Microsoft 365 account/calendar pickers, recurrence and timezone views, offline cache, and
+  reviewable create/edit/delete actions. Provider credentials remain in the trusted shell's vault;
+  project files carry only portable selection intent. See
+  [`docs/features/canvas/node-kinds.md`](./docs/features/canvas/node-kinds.md).
 - **Scheduled settings** — rules that automatically overlay appearance/customization settings
   for a date+time window ("dark theme after 22:00"), with an optional Home Assistant boolean
   source. See [`docs/scheduled-settings.md`](./docs/scheduled-settings.md).

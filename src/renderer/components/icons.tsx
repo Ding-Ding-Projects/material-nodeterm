@@ -167,6 +167,10 @@ export const IconReload = () => (
   </svg>
 )
 
+export const IconCalendar = () => (
+  <span className="material-symbols-rounded" aria-hidden="true">calendar_month</span>
+)
+
 /** Power symbol — restarting a PROCESS (the agent CLI), as opposed to IconReload's
  *  circular arrow, which reloads a VIEW. The two restart actions must not share a glyph. */
 export const IconPower = () => (

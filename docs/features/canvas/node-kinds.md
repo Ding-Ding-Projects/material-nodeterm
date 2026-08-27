@@ -25,6 +25,7 @@ empty-canvas context menu, group context menu, and command palette all expose th
 | **Diff** | A read-only Monaco diff view comparing HEAD↔index (staged) or index↔working tree (unstaged) for a single file. |
 | **Torrent Downloader** | A local WebTorrent task surface with magnet or `.torrent` intake, metadata/file selection, destination preflight, progress, recovery, and bounded seeding. See [Torrent Downloader](../torrents/torrent-downloader.md). |
 | **Linux ISO VM** | A one-shot QEMU Linux guest with guided ISO/disk pickers, disposable live and persistent install modes, loopback VNC/QMP, and bounded resources. It is distinct from WSL. See [Linux ISO VM](../integrations/linux-iso-vm.md). |
+| **Calendar** | A guided calendar view for local events and imported ICS files, with provider account and calendar pickers for CalDAV, Google Calendar, and Microsoft 365. Agenda, week, month, recurrence, timezone, offline cache, create/edit preview, and destructive delete confirmation all live in the node. |
 
 Two other things render *on* the canvas but are not persisted node kinds: **subagent cards**
 (ephemeral cards showing an agent's spawned subagents, connected by an edge to the parent
@@ -41,6 +42,9 @@ rather than an in-session loop).
   node's selected shell profile is snapshotted separately in this machine's `LocalNodeExec`
   overlay; it is not written to the shared project file. See
   [Windows shell profiles](../terminals/windows-shell-profiles.md).
+- Calendar nodes persist only `calendarConfig` intent: provider, opaque account/calendar references,
+  timezone, view, weekend visibility, and cache preference. OAuth values, local ICS paths, event
+  cache, provider sessions, and host identifiers remain in machine-local application data.
 
 ## Failure modes
 
@@ -50,6 +54,9 @@ rather than an in-session loop).
 - **An unreadable or corrupted project file**: nodeterm never drops nodes it can't parse
   cleanly. A corrupt project is set aside under a timestamped filename rather than overwritten,
   so nothing is silently lost.
+- **A provider is offline or lacks consent**: the node keeps its last valid local cache, labels it
+  stale/offline, and names the exact recovery action. It never treats a failed read as an empty
+  calendar and never accepts an arbitrary URL or credential field.
 
 ## Security considerations
 
@@ -70,6 +77,9 @@ rather than an in-session loop).
   data such as an editor's open file) survived exactly as it was.
 - Group a mix of node kinds together, collapse the group, and confirm its children stay bound
   to it through a drag, a resize, and an app restart.
+- Add a Calendar node, choose Local, import a bounded ICS file, switch between Agenda/Week/Month,
+  change timezone, and confirm the source path is not present in the saved project state. Provider
+  rows should remain disabled with an exact reason until a trusted account binding exists.
 
 ## Suggested articles
 
@@ -80,3 +90,5 @@ rather than an in-session loop).
 - [Agent support](../agents/agent-support.md) — everything specific to the agent node kind.
 - [Source control & worktrees](../source-control/source-control-and-worktrees.md) — binding a
   group node to a git worktree.
+- [Scheduled settings](../../scheduled-settings.md) — timezone-aware settings that can overlay a
+  calendar node's display choices.

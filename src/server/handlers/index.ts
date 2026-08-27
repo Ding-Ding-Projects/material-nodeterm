@@ -12,6 +12,7 @@ import { registerOllamaIpc } from '../../core/ollama/register-ipc'
 import { registerMinecraftIpc } from '../../core/minecraft/register-ipc'
 import { registerTorrentIpc } from '../../core/torrent/register-ipc'
 import { registerVirtualMachineIpc } from '../../core/virtual-machine/register-ipc'
+import { registerCalendarIpc } from '../../core/calendar/register-ipc'
 import type { MinecraftServerManager } from '../../core/minecraft/server-manager'
 import { registerVsCodeHandlers } from '../../core/vscode-handlers'
 import { LocalHistoryStore } from '../../core/local-history'
@@ -78,6 +79,7 @@ export function registerCoreHandlers(
   const { manager: minecraftServers } = registerMinecraftIpc(platform)
   registerTorrentIpc(platform)
   const { manager: virtualMachineManager } = registerVirtualMachineIpc(platform)
+  registerCalendarIpc(platform)
   // "Open in Visual Studio Code" + local settings history — same registrars the desktop shell
   // uses (src/main/index.ts), over the generic platform.handle seam, so the browser gets the
   // identical feature acting on the SERVER's own machine (docs/exports.md, docs/local-history.md).

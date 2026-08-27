@@ -1111,6 +1111,8 @@ describe('duplicateNode across every node kind', () => {
     shop: 'shop'
     torrent: 'torrent'
     'linux-vm': 'linux-vm'
+    calendar: 'calendar',
+    nsis: 'nsis'
   }
   const ALL_KINDS = Object.keys(EXPECTED_PREFIX) as NodeKind[]
 

@@ -92,6 +92,7 @@ import { StickyNode } from '../nodes/StickyNode'
 import { GroupNode, setWorktreeActionHandler, setWslActionHandler } from '../nodes/GroupNode'
 import { AnnotationNode } from '../nodes/AnnotationNode'
 import AuthenticatorNode from '../nodes/AuthenticatorNode'
+import CalendarNode from '../nodes/CalendarNode'
 import { useAnnotationDrawTool } from './useAnnotationDrawTool'
 import { annotationEndpoints } from '../lib/annotation'
 import { LazyEditorNode, LazyDiffNode } from '../nodes/lazyMonacoNodes'
@@ -172,6 +173,7 @@ import {
   IconMarkdown,
   IconMic,
   IconReload,
+  IconCalendar,
   IconPower,
   IconNote,
   IconConvert,
@@ -592,6 +594,7 @@ import {
   WORKTREE_GROUP_SIZE,
   createSshTerminalNode,
   createAuthenticatorNode,
+  createCalendarNode,
   createNsisNode,
   createTorrentNode,
   createStickyNode,
@@ -1828,6 +1831,7 @@ export function Canvas() {
       group: withNodeBoundary(GroupNode),
       annotation: withNodeBoundary(AnnotationNode),
       authenticator: withNodeBoundary(AuthenticatorNode),
+      calendar: withNodeBoundary(CalendarNode),
       editor: withNodeBoundary(LazyEditorNode),
       diff: withNodeBoundary(LazyDiffNode),
       subagent: withNodeBoundary(SubagentNode),
@@ -4695,6 +4699,17 @@ export function Canvas() {
         if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
         return appended.nodes
       })
+    },
+    [setNodes, markDirty, emptyNodePos, parentInto]
+  )
+
+  const addCalendar = useCallback(
+    (center?: { x: number; y: number }, groupId?: string) => {
+      setNodes((ns) => {
+        const node = createCalendarNode(ns.length, center ?? emptyNodePos())
+        return [...ns, groupId ? parentInto(node, groupId) : node]
+      })
+      markDirty()
     },
     [setNodes, markDirty, emptyNodePos, parentInto]
   )
@@ -9022,6 +9037,33 @@ export function Canvas() {
               } as MenuItem
             ]
           : []),
+        {
+          label: 'New terminal',
+          icon: <IconTerminal />,
+          onClick: defaultTerminalCreationHandler(addTerminal, { center: at, groupId })
+        },
+        ...terminalProfileCreationItems(at, groupId),
+        ...agentCreationItems(at, groupId),
+        {
+          label: 'New sticky note',
+          icon: <IconNote />,
+          onClick: () => addSticky(at, groupId)
+        },
+        {
+          label: 'New Loop',
+          icon: <IconReload />,
+          onClick: () => addNativeLoop(at, groupId)
+        },
+        {
+          label: 'New authenticator',
+          icon: <IconLock />,
+          onClick: () => addAuthenticator(at, groupId)
+        },
+        {
+          label: 'New calendar',
+          icon: <IconCalendar />,
+          onClick: () => addCalendar(at, groupId)
+        },
         { type: 'separator' },
         ...(isHidden('colors', useSettings.getState().settings.hiddenNodeMenuItems)
           ? []
@@ -9211,6 +9253,11 @@ export function Canvas() {
               label: 'New authenticator',
               icon: <IconLock />,
               onClick: () => addAuthenticator(at)
+            },
+            {
+              label: 'New calendar',
+              icon: <IconCalendar />,
+              onClick: () => addCalendar(at)
             },
             {
               label: 'New NSIS installer…',
@@ -13398,6 +13445,12 @@ export function Canvas() {
             label: 'New authenticator',
             icon: <IconLock />,
             run: () => addAuthenticator()
+          },
+          {
+            id: 'new-calendar',
+            label: 'New calendar',
+            icon: <IconCalendar />,
+            run: () => addCalendar()
           },
           {
             id: 'new-nsis',

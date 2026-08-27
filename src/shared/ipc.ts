@@ -647,6 +647,18 @@ export const IPC = {
   torrentSetSeedPolicy: 'torrent:set-seed-policy',
   torrentReconcile: 'torrent:reconcile',
   torrentTask: 'torrent:task',
+  // Calendar nodes. Secrets never travel through these metadata/event channels; the core owns
+  // OAuth callbacks and seals provider tokens in the OS vault.
+  calendarStatus: 'calendar:status',
+  calendarAccounts: 'calendar:accounts',
+  calendarCalendars: 'calendar:calendars',
+  calendarEvents: 'calendar:events',
+  calendarImportIcs: 'calendar:import-ics',
+  calendarRefresh: 'calendar:refresh',
+  calendarBeginOAuth: 'calendar:begin-oauth',
+  calendarCreate: 'calendar:create',
+  calendarUpdate: 'calendar:update',
+  calendarRemove: 'calendar:remove',
   // "Open in Visual Studio Code" (src/core/vscode-detect.ts, src/core/vscode-handlers.ts).
   // Registered on BOTH shells via the generic `platform.handle` seam, so it opens VS Code on
   // whichever machine is actually running the shell (this desktop, or the Server Edition host).
