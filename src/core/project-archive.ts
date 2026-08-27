@@ -60,6 +60,9 @@ import {
   type PortableMediaExportPayload,
   type PortableMediaPreparation
 } from './portable-media-assets'
+import { readBoardAttachment } from './board-attachments'
+import { validEntry } from './board-log'
+import { validateBoardAttachmentRef, type BoardAttachmentRef } from '../shared/comment-attachments'
 import type { MediaAssetReference } from '../shared/media-catalog'
 import type { PortableMediaDecisionRecord } from '../shared/portable-media'
 import type { PortablePlannerDefinitions } from './portable-planner'
@@ -70,11 +73,13 @@ import type { PortalRepairRecord } from './portal-lifecycle'
 export * from './portable-project-v3'
 export * from './portable-canvas-projection'
 export * from './portable-media-assets'
+export * from './board-attachments'
 export * from './portable-project-import'
 export * from './portable-bindings'
 export * from './portable-planner'
 export * from './universe-shop'
 export * from './portal-lifecycle'
+export * from './backup-restore'
 
 /** V1 JSON-text archives keep their historical cap. */
 const MAX_ARCHIVE_BYTES_V1 = 180 * 1024 * 1024
@@ -435,6 +440,43 @@ async function collectProjectMedia(project: Project): Promise<{
   return { project: { ...project, nodes }, media: [...byAsset.values()], omissions }
 }
 
+interface BoardAttachmentArchiveCapture {
+  entries: Array<{ path: string; data: Buffer }>
+  omissions: PortableProjectOmission[]
+}
+
+/** Capture the board log and only the content-addressed carriers it references. */
+async function collectProjectBoardAttachments(project: Project): Promise<BoardAttachmentArchiveCapture> {
+  if (!project.cwd || project.ssh) return { entries: [], omissions: [{ path: 'comments/board-log.jsonl', reason: 'machine-local', detail: 'This project has no local board-history folder to carry.' }] }
+  const root = project.cwd
+  const entries: Array<{ path: string; data: Buffer }> = []
+  const refs = new Map<string, BoardAttachmentRef>()
+  for (const name of ['board-log.jsonl.1', 'board-log.jsonl']) {
+    const data = await fs.readFile(path.join(root, '.nodeterm', name)).catch(() => null)
+    if (!data) continue
+    entries.push({ path: `comments/${name}`, data })
+    for (const line of data.toString('utf8').split('\n')) {
+      if (!line.trim()) continue
+      let parsed: unknown
+      try { parsed = JSON.parse(line) } catch { continue }
+      if (!validEntry(parsed)) continue
+      for (const attachment of parsed.attachments ?? []) {
+        try { validateBoardAttachmentRef(attachment); refs.set(attachment.id, attachment) } catch { /* import validation keeps malformed references out */ }
+      }
+    }
+  }
+  const omissions: PortableProjectOmission[] = []
+  for (const ref of refs.values()) {
+    try {
+      const data = await readBoardAttachment(root, ref)
+      entries.push({ path: ref.archivePath, data: Buffer.from(data) })
+    } catch {
+      omissions.push({ path: ref.archivePath, reason: 'machine-local', detail: 'The comment attachment carrier was unavailable or failed integrity validation.' })
+    }
+  }
+  return { entries, omissions }
+}
+
 export class ProjectArchiveService {
   constructor(
     private readonly history: LocalHistoryStore,
@@ -452,6 +494,7 @@ export class ProjectArchiveService {
     const mediaCapture = opts.portableMedia
       ? { project, media: [] as PortableMediaCollected[], omissions: [] as PortableProjectOmission[] }
       : await collectProjectMedia(project)
+    const boardAttachments = await collectProjectBoardAttachments(mediaCapture.project)
     let media: PortableMediaExportPayload | undefined
     if (opts.portableMedia) {
       media = await resolvePortableMediaPreparation(opts.portableMedia.preparation, opts.portableMedia.decisions)
@@ -490,13 +533,15 @@ export class ProjectArchiveService {
       { path: 'process-state', reason: 'unsupported' as const, detail: 'Running processes and session state are not portable project content.' },
       { path: 'working-directory', reason: 'machine-local' as const, detail: 'Absolute paths are destination-specific and are not carried.' },
       ...mediaCapture.omissions,
+      ...boardAttachments.omissions,
       ...(opts.vault ? [{ path: 'vault', reason: 'credential' as const, detail: 'The local vault remains on this machine and must be configured again.' }] : [])
     ]
     const portable = await exportPortableProjectV3(mediaCapture.project, {
       historyBundle,
       omissions,
       ...(media ? { media } : {}),
-      ...(plannerDefinitions ? { planner: [...plannerDefinitions] } : {})
+      ...(plannerDefinitions ? { planner: [...plannerDefinitions] } : {}),
+      ...(boardAttachments.entries.length > 0 ? { commentAttachments: { entries: boardAttachments.entries } } : {})
     })
     const mediaOmissions: ProjectArchiveExclusion[] = [
       ...(media?.manifest.omissions.map((item) => ({
@@ -510,20 +555,21 @@ export class ProjectArchiveService {
         detail: 'Locate Later kept this content-addressed reference unresolved for the destination computer.'
       })) ?? [])
     ]
-    const includedMediaBytes = media?.files.reduce((total, item) => total + item.data.byteLength, 0) ?? 0
+    const includedMediaBytes = (media?.files.reduce((total, item) => total + item.data.byteLength, 0) ?? 0) + boardAttachments.entries.reduce((total, item) => total + item.data.byteLength, 0)
     return {
       bytes: portable.bytes,
       archiveVersion: 3,
       contents: {
         repository: 'portable-projection',
         repositoryNote: 'Schema 3 carries safe project intent only. Local bindings, credentials, paths, processes, caches, and provider state remain on the source machine.',
-        workingFiles: media?.files.length ?? 0,
+        workingFiles: (media?.files.length ?? 0) + boardAttachments.entries.length,
         workingBytes: includedMediaBytes,
         excluded: [
           ...portable.manifest.omissions.map((item) => ({ path: item.path, reason: item.reason, detail: item.detail })),
-          ...mediaOmissions
+          ...mediaOmissions,
+          ...boardAttachments.omissions
         ],
-        excludedFiles: portable.manifest.omissions.length + mediaOmissions.length,
+        excludedFiles: portable.manifest.omissions.length + mediaOmissions.length + boardAttachments.omissions.length,
         excludedBytes: 0
       }
     }
@@ -602,7 +648,8 @@ export class ProjectArchiveService {
       if (!manifestBytes || !projectBytes) throw new Error('This portable project is missing its manifest or project snapshot.')
       const manifest = parsePortableProjectV3Manifest(manifestBytes)
       const projection = parsePortableCanvasProjectionV3(projectBytes)
-      const needsDestination = projection.media?.assets.some((asset) => asset.unresolved !== true) === true
+      const needsDestination = projection.media?.assets.some((asset) => asset.unresolved !== true) === true ||
+        [...entries.keys()].some((entryPath) => entryPath.startsWith('comments/') || entryPath.startsWith('assets/attachments/'))
       return { archiveVersion: 3, needsDestination, projectName: manifest.project.name }
     }
     let hasPayload = false
@@ -634,8 +681,8 @@ export class ProjectArchiveService {
         contents: {
           repository: imported.stagedPath ? 'portable-projection' : 'portable-projection',
           repositoryNote: 'Schema 3 imported safe project intent only. No deployment, provider mutation, process launch, download, or local binding was performed.',
-          workingFiles: imported.mediaFiles,
-          workingBytes: imported.mediaBytes,
+          workingFiles: imported.mediaFiles + imported.commentFiles,
+          workingBytes: imported.mediaBytes + imported.commentBytes,
           excluded: [...imported.omissions.map((item) => ({ path: item.path, reason: item.reason, detail: item.detail })), ...mediaOmissions],
           excludedFiles: imported.omissions.length + mediaOmissions.length,
           excludedBytes: 0

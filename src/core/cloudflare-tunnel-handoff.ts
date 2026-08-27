@@ -21,6 +21,7 @@ import {
   type CloudflareTunnelHandoffStage,
   type CloudflareTunnelHandoffState,
   type CloudflareTunnelIntent,
+  type CloudflareTunnelCapabilities,
   type CloudflareZoneSummary,
   type HostedServiceHealth,
   type HostedServiceOrigin
@@ -38,6 +39,7 @@ export interface CloudflareTunnelCreated {
 }
 
 export interface CloudflareTunnelProviderAdapter {
+  capabilities(): Promise<CloudflareTunnelCapabilities>
   accounts(): Promise<CloudflareAccountSummary[]>
   zones(accountId: string): Promise<CloudflareZoneSummary[]>
   /** Core-only lookup. The opaque key is read from the protected vault and never exposed to UI. */
@@ -151,6 +153,10 @@ export class CloudflareTunnelHandoffService implements CloudflareTunnelHandoffAp
     return (await this.provider.accounts()).map((account) => ({ ...account }))
   }
 
+  async capabilities(): Promise<CloudflareTunnelCapabilities> {
+    return { ...(await this.provider.capabilities()) }
+  }
+
   async zones(accountId: string): Promise<CloudflareZoneSummary[]> {
     if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(accountId)) return []
     return (await this.provider.zones(accountId)).map((zone) => ({ ...zone }))
@@ -203,6 +209,13 @@ export class CloudflareTunnelHandoffService implements CloudflareTunnelHandoffAp
       if (cancelled(controller.signal)) return this.cancelledResult(state, emit)
 
       emit('validating-provider-binding', 0.3, 'Validating the selected Cloudflare account and zone.')
+      const capabilities = await withDeadline((signal) => this.provider.capabilities(), PROVIDER_DEADLINE_MS, controller.signal)
+      if (!capabilities.available || !capabilities.canCreateTunnel || !capabilities.canStartConnector || !capabilities.canVerifyExternal) {
+        const reason = capabilities.reason ?? 'The local Cloudflare Tunnel adapter is unavailable for this handoff.'
+        state = { ...state, reason }
+        emit('failed', 0, reason)
+        return { ok: false, state, binding: null, error: reason }
+      }
       const [accounts, zones] = await Promise.all([
         withDeadline((signal) => this.provider.accounts(), PROVIDER_DEADLINE_MS, controller.signal),
         withDeadline((signal) => this.provider.zones(request.accountId), PROVIDER_DEADLINE_MS, controller.signal)

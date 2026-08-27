@@ -3,6 +3,7 @@ import type {
   CloudflareAccountSummary,
   CloudflareTunnelHandoffApi,
   CloudflareTunnelHandoffProgress,
+  CloudflareTunnelCapabilities,
   CloudflareTunnelIntent,
   CloudflareZoneSummary,
   HostedServiceHealth,
@@ -50,6 +51,7 @@ export function CloudflareTunnelHandoffPanel({ nodeId, serviceId, intent, api, o
   const [accountId, setAccountId] = useState('')
   const [zoneId, setZoneId] = useState('')
   const [health, setHealth] = useState<HostedServiceHealth | null>(null)
+  const [capabilities, setCapabilities] = useState<CloudflareTunnelCapabilities | null>(null)
   const [progress, setProgress] = useState<CloudflareTunnelHandoffProgress | null>(null)
   const [busy, setBusy] = useState(false)
   const [confirmation, setConfirmation] = useState(false)
@@ -78,10 +80,11 @@ export function CloudflareTunnelHandoffPanel({ nodeId, serviceId, intent, api, o
 
   useEffect(() => {
     let mounted = true
-    void Promise.all([api.origins(nodeId), api.accounts()]).then(([nextOrigins, nextAccounts]) => {
+    void Promise.all([api.origins(nodeId), api.accounts(), api.capabilities()]).then(([nextOrigins, nextAccounts, nextCapabilities]) => {
       if (!mounted) return
       setOrigins(nextOrigins)
       setAccounts(nextAccounts)
+      setCapabilities(nextCapabilities)
       setOriginId((current) => nextOrigins.some((origin) => origin.id === current) ? current : nextOrigins[0]?.id ?? '')
       setAccountId((current) => current && nextAccounts.some((account) => account.id === current) ? current : nextAccounts.find((account) => account.available)?.id ?? '')
     }).catch((error) => mounted && setMessage(textFor(error)))
@@ -148,6 +151,7 @@ export function CloudflareTunnelHandoffPanel({ nodeId, serviceId, intent, api, o
       <strong>{health?.state === 'healthy' ? 'Local service healthy' : 'External exposure is not verified'}</strong>
       <span>{message}</span>
       {progress && <progress max={1} value={progress.progress} aria-label={progress.message} />}
+      {capabilities && !capabilities.available && <small>{capabilities.reason ?? 'The Cloudflare Tunnel adapter is unavailable on this computer.'}</small>}
     </div>
 
     <div className="service-node__picker">
@@ -195,7 +199,7 @@ export function CloudflareTunnelHandoffPanel({ nodeId, serviceId, intent, api, o
     <label className="service-node__field">Path prefix<input value={intent.pathPrefix} onChange={(event) => onIntentChange({ ...intent, serviceId, originId, pathPrefix: event.target.value })} placeholder="/" spellCheck={false} /></label>
     {intentError && <p className="service-node__error" role="alert">{intentError}</p>}
     <label className="service-node__check"><input type="checkbox" checked={confirmation} onChange={(event) => setConfirmation(event.target.checked)} /> I reviewed the healthy local origin and explicitly confirm external exposure.</label>
-    <button type="button" onClick={() => void startHandoff()} disabled={busy || !!intentError || health?.state !== 'healthy' || !selectedAccount || !selectedZone || !confirmation} title={intentError ?? (health?.state !== 'healthy' ? 'Verify a healthy local origin first.' : !confirmation ? 'Confirm external exposure first.' : 'Create and verify the Cloudflare Tunnel handoff.')}>Create and verify Tunnel route</button>
+    <button type="button" onClick={() => void startHandoff()} disabled={busy || !!intentError || health?.state !== 'healthy' || !selectedAccount || !selectedZone || !confirmation || !capabilities?.available || !capabilities.canCreateTunnel || !capabilities.canStartConnector || !capabilities.canVerifyExternal} title={intentError ?? (health?.state !== 'healthy' ? 'Verify a healthy local origin first.' : !confirmation ? 'Confirm external exposure first.' : capabilities && !capabilities.available ? capabilities.reason ?? 'The Cloudflare Tunnel adapter is unavailable.' : 'Create and verify the Cloudflare Tunnel handoff.')}>Create and verify Tunnel route</button>
     <p className="service-node__note">The project carries only service and routing intent. Cloudflare account, zone, tunnel, connector, credential, endpoint, process, and host details stay on this computer. Import never starts a tunnel or contacts Cloudflare.</p>
   </section>
 }

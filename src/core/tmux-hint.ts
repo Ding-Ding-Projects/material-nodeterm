@@ -33,6 +33,14 @@ export function tmuxInstall(
                 : null
     return command ? { command, label: 'Install tmux' } : null
   }
+  if (platform === 'win32') {
+    // psmux supplies the tmux command surface on Windows. Keep the install action pinned to the
+    // exact WinGet id so a terminal node never waits on an ambiguous package search.
+    if (hasCommand('winget')) {
+      return { command: 'winget install -e --id marlocarlo.psmux', label: 'Install psmux' }
+    }
+    return null
+  }
   return null
 }
 
@@ -98,9 +106,16 @@ export function findFixedTmux(
 export function findCommand(
   name: string,
   env: Record<string, string | undefined>,
-  exists: (path: string) => boolean
+  exists: (path: string) => boolean,
+  platform: NodeJS.Platform | string = process.platform
 ): boolean {
-  const dirs = [...(env.PATH ? env.PATH.split(':') : []), ...COMMON_BIN_DIRS]
-  return dirs.some((d) => d && exists(`${d}/${name}`))
+  const win = platform === 'win32'
+  const dirs = [
+    ...(env.PATH ? env.PATH.split(win ? ';' : ':') : []),
+    ...(win ? [] : COMMON_BIN_DIRS)
+  ]
+  const names = execCandidates(name, platform, env.PATHEXT)
+  const separator = win ? '\\' : '/'
+  return dirs.some((d) => d && names.some((candidate) => exists(`${d}${separator}${candidate}`)))
 }
 

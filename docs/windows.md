@@ -163,9 +163,9 @@ on your next normal app launch even when you did not use that button.
 
 If the update service is offline or returns 404, the current version keeps running. Scheduled
 checks quietly retry later; a check you start reports the problem without turning it into a false
-“no update exists” result. Stable updates come only from a manually dispatched `main` release;
-automatic publication is disabled. Version `0.4.0` is a candidate, and manual publication remains
-pending the real packaged transition checks.
+“no update exists” result. Stable updates come only from a `main` release produced by the
+Windows-only workflow, which accepts pushes to `main` and manual dispatch. Version `0.4.0` remains
+a candidate until the real packaged transition checks complete.
 
 **If you have Windows `0.3.0`, its update check cannot find `0.4.0`.** That version expected NSIS
 metadata from the old generic feed, while Windows releases contain Squirrel packages, so a manual
@@ -207,7 +207,8 @@ electron-builder's x64 Squirrel target with that immutable URL. The supported co
 Windows-only, and the source commit must already be available from the public GitHub repository so
 the exact-SHA HTTP proof can succeed. The output lands in `dist/squirrel-windows/`: a Squirrel
 `Setup.exe`, `RELEASES`, and the full `.nupkg` (plus a delta only when Squirrel deliberately emits
-one). This command does not build the zip target configured for broader packaging.
+one). ZIP, NSIS-only, MSI-only, MSIX-only, and portable-only Windows outputs are not supported
+parallel release routes.
 
 - **Target**: `squirrel` (per project policy — never NSIS, never portable-only). Requires the
   `electron-builder-squirrel-windows` package, declared as a devDependency alongside
@@ -248,9 +249,8 @@ and is not a supported release path.
 - **The new updater interaction is separately pending.** The controller and loopback fixture are
   covered by deterministic checks, but the isolated `0.4.0-fixture.1` → `.2` pair has not yet
   been installed, downloaded, restarted, and checked through Settings → Updates / installed
-  metadata in a Windows Sandbox/VM. Automatic publication is disabled; the committed workflow is
-  manual-only, the hosted workflow is recorded as manually disabled, and publication awaits both
-  proofs and the final release audit.
+  metadata in a Windows Sandbox/VM. Publication awaits those proofs and the final release audit;
+  no installed-app verification is claimed by the source-only packaging lane.
 - **`env(titlebar-area-*)`** — the tab bar currently reserves a fixed 146px on the right for
   Windows' native caption buttons (`titleBarOverlay`) rather than reading Chromium's own
   `titlebar-area-width` CSS environment variable, which would stay exactly correct across DPI

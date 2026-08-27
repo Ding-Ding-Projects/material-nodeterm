@@ -29,7 +29,7 @@ import { IPC } from './ipc'
  * This lives in `shared/` because it is a policy question, not a shell mechanism: two shells each
  * carrying their own `startsWith` is exactly how one of them ends up a release behind the other.
  */
-export const HOST_ONLY_CHANNEL_PREFIXES: readonly string[] = ['githubControl:']
+export const HOST_ONLY_CHANNEL_PREFIXES: readonly string[] = ['githubControl:', 'githubCliAccounts:']
 
 export const HOST_ONLY_CHANNELS: ReadonlySet<string> = new Set([
   IPC.projectSetupRun,

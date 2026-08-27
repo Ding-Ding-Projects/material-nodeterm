@@ -18,8 +18,10 @@ latency and timestamp. An unavailable, unhealthy, or timed-out response leaves t
 disabled. The check is a prerequisite, not a label that can be overridden by a provider response.
 
 The user then reviews the hostname hint and path prefix, selects the Cloudflare account and zone, and
-checks the explicit external-exposure confirmation. Only that final action calls the provider adapter.
-The adapter receives an opaque local credential key resolved from the protected credential store. The
+checks the explicit external-exposure confirmation. The surface first reads the adapter capability
+record. Tunnel creation, connector startup, and external verification must each be advertised as
+available before the final action is enabled. Only that final action calls the provider adapter. The
+adapter receives an opaque local credential key resolved from the protected credential store. The
 credential value never reaches the renderer, the project file, a command argument, a log, or an export.
 
 Progress names each stage: local health, provider binding, tunnel creation, connector start, and
@@ -40,6 +42,11 @@ The machine-local binding is stored through `LocalNodeBindingStore` in
 the selected origin id, an opaque credential-store key, and the last verified local-health timestamp.
 The binding store uses atomic writes and a snapshot restore if the local binding write fails.
 
+The selected local host and port are reviewed in the origin picker and handed to the provider adapter
+only as the validated loopback origin. They are not written to the project file. The adapter cannot
+replace the reviewed origin with an arbitrary endpoint, and a hostname hint is routing intent rather
+than proof that DNS or external reachability exists.
+
 When a project is opened on another computer, the portable intent remains visible while the local
 binding is absent. The user must configure a local origin, rebind an available Cloudflare account and
 zone, or leave the intent unbound. Import itself has no network or provider side effect.
@@ -49,6 +56,7 @@ zone, or leave the intent unbound. Import itself has no network or provider side
 - A missing local origin is an unavailable state, not an empty successful list.
 - A failed or timed-out health probe prevents exposure and names the recovery action.
 - A missing account, unavailable zone, or missing local credential prevents provider mutation.
+- An unavailable adapter capability keeps the handoff disabled and names the missing capability.
 - The provider adapter is called only after local health is healthy and exposure is explicitly confirmed.
 - Provider deadlines are bounded. Cancellation never reports external reachability as verified.
 - Connector creation and external reachability are reported independently, including partial outcomes.

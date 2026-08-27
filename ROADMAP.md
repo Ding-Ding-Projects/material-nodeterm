@@ -14,6 +14,11 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## Shipped and verified
 
+- [ ] Easter egg catalog (#103): 60 local, bounded, accessible desktop surprises are implemented
+      in `src/shared/easter-eggs.ts` and `src/renderer/components/EasterEggs.tsx`, with the
+      cabinet and documentation in place. Runtime interaction, tests, builds, and captures remain
+      intentionally unverified under the issue's no-check boundary.
+
 - [x] Three-process architecture (main / core / renderer) with the `CorePlatform` seam, so
       Server Edition (`src/server`) boots the same core services as Desktop.
 - [x] Terminal session continuity via tmux (macOS/Linux) and the standalone Windows session host,
@@ -52,10 +57,53 @@ later commit, since this file will not be kept in lockstep with every merge).
       (`scripts/check-app-contract.mjs`), 1,101 assertions across 59 features, run clean except
       for the one pending item below.
 - [x] Windows packaging path: Squirrel.Windows via `scripts/windows-installer.mjs`, unsigned by
-      permanent policy, with ICO regeneration/verification, nupkg/RELEASES agreement checks, and
-      a manual-dispatch-only `main`-only release workflow.
+      permanent policy, with ICO regeneration/verification, Setup.exe plus nupkg/RELEASES
+      agreement checks, and a Windows-only release workflow triggered by pushes to `main` and
+      manual dispatch. ZIP, NSIS-only, MSI-only, MSIX-only, and portable-only parallel installer
+      routes are retired.
+- [ ] Cognition Devin CLI support (#106): source-level builtin registry, launch forms, project
+      hook installation, status normalization, and notification fallback are implemented on
+      `feat/devin-cli-support`. The real `devin 3000.4.25` binary was unavailable in this lane, so
+      runtime launch, availability, hook delivery, Desktop, Server Edition, SSH, and packaged
+      evidence remain unverified.
 
 ## In progress / partially landed
+
+- [ ] **Portable Comment and Activity attachments, issue #94**: source support is present in
+      `src/shared/comment-attachments.ts`, `src/core/board-attachments.ts`, the board-log bridge,
+      composer queue, and schema 3 comment carriers. Tests, type checks, lint, builds, packaging,
+      runtime interaction, reviews, security and accessibility audits, and captures remain pending
+      in the integration lane.
+
+- [ ] **Agent-to-agent drag collaboration, issue #90**: the bounded collaboration handle and
+      keyboard/touch equivalent now reuse the existing context-link path for two compatible agent
+      nodes. Credentials, accounts, projects, working directories, and live sessions remain
+      unchanged. Tests, builds, runtime interaction, accessibility review, security review, and
+      captures remain unverified under the lane's explicit boundary.
+
+- [ ] **Context-window progress, issue #89**: every agent-backed node, session row, Kanban card,
+      and card modal now keeps a visible meter with provider-scoped telemetry, exact known values,
+      explicit unknown/not-reported/stale/unavailable states, restart-safe generation fencing, and
+      bounded local/remote transcript reads. The implementation lane intentionally has no tests,
+      lint, type checks, builds, packaging, runtime interaction, reviews, audits, or captures yet.
+
+- [ ] **Bounded wheel zoom and persisted wheel speed, issue #107**: the renderer now shares a ±50
+      `deltaY` budget across each 40 ms burst and applies a persisted 0.2×–2.0× multiplier only to
+      plain-wheel zoom. The Behavior setting has localized copy, point-of-use validation, and
+      provenance text. Server Edition shares the same renderer and settings record. Tests, type
+      checks, lint, builds, packaging, runtime interaction, reviews, audits, and captures remain
+      unrun in this implementation lane; the generated offline-doc bundle awaits the normal docs
+      generation step in integration.
+- [ ] **Ten-level funny controls, issue #113**: source and localization range now covers independent
+      English and Cantonese levels 1–10, schema-versioned settings migration, scheduled values,
+      site storage, exports, provenance copy, Easter eggs, and feature resolvers. This implementation
+      lane intentionally has no tests, type checks, lint, builds, packaging, runtime interaction,
+      reviews, audits, or captures; integrated verification remains pending.
+- [ ] **Desktop trackpad gesture facts, issue #108**: main-process scroll and pinch edges now feed
+      a depth-safe typed bridge so macOS desktop wheel routing distinguishes a precise-pixel mouse
+      from a trackpad, including the bounded momentum-gap linger. Server Edition keeps its browser
+      heuristic and mobile is not applicable. This implementation lane intentionally has no tests,
+      lint, type checks, builds, packaging, runtime interaction, reviews, audits, or captures yet.
 
 - [ ] **Shared provider services, issue #18**: provider catalog, account metadata, sealed
       credential payloads, bounded one-time OAuth PKCE callbacks, adapter-owned resource discovery,
@@ -97,6 +145,29 @@ later commit, since this file will not be kept in lockstep with every merge).
       Configure/Rebind/Adopt/Deploy/Locate Asset/Leave Unbound surface is wired for Desktop with
       an honest Server Edition boundary. Tests, build/package evidence, generated docs bundle,
       runtime interaction, and captures remain outstanding.
+
+- [ ] **Nextcloud AIO hosting, issue #52**: the guided pinned official image profile is implemented
+      on `feat/program-41-nextcloud-aio` with explicit Docker socket authority disclosure, no
+      privileged mode, local loopback/private binding, fixed lifecycle operations, health and
+      progress states, backup/restore/rollback records, portable safe intent, localized copy, and
+      dedicated docs. Tests, type checks, builds, packaging, runtime interaction, reviews, and
+      captures remain outstanding under the issue's ultra-speed boundary.
+
+- [ ] **Cloudflare core managers, issue #57**: typed account, zone, DNS, SSL/TLS, ruleset, redirect,
+      cache, and analytics operations are implemented in the shared contract, host service, Desktop
+      and Server Edition bridges, and canvas node. Local sealed credentials, bounded output,
+      cancellation, safe previews, destructive confirmation, explicit unavailable states, and safe
+      schema 3 intent are present. Tests, type checks, lint, reviews, security or accessibility
+      checks, builds, packaging, installer execution, runtime interaction, and captures remain
+      unverified under the ultra-speed lane.
+
+- [ ] **Guided GitHub API capabilities, issue #101**: typed REST and fixed GraphQL operations now
+      cover repository, source-control, collaboration, Actions, release, organization, account,
+      search, security, ruleset, webhook, and app resources. The host resolves approved project
+      scope and local credentials, validates semantic inputs, bounds pagination and response data,
+      reports progress and rate limits, supports cancellation, and requires exact destructive
+      confirmation. Tests, type checks, lint, reviews, builds, packaging, runtime interaction, and
+      captures remain unverified on the dedicated feature branch.
 
 - [ ] **ADHD modes** — Focus, Low stimulation, Time awareness, One thing at a time, and Momentum
       are all specced in `docs/adhd-modes.md`. Time awareness, Momentum, and the
@@ -271,8 +342,18 @@ intentionally unchecked because this task publishes the plan only.
 - [ ] Add interactive door construction and numeric or passphrase entry. Source components and
       portable intent are present; live navigator wiring remains pending.
 - [x] Add the top-down recovery game with three energy keys, hazards, core activation, and portable state. Source implementation is complete; built-artifact verification remains for integration.
-- [ ] Add unlimited AWS Universes with AWS-only scope and AWS Shop nodes.
-- [ ] Bundle AWS CLI v2 and maintain verified model and documentation indexing.
+- [x] Add unlimited AWS Universes with AWS-only scope, guided navigation, and AWS Shop nodes.
+      Source implementation and delivery records are present; tests, type checks, builds,
+      packaging, runtime interaction, and captures remain explicitly unrun under issue #39's
+      ultra-speed boundary.
+- [ ] Bundle AWS CLI v2 and maintain verified model and documentation indexing. The pinned MSI,
+      verified fallback, version details route, bounded installed-model inventory, feature article,
+      and offline documentation entry are present on the issue #41 jer. Tests, builds, packaging,
+      installer execution, runtime interaction, and HuiShots remain pending, so this item stays
+      unticked.
+- [x] Add the platform-free AWS CLI model documentation index for services, commands, options,
+      paginators, waiters, input and output shapes, and input skeletons. Tests, builds, runtime
+      interaction, and packaged verification remain unrun under issue #42's lane boundary.
 - [ ] Generate interactive wizard forms for every AWS service, command, option, paginator, waiter,
       skeleton, input, and output described by the installed CLI models.
 - [ ] Add AWS identity, SSO, role, MFA, Resource Explorer, Cloud Control, S3, EC2, IAM, STS,
@@ -281,19 +362,36 @@ intentionally unchecked because this task publishes the plan only.
 
 ### Hosting and Cloudflare
 
-- [ ] Add GitLab Server CE and EE hosting profiles with backup and restore.
+- [x] Add the shared hosted-resource backup and restore framework with version, edition, resource,
+      ownership, archive-safety, progress, cancellation, atomic publication, restore-review, and
+      rollback contracts. Source and direct documentation are present; tests, builds, packaging,
+      runtime interaction, and captures remain explicitly unrun under issue #55's ultra-speed boundary.
+- [ ] Add GitLab Server CE and EE hosting profiles with backup, restore, readiness, credential
+      handoff, update, rollback, four managed volumes, and private binding. Source and docs are
+      present in issue #51; tests, builds, packaging, runtime interaction, and captures remain
+      unrun under the ultra-speed boundary.
 - [ ] Add Nextcloud AIO and managed no-socket hosting profiles.
 - [ ] Add Open WebUI hosting with existing Ollama reuse and honest bootstrap states.
 - [x] Add the hosted-service Cloudflare Tunnel handoff contract after local health verification. The
-      portable routing intent and machine-local binding coordinator are present; provider adapter,
-      build, packaging, and runtime evidence remain pending.
+      portable routing intent, capability-bound provider seam, and machine-local binding coordinator
+      are present; provider adapter wiring, build, packaging, and runtime evidence remain pending.
 - [ ] Add Cloudflare account, zone, DNS, security, Workers, Pages, storage, queue, Access, and
       analytics managers.
+- [x] Add typed Cloudflare Access, Zero Trust, Workers, Pages, R2, D1, and Queues managers with
+      local protected credentials, portable neutral intent, bounded fixed-route API calls,
+      progress/cancellation, per-field regex builders, and destructive confirmation. Verification
+      remains intentionally unrun in the ultra-speed lane.
 - [ ] Add one-click Cloudflare Tunnel setup with private-first routing and connector choices.
 
 ### Clean-room features and upstream parity
 
 - [ ] Add clean-room browser, kiosk, PWA, proxy, and read-only diagnostics nodes.
+- [ ] **Program 57 / #68, linked-agent inbox notifications.** The source path already carries the
+      upstream PR #98 intent through the authenticated `notify --node <id>` route, project-local
+      consent, runtime ownership checks, fixed application-authored text, and the bounded
+      deliver-on-idle queue. Feature documentation, the offline bundle, the documentation site,
+      and the completeness inventory are recorded in this lane. Tests, builds, packaging, runtime
+      interaction, and UI captures remain pending under the explicit ultra-speed boundary.
 - [ ] Implement the outstanding upstream behavior from the planned issue and pull-request parity map.
 - [ ] Split the PR #422 behavior into independent link, endpoint, navigation, grouping, agent, and
       account lanes.

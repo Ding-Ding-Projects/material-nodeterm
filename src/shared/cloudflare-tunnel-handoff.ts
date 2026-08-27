@@ -55,6 +55,14 @@ export interface CloudflareZoneSummary {
   reason: string | null
 }
 
+export interface CloudflareTunnelCapabilities {
+  available: boolean
+  canCreateTunnel: boolean
+  canStartConnector: boolean
+  canVerifyExternal: boolean
+  reason: string | null
+}
+
 export interface CloudflareTunnelHandoffState {
   nodeId: string
   localHealth: HostedServiceHealth
@@ -110,6 +118,7 @@ export interface CloudflareTunnelHandoffResult {
 export interface CloudflareTunnelHandoffApi {
   origins(nodeId: string): Promise<HostedServiceOrigin[]>
   health(nodeId: string, originId: string): Promise<HostedServiceHealth>
+  capabilities(): Promise<CloudflareTunnelCapabilities>
   accounts(): Promise<CloudflareAccountSummary[]>
   zones(accountId: string): Promise<CloudflareZoneSummary[]>
   handoff(request: CloudflareTunnelHandoffRequest): Promise<CloudflareTunnelHandoffResult>

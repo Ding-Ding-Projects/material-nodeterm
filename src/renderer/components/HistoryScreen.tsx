@@ -42,7 +42,7 @@ export function HistoryScreen({ onGoToNode, onKillSession }: HistoryScreenProps)
   const [tab, setTab] = useState<HistoryTab>('memory')
 
   return (
-    <div className="md3-history-screen" data-screen-label="History">
+    <div className="md3-history-screen" data-screen-label="History" data-easter-surface="changelog">
       <div className="md3-history-screen__head">
         <div className="md3-history-screen__heading">
           <div className="md3-history-screen__title">History</div>

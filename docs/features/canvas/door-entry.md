@@ -8,9 +8,10 @@ reuse toy-lock state.
 ## Guided entry
 
 `UniverseDoorEntryPanel` presents the enabled methods as a real Material Design 3 segmented
-control. The panel includes a local plain-text search field with its own adjacent anchored full
-regex builder. Filtering never changes the configured policy. The search field starts in plain-text
-mode and only enters regex mode when the user opens the builder.
+control. `PortalLifecycleDialog` mounts it in an anchored popover from the selected portal's
+**Enter** action. The panel includes a local plain-text search field with its own adjacent anchored
+full regex builder. Filtering never changes the configured policy. The search field starts in
+plain-text mode and only enters regex mode when the user opens the builder.
 
 Numeric entry uses a text control with numeric keyboard hints, an exact digit limit, and an explicit
 instruction naming the required number of digits. Passphrase entry uses a password control with a
@@ -24,7 +25,8 @@ localized explanatory copy and is not stored in the credential policy.
 
 ## Schema 3 portability
 
-`PortableUniverseDoorEntryV3` is the portable policy. It contains:
+`PortableUniverseDoorEntryV3` is the portable policy attached to a `PortableUniverseDoorV3` door
+record. It contains:
 
 - `schemaVersion: 3`;
 - a bounded door identifier;
@@ -39,7 +41,10 @@ credential-shaped fields instead of silently dropping them.
 Portable exports therefore never contain numeric values, passphrases, credential fingerprints,
 vault material, provider sessions, machine paths, or runtime handles. A local application-data
 binding contains only the stable vault key, the selected method, and the `credential-vault` storage
-marker. The vault adapter is owned by the caller and must never place the secret in project files,
+marker. `universe-door-entries.json` is sealed through `SecureStore` by
+`src/core/universe-door-entry-service.ts`; it stores only bounded policy metadata and sealed values.
+The `universeDoorEntry` bridge exposes configure, verify, and remove operations, but never returns a
+stored value. The vault adapter is host-owned and must never place the secret in project files,
 logs, exports, history, or diagnostics.
 
 Import of this policy is pure. It does not contact a provider, open a process, launch a portal, or
@@ -51,8 +56,12 @@ door can be used.
 The entry policy is validated before a caller stores or submits a value. A rejected value remains
 in the panel for correction, but the secret is never included in validation messages. A caller that
 cannot reach its vault or cannot verify the door reports that condition as a non-blocking error and
-keeps the door closed. The policy does not provide a bypass route, and it does not grant access to
-any other door or toy lock.
+keeps the door closed. Before a verified value can transition canvases, the caller runs
+`navigatePortablePortal` and `decideUniverseDoorNavigation` with `source: 'door'`, the exact current
+canvas, target canvas, door id, and reciprocal pair. Tab, palette, history, and direct-selection
+requests remain refused. The policy does not provide a bypass route, and it does not grant access
+to any other door or toy lock. Cancel and success return focus to the exact door button that opened
+the anchored panel.
 
 ## Three surfaces
 
@@ -69,8 +78,8 @@ any other door or toy lock.
 
 This implementation lane intentionally did not run tests, type checks, lint, builds, packaging,
 installer execution, runtime interaction, accessibility review, security review, or UI captures.
-Those checks remain pending for the integrated portal flow. The feature's schema validator and
-panel are reusable seams for that later verification pass.
+Those checks remain pending for the integrated portal flow. The service, bridge, schema validator,
+navigation decision, and panel are reusable seams for that later verification pass.
 
 ## Suggested articles
 
@@ -78,4 +87,3 @@ panel are reusable seams for that later verification pass.
 - [Portable project schema 3](../projects/portable-schema3.md)
 - [Portable canvas projection](../projects/portable-canvas-projection.md)
 - [Toy locks](../../toy-locks.md)
-

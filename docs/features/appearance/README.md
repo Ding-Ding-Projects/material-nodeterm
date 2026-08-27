@@ -17,5 +17,7 @@ migration toward Material Design 3.
 - [Material Design 3 desktop surface audit](./material-3-audit.md) — the hand-written inventory of
   every desktop shell, node, destination, settings section, overlay, status state, and checked-in
   documentation page, plus the source-level remediation and remaining ownership conflicts.
+- [Easter eggs](./easter-eggs.md) — the stable 60-entry catalog of local, accessible interface
+  surprises, its bounded trigger cabinet, ten funny levels, and School-mode suppression contract.
 
 See also [Canvas](../canvas/README.md), whose node chrome consumes most of these tokens.
