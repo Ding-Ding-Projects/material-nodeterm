@@ -500,6 +500,14 @@ export function buildStubApi(): Omit<
     // inert no-ops (there is no connectionId to act on) and the subscriptions are no-op unsubscribes.
     relayHost: {
       dockerContexts: U('relayHost.dockerContexts'),
+      manager: {
+        contexts: U('relayHost.manager.contexts'),
+        snapshot: U('relayHost.manager.snapshot'),
+        logs: U('relayHost.manager.logs'),
+        run: U('relayHost.manager.run'),
+        cancel: noop,
+        onProgress: noopUnsub
+      },
       start: U('relayHost.start'),
       invite: U('relayHost.invite'),
       stop: U('relayHost.stop'),

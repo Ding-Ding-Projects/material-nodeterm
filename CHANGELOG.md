@@ -9,6 +9,14 @@
   Tests, lint, type checks, builds, packaging, runtime interaction, and captures were intentionally
   not run in this ultra-speed implementation lane.
 
+- Add a guided Docker host manager for local and saved SSH contexts. The canvas node now exposes
+  searchable containers, images, volumes, networks, Compose projects, bounded statistics, redacted
+  logs, fixed typed container tasks, cancellable lifecycle progress, and destructive confirmation.
+  Main-process argument-array validation prevents renderer shell input, while schema 3 carries only
+  safe neutral intent and keeps credentials, endpoints, paths, live ids, and process state local.
+  The ultra-speed lane intentionally did not run tests, type checks, lint, reviews, security or
+  accessibility checks, builds, packaging, installer execution, runtime interaction, or captures.
+
 - Add a source-only desktop Material Design 3 audit with a hand-written inventory of 212 rendered
   surfaces, including onboarding, profile picking, conversion, password management, Minecraft
   management, dialogs, find bars, and notifications. Shared NumberField, Radio, Progress, and Tabs
