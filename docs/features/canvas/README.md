@@ -20,6 +20,8 @@ The pan/zoom surface nodeterm is built around, and everything that lives on it.
   dish selection, portable display intent, and published-photo recovery without vendored images.
 - [Multiverse child canvases](./multiverse-canvases.md) - scoped nested canvases, guided hierarchy
   navigation, the depth-8 boundary, persistence, and portable schema 3 projection.
+- [Typed link endpoint model](./link-endpoint-model.md) - bounded node, foreign-node, and branch
+  endpoints, project ownership, portable repository references, and safe link metadata.
 - [Portal lifecycle and child-content preservation](./portal-lifecycle.md) - guided creation,
   import repair, deletion, and preservation of nested child content.
 - [Alarm Clock nodes](../../alarm-clock.md) — one-shot and recurring reminders with timezone,

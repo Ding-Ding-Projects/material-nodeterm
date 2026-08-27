@@ -463,6 +463,32 @@ were run in this ultra-speed lane. The generated `src/shared/docs-data.ts` bundl
 because `esbuild` is absent from this checkout and this lane does not install dependencies or run
 builds. The parent owns the final current-main integration, offline-bundle regeneration, release
 evidence, and any later verification.
+## 2026-08-27, bounded typed link endpoint model, issue #86
+
+This source lane was reconciled with the exact `origin/main` tip
+`54164b84dce0b7e62787b1de2885405ff4ed821c`. Commit
+`20a57197b6d470d03a8e7d7f3e2cff73a7f16c03` adds the platform-free shared validator in
+`src/shared/link-model.ts`. It accepts the discriminated `Endpoint` forms `node`, `xnode`, and
+`branch`, the `context`, `lineage`, and `dependency` kinds, and project-owned `Link` records.
+
+The validator bounds identifiers, endpoint components, metadata depth, metadata keys, metadata
+bytes, and total link count. It rejects unknown fields, malformed values, unsafe metadata names,
+absolute or traversing repository paths, duplicate ids, self-links, missing local endpoints,
+foreign mutation sources, and foreign references that point back at the local project. Foreign
+nodes are references only and are never mutated by this model.
+
+The direct article is `docs/features/canvas/link-endpoint-model.md`, indexed from the Canvas
+category. `CHANGELOG.md` records the same scope and verification boundary. Legacy `bridges` and
+`ropes` fields, migration, persistence wiring, cross-project projection, navigation, grouping,
+dependency execution, model switching, restart behavior, account behavior, and user-facing link
+authoring remain outside this lane for their dedicated owners.
+
+This source lane intentionally did not run tests, lint, type checks, builds, packaging, runtime
+interaction, reviews, security or accessibility audits, or captures. The parent integration lane
+must wire the validator into every relevant persistence boundary, regenerate the offline
+documentation bundle, and perform the remaining verification before merging. No GitHub issue or
+pull request mutation was performed by this lane.
+
 ## 2026-08-27, AWS core-service managers, issue #46 PR preparation
 
 The issue jer was reconciled with the exact `origin/main` tip `2472cf23b99559005476841d3db5e6bc4691ac06`.
