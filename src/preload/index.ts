@@ -43,6 +43,7 @@ import type { HomeAssistantClientEvent } from '../shared/home-assistant'
 import type { ProjectConsentRequest, ProjectSetupEvent } from '../shared/project-settings'
 import type { CloudflareApi, CloudflareCatalog, CloudflareExecutionProgress, CloudflareExecutionResult } from '../shared/cloudflare-zero-trust'
 import type { GitHubApiRequest, GitHubApiProgress } from '../shared/github-api'
+import type { AwsIdentityAction, AwsIdentityBinding, AwsIdentityOperation } from '../shared/aws-identity'
 
 // Fan a single ipcRenderer listener per channel out to many renderer subscribers. Without
 // this, every node that subscribes (e.g. Cmd+M markdown toggle on each terminal/editor) adds
@@ -1256,7 +1257,10 @@ const api: NodeTerminalApi = {
     onEvent: (listener) => subscribeMinecraftEvent(listener)
   },
   awsIdentity: {
-    discover: () => ipcRenderer.invoke(IPC.awsIdentityDiscover)
+    discover: () => ipcRenderer.invoke(IPC.awsIdentityDiscover),
+    start: (action: AwsIdentityAction, profileName: string, binding?: AwsIdentityBinding) => ipcRenderer.invoke(IPC.awsIdentityStart, action, profileName, binding),
+    cancel: (operationId: string) => ipcRenderer.invoke(IPC.awsIdentityCancel, operationId),
+    onOperation: (listener: (operation: AwsIdentityOperation) => void) => subscribe<[AwsIdentityOperation]>(IPC.awsIdentityOperation)((operation) => listener(operation))
   },
   torrent: {
     runtime: () => ipcRenderer.invoke(IPC.torrentRuntime),
