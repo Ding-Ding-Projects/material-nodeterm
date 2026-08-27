@@ -46,10 +46,13 @@ export function SettingsSidebar({
   const schoolModeName = useSchoolMode((s) => s.name)
   const schoolModeEnabled = useSchoolMode((s) => s.enabled)
   const schoolModeHydrated = useSchoolMode((s) => s.hydrated)
-  const groups = useMemo(
-    () => [...visibleSettingsGroups(isPlatformVariant, schoolModeHydrated && !schoolModeEnabled), ...(extraGroups ?? [])],
-    [extraGroups, schoolModeEnabled, schoolModeHydrated]
-  )
+  const groups = useMemo(() => {
+    const visibleGroups = visibleSettingsGroups(
+      isPlatformVariant,
+      schoolModeHydrated && !schoolModeEnabled
+    )
+    return [...visibleGroups, ...(extraGroups ?? [])]
+  }, [extraGroups, schoolModeEnabled, schoolModeHydrated])
   return (
     <aside className="md3-settings-sidebar flex shrink-0 flex-col">
       <div
