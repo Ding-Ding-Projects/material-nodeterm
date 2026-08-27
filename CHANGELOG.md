@@ -21,6 +21,14 @@
   Merge leftovers 清走晒：PTY 收返一份完整收尾流程，Windows 字型保留現行 fallback，speech 繼續
   支援明確停用 dictation，torrent listener 唔再同 callback 撞名。三個 source file 各自通過
   `PARSE_OK` syntax evidence；其餘 checks 今次 ultra-speed repair 沒有執行。
+- Reconstruct the SSH project manager after a merge retained two remote Codex account and runtime
+  implementations. The manager now keeps one safe-home-validated account lifecycle, one
+  credential-local identity path, one executable-only runtime installer, and one relay-source
+  provider, while preserving per-node token materialization, live host status, OAuth forwarding,
+  and the current project and canvas integrations. Duplicate imports and displaced method
+  documentation were removed with the obsolete blocks. A single-file esbuild transform recorded
+  syntax-only evidence. This ultra-speed repair ran no tests, type checks, lint, reviews, audits,
+  builds, packaging, runtime interaction, or screen captures.
 
 - Reconcile stale merge fragments in `src/main/index.ts`. The main process now keeps one import
   declaration per duplicated filesystem, Electron, SSH, account, and notification helper; one quit-confirmation

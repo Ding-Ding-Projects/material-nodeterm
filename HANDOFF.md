@@ -44,6 +44,27 @@ verification.
 Merge leftovers 清走晒：PTY 收返一份完整收尾流程，Windows 字型保留現行 fallback，speech 繼續
 明確停用 dictation，torrent callback 同 listener method 分開命名，唔再撞車。三個 source file
 都有 `PARSE_OK` syntax evidence；其餘 checks 留返 parent integration lane 處理。
+## 2026-08-27, SSH project manager merge reconstruction
+
+`src/main/remote-ssh/ssh-project.ts` retained an older duplicate of the remote Codex account
+lifecycle and runtime installer beside the newer safe-home-validated implementation. The repair
+keeps the current account-aware methods, their real non-symlink `auth.json` boundary, remote-only
+credential handling, the node, Codex, and curl runtime probe, executable-only relay and launcher
+uploads, and the complete remote catalog, thread, exposure, and atomic import path. It also keeps
+the per-node token minter, host-status callbacks, OAuth callback forwarding, live terminal settings,
+and the current project and canvas registrations.
+
+The original one-set implementation is recorded at `20aeabcfe9cec74bdf0f79fb098285e1f4461bff`.
+The hardened one-set parent at `34595056f67c84208944d0923180b6f8c6ef10fa` adds the retained safe-home
+helpers and checks. Merge `7c14db981f9e130cda2b9100285805f9646d7e58` first combined both method
+sets, and later recovery commits removed other fragments without removing this duplicate.
+
+The obsolete account and installer block, duplicate imports, duplicate `codexRelaySource` object
+key, and displaced method documentation were removed. The direct records are `CHANGELOG.md`,
+`ROADMAP.md`, and this handoff. A single-file esbuild transform reported `PARSE_OK`; that is syntax
+evidence only. No tests, type checks, lint, reviews, audits, builds, packaging, runtime interaction,
+or screen captures were run. The parent integration lane owns the combined pull request, release,
+and broader verification.
 
 ## 2026-08-27, main process index merge-fragment repair
 

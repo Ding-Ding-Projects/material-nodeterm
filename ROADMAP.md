@@ -41,6 +41,10 @@ later commit, since this file will not be kept in lockstep with every merge).
       the current Windows font fallback and explicit no-dictation speech default, and separates
       the torrent callback field from its task subscription method. All three changed source files
       report single-file esbuild syntax success; broader verification remains pending.
+      The SSH project manager now keeps one safe-home-validated remote Codex account lifecycle,
+      one executable-only runtime installer, one relay-source provider, and the existing node-token,
+      host-status, OAuth, project, and canvas wiring; its single-file esbuild transform reports
+      syntax-only success.
       The combined recovery remains unchecked until the parent integration
       lane records build, packaging, and release-workflow evidence. The ultra-speed pass
       intentionally omits tests, type checks, lint, reviews, accessibility and security checks,
