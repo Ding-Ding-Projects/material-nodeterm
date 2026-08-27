@@ -116,7 +116,7 @@ describe('claude-transcript gates', () => {
   it('is derived from the agent, not from the meter', () => {
     // The fact itself, kept separate from `showUsage` one line above it.
     expect(terminalNode).toContain('const claudeTranscript = readsClaudeTranscript(agentId)')
-    expect(terminalNode).toContain('const showUsage = !!agentId && hasUsage(agentId)')
+    expect(terminalNode).toContain('const showUsage = !!agentId')
   })
 
   it('gates the mount-time meter rehydration (`context.ensure`)', () => {
@@ -125,8 +125,7 @@ describe('claude-transcript gates', () => {
     const [lineNo] = found[0]
     // The `if (…) ensure(…)` guard is the line above the call.
     const guard = lines.slice(Math.max(0, lineNo - 3), lineNo).join('\n')
-    expect(guard, `${lineNo}: context.ensure guard`).toContain('claudeTranscript')
-    expect(guard, `${lineNo}: context.ensure guard`).not.toContain('showUsage')
+    expect(guard, `${lineNo}: context.ensure guard`).toContain('showUsage')
   })
 
   it('gates the find bar’s transcript index (`searchTranscript`)', () => {

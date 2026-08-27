@@ -149,6 +149,8 @@ export interface DockerHostManagerApi {
   snapshot(context: string): Promise<DockerHostSnapshot>
   logs(context: string, containerId: string): Promise<string>
   run(action: DockerHostAction): Promise<{ jobId: string }>
+  /** Guided GitLab Server hosting. Uses only pinned official images and closed operations. */
+  gitlab: import('./gitlab-hosting').GitLabHostingApi
   cancel(jobId: string): void
   onProgress(listener: (progress: DockerHostJobProgress) => void): () => void
   /** Fixed managed Nextcloud profile. The host owns secret-file creation and all Docker argv. */

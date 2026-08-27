@@ -110,7 +110,7 @@ export function NextcloudManagedPanel({ intent, binding, onIntentChange, onBindi
       setContexts(rows)
       if (!context) setContext(rows.find((row) => row.current)?.name ?? rows[0]?.name ?? '')
     }).catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : String(cause)) })
-    const unsubscribe = window.nodeTerminal.relayHost.manager.nextcloud?.onProgress((event) => {
+    const unsubscribe = window.nodeTerminal.relayHost.nextcloudManaged.onProgress((event) => {
       if (event.jobId) setProgress(event)
       if (event.phase === 'completed' || event.phase === 'failed' || event.phase === 'cancelled') setBusy(false)
     })
@@ -125,7 +125,7 @@ export function NextcloudManagedPanel({ intent, binding, onIntentChange, onBindi
     let active = true
     try {
       const local = bindingFromForm({ context, projectName, dataDirectory, backupDirectory, loopbackPort })
-      const manager = window.nodeTerminal.relayHost.manager.nextcloud
+      const manager = window.nodeTerminal.relayHost.nextcloudManaged
       if (!manager) return () => { active = false }
       void manager.snapshots(local).then((items) => {
         if (active) setSnapshots(items)
@@ -168,7 +168,7 @@ export function NextcloudManagedPanel({ intent, binding, onIntentChange, onBindi
     }
     try {
       const action = validateNextcloudManagedAction(raw)
-      const manager = window.nodeTerminal.relayHost.manager.nextcloud
+      const manager = window.nodeTerminal.relayHost.nextcloudManaged
       if (!manager) throw new Error('Managed Nextcloud operations are unavailable on this surface. Use a desktop host with a Docker context.')
       setBusy(true)
       setProgress(null)
@@ -243,7 +243,7 @@ export function NextcloudManagedPanel({ intent, binding, onIntentChange, onBindi
       </section>
 
       {error ? <p className="service-node__note" role="alert">{error}</p> : null}
-      {progress ? <section className="docker-manager__jobs" aria-label="Managed Nextcloud progress"><header><strong>{progress.operation}</strong><span>{progress.phase} · {progress.completedSteps}/{progress.totalSteps}</span></header><progress max={progress.totalSteps} value={progress.completedSteps} /><p>{progress.message}</p>{progress.output ? <pre>{progress.output}</pre> : null}{(progress.phase === 'queued' || progress.phase === 'preflight' || progress.phase === 'secrets' || progress.phase === 'database' || progress.phase === 'cache' || progress.phase === 'web' || progress.phase === 'backup' || progress.phase === 'restore' || progress.phase === 'rollback') ? <Button onClick={() => window.nodeTerminal.relayHost.manager.nextcloud?.cancel(progress.jobId)}>Cancel</Button> : null}</section> : null}
+      {progress ? <section className="docker-manager__jobs" aria-label="Managed Nextcloud progress"><header><strong>{progress.operation}</strong><span>{progress.phase} · {progress.completedSteps}/{progress.totalSteps}</span></header><progress max={progress.totalSteps} value={progress.completedSteps} /><p>{progress.message}</p>{progress.output ? <pre>{progress.output}</pre> : null}{(progress.phase === 'queued' || progress.phase === 'preflight' || progress.phase === 'secrets' || progress.phase === 'database' || progress.phase === 'cache' || progress.phase === 'web' || progress.phase === 'backup' || progress.phase === 'restore' || progress.phase === 'rollback') ? <Button onClick={() => window.nodeTerminal.relayHost.nextcloudManaged.cancel(progress.jobId)}>Cancel</Button> : null}</section> : null}
 
       <div className="service-node__note"><strong>{copy('portableIntent', 'Portable intent')}:</strong> {currentIntent.profile}. {copy('localOnly', 'Context, folders, secret keys, process state, and generated runtime data stay on this computer. The project file carries only the no-socket profile choice.')}</div>
     </div>
