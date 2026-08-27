@@ -1,9 +1,85 @@
 import { describe, it, expect } from 'vitest'
-import { normalizeClaude, normalizeCodex, normalizeFor, type RawHookEnvelope } from './normalize'
+import {
+  normalizeClaude,
+  normalizeCodex,
+  normalizeCopilot,
+  normalizeFor,
+  type RawHookEnvelope
+} from './normalize'
 
 function env(payload: Record<string, unknown>): RawHookEnvelope {
   return { nodeId: 'n1', agentId: 'claude', payload }
 }
+
+function copilotEnv(payload: Record<string, unknown>): RawHookEnvelope {
+  return { nodeId: 'n1', agentId: 'copilot', payload }
+}
+
+describe('normalizeCopilot', () => {
+  it('maps session boundaries and captures the CLI session id', () => {
+    expect(normalizeCopilot(copilotEnv({ hook_event_name: 'SessionStart', session_id: 's1' }))).toEqual({
+      nodeId: 'n1',
+      agentId: 'copilot',
+      sessionId: 's1',
+      kind: 'session',
+      sessionPhase: 'start'
+    })
+    expect(normalizeCopilot(copilotEnv({ hook_event_name: 'SessionEnd', session_id: 's1' }))).toMatchObject({
+      kind: 'session',
+      sessionPhase: 'end'
+    })
+  })
+
+  it('maps turn and tool lifecycle without treating a failed tool as a finished turn', () => {
+    expect(
+      normalizeCopilot(copilotEnv({ hook_event_name: 'UserPromptSubmit', prompt: 'fix it' }))
+    ).toMatchObject({ state: 'working', newTurn: true, task: 'fix it' })
+    for (const hook_event_name of ['PreToolUse', 'PostToolUse', 'PostToolUseFailure']) {
+      expect(normalizeCopilot(copilotEnv({ hook_event_name })), hook_event_name).toMatchObject({
+        state: 'working'
+      })
+    }
+    expect(
+      normalizeCopilot(
+        copilotEnv({ hook_event_name: 'Stop', last_assistant_message: 'finished' })
+      )
+    ).toMatchObject({ state: 'done', lastMessage: 'finished' })
+  })
+
+  it('maps only the documented needs-user notifications', () => {
+    expect(
+      normalizeCopilot(
+        copilotEnv({
+          hook_event_name: 'Notification',
+          notification_type: 'permission_prompt',
+          message: 'Approve command?'
+        })
+      )
+    ).toMatchObject({ state: 'blocked', lastMessage: 'Approve command?' })
+    expect(
+      normalizeCopilot(
+        copilotEnv({
+          hook_event_name: 'Notification',
+          notification_type: 'elicitation_dialog',
+          message: 'Which option?'
+        })
+      )
+    ).toMatchObject({ state: 'waiting', lastMessage: 'Which option?' })
+    for (const notification_type of ['agent_idle', 'agent_completed', 'unknown_future_type']) {
+      expect(
+        normalizeCopilot(copilotEnv({ hook_event_name: 'Notification', notification_type })),
+        notification_type
+      ).toBeNull()
+    }
+  })
+
+  it('routes through the shared dispatcher', () => {
+    expect(normalizeFor('copilot', copilotEnv({ hook_event_name: 'Stop' }))).toMatchObject({
+      agentId: 'copilot',
+      state: 'done'
+    })
+  })
+})
 
 describe('normalizeClaude — turn-end signals', () => {
   it('Stop → done, not interrupted', () => {
@@ -327,5 +403,86 @@ describe('normalizeCodex — request_user_input (ask-the-user)', () => {
     const e = normalizeCodex(cenv({ hook_event_name: 'PreToolUse', tool_name: 'shell' }))
     expect(e).toMatchObject({ kind: 'state', state: 'working' })
     expect(e?.awaitingInput).toBeFalsy()
+  })
+})
+
+// Payload shapes below are the LIVE capture from codex-cli 0.146.0 (spawn_agent measurement run,
+// 2026-08-24): parent session_id + the child's agent_id/agent_type; SubagentStart's
+// transcript_path is the CHILD's rollout; a child's own tool events carry agent_id too.
+describe('normalizeCodex — subagents (spawn_agent)', () => {
+  function cenv(payload: Record<string, unknown>): RawHookEnvelope {
+    return { nodeId: 'n1', agentId: 'codex', payload }
+  }
+
+  it('SubagentStart → subagent-start keyed by agent_id, typed by agent_type', () => {
+    const e = normalizeCodex(
+      cenv({
+        hook_event_name: 'SubagentStart',
+        session_id: '01a0343d-d249-73e2-a462-e824df60d95c',
+        turn_id: '01a0343d-ef3a-7840-b6ed-683b7b024519',
+        transcript_path: '/home/u/.codex/sessions/2026/08/24/rollout-child.jsonl',
+        agent_id: '01a0343d-ef01-7700-b32f-c32ee1fc21f9',
+        agent_type: 'default'
+      })
+    )
+    expect(e).toMatchObject({
+      kind: 'subagent-start',
+      toolUseId: '01a0343d-ef01-7700-b32f-c32ee1fc21f9',
+      subagentType: 'default',
+      sessionId: '01a0343d-d249-73e2-a462-e824df60d95c'
+    })
+    // The spawn message is encrypted end-to-end — there is no task text to label the card with.
+    expect(e?.taskLabel).toBeUndefined()
+  })
+
+  it('SubagentStop → subagent-end carrying the child final answer as result', () => {
+    const e = normalizeCodex(
+      cenv({
+        hook_event_name: 'SubagentStop',
+        session_id: '01a0343d-d249-73e2-a462-e824df60d95c',
+        agent_id: '01a0343d-ef01-7700-b32f-c32ee1fc21f9',
+        agent_type: 'default',
+        agent_transcript_path: '/home/u/.codex/sessions/2026/08/24/rollout-child.jsonl',
+        last_assistant_message: 'The command output was:\n\n`hello-from-subagent`'
+      })
+    )
+    expect(e).toMatchObject({
+      kind: 'subagent-end',
+      toolUseId: '01a0343d-ef01-7700-b32f-c32ee1fc21f9',
+      result: 'The command output was:\n\n`hello-from-subagent`'
+    })
+  })
+
+  // After an async spawn the parent's turn can end while the child still runs; a child Bash
+  // event mapping to 'working' would flip the finished parent back to RUNNING with nothing to
+  // clear it. Child activity reaches the card via the rollout tail, not the state machine.
+  it("a child's own tool events (agent_id-tagged) do not drive the parent state", () => {
+    for (const ev of ['PreToolUse', 'PostToolUse']) {
+      const e = normalizeCodex(
+        cenv({
+          hook_event_name: ev,
+          session_id: '01a0343d-d249-73e2-a462-e824df60d95c',
+          agent_id: '01a0343d-ef01-7700-b32f-c32ee1fc21f9',
+          agent_type: 'default',
+          tool_name: 'Bash',
+          tool_input: { command: 'echo hello-from-subagent' }
+        })
+      )
+      expect(e).toBeNull()
+    }
+  })
+
+  // The PARENT's spawn/wait tool calls carry no agent_id and stay ordinary working events —
+  // the card is keyed off SubagentStart, never off the spawn tool call.
+  it('the parent spawn_agent tool call remains a plain working event', () => {
+    const e = normalizeCodex(
+      cenv({
+        hook_event_name: 'PreToolUse',
+        session_id: 's1',
+        tool_name: 'collaborationspawn_agent',
+        tool_input: { task_name: 'echo_check', fork_turns: 'all', message: 'gAAAA…' }
+      })
+    )
+    expect(e).toMatchObject({ kind: 'state', state: 'working' })
   })
 })

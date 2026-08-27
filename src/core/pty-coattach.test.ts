@@ -40,6 +40,13 @@ vi.mock('./session-host-backend', () => ({
   sessionHostPaneCommand: async () => null,
   sessionHostSendKeys: async () => false
 }))
+// Pin the persistence backend: `sessionHostSupported()` only asks whether
+// out/session-host/host.cjs exists on disk, so whether this suite exercises the mocked
+// `node-pty` spawn below or a real session-host shim depended on whether anyone had run
+// `npm run build` (or `npm run host:build`). See src/core/__fixtures__/no-session-host.ts.
+vi.mock('./session-host-backend', async () =>
+  (await import('./__fixtures__/no-session-host')).noSessionHost()
+)
 
 vi.mock('node-pty', () => ({
   spawn: (_file: string, _args: string[], _opts: unknown) => {
@@ -219,6 +226,37 @@ describe('terminal co-attach: one PTY, N subscribers', () => {
     expect(second.sessionId).toBe('') // neither the dead session…
     expect(second.closed).toEqual({ by: ALICE }) // …nor a fresh one: the node is gone
     expect(spawned).toHaveLength(1)
+  })
+
+  // The agent-status mirror feeds the notch HUD, the phone's Live Activity and its Inbox. Deleting
+  // a node used to tell it NOTHING — `clearNode` had no production caller — so those surfaces kept
+  // rendering a node that no longer exists. It is wired at the one core chokepoint both shells
+  // share (`endSession`), and gated on the DELETE intent: a RECYCLE keeps the node, so clearing
+  // there would blank a live badge for a node still sitting on the canvas.
+  it('a DELETE clears the node from the agent-status mirror; a RECYCLE keeps it', async () => {
+    const mirror = await import('./agent-status-mirror')
+    mirror._resetForTest()
+    try {
+      const m = await manager()
+      await create(ALICE)
+      mirror.recordAgentEvent({
+        nodeId: 'node-1',
+        agentId: 'claude',
+        kind: 'state',
+        state: 'working'
+      } as never)
+      expect(mirror._snapshot()['node-1']).toBeDefined()
+
+      // A worktree move recycles the session; the node lives on, so its status must survive.
+      await m.recycleSession(ALICE, 'node-1')
+      expect(mirror._snapshot()['node-1']).toBeDefined()
+
+      // The × is permanent — the entry goes with the node.
+      await m.destroySession(ALICE, 'node-1')
+      expect(mirror._snapshot()['node-1']).toBeUndefined()
+    } finally {
+      mirror._resetForTest()
+    }
   })
 
   it('a relay-served (detached) pty is NOT indexed: it keeps its own session', async () => {

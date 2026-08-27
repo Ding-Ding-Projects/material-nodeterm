@@ -10,6 +10,8 @@ import { DEFAULT_SETTINGS, type Settings } from '@shared/types'
  *  - the override replaces the program part of a NEW node's launch line, and every appended
  *    piece (prompt quoting, grok's `--` separator) lands exactly where it does on the bare
  *    command;
+ *    piece (prompt quoting, permission-mode flag, grok's `--` separator) lands exactly where it
+ *    does on the bare command;
  *  - an unset/blank override changes nothing, byte-for-byte — the default-path guarantee every
  *    existing user is standing on.
  *
@@ -65,10 +67,17 @@ describe('createAgentNode — launch-command override', () => {
   it('keeps grok’s `--` separator after the override', () => {
     withOverrides({ grok: 'grok-wrap' })
     expect(cmd('grok', 'version')).toContain('grok-wrap --')
+    expect(cmd('grok', 'version')).toBe("grok-wrap -- 'version'")
+  })
+
+  it('keeps opencode’s --prompt flag after the override', () => {
+    withOverrides({ opencode: 'oc-wrap' })
+    expect(cmd('opencode', 'hello')).toBe("oc-wrap --prompt 'hello'")
   })
 
   it('leaves every agent without an override on its bare command', () => {
     withOverrides({ claude: 'my-claude work' })
+    expect(cmd('codex', 'hello')).toBe("codex 'hello'")
     expect(cmd('gemini')).toBe('gemini')
   })
 })

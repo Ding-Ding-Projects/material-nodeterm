@@ -20,13 +20,14 @@ import { useActiveSessionApi } from '../../session/session'
 import { ConfirmDialog } from '../ConfirmDialog'
 import { MaterialSymbol, type MaterialSymbolName } from '../MaterialSymbol'
 import { promptDialog } from '../promptDialog'
+import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
+import { copy, fact, mapOwnedSentence, type DisplaySegment } from '../../lib/personalVocabulary/ownedCopy'
 import {
   catalogPollDelayMs,
   catalogPollShouldContinue,
-  completenessHeadline,
+  formatAge,
   parseCatalogPayload,
   selectCatalogPage,
-  stalenessSentence,
   type CatalogFilter,
   type CatalogPage,
   type CatalogRow,
@@ -34,7 +35,7 @@ import {
   type CatalogView
 } from './catalogView'
 import { troubleshootSteps } from './troubleshoot'
-import { TextArea } from '@renderer/ui/md3'
+import { Progress, Tabs, TextArea } from '@renderer/ui/md3'
 import { Select } from '@renderer/ui/Select'
 
 /** How often the panel re-asks for the catalog while the core reports a refresh in flight. The
@@ -63,7 +64,8 @@ function panelScopeKey(api: ActiveSessionApi): number {
 
 interface RouteError {
   code: string | null
-  message: string
+  copy: string
+  detail?: string
 }
 
 interface ModelDeleteTarget {
@@ -92,12 +94,12 @@ function routeError(error: unknown): RouteError {
   if (code === E_UNSUPPORTED) {
     return {
       code,
-      message:
+      copy:
         'Ollama is not available for this remote project session. The manager will not fall back to this computer.'
     }
   }
   const detail = error instanceof Error ? error.message : String(error)
-  return { code, message: `Could not load Ollama for this project session: ${detail}` }
+  return { code, copy: 'Could not load Ollama for this project session:', detail }
 }
 
 const toast = (message: string, kind: 'error' | 'info' = 'info'): void => {
@@ -125,11 +127,12 @@ const FIT_ICON: Record<FitEvaluation['verdict'], MaterialSymbolName> = {
 }
 
 function FitBadge({ fit }: { fit: FitEvaluation | undefined }) {
+  const vocab = useVocabularyMapper()
   if (!fit)
     return (
       <span className="om-fit om-fit--unknown">
         <MaterialSymbol name="radio_button_unchecked" size={14} />
-        Unknown
+        {vocab('Unknown')}
       </span>
     )
   const label =
@@ -143,21 +146,22 @@ function FitBadge({ fit }: { fit: FitEvaluation | undefined }) {
   return (
     <span className={`om-fit om-fit--${fit.verdict}`}>
       <MaterialSymbol name={FIT_ICON[fit.verdict]} size={14} />
-      {label}
+      {vocab(label)}
     </span>
   )
 }
 
 function FitDetail({ fit }: { fit: FitEvaluation | undefined }) {
+  const vocab = useVocabularyMapper()
   if (!fit) return null
   return (
     <div className="om-fit-detail">
       <ul>
         {fit.evidence.map((e, i) => (
-          <li key={i}>{e}</li>
+          <li key={i}>{vocab('Evidence:')} {e}</li>
         ))}
         {fit.assumptions.map((a, i) => (
-          <li key={`a-${i}`}>Assumption: {a}</li>
+          <li key={`a-${i}`}>{vocab('Assumption:')} {a}</li>
         ))}
       </ul>
     </div>
@@ -198,6 +202,7 @@ function OllamaManagerPanelForApi({
   onClose,
   api
 }: OllamaManagerPanelProps & { api: ActiveSessionApi }) {
+  const vocab = useVocabularyMapper()
   const ollama = api.ollama
   const apiRef = useRef(api)
   const mountedRef = useRef(true)
@@ -478,17 +483,17 @@ function OllamaManagerPanelForApi({
 
   return createPortal(
     <div className="drawer-overlay md3-ollama" onClick={onClose}>
-      <aside className="drawer ollama" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Ollama manager">
+      <aside className="drawer ollama" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={vocab('Ollama manager')}>
         <div className="drawer__head">
-          <h2>Ollama manager</h2>
-          <button className="drawer__close" onClick={onClose} aria-label="Close">
+          <h2>{vocab('Ollama manager')}</h2>
+          <button className="drawer__close" onClick={onClose} aria-label={vocab('Close')}>
             <MaterialSymbol name="close" size={18} />
           </button>
         </div>
         <div className="drawer__body om-body">
           {accessError ? (
             <section className="om-empty-note" role="alert">
-              <p>{accessError.message}</p>
+              <p>{vocab(accessError.copy)}{accessError.detail && <> {accessError.detail}</>}</p>
               {accessError.code && (
                 <p>
                   Refusal code: <code>{accessError.code}</code>
@@ -496,7 +501,7 @@ function OllamaManagerPanelForApi({
               )}
               {accessError.code !== E_UNSUPPORTED && (
                 <button className="sc-btn" onClick={() => void refreshStatus()} disabled={checking}>
-                  Retry
+                  {vocab('Retry')}
                 </button>
               )}
             </section>
@@ -511,59 +516,103 @@ function OllamaManagerPanelForApi({
                     className={`om-tab${tab === t ? ' om-tab--active' : ''}`}
                     onClick={() => setTab(t)}
                   >
-                    {t === 'health' ? 'Health' : t === 'models' ? 'Installed' : t === 'store' ? 'Model store' : 'Chat'}
+                    {vocab(t === 'health' ? 'Health' : t === 'models' ? 'Installed' : t === 'store' ? 'Model store' : 'Chat')}
                   </button>
                 ))}
               </div>
+              <Tabs
+                items={[
+                  { id: 'health', label: 'Health' },
+                  { id: 'models', label: 'Installed' },
+                  { id: 'store', label: 'Model store' },
+                  { id: 'chat', label: 'Chat' }
+                ]}
+                value={tab}
+                onChange={(id) => setTab(id as Tab)}
+                ariaLabel="Ollama sections"
+                className="om-tabs"
+                tabClassName="om-tab"
+                activeTabClassName="om-tab--active"
+                idPrefix="ollama-tab"
+                panelIdPrefix="ollama-tabpanel"
+              />
 
               {tab === 'health' && (
-                <HealthTab
-                  status={status}
-                  checking={checking}
-                  hardware={hardware}
-                  running={running}
-                  onRefresh={refreshStatus}
-                />
+                <div
+                  role="tabpanel"
+                  id="ollama-tabpanel-health"
+                  aria-labelledby="ollama-tab-health"
+                  className="om-tabpanel"
+                >
+                  <HealthTab
+                    status={status}
+                    checking={checking}
+                    hardware={hardware}
+                    running={running}
+                    onRefresh={refreshStatus}
+                  />
+                </div>
               )}
 
               {tab === 'models' && (
-                <ModelsTab
-                  status={status}
-                  models={models}
-                  fitMap={fitMap}
-                  onDelete={(model) => setDeleteTarget({ model, api })}
-                  onRefresh={refreshStatus}
-                />
+                <div
+                  role="tabpanel"
+                  id="ollama-tabpanel-models"
+                  aria-labelledby="ollama-tab-models"
+                  className="om-tabpanel"
+                >
+                  <ModelsTab
+                    status={status}
+                    models={models}
+                    fitMap={fitMap}
+                    onDelete={(model) => setDeleteTarget({ model, api })}
+                    onRefresh={refreshStatus}
+                  />
+                </div>
               )}
 
               {tab === 'store' && (
-                <StoreTab
-                  ollama={ollama}
-                  status={status}
-                  storeQuery={storeQuery}
-                  setStoreQuery={setStoreQuery}
-                  storeFilter={storeFilter}
-                  setStoreFilter={setStoreFilter}
-                  storeSort={storeSort}
-                  setStoreSort={setStoreSort}
-                  page={catalogPage}
-                  setStorePage={setStorePage}
-                  catalog={catalog}
-                  catalogError={catalogError}
-                  onReloadCatalog={loadCatalog}
-                  fitMap={fitMap}
-                  customRef={customRef}
-                  setCustomRef={setCustomRef}
-                  onAddCustomRef={handleAddCustomRef}
-                  onAddToCart={handleAddToCart}
-                  cart={cart}
-                  cartSummary={cartSummary}
-                  cartEstimate={cartEstimate}
-                />
+                <div
+                  role="tabpanel"
+                  id="ollama-tabpanel-store"
+                  aria-labelledby="ollama-tab-store"
+                  className="om-tabpanel"
+                >
+                  <StoreTab
+                    ollama={ollama}
+                    status={status}
+                    storeQuery={storeQuery}
+                    setStoreQuery={setStoreQuery}
+                    storeFilter={storeFilter}
+                    setStoreFilter={setStoreFilter}
+                    storeSort={storeSort}
+                    setStoreSort={setStoreSort}
+                    page={catalogPage}
+                    setStorePage={setStorePage}
+                    catalog={catalog}
+                    catalogError={catalogError}
+                    onReloadCatalog={loadCatalog}
+                    fitMap={fitMap}
+                    customRef={customRef}
+                    setCustomRef={setCustomRef}
+                    onAddCustomRef={handleAddCustomRef}
+                    onAddToCart={handleAddToCart}
+                    cart={cart}
+                    cartSummary={cartSummary}
+                    cartEstimate={cartEstimate}
+                  />
+                </div>
               )}
 
               {tab === 'chat' && (
-                <ChatTab key={chatScopeKey(ollama)} ollama={ollama} status={status} models={models} />
+                <div
+                  role="tabpanel"
+                  id="ollama-tabpanel-chat"
+                  aria-labelledby="ollama-tab-chat"
+                  className="om-tabpanel"
+                >
+                  <ChatTab key={chatScopeKey(ollama)} ollama={ollama} status={status} models={models} />
+                </div>
               )}
             </>
           )}
@@ -571,7 +620,12 @@ function OllamaManagerPanelForApi({
       </aside>
       {deleteTarget?.api === api && (
         <ConfirmDialog
-          message={`Delete the installed model "${deleteTarget.model}"? This removes its blobs from disk.`}
+          message=""
+          messageSegments={[
+            copy('Delete the installed model "'),
+            fact(deleteTarget.model),
+            copy('"? This removes its blobs from disk.')
+          ]}
           onConfirm={() => void handleDelete()}
           onCancel={() => setDeleteTarget(null)}
         />
@@ -594,6 +648,7 @@ function HealthTab({
   running: OllamaRunningModel[]
   onRefresh: () => void
 }) {
+  const vocab = useVocabularyMapper()
   const ok = status?.health === 'ok'
   const dotClass = checking ? 'checking' : ok ? 'ok' : status ? 'bad' : ''
   return (
@@ -602,29 +657,29 @@ function HealthTab({
         <span className={`om-health__dot om-health__dot--${dotClass}`} aria-hidden />
         <span>
           {checking
-            ? 'Checking…'
+            ? vocab('Checking…')
             : !status
-              ? 'Not checked yet'
+              ? vocab('Not checked yet')
               : status.health === 'ok'
-                ? `Running — Ollama ${status.version ?? 'unknown version'} at ${status.endpoint}`
+                    ? <>{vocab('Running')} — Ollama {status.version ?? vocab('unknown version')} {vocab('at')} {status.endpoint}</>
                 : status.health === 'not-installed'
-                  ? 'Ollama does not appear to be installed'
+                  ? vocab('Ollama does not appear to be installed')
                   : status.health === 'stopped'
-                    ? `Ollama is not running at ${status.endpoint} (connection refused)`
+                    ? <>{vocab('Ollama is not running at')} {status.endpoint} ({vocab('connection refused')})</>
                     : status.health === 'unreachable'
-                      ? `Could not reach Ollama at ${status.endpoint}`
-                      : `Ollama answered but reported a problem: ${status.detail ?? 'unknown error'}`}
+                      ? <>{vocab('Could not reach Ollama at')} {status.endpoint}</>
+                      : <>{vocab('Ollama answered but reported a problem:')} {status.detail ?? vocab('unknown error')}</>}
         </span>
         <button className="sc-btn" onClick={onRefresh} disabled={checking}>
-          Retry
+          {vocab('Retry')}
         </button>
       </div>
 
       {hardware && (
         <p className="om-hardware">
-          {formatBytes(hardware.totalRamBytes)} RAM total ({formatBytes(hardware.freeRamBytes)} free) ·{' '}
-          {hardware.gpuName ? `GPU: ${hardware.gpuName}` : 'No GPU detected'}
-          {hardware.vramBytes !== null && ` (${formatBytes(hardware.vramBytes)} VRAM)`} · Free disk:{' '}
+          {formatBytes(hardware.totalRamBytes)} {vocab('RAM total')} ({formatBytes(hardware.freeRamBytes)} {vocab('free')}) ·{' '}
+          {hardware.gpuName ? <>{vocab('GPU:')} {hardware.gpuName}</> : vocab('No GPU detected')}
+          {hardware.vramBytes !== null && ` (${formatBytes(hardware.vramBytes)} VRAM)`} · {vocab('Free disk:')}{' '}
           {formatBytes(hardware.freeDiskBytes)} · {hardware.platform}/{hardware.arch}
         </p>
       )}
@@ -632,25 +687,25 @@ function HealthTab({
       {!ok && (
         <div className="om-troubleshoot">
           <p>
-            <strong>Get Ollama running:</strong>
+          <strong>{vocab('Get Ollama running:')}</strong>
           </p>
           <ol>
             {troubleshootSteps(hardware?.platform ?? 'linux', status?.health).map((step, i) => (
               <li key={i}>
-                {step.label}
+                {vocab(step.label)}
                 {step.command && <pre>{step.command}</pre>}
               </li>
             ))}
           </ol>
           <button className="sc-btn" onClick={onRefresh}>
-            I've done this — check again
+            {vocab("I've done this — check again")}
           </button>
         </div>
       )}
 
       {ok && running.length > 0 && (
         <>
-          <h3>Currently loaded</h3>
+          <h3>{vocab('Currently loaded')}</h3>
           <ul className="om-model-list">
             {running.map((m) => (
               <li key={m.name} className="om-model">
@@ -683,19 +738,20 @@ function ModelsTab({
   onDelete: (name: string) => void
   onRefresh: () => void
 }) {
+  const vocab = useVocabularyMapper()
   const [expanded, setExpanded] = useState<string | null>(null)
   if (status?.health !== 'ok') {
-    return <p className="om-empty-note">Ollama is not reachable — see the Health tab.</p>
+    return <p className="om-empty-note">{vocab('Ollama is not reachable — see the Health tab.')}</p>
   }
   return (
     <section>
       <div className="om-actions">
         <button className="sc-btn" onClick={onRefresh}>
-          Refresh
+          {vocab('Refresh')}
         </button>
       </div>
       {models.length === 0 ? (
-        <p className="om-empty-note">No models installed yet — pull one from the Model store tab.</p>
+        <p className="om-empty-note">{vocab('No models installed yet — pull one from the Model store tab.')}</p>
       ) : (
         <ul className="om-model-list">
           {models.map((m) => (
@@ -716,7 +772,7 @@ function ModelsTab({
                 </span>
                 <FitBadge fit={fitMap[m.name]} />
                 <button className="cv-item__link" onClick={() => onDelete(m.name)}>
-                  Delete
+                  {vocab('Delete')}
                 </button>
               </div>
               {expanded === m.name && <FitDetail fit={fitMap[m.name]} />}
@@ -732,10 +788,11 @@ function ModelsTab({
  *  the library page prints "1.3GB" while the manifest knows 1_321_098_329 bytes, and a rounded
  *  figure must not look like a measured one. A missing size stays "unknown", never 0. */
 function CatalogSize({ row }: { row: CatalogRow }) {
+  const vocab = useVocabularyMapper()
   if (row.sizeBytes === null) {
     return (
       <span className="om-model__meta" title={row.factsError ?? undefined}>
-        {row.factsError ? 'size unavailable' : 'size not fetched yet'}
+        {vocab(row.factsError ? 'size unavailable' : 'size not fetched yet')}
       </span>
     )
   }
@@ -745,6 +802,68 @@ function CatalogSize({ row }: { row: CatalogRow }) {
       {formatBytes(row.sizeBytes)}
     </span>
   )
+}
+
+function catalogHeadlineText(
+  vocab: (text: string) => string,
+  view: CatalogView
+): string {
+  switch (view.completeness.state) {
+    case 'complete':
+      return mapOwnedSentence(vocab, [
+        copy('Complete first-party library: all '),
+        fact(String(view.completeness.modelsKnown)),
+        copy(' models and all '),
+        fact(String(view.completeness.tagsKnown)),
+        copy(' tags on ollama.com/library. Community models aren\'t enumerable — add one by exact reference.')
+      ])
+    case 'partial':
+      return mapOwnedSentence(vocab, [
+        copy('Partial catalog: '),
+        fact(String(view.completeness.tagsKnown)),
+        copy(' tags across '),
+        fact(String(view.completeness.modelsKnown)),
+        copy(' models fetched so far — this is not yet the whole catalog.')
+      ])
+    case 'unavailable':
+      return vocab('The published catalog could not be loaded. This is a load failure, not an empty catalog — the exact-reference field below still reaches any model.')
+    default:
+      return view.source === 'legacy'
+        ? vocab('Short model list from this session — completeness unknown.')
+        : vocab('Catalog state is unknown for this session.')
+  }
+}
+
+export function catalogStalenessSegments(
+  view: CatalogView,
+  now: number
+): readonly DisplaySegment[] | null {
+  switch (view.staleness) {
+    case 'never':
+      return view.registryEnabled ? [copy('The catalog has never been fetched on this machine.')] : null
+    case 'stale':
+      return view.indexFetchedAt === null
+        ? [copy('The cached catalog is out of date and is being refreshed.')]
+        : [
+            copy('The cached catalog is out of date (last fetched '),
+            fact(formatAge(now - view.indexFetchedAt)),
+            copy(' ago) and is being refreshed.')
+          ]
+    case 'fresh':
+      return view.indexFetchedAt === null
+        ? null
+        : [copy('Catalog fetched '), fact(formatAge(now - view.indexFetchedAt)), copy(' ago.')]
+    default:
+      return null
+  }
+}
+
+export function ollamaPageSummarySegments(page: CatalogPage) {
+  return [
+    copy('Showing '), fact(String(page.from)), copy('–'), fact(String(page.to)), copy(' of '),
+    fact(String(page.total)), copy(' matching references (page '), fact(String(page.page)), copy(' of '),
+    fact(String(page.pageCount)), copy(').')
+  ]
 }
 
 function StoreTab({
@@ -792,15 +911,16 @@ function StoreTab({
   cartSummary: Pick<PullQueueState, 'running' | 'concurrency'>
   cartEstimate: { known: number; unknownCount: number }
 }) {
+  const vocab = useVocabularyMapper()
   return (
     <>
       <section>
-        <h3>Model catalog</h3>
+        <h3>{vocab('Model catalog')}</h3>
         {catalog === null ? (
           <p className="om-empty-note">
             {catalogError
-              ? `The catalog could not be loaded: ${catalogError}. This is a load failure, not an empty catalog — the exact-reference field below still reaches any model.`
-              : 'Loading the catalog…'}
+              ? <>{vocab('The catalog could not be loaded:')} {catalogError}. {vocab('This is a load failure, not an empty catalog — the exact-reference field below still reaches any model.')}</>
+              : vocab('Loading the catalog…')}
           </p>
         ) : (
           <div
@@ -811,24 +931,23 @@ function StoreTab({
             role="status"
             aria-live="polite"
           >
-            <p>{completenessHeadline(catalog)}</p>
+              <p>{catalogHeadlineText(vocab, catalog)}</p>
             {catalog.refreshing && (
               <p>
-                Still fetching: {catalog.pendingTagFetches} model tag lists, {catalog.pendingFactFetches} exact
-                sizes.
+              {mapOwnedSentence(vocab, [copy('Still fetching: '), fact(String(catalog.pendingTagFetches)), copy(' model tag lists, '), fact(String(catalog.pendingFactFetches)), copy(' exact sizes.')])}
               </p>
             )}
             {(() => {
-              const staleness = stalenessSentence(catalog, Date.now())
-              return staleness ? <p>{staleness}</p> : null
+              const staleness = catalogStalenessSegments(catalog, Date.now())
+              return staleness ? <p>{mapOwnedSentence(vocab, staleness)}</p> : null
             })()}
             {catalog.completeness.reasons.map((reason, i) => (
-              <p key={i}>{reason}</p>
+              <p key={i}>{mapOwnedSentence(vocab, [fact(reason)])}</p>
             ))}
-            {catalog.refreshError && <p>Last refresh error: {catalog.refreshError}</p>}
-            {catalogError && <p>The most recent reload failed: {catalogError}. Showing the last list that loaded.</p>}
+            {catalog.refreshError && <p>{vocab('Last refresh error:')} {catalog.refreshError}</p>}
+            {catalogError && <p>{vocab('The most recent reload failed:')} {catalogError}. {vocab('Showing the last list that loaded.')}</p>}
             <button className="sc-btn" onClick={onReloadCatalog}>
-              Reload catalog
+              {vocab('Reload catalog')}
             </button>
           </div>
         )}
@@ -837,51 +956,51 @@ function StoreTab({
             type="search"
             className="om-search"
             style={{ marginBottom: 0, flex: 1 }}
-            placeholder="Search every model and tag…"
-            aria-label="Search the model catalog"
+            placeholder={vocab('Search every model and tag…')}
+            aria-label={vocab('Search the model catalog')}
             value={storeQuery}
             onChange={(e) => setStoreQuery(e.target.value)}
           />
           <label>
-            Show
+            {vocab('Show')}
             <Select
-              aria-label="Filter the model catalog"
+              aria-label={vocab('Filter the model catalog')}
               value={storeFilter}
               onChange={(e) => setStoreFilter(e.target.value as CatalogFilter)}
             >
-              <option value="all">Everything</option>
-              <option value="installed">Installed</option>
-              <option value="not-installed">Not installed</option>
-              <option value="with-size">Known size</option>
+              <option value="all">{vocab('Everything')}</option>
+              <option value="installed">{vocab('Installed')}</option>
+              <option value="not-installed">{vocab('Not installed')}</option>
+              <option value="with-size">{vocab('Known size')}</option>
             </Select>
           </label>
           <label>
-            Sort
+            {vocab('Sort')}
             <Select
-              aria-label="Sort the model catalog"
+              aria-label={vocab('Sort the model catalog')}
               value={storeSort}
               onChange={(e) => setStoreSort(e.target.value as CatalogSort)}
             >
-              <option value="name">Name</option>
-              <option value="size-asc">Smallest first</option>
-              <option value="size-desc">Largest first</option>
-              <option value="installed-first">Installed first</option>
+              <option value="name">{vocab('Name')}</option>
+              <option value="size-asc">{vocab('Smallest first')}</option>
+              <option value="size-desc">{vocab('Largest first')}</option>
+              <option value="installed-first">{vocab('Installed first')}</option>
             </Select>
           </label>
         </div>
         <p className="om-empty-note">
           {page.total === 0
             ? catalog && catalog.rows.length > 0
-              ? 'No catalog row matches this search or filter.'
-              : 'No rows are listed. See the catalog state above for whether that is a load failure or a catalog that is genuinely still being fetched.'
-            : `Showing ${page.from}–${page.to} of ${page.total} matching references (page ${page.page} of ${page.pageCount}).`}
+              ? vocab('No catalog row matches this search or filter.')
+              : vocab('No rows are listed. See the catalog state above for whether that is a load failure or a catalog that is genuinely still being fetched.')
+            : mapOwnedSentence(vocab, ollamaPageSummarySegments(page))}
         </p>
         <ul className="om-model-list">
           {page.rows.map((row) => (
             <li key={row.ref} className="om-model">
               <div className="om-model__row">
                 <span className="om-model__name">{row.ref}</span>
-                {row.installed && <span className="om-model__meta">installed</span>}
+                {row.installed && <span className="om-model__meta">{vocab('installed')}</span>}
                 <CatalogSize row={row} />
                 <span className="om-model__meta" title={row.revision ?? undefined}>
                   {row.revision
@@ -891,8 +1010,8 @@ function StoreTab({
                       // shown here complete: appending "…" to it would claim more digits exist
                       // than were ever fetched. (This used to be backwards — the truncated case
                       // had no ellipsis and the complete case had one.)
-                      `rev ${row.revision.replace(/^sha256:/, '').slice(0, 12)}${row.revisionExact ? '…' : ''}`
-                    : 'rev unknown'}
+                      <>{vocab('rev')} {row.revision.replace(/^sha256:/, '').slice(0, 12)}{row.revisionExact ? '…' : ''}</>
+                    : <>{vocab('rev')} {vocab('unknown')}</>}
                 </span>
                 <span className="om-model__meta">
                   {row.installed
@@ -902,20 +1021,20 @@ function StoreTab({
                       // time). Labeling it "installed" says what it actually is; showing a bare date
                       // here implied a publish date this app has never had evidence for.
                       row.publishedAt
-                      ? `installed ${new Date(row.publishedAt).toLocaleDateString()}`
-                      : 'no timestamp'
-                    : 'no published date'}
+                      ? <>{vocab('installed')} {new Date(row.publishedAt).toLocaleDateString()}</>
+                      : vocab('no timestamp')
+                    : vocab('no published date')}
                 </span>
                 <FitBadge fit={fitMap[row.ref]} />
                 <button className="sc-btn" disabled={status?.health !== 'ok'} onClick={() => onAddToCart(row.ref)}>
-                  Add to cart
+                  {vocab('Add to cart')}
                 </button>
               </div>
               {row.tag === null && (
                 <p className="om-empty-note">
                   {row.tagsState === 'error'
-                    ? `This model's tag list could not be fetched (${row.tagsError ?? 'unknown error'}) — its other tags are not listed. The bare name pulls :latest.`
-                    : "This model's published tag list has not been fetched yet — its other tags are not listed. The bare name pulls :latest."}
+                    ? mapOwnedSentence(vocab, [copy("This model's tag list could not be fetched ("), fact(row.tagsError ?? 'unknown error'), copy(") — its other tags are not listed. The bare name pulls "), fact(':latest'), copy('.')])
+                    : mapOwnedSentence(vocab, [copy("This model's published tag list has not been fetched yet — its other tags are not listed. The bare name pulls "), fact(':latest'), copy('.')])}
                 </p>
               )}
             </li>
@@ -924,17 +1043,17 @@ function StoreTab({
         {page.pageCount > 1 && (
           <div className="om-actions">
             <button className="sc-btn" disabled={page.page <= 1} onClick={() => setStorePage((p) => p - 1)}>
-              Previous
+              {vocab('Previous')}
             </button>
             <span className="om-model__meta">
-              Page {page.page} of {page.pageCount}
+              {vocab('Page')} {page.page} {vocab('of')} {page.pageCount}
             </span>
             <button
               className="sc-btn"
               disabled={page.page >= page.pageCount}
               onClick={() => setStorePage((p) => p + 1)}
             >
-              Next
+              {vocab('Next')}
             </button>
           </div>
         )}
@@ -943,23 +1062,22 @@ function StoreTab({
             type="text"
             className="om-search"
             style={{ marginBottom: 0, flex: 1 }}
-            placeholder="Exact model reference, e.g. llama3.2:1b"
-            aria-label="Model reference"
+            placeholder={vocab('Exact model reference, e.g. llama3.2:1b')}
+            aria-label={vocab('Model reference')}
             value={customRef}
             onChange={(e) => setCustomRef(e.target.value)}
           />
           <button className="sc-btn" disabled={status?.health !== 'ok' || !customRef.trim()} onClick={onAddCustomRef}>
-            Add
+            {vocab('Add')}
           </button>
         </div>
       </section>
 
       <section>
-        <h3>Pull queue (cart)</h3>
+        <h3>{vocab('Pull queue (cart)')}</h3>
         <p className="om-empty-note">
-          Downloads only — there is no price, account, or purchase here. Estimated total for pending
-          items with a known size: {formatBytes(cartEstimate.known)}
-          {cartEstimate.unknownCount > 0 && ` (+${cartEstimate.unknownCount} of unknown size)`}.
+          {vocab('Downloads only — there is no price, account, or purchase here. Estimated total for pending items with a known size:')} {formatBytes(cartEstimate.known)}
+          {cartEstimate.unknownCount > 0 && ` (+${cartEstimate.unknownCount} ${vocab('of unknown size')})`}.
         </p>
         <div className="cv-queue-controls">
           <button
@@ -969,10 +1087,10 @@ function StoreTab({
               void (cartSummary.running ? ollama.pullPause() : ollama.pullStart())
             }
           >
-            {cartSummary.running ? 'Pause' : 'Start'}
+            {vocab(cartSummary.running ? 'Pause' : 'Start')}
           </button>
           <label className="cv-concurrency">
-            Parallel:
+            {vocab('Parallel:')}
             <input
               type="number"
               min={1}
@@ -983,7 +1101,7 @@ function StoreTab({
           </label>
         </div>
         {cart.length === 0 ? (
-          <p className="om-empty-note">The cart is empty.</p>
+          <p className="om-empty-note">{vocab('The cart is empty.')}</p>
         ) : (
           <ul className="om-cart">
             {cart.map((item) => {
@@ -1002,28 +1120,31 @@ function StoreTab({
                       {item.completedBytes !== null ? formatBytes(item.completedBytes) : '—'}
                       {item.totalBytes !== null && ` / ${formatBytes(item.totalBytes)}`}
                     </span>
-                    <span className="cv-item__status">{item.digestPhase ?? item.status}</span>
+                    <span className="cv-item__status">{item.digestPhase ?? vocab(item.status)}</span>
                   </div>
                   {pct !== null && (
-                    <div className="cv-progress">
-                      <div className="cv-progress__bar" style={{ width: `${pct}%` }} />
-                    </div>
+                    <Progress
+                      value={pct}
+                      label={`Download progress for ${item.ref}`}
+                      className="cv-progress"
+                      barClassName="cv-progress__bar"
+                    />
                   )}
                   {item.error && <p className="cv-item__error">{item.error}</p>}
                   <div className="cv-item__actions">
                     {(item.status === 'queued' || item.status === 'running') && (
                       <button className="cv-item__link" onClick={() => void ollama.pullCancelItem(item.id)}>
-                        Cancel
+                        {vocab('Cancel')}
                       </button>
                     )}
                     {(item.status === 'failed' || item.status === 'cancelled') && (
                       <button className="cv-item__link" onClick={() => void ollama.pullRetryItem(item.id)}>
-                        Retry
+                        {vocab('Retry')}
                       </button>
                     )}
                     {item.status !== 'running' && item.status !== 'queued' && (
                       <button className="cv-item__link" onClick={() => void ollama.pullRemoveItem(item.id)}>
-                        Remove
+                        {vocab('Remove')}
                       </button>
                     )}
                   </div>
@@ -1046,6 +1167,7 @@ function ChatTab({
   status: OllamaStatus | null
   models: OllamaModelInfo[]
 }) {
+  const vocab = useVocabularyMapper()
   const [sessions, setSessions] = useState<OllamaChatSessionSummary[]>([])
   const [active, setActive] = useState<OllamaChatSession | null>(null)
   const [streamingText, setStreamingText] = useState('')
@@ -1154,33 +1276,33 @@ function ChatTab({
     }
   }, [active, ollama])
 
-  if (status?.health !== 'ok') return <p className="om-empty-note">Ollama is not reachable — see the Health tab.</p>
+  if (status?.health !== 'ok') return <p className="om-empty-note">{vocab('Ollama is not reachable — see the Health tab.')}</p>
 
   const hasVision = capabilities?.includes('vision') ?? false
   const attachmentReason = !active
-    ? 'Start a chat first'
+    ? vocab('Start a chat first')
     : capabilities === null
-      ? 'This model\'s capabilities have not been verified yet'
+      ? vocab("This model's capabilities have not been verified yet")
       : !hasVision
-        ? `"${active.model}" has no verified vision capability`
-        : 'Image attachments are not implemented in this build yet'
+        ? mapOwnedSentence(vocab, [copy('"'), fact(active.model), copy('" has no verified vision capability')])
+        : vocab('Image attachments are not implemented in this build yet')
 
   return (
     <section className="om-chat">
       <div className="om-actions">
         <button className="sc-btn" onClick={() => void handleNewChat()}>
-          New chat
+          {vocab('New chat')}
         </button>
         {active && (
           <>
             <button className="sc-btn" onClick={() => void handleRename()}>
-              Rename
+              {vocab('Rename')}
             </button>
             <button className="sc-btn" onClick={() => void handleExport()}>
-              Export (Markdown)
+              {vocab('Export (Markdown)')}
             </button>
             <button className="cv-item__link" onClick={() => setDeleteConfirm(true)}>
-              Delete
+              {vocab('Delete')}
             </button>
           </>
         )}
@@ -1200,12 +1322,12 @@ function ChatTab({
       )}
 
       {!active ? (
-        <p className="om-empty-note">No chat open. Start a new one.</p>
+        <p className="om-empty-note">{vocab('No chat open. Start a new one.')}</p>
       ) : (
         <>
           <div className="om-actions">
             <label>
-              Model:{' '}
+              {vocab('Model:')}{' '}
               <Select
                 value={active.model}
                 onChange={async (e) => {
@@ -1224,7 +1346,7 @@ function ChatTab({
           </div>
           <div className="om-chat__params">
             <label>
-              Temperature:{' '}
+              {vocab('Temperature:')}{' '}
               <input
                 type="number"
                 step={0.1}
@@ -1237,7 +1359,7 @@ function ChatTab({
               />
             </label>
             <label>
-              Top-p:{' '}
+              {vocab('Top-p:')}{' '}
               <input
                 type="number"
                 step={0.05}
@@ -1248,7 +1370,7 @@ function ChatTab({
               />
             </label>
             <label>
-              Context:{' '}
+              {vocab('Context:')}{' '}
               <input
                 type="number"
                 step={512}
@@ -1259,7 +1381,7 @@ function ChatTab({
             </label>
           </div>
           <details>
-            <summary>System prompt</summary>
+            <summary>{vocab('System prompt')}</summary>
             <TextArea
               value={active.systemPrompt}
               onChange={(e) => setActive((a) => (a ? { ...a, systemPrompt: e.target.value } : a))}
@@ -1269,7 +1391,7 @@ function ChatTab({
 
           <div className="om-chat__transcript" ref={transcriptRef}>
             {active.messages.length === 0 && !streaming && (
-              <p className="om-empty-note">No messages yet — say something below.</p>
+              <p className="om-empty-note">{vocab('No messages yet — say something below.')}</p>
             )}
             {active.messages.map((m, i) => (
               <div key={i} className={`om-chat__msg om-chat__msg--${m.role}`}>
@@ -1287,11 +1409,11 @@ function ChatTab({
 
           <div className="om-actions">
             <button className="cv-item__link" disabled title={attachmentReason}>
-              Attach image (disabled — {attachmentReason})
+              {vocab('Attach image')} ({vocab('disabled')} — {attachmentReason})
             </button>
             {!capabilities && (
               <button className="cv-item__link" onClick={() => void handleVerifyCapabilities()} disabled={verifyingCaps}>
-                {verifyingCaps ? 'Verifying…' : 'Verify model capabilities'}
+                {vocab(verifyingCaps ? 'Verifying…' : 'Verify model capabilities')}
               </button>
             )}
           </div>
@@ -1299,7 +1421,7 @@ function ChatTab({
           <div className="om-chat__composer">
             <TextArea
               value={composer}
-              placeholder="Message…"
+              placeholder={vocab('Message…')}
               onChange={(e) => setComposer(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
@@ -1310,11 +1432,11 @@ function ChatTab({
             />
             {streaming ? (
               <button className="sc-btn" onClick={() => void ollama.chatStop(active.id)}>
-                Stop
+                {vocab('Stop')}
               </button>
             ) : (
               <button className="sc-btn primary" onClick={() => void handleSend()} disabled={!composer.trim()}>
-                Send
+                {vocab('Send')}
               </button>
             )}
           </div>
@@ -1322,7 +1444,12 @@ function ChatTab({
       )}
       {deleteConfirm && (
         <ConfirmDialog
-          message={`Delete the chat "${active?.title}"? This cannot be undone.`}
+          message=""
+          messageSegments={[
+            copy('Delete the chat "'),
+            fact(active?.title ?? ''),
+            copy('"? This cannot be undone.')
+          ]}
           onConfirm={() => void handleDelete()}
           onCancel={() => setDeleteConfirm(false)}
         />

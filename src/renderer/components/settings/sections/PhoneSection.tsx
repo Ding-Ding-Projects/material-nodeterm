@@ -7,6 +7,7 @@ import {
 import type { RemoteLoginHelp } from '../../../../shared/types'
 import type { PairedDevice } from '@shared/types'
 import { SettingsSection } from '../SettingsSection'
+import { SettingsText } from '../SettingsText'
 import { SearchableRow } from '../SearchableRow'
 import { requiresDestructiveGate } from '@shared/kids-mode-policy'
 import { openDestructiveGate } from '../../../state/destructiveGate'
@@ -75,10 +76,10 @@ export function PhoneSection({ isActive }: { isActive: boolean }): React.JSX.Ele
         searchEntries={ENTRIES}
       >
         <div className="space-y-2" role="status">
-          <h4 className="text-[13px] font-medium text-text">Not available in Server Edition</h4>
+          <h4 className="text-[13px] font-medium text-text"><SettingsText>Not available in Server Edition</SettingsText></h4>
           <p className="text-sm text-muted">
-            This browser is already connected to the Server Edition host. Pair nodeterm mobile
-            from the desktop app running on the machine whose terminals you want to reach.
+            <SettingsText>This browser is already connected to the Server Edition host. Pair</SettingsText>{' '}
+            <strong>nodeterm mobile</strong>{' '}<SettingsText>from the desktop app running on the machine whose terminals you want to reach.</SettingsText>
           </p>
         </div>
       </SettingsSection>
@@ -104,6 +105,10 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
       setRemoteLoginHelp({ opened: 'none', command: 'sudo systemctl enable --now ssh' })
     }
   }
+  // What the last revoke has to say, and whether it is a WARNING or a receipt. A successful
+  // removal owes the user a sentence too (the phone keeps Pro for a few days), and printing that
+  // in the warning colour would read as a failure.
+  const [revokeNote, setRevokeNote] = useState<{ text: string; warn: boolean } | null>(null)
 
   const phoneAccessEnabled = useSettings((s) => s.settings.phoneAccessEnabled)
   const updateSettings = useSettings((s) => s.update)
@@ -133,9 +138,13 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
   }, [])
 
   // The shared pairing machine (also behind the top-right quick-pair popover); a completed
-  // pairing refreshes the device list below.
+  // pairing refreshes the device list below — and drops the last revoke note, which names a device
+  // by name and would otherwise outlive the very phone it warns about being re-paired.
   const { phase, qr, sshOpen, sshHealed, relayResult, relayPlan, error, busy, start, stop, reset } = usePhonePairing(
-    () => void refreshDevices()
+    () => {
+      setRevokeNote(null)
+      void refreshDevices()
+    }
   )
 
   const togglePhoneAccess = (next: boolean): void => {
@@ -182,8 +191,23 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
     })
   }
 
+  // Removing local access and taking the phone's Pro back are DIFFERENT facts, and the second one
+  // used to be missing entirely — Remove unpinned the key here while the server kept minting Pro
+  // for that phone forever. So both legs are surfaced:
+  //  - 'skipped' says nothing. It means we had nothing of ours to revoke — a free-tier desktop
+  //    holds no entitlement to sign the request with, or the device was already gone from the
+  //    registry — and warning there would tell a free user their phone's Pro is stuck when it
+  //    never had any of ours. (A device paired before we recorded the phone's relay id does NOT
+  //    land here: it falls back to our own pairing id, which is the row's key in that case, so the
+  //    server leg really does run — see `revokeDevice` in main/pairing-service.ts.)
+  //  - 'ok' still owes a sentence: the phone keeps the entitlement it already holds until that
+  //    expires, so Pro does not stop the instant the row goes. Saying nothing produced exactly the
+  //    support mail this branch exists to end ("I removed it and it still has Pro").
+  //  - 'failed' warns — and does not prescribe waiting. It collapses a 403 (not our row), a 401,
+  //    a 5xx and an unreachable server, and only the last of those clears by itself.
   const revokeDevice = async (device: PairedDevice): Promise<void> => {
     setPendingRevoke(null)
+    setRevokeNote(null)
     try {
       await window.nodeTerminal.pairing.revokeDevice(device.id)
       // A successful retry is the only thing that clears the persistent warning.
@@ -196,6 +220,38 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
         `Couldn’t revoke “${device.name}”${detail}. Its SSH access may still be active. ` +
           'The device remains listed; fix the file-access problem and retry Revoke.'
       )
+      const result = await window.nodeTerminal.pairing.revokeDevice(device.id)
+      // Additive, not exclusive: both legs can fail at once (an unwritable ~/.ssh while offline),
+      // and being told only half of that leaves the other half to be discovered by accident.
+      const notes: string[] = []
+      if (!result.local) {
+        notes.push(`Couldn’t remove “${device.name}” from this machine — try again.`)
+      }
+      if (result.server === 'failed') {
+        // Deliberately not "pair it and remove it again": that used to be the whole advice, and it
+        // is wrong twice over — a 403 will never clear however long you wait, and pairing RESTORES
+        // the phone's Pro (the mint upserts its row) before the second removal tries again. It is
+        // offered as what it is — a retry that costs something — with support as the reliable path.
+        notes.push(
+          (result.local ? `Removed “${device.name}” from this machine, but its` : 'Its') +
+            ' Pro access couldn’t be revoked — we were refused or couldn’t reach the server — so' +
+            ' that phone may keep Pro. Pairing it again and removing it retries the revoke, though' +
+            ' pairing restores its Pro in the meantime. Get in touch if it keeps failing.'
+        )
+      }
+      if (notes.length) {
+        setRevokeNote({ text: notes.join(' '), warn: true })
+      } else if (result.server === 'ok') {
+        // Not instant, and we say so. The phone holds a signed entitlement minted for up to seven
+        // days; revoking the row stops the NEXT one, it cannot reach into the phone.
+        setRevokeNote({
+          text: `Removed “${device.name}”. Its Pro ends when the pass it already holds expires — within 7 days.`,
+          warn: false
+        })
+      }
+    } catch {
+      // The call itself never got an answer (main is gone, or the surface doesn't support it).
+      setRevokeNote({ text: `Couldn’t remove “${device.name}” — try again.`, warn: true })
     } finally {
       void refreshDevices()
     }
@@ -266,12 +322,8 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
         <div className="space-y-3">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <h4 className="text-[13px] font-medium text-text">Remote access from your phone</h4>
-              <p className="mt-1 text-sm text-muted">
-                Reach this machine from anywhere — not just your local network — end-to-end encrypted
-                over the relay. Your paired phone connects through the relay; the connection is
-                verified with a code the first time.
-              </p>
+              <h4 className="text-[13px] font-medium text-text"><SettingsText>Remote access from your phone</SettingsText></h4>
+              <p className="mt-1 text-sm text-muted"><SettingsText>Reach this machine from anywhere — not just your local network — end-to-end encrypted over the relay. Your paired phone connects through the relay; the connection is verified with a code the first time.</SettingsText></p>
             </div>
             <Switch
               checked={phoneAccessEnabled}
@@ -284,23 +336,20 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
 
       <SearchableRow {...ROWS.pair}>
         <div className="space-y-4">
-          <h4 className="text-[13px] font-medium text-text">Pair a device</h4>
+              <h4 className="text-[13px] font-medium text-text"><SettingsText>Pair a device</SettingsText></h4>
           <p className="text-sm text-muted">
             {/* Said in the future tense on purpose. This paragraph renders in BOTH states, and when
                 Remote Login is off there is no QR below it — the old copy read "scan this QR" and
                 "inside this QR" over an empty space, telling the reader to scan something that was not
                 there. Every fact it carried is kept; only the tense moved. */}
-            Open <strong>nodeterm mobile</strong> on your iPhone and scan the QR below. The phone
-            generates and keeps its own key; the pairing request and the credentials sent back are
-            encrypted to the host key carried in that QR.
+            <SettingsText>Open</SettingsText>{' '}<strong>nodeterm mobile</strong>{' '}<SettingsText>on your iPhone and scan the QR below. The phone generates and keeps its own key; the pairing request and the credentials sent back are encrypted to the host key carried in that QR.</SettingsText>
           </p>
 
           {phase === 'idle' || phase === 'timeout' || phase === 'failed' ? (
             <div className="space-y-3">
               {phase === 'timeout' ? (
                 <p className="text-sm text-muted">
-                  Pairing timed out — that code no longer works. Start again and scan the fresh
-                  one within ten minutes.
+                  <SettingsText>Pairing timed out — that code no longer works. Start again and scan the fresh one within ten minutes.</SettingsText>
                 </p>
               ) : null}
               <Button variant="primary" disabled={busy} onClick={() => void start()}>
@@ -317,9 +366,7 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
                 // The live probe (usePhonePairing) flips sshOpen and the QR appears by itself.
                 <div className="space-y-2">
                   <p className="text-sm" style={{ color: '#ff9f0a' }}>
-                    {remoteLoginCopy.what} is off, so your phone wouldn&apos;t be able to connect
-                    after pairing. Turn it on — the QR appears here the moment it is, with no need to
-                    restart pairing.
+                      <SettingsText segments={[{ kind: 'fact', value: remoteLoginCopy.what }, { kind: 'copy', value: " is off, so your phone wouldn't be able to connect after pairing. Turn it on — the QR appears here the moment it is, with no need to restart pairing." }]} />
                   </p>
                   {/* Rendered from what the handler RETURNS, never from the platform we guessed. The
                       button was mac-only and the handler was `if (platform !== 'darwin') return` — so a
@@ -328,8 +375,7 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
                       settings surface worth opening, show the command instead of a button that misfires. */}
                   {remoteLoginHelp?.opened === 'none' && remoteLoginHelp.command ? (
                     <p className="text-sm text-muted">
-                      Run <code className="select-all">{remoteLoginHelp.command}</code>, then come back —
-                      this page is watching.
+                      <SettingsText>Run</SettingsText>{' '}<code className="select-all">{remoteLoginHelp.command}</code>, <SettingsText>then come back — this page is watching.</SettingsText>
                     </p>
                   ) : (
                     <Button onClick={() => void openRemoteLogin()}>{remoteLoginCopy.button}</Button>
@@ -344,23 +390,19 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
                     alt="Pairing QR code"
                     className="rounded-lg bg-white p-2"
                   />
-                  <p className="text-sm text-muted">Waiting for your phone… (10 min)</p>
+                  <p className="text-sm text-muted"><SettingsText>Waiting for your phone… (10 min)</SettingsText></p>
                   {relayPlan === 'dev' ? (
                     <p className="text-sm" style={{ color: '#ff9f0a' }}>
-                      Dev build: the relay is off regardless of the toggle, so this code pairs
-                      LAN-only. Run a packaged build — or set NODETERM_RELAY_URL — for remote
-                      access.
+                      <SettingsText>Dev build: the relay is off regardless of the toggle, so this code pairs LAN-only. Run a packaged build — or set</SettingsText>{' '}<code>NODETERM_RELAY_URL</code>{' '}<SettingsText>for remote access.</SettingsText>
                     </p>
                   ) : !phoneAccessEnabled ? (
                     <p className="text-sm" style={{ color: '#ff9f0a' }}>
-                      LAN-only code: the phone will reach this machine only on this network. Turn
-                      on <strong>Remote access from your phone</strong> above first to also
-                      connect from cellular — the QR refreshes by itself.
+                      <SettingsText>LAN-only code: the phone will reach this machine only on this network. Turn on</SettingsText>{' '}<strong><SettingsText>Remote access from your phone</SettingsText></strong>{' '}<SettingsText>above first to also connect from cellular — the QR refreshes by itself.</SettingsText>
                     </p>
                   ) : null}
                   {sshHealed ? (
                     <p className="text-sm" style={{ color: '#30d158' }}>
-                      ✓ Remote Login is on — scan away.
+                      ✓ <SettingsText>Remote Login is on — scan away.</SettingsText>
                     </p>
                   ) : null}
                 </>
@@ -372,11 +414,11 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
           {phase === 'paired' ? (
             <div className="space-y-3">
               <p className="text-sm font-medium" style={{ color: '#30d158' }}>
-                ✓ Paired. That device can now connect with its own key.
+                ✓ <SettingsText>Paired. That device can now connect with its own key.</SettingsText>
               </p>
               {relayResult === 'ok' ? (
                 <p className="text-sm" style={{ color: '#30d158' }}>
-                  Remote access is set up — the phone can reach this machine from anywhere.
+                  <SettingsText>Remote access is set up — the phone can reach this machine from anywhere.</SettingsText>
                 </p>
               ) : relayResult === 'failed' ? (
                 <p className="text-sm" style={{ color: '#ff9f0a' }}>
@@ -386,13 +428,11 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
                 </p>
               ) : relayResult === 'off' ? (
                 <p className="text-sm text-muted">
-                  LAN-only pairing — remote access is switched off above.
+                  <SettingsText>LAN-only pairing — remote access is switched off above.</SettingsText>
                 </p>
               ) : relayResult === 'dev' ? (
                 <p className="text-sm text-muted">
-                  LAN-only pairing — this is an unpackaged (dev) build, where the relay is
-                  disabled regardless of the toggle. Set NODETERM_RELAY_URL to test remote
-                  access, or use a packaged build.
+                  <SettingsText>LAN-only pairing — this is an unpackaged (dev) build, where the relay is disabled regardless of the toggle. Set NODETERM_RELAY_URL to test remote access, or use a packaged build.</SettingsText>
                 </p>
               ) : null}
               <Button onClick={reset}>Pair another device</Button>
@@ -401,7 +441,7 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
 
           {error ? (
             <p className="text-sm" style={{ color: '#ff9f0a' }}>
-              {error}
+              <SettingsText segments={[{ kind: 'fact', value: error }]} />
             </p>
           ) : null}
         </div>
@@ -409,14 +449,14 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
 
       <SearchableRow {...ROWS.devices}>
         <div className="space-y-3">
-          <h4 className="text-[13px] font-medium text-text">Paired devices</h4>
+              <h4 className="text-[13px] font-medium text-text"><SettingsText>Paired devices</SettingsText></h4>
           {revokeError ? (
             <p role="alert" className="text-sm" style={{ color: '#ff9f0a' }}>
               {revokeError}
             </p>
           ) : null}
           {devices.length === 0 ? (
-            <p className="text-sm text-muted">No devices paired yet</p>
+            <p className="text-sm text-muted"><SettingsText>No devices paired yet</SettingsText></p>
           ) : (
             <ul className="space-y-2">
               {devices.map((device) => (
@@ -442,11 +482,9 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
 
       <SearchableRow {...ROWS.relayPeers}>
         <div className="space-y-3">
-          <h4 className="text-[13px] font-medium text-text">Approved relay peers</h4>
+          <h4 className="text-[13px] font-medium text-text"><SettingsText>Approved relay peers</SettingsText></h4>
           <p className="text-sm text-muted">
-            Every phone or other desktop that has mutually approved a relay connection to this
-            machine, and can therefore reach its terminals whenever it connects. Public keys
-            only — never a credential.
+            <SettingsText>Every phone or other desktop that has mutually approved a relay connection to this machine, and can therefore reach its terminals whenever it connects. Public keys only — never a credential.</SettingsText>
           </p>
           {revokePeerError ? (
             <p role="alert" className="text-sm" style={{ color: '#ff9f0a' }}>
@@ -454,7 +492,7 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
             </p>
           ) : null}
           {relayPeers.length === 0 ? (
-            <p className="text-sm text-muted">No relay peers approved yet</p>
+            <p className="text-sm text-muted"><SettingsText>No relay peers approved yet</SettingsText></p>
           ) : (
             <ul className="space-y-2">
               {relayPeers.map((peerKeyB64) => (
@@ -474,6 +512,14 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
               ))}
             </ul>
           )}
+          {revokeNote ? (
+            <p
+              className={revokeNote.warn ? 'text-sm' : 'text-sm text-muted'}
+              style={revokeNote.warn ? { color: '#ff9f0a' } : undefined}
+            >
+              {revokeNote.text}
+            </p>
+          ) : null}
         </div>
       </SearchableRow>
 
@@ -492,7 +538,10 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
           off the existing single confirm is unchanged. */}
       {pendingRevoke && !kidsGateRequired ? (
         <ConfirmDialog
-          message={`Revoke “${pendingRevoke.name}”? Its key is removed from this machine and it will no longer be able to connect.`}
+          // Both legs, and the timing of the one that is not instant. "If" rather than a flat
+          // claim: a free-tier desktop has no Pro of ours on that phone to take back, and this
+          // dialog cannot tell — the server leg reports that only after the fact ('skipped').
+          message={`Revoke “${pendingRevoke.name}”? Its key is removed from this machine and it will no longer be able to connect. If its Pro comes from this Mac’s license, that is revoked too — the phone loses Pro within 7 days.`}
           confirmLabel="Revoke"
           onConfirm={() => void revokeDevice(pendingRevoke)}
           onCancel={() => setPendingRevoke(null)}

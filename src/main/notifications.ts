@@ -8,6 +8,61 @@ export interface NotificationLike {
   on(event: 'click' | 'close' | 'failed', cb: () => void): void
 }
 
+export interface NativeNotificationCopy {
+  title: string
+  body: string
+}
+
+export type PreparedNativeNotification = {
+  title: string
+  body: string
+  titleKind: 'authored' | 'fact'
+  bodyKind: 'authored' | 'fact'
+}
+
+export function isPreparedNativeNotification(payload: {
+  title?: unknown
+  body?: unknown
+  titleKind?: unknown
+  bodyKind?: unknown
+}): payload is PreparedNativeNotification {
+  return (
+    typeof payload.title === 'string' &&
+    typeof payload.body === 'string' &&
+    (payload.titleKind === 'authored' || payload.titleKind === 'fact') &&
+    (payload.bodyKind === 'authored' || payload.bodyKind === 'fact')
+  )
+}
+
+export function isPreparedNativeNotification(payload: unknown): payload is PreparedNativeNotification {
+  if (!payload || typeof payload !== 'object') return false
+  const candidate = payload as {
+    title?: unknown
+    body?: unknown
+    titleKind?: unknown
+    bodyKind?: unknown
+  }
+  return (
+    typeof candidate.title === 'string' &&
+    typeof candidate.body === 'string' &&
+    (candidate.titleKind === 'authored' || candidate.titleKind === 'fact') &&
+    (candidate.bodyKind === 'authored' || candidate.bodyKind === 'fact')
+  )
+}
+
+/** The exact admission helper used by the app IPC handler. Keeping this tiny function beside
+ * the structural check gives tests a seam that exercises the same rejection decision without
+ * starting Electron's process-wide bootstrap. */
+export function prepareNativeNotification(payload: unknown): PreparedNativeNotification | null {
+  return isPreparedNativeNotification(payload) ? payload : null
+}
+
+/** Native notifications receive already-classified copy from the renderer. Keep title and body
+ * separate, and never concatenate or map the body here: provider/host facts must survive exactly. */
+export function composeNativeNotification(payload: PreparedNativeNotification): NativeNotificationCopy {
+  return { title: payload.title, body: payload.body }
+}
+
 // Backstop for notifications macOS parks in Notification Center without ever emitting
 // 'close' — beyond this, the oldest retained one is dropped (its click stops working,
 // which is the pre-fix behavior; anything recent keeps its handler alive).

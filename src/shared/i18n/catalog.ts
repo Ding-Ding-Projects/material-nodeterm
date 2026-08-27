@@ -176,6 +176,113 @@ export const CATALOG: Catalog = {
   },
 
   // ---------------------------------------------------------------------------------------
+  // Unified Node Catalog. Registry rows carry stable ids and English fallbacks; this catalogue
+  // supplies the live language mode and funny-level voice for the picker itself and its common
+  // entries. Descriptors remain data so server and portable layers do not import UI copy.
+  // ---------------------------------------------------------------------------------------
+  'nodeCatalog.title': { en: flat('Node Catalog'), yue: flat('節點目錄') },
+  'nodeCatalog.description': {
+    en: [
+      'Choose a node from the typed catalog. Safe defaults are applied now; machine-local details stay local.',
+      'Pick a typed node. Safe defaults do the boring setup while local details stay put.',
+      'Choose a node and let the catalog handle the sensible starting values.',
+      'Pick a node from the catalog and let it do the setup dance for you.',
+      'Choose a node. The catalog has brought sensible defaults and left your private machine details at home.'
+    ],
+    yue: [
+      '喺有類型嘅目錄揀個節點。安全預設值即刻套用，本機資料留返本機。',
+      '揀個節點，安全預設值幫你做啲悶嘢，本機資料照留本機。',
+      '揀個節點，目錄會處理好合理嘅起步設定。',
+      '喺目錄揀個節點，等佢幫你跳一跳設定舞。',
+      '揀個節點啦。合理預設值已經帶到，本機私事就留喺屋企。'
+    ]
+  },
+  'nodeCatalog.search.label': { en: flat('Search node catalog'), yue: flat('搜尋節點目錄') },
+  'nodeCatalog.categories': { en: flat('Node categories'), yue: flat('節點分類') },
+  'nodeCatalog.results': { en: flat('Node catalog results'), yue: flat('節點目錄結果') },
+  'nodeCatalog.docs': { en: flat('Documentation'), yue: flat('文件') },
+  'nodeCatalog.results.count': { en: flat('{count} nodes shown'), yue: flat('顯示 {count} 個節點') },
+  'nodeCatalog.mode.required': { en: flat('Ready when required capabilities are available'), yue: flat('所需功能齊就可以用') },
+  'nodeCatalog.mode.configureLater': { en: flat('Configure later'), yue: flat('稍後設定') },
+  'nodeCatalog.category.all': { en: flat('All'), yue: flat('全部') },
+  'nodeCatalog.category.terminals': { en: flat('Terminals'), yue: flat('終端機') },
+  'nodeCatalog.category.agents': { en: flat('Agents'), yue: flat('AI 代理') },
+  'nodeCatalog.category.canvas': { en: flat('Canvas'), yue: flat('畫布') },
+  'nodeCatalog.category.files': { en: flat('Files'), yue: flat('檔案') },
+  'nodeCatalog.category.media': { en: flat('Media'), yue: flat('媒體') },
+  'nodeCatalog.category.managers': { en: flat('Managers'), yue: flat('管理器') },
+  'nodeCatalog.category.automation': { en: flat('Automation'), yue: flat('自動化') },
+  'nodeCatalog.category.tools': { en: flat('Tools'), yue: flat('工具') },
+  'nodeCatalog.category.universes': { en: flat('Universes'), yue: flat('宇宙') },
+  'nodeCatalog.category.hosting': { en: flat('Hosting'), yue: flat('託管') },
+  'nodeCatalog.empty': {
+    en: [
+      'No nodes match this search. Try plain text or open the regex builder for a pattern.',
+      'Nothing matches yet. Try a simpler search or build a regex.',
+      'No catalog row survived that search. The regex builder is ready if you want it.',
+      'The catalog found zilch. Try another phrase, or let the regex builder wear the thinking cap.',
+      'No node made it through that search. Give the regex builder a turn; it enjoys a puzzle.'
+    ],
+    yue: [
+      '冇節點符合呢個搜尋。試下普通文字，或者開正則建立器整個模式。',
+      '暫時冇嘢啱。試下簡單啲，或者砌個正則。',
+      '呢次搜尋冇目錄項目留低，正則建立器隨時候命。',
+      '目錄搵唔到半粒。換句話，或者叫正則建立器戴頂思考帽。',
+      '冇節點捱得過呢次搜尋。俾正則建立器玩下謎題啦。'
+    ]
+  },
+  'nodeCatalog.keyboardHint': {
+    en: flat('Use Up and Down to choose, Enter to create, and Escape to clear or close. Disabled rows explain what to do next.'),
+    yue: flat('用上下揀選，Enter 建立，Escape 清除或關閉。停用項目會講埋下一步點做。')
+  },
+  'nodeCatalog.entry.terminal.label': { en: flat('Terminal'), yue: flat('終端機') },
+  'nodeCatalog.entry.terminal.description': { en: flat('Open a real shell with the saved safe profile.'), yue: flat('用已儲存嘅安全設定開真正嘅終端機。') },
+  'nodeCatalog.entry.sticky.label': { en: flat('Sticky note'), yue: flat('便利貼') },
+  'nodeCatalog.entry.sticky.description': { en: flat('Add an editable note that can carry project context.'), yue: flat('加張可以編輯、用嚟記低項目背景嘅筆記。') },
+  'nodeCatalog.entry.group.label': { en: flat('Group frame'), yue: flat('群組框') },
+  'nodeCatalog.entry.group.description': { en: flat('Add an empty frame for organizing related nodes.'), yue: flat('加個空框，整理相關節點。') },
+  'nodeCatalog.entry.annotation.label': { en: flat('Drawing annotation'), yue: flat('繪圖註解') },
+  'nodeCatalog.entry.annotation.description': { en: flat('Arm the drawing tool, then drag a line or arrow on the canvas.'), yue: flat('啟用繪圖工具，再喺畫布拖出直線或箭嘴。') },
+  'nodeCatalog.entry.browser.label': { en: flat('Browser'), yue: flat('瀏覽器') },
+  'nodeCatalog.entry.browser.description': { en: flat('Open a browser node with a blank address bar.'), yue: flat('開個有空白網址列嘅瀏覽器節點。') },
+  'nodeCatalog.entry.authenticator.label': { en: flat('Authenticator'), yue: flat('驗證器') },
+  'nodeCatalog.entry.authenticator.description': { en: flat('Open the local TOTP authenticator without moving secrets into the project.'), yue: flat('開本機 TOTP 驗證器，唔會將秘密搬入項目。') },
+  'nodeCatalog.entry.loop.label': { en: flat('Loop'), yue: flat('循環排程') },
+  'nodeCatalog.entry.loop.description': { en: flat('Create a paused local schedule with an explicit next action.'), yue: flat('建立一個暫停中、下一步清清楚楚嘅本機排程。') },
+  'nodeCatalog.entry.dino.label': { en: flat('Dino game'), yue: flat('恐龍遊戲') },
+  'nodeCatalog.entry.dino.description': { en: flat('Open the small local canvas game.'), yue: flat('開個細細嘅本機畫布遊戲。') },
+  'nodeCatalog.entry.remote-terminal.label': { en: flat('Remote terminal'), yue: flat('遠端終端機') },
+  'nodeCatalog.entry.remote-terminal.description': { en: flat('Open a terminal through a selected saved remote connection.'), yue: flat('透過揀好嘅遠端連線開終端機。') },
+  'nodeCatalog.entry.agent.claude.label': { en: flat('Claude'), yue: flat('Claude') },
+  'nodeCatalog.entry.agent.claude.description': { en: flat('Start an agent session with the active account and permission plan.'), yue: flat('用目前帳戶同權限方案開始 AI 代理工作階段。') },
+  'nodeCatalog.entry.agent.codex.label': { en: flat('Codex'), yue: flat('Codex') },
+  'nodeCatalog.entry.agent.codex.description': { en: flat('Start a Codex agent session using a selectable local account.'), yue: flat('用可選嘅本機帳戶開始 Codex 代理工作階段。') },
+  'nodeCatalog.entry.agent.gemini.label': { en: flat('Gemini'), yue: flat('Gemini') },
+  'nodeCatalog.entry.agent.gemini.description': { en: flat('Start a Gemini agent session with the configured launch command.'), yue: flat('用已設定嘅啟動指令開始 Gemini 代理工作階段。') },
+  'nodeCatalog.entry.web.label': { en: flat('Web view'), yue: flat('網頁檢視') },
+  'nodeCatalog.entry.web.description': { en: flat('Open a web view with a URL chosen in its guided address field.'), yue: flat('用引導式網址欄揀網址，再開網頁檢視。') },
+  'nodeCatalog.entry.video.label': { en: flat('Video'), yue: flat('影片') },
+  'nodeCatalog.entry.video.description': { en: flat('Open a local video node and choose the media file in its picker.'), yue: flat('開本機影片節點，再用選擇器揀媒體檔案。') },
+  'nodeCatalog.entry.nsis.label': { en: flat('Installer builder'), yue: flat('安裝程式建立器') },
+  'nodeCatalog.entry.nsis.description': { en: flat('Start a guided installer-builder form with safe project defaults.'), yue: flat('用安全項目預設值開始引導式安裝程式表單。') },
+  'nodeCatalog.entry.service.minecraft.label': { en: flat('Minecraft manager'), yue: flat('Minecraft 管理器') },
+  'nodeCatalog.entry.service.minecraft.description': { en: flat('Open a manager for a locally bound Minecraft service.'), yue: flat('開本機已綁定 Minecraft 服務嘅管理器。') },
+  'nodeCatalog.entry.service.dockerhost.label': { en: flat('Docker host manager'), yue: flat('Docker 主機管理器') },
+  'nodeCatalog.entry.service.dockerhost.description': { en: flat('Open a typed manager for a local or saved Docker host.'), yue: flat('開本機或已儲存 Docker 主機嘅有類型管理器。') },
+  'nodeCatalog.entry.service.proxmox.label': { en: flat('Proxmox manager'), yue: flat('Proxmox 管理器') },
+  'nodeCatalog.entry.service.proxmox.description': { en: flat('Open a typed manager for a saved Proxmox connection.'), yue: flat('開已儲存 Proxmox 連線嘅有類型管理器。') },
+  'nodeCatalog.entry.service.gitlab.label': { en: flat('GitLab manager'), yue: flat('GitLab 管理器') },
+  'nodeCatalog.entry.service.gitlab.description': { en: flat('Open a typed manager for a saved GitLab connection.'), yue: flat('開已儲存 GitLab 連線嘅有類型管理器。') },
+  'nodeCatalog.entry.service.homeassistant.label': { en: flat('Home Assistant manager'), yue: flat('Home Assistant 管理器') },
+  'nodeCatalog.entry.service.homeassistant.description': { en: flat('Open a typed manager for a saved Home Assistant connection.'), yue: flat('開已儲存 Home Assistant 連線嘅有類型管理器。') },
+  'nodeCatalog.entry.service.freepbx.label': { en: flat('FreePBX manager'), yue: flat('FreePBX 管理器') },
+  'nodeCatalog.entry.service.freepbx.description': { en: flat('Open a typed manager for a saved FreePBX connection.'), yue: flat('開已儲存 FreePBX 連線嘅有類型管理器。') },
+  'nodeCatalog.entry.editor.label': { en: flat('Editor'), yue: flat('編輯器') },
+  'nodeCatalog.entry.editor.description': { en: flat('Open a selected project file in the embedded editor.'), yue: flat('喺內置編輯器開揀好嘅項目檔案。') },
+  'nodeCatalog.entry.diff.label': { en: flat('Diff viewer'), yue: flat('差異檢視器') },
+  'nodeCatalog.entry.diff.description': { en: flat('Open a selected project file in the read-only diff viewer.'), yue: flat('喺唯讀差異檢視器開揀好嘅項目檔案。') },
+
+  // ---------------------------------------------------------------------------------------
   // Confirm / delete dialog defaults (ConfirmDialog.tsx). Custom labels a caller passes in
   // (e.g. "Remove worktree") are that caller's own copy and stay in English for now — only the
   // component's own DEFAULTS are localized here.
@@ -968,5 +1075,312 @@ export const CATALOG: Catalog = {
   'announce.dismiss': {
     en: flat('Dismiss'),
     yue: flat('關閉')
+  },
+
+  // ---------------------------------------------------------------------------------------
+  // Special-universe Shop node. Scope and catalog counts are caller-owned facts; the catalogue
+  // only styles the surrounding copy for the selected language and funny level.
+  // ---------------------------------------------------------------------------------------
+  'universeShop.title': {
+    en: flat('Shop'),
+    yue: flat('商店')
+  },
+  'universeShop.scope': {
+    en: flat('{scope} catalog'),
+    yue: flat('{scope} 目錄')
+  },
+  'universeShop.description': {
+    en: [
+      'Choose a node to create in this universe. The catalog is scoped and stays local to this Shop.',
+      'Pick something for this universe. This Shop keeps the catalog in its lane.',
+      'Choose a node here; the catalog knows which universe it belongs to.',
+      'Pick a node for this universe, with the catalog politely staying in bounds.',
+      'Choose a node and let this Shop do the shopping, without wandering into another universe.'
+    ],
+    yue: [
+      '揀一個節點喺呢個宇宙建立。目錄有範圍，留喺呢間商店入面。',
+      '揀啱呢個宇宙用嘅嘢，間商店會守好自己條界線。',
+      '喺呢度揀節點，目錄會認得自己屬於邊個宇宙。',
+      '揀個節點畀呢個宇宙，目錄乖乖留返喺範圍內。',
+      '揀個節點，等間商店幫你買，唔好行錯去第二個宇宙。'
+    ]
+  },
+  'universeShop.search.label': {
+    en: flat('Search catalog'),
+    yue: flat('搜尋目錄')
+  },
+  'universeShop.search.placeholder': {
+    en: flat('Search nodes'),
+    yue: flat('搜尋節點')
+  },
+  'universeShop.search.regex': {
+    en: flat('Open regex builder for this catalog'),
+    yue: flat('開啟呢個目錄嘅正則建立器')
+  },
+  'universeShop.search.error': {
+    en: flat('Pattern is invalid. Showing all scoped entries.'),
+    yue: flat('模式無效，依家顯示全部範圍內項目。')
+  },
+  'universeShop.search.count': {
+    en: flat('{count} scoped entries'),
+    yue: flat('{count} 個範圍內項目')
+  },
+  'universeShop.empty': {
+    en: flat('No catalog entries match this search.'),
+    yue: flat('冇目錄項目符合呢個搜尋。')
+  },
+  'universeShop.catalogUnavailable': {
+    en: flat('The unified Node Catalog is unavailable in this build. Enable the catalog dependency before creating nodes.'),
+    yue: flat('呢個版本未有共用節點目錄。請先啟用目錄功能，之後先可以建立節點。')
+  },
+  'universeShop.invalidScope': {
+    en: flat('This Shop has incomplete universe scope metadata, so catalog creation is unavailable.'),
+    yue: flat('呢間商店嘅宇宙範圍資料唔完整，所以暫時未可以建立目錄項目。')
+  },
+  'universeShop.entryUnavailable': {
+    en: flat('This catalog entry is unavailable until its executor is available.'),
+    yue: flat('呢個目錄項目要等執行功能可用先可以使用。')
+  },
+  'universeShop.entries.aria': {
+    en: flat('Available catalog entries'),
+    yue: flat('可用目錄項目')
+  },
+  'universeShop.selected': {
+    en: flat('{entry} selected. Use the shared creation action to continue.'),
+    yue: flat('已揀 {entry}，用共用建立動作繼續。')
+  },
+  'universeShop.hint': {
+    en: flat('This Shop stays available as the one catalog entry point for this universe.'),
+    yue: flat('呢間商店會一直做呢個宇宙唯一嘅目錄入口。')
+  },
+  'universeShop.aria.label': {
+    en: flat('Shop for {scope}'),
+    yue: flat('{scope} 商店')
+  },
+  'universeShop.fixed.title': {
+    en: flat('This Shop belongs to its universe and cannot be moved or deleted.'),
+    yue: flat('呢間商店屬於自己嘅宇宙，唔可以移動或者刪除。')
+  // Linux ISO VM node. These labels are flat because they identify controls, while operation
+  // details and digest values remain facts supplied by the VM manager.
+  'virtualMachine.title': { en: flat('Linux ISO VM'), yue: flat('Linux ISO 虛擬機') },
+  'virtualMachine.iso': { en: flat('Linux ISO'), yue: flat('Linux ISO 映像') },
+  'virtualMachine.disk': { en: flat('Persistent disk'), yue: flat('持久磁碟') },
+  'virtualMachine.mode': { en: flat('Mode'), yue: flat('模式') },
+  'virtualMachine.mode.disposable': { en: flat('Disposable live, changes are discarded'), yue: flat('即用即棄，變更會丟棄') },
+  'virtualMachine.mode.persistent': { en: flat('Persistent install, keep the selected disk'), yue: flat('持久安裝，保留所選磁碟') },
+  'virtualMachine.expectedHash': { en: flat('Expected ISO SHA-256 (optional)'), yue: flat('預期 ISO SHA-256（可選）') },
+  'virtualMachine.memory': { en: flat('Memory (MiB)'), yue: flat('記憶體（MiB）') },
+  'virtualMachine.cpus': { en: flat('CPUs'), yue: flat('CPU 數量') },
+  'virtualMachine.network': { en: flat('Enable user-mode network'), yue: flat('啟用使用者模式網絡') },
+  'virtualMachine.whpx': { en: flat('Prefer WHPX acceleration'), yue: flat('優先使用 WHPX 加速') },
+  'virtualMachine.save': { en: flat('Save configuration'), yue: flat('儲存設定') },
+  'virtualMachine.start': { en: flat('Start'), yue: flat('啟動') },
+  'virtualMachine.stop': { en: flat('Stop'), yue: flat('停止') },
+  'virtualMachine.snapshot': { en: flat('Snapshot'), yue: flat('快照') },
+  'virtualMachine.restore': { en: flat('Restore'), yue: flat('還原') },
+  'virtualMachine.openDisplay': { en: flat('Open display'), yue: flat('開啟顯示畫面') },
+  'virtualMachine.createDisk': { en: flat('Create disk'), yue: flat('建立磁碟') },
+  'virtualMachine.browse': { en: flat('Browse'), yue: flat('瀏覽') },
+  'virtualMachine.note': { en: flat('Linux ISO VM is separate from WSL. It runs one isolated QEMU machine with a loopback-only display.'), yue: flat('Linux ISO 虛擬機同 WSL 分開，會用只限本機回環顯示嘅 QEMU 隔離機器。') }
   }
+  // WSL creation dialog (WslCreateDialog.tsx). Labels stay flat, while explanatory copy gets
+  // five honest levels. Runtime distribution names, versions, instance names, paths, operation
+  // ids, parser details, and executable names are supplied by the caller and never live here.
+  // ---------------------------------------------------------------------------------------
+  'wsl.create.title': { en: flat('New {brand} instance'), yue: flat('新增 {brand} 實例') },
+  'wsl.create.actions.cancel': { en: flat('Cancel'), yue: flat('取消') },
+  'wsl.create.actions.create': { en: flat('Create'), yue: flat('建立') },
+  'wsl.create.actions.cancelling': { en: flat('Cancelling…'), yue: flat('正在取消…') },
+  'wsl.create.actions.creating': { en: flat('Creating…'), yue: flat('正在建立…') },
+  'wsl.create.description': {
+    en: [
+      'Choose a distribution from the live {brand} catalogue, then give this machine-local instance a unique name.',
+      'Pick a distribution from the live {brand} catalogue, then give this local instance a unique name.',
+      'Choose the distribution first, then name this local {brand} instance something unique.',
+      'Pick a distribution and give the new local {brand} instance a name that will not bump into another one.',
+      'Choose your distribution, then give this local {brand} instance a name so tidy even the catalogue smiles.'
+    ],
+    yue: [
+      '喺即時 {brand} 目錄揀一個發行版，再為呢個本機實例改個獨一無二嘅名。',
+      '先揀即時 {brand} 目錄入面嘅發行版，再幫本機實例改個唔撞名嘅名。',
+      '揀好發行版，再為本機 {brand} 實例改個獨特名稱。',
+      '揀個發行版，再幫新嘅本機 {brand} 實例改個唔會同其他實例打交嘅名。',
+      '揀好發行版，再幫本機 {brand} 實例改個連目錄都會點頭嘅靚名。'
+    ]
+  },
+  'wsl.create.filter.label': { en: flat('Filter distributions'), yue: flat('篩選發行版') },
+  'wsl.create.filter.regex': { en: flat('Regex for {brand} distributions'), yue: flat('{brand} 發行版 Regex') },
+  'wsl.create.list.aria': { en: flat('Available {brand} distributions'), yue: flat('可用 {brand} 發行版') },
+  'wsl.create.status.loading': { en: flat('Loading available distributions…'), yue: flat('正在載入可用發行版…') },
+  'wsl.create.error.cataloguePrefix': { en: flat('Could not load available distributions:'), yue: flat('無法載入可用發行版：') },
+  'wsl.create.error.catalogueNotInstalled': {
+    en: [
+      'WSL is not installed on this machine, so the online catalogue is unavailable.',
+      'WSL is not installed here, so the online catalogue cannot be shown.',
+      'This machine has no WSL installation to query for the online catalogue.',
+      'The catalogue has nowhere to look because WSL is not installed on this machine.',
+      'The catalogue went looking for WSL and found an empty cupboard: WSL is not installed here.'
+    ],
+    yue: [
+      '呢部電腦未安裝 WSL，所以無法使用線上目錄。',
+      '呢部機未有 WSL，所以睇唔到線上目錄。',
+      '呢部電腦冇 WSL 可以查詢線上目錄。',
+      'WSL 未安裝，目錄冇地方可以查喇。',
+      '目錄搵 WSL 搵到個空櫃：呢部機根本未裝 WSL。'
+    ]
+  },
+  'wsl.create.error.catalogueCommandFailed': {
+    en: [
+      'The WSL catalogue command could not be completed.',
+      'The WSL catalogue command did not finish successfully.',
+      'The WSL catalogue command stopped before it returned a list.',
+      'The WSL catalogue command stumbled before bringing back the list.',
+      'The WSL catalogue command tripped over its own shoelaces before the list arrived.'
+    ],
+    yue: [
+      'WSL 目錄指令無法完成。',
+      'WSL 目錄指令未能成功完成。',
+      'WSL 目錄指令未傳回清單就停止咗。',
+      'WSL 目錄指令未拎返清單就絆咗一跤。',
+      'WSL 目錄指令未拎返清單就自己踩親鞋帶喇。'
+    ]
+  },
+  'wsl.create.error.catalogueParseFailed': {
+    en: [
+      'The WSL catalogue response could not be parsed.',
+      'The WSL catalogue response was not in a readable shape.',
+      'The WSL catalogue response did not match the expected table.',
+      'The WSL catalogue response arrived, but its table shape went sideways.',
+      'The WSL catalogue response arrived wearing a table costume with none of the right pockets.'
+    ],
+    yue: [
+      '無法解析 WSL 目錄回應。',
+      'WSL 目錄回應唔係可讀嘅格式。',
+      'WSL 目錄回應唔符合預期表格。',
+      'WSL 目錄回應到咗，但表格形狀歪咗。',
+      'WSL 目錄回應著住表格衫到場，但啲袋全部唔啱位。'
+    ]
+  },
+  'wsl.create.empty.none': { en: flat('No distributions available.'), yue: flat('沒有可用發行版。') },
+  'wsl.create.empty.noMatch': { en: flat('No distributions match that filter.'), yue: flat('沒有發行版符合呢個篩選。') },
+  'wsl.create.field.name': { en: flat('Instance name'), yue: flat('實例名稱') },
+  'wsl.create.field.nameAria': { en: flat('{brand} instance name'), yue: flat('{brand} 實例名稱') },
+  'wsl.create.field.placeholder': { en: flat('my-project'), yue: flat('my-project') },
+  'wsl.create.field.support': {
+    en: flat('Letters, numbers, spaces, dots, hyphens, and underscores are accepted.'),
+    yue: flat('接受字母、數字、空格、句點、連字號同底線。')
+  },
+  'wsl.create.error.prefix': { en: flat('The {brand} operation reported an error:'), yue: flat('{brand} 操作回報錯誤：') },
+  'wsl.create.progress.starting': {
+    en: [
+      'Starting {brand} creation…',
+      'Starting the {brand} creation operation…',
+      'Beginning local {brand} setup…',
+      'Starting {brand} setup, with the progress board ready…',
+      'Starting {brand} creation, the tiny progress parade is leaving the station…'
+    ],
+    yue: [
+      '正在開始建立 {brand}…',
+      '而家開始 {brand} 建立操作…',
+      '開始設定本機 {brand}…',
+      '開始設定 {brand}，進度板已經準備好…',
+      '開始建立 {brand}，迷你進度巡遊而家出發…'
+    ]
+  },
+  'wsl.create.progress.cancelling': {
+    en: [
+      'Cancelling {brand} creation…',
+      'Requesting cancellation of {brand} creation…',
+      'Stopping the local {brand} operation…',
+      'Asking {brand} creation to step aside safely…',
+      'Cancelling {brand} creation before the progress parade gets too dramatic…'
+    ],
+    yue: [
+      '正在取消建立 {brand}…',
+      '正在要求取消建立 {brand}…',
+      '正在停止本機 {brand} 操作…',
+      '請 {brand} 建立操作安全咁行埋一邊…',
+      '趁 {brand} 進度巡遊未變大龍先取消佢…'
+    ]
+  },
+  'wsl.create.progress.validating': { en: flat('Validating the selected distribution and name.'), yue: flat('正在驗證所選發行版同名稱。') },
+  'wsl.create.progress.checking': { en: flat('Checking {brand} availability.'), yue: flat('正在檢查 {brand} 可用性。') },
+  'wsl.create.progress.installing': { en: flat('Installing the selected distribution through {exe}.'), yue: flat('正透過 {exe} 安裝所選發行版。') },
+  'wsl.create.progress.recording': { en: flat('Recording the new local {brand} instance.'), yue: flat('正在記錄新嘅本機 {brand} 實例。') },
+  'wsl.create.progress.completed': { en: flat('{brand} creation completed.'), yue: flat('{brand} 建立完成。') },
+  'wsl.create.progress.failed': { en: flat('{brand} creation failed.'), yue: flat('{brand} 建立失敗。') },
+  'wsl.create.progress.cancelled': { en: flat('{brand} creation was cancelled.'), yue: flat('{brand} 建立已取消。') },
+  'wsl.create.progress.step': { en: flat('Step'), yue: flat('步驟') },
+  'wsl.create.progress.of': { en: flat('of'), yue: flat('共') },
+  'wsl.create.progress.aria': { en: flat('{brand} creation phase progress'), yue: flat('{brand} 建立階段進度') },
+  'wsl.create.progress.elapsed': { en: flat('Elapsed time:'), yue: flat('已用時間：') },
+  'wsl.create.progress.seconds': { en: flat('seconds.'), yue: flat('秒。') },
+  'wsl.create.progress.telemetry': {
+    en: flat('Installation progress is reported by phase because {exe} provides no byte or percentage telemetry.'),
+    yue: flat('由於 {exe} 沒有提供位元組或百分比遙測，安裝進度會按階段報告。')
+  'wsl.create.progress.checking': {
+    en: ['Checking WSL availability and the current distribution list.', 'Checking WSL and the current distribution list.', 'Checking WSL availability and the current list.', 'Checking whether WSL and the list are behaving.', 'Checking WSL and asking the list to keep its shoes on.'],
+    yue: ['正在檢查 WSL 可用狀態同目前發行版清單。', '正在檢查 WSL 同目前發行版清單。', '正在檢查 WSL 可用狀態同目前清單。', '睇吓 WSL 同清單係咪乖乖運作緊。', '檢查 WSL，同清單講聲唔好周街甩鞋。']
+  },
+  'wsl.create.progress.recording': {
+    en: ['Recording ownership for "{name}" so this app can manage the new instance.', 'Recording ownership for "{name}" so this app can manage it.', 'Saving ownership for "{name}" before management is enabled.', 'Writing down that "{name}" belongs to this app before the knobs appear.', 'Giving "{name}" an ownership note tidy enough for future housekeeping.'],
+    yue: ['正在記錄「{name}」嘅擁有權，等呢個程式可以管理新實例。', '正在記錄「{name}」嘅擁有權，等呢個程式可以管理佢。', '開啟管理之前，先儲存「{name}」嘅擁有權。', '先寫低「{name}」係呢個程式嘅，之後先拎出啲掣。', '幫「{name}」寫張整齊到未來都想收埋嘅擁有權紙仔。']
+  },
+  'wsl.create.progress.completed': {
+    en: ['WSL instance "{name}" was created and ownership was recorded.', 'WSL instance "{name}" was created and ownership is saved.', 'WSL instance "{name}" exists and its ownership record is saved.', 'WSL instance "{name}" is ready, with its ownership paperwork filed.', 'WSL instance "{name}" is ready, and its ownership paperwork has stopped doing cartwheels.'],
+    yue: ['WSL 實例「{name}」已建立，亦已記錄擁有權。', 'WSL 實例「{name}」已建立，擁有權亦已儲存。', 'WSL 實例「{name}」存在，擁有權紀錄亦已儲存。', 'WSL 實例「{name}」準備好喇，擁有權文件亦已入檔。', 'WSL 實例「{name}」準備好喇，擁有權文件終於唔再翻筋斗。']
+  },
+  'wsl.create.progress.failed': {
+    en: ['WSL instance creation failed: {error}', 'WSL instance creation did not finish: {error}', 'WSL could not create the instance: {error}', 'WSL creation hit a snag: {error}', 'WSL creation tripped over a very specific banana peel: {error}'],
+    yue: ['建立 WSL 實例失敗：{error}', '建立 WSL 實例未能完成：{error}', 'WSL 無法建立實例：{error}', '建立 WSL 實例撞到個小障礙：{error}', '建立 WSL 實例俾一塊好有針對性嘅香蕉皮跣親：{error}']
+  },
+  'wsl.create.progress.cancelled': {
+    en: ['WSL instance creation was cancelled.', 'WSL instance creation was stopped by cancellation.', 'WSL instance creation ended because it was cancelled.', 'WSL creation was politely asked to stop, and it did.', 'WSL creation has packed its little suitcase because cancellation won.'],
+    yue: ['建立 WSL 實例已取消。', '建立 WSL 實例因取消而停止。', '建立 WSL 實例因取消而結束。', 'WSL 建立收到取消通知，乖乖停低咗。', 'WSL 建立執好個細喼，因為取消贏咗。']
+  },
+  'wsl.create.progress.cancelledLate': {
+    en: ['WSL instance "{name}" was created before cancellation completed; no canvas frame was bound.', 'WSL instance "{name}" was created before cancellation finished, so no canvas frame was bound.', 'WSL instance "{name}" already existed when cancellation completed; no canvas frame was bound.', 'WSL instance "{name}" beat cancellation to the finish line, so no canvas frame was bound.', 'WSL instance "{name}" crossed the finish line before cancellation, and the canvas wisely kept its hands in its pockets.'],
+    yue: ['取消完成之前，WSL 實例「{name}」已建立；沒有綁定畫布框架。', '取消完成之前，WSL 實例「{name}」已建立，所以沒有綁定畫布框架。', '取消完成時 WSL 實例「{name}」已存在；沒有綁定畫布框架。', 'WSL 實例「{name}」跑贏取消先到終點，所以沒有綁定畫布框架。', 'WSL 實例「{name}」早過取消衝線，畫布就醒目咁冇伸手亂拎。']
+  },
+  'wsl.create.progress.step': { en: flat('Step'), yue: flat('步驟') },
+  'wsl.create.progress.of': { en: flat('of'), yue: flat('共') },
+  'wsl.create.progress.aria': { en: flat('WSL creation phase progress'), yue: flat('WSL 建立階段進度') },
+  'wsl.create.progress.value': {
+    en: ['Step {step} of {steps}, {stage}. {detail}', 'Step {step} of {steps}, currently {stage}. {detail}', 'Phase {step} of {steps}: {stage}. {detail}', 'Phase {step} of {steps} is {stage}; {detail}', 'Step {step} of {steps}: {stage} is on duty. {detail}'],
+    yue: ['第 {step} 步，共 {steps} 步，{stage}。{detail}', '第 {step} 步，共 {steps} 步，而家係 {stage}。{detail}', '第 {step} 階段，共 {steps} 階段：{stage}。{detail}', '第 {step} 階段，共 {steps} 階段，狀態係 {stage}；{detail}', '第 {step} 步，共 {steps} 步：{stage} 當值中。{detail}']
+  },
+  'wsl.create.progress.elapsed': { en: flat('Elapsed time:'), yue: flat('已用時間：') },
+  'wsl.create.progress.seconds': { en: flat('seconds.'), yue: flat('秒。') },
+  'wsl.create.progress.installing': {
+    en: [
+      'Installing "{catalogue}" as "{name}" for operation {operationId}. Installation progress is reported by phase because wsl.exe provides no byte or percentage telemetry.',
+      'Installing "{catalogue}" as "{name}" for operation {operationId}. Progress is reported by phase because wsl.exe provides no byte or percentage telemetry.',
+      'Installing "{catalogue}" as "{name}" for operation {operationId}; wsl.exe reports phases, not bytes or percentages.',
+      'Installing "{catalogue}" as "{name}" for operation {operationId}; wsl.exe is counting phases instead of bytes.',
+      'Installing "{catalogue}" as "{name}" for operation {operationId}; wsl.exe brought a phase counter and left the byte ruler at home.'
+    ],
+    yue: [
+      '正在用操作 {operationId} 將「{catalogue}」安裝成「{name}」。由於 wsl.exe 沒有提供位元組或百分比遙測，安裝進度會按階段報告。',
+      '正在用操作 {operationId} 將「{catalogue}」安裝成「{name}」。wsl.exe 只按階段報告，冇位元組或百分比。',
+      '正在用操作 {operationId} 安裝「{catalogue}」成為「{name}」；wsl.exe 報告階段，唔報位元組或百分比。',
+      '正在用操作 {operationId} 安裝「{catalogue}」成為「{name}」；wsl.exe 而家數階段，唔數位元組。',
+      '正在用操作 {operationId} 安裝「{catalogue}」成為「{name}」；wsl.exe 帶咗階段計數器，偏偏將位元組尺留咗喺屋企。'
+    ]
+  },
+  'wsl.create.progress.installingDetail': {
+    en: flat('Installation progress is reported by phase because wsl.exe provides no byte or percentage telemetry.'),
+    yue: flat('由於 wsl.exe 沒有提供位元組或百分比遙測，安裝進度會按階段報告。')
+  },
+  'wsl.create.progress.cancellable': { en: flat('The operation is bounded and can be cancelled.'), yue: flat('呢個操作有界限，而且可以取消。') },
+  'wsl.create.error.noActive': { en: flat('Cancellation could not be sent because there is no active {brand} operation.'), yue: flat('因為沒有進行中嘅 {brand} 操作，所以無法送出取消。') },
+  'wsl.create.error.cancelRejected': { en: flat('Cancellation was not accepted because the {brand} operation is no longer active. You can retry or close this dialog.'), yue: flat('取消未被接受，因為 {brand} 操作已經唔再進行中。你可以再試，或者關閉呢個對話框。') },
+  'wsl.create.error.cancelPrefix': { en: flat('Could not cancel {brand} creation:'), yue: flat('無法取消建立 {brand}：') },
+  'wsl.create.validation.required': { en: flat('Name is required.'), yue: flat('必須輸入名稱。') },
+  'wsl.create.validation.whitespace': { en: flat('Name cannot start or end with whitespace.'), yue: flat('名稱開頭同結尾唔可以有空白。') },
+  'wsl.create.validation.length': { en: flat('Name must be 64 characters or fewer.'), yue: flat('名稱最多 64 個字元。') },
+  'wsl.create.validation.characters': { en: flat('Name contains characters that are not allowed.'), yue: flat('名稱包含唔容許嘅字元。') },
+  'wsl.create.validation.shape': { en: flat('Use letters, numbers, spaces, dots, hyphens, or underscores, starting and ending with a letter or number.'), yue: flat('請用字母、數字、空格、句點、連字號或底線，而且要由字母或數字開頭同結尾。') },
+  'wsl.create.validation.duplicate': { en: flat('A {brand} instance with this name already exists.'), yue: flat('已經有一個同名嘅 {brand} 實例。') },
+  'wsl.create.validation.chooseDistribution': { en: flat('Choose a distribution.'), yue: flat('請揀一個發行版。') }
+  'wsl.create.validation.duplicate': { en: flat('A WSL instance with this name already exists.'), yue: flat('已經有一個同名嘅 WSL 實例。') }
 }

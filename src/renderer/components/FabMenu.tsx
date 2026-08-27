@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { AGENT_CONFIG, BUILTIN_AGENT_IDS, type AgentId } from '@shared/agents/config'
 import { AgentIcon } from '../lib/agentIcons'
 import { useSettings } from '../state/settings'
@@ -6,10 +6,19 @@ import { useProjects } from '../state/projects'
 import { accountsForProject, sshAccountsHint } from '../state/workspace'
 import type { TerminalProfileChoice } from '../lib/terminal-profile-actions'
 import { useLocalizedVocabularyText } from '../lib/personalVocabulary/useLocalizedVocabularyText'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { IconLock } from './icons'
 import { writeAuthenticatorDrag } from '../lib/explorerNodeDrag'
+import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
+import { AnchoredRegexBuilder } from './regex/AnchoredRegexBuilder'
+import { useState } from 'react'
+import type { AgentId } from '@shared/agents/config'
+import type { TerminalProfileChoice } from '../lib/terminal-profile-actions'
+import { useLocalizedVocabularyText } from '../lib/personalVocabulary/useLocalizedVocabularyText'
 
 export interface FabMenuProps {
+  /** Opens the single typed registry used by every creation surface. */
+  onOpenCatalog: () => void
   onAddTerminal: () => void
   /** Desktop-local Windows capability. Keep false for SSH, relay, and Server Edition sessions. */
   offersTerminalProfiles?: boolean
@@ -20,6 +29,8 @@ export interface FabMenuProps {
   onAddTerminalWithProfile?: (profileId: string) => void
   onAddSticky: () => void
   onAddLoop: () => void
+  onAddTimer?: () => void
+  onAddAlarmClock?: () => void
   /** Create a TOTP code displayer. The row is also DRAGGABLE onto the canvas, which is what
    *  lets it land where the pointer is rather than at the default placement. */
   onAddAuthenticator: () => void
@@ -39,6 +50,7 @@ export interface FabMenuProps {
  * behavior test can drive exactly this surface, the same way it drove the old `Dock`.
  */
 export function FabMenu({
+  onOpenCatalog,
   onAddTerminal,
   offersTerminalProfiles = false,
   terminalProfileChoices = [],
@@ -46,6 +58,8 @@ export function FabMenu({
   onAddTerminalWithProfile,
   onAddSticky,
   onAddLoop,
+  onAddTimer = () => {},
+  onAddAlarmClock = () => {},
   onAddAuthenticator,
   onAddDino,
   onAddAgent,
@@ -54,21 +68,11 @@ export function FabMenu({
   onConnectRemote
 }: FabMenuProps) {
   const profileText = useLocalizedVocabularyText()
+  const vocab = useVocabularyMapper()
+  const menuSearch = useRegexSearchField()
+  const menuInputRef = useRef<HTMLInputElement>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
-  const customAgents = useSettings((s) => s.settings.customAgents)
-  const disabledAgents = useSettings((s) => s.settings.disabledAgents)
-  const claudeAccounts = useSettings((s) => s.settings.claudeAccounts)
-  const activeProjectId = useProjects((s) => s.activeProjectId)
-  const activeProject = useProjects((s) => s.projects.find((p) => p.id === activeProjectId))
-  // Accounts usable in the active project (local for a local project, this host's for an SSH
-  // project). The flat FAB menu can't nest, so Claude gets one "New Claude — <label>" entry per
-  // account (plus the base "Claude" = project default).
-  const localAccounts = accountsForProject(claudeAccounts, activeProject)
-  // ✓ marks the project's default account entry (what the base "Claude" resolves to).
-  const defaultAccountId = localAccounts.some((a) => a.id === activeProject?.defaultAccountId)
-    ? activeProject?.defaultAccountId
-    : undefined
   const profileEmptyState = terminalProfileEmptyState ?? {
     label: profileText('terminalProfiles.common.profilesUnavailable', 'Profiles unavailable'),
     hint: profileText(
@@ -107,9 +111,23 @@ export function FabMenu({
             aria-label={
               profileMenuOpen
                 ? profileText('terminalProfiles.create.chooseProfileAria', 'Choose terminal profile')
-                : 'Add node'
+                : vocab('Add node')
             }
           >
+            <div className="menu-filter" onMouseDown={(e) => e.stopPropagation()}>
+              <div className="menu-filter__row">
+                <input
+                  ref={menuInputRef}
+                  className="menu-filter__input"
+                  value={menuSearch.value}
+                  placeholder={menuSearch.mode === 'regex' ? vocab('Filter new nodes… (regex)') : vocab('Filter new nodes…')}
+                  aria-label={vocab('Filter new nodes')}
+                  onChange={(e) => menuSearch.setValue(e.target.value)}
+                />
+                <AnchoredRegexBuilder search={menuSearch} fieldRef={menuInputRef} label={vocab('Regex — new nodes')} zIndex={90} />
+              </div>
+              {menuSearch.error && <div className="menu-filter__error">{menuSearch.error}</div>}
+            </div>
             {profileMenuOpen ? (
               <>
                 <button role="menuitem" onClick={() => setProfileMenuOpen(false)}>
@@ -184,7 +202,7 @@ export function FabMenu({
               <>
                 <button role="menuitem" onClick={pick(onAddTerminal)}>
                   <TerminalIcon />
-                  <span>Terminal</span>
+                  <span>{vocab('Terminal')}</span>
                 </button>
                 {offersTerminalProfiles ? (
                   <button role="menuitem" onClick={() => setProfileMenuOpen(true)}>
@@ -199,7 +217,7 @@ export function FabMenu({
                 ) : null}
                 <button role="menuitem" onClick={pick(onAddRemote)}>
                   <TerminalIcon />
-                  <span>Remote…</span>
+                  <span>{vocab('Remote…')}</span>
                 </button>
                 {BUILTIN_AGENT_IDS.filter((aid) => !disabledAgents.includes(aid)).flatMap((aid) => {
                   const base = (
@@ -255,6 +273,14 @@ export function FabMenu({
                 <button role="menuitem" onClick={pick(onAddLoop)}>
                   <LoopIcon />
                   <span>Loop</span>
+                </button>
+                <button role="menuitem" onClick={pick(onAddTimer)}>
+                  <span aria-hidden="true">◷</span>
+                  <span>Timer</span>
+                <button role="menuitem" onClick={pick(onAddAlarmClock)}>
+                  <AlarmIcon />
+                  <span>Alarm Clock</span>
+                </button>
                 <button
                   role="menuitem"
                   draggable
@@ -267,10 +293,12 @@ export function FabMenu({
                   <IconLock />
                   <span>Authenticator</span>
                 </button>
-                </button>
                 <button role="menuitem" onClick={pick(onAddDino)}>
                   <DinoIcon />
                   <span>Dino Game</span>
+                <button role="menuitem" onClick={pick(onOpenCatalog)}>
+                  <CatalogIcon />
+                  <span>Browse node catalog…</span>
                 </button>
                 <button role="menuitem" onClick={pick(onOpenFile)}>
                   <EditorIcon />
@@ -307,6 +335,14 @@ function PlusIcon() {
     </svg>
   )
 }
+function CatalogIcon() {
+  return (
+    <svg {...S}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M3.5 12h17M12 3.5c2.4 2.2 3.3 5 3.3 8.5s-.9 6.3-3.3 8.5c-2.4-2.2-3.3-5-3.3-8.5S9.6 5.7 12 3.5Z" />
+    </svg>
+  )
+}
 function TerminalIcon() {
   return (
     <svg {...S}>
@@ -335,6 +371,14 @@ function LoopIcon() {
     <svg {...S}>
       <path d="M20 7v5h-5M4 17v-5h5" />
       <path d="M6.1 9a7 7 0 0 1 11.8-2L20 12M4 12l2.1 5a7 7 0 0 0 11.8-2" />
+    </svg>
+  )
+}
+function AlarmIcon() {
+  return (
+    <svg {...S}>
+      <circle cx="12" cy="13" r="7" />
+      <path d="M12 9v4l3 2M5 5 3.5 3.5M19 5l1.5-1.5M12 3v2M4 13H2M22 13h-2" />
     </svg>
   )
 }

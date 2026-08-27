@@ -1,5 +1,6 @@
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react'
 import { cn } from '../cn'
+import { useVocabularyMapper, type VocabularyTextMode } from '../../lib/personalVocabulary/useVocabularyText'
 
 export type ButtonVariant = 'filled' | 'tonal' | 'outlined' | 'text'
 
@@ -19,6 +20,8 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
    *  `trailingIcon`). Pass a `<MaterialSymbol .../>` or any small element. */
   leadingIcon?: ReactNode
   trailingIcon?: ReactNode
+  /** Classifies standard accessible/title text so exact facts can opt out of prose mapping. */
+  vocabularyMode?: VocabularyTextMode
 }
 
 /**
@@ -28,9 +31,10 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
  * forwards everything else.
  */
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { variant = 'filled', size = 'medium', danger = false, leadingIcon, trailingIcon, className, children, type = 'button', ...rest },
+  { variant = 'filled', size = 'medium', danger = false, leadingIcon, trailingIcon, className, children, type = 'button', vocabularyMode = 'authored', ...rest },
   ref
 ) {
+  const vocab = useVocabularyMapper()
   return (
     <button
       ref={ref}
@@ -45,9 +49,11 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
         className
       )}
       {...rest}
+      aria-label={vocabularyMode === 'authored' ? vocab(rest['aria-label']) : rest['aria-label']}
+      title={vocabularyMode === 'authored' ? vocab(rest.title) : rest.title}
     >
       {leadingIcon}
-      {children}
+      {vocabularyMode === 'authored' && typeof children === 'string' ? vocab(children) : children}
       {trailingIcon}
     </button>
   )

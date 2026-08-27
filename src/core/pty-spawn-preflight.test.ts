@@ -33,6 +33,10 @@ const nodePty = vi.hoisted(() => ({ throws: false }))
 // Pin the persistence backend: without this the suite silently tests whichever backend this
 // machine has built, not the plain-shell path it was written for. See the fixture for the full
 // explanation and the 78-pass -> 73-fail incident that prompted it.
+// Pin the persistence backend: `sessionHostSupported()` only asks whether
+// out/session-host/host.cjs exists on disk, so whether this suite exercises the mocked
+// `node-pty` spawn below or a real session-host shim depended on whether anyone had run
+// `npm run build` (or `npm run host:build`). See src/core/__fixtures__/no-session-host.ts.
 vi.mock('./session-host-backend', async () =>
   (await import('./__fixtures__/no-session-host')).noSessionHost()
 )

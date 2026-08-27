@@ -94,10 +94,18 @@ export function blip(state, kind) {
 // ---------------------------------------------------------------------
 // Toasts + Messages room (notifications-state)
 // ---------------------------------------------------------------------
-export function toast(store, icon, title, body, sub, speakFn) {
+/** Copy ownership for each visible toast field. Authored values may use local vocabulary;
+ * facts such as a dish name, path, provider value, or user-supplied identifier stay exact. */
+export function toast(store, icon, title, body, sub, speakFn, ownership = {}) {
   const id = 't' + Date.now() + Math.random().toString(36).slice(2, 6)
+  const titleKind = ownership.titleKind || 'authored'
+  const bodyKind = ownership.bodyKind || 'authored'
+  const subKind = ownership.subKind || 'authored'
+  if (!['authored', 'fact'].includes(titleKind) || !['authored', 'fact'].includes(bodyKind) || !['authored', 'fact'].includes(subKind)) {
+    throw new TypeError('Toast copy ownership must be authored or fact.')
+  }
   store.setState((s) => ({ toasts: s.state ? s.state.toasts : s.toasts }))
-  store.setState((s) => ({ toasts: (s.toasts || []).concat([{ id, icon, title, body, sub: sub || '' }]).slice(-3) }))
+  store.setState((s) => ({ toasts: (s.toasts || []).concat([{ id, icon, title, body, sub: sub || '', titleKind, bodyKind, subKind }]).slice(-3) }))
   blip(store.state, icon === '❌' ? 'bad' : 'ok')
   if (typeof speakFn === 'function') speakFn(title + '. ' + body)
   setTimeout(() => {
@@ -107,9 +115,14 @@ export function toast(store, icon, title, body, sub, speakFn) {
 export function dismissToast(store, id) {
   store.setState((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }), { persist: false })
 }
-export function notify(store, title, body, tag) {
+export function notify(store, title, body, tag, ownership = {}) {
+  const titleKind = ownership.titleKind || 'authored'
+  const bodyKind = ownership.bodyKind || 'authored'
+  if (!['authored', 'fact'].includes(titleKind) || !['authored', 'fact'].includes(bodyKind)) {
+    throw new TypeError('Notification copy ownership must be authored or fact.')
+  }
   store.setState((s) => ({
-    notes: [{ id: 'n' + Date.now() + Math.random().toString(36).slice(2, 5), title, body, when: nowIso(), tag: tag || 'note' }].concat(s.notes).slice(0, 200),
+    notes: [{ id: 'n' + Date.now() + Math.random().toString(36).slice(2, 5), title, body, titleKind, bodyKind, when: nowIso(), tag: tag || 'note' }].concat(s.notes).slice(0, 200),
   }))
 }
 
@@ -403,12 +416,13 @@ export function buildPaletteTargets(store, deps) {
   const targets = []
   deps.sections.forEach((x) => targets.push({ icon: x.icon, label: 'Go to ' + x.label, hint: 'room', run: () => deps.goRoom(x.id) }))
   deps.features.forEach((f) => targets.push({ icon: f.icon, label: f.title, hint: 'card', run: () => store.setState({ sec: 'home', qSec: f.title, view: 'room', paletteOpen: false }, { persist: false }) }))
-  deps.docs.forEach((d) => targets.push({ icon: '📖', label: d[0], hint: 'guide page', run: () => store.setState({ sec: 'docs', qSec: d[0], view: 'room', paletteOpen: false }, { persist: false }) }))
+  deps.docs.filter((d) => !store.state.school || d[2] !== 'personal-vocabulary').forEach((d) => targets.push({ icon: '📖', label: d[0], hint: 'guide page', run: () => store.setState({ sec: 'docs', qSec: d[0], view: 'room', paletteOpen: false }, { persist: false }) }))
   allSettingsCards().forEach((c) => {
+    if (store.state.school && c.id === 'vocab') return
     const controls = typeof c.controlLabels === 'function' ? c.controlLabels(store.state) : typeof c.controls === 'function' ? c.controls(store.state).map((x) => x.label) : []
     controls.forEach((label) => targets.push({ icon: c.icon, label, hint: c.title, run: () => store.setState({ sec: 'settings', qSec: c.title, view: 'room', paletteOpen: false }, { persist: false }) }))
   })
-  deps.coverage.forEach((c) => targets.push({ icon: c[2] === 'done' ? '✅' : '⚠️', label: c[0], hint: 'checklist', run: () => store.setState({ sec: 'coverage', qSec: c[0], view: 'room', paletteOpen: false }, { persist: false }) }))
+  deps.coverage.filter((c) => !store.state.school || !String(c[0]).toLowerCase().includes('vocabulary')).forEach((c) => targets.push({ icon: c[2] === 'done' ? '✅' : '⚠️', label: c[0], hint: 'checklist', run: () => store.setState({ sec: 'coverage', qSec: c[0], view: 'room', paletteOpen: false }, { persist: false }) }))
   targets.push({ icon: '🚪', label: 'Back to the hallway', hint: 'action', run: () => store.setState({ view: 'hall', paletteOpen: false }, { persist: false }) })
   targets.push({ icon: '🌗', label: 'Switch day / night', hint: 'action', run: () => { store.setState({ paletteOpen: false }, { persist: false }); deps.toggleTheme() } })
   targets.push({ icon: '🧺', label: 'Empty the model basket', hint: 'action', run: () => { store.setState({ cart: {}, paletteOpen: false }); toast(store, '🧺', 'Basket emptied', 'Nothing was downloaded either way.') } })

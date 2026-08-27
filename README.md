@@ -43,6 +43,119 @@ macOS, Linux) and as a **self-hosted browser app** you reach from anywhere — i
 with nothing to install.
 
 ## The interface
+<table>
+<tr>
+<td width="42%" valign="middle">
+
+### Everything is a node
+
+Right-click the canvas to open a **terminal** — or an AI **agent**. Each runs in its own
+persistent tmux session, next to **sticky notes** (link one to feed an agent context),
+**Monaco editors**, **diff views**, and **web/video** nodes — arranged spatially, like a
+map. Quit the app, even **restart the machine** — every session comes back.
+
+</td>
+<td><img src="docs/assets/canvas-tour.webp" alt="The canvas — terminals, agents, notes, editors and diffs as nodes; sessions survive a full restart" /></td>
+</tr>
+<tr>
+<td width="42%" valign="middle">
+
+### Know when an agent needs you
+
+Hook-driven status — no output scraping: pulsing **RUNNING / NEEDS YOU** badges,
+**subagent** cards with live transcripts, a per-node **context meter**, and OS
+notifications. Click the ping, answer the permission prompt right in the node, and get
+told the moment the turn is **done**. On a MacBook, agents live in the **notch** too.
+
+</td>
+<td><img src="docs/assets/agents-tour.webp" alt="Agent status — NEEDS YOU flip, notification, answering a permission prompt, subagent fan-out" /></td>
+</tr>
+<tr>
+<td width="42%" valign="middle">
+
+### One project, two views
+
+Every project is a canvas — **and also a kanban board**. Cards *are* your live
+sessions: drag them across columns while the agent keeps running, open a card into a
+**live card modal** (the real session + members, due date, priority, comments), and
+assign teammates. Toggle with `⌘⇧B`.
+<br/><sub>▶ <a href="docs/assets/kanban-launch.mp4">Watch the board video with sound</a></sub>
+
+</td>
+<td><img src="docs/assets/kanban-launch.webp" alt="The kanban board — live session cards, drag between columns, the card modal with a live Claude Code session" /></td>
+</tr>
+<tr>
+<td width="42%" valign="middle">
+
+### Your sessions, anywhere
+
+**Pair your phone** with one QR — *scan with the nodeterm iOS app* — and the **same
+live session continues in your pocket**, E2E encrypted **over the relay, not just your
+LAN**. The same canvas also runs self-hosted in any browser (Server Edition).
+
+</td>
+<td><img src="docs/assets/remote-tour.webp" alt="Pair your phone — scan the QR, the same live session continues on the iPhone" /></td>
+</tr>
+<tr>
+<td width="42%" valign="middle">
+
+### Talk to your terminal
+
+Hold `⌘⌥` and say it. On-device **Whisper** transcribes locally — review the text,
+then **Send** (nothing auto-submits). Your voice never leaves the machine.
+
+</td>
+<td><img src="docs/assets/dictation-tour.webp" alt="Dictation — hold cmd-shift-D, speak, review, send into the terminal" /></td>
+</tr>
+</table>
+
+### Node kinds
+
+🖥 **Terminal** (xterm + tmux, AI naming) · 🤖 **Agent** (Claude Code / Codex / Gemini /
+GitHub Copilot / opencode / Grok / custom) · 📝 **Sticky note** (link to an agent as context) · 🗂 **Group**
+(bind to a **git worktree** for agent-per-branch) · ✏️ **Editor** (Monaco, ⌘S) ·
+🔀 **Diff** · 🌐 **Web / Video**
+
+### More
+
+- **Session continuity (tmux)** — terminals keep running across node remounts *and* full
+  app restarts, including live processes; machine reboots restore scrollback and resume
+  agent sessions (`claude --resume`). The macOS app **ships its own tmux**, so this works
+  with nothing installed; a tmux already on your system is always used in preference to it,
+  and terminals opened before an upgrade stay as they were until you refresh the node.
+- **Talk to your terminal** — on-device Whisper dictation (hold ⌘⌥): speak, review, send.
+- **Agent superpowers** — **context links** so agent nodes read each other's transcripts
+  on demand; Claude-only **branch a conversation** and **managed accounts** for several
+  logged-in Claude identities side by side; agents can drive the canvas (open nodes,
+  spawn teams, verify each other's work) via the built-in canvas-control CLI.
+- **Remote / SSH projects** — open a project on a remote host over SSH; terminals, files,
+  git, and even the board run there while the canvas stays local.
+- **Source control** — VS Code-style stage/unstage, discard, branch switch/create,
+  commit, push/sync/publish, **worktrees**, and `gh` sign-in — backed by system `git`.
+- **GitHub Issues on Kanban** – opt-in issue cards, exact label-to-column mapping,
+  All / GitHub / Sessions filtering, and two-way move, close, and reopen sync. See
+  [setup and security details](./docs/github-issues-kanban.md).
+- **AI commit messages & terminal names** — bring-your-own local agent CLI run read-only
+  on the staged diff or captured output.
+- **Your sessions, in your pocket** — **nodeterm mobile** (iOS) attaches to the same live
+  tmux sessions: watch an agent work, answer a "needs you", or type into any terminal
+  from your phone — plus push notifications and a mobile board view.
+- **Power & sleep** — while an agent is working, nodeterm keeps the machine from
+  idle-sleeping, and lets go the moment it finishes (on by default; toggle in the setup
+  tour or Settings → Behavior). No app can hold a machine awake through a closed lid —
+  for overnight runs keep the laptop open and plugged in, or run the agents on a box
+  that doesn't sleep via the [Server Edition](./docs/SERVER.md).
+- **Command palette** (⌘K), **file explorer** (⌘⇧E), **markdown view** (⌘M),
+  **undo/redo**, and a native macOS dark UI.
+- **Auto-update & in-app announcements** — the app checks a self-hosted feed and
+  surfaces a "Restart to update" banner and product news.
+
+### 🌍 Server Edition — nodeterm in your browser
+
+The same canvas runs headless on a Linux (or macOS) host and is used from any browser —
+so your terminals, editors, source control, board, and agents live on a server you reach
+from anywhere. Single-user auth (password + secure cookie), a WebSocket bridge, and the
+exact same renderer as the desktop app.
 
 The whole app is **Material Design 3** — one baseline scheme seeded at `#6750A4`, tonal elevation
 rather than drop shadows, and Outfit / Roboto Mono / Material Symbols bundled and subsetted so it
@@ -102,6 +215,21 @@ need a live agent session and a reachable host, so the harness skips them loudly
 </details>
 
 ## ✨ Features
+**Trying it out?** Removal is one script — it stops every process nodeterm started, reverts
+the status-hook/skill entries it merged into your agent CLIs' config (your own hooks and
+credentials are never touched), and deletes all of nodeterm's own state. Run it with
+`--dry-run` first to see the full list of what it found:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/eneskirca/nodeterm/main/scripts/uninstall.sh | bash -s -- --dry-run
+curl -fsSL https://raw.githubusercontent.com/eneskirca/nodeterm/main/scripts/uninstall.sh | bash -s -- --yes
+```
+
+The full inventory of what nodeterm writes where (and what the script keeps, like the
+`.nodeterm/` canvas folders inside your own repos) is documented in
+[docs/uninstall.md](docs/uninstall.md).
+
+## 🛠 Build from source
 
 ### The canvas
 
@@ -112,11 +240,23 @@ Proxmox, GitLab, Home Assistant and FreePBX — each an ordinary node you drag, 
 persist like any other, because a managed service is something you arrange beside the terminals
 working on it, not a modal you visit.
 
+The canvas also includes a **Torrent Downloader** node for explicit local WebTorrent tasks, with
+magnet or `.torrent` intake, safe destination selection, file-level metadata choices, live transfer
+progress, restart recovery, and a bounded per-task seeding policy.
+
 **Group** nodes are real containers that nest inside each other and can bind to a git worktree, so
 every node created inside one inherits that worktree's directory. Quit the app and the persistent
 backend reattaches to the live session; reboot the machine and cold restore rebuilds the node,
 replays saved scrollback and resumes a supported agent CLI — it does not preserve the original OS
 process, and says so.
+
+Each Multiverse and AWS Universe child canvas also owns one fixed **Shop** node. It opens the
+scope-bound catalog, keeps a deterministic identity across import, hydration, undo and peer replay,
+and refuses deletion, duplication, grouping, or movement. Live choices are handed to the unified
+Node Catalog creation coordinator with immutable event ids and collision-free placement. The root
+canvas has no Shop. See the
+[special-universe Shop article](./docs/features/integrations/aws-universe-shop.md) for the
+portable metadata, repair records, disabled AWS entries, and verification boundary.
 
 ### Agent support — Claude Code, Codex, Gemini, opencode, Grok, or your own
 
@@ -228,6 +368,15 @@ Identical on desktop and in the browser.
 - **Local Ollama suite manager** — a local manager for [Ollama](https://ollama.com) that talks
   only to its documented local HTTP API, never a cloud service. See
   [`docs/ollama-manager.md`](./docs/ollama-manager.md).
+- **Torrent Downloader** — local WebTorrent downloads with magnet and `.torrent` intake,
+  metadata/file selection, safe destination preflight, progress, pause/resume/cancel/retry,
+  restart reconciliation, and bounded per-task seeding. See
+  [`docs/features/torrents/torrent-downloader.md`](./docs/features/torrents/torrent-downloader.md).
+- **Calendar nodes** — local calendars and ICS import, with guided CalDAV, Google Calendar, and
+  Microsoft 365 account/calendar pickers, recurrence and timezone views, offline cache, and
+  reviewable create/edit/delete actions. Provider credentials remain in the trusted shell's vault;
+  project files carry only portable selection intent. See
+  [`docs/features/canvas/node-kinds.md`](./docs/features/canvas/node-kinds.md).
 - **Scheduled settings** — rules that automatically overlay appearance/customization settings
   for a date+time window ("dark theme after 22:00"), with an optional Home Assistant boolean
   source. See [`docs/scheduled-settings.md`](./docs/scheduled-settings.md).
@@ -326,6 +475,7 @@ package-manager `PATH` refresh race): [`docs/building.md`](./docs/building.md).
 | [Documentation site](https://ding-ding-projects.github.io/material-nodeterm/) | The landing page and browsable docs, published from `site/`. |
 | [`docs/features/`](./docs/features/README.md) | One article per feature — behaviour, configuration, failure modes, security, verification — grouped by category. |
 | [`docs/app-contract.md`](./docs/app-contract.md) | The desktop app's hand-written feature-completeness guard (`npm run check:app-contract`) — what it checks and why, alongside the site's `check-site-contract.mjs`. |
+| [`docs/features/appearance/material-3-audit.md`](./docs/features/appearance/material-3-audit.md) | The exhaustive source-level Material Design 3 inventory for every desktop surface and checked-in documentation page (`npm run check:material-audit`). |
 | [`CLAUDE.md`](./CLAUDE.md) | The deep architecture reference: process boundaries, every subsystem's invariants and the reasoning behind them. |
 | [`CONTRIBUTING.md`](./CONTRIBUTING.md) | Setup, the process-boundary rules, and the house rules a PR gets sent back for. |
 | [`AGENTS.md`](./AGENTS.md) | Guidance for coding agents working in this repository. |
@@ -417,3 +567,69 @@ excludes offering it to third parties on a hosted/embedded basis or as a competi
 product or service. On the fourth anniversary of a given version's first public release (or the
 license's stated Change Date, whichever comes first), that version automatically converts to the
 **MIT License**.
+These are the defaults — every one of them is remappable in **Settings → Keyboard Shortcuts**.
+
+| Shortcut | Action |
+| --- | --- |
+| `⌘K` | Command palette |
+| `⌘T` / `⌘⇧C` | New terminal / New Claude Code |
+| `⌘⇧B` | Toggle the kanban board |
+| `⌘W` | Close the selected node |
+| `⌘←` `⌘→` `⌘↑` `⌘↓` | Focus the node left / right / above / below (`Ctrl+Shift+arrow` off macOS) |
+| `⌘Z` / `⌘⇧Z` | Undo / Redo |
+| `⌘M` | Toggle markdown view (terminal / editor) |
+| Hold `⌘⌥` (`Ctrl+Alt`) | Dictate into the focused terminal |
+| `⌘⇧E` | File explorer |
+| `⌘,` | Settings · `⌘/` Shortcuts |
+| `Right-click` | Actions menu (empty space or node) |
+
+## 🏗 Architecture
+
+- **Electron, three contexts** — `src/main` (the Electron shell), `src/preload` (the only
+  bridge, `window.nodeTerminal`), `src/renderer` (React UI). `src/shared` holds the types
+  and IPC channel names used by all three.
+- **`CorePlatform` seam** — every service (PTY, workspace/settings, git, agents, hooks) lives
+  in `src/core` behind a small platform interface and never imports `electron`. Electron is
+  one implementation of that seam; the browser Server Edition (`src/server`) is another,
+  booting the exact same services over a WebSocket-RPC bridge (`src/renderer/bridge` fills
+  `window.nodeTerminal` in the browser). One codebase, one renderer, multiple shells.
+- **`TerminalTransport` abstraction** — the renderer depends only on this interface, never on
+  IPC or node-pty directly. `LocalTransport` talks to the local host; `RemoteTransport` talks
+  to a remote agent over SSH — so remote projects drop in without touching the canvas UI.
+- **React Flow is the single source of truth** for live nodes; projects persist serialized
+  nodes to disk, and tmux keeps sessions alive across restarts.
+- **Three surfaces** — the desktop app, the browser **Server Edition**, and the
+  **mobile companion** (a separate SwiftUI repo) all ride the same core + transport seams.
+
+See [`docs/SERVER.md`](./docs/SERVER.md) for the Server Edition, and the design docs
+under [`docs/`](./docs) for deeper notes.
+
+## 🤝 Contributing
+
+Issues and pull requests are welcome. **Start with [CONTRIBUTING.md](./CONTRIBUTING.md)** —
+setup, the process-boundary rules, and the house rules that come up in review.
+[CLAUDE.md](./CLAUDE.md) is the deep reference behind them (and is loaded automatically if
+you work with an AI coding agent). Questions or bug reports are also happy at
+[nodeterm.dev/support](https://nodeterm.dev/support) / support@nodeterm.dev. nodeterm is licensed under the
+[Business Source License 1.1](https://mariadb.com/bsl11/) — you can use, modify,
+and redistribute it freely, including in production, except offering it as a
+competing product or service (see [License](#-license)).
+
+By submitting a contribution (pull request, patch, or code snippet), you agree
+that it is licensed under the same [BUSL-1.1](./LICENSE) terms as the rest of
+the project, and that the project may continue to relicense future versions
+(including your contribution) as part of its normal licensing model.
+
+## 📜 License
+
+**[BUSL-1.1](./LICENSE)** ([Business Source License](https://mariadb.com/bsl11/)): you may
+copy, modify, redistribute, and — under the Additional Use Grant — make **production
+use** of nodeterm; the one thing you may not do is offer it (hosted, embedded, or as a
+standalone product/service) in a way that **competes** with nodeterm or with the
+Licensor's products built on it. Each release automatically becomes plain **MIT** four
+years after it is published. See [`LICENSE`](./LICENSE) for the full terms and
+[`THIRD-PARTY-NOTICES.md`](./THIRD-PARTY-NOTICES.md) for the bundled open-source
+components. For a commercial license beyond the grant, contact eneskirca@gmail.com.
+
+> "Claude" and "Claude Code" are trademarks of Anthropic, and "Trello" is a trademark of
+> Atlassian; nodeterm is not affiliated with or endorsed by either.

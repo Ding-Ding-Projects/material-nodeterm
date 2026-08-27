@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { appendProjectNode } from './project-node-append'
+import { appendProjectNode, removeProjectNode } from './project-node-append'
 
 const NOW = new Date('2026-07-16T10:00:00.000Z')
 
@@ -137,6 +137,55 @@ describe('appendProjectNode', () => {
     expect(f.nodes[1].ssh).toMatchObject({
       host: 'h', user: 'u', port: 2222, futureSshField: 'kept'
     })
+  it('inherits ssh ONLY from a real remote-tmux sibling — never from an `ssh <host>` terminal', () => {
+    // A local project can hold a terminal that merely RUNS ssh (or a host attachment): it carries
+    // `data.ssh` and runs on the local pty. The phone's session runs on THIS machine, so copying
+    // that spec (and force-setting sshRemoteTmux) sent the desktop off to the other host, where
+    // `tmux new-session -A` created a fresh empty session instead of finding the phone's.
+    const sshTerminal = { ...sibling, id: 'term-aaa-9', sshRemoteTmux: undefined }
+    const local = JSON.parse(appendProjectNode(baseFile([sshTerminal]), { id: 'term-c-1' }, NOW)!)
+    expect(local.nodes[1].ssh).toBeUndefined()
+    expect(local.nodes[1].sshRemoteTmux).toBeUndefined()
+
+    // Explicitly false is the same answer, and so is a donor whose spec cannot be dialled.
+    const off = JSON.parse(
+      appendProjectNode(baseFile([{ ...sibling, sshRemoteTmux: false }]), { id: 'term-c-2' }, NOW)!
+    )
+    expect(off.nodes[1].ssh).toBeUndefined()
+    const halfSpec = JSON.parse(
+      appendProjectNode(baseFile([{ ...sibling, ssh: { host: 'h' } }]), { id: 'term-c-3' }, NOW)!
+    )
+    expect(halfSpec.nodes[1].ssh).toBeUndefined()
+    expect(halfSpec.nodes[1].sshRemoteTmux).toBeUndefined()
+
+    // A genuine remote-tmux sibling still donates, and is preferred over the local ssh terminal.
+    const remote = JSON.parse(
+      appendProjectNode(baseFile([sshTerminal, sibling]), { id: 'term-c-4' }, NOW)!
+    )
+    expect(remote.nodes[2].ssh).toEqual({ host: 'h', user: 'u' })
+    expect(remote.nodes[2].sshRemoteTmux).toBe(true)
+  })
+
+  it('carries accountId so the session keeps the identity the phone launched it under', () => {
+    const f = JSON.parse(
+      appendProjectNode(
+        baseFile([]),
+        { id: 'term-c-1', agentId: 'claude', accountId: '9f1c2b3d-4e5f-6071-8293-a4b5c6d7e8f9' },
+        NOW
+      )!
+    )
+    expect(f.nodes[0].accountId).toBe('9f1c2b3d-4e5f-6071-8293-a4b5c6d7e8f9')
+    // Absent = the system account (~/.claude), exactly as before.
+    const plain = JSON.parse(appendProjectNode(baseFile([]), { id: 'term-c-2' }, NOW)!)
+    expect(plain.nodes[0].accountId).toBeUndefined()
+  })
+
+  it('refuses an unsafe accountId — it becomes a config-dir path segment', () => {
+    // Refused whole, not written without the field: a node registered under the SYSTEM account is
+    // the very wrong-identity bug accountId exists to prevent, and it would look like a success.
+    for (const bad of ['../../etc', 'a/b', 'a b', '', 'a.b', 123 as never, {} as never]) {
+      expect(appendProjectNode(baseFile([]), { id: 'term-c-1', accountId: bad }, NOW)).toBeNull()
+    }
   })
 
   it('refuses: bad JSON / wrong shape / wrong version — never invents a file', () => {
@@ -168,5 +217,46 @@ describe('appendProjectNode', () => {
     )
     expect(f.nodes[0].title.length).toBeLessThanOrEqual(120)
     expect(f.nodes[0].agentId).toBeUndefined()
+  })
+})
+
+describe('removeProjectNode', () => {
+  const two = [sibling, { ...sibling, id: 'term-bbb-2', ssh: undefined, sshRemoteTmux: undefined }]
+
+  it('removes the node, bumps rev, refreshes savedAt', () => {
+    const out = removeProjectNode(baseFile(two), 'term-aaa-1', NOW)
+    expect(out).not.toBeNull()
+    const f = JSON.parse(out!)
+    expect(f.rev).toBe(8)
+    expect(f.savedAt).toBe('2026-07-16T10:00:00.000Z')
+    expect(f.nodes.map((n: { id: string }) => n.id)).toEqual(['term-bbb-2'])
+  })
+
+  it('round-trips every field it does not know (bridges, kanban, future schema)', () => {
+    const extra = {
+      bridges: [{ from: 'term-aaa-1', to: 'term-bbb-2' }],
+      kanban: { columns: [], assignments: [{ nodeId: 'term-aaa-1', columnId: 'c1' }] },
+      futureField: { keep: true }
+    }
+    const f = JSON.parse(removeProjectNode(baseFile(two, extra), 'term-aaa-1', NOW)!)
+    // Dangling references are deliberately left for their readers' lazy pruning (same as a
+    // desktop delete) — removal must not reinterpret parts of the file it does not own.
+    expect(f.bridges).toEqual(extra.bridges)
+    expect(f.kanban).toEqual(extra.kanban)
+    expect(f.futureField).toEqual(extra.futureField)
+    expect(f.viewport).toEqual({ x: 1, y: 2, zoom: 0.5 })
+  })
+
+  it('answers null for a node id not in this file — "try the next project", no rev churn', () => {
+    expect(removeProjectNode(baseFile(two), 'term-zzz-9', NOW)).toBeNull()
+    expect(removeProjectNode(baseFile([]), 'term-aaa-1', NOW)).toBeNull()
+  })
+
+  it('refuses: bad JSON / wrong shape / wrong version / empty id — never invents a file', () => {
+    expect(removeProjectNode('{ not json', 'term-aaa-1', NOW)).toBeNull()
+    expect(removeProjectNode('[1,2]', 'term-aaa-1', NOW)).toBeNull()
+    expect(removeProjectNode('{"version":99,"rev":1,"nodes":[]}', 'term-aaa-1', NOW)).toBeNull()
+    expect(removeProjectNode('{"version":1}', 'term-aaa-1', NOW)).toBeNull()
+    expect(removeProjectNode(baseFile(two), '', NOW)).toBeNull()
   })
 })

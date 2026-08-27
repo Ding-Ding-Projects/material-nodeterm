@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { NodeResizer, useReactFlow, type NodeProps } from '@xyflow/react'
+import { NODE_MIN_SIZES } from '../lib/nodeSizing'
 import { useShallow } from 'zustand/react/shallow'
 import { type CanvasNode } from '../state/workspace'
 import { useProjects } from '../state/projects'
@@ -7,6 +8,7 @@ import { useActiveSessionPresence } from '../session/session'
 import { alphaTint } from '../components/color/tint'
 import { createDinoGame } from './dino/dino-game'
 import { shouldSpectate } from './dino/dino-authority'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 /**
  * A dino node: a small self-contained T-Rex–style runner on a canvas. No PTY.
@@ -24,9 +26,12 @@ import { shouldSpectate } from './dino/dino-authority'
  * byte-identical to before.
  */
 export function DinoNode({ id, data, selected }: NodeProps<CanvasNode>) {
+  const vocab = useVocabularyMapper()
   const { updateNodeData, deleteElements } = useReactFlow()
   const hostRef = useRef<HTMLDivElement>(null)
   const gameRef = useRef<ReturnType<typeof createDinoGame> | null>(null)
+  const vocabRef = useRef(vocab)
+  vocabRef.current = vocab
 
   // The active session's presence. DinoNode renders under Canvas's active-session provider, which is
   // KEYED on `session.id` (Canvas.tsx), so this node REMOUNTS on a session swap — the mount-time
@@ -55,7 +60,8 @@ export function DinoNode({ id, data, selected }: NodeProps<CanvasNode>) {
       // the SESSION wrapper `presence.dino` (not raw `api.presence.dino`), so a solo player's ~20 Hz
       // snapshots are SKIPPED with no peer to watch (the `null` stop always lands). `presence` is
       // captured once at mount (safe — DinoNode remounts on session change; see the note above).
-      onSnapshot: (snap) => presence.dino(snap ? { nodeId: id, snap } : null)
+      onSnapshot: (snap) => presence.dino(snap ? { nodeId: id, snap } : null),
+      text: (value) => vocabRef.current(value)
     })
     gameRef.current = game
     return () => {
@@ -93,7 +99,7 @@ export function DinoNode({ id, data, selected }: NodeProps<CanvasNode>) {
 
   return (
     <div className={`dino-node${selected ? ' selected' : ''}`} style={{ borderColor: data.color }}>
-      <NodeResizer minWidth={400} minHeight={160} isVisible={selected} color={data.color} />
+      <NodeResizer minWidth={NODE_MIN_SIZES.dino.width} minHeight={NODE_MIN_SIZES.dino.height} isVisible={selected} color={data.color} />
 
       {/* alphaTint, NOT `${data.color}33`: appending hex alpha only yields a colour when the string
           is 6-digit hex, and `data.color` is a plain string a node menu's full picker can set to
@@ -112,14 +118,14 @@ export function DinoNode({ id, data, selected }: NodeProps<CanvasNode>) {
           <span
             className="dino-node__watching nodrag"
             style={{ color: peer.color, borderColor: `${peer.color}66` }}
-            title={`${peer.name} is playing this dino`}
+            title={`${peer.name} ${vocab('is playing this dino')}`}
           >
-            ▷ {peer.name} is playing
+            ▷ {peer.name} {vocab('is playing')}
           </span>
         )}
         <button
           className="term-node__close"
-          title="Close"
+          title={vocab('Close')}
           onClick={() => deleteElements({ nodes: [{ id }] })}
         >
           ×

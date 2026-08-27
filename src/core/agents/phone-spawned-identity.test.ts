@@ -58,6 +58,9 @@ describe('a phone-spawned session presents its per-node token', { timeout: REAL_
     encoding: 'utf8',
     env: shellEnv
   })
+describe('a phone-spawned session presents its per-node token', () => {
+  const sh = spawnSync('sh', ['-c', 'exit 0'])
+  const curl = spawnSync('sh', ['-c', 'command -v curl'], { encoding: 'utf8' })
   const available = sh.status === 0 && !sh.error && curl.status === 0
 
   let dir = ''
@@ -95,6 +98,7 @@ describe('a phone-spawned session presents its per-node token', { timeout: REAL_
   afterAll(() => {
     server?.close()
     if (dir) rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+    if (dir) rmSync(dir, { recursive: true, force: true })
   })
 
   beforeEach(() => {
@@ -104,6 +108,7 @@ describe('a phone-spawned session presents its per-node token', { timeout: REAL_
 
   /** Resolve when one more POST has landed (or reject after `ms` — a silent script is a failure). */
   function nextPost(ms = REAL_SHELL_TEST_TIMEOUT_MS): Promise<Received> {
+  function nextPost(ms = 5000): Promise<Received> {
     if (received.length > 0) return Promise.resolve(received[received.length - 1])
     return new Promise<Received>((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error('no POST arrived')), ms)
@@ -137,6 +142,15 @@ describe('a phone-spawned session presents its per-node token', { timeout: REAL_
             ['HOME', 'NODETERM_HOOK_ENDPOINT']
           )
         ),
+  function runPhoneHook(script: string, home: string, nodeId: string, endpoint: string): Promise<number> {
+    return new Promise((resolve) => {
+      const child = spawn('sh', [script], {
+        env: {
+          HOME: home,
+          PATH: process.env.PATH ?? '',
+          NODETERM_HOOK_ENDPOINT: endpoint,
+          NODETERM_NODE_ID: nodeId
+        },
         stdio: ['pipe', 'ignore', 'ignore']
       })
       child.stdin.end('{"hook_event_name":"Stop","session_id":"s1"}')
@@ -159,6 +173,7 @@ describe('a phone-spawned session presents its per-node token', { timeout: REAL_
       `NODETERM_HOOK_PORT=${port}\nNODETERM_HOOK_TOKEN=bearer-xyz\n` +
         `NODETERM_HOOK_VERSION=${version}\n` +
         (tokenDir ? `NODETERM_NODE_TOKEN_DIR=${quotePathForPosixShell(tokenDir)}\n` : ''),
+        (tokenDir ? `NODETERM_NODE_TOKEN_DIR=${tokenDir}\n` : ''),
       { encoding: 'utf8', mode: 0o600 }
     )
     return p

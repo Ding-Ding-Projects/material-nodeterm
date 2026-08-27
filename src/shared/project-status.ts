@@ -63,9 +63,17 @@ export interface StatusEvidence {
 export interface StatusGateRow {
   id: string
   label: string
+  /** Capture labels are authored UI copy; changelog and release-note labels are external data. */
+  labelOwnership: 'authored' | 'factual'
   state: GateState
   note: string
 }
+
+/** A status sentence carries authored copy separately from evidence values. This prevents a
+ * vocabulary replacement from changing a version, count, timestamp, or commit identifier. */
+export type StatusSummaryPart =
+  | { kind: 'authored'; text: string }
+  | { kind: 'factual'; text: string }
 
 export interface StatusGateCard {
   id: string
@@ -73,6 +81,8 @@ export interface StatusGateCard {
   state: GateState
   /** One honest sentence. States what is known, and equally what is NOT recorded. */
   summary: string
+  /** Optional typed rendering parts for the summary. Legacy callers can keep using `summary`. */
+  summaryParts?: readonly StatusSummaryPart[]
   /** ISO timestamp of the recorded evidence behind this card, or null = the repo records none. */
   recordedAt: string | null
   evidence: StatusEvidence[]
@@ -160,12 +170,14 @@ export function shortCommit(sha: string): string {
 /** The capture gate: the one gate with real committed run evidence (provenance included). */
 export function captureGate(manifest: CaptureManifest | null): StatusGateCard {
   if (manifest === null) {
+    const summary =
+      'No capture manifest is readable in this build, so the capture state is unknown — and unknown is not passed.'
     return {
       id: 'captures',
       title: 'Built-app captures',
       state: 'unrun',
-      summary:
-        'No capture manifest is readable in this build, so the capture state is unknown — and unknown is not passed.',
+      summary,
+      summaryParts: [{ kind: 'authored', text: summary }],
       recordedAt: null,
       evidence: [{ label: 'Runs with', value: 'npm run shots -- --launch' }],
       rows: []
@@ -175,18 +187,21 @@ export function captureGate(manifest: CaptureManifest | null): StatusGateCard {
     ...manifest.captured.map((c) => ({
       id: `captured-${c.id}`,
       label: c.title,
+      labelOwnership: 'authored' as const,
       state: 'verified' as GateState,
       note: `${c.id} · ${c.bytes} bytes`
     })),
     ...manifest.skipped.map((s) => ({
       id: `skipped-${s.id}`,
       label: s.id,
+      labelOwnership: 'factual' as const,
       state: 'unrun' as GateState,
       note: `skipped — ${s.why}`
     })),
     ...manifest.failures.map((f) => ({
       id: `failed-${f.id}`,
       label: f.id,
+      labelOwnership: 'factual' as const,
       state: 'failed' as GateState,
       note: f.why
     }))
@@ -206,37 +221,60 @@ export function captureGate(manifest: CaptureManifest | null): StatusGateCard {
     })
   }
   if (manifest.failures.length > 0) {
+    const summary = `The last recorded capture run failed on ${manifest.failures.length} surface${
+      manifest.failures.length === 1 ? '' : 's'
+    }.`
     return {
       id: 'captures',
       title: 'Built-app captures',
       state: 'failed',
-      summary: `The last recorded capture run failed on ${manifest.failures.length} surface${
-        manifest.failures.length === 1 ? '' : 's'
-      }.`,
+      summary,
+      summaryParts: [
+        { kind: 'authored', text: 'The last recorded capture run failed on ' },
+        { kind: 'factual', text: String(manifest.failures.length) },
+        { kind: 'authored', text: manifest.failures.length === 1 ? ' surface.' : ' surfaces.' }
+      ],
       recordedAt: manifest.capturedAt,
       evidence,
       rows
     }
   }
   if (manifest.captured.length === 0) {
+    const summary =
+      'A capture manifest exists but records no photographed surface, so the capture state is unrun.'
     return {
       id: 'captures',
       title: 'Built-app captures',
       state: 'unrun',
-      summary:
-        'A capture manifest exists but records no photographed surface, so the capture state is unrun.',
+      summary,
+      summaryParts: [{ kind: 'authored', text: summary }],
       recordedAt: manifest.capturedAt,
       evidence,
       rows
     }
   }
+  const summary = `The last recorded capture run photographed ${manifest.captured.length} surfaces of the real built app from commit ${shortCommit(
+    manifest.commit
+  )}${manifest.skipped.length > 0 ? `; ${manifest.skipped.length} surfaces were skipped and stay unrun` : ''}.`
   return {
     id: 'captures',
     title: 'Built-app captures',
     state: 'verified',
-    summary: `The last recorded capture run photographed ${manifest.captured.length} surfaces of the real built app from commit ${shortCommit(
-      manifest.commit
-    )}${manifest.skipped.length > 0 ? `; ${manifest.skipped.length} surfaces were skipped and stay unrun` : ''}.`,
+    summary,
+    summaryParts: [
+      { kind: 'authored', text: 'The last recorded capture run photographed ' },
+      { kind: 'factual', text: String(manifest.captured.length) },
+      { kind: 'authored', text: ' surfaces of the real built app from commit ' },
+      { kind: 'factual', text: shortCommit(manifest.commit) },
+      ...(manifest.skipped.length > 0
+        ? [
+            { kind: 'authored' as const, text: '; ' },
+            { kind: 'factual' as const, text: String(manifest.skipped.length) },
+            { kind: 'authored' as const, text: ' surfaces were skipped and stay unrun' }
+          ]
+        : []),
+      { kind: 'authored', text: '.' }
+    ],
     recordedAt: manifest.capturedAt,
     evidence,
     rows
@@ -275,11 +313,13 @@ export function releaseGate(
   const pendingCommits = unreleased?.commits.length ?? 0
 
   if (newest === null) {
+    const summary = 'The changelog records no dated release, so no published release can be claimed.'
     return {
       id: 'release',
       title: 'Release',
       state: 'unrun',
-      summary: 'The changelog records no dated release, so no published release can be claimed.',
+      summary,
+      summaryParts: [{ kind: 'authored', text: summary }],
       recordedAt: null,
       evidence: [
         { label: 'Version in this tree', value: currentVersion ?? 'unreadable' },
@@ -309,6 +349,7 @@ export function releaseGate(
   const rows: StatusGateRow[] = (unreleased?.items ?? []).map((item, i) => ({
     id: `unreleased-${i}`,
     label: changelogItemLabel(item.text),
+    labelOwnership: 'factual',
     state: 'waiting' as GateState,
     note: item.category
   }))
@@ -317,11 +358,36 @@ export function releaseGate(
         pendingItems === 1 ? '' : 's'
       }${versionAhead ? ` and the version bump to ${currentVersion}` : ''} are waiting for the next release.`
     : `Everything the changelog records has shipped in ${newest.version} (${newest.date}). No packaged-install verification is recorded in this tree, so none is claimed.`
+  const summaryParts = waiting
+    ? [
+        { kind: 'authored' as const, text: 'The newest release this tree records is ' },
+        { kind: 'factual' as const, text: newest.version },
+        { kind: 'authored' as const, text: ' (' },
+        { kind: 'factual' as const, text: newest.date },
+        { kind: 'authored' as const, text: '). ' },
+        { kind: 'factual' as const, text: String(pendingItems) },
+        { kind: 'authored' as const, text: pendingItems === 1 ? ' recorded change' : ' recorded changes' },
+        ...(versionAhead
+          ? [
+              { kind: 'authored' as const, text: ' and the version bump to ' },
+              { kind: 'factual' as const, text: currentVersion as string }
+            ]
+          : []),
+        { kind: 'authored' as const, text: ' are waiting for the next release.' }
+      ]
+    : [
+        { kind: 'authored' as const, text: 'Everything the changelog records has shipped in ' },
+        { kind: 'factual' as const, text: newest.version },
+        { kind: 'authored' as const, text: ' (' },
+        { kind: 'factual' as const, text: newest.date },
+        { kind: 'authored' as const, text: '). No packaged-install verification is recorded in this tree, so none is claimed.' }
+      ]
   return {
     id: 'release',
     title: 'Release',
     state: waiting ? 'waiting' : 'verified',
     summary,
+    summaryParts,
     recordedAt: newest.date ? `${newest.date}T00:00:00.000Z` : null,
     evidence,
     rows
@@ -378,11 +444,13 @@ export const UNRECORDED_GATES: readonly UnrecordedGateSpec[] = [
 ]
 
 export function unrecordedGate(spec: UnrecordedGateSpec): StatusGateCard {
+  const summary = `${spec.what} No verdict is recorded in the repository, so this build cannot claim one — a check that has not run is unrun, not passed.`
   return {
     id: spec.id,
     title: spec.title,
     state: 'unrun',
-    summary: `${spec.what} No verdict is recorded in the repository, so this build cannot claim one — a check that has not run is unrun, not passed.`,
+    summary,
+    summaryParts: [{ kind: 'authored', text: summary }],
     recordedAt: null,
     evidence: [{ label: 'Runs with', value: spec.command }],
     rows: []

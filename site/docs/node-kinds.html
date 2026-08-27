@@ -31,7 +31,7 @@
     <article class="doc-body">
       <p class="doc-kicker">Canvas</p>
       <h1>Node kinds</h1>
-      <p>Every object on the canvas is a React Flow custom node of one of five kinds: terminal, sticky, group, editor, or diff.</p>
+      <p>Every object on the canvas is a React Flow custom node. Alongside terminals, sticky notes, groups, editors, diffs, and service nodes, each Multiverse or AWS Universe child canvas owns one fixed Shop node; the root canvas has none.</p>
 
       <h2>Behaviour</h2>
       <ul>
@@ -40,19 +40,20 @@
           <li><strong>group</strong> — a real parent/child frame; frames can nest to any depth and can be bound to a git worktree, so every node created inside one inherits that worktree's path as its working directory.</li>
           <li><strong>editor</strong> — a Monaco code editor bound to a file path, with an image-preview mode for common image formats.</li>
           <li><strong>diff</strong> — a read-only Monaco diff view comparing a file's staged or unstaged changes.</li>
+          <li><strong>shop</strong> — the one deterministic, scope-bound catalog entry point owned by a Multiverse or AWS Universe child canvas. It cannot be moved, grouped, duplicated, or deleted.</li>
         </ul>
 
       <h2>Configuration</h2>
       <p>Default node size for new terminal and agent nodes is set once in Settings and applies to every subsequently created node; existing nodes keep whatever size they were last resized to.</p>
 
       <h2>Failure modes</h2>
-      <p>A node's id must never change once created — it is also the tmux session name for terminal nodes, so changing it would orphan the running session from the node that used to own it.</p>
+      <p>A node's id must never change once created — it is also the tmux session name for terminal nodes, so changing it would orphan the running session from the node that used to own it. A Shop id is derived from its universe canvas id and is repaired on import when missing or duplicated.</p>
 
       <h2>Security considerations</h2>
       <p>Editor and diff nodes read and write real files on disk (or on a remote host for SSH projects) — the same access any local editor would have, no more and no less.</p>
 
       <h2>Verification</h2>
-      <p>Each node kind has its own focused test coverage for creation, persistence, and its kind-specific behaviour (e.g. the diff node's staged/unstaged toggle, the group node's re-fit-to-children logic).</p>
+      <p>Each node kind has its own focused test coverage for creation, persistence, and its kind-specific behaviour (e.g. the diff node's staged/unstaged toggle, the group node's re-fit-to-children logic). The Shop lane's implementation is present, but tests, builds, runtime interaction, and captures were intentionally not run for issue #17.</p>
 
       <section class="doc-suggested">
         <h2>Suggested articles</h2>

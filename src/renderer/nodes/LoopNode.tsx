@@ -1,9 +1,11 @@
 import { useEffect, useRef } from 'react'
 import { Handle, NodeResizer, Position, type NodeProps } from '@xyflow/react'
+import { NODE_MIN_SIZES } from '../lib/nodeSizing'
 import type { CanvasNode } from '../state/workspace'
 import { useAgentNodes } from '../state/agentNodes'
 import { applyLoopDismiss } from '../lib/loopCard'
 import { useSession } from '../session/session'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 /**
  * Loop/schedule/cron node — first-class (select/drag/resize). Shows the kind, schedule, full
@@ -11,6 +13,7 @@ import { useSession } from '../session/session'
  * parent terminal (manual trigger).
  */
 export function LoopNode({ id, data, selected }: NodeProps<CanvasNode>) {
+  const vocab = useVocabularyMapper()
   // The parent terminal's core api — the manual trigger sends into ITS tmux session.
   const { api } = useSession()
   const count = (data.loopCount as number) ?? 0
@@ -18,8 +21,11 @@ export function LoopNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const active = !!data.loopActive
   const schedule = (data.loopSchedule as string) || ''
   const task = (data.loopTask as string) || ''
-  const kind = (data.loopKind as string) || 'loop'
-  const label = `Claude ${kind.charAt(0).toUpperCase()}${kind.slice(1)}`
+  // The provider label and loop kind are exact provider/runtime facts, not app-authored prose.
+  // The surrounding controls and empty-state copy below remain vocabulary-mappable.
+  const kind = typeof data.loopKind === 'string' && data.loopKind ? data.loopKind : 'loop'
+  const kindLabel = `${kind.charAt(0).toUpperCase()}${kind.slice(1)}`
+  const label = `Claude ${kindLabel}`
   const expanded = !!data.ephExpanded
   const bodyRef = useRef<HTMLDivElement>(null)
   const toggle = () => useAgentNodes.getState().toggleExpanded(id)
@@ -53,11 +59,12 @@ export function LoopNode({ id, data, selected }: NodeProps<CanvasNode>) {
   return (
     <div onPointerDownCapture={select} className={`loop-node${active ? ' working' : ''}`}>
       <NodeResizer isVisible={selected} minWidth={180} minHeight={84} color="var(--md-primary)" />
+      <NodeResizer isVisible={selected} minWidth={NODE_MIN_SIZES.loop.width} minHeight={NODE_MIN_SIZES.loop.height} color="#bf7af0" />
       <Handle type="target" position={Position.Top} isConnectable={false} />
       <div className="loop-node__head nodrag" onClick={toggle} style={{ cursor: 'pointer' }}>
         <button
           className="loop-node__expand"
-          title={expanded ? 'Collapse' : 'Open'}
+          title={vocab(expanded ? 'Collapse' : 'Open')}
           onClick={(e) => {
             e.stopPropagation()
             toggle()
@@ -70,13 +77,13 @@ export function LoopNode({ id, data, selected }: NodeProps<CanvasNode>) {
         {count > 0 && <span className="loop-node__count">×{count}</span>}
         {schedule && <span className="loop-node__sched">{schedule}</span>}
         {task && (
-          <button className="loop-node__play" title="Run now (manual trigger)" onClick={trigger}>
+          <button className="loop-node__play" title={vocab('Run now (manual trigger)')} onClick={trigger}>
             ▶
           </button>
         )}
         <button
           className="loop-node__close"
-          title="Dismiss card (does not remove the job)"
+          title={vocab('Dismiss card (does not remove the job)')}
           onClick={dismiss}
         >
           ×
@@ -92,7 +99,7 @@ export function LoopNode({ id, data, selected }: NodeProps<CanvasNode>) {
                   <span className="loop-node__item-n">{i + 1}.</span> {it}
                 </div>
               ))
-            : !task && <span className="loop-node__empty">No activity yet.</span>}
+            : !task && <span className="loop-node__empty">{vocab('No activity yet.')}</span>}
         </div>
       )}
     </div>

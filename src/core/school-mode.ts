@@ -80,6 +80,7 @@ function sanitizeName(name: string): string {
 export class SchoolModeStore {
   private readonly persist: (file: string, data: string) => Promise<void>
   private cache: SchoolModeRecord = DEFAULT_RECORD
+  private hydrated = false
   private listeners = new Set<(r: SchoolModeRecord) => void>()
   private watcher = new SharedRecordWatcher(recordFile(), () => this.queueReload())
   /** Every write is FIFO'd through this chain (same idiom as SettingsStore.saveChain / WorkspaceStore
@@ -96,8 +97,12 @@ export class SchoolModeStore {
    *  once at boot, before `registerIpc()`. */
   async init(): Promise<void> {
     const lifecycle = ++this.lifecycle
-    await this.reload(lifecycle)
-    if (lifecycle === this.lifecycle) this.watcher.start()
+    this.hydrated = false
+    const readable = await this.reload(lifecycle)
+    if (lifecycle === this.lifecycle) {
+      this.hydrated = readable
+      this.watcher.start()
+    }
   }
 
   private async reload(lifecycle: number): Promise<boolean> {
@@ -121,6 +126,7 @@ export class SchoolModeStore {
     const run = this.chain.then(async () => {
       const before = this.cache
       const applied = await this.reload(lifecycle)
+      this.hydrated = applied
       if (applied && (before.enabled !== this.cache.enabled || before.name !== this.cache.name)) this.notify()
     })
     this.chain = run.catch(() => {})
@@ -133,6 +139,12 @@ export class SchoolModeStore {
 
   get(): SchoolModeRecord {
     return this.cache
+  }
+
+  /** Whether the current record was read successfully during initialization. A default OFF
+   *  value is not permission to apply optional vocabulary until this is true. */
+  isHydrated(): boolean {
+    return this.hydrated
   }
 
   onChange(cb: (r: SchoolModeRecord) => void): () => void {

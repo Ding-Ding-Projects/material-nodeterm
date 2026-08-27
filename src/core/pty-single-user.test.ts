@@ -6,6 +6,7 @@ import { initPlatform, resetPlatformForTests } from './platform'
 import { fakePlatform, type FakePlatform } from './platform-fake'
 import { IPC } from '../shared/ipc'
 import { DEFAULT_SETTINGS } from '../shared/types'
+import { MODEL_GATEWAY_SECRET_REF } from '../shared/agents/model-gateway'
 import { TMUX_SOCKET, sessionName } from './tmux-naming'
 
 /**
@@ -43,6 +44,7 @@ const spawnArgs: Array<{
 // out/session-host/host.cjs exists on disk, so whether this suite exercises the mocked
 // `node-pty` spawn below or a real session-host shim depended on whether anyone had run
 // `npm run build`. See src/core/__fixtures__/no-session-host.ts.
+// `npm run build` (or `npm run host:build`). See src/core/__fixtures__/no-session-host.ts.
 vi.mock('./session-host-backend', async () =>
   (await import('./__fixtures__/no-session-host')).noSessionHost()
 )
@@ -103,6 +105,8 @@ const execCalls: Array<{ file: string; args: string[] }> = []
 const liveTmuxSessions = new Set<string>()
 let holdNextKill = false
 let releaseHeldKill: (() => void) | undefined
+let paneProcessReply = ''
+let processGroupReply = ''
 
 vi.mock('child_process', () => {
   type Cb = (err: Error | null, res?: { stdout: string; stderr: string }) => void
@@ -128,6 +132,10 @@ vi.mock('child_process', () => {
       const target = args[args.indexOf('-t') + 1]
       liveTmuxSessions.delete(target)
       ok('')
+    } else if (args.includes('#{pane_pid}|#{pane_current_command}')) {
+      ok(paneProcessReply)
+    } else if (file === 'ps' && args.includes('tpgid=')) {
+      ok(processGroupReply)
     } else {
       ok('')
     }
@@ -166,6 +174,25 @@ vi.mock('./exec-path', async (importOriginal) => {
 const SOLO = 42
 
 /**
+ * Hermetic tmux resolution (issue #160). Without this, `init()` → `ensureTmux()` → `findTmux()`
+ * probes the REAL machine: `fs.existsSync` on the fixed install paths, then the login-shell PATH,
+ * then the bundled binary. Two ways that made this file's answer depend on the host:
+ *  - a machine with no tmux installed never actually tested the tmux-backed manager (every
+ *    `tmuxManager()` silently exercised the plain-shell fallback instead);
+ *  - under ~16 parallel workers a transient EMFILE makes `existsSync` swallow the error and
+ *    answer FALSE for a tmux that IS installed — every candidate misses, the manager silently
+ *    falls back to a plain shell, and all of this file's "expected 1 tmux call, got 0"
+ *    assertions fail at once. That is issue #160's run A (44 failures), unreproducible alone.
+ * Pinning the first fixed candidate makes tmux resolution a function of the code under test, not
+ * of the host's fd budget. No real tmux is ever invoked: node-pty and child_process are mocked
+ * above, and ensureTmux's `source-file` push goes through the mocked execFileSync.
+ */
+vi.mock('./tmux-hint', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./tmux-hint')>()),
+  findFixedTmux: () => '/usr/bin/tmux'
+}))
+
+/**
  * A machine with pty devices to spare, always.
  *
  * Without this the real probe runs a `readdir('/dev')` against the DEVELOPER's host, and
@@ -191,6 +218,9 @@ describe('SINGLE-USER REGRESSION: co-attach must not change the solo path', () =
     execCalls.length = 0
     holdNextKill = false
     releaseHeldKill = undefined
+    liveTmuxSessions.clear()
+    paneProcessReply = ''
+    processGroupReply = ''
     userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nt-solo-'))
     fake = fakePlatform({ userDataDir })
     initPlatform(fake)
@@ -198,6 +228,7 @@ describe('SINGLE-USER REGRESSION: co-attach must not change the solo path', () =
   })
   afterEach(() => {
     vi.useRealTimers()
+    vi.restoreAllMocks()
     resetPlatformForTests()
     // BEST EFFORT, and it must stay that way. This races a write it cannot wait for: the scrollback
     // snapshot is fired and forgotten by design (`snapshotScrollback` is best-effort and nothing
@@ -298,6 +329,118 @@ describe('SINGLE-USER REGRESSION: co-attach must not change the solo path', () =
     } finally {
       if (previousPassword === undefined) delete process.env.NODETERM_SERVER_PASSWORD
       else process.env.NODETERM_SERVER_PASSWORD = previousPassword
+    }
+  })
+
+  it('injects the shared gateway into both the PTY and its tmux session environment', async () => {
+    const inherited = process.env.NODETERM_TEST_GATEWAY_KEY
+    process.env.NODETERM_TEST_GATEWAY_KEY = 'vk-secret'
+    try {
+      const { PtyManager } = await import('./pty-manager')
+      const m = new PtyManager()
+      m.init(() => ({
+        ...DEFAULT_SETTINGS,
+        modelGateway: {
+          baseUrl: 'https://bifrost.example.test',
+          apiKey: '${env:NODETERM_TEST_GATEWAY_KEY}'
+        }
+      }))
+      m.registerIpc()
+
+      await create(80, 24, 'gateway-node', { agentId: 'claude' })
+
+      expect(spawnArgs[0].env.ANTHROPIC_BASE_URL).toBe(
+        'https://bifrost.example.test/anthropic'
+      )
+      expect(spawnArgs[0].env.ANTHROPIC_AUTH_TOKEN).toBe('vk-secret')
+      // NEVER on argv: the tmux client's command line is world-readable in /proc/<pid>/cmdline
+      // for the whole session on a multi-user host (the PR #195 leak class). The session gets the
+      // values through the conf's update-environment list reading this client's process env.
+      expect(spawnArgs[0].args.join(' ')).not.toContain('vk-secret')
+      expect(spawnArgs[0].args.join(' ')).not.toContain('ANTHROPIC_AUTH_TOKEN')
+      expect(spawnArgs[0].args.join(' ')).not.toContain('${env:')
+    } finally {
+      if (inherited === undefined) delete process.env.NODETERM_TEST_GATEWAY_KEY
+      else process.env.NODETERM_TEST_GATEWAY_KEY = inherited
+    }
+  })
+
+  it('maps a selected Copilot model into its BYOK environment, never a model flag', async () => {
+    const { PtyManager } = await import('./pty-manager')
+    const m = new PtyManager()
+    m.init(() => ({
+      ...DEFAULT_SETTINGS,
+      modelGateway: { baseUrl: 'https://bifrost.example.test', apiKey: 'vk-secret' }
+    }))
+    m.registerIpc()
+
+    await create(80, 24, 'copilot-gateway-node', {
+      agentId: 'copilot',
+      agentModel: 'openai/gpt-5.5'
+    })
+
+    expect(spawnArgs[0].env).toMatchObject({
+      COPILOT_PROVIDER_BASE_URL: 'https://bifrost.example.test/openai/v1',
+      COPILOT_PROVIDER_TYPE: 'openai',
+      COPILOT_PROVIDER_API_KEY: 'vk-secret',
+      COPILOT_PROVIDER_MODEL_ID: 'gpt-5.5',
+      COPILOT_PROVIDER_WIRE_MODEL: 'openai/gpt-5.5',
+      COPILOT_PROVIDER_WIRE_API: 'responses'
+    })
+    // The BYOK env — key included — reaches the session via the client env + update-environment,
+    // never the argv (see the claude case above for why).
+    expect(spawnArgs[0].args.join(' ')).not.toContain('vk-secret')
+    expect(spawnArgs[0].args.join(' ')).not.toContain('COPILOT_PROVIDER')
+    expect(spawnArgs[0].args.join(' ')).not.toContain('--model')
+  })
+
+  it('reads a stored gateway key through the shell-owned secret cache', async () => {
+    const { PtyManager } = await import('./pty-manager')
+    const m = new PtyManager()
+    m.init(
+      () => ({
+        ...DEFAULT_SETTINGS,
+        modelGateway: {
+          baseUrl: 'https://bifrost.example.test',
+          apiKey: MODEL_GATEWAY_SECRET_REF
+        }
+      }),
+      () => 'stored-gateway-key'
+    )
+    m.registerIpc()
+
+    await create(80, 24, 'stored-gateway-node', { agentId: 'codex' })
+
+    expect(spawnArgs[0].env).toMatchObject({
+      OPENAI_BASE_URL: 'https://bifrost.example.test/openai/v1',
+      OPENAI_API_KEY: 'stored-gateway-key'
+    })
+    // The stored key must not surface on the tmux client's argv either — same #195 class.
+    expect(spawnArgs[0].args.join(' ')).not.toContain('stored-gateway-key')
+  })
+
+  it('never exposes gateway credentials to a plain terminal', async () => {
+    const inherited = process.env.ANTHROPIC_AUTH_TOKEN
+    process.env.ANTHROPIC_AUTH_TOKEN = 'preexisting-shell-token'
+    try {
+      const { PtyManager } = await import('./pty-manager')
+      const m = new PtyManager()
+      m.init(() => ({
+        ...DEFAULT_SETTINGS,
+        modelGateway: { baseUrl: 'https://bifrost.example.test', apiKey: 'vk-secret' }
+      }))
+      m.registerIpc()
+
+      await create(80, 24, 'plain-terminal')
+
+      // Plain shells still inherit the user's ordinary process environment; the gateway neither
+      // overwrites it nor emits an explicit tmux session value.
+      expect(spawnArgs[0].env.ANTHROPIC_AUTH_TOKEN).toBe('preexisting-shell-token')
+      expect(spawnArgs[0].args.join(' ')).not.toContain('vk-secret')
+      expect(spawnArgs[0].args.join(' ')).not.toContain('bifrost.example.test')
+    } finally {
+      if (inherited === undefined) delete process.env.ANTHROPIC_AUTH_TOKEN
+      else process.env.ANTHROPIC_AUTH_TOKEN = inherited
     }
   })
 
@@ -423,6 +566,42 @@ describe('SINGLE-USER REGRESSION: co-attach must not change the solo path', () =
     kill(sessionId)
     expect(spawned[0].killed).toBe(true) // the pty (tmux client) is released
     expect(tmuxCalls('kill-session')).toEqual([]) // the session keeps running
+  })
+
+  it('terminates an agent foreground process group without typing into its pane', async () => {
+    await tmuxManager()
+    await create(80, 24)
+    paneProcessReply = '33293|codex\n'
+    processGroupReply = '33319\n'
+    // sig 0 is the post-SIGTERM grace probe: ESRCH means the group has already exited, so the
+    // bounded wait breaks on its first iteration (no fake-timer setTimeout is reached).
+    const signal = vi
+      .spyOn(process, 'kill')
+      .mockImplementation(((_pid: number, sig?: string | number) => {
+        if (sig === 0) throw Object.assign(new Error('ESRCH'), { code: 'ESRCH' })
+        return true
+      }) as typeof process.kill)
+    execCalls.length = 0
+
+    // No expectedAgentId here — the legacy shell-only guard path (an SSH/codex node's own
+    // model switch passes its id; this asserts the base kill mechanism stays intact).
+    await expect(fake.handlers[IPC.ptyTerminateForeground]('solo-1')).resolves.toBe(true)
+
+    expect(signal).toHaveBeenCalledWith(-33319, 'SIGTERM')
+    expect(tmuxCalls('send-keys')).toEqual([])
+    expect(execCalls.some((call) => call.file === 'ps' && call.args.includes('tpgid='))).toBe(true)
+  })
+
+  it('refuses to terminate the pane login shell', async () => {
+    await tmuxManager()
+    await create(80, 24)
+    paneProcessReply = '33293|-zsh\n'
+    processGroupReply = '33293\n'
+    const signal = vi.spyOn(process, 'kill').mockImplementation(() => true)
+
+    await expect(fake.handlers[IPC.ptyTerminateForeground]('solo-1')).resolves.toBe(false)
+
+    expect(signal).not.toHaveBeenCalled()
   })
 
   it('the detach path still snapshots the scrollback (cold restore after a reboot)', async () => {
@@ -572,6 +751,7 @@ describe('SINGLE-USER REGRESSION: co-attach must not change the solo path', () =
     const { sessionId } = await create(80, 24)
     fake.sent.length = 0
     await (fake.handlers[IPC.ptyRecycle](SOLO, 'solo-1') as Promise<void>)
+    await (fake.handlers[IPC.ptyRecycle](SOLO, 'solo-1') as unknown as Promise<void>)
 
     const kills = tmuxCalls('kill-session')
     expect(kills).toHaveLength(1) // we hold the session; one socket, one kill

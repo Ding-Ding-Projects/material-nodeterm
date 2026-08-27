@@ -14,14 +14,21 @@ import {
   type RpcMessage
 } from '../../shared/rpc'
 import { IPC } from '../../shared/ipc'
+import { mapLocalVocabularyText } from '../lib/personalVocabulary/hostMessage'
 import type { GitHubControlApi, GitHubIssuesApi } from '../../shared/github-issues'
 import type { ConverterApi } from '../../shared/converter'
 import type { OllamaApi } from '../../shared/ollama'
 import type { MinecraftApi } from '../../shared/minecraft'
 import type { NodeDependenciesApi } from '../../shared/node-dependencies'
+import type { TorrentApi, TorrentTaskState } from '../../shared/torrent'
+import type { VirtualMachineApi } from '../../shared/virtual-machine'
+import type { CalendarApi, CalendarProvider } from '../../shared/calendar'
 import {
   UNKNOWN_CLAUDE_CLI_CAPS,
   type BoardLogApi,
+  type TimerApi,
+  type LogApi,
+  type LogRecord,
   type BoardLogReadResult,
   type ChatTranscriptResult,
   type ClaudeApi,
@@ -40,6 +47,7 @@ import {
   type PtyApi,
   type PtyCreateOptions,
   type ScheduledSettingsApi,
+  type PlannerApi,
   type SettingsApi,
   type KidsModeApi,
   type KidsModeSnapshot,
@@ -118,6 +126,7 @@ import type {
   ScheduledSettingsFile,
   ScheduledSettingsLoadState
 } from '../../shared/scheduled-settings'
+import type { PlannerFile, PlannerLoadState, PlannerOccurrence } from '../../shared/planner-occurrences'
 import type { VsCodeInstall, VsCodeOpenResult } from '../../shared/vscode'
 import type { HistoryFilters, HistoryListResult, HistoryRestoreResult } from '../../shared/local-history'
 import { buildStubApi } from './stubs'
@@ -148,7 +157,9 @@ async function postUploadOverHttp(
   })
   const result = (await response.json().catch(() => null)) as UploadHttpSuccess | UploadHttpError | null
   if (!response.ok) {
-    const message = result && 'message' in result ? result.message : 'The server refused the upload.'
+    const message = result && 'message' in result
+      ? result.message
+      : mapLocalVocabularyText('The server refused the upload.')
     throw new Error(message)
   }
   return result && 'path' in result && typeof result.path === 'string' ? result.path : null
@@ -166,18 +177,18 @@ export async function saveUploadOverHttp(
 ): Promise<string | null> {
   if (typeof dataBase64 !== 'string' || dataBase64.length === 0) return null
   if (dataBase64.length > UPLOAD_MAX_BASE64_CHARS) {
-    throw new Error(UPLOAD_TOO_LARGE_MESSAGE)
+    throw new Error(mapLocalVocabularyText(UPLOAD_TOO_LARGE_MESSAGE))
   }
 
   let binary: string
   try {
     binary = atob(dataBase64)
   } catch {
-    throw new Error('The selected file could not be decoded for upload.')
+    throw new Error(mapLocalVocabularyText('The selected file could not be decoded for upload.'))
   }
   if (binary.length === 0) return null
   if (binary.length > UPLOAD_MAX_BYTES) {
-    throw new Error(UPLOAD_TOO_LARGE_MESSAGE)
+    throw new Error(mapLocalVocabularyText(UPLOAD_TOO_LARGE_MESSAGE))
   }
 
   const bytes = new Uint8Array(binary.length)
@@ -198,7 +209,7 @@ export async function saveUploadBlobOverHttp(
   // Blob.size is cheap browser metadata. The authenticated receiver still counts untrusted bytes
   // again, because this renderer-side guard is an allocation optimization, not a trust boundary.
   if (data.size === 0) return null
-  if (data.size > UPLOAD_MAX_BYTES) throw new Error(UPLOAD_TOO_LARGE_MESSAGE)
+  if (data.size > UPLOAD_MAX_BYTES) throw new Error(mapLocalVocabularyText(UPLOAD_TOO_LARGE_MESSAGE))
   return postUploadOverHttp(name, data, fetchImpl)
 }
 
@@ -348,12 +359,22 @@ const AI_NAMING_UNAVAILABLE = {
 
 /** Build the real `pty` / `workspace` / `settings` / `schoolMode` / `scheduledSettings`
  *  namespaces (plus the top-level `userDataDir`) over an RpcClient, mirroring the preload's
+/** Build the real `pty` / `workspace` / `projectSettings` / `settings` namespaces (plus the
+ *  top-level `userDataDir`) over an RpcClient, mirroring the preload's
  *  invoke(→request)/send(→cast) split exactly. */
 export function buildRealApi(
   client: RpcClient
 ): Pick<
   NodeTerminalApi,
-  'pty' | 'workspace' | 'serverDeployment' | 'settings' | 'schoolMode' | 'kidsMode' | 'scheduledSettings' | 'userDataDir'
+  'pty' | 'workspace' | 'serverDeployment' | 'settings' | 'schoolMode' | 'kidsMode' | 'scheduledSettings' | 'planner' | 'userDataDir'
+  | 'pty'
+  | 'workspace'
+  | 'projectSettings'
+  | 'projectSetup'
+  | 'worktree'
+  | 'settings'
+  | 'agent'
+  | 'userDataDir'
 > {
   const pty: PtyApi = {
     create: (options: PtyCreateOptions) =>
@@ -368,8 +389,8 @@ export function buildRealApi(
       client.request(IPC.ptyDestroy, persistKey, opts?.everySocket === true) as Promise<void>,
     recycle: (persistKey) => client.request(IPC.ptyRecycle, persistKey) as Promise<void>,
     // No server handler — degrade gracefully (never reject the boot path).
-    generateName: () => Promise.resolve(AI_NAMING_UNAVAILABLE),
-    generateGroupName: () => Promise.resolve(AI_NAMING_UNAVAILABLE),
+    generateName: () => Promise.resolve({ ...AI_NAMING_UNAVAILABLE, message: mapLocalVocabularyText(AI_NAMING_UNAVAILABLE.message) }),
+    generateGroupName: () => Promise.resolve({ ...AI_NAMING_UNAVAILABLE, message: mapLocalVocabularyText(AI_NAMING_UNAVAILABLE.message) }),
     capture: (persistKey, full) =>
       client.request(IPC.ptyCapture, persistKey, full).catch(() => '') as Promise<string>,
     readScrollback: (persistKey) =>
@@ -391,6 +412,8 @@ export function buildRealApi(
     // reason to stop polling.
     correctTeamLeadPaneWidth: (persistKey) =>
       client.request(IPC.ptyCorrectTeamPaneWidth, persistKey).catch(() => false) as Promise<boolean>,
+    terminateForeground: (persistKey, expectedAgentId) =>
+      client.request(IPC.ptyTerminateForeground, persistKey, expectedAgentId).catch(() => false) as Promise<boolean>,
     // No server handler — the session-name poll degrades to no adopted name. A PRE-EXISTING gap,
     // and not any one agent's: `IPC.ptyReadSessionName` has never been registered server-side, so
     // claude's, grok's and gemini's read legs are equally stubbed here (the write leg works on both
@@ -440,12 +463,25 @@ export function buildRealApi(
       client.request(IPC.workspaceJoinParts, cwd) as ReturnType<WorkspaceApi['joinParts']>,
     exportProject: async () => ({
       ok: false,
-      error: 'Project archive export is available in the Windows desktop app.'
+      error: mapLocalVocabularyText('Project archive export is available in the Windows desktop app.')
     }),
     importProject: async () => ({
       ok: false,
-      error: 'Project archive import is available in the Windows desktop app.'
+      error: mapLocalVocabularyText('Project archive import is available in the Windows desktop app.')
     }),
+    portableBindings: {
+      state: async (input: { nodeId: string; featureId: string; displayLabel: string; hasMissingAssets?: boolean }) => [{
+        nodeId: input.nodeId,
+        featureId: input.featureId,
+        displayLabel: input.displayLabel,
+        action: 'leave-unbound' as const,
+        enabled: true,
+        bound: false
+      }],
+      apply: async () => ({ ok: false as const, error: 'Destination bindings are available only in the desktop app.' })
+    },
+    onArchiveProgress: () => () => {},
+    cancelArchiveImport: async () => false,
     // Archive save/open are desktop-only here, so their password prompt — and therefore its
     // ladder — cannot be reached in the browser at all. No wait exists to end.
     archiveLadderIssue: async () => ({ challenge: null, budgetLeft: 0, waitMs: 0 }),
@@ -455,8 +491,14 @@ export function buildRealApi(
       budgetLeft: 0,
       waitMs: 0,
       challenge: null,
-      message: 'Project archives are available in the Windows desktop app.'
+      message: mapLocalVocabularyText('Project archives are available in the Windows desktop app.')
     }),
+    // REAL for the same reason: core registers IPC.workspaceProjectFileState, and a stub would
+    // have to answer 'unreadable' — which is the side that never recovers a deleted project file.
+    projectFileState: (folder: string) =>
+      client.request(IPC.workspaceProjectFileState, folder) as ReturnType<
+        WorkspaceApi['projectFileState']
+      >,
     // REAL: core broadcasts IPC.workspaceMigrated after a v2→v3 migration (workspace-store.ts).
     onMigrated: (cb) => client.subscribe(IPC.workspaceMigrated, cb as Listener),
     // REAL: core broadcasts IPC.workspaceCorruptRecovered from the load path (workspace-store.ts).
@@ -468,6 +510,72 @@ export function buildRealApi(
     // data loss (the store's own rev reconciliation still guards writes). Booting the watcher in
     // src/server is the follow-up.
     onExternalChange: () => () => {}
+  }
+
+  const timer: TimerApi = {
+    occurrences: () => client.request(IPC.timerOccurrencesLoad) as Promise<import('../../shared/timer').TimerOccurrence[]>,
+    schedule: (timerId, scheduledAt) => client.request(IPC.timerOccurrenceSchedule, timerId, scheduledAt) as Promise<import('../../shared/timer').TimerOccurrence | null>,
+    transition: (id, state) => client.request(IPC.timerOccurrenceTransition, id, state) as Promise<import('../../shared/timer').TimerOccurrence | null>,
+    lap: (id, elapsedMs) => client.request(IPC.timerOccurrenceLap, id, elapsedMs) as Promise<number[] | null>
+  // REAL: WorkspaceStore (core) registers the project-settings:* channels too — same
+  // registerIpc() call as workspace above — so the server serves this on both shells.
+  const projectSettings: NodeTerminalApi['projectSettings'] = {
+    read: (projectId) =>
+      client.request(IPC.projectSettingsRead, projectId) as ReturnType<
+        NodeTerminalApi['projectSettings']['read']
+      >,
+    writeShared: (projectId, doc) =>
+      client.request(IPC.projectSettingsWriteShared, projectId, doc) as Promise<boolean>,
+    updateLocal: (projectId, local) =>
+      client.request(IPC.projectSettingsUpdateLocal, projectId, local) as Promise<boolean>,
+    launchInfo: (projectId) =>
+      client.request(IPC.projectSettingsLaunchInfo, projectId) as ReturnType<
+        NodeTerminalApi['projectSettings']['launchInfo']
+      >,
+    // REAL: `ProjectSetupService.ensureFamilyTrusted` broadcasts IPC.projectTrustChanged on every
+    // approval, for each project id that asked.
+    onTrustChanged: (cb) => client.subscribe(IPC.projectTrustChanged, cb as Listener)
+  }
+
+  // REAL: registerProjectSetupHandlers (core) is wired on the same construction-order point as
+  // src/main/index.ts. Wire carries exactly `(projectId, kind, worktreePath?)` — no rootPath/
+  // projectName/ssh; the server derives those itself from its own workspace index, same as main.
+  const projectSetup: NodeTerminalApi['projectSetup'] = {
+    run: (projectId, kind, worktreePath) =>
+      client.request(IPC.projectSetupRun, projectId, kind, worktreePath) as ReturnType<
+        NodeTerminalApi['projectSetup']['run']
+      >,
+    cancel: (runKey) => client.request(IPC.projectSetupCancel, runKey) as Promise<boolean>,
+    consent: async (requestId, answer) => {
+      client.cast(IPC.projectSetupConsentSubmit, requestId, answer)
+    },
+    // Fails CLOSED on a rejection rather than throwing at the caller: over the relay this method is
+    // host-only, so a guest's call comes back E_FORBIDDEN — and "not trusted" is exactly the right
+    // answer for a client that may not raise the host's dialog.
+    requestTrust: (projectId, family) =>
+      client.request(IPC.projectSetupRequestTrust, projectId, family).then(
+        (v) => v === true,
+        () => false
+      ),
+    onConsentRequest: (cb) => client.subscribe(IPC.projectSetupConsentRequest, cb as Listener),
+    onConsentDismiss: (cb) => client.subscribe(IPC.projectSetupConsentDismiss, cb as Listener),
+    onEvent: (projectId, cb) => {
+      const unsub = client.subscribe(IPC.projectSetupEvent(projectId), cb as Listener)
+      client.cast(IPC.projectSetupSubscribe, projectId)
+      return () => {
+        unsub()
+        client.cast(IPC.projectSetupUnsubscribe, projectId)
+      }
+    }
+  }
+
+  // REAL: registerWorktreeSharedPathsHandlers (core), same construction point as main/server. Wire
+  // carries exactly `(projectId, worktreePath)`; the server reads the sharedPaths list itself.
+  const worktree: NodeTerminalApi['worktree'] = {
+    materializeShared: (projectId, worktreePath) =>
+      client.request(IPC.worktreeMaterializeShared, projectId, worktreePath) as ReturnType<
+        NodeTerminalApi['worktree']['materializeShared']
+      >
   }
 
   const settings: SettingsApi = {
@@ -514,6 +622,35 @@ export function buildRealApi(
       client.request(IPC.scheduledSettingsActiveState) as Promise<ScheduledSettingsActiveState>,
     onActiveChange: (cb) => client.subscribe(IPC.scheduledSettingsActiveChange, cb as Listener)
   }
+  const planner: PlannerApi = {
+    load: () => client.request(IPC.plannerLoad) as Promise<PlannerLoadState>,
+    save: (file: PlannerFile) => client.request(IPC.plannerSave, file) as ReturnType<PlannerApi['save']>,
+    history: () => client.request(IPC.plannerHistory) as Promise<PlannerOccurrence[]>,
+    export: (format) => client.request(IPC.plannerExport, format) as ReturnType<PlannerApi['export']>,
+    onOccurrence: (cb) => client.subscribe(IPC.plannerOccurrence, cb as Listener)
+  const agent: NodeTerminalApi['agent'] = {
+    // Deliberately NOT a request: the server registers no env-snapshot handler (a full host-env
+    // dump answerable by any authenticated WS client is the PR #195 leak class at the RPC layer).
+    // An empty snapshot makes `${env:VAR}` expansion surface every referenced var as missing, and
+    // the launch paths refuse rather than type a mangled line.
+    envSnapshot: () => Promise.resolve({}),
+    discoverModels: (gateway) =>
+      client.request(IPC.agentDiscoverModels, gateway) as ReturnType<
+        NodeTerminalApi['agent']['discoverModels']
+      >,
+    gatewayCredentialStatus: () =>
+      client.request(IPC.agentGatewayCredentialStatus) as ReturnType<
+        NodeTerminalApi['agent']['gatewayCredentialStatus']
+      >,
+    saveGatewayCredential: (apiKey) =>
+      client.request(IPC.agentGatewayCredentialSave, apiKey) as ReturnType<
+        NodeTerminalApi['agent']['saveGatewayCredential']
+      >,
+    clearGatewayCredential: () =>
+      client.request(IPC.agentGatewayCredentialClear) as ReturnType<
+        NodeTerminalApi['agent']['clearGatewayCredential']
+      >
+  }
 
   // The server's data dir, over the SAME channel the desktop preload uses. It is the writable base
   // the worktree dialog derives its default path from — a stub returning '' would suggest
@@ -524,13 +661,15 @@ export function buildRealApi(
     start: async () => ({
       ok: false,
       state: 'failed' as const,
-      error: 'Deployment is controlled by the Windows desktop app.'
+      error: mapLocalVocabularyText('Deployment is controlled by the Windows desktop app.')
     }),
     currentTotp: async () => '',
     status: async () => ({ running: false }),
     onProgress: () => () => {}
   }
-  return { pty, workspace, serverDeployment, settings, schoolMode, kidsMode, scheduledSettings, userDataDir }
+  return { pty, workspace, serverDeployment, settings, schoolMode, kidsMode, scheduledSettings, planner, userDataDir }
+  return { pty, workspace, timer, serverDeployment, settings, schoolMode, kidsMode, scheduledSettings, userDataDir }
+  return { pty, workspace, projectSettings, projectSetup, worktree, settings, agent, userDataDir }
 }
 
 export function buildGitHubApi(
@@ -556,6 +695,10 @@ export function buildGitHubApi(
       >,
     clearCache: (projectId) =>
       client.request(IPC.githubIssuesClearCache, projectId) as Promise<void>,
+    projectAvatar: (projectId) =>
+      client.request(IPC.githubProjectAvatar, projectId) as ReturnType<
+        GitHubIssuesApi['projectAvatar']
+      >,
     onChanged: (projectId, listener) =>
       client.subscribe(IPC.githubIssuesChanged(projectId), listener as Listener)
   }
@@ -592,7 +735,7 @@ export function buildGitHubApi(
  */
 export function buildFilesApi(
   client: RpcClient
-): Pick<NodeTerminalApi, 'fs' | 'git' | 'files' | 'context' | 'boardLog'> {
+): Pick<NodeTerminalApi, 'fs' | 'git' | 'files' | 'context' | 'boardLog' | 'logs'> {
   const fs: FsApi = {
     list: (dirPath) => client.request(IPC.fsList, dirPath) as ReturnType<FsApi['list']>,
     read: (filePath) => client.request(IPC.fsRead, filePath) as Promise<string>,
@@ -734,7 +877,22 @@ export function buildFilesApi(
     }
   }
 
-  return { fs, git, files, context, boardLog }
+  // Same core on the server, so the log ring is real over the bridge — the panel debugs the
+  // Server Edition process, which is exactly where a packaged-app console is least visible.
+  const logs: LogApi = {
+    snapshot: () => client.request(IPC.logSnapshot) as Promise<LogRecord[]>,
+    clear: () => client.cast(IPC.logClear),
+    onBatch: (cb) => {
+      const unsub = client.subscribe(IPC.logBatch, cb as Listener)
+      client.cast(IPC.logSubscribe)
+      return () => {
+        unsub()
+        client.cast(IPC.logUnsubscribe)
+      }
+    }
+  }
+
+  return { fs, git, files, context, boardLog, logs }
 }
 
 /** Server Edition specialization: raw HTTP for upload bytes, RPC for the other file operations. */
@@ -971,6 +1129,60 @@ export function buildMinecraftApi(client: RpcClient): Pick<NodeTerminalApi, 'min
     onEvent: (listener) => client.subscribe(IPC.minecraftEvent, listener as Listener)
   }
   return { minecraft }
+}
+
+/** Local WebTorrent downloader, routed to the machine that owns this session. */
+export function buildTorrentApi(client: RpcClient): Pick<NodeTerminalApi, 'torrent'> {
+  const torrent: TorrentApi = {
+    runtime: () => client.request(IPC.torrentRuntime) as ReturnType<TorrentApi['runtime']>,
+    list: (nodeId) => client.request(IPC.torrentList, nodeId) as ReturnType<TorrentApi['list']>,
+    inspect: (input) => client.request(IPC.torrentInspect, input) as ReturnType<TorrentApi['inspect']>,
+    add: (input) => client.request(IPC.torrentAdd, input) as ReturnType<TorrentApi['add']>,
+    chooseFiles: (id, paths) => client.request(IPC.torrentChooseFiles, id, paths) as ReturnType<TorrentApi['chooseFiles']>,
+    setDestination: (id, destination) => client.request(IPC.torrentSetDestination, id, destination) as ReturnType<TorrentApi['setDestination']>,
+    preflight: (id) => client.request(IPC.torrentPreflight, id) as ReturnType<TorrentApi['preflight']>,
+    start: (id) => client.request(IPC.torrentStart, id) as ReturnType<TorrentApi['start']>,
+    pause: (id) => client.request(IPC.torrentPause, id) as ReturnType<TorrentApi['pause']>,
+    resume: (id) => client.request(IPC.torrentResume, id) as ReturnType<TorrentApi['resume']>,
+    cancel: (id) => client.request(IPC.torrentCancel, id) as ReturnType<TorrentApi['cancel']>,
+    retry: (id) => client.request(IPC.torrentRetry, id) as ReturnType<TorrentApi['retry']>,
+    remove: (id) => client.request(IPC.torrentRemove, id) as ReturnType<TorrentApi['remove']>,
+    setSeedPolicy: (id, policy) => client.request(IPC.torrentSetSeedPolicy, id, policy) as ReturnType<TorrentApi['setSeedPolicy']>,
+    reconcile: () => client.request(IPC.torrentReconcile) as ReturnType<TorrentApi['reconcile']>,
+    onTask: (listener) => client.subscribe(IPC.torrentTask, listener as (payload: TorrentTaskState) => void)
+  }
+  return { torrent }
+/** Linux ISO VM manager. The server process owns QEMU and exposes only the bounded lifecycle API. */
+export function buildVirtualMachineApi(client: RpcClient): Pick<NodeTerminalApi, 'virtualMachine'> {
+  const virtualMachine: VirtualMachineApi = {
+    tools: () => client.request(IPC.virtualMachineTools) as ReturnType<VirtualMachineApi['tools']>,
+    status: (id) => client.request(IPC.virtualMachineStatus, id) as ReturnType<VirtualMachineApi['status']>,
+    configure: (id, config, local) => client.request(IPC.virtualMachineConfigure, id, config, local) as ReturnType<VirtualMachineApi['configure']>,
+    createDisk: (id, folder) => client.request(IPC.virtualMachineCreateDisk, id, folder) as ReturnType<VirtualMachineApi['createDisk']>,
+    start: (id) => client.request(IPC.virtualMachineStart, id) as ReturnType<VirtualMachineApi['start']>,
+    stop: (id) => client.request(IPC.virtualMachineStop, id) as ReturnType<VirtualMachineApi['stop']>,
+    snapshot: (id, name) => client.request(IPC.virtualMachineSnapshot, id, name) as ReturnType<VirtualMachineApi['snapshot']>,
+    restore: (id, name) => client.request(IPC.virtualMachineRestore, id, name) as ReturnType<VirtualMachineApi['restore']>,
+    openDisplay: (id) => client.request(IPC.virtualMachineOpenDisplay, id) as ReturnType<VirtualMachineApi['openDisplay']>,
+    reset: (id) => client.request(IPC.virtualMachineReset, id) as ReturnType<VirtualMachineApi['reset']>,
+    onEvent: (listener) => client.subscribe(IPC.virtualMachineEvent, listener as Listener)
+  }
+  return { virtualMachine }
+/** Calendar nodes use the same host-owned CorePlatform in the desktop and Server Edition. */
+export function buildCalendarApi(client: RpcClient): Pick<NodeTerminalApi, 'calendar'> {
+  const calendar: CalendarApi = {
+    status: (id, config) => client.request(IPC.calendarStatus, id, config) as ReturnType<CalendarApi['status']>,
+    accounts: () => client.request(IPC.calendarAccounts) as ReturnType<CalendarApi['accounts']>,
+    calendars: (accountId, provider) => client.request(IPC.calendarCalendars, accountId, provider) as ReturnType<CalendarApi['calendars']>,
+    events: (id, config) => client.request(IPC.calendarEvents, id, config) as ReturnType<CalendarApi['events']>,
+    importIcs: (id, text, name) => client.request(IPC.calendarImportIcs, id, text, name) as ReturnType<CalendarApi['importIcs']>,
+    refresh: (id, config) => client.request(IPC.calendarRefresh, id, config) as ReturnType<CalendarApi['refresh']>,
+    beginOAuth: (provider: Exclude<CalendarProvider, 'local' | 'ics'>) => client.request(IPC.calendarBeginOAuth, provider) as ReturnType<CalendarApi['beginOAuth']>,
+    create: (input) => client.request(IPC.calendarCreate, input) as ReturnType<CalendarApi['create']>,
+    update: (input) => client.request(IPC.calendarUpdate, input) as ReturnType<CalendarApi['update']>,
+    remove: (id, eventId) => client.request(IPC.calendarRemove, id, eventId) as ReturnType<CalendarApi['remove']>
+  }
+  return { calendar }
 }
 
 /**
@@ -1275,6 +1487,39 @@ export function buildTranscriptApi(
   }
 }
 
+/**
+ * Managed CLAUDE accounts over the WS bridge (issue #313). REAL, not a stub: the lifecycle moved
+ * into `src/core/claude-accounts-service.ts`, so the server registers the same four channels the
+ * desktop does and the browser can create, log into and remove accounts. Deliberately NOT added to
+ * `relay-api.ts` — a relay tab drives someone else's machine, and minting an account there would
+ * create it on the HOST while this renderer's settings.json records it as one of its own.
+ *
+ * `waitLogin` is a straight passthrough of a poll that runs up to 5 minutes. That is safe because
+ * RpcClient has no request timeout: a pending request rejects only when the socket drops, which is
+ * exactly the outcome the caller wants (the login row stays pending and offers Retry).
+ *
+ * The `codexAccounts` namespace stays STUBBED (E_UNSUPPORTED). Its switch verbs authorize the
+ * owning window by Electron WebContents id, which has no meaning over a WS connection — porting it
+ * needs a connection-identity design, not a builder.
+ */
+export function buildClaudeAccountsApi(client: RpcClient): Pick<NodeTerminalApi, 'claudeAccounts'> {
+  return {
+    claudeAccounts: {
+      add: (ctx) =>
+        client.request(IPC.claudeAccountsAdd, ctx) as Promise<{
+          id: string
+          configDir: string
+          versionSupported: boolean
+        }>,
+      waitLogin: (id, ctx) =>
+        client.request(IPC.claudeAccountsWaitLogin, id, ctx) as Promise<{ email: string } | null>,
+      cancelWaitLogin: (id) =>
+        client.request(IPC.claudeAccountsCancelWait, id) as Promise<void>,
+      remove: (id, ctx) => client.request(IPC.claudeAccountsRemove, id, ctx) as Promise<void>
+    }
+  }
+}
+
 /** WS URL for the current page: same host, `/ws`, ws→http / wss→https. */
 function wsUrl(): string {
   const scheme = location.protocol === 'https:' ? 'wss' : 'ws'
@@ -1305,7 +1550,7 @@ export function showReconnectOverlay(): void {
     'position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;' +
     'justify-content:center;background:var(--md-scrim,rgba(0,0,0,0.6));color:var(--md-on-surface,#E6E0E9);' +
     'font:15px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;text-align:center;padding:24px'
-  el.textContent = 'Connection lost — reconnecting…'
+  el.textContent = mapLocalVocabularyText('Connection lost — reconnecting…')
   document.body.appendChild(el)
 }
 
@@ -1397,6 +1642,9 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildNodeDependenciesApi(client),
     ...buildOllamaApi(client),
     ...buildMinecraftApi(client),
+    ...buildTorrentApi(client),
+    ...buildVirtualMachineApi(client),
+    ...buildCalendarApi(client),
     ...buildUsageApi(client),
     ...buildSessionMemoryApi(client),
     ...buildVsCodeApi(client),
@@ -1406,6 +1654,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildAuthenticatorApi(client),
     ...buildPasswordManagerApi(client),
     ...buildGitHubApi(client),
+    ...buildClaudeAccountsApi(client),
     codex: buildCodexApi(client),
     // `claude` is assembled from two builders: `cliCaps` from the relay-shared one, and the
     // transcript reader from the Server-Edition-only one (which also supplies `chat`).

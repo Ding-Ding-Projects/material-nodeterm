@@ -1,7 +1,8 @@
 # MD3 shared primitives (`src/renderer/ui/md3/`)
 
-**Status:** primitives shipped, and the app's shared controls now render them. The three
-primitives that did not exist (`Checkbox`, `TextArea`, `Slider`) have been built and adopted.
+**Status:** primitives shipped, and the app's shared controls now render them. The seven
+primitives that did not exist (`Checkbox`, `TextArea`, `Slider`, `NumberField`, `Radio`,
+`Progress`, `Tabs`) have been built and adopted where the audited source uses those controls.
 The large remainder is the raw `<button>` population — see [Migration status](#migration-status).
 
 ## Why this exists
@@ -25,7 +26,8 @@ instead of writing a fifteenth scoped class.
 ```ts
 import {
   Button, IconButton, Fab, Switch, TextField, Chip, StatusChip,
-  Card, ListRow, Menu, Dialog, Badge, SegmentedButton, Divider
+  Card, ListRow, Menu, Dialog, Badge, SegmentedButton, Checkbox, TextArea,
+  Slider, NumberField, Radio, Progress, Divider
 } from '@renderer/ui/md3'
 ```
 
@@ -47,6 +49,10 @@ stylesheet import is required.
 | `Dialog` | Centered modal + scrim, r28, Escape/scrim-click/focus-return | New CSS (`.mdx-dialog*`) |
 | `Badge` | 16px min-width pill or 8px dot, optional `corner` positioning | New CSS (`.mdx-badge*`) |
 | `SegmentedButton` | 40px pill container, selected segment filled `secondary-container` | New CSS (`.mdx-seg*`) |
+| `NumberField` | Dense numeric outlined field with tabular values | New CSS (`.mdx-number-field`) |
+| `Radio` | Native radio grouping with M3 selected dot and focus state | New CSS (`.mdx-radio`) |
+| `Progress` | Determinate or indeterminate linear progress with ARIA values | New CSS (`.mdx-progress*`) |
+| `Tabs` | Keyboard-roving tablist with selected state and focus ring | New CSS (`.mdx-tabs*`) |
 | `Divider` | 1px `outline-variant` hairline, horizontal/vertical | New CSS (`.mdx-divider*`) |
 
 Every component is a thin wrapper: a root class, a variant class, forwarded DOM props, a
@@ -133,10 +139,11 @@ Delegating `ui/Button` also fixed the contrast defect this document recorded bel
 `primary` painted `text-white` on `--md-primary`, which is `#D0BCFF` in the dark theme, so the
 app's most prominent button was white on light lavender. It now uses `--md-on-primary`.
 
-### Three primitives were built because nothing existed to adopt
+### Six primitives were built because nothing existed to adopt
 
-`Checkbox`, `TextArea` and `Slider` had no entry in the barrel, so every call site needing one was
-*forced* to hand-roll it. All three paint the native element rather than rebuilding it from a
+`Checkbox`, `TextArea`, `Slider`, `NumberField`, `Radio`, `Progress` and `Tabs` had no entry in the barrel,
+so every call site needing one was *forced* to hand-roll it. The native controls paint through the
+shared stylesheet rather than rebuilding their input semantics from a
 `div`: the native input carries label association, the keyboard model, the role and its state
 announcements, and form participation, and a rebuilt one has to reimplement each of those.
 
@@ -148,6 +155,8 @@ Adoption after building them:
 | `<textarea>` | 12 | 1 (the definition) |
 | `type="range"` | 14 | 4 (definition, plus two exempt) |
 | `<select>` | 18 | 3 (definition, plus two doc-comment mentions) |
+| `type="radio"` | 9 | 1 (the definition) |
+| `role="progressbar"` | 3 | 1 (the shared primitive) |
 
 Two sliders are deliberately exempt: the colour picker's hue and alpha tracks paint a rainbow and
 a checkerboard, so there the track **is the data** rather than chrome, which the design rules
@@ -160,8 +169,19 @@ exempt. Painting an MD3 track over them would destroy the picker to make it tidi
 same handful of shapes. Delegation cannot reach these: each is an individual edit, and each will
 change how that surface looks, so it wants eyes on the built artifact rather than a sweep.
 
-`Radio`, `Tooltip`, `Tabs` and `Progress` still have no primitive, so their call sites remain
-forced to hand-roll in the same way the three above were.
+`Radio` and `Progress` now use shared primitives. Tooltip and tabs remain feature-owned because
+their positioning and tab-list state are coupled to their owning surfaces; the full source
+inventory records those surfaces and their style markers in
+`docs/features/appearance/material-3-audit.md`.
+
+### Full desktop source audit
+
+The 2026-08-26 audit names 201 desktop and site rows in
+`docs/features/appearance/material-3-audit.md`. `scripts/check-material-audit.mjs` checks the
+hand-written list, exact implementation markers, style markers, shared primitive exports, the
+legacy numeric-field defect, keyboard tooltip semantics, and a deletion mutation. The audit is
+source-only in that lane, so it deliberately leaves built-artifact clipping and pixel evidence
+unverified until a permitted runtime pass.
 
 ## The one bug fixed outside this directory
 

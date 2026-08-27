@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { Handle, NodeResizer, Position, useReactFlow, type NodeProps } from '@xyflow/react'
+import { NODE_MIN_SIZES } from '../lib/nodeSizing'
 import type { CanvasNode } from '../state/workspace'
 import { httpUrl } from './webUrl'
 import { useDiscardWhenHidden, webviewAudible, type AudibleWebview } from './useDiscardWhenHidden'
 import { DiscardedPlate } from './DiscardedPlate'
 import { nodeHeaderFillStyle } from '../lib/nodeColor'
 import { EditableNodeTitle } from '../components/EditableNodeTitle'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { useWebviewKeepAlive } from '../state/webviewKeepAlive'
 
 /**
  * A web view node. When `data.url` is set it loads that live URL; otherwise it serves the
@@ -14,12 +17,14 @@ import { EditableNodeTitle } from '../components/EditableNodeTitle'
  * The frame/header mirror {@link VideoNode}/EditorNode for consistent drag/resize/close behavior.
  */
 export default function WebNode({ id, data, selected }: NodeProps<CanvasNode>) {
+  const vocab = useVocabularyMapper()
   const { deleteElements, updateNodeData } = useReactFlow()
   const [src, setSrc] = useState('')
   const [error, setError] = useState('')
   const url = (data.url as string) ?? ''
   const filePath = (data.filePath as string) ?? ''
-  const title = (data.title as string) || url || filePath.split('/').pop() || 'web'
+  const title = (data.title as string) || url || filePath.split('/').pop() || ''
+  const displayTitle = title || vocab('web')
   const rootRef = useRef<HTMLDivElement | null>(null)
   /** The guest, for the audible check only — a local html page can hold a playing <video>. */
   const wvRef = useRef<AudibleWebview | null>(null)
@@ -86,6 +91,10 @@ export default function WebNode({ id, data, selected }: NodeProps<CanvasNode>) {
       setDiscarded(true)
       setSrc('')
       srcRef.current = ''
+      // A background keep-alive GHOST (data.ghost — lib/webviewKeepAlive.ts) whose guest is gone
+      // is a husk holding a pool slot: end its entry, which unmounts this whole node. An active
+      // node keeps the plate-and-restore behavior unchanged.
+      if (data.ghost === true) useWebviewKeepAlive.getState().drop(id)
     },
     onRestore: () => {
       setDiscarded(false)
@@ -105,7 +114,7 @@ export default function WebNode({ id, data, selected }: NodeProps<CanvasNode>) {
       className={`term-node web-node${selected ? ' selected' : ''}`}
       style={{ borderTopColor: data.color }}
     >
-      <NodeResizer minWidth={320} minHeight={200} isVisible={selected} color={data.color} />
+      <NodeResizer minWidth={NODE_MIN_SIZES.web.width} minHeight={NODE_MIN_SIZES.web.height} isVisible={selected} color={data.color} />
       {/* Invisible target handle so a rope from the agent node that opened this can attach. */}
       <Handle
         id="flow-in"
@@ -124,16 +133,16 @@ export default function WebNode({ id, data, selected }: NodeProps<CanvasNode>) {
         <EditableNodeTitle
           value={(data.title as string) ?? ''}
           onChange={(next) => updateNodeData(id, { title: next })}
-          emptyLabel={title}
-          title={url || filePath || 'Click to rename'}
-          ariaLabel="Web page name"
+          emptyLabel={displayTitle}
+          title={url || filePath || vocab('Click to rename')}
+          ariaLabel={vocab('Web page name')}
           rejectEmpty={false}
         />
         <span className="term-node__spacer" />
         {url && (
           <button
             className="term-node__close"
-            title="Open in browser"
+            title={vocab('Open in browser')}
             onClick={() => {
               const safe = httpUrl(url)
               if (safe) window.nodeTerminal.shell.openExternal(safe)
@@ -144,7 +153,7 @@ export default function WebNode({ id, data, selected }: NodeProps<CanvasNode>) {
         )}
         <button
           className="term-node__close"
-          title="Close"
+          title={vocab('Close')}
           onClick={() => deleteElements({ nodes: [{ id }] })}
         >
           ×
@@ -165,7 +174,7 @@ export default function WebNode({ id, data, selected }: NodeProps<CanvasNode>) {
               style={{ width: '100%', height: '100%' }}
             />
           ) : (
-            <span className="editor-node__loading">{error || 'No source'}</span>
+            <span className="editor-node__loading">{error ? vocab(error) : vocab('No source')}</span>
           )}
         </div>
       </div>

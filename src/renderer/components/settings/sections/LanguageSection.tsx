@@ -12,6 +12,8 @@ import { normalizeLanguageMode } from '@shared/i18n'
 import { useSchoolMode } from '../../../state/schoolMode'
 import { schoolModeAllowsOptionalFeatures } from '../../../lib/schoolModePolicy'
 import { Slider } from '@renderer/ui/md3'
+import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
+import { settingsSearchEntryWithVocabulary } from '../vocabulary'
 
 const ROWS = {
   mode: {
@@ -45,6 +47,13 @@ function FunnyLevelSlider({
   ariaLabel: string
 }): React.JSX.Element {
   const { t } = useI18n()
+  const vocab = useVocabularyMapper()
+  const mappedRows = {
+    mode: settingsSearchEntryWithVocabulary(ROWS.mode, vocab),
+    funnyEn: settingsSearchEntryWithVocabulary(ROWS.funnyEn, vocab),
+    funnyYue: settingsSearchEntryWithVocabulary(ROWS.funnyYue, vocab),
+    emoji: settingsSearchEntryWithVocabulary(ROWS.emoji, vocab)
+  }
   const lowLabel = t('settings.language.level.1', '1 — Fully professional').primary
   const highLabel = t('settings.language.level.5', '5 — Maximum playfulness').primary
   return (
@@ -111,17 +120,19 @@ export function LanguageSection({ isActive }: { isActive: boolean }): React.JSX.
   return (
     <SettingsSection
       id="language"
+      resolvedVocabulary={{ source: 'i18n', fields: 'all', searchEntries: 'mapped' }}
       title={title.primary}
       description={description.secondary ? `${description.primary} ${description.secondary}` : description.primary}
       isActive={isActive}
-      searchEntries={ENTRIES}
+      searchEntries={Object.values(mappedRows)}
     >
-      <SearchableRow {...ROWS.mode}>
+      <SearchableRow {...mappedRows.mode} resolvedVocabulary={{ source: 'i18n', fields: 'all' }}>
         <FieldRow
           label={t('settings.language.mode.label', 'Language mode').primary}
           control={
             <SegmentedPill<LanguageMode>
               value={normalizeLanguageMode(languageMode)}
+              vocabularyMode="factual"
               ariaLabel="Language mode"
               onChange={(v) => updateIfAllowed({ languageMode: v })}
               options={[
@@ -137,7 +148,7 @@ export function LanguageSection({ isActive }: { isActive: boolean }): React.JSX.
         />
       </SearchableRow>
 
-      <SearchableRow {...ROWS.funnyEn}>
+      <SearchableRow {...mappedRows.funnyEn} resolvedVocabulary={{ source: 'i18n', fields: 'all' }}>
         <FieldRow
           label={t('settings.language.funnyEn.label', 'English funny level').primary}
           control={
@@ -150,7 +161,7 @@ export function LanguageSection({ isActive }: { isActive: boolean }): React.JSX.
         />
       </SearchableRow>
 
-      <SearchableRow {...ROWS.funnyYue}>
+      <SearchableRow {...mappedRows.funnyYue} resolvedVocabulary={{ source: 'i18n', fields: 'all' }}>
         <FieldRow
           label={t('settings.language.funnyYue.label', 'Cantonese funny level').primary}
           control={
@@ -174,7 +185,7 @@ export function LanguageSection({ isActive }: { isActive: boolean }): React.JSX.
         ).primary}
       </p>
 
-      <SearchableRow {...ROWS.emoji}>
+      <SearchableRow {...mappedRows.emoji} resolvedVocabulary={{ source: 'i18n', fields: 'all' }}>
         <FieldRow
           label={t('settings.language.emoji.label', 'Show emojis in dialogs and message boxes').primary}
           description={

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { PtyPressure } from '@shared/types'
 import { isMacPlatform } from '../../shared/platform-utils'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 // The warning that was missing on 2026-08-11: the machine filled up its pty devices
 // (`kern.tty.ptmx_max`) and the first thing anyone learned about it was terminals refusing to
@@ -15,8 +16,20 @@ import { isMacPlatform } from '../../shared/platform-utils'
 export interface PtyPressureCopy {
   title: string
   body: string
+  /** Body segments keep the live numeric measurement separate from translatable prose. */
+  bodyParts: readonly { kind: 'authored' | 'factual'; text: string }[]
   /** Drives the banner's severity styling (`announce-banner--<tone>`). */
   tone: 'warning' | 'danger'
+}
+
+function countParts(usage: number, ceiling: number): readonly { kind: 'authored' | 'factual'; text: string }[] {
+  return [
+    { kind: 'authored', text: '(' },
+    { kind: 'factual', text: String(usage) },
+    { kind: 'authored', text: ' of ' },
+    { kind: 'factual', text: String(ceiling) },
+    { kind: 'authored', text: ' pty devices)' }
+  ]
 }
 
 /**
@@ -33,18 +46,32 @@ export function ptyPressureCopy(p: PtyPressure): PtyPressureCopy | null {
   const counts = `(${p.usage} of ${p.ceiling} pty devices)`
   const recover = 'Deleting sessions from Recently closed returns them.'
   if (p.level === 'critical') {
+    const body =
+      `This machine has run out of terminal capacity ${counts}. New terminals will fail to ` +
+      `open until some are returned. ${recover}`
     return {
       tone: 'danger',
       title: 'Out of terminal capacity',
-      body:
-        `This machine has run out of terminal capacity ${counts}. New terminals will fail to ` +
-        `open until some are returned. ${recover}`
+      body,
+      bodyParts: [
+        { kind: 'authored', text: 'This machine has run out of terminal capacity ' },
+        ...countParts(p.usage, p.ceiling),
+        { kind: 'authored', text: '. New terminals will fail to open until some are returned. ' },
+        { kind: 'authored', text: recover }
+      ]
     }
   }
+  const body = `This machine is close to its terminal limit ${counts}. ${recover}`
   return {
     tone: 'warning',
     title: 'Close to this machine’s terminal limit',
-    body: `This machine is close to its terminal limit ${counts}. ${recover}`
+    body,
+    bodyParts: [
+      { kind: 'authored', text: 'This machine is close to its terminal limit ' },
+      ...countParts(p.usage, p.ceiling),
+      { kind: 'authored', text: '. ' },
+      { kind: 'authored', text: recover }
+    ]
   }
 }
 
@@ -63,6 +90,7 @@ export function PtyPressureBanner({
     null
   )
   const [busy, setBusy] = useState(false)
+  const vocab = useVocabularyMapper()
 
   useEffect(() => {
     // Optional-called: the Server Edition bridge declares this a documented no-op.
@@ -111,22 +139,26 @@ export function PtyPressureBanner({
     <div className={`announce-banner announce-banner--${copy.tone}`}>
       <span className="announce-banner__dot" />
       <div className="announce-banner__content">
-        <span className="announce-banner__title">{copy.title}</span>
-        <span className="announce-banner__body">{copy.body}</span>
+        <span className="announce-banner__title">{vocab(copy.title)}</span>
+        <span className="announce-banner__body">
+          {copy.bodyParts.map((part, index) => (
+            <span key={`${part.kind}-${index}`}>{part.kind === 'authored' ? vocab(part.text) : part.text}</span>
+          ))}
+        </span>
       </div>
       {isMac && (
         <button
           className="announce-banner__btn"
-          title="Raises this Mac’s pty-device limit (kern.tty.ptmx_max) now and after every restart. macOS will ask for your password."
+          title={vocab('Raises this Mac’s pty-device limit (kern.tty.ptmx_max) now and after every restart. macOS will ask for your password.')}
           disabled={busy}
           onClick={fix}
         >
-          {busy ? 'Fixing…' : 'Fix automatically…'}
+          {busy ? vocab('Fixing…') : vocab('Fix automatically…')}
         </button>
       )}
       <button
         className="announce-banner__close"
-        title="Dismiss"
+        title={vocab('Dismiss')}
         onClick={() => setDismissed({ level: reading.level, seq: state!.seq })}
       >
         ✕

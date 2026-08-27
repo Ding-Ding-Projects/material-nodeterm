@@ -1,6 +1,7 @@
 import type { NodeKind, Project } from '@shared/types'
 import type { AgentId } from '@shared/agents/config'
 import type { ActiveAgentLaunchPlan } from '@renderer/state/permissionMode'
+import type { AgentId, AgentPermissionMode } from '@shared/agents/config'
 import {
   type CanvasNode,
   type NodeData,
@@ -8,11 +9,17 @@ import {
   createAgentNode,
   createEditorNode,
   createVideoNode,
+  createPhotoNode,
+  createGalleryNode,
   createWebNode,
   createBrowserNode,
   createDiffNode,
   createStickyNode,
   createDinoNode,
+  createVirtualMachineNode,
+  createTorrentNode,
+  createCalendarNode,
+  createTimerNode,
   isAccountLoginNode
 } from '@renderer/state/workspace'
 import { absolutePosition, type FocusableNode } from './nodeFocus'
@@ -69,6 +76,7 @@ export function snapshotNode(
       { id: '__snapshot__', position: node.position, parentId: node.parentId },
       all
     ),
+    absolutePosition: absolutePosition({ id: '__snapshot__', position: node.position, parentId: node.parentId }, all),
     ...(node.parentId ? { parentId: node.parentId } : {}),
     ...(node.extent === 'parent' ? { extent: 'parent' as const } : {}),
     ...(size ? { size } : {}),
@@ -96,7 +104,12 @@ export interface RecreateContext {
 }
 
 const COSMETIC_KEYS = [
-  'title', 'titleAuto', 'color', 'group', 'tags', 'collapsed', 'expandedHeight', 'shell'
+  'title', 'titleAuto', 'color', 'group', 'tags', 'collapsed', 'expandedHeight', 'shell', 'torrentMagnet'
+  permissionModeFor: (agentId: AgentId) => AgentPermissionMode | undefined
+}
+
+const COSMETIC_KEYS = [
+  'title', 'titleAuto', 'color', 'group', 'tags', 'collapsed', 'expandedHeight', 'shell', 'agentModel'
 ] as const
 
 function withCosmetics(node: CanvasNode, data: NodeData): CanvasNode {
@@ -165,6 +178,10 @@ function buildBase(snapshot: ReopenNodeSnapshot, ctx: RecreateContext): CanvasNo
       return d.filePath ? createEditorNode(0, d.filePath, undefined, d.sshFs) : null
     case 'video':
       return d.filePath ? createVideoNode(0, d.filePath, undefined, d.sshFs) : null
+    case 'photo':
+      return d.filePath ? createPhotoNode(0, d.filePath, undefined, d.sshFs) : null
+    case 'gallery':
+      return createGalleryNode(0, (d.mediaAssets as import('@shared/media-catalog').MediaAssetReference[]) ?? [])
     case 'diff':
       return d.cwd && d.filePath
         ? createDiffNode(0, d.cwd, d.filePath, !!d.diffStaged, undefined, d.commitOid)
@@ -173,6 +190,33 @@ function buildBase(snapshot: ReopenNodeSnapshot, ctx: RecreateContext): CanvasNo
       return createWebNode(0, { url: d.url, filePath: d.filePath })
     case 'browser':
       return createBrowserNode(0, d.url ?? '', undefined, undefined, d.browserProfileId)
+    case 'dino':
+      return createDinoNode(0, undefined, d.highScore ?? 0)
+    case 'linux-vm': {
+      const node = createVirtualMachineNode(0)
+      return {
+        ...node,
+        data: {
+          ...node.data,
+          virtualMachineConfig: d.virtualMachineConfig ?? node.data.virtualMachineConfig,
+          virtualMachineLocalPaths: d.virtualMachineLocalPaths ?? node.data.virtualMachineLocalPaths
+        }
+      }
+    }
+    case 'torrent':
+      return createTorrentNode(0)
+    case 'calendar':
+      return createCalendarNode(0)
+    case 'timer': {
+      const node = createTimerNode(0)
+      return { ...node, data: { ...node.data, ...d, running: false, paused: false, elapsedMs: 0, lapsMs: [], occurrenceId: undefined, occurrenceState: 'scheduled' } }
+    }
+    case 'diff':
+      return d.cwd && d.filePath ? createDiffNode(0, d.cwd, d.filePath, !!d.diffStaged, undefined, d.commitOid) : null
+    case 'web':
+      return createWebNode(0, { url: d.url, filePath: d.filePath })
+    case 'browser':
+      return createBrowserNode(0, d.url ?? '', undefined, d.partition)
     case 'dino':
       return createDinoNode(0, undefined, d.highScore ?? 0)
     default:
@@ -190,6 +234,7 @@ export function recreateNodeFromSnapshot(
   snapshot: ReopenNodeSnapshot,
   ctx: RecreateContext
 ): CanvasNode | null {
+export function recreateNodeFromSnapshot(snapshot: ReopenNodeSnapshot, ctx: RecreateContext): CanvasNode | null {
   const base = buildBase(snapshot, ctx)
   if (!base) return null
   const node = withCosmetics(base, snapshot.data)
@@ -206,3 +251,4 @@ export function recreateNodeFromSnapshot(
   }
   return node
 }
+

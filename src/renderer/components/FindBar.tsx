@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import type { SearchMode } from '../lib/regex/useRegexSearchField'
 import { AnchoredRegexBuilder } from './regex/AnchoredRegexBuilder'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 /** Identical shape to SearchSnippet in useTerminalSearch.ts (imported by the consumer). */
 export interface FindBarSnippet {
@@ -44,6 +45,7 @@ export function FindBar({
   onFlagsChange,
   error
 }: Props): JSX.Element {
+  const vocab = useVocabularyMapper()
   const inputRef = useRef<HTMLInputElement>(null)
   useEffect(() => {
     inputRef.current?.focus()
@@ -57,7 +59,7 @@ export function FindBar({
         <input
           ref={inputRef}
           className="term-node__find-input"
-          placeholder={mode === 'regex' ? 'Find (regex)…' : 'Find…'}
+          placeholder={vocab(mode === 'regex' ? 'Find (regex)…' : 'Find…')}
           value={query}
           spellCheck={false}
           onChange={(e) => onQueryChange(e.target.value)}
@@ -75,7 +77,7 @@ export function FindBar({
         {regexCapable && (
           <AnchoredRegexBuilder
             fieldRef={inputRef}
-            label="Regex — terminal find"
+            label={vocab('Regex — terminal find')}
             search={{
               mode: mode!,
               pattern: pattern!,
@@ -90,8 +92,8 @@ export function FindBar({
         <button
           type="button"
           className="term-node__find-btn"
-          title="Previous (Shift+Enter)"
-          aria-label="Previous match"
+          title={vocab('Previous (Shift+Enter)')}
+          aria-label={vocab('Previous match')}
           onClick={onPrev}
           disabled={!matchCount}
         >
@@ -100,8 +102,8 @@ export function FindBar({
         <button
           type="button"
           className="term-node__find-btn"
-          title="Next (Enter)"
-          aria-label="Next match"
+          title={vocab('Next (Enter)')}
+          aria-label={vocab('Next match')}
           onClick={onNext}
           disabled={!matchCount}
         >
@@ -110,8 +112,8 @@ export function FindBar({
         <button
           type="button"
           className="term-node__find-btn"
-          title="Close (Esc)"
-          aria-label="Close search"
+          title={vocab('Close (Esc)')}
+          aria-label={vocab('Close search')}
           onClick={onClose}
         >
           ✕

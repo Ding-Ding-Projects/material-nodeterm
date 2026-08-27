@@ -819,7 +819,7 @@
   border: 1px solid var(--md-outline-variant);
   border-top-width: 1px; /* was a 3px inline-coloured accent border; the header dot now carries
                              the user's colour choice, so the whole ring stays one weight */
-  border-radius: 24px;
+  border-radius: var(--md-shape-node);
   box-shadow: none;
   transition:
     border-color var(--md-motion-effect),
@@ -2026,7 +2026,7 @@ button.term-node__title-text:focus-visible {
    alphaTint, a per-note user choice, not a role token) — only shape/elevation change here.
    --------------------------------------------------------------------------------------------- */
 .sticky-node {
-  border-radius: 20px;
+  border-radius: var(--md-shape-section);
   box-shadow: none;
 }
 /* `outline`, not `box-shadow`: the border is already carrying the note's OWN colour (inline
@@ -2123,7 +2123,7 @@ button.term-node__title-text:focus-visible {
 .loop-node {
   background: var(--md-surface-container-low);
   border: 1px dashed var(--md-outline-variant);
-  border-radius: 20px;
+  border-radius: var(--md-shape-section);
   box-shadow: none;
 }
 .subagent-node {
@@ -2186,7 +2186,7 @@ button.term-node__title-text:focus-visible {
 /* Native (cron-scheduled) loop node — same shape recipe, warning token in place of raw amber. */
 .native-loop-node {
   border: 1px solid color-mix(in srgb, var(--md-warning) 55%, transparent);
-  border-radius: 20px;
+  border-radius: var(--md-shape-section);
   background: color-mix(in srgb, var(--md-surface-container-low) 92%, var(--md-warning) 8%);
   color: var(--md-on-surface);
   box-shadow: none;
@@ -2234,6 +2234,31 @@ button.term-node__title-text:focus-visible {
   color: var(--md-warning);
   background: color-mix(in srgb, var(--md-warning) 16%, transparent);
 }
+
+/* Alarm Clock node, all controls retain the Lang gui surface roles and touch-sized targets. */
+.alarm-clock-node { min-width: 340px; min-height: 300px; overflow: hidden; }
+.alarm-clock-node__glyph { font-size: 17px; margin-right: 5px; }
+.alarm-clock-node__body { display: flex; flex-direction: column; gap: 8px; padding: 10px; overflow: auto; }
+.alarm-clock-node__body label { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; }
+.alarm-clock-node__body input, .alarm-clock-node__body select { min-height: 30px; min-width: 0; flex: 1; }
+.alarm-clock-node__body fieldset { border: 1px solid var(--md-outline-variant); border-radius: 8px; padding: 5px 7px; }
+.alarm-clock-node__days, .alarm-clock-node__options { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; }
+.alarm-clock-node__days input, .alarm-clock-node__options input { flex: none; min-height: 18px; width: 18px; }
+.alarm-clock-node__honesty, .alarm-clock-node__empty, .alarm-clock-node__error { margin: 0; font-size: 11px; line-height: 1.35; }
+.alarm-clock-node__honesty, .alarm-clock-node__empty { color: var(--md-on-surface-variant); }
+.alarm-clock-node__error { color: var(--md-error); }
+.alarm-clock-node__status, .alarm-clock-node__history-head, .alarm-clock-node__search, .alarm-clock-node__history li { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.alarm-clock-node__status { flex-wrap: wrap; color: var(--md-on-surface-variant); font-size: 11px; }
+.alarm-clock-node__status strong { color: var(--md-primary); }
+.alarm-clock-node__actions button, .alarm-clock-node__history button { min-height: 30px; border-radius: 8px; }
+.alarm-clock-node__history { border-top: 1px solid var(--md-outline-variant); padding-top: 7px; }
+.alarm-clock-node__search { margin-top: 5px; }
+.alarm-clock-node__search input { width: 100%; }
+.alarm-clock-node__search button { flex: none; font-family: monospace; }
+.alarm-clock-node__regex { display: grid; gap: 4px; margin-top: 5px; padding: 7px; border: 1px solid var(--md-outline); border-radius: 8px; background: var(--md-surface-container-high); }
+.alarm-clock-node__regex span { color: var(--md-on-surface-variant); font-size: 11px; }
+.alarm-clock-node__history ul { list-style: none; margin: 5px 0 0; padding: 0; display: grid; gap: 4px; font-size: 11px; }
+.alarm-clock-node__history li { border-bottom: 1px solid var(--md-outline-variant); padding: 4px 0; }
 .schedule-handle {
   border-color: var(--md-surface-container);
   background: var(--md-warning);
@@ -2245,7 +2270,7 @@ button.term-node__title-text:focus-visible {
    already re-tints it; this file bumps its shape to match the rest of the canvas.
    --------------------------------------------------------------------------------------------- */
 .service-node {
-  border-radius: 24px;
+  border-radius: var(--md-shape-node);
 }
 /* `outline`, not `box-shadow`: the root border is already user-coloured (nodeBorderStyle ->
    inline `borderColor: data.color`), so an outline sits outside it without erasing that choice. */
@@ -2266,10 +2291,157 @@ button.term-node__title-text:focus-visible {
 }
 
 /* ---------------------------------------------------------------------------------------------
+   Universe Shop — a fixed, scope-bound catalog card. The card paints its own surface and keeps
+   the filter and anchored regex trigger keyboard reachable at narrow widths.
+   --------------------------------------------------------------------------------------------- */
+.shop-node {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--md-outline-variant);
+  border-radius: 24px;
+  background: var(--md-surface-container);
+  color: var(--md-on-surface);
+  box-shadow: var(--md-elevation-2);
+}
+.shop-node.selected {
+  outline: 1.5px solid var(--md-primary);
+}
+.shop-node__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 58px;
+  padding: 10px 14px;
+}
+.shop-node__icon,
+.shop-node__fixed {
+  flex: 0 0 auto;
+  font-size: 20px;
+}
+.shop-node__fixed {
+  margin-left: auto;
+}
+.shop-node__title {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.2;
+}
+.shop-node__scope,
+.shop-node__description,
+.shop-node__hint,
+.shop-node__search-note,
+.shop-node__empty {
+  margin: 0;
+  color: var(--md-on-surface-variant);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.shop-node__body {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 9px;
+  padding: 12px 14px 14px;
+}
+.shop-node__search-row {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.shop-node__search-label {
+  color: var(--md-on-surface-variant);
+  font-size: 12px;
+  font-weight: 600;
+}
+.shop-node__search-control {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+}
+.shop-node__search {
+  min-width: 0;
+  flex: 1;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid var(--md-outline);
+  border-radius: var(--md-shape-sm);
+  background: var(--md-surface);
+  color: var(--md-on-surface);
+}
+.shop-node__search-control .md3-regex-trigger {
+  min-width: 44px;
+  min-height: 44px;
+}
+.shop-node__entries {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  overflow: auto;
+  margin: 0;
+  padding: 2px;
+  list-style: none;
+}
+.shop-node__entry-item {
+  display: block;
+}
+.shop-node__entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-sm);
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+  text-align: left;
+  cursor: pointer;
+}
+.shop-node__entry:hover,
+.shop-node__entry.selected {
+  border-color: var(--md-primary);
+  background: var(--md-secondary-container);
+}
+.shop-node__entry:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+.shop-node__entry-disabled {
+  flex: 0 0 auto;
+  color: var(--md-on-surface-variant);
+  font-size: 11px;
+}
+.shop-node__entry-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.shop-node__entry-kind {
+  flex: 0 0 auto;
+  color: var(--md-on-surface-variant);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.shop-node :is(button, input):focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+@media (max-width: 520px) {
+  .shop-node__entry-kind {
+    display: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------------------------
    Dino node (mini-game) — same card recipe, one flat radius.
    --------------------------------------------------------------------------------------------- */
 .dino-node {
-  border-radius: 24px;
+  border-radius: var(--md-shape-node);
 }
 /* Outline again: `borderColor: data.color` on the root carries the user's own choice. */
 .dino-node.selected {
@@ -2278,6 +2450,27 @@ button.term-node__title-text:focus-visible {
 .dino-node__header {
   min-height: 52px;
 }
+
+/* Linux ISO VM node: guided controls, loopback-only display and truthful bounded state. */
+.virtual-machine-node { display:flex; flex-direction:column; width:100%; height:100%; overflow:hidden; color:var(--md-on-surface,#f2f2f7); background:var(--md-surface-container); border:1px solid var(--md-outline-variant,#3a3a3c); border-radius:var(--md-shape-medium); }
+.virtual-machine-node.selected { box-shadow:0 0 0 2px var(--md-primary,#0a84ff); }
+.virtual-machine-node__body { display:flex; flex:1; flex-direction:column; gap:9px; padding:12px; overflow:auto; }
+.virtual-machine-node__note,.virtual-machine-node__hint,.virtual-machine-node__status,.virtual-machine-node__display { margin:0; font-size:11px; line-height:1.4; }
+.virtual-machine-node__note,.virtual-machine-node__hint { color:var(--md-on-surface-variant,#9a9a9e); }
+.virtual-machine-node__field { display:flex; flex-direction:column; gap:4px; color:var(--md-on-surface-variant,#9a9a9e); font-size:11px; }
+.virtual-machine-node__path { display:flex; gap:6px; align-items:stretch; }
+.virtual-machine-node__path button,.virtual-machine-node__actions button,.virtual-machine-node__snapshot button,.virtual-machine-node__display button { min-height:44px; padding:0 10px; color:var(--md-on-primary-container); background:var(--md-primary-container); border:1px solid var(--md-outline-variant); border-radius:var(--md-shape-small); cursor:pointer; }
+.virtual-machine-node__path button:disabled,.virtual-machine-node__actions button:disabled,.virtual-machine-node__snapshot button:disabled { opacity:.5; cursor:not-allowed; }
+.virtual-machine-node__grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.virtual-machine-node__grid label { display:flex; flex-direction:column; gap:4px; color:var(--md-on-surface-variant); font-size:11px; }
+.virtual-machine-node__row { display:flex; align-items:center; justify-content:space-between; gap:8px; color:var(--md-on-surface); font-size:12px; }
+.virtual-machine-node__status { color:var(--md-primary); }
+.virtual-machine-node__status.is-error { color:var(--md-error); }
+.virtual-machine-node__actions,.virtual-machine-node__snapshot { display:flex; gap:6px; align-items:center; }
+.virtual-machine-node__snapshot .mdx-input { flex:1; }
+.virtual-machine-node__display code { user-select:all; }
+.virtual-machine-node :is(button,input,select):focus-visible { outline:2px solid var(--md-primary); outline-offset:2px; }
+@media (max-width:560px) { .virtual-machine-node__grid { grid-template-columns:1fr; } .virtual-machine-node__actions,.virtual-machine-node__snapshot { flex-wrap:wrap; } }
 
 /* ============================================================================================
    MD3: Kanban board (Board lane — design/v2/MD3 Board.dc.html)
@@ -2387,7 +2580,7 @@ button.term-node__title-text:focus-visible {
 .kanban-col {
   background: var(--md-surface-container-low);
   border: none;
-  border-radius: 24px;
+  border-radius: var(--md-shape-node);
   transition: background var(--md-motion-effect, 200ms cubic-bezier(0.34, 0.8, 0.34, 1));
   display: flex;
   flex-direction: column;
@@ -3256,8 +3449,10 @@ button.term-node__title-text:focus-visible {
 
 @media (prefers-reduced-motion: reduce) {
   :root {
-    --md3-motion-spatial: 1ms linear;
-    --md3-motion-effect: 1ms linear;
+    --md-motion-spatial: 0ms linear;
+    --md-motion-effect: 0ms linear;
+    --md3-motion-spatial: 0ms linear;
+    --md3-motion-effect: 0ms linear;
   }
 }
 
@@ -3299,7 +3494,7 @@ button.term-node__title-text:focus-visible {
 .palette {
   background: var(--md-surface-container-high);
   border: none;
-  border-radius: 28px;
+  border-radius: var(--md-shape-extra-large);
   box-shadow: none;
   animation: md3-pop-in var(--md3-motion-spatial);
   width: 560px;
@@ -3311,7 +3506,7 @@ button.term-node__title-text:focus-visible {
 }
 .palette--full {
   /* The expanded state keeps the same tonal surface + radius; only its size is special-cased. */
-  border-radius: 28px !important;
+  border-radius: var(--md-shape-extra-large) !important;
   width: min(1040px, calc(100vw - 40px)) !important;
   height: calc(100vh - 80px) !important;
   max-height: none !important;
@@ -3364,7 +3559,7 @@ button.term-node__title-text:focus-visible {
   min-height: 58px;
   padding: 8px 16px;
   gap: 16px;
-  border-radius: 20px;
+  border-radius: var(--md-shape-large);
   font-family: var(--md3-font-ui);
   transition: background var(--md3-motion-effect);
   display: flex;
@@ -3387,7 +3582,7 @@ button.term-node__title-text:focus-visible {
 .palette__icon {
   width: 40px;
   height: 40px;
-  border-radius: 14px;
+  border-radius: var(--md-shape-medium);
   background: var(--md-secondary-container);
   color: var(--md-on-secondary-container);
   flex: none;
@@ -3513,7 +3708,7 @@ button.term-node__title-text:focus-visible {
 .ctx-menu {
   background: var(--md-surface-container-high);
   border: none;
-  border-radius: 20px;
+  border-radius: var(--md-shape-large);
   padding: 8px;
   gap: 1px;
   box-shadow: none;
@@ -3524,13 +3719,13 @@ button.term-node__title-text:focus-visible {
 .ctx-submenu {
   background: var(--md-surface-container-high);
   border: none;
-  border-radius: 20px;
+  border-radius: var(--md-shape-large);
   padding: 8px;
   box-shadow: none;
   animation: md3-fade-in var(--md3-motion-effect);
 }
 .ctx-item {
-  border-radius: 14px;
+  border-radius: var(--md-shape-medium);
   padding: 10px 14px;
   gap: 13px;
   font-family: var(--md3-font-ui);
@@ -3665,7 +3860,7 @@ button.term-node__title-text:focus-visible {
   display: flex;
   flex-direction: column;
   background: var(--md-surface-container-high);
-  border-radius: 20px;
+  border-radius: var(--md-shape-large);
   padding: 12px;
   gap: 8px;
   animation: md3-pop-in var(--md3-motion-spatial);
@@ -3691,7 +3886,7 @@ button.term-node__title-text:focus-visible {
   gap: 10px;
   width: 100%;
   border: none;
-  border-radius: 14px;
+  border-radius: var(--md-shape-medium);
   padding: 9px 12px;
   background: transparent;
   color: var(--md-on-surface);
@@ -3770,7 +3965,7 @@ button.term-node__title-text:focus-visible {
 .anchored-pop {
   background: var(--md-surface-container-high);
   border: none;
-  border-radius: 24px;
+  border-radius: var(--md-shape-extra-large);
   box-shadow: none;
   animation: md3-pop-in var(--md3-motion-spatial);
 }
@@ -3784,11 +3979,14 @@ button.term-node__title-text:focus-visible {
   background: var(--md-surface-container-highest);
   color: var(--md-on-surface);
   border: 1px solid var(--md-outline-variant);
-  border-radius: 8px;
+  border-radius: var(--md-shape-extra-small);
   box-shadow: none;
   font-family: var(--md3-font-ui);
   font-size: 11.5px;
   padding: 6px 10px;
+  max-width: min(360px, calc(100vw - 24px));
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 /* ---- MD3: Confirm / input dialog shell (ConfirmDialog, InputDialog, and every reuser of the
@@ -4286,13 +4484,13 @@ button.term-node__title-text:focus-visible {
      (40px) PLUS the flex gap between them (8px, from .destgate__slider-wrap) — get this wrong
      by the gap amount and the fill floats a few px below the track it's meant to sit inside. */
   margin-top: -48px;
-  border-radius: 999px 0 0 999px;
+  border-radius: var(--md-shape-full) 0 0 var(--md-shape-full);
   background: linear-gradient(90deg, color-mix(in srgb, var(--md-error) 55%, transparent), var(--md-error));
 }
 .destgate__complete {
   background: var(--md-success-container);
   color: var(--md-on-success-container);
-  border-radius: 20px;
+  border-radius: var(--md-shape-section);
   font-family: var(--md3-font-ui);
 }
 .destgate__exit {
@@ -4323,7 +4521,7 @@ button.term-node__title-text:focus-visible {
   background: var(--md-surface-container-high);
   border: none;
   border-left: 4px solid var(--md-primary);
-  border-radius: 20px;
+  border-radius: var(--md-shape-section);
   box-shadow: none;
   padding: 14px 14px 14px 16px;
   animation: md3-pop-in var(--md3-motion-spatial);
@@ -4448,7 +4646,7 @@ button.term-node__title-text:focus-visible {
   border-color: var(--md-error);
 }
 .notif-center__row {
-  border-radius: 20px;
+  border-radius: var(--md-shape-section);
   transition: background var(--md3-motion-effect);
 }
 .notif-center__row:hover {
@@ -5164,7 +5362,7 @@ button.term-node__title-text:focus-visible {
   flex: 0 0 auto;
   height: 17px;
   padding: 0 6px;
-  border-radius: 5px;
+  border-radius: var(--md-shape-compact);
   background: var(--md-tertiary-container);
   color: var(--md-on-tertiary-container);
   font-family: var(--md-font-mono, ui-monospace, monospace);
@@ -5473,7 +5671,7 @@ button.term-node__title-text:focus-visible {
    selector just to undo it for THIS one case — simpler to only own what every child actually
    shares (padding, radius, hover) and leave `display` to whichever child needs it. */
 .md3-settings-card > * {
-  border-radius: 20px;
+  border-radius: var(--md-shape-section);
   padding: 12px 18px;
   min-height: 64px;
   box-sizing: border-box;
@@ -5604,7 +5802,7 @@ button.term-node__title-text:focus-visible {
   gap: 8px;
   padding: 8px 10px;
   border: none;
-  border-radius: 14px;
+  border-radius: var(--md-shape-medium);
   background: transparent;
   color: var(--md-on-surface);
   font-size: 13.5px;
@@ -5759,9 +5957,9 @@ button.term-node__title-text:focus-visible {
      design lg 28px  -> --md-shape-large       (--radius-xxl, 28px)
      design full     -> --md-shape-full        (999px, same name in both)
    Motion + font tokens (--md-motion-spatial/--md-motion-effect, --md-font-ui/--md-font-mono) do
-   not exist yet in styles.css, so they are defined once here, with the exact values
-   design/v2/md3/tokens.css specifies for motion, and the app's OWN existing system-font stacks for
-   type (never a Google Fonts / CDN icon link — the renderer's CSP is `font-src 'self' data:` and
+   are defined in styles.css, so this sheet reuses those exact global values for motion and the
+   app's vendored font stacks for type (never a Google Fonts / CDN icon link — the renderer's CSP is
+   `font-src 'self' data:` and
    scripts/check-app-contract.mjs fails the build on any such link anywhere under src/renderer).
    Any later canonical token pass that defines these same names globally simply takes over, since
    custom properties are looked up by name, not by which file happened to declare them first.
@@ -5773,8 +5971,8 @@ button.term-node__title-text:focus-visible {
 :root {
   --md-motion-spatial: 500ms cubic-bezier(0.38, 1.21, 0.22, 1);
   --md-motion-effect: 200ms cubic-bezier(0.34, 0.8, 0.34, 1);
-  --md-font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro', 'Helvetica Neue', Arial, sans-serif;
-  --md-font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --md-font-ui: var(--font-ui);
+  --md-font-mono: var(--font-mono);
 }
 
 /* --------------------------------------------------------------------------------------------
@@ -7265,7 +7463,7 @@ button.term-node__title-text:focus-visible {
 .md3-kids-home__avatar-bubble {
   width: 110px;
   height: 110px;
-  border-radius: 38px;
+  border-radius: var(--md-shape-extra-large);
   background: var(--md-primary-container);
   color: var(--md-on-primary-container);
   display: flex;
@@ -7308,7 +7506,7 @@ button.term-node__title-text:focus-visible {
 .md3-kids-tile {
   position: relative;
   border: none;
-  border-radius: 32px;
+  border-radius: var(--md-shape-extra-large);
   padding: 26px 26px 22px;
   display: flex;
   flex-direction: column;
@@ -7968,8 +8166,7 @@ button.term-node__title-text:focus-visible {
   flex-shrink: 0;
   width: 20px;
   height: 20px;
-  border-radius: 7px; /* no exact --md-shape step between extra-small(6)/small(8) — the design's
-    own literal, same authoring convention already used elsewhere in styles.css */
+  border-radius: var(--md-shape-extra-small);
   font-family: var(--font-mono);
   font-size: 10.5px;
   font-weight: 700;
@@ -7980,7 +8177,7 @@ button.term-node__title-text:focus-visible {
   width: 15px;
   height: 15px;
   font-size: 9px;
-  border-radius: 5px;
+  border-radius: var(--md-shape-extra-small);
 }
 
 .md3-status--m {
@@ -8691,15 +8888,10 @@ button.term-node__title-text:focus-visible {
  *   .md3-export-menu      -- ExportMenu's root (already exclusive via `.export-menu`, kept scoped
  *                            for symmetry with the rest of this file)
  *
- * Typography note: the design tokens name `--md-font-ui`/`--md-font-mono`, but this app already
- * self-hosts its three families under different variable names that ALSO carry the CJK fallback
- * stack the Cantonese language mode needs (`--font-ui`, `--font-mono` -- see fonts.css). Using the
- * design doc's own `--md-font-ui` value here would silently drop the bundled "Outfit Variable"
- * face (it isn't registered under the bare name "Outfit") and lose the CJK fallback outright, so
- * this file deliberately spells typography through the app's real `--font-ui`/`--font-mono` while
- * every colour still comes only from the `--md-*` token contract, per the design's own instruction
- * that its font tokens are meant to be "the same names the app already speaks" -- they aren't,
- * quite, and this is the reconciliation.
+ * Typography note: the vendored Outfit and Roboto Mono stacks in fonts.css are the source of truth,
+ * including their CJK-safe fallbacks. The Material Design 3 aliases above deliberately point at those
+ * stacks, so a later imported surface cannot silently replace the bundled faces with a stale
+ * system-only declaration.
  * ================================================================================================= */
 
 /* -------------------------------------------------------------------------------------------------
@@ -11445,4 +11637,461 @@ button.term-node__title-text:focus-visible {
 }
 .icon-menu__reset-btn {
   align-self: flex-start;
+}
+
+/* Canonical live chrome geometry. These final owners keep every audited surface on named Material Design 3
+   shape tokens even where older feature blocks retain their historical selector declarations. */
+.term-node,
+.service-node,
+.dino-node,
+.kanban-col {
+  border-radius: var(--md-shape-node);
+}
+.sticky-node,
+.loop-node,
+.native-loop-node,
+.destgate__complete,
+.destgate__exit,
+.notif-center__row {
+  border-radius: var(--md-shape-section);
+}
+.palette,
+.palette--full,
+.ctx-menu,
+.ctx-submenu,
+.anchored-pop,
+.confirm {
+  border-radius: var(--md-shape-extra-large);
+}
+.palette__item,
+.ctx-item,
+.confirm__option,
+.md3-settings-card > *,
+.icon-menu__preview {
+  border-radius: var(--md-shape-medium);
+}
+.md3-status-badge,
+.md3-status-badge--small {
+  border-radius: var(--md-shape-compact);
+}
+.md3-kids-home__avatar-bubble,
+.md3-kids-tile {
+  border-radius: var(--md-shape-extra-large);
+}
+.mdx-menu {
+  border-radius: var(--md-shape-large);
+}
+.palette__icon {
+  border-radius: var(--md-shape-medium);
+}
+.mdx-row {
+  border-radius: var(--md-shape-small);
+/* ============================================================================================
+   Desktop legacy-control remediation
+   ============================================================================================
+   Several older feature lanes still keep their domain class names (`sc-btn`, `mc-button`, and
+   `toylock-btn`) because those names are part of their behavior and test selectors. Their chrome
+   is nevertheless one shared Material Design 3 recipe. This final layer gives those controls the
+   same token colors, full shape, state layer, focus ring, and disabled treatment as the extracted
+   primitives without changing their event wiring or data semantics. More-specific surface rules
+   above remain free to choose a compact size or a destructive tone. */
+.sc-btn,
+.mc-button,
+.toylock-btn:not(.toylock-btn--link) {
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--md-outline);
+  border-radius: var(--md-shape-full);
+  background: transparent;
+  color: var(--md-on-surface);
+  font-family: var(--md-font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background var(--md-motion-effect),
+    border-color var(--md-motion-effect),
+    color var(--md-motion-effect);
+}
+.sc-btn:hover:not(:disabled),
+.mc-button:hover:not(:disabled),
+.toylock-btn:not(.toylock-btn--link):hover:not(:disabled) {
+  background: color-mix(in srgb, var(--md-on-surface) 8%, transparent);
+}
+.sc-btn:focus-visible,
+.mc-button:focus-visible,
+.toylock-btn:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+.sc-btn:disabled,
+.mc-button:disabled,
+.toylock-btn:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+.sc-btn.primary,
+.mc-button--primary,
+.toylock-btn--primary {
+  border-color: transparent;
+  background: var(--md-primary);
+  color: var(--md-on-primary);
+}
+.sc-btn.primary:hover:not(:disabled),
+.mc-button--primary:hover:not(:disabled),
+.toylock-btn--primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--md-primary) 92%, var(--md-on-primary) 8%);
+}
+.mc-link,
+.toylock-btn--link {
+  color: var(--md-primary);
+  font-family: var(--md-font-ui);
+}
+.mc-link:focus-visible,
+.toylock-btn--link:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+  border-radius: var(--md-shape-extra-small);
+}
+.mc-link--danger {
+  color: var(--md-error);
+/* Unified Node Catalog. The dialog owns its own bounded list and the search field keeps the
+   anchored regex trigger beside the exact corpus it filters. */
+.mdx-dialog.node-catalog-dialog {
+  width: min(760px, calc(100vw - 32px));
+  max-height: min(820px, calc(100vh - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.node-catalog-dialog__icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  color: var(--md-on-primary-container);
+  background: var(--md-primary-container);
+  font-size: 24px;
+}
+.node-catalog-dialog__intro,
+.node-catalog-dialog__hint {
+  margin: 0;
+  color: var(--md-on-surface-variant);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.node-catalog-dialog__secondary {
+  display: block;
+  margin-top: 3px;
+  color: var(--md-on-surface-variant);
+  font-size: 12px;
+}
+.node-catalog-dialog__categories {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  max-height: 82px;
+  overflow-y: auto;
+  padding: 2px;
+}
+.node-catalog-dialog__list {
+  min-height: 180px;
+  max-height: min(480px, 52vh);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 2px;
+}
+.node-catalog-dialog__profiles {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  padding: 3px;
+}
+.node-catalog-dialog__profile-label {
+  color: var(--md-on-surface-variant);
+  font-size: 12px;
+  font-weight: 600;
+  margin-right: 3px;
+}
+.node-catalog-dialog__profiles button {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--md-outline-variant);
+  border-radius: 12px;
+  color: var(--md-on-surface);
+  background: var(--md-surface-container);
+  cursor: pointer;
+}
+.node-catalog-dialog__profiles button.is-selected {
+  border-color: var(--md-primary);
+  color: var(--md-on-primary-container);
+  background: var(--md-primary-container);
+}
+.node-catalog-dialog__profiles button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.node-catalog-dialog__row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  min-height: 64px;
+  border: 1px solid var(--md-outline-variant);
+  border-radius: 14px;
+  background: var(--md-surface-container);
+}
+.node-catalog-dialog__row.is-active {
+  border-color: var(--md-primary);
+  background: var(--md-primary-container);
+}
+.node-catalog-dialog__row.is-disabled {
+  opacity: 0.72;
+}
+.node-catalog-dialog__row-main {
+  min-width: 0;
+  flex: 1;
+  padding: 11px 13px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  color: var(--md-on-surface);
+  background: transparent;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+}
+.node-catalog-dialog__row-main:disabled {
+  cursor: not-allowed;
+}
+.node-catalog-dialog__row-title {
+  font-weight: 600;
+  font-size: 14px;
+}
+.node-catalog-dialog__row-secondary {
+  display: block;
+  margin-top: 2px;
+  font-weight: 400;
+  color: var(--md-on-surface-variant);
+}
+.node-catalog-dialog__row-description,
+.node-catalog-dialog__row-reason,
+.node-catalog-dialog__row-mode {
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--md-on-surface-variant);
+}
+.node-catalog-dialog__row-mode {
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--md-primary);
+}
+.node-catalog-dialog__row-reason {
+  color: var(--md-error);
+}
+.node-catalog-dialog__docs {
+  align-self: center;
+  flex: none;
+  margin-right: 12px;
+  padding: 8px;
+  min-width: 44px;
+  min-height: 44px;
+  color: var(--md-primary);
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.node-catalog-dialog__docs:focus-visible,
+.node-catalog-dialog__row-main:focus-visible {
+  outline: 3px solid var(--md-primary);
+  outline-offset: 2px;
+}
+.node-catalog-dialog__empty {
+  min-height: 150px;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: var(--md-on-surface-variant);
+  text-align: center;
+}
+@media (max-width: 560px) {
+  .mdx-dialog.node-catalog-dialog {
+    width: calc(100vw - 20px);
+    max-height: calc(100vh - 20px);
+  }
+  .node-catalog-dialog__list {
+    max-height: 46vh;
+  }
+  .node-catalog-dialog__docs {
+    margin-right: 6px;
+    padding-inline: 5px;
+.torrent-node {
+  min-width: 440px;
+  background: var(--md-surface-container);
+}
+
+.torrent-node__body {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  min-height: 320px;
+  overflow: auto;
+}
+
+.torrent-node__runtime,
+.torrent-node__empty,
+.torrent-node__error,
+.torrent-node__regex,
+.torrent-node__task {
+  border-radius: 12px;
+  padding: 9px 11px;
+  background: var(--md-surface-container-high);
+}
+
+.torrent-node__runtime {
+  font-size: 12px;
+  color: var(--md-on-surface-variant);
+}
+
+.torrent-node__field,
+.torrent-node__destination,
+.torrent-node__search,
+.torrent-node__regex label {
+  display: grid;
+  gap: 5px;
+}
+
+.torrent-node__field input,
+.torrent-node__destination input,
+.torrent-node__search input,
+.torrent-node__regex input {
+  min-height: 36px;
+  border: 1px solid var(--md-outline);
+  border-radius: 8px;
+  background: var(--md-surface);
+  color: var(--md-on-surface);
+  padding: 0 9px;
+}
+
+.torrent-node__actions,
+.torrent-node__task-actions,
+.torrent-node__stats {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.torrent-node__actions button,
+.torrent-node__destination button,
+.torrent-node__search button,
+.torrent-node__task-actions button,
+.torrent-node__task-actions select {
+  min-height: 36px;
+  border: 0;
+  border-radius: 18px;
+  padding: 0 12px;
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+  cursor: pointer;
+}
+
+.torrent-node__actions button:disabled,
+.torrent-node__task-actions button:disabled {
+  cursor: not-allowed;
+  opacity: .5;
+}
+
+.torrent-node__destination {
+  grid-template-columns: 1fr auto;
+  align-items: end;
+}
+
+.torrent-node__destination label {
+  grid-column: 1 / -1;
+}
+
+.torrent-node__search {
+  grid-template-columns: 1fr auto;
+  align-items: end;
+}
+
+.torrent-node__search label {
+  grid-column: 1 / -1;
+}
+
+.torrent-node__task-head,
+.torrent-node__stats {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--md-on-surface-variant);
+}
+
+.torrent-node__task-head strong {
+  color: var(--md-on-surface);
+  overflow-wrap: anywhere;
+}
+
+.torrent-node__task progress {
+  display: block;
+  width: 100%;
+  height: 8px;
+  margin: 10px 0 7px;
+  accent-color: var(--md-primary);
+}
+
+.torrent-node__files {
+  display: grid;
+  gap: 5px;
+  max-height: 150px;
+  overflow: auto;
+  margin-top: 8px;
+}
+
+.torrent-node__files label {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 7px;
+  align-items: center;
+  font-size: 12px;
+}
+
+.torrent-node__files span {
+  overflow-wrap: anywhere;
+}
+
+.torrent-node__files small {
+  color: var(--md-on-surface-variant);
+}
+
+.torrent-node button:focus-visible,
+.torrent-node input:focus-visible,
+.torrent-node select:focus-visible {
+  outline: 3px solid var(--md-primary);
+  outline-offset: 2px;
+}
+
+@media (max-width: 600px) {
+  .torrent-node {
+    min-width: 320px;
+  }
+
+  .torrent-node__destination,
+  .torrent-node__search {
+    grid-template-columns: 1fr;
+  }
+
+  .torrent-node__stats {
+    justify-content: flex-start;
+  }
 }

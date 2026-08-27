@@ -7,6 +7,8 @@ import { Switch } from '@renderer/ui/Switch'
 import { Button } from '@renderer/ui/Button'
 import { playSfx } from '@renderer/lib/sfx'
 import { Slider } from '@renderer/ui/md3'
+import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
+import { mapNativeNotification } from '../../../lib/personalVocabulary/hostMessage'
 
 const ROWS = {
   notify: {
@@ -25,6 +27,7 @@ const ROWS = {
 const ENTRIES = Object.values(ROWS)
 
 export function NotificationsSection({ isActive }: { isActive: boolean }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   const notifyOnClaudeDone = useSettings((s) => s.settings.notifyOnClaudeDone)
   const soundEffects = useSettings((s) => s.settings.soundEffects)
   const soundVolume = useSettings((s) => s.settings.soundVolume)
@@ -60,12 +63,14 @@ export function NotificationsSection({ isActive }: { isActive: boolean }): React
                 // rejects it and we surface the repair path below.
                 if (on)
                   void window.nodeTerminal
-                    .notify({
+                    .notify(mapNativeNotification({
                       title: 'Notifications enabled',
                       body: "You'll be told when Claude Code finishes in the background.",
                       nodeId: '',
-                      force: true
-                    })
+                      force: true,
+                      titleKind: 'authored',
+                      bodyKind: 'authored'
+                    }, vocab))
                     .then((result) => setOsBlocked(result === 'failed'))
               }}
             />

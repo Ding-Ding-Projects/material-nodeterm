@@ -105,6 +105,8 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
       joinParts: () => relayUnsupported('workspace.joinParts')
     },
     userDataDir: real.userDataDir, // the host's writable base — worktree default paths live there
+    workspace: real.workspace, // the host's canvas/project files
+    userDataDir: real.userDataDir, // the host's writable base
     fs: files.fs,
     git: {
       ...files.git,
@@ -116,6 +118,10 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     context: files.context,
     githubIssues: github.githubIssues,
     githubControl: local.githubControl,
+    // A relay tab must never launch a VM on the viewer's machine when its canvas is hosted
+    // elsewhere. VM paths and process state are machine-local; until a scoped relay route exists,
+    // keep the operation visibly unavailable rather than silently using this desktop's QEMU.
+    virtualMachine: stub.virtualMachine,
     ...buildAgentApi(client), // onAgentStatus / onSubagentActivity — the host's agent hooks
     ...buildCanvasApi(client), // canvas sync against the host's reflector
     ...buildPresenceApi(client), // the host's presence hub
@@ -209,7 +215,15 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     // server is ONE machine's filesystem/java/process table, and there is no remote-routed core
     // call for it yet. Refuse cleanly rather than silently provisioning/spawning on the WRONG
     // machine (`...local` would run java on the VIEWER, not the host it joined).
-    minecraft: stub.minecraft
+    minecraft: stub.minecraft,
+    torrent: stub.torrent
+    calendar: stub.calendar
+    // Browser control never rides the relay either (no CDP off the desktop) — inert no-ops.
+    onBrowserControlResolve: stub.onBrowserControlResolve,
+    sendBrowserControlResolveResult: stub.sendBrowserControlResolveResult,
+    // Messaging rides the same decision: the browser client is never a sender (constraint 5 of
+    // the messaging plan — the phone drives canvas control over relay→IPC, not /control/*).
+    agentMessage: stub.agentMessage
   } satisfies NodeTerminalApi
 
   return {

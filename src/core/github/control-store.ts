@@ -5,6 +5,7 @@ import type {
   GitHubControlState,
   GitHubProjectApproval
 } from '../../shared/github-issues'
+import { renameAtomic, tempNameFor } from '../fs-atomic'
 import { parseGitHubRepository } from './config'
 import { renameAtomic, tempNameFor } from '../fs-atomic'
 
@@ -180,5 +181,20 @@ export class GitHubControlStore {
       await fs.rm(temporary, { force: true }).catch(() => {})
       throw e
     }
+    // Unique temp + retrying rename (core/fs-atomic.ts). mutate()'s writeQueue serializes writes
+    // WITHIN this instance, but a second instance on the same data dir (Server Edition --data-dir)
+    // shares nothing with it — the fixed `<file>.tmp` name this used to carry let two such writers
+    // publish each other's half-written bytes. The unique name never self-heals, so a failed write
+    // removes its own temp before rethrowing.
+    const temporary = tempNameFor(this.filePath)
+    try {
+      await fs.writeFile(temporary, JSON.stringify(state), { encoding: 'utf-8', mode: 0o600 })
+      await fs.chmod(temporary, 0o600)
+      await renameAtomic(temporary, this.filePath)
+    } catch (error) {
+      await fs.rm(temporary, { force: true }).catch(() => {})
+      throw error
+    }
+    await fs.chmod(this.filePath, 0o600)
   }
 }

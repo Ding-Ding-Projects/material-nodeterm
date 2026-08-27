@@ -31,22 +31,22 @@
     <article class="doc-body">
       <p class="doc-kicker">This site</p>
       <h1>Personal vocabulary</h1>
-      <p>Upload your own local word → replacement JSON file, and this site's prose is rewritten with it — until then, every surface shows its original wording, because this site ships no built-in mappings of its own.</p>
+      <p>Choose your own local versioned JSON file, and this site's prose is rewritten with it — until then, every surface shows its original wording, because this site ships no built-in mappings of its own.</p>
 
       <h2>Behaviour</h2>
-      <p>The upload control is visible even before a file exists, with distinct no-file, loaded, invalid, and cleared states. A file is validated <strong>completely</strong> before anything is applied — an invalid file never applies partially. Replacements are applied only at the user-facing prose text boundary (this site's central copy-rendering function), never to code, URLs, identifiers, or paths.</p>
+      <p>The upload control is visible even before a file exists, with distinct no-file, loaded, invalid, and cleared states. A file is validated <strong>completely</strong> before anything is applied — an invalid file never applies partially, and the previous valid file stays active. Replacements are applied only at the user-facing prose text boundary (this site's central copy-rendering function), never to code, URLs, identifiers, or paths.</p>
 
       <h2>Configuration</h2>
-      <p>The schema is one version, bounded on every axis: a file-size cap, a maximum entry count, bounded key and value lengths, string-only values, and rejection of unsafe keys like <code>__proto__</code>. See the exact numbers in <code>site/app/shared/vocabulary-state.js</code>.</p>
+      <p>The schema is identical to the desktop renderer: version <code>1</code>, a 256 KB UTF-8 byte cap, maximum depth and node budgets, a maximum of 2,000 entries, bounded key and value lengths, string-only values, duplicate-key rejection, and rejection of unsafe keys like <code>__proto__</code>. The persisted browser cache adds only <code>entryCount</code> and <code>savedAt</code>, validates their consistency, and expires after 30 days. See the exact contract in <code>site/app/shared/vocabulary-state.js</code>.</p>
 
       <h2>Failure modes</h2>
       <p>A rejected file leaves the previous, still-valid vocabulary (if any) untouched and active — a bad upload never silently wipes out a working one.</p>
 
       <h2>Security considerations</h2>
-      <p>Nothing is ever uploaded anywhere — parsing, validation, and replacement all happen locally, in this browser only, with no network request of any kind.</p>
+      <p>Nothing is ever uploaded anywhere — parsing, validation, caching, and replacement all happen locally, in this browser only, with no network request of any kind. The upload is a semantic JSON file picker, not a free-text substitute for the contract.</p>
 
       <h2>Verification</h2>
-      <p>Bounds and rejection rules are all in one function, <code>validateVocabularyText()</code>, which returns either a fully validated result or a specific rejection reason — never a partial success.</p>
+      <p>Bounds and rejection rules are all in <code>validateVocabularyJson()</code>, with the persisted envelope checked by <code>validateVocabularyCacheJson()</code>. Both return either a fully validated result or a specific rejection reason — never a partial success.</p>
 
       <section class="doc-suggested">
         <h2>Suggested articles</h2>

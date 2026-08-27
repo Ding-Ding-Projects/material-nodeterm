@@ -103,6 +103,12 @@
   --md-shape-large: var(--radius-xl); /* 16px */
   --md-shape-extra-large: var(--radius-xxl); /* 28px */
   --md-shape-full: var(--radius-full); /* pill / circular */
+  /* Measured desktop component geometry, kept named so surfaces share one Material Design 3 scale. */
+  /* Component-specific geometry remains a token rather than a one-off declaration. These values
+     are the measured node, section, and compact badge shapes in the checked-in desktop design. */
+  --md-shape-node: 24px;
+  --md-shape-section: 20px;
+  --md-shape-compact: 4px;
 
   /* ---- Motion — MD3 expressive springs, approximated for CSS ------------------------------
      Theme-independent, declared once. Apply --md-motion-spatial to movement/scale on entrances
@@ -478,6 +484,18 @@ body,
   background: rgba(var(--tint-rgb), 0.3);
 }
 
+/* When the project has a real icon (emoji / lucide / image) the glyph replaces the plain 9px
+   fallback dot: a larger box (an emoji is ~13px and would overflow 9px, and a lucide/image glyph
+   would be clipped) with NO baked-in tint background (that tint circle only belongs to the fallback
+   dot). Applied by TabBar only when `p.icon` is set; the plain `.tab__dot` fallback is untouched.
+   16px matches the other project-glyph surfaces; the exact px wants a live Mac look, so it's tunable. */
+.tab__dot--icon {
+  width: 16px;
+  height: 16px;
+  border-radius: 0;
+  background: none;
+}
+
 /* Unread-completion count badge on a project tab. */
 .tab__badge {
   display: inline-flex;
@@ -823,6 +841,57 @@ body,
 .dock-menu svg {
   color: var(--md-on-surface-variant);
   flex-shrink: 0;
+}
+
+/* One level of flyout submenu — for a builtin harness that has inheriting custom agents (e.g. a
+ * claude-compatible proxy). The parent button carries a ▸ chevron; hovering/focusing it opens the
+ * flyout to the right of the menu. Reused only when there is something to nest, so a menu with no
+ * inheriting customs is byte-identical to before. */
+.dock-menu__has-sub {
+  position: relative;
+}
+.dock-menu__chevron {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--muted);
+}
+.dock-menu__sub {
+  position: absolute;
+  left: 100%;
+  top: -6px;
+  min-width: 190px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  background: rgba(var(--menu-rgb), 0.98);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, calc(0.55 * var(--shadow-k)));
+}
+.dock-menu__sub button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 12px;
+  background: transparent;
+  color: var(--text);
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+.dock-menu__sub button:hover:not(:disabled) {
+  background: var(--panel-header);
+}
+.dock-menu__sub-label {
+  padding: 4px 12px 2px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
 }
 
 /* ---- Dictation overlay: bottom-center floating card above the Dock ---- */
@@ -1298,6 +1367,29 @@ body,
   flex-shrink: 0;
 }/* Title shown as text; only the name itself is clickable to rename. *//* Pushes the AI / close buttons to the far right. */
 .term-node__spacer {
+}
+
+/* Maximize toggle (issue #399): a regular right-group header icon button, next to the close ×.
+   Same recipe as .term-node__refresh — the toggle is ordinary chrome, not a traffic light. */
+.term-node__maximize {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+}
+
+.term-node__maximize:hover {
+  background: rgba(10, 132, 255, 0.18);
+  color: var(--accent-text);
+}
+
+.term-node__title {
   flex: 1;
 }
 
@@ -1399,6 +1491,84 @@ body,
 
 /* Claude Code status: RUNNING badge while working, unread dot when finished. */
 /* The walking agent mascot inside the RUNNING
+.term-node__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 8px;
+  flex-shrink: 0;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--success);
+}
+
+.term-node__status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* RUNNING matches the working spinner + node glow (clay #d97757), not the base green. */
+.term-node__status--busy {
+  color: #d97757;
+}
+
+.term-node__status--busy .term-node__status-dot {
+  animation: nt-pulse 1.1s ease-in-out infinite;
+}
+
+/* DRIVING: an agent holds a control lease on this browser node (S8 PR 6). Same clay as RUNNING so
+   it reads as agent activity, but it carries a label + a Stop button, so it is wider than the plain
+   status badges. Always on — no setting hides it (decision 4). */
+.term-node__status--driven {
+  color: #d97757;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.term-node__status--driven .term-node__status-dot {
+  animation: nt-pulse 1.1s ease-in-out infinite;
+}
+
+.browser-driving__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+/* The one obvious Stop. Quiet by default, clay on hover — it is a deliberate act, so it should read
+   as available without shouting. */
+.browser-driving__stop {
+  flex-shrink: 0;
+  margin-left: 2px;
+  padding: 0 6px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  background: rgba(var(--tint-rgb), 0.08);
+  border: 1px solid transparent;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.browser-driving__stop:hover {
+  color: #d97757;
+  border-color: rgba(217, 119, 87, 0.5);
+}
+
+/* The dot's pulse is decoration; the state still reads frozen at the lit end (matches the mascot
+   pulse contract above). */
+@media (prefers-reduced-motion: reduce) {
+  .term-node__status--driven .term-node__status-dot {
+    animation: none;
+  }
+}
+
+/* Walking mascot (docs/mascot-sprites.md): sits where the pulsing dot would, INSIDE the RUNNING
    badge, pure CSS spritesheet stepping — no per-node JS timers. Sizes come from lib/mascot.ts via
    the inline CSS vars so the animation and the rendered sheet can never desync. Fixed heights ≤
    the other header controls (≈18px), so the mascot never changes header height. */
@@ -1546,6 +1716,199 @@ body,
   align-items: center;
   gap: 6px;
 }.term-node__find-btn:disabled {
+}
+
+.term-node__ai {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.term-node__ai:hover:not(:disabled) {
+  background: rgba(10, 132, 255, 0.18);
+  color: var(--accent-text);
+}
+
+.term-node__ai:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.term-node__move-worktree {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.term-node__move-worktree:hover {
+  background: rgba(10, 132, 255, 0.18);
+  color: var(--accent-text);
+}
+
+.term-node__search {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+}
+
+.term-node__search:hover {
+  background: rgba(10, 132, 255, 0.18);
+  color: var(--accent-text);
+}
+
+.term-node__refresh {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+}
+
+.term-node__refresh:hover {
+  background: rgba(10, 132, 255, 0.18);
+  color: var(--accent-text);
+}
+
+.term-node__mic {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+}
+
+.term-node__mic:hover {
+  background: rgba(10, 132, 255, 0.18);
+  color: var(--accent-text);
+}
+
+.term-node__chat {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+}
+
+.term-node__chat:hover {
+  background: rgba(10, 132, 255, 0.18);
+  color: var(--accent-text);
+}
+
+.term-node__hide-fanout,
+.term-node__tidy-fanout {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+}
+
+.term-node__hide-fanout:hover,
+.term-node__tidy-fanout:hover {
+  background: rgba(10, 132, 255, 0.18);
+  color: var(--accent-text);
+}
+
+.term-node__hide-fanout[aria-pressed='true'] {
+  color: var(--accent-text);
+}
+
+.term-node__find {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 8px;
+  background: var(--surface-raised);
+  border-bottom: 1px solid rgba(var(--tint-rgb), 0.08);
+}
+
+.term-node__find-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.term-node__find-input {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg);
+  border: 1px solid rgba(var(--tint-rgb), 0.12);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 12px;
+  padding: 3px 6px;
+  outline: none;
+}
+
+.term-node__find-input:focus {
+  border-color: var(--accent);
+}
+
+.term-node__find-count {
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.term-node__find-btn {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.term-node__find-btn:hover:not(:disabled) {
+  background: rgba(10, 132, 255, 0.18);
+  color: var(--accent-text);
+}
+
+.term-node__find-btn:disabled {
   opacity: 0.4;
   cursor: default;
 }
@@ -2320,6 +2683,20 @@ body,
   flex: none;
 }
 
+.welcome__recent-mark {
+  width: 15px;
+  height: 15px;
+  border-radius: 4px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 600;
+  color: #fff;
+  overflow: hidden;
+}
+
 .welcome__recent-name {
   font-size: 13px;
   flex: none;
@@ -2454,6 +2831,8 @@ body,
      the row's remaining width — size it to its content so long account labels don't wrap. */
   width: max-content;
   max-width: 320px;
+  max-height: min(70vh, 520px);
+  overflow-y: auto;
 }
 /* Opened on the row's LEFT because the right side ran out of screen — see fitFlyout. `left: auto`
    is required: the base rule's `left` would otherwise keep winning and both edges would be set,
@@ -2678,6 +3057,78 @@ body,
   color: var(--danger);
   font-size: 11px;
   line-height: 1.4;
+/* Rendered-markdown twin of the textarea body: same box, click flips into the textarea. */
+.sticky-node__view {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 10px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text);
+  cursor: text;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.sticky-node__placeholder {
+  color: rgba(192, 202, 245, 0.4);
+}
+
+.sticky-node__md > :first-child {
+  margin-top: 0;
+}
+.sticky-node__md > :last-child {
+  margin-bottom: 0;
+}
+.sticky-node__md p,
+.sticky-node__md ul,
+.sticky-node__md ol {
+  margin: 0 0 6px;
+}
+.sticky-node__md ul,
+.sticky-node__md ol {
+  padding-left: 18px;
+}
+.sticky-node__md h1,
+.sticky-node__md h2,
+.sticky-node__md h3,
+.sticky-node__md h4 {
+  margin: 8px 0 4px;
+  font-size: 13px;
+}
+.sticky-node__md h1 {
+  font-size: 15px;
+}
+.sticky-node__md h2 {
+  font-size: 14px;
+}
+.sticky-node__md pre {
+  background: rgba(0, 0, 0, calc(0.25 * var(--shadow-k) + 0.08));
+  padding: 6px 8px;
+  border-radius: 6px;
+  overflow-x: auto;
+}
+.sticky-node__md code {
+  font-size: 12px;
+}
+.sticky-node__md a {
+  color: var(--accent);
+}
+
+/* "↻ <agent> · 5m ago" — present only while the body is the untouched agent-synced text. */
+.sticky-node__stamp {
+  flex: 0 0 auto;
+  padding: 3px 10px 5px;
+  font-size: 10px;
+  color: var(--muted);
+  user-select: none;
+}
+
+.sticky-node.collapsed .sticky-node__body,
+.sticky-node.collapsed .sticky-node__view,
+.sticky-node.collapsed .sticky-node__stamp {
+  display: none;
 }
 
 .regex-builder__warn {
@@ -2992,6 +3443,28 @@ body,
   border-radius: 4px;
 }
 
+/* Photo and mixed-media gallery nodes keep media bounded inside their own painted surface. */
+.photo-node .editor-node__image img,
+.gallery-node__stage img,
+.gallery-node__stage video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  object-fit: contain;
+}
+.gallery-node__stage { position: relative; display: flex; flex-direction: column; min-height: 0; height: 100%; background: var(--md-surface-container-high); }
+.gallery-node__stage > img, .gallery-node__stage > video { flex: 1 1 auto; min-height: 0; }
+.gallery-node__thumbs { display: flex; gap: 6px; flex: 0 0 36px; align-items: center; padding: 4px 8px; overflow-x: auto; background: var(--md-surface-container); }
+.gallery-node__thumbs span { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; color: var(--md-on-surface-variant); background: var(--md-surface-container-highest); }
+.gallery-node__thumbs span.is-active { outline: 2px solid var(--md-primary); color: var(--md-on-primary-container); }
+.gallery-node__thumbs button { border: 0; cursor: pointer; font: inherit; }
+.gallery-node__thumbs button.is-active { outline: 2px solid var(--md-primary); color: var(--md-on-primary-container); }
+.gallery-node__add { display: inline-flex; align-items: center; min-height: 28px; padding: 0 8px; border-radius: 8px; background: var(--md-primary-container); color: var(--md-on-primary-container); cursor: pointer; }
+.gallery-node__add input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.gallery-node__remove { min-height: 28px; border: 0; border-radius: 8px; padding: 0 8px; background: var(--md-error-container); color: var(--md-on-error-container); cursor: pointer; }
+.gallery-node__count { font-size: 12px; color: var(--md-on-surface-variant); margin-inline-end: 8px; }
+
 /* PDF: the viewer fills the node body — it brings its own toolbar, scrollbars and page chrome,
    so no padding or checkerboard here, and centering only applies to the loading/error text. */
 .editor-node__pdf {
@@ -3044,6 +3517,21 @@ body,
   font-size: 11.5px;
   color: var(--muted);
   word-break: break-word;
+/* Overlays/menus that can overlap the macOS title-bar strip must opt out of window-drag,
+   otherwise clicks on their top controls (×, ↻, …) drag the window instead. */
+.drawer-overlay,
+.drawer--pinned,
+.palette-overlay,
+.sc-overlay,
+.confirm-overlay,
+.ctx-menu,
+.ctx-backdrop,
+.tab-menu,
+.controls-cluster,
+.dock,
+.dictation,
+.kanban-overlay {
+  -webkit-app-region: no-drag;
 }
 
 /* ---- Sticky note node ---- */
@@ -3063,6 +3551,33 @@ body,
 }
 
 .sticky-node__header {
+/* Pinned explorer: no scrim, clicks pass through to the canvas. The drawer is a floating
+   card on the right — same shape as the sessions sidebar on the left — so the controls
+   cluster (top: 54px, right: 14px, 34px tall) stays reachable. z 26 sits with that cluster
+   above the kanban board (25) and below the tab bar (30) / dialogs (55+). pointer-events
+   on the overlay is load-bearing: a transparent overlay that still captures would freeze
+   the canvas even with the click-to-close handler removed. */
+.drawer-overlay--pinned {
+  background: transparent;
+  pointer-events: none;
+  z-index: 26;
+}
+.drawer-overlay--pinned .drawer--pinned {
+  pointer-events: auto;
+  position: absolute;
+  top: 96px; /* 54 (cluster) + 34 (buttons) + 8 (gap) — must sit BELOW the cluster */
+  right: 14px;
+  bottom: 14px;
+  height: auto;
+  max-height: none;
+  width: 320px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, calc(0.45 * var(--shadow-k)));
+}
+
+.drawer__head {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -3723,6 +4238,17 @@ body,
   padding: 5px 8px;
   font-size: 12px;
   outline: none;
+.ex-head-actions button.is-on {
+  color: var(--accent);
+}
+
+.ex-head-actions button svg {
+  display: block;
+}
+
+.ex-body {
+  padding: 6px 4px 20px;
+  font-size: 13px;
 }
 
 .set-col {
@@ -4009,6 +4535,56 @@ body,
   display: inline-flex;
   align-items: center;
   justify-content: center;
+/* A repository may have hundreds of worktrees. Keep the dialog controls reachable and scroll only
+   the repeated rows; viewport-relative height still fits on short displays. */
+.bind-existing__list {
+  max-height: min(260px, 32vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 3px;
+}
+
+.bind-existing__title {
+  margin: 0 0 6px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.bind-existing__search {
+  width: 100%;
+  height: 30px;
+  margin: 0 0 6px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  outline: none;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.bind-existing__search:focus {
+  border-color: var(--accent);
+}
+
+.bind-existing__empty {
+  padding: 10px 8px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.bind-existing__row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-bottom: 4px;
   background: transparent;
   border: none;
   border-radius: 5px;
@@ -4223,6 +4799,18 @@ body,
 
 .scm-commit-btn:hover:not(:disabled) {
   filter: brightness(1.08);
+.confirm__textarea {
+  /* Task prose, not a one-liner: fixed comfortable height, user-growable. `font-family` because
+     a bare textarea falls back to the UA monospace default, unlike input. */
+  font-family: inherit;
+  line-height: 1.45;
+  min-height: 76px;
+  resize: vertical;
+}
+
+.confirm__input:focus {
+  outline: none;
+  border-color: var(--accent);
 }
 
 .scm-commit-btn:disabled {
@@ -4398,6 +4986,139 @@ body,
   flex-shrink: 0;
   border-top: 1px solid var(--border);
   padding: 6px 8px;
+/* --- Debug log panel (issue #78) — same overlay family as the shortcuts panel ------------- */
+.logpanel {
+  width: 860px;
+  max-width: 94vw;
+  height: 70vh;
+  display: flex;
+  flex-direction: column;
+  background: rgba(var(--menu-rgb), 0.99);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, calc(0.6 * var(--shadow-k)));
+  overflow: hidden;
+}
+.logpanel__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.logpanel__head h2 {
+  margin: 0 6px 0 0;
+  font-size: 14px;
+  color: var(--text-strong);
+  white-space: nowrap;
+}
+.logpanel__chips {
+  display: flex;
+  gap: 4px;
+}
+.logpanel__chip {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  border-radius: 999px;
+  font-size: 11px;
+  padding: 2px 9px;
+  cursor: pointer;
+}
+.logpanel__chip.is-on {
+  background: rgba(var(--tint-rgb), 0.08);
+  color: var(--text);
+}
+.logpanel__chip--warn.is-on {
+  color: var(--warn);
+}
+.logpanel__chip--error.is-on {
+  color: var(--danger);
+}
+.logpanel__filter {
+  flex: 1;
+  min-width: 80px;
+  background: rgba(var(--tint-rgb), 0.06);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 12px;
+  padding: 4px 9px;
+}
+.logpanel__filter:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.logpanel__act {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  border-radius: 8px;
+  font-size: 12px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+.logpanel__act:hover {
+  background: rgba(var(--tint-rgb), 0.08);
+}
+.logpanel__feed {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+.logpanel__row {
+  display: flex;
+  gap: 8px;
+  padding: 0 14px;
+  align-items: baseline;
+}
+.logpanel__row:hover {
+  background: rgba(var(--tint-rgb), 0.04);
+}
+.logpanel__time {
+  color: var(--muted-2);
+  flex: none;
+}
+.logpanel__level {
+  flex: none;
+  width: 42px;
+  text-transform: uppercase;
+  font-size: 10px;
+  color: var(--muted);
+}
+.logpanel__level--warn {
+  color: var(--warn);
+}
+.logpanel__level--error {
+  color: var(--danger);
+}
+.logpanel__tag {
+  color: var(--accent);
+  flex: none;
+}
+.logpanel__msg {
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  min-width: 0;
+}
+.logpanel__row--debug .logpanel__msg {
+  color: var(--muted);
+}
+.logpanel__empty {
+  color: var(--muted);
+  text-align: center;
+  padding: 32px 0;
+  font-family: inherit;
+}
+
+.shortcuts {
+  width: 560px;
+  max-width: 92vw;
+  max-height: 80vh;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -4701,6 +5422,52 @@ body,
   line-height: 1.4;
   white-space: pre-wrap;
   word-break: break-word;
+/* Project setup/archive script state for this checkout — same quiet weight as the status
+   suffixes above; only a failure earns a color. */
+.group-node__setup {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: help;
+}
+
+.group-node__setup--done {
+  color: var(--success);
+}
+
+.group-node__setup--failed,
+.group-node__setup--cancelled {
+  color: var(--warn);
+}
+
+/* A failed SETUP is a button (re-run), not a label — it is the only path that can release the
+   nodes the failure left armed. Styled as the chip it replaces, plus a click affordance. */
+button.group-node__setup {
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+button.group-node__setup:hover:not(:disabled) {
+  background: var(--panel-header);
+}
+
+/* A launch is already in flight (or running) — the click would only earn a `busy` refusal. */
+button.group-node__setup:disabled {
+  cursor: default;
+  opacity: 0.75;
+}
+
+.group-node__wt-btn {
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 7px;
+  font-size: 13px;
+  padding: 2px 8px;
+  cursor: pointer;
 }
 
 .bind-mode {
@@ -5219,6 +5986,127 @@ body,
   border-radius: 999px;
   user-select: none;
   cursor: grab;
+.react-flow__controls-button:hover {
+  background: var(--panel-header);
+}
+
+/* Canvas lock toggle (in the bottom-left Controls). The padlock fills with
+   currentColor, so the locked state tints via `color`. */
+.react-flow__controls-button.canvas-lock-btn.locked {
+  color: var(--accent);
+  background: rgba(10, 132, 255, 0.14);
+}
+
+/* ---- Bottom-left pill cluster (usage + system resources) ----
+   ONE flex row, because neither pill can hard-code an offset for the other: the usage pill's width
+   changes with every number it prints, and it is absent altogether for a user with no agent
+   subscription at all.
+   Deliberately carries NO z-index: an absolutely positioned box with `z-index: auto` establishes no
+   stacking context, so each pill's own z-index (5 / 13 / 26 / 60) keeps competing with the sessions
+   sidebar and the kanban overlay exactly as it did when each was anchored on its own. Do not add
+   z-index, transform, filter or opacity here — any of them would trap both pills below the sidebar. */
+.canvas-pills {
+  position: absolute;
+  left: 60px; /* clear the React Flow Controls column */
+  bottom: 18px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ---- Resume-where-you-left-off card (breadcrumb trail, once per project activation) ---- */
+/* Anchored in .flow-wrap under the controls cluster (top: 54px, 34px tall) rather than beside it,
+   so the two never overlap; the left side is the sessions sidebar's (top: 54px, left: 14px).
+   z-index 11 sits above the canvas and BELOW the sidebar (12) — a card the user has not dismissed
+   must never cover a panel they deliberately opened — and below the kanban overlay (25), where the
+   canvas and everything on it is correctly hidden. */
+.resume-card {
+  position: absolute;
+  top: 100px;
+  right: 14px;
+  z-index: 11;
+  width: 260px;
+  max-width: calc(100vw - 28px);
+  padding: 8px 8px 6px;
+  background: rgba(var(--menu-rgb), 0.96);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 10px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, calc(0.45 * var(--shadow-k)));
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.resume-card__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 2px 6px 4px;
+}
+
+.resume-card__title {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.resume-card__close {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.resume-card__close:hover {
+  background: var(--panel-header);
+  color: var(--text);
+}
+
+.resume-card__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.resume-card__row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 5px 6px;
+  background: transparent;
+  border: none;
+  border-radius: 7px;
+  color: var(--text);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.resume-card__row:hover {
+  background: var(--panel-header);
+}
+
+.resume-card__note {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resume-card__time {
+  flex: none;
+  color: var(--muted-2);
+  font-size: 11px;
 }
 .group-node__label:active {
   cursor: grabbing;
@@ -5361,6 +6249,59 @@ body,
 .group-node__close {
   padding: 3px 8px;
   line-height: 1;
+}
+/* "Use for new sessions" affordance + current-default chip on an account row (issue #142).
+   Same chip grammar as __host above; the button reads as quiet text until hovered so the
+   readout stays a readout. */
+.usage-account__default {
+  margin-left: 6px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.usage-account__use {
+  margin-left: 6px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: none;
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  color: rgba(var(--tint-rgb), 0.45);
+  background: transparent;
+  cursor: pointer;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.usage-account__use:hover {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+/* Popover-footer action (issue #420): opens the system-scoped `claude /login` terminal. A quiet
+   full-width row, styled with the same tint/accent tokens as `.usage-account__use` so it reads
+   in both themes. */
+.usage-popover__switch {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 5px 8px;
+  border: none;
+  border-radius: 6px;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  text-align: left;
+  color: rgba(var(--tint-rgb), 0.55);
+  background: rgba(var(--tint-rgb), 0.06);
+  cursor: pointer;
+}
+.usage-popover__switch:hover {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
 /* Selected outline for ephemeral subagent/loop nodes. */
@@ -8723,6 +9664,46 @@ body,
   align-items: center;
   gap: 6px;
 }
+.ss-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; flex: 0 0 auto; }
+.ss-dot--unknown { background: var(--muted-2); }
+/* A finished turn the user has already seen: a quiet, filled success dot (the unread state
+   promotes to the pulsing check instead — see SessionRow). */
+.ss-dot--done { background: var(--success); }
+.ss-check { color: var(--success); margin-top: 2px; flex: 0 0 auto; line-height: 0; }
+/* Unread: the same check, accent-blue and pulsing until the user visits the node. */
+.ss-check--unread { color: var(--accent); animation: nt-pulse 1.1s ease-in-out infinite; }
+.ss-check svg { width: 13px; height: 13px; }
+/* attention renders as a red bell (ss-bell) — "it's ringing for you". Gentle pulse,
+   same cadence as the header badge dot. */
+.ss-bell { color: var(--danger); margin-top: 2px; flex: 0 0 auto; line-height: 0; animation: nt-pulse 1.1s ease-in-out infinite; }
+.ss-bell svg { width: 13px; height: 13px; }
+.ss-dot--working {
+  background: transparent;
+  border: 2px solid var(--agent-working);
+  border-top-color: transparent;
+  animation: nt-spin 1s steps(12, end) infinite;
+}
+
+.ss-row__body { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.ss-row__titleline { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.ss-mark { width: 9px; height: 9px; border-radius: 3px; flex: 0 0 auto; }
+.ss-title { font-size: 12.5px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ss-title.is-unread { font-weight: 600; }
+.ss-title-input { font-size: 12.5px; background: var(--panel); color: var(--text); border: 1px solid var(--accent); border-radius: 4px; padding: 1px 4px; }
+.ss-chip { font-size: 10px; color: var(--text); opacity: 0.7; background: var(--panel-header); border-radius: 4px; padding: 0 5px; max-width: 9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 0 0 auto; }
+.ss-loop { font-size: 9.5px; color: var(--caution); border: 1px solid rgba(255, 214, 10, 0.4); border-radius: 4px; padding: 0 4px; flex: 0 0 auto; }
+.ss-meta { display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--muted); min-width: 0; }
+.ss-meta__cwd { font-family: monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ss-meta__ssh { display: inline-flex; align-items: center; gap: 3px; flex: 0 0 auto; }
+.ss-meta__state-age { margin-left: auto; flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+.ss-ctx { font-size: 9.5px; padding: 0 5px; border-radius: 4px; color: #000; font-weight: 600; flex: 0 0 auto; }
+.ss-row__ai { margin-left: auto; opacity: 0; border: none; background: transparent; color: var(--text); cursor: pointer; font-size: 12px; line-height: 1; padding: 0 2px; flex: 0 0 auto; }
+.ss-row:hover .ss-row__ai { opacity: 0.6; }
+.ss-row__ai:hover { opacity: 1 !important; color: var(--accent); }
+.ss-row__ai:disabled { opacity: 0.6; cursor: default; color: var(--accent); }
+.ss-row__close { opacity: 0; border: none; background: transparent; color: var(--text); cursor: pointer; font-size: 14px; line-height: 1; padding: 0 2px; flex: 0 0 auto; }
+.ss-row:hover .ss-row__close { opacity: 0.6; }
+.ss-row__close:hover { opacity: 1 !important; color: var(--danger); }
 
 /* ── Label picker (create/assign/edit) ── */
 .label-picker__scrim {
@@ -8750,6 +9731,58 @@ body,
 .label-picker__input {
   display: flex;
   flex-wrap: wrap;
+.sessions-sidebar__head { display: flex; align-items: baseline; gap: 8px; padding: 10px 10px 8px; }
+.sessions-sidebar__title { font-size: 14px; font-weight: 700; color: var(--text); letter-spacing: -0.01em; }
+.sessions-sidebar__count { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+/* Grouping tabs: text with a 2px accent underline on the active tab, sitting on the hairline that
+   separates the header from the list (see the "Metin sekmesi" design). */
+.ss-tabs { display: flex; gap: 18px; padding: 0 12px; border-bottom: 1px solid var(--border); }
+.ss-tab {
+  position: relative;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 4px 1px 8px;
+  margin-bottom: -1px; /* overlap the container border so the underline lands on the hairline */
+  transition: color 120ms ease;
+}
+.ss-tab:hover { color: var(--text); }
+.ss-tab.is-active { color: var(--text); }
+.ss-tab.is-active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 1px;
+}
+.ss-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+.sessions-sidebar__head-actions { margin-left: auto; display: flex; gap: 4px; }
+.sessions-sidebar__head-actions button { width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; background: transparent; border: none; color: var(--text); cursor: pointer; border-radius: 6px; }
+.sessions-sidebar__head-actions button:hover { background: var(--panel-header); }
+.sessions-sidebar__head-actions button.is-on { color: var(--accent); }
+.sessions-sidebar__search { margin: 8px 10px 4px; }
+.sessions-sidebar__search input { width: 100%; box-sizing: border-box; font-size: 12px; padding: 5px 8px; background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 7px; }
+.sessions-sidebar__body { overflow-y: auto; padding: 4px 6px 8px; }
+.sessions-sidebar__empty { padding: 18px 12px; text-align: center; font-size: 12px; color: var(--muted); }
+
+.ss-group__head { display: flex; align-items: center; gap: 6px; padding: 6px 6px; cursor: pointer; border-radius: 6px; border: 1px solid transparent; }
+.ss-group__head:hover { background: var(--panel-header); }
+/* Project sections read as bands: monogram + heavier head + breathing room between projects. */
+.ss-group { margin: 2px 0; }
+.ss-group + .ss-group { margin-top: 10px; }
+.ss-group__head { background: rgba(var(--tint-rgb), 0.035); }
+.ss-group__head:hover { background: var(--panel-header); }
+.ss-group__monogram {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  display: inline-flex;
   align-items: center;
   gap: 4px;
   min-height: 30px;
@@ -8827,6 +9860,80 @@ body,
   font-size: 12.5px;
   text-align: left;
 }
+/* Sibling-reorder drop zones for group rows in the sessions tree (a thin accent rule marks
+   where the dragged frame would land). */
+.ss-subgroup__reorder-zone,
+.ss-subgroup__reorder-end { position: relative; height: 5px; }
+.ss-subgroup__reorder-end--root { margin-left: 15px; }
+.ss-subgroup__reorder-zone.is-drop-before::before,
+.ss-subgroup__reorder-end.is-drop-before::before { content: ''; position: absolute; top: 1px; left: 2px; right: 6px; height: 2px; border-radius: 1px; background: var(--accent); pointer-events: none; }
+.ss-subgroup__head { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 6px; border: 1px solid transparent; cursor: pointer; }
+.ss-subgroup__head:hover { background: var(--panel-header); }
+.ss-subgroup__dot { width: 7px; height: 7px; border-radius: 2px; flex: 0 0 auto; }
+/* Content-sized (not flex:1): the row click navigates to the group on the canvas, so the
+   rename target must be only as wide as the name itself. */
+.ss-subgroup__name { flex: 0 1 auto; min-width: 0; font-size: 11.5px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ss-subgroup__head .ss-group__count { margin-left: auto; }
+.ss-subgroup__ai { opacity: 0; border: none; background: transparent; color: var(--text); cursor: pointer; font-size: 12px; line-height: 1; padding: 0 2px; flex: 0 0 auto; }
+.ss-subgroup__head:hover .ss-subgroup__ai { opacity: 0.6; }
+.ss-subgroup__ai:hover { opacity: 1 !important; color: var(--accent); }
+.ss-subgroup__ai:disabled { opacity: 0.6; cursor: default; color: var(--accent); }
+.ss-ungrouped { margin: 2px 0 0 15px; border: 1px solid transparent; border-radius: 6px; }
+.ss-ungrouped__label { font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); padding: 4px 6px 2px 8px; }
+/* Drop-target highlight while dragging a session onto a group / project header */
+.is-drop-target { border-color: var(--accent) !important; background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.ss-row[draggable='true'] { cursor: grab; }
+.ss-row[draggable='true']:active { cursor: grabbing; }
+/* Reorder: insertion line above the row the dragged session will land before */
+.ss-rowdrop { position: relative; }
+.ss-rowdrop.is-drop-before::before { content: ''; position: absolute; top: -1px; left: 6px; right: 6px; height: 2px; border-radius: 1px; background: var(--accent); pointer-events: none; }
+/* Project reorder: vertical insertion line before the tab / horizontal line above the
+   sidebar project header the dragged project will land before */
+.tab.is-drop-before::before { content: ''; position: absolute; left: -3px; top: 4px; bottom: 4px; width: 2px; border-radius: 1px; background: var(--accent); pointer-events: none; }
+.ss-group { position: relative; }
+.ss-group.is-drop-before::before { content: ''; position: absolute; top: -1px; left: 6px; right: 6px; height: 2px; border-radius: 1px; background: var(--accent); pointer-events: none; z-index: 1; }
+
+/* Sidebar head grouping toggle: a compact SegmentedPill (Project | Status). */
+
+/* Status-grouped sections (sidebar grouped by status). Always expanded — no chevron, no
+   collapse; the whole point is that sessions awaiting a response are visible at a glance. */
+.ss-status { margin: 2px 0; }
+.ss-status + .ss-status { margin-top: 8px; }
+.ss-status__head { display: flex; align-items: center; gap: 6px; padding: 5px 6px; border-radius: 6px; background: rgba(var(--tint-rgb), 0.035); }
+.ss-status__label { font-size: 12px; font-weight: 600; color: var(--text); }
+.ss-status__count { font-size: 10px; color: var(--muted); }
+.ss-status__icon { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; }
+.ss-status__icon--attention { width: auto; height: auto; border-radius: 0; color: var(--danger); display: inline-flex; }
+.ss-status__icon--attention svg { width: 11px; height: 11px; }
+.ss-status__icon--working { background: var(--accent); }
+/* Unread: the same accent-blue as the row's "new for you" check, ringed so the section header
+   reads as "these are the unlooked-at ones". */
+.ss-status__icon--unread { background: var(--accent); box-shadow: 0 0 0 2px rgba(var(--tint-rgb), 0.18); }
+/* Idle: a settled, already-seen turn — a quiet filled success dot. */
+.ss-status__icon--idle { background: var(--success); opacity: 0.7; }
+.ss-status__icon--unknown { background: rgba(var(--tint-rgb), 0.25); }
+.ss-status__rows { padding: 2px 0 2px 2px; }
+
+/* Status-mode row: project monogram in place of the plain color mark. */
+.ss-mark--project {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: rgba(var(--tint-rgb), 0.95);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
+  flex: 0 0 auto;
+}
+.ss-meta__project { color: var(--muted); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ss-meta__project + .ss-meta__cwd::before { content: '· '; }
+
+.sessions-icon-cluster { position: absolute; top: 54px; left: 14px; z-index: 11; }
+.sessions-icon-cluster button { width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; background: rgba(var(--menu-rgb), 0.92); border: 1px solid var(--border); border-radius: 9px; color: var(--text); cursor: pointer; box-shadow: 0 6px 20px rgba(0, 0, 0, calc(0.3 * var(--shadow-k))); }
+.sessions-icon-cluster button:hover { background: var(--panel-header); }
 
 .label-picker__createrow {
   position: relative;
@@ -10754,6 +11861,13 @@ body,
   transform: translate(-50%, -50%);
 }
 .destgate__head {
+.kanban-modal {
+  animation: kanban-pop 0.16s ease-out;
+  /* width/height are inline (remembered per machine — see cardModalSize.ts). These are the safety
+     ceiling so the sheet can never exceed the viewport, even for the frame before the clamp runs. */
+  max-width: calc(100vw - 24px);
+  max-height: calc(100vh - 24px);
+  position: relative;
   display: flex;
   align-items: flex-start;
   gap: 10px;
@@ -10763,6 +11877,31 @@ body,
   width: 28px;
   height: 28px;
   border-radius: 50%;
+/* Resize handles (issue #389): thin strips just inside each edge, larger squares at the corners.
+   Inset (not outset) so the sheet's overflow:hidden / border-radius doesn't clip them. */
+.kanban-modal__resize {
+  position: absolute;
+  z-index: 6;
+  touch-action: none;
+}
+.kanban-modal__resize--n { top: 0; left: 0; right: 0; height: 6px; cursor: ns-resize; }
+.kanban-modal__resize--s { bottom: 0; left: 0; right: 0; height: 6px; cursor: ns-resize; }
+.kanban-modal__resize--w { left: 0; top: 0; bottom: 0; width: 6px; cursor: ew-resize; }
+.kanban-modal__resize--e { right: 0; top: 0; bottom: 0; width: 6px; cursor: ew-resize; }
+.kanban-modal__resize--ne,
+.kanban-modal__resize--nw,
+.kanban-modal__resize--se,
+.kanban-modal__resize--sw {
+  width: 14px;
+  height: 14px;
+  z-index: 7; /* corners beat the edge strips they overlap */
+}
+.kanban-modal__resize--ne { top: 0; right: 0; cursor: nesw-resize; }
+.kanban-modal__resize--nw { top: 0; left: 0; cursor: nwse-resize; }
+.kanban-modal__resize--se { bottom: 0; right: 0; cursor: nwse-resize; }
+.kanban-modal__resize--sw { bottom: 0; left: 0; cursor: nesw-resize; }
+.kanban-modal__header {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -10921,6 +12060,29 @@ body,
   }
 }
 .destgate__actions {
+/* Rendered-markdown twin of .kanban-modal__sticky: same box, click flips into the textarea.
+   The markdown inside uses the note's own .sticky-node__md rules — one set of typography, so the
+   canvas and the card cannot disagree about how a heading or a code block reads. */
+.kanban-modal__sticky-view {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 14px 16px;
+  color: rgba(var(--tint-rgb), 0.9);
+  font-size: 13px;
+  line-height: 1.5;
+  cursor: text;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.kanban-modal__sticky-view .sticky-node__stamp {
+  padding: 8px 0 0;
+}
+
+.kanban-modal__pane {
+  position: relative; /* anchors the markdown-view overlay */
+  flex: 1;
+  min-width: 0;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -11562,6 +12724,46 @@ body,
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Calendar nodes */
+.calendar-node { min-width: 0; overflow: hidden; background: var(--md-sys-color-surface-container, #f3edf7); border: 1px solid var(--md-sys-color-outline-variant, #cac4d0); border-top: 4px solid; border-radius: 16px; box-shadow: var(--md-sys-elevation-1, 0 1px 3px #0002); color: var(--md-sys-color-on-surface, #1d1b20); }
+.calendar-node .term-node__header { min-height: 42px; display: flex; align-items: center; gap: 8px; padding: 6px 10px; }
+.calendar-node__title { font-weight: 650; }
+.calendar-node__state { max-width: 42%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; opacity: .76; }
+.calendar-node__toolbar { display: flex; gap: 4px; padding: 8px 10px 0; border-bottom: 1px solid var(--md-sys-color-outline-variant, #cac4d0); }
+.calendar-node__toolbar button[aria-selected="true"] { background: var(--md-sys-color-secondary-container, #e8def8); font-weight: 650; }
+.calendar-node__body { padding: 10px; overflow: auto; max-height: 450px; }
+.calendar-node__filters, .calendar-node__source, .calendar-node__row { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; margin-bottom: 10px; }
+.calendar-node__filters label, .calendar-node__source label, .calendar-node__row label, .calendar-node__editor label { display: flex; flex: 1 1 160px; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; }
+.calendar-node__filters input, .calendar-node__source select, .calendar-node__row input, .calendar-node__editor input { min-height: 34px; border: 1px solid var(--md-sys-color-outline, #79747e); border-radius: 8px; padding: 6px 9px; background: var(--md-sys-color-surface, #fffbfe); color: inherit; }
+.calendar-node__picker-search { display: flex; align-items: center; gap: 4px; margin-top: 4px; }
+.calendar-node__picker-search input { flex: 1; min-width: 0; }
+.calendar-node__picker-search .md3-regex-trigger { flex: 0 0 34px; padding: 0; }
+.calendar-node button { min-height: 34px; border: 0; border-radius: 18px; padding: 0 12px; cursor: pointer; background: var(--md-sys-color-secondary-container, #e8def8); color: var(--md-sys-color-on-secondary-container, #1d192b); }
+.calendar-node button:disabled { opacity: .5; cursor: not-allowed; }
+.calendar-node__hint, .calendar-node__cache { margin: 4px 0; font-size: 11px; opacity: .76; }
+.calendar-node__regex { flex: 1 1 100%; padding: 8px; border: 1px solid var(--md-sys-color-outline-variant, #cac4d0); border-radius: 12px; background: var(--md-sys-color-surface-container-high, #ece6f0); }
+.calendar-node__regex p { margin: 4px 0; font-size: 11px; }
+.calendar-node__two-col { display: flex; gap: 8px; }
+.calendar-node__two-col > label { min-width: 0; }
+.calendar-node__check { flex: 0 1 auto !important; flex-direction: row !important; align-items: center; min-height: 34px; }
+.calendar-node__actions { display: flex; gap: 8px; justify-content: flex-end; margin: 8px 0; }
+.calendar-node__events { display: grid; gap: 7px; }
+.calendar-node__events--week { grid-template-columns: repeat(7, minmax(0, 1fr)); align-items: start; }
+.calendar-node__events--month { grid-template-columns: repeat(7, minmax(0, 1fr)); align-items: start; }
+.calendar-node__events--week .calendar-node__event, .calendar-node__events--month .calendar-node__event { min-height: 62px; display: block; }
+.calendar-node__event { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px; border-radius: 12px; background: var(--md-sys-color-surface-container-high, #ece6f0); }
+.calendar-node__event > div:first-child { min-width: 0; display: grid; gap: 2px; }
+.calendar-node__event-select { display: flex; align-items: center; gap: 6px; }
+.calendar-node__event-select input { min-height: 18px; }
+.calendar-node__event span, .calendar-node__event small { display: block; font-size: 11px; opacity: .78; overflow-wrap: anywhere; }
+.calendar-node__event-actions { display: flex; flex: 0 0 auto; gap: 4px; }
+.calendar-node__event-actions button { min-height: 30px; padding: 0 8px; }
+.calendar-node__empty, .calendar-node__error { padding: 12px; border-radius: 12px; background: var(--md-sys-color-surface-container-high, #ece6f0); font-size: 12px; }
+.calendar-node__error { color: var(--md-sys-color-error, #ba1a1a); }
+.calendar-node__editor { display: grid; gap: 8px; padding: 10px; border: 1px solid var(--md-sys-color-outline-variant, #cac4d0); border-radius: 12px; }
+.calendar-node__editor h3 { margin: 0; }
+@media (max-width: 560px) { .calendar-node__two-col { display: grid; } .calendar-node__event { align-items: flex-start; flex-direction: column; } .calendar-node__event-actions { width: 100%; } .calendar-node__event-actions button { flex: 1; } }
 
 /* Categorized adapter catalog */
 .cv-catalog {
@@ -12903,6 +14105,43 @@ body,
   opacity: 0.42;
   cursor: default;
 }
+
+/* Alarm Clock node: the form stays compact enough for the canvas while keeping every value
+   editable, including the wall-clock timezone and occurrence history. */
+.alarm-clock-node {
+  min-width: 340px;
+  min-height: 300px;
+  overflow: hidden;
+}
+.alarm-clock-node__glyph { font-size: 17px; margin-right: 5px; }
+.alarm-clock-node__body { display: flex; flex-direction: column; gap: 8px; padding: 10px; overflow: auto; }
+.alarm-clock-node__body label { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; }
+.alarm-clock-node__body input, .alarm-clock-node__body select { min-height: 30px; min-width: 0; flex: 1; border: 1px solid var(--md-outline); border-radius: 8px; padding: 4px 7px; background: var(--md-surface-container); color: var(--md-on-surface); }
+.alarm-clock-node__body fieldset { border: 1px solid var(--md-outline-variant); border-radius: 8px; padding: 5px 7px; }
+.alarm-clock-node__body fieldset label { justify-content: flex-start; }
+.alarm-clock-node__days { display: flex; flex-wrap: wrap; gap: 5px; }
+.alarm-clock-node__days input, .alarm-clock-node__options input { flex: none; min-height: 18px; width: 18px; }
+.alarm-clock-node__options { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.alarm-clock-node__options label { justify-content: flex-start; }
+.alarm-clock-node__options label:first-child { flex: 1 1 130px; }
+.alarm-clock-node__honesty { margin: 0; color: var(--md-on-surface-variant); font-size: 11px; line-height: 1.35; }
+.alarm-clock-node__error { margin: 0; color: var(--md-error); font-size: 11px; }
+.alarm-clock-node__status { display: flex; flex-wrap: wrap; gap: 6px 10px; color: var(--md-on-surface-variant); font-size: 11px; }
+.alarm-clock-node__status strong { color: var(--md-primary); }
+.alarm-clock-node__actions button, .alarm-clock-node__history button { min-height: 30px; border: 0; border-radius: 8px; padding: 5px 10px; background: var(--md-primary); color: var(--md-on-primary); cursor: pointer; }
+.alarm-clock-node__actions button:disabled { opacity: .5; cursor: not-allowed; }
+.alarm-clock-node__actions button.active { background: var(--md-secondary); color: var(--md-on-secondary); }
+.alarm-clock-node__history { border-top: 1px solid var(--md-outline-variant); padding-top: 7px; }
+.alarm-clock-node__history-head, .alarm-clock-node__search, .alarm-clock-node__history li { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.alarm-clock-node__search { margin-top: 5px; }
+.alarm-clock-node__search input { width: 100%; }
+.alarm-clock-node__search button { flex: none; font-family: monospace; padding: 5px 7px; }
+.alarm-clock-node__regex { display: grid; gap: 4px; margin-top: 5px; padding: 7px; border: 1px solid var(--md-outline); border-radius: 8px; background: var(--md-surface-container-high); }
+.alarm-clock-node__regex span { font-size: 11px; color: var(--md-on-surface-variant); }
+.alarm-clock-node__history ul { list-style: none; margin: 5px 0 0; padding: 0; display: grid; gap: 4px; font-size: 11px; }
+.alarm-clock-node__history li { border-bottom: 1px solid var(--md-outline-variant); padding: 4px 0; }
+.alarm-clock-node__history li button { background: var(--md-secondary-container); color: var(--md-on-secondary-container); font-size: 10px; padding: 3px 6px; }
+.alarm-clock-node__empty { color: var(--md-on-surface-variant); font-size: 11px; margin: 6px 0 0; }
 .schedule-handle {
   width: 12px;
   height: 12px;
@@ -13592,4 +14831,257 @@ body.focus-mode .dock:hover {
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* ---- Timer nodes ---------------------------------------------------------- */
+.timer-node { min-width: 320px; min-height: 300px; padding: 12px; color: var(--md-on-surface); background: var(--md-surface-container); border: 1px solid var(--md-outline-variant); border-radius: 20px; box-shadow: var(--md-elevation-2); }
+.timer-node.selected { outline: 2px solid var(--md-primary); outline-offset: 2px; }
+.timer-node__header, .timer-node__actions, .timer-node__modes { display: flex; align-items: center; gap: 8px; }
+.timer-node__header { margin-bottom: 10px; font-weight: 650; }
+.timer-node__header input { min-width: 0; flex: 1; background: transparent; color: inherit; border: 0; font: inherit; }
+.timer-node__header button { min-width: 40px; min-height: 40px; }
+.timer-node__modes { flex-wrap: wrap; }
+.timer-node__modes button[aria-selected="true"] { background: var(--md-primary-container); color: var(--md-on-primary-container); }
+.timer-node__display { display: block; margin: 18px 0; text-align: center; font: 700 44px/1.1 ui-monospace, monospace; letter-spacing: .04em; }
+.timer-node__duration, .timer-node__repeat, .timer-node__alarm { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+.timer-node input[type="number"] { width: 76px; }
+.timer-node__sequence { margin: 12px 0; padding: 10px; border-radius: 14px; background: var(--md-surface-container-high); }
+.timer-node__sequence > div { display: flex; gap: 8px; margin-top: 6px; }
+.timer-node__sequence input { min-width: 0; flex: 1; }
+.timer-node__actions { margin-top: 14px; flex-wrap: wrap; }
+.timer-node__actions button { min-height: 40px; }
+.timer-node__meta { margin-top: 10px; color: var(--md-on-surface-variant); font-size: .82rem; }
+
+/* ================================ Polish pass (issue #78) ==================================
+   Enter animations for the shared overlay shells + quiet scrollbars. Rules of the pass:
+   transform/opacity ONLY (nothing that forces layout — terminals must keep streaming at 60fps),
+   one-shot on mount (no exit mechanism: every shell hard-unmounts via `{open && portal}`, and
+   keeping portals alive for an exit tween would thread a closing state through 15 dialogs — the
+   kanban modal set this precedent and it reads fine), and the existing token palette only.
+   NEVER animate a shell that CONTAINS a terminal: there the constraint is stronger than
+   "no layout" — an animating `transform` on an ancestor of a glyph-attached terminal
+   desynchronizes the shared canvas (grid origins are measured from the DOM rect, the canvas
+   draws from the camera), so such a shell must leave the shared renderer for the duration,
+   the way `dragging` already does. Today's selectors are overlays/menus/drawers/tooltips only. */
+
+@keyframes nt-overlay-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes nt-surface-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes nt-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes nt-drawer-in {
+  from {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Scrims fade fast — they must never make the surface feel late. */
+.confirm-overlay,
+.sc-overlay,
+.palette-overlay,
+.drawer-overlay {
+  animation: nt-overlay-fade 0.12s ease-out;
+}
+/* Dialog-family surfaces pop with the kanban modal's spring curve. */
+.confirm,
+.shortcuts,
+.palette {
+  animation: nt-surface-pop 0.16s cubic-bezier(0.22, 1, 0.36, 1);
+}
+/* Menus are twitch surfaces — barely-there settle, never a bounce. */
+.ctx-menu,
+.tab-menu {
+  animation: nt-menu-in 0.12s ease-out;
+}
+/* Drawers slide in from their anchored edge (they open right-aligned). */
+.drawer {
+  animation: nt-drawer-in 0.16s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.tooltip {
+  animation: nt-overlay-fade 0.12s ease-out;
+}
+
+/* Same contract as the mascot pulse above: motion is decoration; everything must read without it. */
+@media (prefers-reduced-motion: reduce) {
+  .confirm-overlay,
+  .sc-overlay,
+  .palette-overlay,
+  .drawer-overlay,
+  .confirm,
+  .shortcuts,
+  .palette,
+  .ctx-menu,
+  .tab-menu,
+  .drawer,
+  .tooltip {
+    animation: none;
+  }
+}
+
+/* --- Quiet scrollbars everywhere -----------------------------------------------------------
+   The standard properties, not ::-webkit-scrollbar: `scrollbar-color` INHERITS (set once on
+   :root), `scrollbar-width` does not (hence the `*`), and on macOS they keep the native
+   overlay behavior — thumbs appear on scroll instead of reserving a chunky gutter, which is
+   what made the default bars read as foreign controls in every panel. Setting a standard
+   property also makes Chromium ignore an element's ::-webkit-scrollbar rules, so the three
+   deliberately-HIDDEN scrollbars (tab strip, xterm viewports) keep working through the
+   `scrollbar-width: none` they already declare, and the banner/menu custom thumbs converge on
+   this same thin themed look instead of their hand-rolled webkit variants. */
+:root {
+  scrollbar-color: rgba(var(--tint-rgb), 0.22) transparent;
+}
+* {
+  scrollbar-width: thin;
+}
+
+/* ================================= Focus mode (issue #78) ==================================
+   One terminal fills the window. The surface is a fixed opaque layer ABOVE the canvas (z 40 —
+   over the sidebar's 12 and the dock's 20, under menus at 46 and dialogs at 55/70), and the
+   focused `.term-node` is REPARENTED into it (TerminalNode's layout effect) — same element,
+   same xterm, no respawn. Chrome is not "hidden": it simply sits under the opaque surface, and
+   the dock is lifted above it (z 41) on pointer proximity / hover. */
+.focus-surface {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: none;
+}
+.focus-surface.is-active {
+  display: block;
+  background: var(--canvas-bg);
+}
+/* The reparented node root: fill the surface edge to edge. width/height 100% still resolve
+   against the surface; the absolute inset pins it regardless of the flow-node sizing props. */
+.focus-surface .term-node {
+  position: absolute;
+  inset: 0;
+  width: auto;
+  height: auto;
+  border-radius: 0;
+}
+/* Canvas-only affordances are meaningless off-canvas: resize grips, link handles, flow ports. */
+.focus-surface .react-flow__resize-control,
+.focus-surface .bridge-handle,
+.focus-surface .react-flow__handle {
+  display: none;
+}
+.focus-exit {
+  position: absolute;
+  top: 10px;
+  right: 14px;
+  z-index: 2;
+  border: 1px solid var(--border);
+  background: rgba(var(--menu-rgb), 0.92);
+  color: var(--text);
+  border-radius: 999px;
+  font-size: 11px;
+  padding: 4px 12px;
+  cursor: pointer;
+  opacity: 0.4;
+  transition: opacity 0.16s ease-out;
+}
+.focus-exit:hover {
+  opacity: 1;
+}
+/* The canvas itself goes display:none, not merely covered (review finding on #267): an
+   IntersectionObserver does not model occlusion, so covered-but-displayed terminals kept
+   reporting visible, kept their WebGL contexts, and a full budget then refused the one node
+   filling the screen (tryGrant only evicts HIDDEN holders). display:none zeroes their geometry,
+   they report hidden, the budget reclaims them — and 16+ occluded terminals stop rendering
+   frames nobody can see. Their size votes go null via applyFit's focus gate, like the board. */
+body.focus-mode .flow-wrap {
+  display: none;
+}
+/* Dock reveal: proximity (Canvas toggles `focus-reveal-bottom` on mousemove) or direct hover
+   keeps it up once revealed. Lifted above the surface, faded via opacity only. */
+body.focus-mode .dock {
+  z-index: 41;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.16s ease-out;
+}
+body.focus-mode.focus-reveal-bottom .dock,
+body.focus-mode .dock:hover {
+  opacity: 1;
+  pointer-events: auto;
+}
+@media (prefers-reduced-motion: reduce) {
+  .focus-exit,
+  body.focus-mode .dock {
+    transition: none;
+  }
+}
+/* S6 — account identity + provenance pills (AccountIdentityPills). One cluster wherever a Codex
+   account is shown (settings, node chrome, create/switch menus) so an account reads identically
+   everywhere. Theme-aware via --tint-rgb / semantic tokens; no new colour language. */
+.account-identity-pills {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  vertical-align: middle;
+}
+.account-identity-pill {
+  max-width: 22ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  background: rgba(var(--tint-rgb), 0.08);
+}
+.account-provenance-pill {
+  flex: none;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  background: rgba(var(--tint-rgb), 0.05);
+  border: 1px solid var(--border);
+}
+.account-identity-check {
+  flex: none;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--accent);
+}
+/* A managed home that is missing / an account that cannot be operated: the same cluster, warned.
+   Recolour text + outline with the warn token; no tinted fill (there is no --warn-rgb to build
+   a translucent background from, and the theme guard forbids referencing an undefined variable). */
+.account-identity-pills--warning .account-identity-pill,
+.account-identity-pills--warning .account-provenance-pill {
+  color: var(--warn);
+  border: 1px solid var(--warn);
+  background: transparent;
 }

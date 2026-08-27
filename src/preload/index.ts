@@ -1,5 +1,6 @@
-import { contextBridge, ipcRenderer, webUtils } from 'electron'
+import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 import { IPC } from '../shared/ipc'
+import { resolveUiScale } from '../shared/ui-scale'
 import type {
   CanvasMutation,
   CanvasState,
@@ -10,6 +11,7 @@ import type {
   Project,
   PtyCreateOptions,
   PtyPressure,
+  LogRecord,
   RecycledInfo,
   RelayPeerPending,
   RemoteUsageQuery,
@@ -21,6 +23,7 @@ import type {
   WorkspaceMigrationKind
 } from '../shared/types'
 import type { ScheduledSettingsActiveState, ScheduledSettingsFile } from '../shared/scheduled-settings'
+import type { PlannerFile, PlannerLoadState, PlannerOccurrence } from '../shared/planner-occurrences'
 import type { HistoryFilters } from '../shared/local-history'
 import type { ClientId, PeerDiff, PeerIdentity, PeerState } from '../shared/presence'
 import type { ConvertQueueItem, ConverterQueueState } from '../shared/converter'
@@ -28,6 +31,10 @@ import type { PullQueueItem, PullQueueState } from '../shared/ollama'
 import type { MinecraftEvent } from '../shared/minecraft'
 import type { NodeDependencyAvailability, NodeDependencyProgress, NodeDependencyInstallResult } from '../shared/node-dependencies'
 import type { WslCreateProgress } from '../shared/wsl'
+import type { TorrentTaskState } from '../shared/torrent'
+import type { VirtualMachineEvent } from '../shared/virtual-machine'
+import type { CalendarProvider } from '../shared/calendar'
+import type { ProjectConsentRequest, ProjectSetupEvent } from '../shared/project-settings'
 
 // Fan a single ipcRenderer listener per channel out to many renderer subscribers. Without
 // this, every node that subscribes (e.g. Cmd+M markdown toggle on each terminal/editor) adds
@@ -56,7 +63,12 @@ function subscribe<A extends unknown[] = []>(channel: string) {
 const subscribeMutation = subscribe<[CanvasMutation]>(IPC.remoteHostApplyMutation)
 // Fan-out subscriber for the connection-approval prompt (main → host renderer when a client
 // finishes the handshake; carries the SAS to show in the approval dialog).
-const subscribePeerPending = subscribe<[{ sas: string | null; id: string }]>(IPC.remoteHostPeerPending)
+const subscribePeerPending = subscribe<[{ sas: string | null; id: string; pub?: string | null }]>(
+  IPC.remoteHostPeerPending
+)
+const subscribePeerPendingCleared = subscribe<[{ id: string | null; pub?: string | null }]>(
+  IPC.remoteHostPeerPendingCleared
+)
 
 // New relay tunnel (Stage 4). Non-per-id host events reuse the fan-out helper; per-connection
 // client events (sas/approved/frame/closed) attach directly per connectionId.
@@ -74,6 +86,8 @@ const subscribeOllamaChatStream = subscribe<
 const subscribeMinecraftEvent = subscribe<[MinecraftEvent]>(IPC.minecraftEvent)
 const subscribeNodeDependencyState = subscribe<[NodeDependencyAvailability]>(IPC.nodeDependencyState)
 const subscribeNodeDependencyProgress = subscribe<[NodeDependencyProgress]>(IPC.nodeDependencyProgress)
+const subscribeTorrentTask = subscribe<[TorrentTaskState]>(IPC.torrentTask)
+const subscribeVirtualMachineEvent = subscribe<[VirtualMachineEvent]>(IPC.virtualMachineEvent)
 const subscribeWidgetState = subscribe<[CanvasWidgetLiveState]>(IPC.widgetStateChanged)
 
 const subscribeRelayPeerPending = subscribe<[RelayPeerPending]>(IPC.relayHostPeerPending)
@@ -86,6 +100,19 @@ const subscribeRelayHostClosed = subscribe<[{ id: string }]>(IPC.relayHostClosed
 const subscribeScheduledSettingsActive = subscribe<[ScheduledSettingsActiveState]>(
   IPC.scheduledSettingsActiveChange
 )
+const subscribePlannerOccurrence = subscribe<[PlannerOccurrence]>(IPC.plannerOccurrence)
+// Project setup/archive (SDD: 2026-08-19-project-settings-trust): global (not per-project) main →
+// renderer prompts, fanned out the same way as the relay events above.
+const subscribeProjectSetupConsentRequest = subscribe<[ProjectConsentRequest]>(
+  IPC.projectSetupConsentRequest
+)
+const subscribeProjectSetupConsentDismiss = subscribe<[{ requestId: string }]>(
+  IPC.projectSetupConsentDismiss
+)
+// Not per-project like githubIssuesChanged: `project-trust:changed` is one global channel whose
+// payload carries the projectId, fanned out the same way — nobody broadcasts it yet (Task 2), but
+// the renderer cache subscribes ahead of the emitter.
+const subscribeProjectTrustChanged = subscribe<[{ projectId: string }]>(IPC.projectTrustChanged)
 
 const api: NodeTerminalApi = {
   pty: {
@@ -127,6 +154,8 @@ const api: NodeTerminalApi = {
     paneCommand: (persistKey) => ipcRenderer.invoke(IPC.ptyPaneCommand, persistKey),
     correctTeamLeadPaneWidth: (persistKey) =>
       ipcRenderer.invoke(IPC.ptyCorrectTeamPaneWidth, persistKey),
+    terminateForeground: (persistKey, expectedAgentId) =>
+      ipcRenderer.invoke(IPC.ptyTerminateForeground, persistKey, expectedAgentId),
     readSessionName: (sessionId, accountId, agentId) =>
       ipcRenderer.invoke(IPC.ptyReadSessionName, sessionId, accountId, agentId),
     onData: (sessionId, listener) => {
@@ -178,10 +207,23 @@ const api: NodeTerminalApi = {
       ipcRenderer.invoke(IPC.projectArchiveExport, project, password),
     importProject: (opts?: { path?: string; password?: string }) =>
       ipcRenderer.invoke(IPC.projectArchiveImport, opts),
+    portableBindings: {
+      state: (input: { nodeId: string; featureId: string; displayLabel: string; hasMissingAssets?: boolean }) =>
+        ipcRenderer.invoke(IPC.portableBindingState, input),
+      apply: (input: { nodeId: string; action: import('../shared/types').PortableBindingAction; providerOrHostIdentity?: string; localResourceReferences?: Record<string, string | number | boolean>; credentialKeys?: string[] }) =>
+        ipcRenderer.invoke(IPC.portableBindingApply, input)
+    },
+    onArchiveProgress: (cb: (event: import('../shared/types').ProjectArchiveProgress) => void) => {
+      const handler = (_event: unknown, progress: import('../shared/types').ProjectArchiveProgress) => cb(progress)
+      ipcRenderer.on(IPC.projectArchiveProgress, handler)
+      return () => ipcRenderer.removeListener(IPC.projectArchiveProgress, handler)
+    },
+    cancelArchiveImport: () => ipcRenderer.invoke(IPC.projectArchiveCancel),
     archiveLadderIssue: (filePath: string) =>
       ipcRenderer.invoke(IPC.projectArchiveLadderIssue, filePath),
     archiveLadderVerify: (input: unknown) =>
       ipcRenderer.invoke(IPC.projectArchiveLadderVerify, input),
+    projectFileState: (folder: string) => ipcRenderer.invoke(IPC.workspaceProjectFileState, folder),
     onMigrated: (cb: (kind: WorkspaceMigrationKind) => void) => {
       // Older mains broadcast no payload; that was the v2→v3 migration.
       const h = (_e: unknown, kind?: WorkspaceMigrationKind) => cb(kind ?? 'v2')
@@ -199,6 +241,12 @@ const api: NodeTerminalApi = {
       return () => ipcRenderer.removeListener(IPC.workspaceExternalChange, h)
     }
   },
+  timer: {
+    occurrences: () => ipcRenderer.invoke(IPC.timerOccurrencesLoad),
+    schedule: (timerId: string, scheduledAt: number) => ipcRenderer.invoke(IPC.timerOccurrenceSchedule, timerId, scheduledAt),
+    transition: (id: string, state: string) => ipcRenderer.invoke(IPC.timerOccurrenceTransition, id, state),
+    lap: (id: string, elapsedMs: number) => ipcRenderer.invoke(IPC.timerOccurrenceLap, id, elapsedMs)
+  },
   serverDeployment: {
     start: () => ipcRenderer.invoke(IPC.serverDeploymentStart),
     currentTotp: () => ipcRenderer.invoke(IPC.serverDeploymentTotp),
@@ -208,6 +256,47 @@ const api: NodeTerminalApi = {
       ipcRenderer.on(IPC.serverDeploymentProgress, h)
       return () => ipcRenderer.removeListener(IPC.serverDeploymentProgress, h)
     }
+  },
+  projectSettings: {
+    read: (projectId: string) => ipcRenderer.invoke(IPC.projectSettingsRead, projectId),
+    writeShared: (projectId: string, doc) =>
+      ipcRenderer.invoke(IPC.projectSettingsWriteShared, projectId, doc),
+    updateLocal: (projectId: string, local) =>
+      ipcRenderer.invoke(IPC.projectSettingsUpdateLocal, projectId, local),
+    launchInfo: (projectId: string) => ipcRenderer.invoke(IPC.projectSettingsLaunchInfo, projectId),
+    onTrustChanged: subscribeProjectTrustChanged
+  },
+  projectSetup: {
+    // Wire carries exactly `(projectId, kind, worktreePath?)` — no rootPath/projectName/ssh: main
+    // derives those itself from its own workspace index by projectId and never trusts what crosses
+    // this wire (project-setup-handlers.ts's `registerProjectSetupHandlers`, Task 1 review finding).
+    run: (projectId, kind, worktreePath) =>
+      ipcRenderer.invoke(IPC.projectSetupRun, projectId, kind, worktreePath),
+    cancel: (runKey: string) => ipcRenderer.invoke(IPC.projectSetupCancel, runKey),
+    consent: async (requestId, answer) => {
+      ipcRenderer.send(IPC.projectSetupConsentSubmit, requestId, answer)
+    },
+    requestTrust: (projectId, family) =>
+      ipcRenderer.invoke(IPC.projectSetupRequestTrust, projectId, family),
+    onConsentRequest: subscribeProjectSetupConsentRequest,
+    onConsentDismiss: subscribeProjectSetupConsentDismiss,
+    onEvent: (projectId, cb) => {
+      const ch = IPC.projectSetupEvent(projectId)
+      const handler = (_e: unknown, ev: ProjectSetupEvent): void => cb(ev)
+      ipcRenderer.on(ch, handler)
+      ipcRenderer.send(IPC.projectSetupSubscribe, projectId)
+      return () => {
+        ipcRenderer.removeListener(ch, handler)
+        ipcRenderer.send(IPC.projectSetupUnsubscribe, projectId)
+      }
+    }
+  },
+  worktree: {
+    // Wire carries exactly `(projectId, worktreePath)` — never the sharedPaths list: main reads it
+    // itself by projectId and validates the path against the project's own git worktrees
+    // (worktree-shared-paths-handlers.ts).
+    materializeShared: (projectId: string, worktreePath: string) =>
+      ipcRenderer.invoke(IPC.worktreeMaterializeShared, projectId, worktreePath)
   },
   dialog: {
     selectFolder: () => ipcRenderer.invoke(IPC.dialogSelectFolder),
@@ -258,6 +347,13 @@ const api: NodeTerminalApi = {
     activeState: () => ipcRenderer.invoke(IPC.scheduledSettingsActiveState),
     onActiveChange: subscribeScheduledSettingsActive
   },
+  planner: {
+    load: () => ipcRenderer.invoke(IPC.plannerLoad) as Promise<PlannerLoadState>,
+    save: (file: PlannerFile) => ipcRenderer.invoke(IPC.plannerSave, file),
+    history: () => ipcRenderer.invoke(IPC.plannerHistory),
+    export: (format: 'json' | 'csv') => ipcRenderer.invoke(IPC.plannerExport, format),
+    onOccurrence: subscribePlannerOccurrence
+  },
   githubIssues: {
     subscribe: (projectId) => ipcRenderer.invoke(IPC.githubIssuesSubscribe, { projectId }),
     unsubscribe: async (projectId) => {
@@ -268,6 +364,7 @@ const api: NodeTerminalApi = {
     moveIssue: (request) => ipcRenderer.invoke(IPC.githubIssuesMove, request),
     createMissingLabels: (projectId) => ipcRenderer.invoke(IPC.githubIssuesCreateLabels, projectId),
     clearCache: (projectId) => ipcRenderer.invoke(IPC.githubIssuesClearCache, projectId),
+    projectAvatar: (projectId) => ipcRenderer.invoke(IPC.githubProjectAvatar, projectId),
     onChanged: (projectId, listener) => {
       const channel = IPC.githubIssuesChanged(projectId)
       const handler = (_event: unknown, changed: number[]) => listener(changed)
@@ -422,7 +519,8 @@ const api: NodeTerminalApi = {
   shell: {
     reveal: (path: string) => ipcRenderer.send(IPC.shellReveal, path),
     openPath: (path: string) => ipcRenderer.send(IPC.shellOpenPath, path),
-    openExternal: (url: string) => ipcRenderer.send(IPC.shellOpenExternal, url)
+    openExternal: (url: string) => ipcRenderer.send(IPC.shellOpenExternal, url),
+    pickProjectIcon: () => ipcRenderer.invoke(IPC.shellPickProjectIcon)
   },
   canvasWidget: {
     open: (nodeId: string) => ipcRenderer.invoke(IPC.widgetOpen, nodeId),
@@ -461,6 +559,14 @@ const api: NodeTerminalApi = {
       add: (partition, dirPath) => ipcRenderer.invoke(IPC.browserExtensionsAdd, partition, dirPath),
       remove: (partition, dirPath) => ipcRenderer.invoke(IPC.browserExtensionsRemove, partition, dirPath)
     }
+    onLeaseChanged: (listener) => {
+      const handler = (_e: unknown, push: Parameters<typeof listener>[0]) => listener(push)
+      ipcRenderer.on(IPC.browserLeaseChanged, handler)
+      return () => ipcRenderer.removeListener(IPC.browserLeaseChanged, handler)
+    },
+    stop: (nodeId: string) => ipcRenderer.send(IPC.browserStop, nodeId),
+    stopAll: () => ipcRenderer.send(IPC.browserStopAll),
+    stopProject: (projectId: string) => ipcRenderer.send(IPC.browserStopProject, projectId)
   },
   files: {
     quickOpen: (cwd: string) => ipcRenderer.invoke(IPC.filesQuickOpen, cwd),
@@ -509,6 +615,8 @@ const api: NodeTerminalApi = {
     activate: (key: string) => ipcRenderer.invoke(IPC.licenseActivate, key),
     deactivate: () => ipcRenderer.invoke(IPC.licenseDeactivate),
     getStatus: () => ipcRenderer.invoke(IPC.licenseStatus),
+    detail: () => ipcRenderer.invoke(IPC.licenseDetail),
+    releaseOthers: () => ipcRenderer.invoke(IPC.licenseRelease),
     onChange: (listener) => {
       const handler = (_e: unknown, s: Parameters<typeof listener>[0]) => listener(s)
       ipcRenderer.on(IPC.licenseChanged, handler)
@@ -667,6 +775,14 @@ const api: NodeTerminalApi = {
     readTranscript: (sessionId, cwd, accountId, nodeId) =>
       ipcRenderer.invoke(IPC.claudeReadTranscript, sessionId, cwd, accountId, nodeId)
   },
+  agent: {
+    envSnapshot: () => ipcRenderer.invoke(IPC.envSnapshot),
+    discoverModels: (settings) => ipcRenderer.invoke(IPC.agentDiscoverModels, settings),
+    gatewayCredentialStatus: () => ipcRenderer.invoke(IPC.agentGatewayCredentialStatus),
+    saveGatewayCredential: (apiKey) =>
+      ipcRenderer.invoke(IPC.agentGatewayCredentialSave, apiKey),
+    clearGatewayCredential: () => ipcRenderer.invoke(IPC.agentGatewayCredentialClear)
+  },
   chat: {
     readTranscript: (sessionId, cwd, accountId, nodeId) =>
       ipcRenderer.invoke(IPC.chatReadTranscript, sessionId, cwd, accountId, nodeId)
@@ -684,6 +800,12 @@ const api: NodeTerminalApi = {
     remove: (id, ctx) => ipcRenderer.invoke(IPC.codexAccountsRemove, id, ctx),
     identity: (id, ctx) => ipcRenderer.invoke(IPC.codexAccountsIdentity, id, ctx),
     systemIdentity: (ctx) => ipcRenderer.invoke(IPC.codexAccountsSystemIdentity, ctx),
+    add: () => ipcRenderer.invoke(IPC.codexAccountsAdd),
+    waitLogin: (id) => ipcRenderer.invoke(IPC.codexAccountsWaitLogin, id),
+    cancelWaitLogin: (id) => ipcRenderer.invoke(IPC.codexAccountsCancelWait, id),
+    identity: (id) => ipcRenderer.invoke(IPC.codexAccountsIdentity, id),
+    systemIdentity: (ctx) => ipcRenderer.invoke(IPC.codexAccountsSystemIdentity, ctx),
+    remove: (id) => ipcRenderer.invoke(IPC.codexAccountsRemove, id),
     switchThread: (threadId, cwd, sourceAccountId, targetAccountId) =>
       ipcRenderer.invoke(
         IPC.codexAccountsSwitchThread,
@@ -706,6 +828,18 @@ const api: NodeTerminalApi = {
       ipcRenderer.invoke(IPC.codexAccountsFinishSwitch, rollbackToken),
     rollbackSwitch: (rollbackToken) =>
       ipcRenderer.invoke(IPC.codexAccountsRollbackSwitch, rollbackToken)
+    commitSwitch: (token) => ipcRenderer.invoke(IPC.codexAccountsCommitSwitch, token),
+    finishSwitch: (token) => ipcRenderer.invoke(IPC.codexAccountsFinishSwitch, token),
+    rollbackSwitch: (token) => ipcRenderer.invoke(IPC.codexAccountsRollbackSwitch, token),
+    transferThreadToSsh: (threadId, cwd, projectId, targetAccountId, sourceAccountId) =>
+      ipcRenderer.invoke(
+        IPC.codexAccountsTransferThreadToSsh,
+        threadId,
+        cwd,
+        projectId,
+        targetAccountId,
+        sourceAccountId
+      )
   },
   transcripts: {
     search: (query: string) => ipcRenderer.invoke(IPC.transcriptSearch, query)
@@ -716,8 +850,9 @@ const api: NodeTerminalApi = {
     sendCanvasState: (state) => ipcRenderer.send(IPC.remoteHostCanvasState, state),
     onApplyMutation: subscribeMutation,
     onPeerPending: subscribePeerPending,
-    approve: (id: string) => ipcRenderer.send(IPC.remoteHostApprove, { id }),
-    reject: (id: string) => ipcRenderer.send(IPC.remoteHostReject, { id }),
+    onPeerPendingCleared: subscribePeerPendingCleared,
+    approve: (id: string, pub?: string) => ipcRenderer.send(IPC.remoteHostApprove, { id, pub }),
+    reject: (id: string, pub?: string) => ipcRenderer.send(IPC.remoteHostReject, { id, pub }),
     setPhoneAccess: (enabled) => ipcRenderer.send(IPC.remoteStandingHostSet, enabled)
   },
   relayHost: {
@@ -828,14 +963,46 @@ const api: NodeTerminalApi = {
       }
     }
   },
+  logs: {
+    snapshot: () => ipcRenderer.invoke(IPC.logSnapshot),
+    clear: () => ipcRenderer.send(IPC.logClear),
+    onBatch: (cb) => {
+      const handler = (_e: unknown, batch: LogRecord[]): void => cb(batch)
+      ipcRenderer.on(IPC.logBatch, handler)
+      ipcRenderer.send(IPC.logSubscribe)
+      return () => {
+        ipcRenderer.removeListener(IPC.logBatch, handler)
+        ipcRenderer.send(IPC.logUnsubscribe)
+      }
+    }
+  },
   // Per-node subscriptions (each terminal/editor listens) — multiplexed so they don't pile up
   // ipcRenderer listeners and trip the MaxListeners warning.
+  shortcuts: {
+    // Fire-and-forget: nothing waits on the answer. Main clears the bit itself on the three ways
+    // this page can stop existing — window closed, renderer died, main-frame navigation (⌘R) —
+    // but those are a backstop for a page that VANISHED, not a general safety net: an ordinary
+    // disarm that never sends leaves the shortcuts suppressed until one of them happens.
+    setRecording: (active: boolean) => ipcRenderer.send(IPC.uiShortcutRecording, active),
+    // The terminal-focus mirror, same fire-and-forget shape and the same fail-safe reading on the
+    // far side: main starts at "not focused" and the three page-death resets return it there, so a
+    // report that never arrives costs the terminal-first policy, not the app's shortcuts.
+    setTerminalFocused: (focused: boolean) => ipcRenderer.send(IPC.uiTerminalFocus, focused)
+  },
   onMarkdownToggle: subscribe(IPC.appToggleMarkdown),
   onCloseNode: subscribe(IPC.appCloseNode),
   onZoomActualSize: subscribe(IPC.appZoomActualSize),
+  // Native View menu → renderer.
+  onToggleAutoAlign: subscribe(IPC.appToggleAutoAlign),
+  onFitView: subscribe(IPC.appFitView),
+  onToggleKanban: subscribe(IPC.appToggleKanban),
+  onOpenSettings: subscribe(IPC.appOpenSettings),
   closeWindow: () => ipcRenderer.send(IPC.appCloseWindow),
   focusWindow: () => ipcRenderer.send(IPC.appFocusWindow),
   setBadgeCount: (count) => ipcRenderer.send(IPC.appSetBadge, count),
+  // Page zoom for the UI-scale setting (issue #299). Re-clamped here because the value originates
+  // in hand-editable settings.json and this is the boundary; no IPC — webFrame acts on this window.
+  setUiZoomFactor: (factor) => webFrame.setZoomFactor(resolveUiScale(factor)),
   // Absolute path of a dropped/picked File (File.path was removed in Electron 30+).
   getPathForFile: (file: File) => webUtils.getPathForFile(file),
   userDataDir: () => ipcRenderer.invoke(IPC.appUserDataDir),
@@ -962,6 +1129,58 @@ const api: NodeTerminalApi = {
     restoreBackup: (id, backupId) => ipcRenderer.invoke(IPC.minecraftBackupRestore, id, backupId),
     deleteBackup: (id, backupId) => ipcRenderer.invoke(IPC.minecraftBackupDelete, id, backupId),
     onEvent: (listener) => subscribeMinecraftEvent(listener)
+  },
+  torrent: {
+    runtime: () => ipcRenderer.invoke(IPC.torrentRuntime),
+    list: (nodeId) => ipcRenderer.invoke(IPC.torrentList, nodeId),
+    inspect: (input) => ipcRenderer.invoke(IPC.torrentInspect, input),
+    add: (input) => ipcRenderer.invoke(IPC.torrentAdd, input),
+    chooseFiles: (id, paths) => ipcRenderer.invoke(IPC.torrentChooseFiles, id, paths),
+    setDestination: (id, destination) => ipcRenderer.invoke(IPC.torrentSetDestination, id, destination),
+    preflight: (id) => ipcRenderer.invoke(IPC.torrentPreflight, id),
+    start: (id) => ipcRenderer.invoke(IPC.torrentStart, id),
+    pause: (id) => ipcRenderer.invoke(IPC.torrentPause, id),
+    resume: (id) => ipcRenderer.invoke(IPC.torrentResume, id),
+    cancel: (id) => ipcRenderer.invoke(IPC.torrentCancel, id),
+    retry: (id) => ipcRenderer.invoke(IPC.torrentRetry, id),
+    remove: (id) => ipcRenderer.invoke(IPC.torrentRemove, id),
+    setSeedPolicy: (id, policy) => ipcRenderer.invoke(IPC.torrentSetSeedPolicy, id, policy),
+    reconcile: () => ipcRenderer.invoke(IPC.torrentReconcile),
+    onTask: (listener) => subscribeTorrentTask(listener)
+  virtualMachine: {
+    tools: () => ipcRenderer.invoke(IPC.virtualMachineTools),
+    status: (id) => ipcRenderer.invoke(IPC.virtualMachineStatus, id),
+    configure: (id, config, local) => ipcRenderer.invoke(IPC.virtualMachineConfigure, id, config, local),
+    createDisk: (id, folder) => ipcRenderer.invoke(IPC.virtualMachineCreateDisk, id, folder),
+    start: (id) => ipcRenderer.invoke(IPC.virtualMachineStart, id),
+    stop: (id) => ipcRenderer.invoke(IPC.virtualMachineStop, id),
+    snapshot: (id, name) => ipcRenderer.invoke(IPC.virtualMachineSnapshot, id, name),
+    restore: (id, name) => ipcRenderer.invoke(IPC.virtualMachineRestore, id, name),
+    openDisplay: (id) => ipcRenderer.invoke(IPC.virtualMachineOpenDisplay, id),
+    reset: (id) => ipcRenderer.invoke(IPC.virtualMachineReset, id),
+    onEvent: (listener) => subscribeVirtualMachineEvent(listener)
+  calendar: {
+    status: (id, config) => ipcRenderer.invoke(IPC.calendarStatus, id, config),
+    accounts: () => ipcRenderer.invoke(IPC.calendarAccounts),
+    calendars: (accountId, provider) => ipcRenderer.invoke(IPC.calendarCalendars, accountId, provider),
+    events: (id, config) => ipcRenderer.invoke(IPC.calendarEvents, id, config),
+    importIcs: (id, text, name) => ipcRenderer.invoke(IPC.calendarImportIcs, id, text, name),
+    refresh: (id, config) => ipcRenderer.invoke(IPC.calendarRefresh, id, config),
+    beginOAuth: (provider: Exclude<CalendarProvider, 'local' | 'ics'>) => ipcRenderer.invoke(IPC.calendarBeginOAuth, provider),
+    create: (input) => ipcRenderer.invoke(IPC.calendarCreate, input),
+    update: (input) => ipcRenderer.invoke(IPC.calendarUpdate, input),
+    remove: (id, eventId) => ipcRenderer.invoke(IPC.calendarRemove, id, eventId)
+  // The `browser` verb resolve round-trip (S8 PR 7): main asks the renderer which project owns the
+  // source, whether it is control-capable, and whether the capability is on right now — the renderer
+  // NEVER runs a CDP command.
+  onBrowserControlResolve: (listener) => {
+    const handler = (_e: unknown, req: unknown) => listener(req as never)
+    ipcRenderer.on(IPC.browserControlResolve, handler)
+    return () => ipcRenderer.removeListener(IPC.browserControlResolve, handler)
+  },
+  sendBrowserControlResolveResult: (payload) => ipcRenderer.send(IPC.browserControlResolveResult, payload),
+  agentMessage: {
+    deliver: (req) => ipcRenderer.invoke(IPC.agentMessageDeliver, req)
   }
 }
 

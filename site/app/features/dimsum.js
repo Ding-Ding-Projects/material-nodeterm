@@ -14,12 +14,13 @@ import { DISHES } from '../shared/data.js'
 // Kept here, verbatim, as the guard's documented anchor for the roll
 // condition used at boot: Math.random() < 0.1 (a 10% chance).
 export const SURPRISE_CHANCE_EXPR = 'Math.random() < 0.1'
+export const DIM_SUM_TOAST_OWNERSHIP = Object.freeze({ titleKind: 'authored', bodyKind: 'fact', subKind: 'fact' })
 
 function showAnotherDish(store, h) {
   const i = Math.floor(Math.random() * DISHES.length)
   const d = DISHES[i]
   store.setState({ dishIdx: i }, { persist: false })
-  h.toast('🥟', d.en + ' · ' + d.yue, d.body)
+  h.toast('🥟', d.en + ' · ' + d.yue, d.body, '', DIM_SUM_TOAST_OWNERSHIP)
 }
 
 export function registerDimSum(store, deps, registerAction, registerBinding) {

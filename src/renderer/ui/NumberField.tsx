@@ -1,15 +1,18 @@
+import { forwardRef, type InputHTMLAttributes } from 'react'
+import './md3/primitives.css'
 import { cn } from './cn'
+import { useVocabularyMapper, type VocabularyTextMode } from '../lib/personalVocabulary/useVocabularyText'
 
-export function NumberField({
-  value,
-  onChange,
-  min,
-  max,
-  step,
-  className,
-  disabled,
-  ariaLabel
-}: {
+/**
+ * Dense numeric field on the shared Material Design 3 outlined-field recipe.
+ *
+ * This used to be the one shared field that still emitted Tailwind utility classes and legacy
+ * palette names. That made settings that happened to use a number look different from their
+ * neighbouring text/select fields, and its focus state did not use the same primary state layer.
+ * Keep the small value-oriented API for existing settings rows, but make its rendered control the
+ * same native, keyboard-accessible input recipe as `ui/Input`.
+ */
+export const NumberField = forwardRef<HTMLInputElement, {
   value: number
   onChange: (v: number) => void
   min?: number
@@ -18,22 +21,38 @@ export function NumberField({
   className?: string
   disabled?: boolean
   ariaLabel?: string
-}): React.JSX.Element {
-  return (
-    <input
-      type="number"
-      value={value}
-      min={min}
-      max={max}
-      step={step}
-      disabled={disabled}
-      aria-label={ariaLabel}
-      onChange={(e) => onChange(Number(e.target.value))}
-      className={cn(
-        'h-8 w-24 rounded-md border border-border bg-bg px-2.5 text-[13px] text-text outline-none focus:border-accent',
-        disabled && 'opacity-40',
-        className
-      )}
-    />
-  )
-}
+  vocabularyMode?: VocabularyTextMode
+} & Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'type' | 'className'>>(
+  function NumberField({ value, onChange, min, max, step, className, disabled, ariaLabel, ...rest }, ref) {
+  function NumberField({
+    value,
+    onChange,
+    min,
+    max,
+    step,
+    className,
+    disabled,
+    ariaLabel,
+    ...rest
+  }, ref): React.JSX.Element {
+  function NumberField({ value, onChange, min, max, step, className, disabled, ariaLabel, vocabularyMode = 'authored', ...rest }, ref) {
+    const vocab = useVocabularyMapper()
+    return (
+      <input
+        ref={ref}
+        type="number"
+        value={value}
+        min={min}
+        max={max}
+        step={step}
+        disabled={disabled}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className={cn('mdx-input mdx-number-field', className)}
+        {...rest}
+        aria-label={vocabularyMode === 'authored' ? vocab(ariaLabel) : ariaLabel}
+        title={vocabularyMode === 'authored' ? vocab(rest.title) : rest.title}
+        placeholder={vocabularyMode === 'authored' ? vocab(rest.placeholder) : rest.placeholder}
+      />
+    )
+  }
+)

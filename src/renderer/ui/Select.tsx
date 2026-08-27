@@ -1,6 +1,25 @@
-import type { SelectHTMLAttributes } from 'react'
+import { Children, cloneElement, isValidElement, type ReactNode, type SelectHTMLAttributes } from 'react'
 import './md3/primitives.css'
 import { cn } from './cn'
+import { useVocabularyMapper, type VocabularyTextMode } from '../lib/personalVocabulary/useVocabularyText'
+
+function mapOptionChildren(children: ReactNode, map: ReturnType<typeof useVocabularyMapper>): ReactNode {
+  return Children.map(children, (child) => {
+    if (!isValidElement(child)) return child
+    const props = child.props as { children?: ReactNode; label?: unknown }
+    if (child.type === 'option') {
+      const label = props.children
+      return typeof label === 'string' ? cloneElement(child, undefined, map(label)) : child
+    }
+    if (child.type === 'optgroup') {
+      const label = props.label
+      return cloneElement(child, {
+        label: typeof label === 'string' ? map(label) : label
+      }, mapOptionChildren(props.children, map))
+    }
+    return child
+  })
+}
 
 /**
  * The app's dense select, on the same Material Design 3 outlined-field anatomy as `ui/Input`
@@ -11,12 +30,15 @@ import { cn } from './cn'
 export function Select({
   className,
   children,
+  vocabularyOptions = true,
+  vocabularyMode = 'authored',
   ...rest
-}: SelectHTMLAttributes<HTMLSelectElement>): React.JSX.Element {
+}: SelectHTMLAttributes<HTMLSelectElement> & { vocabularyOptions?: boolean; vocabularyMode?: VocabularyTextMode }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   return (
     <span className="mdx-select__wrap">
-      <select className={cn('mdx-select', className)} {...rest}>
-        {children}
+      <select className={cn('mdx-select', className)} {...rest} aria-label={vocabularyMode === 'authored' ? vocab(rest['aria-label']) : rest['aria-label']} title={vocabularyMode === 'authored' ? vocab(rest.title) : rest.title}>
+        {vocabularyOptions && vocabularyMode === 'authored' ? mapOptionChildren(children, vocab) : children}
       </select>
       <svg
         aria-hidden="true"

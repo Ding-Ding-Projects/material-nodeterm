@@ -56,6 +56,7 @@ describe('RemoteHooks.setup', () => {
     expect(joined.some((j) => j.includes('-O forward') && j.includes('/home/u/.nodeterm/hook-p1.sock:127.0.0.1:51234'))).toBe(true)
     // Endpoint bearer goes to a private, invocation-owned temp and is then published atomically.
     const endpointWrite = calls.find((c) => (c.stdin ?? '').includes('NODETERM_HOOK_TOKEN=tok'))
+    const endpointWrite = calls.find((c) => (c.stdin ?? '').includes("NODETERM_HOOK_TOKEN='tok'"))
     const endpointTemp = endpointWrite?.cmd.match(
       /cat > ('\/home\/u\/\.nodeterm\/\.nodeterm-[0-9a-f-]{36}\.tmp')/
     )?.[1]
@@ -68,8 +69,9 @@ describe('RemoteHooks.setup', () => {
     expect(
       calls.some(
         (c) =>
-          (c.stdin ?? '').includes('NODETERM_HOOK_TOKEN=tok') &&
-          (c.stdin ?? '').includes('NODETERM_HOOK_SOCK=/home/u/.nodeterm/hook-p1.sock')
+          // Values are single-quoted (issue #351) so a spaced remote path sources cleanly.
+          (c.stdin ?? '').includes("NODETERM_HOOK_TOKEN='tok'") &&
+          (c.stdin ?? '').includes("NODETERM_HOOK_SOCK='/home/u/.nodeterm/hook-p1.sock'")
       )
     ).toBe(true)
     // managed script written to the absolute path + config merged with the guarded command.
@@ -447,6 +449,48 @@ describe('RemoteHooks.setup — grok', () => {
   })
 })
 
+describe('RemoteHooks.setup — copilot', () => {
+  it('writes Copilot\'s native hook config under the host COPILOT_HOME', async () => {
+    const { rh, conn, runs } = harness({
+      responses: { '$HOME': '/home/dev', COPILOT_HOME: '/opt/copilot-home' }
+    })
+    await rh.setup('p1', conn, '/s.sock', { port: 1234, token: 't', version: '1' })
+    const write = runs.find(
+      (r) => r.cmd.includes('/opt/copilot-home/hooks/nodeterm-status.json') && r.stdin
+    )
+    expect(write).toBeTruthy()
+    const cfg = JSON.parse(write!.stdin!)
+    expect(cfg.version).toBe(1)
+    expect(cfg.hooks.SessionStart[0]).toEqual({
+      type: 'command',
+      bash: expect.stringContaining('/home/dev/.nodeterm/agent-hooks/copilot.sh'),
+      timeoutSec: 5
+    })
+    expect(runs.find((r) => r.cmd.includes('agent-hooks/copilot.sh'))?.stdin).toContain(
+      '/hook/copilot'
+    )
+    expect(runs.some((r) => r.cmd.includes('/home/dev/.copilot'))).toBe(false)
+  })
+
+  it('falls back to $HOME/.copilot for an unsafe host override', async () => {
+    const { rh, conn, runs } = harness({
+      responses: { '$HOME': '/home/dev', COPILOT_HOME: 'relative/copilot' }
+    })
+    await rh.setup('p1', conn, '/s.sock', { port: 1234, token: 't', version: '1' })
+    expect(
+      runs.some((r) => r.cmd.includes('/home/dev/.copilot/hooks/nodeterm-status.json'))
+    ).toBe(true)
+    expect(runs.some((r) => r.cmd.includes('relative/copilot/hooks'))).toBe(false)
+  })
+
+  it('fails open when the Copilot hook write fails', async () => {
+    const { rh, conn } = harness({ failOn: '.copilot/hooks/nodeterm-status.json' })
+    await expect(
+      rh.setup('p1', conn, '/s.sock', { port: 1234, token: 't', version: '1' })
+    ).resolves.toBeTruthy()
+  })
+})
+
 describe('RemoteHooks.ensureFullscreenTui', () => {
   // Paths are posixQuote'd (single-quoted) in the remote commands; a read is `cat '<path>' …`
   // and a write is `… cat > '<path>'`, so we distinguish them by the presence of `cat >`.
@@ -514,7 +558,7 @@ describe('RemoteHooks.teardown', () => {
 describe('RemoteHooks.installCanvasControl', () => {
   const isWriteTo = (args: string[], p: string) => args.join(' ').includes('cat > ') && args.join(' ').includes(p)
 
-  it('writes an executable shim + the skill, and merges the codex/gemini/opencode blocks', async () => {
+  it('writes an executable shim + the skill, and merges every instruction-file block', async () => {
     const { rh, calls } = harness()
     await rh.installCanvasControl(conn, '/s.sock', '/home/u')
     const joined = calls.map((c) => c.args.join(' '))
@@ -539,6 +583,7 @@ describe('RemoteHooks.installCanvasControl', () => {
     // double-quoted expansion (see "the opencode XDG path expression" below).
     expect(joined.some((j) => j.includes(`NT_H='/home/u'`))).toBe(true)
     expect(joined.some((j) => j.includes('${XDG_CONFIG_HOME:-$NT_H/.config}/opencode/AGENTS.md'))).toBe(true)
+    expect(joined.some((j) => j.includes('/home/u/.copilot/copilot-instructions.md'))).toBe(true)
     expect(calls.some((c) => (c.stdin ?? '').includes('nodeterm:manage-canvas:start'))).toBe(true)
     // no unexpanded tilde survives in any remote path.
     expect(joined.some((j) => j.includes('~/'))).toBe(false)

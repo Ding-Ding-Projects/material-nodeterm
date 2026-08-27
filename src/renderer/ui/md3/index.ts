@@ -57,5 +57,17 @@ export type { TextAreaProps } from './TextArea'
 export { Slider } from './Slider'
 export type { SliderProps } from './Slider'
 
+export { NumberField } from './NumberField'
+export type { NumberFieldProps } from './NumberField'
+
+export { Radio } from './Radio'
+export type { RadioProps } from './Radio'
+
+export { Progress } from './Progress'
+export type { ProgressProps } from './Progress'
+
+export { Tabs } from './Tabs'
+export type { TabOption, TabsProps } from './Tabs'
+
 export { Divider } from './Divider'
 export type { DividerProps } from './Divider'

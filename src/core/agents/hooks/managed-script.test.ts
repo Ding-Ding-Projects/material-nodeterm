@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync, rmSync, utimesSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync, rmSync, utimesSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
@@ -238,7 +238,8 @@ describe('buildManagedScript', () => {
     // (its baked NODETERM_HOOK_ENDPOINT resolved empty). The gate must exit on a MISSING NODE ID,
     // NOT on a missing token — otherwise the failover in nt_send_request never runs and the session
     // stays dark until it is recreated. See buildManagedScript's "Empty-endpoint self-heal" note.
-    expect(s).toContain('if [ -z "$NODETERM_NODE_ID" ]; then\n  exit 0\nfi')
+    // The bail drains stdin first (#187) — see the executed bail-path tests at the end of the file.
+    expect(s).toContain('if [ -z "$NODETERM_NODE_ID" ]; then\n  cat >/dev/null 2>&1 || :\n  exit 0\nfi')
     expect(s).not.toContain('if [ -z "$NODETERM_HOOK_TOKEN" ] || [ -z "$NODETERM_NODE_ID" ]; then')
   })
 
@@ -250,7 +251,9 @@ describe('buildManagedScript', () => {
     expect(s).not.toContain('-H "X-Nodeterm-Hook-Token')
     expect(s).not.toContain('-H "X-Nodeterm-Node-Token')
     expect((s.match(/\n *curl -sS/g) ?? []).length).toBe(4)
-    expect((s.match(/\n *nt_hook_headers \|/g) ?? []).length).toBe(4)
+    // The two answered POSTs are wrapped in a `{ … ; rm … } &` group that self-deletes the payload
+    // temp file, so `nt_hook_headers |` there is preceded by `{ ` — match either form.
+    expect((s.match(/\n *(\{ )?nt_hook_headers \|/g) ?? []).length).toBe(4)
     expect((s.match(/--config -/g) ?? []).length).toBe(4)
   })
 
@@ -294,7 +297,11 @@ describe('buildManagedScript', () => {
       expect(s).toContain('if [ "$nt_decision" = "allow" ] || [ "$nt_decision" = "deny" ]; then')
       const answered = s.match(/--data-urlencode "nodeterm_answered=\$\{nt_decision\}"/g) ?? []
       expect(answered.length).toBe(2)
-      const backgrounded = s.match(/--data-urlencode "payload=\$\{payload\}" >\/dev\/null 2>&1 &/g) ?? []
+      // Each backgrounded answered POST reads the payload from the temp file and self-deletes it
+      // after curl returns (the file must never outlive its reader).
+      const backgrounded = s.match(
+        /--data-urlencode "payload@\$\{nt_payload_file\}" >\/dev\/null 2>&1; rm -f "\$nt_payload_file" 2>\/dev\/null \|\| :; \} &/g
+      ) ?? []
       expect(backgrounded.length).toBe(2)
       expect(s).toContain('--max-time 1')
     })
@@ -324,10 +331,47 @@ describe('buildManagedScript', () => {
       expect(s).toContain('rm -f "$nt_answer" "$nt_pending_file"')
       expect(s).toContain('rm -f "$nt_pending_file"')
     })
-    it('is a no-op branch for a non-claude agent script too (env-gated, present but inert)', () => {
-      const codex = buildManagedScript('codex')
-      expect(codex).toContain('NODETERM_PERM_WAIT_SECS')
-      expect(codex).toContain('/hook/codex')
+    // Issue #409: NODETERM_PERM_WAIT_SECS rides the CLAUDE node's session env and is INHERITED by
+    // nested processes — a codex launched from inside a claude node's shell carried it, and codex
+    // renders its approval dialog only AFTER the PermissionRequest hook exits (measured,
+    // codex-cli 0.149.1), so the inherited wait held every codex approval for the full armed
+    // seconds and could print claude's decision JSON into codex's own (unverified) decision
+    // contract. The wait is therefore claude-only at BUILD time: absent from every other agent's
+    // script, whatever the env says.
+    it('the wait branch is ABSENT from a non-claude agent script, not merely env-inert', () => {
+      for (const agent of ['codex', 'gemini', 'grok', 'copilot', 'opencode']) {
+        const script = buildManagedScript(agent)
+        expect(script, `${agent} script arms the perm wait`).not.toContain('NODETERM_PERM_WAIT_SECS * 2')
+        expect(script, `${agent} script polls the answer file`).not.toContain('.answer')
+        expect(script, `${agent} script can print a decision`).not.toContain('hookSpecificOutput')
+        expect(script).toContain(`/hook/${agent}`)
+      }
+      // And claude keeps the whole branch.
+      const claude = buildManagedScript('claude')
+      expect(claude).toContain('nt_max=$((NODETERM_PERM_WAIT_SECS * 2))')
+      expect(claude).toContain('"behavior":"deny"')
+    })
+  })
+
+  describe('payload stays OFF curl argv (/proc leak + E2BIG fix)', () => {
+    it('never puts the payload on the command line', () => {
+      // `--data-urlencode "payload=$payload"` would publish the full hook body via
+      // /proc/<pid>/cmdline and cap the event at the kernel argv limit (E2BIG on a big diff).
+      expect(s).not.toContain('payload=${payload}')
+    })
+    it('writes the payload to a 0600 temp file after reading stdin', () => {
+      expect(s).toContain('nt_payload_file="$HOME/.nodeterm/pending/payload-$$.tmp"')
+      expect(s).toContain('(umask 077; printf %s "$payload" > "$nt_payload_file")')
+    })
+    it('every POST reads the payload from the temp file with payload@file', () => {
+      // Four POSTs: request (unix-socket + TCP) and answered (unix-socket + TCP).
+      const atFile = s.match(/--data-urlencode "payload@\$\{nt_payload_file\}"/g) ?? []
+      expect(atFile.length).toBe(4)
+    })
+    it('deletes the temp file on every exit path (hot path, answered, no-transport, timeout)', () => {
+      expect(s).toContain('{ nt_send_request; rm -f "$nt_payload_file" 2>/dev/null || :; } &')
+      expect(s).toContain('if [ "$nt_payload_owned" != 1 ]; then rm -f "$nt_payload_file" 2>/dev/null || :; fi')
+      expect(s).toContain('rm -f "$nt_pending_file" "$nt_payload_file" 2>/dev/null || :')
     })
   })
 
@@ -338,8 +382,9 @@ describe('buildManagedScript', () => {
     // under /bin/sh in core/codex-thread-identity-sh.test.ts.)
     it('is present in every agent script when an identity root is known', () => {
       for (const agent of ['claude', 'codex', 'gemini', 'grok', 'opencode']) {
+        // The account-scoped resolver bakes the (quoted) record root in and scans scopes below it.
         expect(buildManagedScript(agent, '/data/codex-thread-nodes')).toContain(
-          "nt_codex_map='/data/codex-thread-nodes'/\"$CODEX_THREAD_ID\""
+          "nt_codex_root='/data/codex-thread-nodes'"
         )
       }
     })
@@ -347,7 +392,15 @@ describe('buildManagedScript', () => {
     it('is omitted entirely when there is no identity root, leaving the legacy script', () => {
       const legacy = buildManagedScript('claude', null as unknown as string)
       expect(legacy).not.toContain('CODEX_THREAD_ID')
-      expect(legacy.split('\n')[1]).toBe('if [ -n "$NODETERM_HOOK_ENDPOINT" ] && [ -r "$NODETERM_HOOK_ENDPOINT" ]; then')
+      // The gate PRECEDES the endpoint sourcing (#186): a non-nodeterm session bails before any
+      // foreign-env file is executed. Order asserted, not a line index — comments may grow.
+      const lines = legacy.split('\n')
+      const gate = lines.indexOf('if [ -z "$NODETERM_NODE_ID" ]; then')
+      const sourcing = lines.indexOf(
+        'if [ -n "$NODETERM_HOOK_ENDPOINT" ] && [ -r "$NODETERM_HOOK_ENDPOINT" ]; then'
+      )
+      expect(gate).toBeGreaterThan(0)
+      expect(sourcing).toBeGreaterThan(gate)
     })
   })
 
@@ -363,36 +416,73 @@ describe('buildManagedScript', () => {
       expect(s).toContain('"$HOME"/.nodeterm/hook-endpoint-*.env')
       expect(s).not.toContain('"$HOME/.nodeterm/hook-endpoint-*.env"')
     })
-    it('picks the FRESHEST existing candidate (ls -t | head -n 1)', () => {
-      expect(s).toContain('nt_fresh=$(ls -t "$@" 2>/dev/null | head -n 1)')
+    it('emits the LOCAL endpoints before the tunnel glob (failure-domain order, not mtime)', () => {
+      // The ordering IS the fix. Every hook-endpoint-*.env tunnel on a host terminates at the same
+      // desktop, so they share one fate; a local endpoint (the host's own Server Edition, or a
+      // desktop installed here) fails independently. Sorting the whole list by mtime buried the one
+      // live endpoint under N dead siblings — see the measured table in managed-script.ts.
+      const list = s.slice(s.indexOf('nt_candidates() {'), s.indexOf('nt_adopt() {'))
+      const server = list.indexOf('"$HOME/.nodeterm-server/hook-endpoint.env"')
+      const appSupport = list.indexOf('"$HOME/Library/Application Support/node-terminal/hook-endpoint.env"')
+      const glob = list.indexOf('"$HOME"/.nodeterm/hook-endpoint-*.env')
+      expect(server).toBeGreaterThan(-1)
+      expect(glob).toBeGreaterThan(appSupport)
+      expect(appSupport).toBeGreaterThan(server)
+    })
+    it('keeps mtime as the tie-break WITHIN the tunnel group only (ls -t over the glob matches)', () => {
+      // The live project's endpoint is rewritten and VERIFIED on every connect, so freshest-first is
+      // still the right order among tunnels — it is only wrong when applied across failure domains.
+      expect(s).toContain('ls -t "$@" 2>/dev/null')
+      // The whole-list, single-winner rule is gone: no `head -n 1` anywhere in the candidate scan.
+      expect(s).not.toContain('ls -t "$@" 2>/dev/null | head -n 1')
     })
     it('SKIPS the endpoint file already tried (compares each candidate to the tried path)', () => {
-      expect(s).toContain('nt_pick_fallback "$NODETERM_HOOK_ENDPOINT"')
+      expect(s).toContain('nt_candidates "$NODETERM_HOOK_ENDPOINT"')
       expect(s).toContain('nt_tried="$1"')
       expect(s).toContain('[ "$nt_c" = "$nt_tried" ] && continue')
     })
-    it('only considers readable candidates and returns 1 when there are none', () => {
+    it('only considers readable candidates and returns nothing when there are none', () => {
       expect(s).toContain('[ -r "$nt_c" ] || continue')
-      expect(s).toContain('[ "$#" -gt 0 ] || return 1')
+      expect(s).toContain('[ "$#" -gt 0 ] || return 0')
+      expect(s).toContain('[ -n "$nt_list" ] || return 1')
     })
-    it('clears SOCK/PORT before sourcing the fallback so a transport switch takes effect', () => {
-      const clearSock = s.indexOf('NODETERM_HOOK_SOCK=""')
-      const clearPort = s.indexOf('NODETERM_HOOK_PORT=""')
-      const source = s.indexOf('. "$nt_fresh"')
+    it('clears SOCK/PORT before sourcing EACH adopted candidate so no transport leaks across', () => {
+      const adopt = s.slice(s.indexOf('nt_adopt() {'), s.indexOf('nt_request_post() {'))
+      const clearSock = adopt.indexOf('NODETERM_HOOK_SOCK=""')
+      const clearPort = adopt.indexOf('NODETERM_HOOK_PORT=""')
+      const clearDir = adopt.indexOf('NODETERM_NODE_TOKEN_DIR=""')
+      const source = adopt.indexOf('. "$1"')
       expect(clearSock).toBeGreaterThan(-1)
       expect(clearPort).toBeGreaterThan(-1)
+      expect(clearDir).toBeGreaterThan(-1)
       expect(source).toBeGreaterThan(clearSock)
       expect(source).toBeGreaterThan(clearPort)
+      expect(source).toBeGreaterThan(clearDir)
     })
-    it('re-POSTs against the fallback exactly ONCE on a failed primary POST', () => {
-      // nt_send_request: primary attempt short-circuits on success (`&& return 0`), else a single
-      // fallback source + one re-POST. No loop → at most one retry.
+    it('walks SEVERAL candidates after a failed primary POST, capped by nt_fallback_max', () => {
+      // One retry could not get past a single stale sibling — which is exactly what the measured
+      // host had. The walk is bounded because a dead reverse-tunnel socket is not cheap to fail:
+      // sshd accepts and never answers, so each attempt can burn the full --max-time.
       expect(s).toContain('nt_request_post && return 0')
-      expect(s).toContain('if nt_pick_fallback "$NODETERM_HOOK_ENDPOINT"; then')
+      expect(s).toContain('nt_fallback_max=3')
+      expect(s).toContain('[ "$nt_n" -le "$nt_fallback_max" ] || break')
       // Count CALLS (followed by whitespace/EOL), not the `nt_request_post() {` definition (`(`).
       const reposts = s.match(/\n *nt_request_post(?=\s|$)/g) ?? []
-      // Two textual calls: the primary attempt and the single fallback retry.
+      // Two textual calls: the primary attempt and the ONE inside the bounded loop.
       expect(reposts.length).toBe(2)
+      // The token is re-read per adopted candidate, inside the loop — not once before it.
+      const loop = s.slice(s.indexOf('for nt_ep in "$@"; do'), s.indexOf('  return 1\n}'))
+      expect(loop).toContain('nt_read_node_token')
+      expect(loop).toContain('nt_adopt "$nt_ep" || continue')
+    })
+    it('splits the candidate list on NEWLINES with globbing off (paths contain spaces)', () => {
+      // "Application Support" has a space in it. Default IFS would split it into two bogus paths;
+      // an unquoted expansion without `set -f` would re-glob a path containing a glob character.
+      expect(s).toContain('IFS="\n"')
+      expect(s).toContain('  set -f\n')
+      expect(s).toContain('  set +f\n')
+      expect(s).toContain('nt_ifs="$IFS"')
+      expect(s).toContain('IFS="$nt_ifs"')
     })
     it('leaves the happy path untouched: a successful primary POST does no fallback work', () => {
       // `&& return 0` guarantees nt_pick_fallback / the candidate scan never run when curl exits 0.
@@ -401,13 +491,16 @@ describe('buildManagedScript', () => {
     })
     it('returns curl exit status from nt_request_post (no `|| true` masking) and returns 1 with no transport', () => {
       // The POST lines end at `>/dev/null 2>&1` (status preserved), NOT `>/dev/null 2>&1 || true`.
-      expect(s).not.toContain('--data-urlencode "payload=${payload}" >/dev/null 2>&1 || true')
+      expect(s).not.toContain('--data-urlencode "payload@${nt_payload_file}" >/dev/null 2>&1 || true')
       expect(s).toContain('  else\n    return 1\n  fi')
     })
     it('perm-wait branch advertises the ask in the FOREGROUND (before the poll), non-perm backgrounds it', () => {
       // Foreground in perm-wait (pendingId reaches primary-or-fallback before the answer poll begins),
       // backgrounded otherwise so a live session's hot path never blocks.
-      expect(s).toContain('if [ -n "$nt_pending" ]; then\n  nt_send_request\nelse\n  nt_send_request &\nfi')
+      expect(s).toContain('if [ -n "$nt_pending" ]; then\n  nt_send_request\nelse\n')
+      // Non-perm-wait backgrounds the POST and self-deletes the payload temp file after it (and its
+      // one fallback retry) return, so the file never outlives its reader.
+      expect(s).toContain('  { nt_send_request; rm -f "$nt_payload_file" 2>/dev/null || :; } &\nfi')
       // The request POST carries nodeterm_pending_id, so the fallback learns the ask too.
       expect(s).toContain('--data-urlencode "nodeterm_pending_id=${nt_pending}"')
     })
@@ -569,7 +662,263 @@ describe('buildManagedScript endpoint failover, executed under /bin/sh', { timeo
     // Git Bash on Windows starts the generated hook, the fixture curl, and the fallback scan as
     // separate processes. The behavior completes in ~8 s on a busy host, past Vitest's 5 s default.
     REAL_SHELL_TEST_TIMEOUT_MS
+    }
   )
+
+  /**
+   * The measured outage, reproduced. On the live host (Mac closed, 8 agents running):
+   *
+   *   hook-endpoint-project-mrkigsjp-4.env  13:25  the primary — excluded as already tried
+   *   hook-endpoint-project-msq9marh-4.env  12:52  another project's tunnel to the SAME Mac, dead
+   *   .nodeterm-server/hook-endpoint.env    00:26  the host's own Server Edition — ALIVE
+   *
+   * A freshest-by-mtime single retry lands on the dead sibling and gives up; that host's mirror
+   * held 0 nodes and 0 events while every session worked. Ordering by FAILURE DOMAIN (locals before
+   * tunnels) is what reaches the live endpoint — and it reaches it FIRST, so the dead sibling is
+   * never even dialled.
+   */
+  it.skipIf(!shAvailable)(
+    'reaches the host-local Server Edition even though a fresher sibling tunnel outranks it by mtime',
+    () => {
+      const home = join(dir, 'home-local-first')
+      const bin = join(dir, 'bin-local-first')
+      const log = join(dir, 'curl-local-first.log')
+      mkdirSync(join(home, '.nodeterm'), { recursive: true })
+      mkdirSync(join(home, '.nodeterm-server'), { recursive: true })
+      mkdirSync(bin, { recursive: true })
+      // The primary: this session's own reverse tunnel, dead with the laptop closed.
+      const primary = join(home, '.nodeterm', 'hook-endpoint-project-mrkigsjp-4.env')
+      writeFileSync(
+        primary,
+        `NODETERM_HOOK_SOCK=${join(home, '.nodeterm', 'hook-mrkigsjp.sock')}\nNODETERM_HOOK_TOKEN=primary-token\nNODETERM_HOOK_VERSION=2\n`,
+        'utf8'
+      )
+      // Another project's tunnel to the SAME Mac. Also dead — they share one fate.
+      const sibling = join(home, '.nodeterm', 'hook-endpoint-project-msq9marh-4.env')
+      writeFileSync(
+        sibling,
+        `NODETERM_HOOK_SOCK=${join(home, '.nodeterm', 'hook-msq9marh.sock')}\nNODETERM_HOOK_TOKEN=sibling-token\nNODETERM_HOOK_VERSION=2\n`,
+        'utf8'
+      )
+      // The always-on Server Edition on THIS host: oldest file on disk, and the only live endpoint.
+      const local = join(home, '.nodeterm-server', 'hook-endpoint.env')
+      writeFileSync(
+        local,
+        'NODETERM_HOOK_PORT=45999\nNODETERM_HOOK_TOKEN=local-token\nNODETERM_HOOK_VERSION=2\n',
+        'utf8'
+      )
+      // Exactly the measured mtime ranking: primary newest, sibling next, local oldest by hours.
+      const now = Date.now() / 1000
+      utimesSync(primary, now, now)
+      utimesSync(sibling, now - 1800, now - 1800)
+      utimesSync(local, now - 46_000, now - 46_000)
+      // Every tunnel socket is dead; only the local TCP port answers.
+      writeFileSync(
+        join(bin, 'curl'),
+        fakeCurlScript(log, 'case "$*" in *127.0.0.1:45999*) : ;; *) exit 7 ;; esac'),
+        { encoding: 'utf8', mode: 0o755 }
+      )
+      const script = join(dir, 'claude-local-first.sh')
+      writeFileSync(script, buildManagedScript('claude'), { encoding: 'utf8', mode: 0o755 })
+      const res = spawnSync('sh', [script], {
+        encoding: 'utf8',
+        input: '{"hook_event_name":"PermissionRequest"}',
+        env: {
+          PATH: `${bin}:${process.env.PATH ?? ''}`,
+          HOME: home,
+          NODETERM_NODE_ID: 'node-1',
+          NODETERM_HOOK_ENDPOINT: primary,
+          NODETERM_PERM_WAIT_SECS: '1'
+        }
+      })
+      expect(res.status).toBe(0)
+      const calls = curlCalls(log)
+      // Two calls: the dead primary, then the LOCAL endpoint. The dead sibling tunnel — freshest of
+      // the remaining candidates, and the only one the old single retry ever tried — is skipped
+      // entirely, because it belongs to the failure domain that just proved itself dead.
+      expect(calls).toHaveLength(2)
+      expect(calls[0].argv).toContain('--unix-socket')
+      expect(calls[0].argv).toContain('hook-mrkigsjp.sock')
+      expect(calls[1].argv).toContain('http://127.0.0.1:45999/hook/claude')
+      expect(calls[1].argv).not.toContain('--unix-socket')
+      expect(calls[1].cfg).toContain('header = "X-Nodeterm-Hook-Token: local-token"')
+      for (const c of calls) expect(c.argv).not.toContain('hook-msq9marh.sock')
+    }
+  )
+
+  // Locals are ordered too, and one of them has a SPACE in its path. A dead local must not end the
+  // walk (an exited Server Edition leaves its endpoint file behind), and default IFS would have
+  // split "Application Support" into two paths that exist nowhere.
+  it.skipIf(!shAvailable)('walks past a dead local to one whose path contains a space', () => {
+    const home = join(dir, 'home-space')
+    const bin = join(dir, 'bin-space')
+    const log = join(dir, 'curl-space.log')
+    const appSupportDir = join(home, 'Library', 'Application Support', 'node-terminal')
+    mkdirSync(join(home, '.nodeterm'), { recursive: true })
+    mkdirSync(join(home, '.nodeterm-server'), { recursive: true })
+    mkdirSync(appSupportDir, { recursive: true })
+    mkdirSync(bin, { recursive: true })
+    const primary = join(home, '.nodeterm', 'hook-endpoint-project-a.env')
+    writeFileSync(
+      primary,
+      `NODETERM_HOOK_SOCK=${join(home, '.nodeterm', 'a.sock')}\nNODETERM_HOOK_TOKEN=primary-token\nNODETERM_HOOK_VERSION=2\n`,
+      'utf8'
+    )
+    // A Server Edition that is no longer running: its endpoint file outlived it.
+    writeFileSync(
+      join(home, '.nodeterm-server', 'hook-endpoint.env'),
+      'NODETERM_HOOK_PORT=46000\nNODETERM_HOOK_TOKEN=stale-server-token\nNODETERM_HOOK_VERSION=2\n',
+      'utf8'
+    )
+    // The live desktop installed on this same host.
+    writeFileSync(
+      join(appSupportDir, 'hook-endpoint.env'),
+      'NODETERM_HOOK_PORT=45999\nNODETERM_HOOK_TOKEN=desktop-token\nNODETERM_HOOK_VERSION=2\n',
+      'utf8'
+    )
+    writeFileSync(
+      join(bin, 'curl'),
+      fakeCurlScript(log, 'case "$*" in *127.0.0.1:45999*) : ;; *) exit 7 ;; esac'),
+      { encoding: 'utf8', mode: 0o755 }
+    )
+    const script = join(dir, 'claude-space.sh')
+    writeFileSync(script, buildManagedScript('claude'), { encoding: 'utf8', mode: 0o755 })
+    const res = spawnSync('sh', [script], {
+      encoding: 'utf8',
+      input: '{"hook_event_name":"PermissionRequest"}',
+      env: {
+        PATH: `${bin}:${process.env.PATH ?? ''}`,
+        HOME: home,
+        NODETERM_NODE_ID: 'node-1',
+        NODETERM_HOOK_ENDPOINT: primary,
+        NODETERM_PERM_WAIT_SECS: '1'
+      }
+    })
+    expect(res.status).toBe(0)
+    const calls = curlCalls(log)
+    // primary (dead socket) → stale Server Edition (dead port) → the desktop under the spaced path.
+    expect(calls).toHaveLength(3)
+    expect(calls[0].argv).toContain('--unix-socket')
+    expect(calls[1].argv).toContain('http://127.0.0.1:46000/hook/claude')
+    expect(calls[2].argv).toContain('http://127.0.0.1:45999/hook/claude')
+    expect(calls[2].cfg).toContain('header = "X-Nodeterm-Hook-Token: desktop-token"')
+  })
+
+  // The bound. A dead reverse-tunnel socket is NOT cheap to fail — sshd accepts the connection and
+  // then never answers, so each attempt can burn the full --max-time. A host with a dozen stale
+  // project endpoints must not turn every hook event into a dozen hanging curls.
+  it.skipIf(!shAvailable)('stops after nt_fallback_max fallback POSTs, however many candidates exist', () => {
+    const home = join(dir, 'home-bound')
+    const bin = join(dir, 'bin-bound')
+    const log = join(dir, 'curl-bound.log')
+    mkdirSync(join(home, '.nodeterm'), { recursive: true })
+    mkdirSync(bin, { recursive: true })
+    const primary = join(home, '.nodeterm', 'hook-endpoint-project-0.env')
+    writeFileSync(primary, 'NODETERM_HOOK_PORT=46000\nNODETERM_HOOK_VERSION=2\n', 'utf8')
+    // Eight more dead tunnels to the same (closed) desktop.
+    const now = Date.now() / 1000
+    for (let i = 1; i <= 8; i++) {
+      const f = join(home, '.nodeterm', `hook-endpoint-project-${i}.env`)
+      writeFileSync(f, `NODETERM_HOOK_PORT=${46000 + i}\nNODETERM_HOOK_VERSION=2\n`, 'utf8')
+      utimesSync(f, now - i, now - i)
+    }
+    utimesSync(primary, now, now)
+    // Nothing anywhere answers.
+    writeFileSync(join(bin, 'curl'), fakeCurlScript(log, 'exit 7'), {
+      encoding: 'utf8',
+      mode: 0o755
+    })
+    const script = join(dir, 'claude-bound.sh')
+    writeFileSync(script, buildManagedScript('claude'), { encoding: 'utf8', mode: 0o755 })
+    const res = spawnSync('sh', [script], {
+      encoding: 'utf8',
+      input: '{"hook_event_name":"PermissionRequest"}',
+      env: {
+        PATH: `${bin}:${process.env.PATH ?? ''}`,
+        HOME: home,
+        NODETERM_NODE_ID: 'node-1',
+        NODETERM_HOOK_ENDPOINT: primary,
+        NODETERM_PERM_WAIT_SECS: '1'
+      }
+    })
+    expect(res.status).toBe(0)
+    const calls = curlCalls(log)
+    // 1 primary + 3 fallbacks, never 1 + 8.
+    expect(calls).toHaveLength(4)
+    // And they are the FRESHEST three tunnels, in order — mtime is still the tie-break within the
+    // tunnel group (this host has no local endpoint at all).
+    expect(calls[1].argv).toContain('127.0.0.1:46001')
+    expect(calls[2].argv).toContain('127.0.0.1:46002')
+    expect(calls[3].argv).toContain('127.0.0.1:46003')
+  })
+
+  // Requirement 4, pinned: the overwhelmingly common host is one project, one tunnel, no Server
+  // Edition. Its only candidate is the endpoint it already tried, so the walk must find nothing and
+  // fire nothing — exactly as before this change.
+  it.skipIf(!shAvailable)('a single-tunnel host with no local endpoint does no fallback work', () => {
+    const home = join(dir, 'home-single')
+    const bin = join(dir, 'bin-single')
+    const log = join(dir, 'curl-single.log')
+    mkdirSync(join(home, '.nodeterm'), { recursive: true })
+    mkdirSync(bin, { recursive: true })
+    const primary = join(home, '.nodeterm', 'hook-endpoint-project-only.env')
+    writeFileSync(
+      primary,
+      `NODETERM_HOOK_SOCK=${join(home, '.nodeterm', 'only.sock')}\nNODETERM_HOOK_TOKEN=only-token\nNODETERM_HOOK_VERSION=2\n`,
+      'utf8'
+    )
+    writeFileSync(join(bin, 'curl'), fakeCurlScript(log, 'exit 7'), { encoding: 'utf8', mode: 0o755 })
+    const script = join(dir, 'claude-single.sh')
+    writeFileSync(script, buildManagedScript('claude'), { encoding: 'utf8', mode: 0o755 })
+    const res = spawnSync('sh', [script], {
+      encoding: 'utf8',
+      input: '{"hook_event_name":"PermissionRequest"}',
+      env: {
+        PATH: `${bin}:${process.env.PATH ?? ''}`,
+        HOME: home,
+        NODETERM_NODE_ID: 'node-1',
+        NODETERM_HOOK_ENDPOINT: primary,
+        NODETERM_PERM_WAIT_SECS: '1'
+      }
+    })
+    expect(res.status).toBe(0)
+    expect(curlCalls(log)).toHaveLength(1)
+  })
+
+  // The happy path pays for none of this: a primary POST that SUCCEEDS must produce exactly one
+  // curl and never touch the candidate scan, even on a host stuffed with live-looking endpoints.
+  it.skipIf(!shAvailable)('a successful primary POST fires exactly one curl and scans nothing', () => {
+    const home = join(dir, 'home-happy')
+    const bin = join(dir, 'bin-happy')
+    const log = join(dir, 'curl-happy.log')
+    mkdirSync(join(home, '.nodeterm'), { recursive: true })
+    mkdirSync(join(home, '.nodeterm-server'), { recursive: true })
+    mkdirSync(bin, { recursive: true })
+    const primary = join(home, '.nodeterm', 'hook-endpoint-project-a.env')
+    writeFileSync(primary, 'NODETERM_HOOK_PORT=45999\nNODETERM_HOOK_VERSION=2\n', 'utf8')
+    for (const other of [
+      join(home, '.nodeterm', 'hook-endpoint-project-b.env'),
+      join(home, '.nodeterm-server', 'hook-endpoint.env')
+    ]) {
+      writeFileSync(other, 'NODETERM_HOOK_PORT=45999\nNODETERM_HOOK_VERSION=2\n', 'utf8')
+    }
+    writeFileSync(join(bin, 'curl'), fakeCurlScript(log), { encoding: 'utf8', mode: 0o755 })
+    const script = join(dir, 'claude-happy.sh')
+    writeFileSync(script, buildManagedScript('claude'), { encoding: 'utf8', mode: 0o755 })
+    const res = spawnSync('sh', [script], {
+      encoding: 'utf8',
+      input: '{"hook_event_name":"PermissionRequest"}',
+      env: {
+        PATH: `${bin}:${process.env.PATH ?? ''}`,
+        HOME: home,
+        NODETERM_NODE_ID: 'node-1',
+        NODETERM_HOOK_ENDPOINT: primary,
+        NODETERM_PERM_WAIT_SECS: '1'
+      }
+    })
+    expect(res.status).toBe(0)
+    expect(curlCalls(log)).toHaveLength(1)
+  })
 
   // The other half of the same subtlety: an OLDER instance's endpoint file carries no
   // NODETERM_NODE_TOKEN_DIR line at all. Sourcing it must leave the dir EMPTY (nt_pick_fallback
@@ -877,4 +1226,84 @@ describe('buildManagedScript generated shell is syntactically valid', { timeout:
       expect(res.status).toBe(0)
     })
   }
+})
+
+/**
+ * The bail path, executed under a real /bin/sh — the two failure modes of issues #186/#187, each
+ * pinned by the issue's own repro shape. String assertions above say the lines exist; these prove
+ * the behavior: no EPIPE for a big writer, and not one byte of endpoint stdout reaching the agent.
+ */
+describe('the managed script bail path (issues #186/#187), under /bin/sh', () => {
+  const sh = spawnSync('sh', ['-c', 'exit 0'])
+  const shAvailable = sh.status === 0 && !sh.error
+  const dir = shAvailable ? mkdtempSync(join(tmpdir(), 'nt-bail-path-')) : ''
+  const script = dir ? join(dir, 'claude.sh') : ''
+  const home = dir ? join(dir, 'home') : ''
+  beforeAll(() => {
+    if (!dir) return
+    mkdirSync(home, { recursive: true })
+    writeFileSync(script, buildManagedScript('claude'), { encoding: 'utf8', mode: 0o755 })
+  })
+  afterAll(() => {
+    if (dir) rmSync(dir, { recursive: true, force: true })
+  })
+  // HOME points at an empty temp dir in every run: the endpoint failover globs $HOME for candidate
+  // files, and a test that let it see the real ~/.nodeterm would depend on this machine's state.
+  const baseEnv = { PATH: process.env.PATH ?? '' }
+
+  it.skipIf(!shAvailable)(
+    'drains stdin before bailing — a >64KB payload never EPIPEs the writer (#187)',
+    async () => {
+      // The issue's repro: raw writes (subprocess.communicate-style helpers swallow EPIPE and hide
+      // this). 2MB is ~32 pipe buffers, so an un-drained bail fails on the second write at latest.
+      const payload = Buffer.alloc(2_000_000, 0x41)
+      const child = spawn('sh', [script], {
+        env: { ...baseEnv, HOME: home },
+        stdio: ['pipe', 'pipe', 'pipe']
+      })
+      const writeError = new Promise<Error | null>((resolve) => {
+        child.stdin.on('error', (e) => resolve(e))
+        child.stdin.end(payload, () => resolve(null))
+      })
+      const exit = new Promise<number | null>((resolve) => child.on('close', (c) => resolve(c)))
+      expect(await writeError).toBeNull()
+      expect(await exit).toBe(0)
+    }
+  )
+
+  it.skipIf(!shAvailable)(
+    'a no-node-id session never executes the endpoint file, let alone leaks its stdout (#186)',
+    () => {
+      // The issue's canary, plus a side-effect marker: executed-at-all and leaked-to-stdout are
+      // different failures, and the marker file catches the first even if output were swallowed.
+      const canary = join(dir, 'canary.env')
+      writeFileSync(canary, `echo "LEAKED"\n: > '${join(dir, 'executed.marker')}'\n`, 'utf8')
+      const res = spawnSync('sh', [script], {
+        encoding: 'utf8',
+        input: '{"hook_event_name":"UserPromptSubmit"}',
+        env: { ...baseEnv, HOME: home, NODETERM_HOOK_ENDPOINT: canary }
+      })
+      expect(res.status).toBe(0)
+      expect(res.stdout).toBe('')
+      expect(existsSync(join(dir, 'executed.marker'))).toBe(false)
+    }
+  )
+
+  it.skipIf(!shAvailable)(
+    'a nodeterm session sources the endpoint file but swallows its stdout (#186 point 2)',
+    () => {
+      // SessionStart/UserPromptSubmit stdout is ADDED TO THE AGENT'S CONTEXT, so even the legit
+      // sourcing path must print nothing. No SOCK/PORT and an empty HOME → the backgrounded POST
+      // finds no transport and no fallback candidates; the script still owes a silent exit 0.
+      const canary = join(dir, 'canary-live.env')
+      writeFileSync(canary, 'echo "LEAKED"\n', 'utf8')
+      const res = spawnSync('sh', [script], {
+        encoding: 'utf8',
+        input: '{"hook_event_name":"UserPromptSubmit"}',
+        env: { ...baseEnv, HOME: home, NODETERM_NODE_ID: 'node-1', NODETERM_HOOK_ENDPOINT: canary }
+      })
+      expect(res.status).toBe(0)
+      expect(res.stdout).toBe('')
+    }
+  )
 })

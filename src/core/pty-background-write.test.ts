@@ -468,6 +468,10 @@ describe('background writes into released sessions', () => {
 
     const NOW = 1_000_000
     const OLD = NOW - 100_000 // well past the grace window, whichever client (if any) is attached
+    const OLD = NOW - 100_000 // well past the 6h grace window: no PANE OUTPUT since then
+    // `#{session_activity}` stays FRESH, the shape a live host always has — the reaper gates on
+    // last pane output now, not on when a client last attached. See SessionInfo.activitySec.
+    const FRESH = NOW - 60
     const killed: Array<{ socket: string; target: string }> = []
     const reaper = createSessionReaper({
       tmuxBin: () => m.getTmuxBin(),
@@ -484,6 +488,9 @@ describe('background writes into released sessions', () => {
         // `nt-node-1` is attached because our shared client IS one; `nt-node-9` is attached by
         // somebody else entirely. Both are idle past grace, so both are eligible either way.
         return `nt-node-1|1|${OLD}\nnt-node-9|1|${OLD}`
+        // `nt-node-1` reads as attached because our shared client IS one; `nt-node-9` is genuinely
+        // attached (somebody is looking at it) and must survive.
+        return `nt-node-1|1|${FRESH}|${OLD}\nnt-node-9|1|${FRESH}|${OLD}`
       },
       readMem: () => ({ availableMb: 100, totalMb: 8000 }), // under the watermark: real pressure
       env: {},

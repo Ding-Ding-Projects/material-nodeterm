@@ -7,11 +7,14 @@
 // slice to localStorage, and schedules a re-render. See app/core/dom.js
 // for the focus-preserving re-render wrapper.
 
+import { isFreshVocabularyCache, validateVocabularyCacheJson } from '../shared/vocabulary-state.js'
+
 const STORAGE_KEY = 'nodeterm-playground.v1'
+const VOCAB_CACHE_KEY = 'nodeterm-playground.vocabulary.v1'
 
 const PERSISTED_KEYS = [
   'theme', 'lang', 'funnyEn', 'funnyYue', 'emoji', 'bigText', 'sound', 'accent', 'nick', 'logo', 'preset',
-  'locks', 'notes', 'history', 'auth', 'school', 'schoolPin', 'narrate', 'voice', 'rate', 'vocab',
+    'locks', 'notes', 'history', 'auth', 'school', 'schoolPin', 'narrate', 'voice', 'rate', 'vocab',
   'schedOn', 'schedTime', 'schedTheme', 'bestMem', 'bestQuiz', 'bestWhack',
 ]
 
@@ -85,9 +88,10 @@ export function createStore() {
     unlockVals: {}, unlocked: {}, locks: {},
     theme: 'day', lang: 'en', funnyEn: 2, funnyYue: 3, emoji: true, bigText: false, sound: false,
     accent: '#ffd93d', nick: '', logo: '', preset: 'playground',
-    school: false, schoolPin: '',
+    school: false, schoolHydrated: true, schoolPin: '',
     narrate: false, voice: '', rate: 3,
     vocab: '',
+    vocabEntries: Object.create(null), vocabSavedAt: 0, vocabStatus: 'no-file', vocabError: '',
     schedOn: false, schedTime: '19:00', schedTheme: 'night',
     voices: [], dishIdx: 0,
     memDeck: [], memUp: [], memDone: [], memMoves: 0, memBusy: false,
@@ -116,6 +120,31 @@ export function createStore() {
   // resurrects the welcome entry on reload and makes the deletion button a lie.
   if (!Array.isArray(state.history)) state.history = defaultHistory()
   if (!state.auth) state.auth = []
+  // The previous free-text setting is not a valid vocabulary document. Do not reapply it after
+  // the JSON contract migration, but preserve the persisted record for a harmless reset.
+  if (!state.vocabEntries || typeof state.vocabEntries !== 'object' || Array.isArray(state.vocabEntries)) {
+    state.vocabEntries = Object.create(null)
+  }
+  state.vocab = ''
+  try {
+    const rawVocabulary = localStorage.getItem(VOCAB_CACHE_KEY)
+    const vocabulary = validateVocabularyCacheJson(rawVocabulary || '')
+    if (vocabulary.ok && isFreshVocabularyCache(vocabulary.cache.savedAt)) {
+      state.vocabEntries = vocabulary.cache.entries
+      state.vocabSavedAt = vocabulary.cache.savedAt
+      state.vocabStatus = 'loaded'
+    } else {
+      state.vocabEntries = Object.create(null)
+      state.vocabSavedAt = 0
+      state.vocabStatus = rawVocabulary ? 'invalid' : 'no-file'
+      state.vocabError = rawVocabulary ? 'The cached vocabulary file is invalid or stale.' : ''
+    }
+  } catch (_err) {
+    state.vocabEntries = Object.create(null)
+    state.vocabSavedAt = 0
+    state.vocabStatus = 'no-file'
+    state.vocabError = ''
+  }
 
   const listeners = []
   let renderScheduled = false

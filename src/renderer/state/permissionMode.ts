@@ -154,6 +154,15 @@ export function activePermissionMode(agentId: AgentId = 'claude'): AgentPermissi
  * kind of cross-project leak `resolvePermissionMode` exists to prevent everywhere else.
  */
 export function permissionModeForProject(
+  return projectPermissionMode(getProject(activeProjectId), agentId)
+}
+
+/**
+ * The same resolution for an EXPLICIT project — the `--project`-targeted opens (issue #338) need
+ * the TARGET project's override + gate, not the active one's: a node opened into another project
+ * must start with that project's permission mode (spec §2.2 defaults), never the caller's.
+ */
+export function projectPermissionMode(
   project: Project | undefined,
   agentId: AgentId = 'claude'
 ): AgentPermissionMode {

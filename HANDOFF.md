@@ -1,5 +1,44 @@
 # Handoff
 
+## 2026-08-26, desktop Material Design 3 and personal vocabulary reconciliation
+
+This source-only lane is on feat/full-app-material3-reconciliation at the current integration tip.
+It adds a hand-written rendered-surface inventory in docs/features/appearance/material-3-audit.md
+and scripts/check-material-audit.mjs, expanded with onboarding, the floating action menu, password
+manager, converter adapter catalog, Minecraft backups/players/properties, dim sum surprise, publish
+dialog, find bar, remote picker, and browser profile picker. The inventory has 212 explicit rows
+across shell, nodes, destinations, settings, overlays, status, state, and site categories. It uses
+exact selector boundaries and radius-owner checks rather than corpus-wide substring evidence.
+
+Shared NumberField, Radio, Progress, and Tabs primitives were added, native radio groups received
+stable names, Tooltip now supports keyboard focus, child association, viewport clamping and
+above-anchor placement, Dialog now labels its title, traps focus, and makes the background inert
+while open, and compact controls use shared token geometry. The vendored Outfit and Roboto Mono
+stacks remain the source of the global Material Design 3 font aliases.
+
+Personal vocabulary coverage is recorded in a separate hand-written inventory with 34 mapped
+producer rows plus 34 explicitly classified production surfaces. The newly classified surfaces
+include onboarding, the dim sum notice, publish/find/remote picker surfaces, browser profiles,
+password management, conversion, Minecraft panels, authenticator and speech settings, toy-lock
+setup, history, docs, appearance, regex, status, update, resume, and node surfaces. The validated
+upload/cache mapper remains the only replacement path; commands, URLs, paths, identifiers, code,
+external records, provider values, filenames, hashes, and user-supplied values stay byte-exact.
+Thirty-one production surfaces remain open for direct call-site mapping, and the coverage check
+is therefore intentionally red.
+
+Verification run in this lane:
+
+- node scripts/check-material-audit.mjs passed with 1762 base assertions and 2006 assertions
+  including the unique-inventory-row pass, required-row, source-marker, exact style-owner,
+  localized-string, documentation-row, and mapper-call negative regressions.
+- node scripts/check-personal-vocabulary-coverage.mjs ran 183 assertions, including
+  removed-producer, removed-mapper, removed-documentation-row, and real-file mutations, and is red
+  because 31 listed production surfaces still need direct mapper call-site coverage.
+- node --check passed for both audit scripts.
+- No general tests, type checks, builds, packaging, runtime launches, or captures were run, by the
+  source-only lane boundary. Current-main preservation remains required during integration, with
+  p79 WSL, p80 picker, p82 clipping, dependency foundation, and the current docs bundle kept intact.
+
 ## 2026-08-26, desktop layout safety sweep
 
 Implemented a source-driven clipping repair for the Windows desktop renderer on
@@ -71,7 +110,7 @@ The new flex constraints and `.bind-existing__list` overflow region keep the row
 dialog surface.
 
 This lane did not run tests, type checking, linting, builds, packaging, installer execution,
-runtime interaction, captures, reviews, or audits, and made no commit or dew. Integration must
+runtime interaction, captures, reviews, or audits, and made no commit or push. Integration must
 independently inspect the final diff and verify the built desktop picker with a long list, narrow
 widths, high display scales, keyboard traversal, and screen-reader list count/state before this
 roadmap item can be ticked.
@@ -96,9 +135,310 @@ ROADMAP, and CHANGELOG. `src/shared/docs-data.ts` was deliberately not regenerat
 so the offline bundle remains an explicit integration point.
 
 This lane did not run tests, type checking, lint, security checks, builds, packaging, installer
-execution, runtime interaction, or captures, and made no commit or dew. Remaining integration work
+execution, runtime interaction, or captures, and made no commit or push. Remaining integration work
 includes focused lifecycle/IPC verification, generated offline docs refresh, catalog
 `Install and continue` wiring, and packaged-bundle proof for any future bundled dependency.
+## 2026-08-26, Material Design 3 surface audit
+
+The Windows desktop Material Design 3 audit is recorded in
+`docs/features/appearance/material-3-audit.md` and enforced by
+`scripts/check-material-audit.mjs`. The hand-written inventory contains 201 exact rows covering
+the desktop shell, every checked-in node, every destination and settings section, every dialog,
+menu, dropdown, picker, tab, overlay, status state, empty state, error state, and every
+documentation or landing page. The checker also validates source markers, style markers, shared
+primitive exports, site-preservation wording, and a deliberate deleted-row mutation.
+
+Source remediation in this lane includes the shared numeric field, radio, progress, and keyboard-
+roving tabs primitives; adoption in worktree, toy-lock, authenticator, speech, converter, Ollama,
+Minecraft, clone, History, and browser-tab surfaces; keyboard and Escape handling for the tooltip;
+and named Material shape tokens for the reviewed desktop node, section, menu, picker, and compact
+badge geometry. The public `AGENTS.md`,
+`CLAUDE.md`, `CONTRIBUTING.md`, `README.md`, `ROADMAP.md`, and appearance documentation now state
+that every rendered Windows desktop element uses Material Design 3 primitives and project tokens
+with no element exemption.
+
+The documentation and landing site is Kids mode by default. Its existing visual style is preserved
+and no site restyling is part of this audit. Only stale site facts, data, releases, links, features,
+accessibility, and broken behavior may be changed. The stale packaging article now describes the
+current v0.4.117 release and push-triggered release workflow.
+
+### Remaining conflicts and evidence boundaries
+
+- The Comments & Activity panel in `src/renderer/components/kanban/CardModal.tsx` is inventoried
+  separately as `destination-comments-activity`, but the file is reserved for the p80 lane.
+- The existing-worktree picker in `src/renderer/components/WorktreeDialog.tsx` is inventoried
+  separately as `overlay-existing-worktree-picker`, but further changes are reserved for p81.
+- The WSL creator clipping state is inventoried as `overlay-wsl-create-clipping` and marked
+  nonconforming and overlapping. The p79 lane owns the WSL creator repair, so this lane made no
+  changes to those files.
+- No tests, builds, runtime launches, pixel measurements, or captures were run in this lane. The
+  source-only checker passes with 1,634 assertions, and the result must be re-read after
+  integration.
+## 2026-08-26, portable media assets and Include/Omit/Locate Later
+
+Implemented `src/core/portable-media-assets.ts` with bounded image, audio, and video collection,
+signature-based type detection, SHA-256 content addressing, regular-file validation, explicit
+Include/Omit/Locate Later decisions, omission records, unresolved placeholders, and strict schema 3
+manifest validation. Source paths are consumed only during local collection and are never retained
+in portable records. Extended `src/core/portable-canvas-projection.ts` with an optional validated
+media manifest field. Added the guided searchable decision surface at
+`src/renderer/components/PortableMediaDecisionDialog.tsx`, plus the categorized article,
+documentation index, Pages article, roadmap note, and changelog entry.
+
+This lane deliberately did not run tests, type checking, linting, reviews, security checks, builds,
+packaging, installer execution, runtime interaction, or captures. Archive entry production/import
+wiring, destination Locate Asset handling, and built-artifact evidence remain pending. No commit or
+dew was made by this lane.
+
+## 2026-08-26, portable media validation and guided export follow-up
+
+Strengthened the media contract with exact allowlisted keys and reconstructed normalized output for
+assets, omissions, and manifests. Unknown, unsafe, authority-bearing, `sourcePath`, and
+`sourceName` fields cannot survive validation. Added bounded omission counts, duplicate and
+case-collision refusal, included-versus-omitted contradiction checks, stable ordering, fatal UTF-8
+manifest parsing, and bounded stable serialization. Media collection now hashes through a bounded
+stream, retains only a small signature prefix, accepts an optional AbortSignal, and returns a
+machine-local stream source rather than allocating a 512 MiB input. EBML is accepted only when its
+bounded prefix identifies WebM; Matroska is refused.
+
+The real project archive export route now opens the native multi-file media picker before saving,
+shows the searchable Include/Omit/Locate Later decision surface, and leaves the existing archive
+operation untouched when the picker is cancelled. The selected source path and source name remain
+transient renderer state only. The archive writer still needs a follow-up adapter to consume the
+selected streaming sources and emit schema 3 media entries; no portable record claims those paths.
+No tests, builds, type checks, captures, commits, or dews were made.
+## 2026-08-26, atomic schema 3 import and destination binding wizard
+
+Implemented schema 3 archive production and import wiring. `src/core/portable-project-import.ts`
+validates complete archive inventory and SHA-256 metadata, migrates legacy snapshots in memory,
+stages a destination beside the final path, refuses collisions, publishes with an atomic rename,
+and removes only its own staging directory on cancellation or failure. Schema 3 exports carry the
+validated canvas projection and history bundle plus safe omission records; credentials, vaults,
+machine paths, provider sessions, processes, and caches remain out of the portable file.
+
+Added `src/core/portable-bindings.ts` for versioned portable blueprints, private local binding
+records, explicit Configure/Rebind/Adopt/Deploy/Locate Asset/Leave Unbound action state, bounded
+progress and cancellation, atomic persistence, and rollback snapshots. Desktop IPC and preload
+handlers persist only opaque local references and credential key names. The anchored renderer
+wizard is `src/renderer/components/PortableBindingWizard.tsx`; Server Edition returns an explicit
+desktop-only boundary and keeps imported projects unbound.
+
+Updated `docs/features/projects/portable-bindings.md`, the projects index, `ROADMAP.md`, and this
+handoff. The generated offline docs bundle still needs regeneration. No tests, type checks, lint,
+security checks, builds, packaging, installer execution, runtime interaction, captures, commit,
+dew, or publication were performed in this lane.
+## 2026-08-26, unified Node Catalog implementation
+
+Implemented the typed Node Catalog registry in `src/shared/node-catalog.ts` and the renderer
+creation coordinator in `src/renderer/state/nodeCreationCoordinator.ts`. Registry rows carry stable
+ids, node kinds, categories, keywords, documentation paths, dependency ids, safe defaults, and
+availability reasons. The coordinator stamps immutable `creationEventId` values, deduplicates retry
+events, and chooses a deterministic collision-free rectangle. `CanvasNodeState` and live node data
+persist the event id while hydration only remembers it.
+
+Added `src/renderer/components/NodeCatalogDialog.tsx`, with category navigation, plain-text search,
+an anchored full regex builder, keyboard navigation, focus restoration, disabled-state explanations,
+accessible listbox state, and per-row documentation links. The FAB, pane context menu, group context
+menu, and command palette now expose the catalog route. Added localized catalog copy, Material Design
+3 styles, a categorized feature article, offline site article, roadmap state, and this handoff.
+
+This ultra-speed implementation pass intentionally did not run tests, type checks, lint, reviews,
+security or accessibility checks, builds, packaging, installer execution, runtime interaction, or
+UI captures. The generated offline documentation bundle was refreshed through the docs generator's
+equivalent TypeScript-strip route because the checkout has no installed `esbuild`; this was a docs
+generation step, not a product build. Build and packaging evidence therefore proves artifact
+production only. No commit or dew was made by this lane.
+
+The refuter repair adds an explicit current, ephemeral, and planned catalog completeness inventory;
+universe scope and depth metadata; configure-later versus required-for-creation states; disabled
+blueprints for every planned node family; strict remote-terminal picker refusal; sibling-coordinate
+placement; bounded placement refusal with a visible notification; fresh event ids for duplicates;
+append coordination across shortcut, drop, paste, board, source-control, login, profile,
+automation, and peer creation; personal-vocabulary localization with bilingual secondary copy;
+in-app documentation navigation; and catalog-driven terminal-profile and authenticator dragging.
+## 2026-08-26, special-universe Shop node and scope enforcement, issue #17
+
+Implemented the lane-6 Shop invariant in `src/core/universe-shop.ts`. Each Multiverse or AWS
+Universe child canvas receives exactly one deterministic `shop-<canvas-id>` node, while root and
+other scopes receive none. The pure coordinator repairs missing, duplicate, normalized, and
+invalid-scope records without network or provider side effects, filters one shared catalog by
+universe scope and Multiverse depth, and keeps invalid regex searches visible and bounded. The
+catalog is supplied through `UniverseShopCatalogProvider`, so this lane does not fork p05 labels or
+factories. Until p05's unified registry is available at integration, the Shop remains visible but
+creation is disabled with an explicit dependency reason. A collision-safe stable suffix is selected
+when `shop-<canvas-id>` is already occupied; if both deterministic candidates are occupied, repair
+refuses creation and preserves the ordinary nodes.
+
+The projection now carries safe universe ownership and non-deletable metadata. `shop` is a typed
+canvas node kind with a fixed renderer card in `src/renderer/nodes/ShopNode.tsx`; its local search
+has an adjacent anchored full regex builder, accessible labels, result counts, visible focus, and
+English/Cantonese/bilingual copy from the shared language catalog. React Flow mutation boundaries
+refuse Shop drag, resize, deletion, duplication, grouping, movement, title rename, and ordinary
+undo paths. The core coordinator also refuses the same peer mutation operations, preserves ordinary
+nodes on Shop-id collisions, mints immutable creation event ids only for live universe creation,
+and deduplicates peer creation events. `createSpecialUniverseCanvas` is the live child-canvas
+constructor and inserts the Shop in the same operation. A live catalog creation callback is exposed
+for the unified p05 coordinator to provide collision-free placement and actual node creation.
+Missing or malformed
+scope, depth, and containing-canvas metadata fails closed instead of creating a Shop in an ambiguous
+location.
+
+Changed files: `src/core/universe-shop.ts`, `src/core/portable-canvas-projection.ts`,
+`src/shared/types.ts`, `src/shared/i18n/catalog.ts`, `src/renderer/state/workspace.ts`,
+`src/renderer/canvas/Canvas.tsx`, `src/renderer/nodes/ShopNode.tsx`,
+`src/renderer/state/projects.ts`, `src/shared/canvas-mutations.ts`,
+`src/renderer/styles.md3.css`, `docs/features/integrations/aws-universe-shop.md`,
+`docs/features/integrations/README.md`, `docs/features/projects/portable-canvas-projection.md`,
+`ROADMAP.md`, `CHANGELOG.md`, `docs/uh-feature-inventory.md`, and this handoff.
+
+No tests, type checks, lint, security checks, builds, packaging, runtime interaction, or captures
+were run, and no commit or dew was made, as explicitly required for this lane. The documentation
+bundle generator could not run because `esbuild` is not installed in this Gerk Tong Hui. The changed
+article entries were synchronized mechanically into `src/shared/docs-data.ts`, but the generator
+still needs to run once that See Fut is available before a release-grade handoff.
+## 2026-08-26, issue #20 media node implementation
+
+Added `src/shared/media-catalog.ts` with Photo, Video, and mixed Gallery catalogue registration,
+portable content-addressed reference validation, and bounded byte-signature checks. Added
+`PhotoNode.tsx` and `GalleryNode.tsx`, wired the new node kinds, factories, serialization fields,
+open-file routing, palette/context creation, and responsive media styling. Shared project saves
+strip transient absolute `sourcePath` hints while retaining portable metadata and explicit missing
+asset states. Added the feature article at
+`docs/features/canvas/media-gallery.md` and recorded the unfinished verification state in the
+roadmap and changelog.
+
+This lane deliberately did not run tests, type checking, builds, packaging, UI interaction, or
+captures, and made no commit or dew. The parent integration lane must run those checks and inspect
+the built artifact before treating issue #20 as verified.
+## 2026-08-26, Torrent Downloader implementation lane
+
+Added the dedicated `torrent` canvas node, shared downloader contract, CorePlatform-backed service,
+IPC registration for Desktop and Server Edition, preload and WebSocket bridges, and the relay
+unsupported degrade. The service prefers the declared or packaged WebTorrent runtime and attempts a
+pinned user-scoped `webtorrent@2.8.1` install when it is absent. It keeps queue state under the
+application data directory, reconciles in-flight tasks after restart, reports metadata and selected
+files, validates destination containment and free space, and supports pause, resume, cancel, retry,
+progress, peer count, speed, ETA, and bounded seeding policies.
+
+The canvas record carries only safe display intent (`torrentMagnet`); local source paths,
+destinations, runtime handles, peer state, and task snapshots never enter the portable project
+file. Added the categorized torrent documentation and inventory entry. `package.json` and
+`package-lock.json` declare `webtorrent` 2.8.1.
+
+This ultra-speed implementation lane intentionally did not run tests, type checks, lint, builds,
+packaging, installer execution, runtime interaction, UI captures, commits, or dews. The docs bundle
+generation, focused tests, built-artifact interaction proof, release packaging, integration, and
+remote verification remain for the owning integration pass.
+## 2026-08-26, Linux ISO VM node, issue #24
+
+Implemented the one-shot `linux-vm` canvas node and its shared lifecycle contract. The renderer
+provides guided ISO and persistent-disk pickers, persistent-install and disposable-live modes,
+bounded memory and CPU controls, explicit network-off-by-default and WHPX preference switches,
+snapshot/restore controls, loopback VNC/QMP status, and visible recovery messages. The manager
+spawns only bundled QEMU resources through a fixed argv vector with `shell: false`, validates paths
+and identifiers, and keeps QMP/process state in machine-local application data.
+
+Portable configuration is carried by `virtualMachineConfig` in the schema 3 project projection.
+ISO and disk paths are carried by `virtualMachineLocalPaths` in the existing local execution
+overlay and are stripped from shared project files and peer mutations. The API is registered for
+both the desktop and Server Edition shells, with preload and WebSocket bridges. The node is in the
+canvas manager catalog and node recreation path.
+
+Changed files include `src/shared/virtual-machine.ts`, `src/core/virtual-machine/`,
+`src/shared/types.ts`, `src/shared/ipc.ts`, `src/shared/node-exec.ts`,
+`src/renderer/state/workspace.ts`, `src/renderer/nodes/VirtualMachineNode.tsx`,
+`src/renderer/canvas/Canvas.tsx`, preload and Server Edition bridges, the integration documentation,
+offline docs data, site docs, `CHANGELOG.md`, `ROADMAP.md`, and this handoff.
+
+This lane deliberately did not run tests, type checks, lint, reviews, security checks, accessibility
+checks, builds, packaging, installer execution, runtime interaction, or captures. The docs bundle
+generator was attempted but could not run because `esbuild` is absent in this isolated checkout;
+the generated offline data entry was added directly. No commit or dew was made by this lane.
+
+### Refuter repair pass
+
+Added pinned QEMU 10.1.0 Windows x64 manifest metadata with official installer SHA-512, size
+disclosure, required packaged payload paths, the `resources/qemu` packaging boundary, and the
+`scripts/ensure-qemu-resources.mjs` bootstrap wired into the Windows packaging path. Added
+QEMU self-probed WHPX selection with TCG fallback, ISO SHA-256 expected/actual reporting, qcow2
+magic-byte versus raw disk detection, free-space preflight and guided persistent-disk creation,
+loopback port preflight/retry, QMP and display socket startup handshakes, bounded QEMU diagnostics,
+startup cancellation generations, stale-process reconciliation, serialized atomic state writes with
+transient rename retries, awaited shutdown, a desktop display-open action, and a Server Edition
+honest no-proxy response. VM duplication now clears machine-local ISO and disk bindings. Added
+source coverage entries for these boundaries. No tests, builds, captures, commit, or dew was made.
+## 2026-08-26, planner occurrence service lane
+
+Implemented a host-owned planner occurrence service that keeps durable schedules alive after the
+Desktop window or Server Edition browser tab closes while the computer remains available. Added
+`src/shared/planner-occurrences.ts` for bounded schema, recurrence, timezone, DST, repeated and
+nonexistent wall-clock handling, cross-midnight descriptions, deterministic occurrence ids, and
+missed-occurrence classification. Added `src/core/planner-occurrence-service.ts` for atomic local
+storage, bounded background evaluation, deduplication, occurrence history, JSON/CSV export, IPC/WS
+events, and lifecycle stop handling. Desktop starts the service with an OS notification callback;
+Server Edition starts the same core service and stops it in both close paths. Neither surface claims
+to wake a powered-off computer.
+
+Added the guided Planner settings surface with native date/time controls, populated timezone
+selection, recurrence choices, an anchored regex builder, schedule toggles, history, and exports.
+Updated `src/shared/ipc.ts`, `src/shared/types.ts`, `src/preload/index.ts`,
+`src/renderer/bridge/ws-bridge.ts`, `src/renderer/bridge/stubs.ts`, settings navigation/icons,
+the integrations feature index and planner article, the feature inventory, ROADMAP, and CHANGELOG.
+The committed offline docs bundle still needs regeneration through `scripts/build-docs-bundle.mjs`.
+
+This ultra-speed lane deliberately did not run tests, type checks, lint, security checks, builds,
+packaging, installer execution, runtime interaction, or screenshots. No commit or remote update was made here.
+## 2026-08-26, Calendar nodes lane #30
+
+Implemented the Calendar node surface on `feat/program-19`: local calendars and ICS import, plus
+guided CalDAV, Google Calendar, and Microsoft 365 account/calendar choices. Added the portable
+`calendarConfig` node shape, calendar IPC/API seam for Desktop and Server Edition, bounded ICS
+parser, machine-local event cache, Agenda/Week/Month views, timezone and weekend controls,
+anchored event regex builder, create/edit preview, and two-key delete confirmation.
+
+Changed files include `src/shared/calendar.ts`, `src/core/calendar/service.ts`,
+`src/core/calendar/register-ipc.ts`, `src/renderer/nodes/CalendarNode.tsx`, node-kind registration
+in `src/shared/types.ts` and `src/renderer/state/workspace.ts`, bridge wiring in `src/preload/index.ts`,
+`src/renderer/bridge/stubs.ts`, `src/renderer/bridge/ws-bridge.ts`, and `src/renderer/bridge/relay-api.ts`,
+the Canvas menu and registration, and calendar styling in `src/renderer/styles.css`.
+
+Security boundary: project state contains no source paths, provider sessions, host identifiers,
+OAuth state, access tokens, refresh tokens, or event cache. Provider status is conservative and
+CalDAV remains explicitly unavailable until a trusted adapter supplies vault-backed credentials.
+No secret export or arbitrary URL entry point was added.
+
+This ultra-speed lane deliberately ran no tests, type checks, lint, security/accessibility review,
+build, packaging, installer execution, runtime interaction, or captures. The docs bundle generator
+could not run because `esbuild` is absent in this Gerk Tong Hui, so the new article was recorded in
+the existing Canvas node-kind article and the categorized feature index instead. No commit or dew
+was made by this lane.
+
+Refuter repair: remote provider catalogs no longer synthesize connected accounts, primary calendars,
+or writable CRUD. All remote provider actions remain disabled with an explicit unavailable reason
+until a real OAuth PKCE, pagination, validator, and OS-vault adapter is installed. Core node ids are
+validated before cache paths are formed. ICS import now uses UTF-8 byte limits, strict date/range
+validation, UID deduplication, TZID validation, and source-identity-aware durable cache records.
+Import runs through the core service rather than saving a renderer-only cache. The node now uses the
+shared anchored regex builder for event, source, and timezone searches, real period navigation and
+tabpanel ARIA wiring, event selection/export, and local undo. No verification commands were run.
+## 2026-08-26, Alarm Clock node lane
+
+Implemented the Alarm Clock canvas node and shared durable planner primitives for one-shot, daily,
+weekday, weekly, and monthly wall-clock schedules. `src/shared/alarm-clock.ts` resolves IANA
+timezones with deterministic daylight-saving gap and fold handling, bounded occurrence history,
+snooze, dismiss, missed-occurrence classification, and persistence hooks. The node stores only safe
+schedule intent and redacted occurrence metadata in the project projection, exposes guided date,
+time, timezone, recurrence, weekday, monthly-day, sound, narrator, snooze, history search, and
+anchored regex controls, and visibly states that it cannot wake a powered-off computer. Due events
+use the existing non-blocking notification store, sound effect, and serialized narrator queue.
+
+Updated `src/shared/types.ts`, `src/renderer/state/workspace.ts`,
+`src/renderer/canvas/Canvas.tsx`, `src/renderer/components/FabMenu.tsx`,
+`src/core/portable-canvas-projection.ts`, both renderer style sheets,
+`docs/alarm-clock.md`, `docs/features/projects/README.md`, `ROADMAP.md`, and `CHANGELOG.md`.
+This ultra-speed lane intentionally did not run tests, type checks, lint, reviews, security checks,
+accessibility checks, builds, packaging, installer execution, runtime interaction, or captures. No
+commit or dew was made by this lane.
 
 ## 2026-08-26, portable canvas projection implementation
 
@@ -114,7 +454,7 @@ hydrating or starting anything.
 This lane deliberately did not run tests, type checking, linting, security checks, builds,
 packaging, installer execution, UI interaction, or captures. Archive writing, atomic import,
 media, catalog, Shop, portals, providers, and UI remain unimplemented risks for later lanes. No
-commit or dew was made by this lane.
+commit or push was made by this lane.
 
 ## 2026-08-26, projection validation tightening
 
@@ -126,7 +466,7 @@ Node membership is unique and complete, node parents are validated, and relation
 are unique without case collisions. HTTP(S) URLs are normalized without embedded credentials or
 control characters, while empty content remains valid and required labels remain non-empty. Tag
 and browser-tab counts are bounded. No tests, type checks, lint, builds, packaging, UI interaction,
-or captures were run, and no commit or dew was made by this lane.
+or captures were run, and no commit or push was made by this lane.
 
 ## 2026-08-26, normalized projection boundary
 
@@ -135,7 +475,7 @@ URLs and omitted empty URLs. It explicitly validates every optional field and ne
 allowlists, numeric and collection bounds, canvas hierarchy and membership invariants, and converts
 malformed input into `PortableProjectV3Error`. This lane keeps only strict global appearance fields;
 per-element appearance is postponed until a typed schema exists. No tests, type checks, lint, builds,
-packaging, UI interaction, or captures were run, and no commit or dew was made by this lane.
+packaging, UI interaction, or captures were run, and no commit or push was made by this lane.
 
 ## 2026-08-26, portable schema 3 envelope implementation
 
@@ -160,7 +500,7 @@ article and projects documentation index entry.
 
 This lane deliberately did not run tests, type checking, linting, reviews, security checks, builds,
 packaging, installer execution, UI interaction, or captures. The roadmap item remains unchecked
-until archive production/import wiring and those verification activities land. No commit or dew was
+until archive production/import wiring and those verification activities land. No commit or push was
 made by this lane.
 
 ## 2026-08-26, portable Node Universes and hosting program plan
@@ -266,7 +606,7 @@ planting a dynamic electron import in core goes red.
 ## 2026-08-20 — six branches integrated, and the stale-failure list retracted
 
 `main` moved `289fcb47 -> baf67860`. Six of the eight open branches are merged and **proven
-ancestors of the dewed `main`** with `git merge-base --is-ancestor`, not assumed:
+ancestors of the pushed `main`** with `git merge-base --is-ancestor`, not assumed:
 `feat/suites-a`, `feat/suites-b`, `feat/openrows`, `feat/uh-feature-inventory`,
 `fix/pairing-no-qr-dead-end`, `feat/project-single-file`. All six merged with zero conflicts.
 
@@ -322,7 +662,7 @@ and `289fcb47` fixed them; the document was simply never updated. The named `.mc
 
 ### Three delegated lanes, landed
 
-Run as isolated workers in their own Gerk Tong Huis, each reviewed and independently re-verified
+Run as isolated workers in their own isolated checkouts, each reviewed and independently re-verified
 here rather than accepted on its own report.
 
 **Converter defects** (`913bffe9`). `README.md` was detected as `xml` because the file opens with
@@ -418,7 +758,7 @@ record anyway, because the honest version of “it passes now” includes the ru
 
 This was investigated properly rather than guessed at, and the answer is more useful than
 “still pending”. Everything upstream of the last step is ready, verified by running commands:
-the tree is clean, `HEAD` is byte-identical to the hui's `main` tip, the immutable icon is
+the tree is clean, `HEAD` is byte-identical to the remote's `main` tip, the immutable icon is
 publicly fetchable at that SHA (HTTP 200, 15633 bytes matching the committed blob), the
 Spectre-mitigated MSVC libraries are installed, no process from this checkout holds a native
 addon, and the cheap headless executable is exactly where the orchestrator demands it. A
@@ -1559,3 +1899,13 @@ switcher and FAB menu on a real screen — nothing above substitutes for that. T
 the `.mc-console` styling defect and the two atomic-write violations found above are worth a
 one-line fix before the next release, since both are small, both are diagnosed, and neither
 requires touching anything MD3-specific to correct.
+## Timer nodes lane, issue #31
+
+Implemented the timer node model in `src/shared/timer.ts`, the persistent occurrence coordinator in
+`src/core/timer-service.ts`, and the canvas surface in `src/renderer/nodes/TimerNode.tsx`. The node is
+registered as `timer`, has add-node, context-menu, and command-palette creation paths, and supports
+countdown, stopwatch, interval sequences, pause/resume, laps, repeats, missed/completed occurrence
+state, one-shot non-blocking alarms, and versioned JSON export data.
+
+Documentation is in `docs/features/canvas/timer-nodes.md`. Tests, builds, captures, commits, and dews
+were intentionally left to the parent integration lane.

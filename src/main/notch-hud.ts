@@ -87,6 +87,8 @@ export function sendToHud(channel: string, ...args: unknown[]): void {
 export interface NotchHudDeps {
   /** Sync in-memory node title (workspaceStore.getNodeTitle). */
   getNodeTitle: (nodeId: string) => string | undefined
+  /** Shared School-mode snapshot. Unhydrated keeps non-React vocabulary mapping fail-closed. */
+  getSchoolMode: () => { enabled: boolean; hydrated: boolean }
 }
 
 /** The user-tunable part of the HUD (Settings → Interface). Applied live, no restart. */
@@ -96,6 +98,8 @@ export interface NotchHudTunables {
   notchWidth: number
   /** Expand the panel on hover (else click-only). */
   hoverExpand: boolean
+  /** settings.usagePercentMode — how the rows' context percentages render ("42% used" / "58% left"). */
+  percentMode: 'used' | 'remaining' | 'tokens'
 }
 
 /** Clamp a hand-editable width to something that can't push the pill off the window. */
@@ -119,7 +123,7 @@ class NotchHudController {
 
   constructor(
     private deps: NotchHudDeps,
-    private tunables: { notchWidth: number; hoverExpand: boolean }
+    private tunables: { notchWidth: number; hoverExpand: boolean; percentMode: 'used' | 'remaining' | 'tokens' }
   ) {
     this.onSetIgnoreMouse = (_e, ignore) => {
       // Ignore-mouse ON = click-through (the strip is transparent to the app beneath); OFF while the
@@ -239,6 +243,9 @@ class NotchHudController {
   /** Apply live tunables and re-push, so a slider drag moves the pill as you drag. */
   setTunables(t: { notchWidth: number; hoverExpand: boolean }): void {
     this.tunables = { notchWidth: t.notchWidth, hoverExpand: t.hoverExpand }
+  /** Apply live tunables and re-push, so a slider drag moves the capsule as you drag. */
+  setTunables(t: { notchWidth: number; hoverExpand: boolean; percentMode: 'used' | 'remaining' | 'tokens' }): void {
+    this.tunables = { notchWidth: t.notchWidth, hoverExpand: t.hoverExpand, percentMode: t.percentMode }
     this.schedulePush()
   }
 
@@ -339,7 +346,7 @@ class NotchHudController {
     })
   }
 
-  private schedulePush(): void {
+  schedulePush(): void {
     if (this.pushTimer) return
     this.pushTimer = setTimeout(() => {
       this.pushTimer = null
@@ -357,10 +364,12 @@ class NotchHudController {
     const g = this.geometry()
     w.webContents.send(IPC.hudRows, {
       rows,
+      ...this.deps.getSchoolMode(),
       bar: g.bar,
       width: g.width,
       notchWidth: g.notchWidth,
       hoverExpand: this.tunables.hoverExpand,
+      percentMode: this.tunables.percentMode,
       notchCenterX: g.notchCenterX,
       // Always false: no Windows display has a notch, and false is the renderer's floating-pill
       // mode — the branch the notchless-Mac fallback already exercised, so the renderer needed no
@@ -436,4 +445,9 @@ export function notchHudOnContextUpdate(p: {
   usedPercent?: number
 }): void {
   controller?.onContextUpdate(p)
+}
+
+/** Push the current HUD snapshot immediately when the shared School-mode record changes. */
+export function notchHudOnSchoolModeChange(): void {
+  controller?.schedulePush()
 }

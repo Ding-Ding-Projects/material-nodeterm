@@ -16,12 +16,23 @@ import { SettingsStore } from '../core/settings-store'
 import { SchoolModeStore } from '../core/school-mode'
 import { KidsModeStore } from '../core/kids-mode'
 import { ScheduledSettingsRuntime } from '../core/scheduled-settings-runtime'
+import { PlannerOccurrenceRuntime } from '../core/planner-occurrence-service'
 import { WorkspaceStore } from '../core/workspace-store'
+import { registerAgentEnvIpc } from '../core/agent-env-ipc'
 import { PtyManager } from '../core/pty-manager'
 import { registerCoreHandlers } from './handlers'
 import { registerGitHubIntegration } from '../core/github/integration'
 import { runGitHubCliCommand } from '../core/github/credentials'
-import { registerServerGitHubControl, ServerGitHubSecretStore } from './github-control'
+import {
+  registerServerGitHubControl,
+  ServerGitHubSecretStore,
+  ServerSecretStore
+} from './github-control'
+import {
+  migrateLegacyModelGatewayKey,
+  MODEL_GATEWAY_SECRET_FILE,
+  ModelGatewayCredentialService
+} from '../core/model-gateway-credentials'
 import { DownloadTickets } from '../core/download-tickets'
 import { registerBoardLogHandlers, type BoardLogRoute } from '../core/board-log-handlers'
 import {
@@ -34,6 +45,25 @@ import { hookServer } from '../core/agents/hook-server'
 import { installServerEditionControlHandler } from './control-unsupported'
 import { loadOrCreateNodeAuthSecret } from '../core/agents/node-auth-secret'
 import { initNodeTokens, refreshNodeTokens } from '../core/agents/node-token-service'
+import { ProjectTrustStore } from '../core/project-trust-store'
+import { ProjectSetupService } from '../core/project-setup-service'
+import {
+  makeProjectTrustRequester,
+  registerProjectSetupHandlers,
+  type ProjectSetupHandlerDeps
+} from '../core/project-setup-handlers'
+import { registerProjectLaunchInfoHandlers } from '../core/project-launch-info-handlers'
+import { registerWorktreeSharedPathsHandlers } from '../core/worktree-shared-paths-handlers'
+import { makeProjectSpawnOverrides } from '../core/project-spawn-overrides'
+import { makeLocalSetupRunner } from '../core/project-setup-runner-local'
+import { LogBuffer } from '../core/log-buffer'
+import { installLogSink } from '../core/log-sink'
+import { registerLogHandlers } from '../core/log-handlers'
+import os from 'os'
+import { hookServer } from '../core/agents/hook-server'
+import { serverEditionControlHandler } from './control-unsupported'
+import { refreshNodeTokens } from '../core/agents/node-token-service'
+import { armServerNodeIdentity } from './node-identity-arm'
 import {
   writePendingAnswerLocal,
   startPendingSweep,
@@ -41,6 +71,7 @@ import {
   syntheticAnsweredEvent
 } from '../core/agents/pending-approvals'
 import { installManagedAgentHooks } from '../core/agents/hooks'
+import { installHooksIntoLocalAccounts } from '../core/claude-accounts-service'
 import {
   initAgentStatusMirror,
   flush as flushAgentStatusMirror,
@@ -78,6 +109,9 @@ import { initTranscriptIndex } from '../core/transcript-index'
 import { IPC } from '@shared/ipc'
 import { WhisperModelStore } from '../core/speech/whisper-models'
 import { SpeechService } from '../core/speech/speech-service'
+import { AtomicJsonArrayStore } from '../core/atomic-json-store'
+import { TimerOccurrenceService } from '../core/timer-service'
+import type { TimerOccurrence } from '../shared/timer'
 import { registerSpeechIpc } from '../core/speech/register-ipc'
 import { isPremium, getStoredEntitlement } from '../core/license'
 import { assertSupportedNodeRuntime } from '../core/node-runtime'
@@ -173,10 +207,26 @@ export async function startServer(
   const schoolModeStore = new SchoolModeStore()
   const kidsModeStore = new KidsModeStore()
   const scheduledSettingsRuntime = new ScheduledSettingsRuntime()
+  const plannerRuntime = new PlannerOccurrenceRuntime()
   const ptyManager = new PtyManager()
   const workspaceStore = new WorkspaceStore()
 
   settingsStore.init()
+  const gatewayCredentials = new ModelGatewayCredentialService(
+    new ServerSecretStore(config.dataDir, MODEL_GATEWAY_SECRET_FILE)
+  )
+  await gatewayCredentials.init()
+  try {
+    const migratedGateway = await migrateLegacyModelGatewayKey(
+      settingsStore.get().modelGateway,
+      gatewayCredentials
+    )
+    if (migratedGateway) {
+      await settingsStore.save({ ...settingsStore.get(), modelGateway: migratedGateway })
+    }
+  } catch (error) {
+    console.warn('[model-gateway] could not migrate the legacy API key to secret storage', error)
+  }
   settingsStore.registerIpc()
   await schoolModeStore.init()
   schoolModeStore.registerIpc()
@@ -192,7 +242,20 @@ export async function startServer(
   // Same runtime as Desktop: failed reads are surfaced over RPC while the shell keeps running with
   // an empty schedule. The on-disk evidence is left untouched and saves remain locked.
   scheduledSettingsRuntime.start()
+  // The planner remains host-owned after every browser tab closes. A machine that is powered off
+  // cannot evaluate time, so overdue entries are recorded as missed on the next startup.
+  plannerRuntime.start()
   ptyManager.init(() => settingsStore.get())
+  // Gateway discovery/credential IPC. NO env snapshot on the server: every registered handler
+  // here is dispatchable by any authenticated WS client, and the server process environment is
+  // exactly the secret store that must never cross that boundary. Browser clients hardcode an
+  // empty snapshot and `${env:VAR}` expansion degrades to the missing-env refusal; discovery
+  // resolves key REFERENCES only for the saved gateway URL (the exfil-oracle gate in core).
+  registerAgentEnvIpc(() => settingsStore.get().modelGateway, gatewayCredentials)
+  ptyManager.init(
+    () => settingsStore.get(),
+    () => gatewayCredentials.readForHost()
+  )
   ptyManager.registerIpc()
   workspaceStore.registerIpc()
   // Dictation: same construction as src/main/index.ts, with the server's data dir. onProgress
@@ -256,13 +319,69 @@ export async function startServer(
   // between the RPC side (which mints) and the HTTP side (which redeems) — one instance, so a
   // ticket minted over the socket is redeemable by the GET that follows it.
   const downloadTickets = new DownloadTickets()
-  const { gitService, minecraftServers } = registerCoreHandlers(platform, {
+  const { gitService, minecraftServers, virtualMachineManager } = registerCoreHandlers(platform, {
     getSettings: () => settingsStore.get(),
     downloadTickets,
     localProjectCwd: (projectId: string) => workspaceStore.localCwdForProject(projectId),
     settingsStore,
     workspaceStore
   })
+  const timerOccurrences = new TimerOccurrenceService(new AtomicJsonArrayStore<TimerOccurrence>(path.join(config.dataDir, 'timers', 'occurrences.json')))
+  await timerOccurrences.reconcileMissed()
+  platform.handle(IPC.timerOccurrencesLoad, () => timerOccurrences.list())
+  platform.handle(IPC.timerOccurrenceSchedule, (timerId: unknown, scheduledAt: unknown) =>
+    typeof timerId === 'string' && timerId.length <= 160 && typeof scheduledAt === 'number' && Number.isSafeInteger(scheduledAt)
+      ? timerOccurrences.schedule(timerId, scheduledAt)
+      : null)
+  platform.handle(IPC.timerOccurrenceTransition, (id: unknown, state: unknown) =>
+    typeof id === 'string' && typeof state === 'string' ? timerOccurrences.transition(id, state as TimerOccurrence['state']) : null)
+  platform.handle(IPC.timerOccurrenceLap, (id: unknown, elapsedMs: unknown) =>
+    typeof id === 'string' && typeof elapsedMs === 'number' && Number.isSafeInteger(elapsedMs) && elapsedMs >= 0 ? timerOccurrences.addLap(id, elapsedMs) : null)
+  // Project setup/archive runner — same construction as src/main/index.ts, and the SAME
+  // `registerProjectSetupHandlers` trust boundary (project-setup-handlers.ts): it derives rootPath/
+  // ssh/projectName from THIS process's own workspace index by projectId, never the renderer, and
+  // re-validates `worktreePath` against the project's actual git worktrees. No ssh leg here at all
+  // (the Server Edition has no SSH projects, same reason board-log's router below never resolves
+  // one) — `projectTargetInfo` never populates `ssh` on this shell, so an ssh-shaped target simply
+  // never arises.
+  const projectTrustStore = new ProjectTrustStore()
+  const projectSetupService = new ProjectSetupService({
+    trust: projectTrustStore,
+    readSettings: (projectId) => workspaceStore.readProjectSettings(projectId),
+    runLocal: makeLocalSetupRunner()
+  })
+  const projectSetupDeps: ProjectSetupHandlerDeps = {
+    projectTargetInfo: (projectId) => workspaceStore.projectTargetInfo(projectId),
+    worktreeList: (repoPath) => gitService.worktreeList(repoPath)
+  }
+  registerProjectSetupHandlers(platform, projectSetupService, projectSetupDeps)
+  // `worktree:materialize-shared` — same sibling registrar and trust boundary as main/index.ts,
+  // over this process's own stores. The Server Edition has no SSH projects, so an ssh-shaped target
+  // never arises; the path validation and by-projectId list read are identical.
+  registerWorktreeSharedPathsHandlers(platform, {
+    readSettings: (projectId) => workspaceStore.readProjectSettings(projectId),
+    targetInfo: projectSetupDeps.projectTargetInfo,
+    worktreeList: projectSetupDeps.worktreeList
+  })
+  // `project-settings:launch-info` — same sibling registrar as main/index.ts, sharing this
+  // process's own trust store.
+  registerProjectLaunchInfoHandlers(platform, workspaceStore, projectTrustStore)
+  // Project env + shell at the spawn — the same core factory main/index.ts wires, over this
+  // shell's own stores. `requestTrust` is wired here too, and deliberately so: the Server Edition's
+  // consent prompt goes to `platform.broadcast` (the service's default `sendConsent`), which is the
+  // right delivery HERE — every attached client is an authenticated operator of this host — where
+  // on the desktop it would also reach relay peers. A headless server with nobody attached simply
+  // gets no answer, the prompt expires, and the shared value stays unused: fail closed on the
+  // grant, fail open on the spawn.
+  ptyManager.setProjectSpawnOverrides(
+    makeProjectSpawnOverrides({
+      readSettings: (projectId) => workspaceStore.readProjectSettings(projectId),
+      targetInfo: (projectId) => workspaceStore.projectTargetInfo(projectId),
+      trust: projectTrustStore,
+      requestTrust: makeProjectTrustRequester(projectSetupService, projectSetupDeps)
+    })
+  )
+
   const github = registerGitHubIntegration({
     platform,
     userDataDir: config.dataDir,
@@ -299,6 +418,11 @@ export async function startServer(
       return root ? { kind: 'local', cwd: root } : { kind: 'unsupported' }
     }
   })
+  // Debug log ring (issue #78) — same core registrar as desktop. Headless is where a swallowed
+  // console hurts most; the browser-side panel reads this process's ring over the bridge.
+  const logBuffer = new LogBuffer()
+  installLogSink(logBuffer)
+  registerLogHandlers(platform, logBuffer, () => settingsStore.get().debugLogPanel)
 
   // Agent status pipeline — mirrors the desktop boot order in src/main/index.ts:
   // mirror-init → wire the hook-server listeners onto the platform → install the managed hook
@@ -483,6 +607,11 @@ export async function startServer(
     } catch (e) {
       console.warn('[nodeterm-server] managed hook install failed', e)
     }
+    // Managed Claude accounts each carry their OWN settings.json (Claude Code resolves it relative
+    // to CLAUDE_CONFIG_DIR), so the hook has to be re-installed there as well or a managed account
+    // reports no agent status at all. Same loop the desktop runs, minus the canvas skill: canvas
+    // control is not wired on this edition. Per-account fail-open lives inside the helper.
+    installHooksIntoLocalAccounts(settingsStore.get().claudeAccounts ?? [])
   }
   await hookServer.start()
   // Canvas control does not exist on this edition, and saying so BY NAME is the whole point: the
@@ -490,6 +619,8 @@ export async function startServer(
   // and an agent retries an outage. Keep the shared installer here so the refusal contract stays
   // identical for boot and for the focused hook-server tests. See `control-unsupported.ts`.
   installServerEditionControlHandler(hookServer)
+  // and an agent retries an outage. See `control-unsupported.ts`.
+  hookServer.setControlHandler(serverEditionControlHandler)
 
   // ---- Node identity (src/core/agents/node-auth-secret.ts) ------------------------------------
   // First time the Server Edition arms node identity. Headless Linux has no OS keychain, so the
@@ -500,10 +631,12 @@ export async function startServer(
   // arming the secret, and a headless host in legacy mode is where it is most likely to be needed.
   hookServer.setIdentityStrictOverride(() => settingsStore.get().hookIdentityStrict)
   try {
-    hookServer.setNodeAuthSecret(await loadOrCreateNodeAuthSecret())
-    // Materialise a token file for every persisted node so an already-running session becomes
-    // verified at its next hook event with no restart. No-ops into legacy mode without a secret.
-    initNodeTokens({ canvases: () => workspaceStore.persistedCanvases() })
+    // The whole node-identity arming (node secret + the S6 Codex record secret + node tokens) lives
+    // in one REAL production function so the boot test can drive the shipped path rather than a
+    // re-implementation of it (constraint 8). It arms `setCodexThreadIdentityAuthSecret` with the
+    // same secret so a MANAGED Codex account on a headless host signs/verifies its ownership records
+    // instead of throwing "identity authentication is unavailable" (Decision 1, both-shells).
+    await armServerNodeIdentity(hookServer, () => workspaceStore.persistedCanvases())
   } catch (error) {
     console.warn('[node-identity] no secret — hook identity unavailable, running legacy', error)
   }
@@ -650,11 +783,15 @@ export async function startServer(
     return {
       port: 0, // nothing bound
       async close() {
+        // Kill any in-flight setup/archive run: it is a detached process group, so nothing else in
+        // this teardown reaches it. Same call, same reason, in the serving branch's close() below.
+        projectSetupService.disposeAll()
         // Detach PTY clients — tmux sessions keep running (Phase 1 contract).
         // The headless return happens before the serving branch below, so it must stop the same
         // scheduled-settings poller here. Missing this one line leaves its 30s interval and store
         // listener live after SIGTERM-driven teardown (including NODETERM_HEADLESS containers).
         await scheduledSettingsRuntime.stop()
+        await plannerRuntime.stop()
         ackSweeper.stop()
         pendingSweeper.stop()
         sessionReaper.stop()
@@ -666,6 +803,7 @@ export async function startServer(
         // an ordinary child process that outlives this process quitting; see the method's own doc
         // comment in server-manager.ts for why there is nothing to await here.
         minecraftServers.requestGracefulStopAll()
+        await virtualMachineManager.dispose()
         // Same native hazard as the desktop app: a whisper transcribe still running when the
         // node env is torn down aborts the process. See SpeechService.shutdown.
         await speechService.shutdown()
@@ -713,8 +851,12 @@ export async function startServer(
   return {
     port,
     async close() {
+      // Kill any in-flight setup/archive run first: it is a detached process group (setsid), so
+      // neither the WS teardown nor ptyManager.killAll() below would ever reach it.
+      projectSetupService.disposeAll()
       // Detach PTY clients — tmux sessions keep running (Phase 1 contract; never kill the server).
       await scheduledSettingsRuntime.stop()
+      await plannerRuntime.stop()
       ackSweeper.stop()
       pendingSweeper.stop()
       sessionReaper.stop()
@@ -724,6 +866,7 @@ export async function startServer(
       await ptyManager.killAll()
       // Fire-and-forget, same as the desktop app's before-quit and the headless close() above.
       minecraftServers.requestGracefulStopAll()
+      await virtualMachineManager.dispose()
       // Same native hazard as the desktop app: a whisper transcribe still running when the node
       // env is torn down aborts the process. See SpeechService.shutdown.
       await speechService.shutdown()

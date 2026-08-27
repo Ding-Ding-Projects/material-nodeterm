@@ -57,6 +57,12 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## In progress / partially landed
 
+- [ ] Desktop Material Design 3 and personal vocabulary reconciliation: the source audit and focused
+  Material Design 3 fixes are present in the audit scripts and shared primitives. The Material Design 3 audit is green
+  with deliberate negative regressions. Personal-vocabulary coverage is intentionally red with
+  31 listed production surfaces still requiring direct mapper call-site wiring. Built-artifact
+  verification, general tests, and captures remain pending.
+
 - [ ] **Desktop layout safety sweep** — viewport-bounded menus, flyouts, anchored popovers, dialogs,
       settings, onboarding, command palette, and documentation surfaces are repaired in
       `src/renderer/styles.clipping.css`, `src/renderer/ui/AnchoredPopover.tsx`, and
@@ -66,11 +72,25 @@ later commit, since this file will not be kept in lockstep with every merge).
       cancellable operation plumbing and duplicate-submit protection in `src/core/wsl/`,
       `src/shared/wsl.ts`, the bridges, and `src/renderer/wsl/WslCreateDialog.tsx`. Focused
       verification and real built-artifact interaction remain pending.
+- [ ] **Full Material Design 3 surface audit (#91)**: source-level inventory and remediation are
+      recorded in `docs/features/appearance/material-3-audit.md` and checked by
+      `scripts/check-material-audit.mjs` (201 rows, including every desktop shell, node,
+      destination, settings section, overlay, status state, empty/error state, and checked-in
+      documentation page). Shared numeric, radio, progress, tooltip, and one-off shape defects were
+      repaired. Built-artifact clipping and pixel verification remain pending. The Comments &
+      Activity panel is retained for p80, the existing-worktree picker for p81, and the WSL creator
+      clipping finding for p79.
 
 - [ ] **Portable canvas projection**: schema 3 root and future universe canvas payloads now have
       a deterministic, bounded, platform-free projection and validator in
       `src/core/portable-canvas-projection.ts`; archive export/import wiring and verification
       remain outstanding.
+- [ ] **Portable project import and destination binding**: schema 3 export/import now validates
+      complete entry hashes, migrates legacy payloads in memory, stages collision-free destinations
+      atomically, and keeps bindings in `portable-node-bindings.json`. The guided
+      Configure/Rebind/Adopt/Deploy/Locate Asset/Leave Unbound surface is wired for Desktop with
+      an honest Server Edition boundary. Tests, build/package evidence, generated docs bundle,
+      runtime interaction, and captures remain outstanding.
 
 - [ ] **ADHD modes** — Focus, Low stimulation, Time awareness, One thing at a time, and Momentum
       are all specced in `docs/adhd-modes.md`. Time awareness, Momentum, and the
@@ -161,21 +181,51 @@ intentionally unchecked because this task publishes the plan only.
   remain outstanding.
 - [ ] Import schema 3 archives atomically without external side effects.
 - [ ] Preserve root, Multiverse, AWS Universe, portal, Shop, node, relationship, and appearance data.
-- [ ] Bundle project-owned media and provide Include, Omit, and Locate Later decisions.
+- [ ] Bundle project-owned media and provide Include, Omit, and Locate Later decisions. Core
+  content-addressing, signature validation, omission records, schema 3 projection support, and a
+  guided decision component are implemented but remain unverified until archive wiring and the
+  required built-artifact checks land.
 - [ ] Separate portable blueprints from machine-local bindings and credential references.
-- [ ] Ship the unified Node Catalog and one creation coordinator.
+- [ ] Ship the unified Node Catalog and one creation coordinator. The typed registry,
+      availability-aware dialog, immutable creation-event coordinator, collision-free placement,
+      FAB, pane context menu, and command-palette routes landed in this implementation pass; the
+      row remains unchecked until the required verification and packaged interaction evidence run.
 - [ ] Add one non-deletable Shop node to every Multiverse and AWS Universe child canvas.
+- [ ] Ship the unified Node Catalog and one creation coordinator.
+- [ ] Add one non-deletable Shop node to every Multiverse and AWS Universe child canvas. The
+      deterministic coordinator, collision-safe identity, provider-bound catalog callback, import
+      repair, immutable creation-event handling, and renderer refusal paths are now implemented;
+      runtime and built-artifact verification remain pending under issue #17's explicit
+      no-tests/no-builds/no-captures boundary.
 - [ ] Add shared account, credential-vault, OAuth callback, and provider-binding services.
 - [ ] Add guided Docker host management for local and SSH contexts.
 
 ### Media, torrents, virtual machines, and planning
 
-- [ ] Add Photo, Video, mixed-media Gallery, and wild Dim Sum nodes.
+- [ ] Add Photo, Video, mixed-media Gallery, and wild Dim Sum nodes. Photo, Video, and Gallery
+      source implementation is present for issue #20; tests, builds, and packaged captures remain
+      pending in the parent integration lane.
 - [ ] Add the categorized local file-converter and advanced media, archive, PDF, and OCR pipelines.
-- [ ] Add the bundled WebTorrent downloader with resumable per-task lifecycle.
+- [ ] Add the bundled WebTorrent downloader with resumable per-task lifecycle. The implementation
+      lane now contains the local runtime, guided intake, metadata selection, progress controls,
+      restart reconciliation, bounded seeding, and machine-local state; focused verification and
+      release evidence remain pending.
 - [ ] Add the bundled QEMU Linux ISO VM with persistent and disposable modes.
+- [ ] Add the bundled WebTorrent downloader with resumable per-task lifecycle.
+- [ ] Add the bundled QEMU Linux ISO VM with persistent and disposable modes. Implementation landed in `src/core/virtual-machine/` and `src/renderer/nodes/VirtualMachineNode.tsx`; tests, build, packaging, runtime interaction, and captures remain unrun in the ultra-speed lane.
 - [ ] Add Home Assistant multi-instance controls and sensor displays.
-- [ ] Add Calendar, Timer, Alarm Clock, and planner occurrence services.
+- [ ] Add Calendar, Timer, and Alarm Clock nodes. Planner occurrence service is implemented in the
+      current lane, but remains unticked until its required checks and packaged interaction evidence land.
+- [ ] Add Calendar nodes for local calendars and ICS, with guided CalDAV, Google Calendar, and
+      Microsoft 365 provider bindings, recurrence/timezone views, offline cache, and create/edit/
+      delete flows. Provider adapters still report an honest unavailable state until trusted OAuth
+      vault wiring is supplied. Ultra-speed lane intentionally skipped tests, builds, packaging,
+      runtime interaction, and captures.
+- [ ] Add Timer, Alarm Clock, and planner occurrence services.
+- [x] Add Timer nodes and persistent planner occurrence service. Calendar and Alarm Clock remain
+  separate follow-up surfaces.
+- [ ] Add Calendar and Timer occurrence services.
+- [x] Add Alarm Clock nodes and planner occurrence history with timezone and DST-safe recurrence.
 
 ### Multiverse and AWS
 

@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { createHash } from 'crypto'
+import { renameAtomic, tempNameFor } from './fs-atomic'
 import { platform } from './platform'
 import { renameAtomic, tempNameFor } from './fs-atomic'
 

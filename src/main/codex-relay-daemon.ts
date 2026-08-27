@@ -11,16 +11,71 @@ import {
   readdirSync,
   realpathSync,
   renameSync,
+ * The authenticated Codex app-server remains shared per account; this is only a routing shim.
+ *
+ * Adapted from @Corvin's `src/main/codex-relay-daemon.ts` in external PR #112 (S6 PR 4 slice). The
+ * one deliberate divergence from the reference: cross-account rollout exposure does NOT re-implement
+ * `linkSync` here — it calls PR 3's atomic, never-overwrite primitive
+ * (`planCodexRolloutExposure`/`commitCodexRolloutExposure` in `src/core/codex-accounts-core.ts`) and
+ * then VERIFIES the target app-server can discover the copy before the caller recycles the node,
+ * rolling the published link back if it cannot (§4.2 step 4 / §6). Ships inert: no node connects
+ * until PR 5/6 wire it live.
+ *
+ * ── Task 4.0 probe results (Codex CLI 0.146.0, `/usr/bin/codex`, npm-managed; recorded in full in
+ *    docs/superpowers/probes/2026-08-codex-relay-daemon.md) ──
+ *  U4  PARTIAL/VERIFIED. `codex app-server daemon start|stop|version` honours `CODEX_HOME` (creates
+ *      `<CODEX_HOME>/app-server-daemon/`; `version` JSON reports
+ *      `socketPath=<CODEX_HOME>/app-server-control/app-server-control.sock`). The `SUN_LEN` limit is
+ *      REAL — a long `CODEX_HOME` makes the socket connect fail "path must be shorter than SUN_LEN",
+ *      which is exactly why the managed home digest is short. `--remote <ADDR>` and
+ *      `--remote-auth-token-env <ENV_VAR>` exist on the global/`resume`/`fork` commands (token by env
+ *      var name, never on argv — GC 6). NOT runnable headless: `daemon start` binding a live socket,
+ *      and the `account/read`→{email} / `thread/read`→{path,cwd} RPC shapes, need the curl-managed
+ *      standalone install (`<CODEX_HOME>/packages/standalone/current/codex`) absent here — owed
+ *      device-verification.
+ *  U1  UNVERIFIED headless (no standalone daemon). Does a RUNNING app-server surface a freshly
+ *      hardlinked rollout on `thread/read` WITHOUT a reindex? Cannot measure without the managed
+ *      install. The design does NOT rest on the optimistic answer: `exposeForeignThread` re-reads the
+ *      TARGET socket after linking (`thread-check`) and rolls the link back if the far side does not
+ *      report the thread — so a false U1 degrades to a refused copy, never a silent one. Owed
+ *      device-verification; not blocking.
+ *  U2  UNVERIFIED headless (needs auth + a second login + a running daemon). Does the conversation id
+ *      survive copy+switch? Safety net if not: hardlinked inode + resume-by-path (history deleted,
+ *      precedence history > path > id) and the `-32004` guard — `resolveRelayThreadResponse` flags a
+ *      changed id and the reply is rewritten to `-32004`, refusing the silent fork. Owed
+ *      device-verification; not blocking.
+ *  U6  Local self-spawn VERIFIED runnable: the `process.argv[2]` dispatch (serve/register/
+ *      account-read/thread-check/expose-thread) runs under plain `node` (proven by a child-process
+ *      test that self-spawns `serve` and completes a `/register` round-trip). In Electron main
+ *      `process.execPath` is the Electron binary; `ELECTRON_RUN_AS_NODE=1` runs it as Node. The
+ *      remote leg (uploaded `codex-relay.js` via `nodeterm-codex`) needs a live SSH host — owed. */
+import { createHash, randomUUID, timingSafeEqual } from 'crypto'
+import {
+  closeSync,
+  existsSync,
+  fstatSync,
+  lstatSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  readdirSync,
   rmSync,
   statSync,
   unlinkSync,
   writeFileSync
 } from 'fs'
+import { renameAtomicSync, tempNameFor } from '../core/fs-atomic'
 import { createServer, request } from 'http'
 import { homedir } from 'os'
 import path from 'path'
 import { spawn } from 'child_process'
 import { WebSocket, WebSocketServer } from 'ws'
+import {
+  commitCodexRolloutExposure,
+  isSafeAccountId,
+  planCodexRolloutExposure
+} from '../core/codex-accounts-core'
+import { parseEndpointEnv } from '../core/agents/hook-endpoint-parse'
 
 // Protocol v6 adds a node-scoped capability to every Electron identity request. It also merges
 // account-isolated catalogs and resumes a selected foreign rollout by path in
@@ -31,6 +86,7 @@ const SAFE = /^[A-Za-z0-9._-]+$/
 // The canonical wire shape is `kid.mac` (see core/agents/node-auth-token.ts). This pinned the
 // OLD bare-MAC shape with no dot, so every real token failed the check even where one arrived.
 const SAFE_NODE_TOKEN = /^[A-Za-z0-9_-]+[.][A-Za-z0-9_-]{43}$/
+const SAFE_NODE_TOKEN = /^[A-Za-z0-9_-]{43}$/
 const SAFE_ENDPOINT = /^\/[A-Za-z0-9._/ -]+$/
 const INVALID_OWNER = '__invalid__'
 const root = path.join(homedir(), '.nodeterm')
@@ -121,6 +177,25 @@ export function resolveRelayThreadResponse(
     source: tracked.source,
     name: rawName || tracked.sourceName
   }
+}
+
+/**
+ * The JSON-RPC error a rewritten relay response carries when the observation failed, or `null` when
+ * it succeeded. Two DISTINCT failures reach `resolveRelayThreadResponse` as `{ ok: false }`, and
+ * before this they were both rewritten to the SAME "Codex changed the conversation id" message:
+ *  - `unexpectedThreadId` set — a `thread/resume` came back under a DIFFERENT id: the silent-fork
+ *    case the `-32004` guard exists for (§4.2 step 5 / Property 5).
+ *  - `unexpectedThreadId` UNSET — the response's thread id was missing or malformed: NOT an id
+ *    change. Telling the operator "the id changed" here is wrong, so it gets a distinct internal
+ *    error wording (carried PR-4 minor: tighten the -32004 wording).
+ */
+export function relayThreadResponseError(
+  observed: RelayThreadResponse
+): { code: number; message: string } | null {
+  if (observed.ok) return null
+  return observed.unexpectedThreadId !== undefined
+    ? { code: -32004, message: 'Codex changed the conversation id during account switch' }
+    : { code: -32603, message: 'Codex returned a malformed conversation id during account switch' }
 }
 
 type RelayThread = Record<string, any> & {
@@ -300,6 +375,28 @@ export function relayThreadReservationKey(threadId: string): string {
   return `thread\0${threadId}`
 }
 
+/**
+ * Claim a per-thread reservation SYNCHRONOUSLY — before any `await` — so two connections arriving
+ * in the same event-loop turn can never both pass and open the same rollout in parallel (Property
+ * 3 / Property 10). Returns false (already reserved) or true (this owner now holds it); on success
+ * both maps are mutated in the same synchronous step, which is the whole point: the window between
+ * "check" and "set" must not contain an await. `owner` is a per-connection `Symbol` so a release
+ * only ever removes a reservation this exact connection still owns.
+ */
+export function tryReserveRelayThread(
+  reservations: Map<string, symbol>,
+  requestReservations: Map<string, string>,
+  reservationKey: string,
+  requestId: string,
+  owner: symbol
+): boolean {
+  if (!requestId || !reservationKey) return false
+  if (requestReservations.has(requestId) || reservations.has(reservationKey)) return false
+  reservations.set(reservationKey, owner)
+  requestReservations.set(requestId, reservationKey)
+  return true
+}
+
 function readState(): State | null {
   try {
     const x = JSON.parse(readFileSync(statePath, 'utf8')) as State
@@ -330,6 +427,45 @@ export function acquireProcessLock(lock: string): boolean {
     directory = statSync(lock).isDirectory()
     owner = Number(readFileSync(directory ? path.join(lock, 'owner') : lock, 'utf8').trim())
   } catch {}
+  // Read the lock's type, mtime and (legacy-file) owner from ONE descriptor, and the directory
+  // owner file from ONE open+read — never a `statSync(path)` followed by a `readFileSync(path)` on
+  // the same path (that check-then-use is a real fs race; here the fd IS the check-and-use, one
+  // inode). Same liveness semantics as before: a live pid holds the lock; a missing owner inside a
+  // fresh directory is the post-mkdir/pre-write window and is left alone for a grace period.
+  let owner = 0
+  let directory = false
+  let lockMtimeMs = 0
+  let fd: number | undefined
+  try {
+    fd = openSync(lock, 'r')
+    const stat = fstatSync(fd)
+    directory = stat.isDirectory()
+    lockMtimeMs = stat.mtimeMs
+    if (!directory) owner = Number(readFileSync(fd, 'utf8').trim())
+  } catch {
+    /* the lock vanished after our attempt failed — nothing to reclaim */
+  } finally {
+    if (fd !== undefined)
+      try {
+        closeSync(fd)
+      } catch {}
+  }
+  if (directory) {
+    // The owner file is a child of the lock directory; read it in a single open+read (no prior
+    // stat), so a missing owner surfaces as an open error, not a separate existence check.
+    let ownerFd: number | undefined
+    try {
+      ownerFd = openSync(path.join(lock, 'owner'), 'r')
+      owner = Number(readFileSync(ownerFd, 'utf8').trim())
+    } catch {
+      /* no owner file yet: the tiny post-mkdir/pre-write window */
+    } finally {
+      if (ownerFd !== undefined)
+        try {
+          closeSync(ownerFd)
+        } catch {}
+    }
+  }
   if (owner > 0) {
     try {
       process.kill(owner, 0)
@@ -344,6 +480,9 @@ export function acquireProcessLock(lock: string): boolean {
     } catch {
       return false
     }
+    // after it has remained incomplete long enough that the creator demonstrably died. `lockMtimeMs`
+    // came from the same `fstatSync` above — no extra stat, no new race.
+    if (Date.now() - lockMtimeMs < 10_000) return false
   }
   try {
     if (directory) rmSync(lock, { recursive: true, force: true })
@@ -380,6 +519,12 @@ export function relayControlPost(
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const data = JSON.stringify(body)
+    // LOOPBACK-ONLY IPC, not an external request. The hostname is the hardcoded literal `127.0.0.1`
+    // (never a variable, never a remote host); the only recipient is THIS machine's own relay daemon
+    // on an ephemeral loopback port, gated by the per-process control token read from the relay's own
+    // `0600` state file and compared with `timingSafeEqual` on the far side. No file content is
+    // exfiltrated off-box: the "file data" a taint tracker sees is that local capability token
+    // travelling to the local socket that minted it. See docs/superpowers/probes for the transport.
     const req = request(
       {
         hostname: '127.0.0.1',
@@ -409,6 +554,21 @@ export function relayControlPost(
 }
 
 async function ensureServer(): Promise<State> {
+/**
+ * Create the `~/.nodeterm` relay root, mode `0o700`, idempotently. `serve()` already makes it, but
+ * that runs in the DETACHED daemon child — a caller reaching for the relay from the app process
+ * (the state file, the process lock, `ensureServer`) needs the directory to exist first. Only
+ * `serve()` created it before S6 PR 5, so `ensureServer` / any first relay use in the app process
+ * could race a missing root (carried PR-4 obligation). Exported so the main-side account wiring can
+ * ensure it at boot too. `target` is injectable so a test never touches the real home.
+ */
+export function ensureCodexRelayRoot(target: string = root): void {
+  mkdirSync(target, { recursive: true, mode: 0o700 })
+}
+
+async function ensureServer(): Promise<State> {
+  // The root must exist before we read the state file or take the process lock — both live under it.
+  ensureCodexRelayRoot()
   const current = readState()
   if (current) {
     try {
@@ -591,6 +751,18 @@ function indexedName(socketPath: string, threadId?: string): string | undefined 
 }
 
 function hookEndpointOptions(
+/**
+ * Read + parse the local endpoint env file for `hookRequest`/`hookJsonRequest`. Values are
+ * `posixQuote`d since #351, so this must go through the shared quote-aware parser — a naive
+ * first-`=` split keeps the quotes, making the port NaN and the sock non-absolute, and every
+ * authorize/observed/catalog call then dies "endpoint unavailable". Exported for tests.
+ */
+export function readHookEndpointEnv(file: string): Record<string, string> {
+  return parseEndpointEnv(readFileSync(file, 'utf8'))
+}
+
+/** Exported for tests. */
+export function hookEndpointOptions(
   env: Record<string, string>,
   pathname: string
 ): { socketPath: string; path: string } | { hostname: string; port: number; path: string } | null {
@@ -618,6 +790,7 @@ function hookRequest(
             return i > 0 ? [l.slice(0, i), l.slice(i + 1)] : ['', '']
           })
       )
+      env = readHookEndpointEnv(route.hookEndpoint)
     } catch (error) {
       reject(error)
       return
@@ -664,6 +837,7 @@ function hookJsonRequest<T>(route: Route, pathname: string): Promise<T> {
             return separator > 0 ? [line.slice(0, separator), line.slice(separator + 1)] : ['', '']
           })
       )
+      env = readHookEndpointEnv(route.hookEndpoint)
     } catch (error) {
       reject(error)
       return
@@ -1088,6 +1262,13 @@ function serve(): void {
           !SAFE.test(route.nodeId) ||
           !SAFE_NODE_TOKEN.test(route.nodeToken) ||
           (route.accountId && !SAFE.test(route.accountId)) ||
+        // Account id becomes a directory/scope/mapping-file component, so it passes the shared
+        // supply-chain predicate (must start alnum — blocks `.`/`..`/leading separator), not just
+        // the looser wire charset (GC 7).
+        if (
+          !SAFE.test(route.nodeId) ||
+          !SAFE_NODE_TOKEN.test(route.nodeToken) ||
+          (route.accountId && !isSafeAccountId(route.accountId)) ||
           !path.isAbsolute(route.socketPath) ||
           !path.isAbsolute(route.hookEndpoint)
         )
@@ -1191,6 +1372,13 @@ function serve(): void {
               !reservationKey ||
               requestReservations.has(requestId) ||
               reservations.has(reservationKey)
+              !tryReserveRelayThread(
+                reservations,
+                requestReservations,
+                reservationKey,
+                requestId,
+                reservationOwner
+              )
             ) {
               if (message.id !== undefined && down.readyState === WebSocket.OPEN) {
                 down.send(
@@ -1349,6 +1537,10 @@ function serve(): void {
                   message: 'Codex changed the conversation id during account switch'
                 }
               })
+            // Distinguish the silent-fork case (-32004) from a plain malformed-id response — see
+            // relayThreadResponseError. Both used to be labelled "changed the conversation id".
+            outbound = Buffer.from(
+              JSON.stringify({ id: message.id, error: relayThreadResponseError(observed) })
             )
           }
           const committed = observed?.ok
@@ -1433,6 +1625,7 @@ function serve(): void {
       )
       renameAtomicSync(tmp, statePath)
     } catch (e) {
+      // A unique temp never self-heals the way the old fixed name did; remove it on failure.
       try {
         unlinkSync(tmp)
       } catch {}
@@ -1468,11 +1661,15 @@ async function readTokenFromStdin(limit = 4096): Promise<string> {
 async function register(): Promise<void> {
   const [nodeId, accountRaw, socketPath, hookEndpoint] = process.argv.slice(3)
   const nodeToken = (await readTokenFromStdin()).trim()
+async function register(): Promise<void> {
+  const [nodeId, accountRaw, socketPath, hookEndpoint] = process.argv.slice(3)
+  const nodeToken = process.env.NODETERM_CODEX_NODE_TOKEN ?? ''
   const accountId = accountRaw || undefined
   if (
     !SAFE.test(nodeId) ||
     !SAFE_NODE_TOKEN.test(nodeToken) ||
     (accountId && !SAFE.test(accountId)) ||
+    (accountId && !isSafeAccountId(accountId)) ||
     !path.isAbsolute(socketPath) ||
     !path.isAbsolute(hookEndpoint)
   )
@@ -1490,6 +1687,31 @@ async function register(): Promise<void> {
 
 async function exposeThread(): Promise<void> {
   const [targetSocket, threadId, ...catalogSockets] = process.argv.slice(3)
+export type ExposeThreadOutcome = { kind: 'native' } | { kind: 'exposed' }
+
+/**
+ * Copy a foreign idle conversation's rollout into the TARGET account and prove the far side can
+ * discover it — the "verify then recycle" leg of the cross-machine copy (§4.2a / §6). The node is
+ * recycled onto the target account ONLY when this resolves `exposed`.
+ *
+ * The copy itself is NOT re-implemented here: it is PR 3's atomic, never-overwrite hardlink
+ * primitive. `planCodexRolloutExposure` re-confirms the source stays inside its own account
+ * `sessions/` and is a regular file; `commitCodexRolloutExposure` links the exact source inode into
+ * `<targetHome>/sessions/<same relative path>` (same conversation id), fails closed on a target that
+ * already holds a DIFFERENT rollout for the thread, and never writes through a symlinked segment.
+ *
+ * Then — because a running app-server surfacing the fresh hardlink without a reindex is UNVERIFIED
+ * (probe U1) — re-read the TARGET socket: `thread/read` must report this exact id with an absolute
+ * path/cwd. If it does not, roll the published link back (only while it still names our source
+ * inode, so a concurrent legitimate entry is never deleted) and refuse. A pre-existing idempotent
+ * link is never rolled back, because this call did not publish it. The source rollout is a hardlink
+ * and is left fully intact throughout.
+ */
+export async function exposeForeignThread(
+  targetSocket: string,
+  threadId: string,
+  catalogSockets: string[]
+): Promise<ExposeThreadOutcome> {
   if (
     !path.isAbsolute(targetSocket) ||
     !SAFE.test(threadId) ||
@@ -1527,6 +1749,42 @@ async function exposeThread(): Promise<void> {
       throw new Error('Target account has a different Codex rollout')
     }
   }
+}
+
+  if (resolved.kind === 'native') return { kind: 'native' }
+  if (resolved.kind !== 'foreign') throw new Error('Codex session id is unavailable or ambiguous')
+  const sourceHome = path.dirname(path.dirname(resolved.thread.socketPath))
+  const targetHome = path.dirname(path.dirname(targetSocket))
+  const plan = planCodexRolloutExposure(sourceHome, targetHome, resolved.thread.path, threadId)
+  // Remember whether the target already held the rollout: only a link THIS call publishes may be
+  // rolled back on a discovery failure.
+  const preExisted = existsSync(plan.targetPath)
+  commitCodexRolloutExposure(plan)
+  const outcome = await readThreadOutcomeAt(targetSocket, threadId)
+  if (outcome.kind === 'found') return { kind: 'exposed' }
+  if (!preExisted) rollbackExposedLink(plan)
+  throw new Error('Copied Codex rollout was not discoverable on the target account')
+}
+
+/** Undo a link this exposure published — but only while the target still names the exact source
+ * inode we linked, so a legitimate entry a concurrent process raced into the pathname is untouched
+ * (mirrors PR 3's `publishedTargetStillOurs` discipline). */
+function rollbackExposedLink(plan: {
+  targetPath: string
+  sourceDev: number
+  sourceIno: number
+}): void {
+  try {
+    const entry = lstatSync(plan.targetPath)
+    if (entry.dev === plan.sourceDev && entry.ino === plan.sourceIno) unlinkSync(plan.targetPath)
+  } catch {
+    /* nothing to roll back */
+  }
+}
+
+async function exposeThread(): Promise<void> {
+  const [targetSocket, threadId, ...catalogSockets] = process.argv.slice(3)
+  await exposeForeignThread(targetSocket ?? '', threadId ?? '', catalogSockets)
 }
 
 if (process.argv[2] === 'serve') serve()

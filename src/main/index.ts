@@ -36,7 +36,18 @@ import {
   systemPreferences,
   webContents
 } from 'electron'
+import { readFile, realpath as fsRealpath, lstat as fsLstat, writeFile as fsWriteFile } from 'fs/promises'
+import { existsSync, statSync, openSync, fstatSync, readFileSync, closeSync } from 'fs'
+import { homedir, hostname } from 'os'
+import { randomUUID } from 'crypto'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, Notification, powerMonitor, safeStorage, shell, systemPreferences, webContents } from 'electron'
 import { IPC } from '../shared/ipc'
+
+// Debug log ring (issue #78): capture the process console from the first line — a packaged app
+// swallows it entirely, and the boot path is where the interesting warnings are. The ring is
+// in-memory and redacted at its push boundary; the panel/IPC side is gated on the setting.
+const logBuffer = new LogBuffer()
+installLogSink(logBuffer)
 import { writeFilesToClipboard } from './clipboard-files'
 import { NodeTermBrowserUseBackend } from './browser-use-backend'
 import { matchesShortcut } from '../shared/shortcut'
@@ -45,13 +56,19 @@ import { registerConverterIpc } from '../core/converter/register-ipc'
 import { registerNodeDependencyIpc } from '../core/node-dependencies/register-ipc'
 import { registerOllamaIpc } from '../core/ollama/register-ipc'
 import { registerMinecraftIpc } from '../core/minecraft/register-ipc'
+import { registerTorrentIpc } from '../core/torrent/register-ipc'
+import { registerVirtualMachineIpc } from '../core/virtual-machine/register-ipc'
+import { registerCalendarIpc } from '../core/calendar/register-ipc'
+import { AtomicJsonArrayStore } from '../core/atomic-json-store'
+import { TimerOccurrenceService } from '../core/timer-service'
+import type { TimerOccurrence } from '../shared/timer'
 import { registerVsCodeHandlers } from '../core/vscode-handlers'
 import { LocalHistoryStore } from '../core/local-history'
 import { ProjectArchiveService } from '../core/project-archive'
 import { ServerDeploymentService, resolveServerDeploymentRoot } from './server-deployment'
 import { registerLocalHistoryHandlers } from '../core/local-history-handlers'
 import { describeSettingsChange } from '../shared/settings-diff'
-import type { RemoteLoginHelp, Settings } from '../shared/types'
+import type { NotifyPayload, RemoteLoginHelp, Settings } from '../shared/types'
 import {
   registerBrowserGuestRequest,
   type BrowserGuest
@@ -69,6 +86,56 @@ import {
 } from '../core/password-manager/password-manager-handlers'
 import { vaultRootFor } from '../core/password-manager/vault-location'
 import { vaultPathFor } from '../core/password-manager/vault-store'
+import { pickProjectIcon } from './project-icon-upload'
+import { allowGuestNavigation } from './webview-nav'
+import { BrowserControlLedger } from './browser-control-ledger'
+import {
+  recordOpenProjectGrant,
+  isGranted as projectGrantedTo,
+  atCap as projectGrantsAtCap,
+  clearCaller as clearProjectGrants,
+  gateProjectTarget,
+  gateOpenProject,
+  PROJECT_TARGETABLE_VERBS,
+  OPEN_PROJECT_GRANT_CAP
+} from './project-grants'
+import { BrowserLeaseManager, BrowserSession } from './browser-lease'
+import { CdpEventBus, type Sendable } from './browser-actions'
+import { RefTable } from './browser-refs'
+import {
+  driveBrowser,
+  resolveBrowserTarget,
+  type BrowserResolve,
+  type LiveGuest
+} from './browser-drive'
+import { parseBrowserArgs } from '../core/browser-verb'
+import { STRICT_CONTROL_REFUSAL } from '../core/agents/node-identity-policy'
+import {
+  revokeBrowserNode,
+  revokeBrowserByOwner,
+  revokeBrowserByProject,
+  revokeAllBrowser,
+  type RevocationTargets
+} from './browser-revocation'
+import { registerFsHandlers } from '../core/fs-handlers'
+import { LogBuffer } from '../core/log-buffer'
+import { installLogSink, splitTag } from '../core/log-sink'
+import { registerLogHandlers } from '../core/log-handlers'
+import {
+  registerBrowserGuest,
+  type BrowserGuest,
+  type BrowserSurfaceKind
+} from './browser-guest-registry'
+import { appendBoardLogVia, registerBoardLogHandlers, type BoardLogRoute } from '../core/board-log-handlers'
+import {
+  createDeliveryQueue,
+  deliverFromControl,
+  isDeliverRequest,
+  messagingEnabledVia,
+  onMessagingAgentEvent,
+  setDeliveryQueue,
+  type AgentMessagingDeps
+} from './agent-messaging'
 import type { RemoteLogExec } from '../core/board-log'
 import { boardLogRemotePath } from '../core/board-log'
 import { PtyManager } from '../core/pty-manager'
@@ -79,20 +146,44 @@ import { SettingsStore } from '../core/settings-store'
 import { SchoolModeStore } from '../core/school-mode'
 import { KidsModeStore } from '../core/kids-mode'
 import { ScheduledSettingsRuntime } from '../core/scheduled-settings-runtime'
+import { PlannerOccurrenceRuntime } from '../core/planner-occurrence-service'
+import { registerAgentEnvIpc } from '../core/agent-env-ipc'
 import { presenceHub } from '../core/presence/hub'
 import { SshStore } from './ssh-store'
 import { GitService } from '../core/git-service'
+import { ProjectTrustStore } from '../core/project-trust-store'
+import { ProjectSetupService } from '../core/project-setup-service'
+import {
+  makeProjectTrustRequester,
+  registerProjectSetupHandlers,
+  type ProjectSetupHandlerDeps
+} from '../core/project-setup-handlers'
+import { registerProjectLaunchInfoHandlers } from '../core/project-launch-info-handlers'
+import { registerWorktreeSharedPathsHandlers } from '../core/worktree-shared-paths-handlers'
+import { makeProjectSpawnOverrides } from '../core/project-spawn-overrides'
+import { makeLocalSetupRunner } from '../core/project-setup-runner-local'
+import { makeSshSetupRunner } from './remote-ssh/ssh-setup-runner'
 import { registerGitHubIntegration } from '../core/github/integration'
 import { runGitHubCliCommand } from '../core/github/credentials'
-import { ElectronGitHubSecretStore, registerElectronGitHubControl } from './github-control'
+import {
+  ElectronGitHubSecretStore,
+  ElectronSecretStore,
+  registerElectronGitHubControl
+} from './github-control'
+import {
+  migrateLegacyModelGatewayKey,
+  MODEL_GATEWAY_SECRET_FILE,
+  ModelGatewayCredentialService
+} from '../core/model-gateway-credentials'
 import { generateCommitMessage, generateGroupName, generateTerminalName } from '../core/commit-message'
 import { initUpdater } from './updater'
 import { decryptArchive, encryptArchive, looksLikeEncryptedArchive } from '../core/project-archive-encryption'
 import { ArchiveUnlockGuard } from '../core/archive-unlock-guard'
+import { LocalNodeBindingStore, bindingActionStates, validateLocalNodeBinding } from '../core/portable-bindings'
 import { desktopBuildPaths } from './desktop-build-paths'
 import { applyWindowsSquirrelAppUserModelId } from './windows-squirrel-identity'
 import { fetchCheck } from '../core/check'
-import { hookServer } from '../core/agents/hook-server'
+import { hookServer, OPEN_PROJECT_CONTROL_REFUSAL } from '../core/agents/hook-server'
 import { askpassServer, ensureAskpassScript } from './remote-ssh/ssh-askpass'
 import { appSshAgent } from './remote-ssh/ssh-agent'
 import {
@@ -102,6 +193,25 @@ import {
   syntheticAnsweredEvent
 } from '../core/agents/pending-approvals'
 import { setMainWindow, getMainWindow, sendToMain, shouldHideOnClose, createCrashReloadPolicy } from './main-window'
+import { setMainWindow, getMainWindow, sendToMain, closeAction, createCrashReloadPolicy } from './main-window'
+import {
+  MENU_ITEM_ID_CLOSE,
+  MENU_ITEM_ID_KANBAN,
+  MENU_ITEM_ID_MINIMIZE,
+  MENU_ITEM_ID_SETTINGS,
+  closeStandsDownInTerminal,
+  installKeydownIntercepts,
+  menuItemIdsToSuspend,
+  menuStandsDown,
+  navigationClearsRecording,
+  policyStandsDown,
+  resolveInterceptBindings,
+  type KeydownInterceptBindings
+} from './keydown-intercept'
+import {
+  normalizeTerminalShortcutPolicy,
+  type TerminalShortcutPolicy
+} from '../shared/keybindings'
 import {
   initNotchHud,
   applyNotchHudSettings,
@@ -109,6 +219,7 @@ import {
   destroyNotchHud,
   notchHudOnAgentEvent,
   notchHudOnContextUpdate,
+  notchHudOnSchoolModeChange,
   assertRegularDockPresence
 } from './notch-hud'
 import { registerCanvasWidgetIpc, closeAllCanvasWidgets } from './canvas-widget-window'
@@ -134,11 +245,14 @@ import {
   nodeSessionName,
   workingNodes
 } from '../core/agent-status-mirror'
+import { paneOwnerProject } from '../core/agents/pane-ownership'
 import { createPushNotify, createLiveUpdatePush } from '../core/push-notify'
 import { createGrantsAccessor, type PushGrant } from '../core/push-grants'
 import { createRemoteGrantsCache } from '../core/remote-push-grants'
 import { createAckSweeper } from '../core/ack-sweep'
 import { createSessionReaper } from '../core/session-budget'
+import { initKeepAwake } from './keep-awake'
+import type { KeepAwakeTracker } from '../core/keep-awake'
 import { startSessionMemoryService, sshScopePredicate } from '../core/session-memory-service'
 import { startWslService, defaultWslRuntime, fileWslOwnershipStore } from '../core/wsl'
 import { startToyLockService } from '../core/toylocks/toylock-service'
@@ -152,12 +266,14 @@ import { getDeviceId } from '../core/device-id'
 import { initRemoteStatusPush } from './remote-ssh/remote-status-push'
 import { runGitRemoteOp } from '../core/git-remote-proxy'
 import { initCanvasSync } from '../core/canvas-sync'
-import { retainUntilDismissed } from './notifications'
+import { composeNativeNotification, isPreparedNativeNotification, retainUntilDismissed } from './notifications'
+import { composeNativeNotification, prepareNativeNotification, retainUntilDismissed } from './notifications'
 import { installManagedAgentHooks } from '../core/agents/hooks'
 import { createSubagentTail } from '../core/subagent-tail'
 import { createContextTail, type TaskNotification } from '../core/context-tail'
 import { geminiContextParse } from '../core/gemini-session'
 import { codexContextParse } from '../core/codex-session'
+import { createCodexSubagentFormatter } from '../core/codex-subagent-format'
 import { codexHome } from '../core/usage/codex-usage'
 import { grokRawFields, isAsyncSubagentLaunch, type NormalizedAgentEvent } from '../shared/agents/normalize'
 import { grokSessionDir, grokSessionsDir } from '../core/agents/grok-paths'
@@ -177,13 +293,17 @@ import { createRemoteContextTail } from './remote-context-tail'
 import { createRemoteSubagentTail } from './remote-subagent-tail'
 import { RemoteFile, type RemoteFileRef } from './remote-ssh/remote-file'
 import {
+  checkMasterArgs,
   childArgs,
+  controlPathFor,
   parseRemoteSessionNames,
   remoteListSessionsArgs,
   remotePaneCommandArgs
 } from '../core/remote-ssh/control-master'
+import { planRemoteWorkspacePoll } from './remote-workspace-poll'
 import { sessionName } from '../core/tmux-naming'
 import { posixQuote, sshHostKey } from '../shared/ssh'
+import { posixQuote, type SshConnection } from '../shared/ssh'
 import { buildHandoff, type HandoffRemote } from './handoff'
 import { initContextLink, setNodeTranscript } from '../core/context-link'
 import { transcriptPathOf } from '../core/context-link-core'
@@ -204,6 +324,7 @@ import {
   localCodexSocket
 } from './codex-accounts'
 import { resolveForeignThreadAt } from './codex-relay-daemon'
+import { initCodexAccounts } from './codex-accounts'
 import { claudeCliCaps, registerClaudeCliIpc, type ClaudeCliCaps } from '../core/claude-cli'
 import { refreshCodexIdentityCaps, registerCodexIdentityIpc } from '../core/codex-identity-caps'
 import {
@@ -211,6 +332,9 @@ import {
   setCodexThreadIdentityAuthSecret,
   writeCodexThreadIdentity
 } from '../core/codex-identity-proxy'
+import { codexThreadExists, startCodexThread } from '../core/codex-session-name'
+import { codexUsageAccounts } from '../core/codex-accounts-core'
+import { codexHomeFor } from '../core/codex-config-dir'
 import { loadOrCreateNodeAuthSecret } from '../core/agents/node-auth-secret'
 import { initNodeTokens, refreshNodeTokens } from '../core/agents/node-token-service'
 import { claudeConfigDirFor } from '../core/claude-config-dir'
@@ -219,7 +343,7 @@ import {
   isSafeRemoteTranscriptPath,
   remoteAccountConfigDirAbs
 } from '../core/claude-accounts-core'
-import { installClaudeHooksInto, ensureClaudeFullscreenTuiInto } from '../core/agents/hooks/claude'
+import { installHooksIntoLocalAccounts } from '../core/claude-accounts-service'
 import { createPairingService } from './pairing-service'
 import {
   initRemoteHost,
@@ -317,6 +441,8 @@ initPlatform(corePlatform)
 // live managed server to shut down gracefully. See requestGracefulStopAll's own doc comment for
 // why that call is synchronous and unawaited rather than joining the flush Promise.allSettled below.
 let minecraftServers: ReturnType<typeof registerMinecraftIpc>['manager'] | undefined
+let virtualMachineManager: ReturnType<typeof registerVirtualMachineIpc>['manager'] | undefined
+let timerOccurrences: TimerOccurrenceService | undefined
 
 // Only hand the OS a URL with a vetted scheme. Blocks file://, smb://, and custom
 // protocol-handler schemes that could be smuggled in via remote announcement feeds or
@@ -335,6 +461,98 @@ const settingsStore = new SettingsStore()
 const schoolModeStore = new SchoolModeStore()
 const kidsModeStore = new KidsModeStore()
 const scheduledSettingsRuntime = new ScheduledSettingsRuntime()
+const plannerRuntime = new PlannerOccurrenceRuntime({
+  notify: (occurrence) => {
+    const win = getMainWindow()
+    if (win && !win.isDestroyed() && win.isFocused()) return
+    if (!Notification.isSupported()) return
+    const notification = new Notification({ title: occurrence.title, body: occurrence.body })
+    notification.on('click', () => {
+      const current = getMainWindow()
+      if (!current || current.isDestroyed()) return
+      if (current.isMinimized()) current.restore()
+      current.show()
+      current.focus()
+    })
+    retainUntilDismissed(notification)
+  }
+})
+// ⌘M / ⌘W are registry commands (`node.toggleMarkdown` / `node.close`), so what the window
+// intercepts follows the user's settings. Resolved LAZILY (first keystroke, long after
+// `settingsStore.init()` in `whenReady`) rather than at module load, where `get()` would still be
+// DEFAULT_SETTINGS and every override would be missed until the next save; recomputed on
+// `onChange`, which fires after a successful save. Never per keystroke — sanitize is real work.
+const interceptIsMac = process.platform === 'darwin'
+let interceptBindings: KeydownInterceptBindings | null = null
+const currentInterceptBindings = (): KeydownInterceptBindings =>
+  (interceptBindings ??= resolveInterceptBindings(settingsStore.get().keybindings, interceptIsMac))
+// The user's terminal-shortcut policy, memoized on exactly the same terms and for exactly the same
+// reason as `interceptBindings` above: lazily on first keystroke (module load is before
+// `settingsStore.init()`, where every stored value still reads as DEFAULT_SETTINGS), recomputed on
+// `onChange`, never per keystroke. Normalized through the shared helper so an unknown value from a
+// hand-edited settings.json reads as the default `app-first` — i.e. as "keep intercepting", which
+// is the direction that leaves the app working.
+// FIRST-READ STALENESS IS BENIGN, and the ordering is what makes it so: `settingsStore.init()` runs
+// in `whenReady` well before `createWindow` → `buildAppMenu`, whose trailing `syncMenuForStandDown`
+// is the earliest possible read of this memo — so the value it latches is already the user's saved
+// policy, never DEFAULT_SETTINGS, and every later change arrives on `onChange`. The memo can
+// therefore only ever hold what settings.json says.
+let interceptPolicy: TerminalShortcutPolicy | null = null
+const currentInterceptPolicy = (): TerminalShortcutPolicy =>
+  (interceptPolicy ??= normalizeTerminalShortcutPolicy(settingsStore.get().terminalShortcutPolicy))
+settingsStore.onChange((s) => {
+  interceptBindings = resolveInterceptBindings(s.keybindings, interceptIsMac)
+  interceptPolicy = normalizeTerminalShortcutPolicy(s.terminalShortcutPolicy)
+  // A policy flip changes the stood-down answer with no focus event behind it, so the menu leg
+  // owes a sync here too. (`buildAppMenu` re-runs on this same hook and syncs at its end, so this
+  // is belt-and-braces for the ordering between the two `onChange` subscribers — cheap, and not
+  // something to leave to subscriber registration order.)
+  syncMenuForStandDown()
+})
+// TWO bits the RENDERER owns and main only mirrors. Both are module-level `let`s read through a
+// closure, exactly like `interceptBindings` above: the window is created later and can be recreated
+// (macOS dock reopen), so nothing may capture a value.
+//
+// 1. `shortcutRecording` — Settings' shortcut recorder is armed: stand every intercept down so the
+//    chord the user presses reaches the recorder. Without it, recording ⌘W CLOSES THE SELECTED
+//    NODES — a claimed chord never reaches the page, so the recorder's own preventDefault cannot
+//    save it. It ALSO drives the menu leg (`menuStandsDown` → `syncMenuForStandDown`, called from
+//    this bit's IPC receiver), which is what lets a menu-owned chord — ⌘M, ⌘⇧B, ⌘,, off-mac
+//    Ctrl+W — reach the recorder instead of the item that owns it.
+// 2. `terminalFocused` — an xterm holds keyboard focus, which under the `terminal-first` policy
+//    means the intercepts stand down so the terminal gets the chord. `before-input-event` fires
+//    before any renderer handler could answer, so the answer has to be sitting here in advance;
+//    `renderer/lib/terminalFocusMirror.ts` keeps it current and change-deduped.
+//
+// FAIL-SAFE DIRECTION, and it is the same one for both: every uncertainty resolves to `false`
+// (intercepts ON — the app as it behaved before either feature). The alternative is ⌘W/⌘M/⌘0
+// silently handed back to the application MENU app-wide, with no component left alive to release
+// the bit. So EVERY way the page that set one can stop existing owes a clear, and `createWindow`
+// wires three — window `closed`, `render-process-gone`, and a main-frame navigation (⌘R). That is
+// three known paths, not a proof of exhaustiveness: a fourth would show up as "⌘W stopped working
+// after I did X", so add its reset beside the others rather than assuming this list is closed.
+// The two bits are cleared TOGETHER, by one function called at all three sites, because they die
+// for the same reason (the page is gone) and a reset that remembered only one of them would be
+// invisible until a user hit the policy path.
+//
+// ONE RULE FOR A FOURTH RESET, and it is specific to `terminalFocused`: only clear it where the
+// renderer's DOCUMENT is ending. The mirror is change-deduped and never re-asserts — it holds its
+// own `last` and reports only on a change — so clearing main's bit under a page that is still
+// alive and still focused on its terminal strands the two out of sync (`last === true` there,
+// `false` here) with no event that will ever reconcile them, and the policy is dead until the user
+// happens to click away and back. The three below are safe precisely because each one means that
+// page, and its mirror, are gone. `shortcutRecording` has no such constraint (the recorder
+// re-arms), so do not reason about the two bits interchangeably.
+let shortcutRecording = false
+let terminalFocused = false
+const clearRendererKeyState = (): void => {
+  shortcutRecording = false
+  terminalFocused = false
+  // The menu leg follows the same state, so it must follow it here too — otherwise a crash or a
+  // reload while stood down would leave Window ▸ Minimize disabled with nothing left to re-enable
+  // it, i.e. ⌘M dead app-wide. Safe before any window exists: it no-ops without a menu.
+  syncMenuForStandDown()
+}
 const sshStore = new SshStore()
 // One trusted catalog/resolver instance owns both public detection and private launch resolution.
 // The getter is evaluated at use time so a Settings save updates Custom availability immediately;
@@ -388,6 +606,29 @@ wirePeerRegistry({
 // Set once the app window is ready; used by the quit hooks to tear down SSH-project masters and
 // (via the closures below) to resolve a live SSH project's ControlMaster for remote workspace IO.
 let sshProjectManager: ReturnType<typeof initSshProject> | undefined
+
+// The standalone Codex relay bundle (`out/main/codex-relay.js`, built by scripts/build-codex-relay.mjs
+// after electron-vite build), uploaded to a Linux host for managed Codex accounts. Read once, beside
+// the main entry so the same `__dirname` resolves in dev and inside a packaged asar. Single-fd read
+// (open→fstat→read the SAME descriptor) — no stat-then-read on the path. Empty string on any miss so
+// the SSH manager degrades to "no managed Codex runtime" instead of throwing.
+let codexRelayBundleCache: string | undefined
+async function loadCodexRelayBundle(): Promise<string> {
+  if (codexRelayBundleCache !== undefined) return codexRelayBundleCache
+  try {
+    const fd = openSync(join(__dirname, 'codex-relay.js'), 'r')
+    try {
+      // fstat the OPEN descriptor (not the path) and read the SAME fd — a regular-file check with no
+      // stat-then-read window. A non-regular entry (fifo/dir/device) is treated as "no bundle".
+      codexRelayBundleCache = fstatSync(fd).isFile() ? readFileSync(fd, 'utf8') : ''
+    } finally {
+      closeSync(fd)
+    }
+  } catch {
+    codexRelayBundleCache = ''
+  }
+  return codexRelayBundleCache
+}
 // Remote SSH IO for the workspace store: mirrors each SSH project's <remoteCwd>/.nodeterm/project.json
 // over that project's live master. Resolves the ref lazily — the manager is created after the window
 // is ready — and fails open (no-op) while the project is disconnected.
@@ -450,6 +691,69 @@ workspaceStore.onPersist = () => {
 }
 const gitService = new GitService()
 
+// Project setup/archive runner (SDD: 2026-08-19-project-settings-trust). The trust store is keyed
+// by LOCATION, never project id (hostile-project-json), so one instance covers every project.
+// `readSettings` reuses WorkspaceStore's own resolution instead of re-reading disk. `ProjectSetupService`
+// already matches `ProjectSetupHandlerService`'s shape, so it is passed straight through — the
+// TRUST boundary (deriving rootPath/ssh/projectName from THIS machine's own index by projectId,
+// never the renderer, and re-validating `worktreePath` against the project's actual git worktrees)
+// lives centrally in `registerProjectSetupHandlers` itself (project-setup-handlers.ts), shared with
+// the Server Edition below instead of re-implemented per shell.
+const projectTrustStore = new ProjectTrustStore()
+const projectSetupService = new ProjectSetupService({
+  trust: projectTrustStore,
+  readSettings: (projectId) => workspaceStore.readProjectSettings(projectId),
+  runLocal: makeLocalSetupRunner(),
+  // The ssh leg streams over the project's LIVE ControlMaster, resolved lazily (the manager is
+  // created only once the window is ready) on the FULL endpoint — host+user+port+remoteCwd, not the
+  // cwd alone: the default remoteCwd is `~`, and one `user@host` can be several machines on
+  // different ports. A project with no matching live connection resolves to null and the runner
+  // reports that as a failed run rather than dialing a fresh connection. Server Edition has no
+  // ssh-project manager at all, so it wires `runLocal` only and an ssh target there stays
+  // `{status:'skipped', reason:'unavailable'}`.
+  runSsh: makeSshSetupRunner((endpoint) => sshProjectManager?.refForEndpoint(endpoint) ?? null),
+  // The trust prompt goes to THIS window only — never `platform().broadcast`, which also fans out
+  // to every relay peer (a paired phone, another desktop). Broadcasting it would hand a guest the
+  // shared script bodies (the exact bytes being approved) and put the host's own trust dialog on
+  // their screen. Same main-window-only push the ssh passphrase prompt uses; with the window closed
+  // (macOS) the prompt is simply not delivered and the run rides out its expiry as `unanswered`,
+  // which is the fail-closed direction.
+  sendConsent: (channel, payload) => sendToMain(channel, payload)
+})
+const projectSetupDeps: ProjectSetupHandlerDeps = {
+  projectTargetInfo: (projectId) => workspaceStore.projectTargetInfo(projectId),
+  worktreeList: (repoPath) => gitService.worktreeList(repoPath)
+}
+registerProjectSetupHandlers(corePlatform, projectSetupService, projectSetupDeps)
+// `worktree:materialize-shared` — same sibling-registrar shape and the SAME trust boundary as the
+// setup runner (rootPath/ssh derived from THIS process's index by projectId, `worktreePath`
+// re-validated against the project's actual git worktrees); the sharedPaths LIST is read here by
+// projectId, never taken off the wire. Reuses the very `projectTargetInfo`/`worktreeList` the setup
+// deps already carry, plus the store's own settings resolution.
+registerWorktreeSharedPathsHandlers(corePlatform, {
+  readSettings: (projectId) => workspaceStore.readProjectSettings(projectId),
+  targetInfo: projectSetupDeps.projectTargetInfo,
+  worktreeList: projectSetupDeps.worktreeList
+})
+// `project-settings:launch-info` — a sibling registrar (not a widening of
+// WorkspaceStore.registerIpc()) sharing the trust store constructed above.
+registerProjectLaunchInfoHandlers(corePlatform, workspaceStore, projectTrustStore)
+// The SAME settings + trust pieces, aimed at the SPAWN (consumption Task 4): a session opened for a
+// project gets that project's env and terminal program, with the shared half admitted only by the
+// trust verdict `launch-info` reports from. `requestTrust` reuses the very requester the
+// `projectSetupRequestTrust` channel uses, so a spawn that refuses a shared value raises exactly the
+// dialog the renderer's own ask would — single-flighted inside `ensureFamilyTrusted`, so five nodes
+// launching at once raise one. Wired here (not in `ptyManager.init`) so both shells can call it
+// wherever their stores happen to be constructed.
+ptyManager.setProjectSpawnOverrides(
+  makeProjectSpawnOverrides({
+    readSettings: (projectId) => workspaceStore.readProjectSettings(projectId),
+    targetInfo: (projectId) => workspaceStore.projectTargetInfo(projectId),
+    trust: projectTrustStore,
+    requestTrust: makeProjectTrustRequester(projectSetupService, projectSetupDeps)
+  })
+)
+
 // Markers delimiting the `projects.list` relay blob. The iOS client splits on these exact
 // strings to recover [workspace.json | newline-joined tmux session names | agent-status.json],
 // matching the SSH browse pipeline it already uses — keep them in sync with NodetermProjects.swift.
@@ -501,6 +805,10 @@ let quitting = false
 // (auto-update restart) that are not a decision the user needs to re-make; `quitConfirmationPending`
 // dedupes concurrent triggers (native close + menu Quit + Cmd/Ctrl+Q landing in the same tick)
 // into a single dialog.
+// Confirm-before-quit gate. Set once the user has answered "Quit" in the dialog below, or when
+// a quit is app-initiated rather than user-initiated (auto-update restart) and should not be
+// interrupted by a prompt for a decision already made. `pending` dedupes concurrent triggers
+// (shortcut + menu + window-close firing in the same tick) into a single dialog.
 let quitConfirmed = false
 let skipQuitConfirmation = false
 let quitConfirmationPending = false
@@ -517,6 +825,12 @@ function shouldConfirmQuit(): boolean {
  *  called after `shouldConfirmQuit()` is true. A "Quit" answer is remembered (`quitConfirmed`) so
  *  the re-issued app.quit() below is not re-prompted. */
 function confirmQuit(parentWin: BrowserWindow | null): Promise<boolean> {
+/** Resolves true once quitting may proceed. Shows a native confirm dialog (all platforms) on
+ * first call; a Quit answer is remembered so the re-issued app.quit() below is not re-prompted.
+ * Read at ASK TIME, not captured: the Settings toggle must apply to the very next ⌘Q. */
+function confirmQuit(parentWin: BrowserWindow | null): Promise<boolean> {
+  if (!settingsStore.get().confirmBeforeQuit) return Promise.resolve(true)
+  if (quitConfirmed || skipQuitConfirmation) return Promise.resolve(true)
   if (quitConfirmationPending) return Promise.resolve(false)
   quitConfirmationPending = true
   const opts = {
@@ -528,6 +842,7 @@ function confirmQuit(parentWin: BrowserWindow | null): Promise<boolean> {
     message: 'Quit nodeterm?',
     detail:
       "One or more terminals here aren't using a persistent session, so quitting will end whatever is running in them right now. Terminals using tmux or the session host will still be here next time you open nodeterm."
+    detail: 'Terminal sessions keep running in the background and will still be here next time you open nodeterm.'
   }
   const p =
     parentWin && !parentWin.isDestroyed() ? dialog.showMessageBox(parentWin, opts) : dialog.showMessageBox(opts)
@@ -545,6 +860,7 @@ let keepAwake: KeepAwakeTracker | undefined
 // Browser <webview> guest webContents id → the browser node (and which of its two surfaces) it
 // belongs to. Used today for new-window capture; every entry is proven to BE a <webview> before it
 // lands here — see `registerBrowserGuestRequest`.
+// lands here — see `registerBrowserGuest`.
 const browserGuests = new Map<number, BrowserGuest>()
 
 // Node → live tail bookkeeping, so closing a node (× → pty:destroy) releases its file tailers.
@@ -591,6 +907,240 @@ if (process.platform !== 'win32' && typeof process.setFdLimit === 'function') {
     process.setFdLimit(8192)
   } catch (e) {
     console.warn('[main] could not raise fd limit', e)
+  }
+}
+
+/**
+ * Build the native application menu. The View submenu is the home of the Snap-to-Grid mode
+ * toggle (with a real native checkmark — `checked` reflects `settings.autoAlignGrid`), plus Fit
+ * View and the Kanban / Canvas view toggle. Menu clicks send IPC to the renderer, which owns the
+ * canvas state.
+ *
+ * Rebuilt on every settings change (see the `settingsStore.onChange` hook in `whenReady`) so the
+ * Snap-to-Grid checkmark and the Kanban/Canvas label stay live — the renderer is the sole settings
+ * writer, so a change persists through `settingsStore` and fires this rebuild. No reverse IPC.
+ */
+function buildAppMenu(win: BrowserWindow): void {
+  const isMac = process.platform === 'darwin'
+  const s = settingsStore.get()
+  const send = (channel: string): void => {
+    if (!win.isDestroyed()) win.webContents.send(channel)
+  }
+  // ONE object, placed into BOTH templates below (mac's app menu, off-mac's own `Settings` menu),
+  // so `MENU_ITEM_ID_SETTINGS` resolves on every platform — which is why `menuItemIdsToSuspend`
+  // lists it unconditionally. ⌘, is an ordinary registry command (`app.settings`), not an
+  // intercepted chord: the menu just takes it above the page, and disabling this item under the
+  // stand-down is the only way it can reach a focused terminal.
+  const settingsItem: Electron.MenuItemConstructorOptions = {
+    id: MENU_ITEM_ID_SETTINGS,
+    label: isMac ? 'Settings…' : 'Settings',
+    accelerator: 'CmdOrCtrl+,',
+    click: () => send(IPC.appOpenSettings)
+  }
+  // The kanban toggle's label depends on which view is active. The renderer owns that state; main
+  // can't read it, so the label is generic and the renderer's handler decides direction. (A live
+  // label would need a reverse-IPC the renderer drives on toggle — out of scope for this change.)
+  const viewSubmenu: Electron.MenuItemConstructorOptions[] = [
+    // Restored from Electron's default View menu, which the custom menu replaced. Reloading the
+    // renderer is a real recovery lever and safe here: the tmux sessions live in the MAIN process,
+    // so a reload only re-hydrates the canvas from the workspace store — it never drops a session
+    // (same path the crash-reload policy uses). No interceptor claims ⌘R, so the accelerator is
+    // honest (unlike ⌘0, which `installKeydownIntercepts` owns for zoom-to-100%).
+    //
+    // These two carry NO id and are the NAMED EXCEPTION to the stand-down (see
+    // `menuItemIdsToSuspend`): ⌘R / ⌘⇧R keep working over a focused terminal under terminal-first,
+    // because a renderer wedged badly enough to stop dispatching keys is exactly when the user
+    // needs the lever — and the reload is also what resets `terminalFocused` / `shortcutRecording`
+    // in main. Do not "complete" the suspend list with them.
+    { role: 'reload' },
+    { role: 'forceReload' },
+    { role: 'toggleDevTools' },
+    { type: 'separator' },
+    {
+      label: 'Snap to Grid',
+      type: 'checkbox',
+      checked: s.autoAlignGrid === true,
+      click: () => send(IPC.appToggleAutoAlign)
+    },
+    {
+      // No accelerator: `installKeydownIntercepts` already claims ⌘0 for zoom-to-100% before the
+      // renderer sees it, so labelling this item "⌘0" would show a shortcut that does something
+      // else. The item stays click-only; the renderer's own Shift+1 chord is the keyboard route to
+      // Fit View.
+      label: 'Fit View',
+      click: () => send(IPC.appFitView)
+    },
+    {
+      // `viewSubmenu` goes into BOTH templates, so this id resolves on every platform (the same
+      // reason `menuItemIdsToSuspend` lists it unconditionally). ⌘⇧B is a registry command
+      // (`view.kanbanToggle`) the menu happens to own above the page; suspending the item is what
+      // lets a terminal-first user's ⌘⇧B reach the shell like every other chord.
+      id: MENU_ITEM_ID_KANBAN,
+      label: 'Toggle Kanban Board',
+      accelerator: 'CmdOrCtrl+Shift+B',
+      click: () => send(IPC.appToggleKanban)
+    },
+    { type: 'separator' },
+    // Also restored from the default menu: Enter Full Screen (Ctrl+⌘F on mac, F11 on Linux).
+    { role: 'togglefullscreen' }
+  ]
+  const template: Electron.MenuItemConstructorOptions[] = isMac
+    ? [
+        {
+          label: app.name,
+          submenu: [
+            { role: 'about' },
+            { type: 'separator' },
+            settingsItem,
+            { type: 'separator' },
+            { role: 'services' },
+            { type: 'separator' },
+            { role: 'hide' },
+            { role: 'hideOthers' },
+            { role: 'unhide' },
+            { type: 'separator' },
+            { role: 'quit' }
+          ]
+        },
+        {
+          label: 'Edit',
+          submenu: [
+            { role: 'undo' },
+            { role: 'redo' },
+            { type: 'separator' },
+            { role: 'cut' },
+            { role: 'copy' },
+            { role: 'paste' },
+            { role: 'pasteAndMatchStyle' },
+            { role: 'delete' },
+            { role: 'selectAll' }
+          ]
+        },
+        { label: 'View', submenu: viewSubmenu },
+        {
+          label: 'Window',
+          // `id` on minimize: `syncMenuForStandDown` disables it while EITHER stand-down is in
+          // effect — a terminal focused under terminal-first, or an armed shortcut recorder — so
+          // ⌘M falls through to the terminal, or to the recorder, instead of minimizing the
+          // window. mac has no `{role:'close'}` here at all — which is why the intercept is ⌘W's
+          // only handler on mac.
+          submenu: [
+            { role: 'minimize', id: MENU_ITEM_ID_MINIMIZE },
+            { role: 'zoom' },
+            { type: 'separator' },
+            { role: 'front' }
+          ]
+        }
+      ]
+    : [
+        { label: 'File', submenu: [{ role: 'quit' }] },
+        {
+          label: 'Edit',
+          submenu: [
+            { role: 'undo' },
+            { role: 'redo' },
+            { type: 'separator' },
+            { role: 'cut' },
+            { role: 'copy' },
+            { role: 'paste' },
+            { role: 'delete' },
+            { role: 'selectAll' }
+          ]
+        },
+        { label: 'View', submenu: viewSubmenu },
+        { label: 'Settings', submenu: [settingsItem] },
+        // Both ids matter off-mac: `{role:'close'}` owns Ctrl+W here, which is readline's kill-word
+        // in a terminal — a stand-down that left it enabled would CLOSE the window on a keystroke
+        // a terminal-first user meant for their shell.
+        {
+          label: 'Window',
+          submenu: [
+            { role: 'minimize', id: MENU_ITEM_ID_MINIMIZE },
+            { role: 'close', id: MENU_ITEM_ID_CLOSE }
+          ]
+        }
+      ]
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template))
+  // A REBUILD resets every item to `enabled: true`, and this function runs on every settings
+  // change — so without this line, a terminal-first user with a terminal focused would have ⌘M
+  // silently start minimizing again the moment they toggled any unrelated setting. The sync is
+  // idempotent and cheap; it belongs at the end of every path that installs a menu, not only at
+  // the paths where the stand-down state changes.
+  syncMenuForStandDown()
+}
+
+/**
+ * Enable/disable the menu items whose ACCELERATORS would otherwise beat a stand-down.
+ *
+ * **Two stand-downs share this leg**, composed by `menuStandsDown(shortcutRecording, policy,
+ * terminalFocused)`: the terminal-first policy (below) and an armed Settings shortcut RECORDER.
+ * The recorder needs it for the same structural reason and a different destination — a menu
+ * accelerator is handled above the page, so while it was armed ⌘M minimized the window, ⌘⇧B opened
+ * the kanban board behind the dialog and ⌘, re-opened Settings, none of them recordable. With the
+ * items suspended those chords reach the recorder. **Reload is still not among them** (see below),
+ * so ⌘R / ⌘⇧R remain unrecordable by design. The two INTERCEPT thunks stay independent parameters
+ * on `installKeydownIntercepts`; only this single `enabled` boolean ORs them.
+ *
+ * `installKeydownIntercepts` standing down means only that main stops calling `preventDefault` —
+ * the key then reaches the page, and if the page ignores it, the MENU, which is handled above the
+ * page either way. So under `terminal-first` with a terminal focused, ⌘M would still hit
+ * `{role:'minimize'}` and (Windows/Linux) Ctrl+W would still hit `{role:'close'}` — the latter
+ * closing the window on what a terminal user means as readline's kill-word, i.e. strictly worse
+ * than not having the policy at all. Disabling the item suppresses its accelerator, so the chord
+ * falls through: page → the renderer's dispatcher (terminal context under terminal-first, where
+ * nothing matches) → xterm → the PTY. That is what makes "everything reaches the shell" true for
+ * ⌘M and Ctrl+W too, not just for ⌘0 and mac's ⌘W.
+ *
+ * The list is `menuItemIdsToSuspend` and it also carries **Toggle Kanban Board (⌘⇧B)** and
+ * **Settings (⌘,)** on every platform. Those two are not intercepted chords at all — they are
+ * ordinary registry commands the menu simply takes above the page, which is why the dispatcher
+ * never sees them and could not stand them down itself. **Reload (⌘R / ⌘⇧R) is the named
+ * exception** and stays live while stood down; see `menuItemIdsToSuspend`'s comment for why.
+ *
+ * Called from every place the composed answer can change — the `ui:terminal-focus` receiver, the
+ * `ui:shortcut-recording` receiver (the recorder arms and disarms once per chord the user records),
+ * the policy recompute in `settingsStore.onChange`, `clearRendererKeyState` (which clears BOTH
+ * bits), and the end of `buildAppMenu` (a rebuild resets `enabled`). NEVER per keystroke: this is a
+ * menu mutation, and `before-input-event` is the one path in the app where work is measured in
+ * keystrokes.
+ *
+ * FAIL-SAFE: a missing menu, or an item id that no longer resolves, does nothing at all. That
+ * leaves the pre-feature behaviour (menu enabled, intercepts deciding), which is the direction
+ * where the app still works — the cost is that a silent id drift is invisible, which is why both
+ * sides of the lookup use the same exported constants rather than string literals.
+ *
+ * KNOWN COST, deliberate: while either stand-down holds, every suspended item — Window ▸ Minimize,
+ * View ▸ Toggle Kanban Board, Settings, and off-mac Window ▸ Close — is greyed out to the MOUSE as
+ * well. They re-enable the moment focus leaves the terminal, or the recorder disarms (and the
+ * traffic-light button is unaffected), so this is a visible but self-healing trade. The alternative
+ * — rebuilding the whole menu without those accelerators on every focus change — costs a menu
+ * rebuild per click between the canvas and a terminal, and closes any menu the user has open. For
+ * the recorder the trade is smaller still: the greyed items sit behind a modal dialog the user
+ * opened to record a chord, and the alternative was four chords they could not bind at all.
+ *
+ * UNTESTED, and here is why: this is Electron menu mutation reached through the module-level
+ * `Menu` singleton inside `src/main/index.ts`, which no test imports (the same gap the intercept
+ * WIRING has — see `keydown-intercept.ts`'s header on why the decision lives in a pure module).
+ * The testable parts were extracted: `menuStandsDown` (the composed state) over `policyStandsDown`
+ * (the policy half) and `menuItemIdsToSuspend` (the list, including the mac/non-mac asymmetry), all
+ * pinned in `keydown-intercept.test.ts`.
+ */
+function syncMenuForStandDown(): void {
+  const menu = Menu.getApplicationMenu()
+  if (!menu) return
+  const enabled = !menuStandsDown(shortcutRecording, currentInterceptPolicy(), terminalFocused)
+  for (const id of menuItemIdsToSuspend(interceptIsMac)) {
+    const item = menu.getMenuItemById(id)
+    if (item) item.enabled = enabled
+  }
+  // The CLOSE item's extra, policy-independent stand-down (issue #383): off-mac its role owns the
+  // Ctrl+W accelerator above the page, and while a terminal has focus that keystroke is readline's
+  // kill-word. Applied ON TOP of the shared suspension — the item must never be MORE enabled than
+  // the shared rule says. Mac has no close item in the template, so the lookup is null there and
+  // this is a no-op by construction.
+  if (closeStandsDownInTerminal(interceptIsMac, terminalFocused)) {
+    const close = menu.getMenuItemById(MENU_ITEM_ID_CLOSE)
+    if (close) close.enabled = false
   }
 }
 
@@ -680,6 +1230,11 @@ function createWindow(): BrowserWindow {
     // client to co-attach to that node would inherit a frozen terminal. The tmux sessions
     // themselves keep running, exactly as they do on quit (killAll).
     ptyManager.dropClient(presenceId)
+    // The window that armed the recorder — or reported a focused terminal — is gone, so nothing
+    // can ever release either bit. Leaving one set would suppress ⌘W/⌘M/⌘0 for the NEXT window too
+    // (the flags outlive the window; a dock reopen builds a fresh one). Same shape as the
+    // dropClient above: state this window owned, released where its departure is observed.
+    clearRendererKeyState()
   })
   // A crashed/killed renderer is the same story, minus the window: drop its subscriptions so the
   // reloaded renderer reattaches to live sessions instead of inheriting the dead one's state.
@@ -690,6 +1245,10 @@ function createWindow(): BrowserWindow {
   const crashReload = createCrashReloadPolicy()
   win.webContents.on('render-process-gone', (_event, details) => {
     ptyManager.dropClient(presenceId)
+    // A dead renderer sends no disarm and no focus-lost report. The reloaded page mounts no
+    // recorder and no terminal, so without this the user would come back to an app where ⌘W does
+    // nothing at all (recording) or minimizes the window (stood down).
+    clearRendererKeyState()
     if (quitting || win.isDestroyed()) return
     const action = crashReload(details.reason, Date.now())
     if (action === 'reload') {
@@ -719,8 +1278,14 @@ function createWindow(): BrowserWindow {
   // outlives its window (tmux sessions, hook server, updater); destroying the window
   // would leave every window-bound subsystem (agent-status forwarding, tails, updater,
   // license events) pointing at a dead webContents after a dock-reopen.
+  // A fullscreen window must LEAVE fullscreen before it hides: hiding in place strands the
+  // window's empty Space as a black screen (issue #78 / electron/electron#20263). The
+  // transition is async, so the hide waits for `leave-full-screen`; `leavingFullScreen`
+  // keeps a second ⌘W during the transition from stacking another listener.
+  let leavingFullScreen = false
   win.on('close', (e) => {
-    if (shouldHideOnClose(process.platform, quitting)) {
+    const action = closeAction(process.platform, quitting, win.isFullScreen())
+    if (action === 'hide') {
       e.preventDefault()
       win.hide()
       return
@@ -730,6 +1295,23 @@ function createWindow(): BrowserWindow {
     // not only in before-quit, where the window (the only place left to show a dialog) would
     // already be destroyed by the time we asked.
     if (shouldConfirmQuit()) {
+    if (action === 'leave-fullscreen-then-hide') {
+      e.preventDefault()
+      if (!leavingFullScreen) {
+        leavingFullScreen = true
+        win.once('leave-full-screen', () => {
+          leavingFullScreen = false
+          if (!win.isDestroyed() && !quitting) win.hide()
+        })
+        win.setFullScreen(false)
+      }
+      return
+    }
+    // action === 'default': the window is really closing. On Windows/Linux the native title-bar
+    // × reaches this directly (no app.quit() first), so the confirm gate must sit here too, not
+    // only in before-quit — otherwise the window (and with it the only place to show a dialog)
+    // would already be gone by the time we asked.
+    if (!quitConfirmed && !skipQuitConfirmation) {
       e.preventDefault()
       void confirmQuit(win).then((ok) => {
         if (ok) app.quit()
@@ -777,6 +1359,31 @@ function createWindow(): BrowserWindow {
       event.preventDefault()
       if (!input.isAutoRepeat) win.webContents.send(IPC.appZoomActualSize)
     }
+  // resetZoom) and forward each to the renderer instead. The decision — and, importantly, what it
+  // must REFUSE — is in `keydown-intercept.ts`, where it can be pressed by a test. The first two
+  // are the user's effective `node.toggleMarkdown` / `node.close` bindings (⌘0 is not remappable).
+  // The two suspensions are separate thunks on purpose (see `installKeydownIntercepts`): the
+  // recorder suspends ALWAYS, the policy only while the mirror says a terminal has focus. Both are
+  // read per keystroke — the settings memo and the mirror both change under a live window.
+  installKeydownIntercepts(
+    win,
+    currentInterceptBindings,
+    interceptIsMac,
+    () => shortcutRecording,
+    () => policyStandsDown(currentInterceptPolicy(), terminalFocused),
+    // The close leg's own, policy-independent stand-down (issue #383) — see the predicate's doc.
+    () => closeStandsDownInTerminal(interceptIsMac, terminalFocused)
+  )
+
+  // The THIRD way the page that armed a recorder (or reported terminal focus) can go away: a
+  // reload. The View menu above restores `{role:'reload'}` / `{role:'forceReload'}`, and ⌘R/⌘⇧R are
+  // accelerators — handled above the page, so the recorder cannot preventDefault its way out of
+  // one, and a same-process reload fires neither `closed` nor `render-process-gone`.
+  // `navigationClearsRecording` is the (tested) filter: a same-document navigation is the SAME page
+  // with the recorder still armed and the terminal still focused, and a subframe is not this page
+  // at all.
+  win.webContents.on('did-start-navigation', (details) => {
+    if (navigationClearsRecording(details)) clearRendererKeyState()
   })
 
   // Open external links in the system browser — only safe schemes (no file://, no custom
@@ -843,11 +1450,26 @@ app.whenReady().then(async () => {
   // window's setWindowOpenHandler / will-navigate above don't cover it). Registered once at
   // startup for all current and future guests.
   app.on('web-contents-created', (_e, contents) => {
+    // Mirror renderer consoles into the debug ring (issue #78) — a packaged app swallows them
+    // too, and React error boundaries report through console.error. All webContents kinds:
+    // the main window and webview guests alike.
+    contents.on('console-message', (event) => {
+      try {
+        const level = event.level === 'error' ? 'error' : event.level === 'warning' ? 'warn' : 'info'
+        // Keep the renderer's own [tag] prefixes — the deliberate field traces ([nodeterm]
+        // healed-swap strands, [glyphgrid] attach/geometry warnings) are exactly what this panel
+        // is for, and they triage by tag. Untagged lines fall back to 'renderer'.
+        const { tag, rest } = splitTag(String(event.message ?? ''))
+        logBuffer.push({ level, tag: tag || 'renderer', msg: rest })
+      } catch {
+        /* logging must never break a page */
+      }
+    })
     if (contents.getType() !== 'webview') return
-    // Web nodes may only show http(s) pages or local content we serve via the jailed
-    // nt-media:// scheme.
+    // Web nodes may only show http(s) pages, jailed nt-media:// content, or origin-gated
+    // local file:// pages (policy + tests in webview-nav.ts).
     contents.on('will-navigate', (e, url) => {
-      if (!/^https?:\/\//i.test(url) && !/^nt-media:\/\//i.test(url)) e.preventDefault()
+      if (!allowGuestNavigation(contents.getURL(), url)) e.preventDefault()
     })
     // A browser node's guest requested a new window → open it as another browser node
     // (never a real popup). Only http(s); other schemes are dropped. The map is consulted
@@ -862,7 +1484,39 @@ app.whenReady().then(async () => {
   })
 
   settingsStore.init()
+  const gatewayCredentials = new ModelGatewayCredentialService(
+    new ElectronSecretStore(app.getPath('userData'), safeStorage, MODEL_GATEWAY_SECRET_FILE)
+  )
+  await gatewayCredentials.init()
+  try {
+    const migratedGateway = await migrateLegacyModelGatewayKey(
+      settingsStore.get().modelGateway,
+      gatewayCredentials
+    )
+    if (migratedGateway) {
+      await settingsStore.save({ ...settingsStore.get(), modelGateway: migratedGateway })
+    }
+  } catch (error) {
+    // Preserve the legacy literal in settings when the keyring/file write fails; migration can
+    // retry next launch, and the user never loses their only copy of the credential.
+    console.warn('[model-gateway] could not migrate the legacy API key to secret storage', error)
+  }
   settingsStore.registerIpc()
+  timerOccurrences = new TimerOccurrenceService(new AtomicJsonArrayStore<TimerOccurrence>(join(app.getPath('userData'), 'timers', 'occurrences.json')))
+  await timerOccurrences.reconcileMissed()
+  ipcMain.handle(IPC.timerOccurrencesLoad, async () => timerOccurrences?.list() ?? [])
+  ipcMain.handle(IPC.timerOccurrenceSchedule, async (_event, timerId: unknown, scheduledAt: unknown) => {
+    if (typeof timerId !== 'string' || timerId.length > 160 || typeof scheduledAt !== 'number' || !Number.isSafeInteger(scheduledAt)) return null
+    return timerOccurrences?.schedule(timerId, scheduledAt)
+  })
+  ipcMain.handle(IPC.timerOccurrenceTransition, async (_event, id: unknown, state: unknown) => {
+    if (typeof id !== 'string' || typeof state !== 'string') return null
+    return timerOccurrences?.transition(id, state as TimerOccurrence['state'])
+  })
+  ipcMain.handle(IPC.timerOccurrenceLap, async (_event, id: unknown, elapsedMs: unknown) => {
+    if (typeof id !== 'string' || typeof elapsedMs !== 'number' || !Number.isSafeInteger(elapsedMs) || elapsedMs < 0) return null
+    return timerOccurrences?.addLap(id, elapsedMs)
+  })
   // "Escape to widget" — see main/canvas-widget-window.ts's module doc. Uses the same
   // `desktopBuildPaths(__dirname)` call every window creation path uses; cheap and pure, so
   // recomputing it here rather than threading the `createWindow()`-local `buildPaths` through
@@ -885,11 +1539,79 @@ app.whenReady().then(async () => {
   // This one runtime is shared with the Server Edition. A corrupt/unreadable schedule file boots
   // into a disabled recovery state rather than aborting this app-ready sequence.
   scheduledSettingsRuntime.start()
+  // Planner occurrence evaluation stays in the host process. Closing the UI leaves this service
+  // alive, while a powered-off computer cannot evaluate time and is reported as missed on restart.
+  plannerRuntime.start()
   // Local, git-backed settings history (docs/local-history.md). One append-only revision per
   // save; the diff-based label lives in shared/settings-diff.ts so it is shared with any future
   // shell that saves settings, rather than re-derived per process.
   const localHistoryStore = new LocalHistoryStore(app.getPath('userData'))
   const projectArchives = new ProjectArchiveService(localHistoryStore)
+  const portableBindings = new LocalNodeBindingStore(app.getPath('userData'))
+  ipcMain.handle(IPC.portableBindingState, async (_event, input: unknown) => {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) return []
+    const value = input as Record<string, unknown>
+    if (typeof value.nodeId !== 'string' || typeof value.featureId !== 'string' || typeof value.displayLabel !== 'string') return []
+    const bindings = await portableBindings.load()
+    const current = bindings[value.nodeId]
+    return bindingActionStates(
+      {
+        schemaVersion: 1,
+        featureId: value.featureId,
+        displayLabel: value.displayLabel,
+        requestedCapabilities: [],
+        safeSettings: {},
+        relationships: []
+      },
+      {
+        hasBinding: Boolean(current),
+        hasMatchingResource: Boolean(current),
+        canConfigure: true,
+        canDeploy: false,
+        hasMissingAssets: value.hasMissingAssets === true
+      }
+    ).map((state) => ({
+      nodeId: value.nodeId as string,
+      featureId: value.featureId as string,
+      displayLabel: value.displayLabel as string,
+      action: state.action,
+      enabled: state.enabled,
+      ...(state.reason ? { reason: state.reason } : {}),
+      bound: Boolean(current)
+    }))
+  })
+  ipcMain.handle(IPC.portableBindingApply, async (_event, input: unknown) => {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) return { ok: false, error: 'Binding input is invalid.' }
+    const value = input as Record<string, unknown>
+    if (typeof value.nodeId !== 'string' || typeof value.action !== 'string') return { ok: false, error: 'Binding input is invalid.' }
+    if (value.action === 'leave-unbound') {
+      await portableBindings.remove(value.nodeId)
+      return { ok: true, state: 'unbound' as const }
+    }
+    if (!['configure', 'rebind', 'adopt', 'locate-asset'].includes(value.action)) {
+      return { ok: false, error: 'Deploy requires an explicit provider flow and is not performed by import.' }
+    }
+    try {
+      const binding = validateLocalNodeBinding({
+        nodeId: value.nodeId,
+        bindingVersion: 1,
+        providerOrHostIdentity: value.providerOrHostIdentity,
+        localResourceReferences: value.localResourceReferences,
+        credentialKeys: value.credentialKeys ?? [],
+        lastVerifiedAt: Date.now()
+      })
+      const snapshot = await portableBindings.snapshot()
+      try {
+        await portableBindings.apply(value.nodeId, binding)
+      } catch (error) {
+        await portableBindings.restore(snapshot)
+        throw error
+      }
+      return { ok: true, state: 'bound' as const }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  })
   // The packaged extraResources directory in a production install, the repo root in dev (see
   // resolveServerDeploymentRoot's own doc comment; `build.extraResources` in package.json ships
   // the matching `server-deployment/` directory). Writable state (the generated .env password,
@@ -928,6 +1650,12 @@ app.whenReady().then(async () => {
   // keyboard-driven second submit (or a second window) walks straight past a disabled button, and
   // two concurrent archive operations could interleave dialogs and history-domain writes.
   let projectArchiveBusy = false
+  let projectArchiveController: AbortController | null = null
+  ipcMain.handle(IPC.projectArchiveCancel, () => {
+    if (!projectArchiveController) return false
+    projectArchiveController.abort()
+    return true
+  })
   /** The working-copy vault document of a folder-less project, or undefined when it has none.
    *  A read failure counts as "no vault" only for a MISSING file; anything else propagates, because
    *  silently saving a project without the vault it has would be data loss wearing a success
@@ -1007,6 +1735,7 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC.projectArchiveImport, async (_event, opts?: { path?: string; password?: string }) => {
     if (projectArchiveBusy) return { ok: false, error: 'Another project export or import is still running.' }
     projectArchiveBusy = true
+    projectArchiveController = new AbortController()
     try {
       // A password retry re-opens the file the FIRST call already found protected, by path: making
       // the user pick the same file again for every wrong password would be its own small cruelty.
@@ -1061,7 +1790,15 @@ app.whenReady().then(async () => {
         if (dest.canceled || !dest.filePaths[0]) return { ok: false, canceled: true }
         destination = dest.filePaths[0]
       }
-      const outcome = await projectArchives.import(raw, { destination })
+      const outcome = await projectArchives.import(raw, {
+        destination,
+        signal: projectArchiveController.signal,
+        onProgress: (progress) => {
+          for (const w of BrowserWindow.getAllWindows()) {
+            if (!w.isDestroyed()) w.webContents.send(IPC.projectArchiveProgress, progress)
+          }
+        }
+      })
       // The project id is minted by the import, so a carried vault can only be placed once it
       // exists. A folder-restoring import already got its vault back with the working files.
       if (outcome.vault) await restoreFolderlessVault(outcome.project.id, outcome.vault)
@@ -1075,6 +1812,7 @@ app.whenReady().then(async () => {
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
     } finally {
+      projectArchiveController = null
       projectArchiveBusy = false
     }
   })
@@ -1131,7 +1869,25 @@ app.whenReady().then(async () => {
     }
   )
   sshStore.registerIpc()
-  ptyManager.init(() => settingsStore.get())
+  // Gateway discovery/credential IPC (peer-reachable by design; the renderer never receives a
+  // stored literal key, and discovery resolves key REFERENCES only for the saved gateway URL).
+  registerAgentEnvIpc(() => settingsStore.get().modelGateway, gatewayCredentials)
+  // The `${env:VAR}` snapshot for custom-agent expansion is DESKTOP-WINDOW-ONLY, so it is a raw
+  // `ipcMain.handle` on purpose (see the handler-table comment in platform-electron.ts): a
+  // `platform().handle` registration would answer relay peers too — a paired phone or remote tab
+  // could read every API key in this process's environment. The browser/relay bridges hardcode
+  // an empty snapshot instead, and expansion there degrades to the missing-env refusal.
+  ipcMain.handle(IPC.envSnapshot, () => {
+    const out: Record<string, string> = {}
+    for (const [k, v] of Object.entries(process.env)) {
+      if (typeof v === 'string') out[k] = v
+    }
+    return out
+  })
+  ptyManager.init(
+    () => settingsStore.get(),
+    () => gatewayCredentials.readForHost()
+  )
   ptyManager.registerIpc()
   workspaceStore.registerIpc()
   gitService.registerIpc()
@@ -1190,12 +1946,30 @@ app.whenReady().then(async () => {
           nodeId,
           typeof ownerNodeId === 'string' ? ownerNodeId : undefined
         )
+    (_e, webContentsId: number, nodeId: string, surface?: BrowserSurfaceKind) => {
+      // `surface` is passed through UNCHANGED, including when it is absent. Both mount sites
+      // (BrowserNode and the kanban CardModal) still send two arguments, so today it is always
+      // absent — and defaulting it to 'canvas' here would record every modal guest as a canvas
+      // guest, which is a false claim a later reverse lookup cannot detect. See `BrowserGuest`.
+      if (
+        !registerBrowserGuest(browserGuests, webContentsId, nodeId, surface, (id) =>
+          webContents.fromId(id) ?? null
+        )
+      ) {
+        // Loud, because the symptom otherwise is "popups from this node stopped opening" with
+        // nothing anywhere to explain it.
+        console.warn('[browser] refused guest registration', { webContentsId, nodeId, surface })
       }
     }
   )
   ipcMain.on(IPC.browserUnregister, (_e, webContentsId: number) => {
+    // The browser node's guest is going away (node closed, project closed/switched, or a discard).
+    // Revoke any control lease on it — LIFECYCLE, so no user-stop tombstone. Read the node id BEFORE
+    // dropping the guest. A no-op for a node that was never driven.
+    const nodeId = browserNodeIdForGuest(webContentsId)
     browserGuests.delete(webContentsId)
     browserUseBackend.unregister(webContentsId)
+    if (nodeId) pushBrowserLeases(revokeBrowserNode(nodeId, browserRevocation, { userStopped: false }))
   })
 
   // Unpacked Chrome-extension loading, per browser profile — see `BrowserExtensionsApi`'s doc
@@ -1269,6 +2043,37 @@ app.whenReady().then(async () => {
 
   ipcMain.on(IPC.appCloseWindow, () => BrowserWindow.getFocusedWindow()?.close())
 
+  // Settings' shortcut recorder arming/disarming. Guarded on the sender being the live main window
+  // (the same `getMainWindow()?.webContents.id !== event.sender.id` test `registerElectronGitHubControl`
+  // uses): a <webview> guest — a browser node showing an arbitrary page — is a webContents in this
+  // process too, and this bit disables the app's own keyboard shortcuts. Resolved at call time, not
+  // captured, because the window can be closed and recreated on macOS.
+  ipcMain.on(IPC.uiShortcutRecording, (event, active: boolean) => {
+    if (getMainWindow()?.webContents.id !== event.sender.id) return
+    shortcutRecording = active === true
+    // The menu leg follows recording too (`menuStandsDown`), so an arm/disarm owes a sync — that is
+    // what lets ⌘M, ⌘⇧B, ⌘, and off-mac Ctrl+W reach the recorder instead of the menu item that
+    // owns them. A recorder arms and disarms once per chord the user records, which is the right
+    // cadence for a menu mutation; NEVER per keystroke (same rule as the focus mirror below). It
+    // must be INSIDE the guard for the same reason as there: a rejected sender must not move the
+    // menu either.
+    syncMenuForStandDown()
+  })
+
+  // The terminal-focus mirror, under the SAME sender guard and for a sharper version of the same
+  // reason: a <webview> guest is a webContents in this process, and this bit decides whether the
+  // window claims ⌘W/⌘M/⌘0 at all — an arbitrary page in a browser node could otherwise hand
+  // itself the window's shortcuts by claiming a terminal is focused. `focused === true` so a
+  // malformed payload reads as NOT focused, the fail-safe direction (intercepts on).
+  ipcMain.on(IPC.uiTerminalFocus, (event, focused: boolean) => {
+    if (getMainWindow()?.webContents.id !== event.sender.id) return
+    terminalFocused = focused === true
+    // The mirror is change-deduped, so this fires only on a real focus transition — the right
+    // cadence for a menu mutation, and the reason the sync is here rather than on the keystroke
+    // path. It must be INSIDE the guard: a rejected sender must not move the menu either.
+    syncMenuForStandDown()
+  })
+
   // Bring the window forward after a file is dropped into a terminal. On macOS a drag-drop from
   // another app does NOT activate the destination app, so without this the drag-source keeps OS
   // keyboard focus and the user types into the wrong application. `getMainWindow()` (not the
@@ -1317,13 +2122,22 @@ app.whenReady().then(async () => {
   // once already after an Electron upgrade invalidated the ncprefs signature record.
   ipcMain.handle(
     IPC.appNotify,
-    async (_e, payload: { title: string; body: string; nodeId: string; force?: boolean }) => {
+    async (_e, payload: NotifyPayload) => {
+      // The native boundary is deliberately fail-closed. A missing ownership tag would make
+      // it impossible to tell whether a personal vocabulary replacement is safe, so reject it
+      // before window focus or notification support checks can turn the malformed request into a
+      // misleading `skipped` result.
+      const prepared = prepareNativeNotification(payload)
+      if (!prepared) return 'failed'
       const win = getMainWindow()
       if (!win || !Notification.isSupported()) return 'skipped'
       // `force` (permission request / confirmation) shows even when focused; normal
       // completion notifications only show when the window is in the background.
       if (!payload.force && win.isFocused()) return 'skipped'
-      const n = new Notification({ title: payload.title, body: payload.body })
+      if (!isPreparedNativeNotification(payload)) return 'failed'
+      const copy = composeNativeNotification(payload)
+      const copy = composeNativeNotification(prepared)
+      const n = new Notification(copy)
       n.on('click', () => {
         // Re-resolve at click time — the window may have been hidden/recreated since.
         const w = getMainWindow()
@@ -1452,6 +2266,12 @@ app.whenReady().then(async () => {
     if (isSafeExternalUrl(url)) void shell.openExternal(url)
   })
 
+  // Project-icon upload: open a file dialog and re-encode the pick to a bounded PNG data URL, main
+  // side (never trust a user file straight onto Project.icon — see project-icon-upload.ts).
+  ipcMain.handle(IPC.shellPickProjectIcon, (e) =>
+    pickProjectIcon(BrowserWindow.fromWebContents(e.sender))
+  )
+
   // The Explorer/Editor fs surface: ONE registrar (core/fs-handlers.ts) shared by this shell and
   // the Server Edition, over the same pure core/fs-ops — so local, browser and peer filesystem
   // behaviour cannot drift. Registered on the platform, so a remote tab's Explorer/editor works.
@@ -1464,13 +2284,17 @@ app.whenReady().then(async () => {
 
   // Universal file converter (docs/file-converter.md) + local Ollama suite manager
   // (docs/ollama-manager.md) + local Minecraft server create-and-manage
-  // (docs/minecraft-server-manager.md) — all three register on the shared CorePlatform, so the
+  // (docs/minecraft-server-manager.md) + local Torrent Downloader (docs/features/torrents/) — all
+  // register on the shared CorePlatform, so the
   // Server Edition gets the identical engine via src/server/handlers/index.ts's own call to these
   // same functions.
   registerConverterIpc(corePlatform)
   registerNodeDependencyIpc(corePlatform)
   registerOllamaIpc(corePlatform)
   minecraftServers = registerMinecraftIpc(corePlatform).manager
+  registerTorrentIpc(corePlatform)
+  virtualMachineManager = registerVirtualMachineIpc(corePlatform).manager
+  registerCalendarIpc(corePlatform)
 
   const githubSecret = new ElectronGitHubSecretStore(app.getPath('userData'), safeStorage)
   const github = registerGitHubIntegration({
@@ -1531,7 +2355,9 @@ app.whenReady().then(async () => {
   // a desktop router that adds SSH routing on top of the local-cwd/unsupported the server also does.
   // A connected SSH project (refForProject → a ref with a remoteCwd) reads/writes/fingerprints over
   // its ControlMaster; anything else falls to the local folder cwd, then unsupported.
-  registerBoardLogHandlers(corePlatform, {
+  // Extracted so the agent-messaging delivery trace can append THROUGH the same router the IPC
+  // handler uses (appendBoardLogVia) instead of restating the local/remote/unsupported decision.
+  const boardLogRouter = {
     route: (projectId: string): BoardLogRoute => {
       const ref = sshProjectManager?.refForProject(projectId)
       if (ref?.remoteCwd) {
@@ -1559,6 +2385,48 @@ app.whenReady().then(async () => {
       if (cwd) return { kind: 'local', cwd }
       return { kind: 'unsupported' }
     }
+  }
+  const boardLog = registerBoardLogHandlers(corePlatform, boardLogRouter)
+  registerLogHandlers(corePlatform, logBuffer, () => settingsStore.get().debugLogPanel)
+
+  // Agent messaging (the `send`/`reply` control verbs). Canvas.tsx forwards the validated verb
+  // here; everything that authorizes or performs the delivery reads MAIN's stores. See
+  // src/main/agent-messaging.ts for the whole map.
+  const messagingDeps: AgentMessagingDeps = {
+    paneOwner: (id) => ptyManager.paneOwner(id),
+    sendFramedPayload: (id, payload) => ptyManager.sendFramedPayload(id, payload),
+    hasLiveSession: (id) => ptyManager.hasLiveSession(id),
+    projects: () => workspaceStore.persistedCanvases(),
+    isRemoteNode: (id) => !!ptyManager.sshRemoteForNode(id),
+    // GLOBAL CONSTRAINT 11: every delivery path is gated behind the per-project switch, OFF by
+    // default. The switch is the `agentMessaging` capability GRANT: the strict `=== true` flag
+    // in the hostile git-shared project.json AND this machine's recorded 'kept' answer to the
+    // clone notice (projectCapabilityGrantedFor — never the raw file bit). Read per call off
+    // the store's index, so a decline or an off-toggle refuses the very next delivery.
+    messagingEnabled: messagingEnabledVia((id) => workspaceStore.capabilityProjectFor(id)),
+    // Runtime pane ownership: which project actually SPAWNED the target's pane this run
+    // (core/agents/pane-ownership.ts). The gate trusts this over the attacker-writable store to
+    // decide whose grant applies; unproven ⇒ refused (PR #237 fix round 2).
+    paneOwnerProject: (id) => paneOwnerProject(id),
+    customAgents: () => settingsStore.get().customAgents,
+    appendBoardLog: (projectId, entry) => appendBoardLogVia(boardLogRouter, projectId, entry)
+  }
+  // Deliver-on-idle (PR 7): the process-lifetime bounded queue, built by the service factory so its
+  // trace + sender-facing legs are wired (and unit-tested) in one place. Its `deliver` is
+  // `runDelivery` against these SAME deps, so a flush re-runs the whole gate chain (ownership, grant,
+  // flow) against live state — the flush-time re-validation. The flush trigger is the target's own
+  // `done` event, already fed to `onMessagingAgentEvent` below. A TTL expiry is board-logged to the
+  // sender's project AND held in the trace ring (never a silent drop). `wake`/`isHibernated` are
+  // RENDERER state (Eco lives in `useAgentStatus`, the wake registry in the renderer's
+  // agent-restart) with no main-side signal today: the BUSY-target leg is fully wired here, and the
+  // hibernated leg's renderer→main wake is an explicitly-recorded residual (see the PR body).
+  messagingDeps.queue = createDeliveryQueue(messagingDeps)
+  setDeliveryQueue(messagingDeps.queue)
+  ipcMain.handle(IPC.agentMessageDeliver, async (_e, raw: unknown) => {
+    if (!isDeliverRequest(raw))
+      return { ok: false, error: 'malformed agent-message request. Do not retry.' }
+    const { reply } = await deliverFromControl(raw, messagingDeps)
+    return reply
   })
 
   // Password managers (core/password-manager/): v1 is local-only, same starting scope board-log
@@ -1801,6 +2669,26 @@ app.whenReady().then(async () => {
   // callers until their own timeout, so it is not optional.
   void refreshCodexIdentityCaps()
   hookServer.setCodexIdentityListener((ev) => sendToMain(IPC.codexIdentity, ev))
+  // A node still on a canvas is "live". A thread whose recorded owner is gone (node deleted, or a
+  // workspace that no longer holds it) is free to be re-claimed; one whose owner is still there is
+  // not, and the launcher then falls back rather than putting two clients on one conversation.
+  const codexNodeIsLive = (nodeId: string): boolean => !!workspaceStore.getNode(nodeId)
+  hookServer.setCodexThreadStartHandler(async ({ nodeId, cwd, hookEndpoint, accountId }) => {
+    const threadId = await startCodexThread(cwd)
+    writeCodexThreadIdentity(threadId, nodeId, hookEndpoint, undefined, accountId)
+    return threadId
+  })
+  hookServer.setCodexThreadBindHandler(async ({ nodeId, threadId, hookEndpoint, accountId }) => {
+    // Ask the app-server whether this conversation exists BEFORE recording that a node owns it.
+    // The id reaching us is whatever the node persisted — it can be stale, or from a session that
+    // ran under plain codex and the shared server has never heard of. Binding it anyway writes a
+    // record and then execs `codex --remote unix:// resume <id>`, which dies with "no rollout
+    // found" AFTER exec, where nothing can fall back any more. Refusing here IS the fallback.
+    if (!(await codexThreadExists(threadId))) {
+      throw new Error('Codex thread is unknown to the shared app-server')
+    }
+    bindCodexThreadIdentity(threadId, nodeId, hookEndpoint, codexNodeIsLive, undefined, accountId)
+  })
   // SSH_ASKPASS relay (ssh-project.ts): lets the ControlMaster, which has no tty, route a
   // passphrase-protected identity file's prompt back through the app instead of failing auth.
   // MUST NOT be fatal: binding a unix socket under ~/.nodeterm can fail for filesystem reasons
@@ -1823,6 +2711,8 @@ app.whenReady().then(async () => {
   // Also skip the confirm dialog: this is a restart-to-update the user already asked for via the
   // "Restart to update" card, not a fresh decision to re-confirm, and a modal here would only
   // block the install.
+  // Also skip the confirm dialog — this is a restart-to-update the user already asked for via the
+  // "Restart to update" card, not an exit, and a modal here would just block the install.
   initUpdater(() => {
     quitting = true
     skipQuitConfirmation = true
@@ -1875,13 +2765,32 @@ app.whenReady().then(async () => {
   // 'show' guarantees a regular window has established the app's Dock presence first.
   const notchTunables = (): NotchHudTunables => {
     const s = settingsStore.get()
-    return { enabled: s.notchHud, notchWidth: s.notchWidth, hoverExpand: s.notchHoverExpand }
+    return {
+      enabled: s.notchHud,
+      notchWidth: s.notchWidth,
+      hoverExpand: s.notchHoverExpand,
+      percentMode: s.usagePercentMode
+    }
   }
   const startNotchHud = (): void =>
-    initNotchHud({ getNodeTitle: displayTitleFor }, notchTunables())
+    initNotchHud({
+      getNodeTitle: displayTitleFor,
+      getSchoolMode: () => ({ enabled: schoolModeStore.get().enabled, hydrated: schoolModeStore.isHydrated() })
+    }, notchTunables())
   if (win.isVisible()) startNotchHud()
   else win.once('show', startNotchHud)
   settingsStore.onChange(() => applyNotchHudSettings(notchTunables()))
+  schoolModeStore.onChange(() => notchHudOnSchoolModeChange())
+  buildAppMenu(win)
+  // Rebuild the native menu on every settings change so the View → Snap to Grid checkmark (and
+  // any future live label) tracks the renderer's setting. The renderer is the sole settings
+  // writer; a change persists through `settingsStore`, which fires this hook. No reverse IPC.
+  // Keep-awake re-reads its enable flag on the same edge.
+  settingsStore.onChange(() => {
+    applyNotchHudSettings(notchTunables())
+    buildAppMenu(win)
+    keepAwake?.refresh()
+  })
   // Keep awake while agents work (docs/superpowers/specs/2026-08-18-keep-awake-design.md): hold an
   // idle-sleep power assertion while a LOCAL agent node is working, released the moment the last
   // one stops. Folds the same mirror edges the notch does; the stale sweep's synthetic end
@@ -1893,6 +2802,14 @@ app.whenReady().then(async () => {
   })
   onNodeStateChange((c) => keepAwake?.onChange(c))
   settingsStore.onChange(() => keepAwake?.refresh())
+  // Converge to the mirror on two occasions the edge stream cannot cover:
+  //  - boot: an app relaunch (auto-update, crash) does not stop a tmux-backed run, and
+  //    loadPersisted deliberately restores its `working` entry WITHOUT firing edges;
+  //  - every mirror flush: a SessionStart mid-working resets the entry silently (upstream keeps
+  //    that edge-free to protect the new turn's Live Activity), which also disarms the stale
+  //    sweep — but the reset schedules a flush itself, so this sync releases moments later.
+  keepAwake.sync(workingNodes().map((w) => w.nodeId))
+  onMirrorFlush(() => keepAwake?.sync(workingNodes().map((w) => w.nodeId)))
   // Advertise launch settings to the mobile companion through the mirror. The provider is
   // consulted at every flush (heartbeat ≤60s), so a settings change propagates without extra
   // plumbing. Caps arrive async: re-flush once the memoized probe answers.
@@ -1922,11 +2839,15 @@ app.whenReady().then(async () => {
   // GRANTED-MODE FALLBACK (spec: 2026-07-21-push-grants; owner-approved "B"). The desktop ALSO
   // wires the SSH-possession push grants the Server Edition uses (src/server/index.ts) — a phone
   // that reached this Mac by plain SSH drops a signed, device-scoped grant at
-  // `~/.nodeterm/push-grants/<deviceId>.grant` on the Mac's own fs. `resolveTarget` keeps a SINGLE
-  // sender: host-mode only when a relay identity is present AND a phone is paired; else (unpaired,
-  // or no identity) it falls through to the grants. So a plain-SSH phone gets pushes for
-  // Mac-tracked sessions with NO QR pairing, and QR-pairing later flips `hasPairedPhone` true →
-  // host-mode automatically (grants suppressed — no double-push to the same phone).
+  // `~/.nodeterm/push-grants/<deviceId>.grant` on the Mac's own fs. `resolveSendTarget` sends BOTH
+  // legs whenever both are live — host mode for the relay-paired phones, one Bearer POST per grant
+  // for the SSH-only ones. It used to be either/or (host wins), which meant a SINGLE relay-paired
+  // phone silenced every SSH-only phone on this Mac: host mode fans out over the backend's
+  // `relay_devices` rows, where an SSH-only phone has no row at all. The per-device exclusion that
+  // would prevent the reverse cost (a phone that is paired AND granted gets two pushes) is not
+  // expressible here — a grant is keyed by the phone's deviceId, `loadApprovedDevices` stores only
+  // NaCl box pubkeys, and nothing on this machine maps one to the other. See the long note on
+  // `resolveSendTarget` in core/push-notify.ts.
   const pushGrants = createGrantsAccessor()
   // ...and the REMOTE half of the same idea. A Mac-driven SSH project's phone can only reach the
   // HOST, so its grant is dropped there, not here — without this sweep an SSH-only user got no
@@ -1934,7 +2855,10 @@ app.whenReady().then(async () => {
   // by a timer below; `get()` is sync so it can sit behind `getGrants`. See
   // core/remote-push-grants.ts.
   const remoteGrants = createRemoteGrantsCache()
-  /** Local grants first (this machine's own phone), then the hosts' — deduped per device inside. */
+  /** Local grants first (this machine's own phone), then the hosts'. ORDER MATTERS: one phone that
+   *  reached both this Mac and an SSH host dropped a different token on each, and push-notify's
+   *  `dedupeGrantsByDevice` keeps the FIRST occurrence per deviceId — so the local token, the one
+   *  that needs no host round-trip to stay fresh, is the survivor. */
   const allPushGrants = (): PushGrant[] => [...pushGrants.get(), ...remoteGrants.get()]
   /** A 401/403 could be on either side's token; neither accessor knows the other's. */
   const markPushGrantDead = (grant: string): void => {
@@ -2174,8 +3098,10 @@ app.whenReady().then(async () => {
   // would mean changing `ContextTail.track(sessionId, path)` and the four call sites that depend on
   // it. The poller (offset reads, torn-line carry, change-gated push) is written once in
   // createContextTail; only the token keys differ, so only `parse` differs. Neither gets
-  // onTaskNotification/onToolResult: both are claude transcript features (subagent cards, the
-  // declined-ask rescue), and neither agent is in SUBAGENT_CAPABLE.
+  // onTaskNotification/onToolResult: both are claude transcript features (the task-notification
+  // sniff exists because claude's hooks never send the async subagent's real end; codex's
+  // SubagentStop hook IS the real end, so its subagent cards need no transcript sniffing —
+  // and the declined-ask rescue is claude-only too).
   const geminiContextTail = createContextTail(pushContextUpdate, { parse: geminiContextParse })
   // Hand the gemini session-name reader its path authority (declared above the handlers that use
   // it, assigned here where the tail exists).
@@ -2405,21 +3331,10 @@ app.whenReady().then(async () => {
   installManagedAgentHooks()
   // Managed accounts each carry their own settings.json AND skills/ (Claude Code resolves both
   // relative to CLAUDE_CONFIG_DIR) — re-install the hook + canvas skill there too (idempotent),
-  // so an app update's new versions reach every account dir. Best-effort: one failing account
-  // must never block launch (match installManagedAgentHooks' fail-open).
-  for (const acct of settingsStore.get().claudeAccounts ?? []) {
-    if (acct.host) continue // remote accounts live on another host; nothing to install locally
-    try {
-      installClaudeHooksInto(claudeConfigDirFor(acct.id))
-      installCanvasSkillInto(claudeConfigDirFor(acct.id))
-      // Ensure fullscreen TUI in this account dir (write-if-absent, version-gated). Off the
-      // critical path: it awaits the memoized CLI probe, then writes fail-open. (The system
-      // ~/.claude is handled by installManagedAgentHooks above, which covers Server Edition too.)
-      void ensureClaudeFullscreenTuiInto(claudeConfigDirFor(acct.id))
-    } catch (e) {
-      console.warn(`[agent-hooks] account ${acct.id} hook install failed`, e)
-    }
-  }
+  // so an app update's new versions reach every account dir. The loop is shared with the Server
+  // Edition's boot (src/core/claude-accounts-service.ts); the canvas skill is the desktop's own
+  // addition, because canvas control is not wired on that shell at all.
+  installHooksIntoLocalAccounts(settingsStore.get().claudeAccounts ?? [], installCanvasSkillInto)
   // Fan a normalized agent event to BOTH consumers: the renderer's agentStatus store (canvas badge)
   // and the mobile-facing mirror. Named so the deterministic-approval answer handler below can reuse
   // it for the optimistic flip.
@@ -2431,6 +3346,9 @@ app.whenReady().then(async () => {
     sendToMain(IPC.agentStatus, enriched)
     // Feed the macOS Notch HUD its prompt (ev.task on newTurn) + subagent grouping (no-op off/non-darwin).
     notchHudOnAgentEvent(enriched)
+    // Agent messaging taps the SAME stream: the sender's newTurn resets its fan-out budget, and
+    // an open delivery receipt watch is satisfied by the target's verified advance.
+    onMessagingAgentEvent(enriched)
   }
   hookServer.setListener(emitAgentStatus)
   for (const event of pendingCodexIdentityEvents.splice(0)) emitAgentStatus(event)
@@ -2722,6 +3640,7 @@ app.whenReady().then(async () => {
         session_id?: string
         transcript_path?: string
         hook_event_name?: string
+        agent_id?: string
       }
       // A REMOTE (SSH) node's transcript lives on the HOST, and these tails read the LOCAL disk —
       // a host path like `~/.gemini/tmp/…` clears the local jail, so without this we would meter
@@ -2729,7 +3648,33 @@ app.whenReady().then(async () => {
       // are out of scope (remote-context-tail.ts is that path), so skip rather than report the
       // wrong machine's numbers. The Server Edition needs no counterpart: it has no SSH projects,
       // which is why its copy of this branch is otherwise identical but lacks these two lines.
+      // (A remote codex node's subagent CARDS still work — normalize is machine-agnostic — it is
+      // only the live-activity tail that has no remote leg yet.)
       if (nodeId && ptyManager.sshRemoteForNode(nodeId)) return
+      // Codex subagent events (spawn_agent), BEFORE the meter track: every agent_id-tagged event
+      // carries the PARENT's session_id with the CHILD's rollout as transcript_path (measured,
+      // codex-cli 0.146.0 — SubagentStart and the child's own tool events alike), so falling
+      // through would re-point the parent's context meter at the child's rollout. The tail is the
+      // shared subagentTail instance: releaseNodeTails/SessionEnd cleanup then covers codex ids
+      // through the same nodeSubagents bookkeeping claude uses.
+      if (agentId === 'codex' && p.agent_id) {
+        if (p.hook_event_name === 'SubagentStart') {
+          subagentTail.trackFile(
+            p.agent_id,
+            safeTranscriptPath(p.transcript_path),
+            createCodexSubagentFormatter
+          )
+          if (nodeId) {
+            const set = nodeSubagents.get(nodeId) ?? new Set<string>()
+            set.add(p.agent_id)
+            nodeSubagents.set(nodeId, set)
+          }
+        } else if (p.hook_event_name === 'SubagentStop') {
+          subagentTail.finish(p.agent_id)
+          if (nodeId) nodeSubagents.get(nodeId)?.delete(p.agent_id)
+        }
+        return
+      }
       const transcriptPath = safeTranscriptPath(p.transcript_path)
       const tail = agentId === 'gemini' ? geminiContextTail : codexContextTail
       if (p.session_id && transcriptPath) tail.track(p.session_id, transcriptPath)
@@ -2905,6 +3850,166 @@ app.whenReady().then(async () => {
       timer: NodeJS.Timeout
     }
   >()
+  // Who owns which agent-opened browser node, THIS app run only. In-memory, never persisted, never
+  // read from project.json (Task 4.3/4.4). Consumed by PR 5 (attach/lease), PR 6 (indicator/Stop).
+  const browserLedger = new BrowserControlLedger()
+  // Holds the debugger lease per driven browser node. Built and unit-tested in PR 5. PR 7 wires each
+  // guest's `webContents.debugger` into a BrowserSession and starts the idle sweep; a driving verb
+  // there will call `browserLedger.touchLease(...)` + `pushBrowserLeases()` so the chip lights up.
+  // No verb attaches a guest yet, so nothing sets a live lease today — but revocation (Stop + the
+  // automatic triggers) is fully live, because `release` is a no-op-safe detach for a node with no
+  // session. Owned here so all the wiring has one home. See browser-lease.ts / browser-revocation.ts.
+  const browserLeases = new BrowserLeaseManager()
+  // @ref bookkeeping (Task 5.5), one table for every driven node; nav bumps a node's generation.
+  const browserRefs = new RefTable()
+  // Per-node event bus (fixed CDP event set → our own state) and the `debugger.on('message')`
+  // listener we registered for it, kept so a teardown removes exactly that listener (a released and
+  // re-created session must not leave a duplicate listener firing on the same debugger).
+  const browserBuses = new Map<string, CdpEventBus>()
+  const browserMsgListeners = new Map<
+    string,
+    { dbg: { removeListener(event: string, fn: (...a: unknown[]) => void): void }; fn: (...a: unknown[]) => void }
+  >()
+  // Tear down the driver-side state for one node (its lease/session is being released). Removes the
+  // exact message listener and forgets the bus + refs, so nothing keeps driving a released node.
+  const browserDriverTeardown = (nodeId: string): void => {
+    const l = browserMsgListeners.get(nodeId)
+    if (l) {
+      try {
+        l.dbg.removeListener('message', l.fn)
+      } catch {
+        /* a destroyed debugger throws; the map cleanup below is what matters */
+      }
+      browserMsgListeners.delete(nodeId)
+    }
+    browserBuses.delete(nodeId)
+    browserRefs.forget(nodeId)
+  }
+  // Revocation releases the lease (detach + reject in-flight) AND tears down the driver state, in one
+  // place, whatever triggered it — so a Stop can never leave a page still drivable.
+  const browserRevocation: RevocationTargets = {
+    leases: {
+      release: (nodeId: string) => {
+        browserLeases.release(nodeId)
+        browserDriverTeardown(nodeId)
+      }
+    },
+    ledger: browserLedger
+  }
+  // The live control session + event bus for a node's CANVAS <webview> guest (Task 2.2: the canvas
+  // surface is the only drivable one — a modal guest is never driven). Attaching is LAZY inside the
+  // session, so getting one costs no debugger attach; that is what keeps "ledger.get() before any
+  // attach" literally true. Returns null when the guest's page is gone (the memory saver released
+  // it), which the drive gate turns into the named discard refusal.
+  const canvasGuestWcId = (browserNodeId: string): number | undefined => {
+    let unknownSurface: number | undefined
+    for (const [wcId, g] of browserGuests) {
+      if (g.nodeId !== browserNodeId) continue
+      if (g.surface === 'canvas') return wcId
+      // `surface` is `undefined` until both mount sites are threaded (guest-registry): treat it as
+      // the canvas fallback (the common case is one canvas guest), but NEVER drive a `'modal'` one.
+      if (g.surface === undefined) unknownSurface = wcId
+    }
+    return unknownSurface
+  }
+  const browserSessionFor = (browserNodeId: string): LiveGuest | null => {
+    const wcId = canvasGuestWcId(browserNodeId)
+    if (wcId === undefined) return null
+    const wc = webContents.fromId(wcId)
+    if (!wc || wc.isDestroyed()) return null
+    const existing = browserLeases.get(browserNodeId)
+    const existingBus = browserBuses.get(browserNodeId)
+    if (existing && existingBus) return { session: existing as unknown as Sendable, bus: existingBus }
+    // Fresh driver: the bus bumps this node's ref generation on a main-frame navigation / context
+    // clear (Task 5.5), the session pushes its lease to the ledger + renderer on every verb (which is
+    // what lights the driving chip), and the message listener feeds the fixed CDP event set into the
+    // bus — nothing is streamed to the agent.
+    const bus = new CdpEventBus(() => browserRefs.bumpGeneration(browserNodeId))
+    const session = new BrowserSession({
+      nodeId: browserNodeId,
+      debugger: wc.debugger,
+      // A 0×0 placeholder: coordinates are unused by --nav/--read, and the pointer verbs (PR 8) call
+      // BrowserSession.refreshViewport() from Page.getLayoutMetrics before every dispatch, which
+      // OVERRIDES this at send time — so a bounded mouse event validates against the real page.
+      viewport: () => ({ viewport: { width: 0, height: 0 } }),
+      isDevToolsOpen: () => {
+        try {
+          return wc.isDevToolsOpened()
+        } catch {
+          return false
+        }
+      },
+      onLeaseChange: (until) => {
+        browserLedger.touchLease(browserNodeId, until)
+        pushBrowserLeases()
+      }
+    })
+    const fn = (_e: unknown, method: string, params: unknown): void => bus.emit(method, params)
+    wc.debugger.on('message', fn)
+    browserLeases.set(browserNodeId, session)
+    browserBuses.set(browserNodeId, bus)
+    browserMsgListeners.set(browserNodeId, {
+      dbg: wc.debugger as unknown as { removeListener(e: string, f: (...a: unknown[]) => void): void },
+      fn: fn as unknown as (...a: unknown[]) => void
+    })
+    return { session: session as unknown as Sendable, bus }
+  }
+  // The 60s idle detach (browser-lease.ts): drop the debugger attachment on nodes gone quiet, so an
+  // attachment never outlives its usefulness. The session stays in the map and re-attaches on the
+  // next verb; only the debugger handle is released. Unref'd so it never holds the process open.
+  const browserIdleSweep = setInterval(() => browserLeases.sweepIdle(Date.now()), 30_000)
+  browserIdleSweep.unref?.()
+  // Push the current driven-lease set to the renderer (chip / rope / kill row). `stopped` ids drop
+  // from the chip immediately, skipping the anti-flicker linger — that is how an explicit Stop hides
+  // at once while a merely-idle lease fades.
+  const pushBrowserLeases = (stopped: string[] = []): void => {
+    const w = getMainWindow()
+    if (!w || w.isDestroyed()) return
+    w.webContents.send(IPC.browserLeaseChanged, {
+      active: browserLedger.activeLeasesForPush(Date.now()),
+      stopped
+    })
+  }
+  // Reverse the guest map: which node id owns this <webview> guest? Used to revoke on a browser
+  // node's teardown (its guest unregisters). Absent guest → no id → nothing to revoke.
+  const browserNodeIdForGuest = (webContentsId: number): string | undefined =>
+    browserGuests.get(webContentsId)?.nodeId
+  // Stop agent control of ONE node — the chip button and the node context menu. USER-initiated, so
+  // it leaves the tombstone: a later drive from that owner is refused by the named human act.
+  ipcMain.on(IPC.browserStop, (_e, nodeId: string) => {
+    pushBrowserLeases(revokeBrowserNode(nodeId, browserRevocation, { userStopped: true }))
+  })
+  // Stop-all — the Settings kill row. Also user-initiated.
+  ipcMain.on(IPC.browserStopAll, () => {
+    pushBrowserLeases(revokeAllBrowser(browserRevocation, { userStopped: true }))
+  })
+  // A project's browser-control switch went OFF (read live in the renderer, never cached at lease
+  // start). User-initiated: a human turned it off.
+  ipcMain.on(IPC.browserStopProject, (_e, projectId: string) => {
+    pushBrowserLeases(revokeBrowserByProject(projectId, browserRevocation))
+  })
+  // The OWNER agent node closed or restarted (pty teardown/recycle) → its browser leases die with
+  // its verified identity. A SECOND listener on these channels alongside releaseNodeTails above;
+  // both fire. LIFECYCLE, so no user-stop tombstone. A restart mints a fresh identity that cannot
+  // drive the old node anyway, so revoking is the honest state.
+  corePlatform.on(IPC.ptyDestroy, (nodeId: string) =>
+    pushBrowserLeases(revokeBrowserByOwner(nodeId, browserRevocation))
+  )
+  corePlatform.on(IPC.ptyRecycle, (nodeId: string) =>
+    pushBrowserLeases(revokeBrowserByOwner(nodeId, browserRevocation))
+  )
+  // The caller's PROJECT GRANTS die with its node too (issue #338, spec P3) — same teardown
+  // anchor, same reasoning as the browser leases above: a grant is consent given to a running
+  // session, and a recycle mints a fresh identity that must re-earn its targeting rights via
+  // open-project. App restart clears the whole in-memory ledger by construction.
+  corePlatform.on(IPC.ptyDestroy, (nodeId: string) => clearProjectGrants(nodeId))
+  corePlatform.on(IPC.ptyRecycle, (nodeId: string) => clearProjectGrants(nodeId))
+  // App quit: detach every debugger lease. A second `before-quit` listener alongside the module-
+  // level flush one (both fire); scoped here so it can reach `browserRevocation`. No push — the
+  // window is going away. LIFECYCLE, so no tombstone (the in-memory ledger is gone on quit anyway).
+  app.on('before-quit', () => {
+    revokeAllBrowser(browserRevocation, { userStopped: false })
+  })
   ipcMain.on(
     IPC.agentControlResult,
     (
@@ -2924,11 +4029,153 @@ app.whenReady().then(async () => {
       pending.resolve(payload)
     }
   )
-  hookServer.setControlHandler(async ({ verb, nodeId, args }) => {
+  // The `browser` verb resolve round-trip (Task 7.2). Main asks the renderer to resolve a source
+  // node's owning project, control-capability and the LIVE per-project capability value; the renderer
+  // answers here. Modelled on `pendingControl`, but its own map with its own short (2s) timeout so a
+  // slow canvas can NEVER consume the 120s pending-control budget.
+  const pendingBrowserResolve = new Map<string, (r: BrowserResolve) => void>()
+  ipcMain.on(
+    IPC.browserControlResolveResult,
+    (
+      _e,
+      payload: {
+        requestId: string
+        ok: boolean
+        refusal?: string
+        projectId?: string
+        projectCwd?: string
+        sourceControlCapable?: boolean
+        capabilityOn?: boolean
+        sourceTitle?: string
+        browserTitle?: string
+      }
+    ) => {
+      const resolve = pendingBrowserResolve.get(payload.requestId)
+      if (!resolve) return
+      pendingBrowserResolve.delete(payload.requestId)
+      resolve(
+        payload.ok
+          ? {
+              ok: true,
+              projectId: payload.projectId ?? '',
+              projectCwd: payload.projectCwd,
+              sourceControlCapable: payload.sourceControlCapable === true,
+              capabilityOn: payload.capabilityOn === true,
+              sourceTitle: payload.sourceTitle,
+              browserTitle: payload.browserTitle
+            }
+          : { ok: false, refusal: payload.refusal ?? 'source node is not on an open canvas' }
+      )
+    }
+  )
+  // Ask the renderer to resolve a source node — the `ask` closure `resolveBrowserTarget` races
+  // against its own 2s timeout. The renderer NEVER runs a CDP command; it answers existence + project
+  // + capability only.
+  const askRendererResolve = (sourceNodeId: string, browserNodeId: string): Promise<BrowserResolve> => {
+    const w = getMainWindow()
+    if (!w || w.isDestroyed()) {
+      return Promise.resolve({ ok: false, refusal: 'source node is not on an open canvas' })
+    }
+    const requestId = randomUUID()
+    const answered = new Promise<BrowserResolve>((resolve) => {
+      pendingBrowserResolve.set(requestId, resolve)
+    })
+    // `browserNodeId` rides along so the renderer can report the browser node's title for the cookie
+    // trace; it is NOT part of the security decision (owner + capability + allowlist stay main-side).
+    w.webContents.send(IPC.browserControlResolve, { requestId, sourceNodeId, browserNodeId })
+    return answered.finally(() => pendingBrowserResolve.delete(requestId))
+  }
+  // The `browser` verb's whole main-side drive: parse (pure), identity belt, resolve round-trip, then
+  // the gate + drive (owner + LIVE capability + CDP allowlist all decided here in MAIN). A capability
+  // read that comes back OFF revokes as it refuses (detach + drop + tombstone). See browser-drive.ts.
+  const handleBrowserVerb = async (
+    nodeId: string,
+    args: Record<string, string>,
+    verified: boolean
+  ): Promise<{ ok: boolean; message?: string; error?: string }> => {
+    const parsed = parseBrowserArgs(args)
+    if ('error' in parsed) return { ok: false, error: parsed.error, message: parsed.error }
+    // Identity is checked first (the belt to hook-server's verified-only gate for STRICT verbs): a
+    // non-verified caller learns nothing, and no resolve round-trip is even made.
+    if (!verified) return { ok: false, error: STRICT_CONTROL_REFUSAL, message: STRICT_CONTROL_REFUSAL }
+    const resolve = await resolveBrowserTarget(parsed.node, () => askRendererResolve(nodeId, parsed.node))
+    const result = await driveBrowser(
+      { call: parsed, ownerNodeId: nodeId, verified, resolve },
+      {
+        ledger: browserLedger,
+        refs: browserRefs,
+        sessionFor: browserSessionFor,
+        revoke: (id) => pushBrowserLeases(revokeBrowserNode(id, browserRevocation, { userStopped: true })),
+        // The cookie-read trace (PR 9): appended in-process, BEFORE the read, through the same board-log
+        // routing the IPC handler uses. A false return (no reachable log / write failed) refuses the read.
+        appendBoardLog: (projectId, entry) => boardLog.append(projectId, entry),
+        // The screenshot jail + write (PR 9). realpath/lstat canonicalize the project-dir jail; writeFile
+        // lands the PNG. All node:fs — never a caller path reaching CDP.
+        screenshotIO: {
+          realpath: (p) => fsRealpath(p),
+          lstat: (p) => fsLstat(p),
+          writeFile: (p, d) => fsWriteFile(p, d)
+        }
+      }
+    )
+    return result.ok
+      ? { ok: true, message: result.message }
+      : { ok: false, error: result.message, message: result.message }
+  }
+  // The caller's OWNING project, by node membership in main's own persisted store — the same
+  // source `resolveDeliveryScope` trusts. `undefined` = not in any saved project (a brand-new
+  // node inside the save debounce, or an id main never saved): the project gates fail closed.
+  const projectIdOfNode = (id: string): string | undefined =>
+    workspaceStore.persistedCanvases().find((c) => c.nodes.some((n) => n.id === id))?.id
+  hookServer.setControlHandler(async ({ verb, nodeId, args, verified }) => {
+    // `browser` is answered in MAIN and never forwarded to the renderer's agent-control dispatch:
+    // the debugger handle and the CDP allowlist are main-side, and the renderer is the more
+    // attackable half. Every other verb still round-trips to the renderer below.
+    if (verb === 'browser') return handleBrowserVerb(nodeId, args, verified)
+    // ── `open-project` + `--project` targeting, gated in MAIN before anything is forwarded
+    // (issue #338 PR 1). The renderer never sees an invalid cwd or an unauthorized `--project`.
+    // The verb itself is verified-only at the hook-server route (requiresVerified) — by the time
+    // an open-project reaches this wrapper, `verified` is true; the gates below are main's own
+    // belt plus everything identity cannot answer (SSH caller, cwd validity, the grant cap).
+    if (verb === 'open-project') {
+      const refuse = (error: string) => ({ ok: false, error, message: error })
+      if (!verified) return refuse(OPEN_PROJECT_CONTROL_REFUSAL)
+      // The rules themselves are the PURE gateOpenProject (project-grants.ts) — caller-unresolved
+      // fail-closed, SSH-caller local-only, cap-before-consent, cwd resolved once — proven
+      // red-capable branch by branch in project-grants.test.ts. This wrapper only feeds it main's
+      // own stores and returns its refusals unforwarded.
+      const callerProjectId = projectIdOfNode(nodeId)
+      const gate = gateOpenProject({
+        callerProjectId,
+        callerIsSsh: callerProjectId
+          ? workspaceStore.projectMetaFor(callerProjectId)?.ssh
+          : undefined,
+        atCap: projectGrantsAtCap(nodeId),
+        rawCwd: args.cwd ?? '',
+        statFn: (p) => statSync(p)
+      })
+      if ('refuse' in gate) return refuse(gate.refuse)
+      // The RESOLVED path — never the raw argument — is what the renderer (PR 2's dialog, the
+      // dedupe, the store) sees. Single resolution, in main, right here.
+      args = { ...args, cwd: gate.resolvedCwd }
+    } else if (PROJECT_TARGETABLE_VERBS.has(verb) && args.project !== undefined) {
+      // Open verbs carrying `--project`: own-or-granted only (spec §3, P2), decided against
+      // main's own store + ledger. Anything else is refused without forwarding.
+      const meta = workspaceStore.projectMetaFor(args.project)
+      const gate = gateProjectTarget({
+        verified,
+        verb,
+        targetProjectId: args.project,
+        callerProjectId: projectIdOfNode(nodeId),
+        targetIsSsh: meta?.ssh,
+        granted: projectGrantedTo(nodeId, args.project)
+      })
+      if (gate !== 'allow') return { ok: false, error: gate.refuse, message: gate.refuse }
+    }
     const target = getMainWindow()
     if (!target) return { ok: false, error: 'window unavailable' }
     const requestId = randomUUID()
-    return await new Promise((resolve) => {
+    const result = await new Promise<{ ok: boolean; message?: string; result?: unknown; error?: string }>((resolve) => {
       const timer = setTimeout(() => {
         pendingControl.delete(requestId)
         resolve({ ok: false, error: 'timed out (no response / not confirmed)' })
@@ -2936,6 +4183,56 @@ app.whenReady().then(async () => {
       pendingControl.set(requestId, { resolve, timer })
       target.webContents.send(IPC.agentControl, { requestId, sourceNodeId: nodeId, verb, args })
     })
+    // Record browser ownership the moment an open-browser succeeds — and ONLY when the caller's
+    // identity verdict for THIS request was `verified` (main's own verdict, not anything off the
+    // wire or project.json). A `legacy`/warned caller may open a browser but owns nothing, so it
+    // can drive nothing. The owner is the verified caller (`nodeId`); the project id + partition
+    // ride along from the renderer's reply for release-by-project and the indicator. This is the
+    // browser sibling of pane-ownership's record-at-fresh-spawn. See browser-control-ledger.ts and
+    // browser-ownership-source.test.ts (ownership is NEVER read from Project.ropes).
+    if (verb === 'open-browser' && verified && result.ok) {
+      const opened = result.result as { id?: string; projectId?: string; partition?: string } | undefined
+      // Refuse to record an entry with no owning project: `releaseByProject('')` would match it, and
+      // a project-less ownership record is meaningless. Fail-closed against future reply-shape drift
+      // — today `partition` is present only when agentBrowserPartition(projectId) succeeded, so a
+      // non-empty safe projectId always rides with it.
+      if (opened?.id && opened.partition && opened.projectId) {
+        browserLedger.claim(opened.id, {
+          ownerNodeId: nodeId,
+          projectId: opened.projectId,
+          partition: opened.partition,
+          navGeneration: 0,
+          leaseActiveUntil: 0,
+          openedAt: Date.now()
+        })
+        // A claim carries no live lease (a verb sets that in PR 7), so this does not light the chip;
+        // it keeps the renderer's view consistent from the moment ownership exists.
+        pushBrowserLeases()
+      }
+    }
+    // Record a project grant the moment an open-project succeeds — the open-browser ledger
+    // pattern above, same conditions: ONLY when the caller's identity verdict for THIS request
+    // was `verified` (main's own verdict, never anything off the wire) AND the renderer's reply
+    // carries a non-empty projectId. Inert until PR 2: today the renderer's `default:` case
+    // answers `unknown verb: open-project` with ok: false, so nothing is ever recorded — but the
+    // record path ships fail-closed and finished, not stubbed.
+    if (verb === 'open-project') {
+      // The whole decision (verified && ok && string projectId → grant; cap race detection) is
+      // the PURE recordOpenProjectGrant — proven branch by branch in project-grants.test.ts.
+      // 'cap' = the pre-forward atCap() check passed but a concurrent open-project from the same
+      // caller filled the last slot while this one was in flight (PR #362 review, M1): the
+      // caller must NOT hear ok while holding no targeting right, so the named refusal replaces
+      // the success reply. Nothing is lost — open-project is idempotent (B1), so a re-run once
+      // grants have cleared returns the same project id and records the grant.
+      if (recordOpenProjectGrant(nodeId, result, verified) === 'cap') {
+        console.warn(
+          `[project-grants] grant cap raced for caller ${nodeId}: open-project succeeded but ` +
+            'the grant was not recorded; replying open-project-grant-cap'
+        )
+        return { ok: false, error: OPEN_PROJECT_GRANT_CAP, message: OPEN_PROJECT_GRANT_CAP }
+      }
+    }
+    return result
   })
   initMediaProtocol()
 
@@ -2972,6 +4269,19 @@ app.whenReady().then(async () => {
   // drop it (filterMirrorForNodes) — a host answers only for its own local credentials.
   const localClaudeAccountIds = (): string[] =>
     (settingsStore.get().claudeAccounts ?? []).filter((a) => !a.host && !a.pending).map((a) => a.id)
+  // Local managed Codex accounts, each paired with the isolated home its auth.json lives in, for
+  // the per-account usage fan-out (S6 §4.3). Remote (`host`) accounts have no local home; pending
+  // ones have no auth yet — both are excluded, exactly like the Claude list above.
+  const localCodexAccounts = (): Array<{
+    id: string
+    home: string
+    label: string
+    email?: string | null
+  }> =>
+    codexUsageAccounts(
+      (settingsStore.get().codexAccounts ?? []).filter((a) => !a.host && !a.pending),
+      codexHomeFor
+    )
   const usageService = initClaudeUsage(win, {
     localAccounts: localClaudeAccountIds,
     codexAccounts: () =>
@@ -2979,9 +4289,14 @@ app.whenReady().then(async () => {
         (settingsStore.get().codexAccounts ?? []).filter((account) => !account.host),
         localCodexAccountHome
       ),
+    codexAccounts: localCodexAccounts,
     onCacheUpdate: () => {
       void flushAgentStatusMirror()
     },
+    // A phone may be reading the mirror's `usage` block even with the window unfocused: relay-paired
+    // (approved device) or SSH-with-a-push-grant. When so, keep polling on the background cadence so
+    // the phone's bars/resets stay live instead of fossilizing at the last focused poll.
+    mirrorMayBeRead: () => pushHasPairedPhone || allPushGrants().length > 0,
     // Remote (SSH host) Claude usage. Same shape as the Context Link remote deps: core owns the
     // command and the parsing, main owns the ControlMaster. `sshProjectManager` is assigned just
     // below, so both closures read it lazily — they only ever run after a project has connected.
@@ -3015,6 +4330,10 @@ app.whenReady().then(async () => {
   // Lazy getter: sshProjectManager is created just below, so a remote account op (which only runs
   // after the user has connected an SSH project) always sees the live manager.
   initClaudeAccounts(() => sshProjectManager)
+  // Machine-scoped managed Codex accounts (S6). Its synchronous boot migration of legacy long
+  // CODEX_HOMEs runs here, before the renderer restores its PTYs — an already-persisted managed
+  // Codex node must see its migrated (SUN_LEN-safe) home on its very first spawn. Same lazy SSH
+  // getter for the local→SSH transfer source leg.
   initCodexAccounts(() => sshProjectManager)
   // The jailed core bridge both phone hosts serve: typed git verbs against the real GitService
   // (cwd-jailed to the shared canvas roots inside the handlers) and phone node registration
@@ -3029,6 +4348,22 @@ app.whenReady().then(async () => {
         undefined,
         process.platform === 'win32' ? settingsStore.get().defaultTerminalProfileId : undefined
       ),
+    // `accountId` = the managed Claude account the phone launched the session under. It has to be
+    // declared here too, or the wire's honest shape stops at this boundary (see RemoteNodeInput).
+    registerNode: (
+      projectId: string,
+      node: { id: string; title?: string; agentId?: string; accountId?: string }
+    ) => workspaceStore.appendRemoteNode(projectId, node),
+    // "End session" from the phone (`pty.destroy`): the SAME two steps the desktop × performs —
+    // kill the tmux session on every socket it could live on (the sweep may have seen it on either
+    // — see the session-memory panel's kill rule), then take the node off its project's canvas
+    // (written as an outside edit, so the watcher broadcasts it and the canvas drops the node
+    // live). Node removal is best-effort by design: an unregistered phone session or an inline
+    // project has no file entry to remove, and that must not fail a destroy that already landed.
+    destroyNode: async (nodeId: string) => {
+      await ptyManager.destroySession(null, nodeId, { everySocket: true })
+      await workspaceStore.removeRemoteNode(nodeId).catch(() => false)
+    },
     // Jail roots beyond the active canvas: the phone browses EVERY project (projects.list), so
     // its fs/git access spans every local project root — not just the tab the desktop happens
     // to have focused (that gap read as "cwd is outside the shared project roots" on the phone).
@@ -3195,6 +4530,16 @@ app.whenReady().then(async () => {
       tmuxScrollback: settingsStore.get().tmuxScrollback,
       terminalWordSeparators: settingsStore.get().terminalWordSeparators
     })
+    // The standalone relay bundle uploaded to a Linux host for managed Codex accounts (S6 PR 6).
+    // Only executable code is ever uploaded — never a credential (Property 1). Reading it is
+    // single-fd (openSync→fstatSync→readFileSync(fd)) so there is no stat-then-read TOCTOU on the
+    // path, and the result is cached (the artifact never changes within an app run). A missing
+    // artifact resolves to '' — `installRemoteCodexRuntime` treats an empty bundle as "no runtime"
+    // and never fails a plain SSH connect over it.
+    loadCodexRelayBundle,
+    // Lead-pane width (issue #119) for the remote tmux conf, read at connect time so the host
+    // carries the value the user last saved. 0 (the default) keeps the conf byte-identical.
+    () => settingsStore.get().tmuxLeadPaneWidth
   )
   // Wake-from-sleep: re-validate every SSH master NOW instead of letting ServerAlive discover the
   // dead TCP ~60s later — until it does, every remote terminal looks alive and is dead (no echo,
@@ -3208,18 +4553,73 @@ app.whenReady().then(async () => {
   // the live canvas without a reconnect. Read-only unless a mirror write is owed
   // (pushIfStanding:false), one `cat` per project per tick over the ControlMaster. The in-flight
   // set keeps a hung read from stacking a second poll on the same project.
+  //
+  // A project only HAS a master because the renderer's active-project effect connected it, which
+  // left every background / never-opened SSH tab permanently unpolled: a session the phone
+  // registered into one of them showed up only when the user happened to click that tab. So each
+  // tick also sweeps the unconnected ones — REUSE-ONLY (see remote-workspace-poll.ts): a master
+  // that is already running is adopted, a host with no live socket is never dialed.
   {
     const REMOTE_WORKSPACE_POLL_MS = 15_000
+    /** How long a cached ssh endpoint map may be reused before it is re-read from the index. */
+    const SSH_ENDPOINT_TTL_MS = 5 * 60_000
     const inFlight = new Set<string>()
+    let endpoints = new Map<string, { conn: SshConnection; remoteCwd: string }>()
+    let endpointsAt = 0
+    /** The project's connection spec, from the workspace index. Loaded lazily and only when an
+     *  adoption candidate exists, so a workspace with no orphan sockets never pays for it. */
+    const endpointFor = async (
+      projectId: string
+    ): Promise<{ conn: SshConnection; remoteCwd: string } | undefined> => {
+      if (Date.now() - endpointsAt > SSH_ENDPOINT_TTL_MS) {
+        try {
+          // sideline:false — a read-only caller must never rename a mid-merge project.json.
+          const workspace = await workspaceStore.load({ sideline: false })
+          endpoints = new Map(
+            workspace.projects
+              .filter((p) => p.ssh)
+              .map((p) => [p.id, { conn: p.ssh!.server, remoteCwd: p.ssh!.remoteCwd }] as const)
+          )
+          endpointsAt = Date.now()
+        } catch { /* keep the previous map: a failed read is not evidence the endpoints changed */ }
+      }
+      return endpoints.get(projectId)
+    }
     setInterval(() => {
-      for (const projectId of workspaceStore.sshProjectIds()) {
-        if (inFlight.has(projectId) || !sshProjectManager?.refForProject(projectId)) continue
+      const mgr = sshProjectManager
+      if (!mgr) return
+      const plan = planRemoteWorkspacePoll({
+        sshProjectIds: workspaceStore.sshProjectIds(),
+        hasLiveRef: (projectId) => !!mgr.refForProject(projectId),
+        busy: (projectId) => inFlight.has(projectId),
+        // Reuse-only gate: no socket file ⇒ no master to adopt ⇒ this project is left alone.
+        hasControlSocket: (projectId) => existsSync(controlPathFor(projectId))
+      })
+      for (const projectId of plan.poll) {
         inFlight.add(projectId)
         void workspaceStore
           .refreshSshProject(projectId, { pushIfStanding: false })
           .then((adopted) => {
             if (adopted) sendToMain(IPC.workspaceExternalChange, adopted)
           })
+          .catch(() => { /* fail-open: the next tick retries */ })
+          .finally(() => inFlight.delete(projectId))
+      }
+      for (const projectId of plan.adopt) {
+        inFlight.add(projectId)
+        void (async () => {
+          const endpoint = await endpointFor(projectId)
+          if (!endpoint) return
+          // Ask the socket itself before touching connect(): a leftover file whose master is gone
+          // would otherwise send connect() down the DIAL path — the one thing this sweep must not
+          // do. `-O check` speaks to the local mux socket only; with no master it fails at once
+          // without opening a connection.
+          const { code } = await mgr.sshRun(checkMasterArgs(endpoint.conn, controlPathFor(projectId)))
+          if (code !== 0) return
+          // Live master → connect() takes its reuse branch (no new auth, no passphrase prompt) and
+          // registers the ref, so the NEXT tick simply polls this project like any other.
+          await mgr.connect(projectId, endpoint.conn, endpoint.remoteCwd)
+        })()
           .catch(() => { /* fail-open: the next tick retries */ })
           .finally(() => inFlight.delete(projectId))
       }
@@ -3259,6 +4659,10 @@ app.on('window-all-closed', () => {
   // On macOS the app stays alive, so the async final snapshots inside killAll can complete
   // in the background; on other platforms quitting goes through before-quit below.
   if (process.platform !== 'darwin') {
+    // Keep the host alive when a local planner schedule is enabled. The window is allowed to be
+    // closed, but the host-owned occurrence service must continue while the computer is available.
+    // A later explicit Quit still follows before-quit and stops the service normally.
+    if (plannerRuntime.hasEnabledSchedules()) return
     app.quit()
   } else {
     void ptyManager.killAll()
@@ -3282,6 +4686,9 @@ app.on('before-quit', (e) => {
   // gate is repeated here for that path. `quitConfirmed` short-circuits this on the re-issued
   // app.quit() below once the user has answered, or on the win.close() gate's own re-issue.
   if (shouldConfirmQuit()) {
+  // gate is repeated here for that path. quitConfirmed short-circuits this on the re-issued
+  // app.quit() below once the user has answered, and on the win.close() gate's own re-issue.
+  if (!quitConfirmed && !skipQuitConfirmation) {
     e.preventDefault()
     void confirmQuit(getMainWindow() as unknown as BrowserWindow | null).then((ok) => {
       if (ok) app.quit()
@@ -3298,11 +4705,23 @@ app.on('before-quit', (e) => {
   // — writing "stop" now is enough for it to shut down gracefully on its own schedule. Called on
   // BOTH passes; the method itself no-ops for an instance already asked.
   minecraftServers?.requestGracefulStopAll()
+  void virtualMachineManager?.dispose()
   destroyNotchHud()
   const scheduledSettingsStop = scheduledSettingsRuntime.stop()
+  const plannerStop = plannerRuntime.stop()
   // Electron releases power assertions at exit anyway; disposing keeps the hold/release log honest.
   keepAwake?.dispose()
+  // Electron releases power assertions at exit anyway; disposing keeps the hold/release log
+  // honest. Clearing the ref too keeps a hook edge that lands during the quit flush (the pty
+  // teardown window below) from re-holding an assertion nothing will ever release.
+  keepAwake?.dispose()
+  keepAwake = undefined
   workspaceWatcher.dispose()
+  // A setup/archive run is a DETACHED process group (setsid, so cancel can SIGKILL the tree), which
+  // means quitting without this leaves `npm ci` churning with no app left to report to — and the
+  // hook/pty teardown below would never touch it. Idempotent, so the second before-quit pass (the
+  // deferred app.quit()) costs nothing.
+  projectSetupService.disposeAll()
   if (quitFlushed) {
     // Second pass (the deferred app.quit() below): the flush had its chance — drop the masters.
     sshProjectManager?.disconnectAll()
@@ -3332,7 +4751,8 @@ app.on('before-quit', (e) => {
   const flush = Promise.allSettled([
     remoteWorkspaceIO.flush(),
     ptyManager.killAll(),
-    scheduledSettingsStop
+    scheduledSettingsStop,
+    plannerStop
   ])
   void Promise.race([flush, new Promise((r) => setTimeout(r, 1500))])
     // Then let whisper go. A dictation still transcribing when Electron tears down the main

@@ -5,9 +5,14 @@ import { isTopDialog, nextDialogId, popDialog, pushDialog } from './dialog-stack
 import { useI18n } from '@renderer/lib/i18n'
 import { useVocabularyMapper } from '@renderer/lib/personalVocabulary/useVocabularyText'
 import { Checkbox } from '@renderer/ui/md3'
+import type { DisplaySegment } from '../lib/personalVocabulary/ownedCopy'
+import { mapOwnedSentence } from '../lib/personalVocabulary/ownedCopy'
 
 interface ConfirmDialogProps {
   message: string
+  /** Typed mixed-copy path. Application prose is mapped, while exact names, paths, and ids stay
+   * byte-identical inside the same confirmation sentence. */
+  messageSegments?: readonly DisplaySegment[]
   /** Optional content rendered ABOVE the message (e.g. the remote-access ConsentNotice), so the
    *  human reads what they are granting before the SAS body + buttons. */
   body?: ReactNode
@@ -39,6 +44,7 @@ interface ConfirmDialogProps {
    * steals focus from whatever they were typing in, and their next Enter/Space then NATIVELY
    * activates the focused button — a path `enterConfirms`/confirm-key never sees, because the
    * browser's default button activation is not the window keydown listener.
+   * browser's default button activation is not the window keydown listener (PR #213 review, I1).
    */
   autoFocusButtons?: boolean
   onConfirm: () => void
@@ -49,6 +55,8 @@ interface ConfirmDialogProps {
    * ANSWER (the capability clone notice's "Turn it off"), a stray Escape aimed at a terminal or a
    * misclick outside the box must be a non-answer — close for now, decide nothing — not a
    * consent-recording cancel. Absent = historical behavior (dismissal cancels).
+   * consent-recording cancel (PR #213 review, I1). Absent = historical behavior (dismissal
+   * cancels).
    */
   onDismiss?: () => void
 }
@@ -61,6 +69,7 @@ interface ConfirmDialogProps {
  */
 export function ConfirmDialog({
   message,
+  messageSegments,
   body,
   busy = false,
   confirmLabel,
@@ -82,12 +91,9 @@ export function ConfirmDialog({
   // everywhere instead of only on the Settings page. Applied to prose only — `body` is caller
   // JSX (it can contain a path or a SAS code) and is passed through untouched.
   //
-  // Known trade-off, stated so nobody has to rediscover it: several callers interpolate a target's
-  // name into `message` ("Delete the chat \"…\"?"), so a vocabulary term that happens to occur in
-  // that name is rewritten in the DISPLAYED sentence. That is display-only — the irreversible call
-  // still re-reads its target by id through `lib/destructiveAuthorization.ts`, and the two-key
-  // `DestructiveConfirmGate` (which names the exact affected items) is deliberately NOT translated
-  // at all. If a caller must disclose a name byte-exactly, it belongs in that gate, not here.
+  // Mixed sentences use `messageSegments` so a vocabulary term in a target name, path, revision,
+  // or diagnostic cannot be rewritten. Legacy string callers still use the historical whole-copy
+  // mapping, while new callers that disclose exact facts must use the typed path above.
   const vocab = useVocabularyMapper()
   // An alert has nothing destructive to warn about and nothing to cancel; anything else keeps the
   // historical destructive defaults ("Delete", danger styling, focus parked on the safe button).
@@ -95,9 +101,14 @@ export function ConfirmDialog({
   // worktree") is that caller's copy and passes through untouched.
   const danger = dangerProp ?? !alert
   const cancelText = vocab(cancelLabel ?? ts('dialog.confirm.cancel', 'Cancel'))
-  const confirmText = vocab(
-    confirmLabel ?? (alert ? ts('dialog.confirm.ok', 'OK') : ts('dialog.confirm.delete', 'Delete'))
-  )
+  const confirmText = vocab(confirmLabel ?? (alert ? ts('dialog.confirm.ok', 'OK') : ts('dialog.confirm.delete', 'Delete')))
+  const messageText = messageSegments ? mapOwnedSentence(vocab, messageSegments) : vocab(message)
+  const cancelText = cancelLabel ? vocab(cancelLabel) : ts('dialog.confirm.cancel', 'Cancel')
+  const confirmText = confirmLabel
+    ? vocab(confirmLabel)
+    : alert
+      ? ts('dialog.confirm.ok', 'OK')
+      : ts('dialog.confirm.delete', 'Delete')
   const messageText = vocab(message)
   const optionLabel = vocab(option?.label)
   // Non-semantic decoration only (Settings → Language → "Show emojis…"): purely visual, never
@@ -134,11 +145,13 @@ export function ConfirmDialog({
       if (!action) return
       e.preventDefault()
       if (action === 'confirm' && !busy) onConfirm()
+      if (action === 'confirm') onConfirm()
       else dismiss()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [id, enterConfirms, onConfirm, dismiss, busy])
+  }, [id, enterConfirms, onConfirm, dismiss])
 
   return createPortal(
     <div className="confirm-overlay" onClick={dismiss}>
@@ -168,6 +181,7 @@ export function ConfirmDialog({
           {!alert && (
             <button className="confirm__btn" autoFocus={autoFocusButtons && danger} onClick={onCancel}>
               {cancelText}
+              {cancelLabel}
             </button>
           )}
           <button

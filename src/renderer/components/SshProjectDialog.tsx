@@ -5,6 +5,7 @@ import { useSshServers } from '../state/sshServers'
 import { Button } from '@renderer/ui/Button'
 import { Input } from '@renderer/ui/Input'
 import type { SshServer } from '@shared/ssh'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 interface SshProjectDialogProps {
   /** Create the SSH project (Canvas commits the active canvas, adds + switches to it). */
@@ -58,6 +59,7 @@ function parentDir(p: string): string {
  * temporary master is torn down on create/cancel.
  */
 export function SshProjectDialog({ onCreate, onManage, onClose }: SshProjectDialogProps) {
+  const vocab = useVocabularyMapper()
   const servers = useSshServers((s) => s.servers)
   const [serverFilter, setServerFilter] = useState('')
   const [step, setStep] = useState<Step>('pick')
@@ -197,16 +199,16 @@ export function SshProjectDialog({ onCreate, onManage, onClose }: SshProjectDial
           }}
         >
           <p className="confirm__msg" style={{ flex: '0 0 auto', overflow: 'visible', fontWeight: 600 }}>
-            Connect over SSH
+            {vocab('Connect over SSH')}
           </p>
           <p className="confirm__msg" style={{ flex: '0 0 auto', overflow: 'visible' }}>
-            Pick a saved server to host this project's terminals.
+            {vocab("Pick a saved server to host this project's terminals.")}
           </p>
           {servers.length > 0 && (
             <Input
               autoFocus
-              aria-label="Filter saved SSH servers"
-              placeholder="Filter by label, host, or user"
+              aria-label={vocab('Filter saved SSH servers')}
+              placeholder={vocab('Filter by label, host, or user')}
               value={serverFilter}
               onChange={(event) => setServerFilter(event.target.value)}
               className="mb-2"
@@ -215,7 +217,7 @@ export function SshProjectDialog({ onCreate, onManage, onClose }: SshProjectDial
           )}
           <div
             role="group"
-            aria-label="Saved SSH servers"
+            aria-label={vocab('Saved SSH servers')}
             style={{
               display: 'flex',
               flex: '1 1 auto',
@@ -229,11 +231,11 @@ export function SshProjectDialog({ onCreate, onManage, onClose }: SshProjectDial
           >
             {servers.length === 0 ? (
               <p className="confirm__msg" style={{ flex: '0 0 auto', margin: 0, opacity: 0.7 }}>
-                No saved servers yet.
+                {vocab('No saved servers yet.')}
               </p>
             ) : visibleServers.length === 0 ? (
               <p className="confirm__msg" style={{ flex: '0 0 auto', margin: 0, opacity: 0.7 }}>
-                No saved servers match “{serverFilter.trim()}”.
+                {vocab('No saved servers match')} “{serverFilter.trim()}”.
               </p>
             ) : (
               visibleServers.map((s) => (
@@ -262,7 +264,7 @@ export function SshProjectDialog({ onCreate, onManage, onClose }: SshProjectDial
             )}
           </div>
           <div className="confirm__actions" style={{ flexShrink: 0 }}>
-            <Button onClick={close}>Cancel</Button>
+            <Button onClick={close}>{vocab('Cancel')}</Button>
             <Button
               variant="primary"
               onClick={() => {
@@ -270,7 +272,7 @@ export function SshProjectDialog({ onCreate, onManage, onClose }: SshProjectDial
                 close()
               }}
             >
-              Add server…
+              {vocab('Add server…')}
             </Button>
           </div>
         </div>
@@ -286,13 +288,13 @@ export function SshProjectDialog({ onCreate, onManage, onClose }: SshProjectDial
               can take a minute to answer, so a static line looked hung. */}
           <p className="confirm__msg" style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span className="ui-spinner" aria-hidden />
-            Connecting to {server?.label}…
+            {vocab('Connecting to')} {server?.label}…
           </p>
           <p className="confirm__msg" style={{ opacity: 0.7 }}>
-            {server ? `Establishing the SSH connection to ${server.user}@${server.host}.` : 'Establishing the SSH connection.'}
+            {server ? <>{vocab('Establishing the SSH connection to')} {server.user}@{server.host}.</> : vocab('Establishing the SSH connection.')}
           </p>
           <div className="confirm__actions">
-            <Button onClick={close}>Cancel</Button>
+            <Button onClick={close}>{vocab('Cancel')}</Button>
           </div>
         </>
       )
@@ -301,15 +303,15 @@ export function SshProjectDialog({ onCreate, onManage, onClose }: SshProjectDial
       return (
         <>
           <p className="confirm__msg" style={{ fontWeight: 600 }}>
-            Connection failed
+            {vocab('Connection failed')}
           </p>
           <p className="confirm__msg" style={{ opacity: 0.8 }}>
-            {error}
+            {error === 'Could not connect to the server.' ? vocab(error) : error}
           </p>
           <div className="confirm__actions">
-            <Button onClick={close}>Close</Button>
+            <Button onClick={close}>{vocab('Close')}</Button>
             <Button variant="primary" onClick={() => server && void connect(server)}>
-              Retry
+              {vocab('Retry')}
             </Button>
           </div>
         </>
@@ -320,7 +322,7 @@ export function SshProjectDialog({ onCreate, onManage, onClose }: SshProjectDial
     return (
       <>
         <p className="confirm__msg" style={{ fontWeight: 600 }}>
-          Choose a folder on {server?.label}
+          {vocab('Choose a folder on')} {server?.label}
         </p>
         <div
           style={{
@@ -333,7 +335,7 @@ export function SshProjectDialog({ onCreate, onManage, onClose }: SshProjectDial
           }}
         >
           <Button className="px-2.5 py-0.5" disabled={atRoot} onClick={() => void list(parentDir(path))}>
-            ↑ Up
+            ↑ {vocab('Up')}
           </Button>
           <Button
             className="px-2.5 py-0.5"
@@ -343,7 +345,7 @@ export function SshProjectDialog({ onCreate, onManage, onClose }: SshProjectDial
               setCreating(true)
             }}
           >
-            ＋ New folder
+            ＋ {vocab('New folder')}
           </Button>
           <span
             title={path}
@@ -363,7 +365,7 @@ export function SshProjectDialog({ onCreate, onManage, onClose }: SshProjectDial
             <Input
               autoFocus
               value={newName}
-              placeholder="Folder name"
+              placeholder={vocab('Folder name')}
               onChange={(e) => setNewName(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') void createFolder()
@@ -376,7 +378,7 @@ export function SshProjectDialog({ onCreate, onManage, onClose }: SshProjectDial
               className="min-w-0 flex-1"
             />
             <Button variant="primary" className="px-2.5 py-0.5" onClick={() => void createFolder()}>
-              Create
+              {vocab('Create')}
             </Button>
             <Button
               className="px-2.5 py-0.5"
@@ -386,13 +388,13 @@ export function SshProjectDialog({ onCreate, onManage, onClose }: SshProjectDial
                 setMkdirErr('')
               }}
             >
-              Cancel
+              {vocab('Cancel')}
             </Button>
           </div>
         )}
         {mkdirErr && (
           <p className="confirm__msg" style={{ color: 'var(--danger, #e5534b)', margin: '0 0 8px', fontSize: 12 }}>
-            {mkdirErr}
+            {vocab(mkdirErr)}
           </p>
         )}
         <div
@@ -406,7 +408,7 @@ export function SshProjectDialog({ onCreate, onManage, onClose }: SshProjectDial
         >
           {dirs.length === 0 ? (
             <p className="confirm__msg" style={{ opacity: 0.6, padding: '10px 12px' }}>
-              No sub-folders here.
+              {vocab('No sub-folders here.')}
             </p>
           ) : (
             dirs.map((d) => (
@@ -421,9 +423,9 @@ export function SshProjectDialog({ onCreate, onManage, onClose }: SshProjectDial
           )}
         </div>
         <div className="confirm__actions">
-          <Button onClick={close}>Cancel</Button>
+          <Button onClick={close}>{vocab('Cancel')}</Button>
           <Button variant="primary" onClick={useThisFolder}>
-            Use this folder
+            {vocab('Use this folder')}
           </Button>
         </div>
       </>

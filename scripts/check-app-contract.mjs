@@ -550,6 +550,32 @@ const FEATURES = [
     ],
   },
   {
+    id: 'portable-project-import-and-bindings',
+    label: 'Atomic schema 3 import and destination binding wizard',
+    files: [
+      'src/core/portable-project-v3.ts',
+      'src/core/portable-project-import.ts',
+      'src/core/portable-bindings.ts',
+      'src/core/portable-canvas-projection.ts',
+      'src/renderer/components/PortableBindingWizard.tsx',
+      'src/main/index.ts',
+      'src/preload/index.ts',
+      'src/renderer/bridge/ws-bridge.ts'
+    ],
+    contentChecks: [
+      ['src/core/portable-project-import.ts', 'export async function importPortableProjectV3('],
+      ['src/core/portable-project-import.ts', 'await validatePortableProjectV3Entries('],
+      ['src/core/portable-project-import.ts', 'await renameAtomic(stage, finalPath)'],
+      ['src/core/portable-bindings.ts', 'export type PortableBindingAction'],
+      ['src/core/portable-bindings.ts', 'export class LocalNodeBindingStore'],
+      ['src/renderer/components/PortableBindingWizard.tsx', 'export function PortableBindingWizard('],
+      ['src/main/index.ts', 'IPC.portableBindingState'],
+      ['src/main/index.ts', 'IPC.portableBindingApply'],
+      ['src/renderer/bridge/ws-bridge.ts', 'Destination bindings are available only in the desktop app.']
+    ],
+    docs: ['docs/features/projects/portable-bindings.md', 'docs/features/projects/portable-schema3.md']
+  },
+  {
     // The sessions-sidebar project-header right-click menu and the project switcher's per-row
     // actions panel are two independently-typed menus that drifted apart (the switcher had no
     // archive save/open, the sidebar menu had no appearance editor). Both must consume the one
@@ -587,6 +613,26 @@ const FEATURES = [
       ['src/shared/types.ts', 'export const SERVICE_NODE_KINDS ='],
     ],
     docs: ['docs/features/integrations/service-nodes.md'],
+  },
+  {
+    id: 'alarm-clock-nodes',
+    label: 'Alarm Clock nodes and durable occurrence planner',
+    files: [
+      'src/shared/alarm-clock.ts',
+      'src/core/alarm-planner.ts',
+      'src/renderer/nodes/AlarmClockNode.tsx',
+      'src/renderer/state/workspace.ts',
+      'src/shared/types.ts'
+    ],
+    contentChecks: [
+      ['src/shared/alarm-clock.ts', 'export class DurableAlarmPlanner'],
+      ['src/shared/alarm-clock.ts', 'export function nextAlarmOccurrence('],
+      ['src/core/alarm-planner.ts', 'export class FileAlarmPlannerStore'],
+      ['src/renderer/nodes/AlarmClockNode.tsx', 'export default function AlarmClockNode('],
+      ['src/renderer/canvas/Canvas.tsx', "alarm: withNodeBoundary(AlarmClockNode)"],
+      ['src/renderer/canvas/Canvas.tsx', "label: 'New Alarm Clock'"],
+    ],
+    docs: ['docs/alarm-clock.md'],
   },
   {
     id: 'agent-support',
@@ -1140,6 +1186,38 @@ const FEATURES = [
     docs: ['docs/minecraft-server-manager.md'],
   },
   {
+    id: 'linux-iso-vm',
+    label: 'Linux ISO VM node',
+    files: [
+      'src/shared/virtual-machine.ts',
+      'src/core/virtual-machine/manager.ts',
+      'src/core/virtual-machine/register-ipc.ts',
+      'src/renderer/nodes/VirtualMachineNode.tsx'
+    ],
+    contentChecks: [
+      ['src/core/virtual-machine/manager.ts', 'export class VirtualMachineManager'],
+      ['src/core/virtual-machine/manager.ts', "shell: false"],
+      ['src/core/virtual-machine/manager.ts', "127.0.0.1"],
+      ['src/core/virtual-machine/manager.ts', 'function probeWhpx('],
+      ['src/core/virtual-machine/manager.ts', 'function detectDiskFormat('],
+      ['src/core/virtual-machine/manager.ts', 'async function sha256File('],
+      ['src/core/virtual-machine/manager.ts', 'function waitForPort('],
+      ['src/core/virtual-machine/manager.ts', 'reconcileOrphans()'],
+      ['src/core/virtual-machine/manager.ts', 'async createDisk('],
+      ['src/core/virtual-machine/manager.ts', 'openDisplay(id: string)'],
+      ['src/core/virtual-machine/manager.ts', "'-nic'"],
+      ['dependencies.manifest.json', '"qemu"'],
+      ['package.json', '"from": "resources/qemu"'],
+      ['package.json', '"prepare:qemu"'],
+      ['scripts/ensure-qemu-resources.mjs', 'createHash(\'sha512\')'],
+      ['src/renderer/nodes/VirtualMachineNode.tsx', 'Persistent install'],
+      ['src/renderer/nodes/VirtualMachineNode.tsx', 'Disposable live']
+    ],
+    wired: { file: 'src/renderer/canvas/Canvas.tsx', symbol: 'VirtualMachineNode' },
+    tests: [['src/core/virtual-machine/manager.test.ts', "describe('VirtualMachineManager'"]],
+    docs: ['docs/features/integrations/linux-iso-vm.md']
+  },
+  {
     id: 'adhd-modes',
     label: 'ADHD modes',
     docs: ['docs/adhd-modes.md'],
@@ -1331,6 +1409,24 @@ const FEATURES = [
       ['src/renderer/ui/SegmentedPill.tsx', "export { SegmentedButton as SegmentedPill } from './md3/SegmentedButton'"],
     ],
     docs: ['docs/md3-primitives.md'],
+  },
+  {
+    // Full desktop surface coverage is a separate contract from the primitive definitions. The
+    // hand-written inventory names every rendered Windows screen and every checked-in site page,
+    // while the companion checker keeps a deleted row from making the audit shrink silently.
+    id: 'md3-surface-audit',
+    label: 'Complete Material Design 3 desktop surface audit',
+    files: [
+      'scripts/check-material-audit.mjs',
+      'docs/features/appearance/material-3-audit.md',
+    ],
+    contentChecks: [
+      ['scripts/check-material-audit.mjs', 'const EXPECTED_SURFACE_IDS = `'],
+      ['scripts/check-material-audit.mjs', 'Surface inventory negative regression'],
+      ['docs/features/appearance/material-3-audit.md', '## Exhaustive inventory'],
+      ['docs/features/appearance/material-3-audit.md', '## Remaining conflicts'],
+    ],
+    docs: ['docs/features/appearance/material-3-audit.md'],
   },
 ]
 

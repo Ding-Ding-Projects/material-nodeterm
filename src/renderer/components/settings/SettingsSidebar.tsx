@@ -10,17 +10,35 @@ import { useSchoolMode } from '../../state/schoolMode'
 const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
 import { matchesEntry } from './search'
 import { SectionIcon } from './SettingsIcons'
+import { settingsSidebarSearchEntry } from './vocabulary'
+import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
+import { useMemo } from 'react'
+import { cn } from '@renderer/ui/cn'
+import { Input } from '@renderer/ui/Input'
+import { visibleSettingsGroups, type SettingsGroup, type SettingsSectionId } from './nav'
+import { matchesQuery } from './search'
+import { SectionIcon } from './SettingsIcons'
+import { ProjectGlyph } from '../ProjectGlyph'
+
+const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
 
 export function SettingsSidebar({
   activeSectionId,
   search,
   onSelect,
   onClose
+  onQueryChange,
+  onClose,
+  extraGroups
 }: {
   activeSectionId: SettingsSectionId
   search: RegexSearchFieldState
   onSelect: (id: SettingsSectionId) => void
   onClose: () => void
+  /** Groups appended after the static nav — e.g. the render-time "Projects" group, which the
+   *  caller builds from live project state (kept out of the sidebar so it needs no store
+   *  subscription of its own). */
+  extraGroups?: SettingsGroup[]
 }): React.JSX.Element {
   const inputRef = useRef<HTMLInputElement>(null)
   // `search.active` — not `value !== ''` — because in regex mode an INVALID pattern must not dim
@@ -30,12 +48,18 @@ export function SettingsSidebar({
   // secondary on ONE line here (`ts`) rather than stacking a second row per item, which would
   // crowd badly. Contrast with LanguageSection's own body copy, which has room to stack.
   const { ts } = useI18n()
+  const vocab = useVocabularyMapper()
   // Once School mode is renamed, the shipped "School mode" label must never surface anywhere —
   // this is the one spot the sidebar nav's otherwise-static section titles need a live override.
   const schoolModeName = useSchoolMode((s) => s.name)
   const schoolModeEnabled = useSchoolMode((s) => s.enabled)
   const schoolModeHydrated = useSchoolMode((s) => s.hydrated)
   const groups = visibleSettingsGroups(isMac, schoolModeHydrated && !schoolModeEnabled)
+  const hasQuery = query.trim() !== ''
+  const GROUPS = useMemo(
+    () => [...visibleSettingsGroups(isMac), ...(extraGroups ?? [])],
+    [extraGroups]
+  )
   return (
     <aside className="md3-settings-sidebar flex shrink-0 flex-col">
       <div
@@ -81,6 +105,7 @@ export function SettingsSidebar({
                 ? ts('settings.nav.searchRegex', 'Search settings (regex)')
                 : ts('settings.nav.search', 'Search settings')
             }
+            vocabularyMode="factual"
             aria-label={ts('settings.nav.search', 'Search settings')}
           />
           <AnchoredRegexBuilder
@@ -113,8 +138,7 @@ export function SettingsSidebar({
               //     "School mode" cannot light up a row the user has renamed away from it.
               const isSchoolMode = s.id === 'school-mode'
               const sectionTitle = isSchoolMode ? label : ts(`settings.section.${s.id}`, s.title)
-              const searchTitle = isSchoolMode ? label : s.title
-              const dimmed = hasQuery && !matchesEntry(search, { title: searchTitle })
+              const dimmed = hasQuery && !matchesEntry(search, settingsSidebarSearchEntry(s, schoolModeName, vocab, sectionTitle, true))
               return (
                 <button
                   key={s.id}
@@ -125,6 +149,27 @@ export function SettingsSidebar({
                 >
                   <span className="md3-settings-nav-row__icon">
                     <SectionIcon id={s.id} />
+                  <span
+                    className={cn(
+                      'flex size-4 shrink-0 items-center justify-center transition-colors',
+                      isActive ? 'text-text' : 'text-muted-2 group-hover:text-muted'
+                    )}
+                  >
+                    {s.color ? (
+                      // A project section — the row's own color/icon (see nav.ts'
+                      // `projectsSettingsGroup`), instead of the generic folder glyph every
+                      // project section used to share.
+                      <ProjectGlyph
+                        icon={s.icon}
+                        color={s.color}
+                        name={s.title}
+                        variant="monogram"
+                        size={16}
+                        className="flex size-4 items-center justify-center rounded-[3px] text-[9px] font-semibold uppercase text-white"
+                      />
+                    ) : (
+                      <SectionIcon id={s.id} />
+                    )}
                   </span>
                   <span className="md3-settings-nav-row__label">{sectionTitle}</span>
                 </button>

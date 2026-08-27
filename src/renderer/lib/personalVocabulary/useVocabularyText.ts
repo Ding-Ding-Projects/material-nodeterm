@@ -1,8 +1,12 @@
 import { useCallback, useMemo } from 'react'
 import { usePersonalVocabulary } from '../../state/personalVocabulary'
 import { useSchoolMode } from '../../state/schoolMode'
-import { applyVocabulary } from './apply'
+import { applyVocabulary, applyVocabularyToTemplate } from './apply'
+import type { PersonalVocabularyEntries } from './schema'
 import { schoolModeAllowsOptionalFeatures } from '../schoolModePolicy'
+
+/** Declares whether a shared control string is product-authored prose or an exact fact. */
+export type VocabularyTextMode = 'authored' | 'factual'
 
 /**
  * The mapper behind every personal-vocabulary boundary in the renderer: one stable callback that
@@ -51,4 +55,24 @@ export function useVocabularyMapper(): <T extends string | undefined | null>(tex
 export function useVocabularyText<T extends string | undefined>(text: T): T {
   const map = useVocabularyMapper()
   return useMemo(() => map(text), [map, text])
+}
+
+/** Map a prose template while inserting dynamic facts verbatim after mapping. */
+export function useVocabularyTemplate(
+  text: string | undefined,
+  params?: Record<string, string>
+): string | undefined {
+  const entries = usePersonalVocabulary((s) => s.entries)
+  const schoolModeEnabled = useSchoolMode((s) => s.enabled)
+  const schoolModeHydrated = useSchoolMode((s) => s.hydrated)
+  const vocabularyAllowed = schoolModeAllowsOptionalFeatures({
+    enabled: schoolModeEnabled,
+    hydrated: schoolModeHydrated
+  })
+  return useMemo(() => {
+    if (text == null) return text
+    // School mode suppresses personal replacements, but facts still need interpolation. Passing an
+    // empty entry set preserves the shipped prose while replacing only named placeholders.
+    return applyVocabularyToTemplate(text, vocabularyAllowed ? entries : ({} as PersonalVocabularyEntries), params)
+  }, [entries, params, text, vocabularyAllowed])
 }

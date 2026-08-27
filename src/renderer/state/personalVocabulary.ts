@@ -1,5 +1,10 @@
 import { create } from 'zustand'
-import { validateVocabularyPayload, type PersonalVocabularyEntries } from '../lib/personalVocabulary/schema'
+import {
+  validateVocabularyCachePayload,
+  validateVocabularyPayload,
+  type PersonalVocabularyCacheEnvelope,
+  type PersonalVocabularyEntries
+} from '../lib/personalVocabulary/schema'
 
 /**
  * The personal-vocabulary cache. Local-only, renderer-side, no IPC and no network request: the
@@ -14,33 +19,25 @@ import { validateVocabularyPayload, type PersonalVocabularyEntries } from '../li
  * rather than by a filter someone has to remember to apply.
  */
 const CACHE_KEY = 'nodeterm.personalVocabulary.v1'
+const CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
 
-interface CachedPayload {
-  version: 1
-  entries: PersonalVocabularyEntries
-  entryCount: number
-  savedAt: number
-}
+type CachedPayload = PersonalVocabularyCacheEnvelope
 
 function readCache(): CachedPayload | null {
   try {
     const raw = localStorage.getItem(CACHE_KEY)
     if (!raw) return null
-    // localStorage is hand-editable input too. Reusing the upload validator keeps a forged
-    // `__proto__` entry, duplicate key, oversized cache, or stale schema from bypassing the exact
-    // contract merely because it arrived on restart rather than through the file picker.
-    const validated = validateVocabularyPayload(raw)
+    // localStorage is hand-editable input too. The cache-envelope validator keeps a forged
+    // `__proto__` entry, duplicate key, oversized cache, mismatched count, or stale schema from
+    // bypassing the exact contract merely because it arrived on restart rather than through the
+    // file picker.
+    const validated = validateVocabularyCachePayload(raw)
     if (!validated.ok) return null
-    const parsed = JSON.parse(raw) as Record<string, unknown>
-    if (!Object.hasOwn(parsed, 'savedAt') || typeof parsed.savedAt !== 'number' || !Number.isFinite(parsed.savedAt)) {
+    const savedAt = validated.cache.savedAt
+    if (savedAt <= 0 || Date.now() - savedAt > CACHE_MAX_AGE_MS || savedAt > Date.now() + 60_000) {
       return null
     }
-    return {
-      version: 1,
-      entries: validated.entries,
-      entryCount: validated.entryCount,
-      savedAt: parsed.savedAt
-    }
+    return validated.cache
   } catch {
     return null
   }
@@ -56,7 +53,7 @@ function writeCache(payload: CachedPayload | null): void {
   }
 }
 
-export type PersonalVocabularyStatus = 'no-file' | 'loaded' | 'invalid'
+export type PersonalVocabularyStatus = 'no-file' | 'reading' | 'loaded' | 'invalid'
 
 interface PersonalVocabularyState {
   status: PersonalVocabularyStatus
@@ -66,6 +63,8 @@ interface PersonalVocabularyState {
   /** Set only right after a REJECTED upload, cleared on the next successful one/clear. Never
    *  persisted — it exists purely to render the "why was this rejected" message once. */
   lastError: string | null
+  beginRead(): void
+  reject(error: string): void
   hydrate(): void
   /** Validate `raw` (the uploaded file's full text) and, if valid, replace the cache atomically —
    *  a rejected file never applies partially. Returns the same verdict for the caller's own UI. */
@@ -80,11 +79,19 @@ export const usePersonalVocabulary = create<PersonalVocabularyState>((set) => ({
   entryCount: 0,
   loadedAt: null,
   lastError: null,
+  beginRead: () => set({ status: 'reading', lastError: null }),
+  reject: (error) => set({ status: 'invalid', lastError: error }),
 
   hydrate: () => {
     const cached = readCache()
     if (cached) {
       set({ status: 'loaded', entries: cached.entries, entryCount: cached.entryCount, loadedAt: cached.savedAt })
+    } else {
+      try {
+        localStorage.removeItem(CACHE_KEY)
+      } catch {
+        // A blocked storage area remains fail-closed in memory.
+      }
     }
   },
 

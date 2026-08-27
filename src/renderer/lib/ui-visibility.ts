@@ -32,10 +32,13 @@ export const HIDEABLE_MENU_ITEMS: readonly HideableRow[] = [
 
 /** Hideable terminal node header buttons, in header order. */
 export const HIDEABLE_HEADER_BUTTONS: readonly HideableRow[] = [
+  { id: 'maximize', label: 'Maximize' },
   { id: 'refresh', label: 'Refresh' },
   { id: 'mic', label: 'Dictate' },
   { id: 'ai-name', label: 'Name with AI' },
-  { id: 'comments', label: 'Comments' }
+  { id: 'comments', label: 'Comments' },
+  { id: 'hide-fanout', label: 'Hide subagent/loop cards' },
+  { id: 'tidy-fanout', label: 'Tidy subagent cards' }
 ]
 
 /** Every id the user may hide — the guard that makes everything else unhideable. */

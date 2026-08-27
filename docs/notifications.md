@@ -30,7 +30,8 @@ decisions the user must actually make before continuing. Concretely:
 
 - A message that only *reports* something (a background operation failed, a copy succeeded, a
   session isn't ready yet) is `notify({ kind: 'error' | 'warning' | 'info' | 'success', title,
-  body? })`.
+  titleKind, body?, bodyKind })`. Every producer states whether each supplied field is `authored`
+  application copy or an exact `fact`; omitted ownership is rejected at the native boundary.
 - A message that *asks* something (confirm, choose an option, provide a value) stays a dialog.
 
 ### What was audited and converted
@@ -72,10 +73,17 @@ import { notify } from '../state/notifications'
 notify({
   kind: 'success',
   title: 'Worktree created',
+  titleKind: 'authored',
   body: 'feature/foo — branched from main',
+  bodyKind: 'fact',
   actions: [{ label: 'Open', onClick: () => goToNode(node) }]
 })
 ```
+
+The native OS notification route accepts only a payload with both ownership fields set to
+`authored` or `fact`. The renderer's `mapNativeNotification` maps authored fields and leaves fact
+fields byte-identical, then the main process validates the prepared payload before constructing an
+OS notification. This keeps paths, provider errors, identifiers, and other runtime values exact.
 
 `actions` are optional right-aligned buttons (retry, undo, open, view details); clicking one both
 runs its handler and dismisses the toast. Every notification — toast or not — is retained in the

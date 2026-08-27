@@ -1,7 +1,19 @@
 {
   "schemaVersion": 1,
   "generatedFrom": "CHANGELOG.md",
-  "generatedNote": "Generated from the repository's real CHANGELOG.md (git history). Do not hand-edit; regenerate from CHANGELOG.md when it changes.",
+  "generatedNote": "Historical entries are generated from the repository's real CHANGELOG.md. The currentRelease overlay is copied from the verified published release manifest so the landing site does not lag the latest stable build.",
+  "currentRelease": {
+    "version": "0.4.117",
+    "date": "2026-08-26",
+    "commit": "727287b8eddd5c30f98306ea442a2584945668d0",
+    "commitUrl": "https://github.com/Ding-Ding-Projects/material-nodeterm/commit/727287b8eddd5c30f98306ea442a2584945668d0",
+    "published": true,
+    "assets": [
+      "nodeterm-Setup-0.4.117.exe",
+      "RELEASES",
+      "node-terminal-0.4.117-full.nupkg"
+    ]
+  },
   "entries": [
     {
       "version": "0.3.0",

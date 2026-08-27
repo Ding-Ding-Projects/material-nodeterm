@@ -84,4 +84,24 @@ export function mutateApprovedDevices(
     await writeApprovedDevices(next)
     return parsePersistedApprovedDevices(next)
   })
+/**
+ * Persist the pinned-device list atomically (unique temp + retrying rename, 0600) via
+ * `writeFileAtomic`.
+ *
+ * The temp name is unique per call because three writers reach this from the main process with
+ * nothing queueing them: the standing host's fire-and-forget pin on approval (standing-host.ts,
+ * `void loadApprovedDevices().then(...)`), relay-trust's un-awaited pin when a mutual approval
+ * settles, and the revoke IPC (src/main/index.ts → revocation.ts). With one shared `<file>.tmp`,
+ * a writer's rename publishes the other's half-written list — or moves the file out from under it,
+ * so the loser's rename fails.
+ *
+ * A failed write removes its own temp and rethrows, and the OLD file is left byte-for-byte
+ * intact — revocation.ts's `persisted:false` contract depends on both halves.
+ *
+ * No orphan sweep here, unlike the PAT stores (src/main/github-control.ts, src/server/github-control.ts)
+ * or agent.json (src/main/pairing-service.ts): those orphan temps hold live credentials, but these are
+ * PUBLIC keys, so a stray temp is litter rather than a leak.
+ */
+export async function saveApprovedDevices(store: ApprovedDevices): Promise<void> {
+  await writeFileAtomic(file(), JSON.stringify(store), { mode: 0o600 })
 }

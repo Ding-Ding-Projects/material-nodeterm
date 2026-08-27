@@ -64,6 +64,11 @@ function dispatchSave(next: Settings): void {
 function scheduleSave(next: Settings): void {
   pendingSave = { settings: next, generation: saveGeneration }
   if (saveTimer || savesSuspended) return
+  // Same guard as the beforeunload flush below: this module is transitively imported by
+  // node-environment unit tests, where `window` doesn't exist and the timer would throw.
+  if (typeof window === 'undefined') return
+  pendingSave = next
+  if (saveTimer) return
   saveTimer = setTimeout(() => {
     saveTimer = null
     const queued = pendingSave

@@ -8,6 +8,7 @@ import { nodeHeaderFillStyle } from '../lib/nodeColor'
 import { useProjects } from '../state/projects'
 import { BrowserSurface } from './BrowserSurface'
 import { BrowserProfilePicker } from './BrowserProfilePicker'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 /** Debounce for persisting a tab's live URL/title while the user navigates — matches the SSH
  *  mirror's 5s write-throttle intent (this repo's established pattern for "don't rewrite the
@@ -33,8 +34,26 @@ const NAV_PERSIST_DEBOUNCE_MS = 800
  * the user switch which of the project's named `browserProfiles` this node uses — two nodes on
  * the same profile share cookies/storage, nodes on different profiles are isolated. See
  * `shared/browser-profiles.ts` for the partition derivation this is built on.
+import { Handle, NodeResizer, Position, useReactFlow, type NodeProps } from '@xyflow/react'
+import { NODE_MIN_SIZES } from '../lib/nodeSizing'
+import type { CanvasNode } from '../state/workspace'
+import { BrowserSurface } from './BrowserSurface'
+import { BrowserDrivingIndicator } from './BrowserDrivingChip'
+import { useWebviewKeepAlive } from '../state/webviewKeepAlive'
+
+/**
+ * A navigable Chromium browser node: node chrome (frame/header/resize/close) wrapping the shared
+ * {@link BrowserSurface} (webview + toolbar). The last top-level URL persists to `data.url` so the
+ * node reopens where it was; the same surface backs the kanban card modal's browser popup.
+ *
+ * A background KEEP-ALIVE GHOST (`data.ghost` — see lib/webviewKeepAlive.ts) renders the same
+ * tree (the mounted `<webview>` is the point), hidden by the ghost node's `display:none` style.
+ * Only the wiring differs: navigation/title facts go to the pool entry (there is no live node in
+ * React Flow to update — `updateNodeData` on a ghost id is a dropped change), and a memory-saver
+ * discard ends the entry outright (a ghost without its guest is a husk holding a cap slot).
  */
 export default function BrowserNode({ id, data, selected }: NodeProps<CanvasNode>) {
+  const vocab = useVocabularyMapper()
   const { deleteElements, updateNodeData } = useReactFlow()
   const headerFill = nodeHeaderFillStyle(data.color)
   const activeProjectId = useProjects((s) => s.activeProjectId)
@@ -140,10 +159,11 @@ export default function BrowserNode({ id, data, selected }: NodeProps<CanvasNode
   }
 
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? tabs[0]
+  const ghost = data.ghost === true
 
   return (
     <div className={`term-node browser-node${selected ? ' selected' : ''}`} style={{ borderTopColor: data.color }}>
-      <NodeResizer minWidth={360} minHeight={240} isVisible={selected} color={data.color} />
+      <NodeResizer minWidth={NODE_MIN_SIZES.browser.width} minHeight={NODE_MIN_SIZES.browser.height} isVisible={selected} color={data.color} />
       {/* Invisible target handle so a rope from the agent node that opened this can attach. */}
       <Handle
         id="flow-in"
@@ -168,20 +188,24 @@ export default function BrowserNode({ id, data, selected }: NodeProps<CanvasNode
         style={headerFill.style}
       >
         <span className="term-node__title-text" title={activeTab?.url || ''}>
-          {(data.title as string) || 'Browser'}
+          {(data.title as string) || vocab('Browser')}
         </span>
+        {/* The driving chip — present the whole time an agent holds a control lease on this node,
+            with the one obvious Stop. Renders nothing otherwise (and, until PR 7 ships the verb that
+            drives a lease, in every case today). */}
+        <BrowserDrivingIndicator nodeId={id} />
         <span className="term-node__spacer" />
         {isTemporary && (
           <button
             className="browser-node__keep"
-            title="This popup is temporary — it is not saved with the project. Keep it?"
+            title={vocab('This popup is temporary — it is not saved with the project. Keep it?')}
             onClick={(e) => {
               e.stopPropagation()
               updateNodeData(id, { temporary: undefined })
               markWorkspaceDirty()
             }}
           >
-            Temporary · Keep
+            {vocab('Temporary · Keep')}
           </button>
         )}
         <BrowserProfilePicker
@@ -208,12 +232,12 @@ export default function BrowserNode({ id, data, selected }: NodeProps<CanvasNode
             // silently merging into the default session.
           }}
         />
-        <button className="term-node__close" title="Close" onClick={() => deleteElements({ nodes: [{ id }] })}>
+        <button className="term-node__close" title={vocab('Close')} onClick={() => deleteElements({ nodes: [{ id }] })}>
           ×
         </button>
       </div>
 
-      <div className="browser-node__tabs nodrag" role="tablist" aria-label="Browser tabs">
+      <div className="browser-node__tabs nodrag" role="tablist" aria-label={vocab('Browser tabs')}>
         {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -221,14 +245,14 @@ export default function BrowserNode({ id, data, selected }: NodeProps<CanvasNode
               role="tab"
               aria-selected={tab.id === activeTabId}
               className={`browser-node__tab${tab.id === activeTabId ? ' browser-node__tab--active' : ''}`}
-              title={tab.url || tab.title}
+              title={tab.url || tab.title || vocab('New Tab')}
               onClick={() => selectTab(tab.id)}
             >
-              <span className="browser-node__tab-title">{tab.title || tab.url || 'New Tab'}</span>
+              <span className="browser-node__tab-title">{tab.title || tab.url || vocab('New Tab')}</span>
               <span
                 role="button"
                 tabIndex={0}
-                aria-label={`Close tab ${tab.title || 'New Tab'}`}
+                aria-label={`${vocab('Close tab')} ${tab.title || vocab('New Tab')}`}
                 className="browser-node__tab-close"
                 onClick={(e) => closeTab(tab.id, e)}
                 onKeyDown={(e) => {
@@ -245,8 +269,8 @@ export default function BrowserNode({ id, data, selected }: NodeProps<CanvasNode
         <button
           type="button"
           className="browser-node__tab-new"
-          title="New tab"
-          aria-label="New tab"
+          title={vocab('New tab')}
+          aria-label={vocab('New tab')}
           onClick={newTab}
         >
           +
@@ -277,6 +301,18 @@ export default function BrowserNode({ id, data, selected }: NodeProps<CanvasNode
             partition={partition}
           />
         )}
+        <BrowserSurface
+          nodeId={id}
+          url={(data.url as string) ?? ''}
+          partition={data.partition as string | undefined}
+          onUrlChange={(u) =>
+            ghost ? useWebviewKeepAlive.getState().updateGhostData(id, { url: u }) : updateNodeData(id, { url: u })
+          }
+          onTitleChange={(t) =>
+            ghost ? useWebviewKeepAlive.getState().updateGhostData(id, { title: t }) : updateNodeData(id, { title: t })
+          }
+          onGuestDiscarded={ghost ? () => useWebviewKeepAlive.getState().drop(id) : undefined}
+        />
       </div>
     </div>
   )

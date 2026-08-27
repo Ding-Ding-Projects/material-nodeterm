@@ -40,9 +40,10 @@
 // the redesign's own divergences from the imported design and its removed
 // design-tool scaffolding.
 
-import { readFileSync, existsSync, readdirSync } from 'node:fs'
+import { copyFileSync, mkdtempSync, readFileSync, existsSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, relative } from 'node:path'
+import { tmpdir } from 'node:os'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -215,8 +216,11 @@ const FEATURES = [
     file: 'site/app/features/vocabulary.js',
     exportName: 'registerVocabulary',
     contentChecks: [
-      ['site/app/shared/vocabulary-state.js', 'validateVocabularyText'],
-      ['site/app/shared/vocabulary-state.js', 'MAX_ENTRIES'],
+      ['site/app/shared/vocabulary-state.js', 'validateVocabularyJson'],
+      ['site/app/shared/vocabulary-state.js', 'validateVocabularyCacheJson'],
+      ['site/app/shared/vocabulary-state.js', 'VOCAB_MAX_ENTRIES'],
+      ['site/app/core/render.js', 'data-bind-file'],
+      ['site/app/main.js', 'bindFile'],
       ['site/app/shared/vocabulary-state.js', '__proto__'],
       ['site/app/shared/i18n.js', 'applyReplacements'],
     ],
@@ -356,6 +360,80 @@ const FEATURES = [
   },
 ]
 
+const SITE_RENDER_COPY_FUNNELS = [
+  ['hall', 'site/app/core/render.js', 'function renderHall'],
+  ['room', 'site/app/core/render.js', 'function renderRoom'],
+  ['list-room', 'site/app/core/render.js', 'function renderListRoom'],
+  ['row-item', 'site/app/core/render.js', 'function rowItem'],
+  ['menu', 'site/app/core/render.js', 'function renderMenu'],
+  ['regex-dialog', 'site/app/core/render.js', 'function renderRx'],
+  ['command-palette', 'site/app/core/render.js', 'function renderPalette'],
+  ['settings-card', 'site/app/core/render.js', 'function settingsCardHtml'],
+  ['home-room', 'site/app/core/render.js', 'function renderHomeRoom'],
+  ['door-tile', 'site/app/core/render.js', 'function doorTile'],
+  ['feature-card', 'site/app/core/render.js', 'function featureCard']
+]
+const CANONICAL_SITE_RENDER_FUNNEL_IDS = `hall room list-room row-item menu regex-dialog command-palette settings-card home-room door-tile feature-card`.split(/\s+/)
+const SITE_RENDER_STRING_OWNERSHIP = [
+  ['hall-top-bar', 'the top bar', 'authored', 'function renderHall'],
+  ['hall-menu-button', 'this button', 'authored', 'function renderHall'],
+  ['hall-day-night', 'Day or night', 'authored', 'function renderHall'],
+  ['hall-message-box', 'Message box', 'authored', 'function renderHall'],
+  ['hall-hello', 'Hello,', 'authored', 'function renderHall'],
+  ['hall-pick-door', 'Pick a door.', 'authored', 'function renderHall'],
+  ['hall-empty-prefix', 'No door has that name. Try the', 'authored', 'function renderHall'],
+  ['hall-empty-suffix', 'button next to the filter!', 'authored', 'function renderHall'],
+  ['hall-peek-code', 'Peek at the code', 'authored', 'function renderHall'],
+  ['room-top-bar', 'the top bar', 'authored', 'function renderRoom'],
+  ['room-rail', 'the room list', 'authored', 'function renderRoom'],
+  ['room-day-night', 'Switch between day and night', 'authored', 'function renderRoom'],
+  ['room-message-box', 'Open the message box', 'authored', 'function renderRoom'],
+  ['room-nav-items', 'items', 'authored', 'function renderRoom'],
+  ['room-changelog', 'Changelog', 'authored', 'function renderRoom'],
+  ['room-help', 'Help', 'authored', 'function renderRoom'],
+  ['list-from-date', 'From date', 'authored', 'function renderListRoom'],
+  ['list-and', 'and', 'authored', 'function renderListRoom'],
+  ['list-to-date', 'To date', 'authored', 'function renderListRoom'],
+  ['settings-lock-copy', 'This box has its own password.', 'authored', 'function settingsCardHtml'],
+  ['settings-unlock', 'Unlock password', 'authored', 'function settingsCardHtml'],
+  ['settings-open', 'Open', 'authored', 'function settingsCardHtml'],
+  ['regex-groups', 'Things it caught', 'authored', 'function renderRx'],
+  ['regex-builder-label', 'Regex builder', 'authored', 'function renderRx'],
+  ['regex-pattern', 'Pattern', 'authored', 'function renderRx'],
+  ['regex-flags', 'Flags', 'authored', 'function renderRx'],
+  ['regex-sample', 'Sample text', 'authored', 'function renderRx'],
+  ['palette-label', 'Magic jump box', 'authored', 'function renderPalette'],
+  ['palette-placeholder', 'Where do you want to go?', 'authored', 'function renderPalette'],
+  ['palette-search', 'Magic jump box search', 'authored', 'function renderPalette'],
+  ['palette-regex', 'Regex builder for the jump box', 'authored', 'function renderPalette'],
+  ['confirm-question', 'Are you sure?', 'authored', 'function renderConfirm'],
+  ['confirm-type', 'Type', 'authored', 'function renderConfirm'],
+  ['confirm-unlock', 'to unlock the button', 'authored', 'function renderConfirm'],
+  ['confirm-word-label', 'Confirmation word', 'authored', 'function renderConfirm'],
+  ['confirm-keep', 'Keep it', 'authored', 'function renderConfirm'],
+  ['confirm-yes', 'Yes, do it', 'authored', 'function renderConfirm'],
+  ['confirm-first', '” first', 'authored', 'function renderConfirm'],
+  ['toast-close', 'Close this message', 'authored', 'function renderToasts'],
+  ['hall-brand', 'nodeterm school', 'fact', 'function renderHall'],
+  ['hall-jump-command', 'Jump', 'fact', 'function renderHall'],
+  ['hall-download-command', 'Get nodeterm', 'fact', 'function renderHall'],
+  ['hall-download-command-2', 'Download nodeterm', 'fact', 'function renderHall'],
+  ['hall-brew-command', 'brew install --cask nodeterm', 'fact', 'function renderHall'],
+  ['room-brand', 'nodeterm', 'fact', 'function renderRoom'],
+  ['room-version', 'v0.3.0', 'fact', 'function renderRoom'],
+  ['room-license', 'BUSL-1.1 licensed · fork of', 'fact', 'function renderRoom'],
+  ['room-upstream-brand', 'eneskirca/nodeterm', 'fact', 'function renderRoom'],
+  ['room-forge-brand', 'GitHub', 'fact', 'function renderRoom'],
+  ['room-legal-notice', '“Claude” and “Claude Code” are trademarks of Anthropic. nodeterm is not affiliated with or endorsed by Anthropic.', 'fact', 'function renderRoom'],
+  ['hall-jump-tooltip', 'Magic jump box — Ctrl+Shift+F', 'fact', 'function renderHall'],
+  ['room-jump-tooltip', 'Magic jump box — Ctrl+Shift+F', 'fact', 'function renderRoom'],
+  ['hall-releases-url', 'REPO_RELEASES', 'fact', 'function renderHall'],
+  ['hall-repository-url', 'REPO_URL', 'fact', 'function renderHall'],
+  ['room-repository-url', 'REPO_URL', 'fact', 'function renderRoom'],
+  ['room-upstream-url', 'UPSTREAM_URL', 'fact', 'function renderRoom'],
+]
+const CANONICAL_SITE_RENDER_STRING_IDS = `hall-top-bar hall-menu-button hall-day-night hall-message-box hall-hello hall-pick-door hall-empty-prefix hall-empty-suffix hall-peek-code room-top-bar room-rail room-day-night room-message-box room-nav-items room-changelog room-help list-from-date list-and list-to-date settings-lock-copy settings-unlock settings-open regex-groups regex-builder-label regex-pattern regex-flags regex-sample palette-label palette-placeholder palette-search palette-regex confirm-question confirm-type confirm-unlock confirm-word-label confirm-keep confirm-yes confirm-first toast-close hall-brand hall-jump-command hall-download-command hall-download-command-2 hall-brew-command room-brand room-version room-license room-upstream-brand room-forge-brand room-legal-notice hall-jump-tooltip room-jump-tooltip hall-releases-url hall-repository-url room-repository-url room-upstream-url`.split(/\s+/)
+
 for (const feature of FEATURES) {
   const fileOk = requireFileExists(feature.file, feature.label)
   if (fileOk) requireExportedFunction(feature.file, feature.exportName, feature.label)
@@ -481,6 +559,24 @@ requireFileExists('site/content/changelog.json', 'Generated changelog content')
         fail('site/content/changelog.json: "entries" must be a non-empty array')
       } else {
         pass(`site/content/changelog.json: ${json.entries.length} changelog entries present`)
+      }
+      checkedCount += 1
+      const current = json.currentRelease
+      if (
+        !current ||
+        current.version !== '0.4.117' ||
+        current.date !== '2026-08-26' ||
+        current.commit !== '727287b8eddd5c30f98306ea442a2584945668d0' ||
+        current.published !== true ||
+        !Array.isArray(current.assets) ||
+        current.assets.length !== 3 ||
+        !current.assets.includes('nodeterm-Setup-0.4.117.exe') ||
+        !current.assets.includes('RELEASES') ||
+        !current.assets.includes('node-terminal-0.4.117-full.nupkg')
+      ) {
+        fail('site/content/changelog.json: currentRelease must describe the verified v0.4.117 stable release and its three published assets')
+      } else {
+        pass('site/content/changelog.json: verified v0.4.117 currentRelease overlay is complete')
       }
     } catch (err) {
       fail(`site/content/changelog.json: invalid JSON (${err.message})`)
@@ -788,6 +884,246 @@ if (cdnHits.length > 0) {
 const NON_FEATURE_MODULES = new Map([
   ['index.js', 'the registrar barrel (FEATURE_REGISTRARS) — it wires features rather than being one'],
 ])
+
+function renderFunnelBody(source, marker) {
+  if (!source) return null
+  const start = source.indexOf(marker)
+  if (start < 0) return null
+  const next = source.indexOf('\nfunction ', start + marker.length)
+  return source.slice(start, next < 0 ? source.length : next)
+}
+
+function hasAuthoredCopyFunnel(body) {
+  return !!body && (body.includes('copy(') || body.includes('copyAttr('))
+}
+
+function copyCallArguments(source, name) {
+  const calls = []
+  const needle = name + '('
+  let searchFrom = 0
+  while (searchFrom < source.length) {
+    const start = source.indexOf(needle, searchFrom)
+    if (start < 0) break
+    let depth = 1
+    let quote = ''
+    let escaped = false
+    let end = start + needle.length
+    for (; end < source.length; end += 1) {
+      const ch = source[end]
+      if (quote) {
+        if (escaped) escaped = false
+        else if (ch === '\\') escaped = true
+        else if (ch === quote) quote = ''
+        continue
+      }
+      if (ch === "'" || ch === '"' || ch === '`') {
+        quote = ch
+      } else if (ch === '(') {
+        depth += 1
+      } else if (ch === ')' && --depth === 0) {
+        calls.push(source.slice(start + needle.length, end))
+        break
+      }
+    }
+    searchFrom = end + 1
+  }
+  return calls
+}
+
+function hasOwnedRenderString(body, text, owner) {
+  if (!body || !body.includes(text)) return false
+  const calls = [...copyCallArguments(body, 'copy'), ...copyCallArguments(body, 'copyAttr')]
+  const copied = calls.some((args) => args.includes(text))
+  if (owner === 'fact') return !copied
+  return copied
+  const facts = [...copyCallArguments(body, 'fact'), ...copyCallArguments(body, 'factAttr')]
+  const hasExactArgument = (args) => {
+    const quoted = [`'${text}'`, `"${text}"`, `\`${text}\``]
+    return args.trim() === text || quoted.some((value) => args.includes(value))
+  }
+  const copied = calls.some(hasExactArgument)
+  const factored = facts.some(hasExactArgument)
+  if (owner === 'fact') return factored && !copied
+  return copied
+}
+
+function balancedExpression(source, start) {
+  let depth = 1
+  let quote = ''
+  let escaped = false
+  for (let i = start; i < source.length; i += 1) {
+    const ch = source[i]
+    if (quote) {
+      if (escaped) escaped = false
+      else if (ch === '\\') escaped = true
+      else if (ch === quote) quote = ''
+      continue
+    }
+    if (ch === "'" || ch === '"' || ch === '`') {
+      quote = ch
+    } else if (ch === '{') {
+      depth += 1
+    } else if (ch === '}' && --depth === 0) {
+      return source.slice(start, i)
+    }
+  }
+  return null
+}
+
+// Parse attributes structurally instead of treating one physical source line as the unit. A
+// template expression can span lines, contain nested calls, and contain quoted text with braces.
+function unownedLabelAttributes(source) {
+  const found = []
+  const attrRe = /(data-menu-label|aria-label|title)\s*=\s*(["'])/g
+  for (const match of source.matchAll(attrRe)) {
+    const contentStart = match.index + match[0].length
+    const quote = match[2]
+    let end = -1
+    let expressionDepth = 0
+    let expressionQuote = ''
+    let escaped = false
+    for (let i = contentStart; i < source.length; i += 1) {
+      const ch = source[i]
+      if (expressionDepth > 0) {
+        if (expressionQuote) {
+          if (escaped) escaped = false
+          else if (ch === '\\') escaped = true
+          else if (ch === expressionQuote) expressionQuote = ''
+        } else if (ch === "'" || ch === '"' || ch === '`') {
+          expressionQuote = ch
+        } else if (ch === '{') {
+          expressionDepth += 1
+        } else if (ch === '}') {
+          expressionDepth -= 1
+        }
+      } else if (ch === '$' && source[i + 1] === '{') {
+        expressionDepth = 1
+        i += 1
+      } else if (ch === quote) {
+        end = i
+        break
+      }
+    }
+    if (end < 0) {
+      found.push(source.slice(match.index, match.index + 80))
+      continue
+    }
+    const content = source.slice(contentStart, end)
+    if (!content.includes('${')) {
+      found.push(content)
+      continue
+    }
+    let cursor = 0
+    while ((cursor = content.indexOf('${', cursor)) >= 0) {
+      const expression = balancedExpression(content, cursor + 2)
+      if (expression === null || !/(copyAttr|factAttr)/.test(expression)) found.push(expression || content.slice(cursor))
+      cursor += 2
+    }
+  }
+  return found
+}
+
+{
+  const ids = SITE_RENDER_COPY_FUNNELS.map(([id]) => id)
+  checkedCount += 1
+  if (ids.length !== CANONICAL_SITE_RENDER_FUNNEL_IDS.length || ids.some((id, i) => id !== CANONICAL_SITE_RENDER_FUNNEL_IDS[i])) {
+    fail('Site renderer funnel inventory does not match its independent canonical list')
+  } else {
+    pass('Site renderer funnel inventory matches its independent canonical list')
+  }
+  for (const [id, file, marker] of SITE_RENDER_COPY_FUNNELS) {
+    const body = renderFunnelBody(readText(file), marker)
+    checkedCount += 1
+    if (!hasAuthoredCopyFunnel(body)) fail(`${id}: authored-copy funnel is missing`)
+    else pass(`${id}: authored-copy funnel is present`)
+
+    const mutatedBody = renderFunnelBody(body.split('copy(').join('').split('copyAttr(').join(''), marker)
+    checkedCount += 1
+    if (hasAuthoredCopyFunnel(mutatedBody)) fail(`${id}: authored-copy funnel mutation was not rejected`)
+    else pass(`${id}: authored-copy funnel mutation is rejected`)
+  }
+  const renderSource = readText('site/app/core/render.js') || ''
+  const copyStart = renderSource.indexOf('function copy(')
+  const copyEnd = renderSource.indexOf('function copyAttr(', copyStart)
+  const copyHelper = copyStart >= 0 && copyEnd > copyStart ? renderSource.slice(copyStart, copyEnd) : ''
+  checkedCount += 1
+  if (!copyHelper.includes('shapeCopy(')) fail('shared site copy helper does not call shapeCopy')
+  else pass('shared site copy helper calls shapeCopy')
+  const mutated = renderSource.split('copy(').join('').split('copyAttr(').join('')
+  checkedCount += 1
+  const body = renderFunnelBody(mutated, 'function renderHall')
+  if (hasAuthoredCopyFunnel(body)) fail('Site renderer funnel mutation was not rejected')
+  else pass('Site renderer funnel mutation is rejected')
+
+  // Every user-visible menu, accessibility, and regex-token label must declare its ownership
+  // helper at the callsite. A raw `attr(...)` or `esc(...)` can accidentally bypass the mapper,
+  // while a broad substring check would miss a renamed or commented-out helper call.
+  const untypedLabels = unownedLabelAttributes(renderSource)
+  checkedCount += 1
+  if (untypedLabels.length) {
+    fail(`Site renderer has ${untypedLabels.length} user-visible label line(s) without copyAttr/factAttr ownership`)
+    for (const line of untypedLabels) console.error(`    - ${line.trim()}`)
+  } else {
+    pass('Site renderer menu, aria, and title labels carry explicit copyAttr/factAttr ownership')
+  }
+}
+
+{
+  checkedCount += 1
+  if (new Set(CANONICAL_SITE_RENDER_STRING_IDS).size !== CANONICAL_SITE_RENDER_STRING_IDS.length) {
+    fail('Site renderer string ownership inventory contains duplicate identifiers')
+  } else {
+    pass('Site renderer string ownership inventory has unique identifiers')
+  }
+  const ownershipIds = SITE_RENDER_STRING_OWNERSHIP.map(([id]) => id)
+  checkedCount += 1
+  if (ownershipIds.length !== CANONICAL_SITE_RENDER_STRING_IDS.length || ownershipIds.some((id, i) => id !== CANONICAL_SITE_RENDER_STRING_IDS[i])) {
+    fail('Site renderer string ownership inventory does not exactly match its independent canonical list')
+  } else {
+    pass('Site renderer string ownership inventory exactly matches its independent canonical list')
+  }
+  for (const [id, text, owner, marker] of SITE_RENDER_STRING_OWNERSHIP) {
+    const body = renderFunnelBody(readText('site/app/core/render.js'), marker)
+    checkedCount += 1
+    if (hasOwnedRenderString(body, text, owner)) pass(`${id}: ${owner} ownership is explicit`)
+    else fail(`${id}: ${owner} ownership is missing or ambiguous`)
+
+    const mutatedBody = body ? body.split(text).join('') : null
+    checkedCount += 1
+    if (hasOwnedRenderString(mutatedBody, text, owner)) fail(`${id}: string-removal mutation was not rejected`)
+    else pass(`${id}: string-removal mutation is rejected`)
+  }
+
+  const mutationRoot = mkdtempSync(join(tmpdir(), 'nodeterm-site-render-audit-'))
+  const renderCopy = join(mutationRoot, 'render.js')
+  try {
+    copyFileSync(join(REPO_ROOT, 'site/app/core/render.js'), renderCopy)
+    const original = readFileSync(renderCopy, 'utf8')
+    for (const [id, text, owner, marker] of SITE_RENDER_STRING_OWNERSHIP) {
+      writeFileSync(renderCopy, original.split(text).join(''), 'utf8')
+      const copiedSource = readFileSync(renderCopy, 'utf8')
+      const copiedBody = renderFunnelBody(copiedSource, marker)
+      checkedCount += 1
+      if (hasOwnedRenderString(copiedBody, text, owner)) fail(`${id}: file-backed string mutation was not rejected`)
+      else pass(`${id}: file-backed string mutation is rejected`)
+      writeFileSync(renderCopy, original, 'utf8')
+    }
+    const labelsWithoutOwnership = join(mutationRoot, 'render-labels.fixture.js')
+    writeFileSync(labelsWithoutOwnership, original.split('copyAttr').join('').split('factAttr').join(''), 'utf8')
+    checkedCount += 1
+    if (unownedLabelAttributes(readFileSync(labelsWithoutOwnership, 'utf8')).length === 0) fail('Site renderer copied label ownership mutation was not rejected')
+    else pass('Site renderer copied label ownership mutation is rejected')
+    const ownershipWithoutFirst = SITE_RENDER_STRING_OWNERSHIP.slice(1).map(([id]) => id)
+    checkedCount += 1
+    if (ownershipWithoutFirst.length === CANONICAL_SITE_RENDER_STRING_IDS.length && ownershipWithoutFirst.every((id, i) => id === CANONICAL_SITE_RENDER_STRING_IDS[i])) {
+      fail('Site renderer canonical ownership deletion mutation was not rejected')
+    } else {
+      pass('Site renderer canonical ownership deletion mutation is rejected')
+    }
+  } finally {
+    rmSync(mutationRoot, { recursive: true, force: true })
+  }
+}
 
 {
   const FEATURES_DIR = join(SITE_DIR, 'app', 'features')

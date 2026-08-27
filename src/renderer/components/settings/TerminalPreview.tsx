@@ -51,6 +51,10 @@ export function TerminalPreview(): React.JSX.Element {
   // 'base' — this preview shows what the CONTROLS on this page are editing, not whatever a
   // scheduled-settings override happens to be applying right now. See useXtermVisualSettings's doc.
   const visual = useXtermVisualSettings('base')
+  // No project id, deliberately: this preview exists to show the GLOBAL appearance settings sitting
+  // right beside it. Scoping it to the active project would repaint the picture with that project's
+  // override, so the row the user is dragging would appear to do nothing.
+  const visual = useXtermVisualSettings()
 
   useEffect(() => {
     const s = useSettings.getState().settings

@@ -8,6 +8,8 @@ import { Button } from '@renderer/ui/Button'
 import { SegmentedPill } from '@renderer/ui/SegmentedPill'
 import { USAGE_PROVIDER_IDS, providerLabel } from '@shared/usage-limits'
 import { AGENT_CONFIG } from '@shared/agents/config'
+import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
+import { SettingsText } from '../SettingsText'
 
 const ROWS = {
   percentMode: {
@@ -133,20 +135,20 @@ function CookieProviderRow({
             <input
               type="password"
               className="input w-64"
-              placeholder={stored ? '•••••••• stored' : placeholder}
+              placeholder={stored ? vocab('•••••••• stored') : vocab(placeholder)}
               value={value}
               onChange={(e) => setValue(e.target.value)}
               autoComplete="off"
               spellCheck={false}
             />
             <Button onClick={() => void save(value)} disabled={!value.trim()}>
-              Save
+              <SettingsText>Save</SettingsText>
             </Button>
-            {(stored || !statusKnown) && <Button onClick={() => void save('')}>Clear</Button>}
+            {(stored || !statusKnown) && <Button onClick={() => void save('')}><SettingsText>Clear</SettingsText></Button>}
           </div>
           {error && (
             <p role="alert" className="text-[11px] leading-snug text-[color:var(--warn)]">
-              {error}
+              <SettingsText segments={[{ kind: 'fact', value: error }]} />
             </p>
           )}
         </div>
@@ -156,6 +158,7 @@ function CookieProviderRow({
 }
 
 export function UsageSection({ isActive }: { isActive: boolean }): React.JSX.Element | null {
+  const vocab = useVocabularyMapper()
   const settings = useSettings((s) => s.settings)
   const update = useSettings((s) => s.update)
 
@@ -204,13 +207,14 @@ export function UsageSection({ isActive }: { isActive: boolean }): React.JSX.Ele
       <SearchableRow {...ROWS.percentMode}>
         <FieldRow
           label="Usage percentages"
-          description="Whether provider limits show the percentage used or remaining."
+          description="Whether provider limits and context meters show percentage used, percentage remaining, or (context meters only) raw token counts. Provider limits have no token count and fall back to Used."
           control={
             <SegmentedPill
               value={settings.usagePercentMode}
               options={[
                 { value: 'used', label: 'Used' },
-                { value: 'remaining', label: 'Remaining' }
+                { value: 'remaining', label: 'Remaining' },
+                { value: 'tokens', label: 'Tokens' }
               ]}
               onChange={(v) => update({ usagePercentMode: v })}
               ariaLabel="Usage percentage display"
@@ -223,13 +227,15 @@ export function UsageSection({ isActive }: { isActive: boolean }): React.JSX.Ele
           {USAGE_PROVIDER_IDS.map((id) => (
             <FieldRow
               key={id}
-              label={`${labelFor(id)} usage`}
+              label={labelFor(id)}
+              labelSegments={[{ kind: 'fact', value: labelFor(id) }, { kind: 'copy', value: ' usage' }]}
               description={PROVIDER_BLURBS[id] ?? ''}
               control={
                 <Switch
                   checked={!hidden.has(id)}
                   onChange={(v) => setShown(id, v)}
-                  ariaLabel={`Show ${labelFor(id)} usage`}
+                  ariaLabel="Show {provider} usage"
+                  ariaLabelParams={{ provider: labelFor(id) }}
                 />
               }
             />

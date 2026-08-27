@@ -7,6 +7,7 @@ import { Button } from '@renderer/ui/Button'
 import { CopyButton } from '@renderer/ui/CopyButton'
 import { Input } from '@renderer/ui/Input'
 import { Select } from '@renderer/ui/Select'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 /**
  * Remote access dialog — a self-contained popup reachable from the project (tab) caret menu, so
@@ -23,7 +24,18 @@ export function RemoteAccessDialog({ onClose }: { onClose: () => void }): React.
   const [hostBusy, setHostBusy] = useState(false)
   const [error, setError] = useState('')
   const [clientCode, setClientCode] = useState('')
-  const [dockerStatus, setDockerStatus] = useState('Checking Docker…')
+  const [dockerStatus, setDockerStatus] = useState<
+    { kind: 'checking' | 'ready' | 'missing' | 'error'; detail?: string }
+  >({ kind: 'checking' })
+  const vocab = useVocabularyMapper()
+  const visibleDockerStatus =
+    dockerStatus.kind === 'checking'
+      ? vocab('Checking Docker…')
+      : dockerStatus.kind === 'ready'
+        ? vocab('Docker is ready.')
+        : dockerStatus.kind === 'missing'
+          ? vocab('No Docker context was found. Open Settings → Docker host to retry.')
+          : `${vocab('Docker is unavailable')}: ${dockerStatus.detail ?? vocab('unknown error')}`
 
   // Which project this host shares with the joiner. Default = the active project (hoisted first
   // by hostShareOptions); the user can pick any other OPEN project before minting the offer.
@@ -52,8 +64,8 @@ export function RemoteAccessDialog({ onClose }: { onClose: () => void }): React.
   useEffect(() => {
     let live = true
     window.nodeTerminal.relayHost.dockerContexts()
-      .then((contexts) => { if (live) setDockerStatus(contexts.length ? 'Docker is ready.' : 'No Docker context was found. Open Settings → Docker host to retry.') })
-      .catch((error) => { if (live) setDockerStatus(`Docker is unavailable: ${error instanceof Error ? error.message : String(error)}`) })
+      .then((contexts) => { if (live) setDockerStatus({ kind: contexts.length ? 'ready' : 'missing' }) })
+      .catch((error) => { if (live) setDockerStatus({ kind: 'error', detail: error instanceof Error ? error.message : String(error) }) })
     return () => { live = false }
   }, [])
 
@@ -93,23 +105,21 @@ export function RemoteAccessDialog({ onClose }: { onClose: () => void }): React.
     <div className="confirm-overlay" onClick={onClose}>
       <div className="remote-dialog" onClick={(e) => e.stopPropagation()}>
         <div className="remote-dialog__head">
-          <h3>Remote access</h3>
-          <button className="remote-dialog__x" onClick={onClose} title="Close">
+          <h3>{vocab('Remote access')}</h3>
+          <button className="remote-dialog__x" onClick={onClose} title={vocab('Close')}>
             ×
           </button>
         </div>
         <p className="remote-dialog__desc">
-          Open terminals on a Docker host you own — end-to-end encrypted over the relay. Hosting
-          and connecting are free.
+          {vocab('Open terminals on a Docker host you own — end-to-end encrypted over the relay. Hosting and connecting are free.')}
         </p>
 
-        <h4 className="remote-dialog__head4">Allow remote access</h4>
-        <p className="remote-dialog__hint" role="status">{dockerStatus}</p>
+        <h4 className="remote-dialog__head4">{vocab('Allow remote access')}</h4>
+        <p className="remote-dialog__hint" role="status">{visibleDockerStatus}</p>
         {hostOffer ? (
             <div className="remote-dialog__block">
               <p className="remote-dialog__hint">
-                Sharing <strong>{sharedName || 'this project'}</strong> — the joiner will see this
-                project and can run commands on this Docker host. Share this pairing code (single use):
+                {vocab('Sharing')} <strong>{sharedName || vocab('this project')}</strong> — {vocab('the joiner will see this project and can run commands on this Docker host. Share this pairing code (single use):')}
               </p>
               <Input
                 className="w-full"
@@ -118,15 +128,15 @@ export function RemoteAccessDialog({ onClose }: { onClose: () => void }): React.
                 onFocus={(e) => e.target.select()}
               />
               <div className="remote-dialog__row">
-                <CopyButton text={hostOffer} label="Copy code" />
-                <Button onClick={() => void stopHosting()}>Stop sharing</Button>
+                <CopyButton text={hostOffer} label={vocab('Copy code')} />
+                <Button onClick={() => void stopHosting()}>{vocab('Stop sharing')}</Button>
               </div>
             </div>
           ) : (
             <div className="remote-dialog__block">
               {shareOptions.length > 1 ? (
                 <label className="remote-dialog__hint">
-                  Project to share
+                  {vocab('Project to share')}
                   <Select
                     className="w-full mt-1"
                     value={effectiveShareId}
@@ -141,26 +151,25 @@ export function RemoteAccessDialog({ onClose }: { onClose: () => void }): React.
                 </label>
               ) : (
                 <p className="remote-dialog__hint">
-                  Sharing <strong>{sharedName || 'this project'}</strong> — the joiner sees this
-                  project and can run commands on this Docker host.
+                  {vocab('Sharing')} <strong>{sharedName || vocab('this project')}</strong> — {vocab('the joiner sees this project and can run commands on this Docker host.')}
                 </p>
               )}
               <Button disabled={hostBusy} onClick={() => void startHosting()}>
-                {hostBusy ? 'Starting…' : 'Allow remote access'}
+                {hostBusy ? vocab('Starting…') : vocab('Allow remote access')}
               </Button>
             </div>
           )}
 
-        <h4 className="remote-dialog__head4">Connect to a host</h4>
+        <h4 className="remote-dialog__head4">{vocab('Connect to a host')}</h4>
         <div className="remote-dialog__block">
           <Input
             className="w-full"
-            placeholder="paste the host's code"
+            placeholder={vocab("paste the host's code")}
             value={clientCode}
             onChange={(e) => setClientCode(e.target.value)}
           />
           <Button disabled={!clientCode.trim()} onClick={connect}>
-            Connect
+            {vocab('Connect')}
           </Button>
         </div>
 

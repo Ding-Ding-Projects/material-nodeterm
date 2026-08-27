@@ -7,6 +7,7 @@ import { useExplorer } from '../state/explorer'
 import { sshFs } from '../terminal/ssh-fs'
 import { useSession } from '../session/session'
 import { promptDialog } from './promptDialog'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import {
   ancestorDirs,
   createTargetDir,
@@ -38,6 +39,7 @@ export interface ExplorerFolderAction {
   projectId: string
   path: string
 }
+import { IconPin } from './icons'
 
 export interface ExplorerPanelProps {
   onClose: () => void
@@ -159,6 +161,7 @@ function TreeEntry({
    */
   filterTest?: (name: string) => boolean
 }) {
+  const vocab = useVocabularyMapper()
   const open = useExplorer((s) => (s.expandedByProject[projectId] ?? []).includes(path))
   const [children, setChildren] = useState<DirEntry[] | null>(null)
   const rowRef = useRef<HTMLDivElement>(null)
@@ -290,8 +293,8 @@ function TreeEntry({
         {onDownload && (
           <button
             className={`ex-dl${dl ? ` ${dl}` : ''}`}
-            title={dl ? DL_TITLE[dl] : entry.dir ? `Download ${entry.name} folder` : `Download ${entry.name}`}
-            aria-label="Download"
+            title={dl ? vocab(DL_TITLE[dl]) : entry.dir ? `${vocab('Download')} ${entry.name} ${vocab('folder')}` : `${vocab('Download')} ${entry.name}`}
+            aria-label={vocab('Download')}
             aria-busy={dl === 'running'}
             // A second click while the first transfer is still running would start a duplicate
             // download and land it beside the first as `name (2)`.
@@ -357,6 +360,7 @@ export function ExplorerPanel({
   pinned = false,
   onTogglePin
 }: ExplorerPanelProps) {
+  const vocab = useVocabularyMapper()
   // Filters visible FILE rows by name (plain text, or regex via the `.*` trigger). See the
   // `filterTest` doc comment on TreeEntry for why directories are never hidden by it.
   const filter = useRegexSearchField()
@@ -590,18 +594,30 @@ export function ExplorerPanel({
     >
       <aside
         className={pinned ? 'drawer md3-explorer drawer--pinned' : 'drawer md3-explorer'}
+      className={pinned ? 'drawer-overlay drawer-overlay--pinned' : 'drawer-overlay'}
+      // Pinned: no handler, so a CSS miss still cannot dismiss the docked tree. The overlay
+      // also has pointer-events:none (styles.css) — without that it would steal canvas clicks
+      // even with a no-op handler. Both halves are load-bearing.
+      onClick={explorerOverlayClickCloses(pinned) ? onClose : undefined}
+    >
+      <aside
+        className={pinned ? 'drawer drawer--pinned' : 'drawer'}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="drawer__head">
-          <h2>{project?.name || 'Explorer'}</h2>
+          <h2>{project?.name || vocab('Explorer')}</h2>
           <div className="ex-head-actions">
-            <button title="Refresh" aria-label="Refresh" onClick={() => setVersion((v) => v + 1)}>
+            <button title={vocab('Refresh')} aria-label={vocab('Refresh')} onClick={() => setVersion((v) => v + 1)}>
               <MaterialSymbol name="refresh" size={18} />
+            <button type="button" title="Refresh" aria-label="Refresh" onClick={() => setVersion((v) => v + 1)}>
+              ↻
             </button>
             {onTogglePin && (
               <button
                 type="button"
                 className={pinned ? 'is-on' : ''}
+                title={vocab(pinned ? 'Unpin' : 'Pin')}
+                aria-label={vocab(pinned ? 'Unpin' : 'Pin')}
                 title={pinned ? 'Unpin' : 'Pin'}
                 aria-label={pinned ? 'Unpin' : 'Pin'}
                 aria-pressed={pinned}
@@ -610,15 +626,17 @@ export function ExplorerPanel({
                 <IconPin />
               </button>
             )}
-            <button className="drawer__close" aria-label="Close" onClick={onClose}>
+            <button className="drawer__close" aria-label={vocab('Close')} onClick={onClose}>
               <MaterialSymbol name="close" size={19} />
+            <button type="button" className="drawer__close" title="Close" aria-label="Close" onClick={onClose}>
+              ×
             </button>
           </div>
         </div>
 
         {!cwd && (
           <div className="drawer__body">
-            <p className="set-note">Set a folder for this project first (tab ⌄ → “Set folder…”).</p>
+            <p className="set-note">{vocab('Set a folder for this project first (tab ⌄ → “Set folder…”).')}</p>
           </div>
         )}
 
@@ -630,7 +648,7 @@ export function ExplorerPanel({
                 className="ex-filter-input"
                 value={filter.value}
                 spellCheck={false}
-                placeholder={filter.mode === 'regex' ? 'Filter files (regex)…' : 'Filter files…'}
+                placeholder={vocab(filter.mode === 'regex' ? 'Filter files (regex)…' : 'Filter files…')}
                 onChange={(e) => filter.setValue(e.target.value)}
               />
               <AnchoredRegexBuilder search={filter} fieldRef={filterInputRef} label="Regex — Explorer filter" />
@@ -638,20 +656,20 @@ export function ExplorerPanel({
             {filter.error && <p className="ex-filter-error">{filter.error}</p>}
             {filter.active && (
               <p className="ex-filter-note">
-                Showing files matching your filter. Expand folders to search inside them.
+                {vocab('Showing files matching your filter. Expand folders to search inside them.')}
               </p>
             )}
             <div
               className="drawer__body ex-body"
               role="tree"
-              aria-label={`${project?.name || 'Project'} folders and files`}
+              aria-label={`${project?.name || vocab('Project')} ${vocab('folders and files')}`}
               onContextMenu={(e) => {
                 if (e.target !== e.currentTarget || !cwd) return
                 e.preventDefault()
                 setMenu({ x: e.clientX, y: e.clientY, path: cwd, dir: true })
               }}
             >
-              {roots?.length === 0 && <p className="set-note">Empty folder.</p>}
+              {roots?.length === 0 && <p className="set-note">{vocab('Empty folder.')}</p>}
               {roots?.map((e) => (
                 <TreeEntry
                   key={e.name}
@@ -690,19 +708,19 @@ export function ExplorerPanel({
                 )}
                 <span className="ex-dls__name" title={d.detail || d.localPath || d.name}>
                   {d.name}
-                  {d.dir && d.status === 'running' ? ' (folder)' : ''}
+                  {d.dir && d.status === 'running' ? ` (${vocab('folder')})` : ''}
                 </span>
                 {d.status === 'done' && d.localPath && (
                   <button
                     className="ex-dls__act"
                     onClick={() => window.nodeTerminal.shell.reveal(d.localPath!)}
                   >
-                    Reveal
+                    {vocab('Reveal')}
                   </button>
                 )}
                 <button
                   className="ex-dls__act ex-dls__dismiss"
-                  aria-label="Dismiss"
+                  aria-label={vocab('Dismiss')}
                   onClick={() => setDownloads((list) => list.filter((x) => x.id !== d.id))}
                 >
                   <MaterialSymbol name="close" size={15} />
@@ -717,8 +735,10 @@ export function ExplorerPanel({
         createPortal(
           <>
             {/* stopPropagation everywhere (same as ContextMenu): this portal's React parent is the
-                drawer OVERLAY (not the aside), so a bubbled click lands on the overlay's
-                onClick={onClose} and closes the whole Explorer along with the menu. */}
+                drawer OVERLAY (not the aside), so a bubbled click on the unpinned modal lands on
+                the overlay's onClick={onClose} and closes the whole Explorer along with the menu.
+                A pinned overlay has no close handler, but the stop is still what keeps the
+                click off the canvas. */}
             <div
               className="tab-backdrop"
               style={{ zIndex: 78 }}
@@ -740,7 +760,7 @@ export function ExplorerPanel({
                   void createEntry(m.path, m.dir, 'file')
                 }}
               >
-                New File…
+                {vocab('New File…')}
               </button>
               <button
                 className="ctx-item"
@@ -750,7 +770,7 @@ export function ExplorerPanel({
                   void createEntry(m.path, m.dir, 'folder')
                 }}
               >
-                New Folder…
+                {vocab('New Folder…')}
               </button>
               {menu.dir && onOpenTerminalAtFolder && (
                 <>
@@ -763,7 +783,7 @@ export function ExplorerPanel({
                       onOpenTerminalAtFolder(folder)
                     }}
                   >
-                    Open terminal here
+                    {vocab('Open terminal here')}
                   </button>
                   {keyboardAgentNodeId && onAgentNodeDrop && (
                     <button
@@ -778,7 +798,7 @@ export function ExplorerPanel({
                         })
                       }}
                     >
-                      Open selected agent here
+                      {vocab('Open selected agent here')}
                     </button>
                   )}
                 </>
@@ -796,7 +816,7 @@ export function ExplorerPanel({
                   >
                     {/* scp -r brings a folder down AS a folder; the HTTP route has to archive it
                         on the fly, and the user should know what will land in Downloads. */}
-                    {menu.dir ? (route === 'http' ? 'Download Folder (.tar.gz)' : 'Download Folder') : 'Download'}
+                    {vocab(menu.dir ? (route === 'http' ? 'Download Folder (.tar.gz)' : 'Download Folder') : 'Download')}
                   </button>
                   {route === 'scp' && (
                     <button
@@ -807,7 +827,7 @@ export function ExplorerPanel({
                         void downloadTo(m.path, m.dir)
                       }}
                     >
-                      Download to…
+                      {vocab('Download to…')}
                     </button>
                   )}
                 </>
@@ -820,7 +840,7 @@ export function ExplorerPanel({
                   setMenu(null)
                 }}
               >
-                Copy Path
+                {vocab('Copy Path')}
               </button>
               <button
                 className="ctx-item"
@@ -829,7 +849,7 @@ export function ExplorerPanel({
                   setMenu(null)
                 }}
               >
-                Copy Relative Path
+                {vocab('Copy Relative Path')}
               </button>
               {/* Root itself (the empty-area menu) is not an ignorable entry. An entry ignored by
                   a broader PATTERN gets neither item: it cannot be "added" (already ignored) and
@@ -845,7 +865,7 @@ export function ExplorerPanel({
                       void toggleGitignore(m.path, !!m.ignored)
                     }}
                   >
-                    {menu.ignored ? 'Remove from .gitignore' : 'Add to .gitignore'}
+                    {vocab(menu.ignored ? 'Remove from .gitignore' : 'Add to .gitignore')}
                   </button>
                 </>
               )}
@@ -861,7 +881,7 @@ export function ExplorerPanel({
                       setMenu(null)
                     }}
                   >
-                    Reveal in Finder
+                    {vocab('Reveal in Finder')}
                   </button>
                 </>
               )}

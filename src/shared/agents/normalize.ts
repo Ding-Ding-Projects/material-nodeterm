@@ -296,12 +296,42 @@ interface CodexPayload {
   prompt?: string
   tool_name?: string
   tool_input?: { prompt?: string; question?: string; questions?: { question?: string }[] }
+  // Subagent (spawn_agent collaboration) fields, measured on codex-cli 0.146.0:
+  // SubagentStart/SubagentStop carry agent_id + agent_type, and a CHILD's own tool events carry
+  // agent_id/agent_type too (the child runs inside the same codex process, so its hooks fire
+  // through the parent's subscription). SubagentStop adds last_assistant_message.
+  agent_id?: string
+  agent_type?: string
+  last_assistant_message?: string
 }
 
 export function normalizeCodex(env: RawHookEnvelope): NormalizedAgentEvent | null {
   const p = env.payload as CodexPayload
   const ev = p.hook_event_name ?? p.hookEventName
   const base = { nodeId: env.nodeId, agentId: env.agentId, sessionId: p.session_id }
+
+  // Subagent fan-out (spawn_agent). Keyed by agent_id — the child's rollout/session uuid —
+  // NOT tool_use_id: the spawn tool's Pre/PostToolUse and the SubagentStart it launches carry
+  // different turn ids and nothing correlates them, while agent_id is stable across the child's
+  // whole life (measured: parallel + nested spawns each get a distinct agent_id, and a nested
+  // child's Start/Stop fire through the same subscription). No taskLabel: the spawn message is
+  // encrypted end-to-end (tool_input.message AND the NEW_TASK payload in the child rollout are
+  // Fernet blobs), so there is no task text to show — the live transcript tail carries the
+  // readable "Task name:" header instead.
+  if (ev === 'SubagentStart' && p.agent_id) {
+    return { ...base, kind: 'subagent-start', toolUseId: p.agent_id, subagentType: p.agent_type }
+  }
+  // The real end signal — codex fires SubagentStop when the child's turn completes, so unlike
+  // claude there is no async-launch-ack trap to dodge here. Duration/token counts are not in the
+  // payload; the card keeps its live-timer elapsed and the result text.
+  if (ev === 'SubagentStop' && p.agent_id) {
+    return { ...base, kind: 'subagent-end', toolUseId: p.agent_id, result: p.last_assistant_message }
+  }
+  // A CHILD's own tool events (tagged agent_id) must not drive the PARENT node's state: after an
+  // async spawn the parent's turn can end (Stop → done) while the child still runs, and a child
+  // Bash event mapping to 'working' would flip a finished node back to RUNNING with no later
+  // parent event to clear it. Child activity reaches the card via the rollout tail instead.
+  if (p.agent_id) return null
 
   // UserPromptSubmit is codex's turn start — flag newTurn so the renderer clears
   // per-turn fan-out once per turn, not on every tool event.
@@ -395,6 +425,59 @@ export function normalizeGemini(env: RawHookEnvelope): NormalizedAgentEvent | nu
       return { ...base, kind: 'state', state: 'blocked', lastMessage: p.message }
     }
     return null
+  }
+  return null
+}
+
+// GitHub Copilot CLI hook payload. Its event names and snake_case envelope intentionally resemble
+// Claude's, but its event set and notification vocabulary are a separate protocol contract. Keep a
+// dedicated normalizer so a future change in one harness cannot silently change the other's state.
+interface CopilotPayload {
+  hook_event_name?: string
+  session_id?: string
+  prompt?: string
+  notification_type?: string
+  message?: string
+  last_assistant_message?: string
+}
+
+export function normalizeCopilot(env: RawHookEnvelope): NormalizedAgentEvent | null {
+  const p = env.payload as CopilotPayload
+  const base = { nodeId: env.nodeId, agentId: env.agentId, sessionId: p.session_id }
+
+  if (p.hook_event_name === 'SessionStart') {
+    return { ...base, kind: 'session', sessionPhase: 'start' }
+  }
+  if (p.hook_event_name === 'SessionEnd') {
+    return { ...base, kind: 'session', sessionPhase: 'end' }
+  }
+  if (p.hook_event_name === 'UserPromptSubmit') {
+    return { ...base, kind: 'state', state: 'working', task: p.prompt, newTurn: true }
+  }
+  if (
+    p.hook_event_name === 'PreToolUse' ||
+    p.hook_event_name === 'PostToolUse' ||
+    p.hook_event_name === 'PostToolUseFailure'
+  ) {
+    return { ...base, kind: 'state', state: 'working' }
+  }
+  if (p.hook_event_name === 'Stop') {
+    return {
+      ...base,
+      kind: 'state',
+      state: 'done',
+      lastMessage: p.last_assistant_message
+    }
+  }
+  if (p.hook_event_name === 'Notification') {
+    // Closed matches only. Informational/background notification types must never create a sticky
+    // NEEDS YOU badge on a finished parent session.
+    if (p.notification_type === 'permission_prompt') {
+      return { ...base, kind: 'state', state: 'blocked', lastMessage: p.message }
+    }
+    if (p.notification_type === 'elicitation_dialog') {
+      return { ...base, kind: 'state', state: 'waiting', lastMessage: p.message }
+    }
   }
   return null
 }
@@ -661,5 +744,6 @@ export function normalizeFor(agentId: AgentId, env: RawHookEnvelope): Normalized
   if (agentId === 'gemini') return normalizeGemini(env)
   if (agentId === 'opencode') return normalizeOpencode(env)
   if (agentId === 'grok') return normalizeGrok(env)
+  if (agentId === 'copilot') return normalizeCopilot(env)
   return null
 }

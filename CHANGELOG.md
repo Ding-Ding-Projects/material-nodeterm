@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add a source-only desktop Material Design 3 audit with a hand-written inventory of 212 rendered
+  surfaces, including onboarding, profile picking, conversion, password management, Minecraft
+  management, dialogs, find bars, and notifications. Shared NumberField, Radio, Progress, and Tabs
+  primitives now carry tokenized focus, reduced-motion, sizing, orientation, and state behavior.
+  Personal vocabulary producer coverage is inventoried across 34 mapped renderer boundaries plus
+  34 classified production surfaces, with 31 direct call-site mappings still open. Local-only
+  replacements keep commands, paths, identifiers, external records, and user input exact. No
+  general tests, builds, packaging, runtime launches, or captures were run in this source-only lane.
+
 - Fix desktop renderer layout overflow across menus, flyouts, anchored popovers, dialogs, settings,
   onboarding, command palette, and documentation surfaces. Long localized and user-renamed values
   now wrap, dynamic collections scroll inside viewport-bounded surfaces, submenu flyouts are
@@ -24,6 +33,74 @@
   atomic user-scoped publication, health probes, cancellation, repair, restart reconciliation, and
   typed desktop/Server Edition IPC. Node Catalog `Install and continue` resume wiring and focused
   verification remain the next integration points.
+- Add a hand-written Material Design 3 audit for every Windows desktop surface and every checked-in
+  documentation page, with a fail-closed source checker and shared numeric, radio, progress,
+  keyboard-roving tabs, tooltip, and shape-token remediation. Built-artifact clipping and pixel evidence remain pending;
+  the documentation and landing site stays in its existing Kids-mode visual style.
+- Add the schema 3 portable media contract: content-addressed image, audio, and video assets,
+  byte/signature validation, explicit Include/Omit/Locate Later decisions, unresolved placeholders,
+  and machine-local source-path exclusion. Archive wiring and verification remain pending.
+- Add schema 3 portable project import and export wiring with complete entry hash validation,
+  bounded in-memory legacy migration, collision-safe atomic destination staging, cancellation,
+  rollback, and an explicit omission report. Keep provider credentials, machine paths, process
+  state, vaults, and local bindings out of the project file.
+- Add the guided Desktop binding wizard with Configure, Rebind, Adopt, Deploy, Locate Asset, and
+  Leave Unbound routes, local binding separation, progress and cancellation state, and an honest
+  Server Edition desktop-only boundary. Verification remains pending by design for this lane.
+- Add the unified Node Catalog registry and creation coordinator. The FAB, pane context menu, and
+  command palette now expose a shared typed inventory with categories, safe defaults, availability
+  reasons, local regex search, documentation links, immutable creation-event idempotence, and
+  collision-free placement. This ultra-speed implementation pass intentionally did not run tests,
+  type checks, lint, reviews, security or accessibility checks, builds, packaging, installer
+  execution, runtime interaction, or UI captures. Build and packaging evidence proves artifact
+  production only.
+
+- Tighten Node Catalog creation semantics: append coordination now covers shortcut, profile, drop,
+  paste, board, source-control, login, automation, duplicate, and peer paths; grouped placement
+  compares siblings in one coordinate space; exhausted placement refuses visibly; remote terminals
+  wait for a concrete picker selection; duplicate nodes receive fresh event ids; planned Photo,
+  Gallery, Torrent, VM, Home Assistant, planner, universe, AWS, and hosting blueprints remain
+  explicit disabled rows; and the offline docs bundle includes the catalog article. Verification is
+  intentionally pending under the ultra-speed delivery boundary.
+- Add the deterministic, non-deletable and non-duplicable Shop coordinator for Multiverse and AWS
+  Universe child canvases. Scope-bound catalog filtering, import repair, hydration and peer
+  idempotence, collision-safe identity, immutable creation-event handling, mutation refusal,
+  portable safe metadata, and the accessible Material Design 3 Shop card are implemented. The Shop
+  consumes a provider interface for the unified Node Catalog and remains creation-disabled until
+  that dependency is available. Tests, builds, packaging, runtime interaction, and captures were
+  not run under issue #17's explicit verification boundary.
+- Add the issue #20 media catalogue and Photo, Video, and mixed-media Gallery canvas node kinds.
+  Local media is routed through the existing allowlisted protocol, gallery references carry bounded
+  portable metadata, and missing assets remain visible instead of disappearing. Verification is
+  pending in the parent integration lane.
+- Add the Torrent Downloader canvas node with packaged or pinned user-scoped WebTorrent runtime
+  discovery, magnet and `.torrent` intake, metadata/file selection, safe destination preflight,
+  progress/speed/peer/ETA reporting, pause/resume/cancel/retry, restart reconciliation, bounded
+  per-task seeding, and machine-local task persistence. The ultra-speed lane intentionally did not
+  run tests, builds, packaging, installer execution, runtime interaction checks, or captures.
+- Add a guided Linux ISO VM canvas node backed by bundled QEMU and qemu-img resolution, bounded
+  memory/CPU settings, WHPX preference, loopback VNC/QMP lifecycle, persistent-install and
+  disposable-live modes, machine-local ISO/disk bindings, snapshot controls, and network-off
+  defaults. Ultra-speed implementation evidence intentionally excludes tests, builds, packaging,
+  runtime interaction, and captures.
+- Harden the Linux ISO VM lane with pinned QEMU dependency metadata, package-resource proof, WHPX
+  probing with TCG fallback, ISO digest validation, qcow2/raw detection, disk free-space checks,
+  QMP/display startup handshakes, bounded diagnostics, cancellation generations, stale-process
+  recovery, atomic state retries, and a truthful Server Edition display boundary.
+- Add a host-owned planner occurrence service with durable local schedules, recurrence choices,
+  timezone and DST semantics, cross-midnight descriptions, missed-occurrence history, JSON/CSV
+  export, Desktop IPC and Server Edition WS-RPC events, and a guided Planner settings surface.
+  This ultra-speed lane intentionally leaves tests, builds, packaging, runtime interaction, and
+  captures unrun.
+- Add Calendar nodes for local calendars and ICS import, with guided CalDAV, Google Calendar, and
+  Microsoft 365 provider/account/calendar selection, recurrence and timezone views, offline cache,
+  create/edit previews, and destructive delete confirmation. Provider credentials stay behind the
+  trusted shell's vault boundary. This ultra-speed lane deliberately ran no tests, type checks,
+  builds, packaging, runtime interaction, or captures.
+- Add Alarm Clock canvas nodes with one-shot and recurring wall-clock schedules, explicit IANA
+  timezones, daylight-saving-safe occurrence planning, snooze, dismiss, missed history, sound and
+  narrator integration, and an honest no-powered-off-wake notice. Verification is intentionally
+  pending in the ultra-speed lane.
 
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and
