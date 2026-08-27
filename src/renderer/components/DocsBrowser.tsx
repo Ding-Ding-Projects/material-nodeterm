@@ -55,6 +55,7 @@ interface ScrollRequest {
 
 export function DocsBrowser(): JSX.Element {
   const vocab = useVocabularyMapper()
+export function DocsBrowser({ initialPath }: { initialPath?: string } = {}): JSX.Element {
   const { state, retry } = useDocsBundle()
   const articles = state.status === 'ready' ? state.articles : EMPTY_ARTICLES
 
@@ -84,8 +85,8 @@ export function DocsBrowser(): JSX.Element {
   // Land on a real article as soon as the bundle arrives.
   useEffect(() => {
     if (path !== null || articles.length === 0) return
-    setPath(byPath.has(DEFAULT_ARTICLE) ? DEFAULT_ARTICLE : articles[0].path)
-  }, [articles, byPath, path])
+    setPath(initialPath && byPath.has(initialPath) ? initialPath : byPath.has(DEFAULT_ARTICLE) ? DEFAULT_ARTICLE : articles[0].path)
+  }, [articles, byPath, initialPath, path])
 
   // --- search ---------------------------------------------------------------------------------
   // `test` changes identity on every keystroke, so it is read through a ref when the debounce

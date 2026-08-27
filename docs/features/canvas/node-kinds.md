@@ -6,6 +6,10 @@ Everything on a nodeterm canvas is a node. Six kinds exist today, and every one 
 the same underlying canvas engine — so they all pan, zoom, resize, group, and persist the same
 way, while each contributes its own body content and header actions.
 
+New nodes are selected through the [Unified Node Catalog](./node-catalog.md), which keeps the
+kind-specific factory, safe defaults, dependency ids, and availability reason together. The FAB,
+empty-canvas context menu, group context menu, and command palette all expose that same registry.
+
 ## Behaviour
 
 | Kind | What it is |

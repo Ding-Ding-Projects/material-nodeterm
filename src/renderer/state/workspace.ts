@@ -31,6 +31,7 @@ import type { AnnotationRect, AnnotationVariant } from '../lib/annotation'
 // reflector.
 export { applyCanvasMutation } from '@shared/canvas-mutations'
 import { acceptNewInboundNode, sanitizeInboundNode } from '@shared/node-exec'
+import { newCreationEventId } from '@shared/node-catalog'
 
 /** Preset color palette — macOS system colors (dark mode). */
 export const NODE_COLORS = [
@@ -80,6 +81,8 @@ export const COLLAPSED_HEIGHT = 40
 
 /** User data carried in the React Flow node's data field. */
 export interface NodeData {
+  /** Immutable creation event key. Hydration reads it but never mints a replacement event. */
+  creationEventId?: string
   /** A live canvas object that was never asked to survive the session — today only a browser
    *  popup. `flowToNodeStates` drops it, so it is absent from project.json, the SSH mirror and the
    *  export archive alike; the node's own "Keep" action clears the flag to promote it. */
@@ -1570,6 +1573,8 @@ export function duplicateNode(node: CanvasNode, offset = 28): CanvasNode {
     extent: undefined,
     data: {
       ...node.data,
+      // A duplicate is a new user creation event, never a second owner of the source event.
+      creationEventId: newCreationEventId(),
       initialCommand: undefined,
       agentLaunchIntent: undefined,
       pendingLaunch: undefined,
@@ -1899,6 +1904,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
       style: { width: n.size.width, height },
       ...(n.parentId ? { parentId: n.parentId, extent: 'parent' as const } : {}),
       data: {
+        creationEventId: n.creationEventId,
         title: n.title,
         // Default true for older agent nodes saved before titleAuto existed, so they start
         // tracking the session name; non-agent nodes ignore it.
@@ -1968,6 +1974,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
       return {
         id: n.id,
         kind,
+        creationEventId: n.data.creationEventId,
         position: n.position,
         size: {
           width: n.measured?.width ?? n.width ?? sizeFor(kind).width,

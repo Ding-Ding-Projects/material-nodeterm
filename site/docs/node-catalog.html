@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Unified Node Catalog - nodeterm docs</title>
+    <meta name="description" content="The typed Node Catalog registry and guided creation coordinator." />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+  </head>
+  <body>
+    <div class="doc-topbar"><a href="../index.html">← nodeterm</a><span aria-hidden="true">/</span><a href="./index.html">Docs</a></div>
+    <article class="doc-body">
+      <p class="doc-kicker">Canvas</p>
+      <h1>Unified Node Catalog</h1>
+      <p>The FAB, empty-canvas context menu, and command palette share one typed registry and creation coordinator. Existing shortcuts and file drops remain fast paths into the same intent model.</p>
+      <h2>Behaviour</h2>
+      <p>Rows carry stable ids, categories, keywords, documentation links, dependency ids, safe defaults, and availability facts. Unavailable rows remain visible with the exact next action. Planned Photo, Gallery, Torrent, Linux VM, Home Assistant, planner, Multiverse, AWS, and hosting blueprints remain explicit disabled rows. A selected row receives one immutable creation event id. Retrying that id is idempotent, and collision-free placement finds the next free rectangle rather than piling nodes together. If the bounded search is exhausted, creation is refused and the canvas stays unchanged.</p>
+      <h2>Interaction</h2>
+      <p>The dialog has category chips, a bounded keyboard-navigable list, result counts, visible focus, and a search field with its adjacent anchored full regex builder. Plain text is the default. Up and Down choose, Enter creates, and Escape clears before closing. Documentation actions open the bundled in-app reader rather than a raw relative Markdown URL.</p>
+      <h2>Portability and safety</h2>
+      <p>Safe defaults are project intent. Credentials, sessions, process state, host identifiers, and absolute machine paths stay local. Hydrating a saved project remembers event ids without creating new events or launching any process.</p>
+      <h2>Verification</h2>
+      <p>The implementation pass intentionally did not run tests, type checks, lint, security checks, accessibility checks, builds, packaging, installer execution, runtime interaction, or captures. Build and packaging evidence proves artifact production only.</p>
+      <section class="doc-suggested"><h2>Suggested articles</h2><ul><li><a href="./node-kinds.html">Node kinds</a></li><li><a href="./canvas-lifecycle.html">Canvas and node lifecycle</a></li><li><a href="./projects-and-tabs.html">Projects and tabs</a></li></ul></section>
+    </article>
+  </body>
+</html>

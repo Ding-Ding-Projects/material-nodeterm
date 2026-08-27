@@ -428,6 +428,8 @@ export interface PendingLaunch {
 export interface CanvasNodeState {
   id: string
   kind: NodeKind
+  /** Immutable idempotency key for the user or automation event that created this node. */
+  creationEventId?: string
   position: { x: number; y: number }
   size: { width: number; height: number }
   title: string

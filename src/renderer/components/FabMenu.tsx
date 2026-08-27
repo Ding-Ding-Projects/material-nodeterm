@@ -11,8 +11,14 @@ import { IconLock } from './icons'
 import { writeAuthenticatorDrag } from '../lib/explorerNodeDrag'
 import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
 import { AnchoredRegexBuilder } from './regex/AnchoredRegexBuilder'
+import { useState } from 'react'
+import type { AgentId } from '@shared/agents/config'
+import type { TerminalProfileChoice } from '../lib/terminal-profile-actions'
+import { useLocalizedVocabularyText } from '../lib/personalVocabulary/useLocalizedVocabularyText'
 
 export interface FabMenuProps {
+  /** Opens the single typed registry used by every creation surface. */
+  onOpenCatalog: () => void
   onAddTerminal: () => void
   /** Desktop-local Windows capability. Keep false for SSH, relay, and Server Edition sessions. */
   offersTerminalProfiles?: boolean
@@ -42,6 +48,7 @@ export interface FabMenuProps {
  * behavior test can drive exactly this surface, the same way it drove the old `Dock`.
  */
 export function FabMenu({
+  onOpenCatalog,
   onAddTerminal,
   offersTerminalProfiles = false,
   terminalProfileChoices = [],
@@ -62,19 +69,6 @@ export function FabMenu({
   const menuInputRef = useRef<HTMLInputElement>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
-  const customAgents = useSettings((s) => s.settings.customAgents)
-  const disabledAgents = useSettings((s) => s.settings.disabledAgents)
-  const claudeAccounts = useSettings((s) => s.settings.claudeAccounts)
-  const activeProjectId = useProjects((s) => s.activeProjectId)
-  const activeProject = useProjects((s) => s.projects.find((p) => p.id === activeProjectId))
-  // Accounts usable in the active project (local for a local project, this host's for an SSH
-  // project). The flat FAB menu can't nest, so Claude gets one "New Claude — <label>" entry per
-  // account (plus the base "Claude" = project default).
-  const localAccounts = accountsForProject(claudeAccounts, activeProject)
-  // ✓ marks the project's default account entry (what the base "Claude" resolves to).
-  const defaultAccountId = localAccounts.some((a) => a.id === activeProject?.defaultAccountId)
-    ? activeProject?.defaultAccountId
-    : undefined
   const profileEmptyState = terminalProfileEmptyState ?? {
     label: profileText('terminalProfiles.common.profilesUnavailable', 'Profiles unavailable'),
     hint: profileText(
@@ -291,6 +285,9 @@ export function FabMenu({
                 <button role="menuitem" onClick={pick(onAddDino)}>
                   <DinoIcon />
                   <span>Dino Game</span>
+                <button role="menuitem" onClick={pick(onOpenCatalog)}>
+                  <CatalogIcon />
+                  <span>Browse node catalog…</span>
                 </button>
                 <button role="menuitem" onClick={pick(onOpenFile)}>
                   <EditorIcon />
@@ -324,6 +321,14 @@ function PlusIcon() {
   return (
     <svg {...S} width={26} height={26}>
       <path d="M12 5v14M5 12h14" />
+    </svg>
+  )
+}
+function CatalogIcon() {
+  return (
+    <svg {...S}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M3.5 12h17M12 3.5c2.4 2.2 3.3 5 3.3 8.5s-.9 6.3-3.3 8.5c-2.4-2.2-3.3-5-3.3-8.5S9.6 5.7 12 3.5Z" />
     </svg>
   )
 }

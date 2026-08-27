@@ -2,7 +2,8 @@
 
 The portable canvas projection is the platform-free `project.json` payload used by schema 3
 export and import work. It preserves the project display metadata, root canvas, future Multiverse
-and AWS Universe canvas scopes, node presentation, grouping, relationships, and ordering. It does
+and AWS Universe canvas scopes, node presentation, grouping, relationships, ordering, and immutable
+creation-event ids. It does
 not open files, start processes, hydrate sessions, or contact a provider.
 
 ## Preserved data
@@ -10,6 +11,8 @@ not open files, start processes, hydrate sessions, or contact a provider.
 The projection contains a stable schema identifier and version, project name, colour and safe icon,
 canvas identifiers and scope, node geometry, kind, title, colour, group, collapse state, tags,
 safe text and browser tab presentation, service labels, bridge and rope relationships, and an
+immutable `creationEventId` for idempotent user and automation creation events. The id is safe intent
+metadata only and carries no machine identity or runtime handle. The projection also carries an
 optional bounded global appearance record. Per-element appearance is postponed until its typed
 schema exists. Child canvases are represented now so later universe and portal
 features can add their own records without changing the root contract. A universe scope is either
@@ -51,3 +54,4 @@ catalog, Shop creation, portals, provider adapters, and UI remain separate imple
 - [Portable project schema 3](./portable-schema3.md)
 - [Project history and archives](./project-history-and-archives.md)
 - [Projects and tabs](./projects-and-tabs.md)
+- [Unified Node Catalog](../canvas/node-catalog.md)

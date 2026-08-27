@@ -134,6 +134,14 @@ import {
   EDIT_TAB_APPEARANCE_ACTION
 } from '../lib/projectMenuActions'
 import { CommandPalette, type Command } from '../components/CommandPalette'
+import { NodeCatalogDialog } from '../components/NodeCatalogDialog'
+import {
+  NODE_CATALOG,
+  nodeCatalogAvailability,
+  newCreationEventId,
+  type NodeCatalogEntry
+} from '@shared/node-catalog'
+import { NodeCreationCoordinator } from '../state/nodeCreationCoordinator'
 import {
   IconAgent,
   IconAnnotationArea,
@@ -1370,6 +1378,14 @@ export function Canvas() {
   // move-into-group action). `ids` is the selection being moved; `groups` is the eligible-target
   // list computed at click time (only frames addSelectionToGroup would actually change).
   const [groupPicker, setGroupPicker] = useState<{ ids: string[]; groups: GroupPickerOption[] } | null>(null)
+  // All user-created nodes pass through this registry. The cursor/group context is captured when
+  // the FAB or a right-click menu opens it, so the dialog never silently places a node elsewhere.
+  const [nodeCatalog, setNodeCatalog] = useState<{
+    at?: { x: number; y: number }
+    groupId?: string
+  } | null>(null)
+  const [docsInitialPath, setDocsInitialPath] = useState<string | undefined>(undefined)
+  const nodeCreationCoordinatorRef = useRef(new NodeCreationCoordinator())
   // Drives WorktreeDialog. `groupId` null = create the group frame around the new worktree;
   // set = bind an existing group (the group context menu). `at` is the pane cursor, if any.
   const [worktreeDialog, setWorktreeDialog] = useState<{
@@ -1721,6 +1737,11 @@ export function Canvas() {
     [terminalProfiles, profileText]
   )
   nodesRef.current = nodes
+  useEffect(() => {
+    // Hydration is a read, not a creation event. Remembering persisted ids makes a retried
+    // catalogue command idempotent without minting anything while a project is reopened.
+    nodeCreationCoordinatorRef.current.remember(nodes)
+  }, [nodes])
   useEffect(() => {
     const onPrepareAgentFolder = (event: Event): void => {
       const nodeId = (event as CustomEvent<{ nodeId?: unknown }>).detail?.nodeId
@@ -3984,9 +4005,10 @@ export function Canvas() {
           project?.ssh,
           terminalCreationOptionsFor(activeProjectId, effectiveProfileId)
         )
-        return [...ns, groupId ? parentInto(node, groupId) : node]
+        const appended = nodeCreationCoordinatorRef.current.appendNode(ns, groupId ? parentInto(node, groupId) : node)
+        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        return appended.nodes
       })
-      markDirty()
     },
     [
       setNodes,
@@ -4216,16 +4238,20 @@ export function Canvas() {
         focusNodeRef.current(existing.id)
         return
       }
-      setNodes((ns) => [
-        ...ns.map((n) => (n.selected ? { ...n, selected: false } : n)),
-        {
+      setNodes((ns) => {
+        const created = {
           ...(isVideoFile(filePath)
             ? createVideoNode(ns.length, filePath, center ?? viewCenter(), sshFs)
             : createEditorNode(ns.length, filePath, center ?? viewCenter(), sshFs)),
           selected: true
         }
-      ])
-      markDirty()
+        const appended = nodeCreationCoordinatorRef.current.appendNode(
+          ns.map((n) => (n.selected ? { ...n, selected: false } : n)),
+          created
+        )
+        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        return appended.nodes
+      })
     },
     [setNodes, markDirty, viewCenter]
   )
@@ -4449,8 +4475,14 @@ export function Canvas() {
     (relPath: string, staged: boolean, scopeCwd?: string) => {
       const cwd = scmCwd(scopeCwd)
       if (!cwd) return
-      setNodes((ns) => [...ns, createDiffNode(ns.length, cwd, relPath, staged, viewCenter())])
-      markDirty()
+      setNodes((ns) => {
+        const appended = nodeCreationCoordinatorRef.current.appendNode(
+          ns,
+          createDiffNode(ns.length, cwd, relPath, staged, viewCenter())
+        )
+        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        return appended.nodes
+      })
     },
     [setNodes, markDirty, scmCwd, viewCenter]
   )
@@ -4460,8 +4492,14 @@ export function Canvas() {
     (relPath: string, commitOid: string, scopeCwd?: string) => {
       const cwd = scmCwd(scopeCwd)
       if (!cwd) return
-      setNodes((ns) => [...ns, createDiffNode(ns.length, cwd, relPath, false, viewCenter(), commitOid)])
-      markDirty()
+      setNodes((ns) => {
+        const appended = nodeCreationCoordinatorRef.current.appendNode(
+          ns,
+          createDiffNode(ns.length, cwd, relPath, false, viewCenter(), commitOid)
+        )
+        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        return appended.nodes
+      })
     },
     [setNodes, markDirty, scmCwd, viewCenter]
   )
@@ -4477,9 +4515,8 @@ export function Canvas() {
         project,
         useSettings.getState().settings.claudeAccounts
       )
-      setNodes((ns) => [
-        ...ns,
-        createAgentNode(
+      setNodes((ns) => {
+        const created = createAgentNode(
           'claude',
           ns.length,
           // Same scope resolution as every other Source Control action (`scmCwd`): the panel's
@@ -4492,8 +4529,10 @@ export function Canvas() {
           activeAgentLaunchPlan('source-control-explain'),
           terminalCreationOptionsFor(activeProjectId)
         )
-      ])
-      markDirty()
+        const appended = nodeCreationCoordinatorRef.current.appendNode(ns, created)
+        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        return appended.nodes
+      })
     },
     [setNodes, markDirty, activeProjectId, viewCenter, scmCwd]
   )
@@ -4578,9 +4617,13 @@ export function Canvas() {
     (kind: ServiceNodeKind, center?: { x: number; y: number }, groupId?: string) => {
       setNodes((ns) => {
         const node = createServiceNode(kind, ns.length, center ?? emptyNodePos())
-        return [...ns, groupId ? parentInto(node, groupId) : node]
+        const appended = nodeCreationCoordinatorRef.current.appendNode(
+          ns,
+          groupId ? parentInto(node, groupId) : node
+        )
+        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        return appended.nodes
       })
-      markDirty()
     },
     [setNodes, markDirty, emptyNodePos, parentInto]
   )
@@ -4589,9 +4632,10 @@ export function Canvas() {
     (center?: { x: number; y: number }, groupId?: string) => {
       setNodes((ns) => {
         const node = createStickyNode(ns.length, center ?? emptyNodePos())
-        return [...ns, groupId ? parentInto(node, groupId) : node]
+        const appended = nodeCreationCoordinatorRef.current.appendNode(ns, groupId ? parentInto(node, groupId) : node)
+        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        return appended.nodes
       })
-      markDirty()
     },
     [setNodes, markDirty, emptyNodePos, parentInto]
   )
@@ -4601,9 +4645,10 @@ export function Canvas() {
     (center?: { x: number; y: number }, groupId?: string) => {
       setNodes((ns) => {
         const node = createAuthenticatorNode(ns.length, center ?? emptyNodePos())
-        return [...ns, groupId ? parentInto(node, groupId) : node]
+        const appended = nodeCreationCoordinatorRef.current.appendNode(ns, groupId ? parentInto(node, groupId) : node)
+        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        return appended.nodes
       })
-      markDirty()
     },
     [setNodes, markDirty, emptyNodePos, parentInto]
   )
@@ -4612,9 +4657,10 @@ export function Canvas() {
     (center?: { x: number; y: number }, groupId?: string) => {
       setNodes((ns) => {
         const node = createNativeLoopNode(ns.length, center ?? emptyNodePos())
-        return [...ns, groupId ? parentInto(node, groupId) : node]
+        const appended = nodeCreationCoordinatorRef.current.appendNode(ns, groupId ? parentInto(node, groupId) : node)
+        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        return appended.nodes
       })
-      markDirty()
     },
     [setNodes, markDirty, emptyNodePos, parentInto]
   )
@@ -4625,9 +4671,10 @@ export function Canvas() {
     (center?: { x: number; y: number }, groupId?: string) => {
       setNodes((ns) => {
         const node = createNsisNode(ns.length, center ?? emptyNodePos())
-        return [...ns, groupId ? parentInto(node, groupId) : node]
+        const appended = nodeCreationCoordinatorRef.current.appendNode(ns, groupId ? parentInto(node, groupId) : node)
+        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        return appended.nodes
       })
-      markDirty()
     },
     [setNodes, markDirty, emptyNodePos, parentInto]
   )
@@ -4642,9 +4689,13 @@ export function Canvas() {
           record,
           ...ns.filter((n) => n.type === 'dino').map((n) => (n.data.highScore as number) ?? 0)
         )
-        return [...ns, createDinoNode(ns.length, center ?? viewCenter(), liveBest)]
+        const appended = nodeCreationCoordinatorRef.current.appendNode(
+          ns,
+          createDinoNode(ns.length, center ?? viewCenter(), liveBest)
+        )
+        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        return appended.nodes
       })
-      markDirty()
     },
     [setNodes, markDirty, viewCenter, activeProjectId]
   )
@@ -4654,8 +4705,14 @@ export function Canvas() {
       const input = await promptDialog({ message: 'Open web view — enter a URL:' })
       const url = input?.trim()
       if (!url) return
-      setNodes((ns) => [...ns, createWebNode(ns.length, { url }, center ?? emptyNodePos())])
-      markDirty()
+      setNodes((ns) => {
+        const appended = nodeCreationCoordinatorRef.current.appendNode(
+          ns,
+          createWebNode(ns.length, { url }, center ?? emptyNodePos())
+        )
+        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        return appended.nodes
+      })
     },
     [setNodes, markDirty, emptyNodePos]
   )
@@ -4665,10 +4722,107 @@ export function Canvas() {
       // Open a blank browser node — the user types the URL in the node's own address bar (like a
       // browser's new tab). We deliberately don't use window.prompt: Electron doesn't support it
       // (it throws "prompt() is and will not be supported"), and a browser node doesn't need it.
-      setNodes((ns) => [...ns, createBrowserNode(ns.length, '', center ?? emptyNodePos())])
-      markDirty()
+      setNodes((ns) => {
+        const appended = nodeCreationCoordinatorRef.current.appendNode(
+          ns,
+          createBrowserNode(ns.length, '', center ?? emptyNodePos())
+        )
+        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        return appended.nodes
+      })
     },
     [setNodes, markDirty, emptyNodePos]
+  )
+
+  /**
+   * One catalog executor for the FAB, pane context menu, and command palette. The existing fast
+   * paths remain available, but they all converge on the same typed factory table here when a
+   * catalog row is chosen. The coordinator stamps an immutable event id, rejects a duplicate
+   * event, and searches for a free rectangle before the node is published.
+   */
+  const createCatalogNode = useCallback(
+    (entry: NodeCatalogEntry, creationEventId: string, at?: { x: number; y: number }, groupId?: string, options?: { terminalProfileId?: string }) => {
+      const project = useProjects.getState().getProject(activeProjectId)
+      const availability = nodeCatalogAvailability(entry, {
+        sessionSource,
+        hasProjectFolder: !!(project?.cwd || project?.ssh?.remoteCwd),
+        isSshProject: !!project?.ssh,
+        hasRemoteConnection: useSshServers.getState().servers.length > 0,
+        supportsWindowsTerminalProfiles: offersTerminalProfiles,
+        universeScope: 'root',
+        universeDepth: 0,
+        hasShopNode: false
+      })
+      if (!availability.available) {
+        notify({ kind: 'error', title: 'Node unavailable', body: availability.reason ?? 'Choose another node.' })
+        return
+      }
+      setNodes((existing) => {
+        const appended = nodeCreationCoordinatorRef.current.append(
+          existing,
+          { entry, creationEventId, center: at ?? emptyNodePos(), groupId },
+          (catalogEntry, index, center) => {
+            if (catalogEntry.id === 'terminal') {
+              return createTerminalNode(
+                index,
+                project?.cwd,
+                center,
+                undefined,
+                project?.ssh,
+                terminalCreationOptionsFor(activeProjectId, options?.terminalProfileId)
+              )
+            }
+            if (catalogEntry.id.startsWith('agent:')) {
+              const agentId = catalogEntry.id.slice('agent:'.length) as AgentId
+              const agentSettings = useSettings.getState().settings
+              const codexAccounts = codexAccountsForCanvas(agentSettings.codexAccounts, project)
+              const account =
+                agentId === 'claude'
+                  ? resolveNewNodeAccount(undefined, project, agentSettings.claudeAccounts)
+                  : undefined
+              const codexAccount =
+                agentId === 'codex' && codexAccounts.length > 0 ? codexAccounts[0].id : undefined
+              const selectedAccount = account ?? codexAccount
+              const accountSsh = agentId === 'codex' ? sshForCodexAccount(selectedAccount) : undefined
+              const ssh = accountSsh ?? project?.ssh
+              const cwd = ssh?.remoteCwd ?? project?.cwd
+              return createAgentNode(
+                agentId,
+                index,
+                cwd,
+                center,
+                undefined,
+                ssh,
+                selectedAccount,
+                activeAgentLaunchPlan('canvas-new-agent', agentId),
+                terminalCreationOptionsFor(activeProjectId)
+              )
+            }
+            if (catalogEntry.id === 'sticky') return createStickyNode(index, center)
+            if (catalogEntry.id === 'group') return createGroupNode(center, undefined, index)
+            if (catalogEntry.id === 'browser') return createBrowserNode(index, '', center)
+            if (catalogEntry.id === 'web') return createWebNode(index, { url: '' }, center)
+            if (catalogEntry.id === 'authenticator') return createAuthenticatorNode(index, center)
+            if (catalogEntry.id === 'dino') return createDinoNode(index, center)
+            if (catalogEntry.id === 'loop') return createNativeLoopNode(index, center)
+            if (catalogEntry.id === 'nsis') return createNsisNode(index, center)
+            if (catalogEntry.id.startsWith('service:')) {
+              return createServiceNode(catalogEntry.nodeKind as ServiceNodeKind, index, center)
+            }
+            // File and diff rows stay visible but disabled until their picker prerequisites exist.
+            return null
+          },
+          parentInto
+        )
+        if (appended.result.error) {
+          notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        }
+        return appended.nodes
+      })
+      // The shared node-data signature effect marks a real append dirty after React commits. This
+      // keeps duplicate retries a true no-op rather than writing an unnecessary project snapshot.
+    },
+    [activeProjectId, emptyNodePos, offersTerminalProfiles, parentInto, sessionSource, setNodes]
   )
 
   // Task 6: the Settings → Accounts "Add account" flow dispatches 'nodeterm:add-account-login'
@@ -4701,9 +4855,8 @@ export function Canvas() {
         if (!project) return // defensive: mismatched/disconnected remote login — never spawn locally
         ssh = project.ssh
       }
-      setNodes((ns) => [
-        ...ns.map((n) => ({ ...n, selected: false })),
-        {
+      setNodes((ns) => {
+        const created = {
           ...createAccountLoginNode(
             accountId,
             ns.length,
@@ -4713,8 +4866,13 @@ export function Canvas() {
           ),
           selected: true
         }
-      ])
-      markDirty()
+        const appended = nodeCreationCoordinatorRef.current.appendNode(
+          ns.map((n) => ({ ...n, selected: false })),
+          created
+        )
+        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        return appended.nodes
+      })
       // The event fires from the full-screen Settings overlay — close it so the user actually
       // sees the login node (it spawns at viewCenter, selected). The defensive return above
       // keeps Settings open when nothing was spawned (mismatched/disconnected remote login).
@@ -4774,14 +4932,18 @@ export function Canvas() {
           }
         else return
       }
-      setNodes((ns) => [
-        ...ns.map((n) => ({ ...n, selected: false })),
-        {
+      setNodes((ns) => {
+        const created = {
           ...createCodexAccountLoginNode(accountId, ns.length, viewCenter(), ssh),
           selected: true
         }
-      ])
-      markDirty()
+        const appended = nodeCreationCoordinatorRef.current.appendNode(
+          ns.map((n) => ({ ...n, selected: false })),
+          created
+        )
+        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        return appended.nodes
+      })
       setSettingsOpen(false)
     }
     window.addEventListener('nodeterm:add-codex-account-login', onAddCodexAccountLogin)
@@ -4831,9 +4993,10 @@ export function Canvas() {
           activeAgentLaunchPlan('canvas-new-agent', agentId),
           terminalCreationOptionsFor(activeProjectId)
         )
-        return [...ns, groupId ? parentInto(node, groupId) : node]
+        const appended = nodeCreationCoordinatorRef.current.appendNode(ns, groupId ? parentInto(node, groupId) : node)
+        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        return appended.nodes
       })
-      markDirty()
     },
     [setNodes, markDirty, activeProjectId, emptyNodePos, cwdForNewNodeIn, parentInto]
   )
@@ -4879,9 +5042,14 @@ export function Canvas() {
           launchPlan,
           options: terminalCreationOptionsFor(drop.projectId)
         })
-        return created ? [...current, placeSpawned(created, besideNode(liveSource))] : current
+        if (!created) return current
+        const appended = nodeCreationCoordinatorRef.current.appendNode(
+          current,
+          placeSpawned(created, besideNode(liveSource))
+        )
+        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        return appended.nodes
       })
-      markDirty()
     },
     [setNodes, markDirty, placeSpawned, besideNode]
   )
@@ -4902,17 +5070,20 @@ export function Canvas() {
       }
       const project = projects.getProject(folder.projectId)
       if (!project) return
-      setNodes((current) => [
-        ...current,
-        createTerminalNodeForExplorerFolder({
-          index: current.length,
-          project,
-          path: folder.path,
-          center,
-          options: terminalCreationOptionsFor(folder.projectId)
-        })
-      ])
-      markDirty()
+      setNodes((current) => {
+        const appended = nodeCreationCoordinatorRef.current.appendNode(
+          current,
+          createTerminalNodeForExplorerFolder({
+            index: current.length,
+            project,
+            path: folder.path,
+            center,
+            options: terminalCreationOptionsFor(folder.projectId)
+          })
+        )
+        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        return appended.nodes
+      })
     },
     [setNodes, markDirty, emptyNodePos]
   )
@@ -4992,11 +5163,14 @@ export function Canvas() {
   const addSshTerminal = useCallback(
     (server: SshServer, screenPos?: { x: number; y: number }) => {
       const at = screenPos ? screenToFlowPosition(screenPos) : emptyNodePos()
-      setNodes((ns) => [
-        ...ns.map((n) => ({ ...n, selected: false })),
-        { ...createSshTerminalNode(server, ns.length, at), selected: true }
-      ])
-      markDirty()
+      setNodes((ns) => {
+        const appended = nodeCreationCoordinatorRef.current.appendNode(
+          ns.map((n) => ({ ...n, selected: false })),
+          { ...createSshTerminalNode(server, ns.length, at), selected: true }
+        )
+        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        return appended.nodes
+      })
     },
     [setNodes, markDirty, screenToFlowPosition, emptyNodePos]
   )
@@ -5876,8 +6050,11 @@ export function Canvas() {
       const binding: GroupWsl = { bindingId: crypto.randomUUID(), distroName: res.name }
       const group = createGroupNode(target.at ?? viewCenter() ?? { x: 0, y: 0 }, WORKTREE_GROUP_SIZE, nodesRef.current.length)
       group.data = { ...group.data, title: res.name, wsl: binding }
-      setNodes((ns) => [group, ...(ns as CanvasNode[])])
-      markDirty()
+      setNodes((ns) => {
+        const appended = nodeCreationCoordinatorRef.current.appendNode(ns as CanvasNode[], group, undefined, { prepend: true })
+        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        return appended.nodes
+      })
       setWslDialog(null)
     },
     [wslDialog, setNodes, markDirty, viewCenter]
@@ -6030,7 +6207,11 @@ export function Canvas() {
         group.data = { ...group.data, title: binding.branch, worktree: binding }
         groupId = group.id
         // Parents must come first — React Flow requires a group before its children.
-        setNodes((ns) => [group, ...(ns as CanvasNode[])])
+        setNodes((ns) => {
+          const appended = nodeCreationCoordinatorRef.current.appendNode(ns as CanvasNode[], group, undefined, { prepend: true })
+          if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+          return appended.nodes
+        })
       }
       markDirty()
       refreshWorktreeStore({ bind: { groupId, worktree: binding } })
@@ -6668,7 +6849,16 @@ export function Canvas() {
         const copies = sources.map((n, i) =>
           placeSpawned(duplicateNode(n), { x: abs[i].x + dx, y: abs[i].y + dy })
         )
-        return [...ns.map((n) => ({ ...n, selected: false })), ...copies]
+        let next = ns.map((n) => ({ ...n, selected: false }))
+        for (const copy of copies) {
+          const appended = nodeCreationCoordinatorRef.current.appendNode(next, copy)
+          if (appended.result.error) {
+            notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+            continue
+          }
+          next = appended.nodes
+        }
+        return next
       })
       markDirty()
     },
@@ -7385,8 +7575,14 @@ export function Canvas() {
       // Where the user right-clicked when the action came from the node menu; beside the source
       // otherwise (the agent-CLI `branch` verb and the header action have no cursor).
       const placed = placeSpawned(copy, opts?.at ?? besideNode(source))
-      setNodes((ns) => [...ns.map((n) => ({ ...n, selected: false })), placed])
-      markDirty()
+      setNodes((ns) => {
+        const appended = nodeCreationCoordinatorRef.current.appendNode(
+          ns.map((n) => ({ ...n, selected: false })),
+          placed
+        )
+        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        return appended.nodes
+      })
       return { ok: true, newNodeId: placed.id }
     },
     [api, setNodes, markDirty, placeSpawned, besideNode]
@@ -7462,8 +7658,14 @@ export function Canvas() {
       )
       node.selected = true
       const placed = placeSpawned(node, at ?? besideNode(source))
-      setNodes((ns) => [...ns.map((n) => ({ ...n, selected: false })), placed])
-      markDirty()
+      setNodes((ns) => {
+        const appended = nodeCreationCoordinatorRef.current.appendNode(
+          ns.map((n) => ({ ...n, selected: false })),
+          placed
+        )
+        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        return appended.nodes
+      })
     },
     [setNodes, markDirty, placeSpawned, besideNode]
   )
@@ -7846,7 +8048,13 @@ export function Canvas() {
           void writeDisk()
           return true
         case 'insertActive':
-          setNodes((ns) => [...ns, ...plan.nodes])
+          setNodes((ns) =>
+            plan.nodes.reduce((current, node) => {
+              const appended = nodeCreationCoordinatorRef.current.appendNode(current, node)
+              if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+              return appended.nodes
+            }, ns)
+          )
           markDirty()
           return true
         case 'insertStored':
@@ -8028,6 +8236,11 @@ export function Canvas() {
     const hidden = useSettings.getState().settings.hiddenNodeMenuItems
     return tidySeparators<MenuItem>([
       { type: 'label', label: ids.length > 1 ? `${ids.length} nodes` : '1 node' },
+      {
+        label: 'New node from catalog…',
+        icon: <IconShapes />,
+        onClick: () => setNodeCatalog({ at })
+      },
       ...((): MenuItem[] => {
         // "Group …" wraps objects that share ONE container — existing frames are valid members
         // now that frames nest. A box-selection that caught a frame AND its children is
@@ -8720,6 +8933,11 @@ export function Canvas() {
       // node menu, so hiding it in Settings hides it everywhere a right-click can reach it.
       return tidySeparators<MenuItem>([
         { type: 'label', label: 'Group' },
+        {
+          label: 'New node from catalog…',
+          icon: <IconShapes />,
+          onClick: () => setNodeCatalog({ at, groupId })
+        },
         ...(canAddSelection && !groupHidden
           ? [
               {
@@ -8738,28 +8956,6 @@ export function Canvas() {
               } as MenuItem
             ]
           : []),
-        {
-          label: 'New terminal',
-          icon: <IconTerminal />,
-          onClick: defaultTerminalCreationHandler(addTerminal, { center: at, groupId })
-        },
-        ...terminalProfileCreationItems(at, groupId),
-        ...agentCreationItems(at, groupId),
-        {
-          label: 'New sticky note',
-          icon: <IconNote />,
-          onClick: () => addSticky(at, groupId)
-        },
-        {
-          label: 'New Loop',
-          icon: <IconReload />,
-          onClick: () => addNativeLoop(at, groupId)
-        },
-        {
-          label: 'New authenticator',
-          icon: <IconLock />,
-          onClick: () => addAuthenticator(at, groupId)
-        },
         { type: 'separator' },
         ...(isHidden('colors', useSettings.getState().settings.hiddenNodeMenuItems)
           ? []
@@ -8812,12 +9008,6 @@ export function Canvas() {
       groupHasWorktree,
       openWorktreeDialog,
       isSshProject,
-      addTerminal,
-      terminalProfileCreationItems,
-      agentCreationItems,
-      addSticky,
-      addAuthenticator,
-      addNativeLoop,
       addToExistingGroup,
       groupSelection
     ]
@@ -8867,7 +9057,6 @@ export function Canvas() {
       // "New file…" needs a project folder to create into — hidden when the project has no cwd.
       const project = useProjects.getState().getProject(activeProjectId)
       const hasCwd = !!(project?.ssh?.remoteCwd ?? project?.cwd)
-      const agentItems = agentCreationItems(at)
       setMenu({
         x: e.clientX,
         y: e.clientY,
@@ -8879,86 +9068,30 @@ export function Canvas() {
         // tidySeparators still wraps the result — a no-op while there are no bare rules here, but
         // cheap insurance if a future edit reintroduces one.
         items: tidySeparators<MenuItem>([
-          // The terminal rows are deliberately NOT a group. "New terminal" is the action this menu
-          // is opened for and owns ⌘T, so it must stay one click away — and "New terminal with
-          // profile…" is itself a submenu, which cannot nest inside another. What was left of a
-          // "Terminals" heading was a heading over two self-describing rows at the top of the menu.
           {
-            label: 'New terminal',
-            icon: <IconTerminal />,
-            shortcut: ['⌘', 'T'],
-            onClick: defaultTerminalCreationHandler(addTerminal, { center: at })
-          },
-          ...terminalProfileCreationItems(at),
-          {
-            label: 'New remote…',
-            icon: <IconTerminal />,
-            onClick: () => openRemotePicker({ x: e.clientX, y: e.clientY })
-          },
-          // Stays flat-with-a-heading exactly as before whenever an agent row is an account
-          // picker (Claude/Codex with ≥1 account); one row when a single agent is enabled.
-          ...paneMenuGroup('Agents', <IconAgent />, agentItems),
-          // Managers for things outside this app. A group with ONE row that opens a submenu,
-          // rather than six product rows: six names spliced into an already long pane menu is the
-          // clutter the menu filter exists to avoid, and a submenu still matches on its children’s
-          // labels, so typing “prox” reaches Proxmox from the top level anyway.
-          ...paneMenuGroup('Managers', <IconRemote />, [
-            {
-              type: 'submenu' as const,
-              label: 'New manager…',
-              icon: <IconRemote />,
-              children: SERVICE_NODE_KINDS.map((kind) => ({
-                label: SERVICE_NODE_LABELS[kind],
-                onClick: () => addService(kind, at)
-              }))
+            label: 'New node from catalog…',
+            icon: <IconShapes />,
+            onClick: () => {
+              setMenu(null)
+              setNodeCatalog({ at })
             }
-          ]),
-          ...paneMenuGroup('Canvas objects', <IconShapes />, [
-            {
-              label: 'New browser',
-              icon: <IconRemote />,
-              onClick: () => addBrowser(at)
-            },
-            {
-              label: 'New sticky note',
-              icon: <IconNote />,
-              onClick: () => addSticky(at)
-            },
-            {
-              label: 'New Loop',
-              icon: <IconReload />,
-              onClick: () => addNativeLoop(at)
-            },
-            {
-              label: 'New authenticator',
-              icon: <IconLock />,
-              onClick: () => addAuthenticator(at)
-            },
-            {
-              label: 'New NSIS installer…',
-              icon: <IconEditor />,
-              onClick: () => addNsis(at)
-            },
-            {
-              label: 'New dino game',
-              icon: <IconDino />,
-              onClick: () => addDino(at)
-            },
-            {
-              label: 'Open file…',
-              icon: <IconEditor />,
-              onClick: () => void openFileDialog(at)
-            },
-            ...(hasCwd
-              ? [
-                  {
-                    label: 'New file…',
-                    icon: <IconEditor />,
-                    onClick: () => void newProjectFile(at)
-                  } as MenuItem
-                ]
-              : [])
-          ]),
+          },
+          // Every right-click creation action opens the same typed catalog. File browsing remains
+          // a separate guided picker because it must inspect real project files first.
+          {
+            label: 'Open file…',
+            icon: <IconEditor />,
+            onClick: () => void openFileDialog(at)
+          },
+          ...(hasCwd
+            ? [
+                {
+                  label: 'New file…',
+                  icon: <IconEditor />,
+                  onClick: () => void newProjectFile(at)
+                } as MenuItem
+              ]
+            : []),
           // One row, so `paneMenuGroup` keeps it top level: a submenu would add a hover to reach
           // exactly one thing, and "New worktree…" already says what the group heading said.
           // A worktree lands as a group frame bound to it; nodes created inside inherit its path.
@@ -9054,7 +9187,6 @@ export function Canvas() {
       activeProjectId,
       addTerminal,
       terminalProfileCreationItems,
-      agentCreationItems,
       addSticky,
       addAuthenticator,
       addNsis,
@@ -9398,7 +9530,11 @@ export function Canvas() {
                 activeAgentLaunchPlan('kanban-new-agent', choice.agentId),
                 terminalCreationOptionsFor(activeProjectId)
               )
-      setNodes((ns) => [...ns, node])
+      setNodes((ns) => {
+        const appended = nodeCreationCoordinatorRef.current.appendNode(ns, node)
+        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        return appended.nodes
+      })
       const board = project?.kanban ?? seedBoard
       if (columnId) {
         useProjects.getState().setProjectKanban(activeProjectId, assignNode(board, node.id, columnId, null))
@@ -9538,7 +9674,14 @@ export function Canvas() {
         agentSessionId: hit.sessionId
       }
       node.selected = true
-      setNodes((ns) => [...ns.map((n) => ({ ...n, selected: false })), node])
+      setNodes((ns) => {
+        const appended = nodeCreationCoordinatorRef.current.appendNode(
+          ns.map((n) => ({ ...n, selected: false })),
+          node
+        )
+        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        return appended.nodes
+      })
       markDirty()
       goToNode(node)
     },
@@ -9966,9 +10109,15 @@ export function Canvas() {
         // relative coords) must pass through untouched — re-running parentInto would read its
         // relative position as absolute and land it off-frame.
         const placed = node.parentId ? node : src.parentId ? parentInto(node, src.parentId) : node
-        setNodes((ns) => [...ns, placed])
+        setNodes((ns) => {
+          const appended = nodeCreationCoordinatorRef.current.appendNode(ns, placed)
+          if (appended.result.error) {
+            notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+            return ns
+          }
+          return appended.nodes
+        })
         connect(placed.id)
-        markDirty()
         return placed.id
       }
       // Grid slots INSIDE a group frame (open-agent --group): 2 columns of terminal-sized
@@ -10707,6 +10856,7 @@ export function Canvas() {
                 nd.id === groupNode.id ? { ...nd, data: { ...nd.data, title: args.label } } : nd
               )
             }
+            grouped = nodeCreationCoordinatorRef.current.stampNewNodes(grouped, live)
             setNodes(grouped)
             markDirty()
             const skippedGrouped = ids.length - resolvable.length
@@ -10940,13 +11090,22 @@ export function Canvas() {
                 )
               : null
             const panelIds = [...reviewerIds, ...(judge ? [judge.id] : [])]
-            let next: CanvasNode[] = [...live, ...reviewers, ...(judge ? [judge] : [])]
+            let next: CanvasNode[] = [...live]
+            for (const created of [...reviewers, ...(judge ? [judge] : [])]) {
+              const appended = nodeCreationCoordinatorRef.current.appendNode(next, created)
+              if (appended.result.error) {
+                notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+                continue
+              }
+              next = appended.nodes
+            }
             next = arrangeNodes(next, panelIds, { layout: 'grid', origin: placeBelow(0) })
             const vGroupCount = next.filter((nd) => nd.type === 'group').length
             const existingGroupIds = new Set(
               next.filter((node) => node.type === 'group').map((node) => node.id)
             )
             next = groupSelectedNodes(next, panelIds, vGroupCount)
+            next = nodeCreationCoordinatorRef.current.stampNewNodes(next, live)
             const vGroup = next.find(
               (node) => node.type === 'group' && !existingGroupIds.has(node.id)
             )!
@@ -11033,6 +11192,7 @@ export function Canvas() {
               next.filter((node) => node.type === 'group').map((node) => node.id)
             )
             next = groupSelectedNodes(next, memberIds, groupCount)
+            next = nodeCreationCoordinatorRef.current.stampNewNodes(next, live)
             const teamGroup = next.find(
               (node) => node.type === 'group' && !existingGroupIds.has(node.id)
             )!
@@ -12976,7 +13136,37 @@ export function Canvas() {
       addTerminal,
       terminalProfileMenuChoices
     )
+    const catalogContext = {
+      sessionSource,
+      hasProjectFolder: newFileHasCwd,
+      isSshProject,
+      hasRemoteConnection: useSshServers.getState().servers.length > 0,
+      supportsWindowsTerminalProfiles: offersTerminalProfiles,
+      universeScope: 'root',
+      universeDepth: 0,
+      hasShopNode: false
+    }
     const cmds: Command[] = [
+      {
+        id: 'node-catalog',
+        label: 'Browse node catalog…',
+        section: 'Create',
+        icon: <IconShapes />,
+        run: () => setNodeCatalog({})
+      },
+      ...NODE_CATALOG.map((entry): Command => {
+        const state = nodeCatalogAvailability(entry, catalogContext)
+        return {
+          id: `catalog:${entry.id}`,
+          label: `New ${entry.label}`,
+          hint: entry.keywords.join(' '),
+          section: `Create · ${entry.category}`,
+          icon: <IconShapes />,
+          disabled: !state.available,
+          note: state.reason,
+          run: () => createCatalogNode(entry, newCreationEventId())
+        }
+      }),
       {
         id: 'new-term',
         label: 'New terminal',
@@ -13429,6 +13619,7 @@ export function Canvas() {
     return cmds
   }, [
     addTerminal,
+    createCatalogNode,
     offersTerminalProfiles,
     terminalProfileMenuChoices,
     addAgentNode,
@@ -13441,6 +13632,7 @@ export function Canvas() {
     openFileDialog,
     openWorktreeDialog,
     isSshProject,
+    sessionSource,
     newProjectFile,
     addProject,
     drawTool.startTool,
@@ -13991,6 +14183,7 @@ export function Canvas() {
             onOpenKids={() => {
               void enterKidsModeFromRail()
             }}
+            onOpenCatalog={() => setNodeCatalog({})}
             onAddTerminal={defaultTerminalCreationHandler(addTerminal)}
             offersTerminalProfiles={offersTerminalProfiles}
             terminalProfileChoices={terminalProfileMenuChoices}
@@ -14407,6 +14600,35 @@ export function Canvas() {
         <VocabularyContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} />
       )}
 
+      {nodeCatalog && (
+        <NodeCatalogDialog
+          open
+          onClose={() => setNodeCatalog(null)}
+          context={{
+            sessionSource,
+            hasProjectFolder: !!(
+              useProjects.getState().getProject(activeProjectId)?.cwd ||
+              useProjects.getState().getProject(activeProjectId)?.ssh?.remoteCwd
+            ),
+            isSshProject,
+            hasRemoteConnection: useSshServers.getState().servers.length > 0,
+            supportsWindowsTerminalProfiles: offersTerminalProfiles,
+            universeScope: 'root',
+            universeDepth: 0,
+            hasShopNode: false
+          }}
+          terminalProfileChoices={terminalProfileMenuChoices}
+          onCreate={(entry, creationEventId, options) =>
+            createCatalogNode(entry, creationEventId, nodeCatalog.at, nodeCatalog.groupId, options)
+          }
+          onOpenDocumentation={(path) => {
+            setNodeCatalog(null)
+            setDocsInitialPath(path)
+            setDocsOpen(true)
+          }}
+        />
+      )}
+
       {/* Toy locks (docs/toy-locks.md) — a for-fun, opt-in gate on a canvas node. The target's
           label is resolved HERE, at render time, from the live node title — never captured stale
           at the moment the context menu opened, so a since-renamed node still shows its current
@@ -14478,7 +14700,7 @@ export function Canvas() {
       )}
       {docsOpen && (
         <div className="md3-docs-host">
-          <DocsBrowser />
+          <DocsBrowser initialPath={docsInitialPath} />
         </div>
       )}
       {statusOpen && (

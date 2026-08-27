@@ -28,6 +28,7 @@ export interface PortableCanvasV3 {
 export interface PortableCanvasNodeV3 {
   id: string
   kind: string
+  creationEventId?: string
   position: { x: number; y: number }
   size: { width: number; height: number }
   title: string
@@ -91,7 +92,7 @@ const ALLOWED_PROJECT = new Set(['name', 'color', 'icon'])
 const ALLOWED_ICON = new Set(['type', 'name'])
 const ALLOWED_CANVAS = new Set(['id', 'scope', 'parentCanvasId', 'title', 'order', 'viewport', 'nodeIds'])
 const ALLOWED_VIEWPORT = new Set(['x', 'y', 'zoom'])
-const ALLOWED_NODE = new Set(['id', 'kind', 'position', 'size', 'title', 'color', 'group', 'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel'])
+const ALLOWED_NODE = new Set(['id', 'kind', 'creationEventId', 'position', 'size', 'title', 'color', 'group', 'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel'])
 const ALLOWED_POSITION = new Set(['x', 'y'])
 const ALLOWED_SIZE = new Set(['width', 'height'])
 const ALLOWED_TAB = new Set(['id', 'url', 'title'])
@@ -158,6 +159,7 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
     size: { width: finite(node.size.width, 'node width'), height: finite(node.size.height, 'node height') },
     title: text(node.title, 'node title'), color: text(node.color, 'node color'), group: node.group === null ? null : text(node.group, 'node group')
   }
+  if (node.creationEventId !== undefined) out.creationEventId = text(node.creationEventId, 'creation event id')
   if (strict && typeof node.collapsed !== 'undefined' && typeof node.collapsed !== 'boolean') throw new PortableProjectV3Error('manifest', 'Portable node collapsed state is invalid.')
   if (strict && node.group !== null && typeof node.group !== 'string') throw new PortableProjectV3Error('manifest', 'Portable node group is invalid.')
   if (strict && node.tags !== undefined && !Array.isArray(node.tags)) throw new PortableProjectV3Error('manifest', 'Portable node tags must be an array.')

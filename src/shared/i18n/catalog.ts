@@ -176,6 +176,113 @@ export const CATALOG: Catalog = {
   },
 
   // ---------------------------------------------------------------------------------------
+  // Unified Node Catalog. Registry rows carry stable ids and English fallbacks; this catalogue
+  // supplies the live language mode and funny-level voice for the picker itself and its common
+  // entries. Descriptors remain data so server and portable layers do not import UI copy.
+  // ---------------------------------------------------------------------------------------
+  'nodeCatalog.title': { en: flat('Node Catalog'), yue: flat('節點目錄') },
+  'nodeCatalog.description': {
+    en: [
+      'Choose a node from the typed catalog. Safe defaults are applied now; machine-local details stay local.',
+      'Pick a typed node. Safe defaults do the boring setup while local details stay put.',
+      'Choose a node and let the catalog handle the sensible starting values.',
+      'Pick a node from the catalog and let it do the setup dance for you.',
+      'Choose a node. The catalog has brought sensible defaults and left your private machine details at home.'
+    ],
+    yue: [
+      '喺有類型嘅目錄揀個節點。安全預設值即刻套用，本機資料留返本機。',
+      '揀個節點，安全預設值幫你做啲悶嘢，本機資料照留本機。',
+      '揀個節點，目錄會處理好合理嘅起步設定。',
+      '喺目錄揀個節點，等佢幫你跳一跳設定舞。',
+      '揀個節點啦。合理預設值已經帶到，本機私事就留喺屋企。'
+    ]
+  },
+  'nodeCatalog.search.label': { en: flat('Search node catalog'), yue: flat('搜尋節點目錄') },
+  'nodeCatalog.categories': { en: flat('Node categories'), yue: flat('節點分類') },
+  'nodeCatalog.results': { en: flat('Node catalog results'), yue: flat('節點目錄結果') },
+  'nodeCatalog.docs': { en: flat('Documentation'), yue: flat('文件') },
+  'nodeCatalog.results.count': { en: flat('{count} nodes shown'), yue: flat('顯示 {count} 個節點') },
+  'nodeCatalog.mode.required': { en: flat('Ready when required capabilities are available'), yue: flat('所需功能齊就可以用') },
+  'nodeCatalog.mode.configureLater': { en: flat('Configure later'), yue: flat('稍後設定') },
+  'nodeCatalog.category.all': { en: flat('All'), yue: flat('全部') },
+  'nodeCatalog.category.terminals': { en: flat('Terminals'), yue: flat('終端機') },
+  'nodeCatalog.category.agents': { en: flat('Agents'), yue: flat('AI 代理') },
+  'nodeCatalog.category.canvas': { en: flat('Canvas'), yue: flat('畫布') },
+  'nodeCatalog.category.files': { en: flat('Files'), yue: flat('檔案') },
+  'nodeCatalog.category.media': { en: flat('Media'), yue: flat('媒體') },
+  'nodeCatalog.category.managers': { en: flat('Managers'), yue: flat('管理器') },
+  'nodeCatalog.category.automation': { en: flat('Automation'), yue: flat('自動化') },
+  'nodeCatalog.category.tools': { en: flat('Tools'), yue: flat('工具') },
+  'nodeCatalog.category.universes': { en: flat('Universes'), yue: flat('宇宙') },
+  'nodeCatalog.category.hosting': { en: flat('Hosting'), yue: flat('託管') },
+  'nodeCatalog.empty': {
+    en: [
+      'No nodes match this search. Try plain text or open the regex builder for a pattern.',
+      'Nothing matches yet. Try a simpler search or build a regex.',
+      'No catalog row survived that search. The regex builder is ready if you want it.',
+      'The catalog found zilch. Try another phrase, or let the regex builder wear the thinking cap.',
+      'No node made it through that search. Give the regex builder a turn; it enjoys a puzzle.'
+    ],
+    yue: [
+      '冇節點符合呢個搜尋。試下普通文字，或者開正則建立器整個模式。',
+      '暫時冇嘢啱。試下簡單啲，或者砌個正則。',
+      '呢次搜尋冇目錄項目留低，正則建立器隨時候命。',
+      '目錄搵唔到半粒。換句話，或者叫正則建立器戴頂思考帽。',
+      '冇節點捱得過呢次搜尋。俾正則建立器玩下謎題啦。'
+    ]
+  },
+  'nodeCatalog.keyboardHint': {
+    en: flat('Use Up and Down to choose, Enter to create, and Escape to clear or close. Disabled rows explain what to do next.'),
+    yue: flat('用上下揀選，Enter 建立，Escape 清除或關閉。停用項目會講埋下一步點做。')
+  },
+  'nodeCatalog.entry.terminal.label': { en: flat('Terminal'), yue: flat('終端機') },
+  'nodeCatalog.entry.terminal.description': { en: flat('Open a real shell with the saved safe profile.'), yue: flat('用已儲存嘅安全設定開真正嘅終端機。') },
+  'nodeCatalog.entry.sticky.label': { en: flat('Sticky note'), yue: flat('便利貼') },
+  'nodeCatalog.entry.sticky.description': { en: flat('Add an editable note that can carry project context.'), yue: flat('加張可以編輯、用嚟記低項目背景嘅筆記。') },
+  'nodeCatalog.entry.group.label': { en: flat('Group frame'), yue: flat('群組框') },
+  'nodeCatalog.entry.group.description': { en: flat('Add an empty frame for organizing related nodes.'), yue: flat('加個空框，整理相關節點。') },
+  'nodeCatalog.entry.annotation.label': { en: flat('Drawing annotation'), yue: flat('繪圖註解') },
+  'nodeCatalog.entry.annotation.description': { en: flat('Arm the drawing tool, then drag a line or arrow on the canvas.'), yue: flat('啟用繪圖工具，再喺畫布拖出直線或箭嘴。') },
+  'nodeCatalog.entry.browser.label': { en: flat('Browser'), yue: flat('瀏覽器') },
+  'nodeCatalog.entry.browser.description': { en: flat('Open a browser node with a blank address bar.'), yue: flat('開個有空白網址列嘅瀏覽器節點。') },
+  'nodeCatalog.entry.authenticator.label': { en: flat('Authenticator'), yue: flat('驗證器') },
+  'nodeCatalog.entry.authenticator.description': { en: flat('Open the local TOTP authenticator without moving secrets into the project.'), yue: flat('開本機 TOTP 驗證器，唔會將秘密搬入項目。') },
+  'nodeCatalog.entry.loop.label': { en: flat('Loop'), yue: flat('循環排程') },
+  'nodeCatalog.entry.loop.description': { en: flat('Create a paused local schedule with an explicit next action.'), yue: flat('建立一個暫停中、下一步清清楚楚嘅本機排程。') },
+  'nodeCatalog.entry.dino.label': { en: flat('Dino game'), yue: flat('恐龍遊戲') },
+  'nodeCatalog.entry.dino.description': { en: flat('Open the small local canvas game.'), yue: flat('開個細細嘅本機畫布遊戲。') },
+  'nodeCatalog.entry.remote-terminal.label': { en: flat('Remote terminal'), yue: flat('遠端終端機') },
+  'nodeCatalog.entry.remote-terminal.description': { en: flat('Open a terminal through a selected saved remote connection.'), yue: flat('透過揀好嘅遠端連線開終端機。') },
+  'nodeCatalog.entry.agent.claude.label': { en: flat('Claude'), yue: flat('Claude') },
+  'nodeCatalog.entry.agent.claude.description': { en: flat('Start an agent session with the active account and permission plan.'), yue: flat('用目前帳戶同權限方案開始 AI 代理工作階段。') },
+  'nodeCatalog.entry.agent.codex.label': { en: flat('Codex'), yue: flat('Codex') },
+  'nodeCatalog.entry.agent.codex.description': { en: flat('Start a Codex agent session using a selectable local account.'), yue: flat('用可選嘅本機帳戶開始 Codex 代理工作階段。') },
+  'nodeCatalog.entry.agent.gemini.label': { en: flat('Gemini'), yue: flat('Gemini') },
+  'nodeCatalog.entry.agent.gemini.description': { en: flat('Start a Gemini agent session with the configured launch command.'), yue: flat('用已設定嘅啟動指令開始 Gemini 代理工作階段。') },
+  'nodeCatalog.entry.web.label': { en: flat('Web view'), yue: flat('網頁檢視') },
+  'nodeCatalog.entry.web.description': { en: flat('Open a web view with a URL chosen in its guided address field.'), yue: flat('用引導式網址欄揀網址，再開網頁檢視。') },
+  'nodeCatalog.entry.video.label': { en: flat('Video'), yue: flat('影片') },
+  'nodeCatalog.entry.video.description': { en: flat('Open a local video node and choose the media file in its picker.'), yue: flat('開本機影片節點，再用選擇器揀媒體檔案。') },
+  'nodeCatalog.entry.nsis.label': { en: flat('Installer builder'), yue: flat('安裝程式建立器') },
+  'nodeCatalog.entry.nsis.description': { en: flat('Start a guided installer-builder form with safe project defaults.'), yue: flat('用安全項目預設值開始引導式安裝程式表單。') },
+  'nodeCatalog.entry.service.minecraft.label': { en: flat('Minecraft manager'), yue: flat('Minecraft 管理器') },
+  'nodeCatalog.entry.service.minecraft.description': { en: flat('Open a manager for a locally bound Minecraft service.'), yue: flat('開本機已綁定 Minecraft 服務嘅管理器。') },
+  'nodeCatalog.entry.service.dockerhost.label': { en: flat('Docker host manager'), yue: flat('Docker 主機管理器') },
+  'nodeCatalog.entry.service.dockerhost.description': { en: flat('Open a typed manager for a local or saved Docker host.'), yue: flat('開本機或已儲存 Docker 主機嘅有類型管理器。') },
+  'nodeCatalog.entry.service.proxmox.label': { en: flat('Proxmox manager'), yue: flat('Proxmox 管理器') },
+  'nodeCatalog.entry.service.proxmox.description': { en: flat('Open a typed manager for a saved Proxmox connection.'), yue: flat('開已儲存 Proxmox 連線嘅有類型管理器。') },
+  'nodeCatalog.entry.service.gitlab.label': { en: flat('GitLab manager'), yue: flat('GitLab 管理器') },
+  'nodeCatalog.entry.service.gitlab.description': { en: flat('Open a typed manager for a saved GitLab connection.'), yue: flat('開已儲存 GitLab 連線嘅有類型管理器。') },
+  'nodeCatalog.entry.service.homeassistant.label': { en: flat('Home Assistant manager'), yue: flat('Home Assistant 管理器') },
+  'nodeCatalog.entry.service.homeassistant.description': { en: flat('Open a typed manager for a saved Home Assistant connection.'), yue: flat('開已儲存 Home Assistant 連線嘅有類型管理器。') },
+  'nodeCatalog.entry.service.freepbx.label': { en: flat('FreePBX manager'), yue: flat('FreePBX 管理器') },
+  'nodeCatalog.entry.service.freepbx.description': { en: flat('Open a typed manager for a saved FreePBX connection.'), yue: flat('開已儲存 FreePBX 連線嘅有類型管理器。') },
+  'nodeCatalog.entry.editor.label': { en: flat('Editor'), yue: flat('編輯器') },
+  'nodeCatalog.entry.editor.description': { en: flat('Open a selected project file in the embedded editor.'), yue: flat('喺內置編輯器開揀好嘅項目檔案。') },
+  'nodeCatalog.entry.diff.label': { en: flat('Diff viewer'), yue: flat('差異檢視器') },
+  'nodeCatalog.entry.diff.description': { en: flat('Open a selected project file in the read-only diff viewer.'), yue: flat('喺唯讀差異檢視器開揀好嘅項目檔案。') },
+
+  // ---------------------------------------------------------------------------------------
   // Confirm / delete dialog defaults (ConfirmDialog.tsx). Custom labels a caller passes in
   // (e.g. "Remove worktree") are that caller's own copy and stay in English for now — only the
   // component's own DEFAULTS are localized here.
