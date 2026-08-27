@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import type { BrowserProfile } from '@shared/types'
 import { findBrowserProfile } from '@shared/browser-profiles'
 import { IconButton } from '../ui/md3/IconButton'
@@ -8,6 +8,9 @@ import { ListRow } from '../ui/md3/ListRow'
 import { TextField } from '../ui/md3/TextField'
 import { MaterialSymbol } from '../components/MaterialSymbol'
 import { openDestructiveGate } from '../state/destructiveGate'
+import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
+import { AnchoredRegexBuilder } from '../components/regex/AnchoredRegexBuilder'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 /** Same palette used by `groupSelectedNodes`/`createTerminalNode` for new-object color defaults —
  *  a browser profile is just another named, colored object on the project. */
@@ -51,9 +54,21 @@ export function BrowserProfilePicker({
   const [newName, setNewName] = useState('')
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
+  const search = useRegexSearchField()
+  const searchRef = useRef<HTMLInputElement>(null)
+  const vocab = useVocabularyMapper()
 
   const current = findBrowserProfile(profiles, selectedId)
-  const label = selectedId ? (current?.name ?? 'Unknown profile') : 'Default'
+  const label = selectedId ? (current?.name ?? vocab('Unknown profile')) : vocab('Default')
+  const visibleProfiles = useMemo(
+    () =>
+      (profiles ?? []).filter((profile) =>
+        search.mode === 'regex'
+          ? search.test(profile.name)
+          : profile.name.toLocaleLowerCase().includes(search.query.toLocaleLowerCase())
+      ),
+    [profiles, search.mode, search.pattern, search.flags, search.query]
+  )
 
   const startCreate = (): void => {
     setCreating(true)
@@ -92,11 +107,11 @@ export function BrowserProfilePicker({
     e.stopPropagation()
     const rect = e.currentTarget.getBoundingClientRect()
     openDestructiveGate({
-      title: `Delete browser profile "${p.name}"`,
+      title: `${vocab('Delete browser profile')} "${p.name}"`,
       description:
-        'Its cookies, sign-ins and site storage are deleted from this machine. Any browser tab still using this profile falls back to the default (unpartitioned) session. This cannot be undone.',
+        vocab('Its cookies, sign-ins and site storage are deleted from this machine. Any browser tab still using this profile falls back to the default (unpartitioned) session. This cannot be undone.'),
       affected: [p.name],
-      confirmLabel: 'Delete profile',
+      confirmLabel: vocab('Delete profile'),
       anchor: { x: rect.left, y: rect.bottom },
       restoreFocusEl: anchorRef.current,
       onConfirm: () => onRemove(p.id)
@@ -111,31 +126,45 @@ export function BrowserProfilePicker({
         className="browser-profile-trigger"
         aria-haspopup="menu"
         aria-expanded={open}
-        title="Browser profile — isolated cookies/storage per profile"
+        title={vocab('Browser profile — isolated cookies/storage per profile')}
         onClick={() => setOpen((v) => !v)}
       >
         <MaterialSymbol name="account_circle" size={16} />
         <span className="browser-profile-trigger__label">{label}</span>
       </button>
       <AnchoredPopover anchorRef={anchorRef} open={open} onClose={() => setOpen(false)} width={260}>
-        <Menu role="menu" aria-label="Browser profile">
+        <Menu role="menu" aria-label={vocab('Browser profile')}>
+          <div className="menu-filter" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="menu-filter__row">
+              <input
+                ref={searchRef}
+                className="menu-filter__input"
+                value={search.value}
+                placeholder={search.mode === 'regex' ? vocab('Filter profiles… (regex)') : vocab('Filter profiles…')}
+                aria-label={vocab('Filter browser profiles')}
+                onChange={(e) => search.setValue(e.target.value)}
+              />
+              <AnchoredRegexBuilder search={search} fieldRef={searchRef} label={vocab('Regex — browser profiles')} />
+            </div>
+            {search.error && <div className="menu-filter__error">{search.error}</div>}
+          </div>
           <ListRow
             role="menuitemradio"
             aria-checked={!selectedId}
             icon={<MaterialSymbol name="account_circle" size={18} />}
-            label="Default"
-            sub="Unpartitioned — the app's shared session"
+            label={vocab('Default')}
+            sub={vocab("Unpartitioned — the app's shared session")}
             trailing={!selectedId ? <MaterialSymbol name="check" size={16} /> : undefined}
             onClick={() => {
               onSelect(undefined)
               setOpen(false)
             }}
           />
-          {(profiles ?? []).map((p) =>
+          {visibleProfiles.map((p) =>
             renamingId === p.id ? (
               <div key={p.id} className="browser-profile-picker__rename" role="none">
                 <TextField
-                  label="Profile name"
+                  label={vocab('Profile name')}
                   autoFocus
                   value={renameValue}
                   onChange={(e) => setRenameValue(e.target.value)}
@@ -181,7 +210,7 @@ export function BrowserProfilePicker({
                 <span className="mdx-row__trailing browser-profile-picker__row-actions">
                   {selectedId === p.id && <MaterialSymbol name="check" size={16} />}
                   <IconButton
-                    aria-label={`Rename “${p.name}”`}
+                    aria-label={`${vocab('Rename')} “${p.name}”`}
                     icon="edit_note"
                     size="dense"
                     onClick={(e) => {
@@ -190,7 +219,7 @@ export function BrowserProfilePicker({
                     }}
                   />
                   <IconButton
-                    aria-label={`Delete “${p.name}”`}
+                    aria-label={`${vocab('Delete')} “${p.name}”`}
                     icon="delete"
                     size="dense"
                     onClick={(e) => requestRemove(p, e)}
@@ -199,10 +228,13 @@ export function BrowserProfilePicker({
               </div>
             )
           )}
+          {visibleProfiles.length === 0 && (
+            <ListRow label={vocab('No browser profiles match this filter.')} disabled />
+          )}
           {creating ? (
             <div className="browser-profile-picker__rename" role="none">
               <TextField
-                label="New profile name"
+                label={vocab('New profile name')}
                 autoFocus
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
@@ -214,7 +246,7 @@ export function BrowserProfilePicker({
               />
             </div>
           ) : (
-            <ListRow icon={<MaterialSymbol name="add" size={18} />} label="New profile…" onClick={startCreate} />
+            <ListRow icon={<MaterialSymbol name="add" size={18} />} label={vocab('New profile…')} onClick={startCreate} />
           )}
         </Menu>
       </AnchoredPopover>

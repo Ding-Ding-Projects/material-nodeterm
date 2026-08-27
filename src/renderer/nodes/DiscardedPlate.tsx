@@ -6,9 +6,11 @@
  * Deliberately quiet: this is an ambient state that heals itself on view, not an error.
  */
 export function DiscardedPlate({ restoring = false }: { restoring?: boolean }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   return (
     <div className="browser-node__discarded">
-      <span>{restoring ? 'Reopening…' : 'Page released to save memory — reopens on view'}</span>
+      <span>{vocab(restoring ? 'Reopening…' : 'Page released to save memory — reopens on view')}</span>
     </div>
   )
 }
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'

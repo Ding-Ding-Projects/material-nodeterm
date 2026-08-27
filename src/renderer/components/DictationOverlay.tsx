@@ -18,6 +18,7 @@ import { equalizerBars } from '../lib/dictation-equalizer'
 import { PcmCapture } from '../lib/pcm-capture'
 import { useSession } from '../session/session'
 import { useSettings } from '../state/settings'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 export interface DictationTarget {
   kind: 'terminal'
@@ -85,6 +86,7 @@ const NO_TARGET_DISMISS_MS = 2500
 
 export function DictationOverlay({ target, stopSignal, onClose, onOpenLicense }: DictationOverlayProps) {
   const { api } = useSession()
+  const vocab = useVocabularyMapper()
 
   const [phase, setPhase] = useState<Phase>('idle')
   const [error, setError] = useState<string | null>(null)
@@ -268,15 +270,22 @@ export function DictationOverlay({ target, stopSignal, onClose, onOpenLicense }:
 
   const mode = dictationMode(target)
 
-  const errorBlock = error && (
+  const appError = error && new Set([
+    'Could not insert — the terminal session is not available.',
+    'Transcription failed.',
+    'Could not request microphone access.',
+    'Could not start recording.'
+  ]).has(error)
+  const visibleError = error && appError ? vocab(error) : error
+  const errorBlock = visibleError && (
     <div className="dictation__error">
-      <span>{error}</span>
-      {isProGateError(error) && (
+      <span>{visibleError}</span>
+      {error !== null && isProGateError(error) && (
         <button type="button" className="dictation__error-action" onClick={onOpenLicense}>
-          See nodeterm Pro
+          {vocab('See nodeterm Pro')}
         </button>
       )}
-      <button type="button" className="dictation__close" title="Dismiss" onClick={handleClose}>
+      <button type="button" className="dictation__close" title={vocab('Dismiss')} onClick={handleClose}>
         ×
       </button>
     </div>
@@ -285,8 +294,8 @@ export function DictationOverlay({ target, stopSignal, onClose, onOpenLicense }:
   if (mode === 'warning') {
     return createPortal(
       <div className="dictation dictation--warning nodrag nowheel" onMouseDown={(e) => e.stopPropagation()}>
-        <span className="dictation__warning-text">Select a terminal node first.</span>
-        <button type="button" className="dictation__close" title="Dismiss" onClick={handleClose}>
+        <span className="dictation__warning-text">{vocab('Select a terminal node first.')}</span>
+        <button type="button" className="dictation__close" title={vocab('Dismiss')} onClick={handleClose}>
           ×
         </button>
       </div>,
@@ -308,14 +317,14 @@ export function DictationOverlay({ target, stopSignal, onClose, onOpenLicense }:
                 <span key={i} className="dictation__bar" style={{ height: `${Math.round(h * 100)}%` }} />
               ))}
             </div>
-            <span className="dictation__label">Dictating...</span>
+            <span className="dictation__label">{vocab('Dictating...')}</span>
             <span className="dictation__elapsed">{formatElapsed(elapsedMs)}</span>
             <span className="dictation__spacer" />
             <button
               type="button"
               className="dictation__pause"
               onClick={() => void stopRecording()}
-              title="Stop recording — transcribes & inserts"
+              title={vocab('Stop recording — transcribes & inserts')}
             >
               <PauseIcon />
             </button>
@@ -325,14 +334,14 @@ export function DictationOverlay({ target, stopSignal, onClose, onOpenLicense }:
         {phase === 'transcribing' && (
           <div className="dictation__transcribing">
             <span className="dictation__spinner" />
-            <span>{capped ? 'Recording capped at 2:30 — transcribing…' : 'Transcribing…'}</span>
+            <span>{capped ? vocab('Recording capped at 2:30 — transcribing…') : vocab('Transcribing…')}</span>
           </div>
         )}
 
         {phase === 'idle' && !error && (
           <div className="dictation__transcribing">
             <span className="dictation__spinner" />
-            <span>Starting…</span>
+            <span>{vocab('Starting…')}</span>
           </div>
         )}
 

@@ -6,6 +6,7 @@ import { useSchoolMode } from '../state/schoolMode'
 import { dimSumLabel, type DimSumDish } from '../lib/dimsum/catalog'
 import { rollDimSumForLaunch } from '../lib/dimsum/roll'
 import { schoolModeAllowsOptionalFeatures } from '../lib/schoolModePolicy'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 /** How long after the app looks settled we decide (and, separately, re-check right before
  *  revealing) whether to show the surprise. Long enough that the first-run tour, the mobile-
@@ -32,6 +33,7 @@ function reducedMotion(): boolean {
  * dialog that opens during the settle delay still suppresses it.
  */
 export function DimSumSurprise() {
+  const vocab = useVocabularyMapper()
   const hydrated = useSettings((s) => s.hydrated)
   const hasProjects = useProjects((s) => s.projects.some((p) => !p.closed))
   const schoolModeEnabled = useSchoolMode((s) => s.enabled)
@@ -97,13 +99,13 @@ export function DimSumSurprise() {
     <div className="dimsum-toast" role="status" aria-live="polite">
       <img className="dimsum-toast__image" src={dish.image} alt={dimSumLabel(dish)} width={40} height={40} />
       <div className="dimsum-toast__body">
-        <div className="dimsum-toast__eyebrow">A little dim sum surprise</div>
+        <div className="dimsum-toast__eyebrow">{vocab('A little dim sum surprise')}</div>
         <div className="dimsum-toast__name">{dimSumLabel(dish)}</div>
       </div>
       <button
         type="button"
         className="dimsum-toast__close"
-        aria-label="Dismiss"
+        aria-label={vocab('Dismiss')}
         onClick={() => {
           if (hideTimerRef.current) clearTimeout(hideTimerRef.current)
           setVisible(false)

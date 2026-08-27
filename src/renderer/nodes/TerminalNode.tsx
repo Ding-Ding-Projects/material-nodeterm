@@ -218,6 +218,12 @@ import {
 } from '../terminal/agent-cold-relaunch'
 import { sameTerminalCoState } from '../terminal/co-state-equality'
 import { useLocalizedVocabularyText } from '../lib/personalVocabulary/useLocalizedVocabularyText'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import {
+  mapAroundExactFacts,
+  pendingLaunchErrorOwnership,
+  pendingLaunchSummaryText
+} from './nodeVocabulary'
 import { ColumnPill } from '../components/kanban/ColumnPill'
 import { BoardLogPanel } from '../components/kanban/BoardLogPanel'
 import { AgentMascot } from './AgentMascot'
@@ -866,6 +872,18 @@ const restartSubs = new Map<string, () => void>()
 type PendingLaunchExecutor = (pending: PendingLaunch) => Promise<LaunchIntentExecutionResult>
 
 /**
+ * A pending launch error is a factual result from the execution coordinator. It can contain a
+ * host, command, path, code, or provider diagnostic, so it must remain verbatim. The surrounding
+ * retry/status chrome is app-authored and is mapped separately at render time.
+ */
+interface PendingLaunchErrorDisplay {
+  ownership: 'external-factual' | 'authored'
+  text: string
+}
+
+const PENDING_LAUNCH_UNKNOWN_ERROR = 'The queued launch delivery result is unknown. Retry to check it safely.'
+
+/**
  * Exact-live-session executors for armed launches. Canvas decides WHEN dependencies are ready;
  * the mounted terminal owns WHICH PTY generation receives the launch. Keying this registry by the
  * renderer session scope plus node id prevents an old delayed request from crossing a recycle or
@@ -1030,6 +1048,9 @@ export function TerminalNode({
   positionAbsoluteY
 }: NodeProps<CanvasNode>) {
   const profileText = useLocalizedVocabularyText()
+  const vocab = useVocabularyMapper()
+  const vocabRef = useRef(vocab)
+  vocabRef.current = vocab
   const agentRelaunchRecoveryText = (error: AgentColdRelaunchRecoveryError): string => {
     switch (error.code) {
       case 'custom-agent-not-configured':
@@ -1038,7 +1059,10 @@ export function TerminalNode({
           'This custom agent is no longer configured. Restore its launch command, then try again. No agent was launched in the replacement shell.'
         )
       case 'launch-intent-failed':
-        return error.detail || 'The trusted agent launch could not be completed.'
+        return error.detail || profileText(
+          'terminalProfiles.error.trustedLaunchFailed',
+          'The trusted agent launch could not be completed.'
+        )
       case 'confirmed-recycle-unavailable':
         return profileText(
           'terminalProfiles.error.agentRecycleUnavailable',
@@ -1821,14 +1845,19 @@ export function TerminalNode({
     .map((depId) => ((getNode(depId) as CanvasNode | undefined)?.data.title as string) || depId)
     .join(', ')
   const pendingLaunchSummary = pendingLaunch
-    ? pendingLaunch.launch.kind === 'shell-command'
-      ? 'the queued terminal command'
-      : pendingLaunch.launch.action === 'resume'
-        ? `resume ${pendingLaunch.launch.agentId}`
-        : `start ${pendingLaunch.launch.agentId}`
+    ? pendingLaunchSummaryText(pendingLaunch.launch, vocab)
     : ''
   const pendingLaunchError =
     typeof data.pendingLaunchError === 'string' ? data.pendingLaunchError : undefined
+  const pendingLaunchErrorDisplay: PendingLaunchErrorDisplay | null = pendingLaunchError
+    ? {
+        ownership:
+          data.pendingLaunchErrorOwnership === 'authored' || data.pendingLaunchErrorOwnership === 'external-factual'
+            ? data.pendingLaunchErrorOwnership
+            : 'external-factual',
+        text: pendingLaunchError
+      }
+    : null
   const pendingLaunchErrorKind =
     data.pendingLaunchErrorKind === 'confirmed' || data.pendingLaunchErrorKind === 'unknown'
       ? data.pendingLaunchErrorKind
@@ -1849,7 +1878,8 @@ export function TerminalNode({
         updateNodeData(id, {
           pendingLaunch: dispatchedLaunch,
           pendingLaunchError: undefined,
-          pendingLaunchErrorKind: undefined
+          pendingLaunchErrorKind: undefined,
+          pendingLaunchErrorOwnership: undefined
         })
       }
       const execution = executePendingLaunchForNode(session.id, id, dispatchedLaunch)
@@ -1860,20 +1890,30 @@ export function TerminalNode({
             reason: 'session-unavailable' as const,
             message: 'The terminal session is not ready for this queued launch.'
           },
-          accepted: false
+          accepted: false,
+          ownership: pendingLaunchErrorOwnership(
+            { ok: false, reason: 'session-unavailable' },
+            false
+          )
         }
       }
-      return { result: await execution, accepted: true }
+      const result = await execution
+      return {
+        result,
+        accepted: true,
+        ownership: pendingLaunchErrorOwnership(result, true)
+      }
     })
     if (!request) return
     setPendingLaunchExecuting(true)
     void request
-      .then(({ result, accepted }) => {
+      .then(({ result, accepted, ownership }) => {
         if (result.ok) {
           updateNodeData(id, {
             pendingLaunch: undefined,
             pendingLaunchError: undefined,
-            pendingLaunchErrorKind: undefined
+            pendingLaunchErrorKind: undefined,
+            pendingLaunchErrorOwnership: undefined
           })
         } else {
           updateNodeData(id, {
@@ -1881,7 +1921,8 @@ export function TerminalNode({
             pendingLaunchError: result.message,
             // No executor means nothing reached the host, so reusing the id is safe. An opaque
             // failure returned by the executor is final for that id and needs a new explicit retry.
-            pendingLaunchErrorKind: accepted ? 'confirmed' : 'unknown'
+            pendingLaunchErrorKind: accepted ? 'confirmed' : 'unknown',
+            pendingLaunchErrorOwnership: ownership
           })
         }
       })
@@ -1890,9 +1931,9 @@ export function TerminalNode({
         // state and show fixed recovery copy instead.
         updateNodeData(id, {
           pendingLaunch: dispatchedLaunch,
-          pendingLaunchError:
-            'The queued launch delivery result is unknown. Retry to check it safely.',
-          pendingLaunchErrorKind: 'unknown'
+          pendingLaunchError: PENDING_LAUNCH_UNKNOWN_ERROR,
+          pendingLaunchErrorKind: 'unknown',
+          pendingLaunchErrorOwnership: 'authored'
         })
       })
       .finally(() => setPendingLaunchExecuting(false))
@@ -1954,6 +1995,12 @@ export function TerminalNode({
   // local default (else a relay tab shows "another user" / a wrong name). Byte-identical on a
   // local tab (active presence IS the default).
   const closedName = co.closed ? closedByLabel(co.closed.by, presence.store.getState().peers) : ''
+  const codexFallback = codexIdentity?.mode === 'plain' ? codexFallbackText(codexIdentity.reason) : ''
+  const codexFallbackDisplay = mapAroundExactFacts(
+    codexFallback,
+    ['codex', 'CLI', 'npm', 'snap'],
+    vocab
+  )
 
   // "Session ended" (a recycle whose replacement never came — see CoState.ended): the user asks for
   // a shell explicitly. Only now do we spawn, in THIS client's cwd — no silent stale-cwd respawn.
@@ -3018,7 +3065,7 @@ export function TerminalNode({
         // Drop the overlay for the duration of the attempt (this respawn IS the retry the user or
         // the coordinator asked for) so the line below is visible; it comes back if we fail.
         setCo(termKey, { offline: false })
-        term.write(`\x1b[90m[connecting to ${ssh.user}@${ssh.host}…]\x1b[0m\r\n`)
+        term.write(`\x1b[90m[${vocabRef.current('connecting to')} ${ssh.user}@${ssh.host}…]\x1b[0m\r\n`)
       }
       const sshRemote =
         sshRemoteTmux && ssh
@@ -3034,7 +3081,7 @@ export function TerminalNode({
       if (sshRemoteTmux && !sshRemote) {
         setCo(termKey, { offline: true })
         term.write(
-          `\r\n\x1b[90m[not connected — this session lives on ${ssh ? `${ssh.user}@${ssh.host}` : 'the remote host'}; nothing was started locally]\x1b[0m\r\n`
+          `\r\n\x1b[90m[${vocabRef.current('not connected')} — ${vocabRef.current('this session lives on')} ${ssh ? `${ssh.user}@${ssh.host}` : vocabRef.current('the remote host')}; ${vocabRef.current('nothing was started locally')}]\x1b[0m\r\n`
         )
         if (sshProjectId) reportSshDrop(sshProjectId, id)
         return
@@ -3115,8 +3162,8 @@ export function TerminalNode({
               if (!disposed)
                 term.write(
                   unavailable === 'codex-account'
-                    ? '\r\n\x1b[90m[Codex account unavailable — nothing was started; open Settings → Accounts]\x1b[0m\r\n'
-                    : '\r\n\x1b[90m[not connected — nothing was started locally]\x1b[0m\r\n'
+                    ? `\r\n\x1b[90m[${vocabRef.current('Codex account unavailable')} — ${vocabRef.current('nothing was started')}; ${vocabRef.current('open Settings')} → ${vocabRef.current('Accounts')}]\x1b[0m\r\n`
+                    : `\r\n\x1b[90m[${vocabRef.current('not connected')} — ${vocabRef.current('nothing was started locally')}]\x1b[0m\r\n`
                 )
               if (sshProjectId) reportSshDrop(sshProjectId, id)
               return
@@ -3127,7 +3174,7 @@ export function TerminalNode({
             // BEFORE `onDisposed()`: there is no session here, so there is nothing to kill or unwire.
             if (closed) {
               setCo(termKey, { closed })
-              if (!disposed) term.write('\r\n\x1b[90m[session closed by another user]\x1b[0m\r\n')
+              if (!disposed) term.write(`\r\n\x1b[90m[${vocabRef.current('session closed by another user')}]\x1b[0m\r\n`)
               return
             }
             // Disposal while the spawn/seed was in flight is NOT necessarily a teardown: an unmount
@@ -3203,7 +3250,7 @@ export function TerminalNode({
               cleanups.push(
                 transport.onClosed(sid, ({ by }) => {
                   setCo(termKey, { closed: { by } })
-                  term.write('\r\n\x1b[90m[session closed by another user]\x1b[0m\r\n')
+                  term.write(`\r\n\x1b[90m[${vocabRef.current('session closed by another user')}]\x1b[0m\r\n`)
                 })
               )
             }
@@ -3220,7 +3267,7 @@ export function TerminalNode({
                   if (recycleAction(info) === 'ended') {
                     disposeParkedTerminal(termKey) // the park holds a dead pty either way
                     setCo(termKey, { ended: true })
-                    term.write('\r\n\x1b[90m[session ended — reopen to restart]\x1b[0m\r\n')
+                    term.write(`\r\n\x1b[90m[${vocabRef.current('session ended — reopen to restart')}]\x1b[0m\r\n`)
                     return
                   }
                   const restart = restartSubs.get(termKey)
@@ -3238,7 +3285,7 @@ export function TerminalNode({
             // us; the first thing on this screen is whatever the new shell prints next.)
             if (wasRecycled)
               term.write(
-                '\r\n\x1b[90m── session restarted by another user (moved to a new folder) ──\x1b[0m\r\n'
+                `\r\n\x1b[90m── ${vocabRef.current('session restarted by another user (moved to a new folder)')} ──\x1b[0m\r\n`
               )
             // Flow control: track xterm's unprocessed write backlog (bytes handed to
             // term.write but not yet parsed, plus anything still queued in the gate below). Past a
@@ -3348,7 +3395,7 @@ export function TerminalNode({
                   // with convertEol:false, so writing it raw would render as a staircase.
                   term.write(toXtermText(snapshot))
                   term.write(
-                    '\r\n\x1b[90m── session restored (process ended by a restart) ──\x1b[0m\r\n'
+                    `\r\n\x1b[90m── ${vocabRef.current('session restored (process ended by a restart)')} ──\x1b[0m\r\n`
                   )
                 }
               } else if (replay === 'warm-attach') {
@@ -3386,7 +3433,7 @@ export function TerminalNode({
             }
             cleanups.push(
               transport.onExit(sid, (code) => {
-                term.write(`\r\n\x1b[90m[process exited with code ${code}]\x1b[0m\r\n`)
+                term.write(`\r\n\x1b[90m[${vocabRef.current('process exited with code')} ${code}]\x1b[0m\r\n`)
                 // ssh exiting 255 on an SSH-project terminal is a CONNECTION drop (sleep/wake,
                 // network change, NAT idle) — the remote tmux session survives. Report it so the
                 // reconnect coordinator can re-establish the master and respawn this node.
@@ -3472,7 +3519,7 @@ export function TerminalNode({
                     code: 'launch-intent-failed',
                     detail:
                       agentLaunch?.message ??
-                      'This host did not confirm the trusted agent launch. No fallback command was run.'
+                      vocabRef.current('This host did not confirm the trusted agent launch. No fallback command was run.')
                   }
                 })
               }
@@ -4540,8 +4587,12 @@ export function TerminalNode({
         ? sshConnectionScope(dropConn)
         : useProjects.getState().activeProjectId
       if (uploadNoteTimer.current) clearTimeout(uploadNoteTimer.current)
+      const uploadName =
+        files.length === 1
+          ? files[0].name
+          : `${files.length} ${vocabRef.current('files')}`
       setUploadNote({
-        text: `Uploading ${files.length === 1 ? files[0].name : `${files.length} files`}…`
+        text: `${vocabRef.current('Uploading')} ${uploadName}…`
       })
       try {
         paths = await droppedPaths(api, files, { sshRemoteTmux: true, projectId })
@@ -4549,19 +4600,19 @@ export function TerminalNode({
         setUploadNote(null)
       }
       if (!paths.length) {
-        setUploadNote({ text: 'Upload failed', failed: true })
+        setUploadNote({ text: vocabRef.current('Upload failed'), failed: true })
         uploadNoteTimer.current = setTimeout(() => setUploadNote(null), 2500)
       }
     } else if (needsWrite) {
       if (uploadNoteTimer.current) clearTimeout(uploadNoteTimer.current)
-      setUploadNote({ text: 'Saving pasted file…' })
+      setUploadNote({ text: vocabRef.current('Saving pasted file…') })
       try {
         paths = await droppedPaths(api, files, { sshRemoteTmux: false, projectId: '' })
       } finally {
         setUploadNote(null)
       }
       if (!paths.length) {
-        setUploadNote({ text: 'Could not save the pasted file', failed: true })
+        setUploadNote({ text: vocabRef.current('Could not save the pasted file'), failed: true })
         uploadNoteTimer.current = setTimeout(() => setUploadNote(null), 2500)
       }
     } else {
@@ -4836,9 +4887,13 @@ export function TerminalNode({
           position={Position.Right}
           className="bridge-handle bridge-handle--out"
           data-tip={
-            contextLinkCapable
-              ? "Link out — drag to another Claude node so they can read each other's context"
-              : 'Link out — drag to a sticky note to attach it as context'
+            mapAroundExactFacts(
+              contextLinkCapable
+                ? "Link out — drag to another Claude node so they can read each other's context"
+                : 'Link out — drag to a sticky note to attach it as context',
+              ['Claude'],
+              vocab
+            )
           }
         />
         <Handle
@@ -4847,9 +4902,13 @@ export function TerminalNode({
           position={Position.Left}
           className="bridge-handle bridge-handle--in"
           data-tip={
-            contextLinkCapable
-              ? 'Link in — drop a link here to share context with this Claude session'
-              : 'Link in — drop a sticky note link here to attach it as context'
+            mapAroundExactFacts(
+              contextLinkCapable
+                ? 'Link in — drop a link here to share context with this Claude session'
+                : 'Link in — drop a sticky note link here to attach it as context',
+              ['Claude'],
+              vocab
+            )
           }
         />
 
@@ -4861,7 +4920,7 @@ export function TerminalNode({
         >
           <button
             className="term-node__collapse"
-            title={collapsed ? 'Expand' : 'Collapse'}
+            title={vocab(collapsed ? 'Expand' : 'Collapse')}
             onClick={toggleCollapse}
           >
             {collapsed ? '▸' : '▾'}
@@ -4869,7 +4928,7 @@ export function TerminalNode({
           <button
             className="term-node__color"
             style={{ background: data.color }}
-            title="Color"
+            title={vocab('Color')}
             onClick={(e) => {
               const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
               setColorAnchor((a) => (a ? null : { x: r.left, y: r.bottom }))
@@ -4888,8 +4947,8 @@ export function TerminalNode({
             <button
               className="term-node__folder-drag nodrag"
               draggable
-              title={`Drag to an Explorer folder to open a new ${data.title} there`}
-              aria-label={`Choose an Explorer folder for a new ${data.title} agent`}
+              title={`${vocab('Drag to an Explorer folder to open a new')} ${data.title} ${vocab('there')}`}
+              aria-label={`${vocab('Choose an Explorer folder for a new')} ${data.title} ${vocab('agent')}`}
               onDragStart={(event) => {
                 event.stopPropagation()
                 event.dataTransfer.effectAllowed = 'copy'
@@ -4937,13 +4996,13 @@ export function TerminalNode({
             <span
               className="term-node__title-text nodrag"
               data-appearance-id={appearanceId('node', id)}
-              title="Click to rename"
+              title={vocab('Click to rename')}
               onClick={() => {
                 titleEditStartRef.current = data.title as string
                 setEditingTitle(true)
               }}
             >
-              {data.title || 'Untitled'}
+              {data.title || vocab('Untitled')}
             </span>
           )}
           {status?.session && status.session !== data.title && (
@@ -4963,9 +5022,9 @@ export function TerminalNode({
           {codexIdentity?.mode === 'plain' && (
             <span
               className="node-account-chip node-account-chip--warning"
-              title={codexFallbackText(codexIdentity.reason)}
+              title={codexFallbackDisplay}
             >
-              plain codex
+              {vocab('plain')} codex
             </span>
           )}
           {accountPresentation ? (
@@ -4992,10 +5051,10 @@ export function TerminalNode({
           {status?.state === 'working' && (
             <span
               className="term-node__status term-node__status--busy"
-              title={`${agentLabel} is working`}
+              title={`${agentLabel} ${vocab('is working')}`}
             >
               <AgentMascot agentId={agentId} />
-              RUNNING
+              {vocab('RUNNING')}
             </span>
           )}
           {/* Eco: this node's CLI was exited to reclaim its RAM while nobody was looking. The tmux
@@ -5006,14 +5065,14 @@ export function TerminalNode({
           {status?.hibernated && (
             <button
               className="term-node__status term-node__status--sleeping nodrag"
-              title="Agent hibernated to save memory — click to resume"
+              title={vocab('Agent hibernated to save memory — click to resume')}
               onClick={(e) => {
                 e.stopPropagation()
                 wakeRef.current()
               }}
             >
               <span className="term-node__status-dot" />
-              SLEEPING
+              {vocab('SLEEPING')}
             </button>
           )}
           {/* Dismissed (cron/schedule) entries are retained as a fact but hidden everywhere they
@@ -5022,7 +5081,7 @@ export function TerminalNode({
           {showLoop && status?.loop && !status.loop.dismissed && (
             <span
               className="term-node__status term-node__status--loop"
-              title={`Running /${status.loop.kind}`}
+              title={`${vocab('Running')} /${status.loop.kind}`}
             >
               <span className="term-node__status-dot" />
               {status.loop.kind.toUpperCase()}
@@ -5038,16 +5097,19 @@ export function TerminalNode({
             <span
               className="term-node__status term-node__status--queued nodrag"
               title={
-                pendingLaunchError ??
-                `Waiting for ${pendingWaitingOn || 'the selected stations'} to finish, then ${pendingLaunchSummary}.`
+                pendingLaunchErrorDisplay
+                  ? pendingLaunchErrorDisplay.ownership === 'authored'
+                    ? vocab(pendingLaunchErrorDisplay.text)
+                    : pendingLaunchErrorDisplay.text
+                  : `${vocab('Waiting for')} ${pendingWaitingOn || vocab('the selected stations')} ${vocab('to finish, then')} ${pendingLaunchSummary}.`
               }
             >
               <span className="term-node__status-dot" />
-              {pendingLaunchExecuting ? 'LAUNCHING' : pendingLaunchError ? 'FAILED' : 'QUEUED'}
+              {vocab(pendingLaunchExecuting ? 'LAUNCHING' : pendingLaunchError ? 'FAILED' : 'QUEUED')}
               <button
                 className="term-node__queued-run"
                 disabled={pendingLaunchExecuting}
-                title={pendingLaunchError ? 'Retry queued launch' : 'Run now without waiting'}
+                title={vocab(pendingLaunchError ? 'Retry queued launch' : 'Run now without waiting')}
                 onClick={(e) => {
                   e.stopPropagation()
                   runPendingLaunchNow()
@@ -5060,10 +5122,10 @@ export function TerminalNode({
           {(status?.state === 'waiting' || status?.state === 'blocked') && (
             <span
               className="term-node__status term-node__status--attention"
-              title={`${agentLabel} needs your input`}
+              title={`${agentLabel} ${vocab('needs your input')}`}
             >
               <span className="term-node__status-dot" />
-              NEEDS YOU
+              {vocab('NEEDS YOU')}
             </span>
           )}
           {/* Deterministic hook-reply approvals (docs/hook-reply-approvals.md): when the node is
@@ -5074,7 +5136,7 @@ export function TerminalNode({
             <span className="term-node__approve nodrag">
               <button
                 className="term-node__approve-btn term-node__approve-btn--allow"
-                title="Approve this permission request"
+                title={vocab('Approve this permission request')}
                 onClick={() =>
                   void window.nodeTerminal.answerPermission({
                     nodeId: id,
@@ -5083,11 +5145,11 @@ export function TerminalNode({
                   })
                 }
               >
-                ✓ Approve
+                ✓ {vocab('Approve')}
               </button>
               <button
                 className="term-node__approve-btn term-node__approve-btn--deny"
-                title="Deny this permission request"
+                title={vocab('Deny this permission request')}
                 onClick={() =>
                   void window.nodeTerminal.answerPermission({
                     nodeId: id,
@@ -5096,22 +5158,22 @@ export function TerminalNode({
                   })
                 }
               >
-                ✕ Deny
+                ✕ {vocab('Deny')}
               </button>
             </span>
           )}
           {isUnread && (
             <span
               className="term-node__status term-node__status--unread"
-              title="Finished — click to mark read"
+              title={vocab('Finished — click to mark read')}
             >
               <span className="term-node__status-dot" />
-              unread
+              {vocab('unread')}
             </span>
           )}
           {!editingTitle && <span className="term-node__spacer" />}
           {canMoveIntoWorktree && (
-            <Tooltip label="Move this terminal into the group's worktree">
+            <Tooltip label={vocab("Move this terminal into the group's worktree")}>
               <button
                 className="term-node__move-worktree nodrag"
                 onClick={() => moveIntoWorktreeHandler?.(id)}
@@ -5127,7 +5189,7 @@ export function TerminalNode({
             view is the last thing a user wants to hunt for. Distinct from "Restart agent",
             which quits the CLI itself; this touches nothing but the viewer. */}
           {!isHidden('refresh', hiddenHeaderButtons) && (
-            <Tooltip label="Refresh — rebuild this view; the session keeps running">
+            <Tooltip label={vocab('Refresh — rebuild this view; the session keeps running')}>
               <button
                 className="term-node__refresh nodrag"
                 onClick={(e) => {
@@ -5155,7 +5217,7 @@ export function TerminalNode({
             relay/server tab, whose core is another machine entirely and which `data.remote`
             does not report (nothing sets that field). */}
           {canEscapeToWidget({ browserRuntime: isBrowserRuntime(), remoteSession, sessionSource: session.source }) && (
-            <Tooltip label="Escape to widget — always-on-top window, same live session">
+            <Tooltip label={vocab('Escape to widget — always-on-top window, same live session')}>
               <button
                 className="term-node__widget-escape nodrag"
                 onClick={(e) => {
@@ -5171,7 +5233,7 @@ export function TerminalNode({
             claude-transcript fact (see the `useTerminalSearch` call above), so keying the label on
             the meter promised a codex/gemini node a conversation search it does not run. */}
           <Tooltip
-            label={claudeTranscript ? 'Search terminal + conversation' : 'Search this terminal'}
+            label={vocab(claudeTranscript ? 'Search terminal + conversation' : 'Search this terminal')}
           >
             <button
               className="term-node__search nodrag"
@@ -5182,7 +5244,7 @@ export function TerminalNode({
             </button>
           </Tooltip>
           {!isHidden('mic', hiddenHeaderButtons) && (
-            <Tooltip label="Dictate into this terminal">
+            <Tooltip label={vocab('Dictate into this terminal')}>
               <button
                 className="term-node__mic nodrag"
                 onClick={(e) => {
@@ -5199,14 +5261,14 @@ export function TerminalNode({
             </Tooltip>
           )}
           {!isHidden('ai-name', hiddenHeaderButtons) && (
-            <Tooltip label="Name with AI (from terminal output)">
+            <Tooltip label={vocab('Name with AI (from terminal output)')}>
               <button className="term-node__ai nodrag" disabled={naming} onClick={nameWithAi}>
                 {naming ? '…' : '✦'}
               </button>
             </Tooltip>
           )}
           {!isHidden('comments', hiddenHeaderButtons) && (
-            <Tooltip label="Comments & activity">
+            <Tooltip label={vocab('Comments & activity')}>
               <button
                 className="term-node__chat nodrag"
                 aria-pressed={commentsOpen}
@@ -5218,7 +5280,7 @@ export function TerminalNode({
           )}
           <button
             className="term-node__close"
-            title="Close (ends the session)"
+            title={vocab('Close (ends the session)')}
             // React Flow's onBeforeDelete boundary asks first; Canvas.deleteNodes ends the session
             // only after authorization. Destroying here would make the confirmation cosmetic.
             onClick={() => deleteElements({ nodes: [{ id }] })}
@@ -5300,7 +5362,7 @@ export function TerminalNode({
             has always treated it as hidden too; this feature only agrees with it. Not a bug. */}
           {offscreenDown && !nodeLocked && (
             <div className="term-node__offscreen nodrag">
-              <span>Session running — reattaches on view</span>
+              <span>{vocab('Session running — reattaches on view')}</span>
             </div>
           )}
           {/* Toy-lock enforcement (docs/toy-locks.md) — the fix for "a locked node does not
@@ -5326,7 +5388,7 @@ export function TerminalNode({
                 }
               }}
             >
-              <span>🔒 Locked — click to unlock</span>
+              <span>🔒 {vocab('Locked — click to unlock')}</span>
             </div>
           )}
           {nodeUnlockPromptAnchor &&
@@ -5350,14 +5412,14 @@ export function TerminalNode({
             })()}
           {co.closed && (
             <div className="term-node__closed nodrag">
-              Closed by {closedName} — this session was ended.
+              {vocab('Closed by')} {closedName} — {vocab('this session was ended.')}
             </div>
           )}
           {!co.closed && co.ended && (
             <div className="term-node__closed nodrag">
-              <span>Session ended — the node was moved and never came back.</span>
+              <span>{vocab('Session ended — the node was moved and never came back.')}</span>
               <button className="term-node__reopen" onClick={reopenEnded}>
-                Reopen
+                {vocab('Reopen')}
               </button>
             </div>
           )}
@@ -5409,29 +5471,33 @@ export function TerminalNode({
               </button>
             </div>
           )}
-          {!co.closed && !co.ended && pendingLaunch && pendingLaunchError && (
+          {!co.closed && !co.ended && pendingLaunch && pendingLaunchErrorDisplay && (
             <div className="term-node__closed nodrag" role="alert">
-              <span>{pendingLaunchError}</span>
+              <span data-vocabulary-ownership={pendingLaunchErrorDisplay.ownership}>
+                {pendingLaunchErrorDisplay.ownership === 'authored'
+                  ? vocab(pendingLaunchErrorDisplay.text)
+                  : pendingLaunchErrorDisplay.text}
+              </span>
               <button
                 className="term-node__reopen"
                 disabled={pendingLaunchExecuting}
                 onClick={runPendingLaunchNow}
               >
-                {pendingLaunchExecuting ? 'Launching…' : 'Retry queued launch'}
+                {pendingLaunchExecuting ? vocab('Launching…') : vocab('Retry queued launch')}
               </button>
             </div>
           )}
           {!co.closed && !co.ended && !co.spawnError && !co.agentRelaunchError && co.offline && (
             <div className="term-node__closed nodrag">
               <span>
-                Not connected to{' '}
+                {vocab('Not connected to')}{' '}
                 {data.ssh
                   ? `${(data.ssh as SshConnection).user}@${(data.ssh as SshConnection).host}`
-                  : 'the host'}{' '}
-                — this session was not started locally.
+                  : vocab('the host')}{' '}
+                — {vocab('this session was not started locally.')}
               </span>
               <button className="term-node__reopen" onClick={reconnectOffline}>
-                Reconnect
+                {vocab('Reconnect')}
               </button>
             </div>
           )}
@@ -5460,7 +5526,7 @@ export function TerminalNode({
                   })
                 )
               }}
-              title="Click to type · drag to move · scroll terminal"
+              title={vocab('Click to type · drag to move · scroll terminal')}
             />
           )}
           {mdMode &&
@@ -5476,8 +5542,8 @@ export function TerminalNode({
             ) : (
               <div className="term-md nodrag nowheel">
                 <div className="term-md__bar">
-                  <span>Markdown</span>
-                  <span className="term-md__hint">{hintLabel('⌘M to exit')}</span>
+                  <span>{vocab('Markdown')}</span>
+                  <span className="term-md__hint">{hintLabel(`⌘M ${vocab('to exit')}`)}</span>
                 </div>
                 <div className="term-md__content" dangerouslySetInnerHTML={{ __html: mdHtml }} />
               </div>

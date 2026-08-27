@@ -10,12 +10,14 @@ import { useSession } from '../session/session'
 import type { CanvasNode } from '../state/workspace'
 import { tooLargeSize, formatBytes } from '@shared/fsLimits'
 import { nodeHeaderFillStyle } from '../lib/nodeColor'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 /**
  * A Monaco diff editor node for a changed file. Staged diff = HEAD vs index;
  * unstaged diff = index vs working tree. Read-only.
  */
 export function DiffNode({ id, data, selected }: NodeProps<CanvasNode>) {
+  const vocab = useVocabularyMapper()
   const { deleteElements } = useReactFlow()
   // This node's core api (a stable context read). Captured by the mount effect's CLOSURE below —
   // deliberately NOT in its dep array: that effect creates/tears down Monaco models, and the
@@ -44,6 +46,7 @@ export function DiffNode({ id, data, selected }: NodeProps<CanvasNode>) {
   // Set by a worktree removal sweep (`displacedByWorktree` / `resetDisplacedCwd` in Canvas.tsx):
   // the repo this diff was scoped to no longer exists, and there is nothing to re-point it at.
   const fileMissing = !!data.fileMissing
+  const displayFileName = rel.split('/').pop() || vocab('untitled')
 
   // A worktree removal can mark `fileMissing` on a node that is ALREADY mounted (open, live diff
   // editor). The main effect below only runs once on mount, so it can't react to that — free the
@@ -146,14 +149,14 @@ export function DiffNode({ id, data, selected }: NodeProps<CanvasNode>) {
         }`}
         style={headerFill.style}
       >
-        <span className="term-node__title-text" title={`${rel} — ${commitOid ? commitOid.slice(0, 7) : staged ? 'staged' : 'working'}`}>
-          {rel.split('/').pop()}
-          <span className="diff-node__tag">{commitOid ? commitOid.slice(0, 7) : staged ? 'staged' : 'changes'}</span>
+        <span className="term-node__title-text" title={`${rel} — ${commitOid ? commitOid.slice(0, 7) : staged ? vocab('staged') : vocab('working')}`}>
+          {displayFileName}
+          <span className="diff-node__tag">{commitOid ? commitOid.slice(0, 7) : staged ? vocab('staged') : vocab('changes')}</span>
         </span>
         <span className="term-node__spacer" />
         <button
           className="term-node__close"
-          title="Close"
+          title={vocab('Close')}
           onClick={() => deleteElements({ nodes: [{ id }] })}
         >
           ×
@@ -164,14 +167,14 @@ export function DiffNode({ id, data, selected }: NodeProps<CanvasNode>) {
         <div className="editor-node__body nodrag">
           <div className="editor-node__image">
             <span className="editor-node__loading">
-              This file’s worktree was removed — it no longer exists.
+              {vocab('This file’s worktree was removed — it no longer exists.')}
             </span>
           </div>
         </div>
       ) : loadError ? (
         <div className="editor-node__body nodrag">
           <div className="editor-node__image">
-            <span className="editor-node__loading">{loadError}</span>
+            <span className="editor-node__loading">{vocab(loadError)}</span>
           </div>
         </div>
       ) : (

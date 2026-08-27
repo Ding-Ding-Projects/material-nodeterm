@@ -23,6 +23,13 @@ nodes on a single pan/zoom canvas, built on Electron with a React renderer. It s
 ways from one codebase — a desktop app, a self-hosted browser edition, and a mobile companion
 that attaches to the same live sessions.
 
+Every rendered element in the Windows desktop application uses Material Design 3 primitives and project tokens,
+including states, overlays, dialogs, menus, settings, nodes, destinations, and notifications. Every
+eligible user-facing text producer passes through the local personal-vocabulary upload boundary,
+while commands, paths, identifiers, external records, and user-supplied values remain literal.
+The documentation and landing site runs in Kids mode by default. Site changes are limited to stale facts, data, releases, links, features, accessibility, and broken behavior; this desktop audit does
+not restyle site files.
+
 ## Process boundaries are enforced, not advisory
 
 The codebase is split by responsibility, and the split is checked by tests, not just
@@ -58,6 +65,34 @@ honest answer is "not applicable here":
 Anything the UI reaches through the preload bridge needs a **real** implementation for the
 browser edition, or a deliberate, visibly-documented degrade — a stub that compiles but does
 nothing is worse than an explicit "not supported here," because it looks finished.
+
+## Material Design 3 is a strict whole-interface requirement
+
+Every user-facing element on every nodeterm surface must conform to Material Design 3. This
+includes application chrome, canvas nodes, node interiors, dialogs, menus, popovers, pickers,
+fields, buttons, tabs, status surfaces, notifications, settings, documentation pages, empty
+states, errors, progress states, accessibility-only labels, hover and focus states, and every
+nested control. A shared theme, a Material-looking container, or a nearby compliant component
+does not exempt an individual element.
+
+Every new or changed user-facing element must use the shared Material Design 3 tokens and
+primitives for colour roles, typography, shape, elevation, state layers, motion, focus, target
+size, responsive containment, and reduced-motion behavior. Legacy or unstyled controls are
+release blockers. When a platform limitation prevents literal component parity, document the
+exact limitation and implement the closest accessible, testable Material Design 3 equivalent
+instead of silently falling back.
+
+The existing Kids-mode-default documentation and landing site is the one visual-style exception.
+Preserve its current visual language and do not restyle it to match the desktop application.
+This exception covers appearance only. Its facts, links, releases, feature data, controls,
+language and personal-vocabulary behavior, accessibility, clipping, responsive behavior, and
+other functional contracts must still remain current and correct.
+
+The completeness inventory and its negative regression must list every user-facing surface and
+fail when an element, implementation marker, documentation row, focused test, built-artifact
+interaction record, or required visual evidence is missing or stale. A check that merely finds
+one Material Design 3 marker somewhere in a file is not sufficient evidence that every rendered
+element in that file conforms.
 
 ## House rules that come up in review
 

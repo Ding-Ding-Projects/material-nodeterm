@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNotifications, type AppNotification, type NotificationKind } from '../state/notifications'
 import { Checkbox } from '@renderer/ui/md3'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 type FilterKind = 'all' | 'unread' | NotificationKind
 
@@ -75,6 +76,7 @@ export function NotificationCenter({
   onClose,
   onRequestBulkDelete
 }: NotificationCenterProps): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   const items = useNotifications((s) => s.items)
   const dismiss = useNotifications((s) => s.dismiss)
   const dismissMany = useNotifications((s) => s.dismissMany)
@@ -154,8 +156,8 @@ export function NotificationCenter({
     <div className="drawer-overlay" onClick={onClose}>
       <div className="notif-center" onClick={(e) => e.stopPropagation()}>
         <div className="notif-center__head">
-          <h2>Notifications</h2>
-          <button className="drawer__close" onClick={onClose} aria-label="Close">
+          <h2>{vocab('Notifications')}</h2>
+          <button className="drawer__close" onClick={onClose} aria-label={vocab('Close')}>
             ×
           </button>
         </div>
@@ -165,7 +167,7 @@ export function NotificationCenter({
             placeholder="Search notifications…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            aria-label="Search notifications"
+            aria-label={vocab('Search notifications')}
           />
           <div className="notif-center__filters" role="group" aria-label="Filter by kind">
             {FILTERS.map((f) => (

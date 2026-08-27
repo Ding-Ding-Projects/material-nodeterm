@@ -378,7 +378,7 @@ export function catalogPollDelayMs(failures: number, baseMs: number): number {
   return baseMs * 2 ** capped
 }
 
-function formatAge(ms: number): string {
+export function formatAge(ms: number): string {
   if (ms < 60_000) return 'less than a minute'
   const minutes = Math.floor(ms / 60_000)
   if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'}`

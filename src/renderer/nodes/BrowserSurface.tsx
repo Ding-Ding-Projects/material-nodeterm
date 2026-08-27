@@ -5,6 +5,7 @@ import { useBrowserHistory } from '../state/browserHistory'
 import { useDiscardWhenHidden, webviewAudible } from './useDiscardWhenHidden'
 import { DiscardedPlate } from './DiscardedPlate'
 import { BrowserExtensionsPanel } from './BrowserExtensionsPanel'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 // Minimal typing for the Electron <webview> element methods/events we use.
 type WebviewEl = HTMLElement & {
@@ -58,6 +59,7 @@ export function BrowserSurface({
   onTitleChange,
   partition
 }: BrowserSurfaceProps) {
+  const vocab = useVocabularyMapper()
   const ref = useRef<WebviewEl | null>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const lastUrlRef = useRef('')
@@ -68,6 +70,7 @@ export function BrowserSurface({
   const [canBack, setCanBack] = useState(false)
   const [canFwd, setCanFwd] = useState(false)
   const [failed, setFailed] = useState('')
+  const [failedExternal, setFailedExternal] = useState(false)
   const [showExtensions, setShowExtensions] = useState(false)
   // Memory saver (see `useDiscardWhenHidden`): the page is released while hidden and rebuilt on
   // reveal. `loadingRef` mirrors the `loading` state because the hook reads it at fire time, from
@@ -142,7 +145,13 @@ export function BrowserSurface({
       if (ev.isMainFrame && ev.errorCode !== -3) {
         // A restore that never landed has no echo to swallow — disarm, or the next navigation pays.
         restoringNavRef.current = null
-        setFailed(ev.errorDescription || 'Failed to load')
+        if (ev.errorDescription) {
+          setFailed(ev.errorDescription)
+          setFailedExternal(true)
+        } else {
+          setFailed('Failed to load')
+          setFailedExternal(false)
+        }
       }
     }
     wv.addEventListener('did-start-loading', onStart)
@@ -231,10 +240,12 @@ export function BrowserSurface({
     const safe = searchOrUrl(address)
     if (!safe) {
       setFailed('Enter a URL or search term')
+      setFailedExternal(false)
       return
     }
     setAddress(safe)
     setFailed('')
+    setFailedExternal(false)
     // A navigation with an initiator: whatever it navigates to is not a restore echo.
     restoringNavRef.current = null
     locationRef.current = safe
@@ -245,16 +256,16 @@ export function BrowserSurface({
   return (
     <div className="browser-surface" ref={rootRef}>
       <div className="browser-node__toolbar nodrag">
-        <button className="browser-node__btn" disabled={!canBack} onClick={() => ref.current?.goBack()} title="Back">
+        <button className="browser-node__btn" disabled={!canBack} onClick={() => ref.current?.goBack()} title={vocab('Back')}>
           ◀
         </button>
-        <button className="browser-node__btn" disabled={!canFwd} onClick={() => ref.current?.goForward()} title="Forward">
+        <button className="browser-node__btn" disabled={!canFwd} onClick={() => ref.current?.goForward()} title={vocab('Forward')}>
           ▶
         </button>
         <button
           className="browser-node__btn"
           onClick={() => (loading ? ref.current?.stop() : ref.current?.reload())}
-          title={loading ? 'Stop' : 'Reload'}
+          title={vocab(loading ? 'Stop' : 'Reload')}
         >
           {loading ? '✕' : '⟳'}
         </button>
@@ -262,7 +273,7 @@ export function BrowserSurface({
           className="browser-node__address"
           value={address}
           spellCheck={false}
-          placeholder="Enter a URL and press Enter"
+          placeholder={vocab('Enter a URL and press Enter')}
           onChange={(e) => setAddress(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') go()
@@ -272,8 +283,8 @@ export function BrowserSurface({
           <button
             className="browser-node__btn"
             onClick={() => setShowExtensions((v) => !v)}
-            title="Extensions"
-            aria-label="Extensions"
+            title={vocab('Extensions')}
+            aria-label={vocab('Extensions')}
             aria-expanded={showExtensions}
           >
             ⬒
@@ -309,7 +320,7 @@ export function BrowserSurface({
           />
         )}
         {discarded && <DiscardedPlate />}
-        {failed && <div className="browser-node__error">{failed}</div>}
+        {failed && <div className="browser-node__error">{failedExternal ? failed : vocab(failed)}</div>}
       </div>
     </div>
   )

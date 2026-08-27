@@ -2154,6 +2154,21 @@ worktree list`: a worktree deleted outside the app makes its group **stale** (ch
   `design/v2/md3/HANDOFF.md` the component recipes both sheets were built from; the ten
   `design/v2/MD3 *.dc.html` prototypes are the visual reference — all DATA the app was
   implemented from, never files the running app reads.
+- **Material Design 3 is strict at the element boundary.** Every user-facing element must use
+  the shared Material Design 3 tokens and primitives, including nested node controls, dialogs,
+  menus, pickers, progress and error states, tooltips, accessible names, hover and focus states,
+  documentation pages, and separately mounted renderer surfaces. A compliant parent card does not
+  make a legacy or unstyled child compliant. Every changed element needs an exact inventory row,
+  localized copy, focused behavioral coverage, and the required built-artifact and visual evidence.
+  The completeness check must fail when any one of those exact records is absent or stale; finding
+  one design-system marker somewhere in a file is not proof that the file's whole rendered surface
+  conforms.
+- **The existing Kids-mode-default documentation and landing site keeps its current visual style.**
+  It is the narrow appearance exception to the element-level Material Design 3 rule and must not
+  be restyled to resemble the desktop application. The exception does not cover stale facts,
+  broken links, missing controls, localization, personal-vocabulary behavior, accessibility,
+  clipping, responsiveness, or other functional contracts; those still have to be repaired and
+  kept current without changing the site's established look.
 - **Fonts and icons are bundled, never fetched.** Three local `@font-face`s in `fonts.css`:
   Outfit Variable (`--font-ui`), Roboto Mono (`--font-mono`, code/terminal), and Material Symbols
   Rounded (icons) — every one committed as woff2 under `src/renderer/assets/fonts/`, regenerated

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { ColorPicker } from './ColorPicker'
 import { useAnchoredPosition } from '@renderer/lib/appearance/useAnchoredPosition'
 import { parseAnyColor, toHex } from '@renderer/lib/color/convert'
+import { useVocabularyMapper } from '@renderer/lib/personalVocabulary/useVocabularyText'
 
 /**
  * A labelled swatch that opens the full infinite `ColorPicker` in a small anchored popover — the
@@ -27,6 +28,8 @@ export function ColorField({
   allowAlpha?: boolean
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
+  const vocab = useVocabularyMapper()
+  const labelText = vocab(label)
   const anchorRef = useRef<HTMLButtonElement>(null)
   const pos = useAnchoredPosition(anchorRef.current, open)
 
@@ -57,25 +60,25 @@ export function ColorField({
 
   return (
     <div className="color-field">
-      <span className="color-field__label">{label}</span>
+      <span className="color-field__label">{labelText}</span>
       <div className="color-field__controls">
         <button
           ref={anchorRef}
           type="button"
           className="color-field__swatch"
           style={swatchBg ? { background: swatchBg } : undefined}
-          aria-label={`${label}: ${value ?? 'not set'} — open colour picker`}
+          aria-label={`${labelText}: ${value ?? vocab('not set')} — ${vocab('open colour picker')}`}
           onClick={() => setOpen((o) => !o)}
         >
           {!swatchBg && <span className="color-field__unset" aria-hidden="true" />}
         </button>
-        <span className="color-field__value">{value ?? 'Not set — inherits the platform default'}</span>
+        <span className="color-field__value">{value ?? vocab('Not set — inherits the platform default')}</span>
         {onClear && value && (
           <button
             type="button"
             className="color-field__reset"
-            title={`Reset ${label} to the platform default`}
-            aria-label={`Reset ${label}`}
+            title={`${vocab('Reset')} ${labelText} ${vocab('to the platform default')}`}
+            aria-label={`${vocab('Reset')} ${labelText}`}
             onClick={onClear}
           >
             ↺
@@ -89,7 +92,7 @@ export function ColorField({
             className="color-field__popover"
             style={{ top: pos.top, left: pos.left }}
             role="dialog"
-            aria-label={`${label} colour picker`}
+            aria-label={`${labelText} ${vocab('colour picker')}`}
           >
             <ColorPicker
               label={label}

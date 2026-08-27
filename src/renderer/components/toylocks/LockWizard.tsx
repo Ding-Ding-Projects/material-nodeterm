@@ -13,8 +13,9 @@ import { useToyLocks } from '../../state/toylocks'
 import { QrCode } from './QrCode'
 import { PasswordField } from './PasswordField'
 import { RecoveryNotice } from './RecoveryNotice'
-import { Checkbox } from '@renderer/ui/md3'
+import { Checkbox, Radio } from '@renderer/ui/md3'
 import { Select } from '@renderer/ui/Select'
+import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 
 type Step = 'setup' | 'password' | 'totp' | 'done'
 
@@ -39,6 +40,7 @@ export function LockWizard({
   anchor: { x: number; y: number }
   onClose: () => void
 }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   const [step, setStep] = useState<Step>('setup')
   const [credentialKind, setCredentialKind] = useState<ToyLockCredentialKind>('password')
   const [duration, setDuration] = useState<ToyLockDurationMode>('session')
@@ -194,7 +196,7 @@ export function LockWizard({
         aria-label={`Lock ${target.label}`}
         ref={boxRef}
       >
-        <div className="toylock-wizard__title">Lock “{target.label}”</div>
+        <div className="toylock-wizard__title">{vocab('Lock')} “{target.label}”</div>
 
         {step === 'setup' && (
           <>
@@ -203,8 +205,7 @@ export function LockWizard({
               <span className="toylock-field__label">Unlock with</span>
               <div className="toylock-radio-row">
                 <label>
-                  <input
-                    type="radio"
+                  <Radio
                     name="credentialKind"
                     checked={credentialKind === 'password'}
                     onChange={() => setCredentialKind('password')}
@@ -213,8 +214,7 @@ export function LockWizard({
                   Password
                 </label>
                 <label>
-                  <input
-                    type="radio"
+                  <Radio
                     name="credentialKind"
                     checked={credentialKind === 'totp'}
                     onChange={() => setCredentialKind('totp')}
@@ -222,8 +222,7 @@ export function LockWizard({
                   Authenticator code (TOTP)
                 </label>
                 <label>
-                  <input
-                    type="radio"
+                  <Radio
                     name="credentialKind"
                     checked={credentialKind === 'password-totp'}
                     onChange={() => setCredentialKind('password-totp')}
@@ -231,8 +230,7 @@ export function LockWizard({
                   Password + code (both required)
                 </label>
                 <label title={isWindows ? undefined : 'Windows only'}>
-                  <input
-                    type="radio"
+                  <Radio
                     name="credentialKind"
                     checked={credentialKind === 'windows-pin'}
                     disabled={!isWindows}

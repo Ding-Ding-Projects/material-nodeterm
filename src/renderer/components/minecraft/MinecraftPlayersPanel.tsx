@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { MinecraftBannedPlayerEntry, MinecraftPlayerEntry, MinecraftPlayerLists } from '@shared/minecraft'
 import { useSession } from '../../session/session'
 import { openDestructiveGate } from '../../state/destructiveGate'
+import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 
 /** Every mutation here is a real vanilla console command sent through the same `sendCommand` the
  *  console tab already uses — never a direct edit of whitelist.json/ops.json/banned-players.json,
@@ -58,6 +59,7 @@ function ListSection({
 }
 
 export function MinecraftPlayersPanel({ nodeId, phase }: { nodeId: string; phase: string }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   const { api } = useSession()
   const [lists, setLists] = useState<MinecraftPlayerLists | null>(null)
   const [nameDraft, setNameDraft] = useState('')
@@ -143,7 +145,7 @@ export function MinecraftPlayersPanel({ nodeId, phase }: { nodeId: string; phase
     })
   }
 
-  if (!lists) return <p className="service-node__note">Loading player lists…</p>
+  if (!lists) return <p className="service-node__note">{vocab('Loading player lists…')}</p>
 
   return (
     <div className="mc-players nodrag">

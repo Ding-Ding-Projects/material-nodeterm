@@ -40,6 +40,12 @@ import {
   type BulkSelectionState
 } from '../../lib/bulkSelection'
 import { ReleaseCard } from './ReleaseCard'
+import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
+import { copy, fact, mapOwnedSentence } from '../../lib/personalVocabulary/ownedCopy'
+
+export function changelogExportOutcomeSegments(kind: 'exported' | 'failed', count: number) {
+  return [fact(String(count)), copy(` ${kind}`)]
+}
 
 const PRESETS: DateRangePreset[] = ['30d', '90d', 'all']
 
@@ -55,7 +61,7 @@ function releaseHaystack(r: ChangelogRelease): string {
   ].join(' ')
 }
 
-function toExportTable(releases: readonly ChangelogRelease[]): ExportTable {
+function toExportTable(releases: readonly ChangelogRelease[], map: (text: string) => string = (text) => text): ExportTable {
   const rows: Record<string, unknown>[] = []
   for (const r of releases) {
     if (r.items.length === 0) {
@@ -81,17 +87,18 @@ function toExportTable(releases: readonly ChangelogRelease[]): ExportTable {
   return {
     name: 'changelog',
     columns: [
-      { key: 'version', label: 'Version' },
-      { key: 'date', label: 'Date' },
-      { key: 'category', label: 'Category' },
-      { key: 'text', label: 'Change' },
-      { key: 'commits', label: 'Commits' }
+      { key: 'version', label: map('Version') },
+      { key: 'date', label: map('Date') },
+      { key: 'category', label: map('Category') },
+      { key: 'text', label: map('Change') },
+      { key: 'commits', label: map('Commits') }
     ],
     rows
   }
 }
 
 export function ChangelogPanel(): JSX.Element {
+  const vocab = useVocabularyMapper()
   const [fromInput, setFromInput] = useState('')
   const [toInput, setToInput] = useState('')
   const [activePreset, setActivePreset] = useState<DateRangePreset | null>('all')
@@ -135,7 +142,7 @@ export function ChangelogPanel(): JSX.Element {
         label: 'Export selected (CSV)',
         describe: (r) => `${r.version}${r.date ? ` — ${r.date}` : ''} (${r.items.length} change${r.items.length === 1 ? '' : 's'})`,
         run: async (items) => {
-          const built = buildTableExport(toExportTable(items), 'csv')
+          const built = buildTableExport(toExportTable(items, vocab), 'csv')
           const result = await window.nodeTerminal.export.saveText(built.filename, built.content, built.mimeType)
           if (!result.ok) {
             if (result.canceled) return { succeeded: [], failed: [] }
@@ -145,15 +152,15 @@ export function ChangelogPanel(): JSX.Element {
         }
       }
     ],
-    []
+    [vocab]
   )
 
   return (
-    <div className="md3-changelog" role="region" aria-label="Changelog">
+    <div className="md3-changelog" role="region" aria-label={vocab('Changelog')}>
       <div className="md3-changelog__toolbar">
         <div className="md3-changelog__dates">
           <label className="md3-history-date-field">
-            From
+            {vocab('From')}
             <input
               type="date"
               value={fromInput}
@@ -165,7 +172,7 @@ export function ChangelogPanel(): JSX.Element {
             />
           </label>
           <label className="md3-history-date-field">
-            To
+            {vocab('To')}
             <input
               type="date"
               value={toInput}
@@ -177,7 +184,7 @@ export function ChangelogPanel(): JSX.Element {
             />
           </label>
         </div>
-        <div className="md3-history-presets" role="group" aria-label="Date range presets">
+        <div className="md3-history-presets" role="group" aria-label={vocab('Date range presets')}>
           {PRESETS.map((p) => (
             <button
               key={p}
@@ -186,7 +193,7 @@ export function ChangelogPanel(): JSX.Element {
               aria-pressed={activePreset === p}
               onClick={() => applyPreset(p)}
             >
-              {DATE_RANGE_PRESET_LABELS[p]}
+              {vocab(DATE_RANGE_PRESET_LABELS[p])}
             </button>
           ))}
         </div>
@@ -195,11 +202,11 @@ export function ChangelogPanel(): JSX.Element {
             ref={searchInputRef}
             type="text"
             className="md3-history-search__input"
-            placeholder={search.mode === 'regex' ? 'Search the changelog (regex)…' : 'Search the changelog…'}
+            placeholder={vocab(search.mode === 'regex' ? 'Search the changelog (regex)…' : 'Search the changelog…')}
             value={search.value}
             spellCheck={false}
             onChange={(e) => search.setValue(e.target.value)}
-            aria-label="Search changelog"
+            aria-label={vocab('Search changelog')}
           />
           <AnchoredRegexBuilder search={search} fieldRef={searchInputRef} label="Regex — Changelog search" />
         </div>
@@ -218,14 +225,14 @@ export function ChangelogPanel(): JSX.Element {
             {to.error}
           </div>
         )}
-        <ExportMenu kind="tabular" label="changelog" build={(format) => buildTableExport(toExportTable(filtered), format)} />
+        <ExportMenu kind="tabular" label={vocab('changelog')} build={(format) => buildTableExport(toExportTable(filtered, vocab), format)} />
       </div>
 
       {filtered.length === 0 ? (
         <div className="md3-changelog-empty md3-changelog-empty--panel">
           {CHANGELOG_RELEASES.length === 0
-            ? 'No changelog data is available in this build.'
-            : 'Nothing matches this filter.'}
+            ? vocab('No changelog data is available in this build.')
+            : vocab('Nothing matches this filter.')}
         </div>
       ) : (
         <>
@@ -239,8 +246,8 @@ export function ChangelogPanel(): JSX.Element {
             actions={bulkActions}
             onActionComplete={(_id, result) => {
               const parts: string[] = []
-              if (result.succeeded.length > 0) parts.push(`${result.succeeded.length} exported`)
-              if (result.failed.length > 0) parts.push(`${result.failed.length} failed`)
+              if (result.succeeded.length > 0) parts.push(mapOwnedSentence(vocab, changelogExportOutcomeSegments('exported', result.succeeded.length)))
+              if (result.failed.length > 0) parts.push(mapOwnedSentence(vocab, changelogExportOutcomeSegments('failed', result.failed.length)))
               setExportResult(parts.length > 0 ? parts.join(', ') : null)
               if (parts.length > 0) setTimeout(() => setExportResult(null), 6000)
             }}

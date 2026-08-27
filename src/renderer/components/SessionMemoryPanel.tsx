@@ -33,6 +33,7 @@ import {
 import { BulkActionBar, type BulkAction } from './BulkActionBar'
 import { ExportMenu } from './ExportMenu'
 import { Checkbox } from '@renderer/ui/md3'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 export interface SessionMemoryPanelProps {
   /** Travel to the node behind a row. Canvas passes `travelToNode`, so a CLOSED project's tab is
@@ -102,6 +103,7 @@ export function SessionMemoryPanel({
   onKillSession,
   onClose
 }: SessionMemoryPanelProps): JSX.Element {
+  const vocab = useVocabularyMapper()
   const ok = useSessionMemory((s) => s.ok)
   const rows = useSessionMemory((s) => s.rows)
   const loading = useSessionMemory((s) => s.loading)
@@ -152,7 +154,7 @@ export function SessionMemoryPanel({
     () => [
       {
         id: 'export-selected',
-        label: 'Export selected (CSV)',
+        label: vocab('Export selected (CSV)'),
         describe: (v) => `${v.title} — ${formatMb(v.row.totalMb)}`,
         run: async (items) => {
           const built = buildTableExport(toExportTable(items), 'csv')
@@ -161,14 +163,14 @@ export function SessionMemoryPanel({
             if (result.canceled) return { succeeded: [], failed: [] }
             return {
               succeeded: [],
-              failed: items.map((item) => ({ item, reason: result.error ?? 'Save failed.' }))
+              failed: items.map((item) => ({ item, reason: result.error ?? vocab('Save failed.') }))
             }
           }
           return { succeeded: items, failed: [] }
         }
       }
     ],
-    []
+    [vocab]
   )
 
   // The sweep runs on OPEN (the panel is unmounted while closed) and on ⟳ — never on a timer, and
@@ -194,23 +196,23 @@ export function SessionMemoryPanel({
   if (relay) {
     body = (
       <div className="sessmem-panel__note md3-sessmem-note">
-        Session memory is not available on a relay tab — these sessions run on the other machine.
+        {vocab('Session memory is not available on a relay tab — these sessions run on the other machine.')}
       </div>
     )
   } else if (!ok) {
     // Rendering an empty list here would report "nothing is using memory" at exactly the moment we
     // failed to measure it.
-    body = <div className="sessmem-panel__note md3-sessmem-note">Could not measure sessions on this machine.</div>
+    body = <div className="sessmem-panel__note md3-sessmem-note">{vocab('Could not measure sessions on this machine.')}</div>
   } else if (!measured) {
-    body = <div className="sessmem-panel__note md3-sessmem-note">Measuring…</div>
+    body = <div className="sessmem-panel__note md3-sessmem-note">{vocab('Measuring…')}</div>
   } else if (views.length === 0) {
     // We looked, and there really is nothing — a different sentence from the two above.
-    body = <div className="sessmem-panel__note md3-sessmem-note">No sessions are running here.</div>
+    body = <div className="sessmem-panel__note md3-sessmem-note">{vocab('No sessions are running here.')}</div>
   } else {
     body = (
       <>
         <div className="sessmem-panel__export md3-sessmem-export">
-          <ExportMenu kind="tabular" label="session memory" build={(format) => buildTableExport(toExportTable(views), format)} />
+          <ExportMenu kind="tabular" label={vocab('session memory')} build={(format) => buildTableExport(toExportTable(views), format)} />
         </div>
         <BulkActionBar<SessionMemoryView>
           visible={views}
@@ -222,8 +224,8 @@ export function SessionMemoryPanel({
           actions={bulkActions}
           onActionComplete={(_id, result) => {
             const parts: string[] = []
-            if (result.succeeded.length > 0) parts.push(`${result.succeeded.length} exported`)
-            if (result.failed.length > 0) parts.push(`${result.failed.length} failed`)
+            if (result.succeeded.length > 0) parts.push(`${result.succeeded.length} ${vocab('exported')}`)
+            if (result.failed.length > 0) parts.push(`${result.failed.length} ${vocab('failed')}`)
             setExportResult(parts.length > 0 ? parts.join(', ') : null)
             if (parts.length > 0) setTimeout(() => setExportResult(null), 6000)
           }}
@@ -240,7 +242,7 @@ export function SessionMemoryPanel({
             <Checkbox
               className="sessmem-row__select md3-sessmem-row__select"
               checked={isSelected(selection, v.row.nodeId)}
-              aria-label={`Select ${v.title}`}
+              aria-label={`${vocab('Select')} ${v.title}`}
               onClick={(e) => {
                 if (e.shiftKey) {
                   setSelection((s) => selectRange(s, v.row.nodeId, visibleIds))
@@ -262,12 +264,12 @@ export function SessionMemoryPanel({
                 onGoToNode(v.row.nodeId)
                 onClose()
               }}
-              title={v.orphan ? 'No node on any canvas' : `Go to ${v.title}`}
+              title={v.orphan ? vocab('No node on any canvas') : `${vocab('Go to')} ${v.title}`}
             >
               <StatusDot state={v.state} hollow={v.orphan} />
               <span className="sessmem-row__title md3-sessmem-row__title">{v.title}</span>
               {v.orphan ? (
-                <span className="sessmem-row__orphan md3-sessmem-chip">no node</span>
+                <span className="sessmem-row__orphan md3-sessmem-chip">{vocab('no node')}</span>
               ) : (
                 v.projectId !== activeProjectId && (
                   <span className="sessmem-row__project md3-sessmem-chip">{v.projectName}</span>
@@ -278,8 +280,8 @@ export function SessionMemoryPanel({
             </button>
             <button
               className="sessmem-row__kill md3-sessmem-row__kill"
-              title="End this session"
-              aria-label={`End ${v.title}`}
+              title={vocab('End this session')}
+              aria-label={`${vocab('End')} ${v.title}`}
               onClick={() => onKillSession(v.row.nodeId, v.orphan)}
             >
               ×
@@ -289,7 +291,7 @@ export function SessionMemoryPanel({
               // is the agent CLI itself plus everything it spawned. A claude session with two MCP
               // servers reads as 3, and a plain `npm run dev` has children too.
               <div className="sessmem-row__kids md3-sessmem-row__kids">
-                └ +{v.row.childCount} child processes <span>{formatMb(v.row.childrenMb)}</span>
+                └ +{v.row.childCount} {vocab('child processes')} <span>{formatMb(v.row.childrenMb)}</span>
               </div>
             )}
           </li>
@@ -300,12 +302,12 @@ export function SessionMemoryPanel({
   }
 
   return (
-    <div className="sessmem-panel md3-sessmem-panel" id="sessmem-panel" role="region" aria-label="Session memory">
+    <div className="sessmem-panel md3-sessmem-panel" id="sessmem-panel" role="region" aria-label={vocab('Session memory')}>
       <div className="sessmem-panel__head md3-sessmem-head">
-        <span className="sessmem-panel__title md3-sessmem-title">Session memory</span>
+        <span className="sessmem-panel__title md3-sessmem-title">{vocab('Session memory')}</span>
         {/* Which machine these numbers describe. The SSH panel is visually identical to the local
             one, so the scope has to be written down. */}
-        <span className="sessmem-panel__scope md3-sessmem-scope">{scopeKey || 'This machine'}</span>
+        <span className="sessmem-panel__scope md3-sessmem-scope">{scopeKey || vocab('This machine')}</span>
         {/* No total unless we measured one: a grand total of `0 MB` beside a failure is the exact
             conflation this panel exists to end. */}
         {measured && <span className="sessmem-panel__total md3-sessmem-total">{formatMb(totalMb(views))}</span>}
@@ -320,20 +322,19 @@ export function SessionMemoryPanel({
           built to correct. One line, no figures: the measurements vary per machine and per model,
           and quoting one here would age into a lie (docs/session-memory.md §1 has them). */}
       <div className="sessmem-panel__attrib md3-sessmem-attrib">
-        Memory held by each session's own processes — the agent CLI and what it spawned, not
-        nodeterm itself.
+        {vocab("Memory held by each session's own processes — the agent CLI and what it spawned, not nodeterm itself.")}
       </div>
 
       <div className="sessmem-panel__foot md3-sessmem-foot">
         <span className="sessmem-panel__count md3-sessmem-count">
-          {measured ? `${views.length} session${views.length === 1 ? '' : 's'}` : ''}
+          {measured ? `${views.length} ${vocab(views.length === 1 ? 'session' : 'sessions')}` : ''}
         </span>
         {/* A relay tab has nothing to retry — the answer is a stub, not a failure. */}
         {!relay && (
           <button
             className={`sessmem-panel__refresh md3-sessmem-refresh${loading ? ' spin' : ''}`}
-            title="Re-measure"
-            aria-label="Re-measure"
+            title={vocab('Re-measure')}
+            aria-label={vocab('Re-measure')}
             disabled={loading}
             onClick={sweep}
           >

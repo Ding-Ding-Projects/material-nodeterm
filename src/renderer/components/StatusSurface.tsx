@@ -25,6 +25,7 @@ import captureManifestRaw from '../../../docs/assets/shots/capture-manifest.json
 import packageJsonRaw from '../../../package.json?raw'
 import { AnchoredRegexBuilder } from './regex/AnchoredRegexBuilder'
 import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import {
   GATE_STATE_META,
   GATE_STATE_ORDER,
@@ -33,7 +34,8 @@ import {
   shortCommit,
   stateCounts,
   type GateState,
-  type StatusGateCard
+  type StatusGateCard,
+  type StatusSummaryPart
 } from '../../shared/project-status'
 
 function readVersion(raw: string): string | null {
@@ -48,6 +50,26 @@ function readVersion(raw: string): string | null {
 /** How often the "viewing at" heartbeat and the relative ages refresh in place. */
 const HEARTBEAT_MS = 30_000
 
+export function statusSummaryParts(card: StatusGateCard): readonly StatusSummaryPart[] {
+  return card.summaryParts ?? [{ kind: 'factual', text: card.summary }]
+}
+
+export function renderStatusSummary(card: StatusGateCard, vocab: (text: string) => string): string {
+  return statusSummaryParts(card)
+    .map((part) => (part.kind === 'authored' ? vocab(part.text) : part.text))
+    .join('')
+}
+
+export function statusSearchCorpus(card: StatusGateCard, meta: { label: string }, vocab: (text: string) => string): string {
+  return [
+    vocab(card.title),
+    renderStatusSummary(card, vocab),
+    vocab(meta.label),
+    ...card.evidence.flatMap((e) => [vocab(e.label), e.value]),
+    ...card.rows.flatMap((row) => [row.labelOwnership === 'authored' ? vocab(row.label) : row.label, row.note])
+  ].join(' ')
+}
+
 function StatusCard({
   card,
   open,
@@ -60,18 +82,19 @@ function StatusCard({
   onToggle: () => void
 }): JSX.Element {
   const meta = GATE_STATE_META[card.state]
+  const vocab = useVocabularyMapper()
   const detailCount = card.evidence.length + card.rows.length
   return (
-    <section className={`status-card status-card--${card.state}`} aria-label={`${card.title}: ${meta.label}`}>
+    <section className={`status-card status-card--${card.state}`} aria-label={`${vocab(card.title)}: ${vocab(meta.label)}`}>
       <div className="status-card__head">
         <span className="status-card__emoji" aria-hidden="true">
           {meta.emoji}
         </span>
         <div className="status-card__titles">
-          <h3 className="status-card__title">{card.title}</h3>
+          <h3 className="status-card__title">{vocab(card.title)}</h3>
           <div className="status-card__stateline">
-            <span className={`status-chip status-chip--${card.state}`}>{meta.label}</span>
-            <span className="status-card__age">evidence: {describeRecordedAt(card.recordedAt, nowMs)}</span>
+            <span className={`status-chip status-chip--${card.state}`}>{vocab(meta.label)}</span>
+            <span className="status-card__age">{vocab('evidence')}: {describeRecordedAt(card.recordedAt, nowMs)}</span>
           </div>
         </div>
         <button
@@ -81,16 +104,16 @@ function StatusCard({
           aria-controls={`status-evidence-${card.id}`}
           onClick={onToggle}
         >
-          {open ? 'Hide evidence' : `Evidence (${detailCount})`}
+          {open ? vocab('Hide evidence') : `${vocab('Evidence')} (${detailCount})`}
         </button>
       </div>
-      <p className="status-card__summary">{card.summary}</p>
+      <p className="status-card__summary">{renderStatusSummary(card, vocab)}</p>
       {open && (
         <div id={`status-evidence-${card.id}`} className="status-card__detail">
           <dl className="status-card__facts">
             {card.evidence.map((e, i) => (
               <div className="status-card__fact" key={`${e.label}-${i}`}>
-                <dt>{e.label}</dt>
+                <dt>{vocab(e.label)}</dt>
                 <dd>
                   {e.href ? (
                     <a href={e.href} target="_blank" rel="noreferrer">
@@ -108,7 +131,7 @@ function StatusCard({
               {card.rows.map((r) => (
                 <li key={r.id} className={`status-row status-row--${r.state}`}>
                   <span aria-hidden="true">{GATE_STATE_META[r.state].emoji}</span>
-                  <span className="status-row__label">{r.label}</span>
+                  <span className="status-row__label">{r.labelOwnership === 'authored' ? vocab(r.label) : r.label}</span>
                   <span className="status-row__note">{r.note}</span>
                 </li>
               ))}
@@ -121,6 +144,7 @@ function StatusCard({
 }
 
 export function StatusSurface(): JSX.Element {
+  const vocab = useVocabularyMapper()
   // Bundled, committed evidence — computed once; nothing here changes while the app runs.
   const model = useMemo(
     () =>
@@ -158,7 +182,7 @@ export function StatusSurface(): JSX.Element {
   const visible = ordered.filter(
     (c) =>
       (stateFilter === 'all' || c.state === stateFilter) &&
-      search.test(`${c.title} ${c.summary}`)
+      search.test(statusSearchCorpus(c, GATE_STATE_META[c.state], vocab))
   )
 
   const toggleCard = (id: string) =>
@@ -175,34 +199,32 @@ export function StatusSurface(): JSX.Element {
     <div className="md3-status-screen" data-screen-label="Status">
       <div className="md3-status-screen__head">
         <div className="md3-status-screen__heading">
-          <h2 className="md3-status-screen__title">Status</h2>
+          <h2 className="md3-status-screen__title">{vocab('Status')}</h2>
           <div className="md3-status-screen__subtitle">
-            What this build can prove about its own gates — recorded evidence only, bundled at
-            build time. A check that has not run is unrun, not passed.
+            {vocab('What this build can prove about its own gates — recorded evidence only, bundled at build time. A check that has not run is unrun, not passed.')}
           </div>
         </div>
         <dl className="md3-status-screen__baseline">
           <div>
-            <dt>Verified baseline</dt>
+            <dt>{vocab('Verified baseline')}</dt>
             <dd>
               {model.baselineCommit
-                ? `capture commit ${shortCommit(model.baselineCommit)}`
-                : 'no capture baseline recorded'}
+                ? `${vocab('capture commit')} ${shortCommit(model.baselineCommit)}`
+                : vocab('no capture baseline recorded')}
             </dd>
           </div>
           <div>
-            <dt>Version in this tree</dt>
-            <dd>{version ?? 'unreadable'}</dd>
+            <dt>{vocab('Version in this tree')}</dt>
+            <dd>{version ?? vocab('unreadable')}</dd>
           </div>
           <div>
-            <dt>Freshest recorded evidence</dt>
+            <dt>{vocab('Freshest recorded evidence')}</dt>
             <dd>{describeRecordedAt(model.newestRecordedAt, nowMs)}</dd>
           </div>
           <div>
-            <dt>Viewing at</dt>
+            <dt>{vocab('Viewing at')}</dt>
             <dd>
-              {new Date(nowMs).toLocaleTimeString()} — ages refresh in place; the evidence itself
-              is whatever the repository recorded
+              {new Date(nowMs).toLocaleTimeString()} — {vocab('ages refresh in place; the evidence itself is whatever the repository recorded')}
             </dd>
           </div>
         </dl>
@@ -214,27 +236,27 @@ export function StatusSurface(): JSX.Element {
             ref={searchInputRef}
             type="text"
             className="md3-status-search__input"
-            placeholder={search.mode === 'regex' ? 'Filter gates (regex)…' : 'Filter gates…'}
+            placeholder={search.mode === 'regex' ? vocab('Filter gates (regex)…') : vocab('Filter gates…')}
             value={search.value}
             spellCheck={false}
             onChange={(e) => search.setValue(e.target.value)}
-            aria-label="Filter status gates"
+            aria-label={vocab('Filter status checks')}
           />
-          <AnchoredRegexBuilder search={search} fieldRef={searchInputRef} label="Regex — status gate filter" />
+          <AnchoredRegexBuilder search={search} fieldRef={searchInputRef} label={vocab('Regex — status gate filter')} />
         </div>
         {search.error && (
           <div className="md3-status-screen__search-error" role="alert">
             {search.error}
           </div>
         )}
-        <div className="md3-status-filters" role="group" aria-label="Filter gates by state">
+        <div className="md3-status-filters" role="group" aria-label={vocab('Filter status checks by state')}>
           <button
             type="button"
             className={`status-filter-chip${stateFilter === 'all' ? ' status-filter-chip--on' : ''}`}
             aria-pressed={stateFilter === 'all'}
             onClick={() => setStateFilter('all')}
           >
-            All ({model.cards.length})
+            {vocab('All')} ({model.cards.length})
           </button>
           {GATE_STATE_ORDER.map((s) => (
             <button
@@ -243,10 +265,10 @@ export function StatusSurface(): JSX.Element {
               className={`status-filter-chip${stateFilter === s ? ' status-filter-chip--on' : ''}`}
               aria-pressed={stateFilter === s}
               disabled={counts[s] === 0}
-              title={counts[s] === 0 ? 'No gate is in this state right now' : undefined}
+               title={counts[s] === 0 ? vocab('No gate is in this state right now') : undefined}
               onClick={() => setStateFilter(s)}
             >
-              <span aria-hidden="true">{GATE_STATE_META[s].emoji}</span> {GATE_STATE_META[s].label} ({counts[s]})
+               <span aria-hidden="true">{GATE_STATE_META[s].emoji}</span> {vocab(GATE_STATE_META[s].label)} ({counts[s]})
             </button>
           ))}
         </div>
@@ -255,9 +277,9 @@ export function StatusSurface(): JSX.Element {
       <div className="md3-status-screen__body">
         {visible.length === 0 ? (
           <p className="md3-status-screen__empty">
-            No gate matches the current filter
-            {stateFilter !== 'all' ? ` (state: ${GATE_STATE_META[stateFilter].label})` : ''}
-            {search.active ? ' and search' : ''}. Clearing them shows all {model.cards.length} gates.
+             {vocab('No gate matches the current filter')}
+             {stateFilter !== 'all' ? ` (${vocab('state')}: ${vocab(GATE_STATE_META[stateFilter].label)})` : ''}
+             {search.active ? ` ${vocab('and search')}` : ''}. {vocab('Clearing them shows all')} {model.cards.length} {vocab('gates')}.
           </p>
         ) : (
           <div className="md3-status-grid">

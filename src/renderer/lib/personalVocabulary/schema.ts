@@ -6,7 +6,7 @@ import { scanJson } from './jsonScan'
  *
  * Shape:
  *   {
- *     "version": 1,            // or "schemaVersion": 1 — both spellings are accepted
+ *     "version": 1,
  *     "entries": { "<term the app would otherwise show>": "<replacement text>", ... }
  *   }
  *
@@ -14,19 +14,11 @@ import { scanJson } from './jsonScan'
  * boundary (`applyVocabulary`) is a literal text replacement, so a nested or non-string value
  * would have no defined meaning there.
  *
- * TWO ALTERNATIVE PAYLOADS are also accepted, because a real dictionary is maintained in more
- * than one file and a loader that only reads the one shape it was written against is a loader
- * that rejects the user's actual data:
+ * Only the versioned entries payload is accepted. Documentation exports and alternate shapes are
+ * rejected instead of being partially interpreted:
  *
- *   { "terms": [ { "replaces": "<ordinary word>", "alias": "<what to show instead>" }, ... ] }
- *   { "requiredPhrases": [ ... ] }     // carries no term→replacement pairs; accepted, applies none
- *
- * VERSION HANDLING. A version that is PRESENT must be exactly VOCAB_SCHEMA_VERSION — a future or
- * older format is still refused rather than guessed at. A version that is ABSENT is accepted and
- * the payload identified by shape. That is a deliberate relaxation of the original
- * reject-if-missing rule: files that predate the field are otherwise unreadable forever, and the
- * shape check below is what actually establishes the data is meaningful. Every bound, the
- * string-only rule and the prototype-pollution refusal are unchanged and still apply to all three.
+ * VERSION HANDLING. A version must be present and exactly VOCAB_SCHEMA_VERSION. Future, older,
+ * and missing versions are refused rather than guessed at.
  */
 export const VOCAB_SCHEMA_VERSION = 1
 /** Hard file-size ceiling, checked on the raw bytes before any parsing. */
@@ -74,33 +66,8 @@ function byteLength(text: string): number {
  * real pairs, and failing the whole upload over one of those would make the user's actual file
  * unusable. Every bound and refusal that applies to `entries` applies identically here.
  */
-function entriesFromTerms(terms: unknown[]): VocabValidationResult {
-  if (terms.length > VOCAB_MAX_ENTRIES) {
-    return { ok: false, error: `more than ${VOCAB_MAX_ENTRIES} terms (${terms.length})` }
-  }
-  const entries = Object.create(null) as PersonalVocabularyEntries
-  let count = 0
-  for (const row of terms) {
-    if (row === null || typeof row !== 'object' || Array.isArray(row)) continue
-    const rowObj = row as Record<string, unknown>
-    const replaces = Object.hasOwn(rowObj, 'replaces') ? rowObj.replaces : undefined
-    const alias = Object.hasOwn(rowObj, 'alias') ? rowObj.alias : undefined
-    if (typeof replaces !== 'string' || typeof alias !== 'string') continue
-    if (replaces.length === 0 || alias.length === 0) continue
-    if (UNSAFE_KEYS.has(replaces)) {
-      return { ok: false, error: `"${replaces}" is not an allowed key` }
-    }
-    // Over-long rows are skipped for the same reason malformed ones are: a dictionary export
-    // carries prose rows (a sentence in `replaces`, a whole explanation in `alias`) beside the
-    // real pairs, and failing the upload over one of those makes the user's file unusable while
-    // telling them nothing they can act on. The bound still holds — such a row is never applied.
-    if (replaces.length > VOCAB_MAX_KEY_LENGTH) continue
-    if (alias.length > VOCAB_MAX_VALUE_LENGTH) continue
-    entries[replaces] = alias
-    count += 1
-  }
-  return { ok: true, entries, entryCount: count }
-}
+// Alternate payloads are intentionally unsupported; the strict validator below is the only
+// entry point so malformed rows can never be silently skipped.
 
 /**
  * Validate the COMPLETE payload before anything derived from it is displayed or cached. Never
@@ -131,59 +98,31 @@ export function validateVocabularyValue(root: unknown): VocabValidationResult {
     if (UNSAFE_KEYS.has(key)) return { ok: false, error: `top-level key "${key}" is not allowed` }
   }
 
-  // Accept either spelling of the version field. Present ⇒ must match; absent ⇒ identified by
-  // shape below (see the header note on why missing is no longer fatal). These are deliberately
-  // own-property reads: inherited values are not part of the uploaded JSON contract.
-  const declaredVersions = [
-    ...(Object.hasOwn(rootObj, 'version') ? [rootObj.version] : []),
-    ...(Object.hasOwn(rootObj, 'schemaVersion') ? [rootObj.schemaVersion] : [])
-  ]
-  const unsupportedVersion = declaredVersions.find(
-    (value) => value !== undefined && value !== VOCAB_SCHEMA_VERSION
-  )
-  if (unsupportedVersion !== undefined) {
-    return {
-      ok: false,
-      error: `unsupported schema version ${JSON.stringify(unsupportedVersion)} (expected ${VOCAB_SCHEMA_VERSION}; a future/older format is rejected rather than guessed at)`
-    }
+  // Accept exactly one versioned upload shape. Companion documents and terms lists are not
+  // substitution files, and silently skipping malformed rows makes a rejected upload look
+  // partially successful.
+  if (!Object.hasOwn(rootObj, 'version') || rootObj.version !== VOCAB_SCHEMA_VERSION) {
+    return { ok: false, error: 'unsupported or missing schema version (expected exactly ' + VOCAB_SCHEMA_VERSION + ')' }
   }
-
-  const hasEntries = Object.hasOwn(rootObj, 'entries')
-  // `terms` list form: [{ replaces, alias }] → { replaces: alias }. A row missing either string
-  // is skipped rather than failing the file: these exports carry documentation-only rows too.
-  if (!hasEntries && Object.hasOwn(rootObj, 'terms') && Array.isArray(rootObj.terms)) {
-    return entriesFromTerms(rootObj.terms)
+  const unknownUploadFields = Object.keys(rootObj).filter((key) => key !== 'version' && key !== 'entries')
+  if (unknownUploadFields.length > 0) {
+    return { ok: false, error: 'unknown top-level field "' + unknownUploadFields[0] + '"' }
   }
-
-  // Two companion documents carry no term→replacement pairs at all: a required-phrases file
-  // (an object OR a list, depending on which generation wrote it) and the folder's own JSON
-  // Schema. Both are valid files with nothing to substitute, so accepting them with zero
-  // entries is the honest answer — reporting an error would say the file is broken when it is
-  // simply not a substitution table.
-  const hasPhrases =
-    Object.hasOwn(rootObj, 'requiredPhrases') &&
-    rootObj.requiredPhrases !== null &&
-    rootObj.requiredPhrases !== undefined
-  const isJsonSchemaDoc =
-    Object.hasOwn(rootObj, '$schema') &&
-    typeof rootObj.$schema === 'string' &&
-    Object.hasOwn(rootObj, 'properties') &&
-    rootObj.properties !== undefined
-  if (!hasEntries && (hasPhrases || isJsonSchemaDoc)) {
-    return { ok: true, entries: {}, entryCount: 0 }
+  if (!Object.hasOwn(rootObj, 'entries')) {
+    return { ok: false, error: 'missing "entries" (term → replacement)' }
   }
-
+  const hasEntries = true
   if (!hasEntries) {
     return {
       ok: false,
-      error: 'no usable vocabulary found — expected "entries" (term → replacement), a "terms" list, or "requiredPhrases"'
+      error: 'no usable vocabulary found — expected "entries" (term → replacement)'
     }
   }
   const entriesRaw = rootObj.entries
   if (entriesRaw === null || typeof entriesRaw !== 'object' || Array.isArray(entriesRaw)) {
     return {
       ok: false,
-      error: 'no usable vocabulary found — expected "entries" (term → replacement), a "terms" list, or "requiredPhrases"'
+      error: 'no usable vocabulary found — expected "entries" (term → replacement)'
     }
   }
   const entriesObj = entriesRaw as Record<string, unknown>
