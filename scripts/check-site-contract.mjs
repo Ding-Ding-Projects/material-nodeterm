@@ -416,11 +416,11 @@ const SITE_RENDER_STRING_OWNERSHIP = [
   ['toast-close', 'Close this message', 'authored', 'function renderToasts'],
   ['hall-brand', 'nodeterm school', 'fact', 'function renderHall'],
   ['hall-jump-command', 'Jump', 'fact', 'function renderHall'],
-  ['hall-download-command', 'Get nodeterm', 'fact', 'function renderHall'],
-  ['hall-download-command-2', 'Download nodeterm', 'fact', 'function renderHall'],
-  ['hall-brew-command', 'brew install --cask nodeterm', 'fact', 'function renderHall'],
+  ['hall-download-command', 'Get nodeterm for Windows', 'fact', 'function renderHall'],
+  ['hall-download-command-2', 'Download for Windows', 'fact', 'function renderHall'],
+  ['hall-installer-fact', 'Windows x64 · unsigned Squirrel installer', 'fact', 'function renderHall'],
   ['room-brand', 'nodeterm', 'fact', 'function renderRoom'],
-  ['room-version', 'v0.3.0', 'fact', 'function renderRoom'],
+  ['room-version', 'v0.4.120', 'fact', 'function renderRoom'],
   ['room-license', 'BUSL-1.1 licensed · fork of', 'fact', 'function renderRoom'],
   ['room-upstream-brand', 'eneskirca/nodeterm', 'fact', 'function renderRoom'],
   ['room-forge-brand', 'GitHub', 'fact', 'function renderRoom'],
@@ -432,7 +432,7 @@ const SITE_RENDER_STRING_OWNERSHIP = [
   ['room-repository-url', 'REPO_URL', 'fact', 'function renderRoom'],
   ['room-upstream-url', 'UPSTREAM_URL', 'fact', 'function renderRoom'],
 ]
-const CANONICAL_SITE_RENDER_STRING_IDS = `hall-top-bar hall-menu-button hall-day-night hall-message-box hall-hello hall-pick-door hall-empty-prefix hall-empty-suffix hall-peek-code room-top-bar room-rail room-day-night room-message-box room-nav-items room-changelog room-help list-from-date list-and list-to-date settings-lock-copy settings-unlock settings-open regex-groups regex-builder-label regex-pattern regex-flags regex-sample palette-label palette-placeholder palette-search palette-regex confirm-question confirm-type confirm-unlock confirm-word-label confirm-keep confirm-yes confirm-first toast-close hall-brand hall-jump-command hall-download-command hall-download-command-2 hall-brew-command room-brand room-version room-license room-upstream-brand room-forge-brand room-legal-notice hall-jump-tooltip room-jump-tooltip hall-releases-url hall-repository-url room-repository-url room-upstream-url`.split(/\s+/)
+const CANONICAL_SITE_RENDER_STRING_IDS = `hall-top-bar hall-menu-button hall-day-night hall-message-box hall-hello hall-pick-door hall-empty-prefix hall-empty-suffix hall-peek-code room-top-bar room-rail room-day-night room-message-box room-nav-items room-changelog room-help list-from-date list-and list-to-date settings-lock-copy settings-unlock settings-open regex-groups regex-builder-label regex-pattern regex-flags regex-sample palette-label palette-placeholder palette-search palette-regex confirm-question confirm-type confirm-unlock confirm-word-label confirm-keep confirm-yes confirm-first toast-close hall-brand hall-jump-command hall-download-command hall-download-command-2 hall-installer-fact room-brand room-version room-license room-upstream-brand room-forge-brand room-legal-notice hall-jump-tooltip room-jump-tooltip hall-releases-url hall-repository-url room-repository-url room-upstream-url`.split(/\s+/)
 
 for (const feature of FEATURES) {
   const fileOk = requireFileExists(feature.file, feature.label)
@@ -565,19 +565,19 @@ requireFileExists('site/content/changelog.json', 'Generated changelog content')
       const current = json.currentRelease
       if (
         !current ||
-        current.version !== '0.4.117' ||
+        current.version !== '0.4.120' ||
         current.date !== '2026-08-26' ||
-        current.commit !== '727287b8eddd5c30f98306ea442a2584945668d0' ||
+        current.commit !== 'c682073037fe7b7e34d19568ced6e3d3a9037e22' ||
         current.published !== true ||
         !Array.isArray(current.assets) ||
         current.assets.length !== 3 ||
-        !current.assets.includes('nodeterm-Setup-0.4.117.exe') ||
+        !current.assets.includes('nodeterm-Setup-0.4.120.exe') ||
         !current.assets.includes('RELEASES') ||
-        !current.assets.includes('node-terminal-0.4.117-full.nupkg')
+        !current.assets.includes('node-terminal-0.4.120-full.nupkg')
       ) {
-        fail('site/content/changelog.json: currentRelease must describe the verified v0.4.117 stable release and its three published assets')
+        fail('site/content/changelog.json: currentRelease must describe the verified v0.4.120 stable release and its three published assets')
       } else {
-        pass('site/content/changelog.json: verified v0.4.117 currentRelease overlay is complete')
+        pass('site/content/changelog.json: verified v0.4.120 currentRelease overlay is complete')
       }
     } catch (err) {
       fail(`site/content/changelog.json: invalid JSON (${err.message})`)
@@ -657,7 +657,7 @@ if (cdnHits.length > 0) {
   for (const file of ALL_SITE_FILES) {
     const rel = relative(REPO_ROOT, file)
     if (rel.endsWith('shared/data.js') || rel.endsWith('shared\\data.js')) continue // UPSTREAM_URL's own definition
-    if (rel.endsWith('changelog.json')) continue // real project history may name eneskirca's Homebrew tap as a historical fact, not a link
+    if (rel.endsWith('changelog.json')) continue // the generated history is checked through its dedicated schema and release assertions
     const text = readFileSync(file, 'utf8')
     const matches = text.match(/eneskirca\/nodeterm/g)
     if (matches) {
@@ -934,9 +934,6 @@ function copyCallArguments(source, name) {
 function hasOwnedRenderString(body, text, owner) {
   if (!body || !body.includes(text)) return false
   const calls = [...copyCallArguments(body, 'copy'), ...copyCallArguments(body, 'copyAttr')]
-  const copied = calls.some((args) => args.includes(text))
-  if (owner === 'fact') return !copied
-  return copied
   const facts = [...copyCallArguments(body, 'fact'), ...copyCallArguments(body, 'factAttr')]
   const hasExactArgument = (args) => {
     const quoted = [`'${text}'`, `"${text}"`, `\`${text}\``]
