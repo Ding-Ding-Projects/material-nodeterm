@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add typed Cloudflare Access, Zero Trust, Workers, Pages, R2, D1, and Queues managers. The canvas
+  node uses guided pickers, local protected credentials, portable neutral intent, fixed API routes,
+  bounded responses, progress and cancellation, anchored regex builders for each search, and the
+  existing two-key destructive confirmation. This ultra-speed lane intentionally ran no tests, type
+  checks, lint, builds, packaging, reviews, security or accessibility checks, installer execution,
+  runtime interaction, or UI captures.
+
 - Complete the Express File Converter flow with queue-wide collision-safe destination names,
   visible rename disclosure, final atomic no-clobber publication, and a completed-output action that
   opens the exact result in Visual Studio Code through the active project API. The converter queue

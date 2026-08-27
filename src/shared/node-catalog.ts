@@ -430,6 +430,18 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
     availability: alwaysAvailable
   },
   {
+    id: 'service:cloudflare-zero-trust',
+    nodeKind: 'cloudflare-zero-trust',
+    category: 'managers',
+    label: 'Cloudflare managers',
+    description: 'Open typed Access, Zero Trust, Workers, Pages, R2, D1 and Queues managers.',
+    keywords: ['service', 'cloudflare', 'access', 'zero trust', 'workers', 'pages', 'r2', 'd1', 'queues'],
+    documentationPath: 'docs/features/integrations/cloudflare-zero-trust-managers.md',
+    safeDefaults: { serviceLabel: '' },
+    dependencies: ['cloudflare-api'],
+    availability: alwaysAvailable
+  },
+  {
     id: 'editor',
     nodeKind: 'editor',
     category: 'files',
@@ -567,6 +579,7 @@ export const NODE_CATALOG_COMPLETENESS: readonly NodeCatalogCompletenessRecord[]
   { id: 'service:gitlab', state: 'current', scope: 'any', reason: 'service manager node' },
   { id: 'service:homeassistant', state: 'current', scope: 'any', reason: 'service manager node' },
   { id: 'service:freepbx', state: 'current', scope: 'any', reason: 'service manager node' },
+  { id: 'service:cloudflare-zero-trust', state: 'current', scope: 'any', reason: 'typed Cloudflare manager node' },
   { id: 'subagent', state: 'ephemeral', scope: 'none', reason: 'hook-derived render-only card' },
   { id: 'loop-card', state: 'ephemeral', scope: 'none', reason: 'schedule-derived render-only card' },
   { id: 'photo', state: 'planned', scope: 'any', reason: 'photo adapter not implemented' },

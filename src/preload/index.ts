@@ -38,6 +38,7 @@ import type { VirtualMachineEvent } from '../shared/virtual-machine'
 import type { CalendarProvider } from '../shared/calendar'
 import type { HomeAssistantClientEvent } from '../shared/home-assistant'
 import type { ProjectConsentRequest, ProjectSetupEvent } from '../shared/project-settings'
+import type { CloudflareApi, CloudflareCatalog, CloudflareExecutionProgress, CloudflareExecutionResult } from '../shared/cloudflare-zero-trust'
 
 // Fan a single ipcRenderer listener per channel out to many renderer subscribers. Without
 // this, every node that subscribes (e.g. Cmd+M markdown toggle on each terminal/editor) adds
@@ -92,6 +93,7 @@ const subscribeNodeDependencyProgress = subscribe<[NodeDependencyProgress]>(IPC.
 const subscribeTorrentTask = subscribe<[TorrentTaskState]>(IPC.torrentTask)
 const subscribeVirtualMachineEvent = subscribe<[VirtualMachineEvent]>(IPC.virtualMachineEvent)
 const subscribeHomeAssistantEvent = subscribe<[HomeAssistantClientEvent]>(IPC.homeAssistantEvent)
+const subscribeCloudflareProgress = subscribe<[CloudflareExecutionProgress & { nodeId: string }]>(IPC.cloudflareProgress)
 const subscribeWidgetState = subscribe<[CanvasWidgetLiveState]>(IPC.widgetStateChanged)
 
 const subscribeRelayPeerPending = subscribe<[RelayPeerPending]>(IPC.relayHostPeerPending)
@@ -208,6 +210,21 @@ const api: NodeTerminalApi = {
     completeOAuth: (callbackUrl: string) => ipcRenderer.invoke(IPC.providerCompleteOAuth, callbackUrl),
     removeAccount: (accountId: string) => ipcRenderer.invoke(IPC.providerRemoveAccount, accountId)
   },
+  cloudflareZeroTrust: {
+    catalog: () => ipcRenderer.invoke(IPC.cloudflareCatalog) as Promise<CloudflareCatalog>,
+    accounts: () => ipcRenderer.invoke(IPC.cloudflareAccounts),
+    configure: (input) => ipcRenderer.invoke(IPC.cloudflareConfigure, input),
+    removeAccount: (id) => ipcRenderer.invoke(IPC.cloudflareRemoveAccount, id),
+    binding: (nodeId) => ipcRenderer.invoke(IPC.cloudflareBinding, nodeId),
+    saveBinding: (nodeId, binding) => ipcRenderer.invoke(IPC.cloudflareSaveBinding, nodeId, binding),
+    resources: (nodeId, manager) => ipcRenderer.invoke(IPC.cloudflareResources, nodeId, manager),
+    execute: (nodeId, request, onProgress) => {
+      const unsubscribe = subscribeCloudflareProgress((progress) => { if (progress.nodeId === nodeId) onProgress(progress) })
+      return (ipcRenderer.invoke(IPC.cloudflareExecute, nodeId, request) as Promise<CloudflareExecutionResult>).finally(unsubscribe)
+    },
+    cancel: (nodeId) => ipcRenderer.invoke(IPC.cloudflareCancel, nodeId),
+    onProgress: (listener) => subscribeCloudflareProgress(listener)
+  } satisfies CloudflareApi,
   workspace: {
     load: () => ipcRenderer.invoke(IPC.workspaceLoad),
     save: (workspace: Workspace) => ipcRenderer.invoke(IPC.workspaceSave, workspace),

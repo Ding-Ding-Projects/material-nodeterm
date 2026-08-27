@@ -671,6 +671,18 @@ export function buildStubApi(): Omit<
       onState: noopUnsub,
       onProgress: noopUnsub
     },
+    cloudflareZeroTrust: {
+      catalog: U('cloudflareZeroTrust.catalog'),
+      accounts: U('cloudflareZeroTrust.accounts'),
+      configure: U('cloudflareZeroTrust.configure'),
+      removeAccount: U('cloudflareZeroTrust.removeAccount'),
+      binding: U('cloudflareZeroTrust.binding'),
+      saveBinding: U('cloudflareZeroTrust.saveBinding'),
+      resources: U('cloudflareZeroTrust.resources'),
+      execute: U('cloudflareZeroTrust.execute'),
+      cancel: U('cloudflareZeroTrust.cancel'),
+      onProgress: noopUnsub
+    },
     ollama: {
       status: U('ollama.status'),
       models: U('ollama.models'),
