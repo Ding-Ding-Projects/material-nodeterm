@@ -9,7 +9,7 @@ does more than it says.
 ## The six kinds, and why one is called a manager and not a host
 
 Six new node kinds join the canvas's `NodeKind` union
-(`src/shared/types.ts` `SERVICE_NODE_KINDS`): `minecraft`, `dockerhost`, `proxmox`, `gitlab`,
+(`src/shared/types.ts` `SERVICE_NODE_KINDS`): `minecraft`, `dockerhost`, `cloudformation`, `proxmox`, `gitlab`,
 `homeassistant`, `freepbx`. Each is rendered by the **same** component,
 `src/renderer/nodes/ServiceNode.tsx` — one component with six callers, because the only thing that
 varies between them is a label and a starting size, and this codebase's most repeated lesson is

@@ -18,6 +18,7 @@ export interface CloudFormationPortableBlueprint {
 export interface CloudFormationStatus {
   available: boolean
   version: string | null
+  origin: 'bundled' | 'path' | null
   profiles: string[]
   regions: string[]
   unavailableReason: string | null
@@ -155,7 +156,9 @@ export function validateCloudFormationPreviewInput(input: CloudFormationPreviewI
     const key = visible(item.key, 'Parameter key', 255)
     if (!SAFE_PARAMETER.test(key)) throw new Error(`Parameter key ${key} is invalid.`)
     if (item.usePreviousValue) return { key, usePreviousValue: true }
-    return { key, value: String(item.value ?? '').slice(0, 4096) }
+    const value = String(item.value ?? '')
+    if (value.length > 4096 || /[\u0000-\u001f\u007f]/.test(value)) throw new Error(`Parameter ${key} has an invalid value.`)
+    return { key, value }
   })
   const capabilities = [...new Set(input.capabilities)].filter((item): item is CloudFormationCapability =>
     (CLOUDFORMATION_CAPABILITIES as readonly string[]).includes(item)

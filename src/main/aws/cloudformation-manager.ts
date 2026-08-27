@@ -1,5 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
-import { access } from 'node:fs/promises'
+import { access, stat } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { IpcMain } from 'electron'
@@ -73,13 +73,16 @@ function normalizeChange(value: unknown): CloudFormationChange {
 export class CloudFormationManager {
   private readonly active = new Map<string, ChildProcessWithoutNullStreams>()
   private readonly awsPath: string | null
+  private readonly awsOrigin: 'bundled' | 'path' | null
 
   constructor(resourcesPath: string, userDataPath: string) {
     const executable = process.platform === 'win32' ? 'aws.exe' : 'aws'
-    this.awsPath = findExecutableSync('aws', [
+    const bundledCandidates = [
       join(resourcesPath, 'aws-cli', executable),
       join(userDataPath, 'tools', 'aws-cli', 'current', executable)
-    ])
+    ]
+    this.awsPath = findExecutableSync('aws', bundledCandidates)
+    this.awsOrigin = this.awsPath && bundledCandidates.includes(this.awsPath) ? 'bundled' : this.awsPath ? 'path' : null
   }
 
   private async run(args: string[], requestId?: string, timeoutMs = COMMAND_TIMEOUT_MS): Promise<CommandResult> {
@@ -104,7 +107,7 @@ export class CloudFormationManager {
         else resolve({ stdout, stderr })
       }
       const append = (current: string, chunk: Buffer): string => {
-        bytes += chunk.length
+        bytes += chunk.byteLength
         if (bytes > MAX_OUTPUT_BYTES) {
           child.kill()
           finish(new Error('AWS CLI output exceeded the bounded preview limit. Narrow the stack or template and retry.'))
@@ -130,6 +133,7 @@ export class CloudFormationManager {
     if (!this.awsPath) return {
       available: false,
       version: null,
+      origin: null,
       profiles: [],
       regions: [...CLOUDFORMATION_REGIONS],
       unavailableReason: 'AWS CLI is unavailable. Install or repair the bundled AWS CLI from the AWS tools manager.'
@@ -140,6 +144,7 @@ export class CloudFormationManager {
       return {
         available: true,
         version: (version.stdout || version.stderr).trim() || null,
+        origin: this.awsOrigin,
         profiles: [...new Set(profileResult.stdout.split(/\r?\n/).map((item) => item.trim()).filter(Boolean))].sort(),
         regions: [...CLOUDFORMATION_REGIONS],
         unavailableReason: null
@@ -148,6 +153,7 @@ export class CloudFormationManager {
       return {
         available: false,
         version: null,
+        origin: null,
         profiles: [],
         regions: [...CLOUDFORMATION_REGIONS],
         unavailableReason: error instanceof Error ? error.message : 'AWS CLI status could not be read.'
@@ -157,9 +163,18 @@ export class CloudFormationManager {
 
   async listStacks(input: CloudFormationScopeInput): Promise<CloudFormationStackSummary[]> {
     const scope = validateCloudFormationScope(input)
-    const result = await this.run(['cloudformation', 'list-stacks', '--profile', scope.profile, '--region', scope.region])
-    const body = parseJson(result.stdout, 'CloudFormation list-stacks')
-    const rows = Array.isArray(body.StackSummaries) ? body.StackSummaries : []
+    const rows: unknown[] = []
+    let nextToken = ''
+    for (let page = 0; page < 20; page++) {
+      const args = ['cloudformation', 'list-stacks', '--profile', scope.profile, '--region', scope.region]
+      if (nextToken) args.push('--next-token', nextToken)
+      const result = await this.run(args)
+      const body = parseJson(result.stdout, 'CloudFormation list-stacks')
+      if (Array.isArray(body.StackSummaries)) rows.push(...body.StackSummaries)
+      const token = asText(body.NextToken)
+      if (!token || token === nextToken) break
+      nextToken = token
+    }
     return rows.slice(0, 500).map((item) => {
       const row = item && typeof item === 'object' ? item as Record<string, unknown> : {}
       return {
@@ -176,6 +191,7 @@ export class CloudFormationManager {
     const scope = validateCloudFormationScope(input)
     if (!isAbsolute(input.templatePath)) throw new Error('Choose a local CloudFormation template file with the Browse control.')
     await access(input.templatePath)
+    if (!(await stat(input.templatePath)).isFile()) throw new Error('Choose a local CloudFormation template file, not a folder.')
     const result = await this.run([
       'cloudformation', 'validate-template',
       '--template-body', pathToFileURL(input.templatePath).href,
@@ -203,8 +219,10 @@ export class CloudFormationManager {
 
   async preview(input: CloudFormationPreviewInput): Promise<CloudFormationChangeSetPreview> {
     const value = validateCloudFormationPreviewInput(input)
+    this.cancelled.delete(value.requestId)
     if (!isAbsolute(value.templatePath)) throw new Error('Choose a local CloudFormation template file with the Browse control.')
     await access(value.templatePath)
+    if (!(await stat(value.templatePath)).isFile()) throw new Error('Choose a local CloudFormation template file, not a folder.')
     const parameters = value.parameters.flatMap((item) => [
       '--parameters',
       item.usePreviousValue ? `ParameterKey=${item.key},UsePreviousValue=true` : `ParameterKey=${item.key},ParameterValue=${item.value ?? ''}`
@@ -226,7 +244,7 @@ export class CloudFormationManager {
     if (!changeSetId) throw new Error('CloudFormation did not return a change-set identifier.')
     const deadline = Date.now() + PREVIEW_TIMEOUT_MS
     while (Date.now() < deadline) {
-      if (!this.active.has(value.requestId) && this.cancelled.has(value.requestId)) throw new Error('CloudFormation preview was cancelled.')
+      if (this.cancelled.has(value.requestId)) throw new Error('CloudFormation preview was cancelled.')
       const described = await this.run([
         'cloudformation', 'describe-change-set',
         '--change-set-name', changeSetId,
@@ -259,7 +277,7 @@ export class CloudFormationManager {
   cancel(requestId: string): boolean {
     const child = this.active.get(requestId)
     this.cancelled.add(requestId)
-    if (!child) return false
+    if (!child) return true
     child.kill()
     return true
   }

@@ -36,6 +36,11 @@ import type { TorrentTaskState } from '../shared/torrent'
 import type { VirtualMachineEvent } from '../shared/virtual-machine'
 import type { CalendarProvider } from '../shared/calendar'
 import type { ProjectConsentRequest, ProjectSetupEvent } from '../shared/project-settings'
+import type {
+  CloudFormationPreviewInput,
+  CloudFormationScopeInput,
+  CloudFormationTemplateInput
+} from '../shared/cloudformation'
 
 // Fan a single ipcRenderer listener per channel out to many renderer subscribers. Without
 // this, every node that subscribes (e.g. Cmd+M markdown toggle on each terminal/editor) adds
@@ -1172,6 +1177,14 @@ const api: NodeTerminalApi = {
     openDisplay: (id) => ipcRenderer.invoke(IPC.virtualMachineOpenDisplay, id),
     reset: (id) => ipcRenderer.invoke(IPC.virtualMachineReset, id),
     onEvent: (listener) => subscribeVirtualMachineEvent(listener)
+  },
+  cloudFormation: {
+    status: () => ipcRenderer.invoke(IPC.cloudFormationStatus),
+    listStacks: (input: CloudFormationScopeInput) => ipcRenderer.invoke(IPC.cloudFormationListStacks, input),
+    inspectTemplate: (input: CloudFormationTemplateInput) => ipcRenderer.invoke(IPC.cloudFormationInspectTemplate, input),
+    previewChangeSet: (input: CloudFormationPreviewInput) => ipcRenderer.invoke(IPC.cloudFormationPreview, input),
+    cancelPreview: (requestId: string) => ipcRenderer.invoke(IPC.cloudFormationCancelPreview, requestId)
+  },
   calendar: {
     status: (id, config) => ipcRenderer.invoke(IPC.calendarStatus, id, config),
     accounts: () => ipcRenderer.invoke(IPC.calendarAccounts),

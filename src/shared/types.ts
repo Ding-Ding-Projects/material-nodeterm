@@ -414,6 +414,7 @@ export type NodeKind =
   | 'gitlab'
   | 'homeassistant'
   | 'freepbx'
+  | 'cloudformation'
   | 'torrent'
   /** One-shot Linux ISO virtual machine, distinct from the WSL terminal profile. */
   | 'linux-vm'
@@ -429,7 +430,8 @@ export const SERVICE_NODE_KINDS = [
   'proxmox',
   'gitlab',
   'homeassistant',
-  'freepbx'
+  'freepbx',
+  'cloudformation'
 ] as const
 
 export type ServiceNodeKind = (typeof SERVICE_NODE_KINDS)[number]
@@ -4503,6 +4505,8 @@ export interface NodeTerminalApi {
   minecraft: import('./minecraft').MinecraftApi
   /** Local Linux ISO VM lifecycle — docs/linux-iso-vm.md. */
   virtualMachine: import('./virtual-machine').VirtualMachineApi
+  /** Guided CloudFormation stack and change-set preview manager. */
+  cloudFormation?: import('./cloudformation').CloudFormationApi
   ssh: SshApi
   sshProject: SshProjectApi
   sshFs: SshFsApi

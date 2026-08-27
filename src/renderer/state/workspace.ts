@@ -1488,7 +1488,8 @@ export const SERVICE_NODE_LABELS: Record<ServiceNodeKind, string> = {
   proxmox: 'Proxmox',
   gitlab: 'GitLab',
   homeassistant: 'Home Assistant',
-  freepbx: 'FreePBX'
+  freepbx: 'FreePBX',
+  cloudformation: 'CloudFormation manager'
 }
 
 /**
@@ -2119,9 +2120,10 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   gitlab: true,
   homeassistant: true,
   freepbx: true,
+  cloudformation: true,
   nsis: true,
-  shop: true
-  torrent: true
+  shop: true,
+  torrent: true,
   'linux-vm': true
 }
 
@@ -2166,9 +2168,10 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   gitlab: SERVICE_SUMMARY_SIZE,
   homeassistant: SERVICE_SUMMARY_SIZE,
   freepbx: SERVICE_SUMMARY_SIZE,
+  cloudformation: SERVICE_CONSOLE_SIZE,
   nsis: NSIS_SIZE,
-  shop: SHOP_SIZE
-  torrent: TORRENT_SIZE
+  shop: SHOP_SIZE,
+  torrent: TORRENT_SIZE,
   'linux-vm': LINUX_VM_SIZE
 }
 

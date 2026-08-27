@@ -2065,6 +2065,7 @@ export function Canvas() {
       gitlab: withNodeBoundary(ServiceNode),
       homeassistant: withNodeBoundary(ServiceNode),
       freepbx: withNodeBoundary(ServiceNode),
+      cloudformation: withNodeBoundary(ServiceNode),
       'linux-vm': withNodeBoundary(VirtualMachineNode)
     }),
     []

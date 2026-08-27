@@ -1,5 +1,6 @@
 import type { NodeKind } from './types'
 import { DOCKER_HOST_PORTABLE_BLUEPRINT } from './docker-host-manager'
+import { portableCloudFormationBlueprint } from './cloudformation'
 
 /** The guided categories shown by the Node Catalog. Keep this list explicit so a new category
  * cannot disappear from the picker simply because no current entry happens to use it. */
@@ -370,6 +371,18 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
     availability: alwaysAvailable
   },
   {
+    id: 'service:cloudformation',
+    nodeKind: 'cloudformation',
+    category: 'managers',
+    label: 'CloudFormation manager',
+    description: 'Inspect a local template and preview its CloudFormation change set.',
+    keywords: ['service', 'aws', 'cloudformation', 'stack', 'change set'],
+    documentationPath: 'docs/features/integrations/cloudformation-manager.md',
+    safeDefaults: { serviceLabel: '', cloudFormationBlueprint: portableCloudFormationBlueprint({ stackName: 'example-stack', changeSetType: 'CREATE', parameters: [], capabilities: [] }) },
+    dependencies: ['aws-cli-v2', 'service-binding'],
+    availability: alwaysAvailable
+  },
+  {
     id: 'service:proxmox',
     nodeKind: 'proxmox',
     category: 'managers',
@@ -501,6 +514,7 @@ export const NODE_CATALOG_COMPLETENESS: readonly NodeCatalogCompletenessRecord[]
   { id: 'nsis', state: 'current', scope: 'any', reason: 'persisted installer-builder node' },
   { id: 'service:minecraft', state: 'current', scope: 'any', reason: 'service manager node' },
   { id: 'service:dockerhost', state: 'current', scope: 'any', reason: 'service manager node' },
+  { id: 'service:cloudformation', state: 'current', scope: 'aws-universe', reason: 'CloudFormation change-set manager' },
   { id: 'service:proxmox', state: 'current', scope: 'any', reason: 'service manager node' },
   { id: 'service:gitlab', state: 'current', scope: 'any', reason: 'service manager node' },
   { id: 'service:homeassistant', state: 'current', scope: 'any', reason: 'service manager node' },
