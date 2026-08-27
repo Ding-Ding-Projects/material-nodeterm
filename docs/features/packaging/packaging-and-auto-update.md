@@ -20,6 +20,10 @@ an immutable raw URL from that full source SHA, and verifies the public download
 Each phase writes synchronous start, completion, or failure diagnostics, and the command awaits
 the complete phase chain before setting its exit status. A post-icon failure therefore names the
 exact phase instead of appearing as a silent early exit.
+The production immutable icon download uses a bounded Node HTTPS stream with a refed 15-second
+request deadline, status 200 and redirect refusal, optional content-length validation, streaming
+byte limits before buffering, exact byte comparison, and ICO validation. Tests may still inject
+the existing fetch-style transport seam without changing production transport.
 After packaging, it requires the exact expected output inventory, semantic nupkg ID/version/title,
 bidirectional `RELEASES` name/size/SHA-1 agreement, the same nuspec `iconUrl`, and matching icon and
 version resources in Setup, the installed app, and its execution stub. The local-installer BAT and

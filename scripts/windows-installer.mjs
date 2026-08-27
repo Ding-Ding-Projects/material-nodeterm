@@ -5,6 +5,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { createRequire } from 'node:module'
 import { createReadStream, readFileSync, writeSync } from 'node:fs'
 import { mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { request as httpsRequest } from 'node:https'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import unzipper from 'unzipper'
@@ -26,6 +27,7 @@ const MAX_ICON_BYTES = 1024 * 1024
 const MAX_ARCHIVE_ENTRY_BYTES = 512 * 1024 * 1024
 const FULL_SHA_RE = /^[0-9a-f]{40}$/
 const REPOSITORY_RE = /^([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)$/
+const IMMUTABLE_ICON_PATH_RE = /^\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/[0-9a-f]{40}\/build\/icon[.]ico$/
 
 export const WINDOWS_RELEASE_IDENTITY = Object.freeze({
   packageId: 'node-terminal',
@@ -479,7 +481,9 @@ export function resolveSourceIdentity(root = REPO_ROOT, env = process.env) {
   return { sourceSha, repository: parseGitHubRepository(origin) }
 }
 
-export async function downloadMatchingIcon(iconUrl, expected, fetchImpl = fetch) {
+export async function downloadMatchingIcon(iconUrl, expected, fetchImpl) {
+  validateImmutableIconDownloadUrl(iconUrl)
+  if (!fetchImpl) return downloadMatchingIconOverHttps(iconUrl, expected)
   let response
   try {
     response = await fetchImpl(iconUrl, {
@@ -502,18 +506,135 @@ export async function downloadMatchingIcon(iconUrl, expected, fetchImpl = fetch)
   return downloaded
 }
 
+function validateImmutableIconDownloadUrl(iconUrl) {
+  let url
+  try {
+    url = new URL(iconUrl)
+  } catch {
+    fail(`immutable installer icon URL is invalid: ${JSON.stringify(iconUrl)}`)
+  }
+  if (
+    url.href !== iconUrl ||
+    url.protocol !== 'https:' ||
+    url.hostname !== 'raw.githubusercontent.com' ||
+    url.port ||
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash ||
+    !IMMUTABLE_ICON_PATH_RE.test(url.pathname)
+  ) {
+    fail(`immutable installer icon download must use the exact HTTPS raw source URL: ${JSON.stringify(iconUrl)}`)
+  }
+  return url
+}
+
+function downloadMatchingIconOverHttps(iconUrl, expected) {
+  const url = validateImmutableIconDownloadUrl(iconUrl)
+  return new Promise((resolve, reject) => {
+    let settled = false
+    const finish = (error, value) => {
+      if (settled) return
+      settled = true
+      clearTimeout(deadline)
+      if (error) reject(error)
+      else resolve(value)
+    }
+    const deadline = setTimeout(() => {
+      request.destroy(new Error('immutable installer icon download timed out after 15000ms'))
+    }, 15_000)
+    let request
+    try {
+      request = httpsRequest(url, {
+      method: 'GET',
+      headers: { accept: 'image/x-icon,application/octet-stream' },
+      }, (response) => {
+      const status = response.statusCode ?? 0
+      if (status !== 200) {
+        response.destroy()
+        finish(new Error(`immutable installer icon download must return 200 without redirect; got ${status}`))
+        return
+      }
+      const declaredLength = response.headers['content-length']
+      let expectedLength = null
+      if (declaredLength !== undefined) {
+        if (typeof declaredLength !== 'string') {
+          response.destroy()
+          finish(new Error('immutable installer icon content-length is invalid'))
+          return
+        }
+        const parsed = Number(declaredLength)
+        if (!Number.isSafeInteger(parsed) || parsed < 0) {
+          response.destroy()
+          finish(new Error('immutable installer icon content-length is invalid'))
+          return
+        }
+        expectedLength = parsed
+        if (parsed > MAX_ICON_BYTES) {
+          response.destroy()
+          finish(new Error('downloaded installer icon is too large'))
+          return
+        }
+      }
+      const chunks = []
+      let total = 0
+      response.on('data', (chunk) => {
+        if (settled) return
+        total += chunk.length
+        if (total > MAX_ICON_BYTES) {
+          response.destroy()
+          finish(new Error('downloaded installer icon exceeded the byte bound'))
+          return
+        }
+        chunks.push(chunk)
+      })
+      response.on('end', () => {
+        if (expectedLength !== null && total !== expectedLength) {
+          finish(new Error(`downloaded installer icon length mismatch: declared ${expectedLength}, received ${total}`))
+          return
+        }
+        const downloaded = Buffer.concat(chunks, total)
+        if (downloaded.length === 0) {
+          finish(new Error('downloaded installer icon has an invalid byte size'))
+          return
+        }
+        if (!downloaded.equals(expected)) {
+          finish(new Error('downloaded installer icon bytes do not match the committed build/icon.ico'))
+          return
+        }
+        try {
+          inspectIco(downloaded)
+          finish(null, downloaded)
+        } catch (error) {
+          finish(error)
+        }
+      })
+      response.on('error', (error) => finish(new Error(`immutable installer icon response failed: ${error.message}`)))
+      })
+    } catch (error) {
+      finish(new Error(`immutable installer icon request could not start: ${error.message}`))
+      return
+    }
+    request.setTimeout(15_000, () => request.destroy(new Error('immutable installer icon socket timed out after 15000ms')))
+    request.on('error', (error) => finish(new Error(`immutable installer icon request failed: ${error.message}`)))
+    request.end()
+  })
+}
+
 /** Prove the generated ICO is committed at HEAD and downloadable through its immutable URL. */
 export async function verifySourceIcon(root = REPO_ROOT, options = {}) {
-  const { fetchImpl = fetch, env = process.env } = options
-  const identity = resolveSourceIdentity(root, env)
+  const { fetchImpl, env = process.env } = options
+  const identity = await runStage('source identity resolution', () => resolveSourceIdentity(root, env))
   const iconPath = path.join(root, ...ICON_RELATIVE_PATH.split('/'))
-  const local = await readFile(iconPath)
+  const local = await runStage('read generated source icon', () => readFile(iconPath))
   if (local.length === 0 || local.length > MAX_ICON_BYTES) fail('build/icon.ico has an invalid byte size')
-  const committed = runGit(root, ['show', `${identity.sourceSha}:${ICON_RELATIVE_PATH}`], null)
-  if (!local.equals(committed)) fail('generated build/icon.ico does not exactly match the icon committed at HEAD')
-  const frames = inspectIco(local)
+  const committed = await runStage('read committed source icon', () => runGit(root, ['show', `${identity.sourceSha}:${ICON_RELATIVE_PATH}`], null))
+  await runStage('compare generated and committed source icon', () => {
+    if (!local.equals(committed)) fail('generated build/icon.ico does not exactly match the icon committed at HEAD')
+  })
+  const frames = await runStage('parse committed source icon', () => inspectIco(local))
   const iconUrl = immutableIconUrl(identity.repository, identity.sourceSha)
-  await downloadMatchingIcon(iconUrl, local, fetchImpl)
+  await runStage('download immutable source icon', () => downloadMatchingIcon(iconUrl, local, fetchImpl))
   return {
     schemaVersion: 1,
     sourceSha: identity.sourceSha,

@@ -14,6 +14,20 @@ Changed files are `scripts/windows-installer.mjs`, `docs/features/packaging/pack
 `CHANGELOG.md`, and this handoff. No tests, checkers, lint, typecheck, builds, packaging, runtime
 interaction, reviews, audits, or captures were run in this lane.
 
+## 2026-08-27, immutable icon transport repair
+
+Release run `33116485248` at `5bb99b39d382cce534637d8661cd02b40ff0549e` showed the awaited wrapper
+reached `source icon verification started` and then terminated without completion, failure, or
+outer-catch output. The production path now uses a refed Node HTTPS request with an explicit
+15-second request deadline, bounded streaming response collection, content-length validation,
+status 200 and redirect refusal, exact byte comparison, and ICO validation. The existing injected
+fetch-style function remains supported for tests. Source identity, generated-versus-committed icon
+comparison, download, and parsing each have their own named diagnostics.
+
+This second repair changed only `scripts/windows-installer.mjs`, this packaging article, the
+Unreleased changelog, and this handoff. No tests, checkers, lint, typecheck, builds, packaging,
+runtime interaction, reviews, audits, or captures were run.
+
 ## 2026-08-27, project-aware navigation, issue #86
 
 This task branch was reconciled with the exact remote `origin/main` tip
