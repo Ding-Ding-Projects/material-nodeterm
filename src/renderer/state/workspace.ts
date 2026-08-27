@@ -57,6 +57,7 @@ import { newUniverseCreationEventId, shopNodeIdForCanvas } from '../../core/univ
 import { TORRENT_NODE_CATALOG_ENTRY } from '@shared/torrent'
 import { DEFAULT_VIRTUAL_MACHINE_CONFIG } from '@shared/virtual-machine'
 import { TIMER_DEFAULT_DURATION_MS, type TimerNodeData } from '@shared/timer'
+import { normalizeAwsIdentityIntent } from '@shared/aws-identity'
 import { createRecoveryGameSnapshot, normalizeRecoveryGameSnapshot, type RecoveryGameSnapshot } from '@shared/recovery-game'
 import { CLOUDFLARE_DEFAULT_INTENT, type CloudflarePortableIntent } from '@shared/cloudflare-core-managers'
 
@@ -1587,6 +1588,7 @@ export const SERVICE_NODE_LABELS: Record<ServiceNodeKind, string> = {
   gitlab: 'GitLab',
   homeassistant: 'Home Assistant',
   freepbx: 'FreePBX',
+  awsidentity: 'AWS identity',
   'cloudflare-zero-trust': 'Cloudflare managers',
   'nextcloud-aio': 'Nextcloud AIO'
 }
@@ -1624,6 +1626,18 @@ export function createServiceNode(
       color: NODE_COLORS[index % NODE_COLORS.length],
       group: null,
       serviceLabel: '',
+      ...(kind === 'awsidentity'
+        ? {
+            awsIdentityIntent: {
+              schemaVersion: 1 as const,
+              mode: 'profile' as const,
+              preferredRegion: null,
+              requireMfa: false,
+              requireRole: false,
+              endpointServices: []
+            }
+          }
+        : {}),
       ...(kind === 'homeassistant' ? { homeAssistantIntent: { ...DEFAULT_HOME_ASSISTANT_NODE_INTENT } } : {}),
       ...(kind === 'cloudflare-zero-trust' ? { cloudflareZeroTrustIntent: { schemaVersion: 1, manager: null, operation: null, accountHint: null, resourceHint: null, values: {} } } : {}),
       ...(kind === 'nextcloud-aio' ? { nextcloudAioConfig: { ...NEXTCLOUD_AIO_DEFAULT_CONFIG } } : {})
@@ -2287,6 +2301,7 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   homeassistant: true,
   'homeassistant-sensor': true,
   freepbx: true,
+  awsidentity: true,
   'nextcloud-aio': true,
   'gitlab-hosting': true,
   'cloudflare-zero-trust': true,
@@ -2343,6 +2358,7 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   homeassistant: SERVICE_SUMMARY_SIZE,
   'homeassistant-sensor': HOME_ASSISTANT_SENSOR_SIZE,
   freepbx: SERVICE_SUMMARY_SIZE,
+  awsidentity: SERVICE_CONSOLE_SIZE,
   'nextcloud-aio': SERVICE_CONSOLE_SIZE,
   'gitlab-hosting': { width: 700, height: 620 },
   'cloudflare-zero-trust': SERVICE_CONSOLE_SIZE,
@@ -2446,6 +2462,9 @@ export function duplicateNode(node: CanvasNode, offset = 28): CanvasNode {
       loopLastRunAt: undefined,
       // A duplicate owns a fresh VM identity and must never inherit another VM's ISO or disk.
       virtualMachineLocalPaths: undefined,
+      // AWS profiles are machine-local bindings. A duplicate keeps safe portable intent but must
+      // require an explicit local profile selection rather than silently sharing one.
+      awsIdentityBinding: undefined,
       ...(kind === 'timer' ? {
         running: false, paused: false, elapsedMs: 0, remainingMs: (node.data as TimerNodeData).durationMs,
         lapsMs: [], sequenceIndex: 0, repeatRemaining: 0, occurrenceId: undefined,
@@ -2803,6 +2822,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         cwd: n.cwd,
         text: n.text,
         serviceLabel: n.serviceLabel,
+        awsIdentityIntent: normalizeAwsIdentityIntent(n.awsIdentityIntent) ?? undefined,
         gitlabHostingConfig: n.gitlabHostingConfig,
         nextcloudAioConfig: n.nextcloudAioConfig,
         homeAssistantIntent: n.homeAssistantIntent,
@@ -2932,6 +2952,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         cwd: n.data.cwd,
         text: n.data.text,
         serviceLabel: n.data.serviceLabel,
+        awsIdentityIntent: normalizeAwsIdentityIntent(n.data.awsIdentityIntent) ?? undefined,
         gitlabHostingConfig: n.data.gitlabHostingConfig,
         nextcloudAioConfig: n.data.nextcloudAioConfig,
         homeAssistantIntent: n.data.homeAssistantIntent,

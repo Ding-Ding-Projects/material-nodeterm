@@ -430,6 +430,7 @@ export type NodeKind =
   | 'homeassistant'
   | 'homeassistant-sensor'
   | 'freepbx'
+  | 'awsidentity'
   | 'nextcloud-aio'
   | 'cloudflare-zero-trust'
   /** Guided Cloudflare account, zone, DNS, SSL/TLS, ruleset, redirect, cache, and analytics manager. */
@@ -450,8 +451,10 @@ export const SERVICE_NODE_KINDS = [
   'gitlab',
   'homeassistant',
   'freepbx',
+  'awsidentity',
   'cloudflare-zero-trust',
-  'nextcloud-aio'
+  'nextcloud-aio',
+  'cloudflare-core-managers'
 ] as const
 
 export type ServiceNodeKind = (typeof SERVICE_NODE_KINDS)[number]
@@ -655,6 +658,10 @@ export interface CanvasNodeState {
    * `localExec` on the index entry, exactly where the shell and Windows profile already live.
    */
   serviceLabel?: string
+  /** AWS-only portable requirements. Profile/account/role/endpoints remain machine-local. */
+  awsIdentityIntent?: import('./aws-identity').AwsIdentityIntent
+  /** AWS-only machine binding, stripped into IndexEntryV3.localExec by shared/node-exec.ts. */
+  awsIdentityBinding?: import('./aws-identity').AwsIdentityBinding
   /** Nextcloud AIO safe deployment intent. Context, container state, backups, and socket bindings remain local. */
   nextcloudAioConfig?: import('./nextcloud-aio').NextcloudAioConfig
   /** Cloudflare manager selection intent. Account ids, credentials and resource ids stay local. */
@@ -4725,6 +4732,8 @@ export interface NodeTerminalApi {
   torrent: import('./torrent').TorrentApi
   /** Local Minecraft server create-and-manage — docs/minecraft-server-manager.md. */
   minecraft: import('./minecraft').MinecraftApi
+  /** Desktop-local AWS profile discovery. Credentials and provider sessions never cross IPC. */
+  awsIdentity: import('./aws-identity').AwsIdentityApi
   /** Local Linux ISO VM lifecycle — docs/linux-iso-vm.md. */
   virtualMachine: import('./virtual-machine').VirtualMachineApi
   /** Machine-local Home Assistant instances with bounded REST and WebSocket discovery. */

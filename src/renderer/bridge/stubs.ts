@@ -709,6 +709,12 @@ export function buildStubApi(): Omit<
       commands: U('awsWizardModels.commands'),
       source: U('awsWizardModels.source')
     },
+    awsIdentity: {
+      discover: U('awsIdentity.discover'),
+      start: U('awsIdentity.start'),
+      cancel: U('awsIdentity.cancel'),
+      onOperation: noopUnsub
+    },
     cloudflareZeroTrust: {
       catalog: U('cloudflareZeroTrust.catalog'),
       accounts: U('cloudflareZeroTrust.accounts'),

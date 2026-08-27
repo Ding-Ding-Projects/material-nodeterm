@@ -23,6 +23,7 @@ import type { OllamaApi } from '../../shared/ollama'
 import type { MinecraftApi } from '../../shared/minecraft'
 import type { NodeDependenciesApi } from '../../shared/node-dependencies'
 import type { AwsWizardModelsApi } from '../../shared/aws-wizard'
+import type { AwsIdentityApi } from '../../shared/aws-identity'
 import type { TorrentApi, TorrentTaskState } from '../../shared/torrent'
 import type { VirtualMachineApi } from '../../shared/virtual-machine'
 import type { CalendarApi, CalendarProvider } from '../../shared/calendar'
@@ -1175,6 +1176,17 @@ export function buildAwsWizardModelsApi(client: RpcClient): Pick<NodeTerminalApi
   return { awsWizardModels }
 }
 
+/** Host-owned AWS identity discovery and bounded fixed-action runner. */
+export function buildAwsIdentityApi(client: RpcClient): Pick<NodeTerminalApi, 'awsIdentity'> {
+  const awsIdentity: AwsIdentityApi = {
+    discover: () => client.request(IPC.awsIdentityDiscover) as ReturnType<AwsIdentityApi['discover']>,
+    start: (action, profileName, binding) => client.request(IPC.awsIdentityStart, action, profileName, binding) as ReturnType<AwsIdentityApi['start']>,
+    cancel: (operationId) => client.request(IPC.awsIdentityCancel, operationId) as ReturnType<AwsIdentityApi['cancel']>,
+    onOperation: (listener) => client.subscribe(IPC.awsIdentityOperation, listener as Listener)
+  }
+  return { awsIdentity }
+}
+
 /** Local Minecraft server create-and-manage (docs/minecraft-server-manager.md) — same core engine
  *  as desktop; the server process is the one downloading, spawning and owning `java`, exactly as
  *  main does. */
@@ -1793,6 +1805,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildConverterApi(client),
     ...buildNodeDependenciesApi(client),
     ...buildAwsWizardModelsApi(client),
+    ...buildAwsIdentityApi(client),
     ...buildOllamaApi(client),
     ...buildCloudflareCoreManagersApi(client),
     ...buildMinecraftApi(client),

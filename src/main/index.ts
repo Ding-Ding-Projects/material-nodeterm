@@ -57,6 +57,7 @@ import { registerConverterIpc } from '../core/converter/register-ipc'
 import { registerNodeDependencyIpc } from '../core/node-dependencies/register-ipc'
 import { registerOllamaIpc } from '../core/ollama/register-ipc'
 import { registerMinecraftIpc } from '../core/minecraft/register-ipc'
+import { registerAwsIdentityIpc } from '../core/aws-identity'
 import { registerTorrentIpc } from '../core/torrent/register-ipc'
 import { registerVirtualMachineIpc } from '../core/virtual-machine/register-ipc'
 import { registerCalendarIpc } from '../core/calendar/register-ipc'
@@ -2373,9 +2374,15 @@ app.whenReady().then(async () => {
   // Server Edition gets the identical engine via src/server/handlers/index.ts's own call to these
   // same functions.
   registerConverterIpc(corePlatform)
-  registerNodeDependencyIpc(corePlatform)
+  const nodeDependencyService = registerNodeDependencyIpc(corePlatform)
   registerOllamaIpc(corePlatform)
   minecraftServers = registerMinecraftIpc(corePlatform).manager
+  registerAwsIdentityIpc(corePlatform, {
+    resolveAwsCli: async () => {
+      const dependency = await nodeDependencyService.status('aws-cli-v2')
+      return { path: dependency.executablePath, reason: dependency.disabledReason }
+    }
+  })
   registerTorrentIpc(corePlatform)
   virtualMachineManager = registerVirtualMachineIpc(corePlatform).manager
   registerCalendarIpc(corePlatform)
