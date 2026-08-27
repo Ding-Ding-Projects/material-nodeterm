@@ -109,6 +109,6 @@ So the honest design is:
   the integration the issue wants to keep. Every write outside the folder is env-gated
   (inert in sessions nodeterm didn't spawn) and marker-reversible.
 
-Windows note: the desktop build ships as an NSIS installer with its own uninstaller
+Windows note: the desktop build ships as an unsigned Squirrel.Windows installer with its own uninstaller
 (Add/Remove Programs); after running it, delete `%APPDATA%\nodeterm` and
 `%USERPROFILE%\.nodeterm`. The POSIX script does not run there.

@@ -1,0 +1,742 @@
+{
+  "version": 1,
+  "sourceCommit": "1ec54fa88552e9286090597d048534fcc8d51e93",
+  "route": "cheap-lowlevel-headless",
+  "capturedAt": "2026-08-27T12:08:18.312Z",
+  "edge": {
+    "version": "151.0.4129.107",
+    "sha256": "1c43c32ab3d8442171fafa7614015dd5b6977e60f8fa22e63f0c30f0b1e6ccf8"
+  },
+  "outputManifestSha256": "509fd8653d26a50a95d707e0f952b98e555aab2c0e079200765a629b58b0f920",
+  "buildReceiptSha256": "b05ef7fadff2e4d2055079f6fa9d670bbaa8c4e883d62b23a9cead31636858ae",
+  "rawAuditReceiptSha256": {
+    "desktop": "56ec18bfc608f9e63c5057cdab06d1034ba5c3f7be394e75c66d076e39905b7e",
+    "emulatedMobile": "6c2d4d595e81c75c371b18cc5caf06afbf6c09e56236285ca5f1b7369bdd1ec0"
+  },
+  "runtime": {
+    "consoleErrorCount": 0,
+    "exceptionCount": 0,
+    "failedResourceCount": 0,
+    "unexpectedThirdPartyCount": 0,
+    "analyticsCount": 0,
+    "desktopUnnamedInteractiveCount": 0,
+    "mobileUnnamedInteractiveCount": 0,
+    "desktopBodyOverflow": false,
+    "mobileBodyOverflow": false,
+    "cleanup": {
+      "completed": true,
+      "ownedOnly": true,
+      "processesGone": true,
+      "portsGone": true,
+      "profileGone": true,
+      "desktopClosed": true
+    }
+  },
+  "keyCaptures": [
+    {
+      "id": "site-hall-current",
+      "path": "docs/assets/shots/site-current/site-hall-current.png",
+      "sha256": "de3135cafb8763bb2e7670702e583d8315c05bd6b5c8edd1b0ed1586f068b63c",
+      "width": 1440,
+      "height": 1000,
+      "viewport": {
+        "width": 1440,
+        "height": 1000,
+        "scale": 1
+      },
+      "alt": "The current nodeterm documentation hallway with searchable feature doors and a single Jump control"
+    },
+    {
+      "id": "site-home-current",
+      "path": "docs/assets/shots/site-current/site-home-current.png",
+      "sha256": "b41cee3ba61a431cea919302fb0b82b6b8ef804e4015245b2c170cf857c55232",
+      "width": 1440,
+      "height": 1000,
+      "viewport": {
+        "width": 1440,
+        "height": 1000,
+        "scale": 1
+      },
+      "alt": "The current nodeterm documentation Home room showing version 0.4.120, Windows download actions, feature cards, and the navigation rail"
+    },
+    {
+      "id": "site-docs-current",
+      "path": "docs/assets/shots/site-current/site-docs-current.png",
+      "sha256": "fa170c009b996e2eea87177475549cc4c398974d035abeab184a155c23d792fe",
+      "width": 1440,
+      "height": 1000,
+      "viewport": {
+        "width": 1440,
+        "height": 1000,
+        "scale": 1
+      },
+      "alt": "The current nodeterm documentation index with bulk selection, per-article actions, local search, and 23 guide entries"
+    },
+    {
+      "id": "site-changelog-current",
+      "path": "docs/assets/shots/site-current/site-changelog-current.png",
+      "sha256": "c62ebe9844baf4d8c4d6830311655727d3ecb2712a60c3000389fc8cd95b307c",
+      "width": 1440,
+      "height": 1000,
+      "viewport": {
+        "width": 1440,
+        "height": 1000,
+        "scale": 1
+      },
+      "alt": "The current nodeterm changelog showing the published version 0.4.120 release and Windows-scope history"
+    },
+    {
+      "id": "site-settings-current",
+      "path": "docs/assets/shots/site-current/site-settings-current.png",
+      "sha256": "2f3570a3c79cc1c3697f02bcd50528c64d12ccc99db74c28c8b0c61e2b9c4c8f",
+      "width": 1440,
+      "height": 1000,
+      "viewport": {
+        "width": 1440,
+        "height": 1000,
+        "scale": 1
+      },
+      "alt": "The current nodeterm settings room showing language, appearance, identity, School mode, narrator, and personal-vocabulary cards"
+    },
+    {
+      "id": "site-screenshots-current",
+      "path": "docs/assets/shots/site-current/site-screenshots-current.png",
+      "sha256": "bc9c509a17d254a4a517df0847d2798ef512b6f60303fa65b0708fcc20871717",
+      "width": 1440,
+      "height": 1000,
+      "viewport": {
+        "width": 1440,
+        "height": 1000,
+        "scale": 1
+      },
+      "alt": "The current nodeterm screenshot room showing the built desktop capture gallery and searchable navigation"
+    },
+    {
+      "id": "site-search-regex-current",
+      "path": "docs/assets/shots/site-current/site-search-regex-current.png",
+      "sha256": "452a111bee45fae411057b313235efbc418a3f0f71082de5bf64b010b01969c7",
+      "width": 1440,
+      "height": 1000,
+      "viewport": {
+        "width": 1440,
+        "height": 1000,
+        "scale": 1
+      },
+      "alt": "The current nodeterm pattern builder open beside the settings search with guided tokens, sample text, and apply controls"
+    },
+    {
+      "id": "site-appearance-current",
+      "path": "docs/assets/shots/site-current/site-appearance-current.png",
+      "sha256": "d5145f45895f5bde54c6727b94a405c9558b329b5803ea3a05ad833ea512b9b2",
+      "width": 1440,
+      "height": 1000,
+      "viewport": {
+        "width": 1440,
+        "height": 1000,
+        "scale": 1
+      },
+      "alt": "The current nodeterm appearance settings card filtered in place with theme, color, preset, text-size, logo, save, load, and reset controls"
+    },
+    {
+      "id": "site-mobile-home-current",
+      "path": "docs/assets/shots/site-current/site-mobile-home-current.png",
+      "sha256": "8c764f9ac9a1f94aa0a47c7fd0c23c0dfa211a00f58f3064f8613438f467a75e",
+      "width": 390,
+      "height": 844,
+      "viewport": {
+        "width": 390,
+        "height": 844,
+        "scale": 1,
+        "mobile": true
+      },
+      "alt": "The current nodeterm documentation navigation at a 390 pixel emulated mobile viewport with touch-sized controls and no body overflow"
+    }
+  ],
+  "recordings": [
+    {
+      "id": "room-home",
+      "feature": "Home",
+      "kind": "destination",
+      "path": "docs/assets/recordings/site/site-room-home.gif",
+      "sha256": "b23511f98d1762b29b3b65d2036fa6d463622bf8dda79263851809c10c5a122c",
+      "bytes": 264985,
+      "width": 720,
+      "height": 450,
+      "frames": 5,
+      "rawFrameSha256": [
+        "3d199405816c37c5827c57ea2495dab78df633dfc3654bb3ffb1dcc2851be0c8",
+        "0ad234568d1c56280143d6ab1696aa2016449bdaad95a7be0d61fd6d00523c26",
+        "95c4f01476a330b3d83ac09a2a955375ef300455643b57fcd3a86ff9f0e8656d",
+        "352a60bdbaf665d961da2615ddecbf9c1a4140dc5dde996cf14646e59a534f35",
+        "b4959a5114fd4faf8d35c8da394e9913488300e03434d9d187bb4595a1f8768d",
+        "b4959a5114fd4faf8d35c8da394e9913488300e03434d9d187bb4595a1f8768d",
+        "b4959a5114fd4faf8d35c8da394e9913488300e03434d9d187bb4595a1f8768d"
+      ],
+      "finalState": {
+        "view": "room",
+        "heading": "The terminal playground"
+      }
+    },
+    {
+      "id": "room-docs",
+      "feature": "Guide book",
+      "kind": "destination",
+      "path": "docs/assets/recordings/site/site-room-docs.gif",
+      "sha256": "6ae59faa66de206f86f67ae183973f323cd918227fc0c52b8d2dcfa6b51c76bc",
+      "bytes": 267716,
+      "width": 720,
+      "height": 450,
+      "frames": 5,
+      "rawFrameSha256": [
+        "9a2449f95396bdc9611582ebb0c2676f8ebdbadb85652efa037d25c54c4f161b",
+        "fab3a8759eafcd1ac082f9e8e02d52ea4874f75fbbd80d1a694242bfd7d8a34a",
+        "3f33b04adc247448f2fbd33cbdfdc554e953183c6b52b66cc2b10ce3391952ec",
+        "a6cb8deff7f9c9c510334325a369245a2a063f08b215467b18204e8939671a72",
+        "57658a32bdb3d150e2e99c59558d6c50156bf81e9b58f4b63e2fe5cd8c6b4b90",
+        "57658a32bdb3d150e2e99c59558d6c50156bf81e9b58f4b63e2fe5cd8c6b4b90",
+        "57658a32bdb3d150e2e99c59558d6c50156bf81e9b58f4b63e2fe5cd8c6b4b90"
+      ],
+      "finalState": {
+        "view": "room",
+        "heading": "The guide book"
+      }
+    },
+    {
+      "id": "room-changelog",
+      "feature": "What changed",
+      "kind": "destination",
+      "path": "docs/assets/recordings/site/site-room-changelog.gif",
+      "sha256": "05787a38071125effec6fd380f0d1a49644b3ae8abfd289d157c08d11c87c044",
+      "bytes": 260653,
+      "width": 720,
+      "height": 450,
+      "frames": 5,
+      "rawFrameSha256": [
+        "9046f89c9d05a35fa2928ee408be9f12e2df88fb5ab86fb9af9a4fee874d3e4c",
+        "4db84d6195325a84dd78bc32fe0b94d358029da24c5b053e1c5a59ced376070c",
+        "4fb2e5f35216fff0f09efd7c133723787e30a4b983a3111207fce309469d3610",
+        "beb83a6bd0ba2e44b7f6cbc5c6a79968c8c884b10492e724d98f748693b32525",
+        "7a8b7fc7d11c74b85488b0b3ee4a321c3f742674c5402f9f96e80189e3b4d6a4",
+        "7a8b7fc7d11c74b85488b0b3ee4a321c3f742674c5402f9f96e80189e3b4d6a4",
+        "7a8b7fc7d11c74b85488b0b3ee4a321c3f742674c5402f9f96e80189e3b4d6a4"
+      ],
+      "finalState": {
+        "view": "room",
+        "heading": "What changed lately"
+      }
+    },
+    {
+      "id": "room-notes",
+      "feature": "Messages",
+      "kind": "destination",
+      "path": "docs/assets/recordings/site/site-room-notes.gif",
+      "sha256": "c6bc028df52061ce75219f45882ce828b0e38ea2c9ad4d2b0004c6118f7fdba8",
+      "bytes": 256715,
+      "width": 720,
+      "height": 450,
+      "frames": 5,
+      "rawFrameSha256": [
+        "3b8710f8d90842bde257e7e7c4f86d3764a6c23e8d9583ca24ff4c89ced2bb6d",
+        "1c05df2028b2e88b6e3ef765165da08d51548f3342fc960ca88e79c58ede6c0f",
+        "ef54b8808c03b6fc71830a6dc2c83a832f5bfaaff48a4ef7a5e2e2193597fb77",
+        "59da72d8b897774b903a1d8c0389395d19dd364cc796d0642e5862750eb9a3cd",
+        "3b10f5c054903ecf1a43b3d37993cacfb0e0b022f0d3c68e8814f7edc7b6cff3",
+        "3b10f5c054903ecf1a43b3d37993cacfb0e0b022f0d3c68e8814f7edc7b6cff3",
+        "3b10f5c054903ecf1a43b3d37993cacfb0e0b022f0d3c68e8814f7edc7b6cff3"
+      ],
+      "finalState": {
+        "view": "room",
+        "heading": "Messages"
+      }
+    },
+    {
+      "id": "room-history",
+      "feature": "Time machine",
+      "kind": "destination",
+      "path": "docs/assets/recordings/site/site-room-history.gif",
+      "sha256": "9418e4fb147e90bea942f0cb1cb21b9ad8debe0fc94b1b45588be46cfad2d1ea",
+      "bytes": 230307,
+      "width": 720,
+      "height": 450,
+      "frames": 5,
+      "rawFrameSha256": [
+        "cc0a2975fea1c5c3564b7bab6d72611fbdaed92c108fb810e3ff51f9e3e79a28",
+        "ff5eb5885c59f957c5baeb442a670c1abfab9aa4866b4b3ff5e398cbe2358c9f",
+        "5b1b90e8e9289fd3d22d582716c6e6f244f226128ac96a73a51d7e2d68c3678f",
+        "7bd0d3fed39581f118c7acdddc4cd74a075b7de15ea6e33df4882b030484a410",
+        "1b1f904f097455ecc03779450852ad67801d0f3386880db14cf69946b4b69eb8",
+        "1b1f904f097455ecc03779450852ad67801d0f3386880db14cf69946b4b69eb8",
+        "1b1f904f097455ecc03779450852ad67801d0f3386880db14cf69946b4b69eb8"
+      ],
+      "finalState": {
+        "view": "room",
+        "heading": "The time machine"
+      }
+    },
+    {
+      "id": "room-auth",
+      "feature": "Code maker",
+      "kind": "destination",
+      "path": "docs/assets/recordings/site/site-room-auth.gif",
+      "sha256": "6c3f0d42b47d7f68499cb519a66280f9509c068366486bbec86b6f0e0661be20",
+      "bytes": 227092,
+      "width": 720,
+      "height": 450,
+      "frames": 5,
+      "rawFrameSha256": [
+        "b54a680cbb52cd5b13015f55d3266c9ba393b276d0aa9a87dcf8d70e15d5707c",
+        "3f7c1cf467a71c360adc5a558e68286bc916d4cb3dcf72ee8e866c0086fc43d5",
+        "0ddd9c6e0cc8d3d70035319528d15e2ea4b01fb56e6f6a776fdb32ac5566dd9f",
+        "471c51664f0d2397f8ac5e319e5d9951931497aa69a8ad9ab63881e0b4da7569",
+        "d35109052f1ac2faa6d1a6654e6fbf242788fe31c4779bcd4d6a5634e911a235",
+        "d35109052f1ac2faa6d1a6654e6fbf242788fe31c4779bcd4d6a5634e911a235",
+        "d35109052f1ac2faa6d1a6654e6fbf242788fe31c4779bcd4d6a5634e911a235"
+      ],
+      "finalState": {
+        "view": "room",
+        "heading": "The code maker"
+      }
+    },
+    {
+      "id": "room-shop",
+      "feature": "Model shop",
+      "kind": "destination",
+      "path": "docs/assets/recordings/site/site-room-shop.gif",
+      "sha256": "722f7cb677e38a1a094e224bf46233c96fe28baaf25e803462084f020c5724ee",
+      "bytes": 271600,
+      "width": 720,
+      "height": 450,
+      "frames": 5,
+      "rawFrameSha256": [
+        "d051e629cc945cbaee58adb92a99f8fadc3b25369213494d43f079394b9fb349",
+        "f0b28aed82c1b47d946b0df3eaecb5aa94739e5db334a546ac23afcdbc017d45",
+        "994434e024e7ac315bc08964cd8eb778183468f0abf5d7c94ccf24c38d6f9dd2",
+        "4147c7c6916b779b6f028e25f617a148312bf65d95bb074ebdc579912e466b12",
+        "9b500a4cefe747055b9f8aff3cf9ca038c5ac1462d369141376016486800d349",
+        "9b500a4cefe747055b9f8aff3cf9ca038c5ac1462d369141376016486800d349",
+        "9b500a4cefe747055b9f8aff3cf9ca038c5ac1462d369141376016486800d349"
+      ],
+      "finalState": {
+        "view": "room",
+        "heading": "The model shop"
+      }
+    },
+    {
+      "id": "room-convert",
+      "feature": "Turn-it-into",
+      "kind": "destination",
+      "path": "docs/assets/recordings/site/site-room-convert.gif",
+      "sha256": "cf08eeb0070bd903c7b58aa6e46d497531d23233497845bbef5a3c6a8207e731",
+      "bytes": 222179,
+      "width": 720,
+      "height": 450,
+      "frames": 5,
+      "rawFrameSha256": [
+        "205a24a96c55622f0ce5c37a636ab599273944805e6d5f76804a3d41edede0c0",
+        "c4acb7545ed784a20a146a905c3144bb0291194573c3e8c82506b1ced2c57fb6",
+        "74f935f2560a20fb6966b39be46e5ee1fafb94d6be1d4a7e09211e29c7b540e7",
+        "7a4703d03d7252c77b2ae197944779bdef6d7b15f57932b655f8d3d3d6b29961",
+        "e138c00741f5c840ff150d2eba3684dd3876d67d8b2d70999d3900d96ebe2c7b",
+        "e138c00741f5c840ff150d2eba3684dd3876d67d8b2d70999d3900d96ebe2c7b",
+        "e138c00741f5c840ff150d2eba3684dd3876d67d8b2d70999d3900d96ebe2c7b"
+      ],
+      "finalState": {
+        "view": "room",
+        "heading": "The turn-it-into lab"
+      }
+    },
+    {
+      "id": "room-export",
+      "feature": "Take it home",
+      "kind": "destination",
+      "path": "docs/assets/recordings/site/site-room-export.gif",
+      "sha256": "03bd6ff0107fbc2d29c9a15eb7cc74d8a0c5844b463b2a189a512cf6faf82309",
+      "bytes": 240221,
+      "width": 720,
+      "height": 450,
+      "frames": 5,
+      "rawFrameSha256": [
+        "043b6ff463b294b8dc8767be4c96071ce193b57f0017175b055c691bcb3b8b1e",
+        "66ecbc642c2eb2c6c5ca6f932df53f210506ac3c2771ddc454a0f8cf886cb847",
+        "ba94493946af9d6821775b1dc4c64056ad7eacd71479ffdf3062a6f396d28c35",
+        "7ff12f9e1715361d130f8af040f65ae539f5c6a8b8112df3ec28e24589f9e541",
+        "cd5bcdd4d4626e64676a1157b077a1d9839585f0916ce98536fa55c85328a802",
+        "cd5bcdd4d4626e64676a1157b077a1d9839585f0916ce98536fa55c85328a802",
+        "cd5bcdd4d4626e64676a1157b077a1d9839585f0916ce98536fa55c85328a802"
+      ],
+      "finalState": {
+        "view": "room",
+        "heading": "Take it home"
+      }
+    },
+    {
+      "id": "room-dish",
+      "feature": "Dim sum",
+      "kind": "destination",
+      "path": "docs/assets/recordings/site/site-room-dish.gif",
+      "sha256": "5b7e2f682eb76f3a71a57b39350a00fabaa20378a5f20bad7cb8c32b222f4201",
+      "bytes": 248612,
+      "width": 720,
+      "height": 450,
+      "frames": 5,
+      "rawFrameSha256": [
+        "0548534d6c566a118c05f9e06ef35cbebc6dfaedc80677340ecbf5897fb69a83",
+        "54a8b0538e32f4e5386c4482c098f3499c71994b0706a294134e3725f1abbfd3",
+        "abce122100076f58c4fb6b6be66f6820d8aadfd714cce136b9e70ba252f76480",
+        "57dc9f1a37c5019efb07a1e9a545add6b227257fe605c587d0d7d105e741d8ca",
+        "4680eeb5e3c23325d491c76af32458e0fa3004538e2f780d8aba1b7cd41276a8",
+        "4680eeb5e3c23325d491c76af32458e0fa3004538e2f780d8aba1b7cd41276a8",
+        "4680eeb5e3c23325d491c76af32458e0fa3004538e2f780d8aba1b7cd41276a8"
+      ],
+      "finalState": {
+        "view": "room",
+        "heading": "The dim sum trolley"
+      }
+    },
+    {
+      "id": "room-coverage",
+      "feature": "Checklist",
+      "kind": "destination",
+      "path": "docs/assets/recordings/site/site-room-coverage.gif",
+      "sha256": "eae3dd8fa7e4ccdd1951b7ecd7711e71849420545117f75b94f995c99b2812d4",
+      "bytes": 249148,
+      "width": 720,
+      "height": 450,
+      "frames": 5,
+      "rawFrameSha256": [
+        "2a07e963aaaf9884e288cd2116a3f6ada271df6ec2fd9ff68c3c3b6a6c14f4c1",
+        "a8a16ee61aa451c32f32bf4b95a9beecee9499e59f4508a8fd108777b2d701f1",
+        "c853616419c9b7f77467c90c1732e089ea9b464af652853d2d177a0bf6f744ad",
+        "4f27fbb8717f2f506dfa9633d3a42d158bf74ef2d4f79c3bf47b12eb3d832a72",
+        "b326ed02e52fe716a26efc4d28e2ddf3ad14b2076911b6c8a7af26570cae7dd5",
+        "b326ed02e52fe716a26efc4d28e2ddf3ad14b2076911b6c8a7af26570cae7dd5",
+        "b326ed02e52fe716a26efc4d28e2ddf3ad14b2076911b6c8a7af26570cae7dd5"
+      ],
+      "finalState": {
+        "view": "room",
+        "heading": "The big checklist"
+      }
+    },
+    {
+      "id": "room-shots",
+      "feature": "Screenshots",
+      "kind": "destination",
+      "path": "docs/assets/recordings/site/site-room-shots.gif",
+      "sha256": "cffa5f15e526f008566e5150050f94710ba2e04cccb3af14f8aedc169db0dc07",
+      "bytes": 243989,
+      "width": 720,
+      "height": 450,
+      "frames": 5,
+      "rawFrameSha256": [
+        "0705d3a4da8b2f4c82837bd1c2276f2d3d92dfa620a7c72e01f1c25fc6ecd665",
+        "0357bdbfa4e7fbe593a54d0176e3096ef2a6a12072246cf2c0f82b9078f94ad7",
+        "8eb65cc71a49f76854b5131266cb9731f6f14ef49b189ae7c865c81031ca1daf",
+        "8e4724217cb5fb4ca2a5155703c5a32e4d6aa7decac5a722e9e0b37f184456c7",
+        "2e34acc90517b5bf65a7cded56312d3b4c1a0bf856334335d1535a4b28e26665",
+        "2e34acc90517b5bf65a7cded56312d3b4c1a0bf856334335d1535a4b28e26665",
+        "2e34acc90517b5bf65a7cded56312d3b4c1a0bf856334335d1535a4b28e26665"
+      ],
+      "finalState": {
+        "view": "room",
+        "heading": "What nodeterm actually looks like"
+      }
+    },
+    {
+      "id": "room-pair",
+      "feature": "Remote access",
+      "kind": "destination",
+      "path": "docs/assets/recordings/site/site-room-pair.gif",
+      "sha256": "50b4f3b78a6cad860e540e61c5afb370fa5d9a4944e4f17a3f5fa1a2421bb313",
+      "bytes": 277169,
+      "width": 720,
+      "height": 450,
+      "frames": 5,
+      "rawFrameSha256": [
+        "bd0afa5af5e5226b3c5780082baa2946382b2b0cfda4c9ea1344adf61027854f",
+        "ec60af19ff6b50f4194be97df1490af97ec9479644f398c19ecb27eca35282e6",
+        "ad33be33150a41b0926a53c36b0305e4b72753356bffd23cce0fb8f1b6a47204",
+        "bdc2be366de246d1592b264a46097fe7114a98f5ecb5b6934e536fdb194c770b",
+        "8bf7cf48b4a45d42bdf5a18ce93afb5dafb3cb7296878692648eb890fa9ef60d",
+        "8bf7cf48b4a45d42bdf5a18ce93afb5dafb3cb7296878692648eb890fa9ef60d",
+        "8bf7cf48b4a45d42bdf5a18ce93afb5dafb3cb7296878692648eb890fa9ef60d"
+      ],
+      "finalState": {
+        "view": "room",
+        "heading": "Use nodeterm remotely"
+      }
+    },
+    {
+      "id": "room-play",
+      "feature": "Playroom",
+      "kind": "destination",
+      "path": "docs/assets/recordings/site/site-room-play.gif",
+      "sha256": "7354753f84f1c7f55927977a5e540188a7664a7d5bea40ee256e51c6f6c8419c",
+      "bytes": 269387,
+      "width": 720,
+      "height": 450,
+      "frames": 5,
+      "rawFrameSha256": [
+        "4843c125bff767649f812a98f661a5e7b845d22dcf47b89ec495513a0051eb0e",
+        "d6eae9e50d7e0fc9a04ef3bdcab2c12a8b556e987860d6b7f74239548135eee7",
+        "4b450e4ddccbc7e6c1077ede8ba4fdd282a4b9d8ceeeef7b35473676ef7b685b",
+        "cd581150801cacba18f63db957c5ee9da952fc5dee541dd1cc53b6e35394da3b",
+        "56193e149ccebfcac20bad49902789bebfacbe9bbdf3e31533dbcfe125c3ff99",
+        "56193e149ccebfcac20bad49902789bebfacbe9bbdf3e31533dbcfe125c3ff99",
+        "56193e149ccebfcac20bad49902789bebfacbe9bbdf3e31533dbcfe125c3ff99"
+      ],
+      "finalState": {
+        "view": "room",
+        "heading": "The playroom"
+      }
+    },
+    {
+      "id": "room-settings",
+      "feature": "Settings",
+      "kind": "destination",
+      "path": "docs/assets/recordings/site/site-room-settings.gif",
+      "sha256": "d83932e8c5f1c826dd291eed30c8de8e674fc47c6927f96453de3ddff7b249e4",
+      "bytes": 226763,
+      "width": 720,
+      "height": 450,
+      "frames": 5,
+      "rawFrameSha256": [
+        "59cc92dbd3dfd918ad7e1aa8a808c70d80bf64599d3d118ad5eaf265c7f2d2a2",
+        "4fc6c056f30aae0f7438d9483f765983e1e36086fbb4baa9af7bae251a426c75",
+        "98b4ae2126134ad03465a36a06860009350b1d17b8cf75c2a92382bef3392e3d",
+        "c09e54b3d6aae1ff9054a291b3195322d3fdb9e1df3425bb965610b6214c8426",
+        "c65b084ba067f9ab1983c90c6e18496180d636121fc83941e74e3d31bade877e",
+        "c65b084ba067f9ab1983c90c6e18496180d636121fc83941e74e3d31bade877e",
+        "c65b084ba067f9ab1983c90c6e18496180d636121fc83941e74e3d31bade877e"
+      ],
+      "finalState": {
+        "view": "room",
+        "heading": "Make it yours"
+      }
+    },
+    {
+      "id": "setting-you",
+      "feature": "About you",
+      "kind": "settings-card",
+      "path": "docs/assets/recordings/site/site-setting-you.gif",
+      "sha256": "eec3b8a35f55d89a7bec540011122e99a40cf69b984a940252a7640859dca814",
+      "bytes": 208756,
+      "width": 720,
+      "height": 450,
+      "frames": 4,
+      "rawFrameSha256": [
+        "c65b084ba067f9ab1983c90c6e18496180d636121fc83941e74e3d31bade877e",
+        "79cd2e440324fb82fdc70e225a5e484c59298abba45fd3ea7d2ac2d3330e1d07",
+        "31ca709cfb230bcc3aa9c6f4239c05da54d15eaf1f5413215a5ed5dfe4ec1048",
+        "e10cd8cd86b8010637602588217812140b61d927656f7911325078747a4eb59b"
+      ],
+      "finalState": {
+        "visible": true,
+        "title": "About you"
+      }
+    },
+    {
+      "id": "setting-look",
+      "feature": "How it looks",
+      "kind": "settings-card",
+      "path": "docs/assets/recordings/site/site-setting-look.gif",
+      "sha256": "380d798160c344233989bfb30cd009722db6423910581910731683fb9396904f",
+      "bytes": 236314,
+      "width": 720,
+      "height": 450,
+      "frames": 5,
+      "rawFrameSha256": [
+        "5c3f4fe1509005b2ce414bd7690384c8bfdce812532c7c092f8f6b0bd7b860f7",
+        "3e1ebc96408f142207fec19bc63895681123344ba4af52afc559adb24aa91da4",
+        "d6b49c088d55d8e41473e40e6fd49094b77d999dbf0b5cd0c7484b4b21b7afc3",
+        "d98c3d8d202a161fc76bd32ceaed7e1a8f8ca2c51f4305a53e4e96162515cc36",
+        "1fe08846c22a1cf0375a6557d5a3a6a87ac4140fc61fd289e344fef47c171f76"
+      ],
+      "finalState": {
+        "visible": true,
+        "title": "How it looks"
+      }
+    },
+    {
+      "id": "setting-words",
+      "feature": "Words and jokes",
+      "kind": "settings-card",
+      "path": "docs/assets/recordings/site/site-setting-words.gif",
+      "sha256": "a8cac99b7957b24f153d105bf23f6a961285cd6226cb5378f5c70df5a49a5c62",
+      "bytes": 235082,
+      "width": 720,
+      "height": 450,
+      "frames": 5,
+      "rawFrameSha256": [
+        "5c3f4fe1509005b2ce414bd7690384c8bfdce812532c7c092f8f6b0bd7b860f7",
+        "032d79ec621e8045a889cc0b22c306a333ef764b1f7c3a355e45c186461da864",
+        "368bdcfd78fb984f49410d3d8c638fa3a18adbd276ce308b59b8fb922734185e",
+        "857a16fc7162b3e5e7f8fcb0ecabcf622d7308c59b84d0874af45d44f3c44524",
+        "14ac77e1353b7cf188add318a098f2081b9658390b86d4a964e1e16c1d63bcb7"
+      ],
+      "finalState": {
+        "visible": true,
+        "title": "Words and jokes"
+      }
+    },
+    {
+      "id": "setting-narrator",
+      "feature": "Read it to me",
+      "kind": "settings-card",
+      "path": "docs/assets/recordings/site/site-setting-narrator.gif",
+      "sha256": "5de2d9a5f2de9a8d137f72ece5d0b2c5c53b0652944230609c374ed04907260a",
+      "bytes": 264661,
+      "width": 720,
+      "height": 450,
+      "frames": 6,
+      "rawFrameSha256": [
+        "5c3f4fe1509005b2ce414bd7690384c8bfdce812532c7c092f8f6b0bd7b860f7",
+        "1bcaa4873ffd2636f7587cb58e94e6416d145756577dec84388357c13ae465a6",
+        "6994025585b637b61b59ebc7fba7aca2ebb68b518ed7b80a51e4d6a88b3d9c83",
+        "5d869c018bfaa4b4a6bdd8099b7c53d18139a5bd747dfc3fe5a16003027b4239",
+        "b27d29b45870ddad97c25db42a53b0838c348d2ff0fc8e036d3db8275b1f81d2",
+        "f75b4a2858f7e2e2a4d3abfdddfec82427cbee6447e96a6dc03d504223aa3299"
+      ],
+      "finalState": {
+        "visible": true,
+        "title": "Read it to me"
+      }
+    },
+    {
+      "id": "setting-school",
+      "feature": "School mode",
+      "kind": "settings-card",
+      "path": "docs/assets/recordings/site/site-setting-school.gif",
+      "sha256": "d002b0c59c27d244908eb347382ab13c303ceea312d0bad96e6866e013674980",
+      "bytes": 213378,
+      "width": 720,
+      "height": 450,
+      "frames": 4,
+      "rawFrameSha256": [
+        "5c3f4fe1509005b2ce414bd7690384c8bfdce812532c7c092f8f6b0bd7b860f7",
+        "651a4596a98bc7f7dcb7d3399ef55543a05564036c4f0bb47a61027f57bc0e24",
+        "bc4823b62d329146841c27e717f90d6bd4f405822907bc9e4834c8ea6d3de1b3",
+        "0b932c84b6c6f87e73c7f5ba488a5560c96263e2749254c183ac6de9fa17c332"
+      ],
+      "finalState": {
+        "visible": true,
+        "title": "School mode"
+      }
+    },
+    {
+      "id": "setting-vocab",
+      "feature": "My own words",
+      "kind": "settings-card",
+      "path": "docs/assets/recordings/site/site-setting-vocab.gif",
+      "sha256": "ff4e16ac5740e4f345d16b596b6758fa60b5adf651091420b1dc5b175c438051",
+      "bytes": 248074,
+      "width": 720,
+      "height": 450,
+      "frames": 5,
+      "rawFrameSha256": [
+        "5c3f4fe1509005b2ce414bd7690384c8bfdce812532c7c092f8f6b0bd7b860f7",
+        "d3bdea0184027ee669f2c46697ca2a58d52483559de516fc37aa55195b3bc67b",
+        "b1c9b46db4505167c2e85e51618f7c28d5f60f75e973d8279fe91e6448ab16c8",
+        "7d5236dc524f891d13e7d7e6b994975747a92bcf5916a802e6f3a2c60613b3c2",
+        "93ea41c7917bcbea1e22a32b2440938a94fd9b18389f0a7e193b8578bd83dbd4"
+      ],
+      "finalState": {
+        "visible": true,
+        "title": "My own words"
+      }
+    },
+    {
+      "id": "setting-safety",
+      "feature": "Toy locks",
+      "kind": "settings-card",
+      "path": "docs/assets/recordings/site/site-setting-safety.gif",
+      "sha256": "2ddc42f80e8618439d1a255dc8eddaaca1424a86c5a9e70a54982ae4ab0b5943",
+      "bytes": 235795,
+      "width": 720,
+      "height": 450,
+      "frames": 4,
+      "rawFrameSha256": [
+        "49d3cce01457664c439c26a371c2802e2484976be4093b91f5da41b5dbac49b0",
+        "3e8ae60571f69c3cd2b38e3153a0ec5c7f0b3080cfa1b03b60265ceaf4d6d07d",
+        "e560fe57916fc33bee5e36aa9129e43f21054bbab8876575a49e3e2387e3f0a0",
+        "89c57beedd38576191edbb4b0cea40c1b56341e02125fe70da2b31fb446470da"
+      ],
+      "finalState": {
+        "visible": true,
+        "title": "Toy locks"
+      }
+    },
+    {
+      "id": "setting-timers",
+      "feature": "Timers",
+      "kind": "settings-card",
+      "path": "docs/assets/recordings/site/site-setting-timers.gif",
+      "sha256": "68f263344e74e62fac69e56a91ff5df315c832f88dfc62f426fd89c86d387de5",
+      "bytes": 386072,
+      "width": 720,
+      "height": 450,
+      "frames": 9,
+      "rawFrameSha256": [
+        "e65d7cbec8b24409ce5abfc3c584862e12e42d51c227af883a3fac9e785e34a8",
+        "631a6447285e6344ed1b3352d1f114c50a569b0e84bbcde8c7d6ea84952840ab",
+        "2684a5a5f5300c8e90b689eff0d5e202b0a25638b1cf8d597b55cb174c122338",
+        "ad5b92ae2c95f9f1795d66a520f866373c6f6ab28279f3b005dd800e0c8a9ae8",
+        "e5fcab6e60b78d8e915c85bcbe59fac40208be900f064838e8d62fe0c7153b77",
+        "75fd440e135c7172493fa713ce556ff6454f465b07740fb584da56cb31c2468d",
+        "a6d4ba08ccba09244c1ab239b108e9290ef300a2713379a95d8f9a7b945eeaa8",
+        "fb6734f975da6b3c2e760080b43089783ff46914421160b16407baabd9431336",
+        "9c36c11a8926e702c3330841c4953a579c616d2ca6147475bd3e355f0c15d695"
+      ],
+      "finalState": {
+        "visible": true,
+        "title": "Timers"
+      }
+    },
+    {
+      "id": "setting-demo",
+      "feature": "Download demo",
+      "kind": "settings-card",
+      "path": "docs/assets/recordings/site/site-setting-demo.gif",
+      "sha256": "fea7ad20af00254ccb74c8e509ac0ec2db5a373e8435ccbb56401b3569408344",
+      "bytes": 219012,
+      "width": 720,
+      "height": 450,
+      "frames": 4,
+      "rawFrameSha256": [
+        "5c3f4fe1509005b2ce414bd7690384c8bfdce812532c7c092f8f6b0bd7b860f7",
+        "39b035a0eaac2d511665f40dc7f0e82166667255386260dab1fe5513a186fcf8",
+        "30fe8010ecb20876b5570edaf812b7f7132ec573b2de84e886e38b686edba378",
+        "b98d8687129e1f849ff7e23f4e644151595a8941217e325920103f8e98f821e7"
+      ],
+      "finalState": {
+        "visible": true,
+        "title": "Download demo"
+      }
+    },
+    {
+      "id": "setting-adhd",
+      "feature": "ADHD modes",
+      "kind": "settings-card",
+      "path": "docs/assets/recordings/site/site-setting-adhd.gif",
+      "sha256": "d9b16f57fbf01bb79464d64c7e9bacd1e9879f8e89f2d4495745de313b916849",
+      "bytes": 225676,
+      "width": 720,
+      "height": 450,
+      "frames": 4,
+      "rawFrameSha256": [
+        "5c3f4fe1509005b2ce414bd7690384c8bfdce812532c7c092f8f6b0bd7b860f7",
+        "c0a36d8c63f76669ebeb0eae765901488934bcb27efab4c5f913609fa2062560",
+        "3f664b28d559342da0b964fb1cac1ccdbfb0e9ef85f6be38d4cda95518d59f55",
+        "bb95be1cd651d608b20f9c4d442650589377d387d48d1380930fe0297031a1f1"
+      ],
+      "finalState": {
+        "visible": true,
+        "title": "ADHD modes"
+      }
+    }
+  ],
+  "limitations": [
+    "GIF files are downscaled visual derivatives of the retained raw PNG frame sequence.",
+    "GIF files contain no audio.",
+    "The mobile capture uses browser emulation and is not physical-device evidence."
+  ]
+}

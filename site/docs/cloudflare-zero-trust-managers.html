@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cloudflare managers, nodeterm</title>
+    <meta name="description" content="Typed Cloudflare Access, Zero Trust, Workers, Pages, R2, D1 and Queues managers with local credentials and portable intent." />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+  </head>
+  <body>
+    <div class="doc-topbar"><a href="./index.html">← Documentation</a></div>
+    <article class="doc-body">
+      <p class="doc-kicker">Integrations</p>
+      <h1>Cloudflare Access, Zero Trust, Workers, Pages, R2, D1 and Queues</h1>
+      <p>This canvas manager is a guided client for the documented Cloudflare API. It is not a raw request editor, arbitrary shell, or hosted substitute for the installed app.</p>
+      <h2>Guided typed operations</h2>
+      <p>Seven fixed manager families expose typed list, create, deploy, remove, and purge actions. Account, operation, and verified-resource pickers are searchable, keyboard-operable, and each has its own adjacent anchored regex builder. Workers deployment uses a selected local script file and never accepts a command or remote URL.</p>
+      <h2>Local credentials and portable intent</h2>
+      <p>API tokens, account ids, credential references, resource ids, selected file paths, response caches, and progress state stay in local protected storage. Schema 3 carries only neutral manager, operation, and field intent. Import has no network, deployment, process, or file-selection side effect, so a new computer visibly remains unbound until configured.</p>
+      <h2>Bounded and reviewable execution</h2>
+      <p>The trusted core owns fixed HTTPS routes, rejects redirects, bounds responses to 8 MiB, enforces a 60-second deadline, redacts result previews, and aborts cancellation. Destructive actions require the app's existing two-key confirmation and a complete preview before any request is sent. Progress, failure, cancellation, and partial result states remain visible.</p>
+      <h2>Implementation status</h2>
+      <p>The implementation is in <code>src/shared/cloudflare-zero-trust.ts</code>, <code>src/core/cloudflare-zero-trust/service.ts</code>, and <code>src/renderer/components/cloudflare/CloudflareZeroTrustPanel.tsx</code>. This ultra-speed lane intentionally ran no tests, type checks, lint, reviews, security or accessibility checks, builds, packaging, installer execution, runtime interaction, or UI captures. The parent integration lane must provide those verdicts.</p>
+      <section class="doc-suggested"><h2>Suggested articles</h2><ul><li><a href="./service-nodes.html">Service nodes</a></li><li><a href="./node-catalog.html">Unified Node Catalog</a></li><li><a href="./portable-media-assets.html">Portable project intent</a></li></ul></section>
+    </article>
+  </body>
+</html>

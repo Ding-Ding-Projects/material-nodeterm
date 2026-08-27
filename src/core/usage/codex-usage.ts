@@ -27,7 +27,13 @@ const SECONDARY_WINDOW_MINUTES = 10_080 // 7d
 
 /** `~/.codex`, or `$CODEX_HOME` when the user has relocated it. */
 export function codexHome(): string {
-  return process.env.CODEX_HOME?.trim() || path.join(os.homedir(), '.codex')
+  const configured = process.env.CODEX_HOME?.trim()
+  if (!configured) return path.join(os.homedir(), '.codex')
+  if (configured === '~') return os.homedir()
+  if (configured.startsWith('~/') || configured.startsWith('~\\')) {
+    return path.resolve(os.homedir(), configured.slice(2))
+  }
+  return path.resolve(configured)
 }
 
 interface CodexAuth {

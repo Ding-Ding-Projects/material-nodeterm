@@ -31,7 +31,7 @@
     <article class="doc-body">
       <p class="doc-kicker">Terminals · persistence</p>
       <h1>Terminal sessions &amp; continuity</h1>
-      <p>Terminal nodes use a persistent backend instead of tying the live shell to the desktop window. macOS, Linux, and SSH sessions use tmux; stock Windows uses nodeterm's standalone session host. Both keep the live process running across an app close or crash. Neither keeps that process alive through a machine reboot.</p>
+      <p>Terminal nodes use a persistent backend instead of tying the live shell to the desktop window. Linux and SSH sessions use tmux; stock Windows uses nodeterm's standalone session host. Both keep the live process running across an app close or crash. Neither keeps that process alive through a machine reboot.</p>
 
       <h2>Behaviour</h2>
       <p>On the tmux path, each terminal is created with <code>tmux new-session -A -D -s nt-&lt;nodeId&gt;</code> on a socket dedicated to nodeterm, using a generated <code>tmux.conf</code> so the user's own <code>~/.tmux.conf</code> never interferes. tmux owns its screen, mouse, and scrollback; OSC 52 carries copied text back to the system clipboard, including over SSH.</p>

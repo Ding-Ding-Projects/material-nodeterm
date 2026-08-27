@@ -9,7 +9,7 @@
 import { esc, attr } from './dom.js'
 import { makeMatcher } from './store.js'
 import { getRoom, allSettingsCards, computeRx, fmtWhen } from './engine.js'
-import { SECTIONS, FEATURES, DOCS, COVERAGE, REPO_URL, REPO_RELEASES, UPSTREAM_URL } from '../shared/data.js'
+import { SECTIONS, FEATURES, DOCS, COVERAGE, REPO_URL, REPO_RELEASES, UPSTREAM_URL, WINDOWS_SETUP_URL } from '../shared/data.js'
 import { shapeVoice, shapeTitle, shapeCopy, effLang } from '../shared/i18n.js'
 import { guardPanel } from '../shared/lockGate.js'
 
@@ -68,7 +68,6 @@ function renderHall(store) {
       </a>
       ${searchBar({ id: 'qGlobal', value: s.qGlobal, placeholder: 'Which room are you looking for?', ariaLabel: 'the whole school', rxKey: 'global', state: s, cls: 'header-search' })}
       <div class="header-actions">
-        <button type="button" class="round-btn round-btn--jump" data-action="open-palette" data-menu-kind="generic" data-menu-label="${copyAttr(s, 'this button')}" title="Magic jump box — Ctrl+Shift+F">✨ Jump</button>
         <button type="button" class="round-btn round-btn--jump" data-action="open-palette" data-menu-kind="generic" data-menu-label="${copyAttr(s, 'this button')}" title="${factAttr('Magic jump box — Ctrl+Shift+F')}">✨ ${fact('Jump')}</button>
         <button type="button" class="round-btn round-btn--theme" data-action="toggle-theme" data-menu-kind="generic" data-menu-label="${copyAttr(s, 'this button')}" aria-label="${copyAttr(s, 'Day or night')}">${s.theme === 'night' ? '🌙' : '☀️'}</button>
         <button type="button" class="round-btn round-btn--bell" data-action="go-room" data-id="notes" data-menu-kind="generic" data-menu-label="${copyAttr(s, 'this button')}" aria-label="${copyAttr(s, 'Message box')}">🔔${s.notes.length ? `<span class="bell-count">${s.notes.length}</span>` : ''}</button>
@@ -96,11 +95,11 @@ function renderHall(store) {
           <div class="hero-panel__body">
             <div class="pill" style="background:var(--pink)">${copy(s, 'a playground for your computer')}</div>
             <h2>${copy(s, 'Your terminals are')}<br />${copy(s, 'blocks on a giant canvas.')}</h2>
-            <p>${copy(s, 'Every terminal is a block you can drag around. Robot helpers get their own blocks too, and they raise a hand when they need you. Nothing disappears when you close the lid.')}</p>
+            <p>${copy(s, 'Every terminal is a block you can drag around. Robot helpers get their own blocks too, and they raise a hand when they need you. Supported live sessions reconnect while their host remains available.')}</p>
             <div class="cta-row">
-              <a class="btn" style="background:var(--green)" href="${factAttr(REPO_RELEASES)}" target="_blank" rel="noopener">⬇ ${fact('Get nodeterm')}</a>
+              <a class="btn" style="background:var(--green)" href="${factAttr(WINDOWS_SETUP_URL)}">⬇ ${fact('Get nodeterm for Windows')}</a>
               <a class="btn" href="${factAttr(REPO_URL)}" target="_blank" rel="noopener">👀 ${copy(s, 'Peek at the code')}</a>
-              <span class="brew-pill">${fact('brew install --cask nodeterm')}</span>
+              <span class="brew-pill">${fact('Windows x64 · unsigned Squirrel installer')}</span>
             </div>
           </div>
         </div>
@@ -121,12 +120,12 @@ function renderHall(store) {
           <div class="steps-grid">
             <div class="step-card" style="background:var(--yellow)"><div class="step-card__n">1</div><h4>${copy(s, 'Right-click the canvas')}</h4><p>${copy(s, 'Open a terminal, or a robot helper, wherever you want it. It becomes a block you can move.')}</p></div>
             <div class="step-card" style="background:var(--blue)"><div class="step-card__n">2</div><h4>${copy(s, 'Lay it out in space')}</h4><p>${copy(s, 'Group blocks, label them, zoom out to see everything at once. The map stays put across restarts.')}</p></div>
-            <div class="step-card" style="background:var(--pink)"><div class="step-card__n">3</div><h4>${copy(s, 'Walk away, come back')}</h4><p>${copy(s, 'Close the lid, reboot the machine. Your terminals and your helpers are exactly where you left them.')}</p></div>
+            <div class="step-card" style="background:var(--pink)"><div class="step-card__n">3</div><h4>${copy(s, 'Walk away, come back')}</h4><p>${copy(s, 'Close and reopen the app to reconnect supported live sessions. After a computer restart, layout and saved scrollback restore honestly.')}</p></div>
           </div>
         </div>
 
         <div class="surface-grid">
-          <div class="surface-card"><div class="surface-card__icon" aria-hidden="true">🖥</div><h4>${copy(s, 'On your desk')}</h4><p>${copy(s, 'The app for macOS and Linux, with native window chrome and auto-update.')}</p></div>
+          <div class="surface-card"><div class="surface-card__icon" aria-hidden="true">🖥</div><h4>${copy(s, 'On your desk')}</h4><p>${copy(s, 'The Windows desktop app has custom window chrome, detected shell profiles, and Squirrel updates.')}</p></div>
           <div class="surface-card"><div class="surface-card__icon" aria-hidden="true">🌍</div><h4>${copy(s, 'In any browser')}</h4><p>${copy(s, 'Server Edition serves the same canvas from your own machine, so you can reach it anywhere.')}</p></div>
           <div class="surface-card"><div class="surface-card__icon" aria-hidden="true">📱</div><h4>${copy(s, 'In your pocket')}</h4><p>${copy(s, 'Run the Docker host on any machine and open it from your phone’s browser — same canvas, nothing to install.')}</p></div>
         </div>
@@ -142,10 +141,10 @@ function renderHall(store) {
 
         <div class="closer-panel">
           <h3>${copy(s, 'Stop hunting through tabs.')}</h3>
-          <p>${copy(s, 'Free, open source, and it works offline. macOS 12+ and Linux x64.')}</p>
+          <p>${copy(s, 'The current desktop package is for Windows x64. The unsigned installer may show an unknown-publisher warning.')}</p>
           <div class="cta-row" style="justify-content:center">
-            <a class="btn" style="background:var(--card);height:56px;font-size:18px" href="${factAttr(REPO_RELEASES)}" target="_blank" rel="noopener">⬇ ${fact('Download nodeterm')}</a>
-            <button type="button" class="btn" style="background:var(--card);height:56px;font-family:var(--mono);font-size:14px" data-action="copy-brew">📋 ${fact('brew install --cask nodeterm')}</button>
+            <a class="btn" style="background:var(--card);height:56px;font-size:18px" href="${factAttr(WINDOWS_SETUP_URL)}">⬇ ${fact('Download for Windows')}</a>
+            <a class="btn" style="background:var(--card);height:56px;font-size:14px" href="${factAttr(REPO_RELEASES)}" target="_blank" rel="noopener">📦 ${fact('View every release file')}</a>
           </div>
         </div>
       </div>
@@ -200,11 +199,10 @@ function renderRoom(store) {
       <a class="brand" href="./index.html" data-no-room>
         <img class="brand__mark" src="./assets/mark.svg" alt="" width="34" height="34" style="padding:3px;background:var(--yellow)" />
         <span class="brand__name">${fact('nodeterm')}</span>
-        <span class="brand__ver">${fact('v0.3.0')}</span>
+        <span class="brand__ver">${fact('v0.4.120')}</span>
       </a>
       ${searchBar({ id: 'qGlobal', value: s.qGlobal, placeholder: 'Search the whole playground…', ariaLabel: 'the big search', rxKey: 'global', state: s, cls: 'header-search' })}
       <div class="header-actions">
-        <button type="button" class="round-btn round-btn--jump" data-action="open-palette" data-menu-kind="generic" data-menu-label="${copyAttr(s, 'this button')}" title="Magic jump box — Ctrl+Shift+F">✨ Jump</button>
         <button type="button" class="round-btn round-btn--jump" data-action="open-palette" data-menu-kind="generic" data-menu-label="${copyAttr(s, 'this button')}" title="${factAttr('Magic jump box — Ctrl+Shift+F')}">✨ ${fact('Jump')}</button>
         <button type="button" class="round-btn round-btn--theme" data-action="toggle-theme" data-menu-kind="generic" data-menu-label="${copyAttr(s, 'this button')}" aria-label="${copyAttr(s, 'Switch between day and night')}">${s.theme === 'night' ? '🌙' : '☀️'}</button>
         <button type="button" class="round-btn round-btn--bell" data-action="go-room" data-id="notes" data-menu-kind="generic" data-menu-label="${copyAttr(s, 'this button')}" aria-label="${copyAttr(s, 'Open the message box')}">🔔${s.notes.length ? `<span class="bell-count">${s.notes.length}</span>` : ''}</button>
@@ -252,10 +250,6 @@ function renderRoom(store) {
     </div>
 
     <footer class="site-footer room-footer">
-      <span>BUSL-1.1 licensed · fork of <a href="${UPSTREAM_URL}" target="_blank" rel="noopener">eneskirca/nodeterm</a></span>
-      <a href="${REPO_URL}" target="_blank" rel="noopener">GitHub</a>
-      <a href="${REPO_URL}/blob/main/CHANGELOG.md" target="_blank" rel="noopener">${copy(s, 'Changelog')}</a>
-      <a href="${REPO_URL}/issues" target="_blank" rel="noopener">${copy(s, 'Help')}</a>
       <span>${fact('BUSL-1.1 licensed · fork of')} <a href="${factAttr(UPSTREAM_URL)}" target="_blank" rel="noopener">${fact('eneskirca/nodeterm')}</a></span>
       <a href="${factAttr(REPO_URL)}" target="_blank" rel="noopener">${fact('GitHub')}</a>
       <a href="${factAttr(REPO_URL + '/blob/main/CHANGELOG.md')}" target="_blank" rel="noopener">${copy(s, 'Changelog')}</a>
@@ -295,7 +289,7 @@ function renderHomeRoom(store) {
         <div style="position:relative">
           <div class="pill" style="background:var(--pink)">${copy(s, 'a playground for your computer')}</div>
           <h2 style="font-size:clamp(30px,5.4vw,52px);line-height:1.03;margin:10px 0 8px">${copy(s, 'Your terminals are')}<br />${copy(s, 'blocks on a giant canvas.')}</h2>
-          <p style="margin:0 0 16px;max-width:600px;font-size:16px;color:var(--ink2)">${copy(s, 'Every terminal is a block you can drag around. Robot helpers get their own blocks too, and they raise a hand when they need you. Nothing disappears when you close the lid.')}</p>
+          <p style="margin:0 0 16px;max-width:600px;font-size:16px;color:var(--ink2)">${copy(s, 'Every terminal is a block you can drag around. Robot helpers get their own blocks too, and they raise a hand when they need you. Supported live sessions reconnect while their host remains available.')}</p>
           <div class="cta-row">
             <a class="btn" style="background:var(--green)" href="${REPO_RELEASES}" target="_blank" rel="noopener">⬇ Get nodeterm</a>
             <a class="btn" href="${REPO_URL}" target="_blank" rel="noopener">👀 ${copy(s, 'Peek at the code')}</a>
