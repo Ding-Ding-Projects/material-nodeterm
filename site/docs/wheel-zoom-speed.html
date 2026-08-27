@@ -25,7 +25,7 @@
       <p><strong>Wheel zoom speed</strong> applies only to plain-wheel input. The persisted range is 0.2× through 2.0×, and 1.0× preserves the historical zoom exponent. Modifier wheel zoom and trackpad pinch retain the fixed multiplier.</p>
 
       <h2>Configuration</h2>
-      <p>Open <strong>Settings → Behavior</strong>, enable <strong>Scroll wheel zooms</strong>, and adjust <strong>Wheel zoom speed</strong>. The slider uses 0.1× steps and reports its current value to assistive technology. Its explanation and provenance line follow the selected language mode and funny-level voice while the numeric multiplier stays factual.</p>
+      <p>Open <strong>Settings → Behavior</strong>, enable <strong>Scroll wheel zooms</strong>, and adjust <strong>Wheel zoom speed</strong>. The slider uses 0.1× steps and reports its current value to assistive technology. Its explanation and provenance line follow the selected language mode and shared funny-level 1–10 voice while the numeric multiplier stays factual.</p>
 
       <h2>Failure modes</h2>
       <p>Hand-edited settings are validated where they are consumed. Missing, non-numeric, and non-finite values use 1.0×. Finite values below 0.2 are clamped to 0.2, and values above 2 are clamped to 2. Reading the setting does not rewrite the file, so the original value remains inspectable.</p>

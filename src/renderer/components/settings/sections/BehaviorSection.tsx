@@ -283,13 +283,13 @@ export function BehaviorSection({ isActive }: { isActive: boolean }): React.JSX.
       </SearchableRow>
       <SearchableRow {...ROWS.wheelZoom}>
         <FieldRow
-          label="Scroll wheel zooms"
-          description={hintLabel('Zoom with a plain mouse wheel (no ⌘). Two-finger trackpad scroll still pans.')}
+          label={t('settings.behavior.wheelZoom.label', 'Scroll wheel zooms').primary}
+          description={t('settings.behavior.wheelZoom.description', 'Zoom with a plain mouse wheel (no Command). Two-finger trackpad scroll still pans.').primary}
           control={
             <Switch
               checked={settings.wheelZoom}
               onChange={(v) => update({ wheelZoom: v })}
-              ariaLabel="Scroll wheel zooms"
+              ariaLabel={t('settings.behavior.wheelZoom.label', 'Scroll wheel zooms').primary}
             />
           }
         />
@@ -321,7 +321,7 @@ export function BehaviorSection({ isActive }: { isActive: boolean }): React.JSX.
         <FieldRow
           label="Trackpad scroll pans"
           description={hintLabel(
-            'macOS: a two-finger trackpad scroll pans the canvas even with wheel zoom on. Turn off if a precise-pixel mouse (Magic Mouse, MX) pans when you meant to zoom.'
+            'macOS: a two-finger trackpad scroll pans the canvas even with wheel zoom on. The desktop app tells mouse and trackpad apart directly, so a wheel mouse still zooms; in the browser (Server Edition) detection is heuristic - turn off there if a precise-pixel mouse (Magic Mouse, MX) pans when you meant to zoom.'
           )}
           control={
             <Switch

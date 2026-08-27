@@ -45,6 +45,7 @@ import { solveFitPadding } from './fit-view'
 import { paneMenuGroup } from './paneMenuGroup'
 import { MacWheelGestureRouter, trackpadRoutingEnabled } from './wheel-gesture'
 import { WheelZoomBurstLimiter, clampWheelZoomSpeed, nextWheelZoom } from './wheel-zoom'
+import { isBrowserRuntime } from '@renderer/bridge/runtime'
 import { selectedLocalFilePaths } from './canvas-file-copy'
 import { codexAccountSwitchStillEligible } from './codex-account-switch'
 import {
@@ -2108,6 +2109,7 @@ export function Canvas() {
       homeassistant: withNodeBoundary(ServiceNode),
       freepbx: withNodeBoundary(ServiceNode),
       'cloudflare-zero-trust': withNodeBoundary(ServiceNode),
+      'nextcloud-aio': withNodeBoundary(ServiceNode),
       'cloudflare-core-managers': withNodeBoundary(CloudflareCoreManagersNode),
       'linux-vm': withNodeBoundary(VirtualMachineNode)
     }),
@@ -4374,7 +4376,13 @@ export function Canvas() {
   useEffect(() => {
     const wrap = flowWrapRef.current
     if (!wrap) return
-    const wheelRouting = new MacWheelGestureRouter()
+    // Desktop macOS receives raw gesture facts from the main process. The browser bridge cannot
+    // observe that stream, so it keeps the existing delta-shape heuristic.
+    const gestureReporting = isMac && !isBrowserRuntime()
+    const wheelRouting = new MacWheelGestureRouter(gestureReporting)
+    const offGesture = gestureReporting
+      ? window.nodeTerminal.onCanvasTrackpadGesture((active) => wheelRouting.noteGesture(active))
+      : undefined
     const wheelLimiter = new WheelZoomBurstLimiter()
     const onWheel = (e: WheelEvent) => {
       if (canvasLocked) return
@@ -4410,7 +4418,10 @@ export function Canvas() {
       setViewport({ x: px - (px - x) * k, y: py - (py - y) * k, zoom: next })
     }
     wrap.addEventListener('wheel', onWheel, { capture: true, passive: false })
-    return () => wrap.removeEventListener('wheel', onWheel, { capture: true })
+    return () => {
+      wrap.removeEventListener('wheel', onWheel, { capture: true })
+      offGesture?.()
+    }
   }, [getViewport, setViewport, wheelZoom, wheelZoomSpeed, trackpadRouting, canvasLocked])
 
   // Double-clicking EMPTY canvas pulls back to the overview zoom — the inverse of the node
@@ -5584,6 +5595,7 @@ export function Canvas() {
             if (catalogEntry.id === 'homeassistant-control') return createHomeAssistantControlNode(index, center)
             if (catalogEntry.id === 'homeassistant-sensor') return createHomeAssistantSensorNode(index, center)
             if (catalogEntry.id === 'gitlab-hosting') return createGitLabHostingNode(index, center)
+            if (catalogEntry.id === 'nextcloud-hosting') return createServiceNode('nextcloud-aio', index, center)
             if (catalogEntry.id.startsWith('service:')) {
               return createServiceNode(catalogEntry.nodeKind as ServiceNodeKind, index, center)
             }
@@ -16814,7 +16826,7 @@ export function Canvas() {
   const paletteChip = chipFor('app.commandPalette')
 
   return (
-    <div className="canvas-root">
+    <div className="canvas-root" data-easter-surface="canvas">
       <TopAppBar>
       <ProjectSwitcher
           onSwitch={switchProject}

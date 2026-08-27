@@ -14,7 +14,7 @@ already-running external GitLab instance and still stores only its safe address 
 
 Service manager node kinds join the canvas's `NodeKind` union
 (`src/shared/types.ts` `SERVICE_NODE_KINDS`): `minecraft`, `dockerhost`, `proxmox`, `gitlab`,
-`homeassistant`, `freepbx`, and `cloudflare-zero-trust`. Each shares the same service-node shell,
+`homeassistant`, `freepbx`, `cloudflare-zero-trust`, and `nextcloud-aio`. Each shares the same service-node shell,
 `src/renderer/nodes/ServiceNode.tsx` — one component with these callers, because the only thing that
 varies between them is a label and a starting size, and this codebase's most repeated lesson is
 that a duplicated rule drifts from its copies.
@@ -27,7 +27,9 @@ canvas right-click to spin up. A Proxmox node's whole job, once it does somethin
 window onto an installation that is already running somewhere. The same framing holds for the rest
 of the family in softer form: a `dockerhost` node manages a Docker daemon that is already running on
 some machine, a `gitlab` node manages a GitLab instance, `homeassistant` discovers a running Home
-Assistant, and `freepbx` manages a running FreePBX box. `minecraft` is the closest thing to an
+Assistant, and `freepbx` manages a running FreePBX box. `nextcloud-aio` manages a pinned official
+Nextcloud AIO master container through an explicitly disclosed Docker socket, without privileged
+mode. `minecraft` is the closest thing to an
 exception — a Minecraft server is realistically something *this* app would help stand up in Docker —
 but the node itself, as shipped, is exactly as inert as its five siblings; see
 [`minecraft-server.md`](minecraft-server.md) for the researched design of the part that would

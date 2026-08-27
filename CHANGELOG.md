@@ -8,6 +8,35 @@
   Behavior setting explains its compiled-in, saved, or scheduled provenance in the active language
   mode and funny-level voice. This source lane intentionally did not run tests, lint, type checks,
   builds, packaging, runtime interaction, reviews, audits, or UI captures.
+- Expand English and Cantonese funny-level controls from 1–5 to 1–10 for issue #113. New
+  installations default both values to level 10, while settings schema version 2 preserves valid
+  established choices and safely normalizes malformed hand-edited values. Scheduled settings,
+  site-local storage, exports, provenance copy, and the Easter-egg and feature copy resolvers now
+  accept the complete range. This source lane intentionally did not run tests, type checks, lint,
+  builds, packaging, runtime interaction, reviews, audits, or UI captures.
+- Route macOS desktop canvas wheel input from main-process trackpad gesture facts. A depth-safe
+  ledger sends scroll and pinch edge transitions over typed IPC, the desktop router keeps a bounded
+  500 ms momentum-gap linger, and precise-pixel mouse packets zoom when no gesture is reported.
+  Server Edition keeps its documented browser heuristic and mobile remains not applicable. This
+  issue #108 implementation lane intentionally did not run tests, lint, type checks, builds,
+  packaging, runtime interaction, reviews, audits, or captures.
+
+- Add the guided GitHub API capability surface. A hand-written operation catalog now covers
+  repository, source control, collaboration, Actions, release, package, deployment, organization,
+  account, search, security, ruleset, webhook, and app resources through fixed REST routes plus a
+  fixed GraphQL account profile query. The host derives approved repositories, keeps credentials out
+  of the renderer, bounds pagination and response data, reports progress and rate limits, supports
+  cancellation, and requires operation-scoped destructive confirmation. Tests, type checks, lint,
+  reviews, security or accessibility checks, builds, packaging, installer execution, runtime
+  interaction, and UI captures remain intentionally unrun for issue #101.
+
+- Add the guided Nextcloud AIO hosting profile for issue #52. It uses a pinned official image,
+  explicitly discloses read-only Docker socket authority, refuses privileged mode and arbitrary
+  shell input, and provides local binding, health, update, backup, restore, rollback, cancellation,
+  and progress states. Schema 3 carries safe intent only; Docker context, socket, host paths,
+  container state, backup data, and credentials remain local. This ultra-speed lane intentionally
+  did not run tests, type checks, lint, reviews, security or accessibility checks, builds, packaging,
+  installer execution, runtime interaction, or captures.
 
 - Rebuild the README from the ground up around the current Windows delivery path, genuine product
   captures, explicit evidence boundaries, and a compact top-level index. Keep 9 current key
@@ -2437,3 +2466,10 @@ git tag --sort=-creatordate
 or on GitHub's [tags](https://github.com/eneskirca/nodeterm/tags) and
 [releases](https://github.com/eneskirca/nodeterm/releases) pages.
 
+# Unreleased
+
+- Add issue #103's local Easter egg cabinet with 60 stable, non-blocking surprises across the
+  desktop surfaces. Each entry has English and Cantonese copy, ten funny levels, keyboard and
+  touch discovery, reduced-motion behavior, local discovery-only persistence, reset support, and
+  complete School-mode suppression. No tests, builds, runtime interaction, or captures were run in
+  this lane by explicit scope.

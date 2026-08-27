@@ -20,6 +20,11 @@ loading, saved, compiled-default-equivalent, and scheduled states. The direct fe
 `docs/features/canvas/wheel-zoom-speed.md`, linked from the Canvas category and expanded in
 `docs/features/canvas/canvas-and-lifecycle.md`.
 
+After the current-main merge, this feature consumes the shared funny-level 1–10 types, resolver,
+and catalogue layers from issue #113. The wheel feature additions define no five-level type, range,
+resolver, migration, or duplicate catalogue implementation; all ten-level behavior comes from the
+shared implementation.
+
 The root `CHANGELOG.md` and `ROADMAP.md` record the feature and its verification boundary. The
 generated `src/shared/changelog-data.ts` and `src/shared/docs-data.ts` were not regenerated because
 this checkout has no installed `esbuild`; the integration lane must run the normal generators and
@@ -29,6 +34,75 @@ No tests, type checks, lint, builds, packaging, runtime interaction, reviews, se
 accessibility audits, or UI captures were run in this lane, per issue #107. The linked checkout is
 clean after the implementation commit. The feature jer was not integrated into `main`, no release
 was created, and no cleanup was performed here.
+## 2026-08-27, ten-level funny controls, issue #113
+
+The implementation lane is `feat/funny-level-10`. It expands the shared funny-level union and
+resolver to levels 1–10, adds distinct voice-only level 6–10 handling for legacy five-slot
+catalogue rows, and keeps factual labels intentionally flat. New installations default both
+language values to level 10. Settings schema version 2 is written by the settings store; valid
+existing 1–5 values survive unchanged, while malformed or missing hand-edited values resolve to
+the level-10 shipped default. Renderer hydration and scheduled settings use the same bounded
+normalization.
+
+The Language settings controls now expose 1–10 with a level-10 label and saved-base versus
+scheduled-value provenance. The Easter-egg and portal-entry resolvers consume the full range.
+The site uses versioned `nodeterm-playground.v2` storage, reads the v1 key once for migration,
+preserves valid old values, defaults invalid values to 10, and exports the range/schema metadata.
+Related docs, site article copy, roadmap, and changelog are updated.
+
+No tests, type checks, lint, builds, packaging, reviews, audits, runtime interaction, or captures
+were run in this source lane, per issue #113. The parent integration lane must verify the complete
+tree against its exact integrated commit. No merge, release, issue comment, issue closure, or
+cleanup was performed here.
+## 2026-08-27, desktop trackpad gesture facts, issue #108
+
+The implementation is on `feat/trackpad-gesture-facts`, based on the current `origin/main` tip
+`00127bc0` and grounded in upstream PR `eneskirca/nodeterm#452`, commit
+`391056b81abd0b933757fa6a4aee23d84cb48884`. `src/main/trackpad-gesture.ts` reduces native macOS
+scroll and pinch begin/end input facts into depth-safe active-state edges and ignores unmatched end
+events. The main window sends those edges through `IPC.canvasTrackpadGesture`, the typed preload
+member `onCanvasTrackpadGesture`, and the browser stub's documented no-op.
+
+`MacWheelGestureRouter` now accepts desktop-only gesture reporting. An open gesture or a close less
+than 500 ms ago routes precise-pixel wheel packets to canvas panning. Reported silence routes them
+to wheel zoom, while the Server Edition keeps the existing renderer heuristic because its browser
+surface lacks the native input stream. Settings, the canvas article, canvas category index,
+`CHANGELOG.md`, and `ROADMAP.md` record the same behavior and boundary. Mobile has no mouse-wheel
+canvas route and is explicitly not applicable.
+
+The generated `src/shared/docs-data.ts` bundle was not regenerated because this lane's explicit
+boundary forbids builds; the parent integration lane must regenerate and verify it before merging
+the documentation update.
+
+This source lane intentionally did not run tests, lint, type checks, builds, packaging, runtime
+interaction, reviews, security or accessibility audits, or UI captures. The parent integration
+lane must verify the exact commit and handle the dedicated pull request, issue progress and closure,
+upstream PR #463, and any later evidence without treating this lane's unrun checks as green.
+
+## 2026-08-27, Nextcloud AIO hosting implementation, issue #52
+
+The implementation lane is `feat/program-41-nextcloud-aio`, based on `12055e96` before the
+current-main integration. The canvas catalog creates a `nextcloud-aio` service node from
+`nextcloud-hosting`, with a typed shared contract in `src/shared/nextcloud-aio.ts`, a desktop
+manager in `src/main/remote/nextcloud-aio-manager.ts`, and a guided renderer surface in
+`src/renderer/components/nextcloud/NextcloudAioPanel.tsx`.
+
+The profile pins `nextcloud/all-in-one:2025.8.0` from the official source, discloses that its
+read-only Docker socket mount can control the Docker host, refuses `--privileged`, uses dropped
+capabilities and `no-new-privileges`, and sends fixed argument arrays only. It exposes discovered
+context selection, loopback/private binding, bounded port validation, health, lifecycle, update,
+backup, restore, rollback, cancellation, partial progress, and explicit failure recovery. Every
+search field has its own adjacent anchored regex builder.
+
+Schema 3 carries only `nextcloudAioConfig` safe intent. Context names, endpoints, socket paths,
+container ids, volume contents, backup records, process state, host paths, and credentials remain
+local and import has no external side effect. Direct documentation is in
+`docs/features/integrations/nextcloud-aio-hosting.md`, the category index, the offline docs bundle,
+and `site/docs/nextcloud-aio-hosting.html`.
+
+No tests, type checks, lint, reviews, security or accessibility checks, builds, packaging,
+installer execution, runtime interaction, or captures were run in this ultra-speed lane. The source
+is committed for the parent integration lane to verify against the exact integrated commit.
 
 ## 2026-08-27, bundled AWS CLI v2 lane, issue #41
 
@@ -2514,3 +2588,58 @@ This ultra-speed lane intentionally ran no tests, type checks, lint, builds, pac
 security checks, accessibility checks, installer execution, runtime interaction, or UI captures.
 The parent integration lane must verify the exact commit, reconcile any central-file overlap with
 other lanes, and supply the remaining release evidence before claiming the feature verified.
+# 2026-08-27, guided GitHub API capabilities, issue #101
+
+Issue #101 is implemented on `feat/github-api-surface` in the dedicated feature checkout. The
+shared `githubApi` contract in `src/shared/github-api.ts` is a hand-written inventory of typed REST
+and fixed GraphQL operations covering repositories, source control, collaboration, projects,
+Actions, releases, packages, deployments, organizations, teams, users, notifications, search,
+security, rulesets, webhooks, apps, and account resources. Each operation records its scope,
+transport, method, required semantic fields, pagination support, and destructive status.
+
+`src/core/github/api-client.ts` builds only documented allowlisted routes and rejects endpoint input,
+unbounded values, unsafe paths, unknown body fields, and invalid identifiers. `GitHubIssuesClient`
+keeps the existing API version, redirect, timeout, bounded response, and rate-limit policy while
+adding the fixed `account.profile` GraphQL document. Results are normalized and bounded, and
+credential-shaped fields are omitted before they cross the bridge.
+
+`src/core/github/api-service.ts` resolves credentials in the host, requires an approved project for
+repository-scoped actions, limits concurrent work per UI, emits progress, supports cancellation,
+and requires exact operation-scoped destructive confirmation. `src/core/github/api-handlers.ts`,
+`src/shared/ipc.ts`, `src/preload/index.ts`, `src/renderer/bridge/ws-bridge.ts`, and the shared API
+type expose the same contract to Desktop and Server Edition. Relay tabs explicitly refuse this
+account-bound namespace so they cannot use the viewer's credential or expose the host account.
+
+Direct documentation is in `docs/features/integrations/github-api.md` and the integrations index.
+`ROADMAP.md` records the feature as implemented but unverified. The generated in-app docs bundle
+was not rebuilt because issue #101 forbids builds and verification; the feature pull request must
+run the normal docs-bundle path before claiming a complete packaged surface.
+
+No tests, type checks, lint, reviews, security or accessibility checks, builds, packaging, installer
+execution, runtime interaction, audits, or HuiShots were run, per the issue's explicit boundary.
+The feature branch remains separate from `main` and is intended to remain available for the dedicated
+pull request.
+
+# 2026-08-27, Easter egg suite, issue #103
+
+Implemented a hand-written 60-entry Easter egg catalog in `src/shared/easter-eggs.ts` and a
+bounded renderer cabinet in `src/renderer/components/EasterEggs.tsx`. The cabinet is mounted at
+the app root, hidden fail-closed under School mode, and exposes a three-second keyboard arm route
+plus a functional Try button for keyboard, touch, and assistive technology users. Discovery state
+is private local storage containing only catalog ids, with an explicit reset action. The status card
+is non-blocking, uses a polite live region, and has a dismissal control. Reduced motion receives a
+static presentation.
+
+The catalog spans canvas, nodes, title bar, settings, command palette, notifications,
+documentation, changelog, search, project switcher, source control, media, scheduling, hosting,
+account, converter, local model management, authenticator, support, and status. Directly related
+surface markers were added to the app bar, canvas, navigation rail, project switcher,
+documentation, settings, history, source control, converter, and local model drawers.
+
+Documentation is in `docs/features/appearance/easter-eggs.md` and indexed from the appearance
+category. `ROADMAP.md` and `CHANGELOG.md` record the implementation and its intentionally pending
+verification state.
+
+No tests, lint, type checks, builds, packaging, runtime interaction, reviews, audits, or HuiShots
+were run, as required by issue #103. The feature jer remains separate from `main`; the parent Dog
+must perform integration and any later verification.

@@ -29,6 +29,25 @@ invalid or missing values fall back to 1.0×. The setting's provenance line iden
 default, a saved override, or an active scheduled value. Its label and explanation follow the
 same language mode and funny-level controls as the rest of Settings, with the numeric value kept
 factual.
+On the macOS desktop, the main process observes the native `gestureScrollBegin` /
+`gestureScrollEnd` and `gesturePinchBegin` / `gesturePinchEnd` edges and sends only the resulting
+active-state transitions to the canvas. A depth-counted ledger keeps nested scroll and pinch phases
+open until the outer phase ends, and ignores an end event whose begin happened before the listener
+started. While a reported gesture is active, or for up to 500 ms after its close, the canvas routes
+precise-pixel wheel packets to panning. Reported silence routes those packets to wheel zoom, so a
+precise-pixel mouse and a trackpad can coexist when both settings are enabled. The Server Edition
+keeps its browser heuristic because a browser cannot observe the native input stream. Mobile has
+no mouse-wheel canvas route, so this behavior is not applicable there.
+
+On the macOS desktop, the main process observes the native `gestureScrollBegin` /
+`gestureScrollEnd` and `gesturePinchBegin` / `gesturePinchEnd` edges and sends only the resulting
+active-state transitions to the canvas. A depth-counted ledger keeps nested scroll and pinch phases
+open until the outer phase ends, and ignores an end event whose begin happened before the listener
+started. While a reported gesture is active, or for up to 500 ms after its close, the canvas routes
+precise-pixel wheel packets to panning. Reported silence routes those packets to wheel zoom, so a
+precise-pixel mouse and a trackpad can coexist when both settings are enabled. The Server Edition
+keeps its browser heuristic because a browser cannot observe the native input stream. Mobile has
+no mouse-wheel canvas route, so this behavior is not applicable there.
 
 **Undo/redo** is a debounced snapshot of the node array taken whenever a drag or edit settles,
 with independent past/future stacks per project. It's suspended while you're typing into an
@@ -63,6 +82,8 @@ each one only decides whether a *view* of that session is currently instantiated
   the offscreen-release timeout (`0` disables release entirely). The speed slider is available
   directly below **Scroll wheel zooms** and is inactive only when the toggle is off.
 - **Settings → Appearance** — which context-menu items and header buttons are shown.
+- **Settings → Behavior** — `Scroll wheel zooms` and `Trackpad scroll pans`. The desktop app uses
+  main-process gesture facts for the latter; the Server Edition retains the heuristic behavior.
 
 Desktop and Server Edition use the same renderer wheel handler and the same persisted settings
 record, so the 40 ms budget, point-of-use clamping, and plain-wheel-only speed multiplier behave
@@ -79,7 +100,15 @@ mouse setting.
   at the canvas origin — the camera holds still until the node's real size is known.
 - A hand-edited wheel speed is missing, non-numeric, or outside 0.2–2.0: the renderer clamps it
   at the point of use and uses 1.0× for an invalid value. The persisted file is not rewritten as
-  a side effect of reading it, so the user can inspect and correct the source value deliberately.
+a side effect of reading it, so the user can inspect and correct the source value deliberately.
+- **A native gesture edge is missing** (for example, a listener started after a begin): the ledger
+  ignores the unmatched end and keeps its depth non-negative. If the browser provides no native
+  gesture facts, the Server Edition uses its documented heuristic instead of claiming device
+identity it cannot observe.
+- **A native gesture edge is missing** (for example, a listener started after a begin): the ledger
+  ignores the unmatched end and keeps its depth non-negative. If the browser provides no native
+  gesture facts, the Server Edition uses its documented heuristic instead of claiming device
+  identity it cannot observe.
 
 ## Security considerations
 

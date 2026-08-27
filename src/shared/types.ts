@@ -1,6 +1,7 @@
 import { DEFAULT_WORD_SEPARATORS } from './word-separators'
 import type { ServiceConnection } from './node-exec'
 import type { DockerHostManagerApi } from './docker-host-manager'
+import type { NextcloudAioManagerApi } from './nextcloud-aio'
 import type { NsisSpec, NsisLocalPaths } from './nsis-form-types'
 // Types shared across the main, preload, and renderer processes.
 
@@ -18,7 +19,7 @@ import type { ProjectKanbanGitHub } from './github-issues'
 import type { ProjectIcon } from './project-icon'
 import type { ShortcutMap } from './shortcuts'
 import { DEFAULT_SHORTCUTS } from './shortcuts'
-import type { FunnyLevel, LanguageMode } from './i18n/types'
+import { DEFAULT_FUNNY_LEVEL, type FunnyLevel, type LanguageMode } from './i18n/types'
 import type { PortableDoorConstructionV3 } from './door-construction'
 import type { VsCodeInstall, VsCodeOpenResult } from './vscode'
 import type { HistoryFilters, HistoryListResult, HistoryRestoreResult } from './local-history'
@@ -429,6 +430,7 @@ export type NodeKind =
   | 'homeassistant'
   | 'homeassistant-sensor'
   | 'freepbx'
+  | 'nextcloud-aio'
   | 'cloudflare-zero-trust'
   /** Guided Cloudflare account, zone, DNS, SSL/TLS, ruleset, redirect, cache, and analytics manager. */
   | 'cloudflare-core-managers'
@@ -448,7 +450,8 @@ export const SERVICE_NODE_KINDS = [
   'gitlab',
   'homeassistant',
   'freepbx',
-  'cloudflare-zero-trust'
+  'cloudflare-zero-trust',
+  'nextcloud-aio'
 ] as const
 
 export type ServiceNodeKind = (typeof SERVICE_NODE_KINDS)[number]
@@ -652,6 +655,8 @@ export interface CanvasNodeState {
    * `localExec` on the index entry, exactly where the shell and Windows profile already live.
    */
   serviceLabel?: string
+  /** Nextcloud AIO safe deployment intent. Context, container state, backups, and socket bindings remain local. */
+  nextcloudAioConfig?: import('./nextcloud-aio').NextcloudAioConfig
   /** Cloudflare manager selection intent. Account ids, credentials and resource ids stay local. */
   cloudflareZeroTrustIntent?: import('./cloudflare-zero-trust').CloudflarePortableIntent
   /** Cloudflare manager safe intent. Credentials and local bindings stay in the host overlay. */
@@ -2257,6 +2262,9 @@ export interface CanvasWidgetState {
 
 /** User-configurable application settings (settings.json). */
 export interface Settings {
+  /** Versioned settings shape. Version 2 expands funny levels to 1–10 while preserving every
+   * valid persisted value from the five-level shape. */
+  settingsSchemaVersion: typeof SETTINGS_SCHEMA_VERSION
   /** ADHD modes — five independent accommodations, all off by default. See `AdhdModes`. */
   adhdModes: AdhdModes
   dockerHost: DockerHostSettings
@@ -2664,7 +2672,7 @@ export interface Settings {
    *  bilingual (English prominent, Cantonese compact secondary). See src/shared/i18n and
    *  docs/language-modes.md. Applies live — no restart. */
   languageMode: LanguageMode
-  /** Funny-level slider for ENGLISH copy, 1 (fully professional) to 5 (maximum playfulness).
+  /** Funny-level slider for ENGLISH copy, 1 (fully professional) to 10 (maximum playfulness).
    *  Independent of `funnyLevelYue` — a user may want plain English with playful Cantonese, or
    *  the reverse. Applies to every message category, errors and warnings included; only the
    *  VOICE changes, never the facts (see src/shared/i18n/catalog.ts). */
@@ -2742,8 +2750,10 @@ export interface Settings {
  *  `#0a84ff` (systemBlue) — see `mergeSettings`'s migration in `core/settings-store.ts` for the
  *  one-time upgrade of an existing install's saved `#0a84ff`. */
 export const DEFAULT_ACCENT = '#6750a4'
+export const SETTINGS_SCHEMA_VERSION = 2 as const
 
 export const DEFAULT_SETTINGS: Settings = {
+  settingsSchemaVersion: 2,
   adhdModes: {
     focus: false,
     lowStimulation: false,
@@ -2895,13 +2905,10 @@ export const DEFAULT_SETTINGS: Settings = {
   notchHoverExpand: true,
   speech: { engine: 'whisper', model: 'tiny', language: 'auto', shortcut: 'Cmd+Alt' },
   languageMode: 'en',
-  // Level 2, not 5: the default install is a developer tool a stranger just downloaded, and a
-  // maximally-playful error message is the wrong first impression for someone who hasn't yet
-  // chosen to have fun with their terminal manager. Level 2 keeps copy mostly plain with a
-  // little character — the kind of tone that reads as "friendly", not "trying too hard". Users
-  // who want more crank both sliders themselves.
-  funnyLevelEn: 2,
-  funnyLevelYue: 2,
+  // New installations start at the maximum deliberate voice level. Existing saved values are
+  // preserved by the versioned settings migration in core/settings-store.ts.
+  funnyLevelEn: DEFAULT_FUNNY_LEVEL,
+  funnyLevelYue: DEFAULT_FUNNY_LEVEL,
   showEmojiInDialogs: false,
   // Narrator: opt-in and silent out of the box. Voices default to automatic — never a named
   // voice, since we can't know what's installed until we ask the platform.
@@ -4308,6 +4315,8 @@ export interface RelayHostApi {
   dockerContexts(): Promise<Array<{ name: string; current: boolean; endpoint: string }>>
   /** Guided local/SSH Docker management. Desktop owns the CLI; Server Edition refuses it. */
   manager: DockerHostManagerApi
+  /** Guided Nextcloud AIO lifecycle manager. Desktop-only; the browser shell reports unsupported. */
+  nextcloudAio: NextcloudAioManagerApi
   /**
    * Enter host mode over the relay: connect and return a pairing offer string to hand to a client.
    * Rejects when Docker or the configured relay is unavailable. `projectId` is the
@@ -4713,6 +4722,10 @@ export interface NodeTerminalApi {
   logs: LogApi
   githubIssues: import('./github-issues').GitHubIssuesApi
   githubControl: import('./github-issues').GitHubControlApi
+  /** Typed, allowlisted REST and GraphQL capability catalog for contextual GitHub actions. */
+  githubApi: import('./github-api').GitHubApiApi
+  /** Host-owned GitHub CLI account discovery and selection. Credential material never crosses this boundary. */
+  githubCliAccounts: import('./github-issues').GitHubCliAccountsApi
   usage: UsageApi
   sessionMemory: SessionMemoryApi
   vscode: VsCodeApi
@@ -4804,6 +4817,10 @@ export interface NodeTerminalApi {
    *  minutes; `level: 'none'` means the banner should come down. Returns unsubscribe.
    *  Server Edition: never fires — the reaper leg runs host-side only (see src/server/index.ts). */
   onPtyPressure(listener: (reading: PtyPressure) => void): () => void
+  /** Fires when the desktop main process observes a trackpad scroll or pinch edge. The payload is
+   *  the depth-safe active state, and only edge transitions are sent. Server Edition never fires:
+   *  its browser tab has no raw input stream and keeps the wheel router's heuristic path. */
+  onCanvasTrackpadGesture(listener: (active: boolean) => void): () => void
   /** Raise this Mac's pty-device ceiling (`kern.tty.ptmx_max`) now AND across reboots, behind
    *  macOS's own administrator-password dialog. Called ONLY from the banner's explicit
    *  "Fix automatically…" click — never on the app's initiative. macOS only; a dismissed password

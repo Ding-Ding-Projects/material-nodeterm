@@ -1,4 +1,4 @@
-import type { Catalog, FiveVariants } from './types'
+import type { Catalog, FunnyVariants } from './types'
 
 /**
  * ============================================================================================
@@ -6,7 +6,7 @@ import type { Catalog, FiveVariants } from './types'
  * ============================================================================================
  *
  * It applies to every category of message in this catalogue, with NO exemptions — destructive
- * actions, security prompts, accessibility copy and error text included. At any level 1-5 a
+ * actions, security prompts, accessibility copy and error text included. At any level 1-10 a
  * string must still name, in unambiguous words, what happened, what is affected, and what the
  * user's options are: which file, which account, which action is irreversible, what the error
  * actually was. Level 5 may wrap those facts in a joke; it must never REPLACE, SOFTEN or OMIT
@@ -22,18 +22,18 @@ import type { Catalog, FiveVariants } from './types'
  * version number, a count) into the catalogue text itself — that value belongs to the CALLER,
  * which is the one place that actually knows it.
  *
- * Adding a new string: pick a dotted id (`surface.element.purpose`), write five English variants
- * (level 1 plain, level 5 playful, 2-4 stepping between) and five Cantonese ones. Reusing a
- * neighbour's text across levels is fine and often correct for a plain label — the array must
- * still have five entries. See docs/language-modes.md.
+ * Adding a new string: pick a dotted id (`surface.element.purpose`), write ten English variants
+ * (level 1 plain, level 10 playful, stepping between) and ten Cantonese ones. Legacy five-slot
+ * rows are expanded by the resolver with distinct voice-only level 6-10 tails until migrated.
+ * See docs/language-modes.md.
  * ============================================================================================
  */
 
 /** For a plain factual label that has no meaningful "funnier" version (a settings-nav noun, an
  *  aria-label) — repeats the same text at all five levels. Still satisfies the five-variant
  *  shape; it just declines to invent forced jokes for something that shouldn't have any. */
-function flat(text: string): FiveVariants {
-  return [text, text, text, text, text]
+function flat(text: string): FunnyVariants {
+  return [text, text, text, text, text, text, text, text, text, text]
 }
 
 export const CATALOG: Catalog = {
@@ -130,13 +130,25 @@ export const CATALOG: Catalog = {
     en: flat('Cantonese funny level'),
     yue: flat('廣東話抵死程度')
   },
+  'settings.language.level.10': {
+    en: flat('10 — Maximum playfulness'),
+    yue: flat('10 — 抵死到爆')
+  },
+  'settings.language.funnyEn.provenance': {
+    en: flat('English saved value: level {level}.'),
+    yue: flat('英文已儲存值：第 {level} 級。')
+  },
+  'settings.language.funnyYue.provenance': {
+    en: flat('Cantonese saved value: level {level}.'),
+    yue: flat('廣東話已儲存值：第 {level} 級。')
+  },
   'settings.language.level.1': {
     en: flat('1 — Fully professional'),
     yue: flat('1 — 正正經經')
   },
   'settings.language.level.5': {
-    en: flat('5 — Maximum playfulness'),
-    yue: flat('5 — 抵死到爆')
+    en: flat('5 — Playful'),
+    yue: flat('5 — 有啲玩味')
   },
   'settings.language.disclosure': {
     en: [
@@ -172,6 +184,26 @@ export const CATALOG: Catalog = {
       '喺對話框同訊息框灑少少表情符號，按鈕標籤永遠唔會有。',
       '俾對話框同訊息框加少少表情符號情趣，按鈕標籤同任何可以撳嘅嘢一律唔會有。',
       '等你嘅對話框同訊息框戴返個得體嘅表情符號，按鈕標籤依然係表情符號禁區。'
+    ]
+  },
+  'settings.behavior.wheelZoom.label': {
+    en: flat('Scroll wheel zooms'),
+    yue: flat('滑鼠滾輪縮放')
+  },
+  'settings.behavior.wheelZoom.description': {
+    en: [
+      'Zoom with a plain mouse wheel (no Command). Two-finger trackpad scroll still pans.',
+      'A plain mouse wheel zooms; two-finger trackpad scroll keeps panning.',
+      'Use the wheel for zoom and two fingers for pan, with both gestures staying distinct.',
+      'The wheel handles zooming while two fingers keep the map wandering politely.',
+      'Spin the wheel to zoom; let two fingers pan, because even gestures deserve separate jobs.'
+    ],
+    yue: [
+      '用普通滑鼠滾輪縮放（唔使 Command）。雙指觸控板捲動仍然平移。',
+      '普通滾輪負責縮放，雙指觸控板捲動繼續平移。',
+      '滾輪縮放、雙指平移，兩種手勢各自做返自己份工。',
+      '滾輪處理縮放，雙指就禮貌咁帶住張圖周圍行。',
+      '轉滾輪就縮放，雙指就平移，手勢都有自己嘅崗位㗎。'
     ]
   },
 
@@ -341,6 +373,37 @@ export const CATALOG: Catalog = {
   'dockerHost.runTaskReady': { en: flat('Run the selected fixed task'), yue: flat('執行揀好嘅固定工作') },
   'dockerHost.chooseContainer': { en: flat('Choose a container first.'), yue: flat('請先揀一個容器。') },
   'dockerHost.runTask': { en: flat('Run task'), yue: flat('執行工作') },
+  'nextcloudAio.title': { en: flat('Nextcloud AIO hosting'), yue: flat('Nextcloud AIO 託管') },
+  'nextcloudAio.authorityTitle': { en: flat('Docker authority disclosure'), yue: flat('Docker 權限披露') },
+  'nextcloudAio.authority': { en: flat('This profile mounts the Docker socket read-only so the official AIO master container can manage its child containers. Docker socket access can control the Docker host. It is not a security boundary.'), yue: flat('呢個 profile 會以唯讀方式掛載 Docker socket，等官方 AIO 主容器管理子容器。Docker socket 權限可以控制 Docker 主機，唔係安全邊界。') },
+  'nextcloudAio.safety': { en: flat('The image source is pinned to the official Nextcloud AIO image. Privileged mode, arbitrary images, shell commands, Compose text, and free-form environment values are never accepted.'), yue: flat('映像來源鎖定官方 Nextcloud AIO 映像。永遠唔接受 privileged mode、任意映像、shell 指令、Compose 文字或者自由環境值。') },
+  'nextcloudAio.source': { en: flat('Review the pinned official source'), yue: flat('查看鎖定嘅官方來源') },
+  'nextcloudAio.tabs': { en: flat('Nextcloud AIO sections'), yue: flat('Nextcloud AIO 分區') },
+  'nextcloudAio.overview': { en: flat('Overview'), yue: flat('概覽') },
+  'nextcloudAio.backups': { en: flat('Backups'), yue: flat('備份') },
+  'nextcloudAio.recovery': { en: flat('Restore and rollback'), yue: flat('還原同回滾') },
+  'nextcloudAio.search': { en: flat('Search contexts and backups'), yue: flat('搜尋環境同備份') },
+  'nextcloudAio.searchContexts': { en: flat('Search Docker contexts'), yue: flat('搜尋 Docker 環境') },
+  'nextcloudAio.searchBackups': { en: flat('Search backups'), yue: flat('搜尋備份') },
+  'nextcloudAio.regex': { en: flat('Regex builder for Nextcloud AIO search'), yue: flat('Nextcloud AIO 搜尋正則建立器') },
+  'nextcloudAio.regexContexts': { en: flat('Regex builder for Docker context search'), yue: flat('Docker 環境搜尋正則建立器') },
+  'nextcloudAio.regexBackups': { en: flat('Regex builder for backup search'), yue: flat('備份搜尋正則建立器') },
+  'nextcloudAio.refresh': { en: flat('Refresh'), yue: flat('重新整理') },
+  'nextcloudAio.refreshing': { en: flat('Refreshing…'), yue: flat('重新整理緊…') },
+  'nextcloudAio.contexts': { en: flat('Available Docker contexts'), yue: flat('可用 Docker 環境') },
+  'nextcloudAio.noContexts': { en: flat('No available Docker context matches this search. Start Docker or choose another search.'), yue: flat('冇可用 Docker 環境符合搜尋。請啟動 Docker 或換個搜尋。') },
+  'nextcloudAio.configure': { en: flat('Configure Nextcloud AIO'), yue: flat('設定 Nextcloud AIO') },
+  'nextcloudAio.binding': { en: flat('Local binding'), yue: flat('本機綁定') },
+  'nextcloudAio.port': { en: flat('Local port'), yue: flat('本機連接埠') },
+  'nextcloudAio.portHint': { en: flat('Loopback keeps the service on this computer. Private network exposes it only on the selected private binding. Port must be between 1024 and 65535.'), yue: flat('Loopback 會將服務留喺呢部電腦。私人網絡只會喺揀好嘅私人綁定公開。連接埠必須係 1024 至 65535。') },
+  'nextcloudAio.deploy': { en: flat('Deploy pinned profile'), yue: flat('部署鎖定 profile') },
+  'nextcloudAio.createBackupReady': { en: flat('Create a local backup of the selected Nextcloud AIO data volume'), yue: flat('建立揀好嘅 Nextcloud AIO 資料卷本機備份') },
+  'nextcloudAio.deployReady': { en: flat('Deploy the pinned profile to the selected Docker context'), yue: flat('將鎖定 profile 部署到揀好嘅 Docker 環境') },
+  'nextcloudAio.chooseContext': { en: flat('Choose an available Docker context first.'), yue: flat('請先揀可用 Docker 環境。') },
+  'nextcloudAio.operations': { en: flat('Operations'), yue: flat('操作') },
+  'nextcloudAio.noBackups': { en: flat('No local backup records are available yet. Create one after deployment.'), yue: flat('暫時冇本機備份紀錄。部署後可以建立一個。') },
+  'nextcloudAio.recoveryNote': { en: flat('Restore and rollback are explicit local operations. Choose a discovered backup record; no path or shell input is accepted.'), yue: flat('還原同回滾係明確嘅本機操作。請揀已發現嘅備份紀錄；唔接受路徑或者 shell 輸入。') },
+  'nextcloudAio.chooseBackup': { en: flat('Search for and select a discovered backup record first.'), yue: flat('請先搜尋同揀一個已發現嘅備份紀錄。') },
   'nodeCatalog.entry.service.proxmox.label': { en: flat('Proxmox manager'), yue: flat('Proxmox 管理器') },
   'nodeCatalog.entry.service.proxmox.description': { en: flat('Open a typed manager for a saved Proxmox connection.'), yue: flat('開已儲存 Proxmox 連線嘅有類型管理器。') },
   'nodeCatalog.entry.service.gitlab.label': { en: flat('GitLab manager'), yue: flat('GitLab 管理器') },

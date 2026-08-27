@@ -25,7 +25,8 @@ Open **Settings → Behavior** and enable **Scroll wheel zooms**. The **Wheel zo
 appears directly below it, with a 0.2× minimum, a 2.0× maximum, 0.1× steps, and a persisted 1.0×
 default. The setting uses the app's language mode and independent funny-level controls. Its
 provenance line identifies the compiled-in default, the saved settings value, or a temporary
-scheduled value while keeping the numeric multiplier factual.
+scheduled value while keeping the numeric multiplier factual. The copy consumes the shared funny-
+level 1–10 types and catalogue; this feature defines no local funny-level range.
 
 The setting is part of the shared `Settings` record. Desktop and Server Edition load and save the
 same shape through their existing settings bridges, so a saved value survives restart and the
