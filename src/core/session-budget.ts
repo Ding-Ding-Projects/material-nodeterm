@@ -260,7 +260,7 @@ export function sessionBudgetConfig(
     minAvailableMb: envInt(env, 'NODETERM_SESSION_MIN_AVAILABLE_MB', Math.max(1024, Math.round(totalMb * 0.1))),
     maxIdle: envInt(env, 'NODETERM_SESSION_MAX_IDLE', envInt(env, 'NODETERM_SESSION_MAX_DETACHED', 48)),
     maxDetached: envInt(env, 'NODETERM_SESSION_MAX_DETACHED', derivedCap),
-    graceSec: envHours(env, 'NODETERM_SESSION_GRACE_HOURS', 24),
+    graceSec: envHours(env, 'NODETERM_SESSION_GRACE_HOURS', 6),
     batchMax: envInt(env, 'NODETERM_SESSION_REAP_BATCH', 8),
     // Percentages, so `envInt`'s `>= 1` floor is not the trap it is for a cap: 0 and junk both fall
     // back to the default, and an operator who wants the term OFF sets the ratio via a value the
@@ -554,7 +554,7 @@ export function createSessionReaper(opts: SessionReaperOpts): SessionReaper {
       if (!fresh) continue
       const now = nowSec()
       const stillIdle = new Set(
-        fresh.filter((s) => now - s.activitySec >= cfg.graceSec).map((s) => s.name)
+        fresh.filter((s) => now - s.outputSec >= cfg.graceSec).map((s) => s.name)
       )
       for (const name of names) {
         if (!stillIdle.has(name)) continue
