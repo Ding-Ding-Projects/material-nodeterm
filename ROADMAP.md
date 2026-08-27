@@ -130,8 +130,8 @@ later commit, since this file will not be kept in lockstep with every merge).
       cover drives/storage, services, startup entries, scheduled tasks, updates, network state,
       and bounded event summaries. Tests, type checks, lint, reviews, security/accessibility
       checks, builds, packaging, runtime interaction, and captures remain intentionally unrun in
-      the ultra-speed lane. The feature jer is reconciled with `origin/main` at
-      `54164b84dce0b7e62787b1de2885405ff4ed821c` and dewed at merge commit
+      the ultra-speed lane. The feature ref is reconciled with `origin/main` at
+      `54164b84dce0b7e62787b1de2885405ff4ed821c` with merge commit
       `538fe6a5b4cbf0384a35ff9edc1a1d59d87df431`.
 - [ ] **Full Material Design 3 surface audit (#91)**: source-level inventory and remediation are
       recorded in `docs/features/appearance/material-3-audit.md` and checked by
