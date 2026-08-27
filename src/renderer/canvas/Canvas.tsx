@@ -4996,7 +4996,7 @@ export function Canvas() {
           terminalCreationOptionsFor(activeProjectId, effectiveProfileId)
         )
         const appended = nodeCreationCoordinatorRef.current.appendNode(ns, groupId ? parentInto(node, groupId) : node)
-        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        if (appended.result.error) notify({ kind: 'error', titleKind: 'authored', title: 'Node placement unavailable', body: appended.result.error, bodyKind: 'fact' })
         return appended.nodes
       })
     },
@@ -5241,7 +5241,7 @@ export function Canvas() {
           ns.map((n) => (n.selected ? { ...n, selected: false } : n)),
           created
         )
-        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        if (appended.result.error) notify({ kind: 'error', titleKind: 'authored', title: 'Node placement unavailable', body: appended.result.error, bodyKind: 'fact' })
         return appended.nodes
       })
     },
@@ -5478,7 +5478,7 @@ export function Canvas() {
           ns,
           createDiffNode(ns.length, cwd, relPath, staged, viewCenter())
         )
-        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        if (appended.result.error) notify({ kind: 'error', titleKind: 'authored', title: 'Node placement unavailable', body: appended.result.error, bodyKind: 'fact' })
         return appended.nodes
       })
     },
@@ -5495,7 +5495,7 @@ export function Canvas() {
           ns,
           createDiffNode(ns.length, cwd, relPath, false, viewCenter(), commitOid)
         )
-        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        if (appended.result.error) notify({ kind: 'error', titleKind: 'authored', title: 'Node placement unavailable', body: appended.result.error, bodyKind: 'fact' })
         return appended.nodes
       })
     },
@@ -5532,7 +5532,7 @@ export function Canvas() {
           activeProjectId
         )
         const appended = nodeCreationCoordinatorRef.current.appendNode(ns, created)
-        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        if (appended.result.error) notify({ kind: 'error', titleKind: 'authored', title: 'Node placement unavailable', body: appended.result.error, bodyKind: 'fact' })
         return appended.nodes
       })
     },
@@ -5623,7 +5623,7 @@ export function Canvas() {
           ns,
           groupId ? parentInto(node, groupId) : node
         )
-        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        if (appended.result.error) notify({ kind: 'error', titleKind: 'authored', title: 'Node placement unavailable', body: appended.result.error, bodyKind: 'fact' })
         return appended.nodes
       })
     },
@@ -5646,7 +5646,7 @@ export function Canvas() {
       setNodes((ns) => {
         const node = createStickyNode(ns.length, center ?? emptyNodePos())
         const appended = nodeCreationCoordinatorRef.current.appendNode(ns, groupId ? parentInto(node, groupId) : node)
-        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        if (appended.result.error) notify({ kind: 'error', titleKind: 'authored', title: 'Node placement unavailable', body: appended.result.error, bodyKind: 'fact' })
         return appended.nodes
       })
     },
@@ -5670,7 +5670,7 @@ export function Canvas() {
       setNodes((ns) => {
         const node = createAuthenticatorNode(ns.length, center ?? emptyNodePos())
         const appended = nodeCreationCoordinatorRef.current.appendNode(ns, groupId ? parentInto(node, groupId) : node)
-        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        if (appended.result.error) notify({ kind: 'error', titleKind: 'authored', title: 'Node placement unavailable', body: appended.result.error, bodyKind: 'fact' })
         return appended.nodes
       })
     },
@@ -5693,7 +5693,7 @@ export function Canvas() {
       setNodes((ns) => {
         const node = createNativeLoopNode(ns.length, center ?? emptyNodePos())
         const appended = nodeCreationCoordinatorRef.current.appendNode(ns, groupId ? parentInto(node, groupId) : node)
-        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        if (appended.result.error) notify({ kind: 'error', titleKind: 'authored', title: 'Node placement unavailable', body: appended.result.error, bodyKind: 'fact' })
         return appended.nodes
       })
     },
@@ -5729,7 +5729,7 @@ export function Canvas() {
       setNodes((ns) => {
         const node = createNsisNode(ns.length, center ?? emptyNodePos())
         const appended = nodeCreationCoordinatorRef.current.appendNode(ns, groupId ? parentInto(node, groupId) : node)
-        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        if (appended.result.error) notify({ kind: 'error', titleKind: 'authored', title: 'Node placement unavailable', body: appended.result.error, bodyKind: 'fact' })
         return appended.nodes
       })
     },
@@ -5761,7 +5761,7 @@ export function Canvas() {
           ns,
           createDinoNode(ns.length, center ?? viewCenter(), liveBest)
         )
-        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        if (appended.result.error) notify({ kind: 'error', titleKind: 'authored', title: 'Node placement unavailable', body: appended.result.error, bodyKind: 'fact' })
         return appended.nodes
       })
     },
@@ -5778,7 +5778,7 @@ export function Canvas() {
           ns,
           createWebNode(ns.length, { url }, center ?? emptyNodePos())
         )
-        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        if (appended.result.error) notify({ kind: 'error', titleKind: 'authored', title: 'Node placement unavailable', body: appended.result.error, bodyKind: 'fact' })
         return appended.nodes
       })
     },
@@ -5795,7 +5795,7 @@ export function Canvas() {
           ns,
           createBrowserNode(ns.length, '', center ?? emptyNodePos())
         )
-        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        if (appended.result.error) notify({ kind: 'error', titleKind: 'authored', title: 'Node placement unavailable', body: appended.result.error, bodyKind: 'fact' })
         return appended.nodes
       })
     },
@@ -5817,7 +5817,7 @@ export function Canvas() {
           ns,
           groupId ? parentInto(node, groupId) : node
         )
-        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        if (appended.result.error) notify({ kind: 'error', titleKind: 'authored', title: 'Node placement unavailable', body: appended.result.error, bodyKind: 'fact' })
         return appended.nodes
       })
       markDirty()
@@ -5857,13 +5857,13 @@ export function Canvas() {
         parentCanvasId: universeContext?.parentCanvasId
       })
       if (!availability.available) {
-        notify({ kind: 'error', title: 'Node unavailable', body: availability.reason ?? 'Choose another node.' })
+        notify({ kind: 'error', titleKind: 'authored', title: 'Node unavailable', body: availability.reason ?? 'Choose another node.', bodyKind: 'fact' })
         return
       }
             if (entry.id === 'aws-universe') {
         const result = createAwsUniverse('New AWS Universe')
         if (result.canvasId) navigateAwsUniverse(result.canvasId)
-        else notify({ kind: 'error', title: 'AWS Universe unavailable', body: result.reason ?? 'The AWS Universe could not be created.' })
+        else notify({ kind: 'error', titleKind: 'authored', title: 'AWS Universe unavailable', body: result.reason ?? 'The AWS Universe could not be created.', bodyKind: 'fact' })
         return
       }
       setNodes((existing) => {
@@ -5950,7 +5950,7 @@ export function Canvas() {
           parentInto
         )
         if (appended.result.error) {
-          notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+          notify({ kind: 'error', titleKind: 'authored', title: 'Node placement unavailable', body: appended.result.error, bodyKind: 'fact' })
         }
         return appended.nodes
       })
@@ -6027,7 +6027,7 @@ export function Canvas() {
           ns.map((n) => ({ ...n, selected: false })),
           created
         )
-        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        if (appended.result.error) notify({ kind: 'error', titleKind: 'authored', title: 'Node placement unavailable', body: appended.result.error, bodyKind: 'fact' })
         return appended.nodes
       })
       // The event fires from the full-screen Settings overlay — close it so the user actually
@@ -6098,7 +6098,7 @@ export function Canvas() {
           ns.map((n) => ({ ...n, selected: false })),
           created
         )
-        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        if (appended.result.error) notify({ kind: 'error', titleKind: 'authored', title: 'Node placement unavailable', body: appended.result.error, bodyKind: 'fact' })
         return appended.nodes
       })
   // The Codex sibling of the block above: Settings → Accounts "Add Codex account" dispatches
@@ -6248,7 +6248,7 @@ export function Canvas() {
           activeProjectId
         )
         const appended = nodeCreationCoordinatorRef.current.appendNode(ns, groupId ? parentInto(node, groupId) : node)
-        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        if (appended.result.error) notify({ kind: 'error', titleKind: 'authored', title: 'Node placement unavailable', body: appended.result.error, bodyKind: 'fact' })
         return appended.nodes
       })
     },
@@ -6340,7 +6340,7 @@ export function Canvas() {
           current,
           placeSpawned(created, besideNode(liveSource))
         )
-        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        if (appended.result.error) notify({ kind: 'error', titleKind: 'authored', title: 'Node placement unavailable', body: appended.result.error, bodyKind: 'fact' })
         return appended.nodes
       })
     },
@@ -6376,7 +6376,7 @@ export function Canvas() {
             options: terminalCreationOptionsFor(folder.projectId)
           })
         )
-        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        if (appended.result.error) notify({ kind: 'error', titleKind: 'authored', title: 'Node placement unavailable', body: appended.result.error, bodyKind: 'fact' })
         return appended.nodes
       })
     },
@@ -6463,7 +6463,7 @@ export function Canvas() {
           ns.map((n) => ({ ...n, selected: false })),
           { ...createSshTerminalNode(server, ns.length, at), selected: true }
         )
-        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        if (appended.result.error) notify({ kind: 'error', titleKind: 'authored', title: 'Node placement unavailable', body: appended.result.error, bodyKind: 'fact' })
         return appended.nodes
       })
     },
@@ -7633,7 +7633,7 @@ export function Canvas() {
       group.data = { ...group.data, title: res.name, wsl: binding }
       setNodes((ns) => {
         const appended = nodeCreationCoordinatorRef.current.appendNode(ns as CanvasNode[], group, undefined, { prepend: true })
-        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        if (appended.result.error) notify({ kind: 'error', titleKind: 'authored', title: 'Node placement unavailable', body: appended.result.error, bodyKind: 'fact' })
         return appended.nodes
       })
       setWslDialog(null)
@@ -7790,7 +7790,7 @@ export function Canvas() {
         // Parents must come first — React Flow requires a group before its children.
         setNodes((ns) => {
           const appended = nodeCreationCoordinatorRef.current.appendNode(ns as CanvasNode[], group, undefined, { prepend: true })
-          if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+          if (appended.result.error) notify({ kind: 'error', titleKind: 'authored', title: 'Node placement unavailable', body: appended.result.error, bodyKind: 'fact' })
           return appended.nodes
         })
       }
@@ -8542,7 +8542,7 @@ export function Canvas() {
         for (const copy of copies) {
           const appended = nodeCreationCoordinatorRef.current.appendNode(next, copy)
           if (appended.result.error) {
-            notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+            notify({ kind: 'error', titleKind: 'authored', title: 'Node placement unavailable', body: appended.result.error, bodyKind: 'fact' })
             continue
           }
           next = appended.nodes
@@ -9438,7 +9438,7 @@ export function Canvas() {
           ns.map((n) => ({ ...n, selected: false })),
           placed
         )
-        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        if (appended.result.error) notify({ kind: 'error', titleKind: 'authored', title: 'Node placement unavailable', body: appended.result.error, bodyKind: 'fact' })
         return appended.nodes
       })
       return { ok: true, newNodeId: placed.id }
@@ -9535,7 +9535,7 @@ export function Canvas() {
           ns.map((n) => ({ ...n, selected: false })),
           placed
         )
-        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        if (appended.result.error) notify({ kind: 'error', titleKind: 'authored', title: 'Node placement unavailable', body: appended.result.error, bodyKind: 'fact' })
         return appended.nodes
       })
     },
@@ -10298,7 +10298,7 @@ export function Canvas() {
           setNodes((ns) =>
             plan.nodes.reduce((current, node) => {
               const appended = nodeCreationCoordinatorRef.current.appendNode(current, node)
-              if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+              if (appended.result.error) notify({ kind: 'error', titleKind: 'authored', title: 'Node placement unavailable', body: appended.result.error, bodyKind: 'fact' })
               return appended.nodes
             }, ns)
           )
@@ -12645,7 +12645,7 @@ export function Canvas() {
               )
       setNodes((ns) => {
         const appended = nodeCreationCoordinatorRef.current.appendNode(ns, node)
-        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        if (appended.result.error) notify({ kind: 'error', titleKind: 'authored', title: 'Node placement unavailable', body: appended.result.error, bodyKind: 'fact' })
         return appended.nodes
       })
       const board = project?.kanban ?? seedBoard
@@ -12801,7 +12801,7 @@ export function Canvas() {
           ns.map((n) => ({ ...n, selected: false })),
           node
         )
-        if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+        if (appended.result.error) notify({ kind: 'error', titleKind: 'authored', title: 'Node placement unavailable', body: appended.result.error, bodyKind: 'fact' })
         return appended.nodes
       })
       markDirty()
@@ -13671,7 +13671,7 @@ export function Canvas() {
         setNodes((ns) => {
           const appended = nodeCreationCoordinatorRef.current.appendNode(ns, placed)
           if (appended.result.error) {
-            notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+            notify({ kind: 'error', titleKind: 'authored', title: 'Node placement unavailable', body: appended.result.error, bodyKind: 'fact' })
             return ns
           }
           return appended.nodes
@@ -14718,7 +14718,7 @@ export function Canvas() {
             for (const created of [...reviewers, ...(judge ? [judge] : [])]) {
               const appended = nodeCreationCoordinatorRef.current.appendNode(next, created)
               if (appended.result.error) {
-                notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+                notify({ kind: 'error', titleKind: 'authored', title: 'Node placement unavailable', body: appended.result.error, bodyKind: 'fact' })
                 continue
               }
               next = appended.nodes
@@ -18812,7 +18812,7 @@ export function Canvas() {
               const node = createKioskPwaNode(existing.length, intent, setup.at ?? emptyNodePos())
               const candidate = setup.groupId ? parentInto(node, setup.groupId) : node
               const appended = nodeCreationCoordinatorRef.current.appendNode(existing, candidate)
-              if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
+              if (appended.result.error) notify({ kind: 'error', titleKind: 'authored', title: 'Node placement unavailable', body: appended.result.error, bodyKind: 'fact' })
               return appended.nodes
             })
             markDirty()
