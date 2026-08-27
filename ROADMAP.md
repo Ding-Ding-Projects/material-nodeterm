@@ -271,7 +271,10 @@ intentionally unchecked because this task publishes the plan only.
 - [ ] Add interactive door construction and numeric or passphrase entry. Source components and
       portable intent are present; live navigator wiring remains pending.
 - [x] Add the top-down recovery game with three energy keys, hazards, core activation, and portable state. Source implementation is complete; built-artifact verification remains for integration.
-- [ ] Add unlimited AWS Universes with AWS-only scope and AWS Shop nodes.
+- [x] Add unlimited AWS Universes with AWS-only scope, guided navigation, and AWS Shop nodes.
+      Source implementation and delivery records are present; tests, type checks, builds,
+      packaging, runtime interaction, and captures remain explicitly unrun under issue #39's
+      ultra-speed boundary.
 - [ ] Bundle AWS CLI v2 and maintain verified model and documentation indexing. The pinned MSI,
       verified fallback, version details route, bounded installed-model inventory, feature article,
       and offline documentation entry are present on the issue #41 jer. Tests, builds, packaging,

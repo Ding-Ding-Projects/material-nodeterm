@@ -359,6 +359,7 @@ function validChildCanvases(value: unknown, _projectId: string): ProjectChildCan
       typeof candidate.order !== 'number' || !Number.isFinite(candidate.order) ||
       !Array.isArray(candidate.nodes)
     ) continue
+    if (candidate.scope === 'aws-universe' && (candidate.parentCanvasId !== 'root' || candidate.depth !== 1)) continue
     const viewport = candidate.viewport && typeof candidate.viewport === 'object' &&
       typeof candidate.viewport.x === 'number' && Number.isFinite(candidate.viewport.x) &&
       typeof candidate.viewport.y === 'number' && Number.isFinite(candidate.viewport.y) &&
@@ -373,7 +374,9 @@ function validChildCanvases(value: unknown, _projectId: string): ProjectChildCan
       title: candidate.title,
       order: candidate.order,
       ...(viewport ? { viewport } : {}),
-      nodes: candidate.nodes.filter((node): node is CanvasNodeState => !!node && typeof node === 'object' && typeof node.id === 'string' && typeof node.kind === 'string')
+      nodes: candidate.nodes.filter((node): node is CanvasNodeState => !!node && typeof node === 'object' && typeof node.id === 'string' && typeof node.kind === 'string'),
+      ...(Array.isArray(candidate.bridges) ? { bridges: candidate.bridges } : {}),
+      ...(Array.isArray(candidate.ropes) ? { ropes: candidate.ropes } : {})
     })
   }
   return result.length > 0 ? result : undefined

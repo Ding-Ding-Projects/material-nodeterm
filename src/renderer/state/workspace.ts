@@ -1490,6 +1490,28 @@ export function createTimerNode(index: number, center?: { x: number; y: number }
   return { id: nextId('timer'), type: 'timer', position: placeAt(center, index, TIMER_SIZE.width, TIMER_SIZE.height), width: TIMER_SIZE.width, height: TIMER_SIZE.height, style: { width: TIMER_SIZE.width, height: TIMER_SIZE.height }, data }
 }
 
+/** Creates a root portal card for one AWS-only child canvas. */
+export function createAwsUniversePortalNode(index: number, canvasId: string, title: string, center?: { x: number; y: number }): CanvasNode {
+  const size = NODE_START_SIZE['aws-universe']
+  return {
+    id: nextId('aws-universe'),
+    type: 'aws-universe',
+    position: placeAt(center, index, size.width, size.height),
+    width: size.width,
+    height: size.height,
+    style: { width: size.width, height: size.height },
+    data: {
+      title,
+      color: '#7d5260',
+      group: null,
+      universeCanvasId: canvasId,
+      universeScope: 'aws-universe',
+      universeDepth: 1,
+      tags: ['aws-universe', 'universe-portal']
+    }
+  }
+}
+
 /** Creates an unbound Home Assistant control. Import and creation perform no network request. */
 export function createHomeAssistantControlNode(index: number, center?: { x: number; y: number }): CanvasNode {
   return {
@@ -2213,6 +2235,7 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   freepbx: true,
   nsis: true,
   shop: true,
+  'aws-universe': true,
   torrent: true,
   'linux-vm': true
 }
@@ -2264,6 +2287,7 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   freepbx: SERVICE_SUMMARY_SIZE,
   nsis: NSIS_SIZE,
   shop: SHOP_SIZE,
+  'aws-universe': { width: 320, height: 220 },
   torrent: TORRENT_SIZE,
   'linux-vm': LINUX_VM_SIZE
 }

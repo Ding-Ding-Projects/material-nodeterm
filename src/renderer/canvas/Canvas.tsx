@@ -109,6 +109,7 @@ import { ServiceNode } from '../nodes/ServiceNode'
 import VirtualMachineNode from '../nodes/VirtualMachineNode'
 import NsisInstallerNode from '../nodes/NsisInstallerNode'
 import ShopNode from '../nodes/ShopNode'
+import { AwsUniversePortalNode } from '../nodes/AwsUniversePortalNode'
 import TorrentNode from '../nodes/TorrentNode'
 import { normalizeAddress } from '../nodes/browserUrl'
 import VideoNode from '../nodes/VideoNode'
@@ -137,6 +138,7 @@ import {
 import { TopAppBar } from '../components/TopAppBar'
 import { ProjectSwitcher } from '../components/ProjectSwitcher'
 import { MultiverseNavigator } from '../components/MultiverseNavigator'
+import { AwsUniverseNavigator } from '../components/AwsUniverseNavigator'
 import { PortalLifecycleDialog } from '../components/PortalLifecycleDialog'
 import { projectCanvasView } from '@shared/multiverse-canvases'
 import { portableCanvasProjectionToProject, projectToPortableCanvasV3 } from '../../core/portable-canvas-projection'
@@ -2084,6 +2086,7 @@ export function Canvas() {
       // tell them apart without six registrations of six near-identical files.
       nsis: withNodeBoundary(NsisInstallerNode),
       shop: withNodeBoundary(ShopNode),
+      'aws-universe': withNodeBoundary(AwsUniversePortalNode),
       torrent: withNodeBoundary(TorrentNode),
       minecraft: withNodeBoundary(ServiceNode),
       dockerhost: withNodeBoundary(ServiceNode),
@@ -3225,6 +3228,29 @@ export function Canvas() {
     return result
   }, [activeProjectId, bumpDirty, commitActiveToStore])
 
+  const navigateAwsUniverse = useCallback((canvasId: string) => {
+    if (!activeProjectId) return
+    commitActiveToStore()
+    nodesProjectIdRef.current = null
+    useProjects.getState().openAwsUniverseCanvas(activeProjectId, canvasId)
+  }, [activeProjectId, commitActiveToStore])
+
+  const createAwsUniverse = useCallback((title: string) => {
+    if (!activeProjectId) return { reason: 'Choose an open project before creating an AWS Universe.' }
+    commitActiveToStore()
+    const result = useProjects.getState().createAwsUniverseCanvas(activeProjectId, title)
+    if (result.canvasId) bumpDirty()
+    return result
+  }, [activeProjectId, bumpDirty, commitActiveToStore])
+
+  useEffect(() => {
+    const onOpen = (event: Event): void => {
+      const canvasId = (event as CustomEvent<{ canvasId?: string }>).detail?.canvasId
+      if (canvasId) navigateAwsUniverse(canvasId)
+    }
+    window.addEventListener('nodeterm:open-aws-universe', onOpen)
+    return () => window.removeEventListener('nodeterm:open-aws-universe', onOpen)
+  }, [navigateAwsUniverse])
   const attachMultiverseDoor = useCallback((input: {
     parentCanvasId: string
     childCanvasId: string
@@ -5416,6 +5442,12 @@ export function Canvas() {
         notify({ kind: 'error', title: 'Node unavailable', body: availability.reason ?? 'Choose another node.' })
         return
       }
+      if (entry.id === 'aws-universe') {
+        const result = createAwsUniverse('New AWS Universe')
+        if (result.canvasId) navigateAwsUniverse(result.canvasId)
+        else notify({ kind: 'error', title: 'AWS Universe unavailable', body: result.reason ?? 'The AWS Universe could not be created.' })
+        return
+      }
       setNodes((existing) => {
         const appended = nodeCreationCoordinatorRef.current.append(
           existing,
@@ -5486,7 +5518,7 @@ export function Canvas() {
       // The shared node-data signature effect marks a real append dirty after React commits. This
       // keeps duplicate retries a true no-op rather than writing an unnecessary project snapshot.
     },
-    [activeProjectId, emptyNodePos, offersTerminalProfiles, parentInto, sessionSource, setNodes]
+    [activeProjectId, createAwsUniverse, emptyNodePos, navigateAwsUniverse, offersTerminalProfiles, parentInto, sessionSource, setNodes]
   )
 
   // Task 6: the Settings → Accounts "Add account" flow dispatches 'nodeterm:add-account-login'
@@ -16710,6 +16742,7 @@ export function Canvas() {
           onOpenArchive={() => void importProjectArchive()}
           archiveBusy={() => projectArchiveBusyRef.current}
         />
+        <AwsUniverseNavigator onNavigate={navigateAwsUniverse} onCreate={createAwsUniverse} />
         <MultiverseNavigator onNavigate={navigateMultiverseCanvas} onCreate={createMultiverseCanvas} onConstructDoor={attachMultiverseDoor} />
         <button
           type="button"

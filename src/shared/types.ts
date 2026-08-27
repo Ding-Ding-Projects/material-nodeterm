@@ -384,6 +384,8 @@ export type NodeKind =
   // intentionally a distinct kind so the canvas can refuse deletion, duplication, grouping, and
   // cross-universe movement at every mutation boundary.
   | 'shop'
+  // AWS Universe portal. The portal is a safe project intent and never carries provider state.
+  | 'aws-universe'
   // A GUI for authoring a Windows NSIS installer script for ANOTHER project (not this app's
   // own installer, which stays Squirrel.Windows — see CLAUDE.md's Packaging section). See
   // `NsisSpec`/`NsisLocalPaths` in `./nsis-form-types` for the shared-vs-machine-local split.
@@ -1042,6 +1044,16 @@ export interface ProjectChildCanvas {
   order: number
   viewport?: Viewport
   nodes: CanvasNodeState[]
+  bridges?: BridgeLink[]
+  ropes?: BridgeLink[]
+}
+
+/** Narrow AWS Universe view over the shared child-canvas projection. */
+export type ProjectAwsUniverseCanvas = ProjectChildCanvas & {
+  scope: 'aws-universe'
+  parentCanvasId: 'root'
+  depth: 1
+  viewport: Viewport
 }
 
 /** Safe portal intent shared by the runtime project and schema 3 projection. */

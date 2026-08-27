@@ -65,6 +65,30 @@ accessibility, packaged-artifact, or visual correctness verdict is claimed. The 
 inventory lane must supply decoded official models, and the later wizard lane must render the picker
 and shape records as typed controls without adding a blank command textbox.
 
+## 2026-08-27, AWS Universe portal with unlimited instances
+
+Issue #39 is implemented on `feat/program-28-aws-universe`. The renderer now exposes an AWS Universe
+navigator with local plain-text search and an adjacent anchored full regex builder, guided naming,
+keyboard-operable instance selection, and explicit AWS-only scope. Root portal cards open their
+matching child canvas through a real event route. Each child starts with one permanent scope-bound
+Shop node.
+
+Portable project files preserve safe AWS child-canvas intent, node membership, viewport, and
+canvas-owned relationships. Schema 3 projection and hydration keep credentials, profiles, SSO and
+role sessions, CLI paths, local files, process state, caches, and account bindings out of shared
+content. Import remains data-only and validates relationship ownership before accepting the result.
+
+Changed implementation paths include `src/shared/aws-universes.ts`, `src/shared/types.ts`,
+`src/shared/node-catalog.ts`, `src/shared/i18n/catalog.ts`, `src/core/workspace-files.ts`,
+`src/core/portable-canvas-projection.ts`, `src/renderer/state/projects.ts`,
+`src/renderer/components/AwsUniverseNavigator.tsx`, `src/renderer/nodes/AwsUniversePortalNode.tsx`,
+`src/renderer/canvas/Canvas.tsx`, and `src/renderer/styles.md3.css`. Related README, roadmap,
+changelog, offline documentation, and site documentation accompany the implementation.
+
+This lane intentionally did not run tests, type checks, lint, reviews, security checks,
+accessibility checks, builds, packaging, installer execution, runtime interaction, or UI captures.
+Those checks remain unverified and are delegated to a later integration lane.
+
 ## 2026-08-27, Express File Converter completion, issue #21
 
 The implementation lane is `feat/program-10-file-converter`, refreshed by fast-forward before edits
