@@ -835,19 +835,9 @@ let activeRemote: { cwd: string; ref: GitRemoteRef } | null = null
 // True from the first before-quit on: lets window close-events through (see hide-on-close).
 let quitting = false
 
-// Confirm-before-quit gate. Only fires when something would actually be lost: a plain-shell
-// terminal (no tmux/session-host underneath it) that would be killed for real, per
-// ptyManager.hasSessionsAtRiskOnQuit() / quit-risk.ts. A canvas where every terminal is
-// tmux-backed — the common case — quits silently, because nothing there dies from quitting.
-// `quitConfirmed` remembers a "Quit" answer so the re-issued app.quit() below (and the second
-// before-quit pass) is never re-prompted; `skipQuitConfirmation` is set for app-initiated quits
-// (auto-update restart) that are not a decision the user needs to re-make; `quitConfirmationPending`
-// dedupes concurrent triggers (native close + menu Quit + Cmd/Ctrl+Q landing in the same tick)
-// into a single dialog.
-// Confirm-before-quit gate. Set once the user has answered "Quit" in the dialog below, or when
-// a quit is app-initiated rather than user-initiated (auto-update restart) and should not be
-// interrupted by a prompt for a decision already made. `pending` dedupes concurrent triggers
-// (shortcut + menu + window-close firing in the same tick) into a single dialog.
+// Confirm-before-quit is only owed when a plain-shell terminal would be lost. The settings value
+// is read at ASK TIME, not captured, so the toggle applies to the very next quit shortcut. A
+// confirmed or app-initiated quit skips the next prompt, and concurrent triggers share one dialog.
 let quitConfirmed = false
 let skipQuitConfirmation = false
 let quitConfirmationPending = false
@@ -860,10 +850,6 @@ function shouldConfirmQuit(): boolean {
   return !quitConfirmed && !skipQuitConfirmation && ptyManager.hasSessionsAtRiskOnQuit()
 }
 
-/** Shows the native confirm dialog (all platforms) and resolves once the user answers. Only ever
- *  called after `shouldConfirmQuit()` is true. A "Quit" answer is remembered (`quitConfirmed`) so
- *  the re-issued app.quit() below is not re-prompted. */
-function confirmQuit(parentWin: BrowserWindow | null): Promise<boolean> {
 /** Resolves true once quitting may proceed. Shows a native confirm dialog (all platforms) on
  * first call; a Quit answer is remembered so the re-issued app.quit() below is not re-prompted.
  * Read at ASK TIME, not captured: the Settings toggle must apply to the very next ⌘Q. */
@@ -881,7 +867,6 @@ function confirmQuit(parentWin: BrowserWindow | null): Promise<boolean> {
     message: 'Quit nodeterm?',
     detail:
       "One or more terminals here aren't using a persistent session, so quitting will end whatever is running in them right now. Terminals using tmux or the session host will still be here next time you open nodeterm."
-    detail: 'Terminal sessions keep running in the background and will still be here next time you open nodeterm.'
   }
   const p =
     parentWin && !parentWin.isDestroyed() ? dialog.showMessageBox(parentWin, opts) : dialog.showMessageBox(opts)
@@ -898,8 +883,7 @@ let keepAwake: KeepAwakeTracker | undefined
 
 // Browser <webview> guest webContents id → the browser node (and which of its two surfaces) it
 // belongs to. Used today for new-window capture; every entry is proven to BE a <webview> before it
-// lands here — see `registerBrowserGuestRequest`.
-// lands here — see `registerBrowserGuest`.
+// lands here through `registerBrowserGuestRequest`.
 const browserGuests = new Map<number, BrowserGuest>()
 
 // Node → live tail bookkeeping, so closing a node (× → pty:destroy) releases its file tailers.
