@@ -218,8 +218,7 @@
         }
       ],
       "forceCodeSigning": false,
-      "signExecutable": false,
-      "signAndEditExecutable": true
+      "signExecutable": false
     },
     "squirrelWindows": {
       "artifactName": "${productName}-Setup-${version}.${ext}",
