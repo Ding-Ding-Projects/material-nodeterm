@@ -12765,6 +12765,46 @@ button.group-node__setup:disabled {
 .calendar-node__editor h3 { margin: 0; }
 @media (max-width: 560px) { .calendar-node__two-col { display: grid; } .calendar-node__event { align-items: flex-start; flex-direction: column; } .calendar-node__event-actions { width: 100%; } .calendar-node__event-actions button { flex: 1; } }
 
+/* Home Assistant sensor display. All chrome consumes Material color roles and the node remains
+   usable when resized, at high display scale, in either theme, or with reduced motion. */
+.ha-sensor-node { min-width: 0; overflow: hidden; background: var(--md-sys-color-surface-container, #f3edf7); border: 1px solid var(--md-sys-color-outline-variant, #cac4d0); border-top: 4px solid; border-radius: 16px; box-shadow: var(--md-sys-elevation-1, 0 1px 3px #0002); color: var(--md-sys-color-on-surface, #1d1b20); }
+.ha-sensor-node .term-node__header { min-height: 44px; display: flex; align-items: center; gap: 8px; padding: 6px 10px; }
+.ha-sensor-node .term-node__header [role="status"] { max-width: 44%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.ha-sensor-node__body { max-height: 510px; overflow: auto; padding: 10px; }
+.ha-sensor-node__body section { display: grid; gap: 8px; margin-bottom: 12px; padding: 10px; border-radius: 14px; background: var(--md-sys-color-surface-container-low, #f7f2fa); }
+.ha-sensor-node__body h3, .ha-sensor-node__body p { margin: 0; }
+.ha-sensor-node__actions, .ha-sensor-node__search, .ha-sensor-node__settings { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
+.ha-sensor-node button { min-height: 36px; border: 0; border-radius: 18px; padding: 0 12px; background: var(--md-sys-color-secondary-container, #e8def8); color: var(--md-sys-color-on-secondary-container, #1d192b); cursor: pointer; }
+.ha-sensor-node button:disabled { opacity: .5; cursor: not-allowed; }
+.ha-sensor-node button:focus-visible, .ha-sensor-node input:focus-visible, .ha-sensor-node summary:focus-visible { outline: 3px solid var(--md-sys-color-primary, #6750a4); outline-offset: 2px; }
+.ha-sensor-node input { min-height: 36px; box-sizing: border-box; border: 1px solid var(--md-sys-color-outline, #79747e); border-radius: 8px; padding: 6px 9px; background: var(--md-sys-color-surface, #fffbfe); color: inherit; }
+.ha-sensor-node__search > input { flex: 1 1 180px; min-width: 0; }
+.ha-sensor-node__configure, .ha-sensor-node__settings { padding: 9px; border: 1px solid var(--md-sys-color-outline-variant, #cac4d0); border-radius: 12px; }
+.ha-sensor-node__configure label, .ha-sensor-node__settings label { display: flex; flex: 1 1 150px; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; }
+.ha-sensor-node__catalog { max-height: 190px; overflow: auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 5px; }
+.ha-sensor-node__catalog label { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 6px; border-radius: 10px; background: var(--md-sys-color-surface-container-high, #ece6f0); }
+.ha-sensor-node__catalog label span { min-width: 0; display: grid; }
+.ha-sensor-node__catalog small, .ha-sensor-node article small, .ha-sensor-node__muted { font-size: 11px; opacity: .76; overflow-wrap: anywhere; }
+.ha-sensor-node__cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 8px; }
+.ha-sensor-node__cards article { min-width: 0; padding: 10px; border: 1px solid var(--md-sys-color-outline-variant, #cac4d0); border-radius: 14px; background: var(--md-sys-color-surface-container-high, #ece6f0); }
+.ha-sensor-node__cards article > header { display: flex; justify-content: space-between; align-items: start; gap: 8px; }
+.ha-sensor-node__cards article > header > div { min-width: 0; display: grid; }
+.ha-sensor-node__cards dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 8px; margin: 8px 0 0; font-size: 12px; }
+.ha-sensor-node__cards dl > div { display: contents; }
+.ha-sensor-node__cards dd { margin: 0; overflow-wrap: anywhere; }
+.ha-sensor-node__value { display: block; margin: 8px 0; font: var(--md-sys-typescale-headline-small, 500 24px/32px sans-serif); overflow-wrap: anywhere; }
+.ha-sensor-node meter { width: 100%; min-height: 18px; margin-top: 8px; accent-color: var(--md-sys-color-primary, #6750a4); }
+.ha-sensor-node__binary { display: flex; align-items: center; gap: 8px; margin-top: 8px !important; font-weight: 650; }
+.ha-sensor-node__binary span { width: 12px; height: 12px; border-radius: 50%; background: var(--md-sys-color-outline, #79747e); }
+.ha-sensor-node__binary--on span { background: var(--md-sys-color-primary, #6750a4); }
+.ha-sensor-node__trend { height: 74px; display: flex; align-items: end; gap: 2px; padding: 6px; border-radius: 10px; background: var(--md-sys-color-surface, #fffbfe); }
+.ha-sensor-node__trend span { flex: 1; min-width: 2px; border-radius: 3px 3px 0 0; background: var(--md-sys-color-primary, #6750a4); }
+.ha-sensor-node__mode-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(105px, 1fr)); gap: 5px; margin-top: 8px; }
+.ha-sensor-node__mode-grid button[aria-pressed="true"] { background: var(--md-sys-color-primary, #6750a4); color: var(--md-sys-color-on-primary, #fff); }
+.ha-sensor-node__empty { padding: 12px; border-radius: 12px; background: var(--md-sys-color-surface-container-high, #ece6f0); }
+@media (max-width: 560px) { .ha-sensor-node__cards, .ha-sensor-node__catalog { grid-template-columns: 1fr; } .ha-sensor-node__actions button { flex: 1 1 130px; } }
+@media (prefers-reduced-motion: reduce) { .ha-sensor-node *, .ha-sensor-node *::before, .ha-sensor-node *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; } }
+
 /* Categorized adapter catalog */
 .cv-catalog {
   display: flex;

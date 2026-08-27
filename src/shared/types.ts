@@ -21,6 +21,7 @@ import type { FunnyLevel, LanguageMode } from './i18n/types'
 import type { VsCodeInstall, VsCodeOpenResult } from './vscode'
 import type { HistoryFilters, HistoryListResult, HistoryRestoreResult } from './local-history'
 import type { CalendarApi, CalendarNodeConfig } from './calendar'
+import type { HomeAssistantSensorApi, HomeAssistantSensorConfig } from './home-assistant-sensor'
 import type {
   ToyLockBeginTotpInput,
   ToyLockBeginTotpResult,
@@ -412,6 +413,7 @@ export type NodeKind =
   | 'proxmox'
   | 'gitlab'
   | 'homeassistant'
+  | 'homeassistant-sensor'
   | 'freepbx'
   | 'torrent'
   /** One-shot Linux ISO virtual machine, distinct from the WSL terminal profile. */
@@ -659,6 +661,9 @@ export interface CanvasNodeState {
   /** calendar-only, GIT-SHARED safe intent. Tokens, provider sessions, paths and event cache stay
    * in the machine-local calendar service. */
   calendarConfig?: CalendarNodeConfig
+  /** Home Assistant sensor-only, project-portable selection and presentation intent. Instance
+   * URLs, credentials, observed values, and history remain machine-local. */
+  homeAssistantSensorConfig?: HomeAssistantSensorConfig
   // editor / diff
   filePath?: string
   /** Photo/video/gallery media is represented by a portable content reference, never an absolute path. */
@@ -4500,6 +4505,8 @@ export interface NodeTerminalApi {
   minecraft: import('./minecraft').MinecraftApi
   /** Local Linux ISO VM lifecycle — docs/linux-iso-vm.md. */
   virtualMachine: import('./virtual-machine').VirtualMachineApi
+  /** Machine-local Home Assistant sensor discovery and bounded observations. */
+  homeAssistantSensor: HomeAssistantSensorApi
   ssh: SshApi
   sshProject: SshProjectApi
   sshFs: SshFsApi

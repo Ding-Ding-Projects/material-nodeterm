@@ -1,5 +1,36 @@
 # Handoff
 
+## 2026-08-27, Home Assistant sensor display source implementation
+
+Issue #28 is implemented on `feat/program-17-home-assistant-sensors`. The lane adds the
+`homeassistant-sensor` node kind and Node Catalog entry, shared portable configuration and typed
+API contracts, a host-owned desktop and Server Edition service, machine-local secret-sealed
+binding, bounded entity discovery and observation history, relay refusal, renderer bridge wiring,
+and a Material Design 3 canvas surface.
+
+Portable project state stores selected entity ids, display modes, reviewed gauge ranges, selected
+attribute keys, refresh timing, history limits, and normal node layout. Instance URLs, credentials,
+provider sessions, local paths, host identity, fetched values, cache, and runtime state stay in
+`<app-data>/home-assistant-sensor-nodes/`. Importing a node has no network, deployment, process, or
+download side effect and opens unbound with explicit Configure, Rebind, Adopt, Deploy, Locate
+Asset, and Leave Unbound routes.
+
+The display supports ordinary values, binary states, enum options, numeric gauges, bounded local
+trends, event entities, weather entities, calendar entities, and selected attributes. Entity and
+display-mode searches use plain text by default and carry adjacent anchored full regex builders.
+Information, partial results, progress state, and failures remain non-blocking, with the shared
+notification history receiving outcomes. Leaving a local binding uses the existing two-key
+destructive confirmation.
+
+Documentation is in
+`docs/features/integrations/home-assistant-sensor-display.md`, indexed from the integrations
+category, mirrored on the documentation site, and represented in the offline documentation bundle.
+
+This ultra-speed implementation lane intentionally did not run tests, type checks, lint, reviews,
+security checks, accessibility checks, builds, packaging, installer execution, runtime interaction,
+or UI captures. The next integration owner must run the appropriate verification and obtain real
+built-artifact evidence before changing any roadmap or release claim to verified.
+
 ## 2026-08-26, desktop Material Design 3 and personal vocabulary reconciliation
 
 This source-only lane is on feat/full-app-material3-reconciliation at the current integration tip.

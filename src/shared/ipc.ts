@@ -802,6 +802,13 @@ export const IPC = {
   calendarCreate: 'calendar:create',
   calendarUpdate: 'calendar:update',
   calendarRemove: 'calendar:remove',
+  // Home Assistant sensor nodes. Shared projects carry only entity/presentation intent; these
+  // channels operate on a machine-local binding whose credential never crosses back to the UI.
+  homeAssistantSensorBinding: 'home-assistant-sensor:binding',
+  homeAssistantSensorConfigure: 'home-assistant-sensor:configure',
+  homeAssistantSensorLeaveUnbound: 'home-assistant-sensor:leave-unbound',
+  homeAssistantSensorDiscover: 'home-assistant-sensor:discover',
+  homeAssistantSensorRefresh: 'home-assistant-sensor:refresh',
   // "Open in Visual Studio Code" (src/core/vscode-detect.ts, src/core/vscode-handlers.ts).
   // Registered on BOTH shells via the generic `platform.handle` seam, so it opens VS Code on
   // whichever machine is actually running the shell (this desktop, or the Server Edition host).

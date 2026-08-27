@@ -93,6 +93,7 @@ import { GroupNode, setWorktreeActionHandler, setWslActionHandler } from '../nod
 import { AnnotationNode } from '../nodes/AnnotationNode'
 import AuthenticatorNode from '../nodes/AuthenticatorNode'
 import CalendarNode from '../nodes/CalendarNode'
+import HomeAssistantSensorNode from '../nodes/HomeAssistantSensorNode'
 import { useAnnotationDrawTool } from './useAnnotationDrawTool'
 import { annotationEndpoints } from '../lib/annotation'
 import { LazyEditorNode, LazyDiffNode } from '../nodes/lazyMonacoNodes'
@@ -705,6 +706,7 @@ import {
   createSshTerminalNode,
   createAuthenticatorNode,
   createCalendarNode,
+  createHomeAssistantSensorNode,
   createNsisNode,
   createTorrentNode,
   createStickyNode,
@@ -2040,6 +2042,7 @@ export function Canvas() {
       annotation: withNodeBoundary(AnnotationNode),
       authenticator: withNodeBoundary(AuthenticatorNode),
       calendar: withNodeBoundary(CalendarNode),
+      'homeassistant-sensor': withNodeBoundary(HomeAssistantSensorNode),
       editor: withNodeBoundary(LazyEditorNode),
       diff: withNodeBoundary(LazyDiffNode),
       subagent: withNodeBoundary(SubagentNode),
@@ -5363,6 +5366,7 @@ export function Canvas() {
             if (catalogEntry.id === 'dino') return createDinoNode(index, center)
             if (catalogEntry.id === 'loop') return createNativeLoopNode(index, center)
             if (catalogEntry.id === 'nsis') return createNsisNode(index, center)
+            if (catalogEntry.id === 'homeassistant-sensor') return createHomeAssistantSensorNode(index, center)
             if (catalogEntry.id.startsWith('service:')) {
               return createServiceNode(catalogEntry.nodeKind as ServiceNodeKind, index, center)
             }

@@ -2,6 +2,7 @@ import type { Node } from '@xyflow/react'
 import type { AgentLaunchIntent, BrowserTab, CanvasMutation, CanvasNodeState, ClaudeAccount, NodeKind, PendingLaunch, Project, ServiceNodeKind } from '@shared/types'
 import { normalizeMediaReference, type MediaAssetReference } from '@shared/media-catalog'
 import type { CalendarNodeConfig } from '@shared/calendar'
+import { DEFAULT_HOME_ASSISTANT_SENSOR_CONFIG, type HomeAssistantSensorConfig } from '@shared/home-assistant-sensor'
 import type { AlarmOccurrence, AlarmRecurrence } from '@shared/alarm-clock'
 import type { ServiceConnection } from '@shared/node-exec'
 import type { NsisLocalPaths, NsisSpec } from '@shared/nsis-form-types'
@@ -264,6 +265,8 @@ export interface NodeData {
   nsisLocalPaths?: NsisLocalPaths
   /** calendar-only, portable selection intent; local cache and credentials are never here. */
   calendarConfig?: CalendarNodeConfig
+  /** Home Assistant sensor-only portable entity and display intent. */
+  homeAssistantSensorConfig?: HomeAssistantSensorConfig
   /** Which agent runs in this terminal node (claude/codex/gemini/custom). */
   agentId?: AgentId
   /** Model selected for this node through the shared model gateway. */
@@ -1363,6 +1366,7 @@ export function createDiffNode(
 /** Creates a new sticky note. */
 const AUTHENTICATOR_SIZE = { width: 340, height: 260 }
 const CALENDAR_SIZE = { width: 620, height: 520 }
+const HOME_ASSISTANT_SENSOR_SIZE = { width: 660, height: 560 }
 const NSIS_SIZE = { width: 460, height: 520 }
 
 /**
@@ -1474,6 +1478,24 @@ export function createStickyNode(index: number, center?: { x: number; y: number 
       color: '#ffd60a',
       group: null,
       text: ''
+    }
+  }
+}
+
+/** Creates an unbound Home Assistant sensor display. Importing it performs no network action. */
+export function createHomeAssistantSensorNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  return {
+    id: nextId('homeassistant-sensor'),
+    type: 'homeassistant-sensor',
+    position: placeAt(center, index, HOME_ASSISTANT_SENSOR_SIZE.width, HOME_ASSISTANT_SENSOR_SIZE.height),
+    width: HOME_ASSISTANT_SENSOR_SIZE.width,
+    height: HOME_ASSISTANT_SENSOR_SIZE.height,
+    style: { width: HOME_ASSISTANT_SENSOR_SIZE.width, height: HOME_ASSISTANT_SENSOR_SIZE.height },
+    data: {
+      title: 'Home Assistant sensors',
+      color: NODE_COLORS[(index + 4) % NODE_COLORS.length],
+      group: null,
+      homeAssistantSensorConfig: { ...DEFAULT_HOME_ASSISTANT_SENSOR_CONFIG, entities: [] }
     }
   }
 }
@@ -2118,6 +2140,7 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   proxmox: true,
   gitlab: true,
   homeassistant: true,
+  'homeassistant-sensor': true,
   freepbx: true,
   nsis: true,
   shop: true
@@ -2165,6 +2188,7 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   proxmox: SERVICE_CONSOLE_SIZE,
   gitlab: SERVICE_SUMMARY_SIZE,
   homeassistant: SERVICE_SUMMARY_SIZE,
+  'homeassistant-sensor': HOME_ASSISTANT_SENSOR_SIZE,
   freepbx: SERVICE_SUMMARY_SIZE,
   nsis: NSIS_SIZE,
   shop: SHOP_SIZE
@@ -2634,6 +2658,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         virtualMachineConfig: n.virtualMachineConfig,
         virtualMachineLocalPaths: n.virtualMachineLocalPaths,
         calendarConfig: n.calendarConfig,
+        homeAssistantSensorConfig: n.homeAssistantSensorConfig,
         textUpdatedAt: n.textUpdatedAt,
         textUpdatedBy: n.textUpdatedBy,
         filePath: n.filePath,
@@ -2757,6 +2782,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         virtualMachineConfig: n.data.virtualMachineConfig,
         virtualMachineLocalPaths: n.data.virtualMachineLocalPaths,
         calendarConfig: n.data.calendarConfig,
+        homeAssistantSensorConfig: n.data.homeAssistantSensorConfig,
         filePath: n.data.filePath,
         fileMissing: n.data.fileMissing,
         url: n.data.url,

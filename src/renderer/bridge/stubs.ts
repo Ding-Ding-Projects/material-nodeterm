@@ -733,6 +733,7 @@ export function buildStubApi(): Omit<
       openDisplay: U('virtualMachine.openDisplay'),
       reset: U('virtualMachine.reset'),
       onEvent: noopUnsub
+    },
     calendar: {
       status: U('calendar.status'),
       accounts: U('calendar.accounts'),
@@ -744,6 +745,14 @@ export function buildStubApi(): Omit<
       create: U('calendar.create'),
       update: U('calendar.update'),
       remove: U('calendar.remove')
+    },
+    homeAssistantSensor: {
+      binding: U('homeAssistantSensor.binding'),
+      configure: U('homeAssistantSensor.configure'),
+      leaveUnbound: U('homeAssistantSensor.leaveUnbound'),
+      discover: U('homeAssistantSensor.discover'),
+      refresh: U('homeAssistantSensor.refresh')
+    },
     // Browser control is desktop-only (no <webview>, no CDP on the Server Edition / relay), so the
     // resolve round-trip is inert here — the verb is refused by name before it reaches a handler.
     onBrowserControlResolve: noopUnsub,

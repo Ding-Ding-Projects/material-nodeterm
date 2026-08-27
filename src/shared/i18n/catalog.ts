@@ -275,6 +275,8 @@ export const CATALOG: Catalog = {
   'nodeCatalog.entry.service.gitlab.description': { en: flat('Open a typed manager for a saved GitLab connection.'), yue: flat('開已儲存 GitLab 連線嘅有類型管理器。') },
   'nodeCatalog.entry.service.homeassistant.label': { en: flat('Home Assistant manager'), yue: flat('Home Assistant 管理器') },
   'nodeCatalog.entry.service.homeassistant.description': { en: flat('Open a typed manager for a saved Home Assistant connection.'), yue: flat('開已儲存 Home Assistant 連線嘅有類型管理器。') },
+  'nodeCatalog.entry.homeassistant-sensor.label': { en: flat('Home Assistant sensor'), yue: flat('Home Assistant 感應器') },
+  'nodeCatalog.entry.homeassistant-sensor.description': { en: flat('Display selected Home Assistant values, states, gauges, trends, events, weather, calendars, and attributes through a local binding.'), yue: flat('用本機綁定顯示揀好嘅 Home Assistant 數值、狀態、儀表、趨勢、事件、天氣、日曆同屬性。') },
   'nodeCatalog.entry.service.freepbx.label': { en: flat('FreePBX manager'), yue: flat('FreePBX 管理器') },
   'nodeCatalog.entry.service.freepbx.description': { en: flat('Open a typed manager for a saved FreePBX connection.'), yue: flat('開已儲存 FreePBX 連線嘅有類型管理器。') },
   'nodeCatalog.entry.editor.label': { en: flat('Editor'), yue: flat('編輯器') },
