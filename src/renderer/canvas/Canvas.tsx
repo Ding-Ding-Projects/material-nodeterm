@@ -2916,7 +2916,10 @@ export function Canvas() {
       nodesProjectIdRef.current = null
       return
     }
-    if (drillContextRef.current) {
+    const activeDrill = drillContextRef.current
+    const isLinkedTargetLoad =
+      activeDrill?.kind === 'project-ref' && activeDrill.targetId === project.id
+    if (activeDrill && !isLinkedTargetLoad) {
       drillContextRef.current = null
       drillParentNodesRef.current = null
       drillParentViewportRef.current = null
@@ -9636,7 +9639,14 @@ export function Canvas() {
   const exitDrill = useCallback(() => {
     const context = drillContextRef.current
     const parent = drillParentNodesRef.current
-    if (!context || !parent || context.kind !== 'group') return
+    if (!context) return
+    if (context.kind === 'project-ref') {
+      drillContextRef.current = null
+      setDrill(null)
+      travelToProjectRef.current(context.projectId)
+      return
+    }
+    if (!parent) return
     const restored = nodeStatesToFlow(
       remergeDrilledNodes(
         flowToNodeStates(parent),
@@ -9667,6 +9677,19 @@ export function Canvas() {
       const parent = nodesRef.current
       const group = parent.find((node) => node.id === groupId && node.type === 'group')
       if (!group) return
+      const ref = group.data.projectRef
+      if (ref && typeof ref.projectId === 'string') {
+        const target = useProjects.getState().projects.find((project) => project.id === ref.projectId)
+        if (!target || target.unavailable || target.closed) {
+          setNotice({ kind: 'error', text: 'The referenced project is unavailable or closed.' })
+          return
+        }
+        commitActiveToStore()
+        drillContextRef.current = { kind: 'project-ref', projectId, targetId: target.id }
+        setDrill({ kind: 'project-ref', projectId, targetId: target.id })
+        travelToProjectRef.current(target.id)
+        return
+      }
       const { flow } = drillGroupChildren(parent, groupId)
       drillParentNodesRef.current = parent
       drillParentViewportRef.current = getViewport()
@@ -9678,7 +9701,7 @@ export function Canvas() {
         void fitView({ duration: 200, padding: 0.12, ...(flow.length ? { nodes: flow.map((node) => ({ id: node.id })) } : {}) })
       })
     },
-    [fitView, getViewport, setNodes]
+    [commitActiveToStore, fitView, getViewport, setNodes]
   )
 
   useEffect(() => {

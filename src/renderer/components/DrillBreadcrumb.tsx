@@ -2,9 +2,8 @@ import type { DrillContext } from '../state/workspace'
 import { useProjects } from '../state/projects'
 
 /**
- * Canvas-level navigation chrome for a group drill. The drilled node set no longer contains the
- * frame that was opened, so the return path must live outside React Flow and remain available even
- * when the group has no children.
+ * Canvas-level navigation chrome for group and linked-project drills. The drilled node set no
+ * longer contains the frame that was opened, so the return path must live outside React Flow.
  */
 export function DrillBreadcrumb({
   drill,
@@ -13,9 +12,12 @@ export function DrillBreadcrumb({
   drill: DrillContext
   onExit: () => void
 }): JSX.Element {
-  const project = useProjects((state) => state.projects.find((item) => item.id === drill.projectId))
-  const group = project?.nodes.find((node) => node.id === drill.groupId)
-  const title = group?.title || 'Group'
+  const projectId = drill.kind === 'project-ref' ? drill.targetId : drill.projectId
+  const project = useProjects((state) => state.projects.find((item) => item.id === projectId))
+  const group = drill.kind === 'group'
+    ? project?.nodes.find((node) => node.id === drill.groupId)
+    : undefined
+  const title = drill.kind === 'project-ref' ? project?.name || 'Project' : group?.title || 'Group'
   return (
     <div className="announce-banner announce-banner--info drill-breadcrumb" role="status">
       <span className="announce-banner__dot" aria-hidden="true" />

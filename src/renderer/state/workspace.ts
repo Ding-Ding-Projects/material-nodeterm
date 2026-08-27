@@ -321,6 +321,8 @@ export interface NodeData {
   codexAccountId?: string
   /** group-only: the git worktree this group is bound to (single source of truth). */
   worktree?: import('@shared/worktree').GroupWorktree
+  /** group-only: safe reference to another open project's canvas. */
+  projectRef?: { projectId: string }
   /**
    * When set, this terminal runs `ssh` to a remote host on the LOCAL PTY (LocalTransport).
    * Unlike `remote` (relay), this IS persisted — the node auto-reconnects on relaunch.
@@ -2072,8 +2074,10 @@ export function rootPosition(node: CanvasNode, nodes: CanvasNode[]): { x: number
   return { x, y }
 }
 
-/** The transient view opened when a group is drilled into. It is intentionally not persisted. */
-export type DrillContext = { kind: 'group'; groupId: string; projectId: string }
+/** The transient view opened when a group or linked project is drilled into. It is not persisted. */
+export type DrillContext =
+  | { kind: 'group'; groupId: string; projectId: string }
+  | { kind: 'project-ref'; projectId: string; targetId: string }
 
 /**
  * Promote a group's direct children into a root-space sub-canvas.
@@ -2963,6 +2967,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         sshRemoteTmux: n.sshRemoteTmux,
         sshFs: n.sshFs,
         worktree: n.worktree,
+        projectRef: n.projectRef,
         annotationVariant: n.annotationVariant,
         annotationDir: n.annotationDir
       }
@@ -3098,6 +3103,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         sshRemoteTmux: n.data.sshRemoteTmux,
         sshFs: n.data.sshFs,
         worktree: n.data.worktree,
+        projectRef: n.data.projectRef,
         annotationVariant: n.data.annotationVariant,
         annotationDir: n.data.annotationDir,
         premaxRect: n.data.premaxRect
