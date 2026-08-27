@@ -325,10 +325,17 @@ destinations, runtime handles, peer state, and task snapshots never enter the po
 file. Added the categorized torrent documentation and inventory entry. `package.json` and
 `package-lock.json` declare `webtorrent` 2.8.1.
 
+The follow-up implementation on `feat/program-12-torrent-downloader` corrects the package's ESM
+loading boundary, keeps inspected tasks attached to their owning canvas node, and makes inspection,
+destination binding, file selection, and start separate user actions. Every task now has isolated
+plain-text-first file and seeding policy searches with adjacent full anchored regex builders. Task
+removal uses the shared two-key destructive confirmation, and duration seeding begins its timer
+when completion is observed instead of when the policy is selected.
+
 This ultra-speed implementation lane intentionally did not run tests, type checks, lint, builds,
-packaging, installer execution, runtime interaction, UI captures, commits, or dews. The docs bundle
-generation, focused tests, built-artifact interaction proof, release packaging, integration, and
-remote verification remain for the owning integration pass.
+packaging, installer execution, runtime interaction, UI captures, audits, or reviews. The docs
+bundle generation, focused tests, built-artifact interaction proof, release packaging, integration,
+and remote verification remain for the owning integration pass.
 ## 2026-08-26, Linux ISO VM node, issue #24
 
 Implemented the one-shot `linux-vm` canvas node and its shared lifecycle contract. The renderer
