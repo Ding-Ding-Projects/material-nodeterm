@@ -28,6 +28,7 @@ import type { HistoryFilters } from '../shared/local-history'
 import type { ClientId, PeerDiff, PeerIdentity, PeerState } from '../shared/presence'
 import type { ConvertQueueItem, ConverterQueueState } from '../shared/converter'
 import type { PullQueueItem, PullQueueState } from '../shared/ollama'
+import type { DockerHostAction, DockerHostJobProgress } from '../shared/docker-host-manager'
 import type { MinecraftEvent } from '../shared/minecraft'
 import type { NodeDependencyAvailability, NodeDependencyProgress, NodeDependencyInstallResult } from '../shared/node-dependencies'
 import type { WslCreateProgress } from '../shared/wsl'
@@ -857,6 +858,18 @@ const api: NodeTerminalApi = {
   },
   relayHost: {
     dockerContexts: () => ipcRenderer.invoke(IPC.relayHostDockerContexts),
+    manager: {
+      contexts: () => ipcRenderer.invoke(IPC.dockerHostManagerContexts),
+      snapshot: (context: string) => ipcRenderer.invoke(IPC.dockerHostManagerSnapshot, context),
+      logs: (context: string, containerId: string) => ipcRenderer.invoke(IPC.dockerHostManagerLogs, context, containerId),
+      run: (action: DockerHostAction) => ipcRenderer.invoke(IPC.dockerHostManagerRun, action),
+      cancel: (jobId: string) => ipcRenderer.send(IPC.dockerHostManagerCancel, jobId),
+      onProgress: (listener: (progress: DockerHostJobProgress) => void) => {
+        const handler = (_event: unknown, progress: DockerHostJobProgress) => listener(progress)
+        ipcRenderer.on(IPC.dockerHostManagerProgress, handler)
+        return () => ipcRenderer.removeListener(IPC.dockerHostManagerProgress, handler)
+      }
+    },
     start: (projectId?: string) => ipcRenderer.invoke(IPC.relayHostStart, projectId),
     invite: (opts?: { projectId?: string; email?: string }) =>
       ipcRenderer.invoke(IPC.relayHostInvite, opts ?? {}),

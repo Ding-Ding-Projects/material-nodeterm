@@ -9,6 +9,14 @@
   Tests, lint, type checks, builds, packaging, runtime interaction, and captures were intentionally
   not run in this ultra-speed implementation lane.
 
+- Add a guided Docker host manager for local and saved SSH contexts. The canvas node now exposes
+  searchable containers, images, volumes, networks, Compose projects, bounded statistics, redacted
+  logs, fixed typed container tasks, cancellable lifecycle progress, and destructive confirmation.
+  Main-process argument-array validation prevents renderer shell input, while schema 3 carries only
+  safe neutral intent and keeps credentials, endpoints, paths, live ids, and process state local.
+  The ultra-speed lane intentionally did not run tests, type checks, lint, reviews, security or
+  accessibility checks, builds, packaging, installer execution, runtime interaction, or captures.
+
 - Add a source-only desktop Material Design 3 audit with a hand-written inventory of 212 rendered
   surfaces, including onboarding, profile picking, conversion, password management, Minecraft
   management, dialogs, find bars, and notifications. Shared NumberField, Radio, Progress, and Tabs
@@ -78,8 +86,10 @@
   not run under issue #17's explicit verification boundary.
 - Add the issue #20 media catalogue and Photo, Video, and mixed-media Gallery canvas node kinds.
   Local media is routed through the existing allowlisted protocol, gallery references carry bounded
-  portable metadata, and missing assets remain visible instead of disappearing. Verification is
-  pending in the parent integration lane.
+  portable metadata, and missing assets remain visible instead of disappearing. Machine paths now
+  round-trip only through the local workspace index; schema 3 binds node references to validated
+  content-addressed archive entries and re-proves byte count, signature, and SHA-256 before export
+  or resolution. Verification is pending in the parent integration lane.
 - Add the Torrent Downloader canvas node with ESM-compatible packaged or pinned user-scoped
   WebTorrent runtime discovery, explicit magnet and `.torrent` metadata inspection, searchable
   file selection and seeding policy pickers with anchored regex builders, safe destination

@@ -7,6 +7,7 @@ import { safeServiceEndpoint } from '@shared/node-exec'
 import { nodeBorderStyle, nodeColorStyle } from '../lib/nodeColor'
 import { ColorMenu } from '../components/color/ColorMenu'
 import { MinecraftServerPanel } from '../components/minecraft/MinecraftServerPanel'
+import { DockerHostManagerPanel } from '../components/docker/DockerHostManagerPanel'
 import { EditableNodeTitle } from '../components/EditableNodeTitle'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { mapAroundExactFacts } from './nodeVocabulary'
@@ -16,9 +17,9 @@ import { mapAroundExactFacts } from './nodeVocabulary'
  * and FreePBX. They differ in what they will eventually manage, not in how they behave as canvas
  * objects, so six near-identical components would be six copies of one rule waiting to drift.
  *
- * WHAT THIS DELIBERATELY DOES NOT DO for five of the six kinds, and why the emptiness is the point:
+ * WHAT THIS DELIBERATELY DOES NOT DO for four of the six kinds, and why the emptiness is the point:
  *
- * Docker/Proxmox/GitLab/Home Assistant/FreePBX are not connected to anything yet. CLAUDE.md is
+ * Proxmox/GitLab/Home Assistant/FreePBX are not connected to anything yet. CLAUDE.md is
  * explicit that a control which is styled as operable while being inert is a defect rather than a
  * placeholder — "any icon, preview, mock window, toolbar control, card, tab, badge, illustration,
  * affordance ... presented as if it can be used must perform its labeled action". So there is no
@@ -30,11 +31,11 @@ import { mapAroundExactFacts } from './nodeVocabulary'
  * rather than implying a connection. Storing where you would connect is a real, useful thing on
  * its own; pretending it connects would not be.
  *
- * `minecraft` IS the lane that wires a real connection — see `MinecraftServerPanel`
+ * `minecraft` and `dockerhost` are the lanes that wire real managers. See `MinecraftServerPanel`
  * (docs/minecraft-server-manager.md). It runs a real local `java -jar server.jar` process on the
- * machine this shell is running on, not a remote connection reached through an address, so it
- * replaces the generic address field entirely rather than growing a fake "Connect" button beside
- * it. When a future lane wires one of the other five kinds, it follows the same pattern: real
+ * and `DockerHostManagerPanel`. Both replace the generic address field entirely rather than growing
+ * a fake "Connect" button beside it. When a future lane wires one of the other four kinds, it follows
+ * the same pattern: real
  * controls that do exactly what they say, added beside this honest copy rather than instead of it.
  */
 /**
@@ -230,8 +231,9 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
         </div>
 
         {!collapsed && kind === 'minecraft' && <MinecraftServerPanel nodeId={id} />}
+        {!collapsed && kind === 'dockerhost' && <DockerHostManagerPanel />}
 
-        {!collapsed && kind !== 'minecraft' && (
+        {!collapsed && kind !== 'minecraft' && kind !== 'dockerhost' && (
           <div className="service-node__body">
             <label className="service-node__field" htmlFor={`${id}-endpoint`}>
               <span className="service-node__field-label">{vocab('Address')}</span>

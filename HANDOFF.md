@@ -24,6 +24,36 @@ packaging, installer execution, reviews, security or accessibility audits, runti
 captures. The parent integration lane must record any later build, package, release, or runtime
 evidence without treating it as evidence for checks that did not run here.
 
+## 2026-08-27, Docker host manager implementation
+
+Issue #19 is implemented on `feat/program-08-docker-host-manager`. The Docker host service node now
+opens a real guided manager instead of the former saved-address placeholder. It discovers Docker CLI
+contexts and classifies local and SSH contexts without exposing endpoints to the renderer. Separate
+resource tabs cover containers, images, volumes, networks, Compose projects, statistics, bounded
+redacted logs, and fixed typed container tasks. Every resource list has plain-text search and an
+adjacent anchored regex builder.
+
+The shared action union contains no shell or arbitrary argument shape. The main process revalidates
+contexts, resource identifiers, names, image choices, and typed tasks before invoking `docker` with
+argument arrays. Guided container creation uses an allowlisted image, generated ownership label,
+resource limits, dropped capabilities, `no-new-privileges`, read-only root by default, bounded tmpfs,
+and no network by default. Destructive removal uses the application's two-key confirmation flow.
+Long operations emit queued, running, completed, failed, and cancelled progress.
+
+The Node Catalog records a schema 3 safe blueprint with only neutral image, network, read-only, and
+resource-bound intent. Context endpoints, SSH identity, credentials, Compose paths, live resource
+ids, statistics, logs, job ids, and process state remain machine-local. Importing that intent has no
+Docker side effect. Server Edition returns an explicit unsupported result for this desktop-owned
+capability.
+
+Directly related documentation is current in `docs/features/remote/docker-host.md`, its category
+index, the offline documentation article, and `site/docs/docker-host-manager.html`. `CHANGELOG.md`
+and `ROADMAP.md` record the same verification boundary.
+
+No tests, type checks, lint, reviews, security or accessibility checks, builds, packaging, installer
+execution, runtime interaction, or captures were run in this ultra-speed lane. The owning integration
+lane must treat every such verdict as unverified.
+
 ## 2026-08-26, desktop Material Design 3 and personal vocabulary reconciliation
 
 This source-only lane is on feat/full-app-material3-reconciliation at the current integration tip.
@@ -334,6 +364,21 @@ roadmap and changelog.
 This lane deliberately did not run tests, type checking, builds, packaging, UI interaction, or
 captures, and made no commit or dew. The parent integration lane must run those checks and inspect
 the built artifact before treating issue #20 as verified.
+
+The resumed issue #20 lane completed the checkpoint's missing serialization and durable-byte
+boundaries. Photo and Video `filePath` values plus Gallery `sourcePath` values now round-trip only
+through the machine-local node overlay. Schema 3 carries ordered media references and the active
+Gallery asset, reconciles each reference against the media manifest, and marks references missing
+when no byte carrier exists. Archive export collects supported media by bounded streaming, re-reads
+and verifies byte count, signature, and SHA-256, writes content-addressed `assets/media/` entries,
+and records them in the outer manifest. Import validates those entries before writing, stages them
+inside the new project root, and publishes atomically. The shared resolver now requires byte-count
+and digest evidence instead of returning a path-shaped guess.
+
+This resumed lane ran no tests, type checks, lint, reviews, security or accessibility checks,
+builds, packaging, installer execution, runtime interaction, or captures, as required by the
+ultra-speed boundary. The coordinating integration lane owns those verdicts, default-branch
+integration, release publication, and capture evidence.
 ## 2026-08-26, Torrent Downloader implementation lane
 
 Added the dedicated `torrent` canvas node, shared downloader contract, CorePlatform-backed service,
