@@ -19,6 +19,7 @@ import type { ProjectIcon } from './project-icon'
 import type { ShortcutMap } from './shortcuts'
 import { DEFAULT_SHORTCUTS } from './shortcuts'
 import type { FunnyLevel, LanguageMode } from './i18n/types'
+import type { PortableDoorConstructionV3 } from './door-construction'
 import type { VsCodeInstall, VsCodeOpenResult } from './vscode'
 import type { HistoryFilters, HistoryListResult, HistoryRestoreResult } from './local-history'
 import type { CalendarApi, CalendarNodeConfig } from './calendar'
@@ -1065,6 +1066,9 @@ export interface ProjectPortalState {
   title: string
   depth: number
   status: 'open' | 'closed'
+  /** Safe construction intent for each side. Credentials and runtime bindings are never stored. */
+  entryConstruction?: PortableDoorConstructionV3
+  returnConstruction?: PortableDoorConstructionV3
 }
 
 /** A project is one canvas/page: its own nodes, viewport, and default working dir. */
@@ -1561,6 +1565,8 @@ export interface WorkspaceApi {
       schedules: import('./planner-occurrences').PlannerSchedule[]
     }
     restoredTo?: string
+    /** Non-fatal portal metadata repairs applied while preserving child content. */
+    repairs?: Array<{ portalId?: string; canvasId?: string; action: string; detail: string; preservedNodeIds: string[] }>
   }>
   /** Hand out the next unlock-ladder question for a rate-limited protected project file. `null`
    *  means no ladder is on offer (no wait to end, this climb already failed to the bottom, or the

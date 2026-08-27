@@ -1874,7 +1874,8 @@ app.whenReady().then(async () => {
         archiveVersion: outcome.archiveVersion,
         contents: outcome.contents,
         ...(outcome.plannerDefinitions ? { plannerDefinitions: outcome.plannerDefinitions } : {}),
-        ...(outcome.restoredTo ? { restoredTo: outcome.restoredTo } : {})
+        ...(outcome.restoredTo ? { restoredTo: outcome.restoredTo } : {}),
+        ...(outcome.repairs?.length ? { repairs: outcome.repairs } : {})
       }
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }

@@ -2,7 +2,6 @@ import { useMemo, useRef, useState } from 'react'
 import type { PortableCanvasProjectionV3 } from '../../core/portable-canvas-projection'
 import {
   createPortablePortal,
-  deletePortablePortal,
   navigatePortablePortal,
   setPortablePortalStatus,
   type PortablePortalV3
@@ -19,9 +18,9 @@ export interface PortalLifecycleDialogProps {
   currentCanvasId: string
   onClose: () => void
   onChange: (projection: PortableCanvasProjectionV3) => void
-  onOpenCanvas: (canvasId: string, returnDoorId: string) => void
+  onOpenCanvas: (portalId: string) => void
   /** Deletion remains behind the app's existing two-key confirmation surface. */
-  onRequestDelete: (portal: PortablePortalV3, apply: () => void) => void
+  onRequestDelete: (portal: PortablePortalV3) => void
 }
 
 /** Guided portal lifecycle surface. It only changes the portable projection; binding, process,
@@ -106,9 +105,12 @@ export function PortalLifecycleDialog({
           return (
             <article key={portal.id} className="portal-lifecycle-dialog__row" aria-label={portal.title}>
               <div><strong>{portal.title}</strong><span>{portal.id} · depth {portal.depth} · {portal.status}</span></div>
-              <Button disabled={!isCurrent || !isOpen} title={!isCurrent ? 'Open the containing canvas first.' : !isOpen ? 'Open this portal before entering it.' : undefined} onClick={() => onOpenCanvas(portal.childCanvasId, portal.returnDoorId)}>Open</Button>
+              <Button disabled={!isCurrent || !isOpen} title={!isCurrent ? 'Open the containing canvas first.' : !isOpen ? 'Open this portal before entering it.' : undefined} onClick={() => {
+                const decision = navigatePortablePortal(projection, portal.id, currentCanvasId)
+                if (decision.allowed) onOpenCanvas(portal.id)
+              }}>Open</Button>
               <Button onClick={() => onChange(setPortablePortalStatus(projection, portal.id, isOpen ? 'closed' : 'open'))}>{isOpen ? 'Close' : 'Open portal'}</Button>
-              <Button title="Deletion requires the app two-key confirmation." onClick={() => onRequestDelete(portal, () => { const result = deletePortablePortal(projection, portal.id); if (result.projection) onChange(result.projection) })}>Delete portal…</Button>
+              <Button title="Deletion requires the app two-key confirmation." onClick={() => onRequestDelete(portal)}>Delete portal…</Button>
             </article>
           )
         })}

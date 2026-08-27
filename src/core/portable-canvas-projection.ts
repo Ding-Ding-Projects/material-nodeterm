@@ -15,6 +15,7 @@ import { validatePortableMediaManifest } from './portable-media-assets'
 import { normalizeMediaReference, type MediaAssetReference } from '../shared/media-catalog'
 import { MAX_MULTIVERSE_DEPTH, repairUniverseShops } from './universe-shop'
 import { validatePortableUniverseDoors, type PortableUniverseDoorV3 } from './universe-door-navigation'
+import { createPortableUniverseDoorPair } from './universe-door-navigation'
 import { normalizePublicDimSumSelection, type PublicDimSumSelection } from '../shared/public-dim-sum'
 import { validateHomeAssistantControlConfig, type HomeAssistantControlConfig } from '../shared/home-assistant-control'
 import { validateHomeAssistantSensorConfig, type HomeAssistantSensorConfig } from '../shared/home-assistant-sensor'
@@ -438,7 +439,19 @@ export function projectToPortableCanvasV3(project: Project, input: PortableCanva
   const icon = project.icon && sanitizeProjectIcon(project.icon)
   const portableIcon = icon?.type === 'emoji' ? { type: icon.type, name: icon.emoji } : icon ? { type: icon.type, name: icon.name } : undefined
   const doorCanvasIds = new Set(canvases.map((canvas) => canvas.id))
-  const doors = input.doors === undefined ? undefined : validatePortableUniverseDoors(input.doors, doorCanvasIds)
+  const derivedDoors = input.doors === undefined
+    ? project.portals?.flatMap((portal) => createPortableUniverseDoorPair({
+      entryDoorId: portal.entryDoorId,
+      returnDoorId: portal.returnDoorId,
+      parentCanvasId: portal.parentCanvasId,
+      childCanvasId: portal.childCanvasId,
+      entryLabel: portal.title,
+      returnLabel: `Return to ${portal.title}`,
+      ...(portal.entryConstruction ? { entryConstruction: portal.entryConstruction } : {}),
+      ...(portal.returnConstruction ? { returnConstruction: portal.returnConstruction } : {})
+    }))
+    : input.doors
+  const doors = derivedDoors === undefined ? undefined : validatePortableUniverseDoors(derivedDoors, doorCanvasIds)
   const planner = input.planner === undefined ? undefined : plannerDefinitionsToPortable(input.planner)
   const portalInput = input.portals ?? project.portals
   const portals = portalInput === undefined ? undefined : validatePortablePortals(portalInput, canvases)
