@@ -104,7 +104,7 @@ import { ensureNodeToken, ensureRemoteNodeToken, sweepNodeToken } from './agents
 import { hasSharedIdentity, type AgentId } from '../shared/agents/config'
 import { quitWouldLoseWork } from './quit-risk'
 import { clearNode as clearNodeAgentStatus } from './agent-status-mirror'
-import { hasSharedIdentity, setCustomAgentBaseResolver, type AgentId } from '../shared/agents/config'
+import { hasSharedIdentity, setCustomAgentBaseResolver, vanillaEnvStripPattern, type AgentId } from '../shared/agents/config'
 import { findCustomAgent } from '../shared/agents/custom-agent'
 import { applyCustomAgentEnv, customAgentEnvArgs } from './custom-agent-env'
 import {
@@ -2224,7 +2224,7 @@ export class PtyManager {
     // Rewrite the launcher on every create: it is generated, so an app upgrade must not leave an
     // old copy behind. Failure is not fatal — `installCodexLauncher` answers null, the caps probe
     // says "no shared identity", and the launch line the renderer already chose is the bare CLI.
-    if (hasSharedIdentity((options.agentId ?? 'claude') as AgentId) && !options.sshRemote) {
+    if (hasSharedIdentity((options.agentBaseId ?? options.agentId ?? 'claude') as AgentId) && !options.sshRemote) {
       installCodexLauncher()
     }
     // Resolve a stable profile id only for a NEW local Windows spawn, after co-attach and all
@@ -2758,14 +2758,22 @@ export class PtyManager {
     // wait-branch for claude sessions when the setting is on. `permWaitSecs > 0` injects
     // NODETERM_PERM_WAIT_SECS; off / non-claude ⇒ 0 ⇒ absent ⇒ legacy behavior.
     const permWaitSecs =
-      this.getSettings().hookReplyApprovals && (options.agentId ?? 'claude') === 'claude' ? PERM_WAIT_SECS_DEFAULT : 0
+      this.getSettings().hookReplyApprovals &&
+      (options.agentBaseId ?? options.agentId ?? 'claude') === 'claude'
+        ? PERM_WAIT_SECS_DEFAULT
+        : 0
     // Materialise this node's token BEFORE the session exists, so the very first hook event the
     // agent fires can already read it. Local sessions only: a remote node's token is written on the
     // HOST (see remote-hooks), because the host is where its hook script runs.
     if (options.persistKey && !options.sshRemote) ensureNodeToken(options.persistKey)
     const hookEnv =
       options.persistKey && !options.sshRemote
-        ? hookServer.buildPtyEnv(options.persistKey, options.agentId ?? 'claude', permWaitSecs)
+        ? hookServer.buildPtyEnv(
+            options.persistKey,
+            options.agentId ?? 'claude',
+            permWaitSecs,
+            (options.agentBaseId ?? options.agentId ?? 'claude') as AgentId
+          )
         : {}
     for (const [k, v] of Object.entries(hookEnv)) env[k] = v
 
@@ -2773,7 +2781,7 @@ export class PtyManager {
     // managed launcher by NAME, so its directory goes first on THIS session's PATH only. A plain
     // terminal, and every other agent, sees the PATH it always saw. The launcher itself falls back
     // to the bare CLI, so a session that gets the PATH but no identity is still a working session.
-    if (hasSharedIdentity((options.agentId ?? 'claude') as AgentId) && !options.sshRemote) {
+    if (hasSharedIdentity((options.agentBaseId ?? options.agentId ?? 'claude') as AgentId) && !options.sshRemote) {
       env.PATH = `${codexLauncherDir()}${path.delimiter}${env.PATH ?? ''}`
     }
 
@@ -2843,7 +2851,11 @@ export class PtyManager {
     // A plain terminal has no agentId and must never receive provider credentials. The hook env's
     // historical Claude fallback does not apply here: gateway access is an explicit agent
     // capability, not a terminal default.
-    const gatewayEnv = options.agentId
+    const stripRe =
+      options.clearEnv || this.getSettings().vanillaLaunchDefault
+        ? vanillaEnvStripPattern((options.agentId ?? 'claude') as AgentId)
+        : null
+    const gatewayEnv = options.agentId && !stripRe
       ? modelGatewayEnv(
           this.getSettings().modelGateway,
           options.agentId,
@@ -2854,6 +2866,9 @@ export class PtyManager {
       : {}
     if (!options.sshRemote) {
       for (const [k, v] of Object.entries(gatewayEnv)) env[k] = v
+      if (stripRe) {
+        for (const k of Object.keys(env)) if (stripRe.test(k)) delete env[k]
+      }
     }
 
     // The OWNING project's env (`.nodeterm/settings.json`, local overlay + TRUSTED shared half —
@@ -2993,7 +3008,8 @@ export class PtyManager {
               hookServer.getVersion(),
               // Same default the local path applies (`hookServer.buildPtyEnv(persistKey, agentId ??
               // 'claude', …)`) so a remote node's agent env matches its local twin exactly.
-              options.agentId ?? 'claude'
+              options.agentId ?? 'claude',
+              options.agentBaseId
             ),
             // Arm the remote permission hook's wait-branch too (deterministic approvals over SSH):
             // the request/answer files live on the REMOTE host; the desktop answers over the

@@ -172,14 +172,16 @@ export function binaryFromLaunchCmd(launchCmd: string | null | undefined): strin
  */
 export function binariesFor(
   agentId: string,
-  customAgents?: readonly { id: string; launchCmd: string }[]
+  customAgents?: readonly { id: string; launchCmd: string; baseAgent?: string }[]
 ): readonly string[] | null {
   const builtin = AGENT_BINARIES[agentId]
   if (builtin) return builtin
   const custom = customAgents?.find((c) => c.id === agentId)
   if (custom) {
-    const name = binaryFromLaunchCmd(custom.launchCmd)
-    return name ? [name] : null
+    const own = binaryFromLaunchCmd(custom.launchCmd)
+    const inherited = custom.baseAgent ? AGENT_BINARIES[custom.baseAgent] : undefined
+    const names = [...new Set([...(own ? [own] : []), ...(inherited ?? [])])]
+    return names.length ? names : null
   }
   // A `custom:` id we were given no definition for is unknowable — deriving from the id would yield
   // `custom:<uuid>`, a name that matches nothing, i.e. `not-agent`: a terminal answer to a question

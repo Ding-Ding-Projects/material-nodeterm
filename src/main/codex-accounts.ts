@@ -40,17 +40,6 @@ import type { SshProjectManager } from './remote-ssh/ssh-project'
 const execFileP = promisify(execFile)
 const LOGIN_POLL_MS = 2000
 const LOGIN_TIMEOUT_MS = 5 * 60 * 1000
-const SHARED_ENTRIES = [
-  'config.toml',
-  'AGENTS.md',
-  'skills',
-  'plugins',
-  'packages',
-  'rules',
-  'hooks.json'
-]
-const SWITCH_RESERVATION_TTL_MS = 60_000
-const waiters = new Map<string, { cancelled: boolean }>()
 /** Non-secret runtime assets symlinked from the system home into each managed home: shared
  *  installation, never a credential or the thread SQLite DB. */
 const SHARED_ENTRIES = ['config.toml', 'AGENTS.md', 'skills', 'plugins', 'packages', 'rules', 'hooks.json']
@@ -95,8 +84,6 @@ function releasePendingSwitch(token: string): void {
   if (!pending) return
   pendingSwitchExposures.delete(token)
   clearTimeout(pending.timer)
-  if (!pending.owner.isDestroyed())
-    pending.owner.removeListener('destroyed', pending.ownerDestroyed)
   if (!pending.owner.isDestroyed()) pending.owner.removeListener('destroyed', pending.ownerDestroyed)
 }
 
@@ -188,65 +175,6 @@ async function existingManagedIdentity(id: string): Promise<{ email: string | nu
   }
 }
 
-export function initCodexAccounts(getSshManager?: () => SshProjectManager | undefined): void {
-  const remoteFor = (ctx?: {
-    projectId?: string
-  }): { mgr: SshProjectManager; projectId: string } | null => {
-    const projectId = ctx?.projectId
-    const mgr = getSshManager?.()
-    if (!projectId) return null
-    if (!mgr) throw new Error('SSH Codex account manager is unavailable')
-    return { mgr, projectId }
-  }
-  // Synchronous before renderer hydration/PTY restore: legacy long CODEX_HOMEs cannot host the
-  // app-server Unix socket, and an already persisted managed node must see its migrated home on
-  // its very first spawn.
-  migrateLegacyCodexAccountHomes(platform().userDataDir)
-
-  ipcMain.handle(IPC.codexAccountsAdd, async (_event, ctx?: { projectId?: string }) => {
-    const id = randomUUID()
-    const remote = remoteFor(ctx)
-    if (remote) {
-      const result = await remote.mgr.remoteCodexAccountAdd(remote.projectId, id)
-      if (!result) throw new Error('Could not initialize Codex account on SSH host')
-      return { id, home: result.home }
-    }
-    return { id, home: await initializeAccountHome(id) }
-  })
-
-  ipcMain.handle(
-    IPC.codexAccountsWaitLogin,
-    async (_event, id: string, ctx?: { projectId?: string }) => {
-      assertCodexAccountId(id)
-      const remote = remoteFor(ctx)
-      const home = localCodexAccountHome(id)
-      const waiter = { cancelled: false }
-      waiters.set(id, waiter)
-      const deadline = Date.now() + LOGIN_TIMEOUT_MS
-      try {
-        while (!waiter.cancelled && Date.now() < deadline) {
-          try {
-            if (remote) {
-              const identity = await remote.mgr.remoteCodexAccountIdentity(remote.projectId, id)
-              if (identity) return identity
-            } else {
-              const auth = await fs.lstat(path.join(home, 'auth.json'))
-              if (auth.isFile() && !auth.isSymbolicLink()) {
-                const identity = await accountIdentity(id)
-                if (identity) return identity
-              }
-            }
-          } catch {
-            // Login has not produced a credential file yet, or its daemon is not ready.
-          }
-          await new Promise((resolve) => setTimeout(resolve, LOGIN_POLL_MS))
-        }
-        return null
-      } finally {
-        waiters.delete(id)
-      }
-    }
-  )
 /**
  * THREE SURFACES (global-constraint 5), stated explicitly:
  *
@@ -271,6 +199,15 @@ export function initCodexAccounts(getSshManager?: () => SshProjectManager | unde
  * index.ts). Only the local→SSH transfer SOURCE leg uses it today; local account ops never do.
  */
 export function initCodexAccounts(getSshManager?: () => SshProjectManager | undefined): void {
+  const remoteFor = (ctx?: {
+    projectId?: string
+  }): { mgr: SshProjectManager; projectId: string } | null => {
+    const projectId = ctx?.projectId
+    const mgr = getSshManager?.()
+    if (!projectId) return null
+    if (!mgr) throw new Error('SSH Codex account manager is unavailable')
+    return { mgr, projectId }
+  }
   // Ensure `~/.nodeterm` exists before any relay/daemon reach (carried PR-4 obligation: only the
   // relay's detached serve() created it before, so a first reach from this process could race a
   // missing root).
@@ -511,7 +448,6 @@ export function initCodexAccounts(getSshManager?: () => SshProjectManager | unde
       sourceAccountId?: string,
       targetAccountId?: string
     ) => {
-      if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(threadId) || !path.isAbsolute(cwd)) {
       if (!SAFE_THREAD_ID.test(threadId) || !path.isAbsolute(cwd)) {
         throw new Error('Invalid Codex account switch request')
       }

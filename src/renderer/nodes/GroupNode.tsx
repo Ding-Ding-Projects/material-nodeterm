@@ -34,6 +34,12 @@ export function setWorktreeActionHandler(
   worktreeActionHandler = fn
 }
 
+/** Canvas registers the group drill-through action because React Flow owns node instantiation. */
+let drillHandler: ((groupId: string) => void) | null = null
+export function setDrillHandler(fn: ((groupId: string) => void) | null): void {
+  drillHandler = fn
+}
+
 /** Same bridge shape, for the WSL chip's sleep/wake/unregister/unbind buttons. */
 let wslActionHandler: ((groupId: string, action: WslAction) => void) | null = null
 export function setWslActionHandler(fn: ((groupId: string, action: WslAction) => void) | null): void {
@@ -55,6 +61,15 @@ export function GroupNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const frameRef = useRef<HTMLDivElement | null>(null)
 
   const wt = data.worktree
+  const projectRef = data.projectRef
+  const referencedProject = useProjects((state) =>
+    projectRef && typeof projectRef.projectId === 'string'
+      ? state.projects.find((project) => project.id === projectRef.projectId)
+      : undefined
+  )
+  const projectRefUnavailable =
+    !!projectRef &&
+    (!referencedProject || referencedProject.unavailable || referencedProject.closed)
   // The store is the ONLY caller of the worktree/status git IPC; it throttles
   // (WORKTREE_STATUS_THROTTLE_MS) and is epoch-guarded, so asking often is free.
   const status = useWorktrees((s) => (wt ? s.statusByPath[wt.path] : undefined))
@@ -193,7 +208,8 @@ export function GroupNode({ id, data, selected }: NodeProps<CanvasNode>) {
     'group-node',
     selected ? 'selected' : '',
     bound ? 'group-node--worktree' : '',
-    bound && stale ? 'group-node--worktree-stale' : ''
+    bound && stale ? 'group-node--worktree-stale' : '',
+    projectRefUnavailable ? 'group-node--worktree-stale' : ''
   ]
     .filter(Boolean)
     .join(' ')
@@ -203,12 +219,14 @@ export function GroupNode({ id, data, selected }: NodeProps<CanvasNode>) {
       ref={frameRef}
       className={frameClass}
       style={{
-        borderColor: bound && stale ? undefined : data.color,
+        borderColor: bound && stale || projectRefUnavailable ? undefined : data.color,
         // 28/255 and 15/255 are the `1c` / `0f` hex-alpha suffixes this used to append to the
         // colour string — same pixels, but a frame coloured from the picker's RGB/HSL/OKLCH tabs
         // now gets its fill instead of silently losing it. See alphaTint.
         background:
-          bound && stale ? undefined : alphaTint(data.color, bound ? 28 / 255 : 15 / 255),
+          bound && stale || projectRefUnavailable
+            ? undefined
+            : alphaTint(data.color, bound ? 28 / 255 : 15 / 255),
         // Rounded selection ring (box-shadow follows border-radius, unlike the resizer line).
         boxShadow: selected ? `0 0 0 1.5px ${data.color}` : undefined
       }}
@@ -372,6 +390,26 @@ export function GroupNode({ id, data, selected }: NodeProps<CanvasNode>) {
             )}
           </div>
         )}
+        {projectRef && (
+          <div className="group-node__wt nodrag">
+            {projectRefUnavailable ? (
+              <span
+                className="group-node__branch group-node__branch--stale"
+                title="Referenced project is unavailable or closed. Reopen it to drill into it."
+              >
+                ↗ unavailable project
+              </span>
+            ) : (
+              <span className="group-node__branch" title={`Drill into project: ${referencedProject?.name ?? ''}`}>
+                <span
+                  className="group-node__dot"
+                  style={{ display: 'inline-block', background: referencedProject?.color ?? '#0a84ff' }}
+                />{' '}
+                ↗ {referencedProject?.name}
+              </span>
+            )}
+          </div>
+        )}
         {wsl && (
           <div className="group-node__wt group-node__wsl nodrag">
             <span
@@ -446,6 +484,14 @@ export function GroupNode({ id, data, selected }: NodeProps<CanvasNode>) {
         })()}
 
       <div className="group-node__actions nodrag">
+        <button
+          className="group-node__drill"
+          title="Open as canvas"
+          aria-label="Open group as canvas"
+          onClick={() => drillHandler?.(id)}
+        >
+          ⤢
+        </button>
         <button
           className="group-node__ungroup"
           title={vocab(frameLocked ? 'Locked — click to unlock' : 'Ungroup')}

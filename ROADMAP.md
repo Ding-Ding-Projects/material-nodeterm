@@ -91,6 +91,16 @@ later commit, since this file will not be kept in lockstep with every merge).
       accounts now carry an optional default node colour that new nodes capture at creation, with
       host-resolved colour applied to phone-registered nodes. Tests, builds, packaging, runtime
       interaction, and screen captures remain pending for this lane.
+- [ ] **Custom agent harness persistence, issue #86:** custom nodes now retain their builtin harness
+      identity across settings removal, and capability routing uses that snapshot. The direct
+      article is `docs/features/agents/custom-agent-harness.md`. Tests, builds, packaging, runtime
+      interaction, reviews, audits, and captures remain pending in the integration lane.
+- [ ] **Per-node model switching, issue #86 / upstream PR #422 slice**: the shared model gateway,
+      capability inheritance, per-node `agentModel` persistence, model picker, identity-gated
+      foreground termination, session recycle, and cold-resume path are present in source. This
+      lane hardens stale same-model callbacks before termination. Focused tests, type checks,
+      builds, packaging, runtime interaction, and captures remain pending by the lane's explicit
+      no-check boundary.
 
 - [ ] **Portable Comment and Activity attachments, issue #94**: source support is present in
       `src/shared/comment-attachments.ts`, `src/core/board-attachments.ts`, the board-log bridge,
@@ -164,6 +174,13 @@ later commit, since this file will not be kept in lockstep with every merge).
       the ultra-speed lane. The feature ref is reconciled with `origin/main` at
       `54164b84dce0b7e62787b1de2885405ff4ed821c` with merge commit
       `538fe6a5b4cbf0384a35ff9edc1a1d59d87df431`.
+- [ ] **Guided branch dependency operations, issue #86**: project-owned same-repository branch
+      links now have bounded typed plans for setting and clearing parents, syncing a child by
+      rebase, proposing a pull request against its parent, and fast-forward shipping into the
+      parent checkout. Progress, cancellation, unavailable states, ownership checks, bounded
+      output, and no-arbitrary-shell arguments are present in `src/shared/dependency-operations.ts`
+      and `src/core/git-service.ts`; tests, type checks, lint, builds, packaging, runtime
+      interaction, reviews, audits, and captures remain pending.
 - [ ] **Full Material Design 3 surface audit (#91)**: source-level inventory and remediation are
       recorded in `docs/features/appearance/material-3-audit.md` and checked by
       `scripts/check-material-audit.mjs` (201 rows, including every desktop shell, node,
@@ -481,6 +498,13 @@ intentionally unchecked because this task publishes the plan only.
 - [ ] Implement the outstanding upstream behavior from the planned issue and pull-request parity map.
 - [ ] Split the PR #422 behavior into independent link, endpoint, navigation, grouping, agent, and
       account lanes.
+- [ ] **Program 75 cross-project link transport and storage, issue #86.** Canvas-owned link commits,
+      persisted `Project.links`, background-project context transport, and local node-endpoint
+      filtering are recorded in `docs/features/projects/cross-project-link-transport.md`. Source
+      implementation is present, but the requested checks and runtime evidence remain pending.
+- [ ] Project-aware navigation source is present on the issue #86 branch, including single-node focus,
+      safe return, ownership-aware target routing, and direct documentation. Tests, type checks,
+      lint, builds, packaging, runtime interaction, reviews, audits, and captures remain pending.
 - [ ] Publish the new upstream pull request based on the final default branch with verified evidence.
 
 ## Deliberately not doing

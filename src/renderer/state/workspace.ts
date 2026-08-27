@@ -44,6 +44,7 @@ import type {
 } from '@shared/types'
 import type { AgentId, AgentPermissionMode, BuiltinAgentId } from '@shared/agents/config'
 import { agentConfig, supportsSessionIdFlag } from '@shared/agents/config'
+import { resolveAgentBase } from '@shared/agents/custom-agent'
 import { assembleLaunchCommand } from '@shared/agents/launch'
 import { agentAccountColor } from '@shared/agents/account-color'
 import { boundAccountId } from '@shared/agents/account-binding'
@@ -328,6 +329,8 @@ export interface NodeData {
   homeAssistantSensorConfig?: HomeAssistantSensorConfig
   /** Which agent runs in this terminal node (claude/codex/gemini/custom). */
   agentId?: AgentId
+  /** Persisted builtin harness for the node's current agent association. */
+  agentBaseId?: BuiltinAgentId
   /** Model selected for this node through the shared model gateway. */
   agentModel?: string
   /**
@@ -349,6 +352,8 @@ export interface NodeData {
   codexAccountId?: string
   /** group-only: the git worktree this group is bound to (single source of truth). */
   worktree?: import('@shared/worktree').GroupWorktree
+  /** group-only: safe reference to another open project's canvas. */
+  projectRef?: { projectId: string }
   /**
    * When set, this terminal runs `ssh` to a remote host on the LOCAL PTY (LocalTransport).
    * Unlike `remote` (relay), this IS persisted — the node auto-reconnects on relaunch.
@@ -1047,6 +1052,17 @@ export function createAgentNode(
       group: null,
       tags: [],
       agentId,
+      ...(resolveAgentBase(
+        agentId,
+        useSettings.getState().settings.customAgents.find((c) => c.id === agentId)
+      )
+        ? {
+            agentBaseId: resolveAgentBase(
+              agentId,
+              useSettings.getState().settings.customAgents.find((c) => c.id === agentId)
+            )
+          }
+        : {}),
       ...(bound ? { accountId: bound } : {}),
       // Persisted alongside the node (unlike initialCommand, which is consumed on first open), so
       // a cold restore months later still knows which conversation this node owns.
@@ -2231,7 +2247,8 @@ function groupsFirst(nodes: CanvasNode[]): CanvasNode[] {
   return [...groups, ...nodes.filter((node) => node.type !== 'group')]
 }
 
-function rootPosition(node: CanvasNode, nodes: CanvasNode[]): { x: number; y: number } {
+/** Resolve a node's position in root canvas coordinates, walking every live group ancestor. */
+export function rootPosition(node: CanvasNode, nodes: CanvasNode[]): { x: number; y: number } {
   const byId = new Map(nodes.map((candidate) => [candidate.id, candidate]))
   const seen = new Set<string>([node.id])
   let x = node.position.x
@@ -2246,6 +2263,116 @@ function rootPosition(node: CanvasNode, nodes: CanvasNode[]): { x: number; y: nu
     parentId = parent.parentId
   }
   return { x, y }
+}
+
+/**
+ * Build the transient single-node canvas used by project-aware focus navigation.
+ * A nested node is promoted into root coordinates while its persisted parent relationship stays
+ * untouched in the source array. Missing ids return an empty view instead of inventing a node.
+ */
+export function drillSingleNode(
+  nodes: CanvasNode[],
+  nodeId: string
+): { flow: CanvasNode[]; found: boolean } {
+  const node = nodes.find((candidate) => candidate.id === nodeId)
+  if (!node) return { flow: [], found: false }
+  return {
+    flow: [{ ...node, parentId: undefined, extent: undefined, position: rootPosition(node, nodes) }],
+    found: true
+  }
+}
+
+/**
+ * Merge the edited focused node back into the full live canvas. React Flow displays the focused
+ * node in root coordinates, while persistence stores nested positions relative to its parent.
+ * Siblings remain intact, and a node removed from the source set is never resurrected.
+ */
+export function mergeSingleNode(
+  fullStored: CanvasNodeState[],
+  focusedState: CanvasNodeState,
+  fullNodesForRoot: CanvasNode[]
+): CanvasNodeState[] {
+  const original = fullStored.find((state) => state.id === focusedState.id)
+  if (!original) return fullStored
+  const parentId = original.parentId
+  let position = focusedState.position
+  if (parentId) {
+    const parent = fullNodesForRoot.find((node) => node.id === parentId)
+    const parentRoot = parent ? rootPosition(parent, fullNodesForRoot) : { x: 0, y: 0 }
+    position = {
+      x: focusedState.position.x - parentRoot.x,
+      y: focusedState.position.y - parentRoot.y
+    }
+  }
+  return fullStored.map((state) =>
+    state.id === focusedState.id ? { ...focusedState, parentId, position } : state
+  )
+}
+
+/** The transient view opened when a group or linked project is drilled into. It is not persisted. */
+export type DrillContext =
+  | { kind: 'group'; groupId: string; projectId: string }
+  | { kind: 'project-ref'; projectId: string; targetId: string }
+
+/**
+ * Promote a group's direct children into a root-space sub-canvas.
+ *
+ * The frame itself and its siblings stay out of the drilled view. Children retain their own
+ * descendants in the source array, but only direct children are promoted, which preserves nested
+ * group structure without inventing a second ownership model.
+ */
+export function drillGroupChildren(
+  nodes: CanvasNode[],
+  groupId: string
+): { flow: CanvasNode[]; childIds: Set<string> } {
+  const childIds = new Set<string>()
+  const flow: CanvasNode[] = []
+  for (const node of nodes) {
+    if (node.parentId !== groupId) continue
+    childIds.add(node.id)
+    flow.push({
+      ...node,
+      parentId: undefined,
+      extent: undefined,
+      position: rootPosition(node, nodes)
+    })
+  }
+  return { flow: groupsFirst(flow), childIds }
+}
+
+/**
+ * Merge an edited drilled child view back into the complete canvas snapshot.
+ *
+ * Drilling changes only the view coordinate space. Persistence remains parent-relative, so direct
+ * children are re-nested against the group's root-space origin. Siblings and the frame survive,
+ * deleted direct children stay deleted, and newly-created drilled children are appended safely.
+ */
+export function remergeDrilledNodes(
+  fullStored: CanvasNodeState[],
+  drilledStates: CanvasNodeState[],
+  groupId: string,
+  fullNodesForRoot: CanvasNode[]
+): CanvasNodeState[] {
+  const drilledById = new Map(drilledStates.map((state) => [state.id, state]))
+  const group = fullNodesForRoot.find((node) => node.id === groupId)
+  const groupRoot = group ? rootPosition(group, fullNodesForRoot) : { x: 0, y: 0 }
+  const directIds = new Set(fullStored.filter((state) => state.parentId === groupId).map((state) => state.id))
+  const renest = (state: CanvasNodeState): CanvasNodeState => ({
+    ...state,
+    parentId: groupId,
+    position: { x: state.position.x - groupRoot.x, y: state.position.y - groupRoot.y }
+  })
+  const merged: CanvasNodeState[] = []
+  for (const state of fullStored) {
+    if (directIds.has(state.id) && !drilledById.has(state.id)) continue
+    const drilled = drilledById.get(state.id)
+    merged.push(drilled ? renest(drilled) : state)
+  }
+  const known = new Set(fullStored.map((state) => state.id))
+  for (const state of drilledStates) {
+    if (!known.has(state.id)) merged.push(renest(state))
+  }
+  return merged
 }
 
 function isDescendant(nodes: CanvasNode[], candidateId: string, ancestorId: string): boolean {
@@ -3045,6 +3172,11 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         // snapshots at the load boundary instead of letting malformed coordinates reach the UI.
         recoveryGame: n.recoveryGame ? normalizeRecoveryGameSnapshot(n.recoveryGame) : undefined,
         agentId,
+        agentBaseId:
+          n.agentBaseId ??
+          (agentId && agentConfig(agentId)
+            ? (agentId as BuiltinAgentId)
+            : useSettings.getState().settings.customAgents.find((c) => c.id === agentId)?.baseAgent),
         agentModel: n.agentModel,
         accountId: n.accountId,
         // Migrate the old title-only identity into an explicit true/false on the next save.
@@ -3056,6 +3188,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         sshRemoteTmux: n.sshRemoteTmux,
         sshFs: n.sshFs,
         worktree: n.worktree,
+        projectRef: n.projectRef,
         annotationVariant: n.annotationVariant,
         annotationDir: n.annotationDir,
         ...(n.kind === 'annotation' && normalizeAnnotationLabel(n.annotationLabel) !== undefined
@@ -3197,6 +3330,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         // state, and normalization keeps old project files safe to reopen on another computer.
         recoveryGame: n.data.recoveryGame ? normalizeRecoveryGameSnapshot(n.data.recoveryGame) : undefined,
         agentId: n.data.agentId,
+        agentBaseId: n.data.agentBaseId,
         agentModel: n.data.agentModel,
         accountId: n.data.accountId,
         accountLogin: n.data.accountLogin,
@@ -3207,6 +3341,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         sshRemoteTmux: n.data.sshRemoteTmux,
         sshFs: n.data.sshFs,
         worktree: n.data.worktree,
+        projectRef: n.data.projectRef,
         annotationVariant: n.data.annotationVariant,
         annotationDir: n.data.annotationDir,
         ...(kind === 'annotation' && normalizeAnnotationLabel(n.data.annotationLabel) !== undefined

@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Preserve a custom agent's selected builtin harness on its node so capability and icon resolution
+  survives removal of the mutable settings record.
+- Route custom harness capability checks through the shared hook, resume, pane, and launch helpers.
+- Document the host-owned executable, profile, argument, environment, working-directory, and secret
+  boundaries for custom agent launches.
+
+- Add project-aware single-node canvas focus for issue #86. The terminal header, command palette,
+  and desktop F11 path now promote one node into a transient canvas, merge edits back into the full
+  project, restore nested coordinates and the parent viewport, and refuse missing or unavailable
+  targets without inventing a destination. This lane did not run tests, type checks, lint, builds,
+  packaging, runtime interaction, reviews, audits, or captures.
+
 - Add viewport-relative canvas zones and named saved layouts. Nodes can preview and snap into half,
   third, or quarter regions while dragging, and a saved arrangement restores portable geometry and
   the camera without carrying sessions, credentials, process state, or machine paths. This
@@ -166,6 +178,46 @@
   implementation lane intentionally did not run tests, type checks, lint, reviews, security or
   accessibility checks, builds, packaging, installer execution, runtime interaction, or UI
   captures.
+- Add a bounded typed link endpoint model for canvas relationships. `Endpoint` now distinguishes
+  local nodes, foreign project-node references, and repository-relative branches, while `Link`
+  carries one explicit relationship kind and project-owned source semantics. The shared validator
+  rejects malformed or non-portable records, unsafe metadata, foreign mutation sources, duplicate
+  ids, and oversized collections. This issue #86 model lane did not run tests, type checks, lint,
+  builds, packaging, runtime interaction, reviews, accessibility or security checks, or captures.
+- Migrate legacy `bridges` and `ropes` project-file arrays into the unified typed `links` collection.
+  Bridge ids remain context links, rope ids remain display-only lineage links, and new saves emit
+  only `links`. Inline projects, cached SSH content, and persisted canvas snapshots use the same
+  idempotent conversion. The issue #86 and upstream PR #422 migration lane was reconciled with
+  `origin/main` at `54164b84dce0b7e62787b1de2885405ff4ed821c`. This source lane did not run tests,
+  lint, type checks, builds, packaging, runtime interaction, reviews, audits, or captures.
+ - Add the cross-project link transport and storage slice for issue #86 and upstream PR #422. The
+  Canvas-owned commit funnel keeps live link state and persisted `Project.links` together, while
+  background-project context transport accepts only local node-to-node context links. Branch,
+  dependency, lineage, and foreign-node behaviors remain in their dedicated lanes. This source lane
+   intentionally did not run tests, lint, type checks, builds, packaging, runtime interaction,
+   reviews, audits, or captures.
+
+- Add repository-aware session grouping and reversible canvas drill-through for issue #86. The
+  sidebar now groups projects by resolved repository root, keeps local and SSH project identities
+  separate, exposes active-repository unbound worktrees as bindable rows, and preserves the existing
+  project and group ownership callbacks. Group frames can open a temporary child view whose edits
+  merge back into the complete parent snapshot without dropping siblings. Safe `projectRef` intent
+  supports linked-project drill-through with muted unavailable and closed targets, normal project
+  travel, and a breadcrumb return route. Implementation commit:
+  `451605b314c709da56c67bc176c78424898ecc26`. This lane did not run tests, lint, type checks,
+  builds, packaging, runtime interaction, reviews, audits, or captures.
+- Add the guided same-repository branch dependency operation contract for issue #86. Project-owned
+  branch links now have bounded plans for setting and clearing parents, rebasing a child, proposing
+  a pull request against its parent, and fast-forward shipping into the parent checkout. The typed
+  Git service and bridges expose queued, running, completed, failed, cancelled, and unavailable
+  states, reject cross-project or mismatched-link requests, bound paths, refs, arguments, and output,
+  and never accept arbitrary shell text. This source lane intentionally did not run tests, type
+  checks, lint, builds, packaging, runtime interaction, reviews, audits, or captures.
+- Harden per-node model switching against stale menu callbacks. A request for the model the node
+  already runs now refuses before foreground termination or session recycling, preserving the
+  active conversation. The source implementation and documentation records were updated in this
+  lane; tests, type checks, lint, reviews, builds, packaging, runtime interaction, and UI captures
+  were intentionally not run.
 
 - Mount the seven AWS core-service routes on the shared AWS manager: S3, EC2, IAM, STS, Lambda,
   CloudWatch, and CloudWatch Logs. Typed operation controls now cover bounded reads, selected writes,
@@ -289,6 +341,11 @@
   54164b84dce0b7e62787b1de2885405ff4ed821c and recorded in commit 95e8eb8e19e4a568bf7286b35a9cdf789a6983ac.
   Tests, lint, type checks, builds, packaging, runtime interaction, reviews, accessibility checks,
   security audits, and UI captures were intentionally not run.
+- Restore one coherent managed Codex account lifecycle and same-machine switching implementation.
+  Duplicate account handlers, app-server readers, and rollout-link publication paths were removed;
+  account-id validation, owner-bound reservations, no-overwrite hardlinks, rollback, and credential
+  boundaries remain intact. This lane intentionally did not run tests, lint, type checks, builds,
+  packaging, runtime interaction, reviews, audits, or UI captures.
 
 - Add the bundled AWS CLI v2 dependency lane. Windows packaging now stages the pinned official
   `2.36.32` MSI, verifies its SHA-256, falls back through a verified local cache or canonical
