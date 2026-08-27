@@ -56,8 +56,10 @@ would look free, and a live bound frame would look gone.
 The dialog keeps one hand-written copy inventory in `src/renderer/wsl/wslCopy.ts`. Each rendered
 label, status, validation message, and progress explanation names its catalogue id and English
 fallback exactly once. The coverage check compares that inventory with the WSL catalogue entries,
-their five English and Cantonese levels, and the dialog's use sites, so removing a row is a visible
-failure rather than a silently smaller check. Authored copy is passed through the local vocabulary
+their ten English and Cantonese levels, and the dialog's use sites, so removing a row is a visible
+failure rather than a silently smaller check. Its negative regression removes the first parsed row
+by exact key, catalogue id, and fallback after normalizing CRLF or LF line boundaries, then asserts
+that the source changed and that the row is absent. Authored copy is passed through the local vocabulary
 mapper. Runtime facts from `wsl.exe`, distribution names, instance names, and operation ids are
 typed separately and remain byte-for-byte intact while vocabulary replacements may apply to the
 authored text around them. The host progress channel sends a phase id plus bounded placeholder
@@ -98,6 +100,11 @@ instance names, paths, operation ids, `wsl.exe` output, and parser details verba
 allowing the user-supplied vocabulary to rename authored wording. Incoming catalogue and service
 errors are displayed as authored prefixes plus the original factual detail. School mode disables
 the optional vocabulary layer and restores the shipped copy live.
+
+The validation phase uses `wsl.create.progress.validating`. Its first English and Cantonese
+variants are the factual fallback, while the remaining variants add bounded voice changes without
+changing the selected distribution, instance name, or operation state. Bilingual mode resolves the
+same phase through both language arrays, with English primary and Cantonese secondary copy.
 
 ## Surfaces
 

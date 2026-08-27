@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Repair WSL copy coverage for the validation phase. The catalogue now supplies ten English and
+  Cantonese variants for `wsl.create.progress.validating`, with a factual level-one fallback and
+  bilingual resolution. The coverage regression removes the first parsed inventory row using exact
+  line boundaries that work for both CRLF and LF, and fails if the mutation is a no-op. This
+  ultra-speed repair ran no tests, type checks, lint, reviews, audits, builds, packaging, runtime
+  interaction, or screen captures; only JavaScript syntax evidence was permitted.
+
 - Repair the personal-vocabulary coverage contract after the merge recovery combined newer
   producer lanes with an older canonical manifest. The hand-written implementation array and its
   independent canonical list now contain the same 145 unique producer identifiers, including all

@@ -57,7 +57,19 @@ assert(stateSource.includes('isWslCatalogueError'), 'renderer catalogue state do
 
 // Negative mutation: deleting one exact inventory row must make the same checks fail. This is
 // intentionally in-process, so the regression proves the checker itself rather than a stale list.
-const mutant = copySource.replace(`  ${inventory[0].key}: { id: '${inventory[0].id}', fallback: '${inventory[0].fallback}' },\n`, '')
+// Split first so the mutation cannot silently miss a CRLF checkout because it expected LF.
+function removeExactInventoryRow(source, row) {
+  const lines = source.split(/\r\n|\n|\r/)
+  const expected = `${row.key}: { id: '${row.id}', fallback: '${row.fallback}' },`
+  const index = lines.findIndex((line) => line.trim() === expected)
+  assert(index >= 0, `negative mutation could not find exact inventory row ${row.id}`)
+  lines.splice(index, 1)
+  const newline = source.includes('\r\n') ? '\r\n' : source.includes('\n') ? '\n' : '\r'
+  return lines.join(newline)
+}
+
+const mutant = removeExactInventoryRow(copySource, inventory[0])
+assert(mutant !== copySource, 'negative mutation did not change the inventory source')
 const mutantRows = inventoryFrom(mutant)
 assert(mutantRows.length !== inventory.length, 'negative mutation did not remove an exact inventory row')
 assert(!mutantRows.some((row) => row.id === inventory[0].id), 'negative mutation escaped exact row matching')

@@ -1,5 +1,24 @@
 # Handoff
 
+## 2026-08-27, WSL copy coverage repair
+
+The WSL copy coverage lane repaired two merge-recovery defects in the exact task-owned files.
+`src/shared/i18n/catalog.ts` now includes `wsl.create.progress.validating` with ten English and
+Cantonese variants. The first variant in each language preserves the factual fallback, while the
+later variants provide bounded voice changes and bilingual mode continues to resolve English as
+the primary text with Cantonese as the secondary text.
+
+`scripts/check-wsl-copy-coverage.mjs` now removes the first parsed inventory row by splitting on
+CRLF, LF, or CR boundaries and matching the exact key, catalogue id, and fallback. It asserts that
+the mutation changed the source and that the exact row disappeared, so a newline mismatch or a
+substring match cannot make the negative regression pass without testing anything.
+
+Direct records are `docs/features/wsl/wsl-instances.md`, `CHANGELOG.md`, `ROADMAP.md`, and this
+handoff. No tests, type checks, lint, reviews, audits, builds, packaging, runtime interaction, or
+screen captures were run under the ultra-speed boundary. Only `node --check` syntax evidence is
+permitted in this lane. The parent integration lane owns merge, build, packaging, release, and
+remote verification.
+
 ## 2026-08-27, personal vocabulary coverage and settings recovery
 
 Release run `33119050796` reached application build after the source identity, resource, icon,

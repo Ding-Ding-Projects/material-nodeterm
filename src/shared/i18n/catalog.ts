@@ -1842,6 +1842,32 @@ export const CATALOG: Catalog = {
     en: ['Checking WSL availability and the current distribution list.', 'Checking WSL and the current distribution list.', 'Checking WSL availability and the current list.', 'Checking whether WSL and the list are behaving.', 'Checking WSL and asking the list to keep its shoes on.'],
     yue: ['正在檢查 WSL 可用狀態同目前發行版清單。', '正在檢查 WSL 同目前發行版清單。', '正在檢查 WSL 可用狀態同目前清單。', '睇吓 WSL 同清單係咪乖乖運作緊。', '檢查 WSL，同清單講聲唔好周街甩鞋。']
   },
+  'wsl.create.progress.validating': {
+    en: [
+      'Validating the selected distribution and name.',
+      'Validating the selected distribution and instance name.',
+      'Checking the selected distribution and name before creation.',
+      'Confirming the selected distribution and name before the operation begins.',
+      'Validating the selected distribution and name, keeping the setup orderly.',
+      'Validating the selected distribution and name, with the paperwork lined up.',
+      'Validating the selected distribution and name, so the setup does not improvise.',
+      'Validating the selected distribution and name, while the progress board checks its list.',
+      'Validating the selected distribution and name, before the tiny progress parade marches.',
+      'Validating the selected distribution and name, because even a Linux instance deserves its name tag checked twice.'
+    ],
+    yue: [
+      '正在驗證所選發行版同名稱。',
+      '正在檢查所選發行版同實例名稱。',
+      '建立之前，先確認所選發行版同名稱。',
+      '操作開始之前，確認所選發行版同名稱。',
+      '正在驗證所選發行版同名稱，等設定有條理咁行。',
+      '正在驗證所選發行版同名稱，文件已經排隊。',
+      '正在驗證所選發行版同名稱，唔畀設定自己亂作主張。',
+      '正在驗證所選發行版同名稱，進度板順便對緊清單。',
+      '正在驗證所選發行版同名稱，迷你進度巡遊出發前先點名。',
+      '正在驗證所選發行版同名稱，Linux 實例都有名牌，梗係要對兩次。'
+    ]
+  },
   'wsl.create.progress.recording': {
     en: ['Recording ownership for "{name}" so this app can manage the new instance.', 'Recording ownership for "{name}" so this app can manage it.', 'Saving ownership for "{name}" before management is enabled.', 'Writing down that "{name}" belongs to this app before the knobs appear.', 'Giving "{name}" an ownership note tidy enough for future housekeeping.'],
     yue: ['正在記錄「{name}」嘅擁有權，等呢個程式可以管理新實例。', '正在記錄「{name}」嘅擁有權，等呢個程式可以管理佢。', '開啟管理之前，先儲存「{name}」嘅擁有權。', '先寫低「{name}」係呢個程式嘅，之後先拎出啲掣。', '幫「{name}」寫張整齊到未來都想收埋嘅擁有權紙仔。']
