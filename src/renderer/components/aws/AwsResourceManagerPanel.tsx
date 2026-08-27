@@ -12,6 +12,7 @@ import {
 } from '@shared/aws-resource-managers'
 import { AnchoredRegexBuilder } from '../regex/AnchoredRegexBuilder'
 import { useRegexSearchField } from '../../lib/regex/useRegexSearchField'
+import { openDestructiveGate } from '../../state/destructiveGate'
 
 interface AwsResourceManagerPanelProps {
   nodeId: string
@@ -92,13 +93,31 @@ export function AwsResourceManagerPanel({ nodeId, data }: AwsResourceManagerPane
     } catch (reason) { setError(String(reason)) }
   }
 
-  const runOperation = async (): Promise<void> => {
+  const executeOperation = async (): Promise<void> => {
     if (!operation || selected.size === 0) return
     setError(null)
     try {
       const next = await window.nodeTerminal.awsManagers.run({ manager: intent.manager, operation: operation.id, resourceIds: [...selected], values: intent.safeValues })
       setProgress(next)
     } catch (reason) { setError(String(reason)) }
+  }
+
+  const runOperation = (event?: React.MouseEvent<HTMLButtonElement>): void => {
+    if (!operation || selected.size === 0) return
+    if (operation.risk === 'destructive') {
+      const rect = event?.currentTarget.getBoundingClientRect()
+      openDestructiveGate({
+        title: operation.label,
+        description: operation.description,
+        affected: [...selected],
+        confirmLabel: operation.label,
+        anchor: rect ? { x: rect.left, y: rect.bottom } : undefined,
+        restoreFocusEl: event?.currentTarget ?? null,
+        onConfirm: () => { void executeOperation() }
+      })
+      return
+    }
+    void executeOperation()
   }
 
   const refreshProgress = async (): Promise<void> => {
@@ -136,7 +155,7 @@ export function AwsResourceManagerPanel({ nodeId, data }: AwsResourceManagerPane
         <div className="aws-manager-panel__search"><input ref={resourceSearchRef} value={resourceSearch.value} onChange={(event) => resourceSearch.setValue(event.target.value)} placeholder="Search resources" aria-label="Search AWS resources" /><AnchoredRegexBuilder search={resourceSearch} fieldRef={resourceSearchRef} label="Regex for AWS resource search" /><button type="button" onClick={() => void refreshResources()}>Refresh</button></div>
         {visibleResources.length > 0 ? <ul className="aws-manager-panel__resources">{visibleResources.map((resource) => <li key={resource.id}><label><input type="checkbox" checked={selected.has(resource.id)} onChange={(event) => setSelected((current) => { const next = new Set(current); if (event.target.checked) next.add(resource.id); else next.delete(resource.id); return next })} /> <span>{resource.label}</span> <small>{resource.kind} · {resource.status}</small></label></li>)}</ul> : <p className="service-node__note">No verified AWS resources are loaded yet. Refresh to query the configured adapter.</p>}
       </div>
-      <div className="aws-manager-panel__actions"><button type="button" disabled={!available.available || selected.size === 0 || !operation} onClick={() => void runOperation()} title={!available.available ? available.nextAction : undefined}>Run selected operation</button>{progress && <><button type="button" onClick={() => void refreshProgress()}>Refresh progress</button>{progress.canCancel && <button type="button" onClick={() => void window.nodeTerminal.awsManagers.cancel(progress.jobId).then(setProgress).catch((reason) => setError(String(reason)))}>Cancel</button>}{progress.canRetry && <button type="button" onClick={() => void window.nodeTerminal.awsManagers.retry(progress.jobId).then(setProgress).catch((reason) => setError(String(reason)))}>Retry</button>}</>}</div>
+      <div className="aws-manager-panel__actions"><button type="button" disabled={!available.available || selected.size === 0 || !operation} onClick={(event) => runOperation(event)} title={!available.available ? available.nextAction : undefined}>Run selected operation</button>{progress && <><button type="button" onClick={() => void refreshProgress()}>Refresh progress</button>{progress.canCancel && <button type="button" onClick={() => void window.nodeTerminal.awsManagers.cancel(progress.jobId).then(setProgress).catch((reason) => setError(String(reason)))}>Cancel</button>}{progress.canRetry && <button type="button" onClick={() => void window.nodeTerminal.awsManagers.retry(progress.jobId).then(setProgress).catch((reason) => setError(String(reason)))}>Retry</button>}</>}</div>
       {!available.available && <p className="service-node__note" role="status">{available.reason ?? 'AWS manager adapter is not available.'} {available.nextAction ?? 'Refresh after configuring the adapter.'}</p>}
       {progress && <p className="service-node__note" role="status">{progress.stage}: {progress.completed}/{progress.total}. {progress.message}</p>}
       {error && <p className="service-node__note" role="alert">{error}</p>}

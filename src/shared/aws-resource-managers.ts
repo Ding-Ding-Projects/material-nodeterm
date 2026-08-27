@@ -400,6 +400,19 @@ export function validateAwsResourceManagerIntent(input: unknown): AwsResourceMan
   for (const field of operation.fields) {
     if (field.required && safeValues[field.id] === undefined) safeValues[field.id] = field.defaultValue
   }
+  if (value.manager === 'eks' && operation.id === 'update-node-group') {
+    const minimum = safeValues.minimum
+    const desired = safeValues.desired
+    const maximum = safeValues.maximum
+    if (typeof minimum !== 'number' || typeof desired !== 'number' || typeof maximum !== 'number' || minimum > desired || desired > maximum) {
+      throw new Error('Node group capacity must satisfy minimum ≤ desired ≤ maximum.')
+    }
+  }
+  if (value.manager === 'cost' && operation.id === 'cost-report') {
+    const startDate = safeValues.startDate
+    const endDate = safeValues.endDate
+    if (typeof startDate !== 'string' || typeof endDate !== 'string' || startDate >= endDate) throw new Error('Cost report end date must be after its start date.')
+  }
   const preferredRegion = value.preferredRegion === undefined ? undefined : safeString(value.preferredRegion)
   if (value.preferredRegion !== undefined && !preferredRegion) throw new Error('AWS preferred region is invalid.')
   return {
