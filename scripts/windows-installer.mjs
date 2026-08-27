@@ -533,6 +533,7 @@ function downloadMatchingIconOverHttps(iconUrl, expected) {
   const url = validateImmutableIconDownloadUrl(iconUrl)
   return new Promise((resolve, reject) => {
     let settled = false
+    let request
     const finish = (error, value) => {
       if (settled) return
       settled = true
@@ -541,9 +542,10 @@ function downloadMatchingIconOverHttps(iconUrl, expected) {
       else resolve(value)
     }
     const deadline = setTimeout(() => {
-      request.destroy(new Error('immutable installer icon download timed out after 15000ms'))
+      const error = new Error('immutable installer icon download timed out after 15000ms')
+      finish(error)
+      if (request && !request.destroyed) request.destroy(error)
     }, 15_000)
-    let request
     try {
       request = httpsRequest(url, {
       method: 'GET',
@@ -610,12 +612,17 @@ function downloadMatchingIconOverHttps(iconUrl, expected) {
         }
       })
       response.on('error', (error) => finish(new Error(`immutable installer icon response failed: ${error.message}`)))
+      response.on('aborted', () => finish(new Error('immutable installer icon response was aborted before completion')))
       })
     } catch (error) {
       finish(new Error(`immutable installer icon request could not start: ${error.message}`))
       return
     }
-    request.setTimeout(15_000, () => request.destroy(new Error('immutable installer icon socket timed out after 15000ms')))
+    request.setTimeout(15_000, () => {
+      const error = new Error('immutable installer icon socket timed out after 15000ms')
+      finish(error)
+      if (!request.destroyed) request.destroy(error)
+    })
     request.on('error', (error) => finish(new Error(`immutable installer icon request failed: ${error.message}`)))
     request.end()
   })
