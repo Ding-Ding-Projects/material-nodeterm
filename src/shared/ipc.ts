@@ -915,5 +915,10 @@ export const IPC = {
   passwordManagerCredentialCode: 'password-manager:credential-code',
   /** Every credential in one manager as non-secret metadata. Closes the gap that left a
    *  credential from an earlier session visible only as a number. */
-  passwordManagerListCredentials: 'password-manager:list-credentials'
+  passwordManagerListCredentials: 'password-manager:list-credentials',
+  // Multiverse portal-door credentials are host-owned and separate from toy locks. Values are
+  // accepted only for an immediate configure or verify request and never returned to the project.
+  universeDoorEntryConfigure: 'universe-door-entry:configure',
+  universeDoorEntryVerify: 'universe-door-entry:verify',
+  universeDoorEntryRemove: 'universe-door-entry:remove'
 } as const

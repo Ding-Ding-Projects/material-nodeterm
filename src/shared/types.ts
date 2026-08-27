@@ -4546,6 +4546,25 @@ export interface PasswordManagerApi {
   listCredentials(projectId: string, managerId: string): Promise<ListCredentialsResult>
 }
 
+/** Portal-door entry uses a separate host-owned local vault, never toy-lock state. Values cross
+ * the protected renderer boundary only for the immediate configure or verify call and are never
+ * returned, projected, logged, or exported. */
+export interface UniverseDoorEntryApi {
+  configure(input: {
+    doorId: string
+    method: 'numeric-code' | 'passphrase'
+    value: string
+    numericCodeDigits?: number
+    passphraseMinLength?: number
+  }): Promise<{ ok: true; credentialKey: string } | { ok: false; error: string }>
+  verify(input: {
+    doorId: string
+    method: 'numeric-code' | 'passphrase'
+    value: string
+  }): Promise<{ verified: true } | { verified: false; reason: string }>
+  remove(doorId: string): Promise<void>
+}
+
 export interface TimerApi {
   occurrences(): Promise<import('./timer').TimerOccurrence[]>
   schedule(timerId: string, scheduledAt: number): Promise<import('./timer').TimerOccurrence | null>
@@ -4662,6 +4681,8 @@ export interface NodeTerminalApi {
   toylock: ToylockApi
   authenticator: AuthenticatorApi
   passwordManager: PasswordManagerApi
+  /** Host-owned portal-door entry vault. This is deliberately separate from toy locks. */
+  universeDoorEntry: UniverseDoorEntryApi
   /** "Escape to widget" — one node's session in its own always-on-top-configurable window. */
   canvasWidget: CanvasWidgetApi
   shortcuts: ShortcutsApi

@@ -224,6 +224,13 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     homeAssistantControl: stub.homeAssistantControl,
     // A relay viewer must not contact or rebind Home Assistant on its own machine.
     homeAssistantSensor: stub.homeAssistantSensor,
+    // A relay viewer never receives or submits the host's door credentials. Keep this explicit
+    // refusal rather than falling through to the viewer's own local vault.
+    universeDoorEntry: {
+      configure: () => relayUnsupported('universeDoorEntry.configure'),
+      verify: () => relayUnsupported('universeDoorEntry.verify'),
+      remove: () => relayUnsupported('universeDoorEntry.remove')
+    },
     // Browser control never rides the relay either (no CDP off the desktop) — inert no-ops.
     onBrowserControlResolve: stub.onBrowserControlResolve,
     sendBrowserControlResolveResult: stub.sendBrowserControlResolveResult,
