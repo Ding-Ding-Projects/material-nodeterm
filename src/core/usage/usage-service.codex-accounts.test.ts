@@ -19,12 +19,6 @@ const { fetchCodexUsage } = vi.hoisted(() => ({
       identity?: { id: string; label: string; email?: string | null }
     ): Promise<ProviderUsage> => ({
       provider: 'codex',
-      accountId: identity?.id ?? null,
-      account: identity?.email ?? null,
-      home?: string,
-      identity?: { id?: string; label?: string | null; email?: string | null }
-    ): Promise<ProviderUsage> => ({
-      provider: 'codex',
       accountId: identity?.id,
       account: identity?.email ?? identity?.label ?? null,
       limits: [],
@@ -76,11 +70,6 @@ describe('Codex multi-account usage', () => {
     service = startUsageService({ shouldPoll: () => false, codexAccounts: () => accounts })
 
     const rows = (await platform.handlers[IPC.usageProviders]()) as ProviderUsage[]
-    expect(rows.filter((row) => row.provider === 'codex').map((row) => row.accountId)).toEqual([
-      null,
-      'a',
-      'b'
-    ])
     // System row first (un-owned ⇒ accountId undefined), then one row per account keyed by its
     // own id — three DISTINCT rows, never merged into one.
     expect(codexRows(rows).map((row) => row.accountId)).toEqual([undefined, 'a', 'b'])
@@ -102,19 +91,6 @@ describe('Codex multi-account usage', () => {
     expect(fetchCodexUsage).toHaveBeenCalledTimes(5)
   })
 
-    await platform.handlers[IPC.usageProviders]()
-    // First sweep: system + account a.
-    expect(fetchCodexUsage).toHaveBeenCalledTimes(2)
-
-    // Adding an account changes the fingerprint, which must bust the debounce cache — otherwise
-    // the popover would keep serving the two-row snapshot and the new account would never appear.
-    accounts = [...accounts, { id: 'b', home: '/isolated/b', label: 'Personal' }]
-    const rows = (await platform.handlers[IPC.usageProviders]()) as ProviderUsage[]
-    expect(codexRows(rows).map((row) => row.accountId)).toEqual([undefined, 'a', 'b'])
-    // 2 (first sweep) + 3 (second sweep after the bust) = 5. A stale cache would leave this at 2.
-    expect(fetchCodexUsage).toHaveBeenCalledTimes(5)
-  })
-
   it('serves the cache within the debounce while the account set is unchanged', async () => {
     const accounts = [{ id: 'a', home: '/isolated/a', label: 'Work' }]
     service = startUsageService({ shouldPoll: () => false, codexAccounts: () => accounts })
@@ -124,6 +100,28 @@ describe('Codex multi-account usage', () => {
     // Same fingerprint ⇒ the second call is served from cache, not a re-fetch (2 + 2 would mean
     // the fingerprint check wrongly busts an unchanged set).
     expect(fetchCodexUsage).toHaveBeenCalledTimes(2)
+  })
+
+  it('invalidates the provider cache when an account is relabelled', async () => {
+    let accounts = [{ id: 'a', home: '/isolated/a', label: 'Work' }]
+    service = startUsageService({ shouldPoll: () => false, codexAccounts: () => accounts })
+    await platform.handlers[IPC.usageProviders]()
+    expect(fetchCodexUsage).toHaveBeenCalledTimes(2)
+
+    accounts = [{ ...accounts[0], label: 'Renamed' }]
+    await platform.handlers[IPC.usageProviders]()
+    expect(fetchCodexUsage).toHaveBeenCalledTimes(4)
+  })
+
+  it('invalidates the provider cache when an account home changes', async () => {
+    let accounts = [{ id: 'a', home: '/isolated/a', label: 'Work' }]
+    service = startUsageService({ shouldPoll: () => false, codexAccounts: () => accounts })
+    await platform.handlers[IPC.usageProviders]()
+    expect(fetchCodexUsage).toHaveBeenCalledTimes(2)
+
+    accounts = [{ ...accounts[0], home: '/isolated/a-new' }]
+    await platform.handlers[IPC.usageProviders]()
+    expect(fetchCodexUsage).toHaveBeenCalledTimes(4)
   })
 
   it('a throwing codexAccounts() yields system-only, never a fabricated account', async () => {
