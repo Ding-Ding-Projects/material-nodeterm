@@ -171,13 +171,13 @@ function UiScaleRow(): React.JSX.Element {
 
 export function AppearanceSection({ isActive }: { isActive: boolean }): React.JSX.Element {
   const vocab = useVocabularyMapper()
-  const appTheme = useSettings((s) => s.settings.appTheme)
-  const accent = useSettings((s) => s.settings.accent)
-  const hiddenNodeMenuItems = useSettings((s) => s.settings.hiddenNodeMenuItems)
-  const hiddenHeaderButtons = useSettings((s) => s.settings.hiddenHeaderButtons)
-  const showResumeCard = useSettings((s) => s.settings.showResumeCard)
-  const windowTitleActiveSession = useSettings((s) => s.settings.windowTitleActiveSession)
-  const rainbowSpeed = useSettings((s) => s.settings.rainbowSpeed)
+  const appTheme = useSettings((s) => s.base.appTheme)
+  const accent = useSettings((s) => s.base.accent)
+  const hiddenNodeMenuItems = useSettings((s) => s.base.hiddenNodeMenuItems)
+  const hiddenHeaderButtons = useSettings((s) => s.base.hiddenHeaderButtons)
+  const showResumeCard = useSettings((s) => s.base.showResumeCard)
+  const windowTitleActiveSession = useSettings((s) => s.base.windowTitleActiveSession)
+  const rainbowSpeed = useSettings((s) => s.base.rainbowSpeed)
   const rainbowValueText = useVocabularyTemplate(
     'Level {level} of {max}, one cycle every {seconds} seconds',
     { level: String(rainbowSpeed), max: String(RAINBOW_SPEED_MAX), seconds: String(rainbowDurationSeconds(rainbowSpeed)) }
