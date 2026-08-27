@@ -6,7 +6,7 @@
   identity rows now offer a real keyboard-accessible choice for future sessions, persist only the
   active project's default account, keep running sessions unchanged, and fall back to System when
   a saved identity is stale. This lane is based on origin/main
-  54164b84dce0b7e62787b1de2885405ff4ed821c and dewed as 95e8eb8e19e4a568bf7286b35a9cdf789a6983ac.
+  54164b84dce0b7e62787b1de2885405ff4ed821c and recorded in commit 95e8eb8e19e4a568bf7286b35a9cdf789a6983ac.
   Tests, lint, type checks, builds, packaging, runtime interaction, reviews, accessibility checks,
   security audits, and UI captures were intentionally not run.
 
