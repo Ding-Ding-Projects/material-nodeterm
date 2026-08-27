@@ -88,6 +88,22 @@ const ROWS = {
       'shift tab'
     ]
   },
+  vanillaLaunch: {
+    title: 'Launch on subscription',
+    keywords: [
+      'subscription',
+      'vanilla',
+      'gateway',
+      'provider',
+      'default',
+      'anthropic',
+      'openai',
+      'copilot',
+      'env',
+      'credentials',
+      'clear env'
+    ]
+  },
   hookReplyApprovals: {
     title: 'One-click approvals',
     keywords: ['approve', 'deny', 'approval', 'permission', 'hook', 'phone', 'canvas', 'one click', 'claude']
@@ -391,6 +407,19 @@ export function AgentsSection({ isActive }: { isActive: boolean }): React.JSX.El
             </div>
           ))}
         </div>
+      </SearchableRow>
+      <SearchableRow {...ROWS.vanillaLaunch}>
+        <FieldRow
+          label="Launch on subscription"
+          description="Start every fresh eligible agent session with gateway and inherited provider environment variables stripped, so it uses its own default provider instead of a configured gateway or inherited override. The per-node Restart on subscription action applies the same behavior to one node. Off by default."
+          control={
+            <Switch
+              checked={settings.vanillaLaunchDefault}
+              ariaLabel="Launch on subscription by default"
+              onChange={(on) => update({ vanillaLaunchDefault: on })}
+            />
+          }
+        />
       </SearchableRow>
       <SearchableRow {...ROWS.permissionMode}>
         <FieldRow
