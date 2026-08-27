@@ -2,54 +2,6 @@
  * connected across Electron restarts while observing thread/resume on that node's own connection.
  * The authenticated Codex app-server remains shared per account; this is only a routing shim. */
 import { createHash, randomUUID, timingSafeEqual } from 'crypto'
-import { renameAtomicSync, tempNameFor } from '../core/fs-atomic'
-import {
-  linkSync,
-  lstatSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  realpathSync,
-  renameSync,
- * The authenticated Codex app-server remains shared per account; this is only a routing shim.
- *
- * Adapted from @Corvin's `src/main/codex-relay-daemon.ts` in external PR #112 (S6 PR 4 slice). The
- * one deliberate divergence from the reference: cross-account rollout exposure does NOT re-implement
- * `linkSync` here — it calls PR 3's atomic, never-overwrite primitive
- * (`planCodexRolloutExposure`/`commitCodexRolloutExposure` in `src/core/codex-accounts-core.ts`) and
- * then VERIFIES the target app-server can discover the copy before the caller recycles the node,
- * rolling the published link back if it cannot (§4.2 step 4 / §6). Ships inert: no node connects
- * until PR 5/6 wire it live.
- *
- * ── Task 4.0 probe results (Codex CLI 0.146.0, `/usr/bin/codex`, npm-managed; recorded in full in
- *    docs/superpowers/probes/2026-08-codex-relay-daemon.md) ──
- *  U4  PARTIAL/VERIFIED. `codex app-server daemon start|stop|version` honours `CODEX_HOME` (creates
- *      `<CODEX_HOME>/app-server-daemon/`; `version` JSON reports
- *      `socketPath=<CODEX_HOME>/app-server-control/app-server-control.sock`). The `SUN_LEN` limit is
- *      REAL — a long `CODEX_HOME` makes the socket connect fail "path must be shorter than SUN_LEN",
- *      which is exactly why the managed home digest is short. `--remote <ADDR>` and
- *      `--remote-auth-token-env <ENV_VAR>` exist on the global/`resume`/`fork` commands (token by env
- *      var name, never on argv — GC 6). NOT runnable headless: `daemon start` binding a live socket,
- *      and the `account/read`→{email} / `thread/read`→{path,cwd} RPC shapes, need the curl-managed
- *      standalone install (`<CODEX_HOME>/packages/standalone/current/codex`) absent here — owed
- *      device-verification.
- *  U1  UNVERIFIED headless (no standalone daemon). Does a RUNNING app-server surface a freshly
- *      hardlinked rollout on `thread/read` WITHOUT a reindex? Cannot measure without the managed
- *      install. The design does NOT rest on the optimistic answer: `exposeForeignThread` re-reads the
- *      TARGET socket after linking (`thread-check`) and rolls the link back if the far side does not
- *      report the thread — so a false U1 degrades to a refused copy, never a silent one. Owed
- *      device-verification; not blocking.
- *  U2  UNVERIFIED headless (needs auth + a second login + a running daemon). Does the conversation id
- *      survive copy+switch? Safety net if not: hardlinked inode + resume-by-path (history deleted,
- *      precedence history > path > id) and the `-32004` guard — `resolveRelayThreadResponse` flags a
- *      changed id and the reply is rewritten to `-32004`, refusing the silent fork. Owed
- *      device-verification; not blocking.
- *  U6  Local self-spawn VERIFIED runnable: the `process.argv[2]` dispatch (serve/register/
- *      account-read/thread-check/expose-thread) runs under plain `node` (proven by a child-process
- *      test that self-spawns `serve` and completes a `/register` round-trip). In Electron main
- *      `process.execPath` is the Electron binary; `ELECTRON_RUN_AS_NODE=1` runs it as Node. The
- *      remote leg (uploaded `codex-relay.js` via `nodeterm-codex`) needs a live SSH host — owed. */
-import { createHash, randomUUID, timingSafeEqual } from 'crypto'
 import {
   closeSync,
   existsSync,
@@ -86,7 +38,6 @@ const SAFE = /^[A-Za-z0-9._-]+$/
 // The canonical wire shape is `kid.mac` (see core/agents/node-auth-token.ts). This pinned the
 // OLD bare-MAC shape with no dot, so every real token failed the check even where one arrived.
 const SAFE_NODE_TOKEN = /^[A-Za-z0-9_-]+[.][A-Za-z0-9_-]{43}$/
-const SAFE_NODE_TOKEN = /^[A-Za-z0-9_-]{43}$/
 const SAFE_ENDPOINT = /^\/[A-Za-z0-9._/ -]+$/
 const INVALID_OWNER = '__invalid__'
 const root = path.join(homedir(), '.nodeterm')
@@ -1258,10 +1209,6 @@ function serve(): void {
     req.on('end', () => {
       try {
         const route = JSON.parse(Buffer.concat(chunks).toString()) as Route
-        if (
-          !SAFE.test(route.nodeId) ||
-          !SAFE_NODE_TOKEN.test(route.nodeToken) ||
-          (route.accountId && !SAFE.test(route.accountId)) ||
         // Account id becomes a directory/scope/mapping-file component, so it passes the shared
         // supply-chain predicate (must start alnum — blocks `.`/`..`/leading separator), not just
         // the looser wire charset (GC 7).
@@ -1661,9 +1608,6 @@ async function readTokenFromStdin(limit = 4096): Promise<string> {
 async function register(): Promise<void> {
   const [nodeId, accountRaw, socketPath, hookEndpoint] = process.argv.slice(3)
   const nodeToken = (await readTokenFromStdin()).trim()
-async function register(): Promise<void> {
-  const [nodeId, accountRaw, socketPath, hookEndpoint] = process.argv.slice(3)
-  const nodeToken = process.env.NODETERM_CODEX_NODE_TOKEN ?? ''
   const accountId = accountRaw || undefined
   if (
     !SAFE.test(nodeId) ||
@@ -1685,8 +1629,6 @@ async function register(): Promise<void> {
   process.stdout.write(`ws://127.0.0.1:${state.port}\n${key}\n`)
 }
 
-async function exposeThread(): Promise<void> {
-  const [targetSocket, threadId, ...catalogSockets] = process.argv.slice(3)
 export type ExposeThreadOutcome = { kind: 'native' } | { kind: 'exposed' }
 
 /**
@@ -1721,36 +1663,6 @@ export async function exposeForeignThread(
     throw new Error('invalid Codex exposure request')
   }
   const resolved = await resolveForeignThreadAt(targetSocket, catalogSockets, threadId)
-  if (resolved.kind === 'native') return
-  if (resolved.kind !== 'foreign') throw new Error('Codex session id is unavailable or ambiguous')
-  const sourceSocket = resolved.thread.socketPath
-  const sourceHome = path.dirname(path.dirname(sourceSocket))
-  const targetHome = path.dirname(path.dirname(targetSocket))
-  const sourceRoot = realpathSync(path.join(sourceHome, 'sessions'))
-  const sourcePath = realpathSync(resolved.thread.path)
-  const relative = path.relative(sourceRoot, sourcePath)
-  if (
-    !relative ||
-    relative === '..' ||
-    relative.startsWith(`..${path.sep}`) ||
-    path.isAbsolute(relative) ||
-    lstatSync(sourcePath).isSymbolicLink()
-  )
-    throw new Error('Unsafe Codex rollout path')
-  const targetPath = path.join(targetHome, 'sessions', relative)
-  mkdirSync(path.dirname(targetPath), { recursive: true, mode: 0o700 })
-  try {
-    linkSync(sourcePath, targetPath)
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
-    const sourceStat = statSync(sourcePath)
-    const targetStat = statSync(targetPath)
-    if (sourceStat.dev !== targetStat.dev || sourceStat.ino !== targetStat.ino) {
-      throw new Error('Target account has a different Codex rollout')
-    }
-  }
-}
-
   if (resolved.kind === 'native') return { kind: 'native' }
   if (resolved.kind !== 'foreign') throw new Error('Codex session id is unavailable or ambiguous')
   const sourceHome = path.dirname(path.dirname(resolved.thread.socketPath))

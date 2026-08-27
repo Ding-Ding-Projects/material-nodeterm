@@ -4014,33 +4014,6 @@ export interface CodexAccountsApi {
   /** Identity of the system ~/.codex account, read through account/read. */
   systemIdentity(ctx?: AccountSshCtx): Promise<{ email: string | null } | null>
   /** Rebind an idle conversation to another login without changing its thread identity. */
-}
- /**
-  * Machine-scoped managed Codex accounts (S6). LOCAL accounts on this Mac are reachable through
- * PR 5; SSH remote accounts land in PR 6. The account LIST is renderer-owned in `settings.json`
- * (`codexAccounts`), exactly like `claudeAccounts`; main owns only the fs + daemon lifecycle and
- * the switch protocol.
- */
- export interface LegacyCodexAccountsApi {
-  /** Mint a new managed account: create its private CODEX_HOME (0700) and symlink the shared,
-   *  non-secret runtime assets in. Returns the new id + its home. */
-  add(): Promise<{ id: string; home: string }>
-  /** Poll the account's `auth.json` (a real file, never a symlink) every 2s up to 5min for a
-   *  completed device login, then read its email; null on timeout/cancel. */
-  waitLogin(id: string): Promise<{ email: string | null } | null>
-  /** Cancel an in-flight `waitLogin` for this account. */
-  cancelWaitLogin(id: string): Promise<void>
-  /** Read a managed account's already-logged-in identity (email), or null if not logged in. */
-  identity(id: string): Promise<{ email: string | null } | null>
-  /** Read a machine's system (`~/.codex`) account identity. No arg ⇒ this Mac. `{ projectId }` ⇒
-   *  the connected SSH host behind that project; a host whose system identity cannot be resolved
-   *  resolves `null` (fail-closed — a remote machine panel never borrows this Mac's login). */
-  systemIdentity(ctx?: { projectId?: string }): Promise<{ email: string | null } | null>
-  /** Remove a managed account: stop its daemon and delete its home. Refused while a switch
-   *  reservation holds it or a concurrent removal is in flight (Property 10). */
-  remove(id: string): Promise<void>
-  /** Phase 1 of the owner-authorized same-machine switch: plan + reserve the rollout exposure of a
-   *  conversation from one account to another under a `rollbackToken` (TTL 60s, owner = caller). */
   switchThread(
     threadId: string,
     cwd: string,
@@ -4057,21 +4030,6 @@ export interface CodexAccountsApi {
   commitSwitch(rollbackToken: string): Promise<void>
   finishSwitch(rollbackToken: string): Promise<void>
   rollbackSwitch(rollbackToken: string): Promise<void>
-  /** Phase 2: commit the reserved exposure (atomic hardlink into the target account). */
-  commitSwitch(rollbackToken: string): Promise<void>
-  /** Phase 3a: finish a committed switch, releasing the reservation. */
-  finishSwitch(rollbackToken: string): Promise<void>
-  /** Phase 3b: roll back a reservation (releases it; a committed link is left for cleanup). */
-  rollbackSwitch(rollbackToken: string): Promise<void>
-  /** Source-side leg of moving an idle LOCAL conversation to an SSH account: validate strict source
-   *  containment then hand the upload to the remote import path (PR 6). Local rollout untouched. */
-  transferThreadToSsh(
-    threadId: string,
-    cwd: string,
-    projectId: string,
-    targetAccountId?: string,
-    sourceAccountId?: string
-  ): Promise<{ threadId: string; imported: boolean }>
 }
 
 /** One ranked search hit across all on-disk Claude session transcripts. */
