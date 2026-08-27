@@ -464,6 +464,23 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
   plannedEntry('multiverse-portal', 'universes', 'Multiverse portal', 'Create a door-only Multiverse canvas below the depth limit.', 'multiverse-service', 'multiverse', 8),
   plannedEntry('aws-universe', 'universes', 'AWS Universe', 'Create an AWS-only child canvas with a dedicated Shop node.', 'aws-cli-v2', 'aws-universe'),
   plannedEntry('aws-service', 'universes', 'AWS service node', 'Create a typed AWS service blueprint from installed CLI models.', 'aws-cli-v2', 'aws-universe'),
+  {
+    id: 'aws-core-services',
+    nodeKind: 'aws-core-services',
+    category: 'managers',
+    label: 'AWS core services manager',
+    description: 'Manage S3, EC2, IAM, STS, Lambda, CloudWatch, and CloudWatch Logs with guided operations.',
+    keywords: ['aws', 's3', 'ec2', 'iam', 'sts', 'lambda', 'cloudwatch', 'logs', 'manager'],
+    documentationPath: 'docs/features/integrations/aws-core-services.md',
+    safeDefaults: { service: 's3', operation: 's3-list-buckets', regionIntent: 'us-east-1' },
+    dependencies: ['aws-cli-v2'],
+    status: 'available',
+    availabilityMode: 'configure-later',
+    scope: 'aws-universe',
+    availability: (context) => context.universeScope === 'aws-universe'
+      ? { available: true }
+      : { available: false, reason: 'Open an AWS Universe canvas before creating this manager.', dependencyIds: ['aws-universe'] }
+  },
   plannedEntry('cloudflare-hosting', 'hosting', 'Cloudflare hosting', 'Create a private-first hosting blueprint with explicit tunnel exposure later.', 'hosting-adapter'),
   plannedEntry('gitlab-hosting', 'hosting', 'GitLab hosting', 'Create a guided GitLab hosting blueprint with local credentials later.', 'hosting-adapter'),
   plannedEntry('nextcloud-hosting', 'hosting', 'Nextcloud hosting', 'Create a managed Nextcloud hosting blueprint with local binding later.', 'hosting-adapter'),
@@ -521,6 +538,7 @@ export const NODE_CATALOG_COMPLETENESS: readonly NodeCatalogCompletenessRecord[]
   { id: 'multiverse-portal', state: 'planned', scope: 'multiverse', reason: 'Multiverse portal not implemented' },
   { id: 'aws-universe', state: 'planned', scope: 'aws-universe', reason: 'AWS Universe not implemented' },
   { id: 'aws-service', state: 'planned', scope: 'aws-universe', reason: 'AWS service node not implemented' },
+  { id: 'aws-core-services', state: 'current', scope: 'aws-universe', reason: 'guided AWS core-service manager node' },
   { id: 'cloudflare-hosting', state: 'planned', scope: 'any', reason: 'Cloudflare hosting not implemented' },
   { id: 'gitlab-hosting', state: 'planned', scope: 'any', reason: 'GitLab hosting not implemented' },
   { id: 'nextcloud-hosting', state: 'planned', scope: 'any', reason: 'Nextcloud hosting not implemented' },

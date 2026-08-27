@@ -35,6 +35,7 @@ export const FEATURES = [
   { id: 'palette', icon: '✨', color: 'var(--orange)', title: 'Jump anywhere', body: 'A command box that hops to any block, project or action. Plus a file explorer and undo/redo.' },
   { id: 'update', icon: '⬆️', color: 'var(--green)', title: 'Keeps itself fresh', body: 'The app checks its own update feed and shows news right inside the window.' },
   { id: 'offline', icon: '📴', color: 'var(--blue)', title: 'Works with no internet', body: 'Projects save to a plain file next to your code, so you can share it or carry it to another machine.' },
+  { id: 'aws-core', icon: '☁️', color: 'var(--orange)', title: 'Guided AWS core services', body: 'S3, EC2, IAM, STS, Lambda, CloudWatch and Logs operations with typed fields and local bindings.' },
 ]
 
 export const DOCS = [
@@ -59,6 +60,7 @@ export const DOCS = [
   ['Terminal sessions & continuity', 'tmux, and the Windows session host', 'terminal-sessions'],
   ['Toy locks', 'a padlock for fun, not for safety', 'toy-locks'],
   ['Windows support', 'what works and what does not yet', 'windows-support'],
+  ['AWS core-service managers', 'guided S3, EC2, IAM, STS, Lambda, CloudWatch and Logs', 'aws-core-services'],
 ]
 
 // A hand-picked six from the design's dumpling list, kept to exactly the

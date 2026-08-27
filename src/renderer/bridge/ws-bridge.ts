@@ -23,6 +23,7 @@ import type { NodeDependenciesApi } from '../../shared/node-dependencies'
 import type { TorrentApi, TorrentTaskState } from '../../shared/torrent'
 import type { VirtualMachineApi } from '../../shared/virtual-machine'
 import type { CalendarApi, CalendarProvider } from '../../shared/calendar'
+import type { AwsCoreApi } from '../../shared/aws-core-services'
 import {
   UNKNOWN_CLAUDE_CLI_CAPS,
   type BoardLogApi,
@@ -1081,6 +1082,22 @@ export function buildOllamaApi(client: RpcClient): Pick<NodeTerminalApi, 'ollama
   return { ollama }
 }
 
+/** Guided AWS core-service managers over the authenticated WS bridge. */
+export function buildAwsCoreServicesApi(client: RpcClient): Pick<NodeTerminalApi, 'awsCoreServices'> {
+  const awsCoreServices: AwsCoreApi = {
+    runtime: () => client.request(IPC.awsCoreRuntime) as ReturnType<AwsCoreApi['runtime']>,
+    profiles: () => client.request(IPC.awsCoreProfiles) as ReturnType<AwsCoreApi['profiles']>,
+    binding: (nodeId) => client.request(IPC.awsCoreBinding, nodeId) as ReturnType<AwsCoreApi['binding']>,
+    bind: (input) => client.request(IPC.awsCoreBind, input) as ReturnType<AwsCoreApi['bind']>,
+    unbind: (nodeId) => client.request(IPC.awsCoreUnbind, nodeId) as ReturnType<AwsCoreApi['unbind']>,
+    preview: (nodeId, request) => client.request(IPC.awsCorePreview, nodeId, request) as ReturnType<AwsCoreApi['preview']>,
+    execute: (nodeId, request) => client.request(IPC.awsCoreExecute, nodeId, request) as ReturnType<AwsCoreApi['execute']>,
+    cancel: (operationId) => client.request(IPC.awsCoreCancel, operationId) as ReturnType<AwsCoreApi['cancel']>,
+    onProgress: (listener) => client.subscribe(IPC.awsCoreProgress, listener as Listener)
+  }
+  return { awsCoreServices }
+}
+
 /** Automatic node-feature dependency lifecycle over the authenticated server RPC. Downloads and
  * installation remain on the server host, so the browser never uses its own PATH as proof. */
 export function buildNodeDependenciesApi(client: RpcClient): Pick<NodeTerminalApi, 'nodeDependencies'> {
@@ -1641,6 +1658,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildConverterApi(client),
     ...buildNodeDependenciesApi(client),
     ...buildOllamaApi(client),
+    ...buildAwsCoreServicesApi(client),
     ...buildMinecraftApi(client),
     ...buildTorrentApi(client),
     ...buildVirtualMachineApi(client),

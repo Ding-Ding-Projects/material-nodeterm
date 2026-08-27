@@ -57,6 +57,11 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## In progress / partially landed
 
+- [ ] **AWS core-service managers (#46)** — guided S3, EC2, IAM, STS, Lambda, CloudWatch, and Logs
+      node surface and local core boundary are implemented in this lane. Integration verification,
+      builds, packaging, runtime interaction, and captures remain pending under the explicit
+      ultra-speed boundary.
+
 - [ ] Desktop Material Design 3 and personal vocabulary reconciliation: the source audit and focused
   Material Design 3 fixes are present in the audit scripts and shared primitives. The Material Design 3 audit is green
   with deliberate negative regressions. Personal-vocabulary coverage is intentionally red with

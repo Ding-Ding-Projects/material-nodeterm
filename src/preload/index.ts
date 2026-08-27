@@ -35,6 +35,7 @@ import type { WslCreateProgress } from '../shared/wsl'
 import type { TorrentTaskState } from '../shared/torrent'
 import type { VirtualMachineEvent } from '../shared/virtual-machine'
 import type { CalendarProvider } from '../shared/calendar'
+import type { AwsCoreProgress } from '../shared/aws-core-services'
 import type { ProjectConsentRequest, ProjectSetupEvent } from '../shared/project-settings'
 
 // Fan a single ipcRenderer listener per channel out to many renderer subscribers. Without
@@ -89,6 +90,7 @@ const subscribeNodeDependencyState = subscribe<[NodeDependencyAvailability]>(IPC
 const subscribeNodeDependencyProgress = subscribe<[NodeDependencyProgress]>(IPC.nodeDependencyProgress)
 const subscribeTorrentTask = subscribe<[TorrentTaskState]>(IPC.torrentTask)
 const subscribeVirtualMachineEvent = subscribe<[VirtualMachineEvent]>(IPC.virtualMachineEvent)
+const subscribeAwsCoreProgress = subscribe<[AwsCoreProgress]>(IPC.awsCoreProgress)
 const subscribeWidgetState = subscribe<[CanvasWidgetLiveState]>(IPC.widgetStateChanged)
 
 const subscribeRelayPeerPending = subscribe<[RelayPeerPending]>(IPC.relayHostPeerPending)
@@ -1093,6 +1095,17 @@ const api: NodeTerminalApi = {
     reconcile: () => ipcRenderer.invoke(IPC.nodeDependencyReconcile),
     onState: (listener) => subscribeNodeDependencyState(listener),
     onProgress: (listener) => subscribeNodeDependencyProgress(listener)
+  },
+  awsCoreServices: {
+    runtime: () => ipcRenderer.invoke(IPC.awsCoreRuntime),
+    profiles: () => ipcRenderer.invoke(IPC.awsCoreProfiles),
+    binding: (nodeId) => ipcRenderer.invoke(IPC.awsCoreBinding, nodeId),
+    bind: (input) => ipcRenderer.invoke(IPC.awsCoreBind, input),
+    unbind: (nodeId) => ipcRenderer.invoke(IPC.awsCoreUnbind, nodeId),
+    preview: (nodeId, request) => ipcRenderer.invoke(IPC.awsCorePreview, nodeId, request),
+    execute: (nodeId, request) => ipcRenderer.invoke(IPC.awsCoreExecute, nodeId, request),
+    cancel: (operationId) => ipcRenderer.invoke(IPC.awsCoreCancel, operationId),
+    onProgress: (listener) => subscribeAwsCoreProgress(listener)
   },
   ollama: {
     status: () => ipcRenderer.invoke(IPC.ollamaStatus),

@@ -663,6 +663,17 @@ export function buildStubApi(): Omit<
       onState: noopUnsub,
       onProgress: noopUnsub
     },
+    awsCoreServices: {
+      runtime: U('awsCoreServices.runtime'),
+      profiles: U('awsCoreServices.profiles'),
+      binding: U('awsCoreServices.binding'),
+      bind: U('awsCoreServices.bind'),
+      unbind: U('awsCoreServices.unbind'),
+      preview: U('awsCoreServices.preview'),
+      execute: U('awsCoreServices.execute'),
+      cancel: U('awsCoreServices.cancel'),
+      onProgress: noopUnsub
+    },
     ollama: {
       status: U('ollama.status'),
       models: U('ollama.models'),

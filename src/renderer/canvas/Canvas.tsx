@@ -102,6 +102,7 @@ import { VIRTUAL_MACHINE_NODE_CATALOG } from '@shared/virtual-machine'
 import type { ProjectIcon } from '@shared/project-icon'
 import BrowserNode from '../nodes/BrowserNode'
 import { ServiceNode } from '../nodes/ServiceNode'
+import AwsCoreServicesNode from '../nodes/AwsCoreServicesNode'
 import VirtualMachineNode from '../nodes/VirtualMachineNode'
 import NsisInstallerNode from '../nodes/NsisInstallerNode'
 import ShopNode from '../nodes/ShopNode'
@@ -711,6 +712,7 @@ import {
   createTerminalNode,
   nodeSshFor,
   createServiceNode,
+  createAwsCoreServicesNode,
   createVirtualMachineNode,
   SERVICE_NODE_LABELS,
   createVideoNode,
@@ -2065,6 +2067,7 @@ export function Canvas() {
       gitlab: withNodeBoundary(ServiceNode),
       homeassistant: withNodeBoundary(ServiceNode),
       freepbx: withNodeBoundary(ServiceNode),
+      'aws-core-services': withNodeBoundary(AwsCoreServicesNode),
       'linux-vm': withNodeBoundary(VirtualMachineNode)
     }),
     []
@@ -5366,6 +5369,7 @@ export function Canvas() {
             if (catalogEntry.id.startsWith('service:')) {
               return createServiceNode(catalogEntry.nodeKind as ServiceNodeKind, index, center)
             }
+            if (catalogEntry.id === 'aws-core-services') return createAwsCoreServicesNode(index, center)
             // File and diff rows stay visible but disabled until their picker prerequisites exist.
             return null
           },

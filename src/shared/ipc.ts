@@ -717,6 +717,17 @@ export const IPC = {
   nodeDependencyReconcile: 'node-dependency:reconcile',
   nodeDependencyState: 'node-dependency:state',
   nodeDependencyProgress: 'node-dependency:progress',
+  // Guided S3, EC2, IAM, STS, Lambda, CloudWatch, and Logs managers. Local profile and endpoint
+  // bindings stay in the privileged host; canvas data carries only safe operation intent.
+  awsCoreRuntime: 'aws-core:runtime',
+  awsCoreProfiles: 'aws-core:profiles',
+  awsCoreBinding: 'aws-core:binding',
+  awsCoreBind: 'aws-core:bind',
+  awsCoreUnbind: 'aws-core:unbind',
+  awsCorePreview: 'aws-core:preview',
+  awsCoreExecute: 'aws-core:execute',
+  awsCoreCancel: 'aws-core:cancel',
+  awsCoreProgress: 'aws-core:progress',
   /** Electron only: a multi-file picker (dialog:select-file only returns one path). Browser (Server
    *  Edition) uses a plain `<input type="file" multiple>` + files.saveUpload instead — see
    *  FileConverterPanel.tsx. */

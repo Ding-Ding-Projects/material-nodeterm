@@ -19,6 +19,7 @@ import {
   createVirtualMachineNode,
   createTorrentNode,
   createCalendarNode,
+  createAwsCoreServicesNode,
   createTimerNode,
   isAccountLoginNode
 } from '@renderer/state/workspace'
@@ -207,6 +208,10 @@ function buildBase(snapshot: ReopenNodeSnapshot, ctx: RecreateContext): CanvasNo
       return createTorrentNode(0)
     case 'calendar':
       return createCalendarNode(0)
+    case 'aws-core-services': {
+      const node = createAwsCoreServicesNode(0)
+      return { ...node, data: { ...node.data, ...d, awsCoreIntent: d.awsCoreIntent ?? node.data.awsCoreIntent } }
+    }
     case 'timer': {
       const node = createTimerNode(0)
       return { ...node, data: { ...node.data, ...d, running: false, paused: false, elapsedMs: 0, lapsMs: [], occurrenceId: undefined, occurrenceState: 'scheduled' } }

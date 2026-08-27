@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>AWS core-service managers | nodeterm</title>
+  <meta name="description" content="Guided S3, EC2, IAM, STS, Lambda, CloudWatch, and Logs managers." />
+  <link rel="stylesheet" href="../styles.css" />
+  <link rel="stylesheet" href="./assets/docs.css" />
+</head>
+<body>
+  <main>
+    <p><a href="./index.html">Documentation</a></p>
+    <h1>AWS core-service managers</h1>
+    <p>The desktop canvas manager provides typed, reviewable operations for S3, EC2, IAM, STS,
+      Lambda, CloudWatch, and CloudWatch Logs. It uses the local AWS CLI through the application
+      host and never accepts arbitrary shell commands or raw request editors.</p>
+    <h2>Services and operations</h2>
+    <ul>
+      <li>S3: list buckets, list objects, create bucket, delete bucket.</li>
+      <li>EC2: describe instances and security groups, start, stop, and terminate instances.</li>
+      <li>IAM: list and inspect users and roles, create users, and delete users.</li>
+      <li>STS: inspect caller identity without exposing session credentials.</li>
+      <li>Lambda: list, inspect, and delete functions.</li>
+      <li>CloudWatch: list metrics and request metric data.</li>
+      <li>CloudWatch Logs: inspect groups and streams, read events, and filter events.</li>
+    </ul>
+    <h2>Portability and privacy</h2>
+    <p>Project files carry only the service, operation, region intent, and safe fields. Profile,
+      endpoint, account session, command output, process state, and credentials remain local. Import
+      performs no provider request or process launch.</p>
+    <h2>Verification status</h2>
+    <p>This lane is source-only. Tests, builds, packaging, runtime interaction, and captures are
+      pending in the integration lane.</p>
+    <p><a href="../../docs/features/integrations/aws-core-services.md">Full feature article</a></p>
+  </main>
+</body>
+</html>

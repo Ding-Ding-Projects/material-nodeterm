@@ -15,6 +15,7 @@ import { validatePortableMediaManifest } from './portable-media-assets'
 import { normalizeMediaReference, type MediaAssetReference } from '../shared/media-catalog'
 import { repairUniverseShops } from './universe-shop'
 import { validatePortableUniverseDoors, type PortableUniverseDoorV3 } from './universe-door-navigation'
+import { AWS_CORE_OPERATIONS_BY_SERVICE, AWS_CORE_SERVICES, normalizeAwsCoreIntent, type AwsCorePortableIntent } from '../shared/aws-core-services'
 
 export type PortableCanvasScope = 'root' | 'multiverse' | 'aws-universe'
 
@@ -52,6 +53,7 @@ export interface PortableCanvasNodeV3 {
   url?: string
   browserTabs?: Array<{ id: string; url?: string; title: string }>
   serviceLabel?: string
+  awsCoreIntent?: AwsCorePortableIntent
   alarmSchedule?: { recurrence: string; date?: string; time: string; weekdays?: number[]; monthDay?: number }
   alarmTimeZone?: string
   alarmEnabled?: boolean
@@ -122,7 +124,7 @@ const ALLOWED_NODE = new Set([
   'universeCanvasId', 'universeScope', 'universeDepth', 'nonDeletable', 'shopSelection',
   'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel',
   'alarmSchedule', 'alarmTimeZone', 'alarmEnabled', 'alarmSnoozeMinutes',
-  'alarmSoundEnabled', 'alarmNarratorEnabled', 'alarmHistory', 'mediaAssets',
+  'alarmSoundEnabled', 'alarmNarratorEnabled', 'alarmHistory', 'mediaAssets', 'awsCoreIntent',
   'mediaActiveAssetId'
 ])
 const ALLOWED_POSITION = new Set(['x', 'y'])
@@ -223,6 +225,12 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
   if (strict && node.parentId !== undefined && typeof node.parentId !== 'string') throw new PortableProjectV3Error('manifest', 'Portable node parent is invalid.')
   if (strict && node.text !== undefined && typeof node.text !== 'string') throw new PortableProjectV3Error('manifest', 'Portable node text is invalid.')
   if (strict && node.serviceLabel !== undefined && typeof node.serviceLabel !== 'string') throw new PortableProjectV3Error('manifest', 'Portable service label is invalid.')
+  if (strict && node.awsCoreIntent !== undefined) {
+    const intent = node.awsCoreIntent
+    if (!record(intent) || intent.schemaVersion !== 1 || !AWS_CORE_SERVICES.includes(intent.service as never) || !AWS_CORE_OPERATIONS_BY_SERVICE[intent.service as keyof typeof AWS_CORE_OPERATIONS_BY_SERVICE]?.includes(intent.operation as never) || !isAwsCoreIntentInput(intent.input)) {
+      throw new PortableProjectV3Error('manifest', 'Portable AWS core-service intent is invalid.')
+    }
+  }
   if (strict && node.browserTabs !== undefined && !Array.isArray(node.browserTabs)) throw new PortableProjectV3Error('manifest', 'Portable browser tabs must be an array.')
   if (node.collapsed !== undefined) out.collapsed = node.collapsed
   if (node.universeCanvasId !== undefined) out.universeCanvasId = text(node.universeCanvasId, 'universe canvas id')
@@ -235,6 +243,7 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
   if (node.text !== undefined) out.text = content(node.text, 'node text')
   if (node.url !== undefined) { const url = safeUrl(node.url, 'node URL'); if (url) out.url = url }
   if (node.serviceLabel !== undefined) out.serviceLabel = text(node.serviceLabel, 'service label')
+  if (node.awsCoreIntent !== undefined) out.awsCoreIntent = normalizeAwsCoreIntent(node.awsCoreIntent)
   if (node.alarmSchedule !== undefined) {
     if (!record(node.alarmSchedule)) throw new PortableProjectV3Error('manifest', 'Portable alarm schedule is invalid.')
     exactKeys(node.alarmSchedule, ALLOWED_ALARM_SCHEDULE, 'alarm schedule')
@@ -273,6 +282,11 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
     throw new PortableProjectV3Error('manifest', 'Active media asset requires a media reference list.')
   }
   return out
+}
+
+function isAwsCoreIntentInput(value: unknown): value is Record<string, string | number | boolean> {
+  if (!record(value) || Object.keys(value).length > 32) return false
+  return Object.keys(value).every((key) => key.length > 0 && key.length <= 128 && !UNSAFE_KEYS.has(key) && ((typeof value[key] === 'string' && (value[key] as string).length <= 2048) || typeof value[key] === 'number' || typeof value[key] === 'boolean'))
 }
 
 function reconcileMediaReferences(
@@ -481,6 +495,7 @@ export function portableCanvasProjectionToProject(
     ...(node.url !== undefined ? { url: node.url } : {}),
     ...(node.browserTabs ? { browserTabs: node.browserTabs.map((tab) => ({ ...tab })) } : {}),
     ...(node.serviceLabel !== undefined ? { serviceLabel: node.serviceLabel } : {}),
+    ...(node.awsCoreIntent !== undefined ? { awsCoreIntent: normalizeAwsCoreIntent(node.awsCoreIntent) } : {}),
     ...(node.mediaAssets ? { mediaAssets: node.mediaAssets.map((asset) => ({ ...asset })) } : {}),
     ...(node.mediaActiveAssetId !== undefined ? { mediaActiveAssetId: node.mediaActiveAssetId } : {})
   }))

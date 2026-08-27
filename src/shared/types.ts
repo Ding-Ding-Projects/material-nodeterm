@@ -378,6 +378,8 @@ export type NodeKind =
   // intentionally a distinct kind so the canvas can refuse deletion, duplication, grouping, and
   // cross-universe movement at every mutation boundary.
   | 'shop'
+  /** Guided AWS core-service manager for S3, EC2, IAM, STS, Lambda, CloudWatch, and Logs. */
+  | 'aws-core-services'
   // A GUI for authoring a Windows NSIS installer script for ANOTHER project (not this app's
   // own installer, which stays Squirrel.Windows — see CLAUDE.md's Packaging section). See
   // `NsisSpec`/`NsisLocalPaths` in `./nsis-form-types` for the shared-vs-machine-local split.
@@ -633,6 +635,8 @@ export interface CanvasNodeState {
   serviceLabel?: string
   /** torrent-only: safe display intent shared with the canvas; task state and paths stay local. */
   torrentMagnet?: string
+  /** AWS core-service safe intent. Profile, endpoint, credentials, and live results stay local. */
+  awsCoreIntent?: import('./aws-core-services').AwsCorePortableIntent
   /** Linux ISO VM settings stored in the shared project projection. */
   virtualMachineConfig?: import('./virtual-machine').VirtualMachineConfig
   /** Linux ISO/disk selections stored only in the machine-local execution overlay. */
@@ -4497,6 +4501,8 @@ export interface NodeTerminalApi {
   nodeDependencies: import('./node-dependencies').NodeDependenciesApi
   /** Local Ollama suite manager — docs/ollama-manager.md. */
   ollama: import('./ollama').OllamaApi
+  /** Guided AWS core-service managers — docs/features/integrations/aws-core-services.md. */
+  awsCoreServices?: import('./aws-core-services').AwsCoreApi
   /** Local WebTorrent downloader — docs/torrent-downloader.md. */
   torrent: import('./torrent').TorrentApi
   /** Local Minecraft server create-and-manage — docs/minecraft-server-manager.md. */

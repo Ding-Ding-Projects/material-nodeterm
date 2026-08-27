@@ -1,5 +1,27 @@
 # Handoff
 
+## 2026-08-27, AWS core-service managers, issue #46
+
+The isolated implementation lane `feat/program-35-aws-core-services` adds a guided AWS core-service
+manager for S3, EC2, IAM, STS, Lambda, CloudWatch, and CloudWatch Logs. `src/core/aws-core-services.ts`
+resolves the AWS CLI, keeps profile and endpoint bindings in local application data, validates a
+typed operation catalogue, executes with argument arrays, reports progress, supports pagination,
+and refuses shell or raw-request input. `src/shared/aws-core-services.ts` is the portable contract.
+`src/renderer/nodes/AwsCoreServicesNode.tsx` provides service tabs, profile and region binding,
+typed operation fields, risk-aware execution, bounded result display, and a plain-text search with
+an adjacent anchored full regex builder. The new `aws-core-services` node is registered in the
+canvas, Node Catalog, preload, Server Edition bridge, and both core shells.
+
+The portable node intent contains service, operation, region intent, and bounded safe fields only.
+Profile names, endpoints, account sessions, CLI paths, request output, process state, tokens, and
+credentials stay in the local application-data binding file and never enter project files.
+
+The feature article is `docs/features/integrations/aws-core-services.md`, and the category index,
+roadmap, changelog, and offline/site follow-up records are owned by the parent integration lane.
+This ultra-speed implementation lane intentionally ran no tests, type checks, lint, reviews,
+security or accessibility checks, builds, packaging, installer execution, runtime interaction, or
+captures. The code is therefore implemented but not runtime-verified.
+
 ## 2026-08-27, Express File Converter completion, issue #21
 
 The implementation lane is `feat/program-10-file-converter`, refreshed by fast-forward before edits

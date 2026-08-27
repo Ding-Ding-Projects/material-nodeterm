@@ -2390,6 +2390,45 @@ button.term-node__title-text:focus-visible {
   outline: 2px solid var(--md-primary);
   outline-offset: 2px;
 }
+
+/* Guided AWS core-service manager (issue #46). The manager uses the same Lang gui roles as the
+ * other service panels, with an internal scroll region so long JSON and localized labels never
+ * escape the node at narrow widths or high display scales. */
+.aws-core-manager {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  color: var(--md-on-surface);
+  background: var(--md-surface-container-low);
+  border-radius: 20px;
+  overflow: auto;
+  max-height: 100%;
+}
+.aws-core-manager__header,
+.aws-core-manager__toolbar,
+.aws-core-manager__binding,
+.aws-core-manager__operation { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.aws-core-manager__header { justify-content: space-between; }
+.aws-core-manager__header span { color: var(--md-on-surface-variant); font-size: 12px; }
+.aws-core-manager__tabs,
+.aws-core-manager__pills { display: flex; gap: 6px; flex-wrap: wrap; }
+.aws-core-manager button,
+.aws-core-manager input,
+.aws-core-manager select { min-height: 40px; }
+.aws-core-manager button,
+.aws-core-manager select { border: 1px solid var(--md-outline); border-radius: 12px; padding: 7px 12px; background: var(--md-surface-container); color: var(--md-on-surface); }
+.aws-core-manager button[aria-selected='true'],
+.aws-core-manager button.selected { background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
+.aws-core-manager__binding,
+.aws-core-manager__operation { align-items: stretch; flex-direction: column; }
+.aws-core-manager__toolbar { align-items: end; }
+.aws-core-manager__search { display: flex; align-items: center; gap: 6px; flex: 1 1 240px; }
+.aws-core-manager__rows { display: grid; gap: 8px; max-height: 260px; overflow: auto; }
+.aws-core-manager__rows article { background: var(--md-surface-container); border: 1px solid var(--md-outline-variant); border-radius: 12px; padding: 10px; overflow: auto; }
+.aws-core-manager__rows pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px ui-monospace, SFMono-Regular, Consolas, monospace; }
+.aws-core-manager__error { color: var(--md-error); }
+.aws-core-manager :is(button, input, select):focus-visible { outline: 3px solid var(--md-primary); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .aws-core-manager *, .aws-core-manager *::before, .aws-core-manager *::after { transition: none !important; animation: none !important; } }
 @media (max-width: 540px) {
   .docker-manager__toolbar,
   .docker-manager article > header {

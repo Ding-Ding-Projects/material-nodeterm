@@ -49,6 +49,7 @@ import { newUniverseCreationEventId, shopNodeIdForCanvas } from '../../core/univ
 import { TORRENT_NODE_CATALOG_ENTRY } from '@shared/torrent'
 import { DEFAULT_VIRTUAL_MACHINE_CONFIG } from '@shared/virtual-machine'
 import { TIMER_DEFAULT_DURATION_MS, type TimerNodeData } from '@shared/timer'
+import { AWS_CORE_DEFAULT_INTENT, type AwsCorePortableIntent } from '@shared/aws-core-services'
 
 // Re-exported so Canvas (and anything else in the renderer) keeps importing it from here, while the
 // single implementation lives in src/shared and is shared with the relay host + the canvas-sync
@@ -86,6 +87,7 @@ const BROWSER_SIZE = { width: 800, height: 560 }
 const NATIVE_LOOP_SIZE = { width: 340, height: 280 }
 const SHOP_SIZE = { width: 480, height: 420 }
 export const TORRENT_SIZE = { width: 620, height: 520 }
+export const AWS_CORE_SERVICES_SIZE = { width: 760, height: 620 }
 const LINUX_VM_SIZE = { width: 760, height: 560 }
 const TIMER_SIZE = { width: 380, height: 360 }
 const ALARM_SIZE = { width: 380, height: 360 }
@@ -255,6 +257,8 @@ export interface NodeData {
   /** service-kinds only, MACHINE-LOCAL: where this node reaches its service. Stripped from the
    *  shared document and from inbound peers; see shared/node-exec.ts. */
   serviceConnection?: ServiceConnection
+  /** AWS core-service portable intent; profile, endpoint, credentials and results stay local. */
+  awsCoreIntent?: AwsCorePortableIntent
   /** Safe torrent magnet intent shared with the canvas. */
   torrentMagnet?: string
   /** nsis-only, GIT-SHARED: the installer's description. See `NsisSpec`. */
@@ -1449,7 +1453,27 @@ export function createCalendarNode(index: number, center?: { x: number; y: numbe
       group: null,
       calendarConfig: { provider: 'local', accountId: null, calendarId: null, timezone: 'local', view: 'agenda', showWeekends: true, cacheEnabled: true }
     }
+}
+
+/** Creates one guided AWS core-service manager with only portable operation intent in node data. */
+export function createAwsCoreServicesNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  return {
+    id: nextId('aws-core-services'),
+    type: 'aws-core-services',
+    position: placeAt(center, index, AWS_CORE_SERVICES_SIZE.width, AWS_CORE_SERVICES_SIZE.height),
+    width: AWS_CORE_SERVICES_SIZE.width,
+    height: AWS_CORE_SERVICES_SIZE.height,
+    style: { width: AWS_CORE_SERVICES_SIZE.width, height: AWS_CORE_SERVICES_SIZE.height },
+    data: {
+      title: 'AWS core services',
+      color: '#ff9900',
+      group: null,
+      awsCoreIntent: { ...AWS_CORE_DEFAULT_INTENT, input: {} },
+      tags: ['aws', 's3', 'ec2', 'iam', 'sts', 'lambda', 'cloudwatch', 'logs']
+    }
   }
+}
+
 export function createTimerNode(index: number, center?: { x: number; y: number }): CanvasNode {
   const data: TimerNodeData = {
     title: 'Timer', color: NODE_COLORS[index % NODE_COLORS.length], group: null,
@@ -2120,8 +2144,9 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   homeassistant: true,
   freepbx: true,
   nsis: true,
-  shop: true
-  torrent: true
+  shop: true,
+  'aws-core-services': true,
+  torrent: true,
   'linux-vm': true
 }
 
@@ -2167,8 +2192,9 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   homeassistant: SERVICE_SUMMARY_SIZE,
   freepbx: SERVICE_SUMMARY_SIZE,
   nsis: NSIS_SIZE,
-  shop: SHOP_SIZE
-  torrent: TORRENT_SIZE
+  shop: SHOP_SIZE,
+  'aws-core-services': AWS_CORE_SERVICES_SIZE,
+  torrent: TORRENT_SIZE,
   'linux-vm': LINUX_VM_SIZE
 }
 
@@ -2629,6 +2655,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         shopSelection: (n as CanvasNodeState & { shopSelection?: string }).shopSelection,
         torrentMagnet: n.torrentMagnet,
         serviceConnection: n.serviceConnection,
+        awsCoreIntent: n.awsCoreIntent,
         nsisSpec: n.nsisSpec,
         nsisLocalPaths: n.nsisLocalPaths,
         virtualMachineConfig: n.virtualMachineConfig,
@@ -2747,6 +2774,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         shopSelection: n.data.shopSelection,
         torrentMagnet: n.data.torrentMagnet,
         serviceConnection: n.data.serviceConnection,
+        awsCoreIntent: n.data.awsCoreIntent,
         nsisSpec: n.data.nsisSpec,
         nsisLocalPaths: n.data.nsisLocalPaths,
         // Media paths remain in the live node long enough for the machine-local index to retain
