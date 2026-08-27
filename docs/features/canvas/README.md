@@ -22,6 +22,8 @@ The pan/zoom surface nodeterm is built around, and everything that lives on it.
   a fractional-dpr display, the two independent causes, and what the app does about each.
 - [Timer nodes](./timer-nodes.md) — countdowns, stopwatches, work/rest sequences, laps, repeats,
   occurrences, and non-blocking alarms.
+- [Multiverse door entry](./door-entry.md) — guided numeric-code and passphrase entry, separate
+  from toy locks, with schema 3 portability and local credential omission rules.
 
 See also [Terminals](../terminals/README.md) for how a terminal node's own session survives
 independently of the canvas, and [Projects](../projects/README.md) for how a whole canvas is
