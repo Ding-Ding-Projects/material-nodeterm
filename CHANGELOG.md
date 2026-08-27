@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add proxy and isolated debugging browser sessions with guided profile and proxy choices, explicit
+  certificate policies, host-owned lifecycle and recovery, bounded redacted diagnostics, and a
+  separate browser partition. Schema 3 carries only safe intent; credentials, certificates,
+  executable paths, process state, cookies, and debugging data remain local. The ultra-speed lane
+  intentionally ran no tests, type checks, lint, reviews, security or accessibility checks, builds,
+  packaging, installer execution, runtime interaction, or captures.
+
 - Complete the Express File Converter flow with queue-wide collision-safe destination names,
   visible rename disclosure, final atomic no-clobber publication, and a completed-output action that
   opens the exact result in Visual Studio Code through the active project API. The converter queue

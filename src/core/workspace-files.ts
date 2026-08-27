@@ -10,6 +10,7 @@ import {
 import type {
   BridgeLink,
   BrowserProfile,
+  DebugBrowserProfile,
   CanvasNodeState,
   NavStop,
   Project,
@@ -29,6 +30,7 @@ import { projectCapabilityFields, readProjectCapabilities } from '../shared/proj
 import { loadedAgentBrowserPartition } from '../shared/browser-partition'
 import { sanitizeProjectIcon, type ProjectIcon } from '../shared/project-icon'
 import { validateCalendarConfig } from '../shared/calendar'
+import { normalizeDebugBrowserProfiles } from '../shared/browser-debug-sessions'
 
 /**
  * Drop a browser node's persisted `partition` unless it is exactly the jar THIS project (its
@@ -136,6 +138,8 @@ export interface ProjectFileV1 {
   /** Named browser profiles — see `BrowserProfile` in `../shared/types` and
    *  `shared/browser-profiles.ts`. Names only; the cookie jar is machine-local. */
   browserProfiles?: BrowserProfile[]
+  /** Safe debugging-browser profiles. Local proxy credentials, certificates and runtime state are omitted. */
+  debugBrowserProfiles?: DebugBrowserProfile[]
 }
 
 /** One workspace.json v3 entry. Exactly one of: `cwd` (local ref), `ssh` (remote ref),
@@ -308,7 +312,8 @@ export function projectToFile(
     ...projectCapabilityFields(p),
     ...(p.dinoHighScore ? { dinoHighScore: p.dinoHighScore } : {}),
     ...(p.kanban ? { kanban: p.kanban } : {}),
-    ...(p.browserProfiles && p.browserProfiles.length > 0 ? { browserProfiles: p.browserProfiles } : {})
+    ...(p.browserProfiles && p.browserProfiles.length > 0 ? { browserProfiles: p.browserProfiles } : {}),
+    ...(p.debugBrowserProfiles && p.debugBrowserProfiles.length > 0 ? { debugBrowserProfiles: p.debugBrowserProfiles } : {})
   }
 }
 
@@ -339,6 +344,11 @@ export function validBrowserProfiles(v: unknown): BrowserProfile[] | undefined {
       typeof (p as BrowserProfile).color === 'string'
   )
   return cleaned.length > 0 ? cleaned : undefined
+}
+
+/** Read only safe debugging-browser intent. Malformed rows are dropped individually. */
+export function validDebugBrowserProfiles(v: unknown): DebugBrowserProfile[] | undefined {
+  return normalizeDebugBrowserProfiles(v)
 }
 
 /** Tolerant reader for imported child-canvas content. A malformed child record is omitted as an
@@ -426,6 +436,7 @@ export function fileToProject(
 ): Project {
   const defaultAccountId = base.defaultAccountId ?? f.defaultAccountId
   const browserProfiles = validBrowserProfiles(f.browserProfiles)
+  const debugBrowserProfiles = validDebugBrowserProfiles(f.debugBrowserProfiles)
   const multiverseCanvases = sanitizeMultiverseCanvases(f.multiverseCanvases)?.map((canvas) => ({
     ...canvas,
     nodes: sanitizeBrowserPartitions(
@@ -476,6 +487,7 @@ export function fileToProject(
     ...(f.dinoHighScore ? { dinoHighScore: f.dinoHighScore } : {}),
     ...(validKanban(f.kanban) ? { kanban: f.kanban } : {}),
     ...(browserProfiles ? { browserProfiles } : {}),
+    ...(debugBrowserProfiles ? { debugBrowserProfiles } : {}),
     ...(base.cwd ? { cwd: base.cwd } : {}),
     ...(base.ssh ? { ssh: base.ssh } : {}),
     ...(base.closed ? { closed: true } : {}),

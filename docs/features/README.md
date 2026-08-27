@@ -19,7 +19,7 @@ the deep architecture reference these articles are distilled from.
 | [Source control](./source-control/README.md) | The git panel, and git worktrees bound to canvas group frames. |
 | [Kanban](./kanban/README.md) | The Trello-style board that mirrors a project's live sessions as cards. |
 | [Appearance](./appearance/README.md) | Design tokens, themes, and the measured state of the Material Design 3 migration. |
-| [Remote & SSH](./remote/README.md) | Opening a project on a remote host, and the self-hosted browser edition. |
+| [Remote & SSH](./remote/README.md) | Remote projects, the self-hosted browser edition, and isolated debugging browser sessions. |
 | [Speech](./speech/README.md) | On-device dictation into any terminal. |
 | [Packaging](./packaging/README.md) | How builds are produced, distributed, and kept up to date. |
 | [Dependency installation](./dependencies/README.md) | The manifest and machine-local lifecycle that installs prerequisites for node features. |
