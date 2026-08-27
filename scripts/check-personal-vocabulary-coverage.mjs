@@ -20,9 +20,9 @@ const PRODUCERS = [
   ['settings-fields', 'src/renderer/components/settings/FieldRow.tsx', 'useVocabularyText('],
   ['settings-sections', 'src/renderer/components/settings/SettingsSection.tsx', 'useVocabularyText('],
   ['personal-vocabulary-upload', 'src/renderer/components/settings/sections/PersonalVocabularySection.tsx', 'usePersonalVocabulary('],
-  ['settings-page', 'src/renderer/components/settings/SettingsPage.tsx', 'useLocalizedVocabularyText()'],
+  ['settings-page-vocabulary-boundary', 'src/renderer/components/settings/SettingsPage.tsx', 'useLocalizedVocabularyText()'],
   ['settings-page-registration', 'src/renderer/components/settings/SettingsPage.tsx', '<PersonalVocabularySection'],
-  ['settings-sidebar', 'src/renderer/components/settings/SettingsSidebar.tsx', 'useI18n()'],
+  ['settings-sidebar-vocabulary-boundary', 'src/renderer/components/settings/SettingsSidebar.tsx', 'useI18n()'],
   ['settings-sidebar-registration', 'src/renderer/components/settings/SettingsSidebar.tsx', 'visibleSettingsGroups('],
   ['settings-section-registry', 'src/renderer/components/settings/nav.ts', 'SETTINGS_SECTION_REGISTRY'],
   ['settings-search-corpus', 'src/renderer/components/settings/SearchableRow.tsx', 'useVocabularyMapper()'],
@@ -31,8 +31,9 @@ const PRODUCERS = [
   ['settings-font-picker', 'src/renderer/components/settings/FontPicker.tsx', 'useVocabularyMapper()'],
   ['settings-theme-picker', 'src/renderer/components/settings/ThemeSelect.tsx', 'useVocabularyMapper()'],
   ['settings-section-inline-copy', 'src/renderer/components/settings/SettingsText.tsx', 'export function SettingsText'],
+  ['settings-copy-facts', 'src/renderer/components/settings/SettingsText.tsx', 'SettingsTextSegment'],
+  ['settings-resolution-ownership', 'src/renderer/components/settings/context.ts', 'resolutionIncludes'],
   ['settings-search-policy', 'src/renderer/components/settings/vocabulary.ts', 'export function settingsSidebarSearchEntry'],
-  ['personal-vocabulary-upload', 'src/renderer/components/settings/sections/PersonalVocabularySection.tsx', 'usePersonalVocabulary'],
   ['command-palette', 'src/renderer/components/CommandPalette.tsx', 'useVocabularyCommands'],
   ['context-menus', 'src/renderer/components/menu/VocabularyContextMenu.tsx', 'useVocabularyMenuItems'],
   ['confirm-dialog', 'src/renderer/components/ConfirmDialog.tsx', 'useVocabularyMapper()'],
@@ -93,20 +94,32 @@ const PRODUCERS = [
   ['appearance-editor', 'src/renderer/components/appearance/AppearanceEditor.tsx', 'useVocabularyMapper()'],
   ['color-field', 'src/renderer/components/color/ColorField.tsx', 'useVocabularyMapper()'],
   ['color-picker', 'src/renderer/components/color/ColorPicker.tsx', 'useVocabularyMapper()'],
-  ['password-manager', 'src/renderer/components/passwordManager/PasswordManagerPanel.tsx', 'const vocab = useVocabularyMapper()'],
-  ['converter-adapter-catalog', 'src/renderer/components/converter/AdapterCatalog.tsx', 'useVocabularyMapper()'],
+  ['bulk-preview-segments', 'src/renderer/components/BulkActionPreview.tsx', 'messageSegments={messageSegments}'],
+  ['bulk-preview-single-title-map', 'src/renderer/components/BulkActionBar.tsx', 'titleSegments={[copy(pending.label)]}'],
+  ['project-storage-segments', 'src/renderer/components/ProjectSwitcher.tsx', 'messageSegments={'],
+  ['project-other-unread-fact', 'src/renderer/components/ProjectSwitcher.tsx', "unreadCountSegments(otherUnread, ' unread in other projects')"],
+  ['converter-detection-note-fact', 'src/renderer/components/converter/FileConverterPanel.tsx', 'f.detection.note'],
+  ['converter-adapter-id-corpus', 'src/renderer/components/converter/AdapterCatalog.tsx', 'adapterSearchCorpus('],
+  ['ollama-staleness-segments', 'src/renderer/components/ollama/OllamaManagerPanel.tsx', 'catalogStalenessSegments('],
+  ['ollama-completeness-segments', 'src/renderer/components/ollama/OllamaManagerPanel.tsx', 'catalogHeadlineText('],
+  ['ollama-completeness-reason-fact', 'src/renderer/components/ollama/OllamaManagerPanel.tsx', 'mapOwnedSentence(vocab, [fact(reason)]'],
+  ['ollama-queue-phase-fact', 'src/renderer/components/ollama/OllamaManagerPanel.tsx', 'item.digestPhase ??'],
+  ['ollama-fit-evidence-fact', 'src/renderer/components/ollama/OllamaManagerPanel.tsx', "vocab('Evidence:')"],
+  ['appearance-weight-segments', 'src/renderer/components/appearance/AppearanceEditor.tsx', 'w.label.indexOf'],
+  ['appearance-font-preview-fact', 'src/renderer/components/appearance/AppearanceEditor.tsx', 'quoteFamily(primary ||'],
+  ['docs-section-copy', 'src/renderer/components/DocsBrowser.tsx', 'vocab(section.label'],
+  ['history-restore-segments', 'src/renderer/components/LocalHistoryPanel.tsx', 'messageSegments={historyRestoreMessageSegments('],
   ['converter-upload-limit', 'src/renderer/components/converter/FileConverterPanel.tsx', 'mapLocalVocabularyText('],
   ['minecraft-backups', 'src/renderer/components/minecraft/MinecraftBackupsPanel.tsx', 'useVocabularyMapper()'],
   ['minecraft-players', 'src/renderer/components/minecraft/MinecraftPlayersPanel.tsx', 'useVocabularyMapper()'],
   ['minecraft-properties', 'src/renderer/components/minecraft/MinecraftPropertiesEditor.tsx', 'useVocabularyMapper()'],
   ['authenticator-settings', 'src/renderer/components/settings/sections/AuthenticatorSection.tsx', 'const vocab = useVocabularyMapper()'],
   ['speech-settings', 'src/renderer/components/settings/sections/SpeechSection.tsx', 'useVocabularyMapper()'],
-  ['authenticator-settings', 'src/renderer/components/settings/sections/AuthenticatorSection.tsx', 'SettingsText'],
-  ['speech-settings', 'src/renderer/components/settings/sections/SpeechSection.tsx', 'SettingsText'],
   ['school-mode-settings', 'src/renderer/components/settings/sections/SchoolModeSection.tsx', 'useVocabularyMapper()'],
   ['kids-mode-settings', 'src/renderer/components/settings/sections/KidsModeSection.tsx', 'useVocabularyMapper()'],
   ['usage-settings', 'src/renderer/components/settings/sections/UsageSection.tsx', 'useVocabularyMapper()'],
   ['toy-lock-wizard', 'src/renderer/components/toylocks/LockWizard.tsx', 'useVocabularyMapper()'],
+  ['shared-prose-primitives', 'src/renderer/ui/md3/Button.tsx', 'useVocabularyMapper()'],
   ['ui-input', 'src/renderer/ui/Input.tsx', 'useVocabularyMapper()'],
   ['ui-button-wrapper-delegation', 'src/renderer/ui/Button.tsx', '<Md3Button'],
   ['ui-md3-button', 'src/renderer/ui/md3/Button.tsx', 'useVocabularyMapper()'],
@@ -127,6 +140,7 @@ const PRODUCERS = [
   ['ui-slider', 'src/renderer/ui/md3/Slider.tsx', 'useVocabularyMapper()'],
   ['ui-checkbox', 'src/renderer/ui/md3/Checkbox.tsx', 'useVocabularyMapper()'],
   ['ui-radio', 'src/renderer/ui/md3/Radio.tsx', 'useVocabularyMapper()'],
+  ['shared-input-controls', 'src/renderer/ui/md3/Slider.tsx', 'useVocabularyMapper()'],
   ['filterable-menu', 'src/renderer/components/menu/FilterableMenu.tsx', 'useVocabularyMapper()'],
   ['editable-node-title', 'src/renderer/components/EditableNodeTitle.tsx', 'useVocabularyMapper()'],
   ['destructive-confirm-gate', 'src/renderer/components/DestructiveConfirmGate.tsx', 'useVocabularyMapper()'],
@@ -217,7 +231,7 @@ const PRODUCTION_SURFACES = [
 
 // Independent hand-written manifests. The mutable rows above are implementation evidence; these
 // lists are the required universe, so deleting a row cannot delete its own requirement too.
-const CANONICAL_PRODUCER_IDS = `settings-fields settings-sections personal-vocabulary-upload command-palette context-menus confirm-dialog input-dialog notifications tooltip conflict-banner canvas-prose fab-menu kanban-view kanban-column kanban-session-card kanban-card-modal source-control worktree-dialog onboarding dim-sum-surprise publish-dialog find-bar remote-picker browser-profile-picker password-manager converter-adapter-catalog converter-upload-limit minecraft-backups minecraft-players minecraft-properties authenticator-settings speech-settings toy-lock-wizard personal-vocabulary-surface-mapper personal-vocabulary-application typed-copy-fact-boundary personal-vocabulary-host-message widget-entrypoint hud-entrypoint dialog-picker-root ws-reconnect-overlay browser-bridge-stubs notification-body-classification site-vocabulary-json site-vocabulary-cache native-notification-canvas native-notification-onboarding native-notification-settings personal-vocabulary-template native-notification-browser native-notification-main`.split(/\s+/)
+const CANONICAL_PRODUCER_IDS = `settings-fields settings-sections personal-vocabulary-upload settings-page-vocabulary-boundary settings-page-registration settings-sidebar-vocabulary-boundary settings-sidebar-registration settings-section-registry settings-search-corpus settings-inline-copy settings-reset settings-font-picker settings-theme-picker settings-section-inline-copy settings-copy-facts settings-resolution-ownership settings-search-policy command-palette context-menus confirm-dialog input-dialog notifications tooltip conflict-banner canvas-prose fab-menu kanban-view kanban-column kanban-session-card kanban-card-modal source-control worktree-dialog onboarding dim-sum-surprise publish-dialog find-bar remote-picker browser-profile-picker wsl-create-dialog terminal-node sticky-node group-node editor-node diff-node browser-node browser-surface browser-start-page browser-extensions-panel discarded-plate video-node web-node loop-node native-loop-node nsis-node service-node authenticator-node annotation-node dino-node subagent-node chat-panel node-fact-preserving-mapper password-manager converter-adapter-catalog converter-panel ollama-manager explorer-panel project-switcher regex-builder anchored-regex-builder changelog-panel release-card local-history-panel docs-browser docs-article-view appearance-editor color-field color-picker bulk-preview-segments bulk-preview-single-title-map project-storage-segments project-other-unread-fact converter-detection-note-fact converter-adapter-id-corpus ollama-staleness-segments ollama-completeness-segments ollama-completeness-reason-fact ollama-queue-phase-fact ollama-fit-evidence-fact appearance-weight-segments appearance-font-preview-fact docs-section-copy history-restore-segments converter-upload-limit minecraft-backups minecraft-players minecraft-properties authenticator-settings speech-settings school-mode-settings kids-mode-settings usage-settings toy-lock-wizard shared-prose-primitives ui-input ui-button-wrapper-delegation ui-md3-button ui-chip ui-menu ui-status-chip ui-switch ui-select ui-number-field ui-text-area ui-text-field ui-fab ui-icon-button ui-segmented-button ui-dialog ui-list-row ui-tabs ui-slider ui-checkbox ui-radio shared-input-controls filterable-menu editable-node-title destructive-confirm-gate personal-vocabulary-surface-mapper personal-vocabulary-application typed-copy-fact-boundary personal-vocabulary-host-message widget-entrypoint hud-entrypoint dialog-picker-root ws-reconnect-overlay browser-bridge-stubs notification-body-classification site-vocabulary-json site-vocabulary-cache native-notification-canvas native-notification-onboarding native-notification-settings personal-vocabulary-template native-notification-browser native-notification-main`.split(/\s+/)
 const CANONICAL_SURFACE_IDS = `app-shell welcome top-app-bar status-surface sessions-sidebar session-row terminal-node sticky-node group-node editor-node diff-node browser-node web-node video-node loop-node service-node native-loop-node nsis-node authenticator-node annotation-node dino-node subagent-node chat-panel browser-surface browser-start-page browser-extensions-panel discarded-plate wsl-dialog regex-builder anchored-regex-builder notification-center notification-toasts changelog-panel release-card local-history docs-browser docs-article appearance-editor color-field color-menu color-picker branch-select bulk-action-bar explorer-panel project-switcher ollama-manager converter-panel pty-pressure update-card resume-card announcement-banner session-memory remote-access-dialog ssh-project-dialog phone-pair-popover dictation-overlay widget-entrypoint hud-entrypoint dialog-picker-root ws-reconnect-overlay browser-bridge-stubs`.split(/\s+/)
 // Every Settings section is listed explicitly. The shared FieldRow/SettingsSection funnels cover
 // their ordinary rows, while SettingsText marks standalone inline prose and the shared primitives
@@ -294,17 +308,21 @@ if (dropSectionIndex >= 0 && scriptArgs[dropSectionIndex + 1]) {
   const index = SETTINGS_SECTION_BOUNDARY_MANIFEST.findIndex(([id]) => id === dropped)
   if (index >= 0) SETTINGS_SECTION_BOUNDARY_MANIFEST.splice(index, 1)
 }
-const CANONICAL_CANVAS_NOTIFY_CALL_IDS = `terminal-profile-create-unavailable explorer-folder-drop-stale explorer-agent-drop-missing explorer-folder-open-stale terminal-profile-restart-disabled terminal-profile-restart-failed branch-failed transfer-not-ready transfer-failed explorer-terminal-profile-unavailable project-save-busy project-save-progress project-save-success project-save-cancelled project-save-failed project-password-mismatch project-open-busy project-open-cancelled project-open-password-check project-open-success project-open-failed test-notification`.split(/\s+/)
+const CANONICAL_CANVAS_NOTIFY_CALL_IDS = `terminal-profile-create-unavailable terminal-create-placement-failed file-open-node-placement-failed working-diff-node-placement-failed commit-diff-node-placement-failed commit-explanation-node-placement-failed service-node-placement-failed sticky-node-placement-failed authenticator-node-placement-failed native-loop-node-placement-failed nsis-node-placement-failed dino-node-placement-failed web-node-placement-failed browser-node-placement-failed files-node-placement-failed catalog-node-unavailable aws-universe-create-unavailable catalog-node-placement-failed claude-account-login-node-placement-failed codex-account-login-node-placement-failed agent-node-placement-failed explorer-agent-folder-drop-stale-project explorer-agent-folder-drop-missing-source explorer-agent-folder-node-placement-failed explorer-terminal-folder-drop-stale-project explorer-terminal-folder-node-placement-failed ssh-terminal-node-placement-failed wsl-group-node-placement-failed worktree-group-node-placement-failed duplicate-node-placement-failed terminal-profile-restart-disabled terminal-profile-restart-failed conversation-branch-failed conversation-branch-node-placement-failed conversation-transfer-not-ready conversation-transfer-failed conversation-transfer-node-placement-failed reopen-last-closed-node-placement-failed board-terminal-profile-unavailable board-node-placement-failed transcript-resume-node-placement-failed canvas-control-node-placement-failed canvas-control-verify-node-placement-failed portable-media-inspection-failed project-save-busy project-save-progress project-save-success project-save-cancelled project-save-failed project-password-mismatch project-open-busy project-open-cancelled project-open-password-check project-open-success project-open-failed test-notification kiosk-pwa-node-placement-failed`.split(/\s+/)
 // Keep the expected title evidence independent from the mutable callsite count. A replacement
 // notification with the same number of arguments must not make the inventory look complete.
 const CANONICAL_CANVAS_NOTIFY_TITLE_MARKERS = [
   ['terminalProfiles.common.unavailableHereTitle', 2],
+  ['Node placement unavailable', 32],
+  ['Node unavailable', 1],
+  ['AWS Universe unavailable', 1],
   ['Folder drop cancelled', 2],
   ['Agent drop cancelled', 1],
   ['terminalProfiles.restart.failedTitle', 2],
   ['Branch failed', 1],
   ['Conversation not ready to transfer yet.', 1],
   ['Transfer failed', 1],
+  ['Media inspection failed', 1],
   ['Project save already running', 1],
   ['Saving project…', 1],
   ['Protected project saved as one file', 1],
@@ -316,6 +334,8 @@ const CANONICAL_CANVAS_NOTIFY_TITLE_MARKERS = [
   ['Project open cancelled', 1],
   ['Unlocking project file…', 1],
   ['Project opened from file', 1],
+  ['Planner definitions configured', 1],
+  ['Planner configuration failed', 1],
   ['Project open failed', 1],
   ['Test notification', 1]
 ]

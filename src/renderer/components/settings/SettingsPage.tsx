@@ -1,100 +1,178 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { useEntitlement } from '../../state/entitlement'
-import { useRegexSearchField } from '../../lib/regex/useRegexSearchField'
-import { SettingsSearchContext } from './context'
-import { SettingsSidebar } from './SettingsSidebar'
-import { FIRST_SECTION_ID, SETTINGS_SECTION_REGISTRY, type SettingsSectionId } from './nav'
-import { useEffect, useMemo } from 'react'
-import { createPortal } from 'react-dom'
-import { useEntitlement } from '../../state/entitlement'
-import { useProjects } from '../../state/projects'
-import { SettingsSearchContext } from './context'
-import { SettingsSidebar } from './SettingsSidebar'
-import { projectsSettingsGroup, type SettingsSectionId } from './nav'
-import { projectSectionId } from './project-settings-targets'
-import { useSettingsTarget } from './useSettingsTarget'
-import { ProjectSettingsSection } from './sections/ProjectSettingsSection'
-import { TerminalSection } from './sections/TerminalSection'
-import { ShellSection } from './sections/ShellSection'
-import { BehaviorSection } from './sections/BehaviorSection'
-import { AppearanceSection } from './sections/AppearanceSection'
-import { AppearanceEditorSection } from './sections/AppearanceEditorSection'
-import { AppIdentitySection } from './sections/AppIdentitySection'
-import { NotchSection } from './sections/NotchSection'
-import { PhoneSection } from './sections/PhoneSection'
-import { SpeechSection } from './sections/SpeechSection'
-import { ScheduleSection } from './sections/ScheduleSection'
-import { PlannerSection } from './sections/PlannerSection'
-import { AdhdModesSection } from './sections/AdhdModesSection'
-import { ShortcutsSection } from './sections/ShortcutsSection'
-import { AgentsSection } from './sections/AgentsSection'
-import { UsageSection } from './sections/UsageSection'
-import { AccountsSection } from './sections/AccountsSection'
-import { CustomAgentsSection } from './sections/CustomAgentsSection'
-import { NotificationsSection } from './sections/NotificationsSection'
-import { NarratorSection } from './sections/NarratorSection'
-import { CommitSection } from './sections/CommitSection'
-import { TmuxSection } from './sections/TmuxSection'
-import { WorkspaceStorageSection } from './sections/WorkspaceStorageSection'
-import { LicenseSection } from './sections/LicenseSection'
-import { PresenceIdentitySection } from './sections/PresenceIdentitySection'
-import { RemoteSection } from './sections/RemoteSection'
-import { TeamAccessSection } from './sections/TeamAccessSection'
-import { SshSection } from './sections/SshSection'
-import { UpdatesSection } from './sections/UpdatesSection'
-import { PrivacySection } from './sections/PrivacySection'
-import { DebugSection } from './sections/DebugSection'
-import { GitHubIssuesSection } from './sections/GitHubIssuesSection'
-import { LanguageSection } from './sections/LanguageSection'
-import { SchoolModeSection } from './sections/SchoolModeSection'
-import { KidsModeSection } from './sections/KidsModeSection'
-import { PersonalVocabularySection } from './sections/PersonalVocabularySection'
-import { LocalHistorySection } from './sections/LocalHistorySection'
-import { ToyLocksSection } from './sections/ToyLocksSection'
-import { AuthenticatorSection } from './sections/AuthenticatorSection'
-import { SupportTicketsSection } from './sections/SupportTicketsSection'
-import { useSchoolMode } from '../../state/schoolMode'
-import { schoolModeAllowsOptionalFeatures } from '../../lib/schoolModePolicy'
-import { useSettings } from '../../state/settings'
-import { useProjects } from '../../state/projects'
 import { Button } from '@renderer/ui/Button'
 import { SegmentedButton } from '@renderer/ui/md3'
+import { useEntitlement } from '../../state/entitlement'
+import { useProjects } from '../../state/projects'
+import { useSchoolMode } from '../../state/schoolMode'
+import { useSettings } from '../../state/settings'
 import { useLocalizedVocabularyText } from '../../lib/personalVocabulary/useLocalizedVocabularyText'
+import { useRegexSearchField, type RegexSearchFieldState } from '../../lib/regex/useRegexSearchField'
+import { schoolModeAllowsOptionalFeatures } from '../../lib/schoolModePolicy'
+import { SettingsSearchContext } from './context'
+import {
+  FIRST_SECTION_ID,
+  SETTINGS_SECTION_REGISTRY,
+  projectsSettingsGroup,
+  type SettingsSectionId
+} from './nav'
+import { parseProjectSectionId, projectSectionId } from './project-settings-targets'
+import { SettingsSidebar } from './SettingsSidebar'
+import { useSettingsTarget } from './useSettingsTarget'
+import { AccountsSection } from './sections/AccountsSection'
+import { AdhdModesSection } from './sections/AdhdModesSection'
+import { AgentsSection } from './sections/AgentsSection'
+import { AppearanceEditorSection } from './sections/AppearanceEditorSection'
+import { AppearanceSection } from './sections/AppearanceSection'
+import { AppIdentitySection } from './sections/AppIdentitySection'
+import { AuthenticatorSection } from './sections/AuthenticatorSection'
+import { BehaviorSection } from './sections/BehaviorSection'
+import { CommitSection } from './sections/CommitSection'
+import { CustomAgentsSection } from './sections/CustomAgentsSection'
+import { DebugSection } from './sections/DebugSection'
+import { GitHubIssuesSection } from './sections/GitHubIssuesSection'
+import { KidsModeSection } from './sections/KidsModeSection'
+import { LanguageSection } from './sections/LanguageSection'
+import { LicenseSection } from './sections/LicenseSection'
+import { LocalHistorySection } from './sections/LocalHistorySection'
 import { ModelGatewaySection } from './sections/ModelGatewaySection'
+import { NarratorSection } from './sections/NarratorSection'
+import { NotchSection } from './sections/NotchSection'
+import { NotificationsSection } from './sections/NotificationsSection'
+import { PersonalVocabularySection } from './sections/PersonalVocabularySection'
+import { PhoneSection } from './sections/PhoneSection'
+import { PlannerSection } from './sections/PlannerSection'
+import { PresenceIdentitySection } from './sections/PresenceIdentitySection'
+import { PrivacySection } from './sections/PrivacySection'
+import { ProjectSettingsSection } from './sections/ProjectSettingsSection'
+import { RemoteSection } from './sections/RemoteSection'
+import { ScheduleSection } from './sections/ScheduleSection'
+import { SchoolModeSection } from './sections/SchoolModeSection'
+import { ShellSection } from './sections/ShellSection'
+import { ShortcutsSection } from './sections/ShortcutsSection'
+import { SpeechSection } from './sections/SpeechSection'
+import { SshSection } from './sections/SshSection'
+import { SupportTicketsSection } from './sections/SupportTicketsSection'
+import { TeamAccessSection } from './sections/TeamAccessSection'
+import { TerminalSection } from './sections/TerminalSection'
+import { TmuxSection } from './sections/TmuxSection'
+import { ToyLocksSection } from './sections/ToyLocksSection'
+import { UpdatesSection } from './sections/UpdatesSection'
+import { UsageSection } from './sections/UsageSection'
+import { WorkspaceStorageSection } from './sections/WorkspaceStorageSection'
 
 const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
 
-export function SettingsPage({ onClose, initialSection, initialQuery, retargetNonce }: {
+export function SettingsPage({
+  onClose,
+  initialSection,
+  initialQuery,
+  retargetNonce
+}: {
   onClose: () => void
+  /** Section to open on; lets callers deep-link to the exact destination. */
   initialSection?: SettingsSectionId
+  /** Pre-fills the same full regex-capable field the sidebar renders. */
   initialQuery?: string
-/** Bumped by a caller that deep-links to a section, so a repeat of the SAME `initialSection`
-   *  still re-targets (and clears the search box). Plain opens — the gear, ⌘, , the native menu —
-   *  leave it alone: they must not throw away a query or a section the user chose in the dialog. */
+  /** A changed nonce re-targets even when the requested section id did not change. */
   retargetNonce?: number
 }): React.JSX.Element {
   const hydrate = useEntitlement((s) => s.hydrate)
+  const scope = useSettings((s) => s.scope)
+  const setScope = useSettings((s) => s.setScope)
+  const setProjectContext = useSettings((s) => s.setProjectContext)
+  const resetProjectAll = useSettings((s) => s.resetProjectAll)
+  const projectOverrides = useSettings((s) => s.projectOverrides)
 
-  // ONE list feeds both the nav rows and the panes below, so a "Projects" row can never point at a
-  // section that is not rendered (or vice versa). Memoized: `projects.filter(...)` inside a zustand
-  // selector would return a fresh array on every store snapshot and re-render the whole page.
+  // One live project list feeds both the dynamically appended nav group and its panes.
   const projects = useProjects((s) => s.projects)
-  const openProjects = useMemo(() => projects.filter((p) => !p.closed), [projects])
-  // Same list, ids only, with a stable identity — it is an effect dependency in useSettingsTarget.
-  const openProjectIds = useMemo(() => openProjects.map((p) => p.id), [openProjects])
+  const activeProjectId = useProjects((s) => s.activeProjectId)
+  const openProjects = useMemo(() => projects.filter((project) => !project.closed), [projects])
+  const openProjectIds = useMemo(() => openProjects.map((project) => project.id), [openProjects])
+  const activeProject = useMemo(
+    () => projects.find((project) => project.id === activeProjectId),
+    [activeProjectId, projects]
+  )
 
-  // Which section is shown and what is typed in the search box, plus the deep-link retarget rule
-  // and the fallback for a project section whose project has since been closed.
-  const { active, setActive, query, setQuery } = useSettingsTarget(
+  const schoolModeEnabled = useSchoolMode((s) => s.enabled)
+  const schoolModeHydrated = useSchoolMode((s) => s.hydrated)
+  const languageFeaturesAllowed = schoolModeAllowsOptionalFeatures({
+    enabled: schoolModeEnabled,
+    hydrated: schoolModeHydrated
+  })
+  const profileText = useLocalizedVocabularyText()
+
+  const { active, setActive, setQuery } = useSettingsTarget(
     initialSection,
     retargetNonce,
     openProjectIds
   )
 
+  const safeSection = useCallback(
+    (section: SettingsSectionId | undefined): SettingsSectionId => {
+      if (!section) return FIRST_SECTION_ID
+      if (!languageFeaturesAllowed && (section === 'language' || section === 'vocabulary')) {
+        return 'school-mode'
+      }
+      if (SETTINGS_SECTION_REGISTRY.some((entry) => entry.id === section)) return section
+      const projectId = parseProjectSectionId(section)
+      return projectId !== null && openProjectIds.includes(projectId) ? section : FIRST_SECTION_ID
+    },
+    [languageFeaturesAllowed, openProjectIds]
+  )
+
+  // useSettingsTarget owns deep-link retargeting while this hook owns the full text/regex field.
+  // Mirror its plain query only as a retarget signal, so a changed nonce clears text and regex
+  // state without replacing the anchored builder with the older plain-text-only field.
+  const rawSearch = useRegexSearchField({ query: initialQuery })
+  const search = useMemo<RegexSearchFieldState>(
+    () => ({
+      ...rawSearch,
+      setValue: (value) => {
+        rawSearch.setValue(value)
+        setQuery(value)
+      },
+      reset: () => {
+        rawSearch.reset()
+        setQuery('')
+      }
+    }),
+    [rawSearch, setQuery]
+  )
+  const searchState = useMemo(
+    () => ({ mode: search.mode, query: search.query, pattern: search.pattern, flags: search.flags }),
+    [search.flags, search.mode, search.pattern, search.query]
+  )
+  const seededTargetQuery = useRef(false)
+  const previousRetarget = useRef({ initialSection, retargetNonce })
+
+  useEffect(() => {
+    if (seededTargetQuery.current) return
+    seededTargetQuery.current = true
+    if (initialQuery) setQuery(initialQuery)
+  }, [initialQuery, setQuery])
+
+  useEffect(() => {
+    const previous = previousRetarget.current
+    if (
+      previous.initialSection === initialSection &&
+      previous.retargetNonce === retargetNonce
+    ) {
+      return
+    }
+    previousRetarget.current = { initialSection, retargetNonce }
+    rawSearch.reset()
+    setQuery('')
+  }, [initialSection, rawSearch.reset, retargetNonce, setQuery])
+
   const extraGroups = useMemo(() => {
     const group = projectsSettingsGroup(
-      openProjects.map((p) => ({ id: p.id, name: p.name, color: p.color, icon: p.icon }))
+      openProjects.map((project) => ({
+        id: project.id,
+        name: project.name,
+        color: project.color,
+        icon: project.icon
+      }))
     )
     return group ? [group] : []
   }, [openProjects])
@@ -107,20 +185,14 @@ export function SettingsPage({ onClose, initialSection, initialQuery, retargetNo
     setProjectContext(activeProjectId, activeProject?.settingsOverrides)
   }, [activeProjectId, activeProject?.settingsOverrides, setProjectContext])
 
-  // Re-target when a caller opens settings to a specific section.
   useEffect(() => {
-    if (initialSection) setActive(safeSection(initialSection))
-  }, [initialSection, languageFeaturesAllowed])
-
-  // A shared record can turn on in another app while this window is looking at Language. Remove
-  // the controls immediately and land on the mode that explains why they disappeared.
-  useEffect(() => {
-    if (!languageFeaturesAllowed && active === 'language') setActive('school-mode')
-  }, [active, languageFeaturesAllowed])
+    const next = safeSection(active)
+    if (next !== active) setActive(next)
+  }, [active, safeSection, setActive])
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -142,31 +214,43 @@ export function SettingsPage({ onClose, initialSection, initialQuery, retargetNo
       <SettingsSearchContext.Provider value={searchState}>
         <main className="min-w-0 flex-1 overflow-y-auto px-12 py-10">
           <div className="mx-auto max-w-[860px] space-y-10">
-            <section className="rounded-[20px] border border-outline/30 bg-surface-container p-4" aria-label={profileText('settings.scope.ariaLabel', 'Settings scope')}>
+            <section
+              className="rounded-[20px] border border-outline/30 bg-surface-container p-4"
+              aria-label={profileText('settings.scope.ariaLabel', 'Settings scope')}
+            >
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h2 className="text-base font-semibold">{profileText('settings.scope.title', 'Settings mode')}</h2>
+                  <h2 className="text-base font-semibold">
+                    {profileText('settings.scope.title', 'Settings mode')}
+                  </h2>
                   <p className="mt-1 text-sm text-text-muted">
                     {profileText(
                       'settings.scope.description',
                       'Global mode stores durable app-wide defaults. Project mode edits a complete sparse overlay for {project}; every unset value inherits Global mode.',
-                      { project: activeProject?.name ?? profileText('settings.scope.activeProject', 'the active project') }
+                      {
+                        project:
+                          activeProject?.name ??
+                          profileText('settings.scope.activeProject', 'the active project')
+                      }
                     )}
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
-                  {/* A segmented button, not two plain buttons: this is one choice between two
-                      mutually exclusive modes, which is exactly the MD3 control for it. The old
-                      pair carried `aria-pressed` with no visual for it, so neither button looked
-                      selected and the panel could not tell you which mode you were editing. */}
                   <SegmentedButton
                     value={scope}
                     vocabularyMode="factual"
                     ariaLabel={profileText('settings.scope.chooseMode', 'Choose settings mode')}
-                    onChange={(next) => setScope(next)}
+                    onChange={setScope}
                     options={[
-                      { value: 'global', label: profileText('settings.scope.global', 'Global mode') },
-                      { value: 'project', label: profileText('settings.scope.project', 'Project mode'), disabled: !activeProjectId }
+                      {
+                        value: 'global',
+                        label: profileText('settings.scope.global', 'Global mode')
+                      },
+                      {
+                        value: 'project',
+                        label: profileText('settings.scope.project', 'Project mode'),
+                        disabled: !activeProjectId
+                      }
                     ]}
                   />
                   {scope === 'project' ? (
@@ -183,7 +267,10 @@ export function SettingsPage({ onClose, initialSection, initialQuery, retargetNo
               </div>
               <p className="mt-3 text-xs text-text-muted" role="status">
                 {scope === 'global'
-                  ? profileText('settings.scope.globalStatus', 'Editing Global defaults. Projects with overrides keep them.')
+                  ? profileText(
+                      'settings.scope.globalStatus',
+                      'Editing Global defaults. Projects with overrides keep them.'
+                    )
                   : profileText(
                       'settings.scope.projectStatus',
                       '{count} project override{plural} active. All other values show their inherited Global value.',
@@ -194,20 +281,20 @@ export function SettingsPage({ onClose, initialSection, initialQuery, retargetNo
                     )}
               </p>
             </section>
+
             <TerminalSection isActive={active === 'terminal'} />
             <ShellSection isActive={active === 'shell'} />
             <BehaviorSection isActive={active === 'behavior'} />
             <AppearanceSection isActive={active === 'appearance'} />
             <AppearanceEditorSection isActive={active === 'appearance-editor'} />
             <AppIdentitySection isActive={active === 'app-identity'} />
-            {isMac && <NotchSection isActive={active === 'notch'} />}
+            {isMac ? <NotchSection isActive={active === 'notch'} /> : null}
             <PhoneSection isActive={active === 'phone'} />
-            <SpeechSection isActive={active === 'speech'} />
-            {languageFeaturesAllowed && <LanguageSection isActive={active === 'language'} />}
+            <SpeechSection isActive={active === 'speech'} onNavigate={setActive} />
+            {languageFeaturesAllowed ? <LanguageSection isActive={active === 'language'} /> : null}
             <ScheduleSection isActive={active === 'schedule'} />
             <PlannerSection isActive={active === 'planner'} />
             <AdhdModesSection isActive={active === 'adhd-modes'} />
-            <SpeechSection isActive={active === 'speech'} onNavigate={setActive} />
             <ShortcutsSection isActive={active === 'shortcuts'} />
             <AgentsSection isActive={active === 'agents'} />
             <UsageSection isActive={active === 'usage'} />
@@ -229,17 +316,19 @@ export function SettingsPage({ onClose, initialSection, initialQuery, retargetNo
             <PrivacySection isActive={active === 'privacy'} />
             <SchoolModeSection isActive={active === 'school-mode'} />
             <KidsModeSection isActive={active === 'kids-mode'} />
-            <PersonalVocabularySection isActive={active === 'vocabulary'} />
+            {languageFeaturesAllowed ? (
+              <PersonalVocabularySection isActive={active === 'vocabulary'} />
+            ) : null}
             <LocalHistorySection isActive={active === 'history'} />
             <ToyLocksSection isActive={active === 'toylocks'} />
             <AuthenticatorSection isActive={active === 'authenticator'} />
             <SupportTicketsSection isActive={active === 'support'} />
             <DebugSection isActive={active === 'debug'} />
-            {openProjects.map((p) => (
+            {openProjects.map((project) => (
               <ProjectSettingsSection
-                key={p.id}
-                projectId={p.id}
-                isActive={active === projectSectionId(p.id)}
+                key={project.id}
+                projectId={project.id}
+                isActive={active === projectSectionId(project.id)}
               />
             ))}
           </div>

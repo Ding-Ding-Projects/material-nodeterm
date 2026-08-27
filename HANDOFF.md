@@ -1,5 +1,33 @@
 # Handoff
 
+## 2026-08-27, personal-vocabulary contract recovery
+
+The merge recovery had combined several complete producer lanes into
+`scripts/check-personal-vocabulary-coverage.mjs` while retaining an older independent canonical
+manifest. The resulting array held duplicate producer identifiers and omitted 19 rows that were
+already documented in `docs/features/appearance/material-3-audit.md`. The source and canonical
+manifests now contain the same 145 unique identifiers in the same order. The documentary source
+markers were refreshed where later typed-copy helpers replaced their older callsite shapes.
+
+The settings shell also retained half of two implementations. `SettingsPage.tsx` now owns one
+coherent search, navigation, project-scope, School-mode, and local-vocabulary boundary;
+`SettingsSidebar.tsx` keeps its shared registry and project-icon route; and `SpeechSection.tsx`
+keeps one free-model, explicit-off, central-shortcut implementation with mapped authored copy.
+Canvas project export keeps one cancellation path and one failure path, and every retained direct
+notification declares title and body ownership without changing external facts. The independent
+Canvas list names 57 checker-retained calls in source order; the two planner notifications nested in
+the project-open action keep their own explicit ownership fields.
+
+Changed files are `scripts/check-personal-vocabulary-coverage.mjs`,
+`docs/features/appearance/material-3-audit.md`, `src/renderer/canvas/Canvas.tsx`,
+`src/renderer/components/settings/SettingsPage.tsx`,
+`src/renderer/components/settings/SettingsSidebar.tsx`,
+`src/renderer/components/settings/sections/SpeechSection.tsx`, `CHANGELOG.md`, `ROADMAP.md`, and
+this handoff. `node --check scripts/check-personal-vocabulary-coverage.mjs` passed. No test,
+type-check, lint, review, audit, runtime-interaction, packaging, or screen-capture workflow was run
+in this ultra-speed lane. The parent integration lane must rerun the supported build from the final
+combined commit before treating the prior build blocker as resolved.
+
 ## 2026-08-27, Squirrel packaging asynchronous exit repair
 
 The Windows packaging wrapper now keeps its top-level asynchronous entrypoint alive until every

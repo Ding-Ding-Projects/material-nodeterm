@@ -259,7 +259,7 @@ The remaining source-only caveat is visual confirmation. The desktop package mus
 
 ## Personal vocabulary producer inventory
 
-Every listed renderer producer has an explicit local mapper boundary. Commands, paths, identifiers, external records, filenames, hashes, provider values, and user-supplied values remain outside the boundary. The inventory is hand-written and checked by `scripts/check-personal-vocabulary-coverage.mjs`.
+Every listed renderer producer has an explicit local mapper boundary. Commands, paths, identifiers, external records, filenames, hashes, provider values, and user-supplied values remain outside the boundary. The inventory is hand-written and checked by `scripts/check-personal-vocabulary-coverage.mjs`. Its producer array and independent canonical manifest now contain the same 145 unique identifiers in the same order, so a duplicate row or an undocumented merge remnant cannot satisfy the completeness check.
 
 | Producer | Surface | Source | Required boundary |
 | --- | --- | --- | --- |
@@ -369,20 +369,20 @@ Every listed renderer producer has an explicit local mapper boundary. Commands, 
 | `color-field` | Colour field | `src/renderer/components/color/ColorField.tsx` | `useVocabularyMapper()` |
 | `color-picker` | Colour picker | `src/renderer/components/color/ColorPicker.tsx` | `useVocabularyMapper()` |
 | `bulk-preview-segments` | Bulk preview typed copy and count fields | `src/renderer/components/BulkActionPreview.tsx` | `messageSegments={messageSegments}` |
-| `bulk-preview-single-title-map` | Bulk preview action-label boundary | `src/renderer/components/BulkActionBar.tsx` | `title={vocab(pending.label)}` |
+| `bulk-preview-single-title-map` | Bulk preview action-label boundary | `src/renderer/components/BulkActionBar.tsx` | `titleSegments={[copy(pending.label)]}` |
 | `project-storage-segments` | Project storage confirmation facts | `src/renderer/components/ProjectSwitcher.tsx` | `messageSegments={` |
-| `project-other-unread-fact` | Other-project unread count fact | `src/renderer/components/ProjectSwitcher.tsx` | `mapOwnedSentence(vocab, [fact(String(otherUnread))` |
+| `project-other-unread-fact` | Other-project unread count fact | `src/renderer/components/ProjectSwitcher.tsx` | `unreadCountSegments(otherUnread, ' unread in other projects')` |
 | `converter-detection-note-fact` | Converter detection note fact | `src/renderer/components/converter/FileConverterPanel.tsx` | `f.detection.note` |
-| `converter-adapter-id-corpus` | Adapter id search corpus | `src/renderer/components/converter/AdapterCatalog.tsx` | `row.id} ${row.label}` |
-| `ollama-staleness-segments` | Model catalogue staleness facts | `src/renderer/components/ollama/OllamaManagerPanel.tsx` | `mapOwnedSentence(vocab, staleness)` |
-| `ollama-completeness-segments` | Model catalogue completeness facts | `src/renderer/components/ollama/OllamaManagerPanel.tsx` | `catalogHeadlineText(vocab, catalog)` |
+| `converter-adapter-id-corpus` | Adapter id search corpus | `src/renderer/components/converter/AdapterCatalog.tsx` | `adapterSearchCorpus(` |
+| `ollama-staleness-segments` | Model catalogue staleness facts | `src/renderer/components/ollama/OllamaManagerPanel.tsx` | `catalogStalenessSegments(` |
+| `ollama-completeness-segments` | Model catalogue completeness facts | `src/renderer/components/ollama/OllamaManagerPanel.tsx` | `catalogHeadlineText(` |
 | `ollama-completeness-reason-fact` | Model catalogue reason facts | `src/renderer/components/ollama/OllamaManagerPanel.tsx` | `mapOwnedSentence(vocab, [fact(reason)]` |
-| `ollama-queue-phase-fact` | Pull queue phase ownership | `src/renderer/components/ollama/OllamaManagerPanel.tsx` | `item.digestPhase ?? vocab(item.status)` |
+| `ollama-queue-phase-fact` | Pull queue phase ownership | `src/renderer/components/ollama/OllamaManagerPanel.tsx` | `item.digestPhase ??` |
 | `ollama-fit-evidence-fact` | Hardware fit evidence ownership | `src/renderer/components/ollama/OllamaManagerPanel.tsx` | `vocab('Evidence:')` |
 | `appearance-weight-segments` | Font weight copy and numeric facts | `src/renderer/components/appearance/AppearanceEditor.tsx` | `w.label.indexOf` |
 | `appearance-font-preview-fact` | Font preview name ownership | `src/renderer/components/appearance/AppearanceEditor.tsx` | `quoteFamily(primary ||` |
-| `docs-section-copy` | Documentation section metadata | `src/renderer/components/DocsBrowser.tsx` | `vocab(section.label)` |
-| `history-restore-segments` | History restore target ownership | `src/renderer/components/LocalHistoryPanel.tsx` | `messageSegments={[` |
+| `docs-section-copy` | Documentation section metadata | `src/renderer/components/DocsBrowser.tsx` | `vocab(section.label` |
+| `history-restore-segments` | History restore target ownership | `src/renderer/components/LocalHistoryPanel.tsx` | `messageSegments={historyRestoreMessageSegments(` |
 | `converter-upload-limit` | Converter upload limit message | `src/renderer/components/converter/FileConverterPanel.tsx` | `mapLocalVocabularyText(` |
 | `minecraft-backups` | Minecraft backups | `src/renderer/components/minecraft/MinecraftBackupsPanel.tsx` | `useVocabularyMapper()` |
 | `minecraft-players` | Minecraft players | `src/renderer/components/minecraft/MinecraftPlayersPanel.tsx` | `useVocabularyMapper()` |
@@ -496,7 +496,10 @@ landing-page JSON/cache validators. The site renderer also has an independent pe
 manifest with file-backed removal mutations. Runtime facts such as paths, IDs, model names,
 provider errors, visible commands, brand names, license text, and shortcut text remain outside the
 authored-copy mapper. Canvas notifications classify every direct body as authored or fact, and the
-landing-page file reader keeps rejected reads visible instead of treating them as successful input.
+hand-written Canvas inventory now names 57 checker-retained production calls in source order. Two
+planner notifications are nested inside the project-open success action and remain explicitly
+classified in source. The landing-page file reader keeps rejected reads visible instead of
+treating them as successful input.
 The per-string checker parses the arguments of each copy call, while the delegated file-change
 tests exercise size rejection, read failure, picker reset, valid binding, and the resulting render.
 

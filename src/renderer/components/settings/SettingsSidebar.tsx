@@ -8,6 +8,7 @@ import { useSchoolMode } from '../../state/schoolMode'
 
 import { matchesEntry } from './search'
 import { SectionIcon } from './SettingsIcons'
+import { ProjectGlyph } from '../ProjectGlyph'
 import { settingsSidebarSearchEntry } from './vocabulary'
 import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 import { useMemo } from 'react'
@@ -19,7 +20,6 @@ export function SettingsSidebar({
   activeSectionId,
   search,
   onSelect,
-  onQueryChange,
   onClose,
   extraGroups
 }: {
