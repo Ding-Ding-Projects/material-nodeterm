@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add viewport-relative canvas zones and named saved layouts. Nodes can preview and snap into half,
+  third, or quarter regions while dragging, and a saved arrangement restores portable geometry and
+  the camera without carrying sessions, credentials, process state, or machine paths. This
+  ultra-speed lane intentionally did not run tests, type checks, lint, reviews, security or
+  accessibility checks, builds, packaging, installer execution, runtime interaction, or captures.
 - Add opt-in Claude account rotation for new default sessions. When the selected account reaches the
   configured usage threshold, the launch funnel chooses the configured account with the most
   headroom, preserves explicit account picks and running sessions, and fails safe when usage is

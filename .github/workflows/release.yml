@@ -188,8 +188,8 @@ jobs:
       # picking one up from the runner's own certificate store. package.json's root
       # `build.forceCodeSigning: false`, `build.win.forceCodeSigning: false`, and
       # `build.win.signExecutable: false` prevent signing,
-      # while `build.win.signAndEditExecutable` stays at its default `true` so PE icon and
-      # version resources are still written. The next step independently verifies the produced
+      # while the omitted `build.win.signAndEditExecutable` uses electron-builder's default
+      # `true` so PE icon and version resources are still written. The next step independently verifies the produced
       # installer's real Authenticode signature and fails if it is somehow signed.
       - name: Package Windows installer (Squirrel, unsigned)
         id: package
