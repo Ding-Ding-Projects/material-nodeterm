@@ -50,7 +50,6 @@ const logBuffer = new LogBuffer()
 installLogSink(logBuffer)
 import { writeFilesToClipboard } from './clipboard-files'
 import { NodeTermBrowserUseBackend } from './browser-use-backend'
-import { matchesShortcut } from '../shared/shortcut'
 import { registerFsHandlers } from '../core/fs-handlers'
 import { TrackpadGestureLedger } from './trackpad-gesture'
 import { registerConverterIpc } from '../core/converter/register-ipc'
@@ -205,7 +204,6 @@ import {
   isValidPendingId,
   syntheticAnsweredEvent
 } from '../core/agents/pending-approvals'
-import { setMainWindow, getMainWindow, sendToMain, shouldHideOnClose, createCrashReloadPolicy } from './main-window'
 import { setMainWindow, getMainWindow, sendToMain, closeAction, createCrashReloadPolicy } from './main-window'
 import {
   MENU_ITEM_ID_CLOSE,
@@ -435,10 +433,6 @@ if (NT_MULTI && process.platform === 'darwin') app.commandLine.appendSwitch('use
 // configured package id and executable name, so derive the runtime value from the same build
 // metadata instead of maintaining a second literal that can drift from installed shortcuts.
 applyWindowsSquirrelAppUserModelId(process.platform, app)
-
-// Platform-abstracted primary modifier target for shortcut matching in the main process
-// (⌘ on mac, Ctrl elsewhere) — mirrors the renderer's `isMac` reader.
-const isMacMain = process.platform === 'darwin'
 
 // First thing in bootstrap: install the Electron CorePlatform so anything in src/core
 // (wired in later tasks) can resolve platform() at boot. Placed after the NT_MULTI
@@ -1352,52 +1346,10 @@ function createWindow(): BrowserWindow {
     }
   })
 
-  // Steal ⌘M / ⌘W / ⌘0 back from Electron's default application menu (minimize / close /
-  // resetZoom) and forward each to the renderer instead.
-  //
-  // ⌘M (markdown-view toggle) and ⌘W (close selected node) are read from settings.shortcuts
-  // (Settings → Shortcuts) via `matchesShortcut`, so a rebind is honoured here too — this is the
-  // inline handler `feat(settings): configurable keyboard shortcuts` introduced, kept here rather
-  // than folded into `keydown-intercept.ts`'s pure `keydownIntercept` (which predates the
-  // Shortcuts section and pins a deliberately BROADER match — any Cmd/Ctrl+M regardless of
-  // Shift/Alt — as a fixed, non-configurable menu-accelerator steal; narrowing that match to the
-  // exact configured combo is the whole point of making it reconfigurable, so the two cannot
-  // share one decision function without re-litigating that pin). ⌘0 (zoom-actual-size) is NOT
-  // part of the shortcuts registry — it is matched on the physical `code` like the renderer's
-  // `zoomShortcutChord`, unrelated to this feature — so it keeps the same fixed check
-  // `keydown-intercept.ts` uses.
-  win.webContents.on('before-input-event', (event, input) => {
-    if (input.type !== 'keyDown') return
-    const shortcuts = settingsStore.get().shortcuts
-    const evt = {
-      metaKey: input.meta,
-      ctrlKey: input.control,
-      shiftKey: input.shift,
-      altKey: input.alt,
-      key: input.key
-    }
-    if (matchesShortcut(evt, shortcuts.toggleMarkdown, isMacMain)) {
-      event.preventDefault()
-      win.webContents.send(IPC.appToggleMarkdown)
-    } else if (matchesShortcut(evt, shortcuts.closeNode, isMacMain)) {
-      // Repurpose Cmd/Ctrl+W: the renderer closes the selected node(s); if none are
-      // selected it asks us to close the window (the standard behavior).
-      event.preventDefault()
-      win.webContents.send(IPC.appCloseNode)
-    } else if ((input.meta || input.control) && input.code === 'Digit0' && !input.shift && !input.alt) {
-      // Matched on the physical `code`, like `keydown-intercept.ts`'s `keydownIntercept`: on a
-      // non-US layout the zero key's `key` is not necessarily "0". Auto-repeat is still
-      // swallowed (so a held chord doesn't restart the renderer's 200ms zoom tween) but not
-      // forwarded again.
-      event.preventDefault()
-      if (!input.isAutoRepeat) win.webContents.send(IPC.appZoomActualSize)
-    }
-  // resetZoom) and forward each to the renderer instead. The decision — and, importantly, what it
-  // must REFUSE — is in `keydown-intercept.ts`, where it can be pressed by a test. The first two
-  // are the user's effective `node.toggleMarkdown` / `node.close` bindings (⌘0 is not remappable).
-  // The two suspensions are separate thunks on purpose (see `installKeydownIntercepts`): the
-  // recorder suspends ALWAYS, the policy only while the mirror says a terminal has focus. Both are
-  // read per keystroke — the settings memo and the mirror both change under a live window.
+  // One before-input-event registration owns shortcut interception. The helper reads the current
+  // configurable bindings for every keystroke, applies the recorder and terminal-policy stand-downs,
+  // and keeps the fixed physical-code zoom behavior. Keeping this seam in one helper prevents an
+  // obsolete inline handler from competing with the current refusal and recording rules.
   installKeydownIntercepts(
     win,
     currentInterceptBindings,
