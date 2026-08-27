@@ -31,6 +31,7 @@ import { sshExtraArgsEnableLocalExec } from './ssh'
 import type { AgentLaunchIntent, CanvasNodeState, PendingLaunch } from './types'
 import type { NsisLocalPaths } from './nsis-form-types'
 import { normalizeVirtualMachineLocalPaths, safeVirtualMachinePath, type VirtualMachineLocalPaths } from './virtual-machine'
+import { normalizeAwsIdentityBinding, type AwsIdentityBinding } from './aws-identity'
 
 /** Per-node exec values the LOCAL machine typed. Persisted only in the machine-local index. */
 export interface LocalNodeExec {
@@ -64,6 +65,8 @@ export interface LocalNodeExec {
    * endpoint with a password embedded in it is refused rather than stored.
    */
   serviceConnection?: ServiceConnection
+  /** Local AWS profile, region and endpoint binding. Contains no credential bytes. */
+  awsIdentityBinding?: AwsIdentityBinding
   /**
    * `NodeState.nsisLocalPaths` — the NSIS installer-builder node's source/license/icon paths on
    * this machine. Belongs on this boundary for the same reason `serviceConnection` does: it is
@@ -383,6 +386,7 @@ function stripNodeExec(n: CanvasNodeState): CanvasNodeState {
     withoutMediaPaths.namedTerminalProfileId === undefined &&
     withoutMediaPaths.pendingLaunch === undefined &&
     withoutMediaPaths.serviceConnection === undefined &&
+    withoutMediaPaths.awsIdentityBinding === undefined &&
     withoutMediaPaths.nsisLocalPaths === undefined &&
     withoutMediaPaths.virtualMachineLocalPaths === undefined &&
     withoutMediaPaths.ssh?.extraArgs === undefined &&
@@ -397,6 +401,7 @@ function stripNodeExec(n: CanvasNodeState): CanvasNodeState {
   if (namedProfileHasLocalCwd) delete out.cwd
   delete out.pendingLaunch
   delete out.serviceConnection
+  delete out.awsIdentityBinding
   delete out.nsisLocalPaths
   delete out.virtualMachineLocalPaths
   if (out.ssh) {
@@ -486,6 +491,7 @@ export function carryLocalNodeExec(
   const pendingLaunch = next.kind === 'terminal' ? clonePendingLaunch(prev.pendingLaunch) : undefined
   const nsisPaths = safeNsisLocalPaths(prev.nsisLocalPaths)
   const vmPaths = normalizeVirtualMachineLocalPaths(prev.virtualMachineLocalPaths)
+  const awsIdentityBinding = normalizeAwsIdentityBinding(prev.awsIdentityBinding)
   const mediaFilePath = safePathString(prev.filePath) ? prev.filePath : undefined
   const mediaSourcePaths = localMediaSourcePaths(prev)
   if (
@@ -495,6 +501,7 @@ export function carryLocalNodeExec(
     extraArgs === undefined &&
     pendingLaunch === undefined &&
     nsisPaths === undefined &&
+    awsIdentityBinding === null &&
     Object.keys(vmPaths).length === 0 &&
     mediaFilePath === undefined &&
     mediaSourcePaths === undefined
@@ -510,6 +517,7 @@ export function carryLocalNodeExec(
   if (pendingLaunch !== undefined) out.pendingLaunch = pendingLaunch
   if (nsisPaths !== undefined) out.nsisLocalPaths = nsisPaths
   if (Object.keys(vmPaths).length > 0) out.virtualMachineLocalPaths = vmPaths
+  if (awsIdentityBinding) out.awsIdentityBinding = awsIdentityBinding
   return restoreMediaPaths(out, { mediaFilePath, mediaSourcePaths })
 }
 
@@ -558,6 +566,8 @@ export function localNodeExec(nodes: CanvasNodeState[]): LocalNodeExecMap | unde
     // endpoint into the trusted store — the exact laundering `sanitizeInboundNode` exists to stop.
     const conn = safeServiceConnection(n.serviceConnection)
     if (conn) entry.serviceConnection = conn
+    const awsIdentityBinding = normalizeAwsIdentityBinding(n.awsIdentityBinding)
+    if (awsIdentityBinding) entry.awsIdentityBinding = awsIdentityBinding
     const nsisPaths = safeNsisLocalPaths(n.nsisLocalPaths)
     if (nsisPaths) entry.nsisLocalPaths = nsisPaths
     const vmPaths = normalizeVirtualMachineLocalPaths(n.virtualMachineLocalPaths)
@@ -577,6 +587,7 @@ export function localNodeExec(nodes: CanvasNodeState[]): LocalNodeExecMap | unde
       entry.sshExtraArgs ||
       entry.pendingLaunch ||
       entry.serviceConnection ||
+      entry.awsIdentityBinding ||
       entry.nsisLocalPaths ||
       entry.virtualMachineLocalPaths ||
       entry.mediaFilePath ||
@@ -619,6 +630,8 @@ export function applyLocalNodeExec(
     // that would be refused today must not be honoured merely because it is already on disk.
     const conn = safeServiceConnection(mine?.serviceConnection)
     if (conn) out.serviceConnection = conn
+    const awsIdentityBinding = normalizeAwsIdentityBinding(mine?.awsIdentityBinding)
+    if (awsIdentityBinding) out.awsIdentityBinding = awsIdentityBinding
     const nsisPaths = safeNsisLocalPaths(mine?.nsisLocalPaths)
     if (nsisPaths) out.nsisLocalPaths = nsisPaths
     const vmPaths = normalizeVirtualMachineLocalPaths(mine?.virtualMachineLocalPaths)

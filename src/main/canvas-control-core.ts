@@ -371,7 +371,7 @@ export function buildCanvasControlInstructions(shimPath: string): string {
     '  hands its worktree path down as the cwd. `--after <id,id>` opens the node ARMED: it does not',
     '  start until every listed station has gone idle, and is context-linked to them so it can read',
     '  their work when it wakes — use it for "B needs what A produced" instead of polling. Only',
-    '  status-reporting agent nodes (claude/codex/gemini) may be waited on; a plain terminal never',
+    '  status-reporting agent nodes (claude/codex/gemini/opencode/grok/copilot/devin) may be waited on; a plain terminal never',
     '  reports finishing, so waiting on one is refused.',
     '  `--resume` opens exactly one existing session through the agent\'s native resume command.',
     '  RESTORE RULE: when an existing session id is known, you MUST pass it with `--resume`.',

@@ -44,6 +44,8 @@ import {
 import { solveFitPadding } from './fit-view'
 import { paneMenuGroup } from './paneMenuGroup'
 import { MacWheelGestureRouter, trackpadRoutingEnabled } from './wheel-gesture'
+import { WheelZoomBurstLimiter, clampWheelZoomSpeed, nextWheelZoom } from './wheel-zoom'
+import { isBrowserRuntime } from '@renderer/bridge/runtime'
 import { selectedLocalFilePaths } from './canvas-file-copy'
 import { codexAccountSwitchStillEligible } from './codex-account-switch'
 import {
@@ -62,6 +64,11 @@ import {
   readAuthenticatorDrag,
   readExplorerFolderDrag
 } from '../lib/explorerNodeDrag'
+import {
+  AGENT_COLLABORATION_MODE_EVENT,
+  AGENT_COLLABORATION_PICK_EVENT,
+  canLinkAgentPair
+} from '../lib/agentCollaborationDrag'
 import {
   SharedGlyphLayer,
   flushOpaqueNodeIds,
@@ -106,6 +113,8 @@ import type { ProjectIcon } from '@shared/project-icon'
 import type { PortableDoorConstructionV3 } from '@shared/door-construction'
 import BrowserNode from '../nodes/BrowserNode'
 import { ServiceNode } from '../nodes/ServiceNode'
+import GitLabHostingNode from '../nodes/GitLabHostingNode'
+import CloudflareCoreManagersNode from '../nodes/CloudflareCoreManagersNode'
 import VirtualMachineNode from '../nodes/VirtualMachineNode'
 import NsisInstallerNode from '../nodes/NsisInstallerNode'
 import ShopNode from '../nodes/ShopNode'
@@ -117,6 +126,7 @@ import PhotoNode from '../nodes/PhotoNode'
 import GalleryNode from '../nodes/GalleryNode'
 import WildDimSumNode from '../nodes/WildDimSumNode'
 import WebNode from '../nodes/WebNode'
+import AwsResourceNode from '../nodes/AwsResourceNode'
 import { NativeLoopNode, setNativeLoopRunHandler } from '../nodes/NativeLoopNode'
 import TimerNode from '../nodes/TimerNode'
 import AlarmClockNode from '../nodes/AlarmClockNode'
@@ -159,9 +169,11 @@ import {
   NODE_CATALOG,
   nodeCatalogAvailability,
   newCreationEventId,
+  type NodeCatalogAvailabilityContext,
   type NodeCatalogEntry
 } from '@shared/node-catalog'
 import { NodeCreationCoordinator } from '../state/nodeCreationCoordinator'
+import { setUniverseShopCatalogRuntime } from '../state/universeShopCatalogProvider'
 import {
   IconAgent,
   IconAnnotationArea,
@@ -501,6 +513,9 @@ import { useTeamAccessEvents } from '../state/teamAccess'
 import { useAgentNodes } from '../state/agentNodes'
 import { SubagentNode } from '../nodes/SubagentNode'
 import { LoopNode } from '../nodes/LoopNode'
+import { XProjectNode } from '../nodes/XProjectNode'
+import { setTravelNodeHandler } from '../nodes/travel-handler'
+import { resolveForeignNodeProjections } from '../lib/foreignNodeProjection'
 import type { NormalizedAgentEvent } from '@shared/agents/normalize'
 import {
   computeWorktreePath,
@@ -725,6 +740,8 @@ import {
   createTerminalNode,
   nodeSshFor,
   createServiceNode,
+  createGitLabHostingNode,
+  createCloudflareCoreManagersNode,
   createVirtualMachineNode,
   SERVICE_NODE_LABELS,
   createVideoNode,
@@ -732,6 +749,7 @@ import {
   createGalleryNode,
   createWildDimSumNode,
   createWebNode,
+  createAwsResourceNode,
   isVideoFile,
   duplicateNode,
   flowToNodeStates,
@@ -1250,6 +1268,9 @@ export function Canvas() {
   const [controlEdges, setControlEdges] = useState<Edge[]>([])
   const controlEdgesRef = useRef<Edge[]>([])
   controlEdgesRef.current = controlEdges
+  // Foreign projections are derived viewers. Their drag positions are session-local and never
+  // enter either project's serialized node list.
+  const [xprojPositions, setXprojPositions] = useState<Record<string, { x: number; y: number }>>({})
   const [dirty, setDirty] = useState(false)
   // Bumped only when a save finished with `dirty` still set (an edit raced it). It exists purely to
   // give the debounced-autosave effect a dependency that CHANGES in that case — `dirty` stays true
@@ -1468,6 +1489,7 @@ export function Canvas() {
   }, [])
   const [explorerAgentNodeId, setExplorerAgentNodeId] = useState<string | null>(null)
   const [explorerFolderDropActive, setExplorerFolderDropActive] = useState(false)
+  const [agentCollaborationSourceId, setAgentCollaborationSourceId] = useState<string | null>(null)
   useEffect(() => {
     if (!explorerOpen) setExplorerAgentNodeId(null)
   }, [explorerOpen])
@@ -2072,6 +2094,7 @@ export function Canvas() {
       diff: withNodeBoundary(LazyDiffNode),
       subagent: withNodeBoundary(SubagentNode),
       loop: withNodeBoundary(LoopNode),
+      xproject: withNodeBoundary(XProjectNode),
       scheduler: withNodeBoundary(NativeLoopNode),
       timer: withNodeBoundary(TimerNode),
       alarm: withNodeBoundary(AlarmClockNode),
@@ -2096,7 +2119,14 @@ export function Canvas() {
       gitlab: withNodeBoundary(ServiceNode),
       homeassistant: withNodeBoundary(ServiceNode),
       freepbx: withNodeBoundary(ServiceNode),
-      'linux-vm': withNodeBoundary(VirtualMachineNode)
+      'linux-vm': withNodeBoundary(VirtualMachineNode),
+      awsidentity: withNodeBoundary(ServiceNode),
+      'gitlab-hosting': withNodeBoundary(GitLabHostingNode),
+      'cloudflare-zero-trust': withNodeBoundary(ServiceNode),
+      'nextcloud-aio': withNodeBoundary(ServiceNode),
+      'cloudflare-core-managers': withNodeBoundary(CloudflareCoreManagersNode),
+      'linux-vm': withNodeBoundary(VirtualMachineNode),
+      'aws-resource': withNodeBoundary(AwsResourceNode)
     }),
     []
   )
@@ -2107,6 +2137,7 @@ export function Canvas() {
   const ephemeralPos = useAgentNodes((s) => s.positions)
   const ephSizes = useAgentNodes((s) => s.sizes)
   const ephExpanded = useAgentNodes((s) => s.expanded)
+  const projectCatalog = useProjects((s) => s.projects)
   // Deliberately NOT `useAgentStatus((s) => s.byId)`: that map's identity changes on every
   // working/waiting flip of any agent node, which re-rendered the whole canvas per hook event.
   // Canvas only needs the /loop entries (for the ephemeral LoopNodes), so subscribe to a
@@ -2291,7 +2322,10 @@ export function Canvas() {
     const claudeById = useAgentStatus.getState().byId // re-read on loopSig change (see above)
     const hasLoops = loopSig !== ''
     const hasAgents = Object.keys(agentById).length > 0
-    if (!hasLoops && !hasAgents) return NO_EPHEMERAL
+    const activeId = useProjects.getState().activeProjectId
+    const activeProjectForProjection = projectCatalog.find((project) => project.id === activeId)
+    const foreign = resolveForeignNodeProjections(activeProjectForProjection, projectCatalog, nodes)
+    if (!hasLoops && !hasAgents && foreign.length === 0) return NO_EPHEMERAL
     // Explicit width/height for an ephemeral node (so it resizes like any other node).
     // Defaults switch with expand; a user resize override wins.
     const dims = (id: string, baseW: number, expW: number, baseH: number, expH: number) => {
@@ -2404,9 +2438,52 @@ export function Canvas() {
         })
       })
     }
+    // Foreign projections are derived from A's lineage links and B's serialized node. They have
+    // no React Flow persistence path and no parent frame, so dragging one only updates the local
+    // ephemeral position map. The source node remains the lineage anchor for the dashed edge.
+    foreign.forEach(({ link, sourceNode, targetProject, targetNode }, index) => {
+      const projectionId = `xproj-${targetProject.id}-${targetNode.id}-${link.id}`
+      const source = nodes.find((node) => node.id === sourceNode.id)
+      const sourceHeight = source?.measured?.height ?? source?.height ?? 400
+      const fallback = {
+        x: (source?.position.x ?? 80) + 360 + (index % 3) * 30,
+        y: (source?.position.y ?? 120) + sourceHeight + 80 + Math.floor(index / 3) * 300
+      }
+      const size = targetNode.size ?? { width: 600, height: 400 }
+      eNodes.push({
+        id: projectionId,
+        type: 'xproject',
+        position: xprojPositions[projectionId] ?? fallback,
+        draggable: true,
+        selectable: false,
+        width: Math.max(280, size.width),
+        height: Math.max(160, size.height),
+        style: { width: Math.max(280, size.width), height: Math.max(160, size.height) },
+        data: {
+          title: targetNode.title,
+          color: targetProject.color,
+          group: null,
+          xprojOriginName: targetProject.name,
+          xprojOriginColor: targetProject.color,
+          xprojSpawn: {
+            bProjectId: targetProject.id,
+            bNodeId: targetNode.id,
+            bNode: targetNode,
+            bProject: targetProject
+          }
+        }
+      } as CanvasNode)
+      eEdges.push({
+        id: `xproj-edge-${link.id}`,
+        source: sourceNode.id,
+        sourceHandle: 'flow-out',
+        target: projectionId,
+        style: { stroke: targetProject.color, strokeWidth: 1.5, strokeDasharray: '5 4' }
+      })
+    })
     return { ephemeralNodes: eNodes, ephemeralEdges: eEdges }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- loopSig stands in for the byId read
-  }, [agentById, loopSig, ephemeralPos, ephSizes, ephExpanded, ephSelId, nodes])
+  }, [agentById, loopSig, ephemeralPos, ephSizes, ephExpanded, ephSelId, nodes, projectCatalog, xprojPositions])
 
   // Merge the persisted nodes with the ephemeral ones once per change (not per render),
   // so React Flow's array-identity short-circuit holds while panning/zooming.
@@ -3961,6 +4038,20 @@ export function Canvas() {
         // so without this a closed browser node's page would keep running unseen.
         if (c.type === 'remove') useWebviewKeepAlive.getState().drop(c.id)
         if ('id' in c && isEph(c.id)) {
+          // Cross-project projections have no agent-nodes entry. Keep their transient absolute
+          // position in Canvas-local state, and never route a projection change into a real node.
+          if (c.id.startsWith('xproj-')) {
+            if (c.type === 'position' && c.position) {
+              setXprojPositions((positions) => ({ ...positions, [c.id]: c.position! }))
+            } else if (c.type === 'remove') {
+              setXprojPositions((positions) => {
+                const next = { ...positions }
+                delete next[c.id]
+                return next
+              })
+            }
+            return false
+          }
           const store = useAgentNodes.getState()
           // Stored as an OFFSET from the parent agent, never as a canvas position — see offsetFrom.
           if (c.type === 'position' && c.position) {
@@ -4101,6 +4192,91 @@ export function Canvas() {
     },
     [linkEndpointOf, agentIdOf, setLinkEdges, setNodes, markDirty, nodes]
   )
+
+  /** Resolve the explicit agent-to-agent drop into the existing context-link operation. */
+  const linkAgentCollaboration = useCallback(
+    (sourceNodeId: string, targetNodeId: string): void => {
+      const source = nodesRef.current.find((node) => node.id === sourceNodeId)
+      const target = nodesRef.current.find((node) => node.id === targetNodeId)
+      const sourceAgent = agentIdOf(sourceNodeId)
+      const targetAgent = agentIdOf(targetNodeId)
+      if (
+        !source ||
+        !target ||
+        !sourceAgent ||
+        !targetAgent ||
+        !canLinkAgentPair(sourceNodeId, sourceAgent, targetNodeId, targetAgent)
+      ) {
+        window.dispatchEvent(
+          new CustomEvent('nodeterm:toast', {
+            detail: {
+              kind: 'error',
+              message: 'Only two existing context-capable agent nodes in this project can be linked.'
+            }
+          })
+        )
+        return
+      }
+      onConnect({
+        source: sourceNodeId,
+        target: targetNodeId,
+        sourceHandle: 'link-out',
+        targetHandle: 'link-in'
+      })
+    },
+    [agentIdOf, onConnect]
+  )
+
+  // Pointer drops carry both endpoint ids. Keyboard and touch use the same button on two nodes:
+  // the first activation arms a source, and the second chooses its target. When exactly two
+  // compatible nodes are selected, one activation links them directly for a shorter keyboard path.
+  useEffect(() => {
+    const onPick = (event: Event): void => {
+      const detail = (event as CustomEvent<{
+        nodeId?: string
+        sourceNodeId?: string
+        targetNodeId?: string
+      }>).detail
+      if (detail?.sourceNodeId && detail.targetNodeId) {
+        setAgentCollaborationSourceId(null)
+        linkAgentCollaboration(detail.sourceNodeId, detail.targetNodeId)
+        return
+      }
+      const nodeId = detail?.nodeId
+      if (!nodeId) return
+      const selected = nodesRef.current
+        .filter((node) => node.selected)
+        .map((node) => node.id)
+      if (selected.length === 2 && selected.includes(nodeId)) {
+        setAgentCollaborationSourceId(null)
+        linkAgentCollaboration(selected[0], selected[1])
+        return
+      }
+      setAgentCollaborationSourceId((current) => {
+        if (!current) return nodeId
+        if (current === nodeId) {
+          window.dispatchEvent(
+            new CustomEvent('nodeterm:toast', {
+              detail: { kind: 'error', message: 'Choose a different agent as the collaboration target.' }
+            })
+          )
+          return null
+        }
+        linkAgentCollaboration(current, nodeId)
+        return null
+      })
+    }
+    window.addEventListener(AGENT_COLLABORATION_PICK_EVENT, onPick)
+    return () => window.removeEventListener(AGENT_COLLABORATION_PICK_EVENT, onPick)
+  }, [linkAgentCollaboration])
+
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent(AGENT_COLLABORATION_MODE_EVENT, {
+        detail: { sourceNodeId: agentCollaborationSourceId }
+      })
+    )
+  }, [agentCollaborationSourceId])
 
   // Double-click a context link to remove it (ephemeral subagent/loop edges are left alone).
   const onEdgeDoubleClick = useCallback(
@@ -4293,16 +4469,25 @@ export function Canvas() {
   // MacWheelGestureRouter tells them apart (and stays sticky for the length of one physical
   // gesture) and hands trackpad packets back to React Flow's own panOnScroll.
   const wheelZoom = settings.wheelZoom
+  const wheelZoomSpeed = clampWheelZoomSpeed(settings.wheelZoomSpeed)
   // The escape hatch, resolved ONCE: the router and React Flow's panOnScroll below must agree, or
   // a gesture neither of them pans is a gesture that does nothing.
   const trackpadRouting = trackpadRoutingEnabled(isMac, settings.trackpadPan)
   useEffect(() => {
     const wrap = flowWrapRef.current
     if (!wrap) return
-    const wheelRouting = new MacWheelGestureRouter()
+    // Desktop macOS receives raw gesture facts from the main process. The browser bridge cannot
+    // observe that stream, so it keeps the existing delta-shape heuristic.
+    const gestureReporting = isMac && !isBrowserRuntime()
+    const wheelRouting = new MacWheelGestureRouter(gestureReporting)
+    const offGesture = gestureReporting
+      ? window.nodeTerminal.onCanvasTrackpadGesture((active) => wheelRouting.noteGesture(active))
+      : undefined
+    const wheelLimiter = new WheelZoomBurstLimiter()
     const onWheel = (e: WheelEvent) => {
       if (canvasLocked) return
-      if (!e.ctrlKey && !e.metaKey) {
+      const plainWheel = !e.ctrlKey && !e.metaKey
+      if (plainWheel) {
         // The ancestor walk is the expensive part of this handler at ~120 Hz, so it is memoized
         // per packet AND never run for a packet no guard asks about (a plain wheel with wheelZoom
         // off, which is the default, walks nothing at all).
@@ -4323,16 +4508,21 @@ export function Canvas() {
       const rect = wrap.getBoundingClientRect()
       const px = e.clientX - rect.left
       const py = e.clientY - rect.top
-      // Cap a single event's influence so a chunky mouse-wheel tick doesn't jump zoom levels.
-      const d = Math.max(-50, Math.min(50, e.deltaY))
-      const next = Math.min(2, Math.max(0.01, zoom * Math.exp(-d * 0.01)))
+      // Spend one shared budget across a short burst: high-resolution ratchet wheels can send
+      // one detent as several packets. The speed setting applies only to plain wheel input;
+      // modifier zoom and pinch retain the fixed historical multiplier.
+      const d = wheelLimiter.apply(e.deltaY, e.timeStamp)
+      const next = nextWheelZoom(zoom, d, plainWheel ? wheelZoomSpeed : 1)
       if (next === zoom) return
       const k = next / zoom
       setViewport({ x: px - (px - x) * k, y: py - (py - y) * k, zoom: next })
     }
     wrap.addEventListener('wheel', onWheel, { capture: true, passive: false })
-    return () => wrap.removeEventListener('wheel', onWheel, { capture: true })
-  }, [getViewport, setViewport, wheelZoom, trackpadRouting, canvasLocked])
+    return () => {
+      wrap.removeEventListener('wheel', onWheel, { capture: true })
+      offGesture?.()
+    }
+  }, [getViewport, setViewport, wheelZoom, wheelZoomSpeed, trackpadRouting, canvasLocked])
 
   // Double-clicking EMPTY canvas pulls back to the overview zoom — the inverse of the node
   // double-click, which frames one node. A fixed zoom, not "the camera the last focus came from":
@@ -5428,7 +5618,17 @@ export function Canvas() {
    * event, and searches for a free rectangle before the node is published.
    */
   const createCatalogNode = useCallback(
-    (entry: NodeCatalogEntry, creationEventId: string, at?: { x: number; y: number }, groupId?: string, options?: { terminalProfileId?: string; namedTerminalProfileId?: string }) => {
+    (
+      entry: NodeCatalogEntry,
+      creationEventId: string,
+      at?: { x: number; y: number },
+      groupId?: string,
+      options?: { terminalProfileId?: string; namedTerminalProfileId?: string },
+      universeContext?: Pick<
+        NodeCatalogAvailabilityContext,
+        'universeScope' | 'universeId' | 'universeDepth' | 'hasShopNode' | 'parentCanvasId'
+      >
+    ) => {
       const project = useProjects.getState().getProject(activeProjectId)
       const availability = nodeCatalogAvailability(entry, {
         sessionSource,
@@ -5436,15 +5636,17 @@ export function Canvas() {
         isSshProject: !!project?.ssh,
         hasRemoteConnection: useSshServers.getState().servers.length > 0,
         supportsWindowsTerminalProfiles: offersTerminalProfiles,
-        universeScope: 'root',
-        universeDepth: 0,
-        hasShopNode: false
+        universeScope: universeContext?.universeScope ?? 'root',
+        universeId: universeContext?.universeId,
+        universeDepth: universeContext?.universeDepth ?? 0,
+        hasShopNode: universeContext?.hasShopNode ?? false,
+        parentCanvasId: universeContext?.parentCanvasId
       })
       if (!availability.available) {
         notify({ kind: 'error', title: 'Node unavailable', body: availability.reason ?? 'Choose another node.' })
         return
       }
-      if (entry.id === 'aws-universe') {
+            if (entry.id === 'aws-universe') {
         const result = createAwsUniverse('New AWS Universe')
         if (result.canvasId) navigateAwsUniverse(result.canvasId)
         else notify({ kind: 'error', title: 'AWS Universe unavailable', body: result.reason ?? 'The AWS Universe could not be created.' })
@@ -5504,9 +5706,16 @@ export function Canvas() {
             if (catalogEntry.id === 'wild-dim-sum') return createWildDimSumNode(index, undefined, center)
             if (catalogEntry.id === 'homeassistant-control') return createHomeAssistantControlNode(index, center)
             if (catalogEntry.id === 'homeassistant-sensor') return createHomeAssistantSensorNode(index, center)
+            if (catalogEntry.id === 'gitlab-hosting') return createGitLabHostingNode(index, center)
+            if (catalogEntry.id === 'nextcloud-hosting') return createServiceNode('nextcloud-aio', index, center)
             if (catalogEntry.id.startsWith('service:')) {
               return createServiceNode(catalogEntry.nodeKind as ServiceNodeKind, index, center)
             }
+            if (catalogEntry.id === 'aws-resource-explorer') return createAwsResourceNode(index, 'resource-explorer', center)
+            if (catalogEntry.id === 'aws-cloud-control') return createAwsResourceNode(index, 'cloud-control', center)
+            const awsCoreCatalogServices = { 'aws-s3': 's3', 'aws-ec2': 'ec2', 'aws-iam': 'iam', 'aws-sts': 'sts', 'aws-lambda': 'lambda', 'aws-cloudwatch': 'cloudwatch', 'aws-logs': 'logs' } as const
+            if (catalogEntry.id in awsCoreCatalogServices) return createAwsResourceNode(index, 'core-services', center, awsCoreCatalogServices[catalogEntry.id as keyof typeof awsCoreCatalogServices])
+            if (catalogEntry.id === 'cloudflare-core-managers') return createCloudflareCoreManagersNode(index, center)
             // File and diff rows stay visible but disabled until their picker prerequisites exist.
             return null
           },
@@ -5522,6 +5731,28 @@ export function Canvas() {
     },
     [activeProjectId, createAwsUniverse, emptyNodePos, navigateAwsUniverse, offersTerminalProfiles, parentInto, sessionSource, setNodes]
   )
+
+  useEffect(() => {
+    const project = useProjects.getState().getProject(activeProjectId)
+    setUniverseShopCatalogRuntime({
+      context: {
+        sessionSource,
+        hasProjectFolder: !!(project?.cwd || project?.ssh?.remoteCwd),
+        isSshProject: !!project?.ssh,
+        hasRemoteConnection: useSshServers.getState().servers.length > 0,
+        supportsWindowsTerminalProfiles: offersTerminalProfiles
+      },
+      create: (entry, context) => {
+        createCatalogNode(entry, context.creationEventId, undefined, undefined, undefined, {
+          universeScope: context.scope,
+          universeId: context.canvasId,
+          universeDepth: context.depth,
+          hasShopNode: true
+        })
+      }
+    })
+    return () => setUniverseShopCatalogRuntime(null)
+  }, [activeProjectId, createCatalogNode, offersTerminalProfiles, sessionSource])
 
   // Task 6: the Settings → Accounts "Add account" flow dispatches 'nodeterm:add-account-login'
   // to open a terminal node running `claude /login` under the new account's config dir.
@@ -9147,7 +9378,7 @@ export function Canvas() {
     const on = settings.autoAlignGrid
     if (on && !prevAutoAlignRef.current) {
       const ids = nodesRef.current
-        .filter((n) => n.type !== 'subagent' && n.type !== 'loop')
+        .filter((n) => n.type !== 'subagent' && n.type !== 'loop' && n.type !== 'xproject')
         .map((n) => n.id)
       if (ids.length) alignToGrid(ids)
     }
@@ -9274,7 +9505,7 @@ export function Canvas() {
       // <ReactFlow nodes> prop but NEVER persisted — they are cleared on the next turn — and both
       // double-click focus and the minimap's double-click land here. A breadcrumb for one is a
       // permanently unresolvable id burning one of the 20 slots, so it is never recorded.
-      if (activeId && node.type !== 'subagent' && node.type !== 'loop') {
+      if (activeId && node.type !== 'subagent' && node.type !== 'loop' && node.type !== 'xproject') {
         const target: BreadcrumbTarget = {
           id: node.id,
           kind: node.type as BreadcrumbTarget['kind'],
@@ -10024,6 +10255,21 @@ export function Canvas() {
     const hidden = useSettings.getState().settings.hiddenNodeMenuItems
     return tidySeparators<MenuItem>([
       { type: 'label', label: ids.length > 1 ? `${ids.length} nodes` : '1 node' },
+      ...(ids.length === 2
+        ? (() => {
+            const firstAgent = agentIdOf(ids[0])
+            const secondAgent = agentIdOf(ids[1])
+            return firstAgent && secondAgent && canLinkAgentPair(ids[0], firstAgent, ids[1], secondAgent)
+              ? ([
+                  {
+                    label: 'Link selected agents',
+                    icon: <IconGroup />,
+                    onClick: () => linkAgentCollaboration(ids[0], ids[1])
+                  }
+                ] as MenuItem[])
+              : []
+          })()
+        : []),
       {
         label: 'New node from catalog…',
         icon: <IconShapes />,
@@ -10706,6 +10952,7 @@ export function Canvas() {
     profileText
     switchCodexAccountNode,
     connectedProjectIdForHost,
+    linkAgentCollaboration,
     deleteNodes,
     gatewayModels,
     gatewayStatus,
@@ -11452,7 +11699,7 @@ export function Canvas() {
       const items =
         node.type === 'group'
           ? groupItems(node.id, screenToFlowPosition({ x: e.clientX, y: e.clientY }))
-          : node.type === 'subagent' || node.type === 'loop'
+          : node.type === 'subagent' || node.type === 'loop' || node.type === 'xproject'
             ? ephemeralItems(node.id)
             : selectionItems(targetIds(node), screenToFlowPosition({ x: e.clientX, y: e.clientY }))
       setMenu({ x: e.clientX, y: e.clientY, items })
@@ -11470,7 +11717,9 @@ export function Canvas() {
         y: e.clientY,
         items: selectionItems(
           // Derived cards can't be acted on; filtering keeps the "N nodes" count honest too.
-          selected.filter((n) => n.type !== 'subagent' && n.type !== 'loop').map((n) => n.id),
+          selected
+            .filter((n) => n.type !== 'subagent' && n.type !== 'loop' && n.type !== 'xproject')
+            .map((n) => n.id),
           screenToFlowPosition({ x: e.clientX, y: e.clientY })
         )
       })
@@ -11680,6 +11929,12 @@ export function Canvas() {
     [setNodes, goToNode, switchProject]
   )
   focusNodeRef.current = focusNodeById
+  // The projection's secondary jump uses the same cross-project focus funnel as notifications and
+  // the sessions sidebar. Clear the registration when this Canvas unmounts.
+  useEffect(() => {
+    setTravelNodeHandler(focusNodeById)
+    return () => setTravelNodeHandler(null)
+  }, [focusNodeById])
 
   // Session board cards are derived LIVE from the canvas nodes; the board stores only assignments.
   // Only while the board is OPEN: `nodes` gets a fresh identity on every drag frame, so a closed
@@ -16725,7 +16980,7 @@ export function Canvas() {
   const paletteChip = chipFor('app.commandPalette')
 
   return (
-    <div className="canvas-root">
+    <div className="canvas-root" data-easter-surface="canvas">
       <TopAppBar>
       <ProjectSwitcher
           onSwitch={switchProject}

@@ -1,0 +1,27 @@
+.cloudflare-zero-trust { display: grid; gap: 14px; padding: 14px; color: var(--md-on-surface); background: var(--md-surface-container); border-radius: 18px; min-width: 0; }
+.cloudflare-zero-trust__header, .cloudflare-zero-trust__account-row, .cloudflare-zero-trust__actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.cloudflare-zero-trust__header { justify-content: space-between; }
+.cloudflare-zero-trust h3, .cloudflare-zero-trust h4 { margin: 0; }
+.cloudflare-zero-trust p { margin: 4px 0; color: var(--md-on-surface-variant); }
+.cloudflare-zero-trust__account, .cloudflare-zero-trust__fields, .cloudflare-zero-trust__resources, .cloudflare-zero-trust__progress, .cloudflare-zero-trust__result { display: grid; gap: 10px; padding: 12px; border-radius: 16px; background: var(--md-surface-container-low); }
+.cloudflare-zero-trust__account-row > input, .cloudflare-zero-trust__account-row > select { flex: 1 1 180px; min-height: 40px; }
+.cloudflare-zero-trust__chooser { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.cloudflare-zero-trust__chooser > div, .cloudflare-zero-trust__resources > div { display: grid; gap: 8px; min-width: 0; }
+.cloudflare-zero-trust__search { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.cloudflare-zero-trust__search > input { min-width: 0; flex: 1; }
+.cloudflare-zero-trust__choices, .cloudflare-zero-trust__resource-list { display: grid; gap: 6px; max-height: 210px; overflow: auto; }
+.cloudflare-zero-trust__choices button, .cloudflare-zero-trust__resource-list button { display: grid; gap: 3px; text-align: left; padding: 9px 11px; min-height: 44px; border: 1px solid var(--md-outline-variant); border-radius: 12px; background: var(--md-surface); color: inherit; cursor: pointer; }
+.cloudflare-zero-trust__choices button.selected, .cloudflare-zero-trust__resource-list button:focus-visible { outline: 2px solid var(--md-primary); outline-offset: 1px; background: var(--md-secondary-container); }
+.cloudflare-zero-trust__choices small, .cloudflare-zero-trust__resource-list small, .cloudflare-zero-trust__field small, .cloudflare-zero-trust__boolean small { color: var(--md-on-surface-variant); }
+.cloudflare-zero-trust__fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.cloudflare-zero-trust__fields > h4, .cloudflare-zero-trust__fields > p { grid-column: 1 / -1; }
+.cloudflare-zero-trust__field { display: grid; gap: 5px; }
+.cloudflare-zero-trust__field > input, .cloudflare-zero-trust__field > select { min-height: 40px; }
+.cloudflare-zero-trust__boolean { display: flex; gap: 8px; align-items: flex-start; }
+.cloudflare-zero-trust__boolean span { display: grid; gap: 3px; }
+.cloudflare-zero-trust__error { padding: 10px; border: 1px solid var(--md-error); border-radius: 12px; color: var(--md-error) !important; }
+.cloudflare-zero-trust__progress progress { width: 100%; min-height: 8px; }
+.cloudflare-zero-trust__result pre { max-height: 180px; overflow: auto; white-space: pre-wrap; }
+.cloudflare-zero-trust__actions { justify-content: space-between; }
+.cloudflare-zero-trust__actions p { flex: 1 1 320px; }
+@media (max-width: 720px) { .cloudflare-zero-trust__chooser, .cloudflare-zero-trust__fields { grid-template-columns: 1fr; } }

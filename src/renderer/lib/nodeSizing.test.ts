@@ -54,7 +54,7 @@ describe('snapNodeToGrid', () => {
   it('every kind has a positive min-size entry', () => {
     const kinds: NodeKind[] = [
       'terminal', 'sticky', 'group', 'editor', 'diff',
-      'video', 'web', 'browser', 'subagent', 'loop', 'dino'
+      'video', 'web', 'browser', 'subagent', 'loop', 'dino', 'nextcloud-aio'
     ]
     for (const k of kinds) {
       expect(NODE_MIN_SIZES[k]).toBeDefined()

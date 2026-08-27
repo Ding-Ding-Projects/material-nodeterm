@@ -10,8 +10,8 @@
 //
 // On the desktop the canvas is the authority: React Flow holds the live edges. Headless there is
 // no focused canvas — there may be no browser attached at all while the agents keep working — so
-// the authority is the persisted project file instead. `bridges[]` in `.nodeterm/project.json` is
-// the same edge set the renderer would have pushed, so we derive the map from every persisted
+// the authority is the persisted project file instead. `links[]` in `.nodeterm/project.json` is
+// the same link set the renderer would have pushed, so we derive the map from every persisted
 // canvas and get a link map that is correct with zero tabs open.
 import type { ContextLinkMap } from '../shared/types'
 import { buildBackgroundLinkMaps } from '../shared/context-link-map'
@@ -49,9 +49,9 @@ export interface ServerContextLinkDeps {
  * Derive the whole link map from persisted canvases plus what the hooks know about who is running
  * where.
  *
- * `activeProjectId: null` is not a placeholder — headless, no project IS active. Every canvas is
+ * `activeProjectId: null` is not a placeholder - headless, no project IS active. Every canvas is
  * exactly the "background" case buildBackgroundLinkMaps was written for: serialized nodes, a
- * `bridges[]` array, and agent identity that has to come from the status mirror rather than from a
+ * `links[]` array, and agent identity that has to come from the status mirror rather than from a
  * mounted node.
  */
 export function deriveLinkMap(deps: {
