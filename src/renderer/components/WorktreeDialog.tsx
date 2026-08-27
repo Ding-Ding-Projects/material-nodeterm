@@ -7,6 +7,7 @@ import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
 import { isValidGitRef, type WorktreeCreateValue, type WorktreeEntry } from '@shared/worktree'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { Radio } from '../ui/md3'
+import { Radio } from '@renderer/ui/md3'
 
 interface Props {
   /** 'create' = the pane/palette entry point (a new group frame); 'bind' = an existing group's
@@ -224,6 +225,10 @@ export function WorktreeDialog({
           <label>
             <Radio
               name="worktree-mode"
+            <Radio checked={mode === 'new'} onChange={() => setMode('new')} /> {vocabulary('New branch')}
+          </label>
+          <label>
+            <Radio
               checked={mode === 'existing'}
               onChange={() => setMode('existing')}
             />{' '}

@@ -14,5 +14,8 @@ migration toward Material Design 3.
 - [Personal vocabulary coverage for tools and documentation](./personal-vocabulary-tools.md) — the
   mapped app-authored copy boundaries for search, history, docs, appearance, converter, model, and
   navigation surfaces, plus the external-content preservation rules.
+- [Material Design 3 desktop surface audit](./material-3-audit.md) — the hand-written inventory of
+  every desktop shell, node, destination, settings section, overlay, status state, and checked-in
+  documentation page, plus the source-level remediation and remaining ownership conflicts.
 
 See also [Canvas](../canvas/README.md), whose node chrome consumes most of these tokens.

@@ -16,7 +16,7 @@ import {
 import { MinecraftPropertiesEditor } from './MinecraftPropertiesEditor'
 import { MinecraftPlayersPanel } from './MinecraftPlayersPanel'
 import { MinecraftBackupsPanel } from './MinecraftBackupsPanel'
-import { Checkbox } from '@renderer/ui/md3'
+import { Checkbox, Progress } from '@renderer/ui/md3'
 import { Select } from '@renderer/ui/Select'
 
 const CONSOLE_CAP = 400
@@ -300,12 +300,12 @@ export function MinecraftServerPanel({ nodeId }: { nodeId: string }): React.JSX.
       {status.phase === 'downloading' && (
         <>
           <p className="service-node__state">Downloading {status.versionId}…</p>
-          <div className={`mc-progress${status.downloadPercent === null ? ' mc-progress--indeterminate' : ''}`}>
-            <div
-              className="mc-progress__fill"
-              style={status.downloadPercent !== null ? { width: `${status.downloadPercent}%` } : undefined}
-            />
-          </div>
+          <Progress
+            value={status.downloadPercent}
+            label={`Download progress for ${status.versionId}`}
+            className={`mc-progress${status.downloadPercent === null ? ' mc-progress--indeterminate' : ''}`}
+            barClassName="mc-progress__fill"
+          />
           <p className="service-node__note">
             {status.downloadPercent !== null && status.totalBytes
               ? `${status.downloadPercent}% — ${formatBytes(status.downloadedBytes ?? 0)} of ${formatBytes(status.totalBytes)}`

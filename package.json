@@ -15,6 +15,7 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "node scripts/check-vocabulary.mjs && node scripts/check-material-audit.mjs && node scripts/check-personal-vocabulary-coverage.mjs && node scripts/check-changelog.mjs && node scripts/check-docs-bundle.mjs && node scripts/check-uh-inventory.mjs && npm run build:app",
+    "build": "node scripts/check-vocabulary.mjs && node scripts/check-changelog.mjs && node scripts/check-docs-bundle.mjs && node scripts/check-uh-inventory.mjs && node scripts/check-material-audit.mjs && npm run build:app",
     "build:app": "electron-vite build && npm run host:build",
     "build-changelog": "node scripts/build-changelog.mjs",
     "check-changelog": "node scripts/check-changelog.mjs",

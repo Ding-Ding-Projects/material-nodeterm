@@ -1332,6 +1332,24 @@ const FEATURES = [
     ],
     docs: ['docs/md3-primitives.md'],
   },
+  {
+    // Full desktop surface coverage is a separate contract from the primitive definitions. The
+    // hand-written inventory names every rendered Windows screen and every checked-in site page,
+    // while the companion checker keeps a deleted row from making the audit shrink silently.
+    id: 'md3-surface-audit',
+    label: 'Complete Material Design 3 desktop surface audit',
+    files: [
+      'scripts/check-material-audit.mjs',
+      'docs/features/appearance/material-3-audit.md',
+    ],
+    contentChecks: [
+      ['scripts/check-material-audit.mjs', 'const EXPECTED_SURFACE_IDS = `'],
+      ['scripts/check-material-audit.mjs', 'Surface inventory negative regression'],
+      ['docs/features/appearance/material-3-audit.md', '## Exhaustive inventory'],
+      ['docs/features/appearance/material-3-audit.md', '## Remaining conflicts'],
+    ],
+    docs: ['docs/features/appearance/material-3-audit.md'],
+  },
 ]
 
 // A feature-row check is only fail-closed if removing the whole row, or one of its required

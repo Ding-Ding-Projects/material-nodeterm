@@ -326,6 +326,7 @@ package-manager `PATH` refresh race): [`docs/building.md`](./docs/building.md).
 | [Documentation site](https://ding-ding-projects.github.io/material-nodeterm/) | The landing page and browsable docs, published from `site/`. |
 | [`docs/features/`](./docs/features/README.md) | One article per feature — behaviour, configuration, failure modes, security, verification — grouped by category. |
 | [`docs/app-contract.md`](./docs/app-contract.md) | The desktop app's hand-written feature-completeness guard (`npm run check:app-contract`) — what it checks and why, alongside the site's `check-site-contract.mjs`. |
+| [`docs/features/appearance/material-3-audit.md`](./docs/features/appearance/material-3-audit.md) | The exhaustive source-level Material Design 3 inventory for every desktop surface and checked-in documentation page (`npm run check:material-audit`). |
 | [`CLAUDE.md`](./CLAUDE.md) | The deep architecture reference: process boundaries, every subsystem's invariants and the reasoning behind them. |
 | [`CONTRIBUTING.md`](./CONTRIBUTING.md) | Setup, the process-boundary rules, and the house rules a PR gets sent back for. |
 | [`AGENTS.md`](./AGENTS.md) | Guidance for coding agents working in this repository. |

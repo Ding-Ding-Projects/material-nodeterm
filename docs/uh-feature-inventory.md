@@ -61,6 +61,7 @@ and then never edited this file.
 | Destructive-action super confirmation | `src/renderer/components/DestructiveConfirmGate.tsx` | `docs/destructive-confirmation.md` | `src/renderer/components/DestructiveGateHost.test.tsx` |
 | Material Design 3 across every surface | `src/renderer/styles.md3.css` | `docs/md3-render-verification.md` | `src/renderer/styles.split.test.ts` |
 | MD3 primitive set | `src/renderer/ui/md3/primitives.css` | `docs/md3-primitives.md` | `src/renderer/ui/md3/primitives-wired.test.ts` |
+| Complete Material Design 3 desktop surface audit | `scripts/check-material-audit.mjs` + `docs/features/appearance/material-3-audit.md` | `docs/features/appearance/material-3-audit.md` | `scripts/check-material-audit.mjs` (1,634 source assertions, including the deleted-row mutation) |
 | Per-element appearance editor | `src/renderer/components/appearance/AppearanceEditor.tsx` | `docs/appearance.md` | `scripts/check-app-contract.mjs` (`appearance-editor` row — no behavioral suite covers the editor itself; `logoSelection.test.ts` covers only the logo leg) |
 | Infinite colour picker + translator | `src/renderer/components/color/ColorPicker.tsx` | `docs/colour-picker.md` | `src/renderer/components/color/ColorPicker.test.tsx` |
 | App rename (display name only) | `src/renderer/components/settings/sections/AppIdentitySection.tsx` | `docs/app-rename.md` | `src/renderer/components/settings/sections/AppIdentitySection.test.tsx` |

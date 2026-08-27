@@ -470,6 +470,17 @@ Preserve its established appearance and do not restyle it to match the desktop a
 exception is limited to appearance: stale facts, broken links, missing or decorative controls,
 localization, personal-vocabulary behavior, accessibility, clipping, responsive behavior, and all
 other functional contracts still need to be corrected and kept current within that visual style.
+**The complete desktop Material Design 3 inventory is `docs/features/appearance/material-3-audit.md`.**
+`scripts/check-material-audit.mjs` fails closed when any named screen, node, dialog, panel, menu,
+dropdown, picker, tab, settings section, overlay, status, empty state, error state, or style
+marker disappears. Every rendered Windows desktop element must use the shared Material Design 3
+primitives and project tokens for color, typography, shape, tonal elevation, state layers, focus,
+motion, density, scaling, and accessibility. Legacy controls and custom lookalikes are defects,
+not exemptions. The audit is source-level until a later permitted built-artifact verification pass.
+
+The documentation and landing site runs in Kids mode by default and its current visual style is
+preserved. Site changes are limited to stale facts, data, releases, links, features,
+accessibility, and broken behavior. Do not restyle the site as part of a desktop audit.
 
 **A new icon is a `MaterialSymbol` call, not another one-off inline `<svg>`.**
 `components/MaterialSymbol.tsx` renders one glyph from the app's own locally bundled, subsetted

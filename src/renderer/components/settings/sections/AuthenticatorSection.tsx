@@ -74,6 +74,10 @@ function AddEntryForm({ onAdded }: { onAdded: (entry: AuthenticatorEntry) => voi
         </label>
         <label>
           <Radio name="authenticator-entry-mode" checked={mode === 'manual'} onChange={() => setMode('manual')} /> Enter manually
+          <Radio checked={mode === 'uri'} onChange={() => setMode('uri')} /> Paste a URI
+        </label>
+        <label>
+          <Radio checked={mode === 'manual'} onChange={() => setMode('manual')} /> Enter manually
         </label>
       </div>
       {mode === 'uri' ? (

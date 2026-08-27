@@ -35,7 +35,7 @@ import {
   type CatalogView
 } from './catalogView'
 import { troubleshootSteps } from './troubleshoot'
-import { TextArea } from '@renderer/ui/md3'
+import { Progress, Tabs, TextArea } from '@renderer/ui/md3'
 import { Select } from '@renderer/ui/Select'
 
 /** How often the panel re-asks for the catalog while the core reports a refresh in flight. The
@@ -520,55 +520,99 @@ function OllamaManagerPanelForApi({
                   </button>
                 ))}
               </div>
+              <Tabs
+                items={[
+                  { id: 'health', label: 'Health' },
+                  { id: 'models', label: 'Installed' },
+                  { id: 'store', label: 'Model store' },
+                  { id: 'chat', label: 'Chat' }
+                ]}
+                value={tab}
+                onChange={(id) => setTab(id as Tab)}
+                ariaLabel="Ollama sections"
+                className="om-tabs"
+                tabClassName="om-tab"
+                activeTabClassName="om-tab--active"
+                idPrefix="ollama-tab"
+                panelIdPrefix="ollama-tabpanel"
+              />
 
               {tab === 'health' && (
-                <HealthTab
-                  status={status}
-                  checking={checking}
-                  hardware={hardware}
-                  running={running}
-                  onRefresh={refreshStatus}
-                />
+                <div
+                  role="tabpanel"
+                  id="ollama-tabpanel-health"
+                  aria-labelledby="ollama-tab-health"
+                  className="om-tabpanel"
+                >
+                  <HealthTab
+                    status={status}
+                    checking={checking}
+                    hardware={hardware}
+                    running={running}
+                    onRefresh={refreshStatus}
+                  />
+                </div>
               )}
 
               {tab === 'models' && (
-                <ModelsTab
-                  status={status}
-                  models={models}
-                  fitMap={fitMap}
-                  onDelete={(model) => setDeleteTarget({ model, api })}
-                  onRefresh={refreshStatus}
-                />
+                <div
+                  role="tabpanel"
+                  id="ollama-tabpanel-models"
+                  aria-labelledby="ollama-tab-models"
+                  className="om-tabpanel"
+                >
+                  <ModelsTab
+                    status={status}
+                    models={models}
+                    fitMap={fitMap}
+                    onDelete={(model) => setDeleteTarget({ model, api })}
+                    onRefresh={refreshStatus}
+                  />
+                </div>
               )}
 
               {tab === 'store' && (
-                <StoreTab
-                  ollama={ollama}
-                  status={status}
-                  storeQuery={storeQuery}
-                  setStoreQuery={setStoreQuery}
-                  storeFilter={storeFilter}
-                  setStoreFilter={setStoreFilter}
-                  storeSort={storeSort}
-                  setStoreSort={setStoreSort}
-                  page={catalogPage}
-                  setStorePage={setStorePage}
-                  catalog={catalog}
-                  catalogError={catalogError}
-                  onReloadCatalog={loadCatalog}
-                  fitMap={fitMap}
-                  customRef={customRef}
-                  setCustomRef={setCustomRef}
-                  onAddCustomRef={handleAddCustomRef}
-                  onAddToCart={handleAddToCart}
-                  cart={cart}
-                  cartSummary={cartSummary}
-                  cartEstimate={cartEstimate}
-                />
+                <div
+                  role="tabpanel"
+                  id="ollama-tabpanel-store"
+                  aria-labelledby="ollama-tab-store"
+                  className="om-tabpanel"
+                >
+                  <StoreTab
+                    ollama={ollama}
+                    status={status}
+                    storeQuery={storeQuery}
+                    setStoreQuery={setStoreQuery}
+                    storeFilter={storeFilter}
+                    setStoreFilter={setStoreFilter}
+                    storeSort={storeSort}
+                    setStoreSort={setStoreSort}
+                    page={catalogPage}
+                    setStorePage={setStorePage}
+                    catalog={catalog}
+                    catalogError={catalogError}
+                    onReloadCatalog={loadCatalog}
+                    fitMap={fitMap}
+                    customRef={customRef}
+                    setCustomRef={setCustomRef}
+                    onAddCustomRef={handleAddCustomRef}
+                    onAddToCart={handleAddToCart}
+                    cart={cart}
+                    cartSummary={cartSummary}
+                    cartEstimate={cartEstimate}
+                  />
+                </div>
               )}
 
               {tab === 'chat' && (
-                <ChatTab key={chatScopeKey(ollama)} ollama={ollama} status={status} models={models} />
+                <div
+                  role="tabpanel"
+                  id="ollama-tabpanel-chat"
+                  aria-labelledby="ollama-tab-chat"
+                  className="om-tabpanel"
+                >
+                  <ChatTab key={chatScopeKey(ollama)} ollama={ollama} status={status} models={models} />
+                </div>
               )}
             </>
           )}
@@ -1079,9 +1123,12 @@ function StoreTab({
                     <span className="cv-item__status">{item.digestPhase ?? vocab(item.status)}</span>
                   </div>
                   {pct !== null && (
-                    <div className="cv-progress">
-                      <div className="cv-progress__bar" style={{ width: `${pct}%` }} />
-                    </div>
+                    <Progress
+                      value={pct}
+                      label={`Download progress for ${item.ref}`}
+                      className="cv-progress"
+                      barClassName="cv-progress__bar"
+                    />
                   )}
                   {item.error && <p className="cv-item__error">{item.error}</p>}
                   <div className="cv-item__actions">

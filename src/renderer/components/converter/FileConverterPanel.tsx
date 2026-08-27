@@ -25,6 +25,7 @@ import { copy, fact, mapOwnedSentence } from '../../lib/personalVocabulary/owned
 export function detectionSummarySegments(note: string, confidence: 'high' | 'medium' | 'low') {
   return [copy('Detection: '), fact(note), copy(' (confidence: '), fact(confidence), copy(')')]
 }
+import { Checkbox, Progress } from '@renderer/ui/md3'
 
 export interface FileConverterPanelProps {
   onClose: () => void
@@ -147,9 +148,12 @@ function QueueRow({
         <span className="cv-item__status">{vocab(item.status.replace('-', ' '))}</span>
       </div>
       {item.status === 'running' && (
-        <div className="cv-progress" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
-          <div className="cv-progress__bar" style={{ width: `${pct}%` }} />
-        </div>
+        <Progress
+          value={pct}
+          label={`Conversion progress for ${item.sourceName}`}
+          className="cv-progress"
+          barClassName="cv-progress__bar"
+        />
       )}
       {item.status === 'needs-confirm' && (
         <div className="cv-confirm">

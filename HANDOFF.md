@@ -138,6 +138,42 @@ This lane did not run tests, type checking, lint, security checks, builds, packa
 execution, runtime interaction, or captures, and made no commit or push. Remaining integration work
 includes focused lifecycle/IPC verification, generated offline docs refresh, catalog
 `Install and continue` wiring, and packaged-bundle proof for any future bundled dependency.
+## 2026-08-26, Material Design 3 surface audit
+
+The Windows desktop Material Design 3 audit is recorded in
+`docs/features/appearance/material-3-audit.md` and enforced by
+`scripts/check-material-audit.mjs`. The hand-written inventory contains 201 exact rows covering
+the desktop shell, every checked-in node, every destination and settings section, every dialog,
+menu, dropdown, picker, tab, overlay, status state, empty state, error state, and every
+documentation or landing page. The checker also validates source markers, style markers, shared
+primitive exports, site-preservation wording, and a deliberate deleted-row mutation.
+
+Source remediation in this lane includes the shared numeric field, radio, progress, and keyboard-
+roving tabs primitives; adoption in worktree, toy-lock, authenticator, speech, converter, Ollama,
+Minecraft, clone, History, and browser-tab surfaces; keyboard and Escape handling for the tooltip;
+and named Material shape tokens for the reviewed desktop node, section, menu, picker, and compact
+badge geometry. The public `AGENTS.md`,
+`CLAUDE.md`, `CONTRIBUTING.md`, `README.md`, `ROADMAP.md`, and appearance documentation now state
+that every rendered Windows desktop element uses Material Design 3 primitives and project tokens
+with no element exemption.
+
+The documentation and landing site is Kids mode by default. Its existing visual style is preserved
+and no site restyling is part of this audit. Only stale site facts, data, releases, links, features,
+accessibility, and broken behavior may be changed. The stale packaging article now describes the
+current v0.4.117 release and push-triggered release workflow.
+
+### Remaining conflicts and evidence boundaries
+
+- The Comments & Activity panel in `src/renderer/components/kanban/CardModal.tsx` is inventoried
+  separately as `destination-comments-activity`, but the file is reserved for the p80 lane.
+- The existing-worktree picker in `src/renderer/components/WorktreeDialog.tsx` is inventoried
+  separately as `overlay-existing-worktree-picker`, but further changes are reserved for p81.
+- The WSL creator clipping state is inventoried as `overlay-wsl-create-clipping` and marked
+  nonconforming and overlapping. The p79 lane owns the WSL creator repair, so this lane made no
+  changes to those files.
+- No tests, builds, runtime launches, pixel measurements, or captures were run in this lane. The
+  source-only checker passes with 1,634 assertions, and the result must be re-read after
+  integration.
 
 ## 2026-08-26, portable canvas projection implementation
 

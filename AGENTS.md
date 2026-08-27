@@ -93,6 +93,11 @@ fail when an element, implementation marker, documentation row, focused test, bu
 interaction record, or required visual evidence is missing or stale. A check that merely finds
 one Material Design 3 marker somewhere in a file is not sufficient evidence that every rendered
 element in that file conforms.
+## Material Design 3 surface policy
+
+Every rendered element in the Windows desktop application uses Material Design 3 primitives and project tokens for color, typography, shape, elevation, state layers, focus, motion, density, scaling, and accessibility. No screen, node, dialog, panel, menu, dropdown, picker, tab, settings section, overlay, status surface, empty state, or error state is exempt. Legacy controls and custom lookalikes are defects to repair, not surfaces to preserve.
+
+The documentation and landing site runs in Kids mode by default. Its current visual style is preserved. Site changes are limited to stale facts, data, releases, links, features, accessibility, and broken behavior. Restyling the site is outside the desktop audit scope.
 
 ## House rules that come up in review
 

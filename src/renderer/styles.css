@@ -104,6 +104,8 @@
   --md-shape-extra-large: var(--radius-xxl); /* 28px */
   --md-shape-full: var(--radius-full); /* pill / circular */
   /* Measured desktop component geometry, kept named so surfaces share one Material Design 3 scale. */
+  /* Component-specific geometry remains a token rather than a one-off declaration. These values
+     are the measured node, section, and compact badge shapes in the checked-in desktop design. */
   --md-shape-node: 24px;
   --md-shape-section: 20px;
   --md-shape-compact: 4px;

@@ -20,6 +20,7 @@ import { useState } from 'react'
 import { SessionMemoryPanel } from './SessionMemoryPanel'
 import { LocalHistoryPanel } from './LocalHistoryPanel'
 import { ChangelogPanel } from './changelog/ChangelogPanel'
+import { Tabs } from '@renderer/ui/md3'
 
 export interface HistoryScreenProps {
   /** Same contract as SessionMemoryPanel's own prop — travel to the node behind a session-memory
@@ -49,22 +50,17 @@ export function HistoryScreen({ onGoToNode, onKillSession }: HistoryScreenProps)
             Session memory · local settings history · changelog
           </div>
         </div>
-        <div className="md3-history-screen__tabs" role="tablist" aria-label="History sections">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              role="tab"
-              id={`history-tab-${t.id}`}
-              aria-selected={tab === t.id}
-              aria-controls={`history-tabpanel-${t.id}`}
-              className={`md3-history-screen__tab${tab === t.id ? ' md3-history-screen__tab--active' : ''}`}
-              onClick={() => setTab(t.id)}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
+        <Tabs
+          items={TABS}
+          value={tab}
+          onChange={(id) => setTab(id as HistoryTab)}
+          ariaLabel="History sections"
+          className="md3-history-screen__tabs"
+          tabClassName="md3-history-screen__tab"
+          activeTabClassName="md3-history-screen__tab--active"
+          idPrefix="history-tab"
+          panelIdPrefix="history-tabpanel"
+        />
       </div>
 
       <div className="md3-history-screen__body">

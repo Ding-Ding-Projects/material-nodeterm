@@ -72,6 +72,14 @@ later commit, since this file will not be kept in lockstep with every merge).
       cancellable operation plumbing and duplicate-submit protection in `src/core/wsl/`,
       `src/shared/wsl.ts`, the bridges, and `src/renderer/wsl/WslCreateDialog.tsx`. Focused
       verification and real built-artifact interaction remain pending.
+- [ ] **Full Material Design 3 surface audit (#91)**: source-level inventory and remediation are
+      recorded in `docs/features/appearance/material-3-audit.md` and checked by
+      `scripts/check-material-audit.mjs` (201 rows, including every desktop shell, node,
+      destination, settings section, overlay, status state, empty/error state, and checked-in
+      documentation page). Shared numeric, radio, progress, tooltip, and one-off shape defects were
+      repaired. Built-artifact clipping and pixel verification remain pending. The Comments &
+      Activity panel is retained for p80, the existing-worktree picker for p81, and the WSL creator
+      clipping finding for p79.
 
 - [ ] **Portable canvas projection**: schema 3 root and future universe canvas payloads now have
       a deterministic, bounded, platform-free projection and validator in
