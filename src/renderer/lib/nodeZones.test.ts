@@ -14,7 +14,6 @@ import { NODE_MAXIMIZE_MARGIN_PX, maximizeTargetRect } from './nodeMaximize'
 const VP = { x: 0, y: 0, zoom: 1 }
 const W = 1200
 const H = 800
-const M = ZONE_MARGIN_PX
 const M = NODE_MAXIMIZE_MARGIN_PX
 const G = ZONE_GUTTER_PX
 
@@ -42,7 +41,6 @@ describe('zoneTargetRect', () => {
     expect(br.y - (tl.y + tl.height)).toBeCloseTo(G)
   })
 
-  it('converts to flow coordinates like a fit-view (zoom + camera offset)', () => {
   it('thirds tile the width with two gutters, center inset on both sides', () => {
     const l = zoneTargetRect(VP, W, H, 'left-third')!
     const c = zoneTargetRect(VP, W, H, 'center-third')!
@@ -62,11 +60,6 @@ describe('zoneTargetRect', () => {
     expect(left.width).toBeCloseTo((W - 2 * M - G) / 2 / 0.5)
   })
 
-  it('refuses a zone smaller than a node header, per zone rather than per container', () => {
-    expect(zoneTargetRect(VP, 0, 0, 'left-half')).toBeNull()
-    // 280px wide: a HALF of the width comes out under the minimum…
-    expect(zoneTargetRect(VP, 280, 800, 'left-half')).toBeNull()
-    // …but a full-width zone in the same container still fits.
   it('a full-viewport zone would be maximize — the two modules agree on the frame', () => {
     // Not a real zone, but the outer edges must match: left-half + right-half spans exactly the
     // rect maximizeTargetRect answers, so the two features can never disagree about the margin.

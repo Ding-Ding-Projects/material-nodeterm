@@ -526,6 +526,7 @@ export function buildRealApi(
     schedule: (timerId, scheduledAt) => client.request(IPC.timerOccurrenceSchedule, timerId, scheduledAt) as Promise<import('../../shared/timer').TimerOccurrence | null>,
     transition: (id, state) => client.request(IPC.timerOccurrenceTransition, id, state) as Promise<import('../../shared/timer').TimerOccurrence | null>,
     lap: (id, elapsedMs) => client.request(IPC.timerOccurrenceLap, id, elapsedMs) as Promise<number[] | null>
+  }
   // REAL: WorkspaceStore (core) registers the project-settings:* channels too — same
   // registerIpc() call as workspace above — so the server serves this on both shells.
   const projectSettings: NodeTerminalApi['projectSettings'] = {

@@ -69,7 +69,6 @@ export const ZONES: readonly { id: ZoneId; label: string; frac: ZoneFraction }[]
   { id: 'top-left', label: 'Top left quarter', frac: { x0: 0, y0: 0, x1: 0.5, y1: 0.5 } },
   { id: 'top-right', label: 'Top right quarter', frac: { x0: 0.5, y0: 0, x1: 1, y1: 0.5 } },
   { id: 'bottom-left', label: 'Bottom left quarter', frac: { x0: 0, y0: 0.5, x1: 0.5, y1: 1 } },
-  { id: 'bottom-right', label: 'Bottom right quarter', frac: { x0: 0.5, y0: 0.5, x1: 1, y1: 1 } }
   { id: 'bottom-right', label: 'Bottom right quarter', frac: { x0: 0.5, y0: 0.5, x1: 1, y1: 1 } },
   { id: 'left-third', label: 'Left third', frac: { x0: 0, y0: 0, x1: 1 / 3, y1: 1 } },
   { id: 'center-third', label: 'Center third', frac: { x0: 1 / 3, y0: 0, x1: 2 / 3, y1: 1 } },
@@ -102,7 +101,6 @@ export function zoneTargetRect(
   containerWidth: number,
   containerHeight: number,
   zone: ZoneId,
-  marginPx: number = ZONE_MARGIN_PX,
   marginPx: number = NODE_MAXIMIZE_MARGIN_PX,
   gutterPx: number = ZONE_GUTTER_PX
 ): FlowRect | null {
