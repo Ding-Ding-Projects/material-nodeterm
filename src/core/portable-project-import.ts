@@ -245,6 +245,9 @@ export async function importPortableProjectV3(bytes: Buffer, options: PortablePr
       }
     : manifest
   const outputManifestBytes = Buffer.from(JSON.stringify(outputManifest, null, 2) + '\n', 'utf8')
+  if (outputManifestBytes.length > PORTABLE_PROJECT_LIMITS.maxManifestBytes) {
+    throw new PortableProjectV3Error('manifest', 'The repaired portable project manifest exceeds its byte limit.')
+  }
   ensureNotCancelled(options)
   const id = freshProjectId()
   const project = portableCanvasProjectionToProject(projection, { id })
