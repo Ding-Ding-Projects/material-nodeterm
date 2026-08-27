@@ -1,8 +1,3 @@
-import type { AccountPresentation } from "../lib/accountPresentation";
-
-// S6 PR 8 — the identity + provenance pills rendered on every Codex account surface (settings,
-// node chrome, create/switch menus). Based on @Corvin's #112 (`AccountIdentityPills.tsx`).
-
 import type { AccountPresentation } from '../lib/accountPresentation'
 
 /**
@@ -10,22 +5,7 @@ import type { AccountPresentation } from '../lib/accountPresentation'
  * "selected" check. The whole cluster shares one native tooltip (the presentation's `tooltip`), so
  * the same account reads identically wherever it appears.
  */
-export function AccountIdentityPills({
-  account,
-  selected = false,
-  warning = false,
-  className = "",
-}: {
-  account: AccountPresentation;
-  selected?: boolean;
-  warning?: boolean;
-  className?: string;
-}): React.JSX.Element {
-  return (
-    <span
-      className={`account-identity-pills${warning ? " account-identity-pills--warning" : ""}${className ? ` ${className}` : ""}`}
-  className = ''
-}: {
+export function AccountIdentityPills({ account, selected = false, warning = false, className = '' }: {
   account: AccountPresentation
   selected?: boolean
   warning?: boolean
@@ -46,6 +26,5 @@ export function AccountIdentityPills({
         </span>
       ) : null}
     </span>
-  );
   )
 }

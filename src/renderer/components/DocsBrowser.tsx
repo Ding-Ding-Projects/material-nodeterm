@@ -53,9 +53,8 @@ interface ScrollRequest {
   nonce: number
 }
 
-export function DocsBrowser(): JSX.Element {
-  const vocab = useVocabularyMapper()
 export function DocsBrowser({ initialPath }: { initialPath?: string } = {}): JSX.Element {
+  const vocab = useVocabularyMapper()
   const { state, retry } = useDocsBundle()
   const articles = state.status === 'ready' ? state.articles : EMPTY_ARTICLES
 
