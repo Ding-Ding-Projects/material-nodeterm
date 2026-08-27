@@ -26,7 +26,8 @@ later commit, since this file will not be kept in lockstep with every merge).
       in `scripts/check-personal-vocabulary-coverage.mjs`. The source repair now reconciles 145
       unique personal-vocabulary producer rows, restores the settings mapper boundaries, and
       removes the duplicated project-save notification outcome, but the parent build has not yet
-      been rerun. The combined recovery remains unchecked until the parent integration lane records
+      been rerun. WSL copy coverage now includes the validating progress catalogue entry and a
+      CRLF/LF-safe exact-row mutation check. The combined recovery remains unchecked until the parent integration lane records
       build, packaging, and release-workflow evidence. The ultra-speed pass intentionally omits
       tests, type checks, lint, reviews, accessibility and security checks, runtime interaction,
       and screen captures after activation.
