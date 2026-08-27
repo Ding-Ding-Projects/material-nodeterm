@@ -126,6 +126,7 @@ import PhotoNode from '../nodes/PhotoNode'
 import GalleryNode from '../nodes/GalleryNode'
 import WildDimSumNode from '../nodes/WildDimSumNode'
 import WebNode from '../nodes/WebNode'
+import AwsResourceNode from '../nodes/AwsResourceNode'
 import { NativeLoopNode, setNativeLoopRunHandler } from '../nodes/NativeLoopNode'
 import TimerNode from '../nodes/TimerNode'
 import AlarmClockNode from '../nodes/AlarmClockNode'
@@ -748,6 +749,7 @@ import {
   createGalleryNode,
   createWildDimSumNode,
   createWebNode,
+  createAwsResourceNode,
   isVideoFile,
   duplicateNode,
   flowToNodeStates,
@@ -2120,7 +2122,8 @@ export function Canvas() {
       'cloudflare-zero-trust': withNodeBoundary(ServiceNode),
       'nextcloud-aio': withNodeBoundary(ServiceNode),
       'cloudflare-core-managers': withNodeBoundary(CloudflareCoreManagersNode),
-      'linux-vm': withNodeBoundary(VirtualMachineNode)
+      'linux-vm': withNodeBoundary(VirtualMachineNode),
+      'aws-resource': withNodeBoundary(AwsResourceNode)
     }),
     []
   )
@@ -5640,7 +5643,7 @@ export function Canvas() {
         notify({ kind: 'error', title: 'Node unavailable', body: availability.reason ?? 'Choose another node.' })
         return
       }
-      if (entry.id === 'aws-universe') {
+            if (entry.id === 'aws-universe') {
         const result = createAwsUniverse('New AWS Universe')
         if (result.canvasId) navigateAwsUniverse(result.canvasId)
         else notify({ kind: 'error', title: 'AWS Universe unavailable', body: result.reason ?? 'The AWS Universe could not be created.' })
@@ -5705,6 +5708,8 @@ export function Canvas() {
             if (catalogEntry.id.startsWith('service:')) {
               return createServiceNode(catalogEntry.nodeKind as ServiceNodeKind, index, center)
             }
+            if (catalogEntry.id === 'aws-resource-explorer') return createAwsResourceNode(index, 'resource-explorer', center)
+            if (catalogEntry.id === 'aws-cloud-control') return createAwsResourceNode(index, 'cloud-control', center)
             if (catalogEntry.id === 'cloudflare-core-managers') return createCloudflareCoreManagersNode(index, center)
             // File and diff rows stay visible but disabled until their picker prerequisites exist.
             return null

@@ -29,6 +29,7 @@ the deep architecture reference these articles are distilled from.
 | [Global and project settings](./global-and-project-settings.md) | Durable app defaults and complete sparse per-project overlays. |
 | [Help](./help/README.md) | The in-app offline documentation browser these articles are read in. |
 | [Calendar](./calendar/README.md) | Local, ICS, CalDAV, Google Calendar, and Microsoft 365 calendar nodes with offline cache and guided provider binding. |
+| [AWS managers](./aws/README.md) | Resource Explorer and Cloud Control manager nodes with local bindings, operation previews, bounded results, and cancellation. |
 
 ## How these articles are organized
 

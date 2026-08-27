@@ -18,7 +18,9 @@ media, managers, automation, and tools. Rows that cannot be created in the curre
 visible and explain the exact missing capability and the next action. An editor or diff row, for
 example, waits for a project file picker instead of accepting an arbitrary path.
 
-The registry also carries explicit disabled blueprint rows for planned Home Assistant sensor,
+The registry carries active AWS Resource Explorer and Cloud Control manager rows. They open guided
+manager nodes with local profile and region binding, generated-operation previews, bounded results,
+and cancellation. The registry also carries explicit disabled blueprint rows for planned Home Assistant sensor,
 Calendar, Planner,
 Multiverse, AWS Universe, AWS service, Cloudflare hosting, Nextcloud hosting, and Open WebUI
 hosting nodes. GitLab hosting is available as a guided private Server node with a pinned official

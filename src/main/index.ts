@@ -58,6 +58,7 @@ import { registerNodeDependencyIpc } from '../core/node-dependencies/register-ip
 import { registerOllamaIpc } from '../core/ollama/register-ipc'
 import { registerMinecraftIpc } from '../core/minecraft/register-ipc'
 import { registerAwsIdentityIpc } from '../core/aws-identity'
+import { registerAwsResourceIpc } from '../core/aws-resource-register-ipc'
 import { registerTorrentIpc } from '../core/torrent/register-ipc'
 import { registerVirtualMachineIpc } from '../core/virtual-machine/register-ipc'
 import { registerCalendarIpc } from '../core/calendar/register-ipc'
@@ -2382,6 +2383,10 @@ app.whenReady().then(async () => {
       const dependency = await nodeDependencyService.status('aws-cli-v2')
       return { path: dependency.executablePath, reason: dependency.disabledReason }
     }
+  })
+  registerAwsResourceIpc(corePlatform, async () => {
+    const dependency = await nodeDependencyService.status('aws-cli-v2')
+    return { path: dependency.executablePath ?? null, reason: dependency.disabledReason }
   })
   registerTorrentIpc(corePlatform)
   virtualMachineManager = registerVirtualMachineIpc(corePlatform).manager

@@ -30,6 +30,7 @@ import { repairPortablePortals, validatePortablePortals, type PortablePortalV3 }
 import { normalizeCloudflareIntent as normalizeCloudflareZeroTrustIntent, type CloudflarePortableIntent as CloudflareZeroTrustPortableIntent } from '../shared/cloudflare-zero-trust'
 import { normalizeCloudflareIntent as normalizeCloudflareCoreIntent, type CloudflarePortableIntent as CloudflareCorePortableIntent } from '../shared/cloudflare-core-managers'
 import { normalizeNextcloudAioConfig, type NextcloudAioConfig } from '../shared/nextcloud-aio'
+import type { AwsManagerPortableIntent } from '../shared/aws-resource'
 
 export type PortableCanvasScope = 'root' | 'multiverse' | 'aws-universe'
 
@@ -67,6 +68,8 @@ export interface PortableCanvasNodeV3 {
   url?: string
   browserTabs?: Array<{ id: string; url?: string; title: string }>
   serviceLabel?: string
+  /** Safe AWS manager intent; local bindings and provider state remain outside the project file. */
+  awsManagerIntent?: AwsManagerPortableIntent
   /** Typed Cloudflare operation intent only; credentials and provider bindings are local. */
   cloudflareZeroTrustIntent?: CloudflareZeroTrustPortableIntent
   cloudflareCoreIntent?: CloudflareCorePortableIntent
@@ -156,7 +159,7 @@ const ALLOWED_VIEWPORT = new Set(['x', 'y', 'zoom'])
 const ALLOWED_NODE = new Set([
   'id', 'kind', 'creationEventId', 'position', 'size', 'title', 'color', 'group',
   'universeCanvasId', 'universeScope', 'universeDepth', 'nonDeletable', 'shopSelection',
-  'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel',
+  'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel', 'awsManagerIntent',
   'wildDimSumDish', 'homeAssistantIntent', 'homeAssistantControlConfig', 'homeAssistantSensorConfig', 'cloudflareZeroTrustIntent', 'cloudflareCoreIntent', 'nextcloudAioConfig',
   'alarmSchedule', 'alarmTimeZone', 'alarmEnabled', 'alarmSnoozeMinutes',
   'alarmSoundEnabled', 'alarmNarratorEnabled', 'alarmHistory', 'mediaAssets',
@@ -281,6 +284,12 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
   if (node.text !== undefined) out.text = content(node.text, 'node text')
   if (node.url !== undefined) { const url = safeUrl(node.url, 'node URL'); if (url) out.url = url }
   if (node.serviceLabel !== undefined) out.serviceLabel = text(node.serviceLabel, 'service label')
+  if (node.awsManagerIntent !== undefined) {
+    const intent = node.awsManagerIntent
+    if (!record(intent) || intent.schemaVersion !== 1 || !['resource-explorer', 'cloud-control'].includes(intent.mode)) throw new PortableProjectV3Error('manifest', 'Portable AWS manager intent is invalid.')
+    if (!text(intent.regionIntent, 'AWS region intent') || intent.regionIntent.length > 64 || typeof intent.resourceQuery !== 'string' || intent.resourceQuery.length > 1024 || typeof intent.cloudControlTypeName !== 'string' || intent.cloudControlTypeName.length > 256) throw new PortableProjectV3Error('manifest', 'Portable AWS manager intent exceeds its bounds.')
+    out.awsManagerIntent = { schemaVersion: 1, mode: intent.mode, regionIntent: intent.regionIntent, resourceQuery: intent.resourceQuery, cloudControlTypeName: intent.cloudControlTypeName }
+  }
   if (node.cloudflareZeroTrustIntent !== undefined) {
     const intent = normalizeCloudflareZeroTrustIntent(node.cloudflareZeroTrustIntent)
     if (!intent) throw new PortableProjectV3Error('manifest', 'Portable Cloudflare manager intent is invalid.')
@@ -664,6 +673,7 @@ export function portableCanvasProjectionToProject(
     ...(node.url !== undefined ? { url: node.url } : {}),
     ...(node.browserTabs ? { browserTabs: node.browserTabs.map((tab) => ({ ...tab })) } : {}),
     ...(node.serviceLabel !== undefined ? { serviceLabel: node.serviceLabel } : {}),
+    ...(node.awsManagerIntent !== undefined ? { awsManagerIntent: { ...node.awsManagerIntent } } : {}),
     ...(node.cloudflareZeroTrustIntent !== undefined ? { cloudflareZeroTrustIntent: normalizeCloudflareZeroTrustIntent(node.cloudflareZeroTrustIntent)! } : {}),
     ...(node.cloudflareCoreIntent !== undefined ? { cloudflareCoreIntent: normalizeCloudflareCoreIntent(node.cloudflareCoreIntent) } : {}),
     ...(node.nextcloudAioConfig !== undefined ? { nextcloudAioConfig: normalizeNextcloudAioConfig(node.nextcloudAioConfig) } : {}),

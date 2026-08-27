@@ -15,6 +15,7 @@ substrate described in CLAUDE.md rather than inventing a surface each.
 | [Special-universe Shop nodes](aws-universe-shop.md) | implemented deterministic, scope-bound Shop coordinator and catalog surface; AWS executors remain visibly unavailable until their later lanes |
 | [AWS CLI model documentation index](aws-cli-model-documentation.md) | platform-free bounded index for official service, command, option, paginator, waiter, input, output, and skeleton metadata; runtime verification remains unrun |
 | [AWS identity manager](aws-identity.md) | guided local profile, IAM Identity Center, role, MFA, region, and service-endpoint controls with safe portable intent and machine-local bindings; host CLI actions remain visibly unavailable until the fixed operation runner is connected |
+| [AWS managers](../aws/README.md) | Resource Explorer and Cloud Control manager nodes with local bindings, operation previews, bounded results, cancellation, and destructive confirmation |
 | [Torrent Downloader](../torrents/torrent-downloader.md) | local WebTorrent downloads with safe machine-local task state |
 | [Linux ISO VM](linux-iso-vm.md) | implemented canvas node with bundled QEMU, WHPX preference, QMP lifecycle, loopback display, persistent/disposable modes, and network-off default |
 | [Planner occurrences](planner-occurrences.md) | host-owned durable recurrence, timezone/DST handling, missed history, UI-closure continuity, and schema 3 definition transfer with explicit destination Configure |

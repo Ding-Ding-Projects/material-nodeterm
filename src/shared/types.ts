@@ -391,6 +391,8 @@ export type NodeKind =
   | 'shop'
   // AWS Universe portal. The portal is a safe project intent and never carries provider state.
   | 'aws-universe'
+  // Guided Resource Explorer and Cloud Control manager. Only safe operation intent is portable.
+  | 'aws-resource'
   // A GUI for authoring a Windows NSIS installer script for ANOTHER project (not this app's
   // own installer, which stays Squirrel.Windows — see CLAUDE.md's Packaging section). See
   // `NsisSpec`/`NsisLocalPaths` in `./nsis-form-types` for the shared-vs-machine-local split.
@@ -675,6 +677,8 @@ export interface CanvasNodeState {
   gitlabHostingConfig?: import('./gitlab-hosting').GitLabHostingConfig
   /** torrent-only: safe display intent shared with the canvas; task state and paths stay local. */
   torrentMagnet?: string
+  /** AWS manager safe operation intent. Profiles, endpoints, results, and credentials stay local. */
+  awsManagerIntent?: import('./aws-resource').AwsManagerPortableIntent
   /** Linux ISO VM settings stored in the shared project projection. */
   virtualMachineConfig?: import('./virtual-machine').VirtualMachineConfig
   /** Linux ISO/disk selections stored only in the machine-local execution overlay. */
@@ -4734,6 +4738,8 @@ export interface NodeTerminalApi {
   minecraft: import('./minecraft').MinecraftApi
   /** Desktop-local AWS profile discovery. Credentials and provider sessions never cross IPC. */
   awsIdentity: import('./aws-identity').AwsIdentityApi
+  /** Desktop AWS Resource Explorer and Cloud Control managers. */
+  awsResource?: import('./aws-resource').AwsResourceApi
   /** Local Linux ISO VM lifecycle — docs/linux-iso-vm.md. */
   virtualMachine: import('./virtual-machine').VirtualMachineApi
   /** Machine-local Home Assistant instances with bounded REST and WebSocket discovery. */

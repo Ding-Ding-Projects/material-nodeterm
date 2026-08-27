@@ -44,6 +44,7 @@ import type { ProjectConsentRequest, ProjectSetupEvent } from '../shared/project
 import type { CloudflareApi, CloudflareCatalog, CloudflareExecutionProgress, CloudflareExecutionResult } from '../shared/cloudflare-zero-trust'
 import type { GitHubApiRequest, GitHubApiProgress } from '../shared/github-api'
 import type { AwsIdentityAction, AwsIdentityBinding, AwsIdentityOperation } from '../shared/aws-identity'
+import type { AwsManagerProgress } from '../shared/aws-resource'
 
 // Fan a single ipcRenderer listener per channel out to many renderer subscribers. Without
 // this, every node that subscribes (e.g. Cmd+M markdown toggle on each terminal/editor) adds
@@ -100,6 +101,7 @@ const subscribeVirtualMachineEvent = subscribe<[VirtualMachineEvent]>(IPC.virtua
 const subscribeCloudflareCoreProgress = subscribe<[CloudflareProgress]>(IPC.cloudflareCoreProgress)
 const subscribeHomeAssistantEvent = subscribe<[HomeAssistantClientEvent]>(IPC.homeAssistantEvent)
 const subscribeCloudflareProgress = subscribe<[CloudflareExecutionProgress & { nodeId: string }]>(IPC.cloudflareProgress)
+const subscribeAwsResourceProgress = subscribe<[AwsManagerProgress]>(IPC.awsResourceProgress)
 const subscribeWidgetState = subscribe<[CanvasWidgetLiveState]>(IPC.widgetStateChanged)
 
 const subscribeRelayPeerPending = subscribe<[RelayPeerPending]>(IPC.relayHostPeerPending)
@@ -1261,6 +1263,17 @@ const api: NodeTerminalApi = {
     start: (action: AwsIdentityAction, profileName: string, binding?: AwsIdentityBinding) => ipcRenderer.invoke(IPC.awsIdentityStart, action, profileName, binding),
     cancel: (operationId: string) => ipcRenderer.invoke(IPC.awsIdentityCancel, operationId),
     onOperation: (listener: (operation: AwsIdentityOperation) => void) => subscribe<[AwsIdentityOperation]>(IPC.awsIdentityOperation)((operation) => listener(operation))
+  },
+  awsResource: {
+    runtime: () => ipcRenderer.invoke(IPC.awsResourceRuntime),
+    profiles: () => ipcRenderer.invoke(IPC.awsResourceProfiles),
+    binding: (nodeId) => ipcRenderer.invoke(IPC.awsResourceBinding, nodeId),
+    bind: (input) => ipcRenderer.invoke(IPC.awsResourceBind, input),
+    unbind: (nodeId) => ipcRenderer.invoke(IPC.awsResourceUnbind, nodeId),
+    preview: (nodeId, request) => ipcRenderer.invoke(IPC.awsResourcePreview, nodeId, request),
+    execute: (nodeId, operationId, request) => ipcRenderer.invoke(IPC.awsResourceExecute, nodeId, operationId, request),
+    cancel: (operationId) => ipcRenderer.invoke(IPC.awsResourceCancel, operationId),
+    onProgress: (listener) => subscribeAwsResourceProgress(listener)
   },
   torrent: {
     runtime: () => ipcRenderer.invoke(IPC.torrentRuntime),

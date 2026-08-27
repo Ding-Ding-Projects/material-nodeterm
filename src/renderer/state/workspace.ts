@@ -60,6 +60,7 @@ import { TIMER_DEFAULT_DURATION_MS, type TimerNodeData } from '@shared/timer'
 import { normalizeAwsIdentityIntent } from '@shared/aws-identity'
 import { createRecoveryGameSnapshot, normalizeRecoveryGameSnapshot, type RecoveryGameSnapshot } from '@shared/recovery-game'
 import { CLOUDFLARE_DEFAULT_INTENT, type CloudflarePortableIntent } from '@shared/cloudflare-core-managers'
+import { AWS_MANAGER_DEFAULT_INTENT, type AwsManagerMode, type AwsManagerPortableIntent } from '@shared/aws-resource'
 
 // Re-exported so Canvas (and anything else in the renderer) keeps importing it from here, while the
 // single implementation lives in src/shared and is shared with the relay host + the canvas-sync
@@ -98,6 +99,7 @@ const WEB_SIZE = { width: 720, height: 520 }
 const BROWSER_SIZE = { width: 800, height: 560 }
 const NATIVE_LOOP_SIZE = { width: 340, height: 280 }
 const SHOP_SIZE = { width: 480, height: 420 }
+export const AWS_RESOURCE_SIZE = { width: 720, height: 580 }
 export const TORRENT_SIZE = { width: 620, height: 520 }
 export const CLOUDFLARE_CORE_MANAGERS_SIZE = { width: 760, height: 680 }
 const LINUX_VM_SIZE = { width: 760, height: 560 }
@@ -283,6 +285,8 @@ export interface NodeData {
   serviceConnection?: ServiceConnection
   /** Safe torrent magnet intent shared with the canvas. */
   torrentMagnet?: string
+  /** AWS Resource Explorer and Cloud Control safe portable intent. */
+  awsManagerIntent?: AwsManagerPortableIntent
   /** nsis-only, GIT-SHARED: the installer's description. See `NsisSpec`. */
   nsisSpec?: NsisSpec
   /** nsis-only, MACHINE-LOCAL: absolute source/license/icon paths on this machine. Stripped
@@ -1502,6 +1506,24 @@ export function createTimerNode(index: number, center?: { x: number; y: number }
   return { id: nextId('timer'), type: 'timer', position: placeAt(center, index, TIMER_SIZE.width, TIMER_SIZE.height), width: TIMER_SIZE.width, height: TIMER_SIZE.height, style: { width: TIMER_SIZE.width, height: TIMER_SIZE.height }, data }
 }
 
+/** Creates one guided AWS manager node; local profiles and provider state remain in core. */
+export function createAwsResourceNode(index: number, mode: AwsManagerMode = 'resource-explorer', center?: { x: number; y: number }): CanvasNode {
+  return {
+    id: nextId('aws-resource'),
+    type: 'aws-resource',
+    position: placeAt(center, index, AWS_RESOURCE_SIZE.width, AWS_RESOURCE_SIZE.height),
+    width: AWS_RESOURCE_SIZE.width,
+    height: AWS_RESOURCE_SIZE.height,
+    style: { width: AWS_RESOURCE_SIZE.width, height: AWS_RESOURCE_SIZE.height },
+    data: {
+      title: mode === 'cloud-control' ? 'AWS Cloud Control' : 'AWS Resource Explorer',
+      color: '#ff9900',
+      group: null,
+      awsManagerIntent: { ...AWS_MANAGER_DEFAULT_INTENT, mode }
+    }
+  }
+}
+
 /** Creates a root portal card for one AWS-only child canvas. */
 export function createAwsUniversePortalNode(index: number, canvasId: string, title: string, center?: { x: number; y: number }): CanvasNode {
   const size = NODE_START_SIZE['aws-universe']
@@ -2309,6 +2331,7 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   nsis: true,
   shop: true,
   'aws-universe': true,
+  'aws-resource': true,
   torrent: true,
   'linux-vm': true
 }
@@ -2366,6 +2389,7 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   nsis: NSIS_SIZE,
   shop: SHOP_SIZE,
   'aws-universe': { width: 320, height: 220 },
+  'aws-resource': AWS_RESOURCE_SIZE,
   torrent: TORRENT_SIZE,
   'linux-vm': LINUX_VM_SIZE
 }
@@ -2833,6 +2857,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         creationEventId: n.creationEventId,
         shopSelection: (n as CanvasNodeState & { shopSelection?: string }).shopSelection,
         torrentMagnet: n.torrentMagnet,
+        awsManagerIntent: n.awsManagerIntent,
         serviceConnection: n.serviceConnection,
         cloudflareZeroTrustIntent: n.cloudflareZeroTrustIntent,
         cloudflareCoreIntent: n.cloudflareCoreIntent,
@@ -2963,6 +2988,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         creationEventId: n.data.creationEventId,
         shopSelection: n.data.shopSelection,
         torrentMagnet: n.data.torrentMagnet,
+        awsManagerIntent: n.data.awsManagerIntent,
         serviceConnection: n.data.serviceConnection,
         cloudflareZeroTrustIntent: n.data.cloudflareZeroTrustIntent,
         cloudflareCoreIntent: n.data.cloudflareCoreIntent,
