@@ -14,6 +14,7 @@ import { registerTorrentIpc } from '../../core/torrent/register-ipc'
 import { registerVirtualMachineIpc } from '../../core/virtual-machine/register-ipc'
 import { registerCalendarIpc } from '../../core/calendar/register-ipc'
 import { registerProviderServicesIpc } from '../../core/provider-services'
+import { registerRemoteOAuthCallbackIpc } from '../../core/remote-oauth-callback'
 import { registerHomeAssistantIpc } from '../../core/home-assistant/register-ipc'
 import { registerHomeAssistantControlIpc } from '../../core/home-assistant-control/register-ipc'
 import { registerHomeAssistantSensorIpc } from '../../core/home-assistant-sensor/register-ipc'
@@ -88,6 +89,7 @@ export function registerCoreHandlers(
   const { manager: virtualMachineManager } = registerVirtualMachineIpc(platform)
   registerCalendarIpc(platform)
   registerProviderServicesIpc(platform)
+  registerRemoteOAuthCallbackIpc(platform)
   registerHomeAssistantIpc(platform)
   registerHomeAssistantControlIpc(platform)
   registerHomeAssistantSensorIpc(platform)

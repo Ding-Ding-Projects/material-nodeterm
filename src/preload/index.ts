@@ -447,6 +447,10 @@ const api: NodeTerminalApi = {
       ipcRenderer.invoke(IPC.sshUploadFile, projectId, localPath, fileName),
     downloadFile: (projectId, remotePath, destDir) =>
       ipcRenderer.invoke(IPC.sshDownloadFile, projectId, remotePath, destDir),
+    forwardOAuthCallback: (projectId, port) =>
+      ipcRenderer.invoke(IPC.sshOAuthForward, projectId, port),
+    cancelOAuthCallback: (projectId, port) =>
+      ipcRenderer.invoke(IPC.sshOAuthForwardCancel, projectId, port),
     onStatus: (cb) => {
       const h = (_e: unknown, e: unknown) => cb(e as never)
       ipcRenderer.on(IPC.sshProjectStatus, h)

@@ -132,6 +132,7 @@ import type {
 import type { PlannerFile, PlannerLoadState, PlannerOccurrence } from '../../shared/planner-occurrences'
 import type { VsCodeInstall, VsCodeOpenResult } from '../../shared/vscode'
 import type { HistoryFilters, HistoryListResult, HistoryRestoreResult } from '../../shared/local-history'
+import type { RemoteOAuthApi } from '../../shared/remote-oauth'
 import { buildStubApi } from './stubs'
 import { mountPickerRoot, openDirectoryPicker } from './dialog-picker'
 import { encodePcmForWire } from './speech-encode'
@@ -741,6 +742,16 @@ export function buildProviderServicesApi(
       removeAccount: (accountId) => client.request(IPC.providerRemoveAccount, accountId) as ReturnType<NodeTerminalApi['providerServices']['removeAccount']>
     }
   }
+}
+
+/** Server Edition callback completion stays host-local and is scoped to this authenticated WS UI. */
+export function buildRemoteOAuthApi(client: RpcClient): Pick<NodeTerminalApi, 'remoteOAuth'> {
+  const remoteOAuth: RemoteOAuthApi = {
+    arm: (input) => client.request(IPC.remoteOAuthArm, input) as ReturnType<RemoteOAuthApi['arm']>,
+    complete: (callbackUrl) => client.request(IPC.remoteOAuthComplete, callbackUrl) as ReturnType<RemoteOAuthApi['complete']>,
+    cancel: () => client.request(IPC.remoteOAuthCancel) as ReturnType<RemoteOAuthApi['cancel']>
+  }
+  return { remoteOAuth }
 }
 
 /**
@@ -1722,6 +1733,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildVirtualMachineApi(client),
     ...buildCalendarApi(client),
     ...buildProviderServicesApi(client),
+    ...buildRemoteOAuthApi(client),
     ...buildHomeAssistantApi(client),
     ...buildHomeAssistantControlApi(client),
     ...buildHomeAssistantSensorApi(client),

@@ -258,6 +258,20 @@ queries it.
 
 ## Security model
 
+### OAuth callbacks from remote sessions
+
+An OAuth flow started by a CLI on this server can print a localhost callback URL while the browser
+is on another computer. The renderer detects only authorize URLs containing an explicit HTTP
+localhost redirect, then arms a host-local callback completer for the observed port and path. After
+the browser redirects, paste the complete callback URL into the notice shown by the renderer. The
+server fetches the URL locally, with a bounded timeout, only when it still matches the observed
+loopback host, port, and path.
+
+The arm is scoped to the authenticated browser connection, consumed before the fetch, expires after
+ten minutes, and is never written to disk. Callback URLs and response bodies are not logged or
+returned to the browser. A malformed URL, changed port or path, non-loopback host, expired arm,
+redirect, or unavailable listener is refused and requires starting the sign-in flow again.
+
 Single-user auth. There is one password; sessions are per-browser.
 
 - **Password hashing:** scrypt (`N=16384, r=8, p=1`, 32-byte key, per-password random

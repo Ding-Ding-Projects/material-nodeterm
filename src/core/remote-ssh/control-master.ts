@@ -673,6 +673,24 @@ export function hookForwardArgs(conn: SshConnection, controlPath: string, remote
 export function hookForwardCancelArgs(conn: SshConnection, controlPath: string, remoteSock: string, hookPort: number): string[] {
   return ['-O', 'cancel', '-R', fwdSpec(remoteSock, hookPort), '-o', `ControlPath=${controlPath}`, ...portArgs(conn), target(conn)]
 }
+
+/**
+ * Forward one observed OAuth callback port from this machine to the SSH host's loopback.
+ *
+ * The port is the only renderer-supplied value that reaches this argv builder, and it is checked
+ * here as well as in the detector and manager. The callback host is fixed to `localhost`; callers
+ * never get to turn this into an arbitrary host forward.
+ */
+export function oauthForwardArgs(conn: SshConnection, controlPath: string, port: number): string[] {
+  if (!Number.isInteger(port) || port < 1 || port > 65_535) throw new Error('invalid OAuth callback port')
+  return ['-O', 'forward', '-L', `${port}:localhost:${port}`, '-o', `ControlPath=${controlPath}`, ...portArgs(conn), target(conn)]
+}
+
+/** Cancel the exact local OAuth callback forward previously added to this ControlMaster. */
+export function oauthForwardCancelArgs(conn: SshConnection, controlPath: string, port: number): string[] {
+  if (!Number.isInteger(port) || port < 1 || port > 65_535) throw new Error('invalid OAuth callback port')
+  return ['-O', 'cancel', '-L', `${port}:localhost:${port}`, '-o', `ControlPath=${controlPath}`, ...portArgs(conn), target(conn)]
+}
 /**
  * tmux `-e KEY=VALUE` pairs injecting the remote hook endpoint file + node id + protocol version,
  * plus the agent identity. The identity pair matters: the local path's `hookServer.buildPtyEnv`
