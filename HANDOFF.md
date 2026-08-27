@@ -1,5 +1,25 @@
 # Handoff
 
+## 2026-08-27, Cloudflare Tunnel route-planner merge reconstruction
+
+`src/shared/cloudflare-tunnels.ts` retained the one-line existing-route conflict return from one
+implementation and the closing brace from a block-bodied version. That brace ended the `try` body
+before the DNS-only conflict branch, so parsing stopped with `Expected finally but found if`.
+
+The repair restores one block-bodied existing-route branch inside the original `try` scope. It
+keeps the current `route-in-use` versus `hostname-in-use` distinction, permits adoption only when
+the selected tunnel already owns a managed route, preserves the DNS-only conflict when records
+exist without a route, and leaves the exact record, zone, hostname, route, ownership, and explicit
+adoption checks unchanged. The complete file contains one declaration for every exported type,
+interface, normalizer, validator, planner, portable-intent helper, and inventory-search helper.
+
+The direct records for this repair are
+`docs/features/remote/cloudflare-tunnel-inventory.md`, `CHANGELOG.md`, `ROADMAP.md`, and this
+handoff. A single-file esbuild transform reported `PARSE_OK`, which is syntax evidence only. No
+tests, type checks, lint, reviews, audits, builds, packaging, runtime interaction, or screen
+captures were run. The parent integration lane owns the combined pull request, build, packaging,
+release, and broader verification.
+
 ## 2026-08-27, main process index merge-fragment repair
 
 The main process entrypoint `src/main/index.ts` retained stale fragments from several merged

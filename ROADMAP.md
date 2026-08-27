@@ -33,6 +33,9 @@ later commit, since this file will not be kept in lockstep with every merge).
       process entrypoint also removes stale duplicate imports, declarations, handlers, object keys,
       notification composition, quit conditions, and teardown while retaining the corrected SSH
       project argument order; its single-file esbuild transform also reports syntax-only success.
+      The Cloudflare Tunnel route planner now keeps its existing-route and DNS-only conflict
+      branches inside one guarded operation, preserving the fail-closed ownership and adoption
+      predicates; its single-file esbuild transform reports syntax-only success.
       The combined recovery remains unchecked until the parent integration
       lane records build, packaging, and release-workflow evidence. The ultra-speed pass
       intentionally omits tests, type checks, lint, reviews, accessibility and security checks,

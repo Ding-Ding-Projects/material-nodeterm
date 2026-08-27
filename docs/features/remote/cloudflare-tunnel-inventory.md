@@ -72,6 +72,19 @@ security or accessibility checks, builds, packaging, installer execution, runtim
 UI captures. The source and documentation are therefore not a runtime or packaged verification
 claim. The parent integration lane must run its own checks against the exact merged commit.
 
+## Merge-recovery note
+
+The route planner keeps route conflict evaluation and DNS conflict evaluation inside one guarded
+operation. An existing route returns a conflict plan before DNS-only evaluation, while a hostname
+that has DNS records but no route returns a separate DNS conflict plan. A merge had retained both
+the one-line route return and the closing brace from a block-bodied alternative, ending the guarded
+operation early. The recovery restores one coherent branch without changing the exact tunnel,
+ownership, hostname, path, zone, record-type, or explicit-adoption checks described above.
+
+Only a single-file syntax transform was used as evidence for this recovery. Tests, type checks,
+lint, reviews, audits, builds, packaging, runtime interaction, and UI captures were not run in the
+ultra-speed repair lane.
+
 ## Suggested articles
 
 - [Server Edition](./server-edition.md)
