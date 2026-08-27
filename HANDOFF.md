@@ -265,6 +265,28 @@ installation. The offline bundle entry was reconciled manually. This ultra-speed
 did not run tests, type checks, lint, reviews, security checks, accessibility checks, builds,
 packaging, installer execution, runtime interaction, or UI captures. The feature branch was not
 merged into `main` and no cleanup was performed in this lane.
+## 2026-08-27, per-account node colour and binding, issue #71
+
+This lane is implemented on `feat/program-60-account-node-color`, reconciled with the exact
+`origin/main` tip `54164b84dce0b7e62787b1de2885405ff4ed821c`. It ports the account colour and single
+binding decisions from upstream PRs #283 and #319 for the current Claude and Codex account model.
+`ClaudeAccount.color` and `CodexAccount.color` are optional settings values. The Accounts section
+writes them through one shared swatch component, and new nodes capture the colour from the account
+list owned by their builtin agent. Matching ids in the Claude and Codex lists stay independent.
+Empty, malformed, stale, or missing values fall back to the builtin agent colour.
+
+`src/shared/agents/account-binding.ts` provides the shared predicate for the persisted account id.
+`src/core/project-node-append.ts` and the host bridge apply the same account binding and use the
+host-resolved colour for phone-registered nodes. Account colour remains presentation-only and is
+not a credential, path, process, or portable execution field. Existing nodes keep their stored
+colour when an account setting changes.
+
+This source lane intentionally did not run tests, lint, type checks, builds, packaging, installer
+execution, runtime interaction, reviews, security or accessibility audits, or captures. The offline
+documentation bundle was not regenerated. The parent integration lane must verify the merged tree,
+run focused checks, regenerate `src/shared/docs-data.ts`, handle issue progress and closure, and
+keep the account feature's unverified state honest until those checks land. No release or cleanup
+was performed in this lane.
 
 ## 2026-08-27, AWS core-service managers, issue #46 PR preparation
 

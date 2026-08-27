@@ -1610,7 +1610,7 @@ untrusted|on-request|never`. Two rules the mapping exists to enforce: a mode the
   edge/push/map logic in `renderer/lib/noteLink.ts`.
 - **Managed Claude accounts** (Claude-only) — run several logged-in Claude identities side by
   side by giving each its own config dir. `settings.claudeAccounts` is a list of `ClaudeAccount
-{id, label, email?, host?, pending?, createdAt}` (in `settings.json`; the account **list** is
+{id, label, email?, host?, pending?, color?, createdAt}` (in `settings.json`; the account **list** is
   config, not credentials). Isolation is **config-dir**, not token storage: a local account's dir
   is `{userData}/claude-accounts/<id>` (`claudeConfigDirFor` / pure `accountConfigDir`),
   a **remote** account's is `~/.nodeterm/claude-accounts/<id>` on its `host` (keyed by
@@ -1631,6 +1631,13 @@ untrusted|on-request|never`. Two rules the mapping exists to enforce: a mode the
     the project-default account), and validation runs against `accountsForProject`, not the raw
     list, so a **pending** account or one **pinned to another machine's host** is never stamped
     onto a node it cannot run on (both used to reach the missing-dir fallback at spawn).
+  - **Per-account default node colour**: `ClaudeAccount.color` and `CodexAccount.color` are
+    optional settings values edited by shared Accounts-section swatches. `agentAccountColor`
+    selects the list owned by the builtin agent (`claude` or `codex`) and trims only string values;
+    an empty, malformed, stale, or missing colour falls back to the agent's own colour. The chosen
+    value is baked into `data.color` at creation, so existing nodes and hand-picked node colours do
+    not change when an account setting is edited. Phone-registered nodes receive the same result
+    from host-resolved account lists before the raw project file is rewritten.
   - **Env injection** — `pty-manager` sets `CLAUDE_CONFIG_DIR` in the spawn env AND as a tmux `-e`
     (local); for a remote node it emits an **absolute-path** remote tmux `-e` built from the
     connection-cached `remoteHome` (skipped **fail-open** if home is unresolved). `AUTH_ENV_STRIP`

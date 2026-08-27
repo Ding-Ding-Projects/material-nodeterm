@@ -2074,6 +2074,8 @@ export interface ClaudeAccount {
   host?: string
   /** True until `claude /login` completes in the account dir and the email is captured. */
   pending?: boolean
+  /** Optional default node color for nodes opened under this account. */
+  color?: string
   createdAt: number
 }
 

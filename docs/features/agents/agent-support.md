@@ -36,10 +36,13 @@ syntax (they are not standardized across CLIs). A mode a given CLI genuinely can
 never silently mapped onto the nearest one; it's simply not applied, so you never end up with
 broader permissions than you asked for because of a translation gap.
 
-**Managed accounts** (Claude Code only, currently) let you run several logged-in identities
-side by side, each isolated by giving it its own configuration directory — nodeterm never
-handles or stores your credentials itself; the agent CLI's own login flow does, scoped to that
-directory.
+**Managed accounts** let you run several logged-in Claude Code or Codex identities side by side,
+each isolated by its own configuration directory or account home. Each account can carry an
+optional default node colour from Settings → Accounts. A newly created node uses the selected
+account's colour instead of the builtin agent colour, while an existing node keeps its baked colour
+and a manually recoloured node is never rewritten. Claude and Codex account lists are resolved
+independently, so matching ids in the two lists cannot cross-colour nodes. nodeterm never handles
+or stores your credentials itself; the agent CLI's own login flow does, scoped to that directory.
 
 **Context links** let two agent-capable nodes read each other's conversation transcript on
 demand by drawing a connection between them on the canvas — a pull, not a push: nothing is
@@ -47,12 +50,15 @@ sent automatically, an agent has to ask for the linked context when it wants it.
 
 ## Configuration
 
+- **Settings → Accounts**: account labels and optional default node colours for each managed Claude
+  or Codex account. The **Default** swatch clears the override and restores the agent's own colour.
 - **Settings → Agents** — default permission mode, agent hibernation (auto-exiting an idle,
   fully offscreen agent's CLI while keeping its shell and history, to save memory on very
   long-lived canvases), and the custom-agent list (command, label, color).
 - Per-project — an override permission mode, so a project that genuinely needs broader
   permissions doesn't require changing your global default.
-- Per-node — which agent CLI launches, and (for Claude Code) which managed account.
+- Per-node: which agent CLI launches, which managed account it uses, and the colour captured at
+  creation time.
 
 ## Failure modes
 
@@ -66,6 +72,9 @@ sent automatically, an agent has to ask for the linked context when it wants it.
 - **A hook event never arrives** (the agent crashed, or hooks were never installed for it): the
   node's status simply never updates rather than being guessed. An unknown state is never
   treated as "finished" — that distinction matters for dependent nodes waiting on this one.
+- **An account colour is missing or malformed**: the node falls back to the builtin agent colour;
+  it never uses a colour from the other provider's account list. A phone-registered node gets its
+  colour from the host's account settings, not from a phone-supplied display value.
 
 ## Security considerations
 
@@ -74,6 +83,9 @@ sent automatically, an agent has to ask for the linked context when it wants it.
   network-exposed endpoint.
 - Managed-account isolation is by configuration directory, not by intercepting or storing
   tokens — nodeterm never sees or persists your agent CLI credentials.
+- Account colours are presentation-only settings. The host resolves them at node creation and
+  stores the resulting node colour with the node, while account credentials, paths, and process
+  state remain outside the portable project file.
 - Canvas control (an agent creating or managing nodes from inside its own session) is
   explicitly opt-in per environment and scoped to the session that requested it; an agent
   cannot control a canvas it wasn't given that capability in.
@@ -86,6 +98,11 @@ sent automatically, an agent has to ask for the linked context when it wants it.
   confirm the launched command reflects the override rather than the global default.
 - Add a second managed account, log it in, and confirm a node bound to it uses an isolated
   configuration directory (separate login state from your first account).
+- Set a Claude or Codex account's default node colour, create a node under that account, and
+  confirm the node takes that colour while an existing node remains unchanged. Clear the swatch
+  and confirm subsequent nodes use the builtin agent colour.
+- The implementation lane records the account-colour behavior, but this ultra-speed delivery
+  boundary does not run tests, type checks, lint, runtime interaction checks, or screen captures.
 - Connect two agent-capable nodes with a context link and confirm one can pull the other's
   transcript on request, and that a plain terminal or an agent outside the capability list is
   not offered the option.

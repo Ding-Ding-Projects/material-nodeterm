@@ -82,6 +82,10 @@ later commit, since this file will not be kept in lockstep with every merge).
       and the feature article are updated. Tests, type checks, lint, reviews, security checks,
       builds, packaging, runtime interaction, and captures remain pending under the ultra-speed
       boundary.
+- [ ] **Per-account node colour and binding, issue #71 / Program 60**: managed Claude and Codex
+      accounts now carry an optional default node colour that new nodes capture at creation, with
+      host-resolved colour applied to phone-registered nodes. Tests, builds, packaging, runtime
+      interaction, and screen captures remain pending for this lane.
 
 - [ ] **Portable Comment and Activity attachments, issue #94**: source support is present in
       `src/shared/comment-attachments.ts`, `src/core/board-attachments.ts`, the board-log bridge,

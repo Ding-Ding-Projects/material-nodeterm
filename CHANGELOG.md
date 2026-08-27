@@ -100,6 +100,13 @@
   remain unchanged. The bounded hook `CONTROL_CEILING_MS` is preserved. This ultra-speed lane did
   not run tests, type checks, lint, reviews, security or accessibility checks, builds, packaging,
   installer execution, runtime interaction, or UI captures.
+- Add per-account default node colours for managed Claude and Codex accounts. Settings exposes
+  shared colour swatches, new nodes capture the owning account's colour at creation, and phone-
+  registered nodes use the host-resolved account colour. Claude and Codex account ids are resolved
+  against their own lists, malformed or empty values fall back to the builtin agent colour, and
+  existing nodes remain unchanged. This ultra-speed lane intentionally did not run tests, type
+  checks, lint, reviews, security or accessibility checks, builds, packaging, installer execution,
+  runtime interaction, or screen captures.
 
 - Mount the seven AWS core-service routes on the shared AWS manager: S3, EC2, IAM, STS, Lambda,
   CloudWatch, and CloudWatch Logs. Typed operation controls now cover bounded reads, selected writes,
