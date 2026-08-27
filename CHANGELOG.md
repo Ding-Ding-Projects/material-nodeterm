@@ -108,6 +108,12 @@
   checks, lint, reviews, security or accessibility checks, builds, packaging, installer execution,
   runtime interaction, or screen captures.
 
+- Add per-session emoji or local image icons. Terminal session icons are validated at both project
+  serialization seams, copied through the durable canvas-image writer, stored portably when the
+  project has a local folder, and rendered consistently in the canvas header, Kanban card, card
+  modal, and sessions sidebar. This source-only Program 61 lane intentionally did not run tests,
+  type checks, lint, builds, packaging, installer execution, runtime interaction, security or
+  accessibility checks, reviews, or UI captures.
 - Mount the seven AWS core-service routes on the shared AWS manager: S3, EC2, IAM, STS, Lambda,
   CloudWatch, and CloudWatch Logs. Typed operation controls now cover bounded reads, selected writes,
   destructive confirmation, pagination, cancellation, and progress while reusing the current local

@@ -339,6 +339,10 @@ import { SpawnTeamDialog } from '../components/SpawnTeamDialog'
 import { conductorPrompt } from '../lib/spawnTeamPrompt'
 import { NotifyConsentDialog } from '../components/NotifyConsentDialog'
 import { SessionsSidebar } from '../components/SessionsSidebar'
+import { nodeIconDialog } from '../components/NodeIconPicker'
+import { applyIconChoice } from '../lib/nodeIconChoice'
+import type { NodeIcon } from '@shared/node-icon'
+import { MaterialSymbol } from '../components/MaterialSymbol'
 import type { SessionNodeInput } from '../lib/sessionList'
 import { liveProjectJumpTarget, projectJumpDigit } from '../lib/projectJump'
 import {
@@ -1131,6 +1135,7 @@ function toKanbanSession(n: CanvasNode): KanbanSession | null {
     color: (n.data.color as string) ?? NODE_COLORS[0],
     kind: 'terminal',
     agentId: n.data.agentId as string | undefined,
+    icon: n.data.icon as NodeIcon | undefined,
     // What the card modal's co-attach terminal needs to join THIS node's session the same way the
     // canvas TerminalNode does.
     spawn: {
@@ -2846,6 +2851,7 @@ export function Canvas() {
               kind: (n.type ?? 'terminal') as SessionNodeInput['kind'],
               title: n.data.title ?? n.id,
               color: n.data.color ?? '#888',
+              icon: n.data.icon as NodeIcon | undefined,
               agentId: n.data.agentId,
               cwd: n.data.cwd,
               ssh: n.data.ssh,
@@ -9334,6 +9340,29 @@ export function Canvas() {
     [setNodes, markDirty]
   )
 
+  /** One write funnel for the session icon across the canvas and board surfaces. */
+  const setNodeIcon = useCallback(
+    (nodeId: string, icon: NodeIcon | undefined): void => {
+      setNodes((ns) => ns.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, icon } } : n)))
+      markDirty()
+    },
+    [setNodes, markDirty]
+  )
+
+  /** The picker is single-session by design: an icon identifies one terminal at a glance. */
+  const pickNodeIcon = useCallback(
+    (nodeId: string): void => {
+      const node = nodesRef.current.find((n) => n.id === nodeId)
+      if (!node || node.type !== 'terminal') return
+      void nodeIconDialog({
+        nodeId,
+        title: (node.data.title as string) ?? '',
+        icon: node.data.icon as NodeIcon | undefined
+      }).then((choice) => applyIconChoice(choice, (icon) => setNodeIcon(nodeId, icon)))
+    },
+    [setNodeIcon]
+  )
+
   const alignToGrid = useCallback(
     (ids: string[]) => {
       const g = useSettings.getState().settings.gridSize || GRID
@@ -10390,6 +10419,19 @@ export function Canvas() {
         // `ids[0]` alone announced one node's colour as the group's, and the first drag then
         // moved every other node away from a value it was never on.
         : ([{ type: 'colors', value: seedColor(ids.map((nid) => nodesRef.current.find((n) => n.id === nid)?.data.color as string | undefined)), onPick: (c) => setNodesColor(ids, c) }] as MenuItem[])),
+      ...(ids.length === 1 &&
+      !isHidden('icon', hidden) &&
+      nodesRef.current.find((n) => n.id === ids[0])?.type === 'terminal'
+        ? ([
+            {
+              label: nodesRef.current.find((n) => n.id === ids[0])?.data.icon
+                ? 'Change icon…'
+                : 'Set icon…',
+              icon: <MaterialSymbol name="palette" size={18} />,
+              onClick: () => pickNodeIcon(ids[0])
+            }
+          ] as MenuItem[])
+        : []),
       { type: 'separator' },
       ...(isHidden('duplicate', hidden)
         ? []
@@ -10955,6 +10997,7 @@ export function Canvas() {
     setGroupPicker,
     removeFromGroup,
     setNodesColor,
+    pickNodeIcon,
     duplicateNodes,
     branchClaude,
     requestDeleteNodes,
@@ -17342,6 +17385,7 @@ export function Canvas() {
           onDeleteNode={deleteNodeFromKanban}
           onModalNodeChange={setKanbanModalNode}
           onBrowserNav={browserNavFromKanban}
+          onSetIcon={setNodeIcon}
           onRestartNodeWithProfile={(nodeId, profile, anchor) =>
             requestRestartWithTerminalProfile(nodeId, profile.id, profile.label, anchor)
           }

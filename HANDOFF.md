@@ -287,6 +287,32 @@ documentation bundle was not regenerated. The parent integration lane must verif
 run focused checks, regenerate `src/shared/docs-data.ts`, handle issue progress and closure, and
 keep the account feature's unverified state honest until those checks land. No release or cleanup
 was performed in this lane.
+## 2026-08-27, per-session emoji and picture icons, issue #72
+
+The session-icon lane is on `feat/program-61-session-icons` at merge commit
+`49ddccd40f37f57c11f4eb330d7f870fb92f4a9f`, which reconciles the feature with exact `origin/main`
+tip `54164b84dce0b7e62787b1de2885405ff4ed821c`. The implementation follows upstream PR #293 and
+issue #291, adapted to this repository's current renderer and session APIs.
+
+`src/shared/node-icon.ts` defines the bounded emoji and image-path contract. It keeps one grapheme,
+removes control characters, accepts only known image extensions, refuses relative traversal, and
+supports both POSIX and Windows absolute paths. Project-local images are stored as safe `./`
+paths; SSH, cwd-less, and local fallback images remain absolute and local. The value is normalized
+when persisted project data becomes live state and again when live state is serialized.
+
+The shared picker and image loader are in `src/renderer/components/NodeIconPicker.tsx`,
+`src/renderer/components/NodeIcon.tsx`, `src/renderer/lib/nodeIconChoice.ts`, and
+`src/renderer/lib/nodeIconImage.ts`. The same mark renders in the canvas terminal header, Kanban
+card, card modal, and sessions sidebar row. Terminal context menus expose Set icon or Change icon,
+and Remove versus Cancel remain distinct outcomes. The card modal and header controls expose
+accessible labels, while the picker keeps keyboard focus on its input and uses the existing local
+file picker and durable canvas-image writer.
+
+Direct documentation is `docs/features/canvas/node-icons.md`, indexed from the Canvas category.
+`CHANGELOG.md` and `ROADMAP.md` record the same source-only boundary. The generated offline docs
+bundle was not regenerated. No tests, lint, type checks, builds, packaging, runtime interaction,
+reviews, audits, or UI captures were run. The parent integration lane owns those checks, the
+dedicated pull request, issue comments and closure, and any later bundle regeneration.
 
 ## 2026-08-27, AWS core-service managers, issue #46 PR preparation
 

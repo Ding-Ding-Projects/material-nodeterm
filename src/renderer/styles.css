@@ -15434,6 +15434,118 @@ body.focus-mode .dock:hover {
   scrollbar-width: thin;
 }
 
+/* Session icons share one fixed box across the canvas, board, modal and sidebar. */
+.node-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  line-height: 1;
+  overflow: hidden;
+  text-align: center;
+}
+
+.node-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 3px;
+  display: block;
+}
+
+.term-node__icon {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  opacity: 0.95;
+}
+
+.term-node__icon:hover {
+  opacity: 1;
+}
+
+.kanban-card__row > .node-icon.kanban-card__icon {
+  margin-top: 4px;
+}
+
+.kanban-modal__icon {
+  background: none;
+  border: none;
+  padding: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--muted);
+  border-radius: 5px;
+  flex-shrink: 0;
+}
+
+.kanban-modal__icon:hover {
+  background: rgba(var(--tint-rgb), 0.1);
+  color: var(--text);
+}
+
+.kanban-modal__icon--empty {
+  opacity: 0.5;
+}
+
+.kanban-modal__icon--empty:hover {
+  opacity: 1;
+}
+
+.node-icon-dialog {
+  min-width: 340px;
+}
+
+.node-icon-dialog__grid {
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  gap: 2px;
+  margin: 10px 0 4px;
+}
+
+.node-icon-dialog__swatch {
+  background: none;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 0;
+  font-size: 18px;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.node-icon-dialog__swatch:hover {
+  background: rgba(var(--tint-rgb), 0.12);
+}
+
+.node-icon-dialog__swatch.is-current {
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.node-icon-dialog__row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 6px;
+}
+
+.node-icon-dialog__input {
+  flex: 1;
+  min-width: 0;
+}
+
+.node-icon-dialog__error {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--danger);
+}
+
 /* ================================= Focus mode (issue #78) ==================================
    One terminal fills the window. The surface is a fixed opaque layer ABOVE the canvas (z 40 —
    over the sidebar's 12 and the dock's 20, under menus at 46 and dialogs at 55/70), and the

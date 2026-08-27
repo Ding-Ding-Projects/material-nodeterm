@@ -550,6 +550,8 @@ export interface CanvasNodeState {
   tags?: string[]
   /** When true the node body is hidden (header-only). */
   collapsed?: boolean
+  /** User-chosen session mark, validated at both project-file serializer seams. */
+  icon?: import('./node-icon').NodeIcon
   /** scheduler-only: prompt delivered through the persistent inter-agent mailbox. */
   loopTask?: string
   /** scheduler-only: fixed cadence in milliseconds. */

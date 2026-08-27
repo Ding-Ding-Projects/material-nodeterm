@@ -267,7 +267,9 @@ Feature requests open on GitHub with no landed implementation yet, newest first:
 - [ ] **#295** — Auto-rotate Claude accounts when usage crosses a threshold (default 90%).
 - [ ] **#292** — Auto-handle OAuth localhost callbacks for remote sessions (MCP auth on SSH /
       Server Edition).
-- [ ] **#291** — Node type icons alongside color coding.
+- [ ] **#291** — Node type icons alongside color coding. Source implementation is present in the
+      Program 61 lane, while tests, build/package evidence, runtime interaction, and captures remain
+      pending under the stated ultra-speed boundary.
 - [ ] **#290** — Source control for monorepos with multiple nested git repos.
 - [ ] **#289** — Custom sounds for agent alerts.
 - [ ] **#286** — Named terminal profiles (start directory).

@@ -65,6 +65,7 @@ import { TIMER_DEFAULT_DURATION_MS, type TimerNodeData } from '@shared/timer'
 import { normalizeAwsIdentityIntent } from '@shared/aws-identity'
 import { createRecoveryGameSnapshot, normalizeRecoveryGameSnapshot, type RecoveryGameSnapshot } from '@shared/recovery-game'
 import type { PortableKioskPwaIntent } from '@shared/kiosk-pwa'
+import { normalizeNodeIcon } from '@shared/node-icon'
 import { CLOUDFLARE_DEFAULT_INTENT, type CloudflarePortableIntent } from '@shared/cloudflare-core-managers'
 import { AWS_MANAGER_DEFAULT_INTENT, type AwsManagerMode, type AwsManagerPortableIntent } from '@shared/aws-resource'
 import type { TunnelPortableIntent } from '@shared/tunnel-state'
@@ -159,6 +160,8 @@ export interface NodeData {
   color: string
   group: string | null
   tags?: string[]
+  /** User-chosen terminal-session mark, validated before entering or leaving live state. */
+  icon?: import('@shared/node-icon').NodeIcon
   collapsed?: boolean
   /** Native persisted Loop node fields (type='scheduler'). */
   loopTask?: string
@@ -2919,6 +2922,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         group: n.group,
         tags: n.tags,
         collapsed,
+        icon: normalizeNodeIcon(n.icon),
         hideFanout: n.hideFanout,
         expandedHeight: n.size.height,
         loopTask: n.loopTask,
@@ -3059,6 +3063,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         group: n.data.group,
         tags: n.data.tags,
         collapsed: n.data.collapsed,
+        icon: normalizeNodeIcon(n.data.icon),
         loopTask: n.data.loopTask,
         loopIntervalMs: n.data.loopIntervalMs,
         loopEnabled: n.data.loopEnabled,

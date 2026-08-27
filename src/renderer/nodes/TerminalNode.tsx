@@ -268,6 +268,10 @@ import { runPendingLaunchOnce } from '../lib/pendingLaunch'
 import { coldAgentLaunchIntent } from '../terminal/agent-launch-intent'
 import { executePendingLaunchForSession } from '../terminal/pending-launch-executor'
 import { ColorMenu } from '../components/color/ColorMenu'
+import { NodeIconView } from '../components/NodeIcon'
+import { nodeIconDialog } from '../components/NodeIconPicker'
+import { applyIconChoice } from '../lib/nodeIconChoice'
+import type { NodeIcon } from '@shared/node-icon'
 import { MaterialSymbol } from '../components/MaterialSymbol'
 import {
   OPEN_EXPLORER_FOR_AGENT_EVENT,
@@ -5477,6 +5481,24 @@ export function TerminalNode({
               onClose={() => setColorAnchor(null)}
             />
           )}
+          {data.icon ? (
+            <button
+              type="button"
+              className="term-node__icon nodrag"
+              title="Change icon"
+              aria-label="Change session icon"
+              onClick={(event) => {
+                event.stopPropagation()
+                void nodeIconDialog({
+                  nodeId: id,
+                  title: (data.title as string) ?? '',
+                  icon: data.icon as NodeIcon
+                }).then((choice) => applyIconChoice(choice, (icon) => updateNodeData(id, { icon })))
+              }}
+            >
+              <NodeIconView icon={data.icon as NodeIcon} size={15} />
+            </button>
+          ) : null}
           {agentId && (
             <button
               className="term-node__folder-drag nodrag"
