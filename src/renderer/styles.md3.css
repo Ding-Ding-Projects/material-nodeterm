@@ -24,6 +24,55 @@
   --nav-rail-w: 88px;
 }
 
+/* AWS operation wizard: generated controls keep the model's exact bounds visible and editable. */
+.aws-wizard {
+  width: min(1100px, calc(100vw - 32px));
+  max-height: min(900px, calc(100vh - 32px));
+  overflow: auto;
+  padding: 24px;
+  color: var(--md-on-surface);
+  background: var(--md-surface-container-high);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: 28px;
+  box-shadow: var(--md-elevation-2);
+}
+.aws-wizard__header h2 { margin: 0; font-size: 1.5rem; line-height: 2rem; }
+.aws-wizard__header p, .aws-wizard__description, .aws-wizard__field small { color: var(--md-on-surface-variant); }
+.aws-wizard__search-row, .aws-wizard__field-row, .aws-wizard__collection-row, .aws-wizard__union-choices, .aws-wizard__tabs {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.aws-wizard__search-row { margin: 16px 0; }
+.aws-wizard__search-row .mdx-input { flex: 1; min-width: 0; }
+.aws-wizard__body { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(320px, .9fr); gap: 20px; align-items: start; }
+.aws-wizard__guided, .aws-wizard__advanced { min-width: 0; }
+.aws-wizard__field { min-width: 0; margin: 0 0 16px; padding: 14px; border: 1px solid var(--md-outline-variant); border-radius: 16px; }
+.aws-wizard__field legend, .aws-wizard__scalar > span, .aws-wizard__file > span { padding: 0 4px; font-weight: 600; }
+.aws-wizard__scalar, .aws-wizard__file { display: grid; gap: 8px; }
+.aws-wizard__children { display: grid; gap: 4px; }
+.aws-wizard__field input:not([type='checkbox']), .aws-wizard__field select, .aws-wizard__field textarea, .aws-wizard__advanced-editor {
+  width: 100%; box-sizing: border-box; min-height: 40px; padding: 8px 10px; color: var(--md-on-surface); background: var(--md-surface-container-low); border: 1px solid var(--md-outline); border-radius: 10px;
+}
+.aws-wizard__switch { display: grid; grid-template-columns: 22px 1fr; gap: 8px; align-items: center; margin: 0 0 16px; padding: 12px; border: 1px solid var(--md-outline-variant); border-radius: 16px; }
+.aws-wizard__switch small { grid-column: 2; color: var(--md-on-surface-variant); }
+.aws-wizard__collection-row { align-items: flex-start; margin: 8px 0; }
+.aws-wizard__collection-row > :first-child { flex: 1; min-width: 0; }
+.aws-wizard__map-row > label { flex: 0 0 150px; display: grid; gap: 6px; }
+.aws-wizard__document, .aws-wizard__advanced-editor { min-height: 180px; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre; tab-size: 2; }
+.aws-wizard__advanced { position: sticky; top: 0; padding: 16px; background: var(--md-surface-container); border-radius: 20px; }
+.aws-wizard__advanced-editor { resize: vertical; }
+.aws-wizard__issues { margin: 12px 0; padding: 12px 12px 12px 30px; color: var(--md-on-error-container); background: var(--md-error-container); border-radius: 12px; }
+.aws-wizard__field--unsupported { color: var(--md-on-error-container); background: var(--md-error-container); }
+.aws-wizard :focus-visible { outline: 3px solid var(--md-primary); outline-offset: 2px; }
+@media (max-width: 760px) {
+  .aws-wizard { width: calc(100vw - 16px); max-height: calc(100vh - 16px); padding: 16px; }
+  .aws-wizard__body { grid-template-columns: 1fr; }
+  .aws-wizard__advanced { position: static; }
+  .aws-wizard__collection-row, .aws-wizard__map-row { flex-wrap: wrap; }
+  .aws-wizard__map-row > label { flex-basis: 100%; }
+}
+
 /* ---------------------------------------------------------------------------------------------
    Top app bar
    --------------------------------------------------------------------------------------------- */

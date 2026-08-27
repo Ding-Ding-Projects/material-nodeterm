@@ -20,13 +20,15 @@ export type AwsWizardFieldKind =
   | 'time'
   | 'date-time'
   | 'file'
+  | 'document'
+  | 'union'
   | 'structure'
   | 'list'
   | 'map'
   | 'unsupported'
 
 export interface AwsWizardSourceMember {
-  name: string
+  name?: string
   shape: string
   required?: boolean
   documentation?: string
@@ -44,10 +46,10 @@ export interface AwsWizardSourceShape {
   enumValues?: readonly string[]
   min?: number | null
   max?: number | null
-  members?: readonly AwsWizardSourceMember[]
-  memberShape?: string | null
-  keyShape?: string | null
-  valueShape?: string | null
+  members?: readonly AwsWizardSourceMember[] | Readonly<Record<string, Omit<AwsWizardSourceMember, 'name'>>>
+  memberShape?: string | { shape?: string } | null
+  keyShape?: string | { shape?: string } | null
+  valueShape?: string | { shape?: string } | null
   /** Optional UI hint supplied by a model adapter. AWS timestamps default to date-time. */
   format?: 'date' | 'time' | 'date-time'
 }
@@ -56,7 +58,7 @@ export interface AwsWizardModelSource {
   serviceId: string
   commandName: string
   inputShape: string | null
-  shapes: readonly AwsWizardSourceShape[]
+  shapes: readonly AwsWizardSourceShape[] | Readonly<Record<string, Omit<AwsWizardSourceShape, 'name'>>>
 }
 
 export interface AwsWizardFieldDefinition {
@@ -72,6 +74,7 @@ export interface AwsWizardFieldDefinition {
   integer: boolean
   children: readonly AwsWizardFieldDefinition[]
   item: AwsWizardFieldDefinition | null
+  mapKey: AwsWizardFieldDefinition | null
   mapValue: AwsWizardFieldDefinition | null
   disabledReason: string | null
 }
@@ -140,6 +143,44 @@ function bound(value: unknown, label: string): number | null {
   return value
 }
 
+function boundedPair(min: number | null, max: number | null, label: string): { min: number | null; max: number | null } {
+  if (min !== null && max !== null && min > max) throw new AwsWizardError('invalid-model', `${label}.min must not exceed ${label}.max.`)
+  return { min, max }
+}
+
+function shapeReference(value: string | { shape?: string } | null | undefined, label: string): string | null {
+  if (value === undefined || value === null) return null
+  return identifier(typeof value === 'string' ? value : value.shape, label)
+}
+
+function normalizeMembers(
+  members: AwsWizardSourceShape['members'],
+  label: string
+): AwsWizardSourceMember[] {
+  if (members === undefined || members === null) return []
+  const entries = Array.isArray(members)
+    ? members.map((member, index) => [member.name ?? '', member, index] as const)
+    : Object.entries(members).map(([name, member], index) => [name, member, index] as const)
+  if (entries.length > MAX_MEMBERS) throw new AwsWizardError('bounds', `${label} exceeds ${MAX_MEMBERS} members.`)
+  const seen = new Set<string>()
+  return entries.map(([rawName, member, index]) => {
+    const name = identifier(rawName, `${label}[${index}].name`)
+    if (FORBIDDEN_KEYS.has(name)) throw new AwsWizardError('invalid-model', `${label} contains an unsafe member name.`)
+    if (seen.has(name)) throw new AwsWizardError('invalid-model', `${label} contains duplicate member ${name}.`)
+    seen.add(name)
+    if (!member || typeof member !== 'object') throw new AwsWizardError('invalid-model', `${label}.${name} must be a member object.`)
+    return {
+      ...member,
+      name,
+      shape: identifier(member.shape, `${label}.${name}.shape`),
+      documentation: boundedText(member.documentation, `${label}.${name}.documentation`),
+      enumValues: enumValues(member.enumValues, `${label}.${name}.enumValues`),
+      min: bound(member.min, `${label}.${name}.min`),
+      max: bound(member.max, `${label}.${name}.max`)
+    }
+  })
+}
+
 function enumValues(value: unknown, label: string): string[] {
   if (value === undefined || value === null) return []
   if (!Array.isArray(value) || value.length > MAX_MEMBERS) throw new AwsWizardError('bounds', `${label} exceeds ${MAX_MEMBERS} values.`)
@@ -155,6 +196,9 @@ function enumValues(value: unknown, label: string): string[] {
 
 function fieldKind(shape: AwsWizardSourceShape): Pick<AwsWizardFieldDefinition, 'kind' | 'integer' | 'disabledReason'> {
   if (shape.enumValues?.length) return { kind: 'enum', integer: false, disabledReason: null }
+  if (shape.format && (shape.type === 'string' || shape.type === 'timestamp')) {
+    return { kind: shape.format, integer: false, disabledReason: null }
+  }
   switch (shape.type) {
     case 'string': return { kind: 'text', integer: false, disabledReason: null }
     case 'boolean': return { kind: 'boolean', integer: false, disabledReason: null }
@@ -166,10 +210,14 @@ function fieldKind(shape: AwsWizardSourceShape): Pick<AwsWizardFieldDefinition, 
     case 'float':
     case 'double':
     case 'bigDecimal': return { kind: 'number', integer: false, disabledReason: null }
-    case 'timestamp': return { kind: shape.format ?? 'date-time', integer: false, disabledReason: null }
+    case 'timestamp': return { kind: 'date-time', integer: false, disabledReason: null }
     case 'blob': return { kind: 'file', integer: false, disabledReason: null }
+    case 'document':
+    case 'json': return { kind: 'document', integer: false, disabledReason: null }
+    case 'union': return { kind: 'union', integer: false, disabledReason: null }
     case 'structure': return { kind: 'structure', integer: false, disabledReason: null }
     case 'list': return { kind: 'list', integer: false, disabledReason: null }
+    case 'set': return { kind: 'list', integer: false, disabledReason: null }
     case 'map': return { kind: 'map', integer: false, disabledReason: null }
     default: return { kind: 'unsupported', integer: false, disabledReason: `The installed model uses unsupported shape type ${shape.type}.` }
   }
@@ -178,30 +226,29 @@ function fieldKind(shape: AwsWizardSourceShape): Pick<AwsWizardFieldDefinition, 
 export function buildAwsWizardDefinition(source: AwsWizardModelSource): AwsWizardDefinition {
   const serviceId = identifier(source.serviceId, 'serviceId')
   const commandName = identifier(source.commandName, 'commandName')
-  if (!Array.isArray(source.shapes) || source.shapes.length > MAX_SHAPES) throw new AwsWizardError('bounds', `Model inventory exceeds ${MAX_SHAPES} shapes.`)
+  const shapeEntries = Array.isArray(source.shapes)
+    ? source.shapes.map((shape, index) => [shape.name, shape, index] as const)
+    : Object.entries(source.shapes).map(([name, shape], index) => [name, { ...shape, name }, index] as const)
+  if (shapeEntries.length > MAX_SHAPES) throw new AwsWizardError('bounds', `Model inventory exceeds ${MAX_SHAPES} shapes.`)
   const shapes = new Map<string, AwsWizardSourceShape>()
-  for (const [index, raw] of source.shapes.entries()) {
-    const name = identifier(raw.name, `shapes[${index}].name`)
+  for (const [rawName, raw, index] of shapeEntries) {
+    if (!raw || typeof raw !== 'object') throw new AwsWizardError('invalid-model', `shapes[${index}] must be an object.`)
+    const name = identifier(raw.name ?? rawName, `shapes[${index}].name`)
     if (shapes.has(name)) throw new AwsWizardError('invalid-model', `Model inventory contains duplicate shape ${name}.`)
-    const members = raw.members ?? []
-    if (!Array.isArray(members) || members.length > MAX_MEMBERS) throw new AwsWizardError('bounds', `Shape ${name} exceeds ${MAX_MEMBERS} members.`)
+    const members = normalizeMembers(raw.members, `Shape ${name}.members`)
+    const limits = boundedPair(bound(raw.min, `shape ${name}.min`), bound(raw.max, `shape ${name}.max`), `shape ${name}`)
     shapes.set(name, {
       ...raw,
       name,
       type: identifier(raw.type, `shape ${name}.type`),
       documentation: boundedText(raw.documentation, `shape ${name}.documentation`),
       enumValues: enumValues(raw.enumValues, `shape ${name}.enumValues`),
-      min: bound(raw.min, `shape ${name}.min`),
-      max: bound(raw.max, `shape ${name}.max`),
-      members: members.map((member, memberIndex) => ({
-        ...member,
-        name: identifier(member.name, `shape ${name}.members[${memberIndex}].name`),
-        shape: identifier(member.shape, `shape ${name}.members[${memberIndex}].shape`),
-        documentation: boundedText(member.documentation, `shape ${name}.members[${memberIndex}].documentation`),
-        enumValues: enumValues(member.enumValues, `shape ${name}.members[${memberIndex}].enumValues`),
-        min: bound(member.min, `shape ${name}.members[${memberIndex}].min`),
-        max: bound(member.max, `shape ${name}.members[${memberIndex}].max`)
-      }))
+      min: limits.min,
+      max: limits.max,
+      members,
+      memberShape: shapeReference(raw.memberShape, `shape ${name}.memberShape`),
+      keyShape: shapeReference(raw.keyShape, `shape ${name}.keyShape`),
+      valueShape: shapeReference(raw.valueShape, `shape ${name}.valueShape`)
     })
   }
 
@@ -211,13 +258,13 @@ export function buildAwsWizardDefinition(source: AwsWizardModelSource): AwsWizar
     if (!shape) return {
       id: path.join('.') || 'input', name, path, kind: 'unsupported', required,
       documentation: overrides?.documentation ?? '', enumValues: [], min: null, max: null,
-      integer: false, children: [], item: null, mapValue: null,
+      integer: false, children: [], item: null, mapKey: null, mapValue: null,
       disabledReason: `The installed model references missing shape ${shapeName}.`
     }
     if (stack.has(shapeName)) return {
       id: path.join('.') || 'input', name, path, kind: 'unsupported', required,
       documentation: overrides?.documentation ?? shape.documentation ?? '', enumValues: [], min: null, max: null,
-      integer: false, children: [], item: null, mapValue: null,
+      integer: false, children: [], item: null, mapKey: null, mapValue: null,
       disabledReason: `Recursive shape ${shapeName} cannot be expanded safely in this wizard.`
     }
     const nextStack = new Set(stack).add(shapeName)
@@ -229,14 +276,21 @@ export function buildAwsWizardDefinition(source: AwsWizardModelSource): AwsWizar
       max: overrides?.max ?? shape.max
     }
     const kind = fieldKind(merged)
-    const children = kind.kind === 'structure'
-      ? (shape.members ?? []).map((member) => build(member.shape, member.name, [...path, member.name], Boolean(member.required), nextStack, member))
+    const members = Array.isArray(shape.members) ? shape.members : []
+    const children = (kind.kind === 'structure' || kind.kind === 'union')
+      ? members.map((member) => build(member.shape, member.name ?? 'member', [...path, member.name ?? 'member'], Boolean(member.required), nextStack, member))
       : []
-    const item = kind.kind === 'list' && shape.memberShape
-      ? build(shape.memberShape, `${name} item`, [...path, '$item'], false, nextStack)
+    const itemShape = shapeReference(shape.memberShape, `${shapeName}.memberShape`)
+    const item = kind.kind === 'list' && itemShape
+      ? build(itemShape, `${name} item`, [...path, '$item'], false, nextStack)
       : null
-    const mapValue = kind.kind === 'map' && shape.valueShape
-      ? build(shape.valueShape, `${name} value`, [...path, '$value'], false, nextStack)
+    const keyShape = shapeReference(shape.keyShape, `${shapeName}.keyShape`)
+    const mapKey = kind.kind === 'map' && keyShape
+      ? build(keyShape, `${name} key`, [...path, '$key'], true, nextStack)
+      : null
+    const valueShape = shapeReference(shape.valueShape, `${shapeName}.valueShape`)
+    const mapValue = kind.kind === 'map' && valueShape
+      ? build(valueShape, `${name} value`, [...path, '$value'], false, nextStack)
       : null
     const missingChild = kind.kind === 'list' && !item
       ? 'The installed list model does not identify its item shape.'
@@ -248,7 +302,7 @@ export function buildAwsWizardDefinition(source: AwsWizardModelSource): AwsWizar
       required, documentation: boundedText(merged.documentation, `${shapeName}.documentation`),
       enumValues: enumValues(merged.enumValues, `${shapeName}.enumValues`),
       min: bound(merged.min, `${shapeName}.min`), max: bound(merged.max, `${shapeName}.max`),
-      integer: kind.integer, children, item, mapValue, disabledReason: missingChild
+      integer: kind.integer, children, item, mapKey, mapValue, disabledReason: missingChild
     }
   }
 
@@ -257,13 +311,47 @@ export function buildAwsWizardDefinition(source: AwsWizardModelSource): AwsWizar
     : {
         id: 'input', name: 'Input', path: [], kind: 'structure' as const, required: true,
         documentation: 'This operation accepts no modeled input.', enumValues: [], min: null, max: null,
-        integer: false, children: [], item: null, mapValue: null, disabledReason: null
+        integer: false, children: [], item: null, mapKey: null, mapValue: null, disabledReason: null
       }
   return { schemaVersion: 1, serviceId, commandName, root }
 }
 
 function issue(issues: AwsWizardValidationIssue[], path: string, message: string): void {
   issues.push({ path: path || 'input', message })
+}
+
+function validateDocument(raw: unknown, issues: AwsWizardValidationIssue[], path: string, depth: number): unknown {
+  if (depth > MAX_DEPTH) {
+    issue(issues, path, `Document nesting exceeds ${MAX_DEPTH} levels.`)
+    return undefined
+  }
+  if (raw === null || typeof raw === 'boolean') return raw
+  if (typeof raw === 'number') {
+    if (!Number.isFinite(raw)) issue(issues, path, 'Document numbers must be finite.')
+    return raw
+  }
+  if (typeof raw === 'string') {
+    if (raw.length > MAX_TEXT) issue(issues, path, `Document text exceeds ${MAX_TEXT} characters.`)
+    return raw
+  }
+  if (Array.isArray(raw)) {
+    if (raw.length > MAX_COLLECTION_ITEMS) issue(issues, path, `Document lists contain more than ${MAX_COLLECTION_ITEMS} items.`)
+    return raw.slice(0, MAX_COLLECTION_ITEMS).map((item, index) => validateDocument(item, issues, `${path}[${index}]`, depth + 1))
+  }
+  let value: JsonRecord
+  try { value = record(raw, 'document') } catch { issue(issues, path, 'Document values must be JSON-compatible.'); return undefined }
+  const keys = Object.keys(value)
+  if (keys.length > MAX_COLLECTION_ITEMS) issue(issues, path, `Document objects contain more than ${MAX_COLLECTION_ITEMS} fields.`)
+  const normalized: JsonRecord = Object.create(null)
+  for (const key of keys.slice(0, MAX_COLLECTION_ITEMS)) {
+    if (!key || key.length > 256 || FORBIDDEN_KEYS.has(key)) {
+      issue(issues, path ? `${path}.${key}` : key, 'Document keys must be bounded safe text.')
+      continue
+    }
+    const next = validateDocument(value[key], issues, path ? `${path}.${key}` : key, depth + 1)
+    if (next !== undefined) normalized[key] = next
+  }
+  return normalized
 }
 
 function validateField(field: AwsWizardFieldDefinition, raw: unknown, issues: AwsWizardValidationIssue[], path: string, depth: number): unknown {
@@ -310,6 +398,8 @@ function validateField(field: AwsWizardFieldDefinition, raw: unknown, issues: Aw
       if (value.kind !== 'local-file' || typeof value.path !== 'string' || !value.path) issue(issues, path, `${field.name} must be selected through the local file picker.`)
       return { kind: 'local-file', path: value.path, name: typeof value.name === 'string' ? value.name : '' }
     }
+    case 'document':
+      return validateDocument(raw, issues, path, depth)
     case 'structure': {
       let value: JsonRecord
       try { value = record(raw, field.name) } catch { issue(issues, path, `${field.name} must be an object.`); return {} }
@@ -322,6 +412,22 @@ function validateField(field: AwsWizardFieldDefinition, raw: unknown, issues: Aw
         if (next !== undefined) normalized[child.name] = next
       }
       return normalized
+    }
+    case 'union': {
+      let value: JsonRecord
+      try { value = record(raw, field.name) } catch { issue(issues, path, `${field.name} must be an object with exactly one choice.`); return {} }
+      const allowed = new Map(field.children.map((child) => [child.name, child]))
+      const keys = Object.keys(value)
+      for (const key of keys) if (!allowed.has(key) || FORBIDDEN_KEYS.has(key)) issue(issues, path ? `${path}.${key}` : key, `Unknown union choice ${key} is not accepted by the installed model.`)
+      const selected = keys.filter((key) => allowed.has(key) && !FORBIDDEN_KEYS.has(key) && value[key] !== undefined && value[key] !== null && value[key] !== '')
+      if (selected.length !== 1) {
+        issue(issues, path, `${field.name} requires exactly one choice.`)
+        return {}
+      }
+      const child = allowed.get(selected[0])!
+      const childPath = path ? `${path}.${child.name}` : child.name
+      const next = validateField(child, value[child.name], issues, childPath, depth + 1)
+      return next === undefined ? {} : { [child.name]: next }
     }
     case 'list': {
       if (!Array.isArray(raw)) { issue(issues, path, `${field.name} must be a list.`); return [] }
@@ -339,6 +445,7 @@ function validateField(field: AwsWizardFieldDefinition, raw: unknown, issues: Aw
       const normalized: JsonRecord = {}
       for (const [key, item] of entries.slice(0, limit)) {
         if (!key || key.length > 256 || FORBIDDEN_KEYS.has(key)) { issue(issues, `${path}.${key}`, 'Map keys must be bounded safe text.'); continue }
+        if (field.mapKey) validateField(field.mapKey, key, issues, `${path}.${key} (key)`, depth + 1)
         normalized[key] = field.mapValue ? validateField(field.mapValue, item, issues, `${path}.${key}`, depth + 1) : undefined
       }
       return normalized
@@ -377,10 +484,11 @@ function portableField(field: AwsWizardFieldDefinition, raw: unknown, path: stri
     omissions.push(`${path || field.name}: local file paths and file handles are omitted; choose the file again on the destination computer.`)
     return undefined
   }
-  if (field.kind === 'structure') {
+  if (field.kind === 'structure' || field.kind === 'union') {
     const input = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw as JsonRecord : {}
     const out: JsonRecord = {}
-    for (const child of field.children) {
+    const children = field.kind === 'union' ? field.children.filter((child) => Object.prototype.hasOwnProperty.call(input, child.name)) : field.children
+    for (const child of children) {
       const childPath = path ? `${path}.${child.name}` : child.name
       const next = portableField(child, input[child.name], childPath, omissions)
       if (next !== undefined) out[child.name] = next
