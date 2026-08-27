@@ -616,6 +616,18 @@ export function buildStubApi(): Omit<
       setSeedPolicy: U('torrent.setSeedPolicy'),
       reconcile: U('torrent.reconcile'),
       onTask: noopUnsub
+    virtualMachine: {
+      tools: U('virtualMachine.tools'),
+      status: U('virtualMachine.status'),
+      configure: U('virtualMachine.configure'),
+      createDisk: U('virtualMachine.createDisk'),
+      start: U('virtualMachine.start'),
+      stop: U('virtualMachine.stop'),
+      snapshot: U('virtualMachine.snapshot'),
+      restore: U('virtualMachine.restore'),
+      openDisplay: U('virtualMachine.openDisplay'),
+      reset: U('virtualMachine.reset'),
+      onEvent: noopUnsub
     }
   } satisfies Omit<
     NodeTerminalApi,

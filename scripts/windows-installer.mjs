@@ -769,6 +769,7 @@ async function buildWindowsInstaller() {
   const squirrelOutput = path.join(REPO_ROOT, 'dist', 'squirrel-windows')
   await cleanWindowsPackageOutputs(REPO_ROOT)
   run(process.execPath, [path.join(REPO_ROOT, 'scripts', 'check-build-preflight.mjs')], { description: 'build preflight' })
+  run(process.execPath, [path.join(REPO_ROOT, 'scripts', 'ensure-qemu-resources.mjs'), '--output', path.join(REPO_ROOT, 'resources', 'qemu')], { description: 'pinned QEMU resource bootstrap' })
   run(process.execPath, [path.join(REPO_ROOT, 'scripts', 'make-icon.mjs')], { description: 'icon generation' })
   const metadata = await verifySourceIcon(REPO_ROOT)
   await writeMetadataAtomic(metadataFile, metadata)

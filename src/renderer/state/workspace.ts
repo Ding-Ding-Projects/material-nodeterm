@@ -28,6 +28,7 @@ import { supportsWindowsTerminalProfiles } from './terminal-profiles'
 import type { AnnotationRect, AnnotationVariant } from '../lib/annotation'
 import { newUniverseCreationEventId, shopNodeIdForCanvas } from '../../core/universe-shop'
 import { TORRENT_NODE_CATALOG_ENTRY } from '@shared/torrent'
+import { DEFAULT_VIRTUAL_MACHINE_CONFIG } from '@shared/virtual-machine'
 
 // Re-exported so Canvas (and anything else in the renderer) keeps importing it from here, while the
 // single implementation lives in src/shared and is shared with the relay host + the canvas-sync
@@ -65,6 +66,7 @@ const BROWSER_SIZE = { width: 800, height: 560 }
 const NATIVE_LOOP_SIZE = { width: 340, height: 280 }
 const SHOP_SIZE = { width: 480, height: 420 }
 export const TORRENT_SIZE = { width: 620, height: 520 }
+const LINUX_VM_SIZE = { width: 760, height: 560 }
 /** Fallback bounding box `flowToNodeStates` uses if an annotation node somehow has no live
  *  width/height at all (every production creation path draws a real rect — see createAnnotationNode
  *  — so this is a defensive floor, matching how every other kind gets a fallback in `sizeFor`). */
@@ -189,6 +191,9 @@ export interface NodeData {
   nonDeletable?: boolean
   /** Last catalog choice is safe user intent only, not an execution or provider binding. */
   shopSelection?: string
+  /** Portable Linux ISO VM intent and machine-local asset bindings. */
+  virtualMachineConfig?: import('@shared/virtual-machine').VirtualMachineConfig
+  virtualMachineLocalPaths?: import('@shared/virtual-machine').VirtualMachineLocalPaths
   /** service-kinds only, MACHINE-LOCAL: where this node reaches its service. Stripped from the
    *  shared document and from inbound peers; see shared/node-exec.ts. */
   serviceConnection?: ServiceConnection
@@ -1117,6 +1122,25 @@ export function createServiceNode(
   }
 }
 
+/** Creates a Linux ISO VM node. The node is a canvas object, not a WSL terminal profile. */
+export function createVirtualMachineNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  return {
+    id: nextId('linux-vm'),
+    type: 'linux-vm',
+    position: placeAt(center, index, LINUX_VM_SIZE.width, LINUX_VM_SIZE.height),
+    width: LINUX_VM_SIZE.width,
+    height: LINUX_VM_SIZE.height,
+    style: { width: LINUX_VM_SIZE.width, height: LINUX_VM_SIZE.height },
+    data: {
+      title: 'Linux ISO VM',
+      color: NODE_COLORS[index % NODE_COLORS.length],
+      group: null,
+      virtualMachineConfig: { ...DEFAULT_VIRTUAL_MACHINE_CONFIG },
+      virtualMachineLocalPaths: {}
+    }
+  }
+}
+
 /**
  * Creates an NSIS installer-builder node — a GUI for authoring a Windows NSIS installer script for
  * ANOTHER project. Not this app's own installer, which stays Squirrel.Windows (see CLAUDE.md's
@@ -1562,6 +1586,7 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   nsis: true,
   shop: true
   torrent: true
+  'linux-vm': true
 }
 
 /**
@@ -1605,6 +1630,7 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   nsis: NSIS_SIZE,
   shop: SHOP_SIZE
   torrent: TORRENT_SIZE
+  'linux-vm': LINUX_VM_SIZE
 }
 
 /** A `Set`, not `type in NODE_KIND_TABLE`: `in` walks the prototype, so `'constructor'` and
@@ -1696,7 +1722,9 @@ export function duplicateNode(node: CanvasNode, offset = 28): CanvasNode {
       // config, so they go with it.
       loopEnabled: undefined,
       loopNextRunAt: undefined,
-      loopLastRunAt: undefined
+      loopLastRunAt: undefined,
+      // A duplicate owns a fresh VM identity and must never inherit another VM's ISO or disk.
+      virtualMachineLocalPaths: undefined
     }
   }
 }
@@ -2032,6 +2060,8 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         serviceConnection: n.serviceConnection,
         nsisSpec: n.nsisSpec,
         nsisLocalPaths: n.nsisLocalPaths,
+        virtualMachineConfig: n.virtualMachineConfig,
+        virtualMachineLocalPaths: n.virtualMachineLocalPaths,
         filePath: n.filePath,
         mediaAssets: n.mediaAssets?.map(normalizeMediaReference).filter((reference): reference is MediaAssetReference => !!reference),
         mediaActiveAssetId: n.mediaActiveAssetId,
@@ -2122,6 +2152,9 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         // `sourcePath` is a machine-local resolver hint and must never enter project.json.
         mediaAssets: n.data.mediaAssets?.map(({ sourcePath: _sourcePath, ...reference }) => reference),
         mediaActiveAssetId: n.data.mediaActiveAssetId,
+        virtualMachineConfig: n.data.virtualMachineConfig,
+        virtualMachineLocalPaths: n.data.virtualMachineLocalPaths,
+        filePath: n.data.filePath,
         fileMissing: n.data.fileMissing,
         url: n.data.url,
         browserProfileId: n.data.browserProfileId,

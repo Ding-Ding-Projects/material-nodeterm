@@ -51,7 +51,8 @@
     "release": "npm run make-icon && npm run build && sh -c 'electron-builder --mac --arm64 --x64 --publish never; s=$?; npm run rebuild; exit $s'",
     "postinstall": "node scripts/patch-node-pty.mjs && electron-rebuild -f -w node-pty,smart-whisper",
     "design:compare": "electron design/compare",
-    "design:v2": "electron design/v2-preview"
+    "design:v2": "electron design/v2-preview",
+    "prepare:qemu": "node scripts/ensure-qemu-resources.mjs --output resources/qemu"
   },
   "build": {
     "appId": "com.nodeterm.app",
@@ -76,6 +77,10 @@
       {
         "from": "build/icon.png",
         "to": "icon.png"
+      },
+      {
+        "from": "resources/qemu",
+        "to": "qemu"
       },
       {
         "from": "out/session-host",

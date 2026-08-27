@@ -78,6 +78,15 @@
   progress/speed/peer/ETA reporting, pause/resume/cancel/retry, restart reconciliation, bounded
   per-task seeding, and machine-local task persistence. The ultra-speed lane intentionally did not
   run tests, builds, packaging, installer execution, runtime interaction checks, or captures.
+- Add a guided Linux ISO VM canvas node backed by bundled QEMU and qemu-img resolution, bounded
+  memory/CPU settings, WHPX preference, loopback VNC/QMP lifecycle, persistent-install and
+  disposable-live modes, machine-local ISO/disk bindings, snapshot controls, and network-off
+  defaults. Ultra-speed implementation evidence intentionally excludes tests, builds, packaging,
+  runtime interaction, and captures.
+- Harden the Linux ISO VM lane with pinned QEMU dependency metadata, package-resource proof, WHPX
+  probing with TCG fallback, ISO digest validation, qcow2/raw detection, disk free-space checks,
+  QMP/display startup handshakes, bounded diagnostics, cancellation generations, stale-process
+  recovery, atomic state retries, and a truthful Server Edition display boundary.
 
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and

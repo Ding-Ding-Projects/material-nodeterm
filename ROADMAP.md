@@ -211,6 +211,8 @@ intentionally unchecked because this task publishes the plan only.
       restart reconciliation, bounded seeding, and machine-local state; focused verification and
       release evidence remain pending.
 - [ ] Add the bundled QEMU Linux ISO VM with persistent and disposable modes.
+- [ ] Add the bundled WebTorrent downloader with resumable per-task lifecycle.
+- [ ] Add the bundled QEMU Linux ISO VM with persistent and disposable modes. Implementation landed in `src/core/virtual-machine/` and `src/renderer/nodes/VirtualMachineNode.tsx`; tests, build, packaging, runtime interaction, and captures remain unrun in the ultra-speed lane.
 - [ ] Add Home Assistant multi-instance controls and sensor displays.
 - [ ] Add Calendar, Timer, Alarm Clock, and planner occurrence services.
 

@@ -329,6 +329,44 @@ This ultra-speed implementation lane intentionally did not run tests, type check
 packaging, installer execution, runtime interaction, UI captures, commits, or dews. The docs bundle
 generation, focused tests, built-artifact interaction proof, release packaging, integration, and
 remote verification remain for the owning integration pass.
+## 2026-08-26, Linux ISO VM node, issue #24
+
+Implemented the one-shot `linux-vm` canvas node and its shared lifecycle contract. The renderer
+provides guided ISO and persistent-disk pickers, persistent-install and disposable-live modes,
+bounded memory and CPU controls, explicit network-off-by-default and WHPX preference switches,
+snapshot/restore controls, loopback VNC/QMP status, and visible recovery messages. The manager
+spawns only bundled QEMU resources through a fixed argv vector with `shell: false`, validates paths
+and identifiers, and keeps QMP/process state in machine-local application data.
+
+Portable configuration is carried by `virtualMachineConfig` in the schema 3 project projection.
+ISO and disk paths are carried by `virtualMachineLocalPaths` in the existing local execution
+overlay and are stripped from shared project files and peer mutations. The API is registered for
+both the desktop and Server Edition shells, with preload and WebSocket bridges. The node is in the
+canvas manager catalog and node recreation path.
+
+Changed files include `src/shared/virtual-machine.ts`, `src/core/virtual-machine/`,
+`src/shared/types.ts`, `src/shared/ipc.ts`, `src/shared/node-exec.ts`,
+`src/renderer/state/workspace.ts`, `src/renderer/nodes/VirtualMachineNode.tsx`,
+`src/renderer/canvas/Canvas.tsx`, preload and Server Edition bridges, the integration documentation,
+offline docs data, site docs, `CHANGELOG.md`, `ROADMAP.md`, and this handoff.
+
+This lane deliberately did not run tests, type checks, lint, reviews, security checks, accessibility
+checks, builds, packaging, installer execution, runtime interaction, or captures. The docs bundle
+generator was attempted but could not run because `esbuild` is absent in this isolated checkout;
+the generated offline data entry was added directly. No commit or dew was made by this lane.
+
+### Refuter repair pass
+
+Added pinned QEMU 10.1.0 Windows x64 manifest metadata with official installer SHA-512, size
+disclosure, required packaged payload paths, the `resources/qemu` packaging boundary, and the
+`scripts/ensure-qemu-resources.mjs` bootstrap wired into the Windows packaging path. Added
+QEMU self-probed WHPX selection with TCG fallback, ISO SHA-256 expected/actual reporting, qcow2
+magic-byte versus raw disk detection, free-space preflight and guided persistent-disk creation,
+loopback port preflight/retry, QMP and display socket startup handshakes, bounded QEMU diagnostics,
+startup cancellation generations, stale-process reconciliation, serialized atomic state writes with
+transient rename retries, awaited shutdown, a desktop display-open action, and a Server Edition
+honest no-proxy response. VM duplication now clears machine-local ISO and disk bindings. Added
+source coverage entries for these boundaries. No tests, builds, captures, commit, or dew was made.
 
 ## 2026-08-26, portable canvas projection implementation
 

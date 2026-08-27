@@ -29,6 +29,7 @@ import type { MinecraftEvent } from '../shared/minecraft'
 import type { NodeDependencyAvailability, NodeDependencyProgress, NodeDependencyInstallResult } from '../shared/node-dependencies'
 import type { WslCreateProgress } from '../shared/wsl'
 import type { TorrentTaskState } from '../shared/torrent'
+import type { VirtualMachineEvent } from '../shared/virtual-machine'
 
 // Fan a single ipcRenderer listener per channel out to many renderer subscribers. Without
 // this, every node that subscribes (e.g. Cmd+M markdown toggle on each terminal/editor) adds
@@ -76,6 +77,7 @@ const subscribeMinecraftEvent = subscribe<[MinecraftEvent]>(IPC.minecraftEvent)
 const subscribeNodeDependencyState = subscribe<[NodeDependencyAvailability]>(IPC.nodeDependencyState)
 const subscribeNodeDependencyProgress = subscribe<[NodeDependencyProgress]>(IPC.nodeDependencyProgress)
 const subscribeTorrentTask = subscribe<[TorrentTaskState]>(IPC.torrentTask)
+const subscribeVirtualMachineEvent = subscribe<[VirtualMachineEvent]>(IPC.virtualMachineEvent)
 const subscribeWidgetState = subscribe<[CanvasWidgetLiveState]>(IPC.widgetStateChanged)
 
 const subscribeRelayPeerPending = subscribe<[RelayPeerPending]>(IPC.relayHostPeerPending)
@@ -994,6 +996,18 @@ const api: NodeTerminalApi = {
     setSeedPolicy: (id, policy) => ipcRenderer.invoke(IPC.torrentSetSeedPolicy, id, policy),
     reconcile: () => ipcRenderer.invoke(IPC.torrentReconcile),
     onTask: (listener) => subscribeTorrentTask(listener)
+  virtualMachine: {
+    tools: () => ipcRenderer.invoke(IPC.virtualMachineTools),
+    status: (id) => ipcRenderer.invoke(IPC.virtualMachineStatus, id),
+    configure: (id, config, local) => ipcRenderer.invoke(IPC.virtualMachineConfigure, id, config, local),
+    createDisk: (id, folder) => ipcRenderer.invoke(IPC.virtualMachineCreateDisk, id, folder),
+    start: (id) => ipcRenderer.invoke(IPC.virtualMachineStart, id),
+    stop: (id) => ipcRenderer.invoke(IPC.virtualMachineStop, id),
+    snapshot: (id, name) => ipcRenderer.invoke(IPC.virtualMachineSnapshot, id, name),
+    restore: (id, name) => ipcRenderer.invoke(IPC.virtualMachineRestore, id, name),
+    openDisplay: (id) => ipcRenderer.invoke(IPC.virtualMachineOpenDisplay, id),
+    reset: (id) => ipcRenderer.invoke(IPC.virtualMachineReset, id),
+    onEvent: (listener) => subscribeVirtualMachineEvent(listener)
   }
 }
 

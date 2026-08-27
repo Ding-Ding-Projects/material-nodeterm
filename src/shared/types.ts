@@ -380,6 +380,8 @@ export type NodeKind =
   | 'homeassistant'
   | 'freepbx'
   | 'torrent'
+  /** One-shot Linux ISO virtual machine, distinct from the WSL terminal profile. */
+  | 'linux-vm'
 
 /**
  * The service kinds, as a runtime list. Exported because both the renderer (menu rows, one shared
@@ -529,6 +531,10 @@ export interface CanvasNodeState {
   serviceLabel?: string
   /** torrent-only: safe display intent shared with the canvas; task state and paths stay local. */
   torrentMagnet?: string
+  /** Linux ISO VM settings stored in the shared project projection. */
+  virtualMachineConfig?: import('./virtual-machine').VirtualMachineConfig
+  /** Linux ISO/disk selections stored only in the machine-local execution overlay. */
+  virtualMachineLocalPaths?: import('./virtual-machine').VirtualMachineLocalPaths
   /**
    * service-kinds only, and MACHINE-LOCAL: where this node reaches its service. Stripped from
    * every project file we write and from every node arriving over the wire, then restored from the
@@ -3868,6 +3874,8 @@ export interface NodeTerminalApi {
   torrent: import('./torrent').TorrentApi
   /** Local Minecraft server create-and-manage — docs/minecraft-server-manager.md. */
   minecraft: import('./minecraft').MinecraftApi
+  /** Local Linux ISO VM lifecycle — docs/linux-iso-vm.md. */
+  virtualMachine: import('./virtual-machine').VirtualMachineApi
   ssh: SshApi
   sshProject: SshProjectApi
   sshFs: SshFsApi

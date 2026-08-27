@@ -20,6 +20,7 @@ import type { OllamaApi } from '../../shared/ollama'
 import type { MinecraftApi } from '../../shared/minecraft'
 import type { NodeDependenciesApi } from '../../shared/node-dependencies'
 import type { TorrentApi, TorrentTaskState } from '../../shared/torrent'
+import type { VirtualMachineApi } from '../../shared/virtual-machine'
 import {
   UNKNOWN_CLAUDE_CLI_CAPS,
   type BoardLogApi,
@@ -1008,6 +1009,22 @@ export function buildTorrentApi(client: RpcClient): Pick<NodeTerminalApi, 'torre
     onTask: (listener) => client.subscribe(IPC.torrentTask, listener as (payload: TorrentTaskState) => void)
   }
   return { torrent }
+/** Linux ISO VM manager. The server process owns QEMU and exposes only the bounded lifecycle API. */
+export function buildVirtualMachineApi(client: RpcClient): Pick<NodeTerminalApi, 'virtualMachine'> {
+  const virtualMachine: VirtualMachineApi = {
+    tools: () => client.request(IPC.virtualMachineTools) as ReturnType<VirtualMachineApi['tools']>,
+    status: (id) => client.request(IPC.virtualMachineStatus, id) as ReturnType<VirtualMachineApi['status']>,
+    configure: (id, config, local) => client.request(IPC.virtualMachineConfigure, id, config, local) as ReturnType<VirtualMachineApi['configure']>,
+    createDisk: (id, folder) => client.request(IPC.virtualMachineCreateDisk, id, folder) as ReturnType<VirtualMachineApi['createDisk']>,
+    start: (id) => client.request(IPC.virtualMachineStart, id) as ReturnType<VirtualMachineApi['start']>,
+    stop: (id) => client.request(IPC.virtualMachineStop, id) as ReturnType<VirtualMachineApi['stop']>,
+    snapshot: (id, name) => client.request(IPC.virtualMachineSnapshot, id, name) as ReturnType<VirtualMachineApi['snapshot']>,
+    restore: (id, name) => client.request(IPC.virtualMachineRestore, id, name) as ReturnType<VirtualMachineApi['restore']>,
+    openDisplay: (id) => client.request(IPC.virtualMachineOpenDisplay, id) as ReturnType<VirtualMachineApi['openDisplay']>,
+    reset: (id) => client.request(IPC.virtualMachineReset, id) as ReturnType<VirtualMachineApi['reset']>,
+    onEvent: (listener) => client.subscribe(IPC.virtualMachineEvent, listener as Listener)
+  }
+  return { virtualMachine }
 }
 
 /**
@@ -1435,6 +1452,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildOllamaApi(client),
     ...buildMinecraftApi(client),
     ...buildTorrentApi(client),
+    ...buildVirtualMachineApi(client),
     ...buildUsageApi(client),
     ...buildSessionMemoryApi(client),
     ...buildVsCodeApi(client),

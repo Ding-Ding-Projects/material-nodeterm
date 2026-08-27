@@ -4,6 +4,8 @@
 
 Everything on a nodeterm canvas is a node. Torrent Downloader joins the existing node kinds, and
 every one is rendered by
+Everything on a nodeterm canvas is a node. The canvas has terminal, document, media, manager, and
+utility kinds, and every one is rendered by
 the same underlying canvas engine — so they all pan, zoom, resize, group, and persist the same
 way, while each contributes its own body content and header actions.
 
@@ -22,6 +24,7 @@ empty-canvas context menu, group context menu, and command palette all expose th
 | **Editor** | A Monaco-based code editor bound to a file path, with save, dirty-state tracking, and a markdown preview toggle for `.md` files. Image files render as an `<img>` preview instead of source text. |
 | **Diff** | A read-only Monaco diff view comparing HEAD↔index (staged) or index↔working tree (unstaged) for a single file. |
 | **Torrent Downloader** | A local WebTorrent task surface with magnet or `.torrent` intake, metadata/file selection, destination preflight, progress, recovery, and bounded seeding. See [Torrent Downloader](../torrents/torrent-downloader.md). |
+| **Linux ISO VM** | A one-shot QEMU Linux guest with guided ISO/disk pickers, disposable live and persistent install modes, loopback VNC/QMP, and bounded resources. It is distinct from WSL. See [Linux ISO VM](../integrations/linux-iso-vm.md). |
 
 Two other things render *on* the canvas but are not persisted node kinds: **subagent cards**
 (ephemeral cards showing an agent's spawned subagents, connected by an edge to the parent

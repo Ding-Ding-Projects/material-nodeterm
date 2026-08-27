@@ -97,9 +97,11 @@ import { annotationEndpoints } from '../lib/annotation'
 import { LazyEditorNode, LazyDiffNode } from '../nodes/lazyMonacoNodes'
 import { DinoNode } from '../nodes/DinoNode'
 import { SERVICE_NODE_KINDS, type ServiceNodeKind, type ProjectArchiveContents } from '@shared/types'
+import { VIRTUAL_MACHINE_NODE_CATALOG } from '@shared/virtual-machine'
 import type { ProjectIcon } from '@shared/project-icon'
 import BrowserNode from '../nodes/BrowserNode'
 import { ServiceNode } from '../nodes/ServiceNode'
+import VirtualMachineNode from '../nodes/VirtualMachineNode'
 import NsisInstallerNode from '../nodes/NsisInstallerNode'
 import ShopNode from '../nodes/ShopNode'
 import TorrentNode from '../nodes/TorrentNode'
@@ -596,6 +598,7 @@ import {
   createTerminalNode,
   nodeSshFor,
   createServiceNode,
+  createVirtualMachineNode,
   SERVICE_NODE_LABELS,
   createVideoNode,
   createPhotoNode,
@@ -1847,7 +1850,8 @@ export function Canvas() {
       proxmox: withNodeBoundary(ServiceNode),
       gitlab: withNodeBoundary(ServiceNode),
       homeassistant: withNodeBoundary(ServiceNode),
-      freepbx: withNodeBoundary(ServiceNode)
+      freepbx: withNodeBoundary(ServiceNode),
+      'linux-vm': withNodeBoundary(VirtualMachineNode)
     }),
     []
   )
@@ -4644,6 +4648,17 @@ export function Canvas() {
         if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
         return appended.nodes
       })
+    },
+    [setNodes, markDirty, emptyNodePos, parentInto]
+  )
+
+  const addVirtualMachine = useCallback(
+    (center?: { x: number; y: number }, groupId?: string) => {
+      setNodes((ns) => {
+        const node = createVirtualMachineNode(ns.length, center ?? emptyNodePos())
+        return [...ns, groupId ? parentInto(node, groupId) : node]
+      })
+      markDirty()
     },
     [setNodes, markDirty, emptyNodePos, parentInto]
   )
@@ -9162,10 +9177,13 @@ export function Canvas() {
               type: 'submenu' as const,
               label: 'New manager…',
               icon: <IconRemote />,
-              children: SERVICE_NODE_KINDS.map((kind) => ({
-                label: SERVICE_NODE_LABELS[kind],
-                onClick: () => addService(kind, at)
-              }))
+              children: [
+                { label: VIRTUAL_MACHINE_NODE_CATALOG[0].label, onClick: () => addVirtualMachine(at) },
+                ...SERVICE_NODE_KINDS.map((kind) => ({
+                  label: SERVICE_NODE_LABELS[kind],
+                  onClick: () => addService(kind, at)
+                }))
+              ]
             }
           ]),
           ...paneMenuGroup('Canvas objects', <IconShapes />, [
