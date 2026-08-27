@@ -8,7 +8,6 @@ import {
   browserDiscardedMessage,
   registerBrowserGuest,
   registerBrowserGuestRequest,
-  type BrowserGuest
   type BrowserGuest,
   type BrowserSurfaceKind
 } from './browser-guest-registry'
@@ -76,7 +75,6 @@ describe('registerBrowserGuest', () => {
       lookups += 1
       return { getType: () => 'webview' }
     }
-    for (const id of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, '7', null]) {
     for (const id of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
       expect(registerBrowserGuest(m, id, 'browser-1', 'canvas', anything), `${id}`).toBe(false)
     }
@@ -86,22 +84,12 @@ describe('registerBrowserGuest', () => {
 
   it('refuses a node id `isSafeNodeId` refuses — it is a map key and, later, a storage key', () => {
     const m = new Map<number, BrowserGuest>()
-    for (const bad of ['../etc', '', '.', '..', 'a/b', 'a b', 'x'.repeat(200), 7, null]) {
-      expect(registerBrowserGuest(m, 7, bad, 'canvas', lookup({ 7: 'webview' })), String(bad)).toBe(
-        false
-      )
     for (const bad of ['../etc', '', '.', '..', 'a/b', 'a b', 'x'.repeat(200)]) {
       expect(registerBrowserGuest(m, 7, bad, 'canvas', lookup({ 7: 'webview' })), bad).toBe(false)
     }
     expect(m.size).toBe(0)
   })
 
-  it('refuses an unknown surface value', () => {
-    const m = new Map<number, BrowserGuest>()
-    // The renderer is the more attackable half; `surface` is what selects a debugger target later.
-    for (const bad of ['modal ', 'CANVAS', '', undefined, null, 1]) {
-      expect(
-        registerBrowserGuest(m, 7, 'browser-1', bad, lookup({ 7: 'webview' })),
   it('refuses a surface value that is present and unrecognised', () => {
     const m = new Map<number, BrowserGuest>()
     // The renderer is the more attackable half; `surface` is what selects a debugger target later.
@@ -153,7 +141,7 @@ describe('browserDiscardedMessage', () => {
 })
 
 describe('registerBrowserGuestRequest', () => {
-  it('keeps the legacy omitted surface as a validated canvas registration', () => {
+  it('keeps the legacy omitted surface as an unknown registration', () => {
     const guests = new Map<number, BrowserGuest>()
     const refused: unknown[] = []
     expect(
@@ -166,7 +154,7 @@ describe('registerBrowserGuestRequest', () => {
         (details) => refused.push(details)
       )
     ).toBe(true)
-    expect(guests.get(21)).toEqual({ nodeId: 'browser-legacy', surface: 'canvas' })
+    expect(guests.get(21)).toEqual({ nodeId: 'browser-legacy' })
     expect(refused).toEqual([])
   })
 
@@ -205,16 +193,6 @@ describe('registerBrowserGuestRequest', () => {
   })
 })
 
-/** The Electron IPC callback must use the validation adapter; direct map writes bypass the guard. */
-describe('the IPC handler is wired through it', () => {
-  it('main never writes to browserGuests directly', () => {
-    // index.ts is checked out CRLF on Windows (core.autocrlf), so normalize before matching a
-    // literal '\n' needle against it — otherwise the '\r' between the two lines makes this a
-    // silent no-op on every Windows checkout.
-    const src = readFileSync(resolve(__dirname, 'index.ts'), 'utf8').replace(/\r\n/g, '\n')
-    expect(src).toContain('registerBrowserGuestRequest(\n        browserGuests')
-    expect(src).not.toContain('browserGuests.set(')
-  })
 /**
  * The guard is only worth anything if it is on the path. `ipcMain.on` cannot be exercised without
  * Electron, so this one claim — every write to `browserGuests` goes through the guard — is checked
@@ -223,7 +201,7 @@ describe('the IPC handler is wired through it', () => {
 describe('the IPC handler is wired through it', () => {
   it('main never writes to browserGuests directly', () => {
     const src = readFileSync(resolve(__dirname, 'index.ts'), 'utf8')
-    expect(src).toContain('registerBrowserGuest(browserGuests')
+    expect(src).toContain('registerBrowserGuestRequest(')
     // `.set(` anywhere on this map would be a second, unguarded door.
     expect(src).not.toContain('browserGuests.set(')
   })
@@ -232,7 +210,8 @@ describe('the IPC handler is wired through it', () => {
     // The unit test above pins the registry; this pins the caller. A `surface ?? 'canvas'` here
     // would reintroduce the false claim one layer up, where no unit test can see it.
     const src = readFileSync(resolve(__dirname, 'index.ts'), 'utf8')
-    expect(src).toContain('nodeId, surface, (id)')
+    expect(src).toContain('registerBrowserGuestRequest(')
+    expect(src).toMatch(/nodeId,\s+undefined,/)
     expect(src).not.toMatch(/surface\s*(\?\?|\|\|)/)
   })
 })

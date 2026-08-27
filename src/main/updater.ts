@@ -110,20 +110,6 @@ function loadBuilderAutoUpdater(): typeof import('electron-updater')['autoUpdate
  * in every local build's log. Verifying the real feed is the job of a promoted package, which
  * carries no marker.
  */
-function packagedUpdateMode(): unknown {
-  if (!app.isPackaged) return undefined
-  try {
-    const pkg = JSON.parse(fs.readFileSync(path.join(app.getAppPath(), 'package.json'), 'utf8')) as {
-      nodeTermUpdates?: unknown
-    }
-    return pkg.nodeTermUpdates
-  } catch (err) {
-    // A normal release without the marker must preserve the established updater behavior.
-    console.warn('[updater] could not read packaged update mode:', err)
-    return undefined
-  }
-}
-
 /**
  * The `nodeTermUpdates` marker a LOCAL package carries in its packaged package.json, injected by
  * the `dist*` scripts via electron-builder's `extraMetadata`. `release` does not set it, so a
