@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -26,6 +26,32 @@ function expectOwnerWritable(mode: number): void {
 }
 
 describe('GitHubControlStore', () => {
+  it('retries a transient rename refusal before reporting publication success', async () => {
+    const originalRename = fs.rename
+    let attempts = 0
+    const rename = vi.spyOn(fs, 'rename').mockImplementation(async (from, to) => {
+      attempts += 1
+      if (attempts === 1) {
+        const error = new Error('destination briefly held open') as NodeJS.ErrnoException
+        error.code = 'EPERM'
+        throw error
+      }
+      return originalRename(from, to)
+    })
+    try {
+      const state = await new GitHubControlStore(userDataDir).approve({
+        expectedRevision: 0,
+        localApprovalId: 'local-a',
+        projectId: 'project-a',
+        repository: 'nodeterm/nodeterm'
+      })
+      expect(state.revision).toBe(1)
+      expect(attempts).toBe(2)
+    } finally {
+      rename.mockRestore()
+    }
+  })
+
   it('serializes the read-modify-write FIFO per store instance', async () => {
     const store = new GitHubControlStore(userDataDir)
     const first = store.approve({
