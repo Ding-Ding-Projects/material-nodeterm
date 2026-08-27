@@ -30,8 +30,9 @@ describe('ServerGitHubSecretStore', () => {
 
     expect(await github.readForHost()).toBe('github-secret')
     expect(await gateway.readForHost()).toBe('gateway-secret')
+    const expectedMode = process.platform === 'win32' ? 0o666 : 0o600
     expect((await fs.stat(path.join(userDataDir, 'model-gateway-key.json'))).mode & 0o777).toBe(
-      0o600
+      expectedMode
     )
   })
 
