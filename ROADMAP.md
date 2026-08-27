@@ -205,12 +205,16 @@ intentionally unchecked because this task publishes the plan only.
 - [ ] Add Photo, Video, mixed-media Gallery, and wild Dim Sum nodes. Photo, Video, and Gallery
       source implementation is present for issue #20; tests, builds, and packaged captures remain
       pending in the parent integration lane.
-- [ ] Add the categorized local file-converter and advanced media, archive, PDF, and OCR pipelines.
+- [ ] Verify the categorized local file converter delivered for issue #21. The source now includes
+      collision-safe destination reservations, atomic publication, resumable progress, cancellation,
+      partial outcomes, per-category regex builders, and completed-output editor handoff; this
+      ultra-speed lane intentionally left tests, builds, runtime interaction, and captures unrun.
+- [ ] Add advanced media, archive-container, PDF-operation, and OCR pipelines.
 - [ ] Add the bundled WebTorrent downloader with resumable per-task lifecycle. The implementation
-      lane now contains the local runtime, guided intake, metadata selection, progress controls,
-      restart reconciliation, bounded seeding, and machine-local state; focused verification and
-      release evidence remain pending.
-- [ ] Add the bundled WebTorrent downloader with resumable per-task lifecycle.
+      lane now contains ESM-compatible local runtime loading, guided inspect-then-start intake,
+      searchable metadata and seeding controls, progress controls, restart reconciliation,
+      completion-based bounded seeding, and machine-local state; focused verification and release
+      evidence remain pending.
 - [ ] Add the bundled QEMU Linux ISO VM with persistent and disposable modes. Source implementation landed in `src/core/virtual-machine/` and `src/renderer/nodes/VirtualMachineNode.tsx`; automated checks, build, packaging, runtime interaction, and captures remain intentionally unrun in the ultra-speed lane.
 - [ ] Add Home Assistant multi-instance controls and sensor displays.
 - [ ] Add Calendar, Timer, and Alarm Clock nodes. Planner occurrence service is implemented in the

@@ -43,6 +43,7 @@ export const DOCS = [
   ['Changelog viewer', 'the date picker and the commit links', 'changelog-viewer'],
   ['Dim sum surprise', 'the little treat that shows up one visit in ten', 'dim-sum-surprise'],
   ['Exports, notifications & local history', 'ten shapes, one honest warning', 'exports-and-history'],
+  ['File converter', 'local adapters, safe names, and editor handoff', 'file-converter'],
   ['Kanban board', 'live session cards', 'kanban-board'],
   ['Language modes, funny levels & emoji', 'English, Cantonese, or both', 'language-modes'],
   ['Narrator', 'the page reads itself out loud', 'narrator'],

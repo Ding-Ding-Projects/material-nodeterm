@@ -358,7 +358,9 @@ Identical on desktop and in the browser.
   [`docs/exports.md`](./docs/exports.md) and [`docs/bulk-actions.md`](./docs/bulk-actions.md).
 - **Universal file converter** — a local, offline conversion surface (documents/PDF, images,
   audio, video, archives, structured data, code/text, binary encodings) reachable from the nav
-  rail's Tools destination or the command palette. See
+  rail's Tools destination or the command palette. It reserves collision-safe output names,
+  publishes validated output atomically, reports partial batch outcomes, and opens completed files
+  directly in Visual Studio Code. See
   [`docs/file-converter.md`](./docs/file-converter.md).
 - **Automatic node dependency installation** — a shared manifest and privileged, machine-local
   lifecycle for canonical HTTPS downloads, SHA-256 verification, portable user-scoped installs,
