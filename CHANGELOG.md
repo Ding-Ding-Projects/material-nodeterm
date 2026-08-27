@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Repair the personal-vocabulary coverage contract after the merge recovery combined newer
+  producer lanes with an older canonical manifest. The hand-written implementation array and its
+  independent canonical list now contain the same 145 unique producer identifiers, including all
+  rows already documented by the Material audit. Settings restores its real mapper and registration
+  boundaries, Canvas keeps one notification for each project-save outcome, and every retained Canvas
+  notification classifies authored copy separately from runtime facts. The Canvas subinventory names
+  57 checker-retained production calls in source order, while the two nested planner notifications
+  remain explicitly classified in their action. This ultra-speed repair ran
+  no tests, type checks, lint, reviews, audits, runtime interaction, packaging, or screen captures;
+  only JavaScript syntax and source-record consistency were checked locally.
+
 - Pin source builds to Node 24.19.0 before native dependency lifecycle scripts run. Node 26.4.0
   publishes Clang thin-LTO settings through its build metadata, which caused node-gyp to forward
   `-flto=thin` and `/opt:lldltojobs=2` into MSVC while compiling `smart-whisper`. The one-click

@@ -23,11 +23,13 @@ later commit, since this file will not be kept in lockstep with every merge).
       rebuild without `LNK1117`; the bootstrap now selects one exact C++ instance with Spectre
       libraries for its default toolset and passes it consistently to preflight and node-gyp. The
       native rebuild now completes; the later build phase remains blocked by a duplicate declaration
-      in `scripts/check-personal-vocabulary-coverage.mjs`. Source changes are in progress and
-      remain unchecked until the parent integration lane records parser, type-check, build,
-      packaging, and release-workflow evidence. The ultra-speed pass intentionally omits tests,
-      reviews, accessibility and security checks, runtime interaction, and screen captures after
-      activation.
+      in `scripts/check-personal-vocabulary-coverage.mjs`. The source repair now reconciles 145
+      unique personal-vocabulary producer rows, restores the settings mapper boundaries, and
+      removes the duplicated project-save notification outcome, but the parent build has not yet
+      been rerun. The combined recovery remains unchecked until the parent integration lane records
+      build, packaging, and release-workflow evidence. The ultra-speed pass intentionally omits
+      tests, type checks, lint, reviews, accessibility and security checks, runtime interaction,
+      and screen captures after activation.
 
 - [ ] Easter egg catalog (#103): 60 local, bounded, accessible desktop surprises are implemented
       in `src/shared/easter-eggs.ts` and `src/renderer/components/EasterEggs.tsx`, with the
