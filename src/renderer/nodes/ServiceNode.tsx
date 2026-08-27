@@ -7,18 +7,22 @@ import { safeServiceEndpoint } from '@shared/node-exec'
 import { nodeBorderStyle, nodeColorStyle } from '../lib/nodeColor'
 import { ColorMenu } from '../components/color/ColorMenu'
 import { MinecraftServerPanel } from '../components/minecraft/MinecraftServerPanel'
+import { AwsIdentityManager } from '../components/aws/AwsIdentityManager'
 import { DockerHostManagerPanel } from '../components/docker/DockerHostManagerPanel'
 import { HomeAssistantPanel } from '../components/home-assistant/HomeAssistantPanel'
+import { CloudflareZeroTrustPanel } from '../components/cloudflare/CloudflareZeroTrustPanel'
+import { NextcloudAioPanel } from '../components/nextcloud/NextcloudAioPanel'
 import { EditableNodeTitle } from '../components/EditableNodeTitle'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { mapAroundExactFacts } from './nodeVocabulary'
 
 /**
- * One component for the whole service family — Minecraft, Docker, Proxmox, GitLab, Home Assistant
- * and FreePBX. They differ in what they will eventually manage, not in how they behave as canvas
- * objects, so six near-identical components would be six copies of one rule waiting to drift.
+ * One component for the whole service family, including the guided AWS identity manager. They
+ * differ in what they manage, not in how they behave as canvas objects, so near-identical
+ * components would be copies of one rule waiting to drift.
  *
- * WHAT THIS DELIBERATELY DOES NOT DO for four of the six kinds, and why the emptiness is the point:
+ * WHAT THIS DELIBERATELY DOES NOT DO for the still-unwired manager kinds, and why the emptiness is
+ * the point:
  *
  * Proxmox/GitLab/FreePBX are not connected to anything yet. Home Assistant is implemented
  * by HomeAssistantPanel through the host-owned REST/WebSocket client. CLAUDE.md is
@@ -52,7 +56,10 @@ const ENDPOINT_PLACEHOLDER: Record<ServiceNodeKind, string> = {
   proxmox: 'https://proxmox.local:8006',
   gitlab: 'https://gitlab.example.com',
   homeassistant: 'http://homeassistant.local:8123',
-  freepbx: 'https://pbx.local'
+  freepbx: 'https://pbx.local',
+  awsidentity: 'https://sts.amazonaws.com',
+  'cloudflare-zero-trust': 'https://api.cloudflare.com',
+  'nextcloud-aio': 'http://127.0.0.1:8080'
 }
 
 /**
@@ -234,6 +241,15 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
 
         {!collapsed && kind === 'minecraft' && <MinecraftServerPanel nodeId={id} />}
         {!collapsed && kind === 'dockerhost' && <DockerHostManagerPanel />}
+        {!collapsed && kind === 'nextcloud-aio' && <NextcloudAioPanel nodeId={id} config={data.nextcloudAioConfig} onConfigChange={(nextcloudAioConfig) => updateNodeData(id, { nextcloudAioConfig })} />}
+
+        {!collapsed && kind === 'awsidentity' && (
+          <AwsIdentityManager
+            binding={data.awsIdentityBinding as never}
+            intent={data.awsIdentityIntent as never}
+            onChange={(awsIdentityBinding, awsIdentityIntent) => updateNodeData(id, { awsIdentityBinding, awsIdentityIntent })}
+          />
+        )}
 
         {!collapsed && kind === 'homeassistant' && (
           <HomeAssistantPanel
@@ -245,7 +261,15 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
           />
         )}
 
-        {!collapsed && kind !== 'minecraft' && kind !== 'dockerhost' && kind !== 'homeassistant' && (
+        {!collapsed && kind === 'cloudflare-zero-trust' && (
+          <CloudflareZeroTrustPanel
+            nodeId={id}
+            intent={data.cloudflareZeroTrustIntent ?? { schemaVersion: 1, manager: null, operation: null, accountHint: null, resourceHint: null, values: {} }}
+            onIntentChange={(cloudflareZeroTrustIntent) => updateNodeData(id, { cloudflareZeroTrustIntent })}
+          />
+        )}
+
+        {!collapsed && kind !== 'minecraft' && kind !== 'dockerhost' && kind !== 'homeassistant' && kind !== 'awsidentity' && kind !== 'cloudflare-zero-trust' && kind !== 'nextcloud-aio' && (
           <div className="service-node__body">
             <label className="service-node__field" htmlFor={`${id}-endpoint`}>
               <span className="service-node__field-label">{vocab('Address')}</span>

@@ -4,6 +4,8 @@ import { NODE_MIN_SIZES } from '../lib/nodeSizing'
 import type { CanvasNode } from '../state/workspace'
 import { useAgentNodes } from '../state/agentNodes'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { ContextMeter } from '../components/ContextMeter'
+import { contextSourceKey } from '../state/contextWindow'
 
 function fmtDur(ms: number): string {
   const s = Math.round(ms / 1000)
@@ -79,6 +81,7 @@ export function SubagentNode({ id, data, selected }: NodeProps<CanvasNode>) {
         <span className="subagent-node__dot" />
         <span className="subagent-node__type">{typeLabel}</span>
         <span className="subagent-node__state">{vocab(working ? 'working' : 'done')}</span>
+        <ContextMeter sessionId={null} agentId={typeLabel} sourceKey={contextSourceKey(typeLabel)} />
       </div>
       {data.title && !expanded && <div className="subagent-node__task">{data.title as string}</div>}
       {meta && <div className="subagent-node__meta">{meta}</div>}
