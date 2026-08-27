@@ -4,9 +4,10 @@
 
 Terminal and agent nodes use a persistent backend rather than tying the live shell directly to
 the desktop window. On Linux that backend is normally
-[tmux](https://github.com/tmux/tmux); on Windows it is nodeterm's standalone session host when no
-native tmux is available. In both cases the process can survive closing a node, switching
-projects, and quitting or crashing the app.
+[tmux](https://github.com/tmux/tmux); on Windows the resolver prefers `tmux`, then the
+tmux-compatible `psmux`, and falls back to nodeterm's standalone session host when neither is
+available. In all cases the process can survive closing a node, switching projects, and quitting
+or crashing the app.
 
 ## Behaviour
 
@@ -50,9 +51,10 @@ nothing to reattach to. nodeterm bridges this gap instead of pretending it did n
 
 - **Settings → tmux** — turn persistent backend support on/off, and set the scrollback bound used
   by tmux history, the Windows host's headless terminal, and cold-start replay.
-- A system tmux found on `PATH` (or at a fixed system location) is always preferred over the
-  session host. (The macOS desktop build used to bundle its own tmux binary as a fallback; that
-  bundle was deleted with the macOS desktop target.)
+- A system `tmux` found on `PATH` (or at a fixed POSIX location) is always preferred over the
+  session host. On Windows, `psmux` is checked after `tmux`, with `PATHEXT` expansion for native
+  executables and package-manager shims. If neither is present, the session host remains the
+  explicit fallback.
 - **Settings → Shell** on Windows selects the default detected profile. Profile choices are
   machine-local and snapshotted per node; see [Windows shell profiles](./windows-shell-profiles.md).
 
@@ -62,6 +64,10 @@ nothing to reattach to. nodeterm bridges this gap instead of pretending it did n
   non-persistent state instead of claiming continuity. On Windows, a provisional or rejected
   session-host attach fails closed and surfaces its real reason; it is not replaced by a plain
   shell or indexed as a persistent session.
+- **No Windows multiplexer is available:** the banner identifies `psmux` as the supported
+  compatible implementation and offers `winget install -e --id marlocarlo.psmux` when `winget`
+  is discoverable. Without Windows Package Manager, the banner remains an honest warning without
+  inventing an installer command, and the session host continues to provide persistence.
 - **A selected Windows profile is unavailable:** the node reports that exact profile and lets the
   user choose another. Explicit PowerShell, Git Bash, custom, and WSL profiles never silently fall
   back; only the `auto` profile follows its documented precedence.

@@ -56,6 +56,7 @@ import { TORRENT_NODE_CATALOG_ENTRY } from '@shared/torrent'
 import { DEFAULT_VIRTUAL_MACHINE_CONFIG } from '@shared/virtual-machine'
 import { TIMER_DEFAULT_DURATION_MS, type TimerNodeData } from '@shared/timer'
 import { createRecoveryGameSnapshot, normalizeRecoveryGameSnapshot, type RecoveryGameSnapshot } from '@shared/recovery-game'
+import { CLOUDFLARE_DEFAULT_INTENT, type CloudflarePortableIntent } from '@shared/cloudflare-core-managers'
 
 // Re-exported so Canvas (and anything else in the renderer) keeps importing it from here, while the
 // single implementation lives in src/shared and is shared with the relay host + the canvas-sync
@@ -95,6 +96,7 @@ const BROWSER_SIZE = { width: 800, height: 560 }
 const NATIVE_LOOP_SIZE = { width: 340, height: 280 }
 const SHOP_SIZE = { width: 480, height: 420 }
 export const TORRENT_SIZE = { width: 620, height: 520 }
+export const CLOUDFLARE_CORE_MANAGERS_SIZE = { width: 760, height: 680 }
 const LINUX_VM_SIZE = { width: 760, height: 560 }
 const TIMER_SIZE = { width: 380, height: 360 }
 const ALARM_SIZE = { width: 380, height: 360 }
@@ -255,6 +257,8 @@ export interface NodeData {
   recoveryGame?: RecoveryGameSnapshot
   /** service-kinds only: the display name the user gave this manager. See `CanvasNodeState`. */
   serviceLabel?: string
+  /** Cloudflare manager safe intent; local credential and provider state never enters project data. */
+  cloudflareCoreIntent?: CloudflarePortableIntent
   homeAssistantIntent?: HomeAssistantNodeIntent
   /** Safe ownership metadata for a special-universe Shop node. */
   universeCanvasId?: string
@@ -1616,6 +1620,25 @@ export function createServiceNode(
   }
 }
 
+/** Creates an unbound Cloudflare manager. Only typed safe operation intent is portable. */
+export function createCloudflareCoreManagersNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  return {
+    id: nextId('cloudflare-core-managers'),
+    type: 'cloudflare-core-managers',
+    position: placeAt(center, index, CLOUDFLARE_CORE_MANAGERS_SIZE.width, CLOUDFLARE_CORE_MANAGERS_SIZE.height),
+    width: CLOUDFLARE_CORE_MANAGERS_SIZE.width,
+    height: CLOUDFLARE_CORE_MANAGERS_SIZE.height,
+    style: { width: CLOUDFLARE_CORE_MANAGERS_SIZE.width, height: CLOUDFLARE_CORE_MANAGERS_SIZE.height },
+    data: {
+      title: 'Cloudflare managers',
+      color: '#f38020',
+      group: null,
+      cloudflareCoreIntent: { ...CLOUDFLARE_DEFAULT_INTENT, input: {} },
+      tags: ['cloudflare', 'account', 'zone', 'dns', 'ssl-tls', 'ruleset', 'redirect', 'cache', 'analytics']
+    }
+  }
+}
+
 /** Creates a Linux ISO VM node. The node is a canvas object, not a WSL terminal profile. */
 export function createVirtualMachineNode(index: number, center?: { x: number; y: number }): CanvasNode {
   return {
@@ -2233,6 +2256,7 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   homeassistant: true,
   'homeassistant-sensor': true,
   freepbx: true,
+  'cloudflare-core-managers': true,
   nsis: true,
   shop: true,
   'aws-universe': true,
@@ -2285,6 +2309,7 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   homeassistant: SERVICE_SUMMARY_SIZE,
   'homeassistant-sensor': HOME_ASSISTANT_SENSOR_SIZE,
   freepbx: SERVICE_SUMMARY_SIZE,
+  'cloudflare-core-managers': CLOUDFLARE_CORE_MANAGERS_SIZE,
   nsis: NSIS_SIZE,
   shop: SHOP_SIZE,
   'aws-universe': { width: 320, height: 220 },
@@ -2750,6 +2775,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         shopSelection: (n as CanvasNodeState & { shopSelection?: string }).shopSelection,
         torrentMagnet: n.torrentMagnet,
         serviceConnection: n.serviceConnection,
+        cloudflareCoreIntent: n.cloudflareCoreIntent,
         nsisSpec: n.nsisSpec,
         nsisLocalPaths: n.nsisLocalPaths,
         virtualMachineConfig: n.virtualMachineConfig,
@@ -2875,6 +2901,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         shopSelection: n.data.shopSelection,
         torrentMagnet: n.data.torrentMagnet,
         serviceConnection: n.data.serviceConnection,
+        cloudflareCoreIntent: n.data.cloudflareCoreIntent,
         nsisSpec: n.data.nsisSpec,
         nsisLocalPaths: n.data.nsisLocalPaths,
         // Media paths remain in the live node long enough for the machine-local index to retain

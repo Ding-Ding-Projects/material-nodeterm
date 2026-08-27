@@ -36,6 +36,7 @@ import type { WslCreateProgress } from '../shared/wsl'
 import type { TorrentTaskState } from '../shared/torrent'
 import type { VirtualMachineEvent } from '../shared/virtual-machine'
 import type { CalendarProvider } from '../shared/calendar'
+import type { CloudflareProgress } from '../shared/cloudflare-core-managers'
 import type { HomeAssistantClientEvent } from '../shared/home-assistant'
 import type { ProjectConsentRequest, ProjectSetupEvent } from '../shared/project-settings'
 
@@ -91,6 +92,7 @@ const subscribeNodeDependencyState = subscribe<[NodeDependencyAvailability]>(IPC
 const subscribeNodeDependencyProgress = subscribe<[NodeDependencyProgress]>(IPC.nodeDependencyProgress)
 const subscribeTorrentTask = subscribe<[TorrentTaskState]>(IPC.torrentTask)
 const subscribeVirtualMachineEvent = subscribe<[VirtualMachineEvent]>(IPC.virtualMachineEvent)
+const subscribeCloudflareCoreProgress = subscribe<[CloudflareProgress]>(IPC.cloudflareCoreProgress)
 const subscribeHomeAssistantEvent = subscribe<[HomeAssistantClientEvent]>(IPC.homeAssistantEvent)
 const subscribeWidgetState = subscribe<[CanvasWidgetLiveState]>(IPC.widgetStateChanged)
 
@@ -1156,6 +1158,19 @@ const api: NodeTerminalApi = {
     chatSend: (id, text) => ipcRenderer.invoke(IPC.ollamaChatSend, id, text),
     chatStop: (id) => ipcRenderer.invoke(IPC.ollamaChatStop, id),
     onChatStream: (listener) => subscribeOllamaChatStream(listener)
+  },
+  cloudflareCoreManagers: {
+    runtime: () => ipcRenderer.invoke(IPC.cloudflareCoreRuntime),
+    credentials: () => ipcRenderer.invoke(IPC.cloudflareCoreCredentials),
+    saveCredential: (input) => ipcRenderer.invoke(IPC.cloudflareCoreSaveCredential, input),
+    removeCredential: (credentialId) => ipcRenderer.invoke(IPC.cloudflareCoreRemoveCredential, credentialId),
+    binding: (nodeId) => ipcRenderer.invoke(IPC.cloudflareCoreBinding, nodeId),
+    bind: (input) => ipcRenderer.invoke(IPC.cloudflareCoreBind, input),
+    unbind: (nodeId) => ipcRenderer.invoke(IPC.cloudflareCoreUnbind, nodeId),
+    preview: (nodeId, request) => ipcRenderer.invoke(IPC.cloudflareCorePreview, nodeId, request),
+    execute: (nodeId, request) => ipcRenderer.invoke(IPC.cloudflareCoreExecute, nodeId, request),
+    cancel: (operationId) => ipcRenderer.invoke(IPC.cloudflareCoreCancel, operationId),
+    onProgress: (listener) => subscribeCloudflareCoreProgress(listener)
   },
   minecraft: {
     versions: () => ipcRenderer.invoke(IPC.minecraftVersions),

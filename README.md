@@ -378,6 +378,10 @@ Identical on desktop and in the browser.
   cache reuse, repair, cancellation, and restart reconciliation. Node Catalog `Install and
   continue` wiring and focused verification remain in progress. See
   [`docs/features/dependencies/automatic-node-dependencies.md`](./docs/features/dependencies/automatic-node-dependencies.md).
+- **Shared hosted-resource backup and restore** — versioned, edition-aware, ownership-reviewed
+  archives with bounded ZIP validation, explicit omissions, progress, cancellation, atomic
+  publication, and rollback contracts for hosted-service nodes. See
+  [`docs/features/integrations/backup-restore.md`](./docs/features/integrations/backup-restore.md).
 - **Local Ollama suite manager** — a local manager for [Ollama](https://ollama.com) that talks
   only to its documented local HTTP API, never a cloud service. See
   [`docs/ollama-manager.md`](./docs/ollama-manager.md).
@@ -417,14 +421,14 @@ info**, then **Run anyway**. This is expected of every unsigned installer from a
 is not a sign of a corrupted download, and it is not something this project will ever silently
 work around by acquiring a certificate.
 
-**Session continuity works, through a different mechanism.** There is no Windows build of tmux
-to bundle, so Windows terminals are backed by the **Windows session host** instead — a
-standalone Node process, built on the same `node-pty` this app already depends on plus a
-headless `xterm.js` for server-side screen state, that owns the real PTYs and outlives the
-Electron app. It is selected automatically whenever no real tmux is found on `PATH` (which is
-always, on a stock Windows install), and it gives you the same practical guarantee: close the
-app, reopen it, and your terminals — and any in-flight agent CLI turn — are still there,
-scrollback and all.
+**Session continuity works, through a Windows-aware resolver.** The desktop searches `PATH` for
+`tmux` first and then the tmux-compatible `psmux` executable, using `PATHEXT` so `.exe` and package
+manager shims are discovered just like native Windows commands. When neither is installed,
+terminals use the **Windows session host** instead — a standalone Node process, built on the same
+`node-pty` this app already depends on plus a headless `xterm.js` for server-side screen state,
+that owns the real PTYs and outlives the Electron app. Close the app, reopen it, and terminals —
+and any in-flight agent CLI turn — remain available with scrollback and the selected persistence
+backend.
 
 Two honest caveats, in the spirit of tmux's own trade-offs:
 
@@ -437,10 +441,10 @@ Two honest caveats, in the spirit of tmux's own trade-offs:
   its own `--resume`/equivalent flag, so you land back roughly where you left off even though
   the underlying process itself did not survive.
 
-If you want tmux-grade durability instead, install a real tmux somewhere on your Windows
-`PATH` (MSYS2's `pacman -S tmux`, or Cygwin's tmux package) — nodeterm prefers a system tmux
-over its own session host every time one is found. Full detail, architecture, and the protocol
-table: [`docs/windows-session-host.md`](./docs/windows-session-host.md) and
+If you want tmux-grade durability instead, install `psmux` with Windows Package Manager
+(`winget install -e --id marlocarlo.psmux`) or place a compatible `tmux.exe` on your Windows
+`PATH` — nodeterm prefers `tmux`, then `psmux`, over its own session host every time one is found.
+Full detail, architecture, and the protocol table: [`docs/windows-session-host.md`](./docs/windows-session-host.md) and
 [`docs/windows.md`](./docs/windows.md).
 
 ## Install / build

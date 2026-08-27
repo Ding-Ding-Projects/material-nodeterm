@@ -74,9 +74,15 @@ import { effectiveSize, type PtySize } from './pty-size'
 import { machOArch, archMismatch } from './macho-arch'
 import { writeScrollback, readScrollback, deleteScrollback } from './scrollback-store'
 import { claudeConfigDirFor } from './claude-config-dir'
-import { findExecutableSync, findInPathString, opensshFallbacks, resolveShellPath, shellPathNow } from './exec-path'
+import {
+  findExecutableSync,
+  findInPathString,
+  isExecutable,
+  opensshFallbacks,
+  resolveShellPath,
+  shellPathNow
+} from './exec-path'
 import { AUTH_ENV_STRIP, accountTmuxEnvArgs, remoteAccountConfigDirAbs } from './claude-accounts-core'
-import { findExecutableSync, findInPathString, resolveShellPath, shellPathNow } from './exec-path'
 import {
   AUTH_ENV_STRIP,
   accountTmuxEnvArgs,
@@ -349,61 +355,39 @@ bind -T copy-mode-vi TripleClick1Pane send-keys -X select-line \\; send-keys -X 
 ${leadPaneHookLines(leadPaneWidth)}`
 }
 
+/** Executable names that implement the tmux command surface, in preference order. */
+const TMUX_BIN_NAMES = ['tmux', 'psmux'] as const
+
 /**
- * Resolve an absolute tmux path (GUI apps don't inherit the shell PATH). Subprocess-free: the old
- * fallback here was a SYNC login-shell `command -v tmux` — sourcing the profile (nvm/conda:
- * 100-800ms) on the main thread, re-triggered every 3s by the tmux-missing banner's install poll,
- * freezing all windows and IPC each time. Now it walks a fixed candidate list
- * (`tmuxCandidatePaths` — Nix, Linuxbrew, the distro paths), then the cached login-shell PATH.
- *
- * (A THIRD source — the static tmux the macOS app bundled as a last resort — died with the macOS
- * desktop. Windows persistence is the standalone session host, and a Linux server is expected to
- * install its own tmux; neither ever reached the bundled binary, so the two-source walk is the
- * whole behavior both platforms already had.)
- *
- * BEFORE THAT ASYNC PATH PROBE SETTLES, a tmux living ONLY on the user's shell PATH is still
- * invisible, and a session spawned in that window silently becomes a plain shell with no
- * persistence — the window this candidate list narrows, and the reason issue #126 could bite a
- * machine that has tmux installed. Two things close it after the fact: init()'s post-probe
- * `ensureTmux()` re-run and `tmuxStatus()`'s re-probe, both of which upgrade NEW sessions without
- * a restart. A session already spawned plain is NOT migrated (there is no way to move a running
- * process into a tmux pane); its recovery is the node's own Refresh/respawn, which re-creates it
- * through the now-resolved tmux.
+ * Resolve the local multiplexer without spawning a shell. POSIX fixed install locations remain
+ * first. Windows has no useful POSIX fixed locations, so it searches the inherited PATH and lets
+ * `execCandidates` resolve `tmux.exe` or `psmux.exe` through PATHEXT.
  */
 function findTmux(): string | null {
-  // Windows has none of `tmuxCandidatePaths`' targets (Homebrew, Nix, the distro `/usr/bin`
-  // family — all POSIX filesystem layouts). Walking the list would just be `existsSync` calls
-  // against paths that can never resolve on this platform — skip straight to the PATH probe, the
-  // one route that can find a real tmux a Windows user installed themselves (WSL's own tmux is a
-  // different filesystem entirely and is never on the Windows PATH; MSYS2/Cygwin tmux, if the
-  // user put it there, is).
-function findTmux(resourcesPath?: string): string | null {
-  // Windows has none of `tmuxCandidatePaths`' targets (Homebrew, MacPorts, Nix, the distro
-  // `/usr/bin` family — all POSIX filesystem layouts) and no bundled tmux (macOS-only, see
-  // `bundledTmuxPath`'s doc comment; `scripts/build-tmux.mjs` never runs for a Windows package).
-  // Walking either list would just be `existsSync` calls against paths that can never resolve on
-  // this platform — skip straight to the PATH probe, the one route that can find a real tmux a
-  // Windows user installed themselves (WSL's own tmux is a different filesystem entirely and is
-  // never on the Windows PATH; MSYS2/Cygwin tmux, if the user put it there, is).
+  const pathStr = shellPathNow() ?? process.env.PATH
   if (os.platform() === 'win32') {
-    return findInPathString('tmux', shellPathNow() ?? process.env.PATH)
+    for (const name of TMUX_BIN_NAMES) {
+      const hit = findInPathString(name, pathStr)
+      if (hit) return hit
+    }
+    return null
   }
-  // BOTH lookups inside the guard: `os.homedir()` throws the same SystemError as `userInfo()` when
-  // there is no passwd entry and no $HOME (some containers), and a thrown probe here would take
-  // out tmux discovery entirely — degrading a machine that HAS tmux to the plain-shell fallback,
-  // which is the failure this whole function is being hardened against. Unknown home/user simply
-  // drops the candidates derived from them.
+
   let home: string | null = null
   let user: string | null = null
   try {
     home = os.homedir()
     user = os.userInfo().username
   } catch {
-    // no home / no passwd entry — the fixed system paths below are still checked
+    // The fixed system paths remain useful when home or user discovery is unavailable.
   }
-  const fixed = findFixedTmux((p) => fs.existsSync(p), home, user)
+  const fixed = findFixedTmux((candidate) => fs.existsSync(candidate), home, user)
   if (fixed) return fixed
-  return findInPathString('tmux', shellPathNow() ?? process.env.PATH)
+  for (const name of TMUX_BIN_NAMES) {
+    const hit = findInPathString(name, pathStr)
+    if (hit) return hit
+  }
+  return null
 }
 
 /** Resolve an absolute ssh path (GUI apps don't inherit the shell PATH). */
@@ -1771,7 +1755,9 @@ export class PtyManager {
     // successful probe here is what makes new sessions tmux-backed without a restart.
     if (!this.tmuxPath) this.ensureTmux()
     const available = !!this.tmuxPath
-    const hint = available ? null : tmuxInstall(process.platform, (cmd) => findCommand(cmd, process.env, fs.existsSync))
+    const hint = available
+      ? null
+      : tmuxInstall(process.platform, (cmd) => findCommand(cmd, process.env, isExecutable))
     return {
       available,
       installCommand: hint?.command ?? null,
