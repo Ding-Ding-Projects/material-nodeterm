@@ -420,13 +420,28 @@ export function ensureWindowsPython(options = {}) {
     return { code: REBOOT_REQUIRED, changed: true, pythonPath: '' }
   }
 
-  // Exit zero is not evidence that the exact requested interpreter is usable. Probe the pinned
-  // target in isolated mode, and export that absolute executable to node-gyp through PYTHON.
+  // Exit zero is not evidence that the exact requested interpreter is usable. Probe both valid
+  // post-install locations in isolated mode. winget can accept the per-user install request while
+  // placing Python in its canonical Python313 directory instead of honoring the custom TargetDir;
+  // rejecting that usable interpreter leaves a successful install followed by a false failure.
+  // Export the exact verified executable to node-gyp through PYTHON.
   let installed = null
   try {
-    if (pathPresent(targetPython, fs)) {
-      installed = supportedPython(targetPython, [], run, arch, config.version, environment)
-    }
+    installed = findSupportedPython(
+      [
+        { program: targetPython, prefixArgs: [], expectedVersion: config.version, requirePresent: true },
+        {
+          program: canonicalPerUserPython,
+          prefixArgs: [],
+          expectedVersion: config.version,
+          requirePresent: true
+        }
+      ],
+      run,
+      arch,
+      environment,
+      fs
+    )
   } catch (error) {
     emitFailure(report, [
       'Dependency : supported 64-bit Python for node-gyp',
