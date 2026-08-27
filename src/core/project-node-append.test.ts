@@ -221,5 +221,3 @@ describe('removeProjectNode', () => {
     expect(removeProjectNode(baseFile(two), '', NOW)).toBeNull()
   })
 })
-
-

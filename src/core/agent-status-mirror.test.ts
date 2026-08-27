@@ -2203,5 +2203,3 @@ describe('inbox event age prune (flush)', () => {
     expect(_inboxSnapshot().events[0].resolved).toBeUndefined()
   })
 })
-
-

@@ -173,5 +173,3 @@ export class GitHubControlStore {
     await fs.chmod(this.filePath, 0o600)
   }
 }
-
-

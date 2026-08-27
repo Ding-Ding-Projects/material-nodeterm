@@ -55,5 +55,3 @@ describe('Codex spawn scope resolves fail-closed', () => {
     )
   })
 })
-
-

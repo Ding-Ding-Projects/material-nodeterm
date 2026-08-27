@@ -295,5 +295,3 @@ describe('readCodexThreadAt / readCodexAccountAt', () => {
     expect(await readCodexAccountAt(s)).toEqual({ email: 'dev@example.com' })
   })
 })
-
-

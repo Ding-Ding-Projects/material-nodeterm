@@ -557,5 +557,3 @@ describe('per-node capability (the authorization the shared bearer cannot give)'
     expect(fallbacks).toEqual([{ nodeId: 'node-1', reason: 'thread-bind-refused' }])
   })
 })
-
-

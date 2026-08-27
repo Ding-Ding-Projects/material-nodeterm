@@ -173,5 +173,3 @@ export function removeProjectNode(raw: string, nodeId: string, now: Date): strin
   root.savedAt = now.toISOString()
   return JSON.stringify(root, null, 2)
 }
-
-

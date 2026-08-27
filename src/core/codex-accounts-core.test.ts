@@ -573,5 +573,3 @@ describe('ensureSharedCodexDaemon: reuse-if-reachable-else-start-once (§2.2)', 
     expect(started).toBe(1)
   })
 })
-
-

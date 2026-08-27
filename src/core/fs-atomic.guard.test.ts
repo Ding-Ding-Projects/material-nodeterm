@@ -512,5 +512,3 @@ function isUniqueTempName(name: string, relativeFile: string, source: string): b
   }
   return false
 }
-
-
