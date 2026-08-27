@@ -173,6 +173,7 @@ export function SettingsPage({
   return createPortal(
     <div
       className="nt-settings md3-settings-shell fixed inset-0 z-[55] flex"
+      data-easter-surface="settings"
       data-appearance-id="app:settings-dialog"
     >
       <SettingsSidebar

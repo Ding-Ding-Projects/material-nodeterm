@@ -482,6 +482,41 @@ export function normalizeCopilot(env: RawHookEnvelope): NormalizedAgentEvent | n
   return null
 }
 
+// Devin CLI 3000.4.25 hook payload. The CLI documents a Claude-shaped snake_case envelope with
+// stable `session_id` and per-turn `prompt_id`. Devin's permission hook is observability only in
+// this integration: we report `blocked` so the canvas can ask for attention, but never send a
+// decision back or claim that nodeterm controls Devin's permissions.
+interface DevinPayload {
+  hook_event_name?: string
+  session_id?: string
+  prompt_id?: string
+  prompt?: string
+  tool_name?: string
+  last_assistant_message?: string
+}
+
+export function normalizeDevin(env: RawHookEnvelope): NormalizedAgentEvent | null {
+  const p = env.payload as DevinPayload
+  const ev = p.hook_event_name
+  const base = { nodeId: env.nodeId, agentId: env.agentId, sessionId: p.session_id }
+
+  if (ev === 'SessionStart') return { ...base, kind: 'session', sessionPhase: 'start' }
+  if (ev === 'SessionEnd') return { ...base, kind: 'session', sessionPhase: 'end' }
+  if (ev === 'UserPromptSubmit') {
+    return { ...base, kind: 'state', state: 'working', task: p.prompt, newTurn: true }
+  }
+  if (ev === 'PermissionRequest') {
+    return { ...base, kind: 'state', state: 'blocked' }
+  }
+  if (ev === 'Stop') {
+    return { ...base, kind: 'state', state: 'done', lastMessage: p.last_assistant_message }
+  }
+  if (ev === 'PreToolUse' || ev === 'PostToolUse' || ev === 'PostCompaction') {
+    return { ...base, kind: 'state', state: 'working' }
+  }
+  return null
+}
+
 // opencode plugin payload (see core/agents/hooks/opencode.ts). The managed plugin forwards
 // { event, sessionID?, role? } per hook; field names beyond `event` are read defensively —
 // opencode's event payload shapes are not a contract, so the event NAME carries the mapping.
@@ -745,5 +780,6 @@ export function normalizeFor(agentId: AgentId, env: RawHookEnvelope): Normalized
   if (agentId === 'opencode') return normalizeOpencode(env)
   if (agentId === 'grok') return normalizeGrok(env)
   if (agentId === 'copilot') return normalizeCopilot(env)
+  if (agentId === 'devin') return normalizeDevin(env)
   return null
 }
