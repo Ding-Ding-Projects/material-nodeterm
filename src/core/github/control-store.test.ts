@@ -26,6 +26,56 @@ function expectOwnerWritable(mode: number): void {
 }
 
 describe('GitHubControlStore', () => {
+  it('serializes the read-modify-write FIFO per store instance', async () => {
+    const store = new GitHubControlStore(userDataDir)
+    const first = store.approve({
+      expectedRevision: 0,
+      localApprovalId: 'local-a',
+      projectId: 'project-a',
+      repository: 'nodeterm/nodeterm'
+    })
+    const second = store.selectProvider({ expectedRevision: 1, provider: 'gh' })
+
+    await expect(first).resolves.toMatchObject({ revision: 1 })
+    await expect(second).resolves.toMatchObject({ revision: 2, authProvider: 'gh' })
+  })
+
+  it('removes its unique temporary file when atomic publication fails', async () => {
+    const target = path.join(userDataDir, 'github-issues-control.json')
+    await fs.mkdir(target)
+    const store = new GitHubControlStore(userDataDir)
+
+    await expect(store.approve({
+      expectedRevision: 0,
+      localApprovalId: 'local-a',
+      projectId: 'project-a',
+      repository: 'nodeterm/nodeterm'
+    })).rejects.toBeTruthy()
+
+    const entries = await fs.readdir(userDataDir)
+    expect(entries.filter((entry) => entry.includes('github-issues-control.json.') ||
+      entry.endsWith('.tmp'))).toEqual([])
+    expect((await fs.readdir(target))).toEqual([])
+  })
+
+  it('preserves an existing target when a later publication is refused', async () => {
+    const store = new GitHubControlStore(userDataDir)
+    const approved = await store.approve({
+      expectedRevision: 0,
+      localApprovalId: 'local-a',
+      projectId: 'project-a',
+      repository: 'nodeterm/nodeterm'
+    })
+    const before = await fs.readFile(path.join(userDataDir, 'github-issues-control.json'), 'utf8')
+    await expect(store.approve({
+      expectedRevision: approved.revision + 1,
+      localApprovalId: 'local-b',
+      projectId: 'project-b',
+      repository: 'nodeterm/nodeterm'
+    })).rejects.toMatchObject({ code: 'revision-conflict' })
+    expect(await fs.readFile(path.join(userDataDir, 'github-issues-control.json'), 'utf8')).toBe(before)
+  })
+
   it('persists an approval with a revision and mode 0600', async () => {
     const store = new GitHubControlStore(userDataDir)
     const state = await store.approve({

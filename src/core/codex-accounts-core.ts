@@ -225,7 +225,9 @@ export function resolveCodexSessionScope(
  * Codex agents need an explicit system-or-managed scope; a plain login terminal needs it when it
  * carries a managed CODEX account id. Sharing this predicate keeps tmux and plain PTYs aligned.
  *
- * `isCodexAccount` is REQUIRED, and deliberately has no default, because neither guess is safe.
+ * Generic callers pass `isCodexAccount` so managed Claude ids remain false. Specialized Codex
+ * callers use the two-argument legacy contract, where any non-empty Codex account id is scoped.
+ * The overload keeps those callers from being forced through a generic provider predicate.
  * Managed Claude and Codex accounts are separate lists that share one id alphabet, so the id alone
  * cannot say which provider it belongs to. Answering "yes" for any id — which this predicate used
  * to do via `!!accountId` — sends every managed CLAUDE node into the fail-closed Codex gate, where
@@ -236,12 +238,21 @@ export function resolveCodexSessionScope(
  */
 export function needsCodexAccountScope(
   agentId: string | undefined,
+  accountId: string | undefined
+): boolean
+export function needsCodexAccountScope(
+  agentId: string | undefined,
   accountId: string | undefined,
   isCodexAccount: (id: string) => boolean
+): boolean
+export function needsCodexAccountScope(
+  agentId: string | undefined,
+  accountId: string | undefined,
+  isCodexAccount?: (id: string) => boolean
 ): boolean {
   if (agentId === 'codex') return true
   if (!accountId) return false
-  return isCodexAccount(accountId)
+  return isCodexAccount ? isCodexAccount(accountId) : true
 }
 
 /**
@@ -499,6 +510,10 @@ export function commitCodexRolloutExposure(
     }
     if (!isVerifiedRollout(plan.targetPath)) {
       throw new Error('Target Codex rollout did not preserve the verified source inode')
+    }
+    const publishedSource = statSync(plan.sourcePath)
+    if (publishedSource.dev !== plan.sourceDev || publishedSource.ino !== plan.sourceIno) {
+      throw new Error('Source Codex rollout changed after account switch commit')
     }
   } catch (error) {
     // Roll back a target THIS call published so a failed commit leaves the target as it was found
