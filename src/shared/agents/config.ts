@@ -355,6 +355,30 @@ export function createdAgentId(
   return tags.includes('claude') ? 'claude' : undefined
 }
 
+/** Resolve a node's current builtin harness from persisted data, then the live registry. */
+export function createdAgentBaseId(
+  data: { agentId?: unknown; agentBaseId?: unknown; tags?: unknown } | undefined
+): BuiltinAgentId | undefined {
+  if (!data) return undefined
+  const id = createdAgentId(data)
+  if (!id) return undefined
+  if (BUILTIN_AGENT_IDS.includes(id as BuiltinAgentId)) return id as BuiltinAgentId
+  if (
+    typeof data.agentBaseId === 'string' &&
+    BUILTIN_AGENT_IDS.includes(data.agentBaseId as BuiltinAgentId)
+  ) {
+    return data.agentBaseId as BuiltinAgentId
+  }
+  return baseAgentOf(id)
+}
+
+/** The agent id whose protocol and capabilities this node currently uses. */
+export function createdAgentHarnessId(
+  data: { agentId?: unknown; agentBaseId?: unknown; tags?: unknown } | undefined
+): AgentId | undefined {
+  return createdAgentBaseId(data) ?? createdAgentId(data)
+}
+
 // Session ids are interpolated into a shell command line (written into the live shell on a
 // cold restart), so accept only the safe charset agents actually use (UUIDs etc.) — never a
 // flag-like or metacharacter-bearing value.

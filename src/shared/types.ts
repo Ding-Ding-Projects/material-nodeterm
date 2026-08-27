@@ -177,6 +177,8 @@ export interface PtyCreateOptions {
    * real value in a later phase.
    */
   agentId?: AgentId
+  /** Persisted builtin harness for the node's current agent association. */
+  agentBaseId?: BuiltinAgentId
   /** Per-node model override. Applied through the node's base harness on launch/cold restore. */
   agentModel?: string
   /** Managed Claude account: inject CLAUDE_CONFIG_DIR for this account into the session env. */
@@ -588,6 +590,8 @@ export interface CanvasNodeState {
   cwd?: string
   /** Which agent runs in this terminal node (claude/codex/gemini/custom). */
   agentId?: AgentId
+  /** Persisted builtin harness for a custom agent, retained if its registry record is removed. */
+  agentBaseId?: BuiltinAgentId
   /** Model selected for this agent node through the shared model gateway. */
   agentModel?: string
   /** Set while this node is armed but not yet launched — see PendingLaunch. */

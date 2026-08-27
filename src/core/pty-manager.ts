@@ -2226,7 +2226,7 @@ export class PtyManager {
     // Rewrite the launcher on every create: it is generated, so an app upgrade must not leave an
     // old copy behind. Failure is not fatal — `installCodexLauncher` answers null, the caps probe
     // says "no shared identity", and the launch line the renderer already chose is the bare CLI.
-    if (hasSharedIdentity((options.agentId ?? 'claude') as AgentId) && !options.sshRemote) {
+    if (hasSharedIdentity((options.agentBaseId ?? options.agentId ?? 'claude') as AgentId) && !options.sshRemote) {
       installCodexLauncher()
     }
     // Resolve a stable profile id only for a NEW local Windows spawn, after co-attach and all
@@ -2760,14 +2760,22 @@ export class PtyManager {
     // wait-branch for claude sessions when the setting is on. `permWaitSecs > 0` injects
     // NODETERM_PERM_WAIT_SECS; off / non-claude ⇒ 0 ⇒ absent ⇒ legacy behavior.
     const permWaitSecs =
-      this.getSettings().hookReplyApprovals && (options.agentId ?? 'claude') === 'claude' ? PERM_WAIT_SECS_DEFAULT : 0
+      this.getSettings().hookReplyApprovals &&
+      (options.agentBaseId ?? options.agentId ?? 'claude') === 'claude'
+        ? PERM_WAIT_SECS_DEFAULT
+        : 0
     // Materialise this node's token BEFORE the session exists, so the very first hook event the
     // agent fires can already read it. Local sessions only: a remote node's token is written on the
     // HOST (see remote-hooks), because the host is where its hook script runs.
     if (options.persistKey && !options.sshRemote) ensureNodeToken(options.persistKey)
     const hookEnv =
       options.persistKey && !options.sshRemote
-        ? hookServer.buildPtyEnv(options.persistKey, options.agentId ?? 'claude', permWaitSecs)
+        ? hookServer.buildPtyEnv(
+            options.persistKey,
+            options.agentId ?? 'claude',
+            permWaitSecs,
+            (options.agentBaseId ?? options.agentId ?? 'claude') as AgentId
+          )
         : {}
     for (const [k, v] of Object.entries(hookEnv)) env[k] = v
 
@@ -2775,7 +2783,7 @@ export class PtyManager {
     // managed launcher by NAME, so its directory goes first on THIS session's PATH only. A plain
     // terminal, and every other agent, sees the PATH it always saw. The launcher itself falls back
     // to the bare CLI, so a session that gets the PATH but no identity is still a working session.
-    if (hasSharedIdentity((options.agentId ?? 'claude') as AgentId) && !options.sshRemote) {
+    if (hasSharedIdentity((options.agentBaseId ?? options.agentId ?? 'claude') as AgentId) && !options.sshRemote) {
       env.PATH = `${codexLauncherDir()}${path.delimiter}${env.PATH ?? ''}`
     }
 
@@ -2995,7 +3003,8 @@ export class PtyManager {
               hookServer.getVersion(),
               // Same default the local path applies (`hookServer.buildPtyEnv(persistKey, agentId ??
               // 'claude', …)`) so a remote node's agent env matches its local twin exactly.
-              options.agentId ?? 'claude'
+              options.agentId ?? 'claude',
+              options.agentBaseId
             ),
             // Arm the remote permission hook's wait-branch too (deterministic approvals over SSH):
             // the request/answer files live on the REMOTE host; the desktop answers over the
