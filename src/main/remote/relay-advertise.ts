@@ -13,13 +13,7 @@
 import { promises as fs } from 'fs'
 import os from 'os'
 import path from 'path'
-import {
-  removeAtomic,
-  renameAtomic,
-  sweepStaleTempFiles,
-  tempNameFor
-} from '../../core/fs-atomic'
-import { removeAtomic, writeFileAtomic } from '../../core/fs-atomic'
+import { removeAtomic, renameAtomic, sweepStaleTempFiles, tempNameFor } from '../../core/fs-atomic'
 
 const FILE = path.join(os.homedir(), '.nodeterm', 'relay.json')
 
@@ -47,7 +41,6 @@ export async function writeRelayAdvertisement(ad: RelayAdvertisement): Promise<v
     await sweepStaleTempFiles(FILE)
     await fs.writeFile(tmp, JSON.stringify(ad, null, 2) + '\n', { mode: 0o600 })
     await renameAtomic(tmp, FILE)
-    await writeFileAtomic(FILE, JSON.stringify(ad, null, 2) + '\n', { mode: 0o600 })
   } catch {
     // Advertisement is opportunistic; pairing-time provisioning still works.
     await fs.rm(tmp, { force: true }).catch(() => {})
@@ -66,9 +59,7 @@ export async function writeRelayAdvertisement(ad: RelayAdvertisement): Promise<v
  */
 export async function removeRelayAdvertisement(): Promise<boolean> {
   return removeAtomic(FILE)
+}
 /** Remove the advertisement (host stopped / toggle off) so phones stop offering adoption.
  *  `removeAtomic` retries transient Windows sharing violations and treats "already absent"
  *  (ENOENT) as success; it never throws. */
-export async function removeRelayAdvertisement(): Promise<void> {
-  await removeAtomic(FILE)
-}

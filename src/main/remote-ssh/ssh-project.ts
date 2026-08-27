@@ -270,26 +270,6 @@ export interface ConnectResult {
   remoteClaudeVersion?: string | null
 }
 
-export function remoteCodexAccountSetupCommand(remoteHome: string, accountId: string): string {
-  const home = remoteCodexHome(remoteHome, accountId)
-  const system = remoteCodexHome(remoteHome)
-  const shared = [
-    'config.toml',
-    'AGENTS.md',
-    'skills',
-    'plugins',
-    'packages',
-    'rules',
-    'hooks.json'
-  ]
-    .map(
-      (name) =>
-        `if [ -e ${posixQuote(`${system}/${name}`)} ] && [ ! -e ${posixQuote(`${home}/${name}`)} ]; then ln -s ${posixQuote(`${system}/${name}`)} ${posixQuote(`${home}/${name}`)} || { printf '%s\n' ${posixQuote(`NODETERM_CODEX_ACCOUNT_SETUP:link:${name}`)}; exit 71; }; fi;`
-    )
-    .join(' ')
-  return `umask 077; mkdir -p ${posixQuote(home)} && chmod 700 ${posixQuote(home)} || { printf '%s\n' 'NODETERM_CODEX_ACCOUNT_SETUP:home'; exit 70; }; ${shared}`
-}
-
 /** Start one persistent app-server per remote CODEX_HOME. Official standalone installs use the
  * daemon manager. npm/global installs cannot, so they fall back to one lock-guarded nohup server
  * and reuse its socket + pid across every node on that account. */
@@ -752,10 +732,11 @@ export class SshProjectManager {
             const confWrite = remoteAtomicWrite(confPath)
             const w = await this.r.run(
               childArgs(conn, controlPath, confWrite.command),
-              remoteTmuxConf(sshTmuxScrollback(this.r), sshWordSeparators(this.r))
-              // Lead-pane width applies on the host too: an agent team spawned in a remote
-              // session squeezes the lead exactly like a local one. 0/absent ⇒ pre-feature conf.
-              remoteTmuxConf(50000, this.r.leadPaneWidth?.() ?? 0)
+              remoteTmuxConf(
+                sshTmuxScrollback(this.r),
+                sshWordSeparators(this.r),
+                this.r.leadPaneWidth?.() ?? 0
+              )
             )
             if (w.code === 0) {
               // source-file is best-effort (pushes options into a warm server); ignore its result.
@@ -1903,15 +1884,6 @@ export class SshProjectManager {
     controlPath: string,
     accountIds: string[]
   ): Promise<Array<{ accountId?: string; socketPath: string }>> {
-    const c = [...this.conns.values()].find((entry) => entry.controlPath === controlPath)
-    if (!c?.remoteHome) throw new Error('SSH Codex host is unavailable')
-    for (const id of accountIds) assertCodexAccountId(id)
-    const ids: Array<string | undefined> = [undefined, ...accountIds]
-    for (const id of ids) {
-      const home = remoteCodexHome(c.remoteHome, id)
-      if (!c.codexCliPath || !c.codexRelayRuntimePath) {
-        throw new Error('SSH Codex CLI is unavailable')
-      }
     const c = this.connByControlPath(controlPath)
     if (!c || !isSafeRemoteHome(c.remoteHome)) throw new Error('SSH Codex host is unavailable')
     for (const id of accountIds) assertCodexAccountId(id)
@@ -1932,10 +1904,6 @@ export class SshProjectManager {
     }))
   }
 
-      socketPath: remoteCodexSocket(remoteHome, accountId)
-    }))
-  }
-
   /** Does the account's app-server already know this thread? The relay's `thread-check` does a live
    *  `thread/read` and exits 0 only when the far side reports the thread with an absolute path+cwd —
    *  the verify-before-recycle primitive (§4.2 step 4). Fail-closed false on any bad input / miss. */
@@ -1944,11 +1912,6 @@ export class SshProjectManager {
     accountId: string | undefined,
     threadId: string
   ): Promise<boolean> {
-    if (accountId) assertCodexAccountId(accountId)
-    if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(threadId)) return false
-    const c = [...this.conns.values()].find((entry) => entry.controlPath === controlPath)
-    if (!c?.remoteHome || !c.codexRelayRuntimePath || !c.codexRelayScriptPath) return false
-    const socket = remoteCodexSocket(c.remoteHome, accountId)
     if (!ACCOUNT_ID_RE.test(threadId)) return false
     const c = this.connByControlPath(controlPath)
     if (!c || !isSafeRemoteHome(c.remoteHome)) return false
@@ -1968,12 +1931,6 @@ export class SshProjectManager {
     threadId: string,
     accountIds: string[]
   ): Promise<void> {
-    const c = [...this.conns.values()].find((entry) => entry.controlPath === controlPath)
-    if (!c?.remoteHome || !c.codexRelayRuntimePath || !c.codexRelayScriptPath) {
-      throw new Error('SSH Codex runtime is unavailable')
-    }
-    const catalog = await this.remoteCodexCatalog(controlPath, accountIds)
-    const target = remoteCodexSocket(c.remoteHome, accountId)
     const c = this.connByControlPath(controlPath)
     if (!c || !isSafeRemoteHome(c.remoteHome) || !c.codexRelayRuntimePath || !c.codexRelayScriptPath) {
       throw new Error('SSH Codex runtime is unavailable')
@@ -2013,11 +1970,6 @@ export class SshProjectManager {
     projectId: string,
     accountId: string | undefined,
     threadId: string,
-    localPath: string,
-    sessionsRelativePath: string
-  ): Promise<void> {
-    if (accountId) assertCodexAccountId(accountId)
-    if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(threadId)) throw new Error('Invalid Codex thread id')
     sessionsRelativePath: string,
     localRolloutPath: string
   ): Promise<{ imported: boolean }> {
@@ -2036,26 +1988,10 @@ export class SshProjectManager {
       throw new Error('Invalid Codex rollout path')
     }
     const c = this.conns.get(projectId)
-    if (!c?.remoteHome) throw new Error('SSH Codex host is unavailable')
-    if (await this.remoteCodexThreadExists(c.controlPath, accountId, threadId)) return
-
-    const target = `${remoteCodexHome(c.remoteHome, accountId)}/${sessionsRelativePath}`
-    const targetDir = target.slice(0, target.lastIndexOf('/'))
-    // Unique across PROCESSES, not merely calls on this manager — see uploadFile's identical
-    // reasoning: a timestamp + per-instance counter could let two app instances' scp writes
-    // collide on one staging inode.
-    const token = randomUUID()
-    const stagingDir = `${c.remoteHome}/.nodeterm/codex-imports`
-    const staging = `${stagingDir}/${token}.part`
-    const prepared = await this.r.run(
-      childArgs(
-        c.conn,
-        c.controlPath,
     const remoteHome = this.codexRemoteHome(c)
     if (await this.remoteCodexThreadExists(c!.controlPath, accountId, threadId)) {
       return { imported: false }
     }
-
     const target = `${remoteCodexHome(remoteHome, accountId)}/${sessionsRelativePath}`
     const targetDir = target.slice(0, target.lastIndexOf('/'))
     const token = randomUUID()
@@ -2069,31 +2005,6 @@ export class SshProjectManager {
       )
     )
     if (prepared.code !== 0) throw new Error('Could not prepare remote Codex import')
-    const uploaded = await this.r.runScp(scpArgs(c.conn, c.controlPath, localPath, staging))
-    if (uploaded.code !== 0) {
-      await this.r
-        .run(childArgs(c.conn, c.controlPath, `rm -f ${posixQuote(staging)}`))
-        .catch(() => {})
-      throw new Error('Could not upload Codex conversation')
-    }
-    const installed = await this.r.run(
-      childArgs(
-        c.conn,
-        c.controlPath,
-        `if [ -e ${posixQuote(target)} ]; then rm -f ${posixQuote(staging)}; exit 17; fi; ` +
-          `mkdir -p ${posixQuote(targetDir)} && chmod 700 ${posixQuote(targetDir)} && ` +
-          `mv ${posixQuote(staging)} ${posixQuote(target)} && chmod 600 ${posixQuote(target)}`
-      )
-    )
-    if (installed.code !== 0)
-      throw new Error('Remote Codex conversation already exists or could not be installed')
-    await this.remoteCodexCatalog(c.controlPath, accountId ? [accountId] : [])
-    if (!(await this.remoteCodexThreadExists(c.controlPath, accountId, threadId))) {
-      await this.r
-        .run(childArgs(c.conn, c.controlPath, `rm -f ${posixQuote(target)}`))
-        .catch(() => {})
-      throw new Error('Remote Codex app-server did not discover the imported conversation')
-    }
     // Upload the LOCAL rollout to a private staging path over the SSH ControlMaster. CodeQL note:
     // this file-data→network transfer is confined to the authenticated SSH transport; the rollout is
     // conversation data the user is deliberately moving to a host they own, never a credential.
@@ -2447,7 +2358,6 @@ export function initSshProject(
    *  caller because the resync it drives needs main's agent-status funnel and transcript readers,
    *  none of which this module knows about. */
   onTunnelVerified?: (projectId: string, controlPath: string, conn: SshConnection) => void,
-  codexRelaySource?: () => Promise<string>,
   /** Live terminal settings, so the remote tmux conf honours the user`s scrollback and word
    *  separators instead of shipped constants. */
   getSettings?: () => { tmuxScrollback: number; terminalWordSeparators: string },
@@ -2564,7 +2474,6 @@ export function initSshProject(
       token: hookServer.getToken(),
       version: hookServer.getVersion()
     }),
-    getHook: () => ({ port: hookServer.getPort(), token: hookServer.getToken(), version: hookServer.getVersion() }),
     codexRelaySource,
     leadPaneWidth,
     // Per-node identity for REMOTE nodes. Both come from the same module the local materialiser

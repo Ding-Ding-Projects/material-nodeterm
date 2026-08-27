@@ -35,10 +35,7 @@ import {
   type PublicDevice,
   type RelayPairingBlock
 } from './pairing-core'
-import type { PairingDoneResult, Settings } from '../shared/types'
-import { publicKeyToB64, type KeyPair } from './remote/e2ee'
 import type { DeviceRevokeResult, DeviceRevokeServerOutcome, Settings } from '../shared/types'
-import { renameAtomic, tempNameFor } from '../core/fs-atomic'
 import { publicKeyToB64, deriveSharedKey, encrypt, decrypt, type KeyPair } from './remote/e2ee'
 import { hostIdFromPublicKeyB64 } from './remote/relay-id'
 import { getDeviceId } from '../core/device-id'
@@ -276,27 +273,26 @@ async function readAgentJson(): Promise<Record<string, unknown>> {
   }
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     throw new Error('agent.json must contain a JSON object.')
+  }
+  const obj = parsed as Record<string, unknown>
+  if ('devices' in obj && !Array.isArray(obj.devices)) {
+    throw new Error('agent.json "devices" must be an array when present.')
+  }
+  return obj
+}
+
 /**
  * Remove agent.json temps no writer in THIS process owns: the legacy fixed `agent.json.tmp`
  * (written by builds from before per-call names) and any `agent.json.<pid>.<seq>[.<uuid>].tmp`
  * whose pid is not ours. Best effort — a failure here must never break (or skip) the write that
  * follows.
- *
- * agent.json is not config: every device entry carries the `agentToken` bearer the phone presents
- * on the host-agent WebSocket, so an orphan is a live credential at 0600 that nothing will ever
- * overwrite — a unique name is never written twice. Temps bearing our own pid are untouchable: one
- * may belong to a concurrent write sitting between its `writeFile` and its `rename`, and deleting
- * it would recreate the exact race the unique names fixed. A foreign pid can in theory be the HOST
- * AGENT mid-write; ~/.nodeterm is shared with it and has no lock to begin with, and the worst case
- * is that process's rename failing cleanly (ENOENT, rethrown to its caller) instead of a forgotten
- * token file sitting on disk forever.
  */
 async function sweepStaleAgentTmp(): Promise<void> {
   try {
     const base = path.basename(AGENT_JSON_PATH)
     for (const entry of await fs.readdir(AGENT_DIR)) {
       if (!entry.startsWith(base) || !entry.endsWith('.tmp')) continue
-      const middle = entry.slice(base.length, -'.tmp'.length) // '' or '.<pid>.<seq>[.<uuid>]'
+      const middle = entry.slice(base.length, -'.tmp'.length)
       const owner =
         /^\.(\d+)\.\d+(?:\.[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})?$/
           .exec(middle)?.[1]
@@ -307,11 +303,6 @@ async function sweepStaleAgentTmp(): Promise<void> {
   } catch {
     // A dir we cannot read is not a reason to fail (or skip) the write below.
   }
-  const obj = parsed as Record<string, unknown>
-  if ('devices' in obj && !Array.isArray(obj.devices)) {
-    throw new Error('agent.json "devices" must be an array when present.')
-  }
-  return obj
 }
 
 /** Detect the machine's display name (macOS ComputerName, else hostname). */
@@ -850,11 +841,6 @@ export function createPairingService(
         // never fail the pairing over a relay hiccup (the phone still got its SSH key installed).
         let relayFields: { relay?: RelayPairingBlock; relayDeviceToken?: string } = {}
         if (relayCtx) {
-          const phoneDeviceId =
-            typeof body.deviceId === 'string' && body.deviceId.trim()
-              ? body.deviceId.trim()
-              : deviceId
-          const minted = await mintRelayDevice(deps.apiBase, {
           const minted = await mintRelayDevice(relayDeps!.apiBase, {
             entitlement: relayCtx.entitlement,
             deviceId: phoneDeviceId,
