@@ -2278,6 +2278,33 @@ switcher and FAB menu on a real screen — nothing above substitutes for that. T
 the `.mc-console` styling defect and the two atomic-write violations found above are worth a
 one-line fix before the next release, since both are small, both are diagnosed, and neither
 requires touching anything MD3-specific to correct.
+
+## Issue #51: GitLab Server hosting source lane
+
+The `feat/program-40-gitlab-hosting` jer adds the `gitlab-hosting` canvas node and the typed
+GitLab hosting surface. The implementation lives in `src/shared/gitlab-hosting.ts`, the guided
+Docker manager extension in `src/main/remote/docker-host-manager.ts`, the preload and unsupported
+bridge shape in `src/preload/index.ts` and `src/renderer/bridge/stubs.ts`, the node factory and
+canvas registration in `src/renderer/state/workspace.ts` and `src/renderer/canvas/Canvas.tsx`, and
+the UI in `src/renderer/nodes/GitLabHostingNode.tsx` plus
+`src/renderer/components/gitlab/GitLabHostingPanel.tsx`.
+
+The node offers pinned official Community Edition and Enterprise Edition image digests, four
+managed volumes, loopback-only ports, readiness through `/-/readiness`, one-session initial root
+credential handoff without logging or persistence, backup enumeration, restore, update, rollback,
+bounded progress, and existing two-key confirmation for destructive actions. The project projection
+stores only schema-versioned edition, image, binding, and guided ports. Contexts, container and
+volume identifiers, backup files, credentials, and process state remain machine-local.
+
+Directly related records are `docs/features/integrations/gitlab-hosting.md`, the integrations
+index, the site card and `site/docs/gitlab-hosting.html`, the offline docs bundle entry in
+`src/shared/docs-data.ts`, `CHANGELOG.md`, and the hosting row in `ROADMAP.md`.
+
+This ultra-speed source lane intentionally ran no tests, type checks, lint, reviews, security or
+accessibility checks, builds, packaging, installer execution, runtime interaction, or captures.
+The parent integration lane must supply those verdicts and release evidence. The Server Edition
+bridge reports its unavailable Docker boundary through the existing unsupported relay-manager
+surface; no fake success is claimed.
 ## Timer nodes lane, issue #31
 
 Implemented the timer node model in `src/shared/timer.ts`, the persistent occurrence coordinator in

@@ -30,6 +30,7 @@ import type { ClientId, PeerDiff, PeerIdentity, PeerState } from '../shared/pres
 import type { ConvertQueueItem, ConverterQueueState } from '../shared/converter'
 import type { PullQueueItem, PullQueueState } from '../shared/ollama'
 import type { DockerHostAction, DockerHostJobProgress } from '../shared/docker-host-manager'
+import type { GitLabHostingAction } from '../shared/gitlab-hosting'
 import type { MinecraftEvent } from '../shared/minecraft'
 import type { NodeDependencyAvailability, NodeDependencyProgress, NodeDependencyInstallResult } from '../shared/node-dependencies'
 import type { WslCreateProgress } from '../shared/wsl'
@@ -890,6 +891,12 @@ const api: NodeTerminalApi = {
       snapshot: (context: string) => ipcRenderer.invoke(IPC.dockerHostManagerSnapshot, context),
       logs: (context: string, containerId: string) => ipcRenderer.invoke(IPC.dockerHostManagerLogs, context, containerId),
       run: (action: DockerHostAction) => ipcRenderer.invoke(IPC.dockerHostManagerRun, action),
+      gitlab: {
+        status: (context: string, nodeId: string) => ipcRenderer.invoke(IPC.dockerHostManagerGitlabStatus, context, nodeId),
+        backups: (context: string, nodeId: string) => ipcRenderer.invoke(IPC.dockerHostManagerGitlabBackups, context, nodeId),
+        handoffInitialCredential: (context: string, nodeId: string) => ipcRenderer.invoke(IPC.dockerHostManagerGitlabCredential, context, nodeId),
+        run: (action: GitLabHostingAction) => ipcRenderer.invoke(IPC.dockerHostManagerGitlabRun, action)
+      },
       cancel: (jobId: string) => ipcRenderer.send(IPC.dockerHostManagerCancel, jobId),
       onProgress: (listener: (progress: DockerHostJobProgress) => void) => {
         const handler = (_event: unknown, progress: DockerHostJobProgress) => listener(progress)

@@ -281,7 +281,10 @@ intentionally unchecked because this task publishes the plan only.
 
 ### Hosting and Cloudflare
 
-- [ ] Add GitLab Server CE and EE hosting profiles with backup and restore.
+- [ ] Add GitLab Server CE and EE hosting profiles with backup, restore, readiness, credential
+      handoff, update, rollback, four managed volumes, and private binding. Source and docs are
+      present in issue #51; tests, builds, packaging, runtime interaction, and captures remain
+      unrun under the ultra-speed boundary.
 - [ ] Add Nextcloud AIO and managed no-socket hosting profiles.
 - [ ] Add Open WebUI hosting with existing Ollama reuse and honest bootstrap states.
 - [ ] Add Cloudflare account, zone, DNS, security, Workers, Pages, storage, queue, Access, and

@@ -6,6 +6,10 @@ any other node, and it stores where it would reach a service — but nothing dia
 Read this document alongside the "what does not work yet" section below before assuming a control
 does more than it says.
 
+The separate `gitlab-hosting` node is now the guided hosting route for GitLab Server. It does not
+change the placeholder `gitlab` service node described below, which remains a manager for an
+already-running external GitLab instance and still stores only its safe address intent.
+
 ## The six kinds, and why one is called a manager and not a host
 
 Six new node kinds join the canvas's `NodeKind` union

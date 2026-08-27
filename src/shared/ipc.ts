@@ -656,6 +656,10 @@ export const IPC = {
   dockerHostManagerRun: 'docker-host-manager:run',
   dockerHostManagerCancel: 'docker-host-manager:cancel',
   dockerHostManagerProgress: 'docker-host-manager:progress',
+  dockerHostManagerGitlabStatus: 'docker-host-manager:gitlab-status',
+  dockerHostManagerGitlabBackups: 'docker-host-manager:gitlab-backups',
+  dockerHostManagerGitlabCredential: 'docker-host-manager:gitlab-credential',
+  dockerHostManagerGitlabRun: 'docker-host-manager:gitlab-run',
   // Team Access (multi-seat): `relayHostInvite` ADDS a seat (invoke, `{ projectId?, email? }` →
   // `{ offer }`, cap-checked → rejects `E_SEATS_FULL`); `relayHostRevoke` (send, `{ id }`) cuts one
   // bridged peer's live session. `relayHostPeerPending`/`relayHostOpen` now also carry the seat

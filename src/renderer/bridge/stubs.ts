@@ -513,6 +513,12 @@ export function buildStubApi(): Omit<
         snapshot: U('relayHost.manager.snapshot'),
         logs: U('relayHost.manager.logs'),
         run: U('relayHost.manager.run'),
+        gitlab: {
+          status: U('relayHost.manager.gitlab.status'),
+          backups: U('relayHost.manager.gitlab.backups'),
+          handoffInitialCredential: U('relayHost.manager.gitlab.handoffInitialCredential'),
+          run: U('relayHost.manager.gitlab.run')
+        },
         cancel: noop,
         onProgress: noopUnsub
       },

@@ -13,11 +13,23 @@ import {
   type DockerHostJobProgress,
   type DockerHostSnapshot
 } from '../../shared/docker-host-manager'
+import {
+  GITLAB_HOSTING_IMAGES,
+  GITLAB_HOSTING_VOLUME_ROLES,
+  isGitLabHostingConfig,
+  type GitLabBackupSummary,
+  type GitLabCredentialHandoff,
+  type GitLabHostingAction,
+  type GitLabHostingConfig,
+  type GitLabHostingStatus
+} from '../../shared/gitlab-hosting'
 
 const execFileAsync = promisify(execFile)
 const SAFE_CONTEXT = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/
 const SAFE_RESOURCE = /^[A-Za-z0-9][A-Za-z0-9_.:@/-]{0,255}$/
 const SAFE_NAME = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/
+const SAFE_NODE_ID = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/
+const SAFE_BACKUP_ID = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/
 const MAX_OUTPUT = 1024 * 1024
 
 function contextArgs(context: string, args: string[]): string[] {
@@ -174,6 +186,161 @@ async function discoveredComposeArgs(context: string, project: string, profile?:
   return ['compose', '--project-name', project, ...files.flatMap((file) => ['--file', file]), ...(profile ? ['--profile', profile] : [])]
 }
 
+function gitlabContainerName(nodeId: string): string {
+  if (!SAFE_NODE_ID.test(nodeId)) throw new Error('The GitLab node identity is invalid.')
+  return `nodeterm-gitlab-${nodeId}`.slice(0, 120)
+}
+
+function gitlabVolumeNames(nodeId: string): Record<(typeof GITLAB_HOSTING_VOLUME_ROLES)[number], string> {
+  const base = gitlabContainerName(nodeId)
+  return {
+    config: `${base}-config`,
+    logs: `${base}-logs`,
+    data: `${base}-data`,
+    backups: `${base}-backups`
+  }
+}
+
+function validateGitLabConfig(config: unknown): GitLabHostingConfig {
+  if (!isGitLabHostingConfig(config)) throw new Error('Choose a pinned GitLab image and valid private ports.')
+  return config
+}
+
+function validateGitLabAction(action: GitLabHostingAction): GitLabHostingAction {
+  if (!action || typeof action !== 'object' || Array.isArray(action)) throw new Error('The GitLab hosting action is invalid.')
+  if (typeof action.context !== 'string') throw new Error('Choose a Docker context before continuing.')
+  contextArgs(action.context, [])
+  gitlabContainerName(action.nodeId)
+  if (action.type === 'deploy' || action.type === 'update') validateGitLabConfig(action.config)
+  if (action.type === 'restore') safeName(action.backupId, 'The backup')
+  return action
+}
+
+function gitlabRunArgs(action: GitLabHostingAction): { label: string; steps: string[][] } {
+  validateGitLabAction(action)
+  const container = gitlabContainerName(action.nodeId)
+  const volumes = gitlabVolumeNames(action.nodeId)
+  const commonRun = (config: GitLabHostingConfig): string[] => [
+    'run', '--detach', '--name', container, '--hostname', container,
+    '--label', 'dev.nodeterm.owner=gitlab-hosting',
+    '--label', `dev.nodeterm.gitlab.edition=${config.edition}`,
+    '--label', `dev.nodeterm.gitlab.image=${config.image}`,
+    '--restart', 'unless-stopped', '--shm-size', '256m',
+    '--cpus', '2', '--memory', '4096m', '--pids-limit', '1024',
+    '--security-opt', 'no-new-privileges', '--cap-drop', 'ALL',
+    '--publish', `127.0.0.1:${config.httpPort}:80`,
+    '--publish', `127.0.0.1:${config.sshPort}:22`,
+    '--volume', `${volumes.config}:/etc/gitlab`,
+    '--volume', `${volumes.logs}:/var/log/gitlab`,
+    '--volume', `${volumes.data}:/var/opt/gitlab`,
+    '--volume', `${volumes.backups}:/var/opt/gitlab/backups`,
+    config.image
+  ]
+
+  switch (action.type) {
+    case 'deploy':
+      return {
+        label: `Deploy GitLab ${action.config.edition.toUpperCase()} server`,
+        steps: [
+          ['pull', action.config.image],
+          ...GITLAB_HOSTING_VOLUME_ROLES.map((role) => ['volume', 'create', volumes[role]]),
+          commonRun(action.config)
+        ]
+      }
+    case 'backup':
+      return { label: 'Back up GitLab server', steps: [['exec', container, 'gitlab-backup', 'create']] }
+    case 'restore':
+      return { label: 'Restore GitLab backup', steps: [['exec', container, 'gitlab-backup', 'restore', `BACKUP=${action.backupId}`, 'force=yes']] }
+    case 'update':
+      return {
+        label: `Update GitLab ${action.config.edition.toUpperCase()} server`,
+        steps: [
+          ['pull', action.config.image],
+          ['stop', container],
+          ['rename', container, `${container}-previous`],
+          commonRun(action.config)
+        ]
+      }
+    case 'rollback':
+      return {
+        label: 'Roll back GitLab server',
+        steps: [
+          ['stop', container],
+          ['rm', '--force', container],
+          ['rename', `${container}-previous`, container],
+          ['start', container]
+        ]
+      }
+  }
+}
+
+async function gitlabStatus(context: string, nodeId: string): Promise<GitLabHostingStatus> {
+  const container = gitlabContainerName(nodeId)
+  const volumes = gitlabVolumeNames(nodeId)
+  const base = { nodeId, context, containerName: container, volumes, checkedAt: Date.now() }
+  let inspect: Record<string, unknown>
+  try {
+    const raw = await docker(context, ['inspect', '--format', '{{json .}}', container], 15_000)
+    inspect = JSON.parse(raw) as Record<string, unknown>
+  } catch (error) {
+    return { ...base, phase: 'missing', ready: false, edition: null, image: null, endpoint: null, detail: error instanceof Error && /No such object/i.test(error.message) ? 'The GitLab container has not been deployed yet.' : 'The GitLab container could not be inspected.' }
+  }
+  const state = (inspect.State ?? {}) as Record<string, unknown>
+  const config = (inspect.Config ?? {}) as Record<string, unknown>
+  const labels = (config.Labels ?? {}) as Record<string, unknown>
+  const network = (inspect.NetworkSettings ?? {}) as Record<string, unknown>
+  const ports = (network.Ports ?? {}) as Record<string, unknown>
+  const httpBindings = Array.isArray(ports['80/tcp']) ? ports['80/tcp'] as Array<Record<string, unknown>> : []
+  const httpPort = typeof httpBindings[0]?.HostPort === 'string' ? httpBindings[0].HostPort : '8929'
+  const endpoint = `http://127.0.0.1:${httpPort}`
+  const running = state.Running === true
+  const image = typeof labels['dev.nodeterm.gitlab.image'] === 'string' ? labels['dev.nodeterm.gitlab.image'] : typeof inspect.Image === 'string' ? inspect.Image : null
+  const edition = labels['dev.nodeterm.gitlab.edition'] === 'ee' ? 'ee' : labels['dev.nodeterm.gitlab.edition'] === 'ce' ? 'ce' : null
+  if (!running) return { ...base, phase: 'stopped', ready: false, edition, image, endpoint: null, detail: 'The GitLab container exists but is stopped.' }
+  try {
+    await docker(context, ['exec', container, 'curl', '--fail', '--silent', '--show-error', 'http://127.0.0.1/-/readiness'], 15_000)
+    return { ...base, phase: 'ready', ready: true, edition, image, endpoint, detail: 'GitLab readiness probe is healthy.' }
+  } catch {
+    return { ...base, phase: 'unready', ready: false, edition, image, endpoint, detail: 'GitLab is running but its readiness probe has not passed yet.' }
+  }
+}
+
+async function gitlabBackups(context: string, nodeId: string): Promise<GitLabBackupSummary[]> {
+  const container = gitlabContainerName(nodeId)
+  const raw = await docker(context, ['exec', container, 'find', '/var/opt/gitlab/backups', '-maxdepth', '1', '-type', 'f', '-printf', '%f\\t%s\\t%T@\\n'], 15_000)
+  return raw.split(/\r?\n/).filter(Boolean).flatMap((line) => {
+    const [filename, size, mtime] = line.split('\t')
+    if (!filename || !SAFE_BACKUP_ID.test(filename)) return []
+    const sizeBytes = Number(size)
+    const createdAt = Number(mtime)
+    return [{ id: filename, filename, sizeBytes: Number.isFinite(sizeBytes) ? sizeBytes : null, createdAt: Number.isFinite(createdAt) ? Math.round(createdAt * 1000) : null }]
+  }).sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0)).slice(0, 200)
+}
+
+const gitlabCredentialClaims = new Set<string>()
+
+async function gitlabInitialCredential(context: string, nodeId: string): Promise<GitLabCredentialHandoff> {
+  const container = gitlabContainerName(nodeId)
+  const claimKey = `${context}\u0000${container}`
+  if (gitlabCredentialClaims.has(claimKey)) throw new Error('The initial credential was already handed off in this session.')
+  const raw = await docker(context, ['exec', container, 'cat', '/etc/gitlab/initial_root_password'], 15_000)
+  const match = raw.match(/^Password:\s*(\S+)\s*$/mi)
+  if (!match?.[1]) throw new Error('GitLab has not published an initial credential yet. Wait for readiness and retry.')
+  gitlabCredentialClaims.add(claimKey)
+  return { username: 'root', password: match[1], expiresAt: Date.now() + 15 * 60 * 1000 }
+}
+
+async function recoverGitLabUpdate(context: string, nodeId: string): Promise<void> {
+  const container = gitlabContainerName(nodeId)
+  const previous = `${container}-previous`
+  // The new container may have been created before its health could be checked. Remove only this
+  // deterministic owner-labelled name, then put the previous container back under its original
+  // name. Every call uses fixed argv and any recovery failure remains visible on the failed job.
+  await docker(context, ['rm', '--force', container], 15_000).catch(() => '')
+  await docker(context, ['rename', previous, container], 15_000).catch(() => '')
+  await docker(context, ['start', container], 15_000).catch(() => '')
+}
+
 function actionLabel(action: DockerHostAction): string {
   switch (action.type) {
     case 'container-lifecycle': return `${action.action} container`
@@ -258,10 +425,51 @@ export function registerDockerHostManager(win: BrowserWindow): { dispose(): void
     if (!win.isDestroyed()) win.webContents.send(IPC.dockerHostManagerProgress, progress)
   }
 
+  const runGitLab = async (action: GitLabHostingAction): Promise<{ jobId: string }> => {
+    const plan = gitlabRunArgs(action)
+    const jobId = randomUUID()
+    send({ jobId, phase: 'queued', label: plan.label, completedSteps: 0, totalSteps: plan.steps.length, message: 'Queued.' })
+    const runStep = (args: string[], step: number): Promise<number> => new Promise((resolve, reject) => {
+      let output = ''
+      const child = spawn('docker', contextArgs(action.context, args), { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] })
+      jobs.set(jobId, child)
+      send({ jobId, phase: 'running', label: plan.label, completedSteps: step, totalSteps: plan.steps.length, message: 'GitLab hosting is processing the selected operation.' })
+      const append = (chunk: Buffer): void => {
+        output = (output + chunk.toString('utf8')).slice(-MAX_OUTPUT)
+        send({ jobId, phase: 'running', label: plan.label, completedSteps: step, totalSteps: plan.steps.length, message: 'GitLab hosting is processing the selected operation.', output: redact(output) })
+      }
+      child.stdout.on('data', append)
+      child.stderr.on('data', append)
+      child.once('error', reject)
+      child.once('close', (code, signal) => {
+        if (signal) reject(new Error('The GitLab hosting operation was cancelled.'))
+        else if (code !== 0) reject(new Error(`GitLab operation exited with code ${code ?? 'unknown'}. ${redact(output)}`))
+        else resolve(code ?? 0)
+      })
+    })
+    void (async () => {
+      try {
+        for (let index = 0; index < plan.steps.length; index += 1) await runStep(plan.steps[index], index)
+        jobs.delete(jobId)
+        send({ jobId, phase: 'completed', label: plan.label, completedSteps: plan.steps.length, totalSteps: plan.steps.length, message: 'Completed.' })
+      } catch (error) {
+        if (action.type === 'update') await recoverGitLabUpdate(action.context, action.nodeId)
+        jobs.delete(jobId)
+        const cancelled = error instanceof Error && /cancelled/i.test(error.message)
+        send({ jobId, phase: cancelled ? 'cancelled' : 'failed', label: plan.label, completedSteps: 0, totalSteps: plan.steps.length, message: cancelled ? 'Cancelled.' : error instanceof Error ? error.message : String(error) })
+      }
+    })()
+    return { jobId }
+  }
+
   ipcMain.handle(IPC.dockerHostManagerContexts, () => discoverDockerManagerContexts())
   ipcMain.handle(IPC.dockerHostManagerSnapshot, (_event, context: string) => dockerHostSnapshot(context))
   ipcMain.handle(IPC.dockerHostManagerLogs, async (_event, context: string, containerId: string) =>
     redact(await docker(context, ['logs', '--tail', '200', safeResource(containerId, 'The container')], 15_000)))
+  ipcMain.handle(IPC.dockerHostManagerGitlabStatus, (_event, context: string, nodeId: string) => gitlabStatus(context, nodeId))
+  ipcMain.handle(IPC.dockerHostManagerGitlabBackups, (_event, context: string, nodeId: string) => gitlabBackups(context, nodeId))
+  ipcMain.handle(IPC.dockerHostManagerGitlabCredential, (_event, context: string, nodeId: string) => gitlabInitialCredential(context, nodeId))
+  ipcMain.handle(IPC.dockerHostManagerGitlabRun, (_event, action: GitLabHostingAction) => runGitLab(action))
   ipcMain.handle(IPC.dockerHostManagerRun, async (_event, action: DockerHostAction): Promise<{ jobId: string }> => {
     const jobId = randomUUID()
     const label = actionLabel(action)
@@ -293,7 +501,7 @@ export function registerDockerHostManager(win: BrowserWindow): { dispose(): void
     dispose() {
       for (const child of jobs.values()) child.kill()
       jobs.clear()
-      for (const channel of [IPC.dockerHostManagerContexts, IPC.dockerHostManagerSnapshot, IPC.dockerHostManagerLogs, IPC.dockerHostManagerRun]) ipcMain.removeHandler(channel)
+      for (const channel of [IPC.dockerHostManagerContexts, IPC.dockerHostManagerSnapshot, IPC.dockerHostManagerLogs, IPC.dockerHostManagerRun, IPC.dockerHostManagerGitlabStatus, IPC.dockerHostManagerGitlabBackups, IPC.dockerHostManagerGitlabCredential, IPC.dockerHostManagerGitlabRun]) ipcMain.removeHandler(channel)
       ipcMain.removeAllListeners(IPC.dockerHostManagerCancel)
     }
   }

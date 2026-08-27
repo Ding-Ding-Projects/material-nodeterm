@@ -418,6 +418,7 @@ export type NodeKind =
   | 'dockerhost'
   | 'proxmox'
   | 'gitlab'
+  | 'gitlab-hosting'
   | 'homeassistant'
   | 'homeassistant-sensor'
   | 'freepbx'
@@ -643,6 +644,8 @@ export interface CanvasNodeState {
   /** Home Assistant node presentation intent safe for schema 3. Hosts, instance ids, credentials,
    *  sessions, and entity caches stay in the machine-local service and binding overlay. */
   homeAssistantIntent?: import('./home-assistant').HomeAssistantNodeIntent
+  /** GitLab hosting intent. Docker context, container, volumes, credentials, and process state stay local. */
+  gitlabHostingConfig?: import('./gitlab-hosting').GitLabHostingConfig
   /** torrent-only: safe display intent shared with the canvas; task state and paths stay local. */
   torrentMagnet?: string
   /** Linux ISO VM settings stored in the shared project projection. */

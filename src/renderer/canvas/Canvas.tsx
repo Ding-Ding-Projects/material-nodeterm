@@ -105,6 +105,7 @@ import { VIRTUAL_MACHINE_NODE_CATALOG } from '@shared/virtual-machine'
 import type { ProjectIcon } from '@shared/project-icon'
 import BrowserNode from '../nodes/BrowserNode'
 import { ServiceNode } from '../nodes/ServiceNode'
+import GitLabHostingNode from '../nodes/GitLabHostingNode'
 import VirtualMachineNode from '../nodes/VirtualMachineNode'
 import NsisInstallerNode from '../nodes/NsisInstallerNode'
 import ShopNode from '../nodes/ShopNode'
@@ -720,6 +721,7 @@ import {
   createTerminalNode,
   nodeSshFor,
   createServiceNode,
+  createGitLabHostingNode,
   createVirtualMachineNode,
   SERVICE_NODE_LABELS,
   createVideoNode,
@@ -2077,6 +2079,7 @@ export function Canvas() {
       dockerhost: withNodeBoundary(ServiceNode),
       proxmox: withNodeBoundary(ServiceNode),
       gitlab: withNodeBoundary(ServiceNode),
+      'gitlab-hosting': withNodeBoundary(GitLabHostingNode),
       homeassistant: withNodeBoundary(ServiceNode),
       freepbx: withNodeBoundary(ServiceNode),
       'linux-vm': withNodeBoundary(VirtualMachineNode)
@@ -5400,6 +5403,7 @@ export function Canvas() {
             if (catalogEntry.id === 'wild-dim-sum') return createWildDimSumNode(index, undefined, center)
             if (catalogEntry.id === 'homeassistant-control') return createHomeAssistantControlNode(index, center)
             if (catalogEntry.id === 'homeassistant-sensor') return createHomeAssistantSensorNode(index, center)
+            if (catalogEntry.id === 'gitlab-hosting') return createGitLabHostingNode(index, center)
             if (catalogEntry.id.startsWith('service:')) {
               return createServiceNode(catalogEntry.nodeKind as ServiceNodeKind, index, center)
             }
