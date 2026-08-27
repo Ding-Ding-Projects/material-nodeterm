@@ -68,6 +68,11 @@ Canvas notification count and title/body ownership mismatches, incorrect `Projec
 and `Project save failed` marker counts, the speech settings marker, and duplicate producer IDs.
 The complete-fixture check added one aggregate failure.
 
+Release run `33123084094` at `e6697feb31e5e59f36e916b4e5b00966e9b57891` then passed the producer
+manifest, producer uniqueness, speech marker, project-save markers, surface manifest, and mutation
+checks. Its remaining three base failures were the Canvas notification count, title ownership, and
+body ownership checks, plus one aggregate complete-fixture failure.
+
 The merge had combined several complete producer changes while retaining an older canonical
 manifest, an obsolete Canvas notification declaration, duplicate ownership checks, malformed
 producer separators, duplicate rows, and an unclosed mutation block. The repaired checker keeps one
@@ -76,6 +81,14 @@ array of 61 production surfaces, and one detailed list of 57 checker-retained Ca
 calls. It filters parsed calls to production object payloads before one inventory, title-ownership,
 body-ownership, and title-marker pass. The two planner notifications nested inside the project-open
 success action keep their own explicit ownership fields in source.
+
+An independent read-only parser matching `callArguments` selected 57 production object payloads,
+with no unmatched calls or IDs. All 57 selected calls carry `titleKind`; 54 carry a body and all 54
+carry `bodyKind`. Placement failures keep factual runtime details, while node-catalog and AWS
+Universe availability reasons remain authored because their source modules generate application
+copy. The title-marker manifest covers current placement, unavailable-node, AWS Universe, media,
+planner, and project notifications, with the separate save-cancelled and save-failed markers at one
+each.
 
 Duplicate producer evidence now resolves to one row per ID. The password manager and authenticator
 rows use the exact `const vocab = useVocabularyMapper()` boundary, the converter catalog keeps one
