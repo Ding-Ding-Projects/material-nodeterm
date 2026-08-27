@@ -91,6 +91,10 @@ later commit, since this file will not be kept in lockstep with every merge).
       accounts now carry an optional default node colour that new nodes capture at creation, with
       host-resolved colour applied to phone-registered nodes. Tests, builds, packaging, runtime
       interaction, and screen captures remain pending for this lane.
+- [ ] **Custom agent harness persistence, issue #86:** custom nodes now retain their builtin harness
+      identity across settings removal, and capability routing uses that snapshot. The direct
+      article is `docs/features/agents/custom-agent-harness.md`. Tests, builds, packaging, runtime
+      interaction, reviews, audits, and captures remain pending in the integration lane.
 
 - [ ] **Portable Comment and Activity attachments, issue #94**: source support is present in
       `src/shared/comment-attachments.ts`, `src/core/board-attachments.ts`, the board-log bridge,

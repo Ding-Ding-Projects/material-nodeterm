@@ -206,6 +206,7 @@ import {
   canRename,
   canReadTitle,
   createdAgentId,
+  createdAgentHarnessId,
   hasPermissionMode,
   reportsOwnCopy,
   resumeCommand,
@@ -1655,6 +1656,7 @@ export function TerminalNode({
   // offer this node's in-place restart from the SAME derivation, and a second copy drifting from
   // this one yields a row whose closure refuses every click.
   const agentId = createdAgentId(data)
+  const agentHarnessId = createdAgentHarnessId(data)
   const sshConnection = data.ssh as SshConnection | undefined
   const sshMachineKey = sshConnection ? sshHostKey(sshConnection) : null
   const machineLabel = sshConnection
@@ -1708,24 +1710,24 @@ export function TerminalNode({
     }
   }, [sshMachineKey])
   // Gate each former `isClaude` site by the capability it actually represents.
-  const showStatus = !!agentId && hasHooks(agentId) // status badge + session-title capture
-  const showLoop = !!agentId && canRecur(agentId) // /loop · /schedule · /cron chrome
-  const contextLinkCapable = !!agentId && canContextLink(agentId) // context-link tip wording only; handles render on all terminals
+  const showStatus = !!agentHarnessId && hasHooks(agentHarnessId) // status badge + session-title capture
+  const showLoop = !!agentHarnessId && canRecur(agentHarnessId) // /loop · /schedule · /cron chrome
+  const contextLinkCapable = !!agentHarnessId && canContextLink(agentHarnessId) // context-link tip wording only; handles render on all terminals
   // Every agent-backed node gets a meter. Providers without verified telemetry remain visible with
   // an explicit not-reported or unavailable state instead of disappearing from the header.
   const showUsage = !!agentId
-  const showChat = !!agentId && canChat(agentId) // Cmd+M opens a chat panel instead of markdown
+  const showChat = !!agentHarnessId && canChat(agentHarnessId) // Cmd+M opens a chat panel instead of markdown
   // Everything that reads the conversation through CLAUDE's transcript readers (`context.ensure`'s
   // mount-time meter rehydration, the find bar's transcript index) — deliberately NOT `showUsage`,
   // which now spans three agents. See lib/transcriptGates.ts for what sharing that gate broke.
-  const claudeTranscript = readsClaudeTranscript(agentId)
+  const claudeTranscript = readsClaudeTranscript(agentHarnessId)
   // The header 💬 now opens the board-log comments flyout (right side); ⌘M keeps the markdown/chat view.
   const [commentsOpen, setCommentsOpen] = useState(false)
-  const canRenameNode = !!agentId && canRename(agentId) // WRITE leg: push `/rename <name>` back
+  const canRenameNode = !!agentHarnessId && canRename(agentHarnessId) // WRITE leg: push `/rename <name>` back
   // READ leg: adopt the agent's own session name into the title. A superset of canRenameNode —
   // gemini names its own sessions but has no rename command, so it polls and never pushes.
-  const canReadTitleNode = !!agentId && canReadTitle(agentId)
-  const agentLabel = (agentId ? agentConfig(agentId) : undefined)?.label ?? 'Agent'
+  const canReadTitleNode = !!agentHarnessId && canReadTitle(agentHarnessId)
+  const agentLabel = (agentHarnessId ? agentConfig(agentHarnessId) : undefined)?.label ?? 'Agent'
 
   // The whole-node drop gesture is deliberately an explicit collaboration affordance, not a
   // second way to move a terminal. The Canvas validates both endpoints in the active project and
@@ -1771,7 +1773,7 @@ export function TerminalNode({
   // Could this node's CLI ever be hibernated — quit AND brought back? A durable property of the
   // agent, not of its current state: the offscreen release consults it to decide whether waiting
   // for Eco is even meaningful here (see `shouldDeferReleaseForEco`).
-  const hibernationTarget = !!agentId && canResume(agentId) && !!exitSequence(agentId)
+  const hibernationTarget = !!agentHarnessId && canResume(agentHarnessId) && !!exitSequence(agentHarnessId)
   const hibernationTargetRef = useRef(hibernationTarget)
   hibernationTargetRef.current = hibernationTarget
 
@@ -3406,6 +3408,7 @@ export function TerminalNode({
           // claim it. Machine-local id, never the git-shared project.json id.
           ownerProjectId: sshProjectId ?? useProjects.getState().activeProjectId,
           agentId: data.agentId,
+          agentBaseId: data.agentBaseId,
           agentModel: data.agentModel,
           accountId: data.accountId,
           codexAccountId: data.codexAccountId as string | undefined,
@@ -5680,7 +5683,7 @@ export function TerminalNode({
               className="term-node__status term-node__status--busy"
               title={`${agentLabel} ${vocab('is working')}`}
             >
-              <AgentMascot agentId={agentId} />
+              <AgentMascot agentId={agentId} agentBaseId={data.agentBaseId} />
               {vocab('RUNNING')}
             </span>
           )}

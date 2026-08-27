@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Preserve a custom agent's selected builtin harness on its node so capability and icon resolution
+  survives removal of the mutable settings record.
+- Route custom harness capability checks through the shared hook, resume, pane, and launch helpers.
+- Document the host-owned executable, profile, argument, environment, working-directory, and secret
+  boundaries for custom agent launches.
+
 - Add project-aware single-node canvas focus for issue #86. The terminal header, command palette,
   and desktop F11 path now promote one node into a transient canvas, merge edits back into the full
   project, restore nested coordinates and the parent viewport, and refuse missing or unavailable
