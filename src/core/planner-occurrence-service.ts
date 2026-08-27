@@ -13,6 +13,7 @@ import {
 } from '../shared/planner-occurrences'
 import { platform } from './platform'
 import { renameAtomic, tempNameFor } from './fs-atomic'
+import { mergePortablePlannerSchedules, validatePortablePlannerDefinitions } from './portable-planner'
 
 export interface PlannerOccurrenceNotifier {
   (occurrence: PlannerOccurrence): void
@@ -153,6 +154,25 @@ export class PlannerOccurrenceService {
     return this.store.get().schedules.some((schedule) => schedule.enabled)
   }
 
+  /** Apply safe imported definitions only after an explicit destination Configure action. */
+  async configure(schedules: PlannerFile['schedules']): Promise<{ ok: true } | { ok: false; error: string }> {
+    try {
+      const blueprint = validatePortablePlannerDefinitions({
+        schemaVersion: 1,
+        featureId: 'planner',
+        displayLabel: 'Planner',
+        schedules
+      })
+      const result = await this.store.update((current) => ({
+        ...current,
+        schedules: mergePortablePlannerSchedules(current.schedules, blueprint.schedules)
+      }))
+      return result.ok ? { ok: true } : result
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : 'Planner definitions could not be configured.' }
+    }
+  }
+
   /** Integration seam for future Calendar, Timer, and Alarm nodes. The callback receives only a
    * durable occurrence record, never a credential, process handle, or machine path. */
   onOccurrence(listener: PlannerOccurrenceNotifier): () => void {
@@ -165,6 +185,7 @@ export class PlannerOccurrenceService {
     platform().handle(IPC.plannerSave, (file: PlannerFile) => this.store.save(file))
     platform().handle(IPC.plannerHistory, () => this.store.get().occurrences)
     platform().handle(IPC.plannerExport, (format: 'json' | 'csv') => this.exportData(format))
+    platform().handle(IPC.plannerConfigure, (schedules: PlannerFile['schedules']) => this.configure(schedules))
   }
 
   private exportData(format: 'json' | 'csv'): { filename: string; content: string } {

@@ -32,6 +32,7 @@ import {
 } from './portable-canvas-projection'
 import { openContainer, packContainer } from './project-archive-container'
 import { renameAtomic } from './fs-atomic'
+import type { PortablePlannerDefinitions } from './portable-planner'
 
 const READ_LIMITS = {
   maxArchiveBytes: PORTABLE_PROJECT_LIMITS.maxCompressedBytes,
@@ -55,12 +56,15 @@ export interface PortableImportResult {
   /** Bindings are always empty on import. This is a visible fact, not an omitted state. */
   bindings: []
   omissions: PortableProjectOmission[]
+  /** Safe planner definitions are returned for an explicit destination Configure action. */
+  plannerDefinitions?: PortablePlannerDefinitions
 }
 
 export interface PortableProjectV3ExportOptions {
   historyBundle: Buffer
   omissions?: readonly PortableProjectOmission[]
   appearance?: Record<string, unknown>
+  planner?: import('../shared/planner-occurrences').PlannerSchedule[]
 }
 
 export interface PortableProjectV3ImportOptions {
@@ -87,7 +91,10 @@ function ensureNotCancelled(options: PortableProjectV3ImportOptions): void {
 
 /** Build a schema 3 container. The manifest hashes every payload entry, including history. */
 export async function exportPortableProjectV3(project: Project, options: PortableProjectV3ExportOptions): Promise<{ bytes: Buffer; manifest: PortableProjectV3Manifest; projection: PortableCanvasProjectionV3 }> {
-  const projection = projectToPortableCanvasV3(project, options.appearance ? { appearance: options.appearance } : {})
+  const projection = projectToPortableCanvasV3(project, {
+    ...(options.appearance ? { appearance: options.appearance } : {}),
+    ...(options.planner ? { planner: options.planner } : {})
+  })
   const projectBytes = Buffer.from(serializePortableCanvasProjectionV3(projection))
   const entries: PortableProjectV3Entry[] = [
     { path: 'project.json', data: projectBytes, required: true },
@@ -186,7 +193,7 @@ export async function importPortableProjectV3(bytes: Buffer, options: PortablePr
     stagedPath = await stageProjection(options.destination, project, Buffer.from(serializePortableCanvasProjectionV3(projection)), manifestBytes, options)
   }
   emit(options, 'completed', 1, 'Project import completed with local bindings left unconfigured.')
-  return { project: stagedPath ? { ...project, cwd: stagedPath } : project, manifest, projection, archiveVersion: 3, bindings: [], omissions: manifest.omissions }
+  return { project: stagedPath ? { ...project, cwd: stagedPath } : project, manifest, projection, archiveVersion: 3, bindings: [], omissions: manifest.omissions, ...(projection.planner ? { plannerDefinitions: projection.planner } : {}) }
 }
 
 /** Marker used by archive callers without exposing container internals. */

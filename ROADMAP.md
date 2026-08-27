@@ -214,10 +214,10 @@ intentionally unchecked because this task publishes the plan only.
 - [ ] Add the bundled WebTorrent downloader with resumable per-task lifecycle.
 - [ ] Add the bundled QEMU Linux ISO VM with persistent and disposable modes. Implementation landed in `src/core/virtual-machine/` and `src/renderer/nodes/VirtualMachineNode.tsx`; tests, build, packaging, runtime interaction, and captures remain unrun in the ultra-speed lane.
 - [ ] Add Home Assistant multi-instance controls and sensor displays.
-- [ ] Add Calendar, Timer, and Alarm Clock nodes. Planner occurrence service is implemented in the
-      current lane, including UI-close continuity and ordered durable occurrence delivery. It remains
-      unticked until schema 3 planner-definition transfer, the offline docs refresh, required checks,
-      and packaged interaction evidence land.
+ - [ ] Add Calendar, Timer, and Alarm Clock nodes. Planner occurrence service is implemented in the
+       current lane, including UI-close continuity, ordered durable occurrence delivery, schema 3
+       planner-definition transfer, and the destination Configure action. It remains unticked until
+       required checks and packaged interaction evidence land.
 - [ ] Add Calendar nodes for local calendars and ICS, with guided CalDAV, Google Calendar, and
       Microsoft 365 provider bindings, recurrence/timezone views, offline cache, and create/edit/
       delete flows. Provider adapters still report an honest unavailable state until trusted OAuth

@@ -95,6 +95,12 @@
   exposes save retry recovery, and gates schedule deletion behind two-key confirmation.
   This ultra-speed lane intentionally leaves tests, builds, packaging, runtime interaction, and
   captures unrun.
+- Extend planner occurrences with a validated schema 3 planner-definition projection and an
+  explicit destination Configure action. Portable import carries schedule intent only, keeps
+  occurrence history and host state local, and merges configured definitions without overwriting a
+  conflicting destination schedule. The generated offline documentation bundle was refreshed from
+  the planner article. Tests, type checks, lint, builds, packaging, runtime interaction, and
+  captures remain unrun under the ultra-speed boundary.
 - Add Calendar nodes for local calendars and ICS import, with guided CalDAV, Google Calendar, and
   Microsoft 365 provider/account/calendar selection, recurrence and timezone views, offline cache,
   create/edit previews, and destructive delete confirmation. Provider credentials stay behind the

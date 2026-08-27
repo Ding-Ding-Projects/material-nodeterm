@@ -352,6 +352,7 @@ const api: NodeTerminalApi = {
     save: (file: PlannerFile) => ipcRenderer.invoke(IPC.plannerSave, file),
     history: () => ipcRenderer.invoke(IPC.plannerHistory),
     export: (format: 'json' | 'csv') => ipcRenderer.invoke(IPC.plannerExport, format),
+    configure: (schedules: PlannerFile['schedules']) => ipcRenderer.invoke(IPC.plannerConfigure, schedules),
     onOccurrence: subscribePlannerOccurrence
   },
   githubIssues: {

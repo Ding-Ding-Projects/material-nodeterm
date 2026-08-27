@@ -59,10 +59,21 @@ and refuses saves until
 the file is repaired and the host is restarted. JSON and CSV exports contain schedule occurrence
 metadata and state, never credentials, private paths, process state, or host identifiers.
 
-Schema 3 planner-definition transfer is not wired in this lane. Until that project projection exists,
-planner schedules remain machine-local and the issue's portability contract is incomplete. A later
-portable import must carry safe planner intent only, require an explicit local Configure action, and
-must not start schedules or emit notifications while importing.
+## Portable planner definitions
+
+Schema 3 project export carries a bounded `planner` definition containing only the user's schedule
+definitions. Occurrence history, the last evaluation marker, application-data locations, process
+state, credentials, provider sessions, and machine paths remain local and are listed in the archive
+omissions. The definition is validated again while the projection is written and while it is read;
+unknown fields and invalid recurrence, timezone, notification, and size values are rejected.
+
+Import stages the project without contacting a provider, starting a schedule, launching a process,
+or emitting an occurrence notification. When imported planner definitions are present, the completed
+open notification exposes an explicit **Configure imported planner schedules** action. That action
+is the destination Configure route: it sends the validated definitions back through the host-owned
+planner service, merges them with existing destination schedules without overwriting a conflicting
+definition, and reports the result in the notification centre. Cancelling or ignoring the action
+leaves the destination schedules unchanged, so import itself has no external side effect.
 
 ## Surface boundaries
 
@@ -77,10 +88,14 @@ must not start schedules or emit notifications while importing.
 This ultra-speed lane did not run tests, type checks, lint, security checks, builds, packaging,
 installer execution, runtime interaction, or screenshots. Those checks remain required before a release
 claim. The implementation paths are `src/shared/planner-occurrences.ts`,
-`src/core/planner-occurrence-service.ts`, `src/preload/index.ts`,
-`src/renderer/bridge/ws-bridge.ts`, and `src/renderer/components/settings/sections/PlannerSection.tsx`.
-The generated offline article bundle remains stale because its generator was intentionally not run
-under this lane's no-build boundary.
+`src/core/planner-occurrence-service.ts`, `src/core/portable-planner.ts`,
+`src/core/portable-canvas-projection.ts`, `src/core/project-archive.ts`,
+`src/preload/index.ts`, `src/renderer/bridge/ws-bridge.ts`, and
+`src/renderer/components/settings/sections/PlannerSection.tsx`.
+The offline documentation bundle is regenerated from this article by
+`node scripts/build-docs-bundle.mjs`. Tests, type checks, lint, security checks, builds, packaging,
+installer execution, runtime interaction, and screenshots remain intentionally unrun in this
+ultra-speed implementation lane.
 
 ## Suggested articles
 

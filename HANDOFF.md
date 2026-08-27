@@ -392,9 +392,18 @@ saves replace only user-authored schedule definitions, and fired or missed occur
 before delivery. The Planner surface reloads durable state after a refused save, provides retry, and
 routes schedule deletion through the two-key destructive confirmation gate.
 
-Two issue #29 deliverables remain open. Planner definitions are not yet included in the schema 3
-project projection with an explicit destination-computer Configure route, and the generated offline
-documentation bundle remains stale because its generator was outside this lane's no-build boundary.
+The issue #29 repair lane now includes schema 3 planner-definition transfer. `src/core/portable-planner.ts`
+validates a bounded planner blueprint containing schedule intent only. Schema 3 export includes that
+blueprint from the host-owned planner store, while import returns it without applying schedules or
+performing external side effects. The completed import notification exposes an explicit Configure
+action, which calls the host planner service and merges imported definitions without overwriting a
+conflicting destination definition. Occurrence history, last-tick state, credentials, paths,
+process state, and provider state remain local.
+
+The generated offline documentation bundle was refreshed from
+`docs/features/integrations/planner-occurrences.md` using the existing bundle renderer. The
+implementation lane still intentionally leaves tests, type checks, lint, builds, packaging,
+installer execution, runtime interaction, accessibility review, and screenshots unrun.
 
 This ultra-speed lane deliberately did not run tests, type checks, lint, security checks, builds,
 packaging, installer execution, runtime interaction, accessibility review, or screenshots. Those

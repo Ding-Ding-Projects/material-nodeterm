@@ -50,6 +50,8 @@ import {
   type PortableProjectV3ImportOptions
 } from './portable-project-import'
 import { projectToPortableCanvasV3, serializePortableCanvasProjectionV3 } from './portable-canvas-projection'
+import type { PortablePlannerDefinitions } from './portable-planner'
+import type { PlannerSchedule } from '../shared/planner-occurrences'
 
 // Schema 3 is exposed from the established archive seam while its validation remains platform-free.
 export * from './portable-project-v3'
@@ -57,6 +59,7 @@ export * from './portable-canvas-projection'
 export * from './portable-media-assets'
 export * from './portable-project-import'
 export * from './portable-bindings'
+export * from './portable-planner'
 export * from './universe-shop'
 
 /** V1 JSON-text archives keep their historical cap. */
@@ -121,6 +124,8 @@ export interface ProjectArchiveImportResult {
   /** The password-manager vault the archive carried for a FOLDER-LESS project, verbatim. The
    *  caller writes it to the new project's working-copy root - see the export note below. */
   vault?: Buffer
+  /** Safe planner definitions awaiting an explicit destination Configure action. */
+  plannerDefinitions?: PortablePlannerDefinitions
 }
 
 export interface ProjectArchiveExportOptions {
@@ -136,6 +141,8 @@ export interface ProjectArchiveExportOptions {
    * save file is as sensitive as that password, which the export UI says out loud.
    */
   vault?: Buffer
+  /** Host-owned schedule definitions are copied as safe intent only. */
+  plannerDefinitions?: readonly PlannerSchedule[]
 }
 
 function isProjectFile(value: unknown): value is ProjectFileV1 {
@@ -319,7 +326,8 @@ interface RepositoryCapture {
 export class ProjectArchiveService {
   constructor(
     private readonly history: LocalHistoryStore,
-    private readonly git: ProjectGitRunner = runProjectGit
+    private readonly git: ProjectGitRunner = runProjectGit,
+    private readonly readPlannerDefinitions?: () => readonly PlannerSchedule[]
   ) {}
 
   async export(
@@ -329,7 +337,8 @@ export class ProjectArchiveService {
     // New saves use the schema 3 portable projection. The legacy V2 writer remains below as a
     // compatibility reference for older fixtures and readers, but is no longer the production
     // export path: repository files, vaults, process state, and machine paths must not travel.
-    const snapshot = projectToPortableCanvasV3(project)
+    const plannerDefinitions = opts.plannerDefinitions ?? this.readPlannerDefinitions?.()
+    const snapshot = projectToPortableCanvasV3(project, plannerDefinitions ? { planner: plannerDefinitions } : {})
     const snapshotText = Buffer.from(serializePortableCanvasProjectionV3(snapshot))
     await this.history.record({
       domain: `project_${project.id}`,
@@ -347,7 +356,7 @@ export class ProjectArchiveService {
       { path: 'working-directory', reason: 'machine-local' as const, detail: 'Absolute paths are destination-specific and are not carried.' },
       ...(opts.vault ? [{ path: 'vault', reason: 'credential' as const, detail: 'The local vault remains on this machine and must be configured again.' }] : [])
     ]
-    const portable = await exportPortableProjectV3(project, { historyBundle, omissions })
+    const portable = await exportPortableProjectV3(project, { historyBundle, omissions, ...(plannerDefinitions ? { planner: [...plannerDefinitions] } : {}) })
     return {
       bytes: portable.bytes,
       archiveVersion: 3,
@@ -465,7 +474,8 @@ export class ProjectArchiveService {
           excludedFiles: imported.omissions.length,
           excludedBytes: 0
         },
-        ...(imported.stagedPath ? { restoredTo: imported.stagedPath } : {})
+        ...(imported.stagedPath ? { restoredTo: imported.stagedPath } : {}),
+        ...(imported.plannerDefinitions ? { plannerDefinitions: imported.plannerDefinitions } : {})
       }
     }
     if (!looksLikeContainer(bytes)) {

@@ -494,6 +494,7 @@ export const IPC = {
   plannerSave: 'planner:save',
   plannerHistory: 'planner:history',
   plannerExport: 'planner:export',
+  plannerConfigure: 'planner:configure',
   plannerOccurrence: 'planner:occurrence',
   sshList: 'ssh:list',
   sshSave: 'ssh:save',

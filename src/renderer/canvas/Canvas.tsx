@@ -15682,12 +15682,25 @@ export function Canvas() {
         useProjects.getState().adoptProject(result.project)
         await writeDisk()
         const where = result.restoredTo ? `Repository and files restored to ${result.restoredTo}. ` : ''
+        const plannerDefinitions = result.plannerDefinitions
         notify({
           kind: 'success',
           titleKind: 'authored',
           title: 'Project opened from file',
           body: `${where}${archiveContentsSummary(result.contents)}`.trim() || 'The project and its complete local history are ready.',
-          bodyKind: 'fact'
+          bodyKind: 'fact',
+          ...(plannerDefinitions ? {
+            actions: [{
+              label: `Configure ${plannerDefinitions.schedules.length} imported planner schedule${plannerDefinitions.schedules.length === 1 ? '' : 's'}`,
+              onClick: () => {
+                void api.planner.configure(plannerDefinitions.schedules).then((configured) => {
+                  notify(configured.ok
+                    ? { kind: 'success', titleKind: 'authored', title: 'Planner definitions configured', body: 'Imported schedule intent is now active on this computer.', bodyKind: 'fact' }
+                    : { kind: 'error', titleKind: 'authored', title: 'Planner configuration failed', body: configured.error, bodyKind: 'fact' })
+                }).catch((error) => notify({ kind: 'error', titleKind: 'authored', title: 'Planner configuration failed', body: error instanceof Error ? error.message : 'The imported planner definitions could not be configured.', bodyKind: 'fact' }))
+              }
+            }]
+          } : {})
         })
       } else if (!result.canceled) {
         notify({ kind: 'error', titleKind: 'authored', title: 'Project open failed', body: result.error, bodyKind: 'fact' })

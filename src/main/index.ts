@@ -1545,7 +1545,7 @@ app.whenReady().then(async () => {
   // save; the diff-based label lives in shared/settings-diff.ts so it is shared with any future
   // shell that saves settings, rather than re-derived per process.
   const localHistoryStore = new LocalHistoryStore(app.getPath('userData'))
-  const projectArchives = new ProjectArchiveService(localHistoryStore)
+  const projectArchives = new ProjectArchiveService(localHistoryStore, undefined, () => plannerRuntime.store.get().schedules)
   const portableBindings = new LocalNodeBindingStore(app.getPath('userData'))
   ipcMain.handle(IPC.portableBindingState, async (_event, input: unknown) => {
     if (!input || typeof input !== 'object' || Array.isArray(input)) return []
@@ -1806,6 +1806,7 @@ app.whenReady().then(async () => {
         project: outcome.project,
         archiveVersion: outcome.archiveVersion,
         contents: outcome.contents,
+        ...(outcome.plannerDefinitions ? { plannerDefinitions: outcome.plannerDefinitions } : {}),
         ...(outcome.restoredTo ? { restoredTo: outcome.restoredTo } : {})
       }
     } catch (error) {
