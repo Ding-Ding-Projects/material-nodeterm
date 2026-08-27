@@ -32,6 +32,11 @@ import {
 } from './portable-canvas-projection'
 import { openContainer, packContainer } from './project-archive-container'
 import { renameAtomic } from './fs-atomic'
+import {
+  validatePortableMediaArchive,
+  type PortableMediaArchiveFile,
+  type PortableMediaExportPayload
+} from './portable-media-assets'
 
 const READ_LIMITS = {
   maxArchiveBytes: PORTABLE_PROJECT_LIMITS.maxCompressedBytes,
@@ -55,12 +60,15 @@ export interface PortableImportResult {
   /** Bindings are always empty on import. This is a visible fact, not an omitted state. */
   bindings: []
   omissions: PortableProjectOmission[]
+  mediaFiles: number
+  mediaBytes: number
 }
 
 export interface PortableProjectV3ExportOptions {
   historyBundle: Buffer
   omissions?: readonly PortableProjectOmission[]
   appearance?: Record<string, unknown>
+  media?: PortableMediaExportPayload
 }
 
 export interface PortableProjectV3ImportOptions {
@@ -87,11 +95,15 @@ function ensureNotCancelled(options: PortableProjectV3ImportOptions): void {
 
 /** Build a schema 3 container. The manifest hashes every payload entry, including history. */
 export async function exportPortableProjectV3(project: Project, options: PortableProjectV3ExportOptions): Promise<{ bytes: Buffer; manifest: PortableProjectV3Manifest; projection: PortableCanvasProjectionV3 }> {
-  const projection = projectToPortableCanvasV3(project, options.appearance ? { appearance: options.appearance } : {})
+  const projection = projectToPortableCanvasV3(project, {
+    ...(options.appearance ? { appearance: options.appearance } : {}),
+    ...(options.media ? { media: options.media.manifest } : {})
+  })
   const projectBytes = Buffer.from(serializePortableCanvasProjectionV3(projection))
   const entries: PortableProjectV3Entry[] = [
     { path: 'project.json', data: projectBytes, required: true },
-    { path: 'history.bundle', data: options.historyBundle, required: true }
+    { path: 'history.bundle', data: options.historyBundle, required: true },
+    ...(options.media?.files.map((file) => ({ path: file.path, data: file.data, required: false })) ?? [])
   ]
   const manifest = await createPortableProjectV3Manifest(
     { name: projection.project.name, color: projection.project.color },
@@ -103,7 +115,8 @@ export async function exportPortableProjectV3(project: Project, options: Portabl
   const bytes = packContainer([
     { path: 'manifest.json', data: manifestBytes },
     { path: 'project.json', data: projectBytes },
-    { path: 'history.bundle', data: options.historyBundle }
+    { path: 'history.bundle', data: options.historyBundle },
+    ...(options.media?.files.map((file) => ({ path: file.path, data: Buffer.from(file.data) })) ?? [])
   ])
   if (bytes.length > PORTABLE_PROJECT_LIMITS.maxCompressedBytes) throw new PortableProjectV3Error('compressed-limit', 'Portable project archive exceeds its compressed-byte limit.')
   return { bytes, manifest, projection }
@@ -116,7 +129,7 @@ function parseLegacyProject(value: unknown, version: 1 | 2): PortableCanvasProje
   return projectToPortableCanvasV3(project)
 }
 
-async function stageProjection(destination: string, project: Project, projectBytes: Buffer, manifestBytes: Buffer, options: PortableProjectV3ImportOptions): Promise<string> {
+async function stageProjection(destination: string, project: Project, projectBytes: Buffer, manifestBytes: Buffer, mediaFiles: readonly PortableMediaArchiveFile[], options: PortableProjectV3ImportOptions): Promise<string> {
   const finalPath = path.resolve(destination)
   const parent = path.dirname(finalPath)
   const parentStat = await fs.stat(parent).catch(() => null)
@@ -138,6 +151,11 @@ async function stageProjection(destination: string, project: Project, projectByt
     await fs.writeFile(path.join(stage, '.nodeterm', 'project.json'), runtimeFile, { flag: 'wx' })
     await fs.writeFile(path.join(stage, '.nodeterm', 'portable-project.json'), projectBytes, { flag: 'wx' })
     await fs.writeFile(path.join(stage, '.nodeterm', 'portable-manifest.json'), manifestBytes, { flag: 'wx' })
+    for (const media of mediaFiles) {
+      const destinationPath = path.join(stage, ...media.path.split('/'))
+      await fs.mkdir(path.dirname(destinationPath), { recursive: true })
+      await fs.writeFile(destinationPath, media.data, { flag: 'wx' })
+    }
     ensureNotCancelled(options)
     emit(options, 'publishing', 0.95, 'Publishing the staged project atomically.')
     await renameAtomic(stage, finalPath)
@@ -178,15 +196,27 @@ export async function importPortableProjectV3(bytes: Buffer, options: PortablePr
     projection = parseLegacyProject(parsed, version)
   }
   ensureNotCancelled(options)
+  if (!projection.media && [...entries.keys()].some((entryPath) => entryPath.startsWith('assets/media/'))) throw new PortableProjectV3Error('manifest', 'Portable media entries exist without a media manifest.')
+  const mediaFiles = projection.media ? await validatePortableMediaArchive(projection.media, entries) : []
+  ensureNotCancelled(options)
   const id = freshProjectId()
   const project = portableCanvasProjectionToProject(projection, { id })
   let stagedPath: string | undefined
   if (options.destination) {
     emit(options, 'staging', 0.7, 'Preparing a collision-free local destination; no bindings or external services are touched.')
-    stagedPath = await stageProjection(options.destination, project, Buffer.from(serializePortableCanvasProjectionV3(projection)), manifestBytes, options)
+    stagedPath = await stageProjection(options.destination, project, Buffer.from(serializePortableCanvasProjectionV3(projection)), manifestBytes, mediaFiles, options)
   }
   emit(options, 'completed', 1, 'Project import completed with local bindings left unconfigured.')
-  return { project: stagedPath ? { ...project, cwd: stagedPath } : project, manifest, projection, archiveVersion: 3, bindings: [], omissions: manifest.omissions }
+  return {
+    project: stagedPath ? { ...project, cwd: stagedPath } : project,
+    manifest,
+    projection,
+    archiveVersion: 3,
+    bindings: [],
+    omissions: manifest.omissions,
+    mediaFiles: mediaFiles.length,
+    mediaBytes: mediaFiles.reduce((total, item) => total + item.data.byteLength, 0)
+  }
 }
 
 /** Marker used by archive callers without exposing container internals. */

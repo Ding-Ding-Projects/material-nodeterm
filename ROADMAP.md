@@ -182,9 +182,10 @@ intentionally unchecked because this task publishes the plan only.
 - [ ] Import schema 3 archives atomically without external side effects.
 - [ ] Preserve root, Multiverse, AWS Universe, portal, Shop, node, relationship, and appearance data.
 - [ ] Bundle project-owned media and provide Include, Omit, and Locate Later decisions. Core
-  content-addressing, signature validation, omission records, schema 3 projection support, and a
-  guided decision component are implemented but remain unverified until archive wiring and the
-  required built-artifact checks land.
+  content-addressing, typed desktop preparation, explicit decisions, parser proof, real
+  `assets/media/` container entries, repeated import validation, and atomic destination staging are
+  implemented. The item remains unchecked because all tests, builds, packaging, runtime
+  interaction, accessibility checks, and captures are intentionally unrun.
 - [ ] Separate portable blueprints from machine-local bindings and credential references.
 - [ ] Ship the unified Node Catalog and one creation coordinator. The typed registry,
       availability-aware dialog, immutable creation-event coordinator, collision-free placement,

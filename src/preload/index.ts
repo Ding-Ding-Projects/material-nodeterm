@@ -203,10 +203,14 @@ const api: NodeTerminalApi = {
     splitIntoParts: (cwd: string, sizeValue: number, sizeUnit: 'KB' | 'MB' | 'GB') =>
       ipcRenderer.invoke(IPC.workspaceSplitIntoParts, cwd, sizeValue, sizeUnit),
     joinParts: (cwd: string) => ipcRenderer.invoke(IPC.workspaceJoinParts, cwd),
-    exportProject: (project: Project, password?: string) =>
-      ipcRenderer.invoke(IPC.projectArchiveExport, project, password),
+    exportProject: (project: Project, password?: string, media?: import('../shared/portable-media').PortableMediaExportPlan) =>
+      ipcRenderer.invoke(IPC.projectArchiveExport, project, password, media),
     importProject: (opts?: { path?: string; password?: string }) =>
       ipcRenderer.invoke(IPC.projectArchiveImport, opts),
+    portableMedia: {
+      prepare: (input: import('../shared/portable-media').PortableMediaPrepareInput) => ipcRenderer.invoke(IPC.portableMediaPrepare, input),
+      discard: (preparationId: string) => ipcRenderer.invoke(IPC.portableMediaDiscard, preparationId)
+    },
     portableBindings: {
       state: (input: { nodeId: string; featureId: string; displayLabel: string; hasMissingAssets?: boolean }) =>
         ipcRenderer.invoke(IPC.portableBindingState, input),

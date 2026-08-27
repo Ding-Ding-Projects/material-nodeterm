@@ -1316,7 +1316,7 @@ export type WorkspaceMigrationKind = 'v2' | 'exec'
 export interface ProjectArchiveExclusion {
   /** Project-folder-relative path, '/'-separated. A grouped directory ends with '/'. */
   path: string
-  reason: 'gitignored' | 'nested-repository' | 'symlink' | 'special' | 'missing' | 'unreadable' | 'machine-local' | 'credential' | 'unsupported'
+  reason: 'gitignored' | 'nested-repository' | 'symlink' | 'special' | 'missing' | 'unreadable' | 'machine-local' | 'credential' | 'unsupported' | 'user-choice' | 'validation-failed'
   /** Human-readable reason for portable schema omissions; absent on legacy file exclusions. */
   detail?: string
   /** File count under a grouped directory exclusion. Absent for a single file. */
@@ -1399,6 +1399,8 @@ export interface ProjectArchiveProgress {
 export interface WorkspaceApi {
   load(): Promise<Workspace>
   save(workspace: Workspace): Promise<void>
+  /** Path-free preparation and cancellation for portable project media. */
+  portableMedia: import('./portable-media').PortableMediaApi
   /** Local destination binding controls. Import never invokes these controls implicitly. */
   portableBindings: PortableBindingApi
   /** Progress and cancellation for the schema 3 import operation. */
@@ -1431,7 +1433,8 @@ export interface WorkspaceApi {
     /** When given, the finished archive is wrapped whole in AES-256-GCM under a key derived from
      *  this password (core/project-archive-encryption.ts) and the file leaks nothing about the
      *  project — not its name, not its file list. Omitted ⇒ the historical plain container. */
-    password?: string
+    password?: string,
+    media?: import('./portable-media').PortableMediaExportPlan
   ): Promise<{
     ok: boolean
     path?: string

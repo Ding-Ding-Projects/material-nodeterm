@@ -207,6 +207,30 @@ operation untouched when the picker is cancelled. The selected source path and s
 transient renderer state only. The archive writer still needs a follow-up adapter to consume the
 selected streaming sources and emit schema 3 media entries; no portable record claims those paths.
 No tests, builds, type checks, captures, commits, or dews were made.
+
+## 2026-08-27, portable media archive and bridge completion
+
+Completed the four missing source boundaries from the portable-media checkpoint. The renderer no
+longer imports filesystem collection code. `src/shared/portable-media.ts`, `src/shared/ipc.ts`,
+`src/preload/index.ts`, and `src/main/index.ts` now provide a typed preparation route that returns a
+single-use id and path-free candidates, plus bounded asset-id decisions and explicit cancellation.
+The host expires unused preparations and consumes a preparation once at export.
+
+`src/core/portable-media-assets.ts` now parser-proves decoded image dimensions and frame counts, WAV
+timing, and MP4 or QuickTime timing and video dimensions. Recognised formats without a bundled
+structural parser cannot be Included and retain an exact Locate Later or Omit route. Export re-reads
+the file and refuses bytes that changed after preparation.
+
+`src/core/portable-project-import.ts` now writes Included bytes to content-addressed
+`assets/media/` entries covered by the outer schema 3 hashes. Import matches every resolved media
+record to exactly one entry, repeats signature, hash, size, and parser-fact validation, stages media
+beside the project metadata, and publishes the complete destination with one atomic rename.
+`src/core/project-archive.ts` reports included media bytes and every Omit or Locate Later record
+without a private path or machine identity.
+
+No tests, type checks, lint, reviews, security checks, accessibility checks, builds, packaging,
+installer execution, runtime interaction, captures, audits, or release work ran in this lane. The
+source implementation is complete for issue #14 but remains intentionally unverified.
 ## 2026-08-26, atomic schema 3 import and destination binding wizard
 
 Implemented schema 3 archive production and import wiring. `src/core/portable-project-import.ts`

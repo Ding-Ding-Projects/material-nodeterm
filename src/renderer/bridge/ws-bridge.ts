@@ -469,6 +469,13 @@ export function buildRealApi(
       ok: false,
       error: mapLocalVocabularyText('Project archive import is available in the Windows desktop app.')
     }),
+    portableMedia: {
+      prepare: async () => ({
+        ok: false,
+        error: mapLocalVocabularyText('Portable media preparation is available in the Windows desktop app.')
+      }),
+      discard: async () => false
+    },
     portableBindings: {
       state: async (input: { nodeId: string; featureId: string; displayLabel: string; hasMissingAssets?: boolean }) => [{
         nodeId: input.nodeId,

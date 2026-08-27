@@ -49,7 +49,13 @@ import {
   looksLikePortableProjectV3,
   type PortableProjectV3ImportOptions
 } from './portable-project-import'
-import { projectToPortableCanvasV3, serializePortableCanvasProjectionV3 } from './portable-canvas-projection'
+import { parsePortableCanvasProjectionV3, projectToPortableCanvasV3, serializePortableCanvasProjectionV3 } from './portable-canvas-projection'
+import { parsePortableProjectV3Manifest } from './portable-project-v3'
+import {
+  resolvePortableMediaPreparation,
+  type PortableMediaPreparation
+} from './portable-media-assets'
+import type { PortableMediaDecisionRecord } from '../shared/portable-media'
 
 // Schema 3 is exposed from the established archive seam while its validation remains platform-free.
 export * from './portable-project-v3'
@@ -136,6 +142,8 @@ export interface ProjectArchiveExportOptions {
    * save file is as sensitive as that password, which the export UI says out loud.
    */
   vault?: Buffer
+  /** Single-use, privileged media preparation plus the user's explicit decisions. */
+  portableMedia?: { preparation: PortableMediaPreparation; decisions: PortableMediaDecisionRecord[] }
 }
 
 function isProjectFile(value: unknown): value is ProjectFileV1 {
@@ -347,17 +355,36 @@ export class ProjectArchiveService {
       { path: 'working-directory', reason: 'machine-local' as const, detail: 'Absolute paths are destination-specific and are not carried.' },
       ...(opts.vault ? [{ path: 'vault', reason: 'credential' as const, detail: 'The local vault remains on this machine and must be configured again.' }] : [])
     ]
-    const portable = await exportPortableProjectV3(project, { historyBundle, omissions })
+    const media = opts.portableMedia
+      ? await resolvePortableMediaPreparation(opts.portableMedia.preparation, opts.portableMedia.decisions)
+      : undefined
+    const portable = await exportPortableProjectV3(project, { historyBundle, omissions, ...(media ? { media } : {}) })
+    const mediaOmissions: ProjectArchiveExclusion[] = [
+      ...(media?.manifest.omissions.map((item) => ({
+        path: `assets/media/${item.assetId}`,
+        reason: item.reason,
+        detail: item.detail
+      })) ?? []),
+      ...(media?.manifest.assets.filter((item) => item.unresolved).map((item) => ({
+        path: `assets/media/${item.assetId}`,
+        reason: 'machine-local' as const,
+        detail: 'Locate Later kept this content-addressed reference unresolved for the destination computer.'
+      })) ?? [])
+    ]
+    const includedMediaBytes = media?.files.reduce((total, item) => total + item.data.byteLength, 0) ?? 0
     return {
       bytes: portable.bytes,
       archiveVersion: 3,
       contents: {
         repository: 'portable-projection',
         repositoryNote: 'Schema 3 carries safe project intent only. Local bindings, credentials, paths, processes, caches, and provider state remain on the source machine.',
-        workingFiles: 0,
-        workingBytes: 0,
-        excluded: portable.manifest.omissions.map((item) => ({ path: item.path, reason: item.reason, detail: item.detail })),
-        excludedFiles: portable.manifest.omissions.length,
+        workingFiles: media?.files.length ?? 0,
+        workingBytes: includedMediaBytes,
+        excluded: [
+          ...portable.manifest.omissions.map((item) => ({ path: item.path, reason: item.reason, detail: item.detail })),
+          ...mediaOmissions
+        ],
+        excludedFiles: portable.manifest.omissions.length + mediaOmissions.length,
         excludedBytes: 0
       }
     }
@@ -431,8 +458,13 @@ export class ProjectArchiveService {
     if (!looksLikeContainer(bytes)) return { archiveVersion: 1, needsDestination: false }
     if (looksLikePortableProjectV3(bytes)) {
       const entries = openContainer(bytes, READ_LIMITS)
-      const manifest = JSON.parse(entries.get('manifest.json')!.toString('utf8')) as { project?: { name?: unknown } }
-      return { archiveVersion: 3, needsDestination: false, ...(typeof manifest.project?.name === 'string' ? { projectName: manifest.project.name } : {}) }
+      const manifestBytes = entries.get('manifest.json')
+      const projectBytes = entries.get('project.json')
+      if (!manifestBytes || !projectBytes) throw new Error('This portable project is missing its manifest or project snapshot.')
+      const manifest = parsePortableProjectV3Manifest(manifestBytes)
+      const projection = parsePortableCanvasProjectionV3(projectBytes)
+      const needsDestination = projection.media?.assets.some((asset) => asset.unresolved !== true) === true
+      return { archiveVersion: 3, needsDestination, projectName: manifest.project.name }
     }
     let hasPayload = false
     const picked = openContainer(bytes, READ_LIMITS, (name) => {
@@ -453,16 +485,20 @@ export class ProjectArchiveService {
   async import(bytes: Buffer, opts: PortableProjectV3ImportOptions = {}): Promise<ProjectArchiveImportResult> {
     if (looksLikePortableProjectV3(bytes)) {
       const imported = await importPortableProjectV3(bytes, opts as PortableProjectV3ImportOptions)
+      const mediaOmissions: ProjectArchiveExclusion[] = [
+        ...(imported.projection.media?.omissions.map((item) => ({ path: `assets/media/${item.assetId}`, reason: item.reason, detail: item.detail })) ?? []),
+        ...(imported.projection.media?.assets.filter((item) => item.unresolved).map((item) => ({ path: `assets/media/${item.assetId}`, reason: 'machine-local' as const, detail: 'Locate Later kept this media reference unresolved.' })) ?? [])
+      ]
       return {
         project: imported.project,
         archiveVersion: 3,
         contents: {
           repository: imported.stagedPath ? 'portable-projection' : 'portable-projection',
           repositoryNote: 'Schema 3 imported safe project intent only. No deployment, provider mutation, process launch, download, or local binding was performed.',
-          workingFiles: 0,
-          workingBytes: 0,
-          excluded: imported.omissions.map((item) => ({ path: item.path, reason: item.reason, detail: item.detail })),
-          excludedFiles: imported.omissions.length,
+          workingFiles: imported.mediaFiles,
+          workingBytes: imported.mediaBytes,
+          excluded: [...imported.omissions.map((item) => ({ path: item.path, reason: item.reason, detail: item.detail })), ...mediaOmissions],
+          excludedFiles: imported.omissions.length + mediaOmissions.length,
           excludedBytes: 0
         },
         ...(imported.stagedPath ? { restoredTo: imported.stagedPath } : {})

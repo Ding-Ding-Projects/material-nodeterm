@@ -65,6 +65,8 @@ import type { TimerOccurrence } from '../shared/timer'
 import { registerVsCodeHandlers } from '../core/vscode-handlers'
 import { LocalHistoryStore } from '../core/local-history'
 import { ProjectArchiveService } from '../core/project-archive'
+import { preparePortableMedia, type PortableMediaPreparation } from '../core/portable-media-assets'
+import type { PortableMediaExportPlan, PortableMediaPrepareInput } from '../shared/portable-media'
 import { ServerDeploymentService, resolveServerDeploymentRoot } from './server-deployment'
 import { registerLocalHistoryHandlers } from '../core/local-history-handlers'
 import { describeSettingsChange } from '../shared/settings-diff'
@@ -1547,6 +1549,28 @@ app.whenReady().then(async () => {
   // shell that saves settings, rather than re-derived per process.
   const localHistoryStore = new LocalHistoryStore(app.getPath('userData'))
   const projectArchives = new ProjectArchiveService(localHistoryStore)
+  const portableMediaPreparations = new Map<string, { createdAt: number; projectId: string; preparation: PortableMediaPreparation }>()
+  const discardExpiredPortableMedia = (): void => {
+    const expiresBefore = Date.now() - 10 * 60 * 1000
+    for (const [id, value] of portableMediaPreparations) if (value.createdAt < expiresBefore) portableMediaPreparations.delete(id)
+  }
+  ipcMain.handle(IPC.portableMediaPrepare, async (_event, input: unknown) => {
+    discardExpiredPortableMedia()
+    if (!input || typeof input !== 'object' || Array.isArray(input)) return { ok: false, error: 'Portable media preparation is invalid.' }
+    const value = input as Record<string, unknown>
+    if (typeof value.projectId !== 'string' || !Array.isArray(value.sourcePaths) || value.sourcePaths.some((item) => typeof item !== 'string') || (value.projectRoot !== undefined && typeof value.projectRoot !== 'string')) return { ok: false, error: 'Portable media preparation is invalid.' }
+    try {
+      const preparation = await preparePortableMedia(value as unknown as PortableMediaPrepareInput)
+      const preparationId = randomUUID()
+      portableMediaPreparations.set(preparationId, { createdAt: Date.now(), projectId: value.projectId, preparation })
+      return { ok: true, preparationId, candidates: preparation.items.map((item) => item.candidate) }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  })
+  ipcMain.handle(IPC.portableMediaDiscard, (_event, preparationId: unknown) =>
+    typeof preparationId === 'string' ? portableMediaPreparations.delete(preparationId) : false
+  )
   const portableBindings = new LocalNodeBindingStore(app.getPath('userData'))
   ipcMain.handle(IPC.portableBindingState, async (_event, input: unknown) => {
     if (!input || typeof input !== 'object' || Array.isArray(input)) return []
@@ -1694,7 +1718,7 @@ app.whenReady().then(async () => {
   const archiveUnlock = new ArchiveUnlockGuard({ schoolMode: () => schoolModeStore.get().enabled })
   ipcMain.handle(
     IPC.projectArchiveExport,
-    async (_event, project: import('../shared/types').Project, password?: string) => {
+    async (_event, project: import('../shared/types').Project, password?: string, media?: PortableMediaExportPlan) => {
     if (projectArchiveBusy) return { ok: false, error: 'Another project export or import is still running.' }
     projectArchiveBusy = true
     try {
@@ -1712,7 +1736,16 @@ app.whenReady().then(async () => {
       // its own files and is captured with the rest; passing it here too would put two copies in
       // one save file. See core/password-manager/vault-location.ts.
       const vault = project.cwd ? undefined : await readFolderlessVault(project.id)
-      const exported = await projectArchives.export(project, vault ? { vault } : {})
+      let portableMedia: { preparation: PortableMediaPreparation; decisions: PortableMediaExportPlan['decisions'] } | undefined
+      if (media !== undefined) {
+        if (!media || typeof media.preparationId !== 'string' || !Array.isArray(media.decisions)) throw new Error('Portable media export plan is invalid.')
+        const prepared = portableMediaPreparations.get(media.preparationId)
+        if (!prepared) throw new Error('Portable media preparation expired. Choose the media again.')
+        if (prepared.projectId !== project.id) throw new Error('Portable media preparation belongs to a different project.')
+        portableMediaPreparations.delete(media.preparationId)
+        portableMedia = { preparation: prepared.preparation, decisions: media.decisions }
+      }
+      const exported = await projectArchives.export(project, { ...(vault ? { vault } : {}), ...(portableMedia ? { portableMedia } : {}) })
       // Encrypt the FINISHED container, never its entries: a ZIP's entry names alone would say
       // which repository travelled and what the project is called. See project-archive-encryption.ts.
       const bytes = password ? encryptArchive(exported.bytes, password) : exported.bytes

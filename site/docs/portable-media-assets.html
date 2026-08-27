@@ -22,11 +22,11 @@
         <li><strong>Locate Later</strong> records an unresolved placeholder so another computer can choose the file explicitly.</li>
       </ul>
       <h2>Validation</h2>
-      <p>Collection checks a regular file, bounded bytes, known signatures, normalised MIME and extension, and SHA-256. Import checks schema 3, content addresses, labels, media kinds, and dimensions or duration bounds. Invalid or unsupported media is refused or recorded as an omission, never partially applied.</p>
+      <p>Collection checks a regular file, bounded bytes, known signatures, normalised MIME and extension, and SHA-256. Include additionally requires parser-proved display facts: decoded image dimensions and frame count, WAV timing from its chunks, or MP4 and QuickTime timing plus video dimensions. A recognised format without a bundled parser remains available for Locate Later or Omit. Import repeats the signature, hash, size, and parser proof against the real archive bytes before any write.</p>
       <h2>Privacy and side effects</h2>
       <p>Import makes no network request, deployment, process launch, download, or provider mutation. Source paths are used only by the local picker. The guided picker has plain-text search and an adjacent anchored regex builder, accessible decision buttons, and an honest no-match state.</p>
       <h2>Implementation and verification</h2>
-      <p>The contract is implemented in <code>src/core/portable-media-assets.ts</code>, with schema 3 projection support in <code>src/core/portable-canvas-projection.ts</code> and the guided renderer in <code>src/renderer/components/PortableMediaDecisionDialog.tsx</code>. This lane did not run tests, builds, packaging, runtime interaction, or captures; archive wiring and built-artifact evidence remain pending.</p>
+      <p>The typed desktop bridge prepares path-free candidates, then carries bounded decisions into the archive service. Included bytes live under <code>assets/media/</code>, are covered by the schema 3 hashes, and stage atomically with the imported project. The contract is implemented in <code>src/core/portable-media-assets.ts</code>, <code>src/core/portable-project-import.ts</code>, <code>src/shared/portable-media.ts</code>, and the guided renderer component. This lane did not run tests, type checks, lint, reviews, security or accessibility checks, builds, packaging, installer execution, runtime interaction, or captures. The source is implemented but unverified.</p>
     </article>
   </body>
 </html>
