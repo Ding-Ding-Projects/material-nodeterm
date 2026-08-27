@@ -13109,3 +13109,32 @@ button.term-node__title-text:focus-visible {
     flex: 1 1 120px;
   }
 }
+/* GitLab hosting node: guided lifecycle surface, private binding, and bounded operations. */
+.gitlab-hosting-node { min-width: 560px; min-height: 360px; overflow: hidden; border: 1px solid var(--md-outline-variant); border-radius: 16px; background: var(--md-surface-container); color: var(--md-on-surface); box-shadow: var(--md-elevation-1); }
+.gitlab-hosting-node__header { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 8px 12px; border-bottom: 1px solid var(--md-outline-variant); }
+.gitlab-hosting-node__product { font-weight: 650; white-space: nowrap; }
+.gitlab-hosting-node__label, .gitlab-hosting-node__label-empty { min-width: 120px; color: var(--md-on-surface-variant); }
+.gitlab-hosting-panel { display: grid; gap: 12px; max-height: 550px; overflow: auto; padding: 14px; background: var(--md-surface); }
+.gitlab-hosting-panel__header, .gitlab-hosting-panel__section > header { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
+.gitlab-hosting-panel__section { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--md-outline-variant); border-radius: 12px; background: var(--md-surface-container-low); }
+.gitlab-hosting-panel__section h4 { margin: 0; color: var(--md-on-surface); }
+.gitlab-hosting-panel__header p, .gitlab-hosting-panel__note, .gitlab-hosting-panel__status { margin: 0; color: var(--md-on-surface-variant); font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
+.gitlab-hosting-panel__search { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.gitlab-hosting-panel__search > *:first-child { flex: 1 1 auto; min-width: 0; }
+.gitlab-hosting-panel__choices, .gitlab-hosting-panel__actions, .gitlab-hosting-panel__port-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.gitlab-hosting-panel__choices button, .gitlab-hosting-panel__port-row button, .gitlab-hosting-panel__backup-list button { min-height: 36px; padding: 6px 10px; border: 1px solid var(--md-outline); border-radius: 10px; background: var(--md-surface-container-high); color: var(--md-on-surface); cursor: pointer; }
+.gitlab-hosting-panel__choices button.selected, .gitlab-hosting-panel__port-row button.selected, .gitlab-hosting-panel__backup-list button.selected { border-color: var(--md-primary); background: var(--md-primary-container); color: var(--md-on-primary-container); }
+.gitlab-hosting-panel__choices button:disabled { cursor: not-allowed; opacity: .55; }
+.gitlab-hosting-panel__port-row > span { width: 44px; font-size: 12px; font-weight: 650; color: var(--md-on-surface-variant); }
+.gitlab-hosting-panel__volumes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.gitlab-hosting-panel__volumes span, .gitlab-hosting-panel__backup-list button { display: grid; gap: 3px; text-align: left; }
+.gitlab-hosting-panel__volumes code { overflow-wrap: anywhere; color: var(--md-on-surface-variant); font-size: 11px; }
+.gitlab-hosting-panel__backup-list { display: grid; gap: 6px; max-height: 160px; overflow: auto; }
+.gitlab-hosting-panel__backup-list small { color: var(--md-on-surface-variant); }
+.gitlab-hosting-panel__credential { display: grid; gap: 6px; padding: 10px; border: 1px solid var(--md-tertiary); border-radius: 10px; background: var(--md-tertiary-container); color: var(--md-on-tertiary-container); }
+.gitlab-hosting-panel__credential input { min-height: 36px; border: 1px solid var(--md-outline); border-radius: 8px; padding: 6px 8px; background: var(--md-surface); color: var(--md-on-surface); }
+.gitlab-hosting-panel__credential p { margin: 0; font-size: 12px; }
+.gitlab-hosting-panel__error { margin: 0; padding: 8px; border-radius: 8px; background: var(--md-error-container); color: var(--md-on-error-container); overflow-wrap: anywhere; }
+.gitlab-hosting-panel__section article { display: grid; gap: 4px; }
+.gitlab-hosting-panel__section article header { display: flex; justify-content: space-between; gap: 8px; }
+@media (max-width: 720px) { .gitlab-hosting-node { min-width: 320px; } .gitlab-hosting-panel__volumes { grid-template-columns: 1fr; } }

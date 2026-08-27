@@ -578,7 +578,21 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
     availability: alwaysAvailable
   },
   plannedEntry('cloudflare-hosting', 'hosting', 'Cloudflare hosting', 'Create a private-first hosting blueprint with explicit tunnel exposure later.', 'hosting-adapter'),
-  plannedEntry('gitlab-hosting', 'hosting', 'GitLab hosting', 'Create a guided GitLab hosting blueprint with local credentials later.', 'hosting-adapter'),
+  {
+    id: 'gitlab-hosting',
+    nodeKind: 'gitlab-hosting',
+    category: 'hosting',
+    label: 'GitLab hosting',
+    description: 'Deploy a private GitLab Server with a pinned Community or Enterprise image.',
+    keywords: ['gitlab', 'hosting', 'community edition', 'enterprise edition', 'backup', 'restore'],
+    documentationPath: 'docs/features/integrations/gitlab-hosting.md',
+    safeDefaults: { gitlabHostingConfig: 'default-private-loopback' },
+    dependencies: ['docker-context'],
+    status: 'available',
+    availabilityMode: 'configure-later',
+    scope: 'any',
+    availability: unsupportedInRelay
+  },
   plannedEntry('nextcloud-hosting', 'hosting', 'Nextcloud hosting', 'Create a managed Nextcloud hosting blueprint with local binding later.', 'hosting-adapter'),
   plannedEntry('open-webui-hosting', 'hosting', 'Open WebUI hosting', 'Create an Open WebUI hosting blueprint that can reuse local Ollama.', 'hosting-adapter')
 ] as const
@@ -638,7 +652,7 @@ export const NODE_CATALOG_COMPLETENESS: readonly NodeCatalogCompletenessRecord[]
   { id: 'aws-service', state: 'planned', scope: 'aws-universe', reason: 'AWS service node not implemented' },
   { id: 'cloudflare-core-managers', state: 'current', scope: 'any', reason: 'typed Cloudflare account, zone, DNS, SSL/TLS, ruleset, redirect, cache, and analytics managers' },
   { id: 'cloudflare-hosting', state: 'planned', scope: 'any', reason: 'Cloudflare hosting not implemented' },
-  { id: 'gitlab-hosting', state: 'planned', scope: 'any', reason: 'GitLab hosting not implemented' },
+  { id: 'gitlab-hosting', state: 'current', scope: 'any', reason: 'guided private GitLab Server hosting node' },
   { id: 'nextcloud-hosting', state: 'planned', scope: 'any', reason: 'Nextcloud hosting not implemented' },
   { id: 'open-webui-hosting', state: 'planned', scope: 'any', reason: 'Open WebUI hosting not implemented' }
 ]

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add the guided GitLab Server hosting node. Choose the pinned official Community Edition or
+  Enterprise Edition image, create four managed volumes, probe readiness, hand off the initial
+  root credential once without logging it, and run backup, restore, update, and rollback actions
+  behind the existing confirmation flow. Binding is loopback-only and all Docker arguments are
+  generated from typed controls. This ultra-speed lane intentionally did not run tests, type
+  checks, lint, reviews, security or accessibility checks, builds, packaging, installer execution,
+  runtime interaction, or captures.
+
 - Add Windows `psmux` discovery to terminal persistence. Executable lookup now honors `PATHEXT`,
   prefers `tmux` and then `psmux`, uses the shared executable predicate for Windows Package
   Manager detection, and keeps the missing-multiplexer banner visible on Windows with an exact

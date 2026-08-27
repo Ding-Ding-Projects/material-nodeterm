@@ -37,6 +37,7 @@ export const FEATURES = [
   { id: 'palette', icon: '✨', color: 'var(--orange)', title: 'Jump anywhere', body: 'A command box that hops to any block, project or action. Plus a file explorer and undo/redo.' },
   { id: 'update', icon: '⬆️', color: 'var(--green)', title: 'Keeps itself fresh', body: 'The app checks its own update feed and shows news right inside the window.' },
   { id: 'offline', icon: '📴', color: 'var(--blue)', title: 'Works with no internet', body: 'Projects save to a plain file next to your code, so you can share it or carry it to another machine.' },
+  { id: 'gitlab-hosting', icon: '🦊', color: 'var(--orange)', title: 'Private GitLab hosting', body: 'Choose Community or Enterprise Edition, deploy a pinned official image with four managed volumes, and back it up or roll it back from guided controls.' },
 ]
 
 export const DOCS = [
@@ -65,6 +66,7 @@ export const DOCS = [
   ['Terminal sessions & continuity', 'tmux, and the Windows session host', 'terminal-sessions'],
   ['Toy locks', 'a padlock for fun, not for safety', 'toy-locks'],
   ['Windows support', 'the current desktop package and its known limits', 'windows-support'],
+  ['GitLab Server hosting', 'private deployment, backups, restore, and rollback', 'gitlab-hosting'],
 ]
 
 // A hand-picked six from the design's dumpling list, kept to exactly the

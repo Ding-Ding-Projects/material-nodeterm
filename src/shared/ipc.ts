@@ -666,6 +666,10 @@ export const IPC = {
   dockerHostManagerRun: 'docker-host-manager:run',
   dockerHostManagerCancel: 'docker-host-manager:cancel',
   dockerHostManagerProgress: 'docker-host-manager:progress',
+  dockerHostManagerGitlabStatus: 'docker-host-manager:gitlab-status',
+  dockerHostManagerGitlabBackups: 'docker-host-manager:gitlab-backups',
+  dockerHostManagerGitlabCredential: 'docker-host-manager:gitlab-credential',
+  dockerHostManagerGitlabRun: 'docker-host-manager:gitlab-run',
   // Guided Cloudflare account, zone, DNS, SSL/TLS, ruleset, redirect, cache, and analytics managers.
   // Tokens stay in the host credential vault; canvas data carries only safe intent.
   cloudflareCoreRuntime: 'cloudflare-core:runtime',
