@@ -1,6 +1,7 @@
 import { DEFAULT_WORD_SEPARATORS } from './word-separators'
 import type { ServiceConnection } from './node-exec'
 import type { DockerHostManagerApi } from './docker-host-manager'
+import type { NextcloudAioManagerApi } from './nextcloud-aio'
 import type { NsisSpec, NsisLocalPaths } from './nsis-form-types'
 // Types shared across the main, preload, and renderer processes.
 
@@ -18,7 +19,7 @@ import type { ProjectKanbanGitHub } from './github-issues'
 import type { ProjectIcon } from './project-icon'
 import type { ShortcutMap } from './shortcuts'
 import { DEFAULT_SHORTCUTS } from './shortcuts'
-import type { FunnyLevel, LanguageMode } from './i18n/types'
+import { DEFAULT_FUNNY_LEVEL, type FunnyLevel, type LanguageMode } from './i18n/types'
 import type { PortableDoorConstructionV3 } from './door-construction'
 import type { VsCodeInstall, VsCodeOpenResult } from './vscode'
 import type { HistoryFilters, HistoryListResult, HistoryRestoreResult } from './local-history'
@@ -220,6 +221,9 @@ export interface PtyCreateOptions {
    * "not connected" overlay and re-spawns when the master is back.
    */
   requireRemote?: boolean
+  /** Join an already-live session only. Foreign canvas projections are viewers, never owners, so
+   * a missing target session is returned as `unavailable: 'no-session'` instead of spawning it. */
+  requireExisting?: boolean
 }
 
 /** A tmux pane's cursor, as tmux reports it: 0-based column/row within the pane, plus whether the
@@ -344,7 +348,8 @@ export interface PtyCreateResult {
    * managed account whose home is missing refuses rather than spawning against the system login
    * (§5 property 4). Same contract — nothing spawned, the renderer shows the node's refusal.
    */
-  unavailable?: 'ssh' | 'codex-account'
+  /** Refusal for a foreign projection that had no live session to join. */
+  unavailable?: 'ssh' | 'codex-account' | 'no-session'
 }
 
 /** Payload of `pty:recycled` — see IPC.ptyRecycled and `recycleAction` in the renderer. */
@@ -386,6 +391,8 @@ export type NodeKind =
   | 'shop'
   // AWS Universe portal. The portal is a safe project intent and never carries provider state.
   | 'aws-universe'
+  // Guided Resource Explorer and Cloud Control manager. Only safe operation intent is portable.
+  | 'aws-resource'
   // A GUI for authoring a Windows NSIS installer script for ANOTHER project (not this app's
   // own installer, which stays Squirrel.Windows — see CLAUDE.md's Packaging section). See
   // `NsisSpec`/`NsisLocalPaths` in `./nsis-form-types` for the shared-vs-machine-local split.
@@ -421,9 +428,15 @@ export type NodeKind =
   | 'dockerhost'
   | 'proxmox'
   | 'gitlab'
+  | 'gitlab-hosting'
   | 'homeassistant'
   | 'homeassistant-sensor'
   | 'freepbx'
+  | 'awsidentity'
+  | 'nextcloud-aio'
+  | 'cloudflare-zero-trust'
+  /** Guided Cloudflare account, zone, DNS, SSL/TLS, ruleset, redirect, cache, and analytics manager. */
+  | 'cloudflare-core-managers'
   | 'torrent'
   /** One-shot Linux ISO virtual machine, distinct from the WSL terminal profile. */
   | 'linux-vm'
@@ -439,7 +452,11 @@ export const SERVICE_NODE_KINDS = [
   'proxmox',
   'gitlab',
   'homeassistant',
-  'freepbx'
+  'freepbx',
+  'awsidentity',
+  'cloudflare-zero-trust',
+  'nextcloud-aio',
+  'cloudflare-core-managers'
 ] as const
 
 export type ServiceNodeKind = (typeof SERVICE_NODE_KINDS)[number]
@@ -643,11 +660,25 @@ export interface CanvasNodeState {
    * `localExec` on the index entry, exactly where the shell and Windows profile already live.
    */
   serviceLabel?: string
+  /** AWS-only portable requirements. Profile/account/role/endpoints remain machine-local. */
+  awsIdentityIntent?: import('./aws-identity').AwsIdentityIntent
+  /** AWS-only machine binding, stripped into IndexEntryV3.localExec by shared/node-exec.ts. */
+  awsIdentityBinding?: import('./aws-identity').AwsIdentityBinding
+  /** Nextcloud AIO safe deployment intent. Context, container state, backups, and socket bindings remain local. */
+  nextcloudAioConfig?: import('./nextcloud-aio').NextcloudAioConfig
+  /** Cloudflare manager selection intent. Account ids, credentials and resource ids stay local. */
+  cloudflareZeroTrustIntent?: import('./cloudflare-zero-trust').CloudflarePortableIntent
+  /** Cloudflare manager safe intent. Credentials and local bindings stay in the host overlay. */
+  cloudflareCoreIntent?: import('./cloudflare-core-managers').CloudflarePortableIntent
   /** Home Assistant node presentation intent safe for schema 3. Hosts, instance ids, credentials,
    *  sessions, and entity caches stay in the machine-local service and binding overlay. */
   homeAssistantIntent?: import('./home-assistant').HomeAssistantNodeIntent
+  /** GitLab hosting intent. Docker context, container, volumes, credentials, and process state stay local. */
+  gitlabHostingConfig?: import('./gitlab-hosting').GitLabHostingConfig
   /** torrent-only: safe display intent shared with the canvas; task state and paths stay local. */
   torrentMagnet?: string
+  /** AWS manager safe operation intent. Profiles, endpoints, results, and credentials stay local. */
+  awsManagerIntent?: import('./aws-resource').AwsManagerPortableIntent
   /** Linux ISO VM settings stored in the shared project projection. */
   virtualMachineConfig?: import('./virtual-machine').VirtualMachineConfig
   /** Linux ISO/disk selections stored only in the machine-local execution overlay. */
@@ -816,6 +847,32 @@ export interface BridgeLink {
 }
 
 /**
+ * One endpoint of a typed Link. The ref discriminator keeps endpoint handling exhaustive and
+ * avoids inferring meaning from legacy id prefixes.
+ *
+ * A node endpoint names a node in the project that owns the link. An xnode endpoint names a node
+ * in another project without copying that node. A branch endpoint names a git branch for links
+ * that model branch relationships.
+ */
+export type Endpoint =
+  | { ref: 'node'; nodeId: string }
+  | { ref: 'xnode'; projectId: string; nodeId: string }
+  | { ref: 'branch'; repoPath: string; branch: string }
+
+/** The persisted kind discriminator for the unified link model. */
+export type LinkKind = 'context' | 'lineage' | 'dependency'
+
+/** A typed link between two endpoints. */
+export interface Link {
+  id: string
+  kind: LinkKind
+  source: Endpoint
+  target: Endpoint
+  /** Optional kind-specific metadata, such as display-only or note information. */
+  meta?: Record<string, unknown>
+}
+
+/**
  * A named browser profile for one project. Browser nodes assigned to the same profile id share
  * that profile's cookies/localStorage/session state (an isolated Electron session partition
  * derived from `projectId + profileId` — see `shared/browser-profiles.ts`); nodes on different
@@ -950,6 +1007,8 @@ export interface BoardLogEntry {
   kind: 'comment' | 'event'
   text?: string
   event?: BoardLogEvent
+  /** Content-addressed files copied into the project's portable attachment carrier. */
+  attachments?: import('./comment-attachments').BoardAttachmentRef[]
 }
 
 /** Max chars kept for a comment's `text`. On an SSH project the whole JSON line becomes one
@@ -1022,6 +1081,18 @@ export interface LogApi {
 export interface BoardLogApi {
   /** Append one entry. Resolves `false` on any failure (unsupported project, fs/exec error). */
   append(projectId: string, entry: BoardLogEntry): Promise<boolean>
+  /** Append one comment and its files as one host-side transaction. Source paths are consumed and
+   * never persisted in the resulting entry. */
+  appendWithAttachments(
+    projectId: string,
+    entry: BoardLogEntry,
+    attachments: import('./comment-attachments').BoardAttachmentDraft[]
+  ): Promise<import('./comment-attachments').BoardLogAppendResult>
+  /** Re-read and integrity-check a posted attachment after restart. */
+  readAttachment(
+    projectId: string,
+    attachment: import('./comment-attachments').BoardAttachmentRef
+  ): Promise<import('./comment-attachments').BoardAttachmentReadResult>
   /** Read the log newest-first (see BoardLogReadResult). */
   read(projectId: string, opts?: BoardLogReadOpts): Promise<BoardLogReadResult>
   /** Subscribe to change pushes for one project; returns an unsubscribe. */
@@ -1160,6 +1231,8 @@ export interface Project {
    * behavior.
    */
   browserProfiles?: BrowserProfile[]
+  /** Unified typed links whose source belongs to this project. */
+  links?: Link[]
   /** Bridge links between Claude nodes (optional; absent in pre-bridge files). */
   bridges?: BridgeLink[]
   /**
@@ -2218,6 +2291,9 @@ export interface CanvasWidgetState {
 
 /** User-configurable application settings (settings.json). */
 export interface Settings {
+  /** Versioned settings shape. Version 2 expands funny levels to 1–10 while preserving every
+   * valid persisted value from the five-level shape. */
+  settingsSchemaVersion: typeof SETTINGS_SCHEMA_VERSION
   /** ADHD modes — five independent accommodations, all off by default. See `AdhdModes`. */
   adhdModes: AdhdModes
   dockerHost: DockerHostSettings
@@ -2349,6 +2425,9 @@ export interface Settings {
    *  scroll keeps panning independently (see canvas/wheel-gesture.ts), so mouse and trackpad
    *  coexist; elsewhere this still trades away scroll-to-pan, so it stays opt-in. */
   wheelZoom: boolean
+  /** Multiplier for plain-wheel zoom exponent, bounded to 0.2–2 at point of use. The historical
+   *  feel is preserved at 1; modifier zoom and trackpad pinch always use the fixed multiplier. */
+  wheelZoomSpeed: number
   /** macOS only: a two-finger trackpad scroll pans the canvas, independently of `wheelZoom`
    *  (see canvas/wheel-gesture.ts). Off restores the pre-router behavior — `wheelZoom` alone
    *  decides — which is also the recourse for a precise-pixel MOUSE that reads as a trackpad. */
@@ -2622,7 +2701,7 @@ export interface Settings {
    *  bilingual (English prominent, Cantonese compact secondary). See src/shared/i18n and
    *  docs/language-modes.md. Applies live — no restart. */
   languageMode: LanguageMode
-  /** Funny-level slider for ENGLISH copy, 1 (fully professional) to 5 (maximum playfulness).
+  /** Funny-level slider for ENGLISH copy, 1 (fully professional) to 10 (maximum playfulness).
    *  Independent of `funnyLevelYue` — a user may want plain English with playful Cantonese, or
    *  the reverse. Applies to every message category, errors and warnings included; only the
    *  VOICE changes, never the facts (see src/shared/i18n/catalog.ts). */
@@ -2700,8 +2779,10 @@ export interface Settings {
  *  `#0a84ff` (systemBlue) — see `mergeSettings`'s migration in `core/settings-store.ts` for the
  *  one-time upgrade of an existing install's saved `#0a84ff`. */
 export const DEFAULT_ACCENT = '#6750a4'
+export const SETTINGS_SCHEMA_VERSION = 2 as const
 
 export const DEFAULT_SETTINGS: Settings = {
+  settingsSchemaVersion: 2,
   adhdModes: {
     focus: false,
     lowStimulation: false,
@@ -2765,6 +2846,7 @@ export const DEFAULT_SETTINGS: Settings = {
   doubleClickFocus: true,
   terminalMiddleClickPaste: false,
   wheelZoom: true,
+  wheelZoomSpeed: 1,
   trackpadPan: true,
   canvasDragMode: 'pan',
   browserMemorySaver: true,
@@ -2852,13 +2934,10 @@ export const DEFAULT_SETTINGS: Settings = {
   notchHoverExpand: true,
   speech: { engine: 'whisper', model: 'tiny', language: 'auto', shortcut: 'Cmd+Alt' },
   languageMode: 'en',
-  // Level 2, not 5: the default install is a developer tool a stranger just downloaded, and a
-  // maximally-playful error message is the wrong first impression for someone who hasn't yet
-  // chosen to have fun with their terminal manager. Level 2 keeps copy mostly plain with a
-  // little character — the kind of tone that reads as "friendly", not "trying too hard". Users
-  // who want more crank both sliders themselves.
-  funnyLevelEn: 2,
-  funnyLevelYue: 2,
+  // New installations start at the maximum deliberate voice level. Existing saved values are
+  // preserved by the versioned settings migration in core/settings-store.ts.
+  funnyLevelEn: DEFAULT_FUNNY_LEVEL,
+  funnyLevelYue: DEFAULT_FUNNY_LEVEL,
   showEmojiInDialogs: false,
   // Narrator: opt-in and silent out of the box. Voices default to automatic — never a named
   // voice, since we can't know what's installed until we ask the platform.
@@ -3791,18 +3870,31 @@ export interface UsageApi {
   onUpdate(listener: (usage: ClaudeUsage) => void): () => void
 }
 
-/** A Claude session's context-window fill, pushed per sessionId from the transcript tailer. */
+export type ContextWindowStatus = 'known' | 'unknown' | 'not-reported' | 'stale' | 'unavailable'
+
+/** A session's context-window telemetry, pushed per sessionId from a provider tailer. */
 export interface ContextWindowUsage {
   sessionId: string
-  /** input + cache_read + cache_creation tokens of the latest assistant message. */
-  usedTokens: number
-  /** Model context window (200k default, 1M for 1m-context models). */
-  windowTokens: number
-  /** 0–100 fullness. */
-  usedPercent: number
+  /** Provider id that produced this snapshot, for example claude, codex, or gemini. */
+  provider: string
+  /** Stable machine scope, never a portable-project identifier. */
+  sourceKey: string
+  /** input-side tokens of the latest request, when the provider reports them. */
+  usedTokens: number | null
+  /** Provider-reported or otherwise verified model context window. */
+  windowTokens: number | null
+  /** 0–100 fullness, only when both token values are finite and verified. */
+  usedPercent: number | null
+  /** Explicit state keeps unknown, stale, and unavailable distinct. */
+  status: ContextWindowStatus
   /** Model id from the transcript, or null if not seen yet. */
   model: string | null
-  updatedAt: number
+  /** Monotonic generation within one source epoch. Never persist this field. */
+  generation: number
+  /** Source epoch changes on process restart, so generation 1 is always fresh. */
+  sourceEpoch: string
+  /** Unix ms when this snapshot was produced, or null when no telemetry arrived. */
+  updatedAt: number | null
 }
 
 export interface ContextApi {
@@ -3814,7 +3906,7 @@ export interface ContextApi {
    * the continuing session is idle. `cwd` is a transcript-path fallback only.
    * `accountId` scopes resolution to a managed Claude account's transcript root (default `~/.claude`).
    */
-  ensure(sessionId: string, cwd?: string, accountId?: string): void
+  ensure(sessionId: string, cwd?: string, accountId?: string, agentId?: string): void
 }
 
 /**
@@ -4265,6 +4357,8 @@ export interface RelayHostApi {
   dockerContexts(): Promise<Array<{ name: string; current: boolean; endpoint: string }>>
   /** Guided local/SSH Docker management. Desktop owns the CLI; Server Edition refuses it. */
   manager: DockerHostManagerApi
+  /** Guided Nextcloud AIO lifecycle manager. Desktop-only; the browser shell reports unsupported. */
+  nextcloudAio: NextcloudAioManagerApi
   /**
    * Enter host mode over the relay: connect and return a pairing offer string to hand to a client.
    * Rejects when Docker or the configured relay is unavailable. `projectId` is the
@@ -4615,6 +4709,8 @@ export interface NodeTerminalApi {
   workspace: WorkspaceApi
   /** Shared provider-account, credential-vault, OAuth-callback, and resource-picker services. */
   providerServices: import('./provider-services').ProviderServicesApi
+  /** Typed Cloudflare Access, Zero Trust, Workers, Pages, R2, D1 and Queues managers. */
+  cloudflareZeroTrust: import('./cloudflare-zero-trust').CloudflareApi
   timer: TimerApi
   serverDeployment: ServerDeploymentApi
   projectSettings: ProjectSettingsApi
@@ -4634,12 +4730,20 @@ export interface NodeTerminalApi {
   converter: import('./converter').ConverterApi
   /** Shared automatic dependency lifecycle for node-feature installers. */
   nodeDependencies: import('./node-dependencies').NodeDependenciesApi
+  /** Current installed AWS CLI model source for the AWS Shop operation wizard. */
+  awsWizardModels: import('./aws-wizard').AwsWizardModelsApi
   /** Local Ollama suite manager — docs/ollama-manager.md. */
   ollama: import('./ollama').OllamaApi
+  /** Guided Cloudflare managers — docs/features/integrations/cloudflare-core-managers.md. */
+  cloudflareCoreManagers?: import('./cloudflare-core-managers').CloudflareCoreManagersApi
   /** Local WebTorrent downloader — docs/torrent-downloader.md. */
   torrent: import('./torrent').TorrentApi
   /** Local Minecraft server create-and-manage — docs/minecraft-server-manager.md. */
   minecraft: import('./minecraft').MinecraftApi
+  /** Desktop-local AWS profile discovery. Credentials and provider sessions never cross IPC. */
+  awsIdentity: import('./aws-identity').AwsIdentityApi
+  /** Desktop AWS Resource Explorer and Cloud Control managers. */
+  awsResource?: import('./aws-resource').AwsResourceApi
   /** Local Linux ISO VM lifecycle — docs/linux-iso-vm.md. */
   virtualMachine: import('./virtual-machine').VirtualMachineApi
   /** Machine-local Home Assistant instances with bounded REST and WebSocket discovery. */
@@ -4666,6 +4770,10 @@ export interface NodeTerminalApi {
   logs: LogApi
   githubIssues: import('./github-issues').GitHubIssuesApi
   githubControl: import('./github-issues').GitHubControlApi
+  /** Typed, allowlisted REST and GraphQL capability catalog for contextual GitHub actions. */
+  githubApi: import('./github-api').GitHubApiApi
+  /** Host-owned GitHub CLI account discovery and selection. Credential material never crosses this boundary. */
+  githubCliAccounts: import('./github-issues').GitHubCliAccountsApi
   usage: UsageApi
   sessionMemory: SessionMemoryApi
   vscode: VsCodeApi
@@ -4757,6 +4865,10 @@ export interface NodeTerminalApi {
    *  minutes; `level: 'none'` means the banner should come down. Returns unsubscribe.
    *  Server Edition: never fires — the reaper leg runs host-side only (see src/server/index.ts). */
   onPtyPressure(listener: (reading: PtyPressure) => void): () => void
+  /** Fires when the desktop main process observes a trackpad scroll or pinch edge. The payload is
+   *  the depth-safe active state, and only edge transitions are sent. Server Edition never fires:
+   *  its browser tab has no raw input stream and keeps the wheel router's heuristic path. */
+  onCanvasTrackpadGesture(listener: (active: boolean) => void): () => void
   /** Raise this Mac's pty-device ceiling (`kern.tty.ptmx_max`) now AND across reboots, behind
    *  macOS's own administrator-password dialog. Called ONLY from the banner's explicit
    *  "Fix automatically…" click — never on the app's initiative. macOS only; a dismissed password

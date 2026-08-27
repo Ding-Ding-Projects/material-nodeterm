@@ -33,6 +33,10 @@ import {
   ANNOTATION_MIN_THICKNESS,
   normalizeAnnotationLabel
 } from '../shared/annotation'
+import { normalizeCloudflareIntent as normalizeCloudflareZeroTrustIntent, type CloudflarePortableIntent as CloudflareZeroTrustPortableIntent } from '../shared/cloudflare-zero-trust'
+import { normalizeCloudflareIntent as normalizeCloudflareCoreIntent, type CloudflarePortableIntent as CloudflareCorePortableIntent } from '../shared/cloudflare-core-managers'
+import { normalizeNextcloudAioConfig, type NextcloudAioConfig } from '../shared/nextcloud-aio'
+import type { AwsManagerPortableIntent } from '../shared/aws-resource'
 
 export type PortableCanvasScope = 'root' | 'multiverse' | 'aws-universe'
 
@@ -70,6 +74,13 @@ export interface PortableCanvasNodeV3 {
   url?: string
   browserTabs?: Array<{ id: string; url?: string; title: string }>
   serviceLabel?: string
+  /** Safe AWS manager intent; local bindings and provider state remain outside the project file. */
+  awsManagerIntent?: AwsManagerPortableIntent
+  /** Typed Cloudflare operation intent only; credentials and provider bindings are local. */
+  cloudflareZeroTrustIntent?: CloudflareZeroTrustPortableIntent
+  cloudflareCoreIntent?: CloudflareCorePortableIntent
+  /** Safe Nextcloud AIO hosting intent; Docker context and live state remain local. */
+  nextcloudAioConfig?: NextcloudAioConfig
   /** Safe public-catalog identity and display copy. Image bytes and network state are excluded. */
   wildDimSumDish?: PublicDimSumSelection
   homeAssistantIntent?: { transport: 'rest' | 'websocket'; domain: string }
@@ -159,8 +170,8 @@ const ALLOWED_VIEWPORT = new Set(['x', 'y', 'zoom'])
 const ALLOWED_NODE = new Set([
   'id', 'kind', 'creationEventId', 'position', 'size', 'title', 'color', 'group',
   'universeCanvasId', 'universeScope', 'universeDepth', 'nonDeletable', 'shopSelection',
-  'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel',
-  'wildDimSumDish', 'homeAssistantIntent', 'homeAssistantControlConfig', 'homeAssistantSensorConfig',
+  'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel', 'awsManagerIntent',
+  'wildDimSumDish', 'homeAssistantIntent', 'homeAssistantControlConfig', 'homeAssistantSensorConfig', 'cloudflareZeroTrustIntent', 'cloudflareCoreIntent', 'nextcloudAioConfig',
   'alarmSchedule', 'alarmTimeZone', 'alarmEnabled', 'alarmSnoozeMinutes',
   'alarmSoundEnabled', 'alarmNarratorEnabled', 'alarmHistory', 'mediaAssets',
   'mediaActiveAssetId', 'recoveryGame',
@@ -268,6 +279,7 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
   if (strict && node.parentId !== undefined && typeof node.parentId !== 'string') throw new PortableProjectV3Error('manifest', 'Portable node parent is invalid.')
   if (strict && node.text !== undefined && typeof node.text !== 'string') throw new PortableProjectV3Error('manifest', 'Portable node text is invalid.')
   if (strict && node.serviceLabel !== undefined && typeof node.serviceLabel !== 'string') throw new PortableProjectV3Error('manifest', 'Portable service label is invalid.')
+  if (strict && node.cloudflareZeroTrustIntent !== undefined && !normalizeCloudflareZeroTrustIntent(node.cloudflareZeroTrustIntent)) throw new PortableProjectV3Error('manifest', 'Portable Cloudflare manager intent is invalid.')
   if (strict && node.homeAssistantControlConfig !== undefined) {
     if (!record(node.homeAssistantControlConfig)) throw new PortableProjectV3Error('manifest', 'Portable Home Assistant control intent is invalid.')
     exactKeys(node.homeAssistantControlConfig, ALLOWED_HOME_ASSISTANT_CONTROL, 'Home Assistant control intent')
@@ -301,6 +313,32 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
   if (node.annotationThickness !== undefined) {
     if (typeof node.annotationThickness !== 'number' || !Number.isInteger(node.annotationThickness) || node.annotationThickness < ANNOTATION_MIN_THICKNESS || node.annotationThickness > ANNOTATION_MAX_THICKNESS) throw new PortableProjectV3Error('manifest', 'Portable annotation thickness is invalid.')
     out.annotationThickness = node.annotationThickness
+  }
+  if (node.awsManagerIntent !== undefined) {
+    const intent = node.awsManagerIntent
+    if (!record(intent) || intent.schemaVersion !== 1 || !['resource-explorer', 'cloud-control', 'core-services'].includes(intent.mode)) throw new PortableProjectV3Error('manifest', 'Portable AWS manager intent is invalid.')
+    if (!text(intent.regionIntent, 'AWS region intent') || intent.regionIntent.length > 64 || typeof intent.resourceQuery !== 'string' || intent.resourceQuery.length > 1024 || typeof intent.cloudControlTypeName !== 'string' || intent.cloudControlTypeName.length > 256) throw new PortableProjectV3Error('manifest', 'Portable AWS manager intent exceeds its bounds.')
+    const coreService = intent.coreService
+    const coreOperation = intent.coreOperation
+    const coreInput = intent.coreInput
+    if (intent.mode === 'core-services' && (!['s3', 'ec2', 'iam', 'sts', 'lambda', 'cloudwatch', 'logs'].includes(String(coreService)) || typeof coreOperation !== 'string')) throw new PortableProjectV3Error('manifest', 'Portable AWS core-service intent is incomplete.')
+    out.awsManagerIntent = { schemaVersion: 1, mode: intent.mode, regionIntent: intent.regionIntent, resourceQuery: intent.resourceQuery, cloudControlTypeName: intent.cloudControlTypeName, ...(coreService ? { coreService } : {}), ...(coreOperation ? { coreOperation } : {}), ...(coreInput ? { coreInput: { ...coreInput } } : {}) }
+  }
+  if (node.cloudflareZeroTrustIntent !== undefined) {
+    const intent = normalizeCloudflareZeroTrustIntent(node.cloudflareZeroTrustIntent)
+    if (!intent) throw new PortableProjectV3Error('manifest', 'Portable Cloudflare manager intent is invalid.')
+    out.cloudflareZeroTrustIntent = intent
+  }
+  if (node.cloudflareCoreIntent !== undefined) {
+    if (!record(node.cloudflareCoreIntent)) throw new PortableProjectV3Error('manifest', 'Portable Cloudflare manager intent is invalid.')
+    const normalized = normalizeCloudflareCoreIntent(node.cloudflareCoreIntent)
+    if (strict && (node.cloudflareCoreIntent.schemaVersion !== 1 || normalized.manager !== node.cloudflareCoreIntent.manager || normalized.operation !== node.cloudflareCoreIntent.operation)) throw new PortableProjectV3Error('manifest', 'Portable Cloudflare manager intent is unsupported.')
+    out.cloudflareCoreIntent = normalized
+  }
+  if (node.nextcloudAioConfig !== undefined) {
+    const normalized = normalizeNextcloudAioConfig(node.nextcloudAioConfig)
+    if (node.kind !== 'nextcloud-aio' || !normalized || (strict && JSON.stringify(normalized) !== JSON.stringify(node.nextcloudAioConfig))) throw new PortableProjectV3Error('manifest', 'Portable Nextcloud AIO intent is invalid or exceeds its bounds.')
+    out.nextcloudAioConfig = normalized
   }
   if (node.wildDimSumDish !== undefined) {
     const dish = normalizePublicDimSumSelection(node.wildDimSumDish)
@@ -669,6 +707,10 @@ export function portableCanvasProjectionToProject(
     ...(node.url !== undefined ? { url: node.url } : {}),
     ...(node.browserTabs ? { browserTabs: node.browserTabs.map((tab) => ({ ...tab })) } : {}),
     ...(node.serviceLabel !== undefined ? { serviceLabel: node.serviceLabel } : {}),
+    ...(node.awsManagerIntent !== undefined ? { awsManagerIntent: { ...node.awsManagerIntent } } : {}),
+    ...(node.cloudflareZeroTrustIntent !== undefined ? { cloudflareZeroTrustIntent: normalizeCloudflareZeroTrustIntent(node.cloudflareZeroTrustIntent)! } : {}),
+    ...(node.cloudflareCoreIntent !== undefined ? { cloudflareCoreIntent: normalizeCloudflareCoreIntent(node.cloudflareCoreIntent) } : {}),
+    ...(node.nextcloudAioConfig !== undefined ? { nextcloudAioConfig: normalizeNextcloudAioConfig(node.nextcloudAioConfig) } : {}),
     ...(node.mediaAssets ? { mediaAssets: node.mediaAssets.map((asset) => ({ ...asset })) } : {}),
     ...(node.mediaActiveAssetId !== undefined ? { mediaActiveAssetId: node.mediaActiveAssetId } : {}),
     ...(node.wildDimSumDish !== undefined ? { wildDimSumDish: node.wildDimSumDish } : {}),
