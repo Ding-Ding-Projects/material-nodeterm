@@ -29,11 +29,14 @@ later commit, since this file will not be kept in lockstep with every merge).
       been rerun. WSL copy coverage now includes the validating progress catalogue entry and a
       CRLF/LF-safe exact-row mutation check. The Codex relay daemon now has one coherent
       descriptor-lock, relay-server, hook-parser, reservation, response, registration, and atomic
-      exposure path, with syntax-only evidence from a single-file esbuild transform. The combined
-      recovery remains unchecked until the parent integration lane records build, packaging, and
-      release-workflow evidence. The ultra-speed pass intentionally omits tests, type checks, lint,
-      reviews, accessibility and security checks, runtime interaction, and screen captures after
-      activation.
+      exposure path, with syntax-only evidence from a single-file esbuild transform. The main
+      process entrypoint also removes stale duplicate imports, declarations, handlers, object keys,
+      notification composition, quit conditions, and teardown while retaining the corrected SSH
+      project argument order; its single-file esbuild transform also reports syntax-only success.
+      The combined recovery remains unchecked until the parent integration
+      lane records build, packaging, and release-workflow evidence. The ultra-speed pass
+      intentionally omits tests, type checks, lint, reviews, accessibility and security checks,
+      runtime interaction, and screen captures after activation.
 
 - [ ] Easter egg catalog (#103): 60 local, bounded, accessible desktop surprises are implemented
       in `src/shared/easter-eggs.ts` and `src/renderer/components/EasterEggs.tsx`, with the

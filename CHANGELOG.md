@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Reconcile stale merge fragments in `src/main/index.ts`. The main process now keeps one import
+  declaration per duplicated filesystem, Electron, SSH, account, and notification helper; one quit-confirmation
+  declaration and detail; one configurable-shortcut interception path; one native-notification
+  composition path; one `codexAccounts` provider and `registerNode` object key; the corrected
+  `initSshProject` argument order and separator; one nested before-quit condition; and one
+  keep-awake teardown. This ultra-speed repair ran no tests, type checks, lint, reviews, audits,
+  builds, packaging, runtime interaction, or screen captures.
+
 - Reconstruct the Codex relay daemon after a merge retained incompatible fragments from several
   implementations. The daemon now keeps one descriptor-based process-lock inspection, one relay
   root and server path, one quote-aware endpoint parser per request helper, one synchronous thread

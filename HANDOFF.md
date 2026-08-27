@@ -1,5 +1,19 @@
 # Handoff
 
+## 2026-08-27, main process index merge-fragment repair
+
+The main process entrypoint `src/main/index.ts` retained stale fragments from several merged
+implementations. The repair keeps one import declaration per duplicated filesystem, Electron, SSH, account, and
+notification helpers; one quit-confirmation declaration and detail; one configurable-shortcut
+interception path through `installKeydownIntercepts`; one native-notification composition path;
+one `codexAccounts` provider and `registerNode` object key; the corrected `initSshProject`
+argument order and separator; one nested before-quit condition; and one keep-awake teardown.
+
+The direct records for this source repair are `CHANGELOG.md`, `ROADMAP.md`, and this handoff. A
+single-file esbuild transform reported `PARSE_OK`; that is syntax evidence only. No tests, type
+checks, lint, reviews, audits, builds, packaging, runtime interaction, or screen captures were run.
+The parent integration lane owns the final merge and all broader verification.
+
 ## 2026-08-27, Codex relay daemon merge reconstruction
 
 `src/main/codex-relay-daemon.ts` retained incompatible fragments from several historical

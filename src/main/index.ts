@@ -1,8 +1,16 @@
 import { join, resolve, posix, dirname as dirnameOf } from 'path'
 import { startSessionNameSweep, displayNodeTitle } from '../core/session-name-sweep'
 import { readAgentSessionName, type AgentSessionNameDeps } from '../core/agent-session-name'
-import { readFile, writeFile, rm as rmFile, mkdir as mkdirFs } from 'fs/promises'
-import { statSync } from 'fs'
+import {
+  readFile,
+  writeFile,
+  rm as rmFile,
+  mkdir as mkdirFs,
+  realpath as fsRealpath,
+  lstat as fsLstat,
+  writeFile as fsWriteFile
+} from 'fs/promises'
+import { existsSync, statSync, openSync, fstatSync, readFileSync, closeSync } from 'fs'
 import { renameAtomic, tempNameFor } from '../core/fs-atomic'
 import { homedir, hostname } from 'os'
 import { randomUUID } from 'crypto'
@@ -29,6 +37,7 @@ import {
   clipboard,
   dialog,
   ipcMain,
+  Menu,
   Notification,
   powerMonitor,
   safeStorage,
@@ -36,11 +45,6 @@ import {
   systemPreferences,
   webContents
 } from 'electron'
-import { readFile, realpath as fsRealpath, lstat as fsLstat, writeFile as fsWriteFile } from 'fs/promises'
-import { existsSync, statSync, openSync, fstatSync, readFileSync, closeSync } from 'fs'
-import { homedir, hostname } from 'os'
-import { randomUUID } from 'crypto'
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, Notification, powerMonitor, safeStorage, shell, systemPreferences, webContents } from 'electron'
 import { IPC } from '../shared/ipc'
 
 // Debug log ring (issue #78): capture the process console from the first line — a packaged app
@@ -50,7 +54,6 @@ const logBuffer = new LogBuffer()
 installLogSink(logBuffer)
 import { writeFilesToClipboard } from './clipboard-files'
 import { NodeTermBrowserUseBackend } from './browser-use-backend'
-import { matchesShortcut } from '../shared/shortcut'
 import { registerFsHandlers } from '../core/fs-handlers'
 import { TrackpadGestureLedger } from './trackpad-gesture'
 import { registerConverterIpc } from '../core/converter/register-ipc'
@@ -95,7 +98,6 @@ import {
   removeExtensionByPath,
   resetBrowserProfile
 } from './browser-extensions'
-import { registerBoardLogHandlers, type BoardLogRoute } from '../core/board-log-handlers'
 import {
   registerPasswordManagerHandlers,
   type PasswordManagerRoute
@@ -133,7 +135,6 @@ import {
   revokeAllBrowser,
   type RevocationTargets
 } from './browser-revocation'
-import { registerFsHandlers } from '../core/fs-handlers'
 import { LogBuffer } from '../core/log-buffer'
 import { installLogSink, splitTag } from '../core/log-sink'
 import { registerLogHandlers } from '../core/log-handlers'
@@ -205,7 +206,6 @@ import {
   isValidPendingId,
   syntheticAnsweredEvent
 } from '../core/agents/pending-approvals'
-import { setMainWindow, getMainWindow, sendToMain, shouldHideOnClose, createCrashReloadPolicy } from './main-window'
 import { setMainWindow, getMainWindow, sendToMain, closeAction, createCrashReloadPolicy } from './main-window'
 import {
   MENU_ITEM_ID_CLOSE,
@@ -264,8 +264,6 @@ import { createGrantsAccessor, type PushGrant } from '../core/push-grants'
 import { createRemoteGrantsCache } from '../core/remote-push-grants'
 import { createAckSweeper } from '../core/ack-sweep'
 import { createSessionReaper } from '../core/session-budget'
-import { initKeepAwake } from './keep-awake'
-import type { KeepAwakeTracker } from '../core/keep-awake'
 import { startSessionMemoryService, sshScopePredicate } from '../core/session-memory-service'
 import { startWslService, defaultWslRuntime, fileWslOwnershipStore } from '../core/wsl'
 import { startToyLockService } from '../core/toylocks/toylock-service'
@@ -280,7 +278,6 @@ import { getDeviceId } from '../core/device-id'
 import { initRemoteStatusPush } from './remote-ssh/remote-status-push'
 import { runGitRemoteOp } from '../core/git-remote-proxy'
 import { initCanvasSync } from '../core/canvas-sync'
-import { composeNativeNotification, isPreparedNativeNotification, retainUntilDismissed } from './notifications'
 import { composeNativeNotification, prepareNativeNotification, retainUntilDismissed } from './notifications'
 import { installManagedAgentHooks } from '../core/agents/hooks'
 import { createSubagentTail } from '../core/subagent-tail'
@@ -318,8 +315,7 @@ import {
 } from '../core/remote-ssh/control-master'
 import { planRemoteWorkspacePoll } from './remote-workspace-poll'
 import { sessionName } from '../core/tmux-naming'
-import { posixQuote, sshHostKey } from '../shared/ssh'
-import { posixQuote, type SshConnection } from '../shared/ssh'
+import { posixQuote, sshHostKey, type SshConnection } from '../shared/ssh'
 import { buildHandoff, type HandoffRemote } from './handoff'
 import { initContextLink, setNodeTranscript } from '../core/context-link'
 import { transcriptPathOf } from '../core/context-link-core'
@@ -336,11 +332,9 @@ import { initClaudeAccounts } from './claude-accounts'
 import {
   ensureCodexAccountDaemon,
   initCodexAccounts,
-  localCodexAccountHome,
   localCodexSocket
 } from './codex-accounts'
 import { resolveForeignThreadAt } from './codex-relay-daemon'
-import { initCodexAccounts } from './codex-accounts'
 import { claudeCliCaps, registerClaudeCliIpc, type ClaudeCliCaps } from '../core/claude-cli'
 import { refreshCodexIdentityCaps, registerCodexIdentityIpc } from '../core/codex-identity-caps'
 import {
@@ -349,7 +343,6 @@ import {
   writeCodexThreadIdentity
 } from '../core/codex-identity-proxy'
 import { codexThreadExists, startCodexThread } from '../core/codex-session-name'
-import { codexUsageAccounts } from '../core/codex-accounts-core'
 import { codexHomeFor } from '../core/codex-config-dir'
 import { loadOrCreateNodeAuthSecret } from '../core/agents/node-auth-secret'
 import { initNodeTokens, refreshNodeTokens } from '../core/agents/node-token-service'
@@ -435,10 +428,6 @@ if (NT_MULTI && process.platform === 'darwin') app.commandLine.appendSwitch('use
 // configured package id and executable name, so derive the runtime value from the same build
 // metadata instead of maintaining a second literal that can drift from installed shortcuts.
 applyWindowsSquirrelAppUserModelId(process.platform, app)
-
-// Platform-abstracted primary modifier target for shortcut matching in the main process
-// (⌘ on mac, Ctrl elsewhere) — mirrors the renderer's `isMac` reader.
-const isMacMain = process.platform === 'darwin'
 
 // First thing in bootstrap: install the Electron CorePlatform so anything in src/core
 // (wired in later tasks) can resolve platform() at boot. Placed after the NT_MULTI
@@ -844,10 +833,6 @@ let quitting = false
 // (auto-update restart) that are not a decision the user needs to re-make; `quitConfirmationPending`
 // dedupes concurrent triggers (native close + menu Quit + Cmd/Ctrl+Q landing in the same tick)
 // into a single dialog.
-// Confirm-before-quit gate. Set once the user has answered "Quit" in the dialog below, or when
-// a quit is app-initiated rather than user-initiated (auto-update restart) and should not be
-// interrupted by a prompt for a decision already made. `pending` dedupes concurrent triggers
-// (shortcut + menu + window-close firing in the same tick) into a single dialog.
 let quitConfirmed = false
 let skipQuitConfirmation = false
 let quitConfirmationPending = false
@@ -860,10 +845,6 @@ function shouldConfirmQuit(): boolean {
   return !quitConfirmed && !skipQuitConfirmation && ptyManager.hasSessionsAtRiskOnQuit()
 }
 
-/** Shows the native confirm dialog (all platforms) and resolves once the user answers. Only ever
- *  called after `shouldConfirmQuit()` is true. A "Quit" answer is remembered (`quitConfirmed`) so
- *  the re-issued app.quit() below is not re-prompted. */
-function confirmQuit(parentWin: BrowserWindow | null): Promise<boolean> {
 /** Resolves true once quitting may proceed. Shows a native confirm dialog (all platforms) on
  * first call; a Quit answer is remembered so the re-issued app.quit() below is not re-prompted.
  * Read at ASK TIME, not captured: the Settings toggle must apply to the very next ⌘Q. */
@@ -881,7 +862,6 @@ function confirmQuit(parentWin: BrowserWindow | null): Promise<boolean> {
     message: 'Quit nodeterm?',
     detail:
       "One or more terminals here aren't using a persistent session, so quitting will end whatever is running in them right now. Terminals using tmux or the session host will still be here next time you open nodeterm."
-    detail: 'Terminal sessions keep running in the background and will still be here next time you open nodeterm.'
   }
   const p =
     parentWin && !parentWin.isDestroyed() ? dialog.showMessageBox(parentWin, opts) : dialog.showMessageBox(opts)
@@ -899,7 +879,6 @@ let keepAwake: KeepAwakeTracker | undefined
 // Browser <webview> guest webContents id → the browser node (and which of its two surfaces) it
 // belongs to. Used today for new-window capture; every entry is proven to BE a <webview> before it
 // lands here — see `registerBrowserGuestRequest`.
-// lands here — see `registerBrowserGuest`.
 const browserGuests = new Map<number, BrowserGuest>()
 
 // Node → live tail bookkeeping, so closing a node (× → pty:destroy) releases its file tailers.
@@ -1360,7 +1339,7 @@ function createWindow(): BrowserWindow {
     // × reaches this directly (no app.quit() first), so the confirm gate must sit here too, not
     // only in before-quit — otherwise the window (and with it the only place to show a dialog)
     // would already be gone by the time we asked.
-    if (shouldConfirmQuit() && !quitConfirmed && !skipQuitConfirmation) {
+    if (shouldConfirmQuit()) {
       e.preventDefault()
       void confirmQuit(win).then((ok) => {
         if (ok) app.quit()
@@ -1369,45 +1348,6 @@ function createWindow(): BrowserWindow {
   })
 
   // Steal ⌘M / ⌘W / ⌘0 back from Electron's default application menu (minimize / close /
-  // resetZoom) and forward each to the renderer instead.
-  //
-  // ⌘M (markdown-view toggle) and ⌘W (close selected node) are read from settings.shortcuts
-  // (Settings → Shortcuts) via `matchesShortcut`, so a rebind is honoured here too — this is the
-  // inline handler `feat(settings): configurable keyboard shortcuts` introduced, kept here rather
-  // than folded into `keydown-intercept.ts`'s pure `keydownIntercept` (which predates the
-  // Shortcuts section and pins a deliberately BROADER match — any Cmd/Ctrl+M regardless of
-  // Shift/Alt — as a fixed, non-configurable menu-accelerator steal; narrowing that match to the
-  // exact configured combo is the whole point of making it reconfigurable, so the two cannot
-  // share one decision function without re-litigating that pin). ⌘0 (zoom-actual-size) is NOT
-  // part of the shortcuts registry — it is matched on the physical `code` like the renderer's
-  // `zoomShortcutChord`, unrelated to this feature — so it keeps the same fixed check
-  // `keydown-intercept.ts` uses.
-  win.webContents.on('before-input-event', (event, input) => {
-    if (input.type !== 'keyDown') return
-    const shortcuts = settingsStore.get().shortcuts
-    const evt = {
-      metaKey: input.meta,
-      ctrlKey: input.control,
-      shiftKey: input.shift,
-      altKey: input.alt,
-      key: input.key
-    }
-    if (matchesShortcut(evt, shortcuts.toggleMarkdown, isMacMain)) {
-      event.preventDefault()
-      win.webContents.send(IPC.appToggleMarkdown)
-    } else if (matchesShortcut(evt, shortcuts.closeNode, isMacMain)) {
-      // Repurpose Cmd/Ctrl+W: the renderer closes the selected node(s); if none are
-      // selected it asks us to close the window (the standard behavior).
-      event.preventDefault()
-      win.webContents.send(IPC.appCloseNode)
-    } else if ((input.meta || input.control) && input.code === 'Digit0' && !input.shift && !input.alt) {
-      // Matched on the physical `code`, like `keydown-intercept.ts`'s `keydownIntercept`: on a
-      // non-US layout the zero key's `key` is not necessarily "0". Auto-repeat is still
-      // swallowed (so a held chord doesn't restart the renderer's 200ms zoom tween) but not
-      // forwarded again.
-      event.preventDefault()
-      if (!input.isAutoRepeat) win.webContents.send(IPC.appZoomActualSize)
-    }
   // resetZoom) and forward each to the renderer instead. The decision — and, importantly, what it
   // must REFUSE — is in `keydown-intercept.ts`, where it can be pressed by a test. The first two
   // are the user's effective `node.toggleMarkdown` / `node.close` bindings (⌘0 is not remappable).
@@ -2213,8 +2153,6 @@ app.whenReady().then(async () => {
       // `force` (permission request / confirmation) shows even when focused; normal
       // completion notifications only show when the window is in the background.
       if (!payload.force && win.isFocused()) return 'skipped'
-      if (!isPreparedNativeNotification(payload)) return 'failed'
-      const copy = composeNativeNotification(payload)
       const copy = composeNativeNotification(prepared)
       const n = new Notification(copy)
       n.on('click', () => {
@@ -4458,11 +4396,6 @@ app.whenReady().then(async () => {
     )
   const usageService = initClaudeUsage(win, {
     localAccounts: localClaudeAccountIds,
-    codexAccounts: () =>
-      codexUsageAccounts(
-        (settingsStore.get().codexAccounts ?? []).filter((account) => !account.host),
-        localCodexAccountHome
-      ),
     codexAccounts: localCodexAccounts,
     onCacheUpdate: () => {
       void flushAgentStatusMirror()
@@ -4525,16 +4458,6 @@ app.whenReady().then(async () => {
   }
   const hostBridge = {
     git: gitService,
-    registerNode: (
-      projectId: string,
-      node: { id: string; title?: string; agentId?: string; accountId?: string }
-    ) =>
-      workspaceStore.appendRemoteNode(
-        projectId,
-        { ...node, accountColor: accountColorForRemoteNode(node) },
-        undefined,
-        process.platform === 'win32' ? settingsStore.get().defaultTerminalProfileId : undefined
-      ),
     // `accountId` = the managed Claude account the phone launched the session under. It has to be
     // declared here too, or the wire's honest shape stops at this boundary (see RemoteNodeInput).
     registerNode: (
@@ -4713,13 +4636,12 @@ app.whenReady().then(async () => {
         // best-effort: a failed resync leaves the stale sweep as the backstop, exactly as today
       })
     },
-    () => readFile(codexRelayScript, 'utf8'),
     // The remote tmux conf reads these, so an SSH project honours the same scrollback and
     // word-separator settings a local one does.
     () => ({
       tmuxScrollback: settingsStore.get().tmuxScrollback,
       terminalWordSeparators: settingsStore.get().terminalWordSeparators
-    })
+    }),
     // The standalone relay bundle uploaded to a Linux host for managed Codex accounts (S6 PR 6).
     // Only executable code is ever uploaded — never a credential (Property 1). Reading it is
     // single-fd (openSync→fstatSync→readFileSync(fd)) so there is no stat-then-read TOCTOU on the
@@ -4876,9 +4798,6 @@ app.on('before-quit', (e) => {
   // gate is repeated here for that path. `quitConfirmed` short-circuits this on the re-issued
   // app.quit() below once the user has answered, or on the win.close() gate's own re-issue.
   if (shouldConfirmQuit()) {
-  // gate is repeated here for that path. quitConfirmed short-circuits this on the re-issued
-  // app.quit() below once the user has answered, and on the win.close() gate's own re-issue.
-  if (!quitConfirmed && !skipQuitConfirmation) {
     e.preventDefault()
     void confirmQuit(getMainWindow() as unknown as BrowserWindow | null).then((ok) => {
       if (ok) app.quit()
@@ -4900,8 +4819,6 @@ app.on('before-quit', (e) => {
   const scheduledSettingsStop = scheduledSettingsRuntime.stop()
   const plannerStop = plannerRuntime.stop()
   alarmPlannerRuntime.stop()
-  // Electron releases power assertions at exit anyway; disposing keeps the hold/release log honest.
-  keepAwake?.dispose()
   // Electron releases power assertions at exit anyway; disposing keeps the hold/release log
   // honest. Clearing the ref too keeps a hook edge that lands during the quit flush (the pty
   // teardown window below) from re-holding an assertion nothing will ever release.
