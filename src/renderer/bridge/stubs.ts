@@ -704,6 +704,11 @@ export function buildStubApi(): Omit<
       onState: noopUnsub,
       onProgress: noopUnsub
     },
+    awsWizardModels: {
+      catalog: U('awsWizardModels.catalog'),
+      commands: U('awsWizardModels.commands'),
+      source: U('awsWizardModels.source')
+    },
     cloudflareZeroTrust: {
       catalog: U('cloudflareZeroTrust.catalog'),
       accounts: U('cloudflareZeroTrust.accounts'),

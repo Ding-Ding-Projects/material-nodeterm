@@ -44,7 +44,8 @@ import {
   buildCanvasApi,
   buildPresenceApi,
   buildClaudeApi,
-  buildGitHubApi
+  buildGitHubApi,
+  buildAwsWizardModelsApi
 } from './ws-bridge'
 import { buildStubApi } from './stubs'
 import { mountPickerRoot, openDirectoryPicker } from './dialog-picker'
@@ -136,6 +137,7 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     ...buildAgentApi(client), // onAgentStatus / onSubagentActivity — the host's agent hooks
     ...buildCanvasApi(client), // canvas sync against the host's reflector
     ...buildPresenceApi(client), // the host's presence hub
+    ...buildAwsWizardModelsApi(client), // the host's installed AWS model inventory
     // `cliCaps` is REAL over the relay so the --permission-mode auto version gate probes the HOST's
     // claude CLI (a remote node launches on the host); `readTranscript` stays LOCAL (v1 degrade —
     // transcripts aren't relayed, so it reads this machine's; the only consumer reads the global api).

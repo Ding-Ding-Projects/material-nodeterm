@@ -22,6 +22,7 @@ import type { ConverterApi } from '../../shared/converter'
 import type { OllamaApi } from '../../shared/ollama'
 import type { MinecraftApi } from '../../shared/minecraft'
 import type { NodeDependenciesApi } from '../../shared/node-dependencies'
+import type { AwsWizardModelsApi } from '../../shared/aws-wizard'
 import type { TorrentApi, TorrentTaskState } from '../../shared/torrent'
 import type { VirtualMachineApi } from '../../shared/virtual-machine'
 import type { CalendarApi, CalendarProvider } from '../../shared/calendar'
@@ -1164,6 +1165,16 @@ export function buildNodeDependenciesApi(client: RpcClient): Pick<NodeTerminalAp
   return { nodeDependencies }
 }
 
+/** Current AWS model inventory and selected operation source over the authenticated server RPC. */
+export function buildAwsWizardModelsApi(client: RpcClient): Pick<NodeTerminalApi, 'awsWizardModels'> {
+  const awsWizardModels: AwsWizardModelsApi = {
+    catalog: () => client.request(IPC.awsWizardCatalog) as ReturnType<AwsWizardModelsApi['catalog']>,
+    commands: (serviceId) => client.request(IPC.awsWizardCommands, serviceId) as ReturnType<AwsWizardModelsApi['commands']>,
+    source: (serviceId, commandName) => client.request(IPC.awsWizardSource, serviceId, commandName) as ReturnType<AwsWizardModelsApi['source']>
+  }
+  return { awsWizardModels }
+}
+
 /** Local Minecraft server create-and-manage (docs/minecraft-server-manager.md) — same core engine
  *  as desktop; the server process is the one downloading, spawning and owning `java`, exactly as
  *  main does. */
@@ -1781,6 +1792,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildSpeechApi(client),
     ...buildConverterApi(client),
     ...buildNodeDependenciesApi(client),
+    ...buildAwsWizardModelsApi(client),
     ...buildOllamaApi(client),
     ...buildCloudflareCoreManagersApi(client),
     ...buildMinecraftApi(client),
