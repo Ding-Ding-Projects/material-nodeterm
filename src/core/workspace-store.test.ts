@@ -76,7 +76,6 @@ describe('save → load round trip (v3)', () => {
 
   // The breadcrumb trail is one person's camera history: it must survive a full app restart on THIS
   // machine (index entry) and never reach the git-shared project file every teammate clones.
-  it("keeps a project's breadcrumbs machine-local: they survive a fresh store, the shared file never carries them", async () => {
   it('keeps a project\'s breadcrumbs machine-local: they survive a fresh store, the shared file never carries them', async () => {
     const breadcrumbs = [
       { nodeId: 'term-1', at: 1_700_000_000_000, note: 'looked at the pty' },

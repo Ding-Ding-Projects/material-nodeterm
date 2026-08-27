@@ -1,7 +1,7 @@
 import { promises as fs } from 'fs'
 import { randomUUID } from 'node:crypto'
 import path from 'path'
-import { renameAtomic, writeFileAtomic } from './fs-atomic'
+import { writeFileAtomic } from './fs-atomic'
 import { IPC } from '../shared/ipc'
 import { platform } from './platform'
 import { renameAtomic, sweepStaleTempFiles, tempNameFor } from './fs-atomic'
@@ -16,6 +16,7 @@ import {
 } from './workspace-files'
 import {
   applyLocalNodeExec,
+  hoistLegacyNodeExec,
   localNodeExec,
   normalizeLocalPendingLaunch,
   stripSharedNodeExec,
@@ -55,9 +56,7 @@ import {
 } from '../shared/project-settings'
 import { readProjectCapabilities, type ProjectCapability } from '../shared/project-capabilities'
 import type { CapabilityAckMap } from './project-capability-consent'
-import { hoistLegacyNodeExec, type LocalNodeExecMap } from '../shared/node-exec'
-import { collisionSeed, derivedProjectId, freshProjectId } from '../shared/project-id'
-import { appendProjectNode, removeProjectNode, type RemoteNodeInput } from './project-node-append'
+import { removeProjectNode } from './project-node-append'
 
 /** Checked remote read: `absent` (no file — safe to push our cache) is NOT `error` (connection
  *  down / ssh failure — a failed read is never evidence of absence, so nothing may be pushed). */
@@ -119,24 +118,6 @@ export type TrustedNodeLaunchLookup =
     }
   | { status: 'missing' }
   | { status: 'unavailable'; reason: TrustedNodeLaunchUnavailableReason }
-
-async function writeAtomic(filePath: string, content: string): Promise<void> {
-  // Unique per write: writers that bypass each other's queue (a second app instance, the SSH
-  // poll's index write) must never share a tmp file — interleaved writes into one shared tmp
-  // published spliced JSON under the atomic rename.
-  const tmp = tempNameFor(filePath)
-  try {
-    await fs.writeFile(tmp, content, 'utf-8')
-    // Retries briefly on Windows if the destination is momentarily held open (AV/indexer/sync) — see fs-atomic.ts.
-    await renameAtomic(tmp, filePath)
-  } catch (e) {
-    // A unique name never self-heals the way the old fixed one did (the next save just reused
-    // it), so a failed write removes its own temp — project.json temps live in the USER'S repo,
-    // where litter is visible. The error still propagates; per-file callers swallow it by design.
-    await fs.rm(tmp, { force: true }).catch(() => {})
-    throw e
-  }
-}
 
 export async function writeAtomic(filePath: string, content: string): Promise<void> {
   // Unique temp per write: writers that bypass each other's queue (a second app instance, the SSH
@@ -392,9 +373,6 @@ export class WorkspaceStore {
               capabilityAck: e.capabilityAck,
               breadcrumbs: e.breadcrumbs,
               settingsOverrides: e.settingsOverrides,
-              localExec: this.execOverlay(e)
-              breadcrumbs: e.breadcrumbs,
-              capabilityAck: e.capabilityAck,
               localExec: this.execOverlay(e, p)
             })
           })
@@ -421,9 +399,6 @@ export class WorkspaceStore {
               capabilityAck: e.capabilityAck,
               breadcrumbs: e.breadcrumbs,
               settingsOverrides: e.settingsOverrides,
-              localExec: this.execOverlay(e)
-              breadcrumbs: e.breadcrumbs,
-              capabilityAck: e.capabilityAck,
               localExec: this.execOverlay(e, e.cache)
             })
           })
@@ -999,7 +974,6 @@ export class WorkspaceStore {
         // would re-raise a notice the user already answered the moment the folder remounts.
         if (old?.capabilityAck) e.capabilityAck = old.capabilityAck
         if (old?.breadcrumbs) e.breadcrumbs = old.breadcrumbs
-        if (old?.breadcrumbs) e.breadcrumbs = old.breadcrumbs
         // The clone-notice acknowledgment must also survive an unavailable window: forgetting it
         // would re-raise a notice the user already answered the moment the folder remounts.
         if (old?.capabilityAck) e.capabilityAck = old.capabilityAck
@@ -1200,7 +1174,10 @@ export class WorkspaceStore {
     if (!result.ok) return { ok: false, reason: result.detail ?? 'join failed' }
     const read = await this.readProjectFile(cwd, false)
     if (read) this.lastWritten.set(singleFile, read.raw)
-    return { ok: true }
+     return { ok: true }
+   }
+
+  /**
    * Is this folder's `.nodeterm/project.json` genuinely gone, merely unreadable, or fine?
    *
    * `readProjectFile` collapses all three into `null`, which is right for its callers (they only
@@ -1243,10 +1220,8 @@ export class WorkspaceStore {
       closed: e.closed,
       viewport: e.viewport,
       defaultAccountId: e.defaultAccountId,
-      capabilityAck: e.capabilityAck,
-      breadcrumbs: e.breadcrumbs,
-      breadcrumbs: e.breadcrumbs,
-      capabilityAck: e.capabilityAck,
+       capabilityAck: e.capabilityAck,
+       breadcrumbs: e.breadcrumbs,
       localExec: e.localExec
     })
   }
@@ -1300,6 +1275,7 @@ export class WorkspaceStore {
   settingsOverridesForProject(projectId: string): Project['settingsOverrides'] {
     const entry = this.index?.entries.find((candidate) => candidate.id === projectId)
     return entry?.settingsOverrides ?? entry?.project?.settingsOverrides
+  }
   /** Minimal per-project target info for the setup/archive runner (project-setup-runner-local.ts's
    *  `resolveProjectSetupTarget`) — cwd/ssh/name straight off the loaded index. Sync, like
    *  `localCwdForProject`: this is what closes the Task 1 review finding that a run's rootPath/
@@ -1669,7 +1645,6 @@ export class WorkspaceStore {
     now = new Date(),
     defaultTerminalProfileId?: string
   ): Promise<boolean> {
-  appendRemoteNode(projectId: string, input: RemoteNodeInput, now = new Date()): Promise<boolean> {
     const run = this.saveChain.then(() => this.appendRemoteNodeNow(projectId, input, now))
     this.saveChain = run.catch(() => {})
     return run
@@ -1725,8 +1700,6 @@ export class WorkspaceStore {
           defaultAccountId: e.defaultAccountId,
           capabilityAck: e.capabilityAck,
           breadcrumbs: e.breadcrumbs,
-          breadcrumbs: e.breadcrumbs,
-          capabilityAck: e.capabilityAck,
           localExec: e.localExec
         })
       )
@@ -1957,8 +1930,6 @@ export class WorkspaceStore {
         id: e.id, ssh: e.ssh, closed: e.closed,
         viewport: e.viewport, defaultAccountId: e.defaultAccountId,
         capabilityAck: e.capabilityAck, breadcrumbs: e.breadcrumbs, localExec: e.localExec
-        viewport: e.viewport, defaultAccountId: e.defaultAccountId, breadcrumbs: e.breadcrumbs,
-        capabilityAck: e.capabilityAck, localExec: e.localExec
       })
     }
     // Our cache stood. Before it clobbers the server, merge in any remote-only session nodes (the
@@ -1974,8 +1945,6 @@ export class WorkspaceStore {
           id: e.id, ssh: e.ssh, closed: e.closed,
           viewport: e.viewport, defaultAccountId: e.defaultAccountId,
           capabilityAck: e.capabilityAck, breadcrumbs: e.breadcrumbs, localExec: e.localExec
-          viewport: e.viewport, defaultAccountId: e.defaultAccountId, breadcrumbs: e.breadcrumbs,
-          capabilityAck: e.capabilityAck, localExec: e.localExec
         })
       }
     }

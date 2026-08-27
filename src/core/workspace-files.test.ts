@@ -74,7 +74,6 @@ describe('projectToFile / fileToProject round-trip', () => {
   })
 })
 
-describe('breadcrumbs are MACHINE-LOCAL, like viewport/defaultAccountId', () => {
 describe('browser partition is re-validated on the hostile load path', () => {
   // project.json is git-shared, hand-editable and auto-adopted (constraint 10); `data.partition` is
   // copied verbatim to <webview partition>. A stored partition survives fileToProject ONLY when it
@@ -695,7 +694,6 @@ describe('project icon: emitted only when valid, sanitized on the hostile load p
   })
 
   it('an invalid in-memory icon is never written to the file (no bytes)', () => {
-    const p = project({ icon: { type: 'material-symbol', name: 'not-a-real-icon' } as any })
     const p = project({ icon: { type: 'lucide', name: 'rocket' } })
     const f = projectToFile(p, 1, 'now')
     expect(f.icon).toEqual({ type: 'lucide', name: 'rocket' })
@@ -769,6 +767,9 @@ describe('per-project capability fields in the shared file', () => {
       { id: 'p1', cwd: '/a/foo' }
     )
     expect(forged.capabilityAck).toBeUndefined()
+  })
+})
+
   it('an oversized icon on disk is dropped on load (fileToProject degrades to no icon)', () => {
     const hugeSrc = `data:image/png;base64,${'A'.repeat(400_000)}`
     const f = { ...projectToFile(project(), 1, 'now'), icon: { type: 'image', src: hugeSrc, source: 'upload' } } as any
@@ -779,4 +780,3 @@ describe('per-project capability fields in the shared file', () => {
     const f = { ...projectToFile(project(), 1, 'now'), icon: { type: 'lucide', name: 'not-real' } } as any
     expect(fileToProject(f, { id: 'p1' }).icon).toBeUndefined()
   })
-})
