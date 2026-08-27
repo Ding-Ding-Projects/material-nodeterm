@@ -1,5 +1,19 @@
 # Handoff
 
+## 2026-08-27, Squirrel packaging asynchronous exit repair
+
+The Windows packaging wrapper now keeps its top-level asynchronous entrypoint alive until every
+phase settles and writes synchronous start, completion, and failure diagnostics for cleanup,
+preflight, resource bootstrap, icon generation, source icon verification, metadata publication,
+application build, electron-builder resolution, Squirrel packaging, and packaged-contract checks.
+This addresses release run 33114320258, which reached successful QEMU, AWS CLI, and icon-generation
+messages and then exited with code 1 without naming a post-icon failure. The unsigned Squirrel policy,
+source-SHA icon URL, and package contract remain unchanged.
+
+Changed files are `scripts/windows-installer.mjs`, `docs/features/packaging/packaging-and-auto-update.md`,
+`CHANGELOG.md`, and this handoff. No tests, checkers, lint, typecheck, builds, packaging, runtime
+interaction, reviews, audits, or captures were run in this lane.
+
 ## 2026-08-27, project-aware navigation, issue #86
 
 This task branch was reconciled with the exact remote `origin/main` tip
