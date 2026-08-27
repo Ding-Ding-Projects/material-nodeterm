@@ -378,6 +378,9 @@ export type NodeKind =
   // intentionally a distinct kind so the canvas can refuse deletion, duplication, grouping, and
   // cross-universe movement at every mutation boundary.
   | 'shop'
+  // AWS Universe portal. The portal is a safe project intent; its child canvas owns the fixed
+  // AWS Shop and keeps provider credentials and runtime bindings in local application data.
+  | 'aws-universe'
   // A GUI for authoring a Windows NSIS installer script for ANOTHER project (not this app's
   // own installer, which stays Squirrel.Windows — see CLAUDE.md's Packaging section). See
   // `NsisSpec`/`NsisLocalPaths` in `./nsis-form-types` for the shared-vs-machine-local split.
@@ -996,6 +999,19 @@ export interface NavStop {
   note: string
 }
 
+/** A portable AWS-only child canvas owned by one AWS Universe portal instance. */
+export interface ProjectAwsUniverseCanvas {
+  id: string
+  title: string
+  parentCanvasId: 'root'
+  depth: 1
+  order: number
+  viewport: Viewport
+  nodes: CanvasNodeState[]
+  bridges?: BridgeLink[]
+  ropes?: BridgeLink[]
+}
+
 /** A project is one canvas/page: its own nodes, viewport, and default working dir. */
 export interface Project {
   id: string
@@ -1014,6 +1030,11 @@ export interface Project {
   ssh?: { server: import('./ssh').SshConnection; remoteCwd: string }
   viewport: Viewport
   nodes: CanvasNodeState[]
+  /** Safe, git-shared AWS Universe child canvases. Each instance is directly rooted and unlimited
+   * in product semantics; portable readers still apply bounded resource limits. */
+  awsUniverses?: ProjectAwsUniverseCanvas[]
+  /** Runtime-only selected AWS Universe child. Never written into a shared project file. */
+  activeAwsUniverseId?: string
   /** Default managed Claude account for new Claude/chat nodes in this project. */
   defaultAccountId?: string
   /** Permission mode for new Claude TERMINAL (CLI) sessions in this project. SDK chat nodes are

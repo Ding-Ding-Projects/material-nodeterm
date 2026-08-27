@@ -13,6 +13,7 @@ import type {
   CanvasNodeState,
   NavStop,
   Project,
+  ProjectAwsUniverseCanvas,
   ProjectKanban,
   Viewport,
   Workspace
@@ -20,6 +21,7 @@ import type {
 import { projectCapabilityFields, readProjectCapabilities } from '../shared/project-capabilities'
 import type { CapabilityAckMap } from '../shared/project-capability-consent'
 import { sanitizeProjectIcon, type ProjectIcon } from '../shared/project-icon'
+import { sanitizeAwsUniverses } from '../shared/aws-universes'
 import type { BridgeLink, CanvasNodeState, NavStop, Project, ProjectKanban, Viewport, Workspace } from '../shared/types'
 import { projectCapabilityFields, readProjectCapabilities } from '../shared/project-capabilities'
 import { loadedAgentBrowserPartition } from '../shared/browser-partition'
@@ -95,6 +97,8 @@ export interface ProjectFileV1 {
    */
   viewport?: Viewport
   nodes: CanvasNodeState[]
+  /** Safe AWS-only child canvases. Runtime selection and local bindings never enter this file. */
+  awsUniverses?: ProjectAwsUniverseCanvas[]
   bridges?: BridgeLink[]
   ropes?: BridgeLink[]
   /**
@@ -259,6 +263,10 @@ export function projectToFile(
   // (`shell`, `ssh.extraArgs`) never leave this machine in it — they ride the machine-local index
   // entry instead (`localNodeExec` / `IndexEntryV3.localExec`). See @shared/node-exec.
   const nodes = stripSharedNodeExec(p.cwd ? toPortableNodes(p.nodes, p.cwd) : p.nodes)
+  const awsUniverses = sanitizeAwsUniverses(p.awsUniverses)?.map((canvas) => ({
+    ...canvas,
+    nodes: stripSharedNodeExec(p.cwd ? toPortableNodes(canvas.nodes, p.cwd) : canvas.nodes)
+  }))
   const icon = sanitizeProjectIcon(p.icon)
   return {
     version: 1,
@@ -269,6 +277,7 @@ export function projectToFile(
     color: p.color,
     viewport: framingViewport(nodes),
     nodes,
+    ...(awsUniverses ? { awsUniverses } : {}),
     ...(icon ? { icon } : {}),
     ...(p.bridges ? { bridges: p.bridges } : {}),
     ...(p.ropes ? { ropes: p.ropes } : {}),
@@ -350,6 +359,13 @@ export function fileToProject(
 ): Project {
   const defaultAccountId = base.defaultAccountId ?? f.defaultAccountId
   const browserProfiles = validBrowserProfiles(f.browserProfiles)
+  const awsUniverses = sanitizeAwsUniverses(f.awsUniverses)?.map((canvas) => ({
+    ...canvas,
+    nodes: sanitizeBrowserPartitions(
+      applyLocalNodeExec(base.cwd ? resolveNodes(canvas.nodes, base.cwd) : canvas.nodes, base.localExec),
+      base.id
+    )
+  }))
   const icon = sanitizeProjectIcon(f.icon)
   return {
     id: base.id,
@@ -367,6 +383,7 @@ export function fileToProject(
       applyLocalNodeExec(base.cwd ? resolveNodes(f.nodes, base.cwd) : f.nodes, base.localExec),
       base.id
     ),
+    ...(awsUniverses ? { awsUniverses } : {}),
     ...(f.bridges ? { bridges: f.bridges } : {}),
     ...(f.ropes ? { ropes: f.ropes } : {}),
     ...(defaultAccountId ? { defaultAccountId } : {}),
@@ -501,7 +518,10 @@ export function splitWorkspace(
     }
     // Exec-enabling node fields are stripped from every project file / ssh cache; the local user's
     // own values are preserved HERE, in the machine-local index (@shared/node-exec).
-    const local = localNodeExec(p.nodes)
+    const local = localNodeExec([
+      ...p.nodes,
+      ...(p.awsUniverses ?? []).flatMap((canvas) => canvas.nodes)
+    ])
     const localRef = local ? { localExec: local } : {}
     if (p.ssh) {
       entries.push({
@@ -541,5 +561,11 @@ export function splitWorkspace(
  * file could be adopted and then mirrored back with its execution fields intact.
  */
 export function serializeProjectFile(f: ProjectFileV1): string {
-  return JSON.stringify({ ...f, nodes: stripSharedNodeExec(f.nodes) }, null, 2)
+  return JSON.stringify({
+    ...f,
+    nodes: stripSharedNodeExec(f.nodes),
+    ...(f.awsUniverses
+      ? { awsUniverses: f.awsUniverses.map((canvas) => ({ ...canvas, nodes: stripSharedNodeExec(canvas.nodes) })) }
+      : {})
+  }, null, 2)
 }

@@ -244,7 +244,10 @@ intentionally unchecked because this task publishes the plan only.
 - [ ] Wire the implemented paired-door navigation policy into the pending Multiverse canvas and
       door-rendering lanes; tab, palette, history, and direct-selection bypasses are refused in core.
 - [ ] Add interactive door construction, numeric or passphrase entry, and recovery game.
-- [ ] Add unlimited AWS Universes with AWS-only scope and AWS Shop nodes.
+- [x] Add unlimited AWS Universes with AWS-only scope, guided navigation, and AWS Shop nodes.
+      Source implementation and delivery records are present; tests, type checks, builds,
+      packaging, runtime interaction, and captures remain explicitly unrun under issue #39's
+      ultra-speed boundary.
 - [ ] Bundle AWS CLI v2 and maintain verified model and documentation indexing.
 - [ ] Generate interactive wizard forms for every AWS service, command, option, paginator, waiter,
       skeleton, input, and output described by the installed CLI models.

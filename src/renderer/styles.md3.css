@@ -2542,6 +2542,80 @@ button.term-node__title-text:focus-visible {
   outline: 2px solid var(--md-primary);
   outline-offset: 2px;
 }
+
+/* AWS Universe portal cards and navigator use the same tonal roles as the scoped Shop. */
+.aws-universe-portal-node {
+  min-width: 320px;
+  min-height: 220px;
+  padding: 20px;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 24px;
+  background: var(--md-sys-color-surface-container);
+  color: var(--md-sys-color-on-surface);
+  box-shadow: var(--md-sys-elevation-level2);
+}
+.aws-universe-portal-node__open {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+  font: inherit;
+  cursor: pointer;
+}
+.aws-universe-portal-node__open:focus-visible,
+.aws-universe-nav__trigger:focus-visible,
+.aws-universe-nav__popover :is(button, input):focus-visible {
+  outline: 3px solid var(--md-sys-color-secondary);
+  outline-offset: 2px;
+}
+.aws-universe-portal-node__icon { font-size: 28px; }
+.aws-universe-portal-node__title { font-weight: 700; }
+.aws-universe-portal-node__scope,
+.aws-universe-portal-node__description,
+.aws-universe-nav__scope,
+.aws-universe-nav__search > span,
+.aws-universe-nav__message { color: var(--md-sys-color-on-surface-variant); }
+.aws-universe-nav__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  max-width: min(46vw, 520px);
+  padding: 8px 14px;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 24px;
+  background: var(--md-sys-color-surface-container);
+  color: var(--md-sys-color-on-surface);
+  font: inherit;
+  cursor: pointer;
+}
+.aws-universe-nav__path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.aws-universe-nav__scope { white-space: nowrap; font-size: .82em; }
+.aws-universe-nav__popover { background: var(--md-sys-color-surface-container-high); color: var(--md-sys-color-on-surface); }
+.aws-universe-nav__header,
+.aws-universe-nav__search-control { display: flex; align-items: center; gap: 10px; }
+.aws-universe-nav__header { justify-content: space-between; gap: 18px; }
+.aws-universe-nav__header > div { min-width: 0; }
+.aws-universe-nav__header button,
+.aws-universe-nav__create button { min-height: 48px; border-radius: 20px; padding-inline: 16px; }
+.aws-universe-nav__search-control input,
+.aws-universe-nav__create input { min-height: 48px; min-width: 0; flex: 1; }
+.aws-universe-nav__list { display: grid; gap: 6px; max-height: 260px; overflow: auto; margin-top: 12px; }
+.aws-universe-nav__list button { display: flex; justify-content: space-between; gap: 12px; min-height: 48px; padding: 10px 14px; border: 1px solid transparent; border-radius: 16px; background: transparent; color: inherit; text-align: start; cursor: pointer; }
+.aws-universe-nav__list button:hover,
+.aws-universe-nav__list button.is-active { background: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); }
+.aws-universe-nav__create { display: grid; gap: 10px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--md-sys-color-outline-variant); }
+.aws-universe-nav__error { color: var(--md-sys-color-error); }
+@media (max-width: 720px) {
+  .aws-universe-nav__trigger { max-width: 100%; }
+  .aws-universe-nav__scope { display: none; }
+  .aws-universe-nav__header { align-items: flex-start; flex-direction: column; }
+}
 @media (max-width: 520px) {
   .shop-node__entry-kind {
     display: none;

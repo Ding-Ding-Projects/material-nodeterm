@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add an AWS Universe navigator and portal cards for unlimited AWS-only child canvases. Each
+  instance receives a permanent scoped Shop, searchable guided controls, and portable schema 3
+  intent without credentials, profiles, local paths, or runtime bindings. Tests, type checks, lint,
+  reviews, security checks, accessibility checks, builds, packaging, installer execution, runtime
+  interaction, and captures remain unrun under issue #39's ultra-speed boundary.
+
 - Complete the Express File Converter flow with queue-wide collision-safe destination names,
   visible rename disclosure, final atomic no-clobber publication, and a completed-output action that
   opens the exact result in Visual Studio Code through the active project API. The converter queue

@@ -258,6 +258,11 @@ canvas has no Shop. See the
 [special-universe Shop article](./docs/features/integrations/aws-universe-shop.md) for the
 portable metadata, repair records, disabled AWS entries, and verification boundary.
 
+The AWS Universe navigator now creates unlimited AWS-only child canvases in the project root. Each
+instance starts with a fixed scoped Shop, remains searchable through the adjacent regex builder,
+and preserves safe intent through portable schema 3 without carrying credentials or local runtime
+bindings. See the [AWS Universe portal article](./docs/features/canvas/aws-universe.md).
+
 ### Agent support — Claude Code, Codex, Gemini, opencode, Grok, or your own
 
 An **agent** node is a terminal preset that launches an agent CLI as its first command. Status

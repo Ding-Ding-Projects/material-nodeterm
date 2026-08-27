@@ -1461,6 +1461,32 @@ export function createTimerNode(index: number, center?: { x: number; y: number }
   return { id: nextId('timer'), type: 'timer', position: placeAt(center, index, TIMER_SIZE.width, TIMER_SIZE.height), width: TIMER_SIZE.width, height: TIMER_SIZE.height, style: { width: TIMER_SIZE.width, height: TIMER_SIZE.height }, data }
 }
 
+/** Creates an AWS-only portal node that opens its directly-owned child canvas. */
+export function createAwsUniversePortalNode(
+  index: number,
+  canvasId: string,
+  title: string,
+  center?: { x: number; y: number }
+): CanvasNode {
+  return {
+    id: nextId('aws-universe'),
+    type: 'aws-universe',
+    position: placeAt(center, index, 420, 260),
+    width: 420,
+    height: 260,
+    style: { width: 420, height: 260 },
+    data: {
+      title,
+      color: '#7d5260',
+      group: null,
+      universeCanvasId: canvasId,
+      universeScope: 'aws-universe',
+      universeDepth: 1,
+      tags: ['aws-universe', 'universe-portal']
+    }
+  }
+}
+
 export function createStickyNode(index: number, center?: { x: number; y: number }): CanvasNode {
   return {
     id: nextId('sticky'),
@@ -2120,8 +2146,9 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   homeassistant: true,
   freepbx: true,
   nsis: true,
-  shop: true
-  torrent: true
+  shop: true,
+  'aws-universe': true,
+  torrent: true,
   'linux-vm': true
 }
 
@@ -2167,8 +2194,9 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   homeassistant: SERVICE_SUMMARY_SIZE,
   freepbx: SERVICE_SUMMARY_SIZE,
   nsis: NSIS_SIZE,
-  shop: SHOP_SIZE
-  torrent: TORRENT_SIZE
+  shop: SHOP_SIZE,
+  'aws-universe': { width: 420, height: 260 },
+  torrent: TORRENT_SIZE,
   'linux-vm': LINUX_VM_SIZE
 }
 

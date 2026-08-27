@@ -153,6 +153,28 @@ const plannedEntry = (
   }
 })
 
+const awsUniverseEntry: NodeCatalogEntry = {
+  id: 'aws-universe',
+  nodeKind: 'aws-universe',
+  category: 'universes',
+  label: 'AWS Universe',
+  description: 'Create an AWS-only child canvas with a dedicated Shop node.',
+  keywords: ['aws', 'cloud', 'universe', 'portal', 'canvas'],
+  documentationPath: 'docs/features/canvas/aws-universe.md',
+  safeDefaults: { scope: 'aws-universe', depth: 1 },
+  dependencies: [],
+  status: 'available',
+  availabilityMode: 'configure-later',
+  scope: 'root',
+  availability: (context) => context.universeScope === 'root'
+    ? { available: true }
+    : {
+        available: false,
+        reason: 'AWS Universe portals can only be created from the root canvas.',
+        dependencyIds: ['canvas-scope:root']
+      }
+}
+
 /**
  * The one source of truth for user-created node intents. Labels and descriptions deliberately stay
  * neutral English here; the renderer resolves them through the normal i18n catalogue, while this
@@ -462,7 +484,7 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
   plannedEntry('alarm', 'automation', 'Alarm clock', 'Create an alarm definition without writing a machine-specific schedule.', 'planner-service'),
   plannedEntry('planner', 'automation', 'Planner', 'Create a planner occurrence definition with explicit local binding.', 'planner-service'),
   plannedEntry('multiverse-portal', 'universes', 'Multiverse portal', 'Create a door-only Multiverse canvas below the depth limit.', 'multiverse-service', 'multiverse', 8),
-  plannedEntry('aws-universe', 'universes', 'AWS Universe', 'Create an AWS-only child canvas with a dedicated Shop node.', 'aws-cli-v2', 'aws-universe'),
+  awsUniverseEntry,
   plannedEntry('aws-service', 'universes', 'AWS service node', 'Create a typed AWS service blueprint from installed CLI models.', 'aws-cli-v2', 'aws-universe'),
   plannedEntry('cloudflare-hosting', 'hosting', 'Cloudflare hosting', 'Create a private-first hosting blueprint with explicit tunnel exposure later.', 'hosting-adapter'),
   plannedEntry('gitlab-hosting', 'hosting', 'GitLab hosting', 'Create a guided GitLab hosting blueprint with local credentials later.', 'hosting-adapter'),
@@ -519,7 +541,7 @@ export const NODE_CATALOG_COMPLETENESS: readonly NodeCatalogCompletenessRecord[]
   { id: 'alarm', state: 'planned', scope: 'any', reason: 'alarm service not implemented' },
   { id: 'planner', state: 'planned', scope: 'any', reason: 'planner service not implemented' },
   { id: 'multiverse-portal', state: 'planned', scope: 'multiverse', reason: 'Multiverse portal not implemented' },
-  { id: 'aws-universe', state: 'planned', scope: 'aws-universe', reason: 'AWS Universe not implemented' },
+  { id: 'aws-universe', state: 'current', scope: 'root', reason: 'AWS-only Universe portal and child canvas' },
   { id: 'aws-service', state: 'planned', scope: 'aws-universe', reason: 'AWS service node not implemented' },
   { id: 'cloudflare-hosting', state: 'planned', scope: 'any', reason: 'Cloudflare hosting not implemented' },
   { id: 'gitlab-hosting', state: 'planned', scope: 'any', reason: 'GitLab hosting not implemented' },

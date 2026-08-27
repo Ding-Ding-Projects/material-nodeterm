@@ -6,6 +6,8 @@ The pan/zoom surface nodeterm is built around, and everything that lives on it.
   what each one is for.
 - [Unified Node Catalog](./node-catalog.md) — the typed registry, guided picker, creation event
   idempotence, availability reasons, and collision-free placement shared by every creation path.
+- [AWS Universe portal](./aws-universe.md) - unlimited AWS-only child canvases, guided navigation,
+  scoped Shop ownership, and portable schema 3 intent.
 - [Photo, Video, and Gallery nodes](./media-gallery.md): content-addressed media, mixed galleries,
   portable byte carriers, local bindings, and explicit missing-asset recovery.
 - [Door-only universe navigation](./door-only-universe-navigation.md) - paired entry and return

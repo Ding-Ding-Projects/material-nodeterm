@@ -105,6 +105,7 @@ import { ServiceNode } from '../nodes/ServiceNode'
 import VirtualMachineNode from '../nodes/VirtualMachineNode'
 import NsisInstallerNode from '../nodes/NsisInstallerNode'
 import ShopNode from '../nodes/ShopNode'
+import { AwsUniversePortalNode } from '../nodes/AwsUniversePortalNode'
 import TorrentNode from '../nodes/TorrentNode'
 import { normalizeAddress } from '../nodes/browserUrl'
 import VideoNode from '../nodes/VideoNode'
@@ -131,6 +132,8 @@ import {
 } from '../lib/adhdModes'
 import { TopAppBar } from '../components/TopAppBar'
 import { ProjectSwitcher } from '../components/ProjectSwitcher'
+import { AwsUniverseNavigator } from '../components/AwsUniverseNavigator'
+import { projectAwsUniverseCanvas, AWS_UNIVERSE_ROOT_ID } from '@shared/aws-universes'
 import { type MenuItem } from '../components/ContextMenu'
 import { devicePixelSnapOffset } from '../terminal/device-pixel-fit'
 import { VocabularyContextMenu } from '../components/menu/VocabularyContextMenu'
@@ -2058,6 +2061,7 @@ export function Canvas() {
       // tell them apart without six registrations of six near-identical files.
       nsis: withNodeBoundary(NsisInstallerNode),
       shop: withNodeBoundary(ShopNode),
+      'aws-universe': withNodeBoundary(AwsUniversePortalNode),
       torrent: withNodeBoundary(TorrentNode),
       minecraft: withNodeBoundary(ServiceNode),
       dockerhost: withNodeBoundary(ServiceNode),
@@ -2800,6 +2804,7 @@ export function Canvas() {
       nodesProjectIdRef.current = null
       return
     }
+    const canvasView = projectAwsUniverseCanvas(project, project.activeAwsUniverseId ?? AWS_UNIVERSE_ROOT_ID)
     // SSH project: (re)open its ControlMaster and record the controlPath so this project's
     // terminal nodes can run over it. Idempotent in main (a live master is reused), so a tab
     // switch back to a connected project is a no-op. Remote tmux is unaffected by the master.
@@ -2831,7 +2836,7 @@ export function Canvas() {
     // locally.
     // NOTE: git routing is deliberately NOT armed for an attachment. The project's own cwd is what
     // the Source Control panel is about, and an attached node must not repoint it at another host.
-    for (const attachment of hostAttachmentsFor(project.id, project.nodes, project.ssh?.server)) {
+    for (const attachment of hostAttachmentsFor(project.id, canvasView.nodes, project.ssh?.server)) {
       void connectHostAttachment(
         attachment.scopeId,
         {
@@ -2863,7 +2868,7 @@ export function Canvas() {
     // url/title already applied, in the SAME setNodes — a later correction would move the `url`
     // prop under the surviving surface and navigate the very page the pool preserved.
     const flow = overlayKeepAliveData(
-      nodeStatesToFlow(project.nodes),
+      nodeStatesToFlow(canvasView.nodes),
       useWebviewKeepAlive.getState().entries,
       project.id
     )
@@ -2884,11 +2889,11 @@ export function Canvas() {
     if (project.cwd && !project.ssh) {
       void useWorktrees.getState().refresh(project.cwd, boundGroups(flow))
     }
-    setLinkEdges((project.bridges ?? []).map((b) => ({ id: b.id, source: b.source, target: b.target })))
+    setLinkEdges((canvasView.bridges ?? []).map((b) => ({ id: b.id, source: b.source, target: b.target })))
     // Restore control ropes with the source agent's color (falls back to the browser blue).
     setControlEdges(
-      (project.ropes ?? []).map((r) => {
-        const srcState = project.nodes.find((n) => n.id === r.source)
+      (canvasView.ropes ?? []).map((r) => {
+        const srcState = canvasView.nodes.find((n) => n.id === r.source)
         const color = agentConfig((srcState?.agentId as AgentId) ?? '')?.color ?? '#0a84ff'
         return ropeEdge(r.id, r.source, r.target, color)
       })
@@ -2908,21 +2913,21 @@ export function Canvas() {
       // the file's viewport is where another machine last saved, not where this user looks.
       preserveViewportRef.current = false
     } else {
-      viewportRef.current = project.viewport
-      setViewport(project.viewport)
-      setZoomPct(Math.round(project.viewport.zoom * 100))
-      setGroupLabelBoost(project.viewport.zoom)
+      viewportRef.current = canvasView.viewport
+      setViewport(canvasView.viewport)
+      setZoomPct(Math.round(canvasView.viewport.zoom * 100))
+      setGroupLabelBoost(canvasView.viewport.zoom)
       // A project can load already zoomed IN past the crisp threshold (saved viewport) — seed
       // the gate before the mount-time IntersectionObserver reports make every node request a
       // context it would only have to give back.
       // A project can load already zoomed IN past the crisp threshold (saved viewport) — seed the
       // gate before the mount-time IntersectionObserver reports make every node request a context
       // it would only have to give back.
-      setWebglZoom(project.viewport.zoom)
+      setWebglZoom(canvasView.viewport.zoom)
       // Seed the shared glyph camera from the same viewport: `onMove` only fires once the user
       // actually pans, so without this a project that loads scrolled away would draw its grids
       // against the previous project's camera until the first gesture.
-      setSharedGlyphCamera(project.viewport)
+      setSharedGlyphCamera(canvasView.viewport)
     }
     // Let load-induced changes settle before we start tracking edits as dirty.
     const t = setTimeout(() => {
@@ -3180,6 +3185,30 @@ export function Canvas() {
       store.commitCanvas
     )
   }, [])
+
+  const navigateAwsUniverse = useCallback((canvasId: string) => {
+    if (!activeProjectId) return
+    commitActiveToStore()
+    nodesProjectIdRef.current = null
+    useProjects.getState().openAwsUniverseCanvas(activeProjectId, canvasId)
+  }, [activeProjectId, commitActiveToStore])
+
+  const createAwsUniverse = useCallback((title: string) => {
+    if (!activeProjectId) return { reason: 'Choose an open project before creating an AWS Universe.' }
+    commitActiveToStore()
+    const result = useProjects.getState().createAwsUniverseCanvas(activeProjectId, title)
+    if (result.canvasId) bumpDirty()
+    return result
+  }, [activeProjectId, bumpDirty, commitActiveToStore])
+
+  useEffect(() => {
+    const onOpen = (event: Event): void => {
+      const canvasId = (event as CustomEvent<{ canvasId?: string }>).detail?.canvasId
+      if (canvasId) navigateAwsUniverse(canvasId)
+    }
+    window.addEventListener('nodeterm:open-aws-universe', onOpen)
+    return () => window.removeEventListener('nodeterm:open-aws-universe', onOpen)
+  }, [navigateAwsUniverse])
 
   const writeDisk = useCallback(async () => {
     // Captured BEFORE the snapshot is built (`toWorkspace()` runs synchronously on this line), so
@@ -5314,6 +5343,12 @@ export function Canvas() {
         notify({ kind: 'error', title: 'Node unavailable', body: availability.reason ?? 'Choose another node.' })
         return
       }
+      if (entry.id === 'aws-universe') {
+        const result = createAwsUniverse('New AWS Universe')
+        if (result.canvasId) navigateAwsUniverse(result.canvasId)
+        else notify({ kind: 'error', title: 'AWS Universe unavailable', body: result.reason ?? 'The AWS Universe could not be created.' })
+        return
+      }
       setNodes((existing) => {
         const appended = nodeCreationCoordinatorRef.current.append(
           existing,
@@ -5379,7 +5414,7 @@ export function Canvas() {
       // The shared node-data signature effect marks a real append dirty after React commits. This
       // keeps duplicate retries a true no-op rather than writing an unnecessary project snapshot.
     },
-    [activeProjectId, emptyNodePos, offersTerminalProfiles, parentInto, sessionSource, setNodes]
+    [activeProjectId, createAwsUniverse, emptyNodePos, navigateAwsUniverse, offersTerminalProfiles, parentInto, sessionSource, setNodes]
   )
 
   // Task 6: the Settings → Accounts "Add account" flow dispatches 'nodeterm:add-account-login'
@@ -16584,6 +16619,7 @@ export function Canvas() {
           onOpenArchive={() => void importProjectArchive()}
           archiveBusy={() => projectArchiveBusyRef.current}
         />
+        <AwsUniverseNavigator onNavigate={navigateAwsUniverse} onCreate={createAwsUniverse} />
         <div className="md3-app-bar__spacer" />
         {/* The docked search bar — the SAME `.cluster-search` button/title the packaged-app
             driver script selects; re-themed, never renamed. */}
