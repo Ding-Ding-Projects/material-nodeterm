@@ -2,7 +2,7 @@
 
 ## 2026-08-27, custom agent harness persistence, issue #86
 
-This jer is reconciled with the exact current `origin/main` tip
+This feature branch is reconciled with the exact current `origin/main` tip
 `54164b84dce0b7e62787b1de2885405ff4ed821c`. The custom harness implementation is committed as
 `20ce2fe4a974a388c7fea6adcae116f2d6bb9ab6`, with the current-main reconciliation pending in this
 follow-up merge commit.
@@ -17,7 +17,7 @@ preserved.
 Direct documentation is `docs/features/agents/custom-agent-harness.md`, indexed from the Agents
 category. The changelog and roadmap carry the same boundary. No tests, lint, type checks, builds,
 packaging, runtime interaction, reviews, audits, or captures were run in this source lane. The
-parent integration lane owns those checks, the final default-jer merge, issue updates, and closure.
+parent integration lane owns those checks, the final default-branch merge, issue updates, and closure.
 
 ## 2026-08-27, AWS core-service managers, issue #46 PR preparation
 
