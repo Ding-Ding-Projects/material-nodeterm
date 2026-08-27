@@ -13,6 +13,7 @@ import {
   createDiffNode,
   createStickyNode,
   createDinoNode,
+  createVirtualMachineNode,
   isAccountLoginNode
 } from '@renderer/state/workspace'
 import { absolutePosition, type FocusableNode } from './nodeFocus'
@@ -175,6 +176,17 @@ function buildBase(snapshot: ReopenNodeSnapshot, ctx: RecreateContext): CanvasNo
       return createBrowserNode(0, d.url ?? '', undefined, undefined, d.browserProfileId)
     case 'dino':
       return createDinoNode(0, undefined, d.highScore ?? 0)
+    case 'linux-vm': {
+      const node = createVirtualMachineNode(0)
+      return {
+        ...node,
+        data: {
+          ...node.data,
+          virtualMachineConfig: d.virtualMachineConfig ?? node.data.virtualMachineConfig,
+          virtualMachineLocalPaths: d.virtualMachineLocalPaths ?? node.data.virtualMachineLocalPaths
+        }
+      }
+    }
     default:
       return null
   }
@@ -206,3 +218,4 @@ export function recreateNodeFromSnapshot(
   }
   return node
 }
+
