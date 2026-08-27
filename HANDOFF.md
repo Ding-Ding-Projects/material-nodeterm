@@ -1,5 +1,30 @@
 # Handoff
 
+## 2026-08-27, desktop trackpad gesture facts, issue #108
+
+The implementation is on `feat/trackpad-gesture-facts`, based on the current `origin/main` tip
+`00127bc0` and grounded in upstream PR `eneskirca/nodeterm#452`, commit
+`391056b81abd0b933757fa6a4aee23d84cb48884`. `src/main/trackpad-gesture.ts` reduces native macOS
+scroll and pinch begin/end input facts into depth-safe active-state edges and ignores unmatched end
+events. The main window sends those edges through `IPC.canvasTrackpadGesture`, the typed preload
+member `onCanvasTrackpadGesture`, and the browser stub's documented no-op.
+
+`MacWheelGestureRouter` now accepts desktop-only gesture reporting. An open gesture or a close less
+than 500 ms ago routes precise-pixel wheel packets to canvas panning. Reported silence routes them
+to wheel zoom, while the Server Edition keeps the existing renderer heuristic because its browser
+surface lacks the native input stream. Settings, the canvas article, canvas category index,
+`CHANGELOG.md`, and `ROADMAP.md` record the same behavior and boundary. Mobile has no mouse-wheel
+canvas route and is explicitly not applicable.
+
+The generated `src/shared/docs-data.ts` bundle was not regenerated because this lane's explicit
+boundary forbids builds; the parent integration lane must regenerate and verify it before merging
+the documentation update.
+
+This source lane intentionally did not run tests, lint, type checks, builds, packaging, runtime
+interaction, reviews, security or accessibility audits, or UI captures. The parent integration
+lane must verify the exact commit and handle the dedicated pull request, issue progress and closure,
+upstream PR #463, and any later evidence without treating this lane's unrun checks as green.
+
 ## 2026-08-27, Nextcloud AIO hosting implementation, issue #52
 
 The implementation lane is `feat/program-41-nextcloud-aio`, based on `12055e96` before the

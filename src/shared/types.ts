@@ -4811,6 +4811,10 @@ export interface NodeTerminalApi {
    *  minutes; `level: 'none'` means the banner should come down. Returns unsubscribe.
    *  Server Edition: never fires — the reaper leg runs host-side only (see src/server/index.ts). */
   onPtyPressure(listener: (reading: PtyPressure) => void): () => void
+  /** Fires when the desktop main process observes a trackpad scroll or pinch edge. The payload is
+   *  the depth-safe active state, and only edge transitions are sent. Server Edition never fires:
+   *  its browser tab has no raw input stream and keeps the wheel router's heuristic path. */
+  onCanvasTrackpadGesture(listener: (active: boolean) => void): () => void
   /** Raise this Mac's pty-device ceiling (`kern.tty.ptmx_max`) now AND across reboots, behind
    *  macOS's own administrator-password dialog. Called ONLY from the banner's explicit
    *  "Fix automatically…" click — never on the app's initiative. macOS only; a dismissed password

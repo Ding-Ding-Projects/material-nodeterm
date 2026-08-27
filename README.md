@@ -94,7 +94,7 @@ That distinction is intentional. A restored view is not described as a process t
 
 | Area | What is available | Detailed documentation |
 | --- | --- | --- |
-| Canvas and nodes | Spatial projects, terminal and agent nodes, notes, groups, editors, diffs, browser surfaces, timers, calendars, media, service nodes, portal doors, child canvases, and recovery activities | [Canvas features](./docs/features/canvas/README.md) |
+| Canvas and nodes | Spatial projects, terminal and agent nodes, notes, groups, editors, diffs, browser surfaces, timers, calendars, media, service nodes, portal doors, child canvases, recovery activities, and desktop trackpad gesture facts for wheel routing | [Canvas features](./docs/features/canvas/README.md) |
 | Terminals | Local shell profiles, persistent session backends, scrollback restoration, terminal rendering, and word-separator controls | [Terminal features](./docs/features/terminals/README.md) |
 | Coding agents | Launch profiles, status hooks, context links, account selection, messaging, and supported capability reporting | [Agent support](./docs/features/agents/agent-support.md) |
 | Projects and tabs | Multiple projects, portable project files, project settings, groups, searches, and tab organization | [Project features](./docs/features/projects/README.md) |

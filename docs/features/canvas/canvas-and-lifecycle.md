@@ -16,6 +16,16 @@ actions depending on whether you clicked empty space, a single node, or a multi-
 A bottom-left canvas lock freezes the *camera* only — nodes stay draggable, resizable, and
 usable while locked; the point is to stop the map itself from sliding, not to freeze your work.
 
+On the macOS desktop, the main process observes the native `gestureScrollBegin` /
+`gestureScrollEnd` and `gesturePinchBegin` / `gesturePinchEnd` edges and sends only the resulting
+active-state transitions to the canvas. A depth-counted ledger keeps nested scroll and pinch phases
+open until the outer phase ends, and ignores an end event whose begin happened before the listener
+started. While a reported gesture is active, or for up to 500 ms after its close, the canvas routes
+precise-pixel wheel packets to panning. Reported silence routes those packets to wheel zoom, so a
+precise-pixel mouse and a trackpad can coexist when both settings are enabled. The Server Edition
+keeps its browser heuristic because a browser cannot observe the native input stream. Mobile has
+no mouse-wheel canvas route, so this behavior is not applicable there.
+
 **Undo/redo** is a debounced snapshot of the node array taken whenever a drag or edit settles,
 with independent past/future stacks per project. It's suspended while you're typing into an
 input, a terminal, or Monaco, so `⌘Z` in a terminal reaches the shell, not the canvas.
@@ -48,6 +58,8 @@ each one only decides whether a *view* of that session is currently instantiated
   drag move the node), double-click-to-focus behaviour, and the offscreen-release timeout
   (`0` disables release entirely).
 - **Settings → Appearance** — which context-menu items and header buttons are shown.
+- **Settings → Behavior** — `Scroll wheel zooms` and `Trackpad scroll pans`. The desktop app uses
+  main-process gesture facts for the latter; the Server Edition retains the heuristic behavior.
 
 ## Failure modes
 
@@ -57,6 +69,10 @@ each one only decides whether a *view* of that session is currently instantiated
 - **A node's size can't be measured yet** (the very first tick after a project loads): a
   "jump to node" action deliberately does nothing rather than guessing and landing the camera
   at the canvas origin — the camera holds still until the node's real size is known.
+- **A native gesture edge is missing** (for example, a listener started after a begin): the ledger
+  ignores the unmatched end and keeps its depth non-negative. If the browser provides no native
+  gesture facts, the Server Edition uses its documented heuristic instead of claiming device
+  identity it cannot observe.
 
 ## Security considerations
 
