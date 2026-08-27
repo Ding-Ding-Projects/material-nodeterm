@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add Windows `psmux` discovery to terminal persistence. Executable lookup now honors `PATHEXT`,
+  prefers `tmux` and then `psmux`, uses the shared executable predicate for Windows Package
+  Manager detection, and keeps the missing-multiplexer banner visible on Windows with an exact
+  `winget install -e --id marlocarlo.psmux` action when available. The ultra-speed lane intentionally
+  did not run tests, type checks, lint, reviews, security or accessibility checks, builds, packaging,
+  installer execution, runtime interaction, or UI captures.
+
 - Add the bundled AWS CLI v2 dependency lane. Windows packaging now stages the pinned official
   `2.36.32` MSI, verifies its SHA-256, falls back through a verified local cache or canonical
   HTTPS download, extracts it into application-local storage, exposes the installed version, and
