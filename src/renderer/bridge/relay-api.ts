@@ -222,6 +222,8 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     // relay project must not silently discover against the viewer's instance registry.
     homeAssistant: stub.homeAssistant,
     homeAssistantControl: stub.homeAssistantControl,
+    // A relay viewer must not contact or rebind Home Assistant on its own machine.
+    homeAssistantSensor: stub.homeAssistantSensor,
     // Browser control never rides the relay either (no CDP off the desktop) — inert no-ops.
     onBrowserControlResolve: stub.onBrowserControlResolve,
     sendBrowserControlResolveResult: stub.sendBrowserControlResolveResult,

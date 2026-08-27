@@ -24,6 +24,7 @@ import type { HistoryFilters, HistoryListResult, HistoryRestoreResult } from './
 import type { CalendarApi, CalendarNodeConfig } from './calendar'
 import type { HomeAssistantApi } from './home-assistant'
 import type { HomeAssistantControlApi, HomeAssistantControlConfig } from './home-assistant-control'
+import type { HomeAssistantSensorApi, HomeAssistantSensorConfig } from './home-assistant-sensor'
 import type {
   ToyLockBeginTotpInput,
   ToyLockBeginTotpResult,
@@ -417,6 +418,7 @@ export type NodeKind =
   | 'proxmox'
   | 'gitlab'
   | 'homeassistant'
+  | 'homeassistant-sensor'
   | 'freepbx'
   | 'torrent'
   /** One-shot Linux ISO virtual machine, distinct from the WSL terminal profile. */
@@ -670,6 +672,9 @@ export interface CanvasNodeState {
   /** Home Assistant control-only portable selection intent. Local connection identity, URL,
    * bearer, discovery cache and request state never enter project data. */
   homeAssistantControlConfig?: HomeAssistantControlConfig
+  /** Home Assistant sensor-only, project-portable selection and presentation intent. Instance
+   * URLs, credentials, observed values, and history remain machine-local. */
+  homeAssistantSensorConfig?: HomeAssistantSensorConfig
   // editor / diff
   filePath?: string
   /** Photo/video/gallery media is represented by a portable content reference, never an absolute path. */
@@ -4540,6 +4545,8 @@ export interface NodeTerminalApi {
   homeAssistant: HomeAssistantApi
   /** Schema-driven Home Assistant controls through host-owned local connection bindings. */
   homeAssistantControl: HomeAssistantControlApi
+  /** Machine-local Home Assistant sensor discovery and bounded observations. */
+  homeAssistantSensor: HomeAssistantSensorApi
   ssh: SshApi
   sshProject: SshProjectApi
   sshFs: SshFsApi

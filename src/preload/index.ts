@@ -1230,6 +1230,13 @@ const api: NodeTerminalApi = {
     call: (input) => ipcRenderer.invoke(IPC.homeAssistantCall, input),
     cancel: (nodeId) => ipcRenderer.invoke(IPC.homeAssistantControlCancel, nodeId)
   },
+  homeAssistantSensor: {
+    binding: (nodeId) => ipcRenderer.invoke(IPC.homeAssistantSensorBinding, nodeId),
+    configure: (input) => ipcRenderer.invoke(IPC.homeAssistantSensorConfigure, input),
+    leaveUnbound: (nodeId) => ipcRenderer.invoke(IPC.homeAssistantSensorLeaveUnbound, nodeId),
+    discover: (nodeId) => ipcRenderer.invoke(IPC.homeAssistantSensorDiscover, nodeId),
+    refresh: (nodeId, config) => ipcRenderer.invoke(IPC.homeAssistantSensorRefresh, nodeId, config)
+  },
   // The `browser` verb resolve round-trip (S8 PR 7): main asks the renderer which project owns the
   // source, whether it is control-capable, and whether the capability is on right now — the renderer
   // NEVER runs a CDP command.

@@ -480,7 +480,21 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
     availabilityMode: 'configure-later',
     availability: inScope('any')
   },
-  plannedEntry('homeassistant-sensor', 'managers', 'Home Assistant sensor', 'Create a typed Home Assistant sensor display with safe binding intent.', 'homeassistant-adapter'),
+  {
+    id: 'homeassistant-sensor',
+    nodeKind: 'homeassistant-sensor',
+    category: 'managers',
+    label: 'Home Assistant sensor',
+    description: 'Display selected Home Assistant values, states, gauges, trends, events, weather, calendars, and attributes through a machine-local binding.',
+    keywords: ['home assistant', 'sensor', 'binary', 'gauge', 'trend', 'weather', 'calendar', 'event', 'history'],
+    documentationPath: 'docs/features/integrations/home-assistant-sensor-display.md',
+    safeDefaults: { entities: [], refreshSeconds: 30, historyLimit: 60 },
+    dependencies: ['homeassistant-adapter'],
+    status: 'current',
+    availabilityMode: 'configure-later',
+    scope: 'any',
+    availability: unsupportedInRelay
+  },
   plannedEntry('calendar', 'automation', 'Calendar', 'Create a portable calendar definition with local account binding later.', 'calendar-service'),
   plannedEntry('timer', 'automation', 'Timer', 'Create a timer blueprint with a local execution binding later.', 'planner-service'),
   {
@@ -548,7 +562,7 @@ export const NODE_CATALOG_COMPLETENESS: readonly NodeCatalogCompletenessRecord[]
   { id: 'linux-vm', state: 'planned', scope: 'any', reason: 'QEMU runtime not implemented' },
   { id: 'wild-dim-sum', state: 'current', scope: 'any', reason: 'portable public-catalog selection node' },
   { id: 'homeassistant-control', state: 'current', scope: 'any', reason: 'schema-driven local binding control node' },
-  { id: 'homeassistant-sensor', state: 'planned', scope: 'any', reason: 'sensor display not implemented' },
+  { id: 'homeassistant-sensor', state: 'current', scope: 'any', reason: 'portable sensor display with machine-local binding' },
   { id: 'calendar', state: 'planned', scope: 'any', reason: 'calendar service not implemented' },
   { id: 'timer', state: 'planned', scope: 'any', reason: 'timer service not implemented' },
   { id: 'alarm', state: 'current', scope: 'any', reason: 'persisted Alarm Clock node with host planner' },

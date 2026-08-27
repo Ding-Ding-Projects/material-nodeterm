@@ -7,6 +7,7 @@ import type { HomeAssistantNodeIntent } from '@shared/home-assistant'
 import { DEFAULT_HOME_ASSISTANT_NODE_INTENT } from '@shared/home-assistant'
 import type { HomeAssistantControlConfig } from '@shared/home-assistant-control'
 import { DEFAULT_HOME_ASSISTANT_CONTROL_CONFIG, validateHomeAssistantControlConfig } from '@shared/home-assistant-control'
+import { DEFAULT_HOME_ASSISTANT_SENSOR_CONFIG, type HomeAssistantSensorConfig } from '@shared/home-assistant-sensor'
 import type { AlarmOccurrence, AlarmRecurrence } from '@shared/alarm-clock'
 import type { ServiceConnection } from '@shared/node-exec'
 import type { NsisLocalPaths, NsisSpec } from '@shared/nsis-form-types'
@@ -275,6 +276,8 @@ export interface NodeData {
   calendarConfig?: CalendarNodeConfig
   /** Home Assistant control portable intent. Local connection state belongs to the host service. */
   homeAssistantControlConfig?: HomeAssistantControlConfig
+  /** Home Assistant sensor-only portable entity and display intent. */
+  homeAssistantSensorConfig?: HomeAssistantSensorConfig
   /** Which agent runs in this terminal node (claude/codex/gemini/custom). */
   agentId?: AgentId
   /** Model selected for this node through the shared model gateway. */
@@ -1384,6 +1387,7 @@ export function createDiffNode(
 const AUTHENTICATOR_SIZE = { width: 340, height: 260 }
 const CALENDAR_SIZE = { width: 620, height: 520 }
 const HOME_ASSISTANT_CONTROL_SIZE = { width: 620, height: 620 }
+const HOME_ASSISTANT_SENSOR_SIZE = { width: 660, height: 560 }
 const NSIS_SIZE = { width: 460, height: 520 }
 
 /**
@@ -1513,6 +1517,24 @@ export function createStickyNode(index: number, center?: { x: number; y: number 
       color: '#ffd60a',
       group: null,
       text: ''
+    }
+  }
+}
+
+/** Creates an unbound Home Assistant sensor display. Importing it performs no network action. */
+export function createHomeAssistantSensorNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  return {
+    id: nextId('homeassistant-sensor'),
+    type: 'homeassistant-sensor',
+    position: placeAt(center, index, HOME_ASSISTANT_SENSOR_SIZE.width, HOME_ASSISTANT_SENSOR_SIZE.height),
+    width: HOME_ASSISTANT_SENSOR_SIZE.width,
+    height: HOME_ASSISTANT_SENSOR_SIZE.height,
+    style: { width: HOME_ASSISTANT_SENSOR_SIZE.width, height: HOME_ASSISTANT_SENSOR_SIZE.height },
+    data: {
+      title: 'Home Assistant sensors',
+      color: NODE_COLORS[(index + 4) % NODE_COLORS.length],
+      group: null,
+      homeAssistantSensorConfig: { ...DEFAULT_HOME_ASSISTANT_SENSOR_CONFIG, entities: [] }
     }
   }
 }
@@ -2160,6 +2182,7 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   proxmox: true,
   gitlab: true,
   homeassistant: true,
+  'homeassistant-sensor': true,
   freepbx: true,
   nsis: true,
   shop: true,
@@ -2209,6 +2232,7 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   proxmox: SERVICE_CONSOLE_SIZE,
   gitlab: SERVICE_SUMMARY_SIZE,
   homeassistant: SERVICE_SUMMARY_SIZE,
+  'homeassistant-sensor': HOME_ASSISTANT_SENSOR_SIZE,
   freepbx: SERVICE_SUMMARY_SIZE,
   nsis: NSIS_SIZE,
   shop: SHOP_SIZE,
@@ -2680,6 +2704,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         virtualMachineLocalPaths: n.virtualMachineLocalPaths,
         calendarConfig: n.calendarConfig,
         homeAssistantControlConfig: n.kind === 'homeassistant-control' ? validateHomeAssistantControlConfig(n.homeAssistantControlConfig) : undefined,
+        homeAssistantSensorConfig: n.homeAssistantSensorConfig,
         textUpdatedAt: n.textUpdatedAt,
         textUpdatedBy: n.textUpdatedBy,
         filePath: n.filePath,
@@ -2808,6 +2833,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         virtualMachineLocalPaths: n.data.virtualMachineLocalPaths,
         calendarConfig: n.data.calendarConfig,
         homeAssistantControlConfig: kind === 'homeassistant-control' ? validateHomeAssistantControlConfig(n.data.homeAssistantControlConfig) : undefined,
+        homeAssistantSensorConfig: n.data.homeAssistantSensorConfig,
         fileMissing: n.data.fileMissing,
         url: n.data.url,
         browserProfileId: n.data.browserProfileId,

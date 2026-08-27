@@ -25,6 +25,7 @@ import type { VirtualMachineApi } from '../../shared/virtual-machine'
 import type { CalendarApi, CalendarProvider } from '../../shared/calendar'
 import type { HomeAssistantApi } from '../../shared/home-assistant'
 import type { HomeAssistantControlApi } from '../../shared/home-assistant-control'
+import type { HomeAssistantSensorApi } from '../../shared/home-assistant-sensor'
 import {
   UNKNOWN_CLAUDE_CLI_CAPS,
   type BoardLogApi,
@@ -1231,6 +1232,18 @@ export function buildHomeAssistantControlApi(client: RpcClient): Pick<NodeTermin
   return { homeAssistantControl }
 }
 
+/** Home Assistant sensor requests run on the host-owned core in both desktop and Server Edition. */
+export function buildHomeAssistantSensorApi(client: RpcClient): Pick<NodeTerminalApi, 'homeAssistantSensor'> {
+  const homeAssistantSensor: HomeAssistantSensorApi = {
+    binding: (nodeId) => client.request(IPC.homeAssistantSensorBinding, nodeId) as ReturnType<HomeAssistantSensorApi['binding']>,
+    configure: (input) => client.request(IPC.homeAssistantSensorConfigure, input) as ReturnType<HomeAssistantSensorApi['configure']>,
+    leaveUnbound: (nodeId) => client.request(IPC.homeAssistantSensorLeaveUnbound, nodeId) as ReturnType<HomeAssistantSensorApi['leaveUnbound']>,
+    discover: (nodeId) => client.request(IPC.homeAssistantSensorDiscover, nodeId) as ReturnType<HomeAssistantSensorApi['discover']>,
+    refresh: (nodeId, config) => client.request(IPC.homeAssistantSensorRefresh, nodeId, config) as ReturnType<HomeAssistantSensorApi['refresh']>
+  }
+  return { homeAssistantSensor }
+}
+
 /**
  * Build the `usage` namespace over an RpcClient. The server shell runs the same core usage
  * service the desktop does, so this is real end to end — including `onUpdate`, which subscribes
@@ -1694,6 +1707,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildProviderServicesApi(client),
     ...buildHomeAssistantApi(client),
     ...buildHomeAssistantControlApi(client),
+    ...buildHomeAssistantSensorApi(client),
     ...buildUsageApi(client),
     ...buildSessionMemoryApi(client),
     ...buildVsCodeApi(client),

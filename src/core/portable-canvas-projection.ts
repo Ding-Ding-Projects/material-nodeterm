@@ -17,6 +17,7 @@ import { repairUniverseShops } from './universe-shop'
 import { validatePortableUniverseDoors, type PortableUniverseDoorV3 } from './universe-door-navigation'
 import { normalizePublicDimSumSelection, type PublicDimSumSelection } from '../shared/public-dim-sum'
 import { validateHomeAssistantControlConfig, type HomeAssistantControlConfig } from '../shared/home-assistant-control'
+import { validateHomeAssistantSensorConfig, type HomeAssistantSensorConfig } from '../shared/home-assistant-sensor'
 
 export type PortableCanvasScope = 'root' | 'multiverse' | 'aws-universe'
 
@@ -68,6 +69,7 @@ export interface PortableCanvasNodeV3 {
   /** Ordered content references only. Absolute source paths are rejected at this boundary. */
   mediaAssets?: MediaAssetReference[]
   mediaActiveAssetId?: string
+  homeAssistantSensorConfig?: HomeAssistantSensorConfig
 }
 
 export interface PortableRelationshipV3 {
@@ -127,7 +129,7 @@ const ALLOWED_NODE = new Set([
   'id', 'kind', 'creationEventId', 'position', 'size', 'title', 'color', 'group',
   'universeCanvasId', 'universeScope', 'universeDepth', 'nonDeletable', 'shopSelection',
   'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel',
-  'wildDimSumDish', 'homeAssistantIntent', 'homeAssistantControlConfig',
+  'wildDimSumDish', 'homeAssistantIntent', 'homeAssistantControlConfig', 'homeAssistantSensorConfig',
   'alarmSchedule', 'alarmTimeZone', 'alarmEnabled', 'alarmSnoozeMinutes',
   'alarmSoundEnabled', 'alarmNarratorEnabled', 'alarmHistory', 'mediaAssets',
   'mediaActiveAssetId'
@@ -283,6 +285,11 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
       const value = { id: text(occurrence.id, 'alarm occurrence id'), alarmId: text(occurrence.alarmId, 'alarm id'), scheduledAt: finite(occurrence.scheduledAt, 'alarm scheduled time'), status: text(occurrence.status, 'alarm occurrence status'), createdAt: finite(occurrence.createdAt, 'alarm occurrence creation time'), timeZone: text(occurrence.timeZone, 'alarm occurrence timezone'), ...(occurrence.resolvedAt === undefined ? {} : { resolvedAt: finite(occurrence.resolvedAt, 'alarm resolved time') }), ...(occurrence.snoozedUntil === undefined ? {} : { snoozedUntil: finite(occurrence.snoozedUntil, 'alarm snooze time') }) }
       return value
     })
+  }
+  if (node.homeAssistantSensorConfig !== undefined) {
+    const normalized = validateHomeAssistantSensorConfig(node.homeAssistantSensorConfig)
+    if (strict && JSON.stringify(normalized) !== JSON.stringify(node.homeAssistantSensorConfig)) throw new PortableProjectV3Error('manifest', 'Portable Home Assistant sensor intent is invalid or exceeds its bounds.')
+    out.homeAssistantSensorConfig = normalized
   }
   if (node.browserTabs !== undefined) {
     if (node.browserTabs.length > 1024) throw new PortableProjectV3Error('entry-limit', 'Portable browser tab count exceeds its bound.')
@@ -512,7 +519,8 @@ export function portableCanvasProjectionToProject(
     ...(node.mediaActiveAssetId !== undefined ? { mediaActiveAssetId: node.mediaActiveAssetId } : {}),
     ...(node.wildDimSumDish !== undefined ? { wildDimSumDish: node.wildDimSumDish } : {}),
     ...(node.homeAssistantIntent !== undefined ? { homeAssistantIntent: { ...node.homeAssistantIntent } } : {}),
-    ...(node.homeAssistantControlConfig !== undefined ? { homeAssistantControlConfig: validateHomeAssistantControlConfig(node.homeAssistantControlConfig) } : {})
+    ...(node.homeAssistantControlConfig !== undefined ? { homeAssistantControlConfig: validateHomeAssistantControlConfig(node.homeAssistantControlConfig) } : {}),
+    ...(node.homeAssistantSensorConfig !== undefined ? { homeAssistantSensorConfig: validateHomeAssistantSensorConfig(node.homeAssistantSensorConfig) } : {})
   }))
   const bridgeLinks = value.relationships
     .filter((link) => link.kind === 'bridge')

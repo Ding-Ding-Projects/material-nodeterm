@@ -236,7 +236,9 @@ intentionally unchecked because this task publishes the plan only.
       control and sensor display nodes remain Program 16 and Program 17.
 - [ ] Add Home Assistant multi-instance controls and sensor displays.
   - [x] Add schema-driven Home Assistant control nodes with local connection binding.
-  - [ ] Add Home Assistant sensor display nodes.
+  - [x] Add Home Assistant sensor display nodes with portable entity and presentation intent,
+        machine-local sealed binding, typed values, binary state, enums, gauges, bounded trends,
+        events, weather, calendars, and selected attributes. Verification remains unrun.
 - [ ] Add Calendar, Timer, and Alarm Clock nodes. Planner occurrence service is implemented in the
       current lane, but remains unticked until its required checks and packaged interaction evidence land.
 - [ ] Add Calendar nodes for local calendars and ICS, with guided CalDAV, Google Calendar, and
