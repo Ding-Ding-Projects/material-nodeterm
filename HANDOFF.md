@@ -331,6 +331,22 @@ generation, focused tests, built-artifact interaction proof, release packaging, 
 remote verification remain for the owning integration pass.
 ## 2026-08-26, Linux ISO VM node, issue #24
 
+### Issue #24 completion repair, 2026-08-27
+
+Restored parseable package scripts, node-kind tables, desktop bridge objects, browser fallback
+objects, and Server Edition bridge functions after the parallel program-lane merge. Corrected
+QEMU's VNC display-number to loopback-port mapping and kept Stop operable while startup is
+pending. The manager now distinguishes cancellation from startup failure, reports a QMP stop failure
+after bounded process termination, refuses to collapse unreadable state into an absent record, and
+publishes unique temporary state files through the shared bounded atomic rename helper. Snapshot
+restore now uses the machine-local saved-name catalogue, plain-text filtering, and the shared
+anchored regex builder instead of freehand restore input. The new picker copy is present in English
+and playful Cantonese resources. The mode dropdown now has its own plain-text filter and isolated
+anchored regex builder too.
+
+This completion repair intentionally ran no tests, type checks, lint, builds, packaging, runtime
+interaction, captures, audits, or reviews. Those verdicts remain unrun rather than inferred.
+
 Implemented the one-shot `linux-vm` canvas node and its shared lifecycle contract. The renderer
 provides guided ISO and persistent-disk pickers, persistent-install and disposable-live modes,
 bounded memory and CPU controls, explicit network-off-by-default and WHPX preference switches,

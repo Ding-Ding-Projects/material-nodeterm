@@ -210,9 +210,8 @@ intentionally unchecked because this task publishes the plan only.
       lane now contains the local runtime, guided intake, metadata selection, progress controls,
       restart reconciliation, bounded seeding, and machine-local state; focused verification and
       release evidence remain pending.
-- [ ] Add the bundled QEMU Linux ISO VM with persistent and disposable modes.
 - [ ] Add the bundled WebTorrent downloader with resumable per-task lifecycle.
-- [ ] Add the bundled QEMU Linux ISO VM with persistent and disposable modes. Implementation landed in `src/core/virtual-machine/` and `src/renderer/nodes/VirtualMachineNode.tsx`; tests, build, packaging, runtime interaction, and captures remain unrun in the ultra-speed lane.
+- [ ] Add the bundled QEMU Linux ISO VM with persistent and disposable modes. Source implementation landed in `src/core/virtual-machine/` and `src/renderer/nodes/VirtualMachineNode.tsx`; automated checks, build, packaging, runtime interaction, and captures remain intentionally unrun in the ultra-speed lane.
 - [ ] Add Home Assistant multi-instance controls and sensor displays.
 - [ ] Add Calendar, Timer, and Alarm Clock nodes. Planner occurrence service is implemented in the
       current lane, but remains unticked until its required checks and packaged interaction evidence land.

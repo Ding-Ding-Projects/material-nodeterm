@@ -1160,6 +1160,7 @@ export const CATALOG: Catalog = {
   'universeShop.fixed.title': {
     en: flat('This Shop belongs to its universe and cannot be moved or deleted.'),
     yue: flat('呢間商店屬於自己嘅宇宙，唔可以移動或者刪除。')
+  },
   // Linux ISO VM node. These labels are flat because they identify controls, while operation
   // details and digest values remain facts supplied by the VM manager.
   'virtualMachine.title': { en: flat('Linux ISO VM'), yue: flat('Linux ISO 虛擬機') },
@@ -1168,6 +1169,9 @@ export const CATALOG: Catalog = {
   'virtualMachine.mode': { en: flat('Mode'), yue: flat('模式') },
   'virtualMachine.mode.disposable': { en: flat('Disposable live, changes are discarded'), yue: flat('即用即棄，變更會丟棄') },
   'virtualMachine.mode.persistent': { en: flat('Persistent install, keep the selected disk'), yue: flat('持久安裝，保留所選磁碟') },
+  'virtualMachine.mode.filter': { en: flat('Filter VM modes'), yue: flat('篩選虛擬機模式') },
+  'virtualMachine.mode.filterRegex': { en: flat('Filter VM modes with regex'), yue: flat('用正規表示式篩選虛擬機模式') },
+  'virtualMachine.mode.regex': { en: flat('Regex for VM modes'), yue: flat('虛擬機模式正規表示式') },
   'virtualMachine.expectedHash': { en: flat('Expected ISO SHA-256 (optional)'), yue: flat('預期 ISO SHA-256（可選）') },
   'virtualMachine.memory': { en: flat('Memory (MiB)'), yue: flat('記憶體（MiB）') },
   'virtualMachine.cpus': { en: flat('CPUs'), yue: flat('CPU 數量') },
@@ -1181,8 +1185,14 @@ export const CATALOG: Catalog = {
   'virtualMachine.openDisplay': { en: flat('Open display'), yue: flat('開啟顯示畫面') },
   'virtualMachine.createDisk': { en: flat('Create disk'), yue: flat('建立磁碟') },
   'virtualMachine.browse': { en: flat('Browse'), yue: flat('瀏覽') },
-  'virtualMachine.note': { en: flat('Linux ISO VM is separate from WSL. It runs one isolated QEMU machine with a loopback-only display.'), yue: flat('Linux ISO 虛擬機同 WSL 分開，會用只限本機回環顯示嘅 QEMU 隔離機器。') }
-  }
+  'virtualMachine.note': { en: flat('Linux ISO VM is separate from WSL. It runs one isolated QEMU machine with a loopback-only display.'), yue: flat('Linux ISO 虛擬機同 WSL 分開，會用只限本機回環顯示嘅 QEMU 隔離機器。') },
+  'virtualMachine.snapshot.newName': { en: flat('New snapshot name'), yue: flat('新快照名稱') },
+  'virtualMachine.snapshot.filter': { en: flat('Filter saved snapshots'), yue: flat('篩選已儲存快照') },
+  'virtualMachine.snapshot.filterRegex': { en: flat('Filter snapshots with regex'), yue: flat('用正規表示式篩選快照') },
+  'virtualMachine.snapshot.regex': { en: flat('Regex for saved snapshots'), yue: flat('已儲存快照正規表示式') },
+  'virtualMachine.snapshot.restoreChoice': { en: flat('Saved snapshot to restore'), yue: flat('要還原嘅已儲存快照') },
+  'virtualMachine.snapshot.noMatch': { en: flat('No snapshots match the filter'), yue: flat('冇快照符合篩選') },
+  'virtualMachine.snapshot.none': { en: flat('Create a snapshot before restoring'), yue: flat('還原之前先建立快照') },
   // WSL creation dialog (WslCreateDialog.tsx). Labels stay flat, while explanatory copy gets
   // five honest levels. Runtime distribution names, versions, instance names, paths, operation
   // ids, parser details, and executable names are supplied by the caller and never live here.
