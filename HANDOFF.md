@@ -1239,14 +1239,14 @@ made by this lane.
 
 ## 2026-08-27, managed Nextcloud no-socket hosting lane
 
-Issue #53 is implemented on `feat/program-42-nextcloud-managed` in the task-owned Gerk Tong Hui.
-The new `nextcloud-managed` node kind uses a fixed PostgreSQL, Redis, and Nextcloud Apache stack,
-an internal network, loopback-only web binding, generated local secret files, and no Docker socket
-mount or privileged mode. The renderer exposes verified Docker context selection, native data and
-backup folder pickers, bounded project name and port controls, separate operation and snapshot
-search fields with adjacent anchored regex builders, progress, cancellation, and two-key recovery
-confirmation. The host process owns the closed Docker argument vector and sequences deploy, update,
-backup, restore, and rollback operations.
+Issue #53 is implemented on feature branch `feat/program-42-nextcloud-managed` at pushed commit
+`9f1406a9dd9758471b6ebad77aed662f1cc22850`. The new `nextcloud-managed` node kind uses a fixed
+PostgreSQL, Redis, and Nextcloud Apache stack, an internal network, loopback-only web binding,
+generated local secret files, and no Docker socket mount or privileged mode. The renderer exposes
+verified Docker context selection, native data and backup folder pickers, bounded project name and
+port controls, separate operation and snapshot search fields with adjacent anchored regex builders,
+progress, cancellation, and two-key recovery confirmation. The host process owns the closed Docker
+argument vector and sequences deploy, update, backup, restore, and rollback operations.
 
 Portable schema 3 carries only `nextcloudManagedIntent`. Machine-local `nextcloudManagedBinding`
 holds the selected context, folders, loopback port, and opaque secret-key names through the local
@@ -1258,8 +1258,7 @@ entry.
 
 This ultra-speed lane intentionally ran no tests, type checks, lint, reviews, security or
 accessibility checks, builds, packaging, installer execution, runtime interaction, or captures.
-Those verdicts remain unverified. The lane's commit and dew state are recorded in the issue handoff
-comment after the required commit.
+Those verification results remain unrun. Default-branch integration is pending.
 
 ## 2026-08-26, portable Node Universes and hosting program plan
 
