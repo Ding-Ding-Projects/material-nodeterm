@@ -1,11 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { NodeResizer, useReactFlow, type NodeProps } from '@xyflow/react'
-import type { TorrentSeedPolicy, TorrentTaskState } from '@shared/torrent'
+import type { TorrentApi, TorrentSeedPolicy, TorrentTaskState } from '@shared/torrent'
 import { normalizeSeedPolicy } from '@shared/torrent'
 import type { CanvasNode } from '../state/workspace'
 import { useActiveSessionApi } from '../session/session'
 import { EditableNodeTitle } from '../components/EditableNodeTitle'
+import { AnchoredRegexBuilder } from '../components/regex/AnchoredRegexBuilder'
+import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
 import { nodeHeaderFillStyle } from '../lib/nodeColor'
+import { openDestructiveGate } from '../state/destructiveGate'
 
 function bytes(value: number): string {
   if (!Number.isFinite(value) || value <= 0) return '0 B'
@@ -31,6 +34,145 @@ function taskLabel(task: TorrentTaskState): string {
   return task.name || (task.sourceKind === 'magnet' ? 'Magnet download' : 'Torrent file')
 }
 
+const SEED_CHOICES: ReadonlyArray<{ id: TorrentSeedPolicy['kind']; label: string; description: string; policy: TorrentSeedPolicy }> = [
+  { id: 'never', label: 'Do not seed', description: 'Stop the WebTorrent handle when the selected files finish.', policy: { kind: 'never' } },
+  { id: 'ratio', label: 'Seed to 1.0 ratio', description: 'Stop after uploading the same amount that was downloaded.', policy: { kind: 'ratio', ratio: 1 } },
+  { id: 'minutes', label: 'Seed for 30 minutes', description: 'Start the 30 minute timer only after the download completes.', policy: { kind: 'minutes', minutes: 30 } }
+]
+
+interface TorrentTaskCardProps {
+  task: TorrentTaskState
+  busy: boolean
+  destination: string
+  torrent: TorrentApi
+  run: (operation: () => Promise<unknown>) => Promise<void>
+}
+
+function TorrentTaskCard({ task, busy, destination, torrent, run }: TorrentTaskCardProps): React.JSX.Element {
+  const fileSearch = useRegexSearchField()
+  const seedSearch = useRegexSearchField()
+  const fileSearchRef = useRef<HTMLInputElement>(null)
+  const seedSearchRef = useRef<HTMLInputElement>(null)
+  const visibleFiles = useMemo(
+    () => task.files.filter((file) => fileSearch.test(`${file.path} ${file.name}`)),
+    [task.files, fileSearch.mode, fileSearch.query, fileSearch.pattern, fileSearch.flags, fileSearch.error]
+  )
+  const visibleSeedChoices = useMemo(
+    () => SEED_CHOICES.filter((choice) => seedSearch.test(`${choice.label} ${choice.description}`)),
+    [seedSearch.mode, seedSearch.query, seedSearch.pattern, seedSearch.flags, seedSearch.error]
+  )
+  const selectedCount = task.files.filter((file) => file.selected).length
+  const canStart = !!task.destination && task.files.length > 0 && selectedCount > 0 && !busy
+  const startReason = !task.destination
+    ? 'Choose a download folder and apply it to this task before starting.'
+    : task.files.length === 0
+      ? 'Wait for torrent metadata before starting.'
+      : selectedCount === 0
+        ? 'Select at least one file before starting.'
+        : null
+
+  const updatePolicy = (policy: TorrentSeedPolicy): void => {
+    void run(() => torrent.setSeedPolicy(task.id, normalizeSeedPolicy(policy)))
+  }
+
+  const requestRemove = (event: React.MouseEvent<HTMLButtonElement>): void => {
+    const trigger = event.currentTarget
+    const rect = trigger.getBoundingClientRect()
+    const opened = openDestructiveGate({
+      title: `Remove torrent task "${taskLabel(task)}"`,
+      description: 'This removes the machine-local task record and stops its WebTorrent handle. Downloaded files remain on disk. The task record cannot be restored.',
+      affected: [taskLabel(task)],
+      confirmLabel: 'Remove task',
+      anchor: { x: rect.left, y: rect.bottom },
+      restoreFocusEl: trigger,
+      onConfirm: () => { void run(() => torrent.remove(task.id)) }
+    })
+    if (!opened) {
+      window.dispatchEvent(new CustomEvent('nodeterm:toast', { detail: { kind: 'error', message: 'Another destructive confirmation is already open.' } }))
+    }
+  }
+
+  return (
+    <article className="torrent-node__task">
+      <div className="torrent-node__task-head"><strong>{taskLabel(task)}</strong><span>{task.status}</span></div>
+      <progress max={1} value={task.progress} aria-label={`${Math.round(task.progress * 100)} percent downloaded`} />
+      <div className="torrent-node__stats"><span>{Math.round(task.progress * 100)}%</span><span>{bytes(task.downloadedBytes)} / {bytes(task.totalBytes)}</span><span>{bytes(task.speedBytesPerSecond)}/s</span><span>{task.peers} peers</span><span>ETA {duration(task.etaSeconds)}</span></div>
+      {task.error && <p className="torrent-node__error" role="alert">{task.error}</p>}
+
+      {task.files.length > 0 && (
+        <details className="torrent-node__picker">
+          <summary>Files ({selectedCount} of {task.files.length} selected)</summary>
+          <div className="torrent-node__picker-search">
+            <label htmlFor={`${task.id}-file-search`}>Filter files</label>
+            <input
+              ref={fileSearchRef}
+              id={`${task.id}-file-search`}
+              value={fileSearch.value}
+              placeholder={fileSearch.mode === 'regex' ? 'Regex pattern' : 'Search file names and paths'}
+              onChange={(event) => fileSearch.setValue(event.target.value)}
+            />
+            <AnchoredRegexBuilder search={fileSearch} fieldRef={fileSearchRef} label={`Regex builder for files in ${taskLabel(task)}`} />
+          </div>
+          {fileSearch.error && <p className="torrent-node__error" role="alert">{fileSearch.error}</p>}
+          <div className="torrent-node__selection-actions">
+            <button type="button" disabled={busy || visibleFiles.length === 0} onClick={() => void run(() => torrent.chooseFiles(task.id, [...new Set([...task.files.filter((file) => file.selected).map((file) => file.path), ...visibleFiles.map((file) => file.path)])]))}>Select filtered</button>
+            <button type="button" disabled={busy || visibleFiles.length === 0} onClick={() => void run(() => torrent.chooseFiles(task.id, task.files.filter((file) => file.selected && !visibleFiles.some((visible) => visible.path === file.path)).map((file) => file.path)))}>Clear filtered</button>
+          </div>
+          <div className="torrent-node__files">
+            {visibleFiles.length === 0 ? <p className="torrent-node__empty">No files match this filter.</p> : visibleFiles.map((file) => (
+              <label key={file.path}>
+                <input
+                  type="checkbox"
+                  checked={file.selected}
+                  disabled={busy}
+                  onChange={(event) => void run(() => torrent.chooseFiles(task.id, task.files.filter((entry) => entry.path === file.path ? event.target.checked : entry.selected).map((entry) => entry.path)))}
+                />
+                <span>{file.path}</span>
+                <small>{bytes(file.sizeBytes)}</small>
+              </label>
+            ))}
+          </div>
+        </details>
+      )}
+
+      <details className="torrent-node__picker">
+        <summary>Seeding: {SEED_CHOICES.find((choice) => choice.id === task.seedPolicy.kind)?.label ?? 'Do not seed'}</summary>
+        <div className="torrent-node__picker-search">
+          <label htmlFor={`${task.id}-seed-search`}>Find a seeding policy</label>
+          <input
+            ref={seedSearchRef}
+            id={`${task.id}-seed-search`}
+            value={seedSearch.value}
+            placeholder={seedSearch.mode === 'regex' ? 'Regex pattern' : 'Search seeding policies'}
+            onChange={(event) => seedSearch.setValue(event.target.value)}
+          />
+          <AnchoredRegexBuilder search={seedSearch} fieldRef={seedSearchRef} label={`Regex builder for seeding policies in ${taskLabel(task)}`} />
+        </div>
+        {seedSearch.error && <p className="torrent-node__error" role="alert">{seedSearch.error}</p>}
+        <div className="torrent-node__seed-options" role="radiogroup" aria-label={`Seeding policy for ${taskLabel(task)}`}>
+          {visibleSeedChoices.length === 0 ? <p className="torrent-node__empty">No seeding policies match this filter.</p> : visibleSeedChoices.map((choice) => (
+            <label key={choice.id}>
+              <input type="radio" name={`${task.id}-seed-policy`} checked={task.seedPolicy.kind === choice.id} disabled={busy} onChange={() => updatePolicy(choice.policy)} />
+              <span><strong>{choice.label}</strong><small>{choice.description}</small></span>
+            </label>
+          ))}
+        </div>
+      </details>
+
+      {startReason && task.status !== 'completed' && task.status !== 'cancelled' && <p className="torrent-node__hint">{startReason}</p>}
+      <div className="torrent-node__task-actions">
+        {(task.status === 'queued' || task.status === 'metadata') && <button type="button" disabled={!canStart} onClick={() => void run(() => torrent.start(task.id))}>Start</button>}
+        {task.status === 'downloading' && <button type="button" disabled={busy} onClick={() => void run(() => torrent.pause(task.id))}>Pause</button>}
+        {task.status === 'paused' && <button type="button" disabled={!canStart} onClick={() => void run(() => torrent.resume(task.id))}>Resume</button>}
+        <button type="button" disabled={busy || task.status === 'completed' || task.status === 'cancelled'} onClick={() => void run(() => torrent.cancel(task.id))}>Cancel</button>
+        <button type="button" disabled={busy || (task.status !== 'failed' && task.status !== 'cancelled')} onClick={() => void run(() => torrent.retry(task.id))}>Retry</button>
+        <button type="button" disabled={busy || !!task.destination || !destination} onClick={() => void run(() => torrent.setDestination(task.id, destination))}>Use folder</button>
+        <button type="button" disabled={busy} onClick={requestRemove}>Remove task</button>
+      </div>
+    </article>
+  )
+}
+
 export default function TorrentNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const { updateNodeData } = useReactFlow()
   const api = useActiveSessionApi()
@@ -38,22 +180,19 @@ export default function TorrentNode({ id, data, selected }: NodeProps<CanvasNode
   const [destination, setDestination] = useState('')
   const [runtime, setRuntime] = useState<{ available: boolean; origin: string; detail: string | null } | null>(null)
   const [busy, setBusy] = useState(false)
-  const [query, setQuery] = useState('')
-  const [regexOpen, setRegexOpen] = useState(false)
-  const [pattern, setPattern] = useState('')
-  const [flags, setFlags] = useState('i')
-  const [regexError, setRegexError] = useState<string | null>(null)
+  const taskSearch = useRegexSearchField()
+  const taskSearchRef = useRef<HTMLInputElement>(null)
 
   const load = useCallback(async (): Promise<void> => {
     try {
       const [nextTasks, nextRuntime] = await Promise.all([api.torrent.list(id), api.torrent.runtime()])
       setTasks(nextTasks)
       setRuntime(nextRuntime)
-      if (!destination) setDestination(nextTasks.find((task) => task.destination)?.destination ?? '')
+      setDestination((current) => current || nextTasks.find((task) => task.destination)?.destination || '')
     } catch (error) {
       setRuntime({ available: false, origin: 'unavailable', detail: error instanceof Error ? error.message : String(error) })
     }
-  }, [api, id, destination])
+  }, [api, id])
 
   useEffect(() => {
     void load()
@@ -66,22 +205,10 @@ export default function TorrentNode({ id, data, selected }: NodeProps<CanvasNode
     })
   }, [api, id, load])
 
-  const filteredTasks = useMemo(() => {
-    const text = query.trim()
-    if (!text) return tasks
-    if (regexOpen && pattern) {
-      try {
-        const re = new RegExp(pattern, flags)
-        setRegexError(null)
-        return tasks.filter((task) => re.test(`${taskLabel(task)} ${task.status} ${task.sourceKind}`))
-      } catch (error) {
-        setRegexError(error instanceof Error ? error.message : 'Invalid regular expression')
-        return []
-      }
-    }
-    const lowered = text.toLocaleLowerCase()
-    return tasks.filter((task) => `${taskLabel(task)} ${task.status}`.toLocaleLowerCase().includes(lowered))
-  }, [flags, pattern, query, regexOpen, tasks])
+  const filteredTasks = useMemo(
+    () => tasks.filter((task) => taskSearch.test(`${taskLabel(task)} ${task.status} ${task.sourceKind}`)),
+    [tasks, taskSearch.mode, taskSearch.query, taskSearch.pattern, taskSearch.flags, taskSearch.error]
+  )
 
   const withBusy = useCallback(async (operation: () => Promise<unknown>): Promise<void> => {
     if (busy) return
@@ -101,37 +228,23 @@ export default function TorrentNode({ id, data, selected }: NodeProps<CanvasNode
     if (chosen) setDestination(chosen)
   }, [api])
 
-  const addMagnet = useCallback(async (): Promise<void> => {
+  const inspectMagnet = useCallback(async (): Promise<void> => {
     const magnet = String(data.torrentMagnet ?? '').trim()
     if (!magnet) return
     await withBusy(async () => {
-      const task = await api.torrent.add({ nodeId: id, sourceKind: 'magnet', sourceRef: magnet, destination })
+      const task = await api.torrent.inspect({ nodeId: id, sourceKind: 'magnet', sourceRef: magnet })
       setTasks((current) => [...current.filter((item) => item.id !== task.id), task])
     })
-  }, [api, data.torrentMagnet, destination, id, withBusy])
+  }, [api, data.torrentMagnet, id, withBusy])
 
-  const addTorrentFile = useCallback(async (): Promise<void> => {
+  const inspectTorrentFile = useCallback(async (): Promise<void> => {
     const source = await api.dialog.selectFile()
     if (!source) return
     await withBusy(async () => {
-      const task = await api.torrent.add({ nodeId: id, sourceKind: 'torrent-file', sourceRef: source, destination })
+      const task = await api.torrent.inspect({ nodeId: id, sourceKind: 'torrent-file', sourceRef: source })
       setTasks((current) => [...current.filter((item) => item.id !== task.id), task])
     })
-  }, [api, destination, id, withBusy])
-
-  const setTaskDestination = useCallback(async (task: TorrentTaskState): Promise<void> => {
-    if (!destination) return
-    await withBusy(() => api.torrent.setDestination(task.id, destination))
-  }, [api, destination, withBusy])
-
-  const updatePolicy = useCallback((task: TorrentTaskState, value: string): Promise<void> => {
-    const policy: TorrentSeedPolicy = value === 'ratio'
-      ? { kind: 'ratio', ratio: 1 }
-      : value === 'minutes'
-        ? { kind: 'minutes', minutes: 30 }
-        : normalizeSeedPolicy({ kind: 'never' })
-    return withBusy(() => api.torrent.setSeedPolicy(task.id, policy))
-  }, [api, withBusy])
+  }, [api, id, withBusy])
 
   const fill = nodeHeaderFillStyle(data.color)
   return (
@@ -151,9 +264,10 @@ export default function TorrentNode({ id, data, selected }: NodeProps<CanvasNode
           <input id={`${id}-magnet`} value={data.torrentMagnet ?? ''} spellCheck={false} placeholder="magnet:?xt=urn:btih:…" onChange={(event) => updateNodeData(id, { torrentMagnet: event.target.value })} />
         </label>
         <div className="torrent-node__actions">
-          <button type="button" disabled={!runtime?.available || !data.torrentMagnet?.trim() || !destination || busy} onClick={() => void addMagnet()}>Add magnet</button>
-          <button type="button" disabled={!runtime?.available || !destination || busy} onClick={() => void addTorrentFile()}>Choose .torrent file</button>
+          <button type="button" disabled={!runtime?.available || !data.torrentMagnet?.trim() || busy} onClick={() => void inspectMagnet()}>Inspect magnet</button>
+          <button type="button" disabled={!runtime?.available || busy} onClick={() => void inspectTorrentFile()}>Inspect .torrent file</button>
         </div>
+        <p className="torrent-node__hint">Inspection reads metadata first. Choose files and a download folder, then start the task explicitly.</p>
         <div className="torrent-node__destination">
           <label htmlFor={`${id}-destination`}>Download folder</label>
           <input id={`${id}-destination`} value={destination} readOnly placeholder="Choose a destination folder" />
@@ -161,31 +275,12 @@ export default function TorrentNode({ id, data, selected }: NodeProps<CanvasNode
         </div>
         <div className="torrent-node__search">
           <label htmlFor={`${id}-search`}>Tasks</label>
-          <input id={`${id}-search`} value={query} placeholder="Search tasks" onChange={(event) => setQuery(event.target.value)} />
-          <button type="button" aria-expanded={regexOpen} onClick={() => setRegexOpen((open) => !open)}>Regex builder</button>
+          <input ref={taskSearchRef} id={`${id}-search`} value={taskSearch.value} placeholder={taskSearch.mode === 'regex' ? 'Regex pattern' : 'Search tasks'} onChange={(event) => taskSearch.setValue(event.target.value)} />
+          <AnchoredRegexBuilder search={taskSearch} fieldRef={taskSearchRef} label="Regex builder for torrent tasks" />
         </div>
-        {regexOpen && (
-          <div className="torrent-node__regex" role="region" aria-label="Torrent task regex builder">
-            <label>Pattern <input value={pattern} onChange={(event) => setPattern(event.target.value)} /></label>
-            <label>Flags <input value={flags} onChange={(event) => setFlags(event.target.value)} /></label>
-            {regexError && <span role="alert">{regexError}</span>}
-          </div>
-        )}
-        {filteredTasks.length === 0 ? <p className="torrent-node__empty">No torrent tasks yet. Add a magnet or choose a torrent file.</p> : filteredTasks.map((task) => (
-          <article key={task.id} className="torrent-node__task">
-            <div className="torrent-node__task-head"><strong>{taskLabel(task)}</strong><span>{task.status}</span></div>
-            <progress max={1} value={task.progress} aria-label={`${Math.round(task.progress * 100)} percent downloaded`} />
-            <div className="torrent-node__stats"><span>{Math.round(task.progress * 100)}%</span><span>{bytes(task.downloadedBytes)} / {bytes(task.totalBytes)}</span><span>{bytes(task.speedBytesPerSecond)}/s</span><span>{task.peers} peers</span><span>ETA {duration(task.etaSeconds)}</span></div>
-            {task.error && <p className="torrent-node__error" role="alert">{task.error}</p>}
-            {task.files.length > 0 && <details><summary>Files ({task.files.length})</summary><div className="torrent-node__files">{task.files.map((file) => <label key={file.path}><input type="checkbox" checked={file.selected} onChange={(event) => void withBusy(() => api.torrent.chooseFiles(task.id, task.files.filter((entry) => entry.path === file.path ? event.target.checked : entry.selected).map((entry) => entry.path)))} /> <span>{file.path}</span><small>{bytes(file.sizeBytes)}</small></label>)}</div></details>}
-            <div className="torrent-node__task-actions">
-              {task.status === 'downloading' ? <button type="button" onClick={() => void withBusy(() => api.torrent.pause(task.id))}>Pause</button> : <button type="button" disabled={task.status === 'completed' || task.status === 'cancelled'} onClick={() => void withBusy(() => api.torrent.resume(task.id))}>Resume</button>}
-              <button type="button" disabled={task.status === 'completed' || task.status === 'cancelled'} onClick={() => void withBusy(() => api.torrent.cancel(task.id))}>Cancel</button>
-              <button type="button" disabled={task.status !== 'failed' && task.status !== 'cancelled'} onClick={() => void withBusy(() => api.torrent.retry(task.id))}>Retry</button>
-              <button type="button" disabled={!!task.destination || !destination} onClick={() => void setTaskDestination(task)}>Use folder</button>
-              <select aria-label={`Seeding policy for ${taskLabel(task)}`} value={task.seedPolicy.kind} onChange={(event) => void updatePolicy(task, event.target.value)}><option value="never">Do not seed</option><option value="ratio">Seed to 1.0 ratio</option><option value="minutes">Seed for 30 minutes</option></select>
-            </div>
-          </article>
+        {taskSearch.error && <p className="torrent-node__error" role="alert">{taskSearch.error}</p>}
+        {filteredTasks.length === 0 ? <p className="torrent-node__empty">No torrent tasks match this search. Inspect a magnet or torrent file to begin.</p> : filteredTasks.map((task) => (
+          <TorrentTaskCard key={task.id} task={task} busy={busy} destination={destination} torrent={api.torrent} run={withBusy} />
         ))}
       </div>
     </div>

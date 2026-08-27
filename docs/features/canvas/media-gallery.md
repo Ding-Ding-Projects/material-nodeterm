@@ -22,10 +22,17 @@ browser MIME claim.
 
 Project data stores a content reference (`assetId`, portable relative path, MIME, byte count,
 SHA-256, and optional dimensions or duration), not an absolute machine path. A transient
-`sourcePath` may help resolve a local asset while the node is open, but serialization strips it.
-References with an invalid path, digest, or byte budget are rejected. An omitted or unavailable
-asset remains represented as `missing` and offers a locate/restore route in the owning flow rather
-than silently deleting the node.
+`sourcePath` or single-file `filePath` may help resolve an asset on the current computer. Shared
+serialization strips those paths and stores them in the machine-local workspace index, keyed by
+node and content address, so a local restart does not lose the binding and a cloned project never
+inherits another computer's path.
+
+Schema 3 stores the ordered node references and active Gallery selection. Included bytes are written
+under `assets/media/<sha256>.<extension>` and listed in both the media manifest and the outer archive
+manifest. Export reads the selected file again and proves its byte count, signature, and SHA-256
+before publication. Import validates the complete archive first, stages media below the new project
+root, then atomically publishes the destination. A reference without a matching byte carrier is
+retained with `missing: true`; it never resolves merely because a plausible filename exists.
 
 ## Accessibility and appearance
 
@@ -40,12 +47,16 @@ media names, MIME values, counts, and metadata remain factual.
 Empty, malformed, unsupported, missing, or disallowed files remain untouched and render an honest
 state. The `nt-media://` protocol allowlists local paths and remote SSH media is resolved through the
 existing host cache path. Media references are content-addressed and portable; credentials, host
-details, and absolute paths do not enter shared project data or exports.
+details, and absolute paths do not enter shared project data or exports. The shared resolver requires
+caller-supplied byte-count and SHA-256 evidence before returning a cache or bundled path. A missing
+file and a same-named file with different bytes remain distinct failure states.
 
 ## Verification state
 
-The implementation is present in the source tree on issue #20's lane. Tests, builds, packaged
-interaction, and real captures are intentionally pending for the parent integration lane.
+The serialization and durable-byte boundaries are implemented in source on issue #20's lane. Tests,
+type checking, lint, reviews, security and accessibility checks, builds, packaging, installer
+execution, runtime interaction, and captures were intentionally not run. Those verdicts and the
+release remain pending in the coordinating integration lane.
 
 ## Suggested articles
 

@@ -649,6 +649,9 @@ export interface ConvertQueueItem {
   sourceName: string
   sourceBytes: number
   destPath: string
+  /** One-based collision suffix selected when the item entered the queue. Omitted for the first
+   *  available name; `2` means the destination uses the familiar `name (2).ext` form. */
+  destinationCollisionIndex?: number
   adapterId: string
   status: ConvertItemStatus
   /** Why the item is in `needs-confirm`: 'lossy' (the adapter is lossy and hasn't been confirmed),

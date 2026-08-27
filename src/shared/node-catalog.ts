@@ -1,4 +1,5 @@
 import type { NodeKind } from './types'
+import { DOCKER_HOST_PORTABLE_BLUEPRINT } from './docker-host-manager'
 
 /** The guided categories shown by the Node Catalog. Keep this list explicit so a new category
  * cannot disappear from the picker simply because no current entry happens to use it. */
@@ -363,8 +364,8 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
     label: 'Docker host manager',
     description: 'Open a typed manager for a local or saved Docker host.',
     keywords: ['service', 'container', 'docker', 'host'],
-    documentationPath: 'docs/features/canvas/node-kinds.md',
-    safeDefaults: { serviceLabel: '' },
+    documentationPath: 'docs/features/remote/docker-host.md',
+    safeDefaults: { serviceLabel: '', dockerHostBlueprint: DOCKER_HOST_PORTABLE_BLUEPRINT },
     dependencies: ['service-binding'],
     availability: alwaysAvailable
   },

@@ -1,5 +1,77 @@
 # Handoff
 
+## 2026-08-27, Express File Converter completion, issue #21
+
+The implementation lane is `feat/program-10-file-converter`, refreshed by fast-forward before edits
+to `origin/main` at `7c14db981f9e130cda2b9100285805f9646d7e58`. The later base already contained the
+per-category, plain-text-first searches and adjacent anchored regex builders, so this lane did not
+duplicate them.
+
+`src/core/converter/service.ts` now reserves the first unused `name.ext`, `name (2).ext`, and later
+destination across both the filesystem and every live queue item. It repeats the reservation check
+after the asynchronous filesystem probe, records a suffix index for visible disclosure, rebuilds
+reservations when terminal rows are removed, and retains the existing final atomic no-clobber
+publication and explicit race-time overwrite path. `src/shared/converter.ts` carries the optional
+suffix index. `FileConverterPanel.tsx` explains adjusted names and gives every completed row an
+active-session **Open in Visual Studio Code** action while retaining desktop **Reveal**.
+
+The converter remains a global, machine-local tool rather than a canvas node. Schema 3 projects omit
+its source and destination paths, progress, process state, editor actions, and queue data. Project
+import therefore causes no converter detection, conversion, folder creation, or process launch.
+
+Verification boundary: the ultra-speed lane intentionally ran no tests, lint, type checks, builds,
+packaging, installer execution, reviews, security or accessibility audits, runtime interaction, or
+captures. The parent integration lane must record any later build, package, release, or runtime
+evidence without treating it as evidence for checks that did not run here.
+
+## 2026-08-27, Docker host manager implementation
+
+Issue #19 is implemented on `feat/program-08-docker-host-manager`. The Docker host service node now
+opens a real guided manager instead of the former saved-address placeholder. It discovers Docker CLI
+contexts and classifies local and SSH contexts without exposing endpoints to the renderer. Separate
+resource tabs cover containers, images, volumes, networks, Compose projects, statistics, bounded
+redacted logs, and fixed typed container tasks. Every resource list has plain-text search and an
+adjacent anchored regex builder.
+
+The shared action union contains no shell or arbitrary argument shape. The main process revalidates
+contexts, resource identifiers, names, image choices, and typed tasks before invoking `docker` with
+argument arrays. Guided container creation uses an allowlisted image, generated ownership label,
+resource limits, dropped capabilities, `no-new-privileges`, read-only root by default, bounded tmpfs,
+and no network by default. Destructive removal uses the application's two-key confirmation flow.
+Long operations emit queued, running, completed, failed, and cancelled progress.
+
+The Node Catalog records a schema 3 safe blueprint with only neutral image, network, read-only, and
+resource-bound intent. Context endpoints, SSH identity, credentials, Compose paths, live resource
+ids, statistics, logs, job ids, and process state remain machine-local. Importing that intent has no
+Docker side effect. Server Edition returns an explicit unsupported result for this desktop-owned
+capability.
+
+Directly related documentation is current in `docs/features/remote/docker-host.md`, its category
+index, the offline documentation article, and `site/docs/docker-host-manager.html`. `CHANGELOG.md`
+and `ROADMAP.md` record the same verification boundary.
+
+No tests, type checks, lint, reviews, security or accessibility checks, builds, packaging, installer
+execution, runtime interaction, or captures were run in this ultra-speed lane. The owning integration
+lane must treat every such verdict as unverified.
+
+## 2026-08-27, door-only universe navigation policy
+
+Issue #37 now has a platform-free paired-door policy in
+`src/core/universe-door-navigation.ts`. It validates reciprocal entry and return doors, requires
+known distinct canvases, returns the exact matching exit-door id after a permitted activation, and
+refuses tab, palette, history, or direct canvas selection. `src/core/portable-canvas-projection.ts`
+accepts and validates the safe door records in schema 3. The transferable fields contain no
+credentials, local paths, provider sessions, process state, host identifiers, caches, or navigation
+history.
+
+The visual door construction and Multiverse child-canvas lanes are still pending, so their shells
+must call `decideUniverseDoorNavigation` before switching the active universe canvas and must not
+expose child canvases as ordinary tabs. Direct documentation is in
+`docs/features/canvas/door-only-universe-navigation.md` and the canvas category index links it.
+
+No tests, type checks, lint, reviews, security or accessibility checks, builds, packaging,
+installer execution, runtime interaction, or UI captures were run in this ultra-speed lane.
+
 ## 2026-08-26, desktop Material Design 3 and personal vocabulary reconciliation
 
 This source-only lane is on feat/full-app-material3-reconciliation at the current integration tip.
@@ -310,6 +382,21 @@ roadmap and changelog.
 This lane deliberately did not run tests, type checking, builds, packaging, UI interaction, or
 captures, and made no commit or dew. The parent integration lane must run those checks and inspect
 the built artifact before treating issue #20 as verified.
+
+The resumed issue #20 lane completed the checkpoint's missing serialization and durable-byte
+boundaries. Photo and Video `filePath` values plus Gallery `sourcePath` values now round-trip only
+through the machine-local node overlay. Schema 3 carries ordered media references and the active
+Gallery asset, reconciles each reference against the media manifest, and marks references missing
+when no byte carrier exists. Archive export collects supported media by bounded streaming, re-reads
+and verifies byte count, signature, and SHA-256, writes content-addressed `assets/media/` entries,
+and records them in the outer manifest. Import validates those entries before writing, stages them
+inside the new project root, and publishes atomically. The shared resolver now requires byte-count
+and digest evidence instead of returning a path-shaped guess.
+
+This resumed lane ran no tests, type checks, lint, reviews, security or accessibility checks,
+builds, packaging, installer execution, runtime interaction, or captures, as required by the
+ultra-speed boundary. The coordinating integration lane owns those verdicts, default-branch
+integration, release publication, and capture evidence.
 ## 2026-08-26, Torrent Downloader implementation lane
 
 Added the dedicated `torrent` canvas node, shared downloader contract, CorePlatform-backed service,
@@ -325,10 +412,17 @@ destinations, runtime handles, peer state, and task snapshots never enter the po
 file. Added the categorized torrent documentation and inventory entry. `package.json` and
 `package-lock.json` declare `webtorrent` 2.8.1.
 
+The follow-up implementation on `feat/program-12-torrent-downloader` corrects the package's ESM
+loading boundary, keeps inspected tasks attached to their owning canvas node, and makes inspection,
+destination binding, file selection, and start separate user actions. Every task now has isolated
+plain-text-first file and seeding policy searches with adjacent full anchored regex builders. Task
+removal uses the shared two-key destructive confirmation, and duration seeding begins its timer
+when completion is observed instead of when the policy is selected.
+
 This ultra-speed implementation lane intentionally did not run tests, type checks, lint, builds,
-packaging, installer execution, runtime interaction, UI captures, commits, or dews. The docs bundle
-generation, focused tests, built-artifact interaction proof, release packaging, integration, and
-remote verification remain for the owning integration pass.
+packaging, installer execution, runtime interaction, UI captures, audits, or reviews. The docs
+bundle generation, focused tests, built-artifact interaction proof, release packaging, integration,
+and remote verification remain for the owning integration pass.
 ## 2026-08-26, Linux ISO VM node, issue #24
 
 Implemented the one-shot `linux-vm` canvas node and its shared lifecycle contract. The renderer

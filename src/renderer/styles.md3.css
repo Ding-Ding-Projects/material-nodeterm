@@ -2286,6 +2286,117 @@ button.term-node__title-text:focus-visible {
 .service-node__input {
   border-radius: var(--md-shape-sm);
 }
+.docker-manager {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 12px;
+  overflow: auto;
+  padding: 12px;
+  background: var(--md-surface);
+  color: var(--md-on-surface);
+}
+.docker-manager__context,
+.docker-manager__create,
+.docker-manager__output,
+.docker-manager__jobs {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-lg);
+  background: var(--md-surface-container);
+}
+.docker-manager__toolbar,
+.docker-manager__search,
+.docker-manager__tabs,
+.docker-manager__pills,
+.docker-manager__actions,
+.docker-manager article > header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.docker-manager__search {
+  min-width: 0;
+  flex: 1 1 240px;
+}
+.docker-manager__search > input {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.docker-manager__tabs,
+.docker-manager__pills,
+.docker-manager__actions {
+  flex-wrap: wrap;
+}
+.docker-manager__tabs button,
+.docker-manager__pills button {
+  min-height: 40px;
+  padding: 7px 12px;
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-full);
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+}
+.docker-manager__tabs button[aria-selected='true'],
+.docker-manager__pills button.selected {
+  border-color: var(--md-primary);
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+.docker-manager__pills button small {
+  display: block;
+  color: var(--md-on-surface-variant);
+}
+.docker-manager__rows {
+  display: grid;
+  gap: 10px;
+}
+.docker-manager__rows article,
+.docker-manager__jobs article {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-md);
+  background: var(--md-surface-container-low);
+}
+.docker-manager article > header {
+  justify-content: space-between;
+}
+.docker-manager__error {
+  padding: 10px 12px;
+  border-radius: var(--md-shape-md);
+  background: var(--md-error-container);
+  color: var(--md-on-error-container);
+}
+.docker-manager__stats {
+  color: var(--md-on-surface-variant);
+  font-variant-numeric: tabular-nums;
+}
+.docker-manager pre {
+  max-height: 220px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.docker-manager progress {
+  width: 100%;
+  accent-color: var(--md-primary);
+}
+.docker-manager :is(button, input):focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+@media (max-width: 540px) {
+  .docker-manager__toolbar,
+  .docker-manager article > header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
 .ctx-colors__rainbow.is-active {
   outline-color: var(--md-primary);
 }
@@ -11933,6 +12044,9 @@ button.term-node__title-text:focus-visible {
   .node-catalog-dialog__docs {
     margin-right: 6px;
     padding-inline: 5px;
+  }
+}
+
 .torrent-node {
   min-width: 440px;
   background: var(--md-surface-container);
@@ -11949,7 +12063,7 @@ button.term-node__title-text:focus-visible {
 .torrent-node__runtime,
 .torrent-node__empty,
 .torrent-node__error,
-.torrent-node__regex,
+.torrent-node__hint,
 .torrent-node__task {
   border-radius: 12px;
   padding: 9px 11px;
@@ -11964,7 +12078,7 @@ button.term-node__title-text:focus-visible {
 .torrent-node__field,
 .torrent-node__destination,
 .torrent-node__search,
-.torrent-node__regex label {
+.torrent-node__picker-search {
   display: grid;
   gap: 5px;
 }
@@ -11972,7 +12086,7 @@ button.term-node__title-text:focus-visible {
 .torrent-node__field input,
 .torrent-node__destination input,
 .torrent-node__search input,
-.torrent-node__regex input {
+.torrent-node__picker-search input {
   min-height: 36px;
   border: 1px solid var(--md-outline);
   border-radius: 8px;
@@ -11983,6 +12097,7 @@ button.term-node__title-text:focus-visible {
 
 .torrent-node__actions,
 .torrent-node__task-actions,
+.torrent-node__selection-actions,
 .torrent-node__stats {
   display: flex;
   gap: 7px;
@@ -11993,8 +12108,10 @@ button.term-node__title-text:focus-visible {
 .torrent-node__actions button,
 .torrent-node__destination button,
 .torrent-node__search button,
+.torrent-node__picker-search button,
+.torrent-node__selection-actions button,
 .torrent-node__task-actions button,
-.torrent-node__task-actions select {
+.torrent-node__picker summary {
   min-height: 36px;
   border: 0;
   border-radius: 18px;
@@ -12005,6 +12122,7 @@ button.term-node__title-text:focus-visible {
 }
 
 .torrent-node__actions button:disabled,
+.torrent-node__selection-actions button:disabled,
 .torrent-node__task-actions button:disabled {
   cursor: not-allowed;
   opacity: .5;
@@ -12024,8 +12142,67 @@ button.term-node__title-text:focus-visible {
   align-items: end;
 }
 
-.torrent-node__search label {
+.torrent-node__search label,
+.torrent-node__picker-search label {
   grid-column: 1 / -1;
+}
+
+.torrent-node__picker {
+  margin-top: 9px;
+  border: 1px solid var(--md-outline-variant);
+  border-radius: 12px;
+  background: var(--md-surface-container-low);
+  overflow: clip;
+}
+
+.torrent-node__picker summary {
+  list-style-position: inside;
+  cursor: pointer;
+  padding-block: 8px;
+}
+
+.torrent-node__picker[open] summary {
+  border-bottom: 1px solid var(--md-outline-variant);
+}
+
+.torrent-node__picker-search,
+.torrent-node__selection-actions,
+.torrent-node__seed-options,
+.torrent-node__picker > .torrent-node__error {
+  margin: 9px;
+}
+
+.torrent-node__picker-search {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: 5px;
+}
+
+.torrent-node__seed-options {
+  display: grid;
+  gap: 6px;
+}
+
+.torrent-node__seed-options label {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 9px;
+  align-items: start;
+  min-height: 44px;
+  padding: 8px;
+  border-radius: 10px;
+  background: var(--md-surface-container-high);
+}
+
+.torrent-node__seed-options span,
+.torrent-node__seed-options small {
+  display: block;
+}
+
+.torrent-node__seed-options small,
+.torrent-node__hint {
+  color: var(--md-on-surface-variant);
 }
 
 .torrent-node__task-head,
@@ -12076,7 +12253,7 @@ button.term-node__title-text:focus-visible {
 
 .torrent-node button:focus-visible,
 .torrent-node input:focus-visible,
-.torrent-node select:focus-visible {
+.torrent-node summary:focus-visible {
   outline: 3px solid var(--md-primary);
   outline-offset: 2px;
 }
@@ -12087,7 +12264,8 @@ button.term-node__title-text:focus-visible {
   }
 
   .torrent-node__destination,
-  .torrent-node__search {
+  .torrent-node__search,
+  .torrent-node__picker-search {
     grid-template-columns: 1fr;
   }
 

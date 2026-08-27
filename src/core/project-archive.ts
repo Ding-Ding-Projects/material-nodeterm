@@ -50,6 +50,13 @@ import {
   type PortableProjectV3ImportOptions
 } from './portable-project-import'
 import { projectToPortableCanvasV3, serializePortableCanvasProjectionV3 } from './portable-canvas-projection'
+import {
+  collectPortableMedia,
+  createPortableMediaManifest,
+  type PortableMediaCollected
+} from './portable-media-assets'
+import type { MediaAssetReference } from '../shared/media-catalog'
+import type { PortableProjectOmission } from './portable-project-v3'
 
 // Schema 3 is exposed from the established archive seam while its validation remains platform-free.
 export * from './portable-project-v3'
@@ -316,6 +323,100 @@ interface RepositoryCapture {
   contents: ProjectArchiveContents
 }
 
+function mediaReference(collected: PortableMediaCollected): MediaAssetReference | undefined {
+  if (collected.asset.kind !== 'image' && collected.asset.kind !== 'video') return undefined
+  return {
+    assetId: collected.asset.id,
+    kind: collected.asset.kind === 'image' ? 'photo' : 'video',
+    portablePath: `./assets/media/${collected.asset.id}.${collected.asset.extension}`,
+    mime: collected.asset.mime,
+    bytes: collected.asset.bytes,
+    sha256: collected.asset.sha256,
+    ...(collected.asset.width === undefined ? {} : { width: collected.asset.width }),
+    ...(collected.asset.height === undefined ? {} : { height: collected.asset.height }),
+    ...(collected.asset.durationMs === undefined ? {} : { durationMs: collected.asset.durationMs }),
+    ...(collected.source ? { sourcePath: collected.source.path } : {})
+  }
+}
+
+async function collectProjectMedia(project: Project): Promise<{
+  project: Project
+  media: PortableMediaCollected[]
+  omissions: PortableProjectOmission[]
+}> {
+  const bySource = new Map<string, PortableMediaCollected>()
+  const byAsset = new Map<string, PortableMediaCollected>()
+  const omissions: PortableProjectOmission[] = []
+  const omittedPaths = new Set<string>()
+  let missingIndex = 0
+
+  const omit = (fallback?: MediaAssetReference): void => {
+    const candidate = fallback?.portablePath.slice(2)
+    if (candidate && omittedPaths.has(candidate)) return
+    const omissionPath = candidate ?? `media/missing/${++missingIndex}`
+    omittedPaths.add(omissionPath)
+    omissions.push({
+      path: omissionPath,
+      reason: 'machine-local',
+      detail: 'A selected media source was unavailable or changed, so its bytes were not included.'
+    })
+  }
+
+  const collect = async (
+    sourcePath: string | undefined,
+    fallback?: MediaAssetReference
+  ): Promise<MediaAssetReference | undefined> => {
+    if (!sourcePath) {
+      if (fallback) omit(fallback)
+      return undefined
+    }
+    try {
+      let collected = bySource.get(sourcePath)
+      if (!collected) {
+        collected = await collectPortableMedia(sourcePath)
+        bySource.set(sourcePath, collected)
+        byAsset.set(collected.asset.id, collected)
+      }
+      return mediaReference(collected)
+    } catch {
+      omit(fallback)
+      return undefined
+    }
+  }
+
+  const nodes = [] as Project['nodes']
+  for (const node of project.nodes) {
+    if (node.kind === 'photo' || node.kind === 'video') {
+      const sourcePath = node.filePath ?? node.mediaAssets?.[0]?.sourcePath
+      const reference = await collect(sourcePath, node.mediaAssets?.[0])
+      nodes.push({
+        ...node,
+        mediaAssets: reference ? [reference] : node.mediaAssets?.map((asset) => ({ ...asset, missing: true })),
+        mediaActiveAssetId: reference?.assetId ?? node.mediaActiveAssetId
+      })
+      continue
+    }
+    if (node.kind === 'gallery' && node.mediaAssets) {
+      const mediaAssets: MediaAssetReference[] = []
+      let mediaActiveAssetId = node.mediaActiveAssetId
+      for (const asset of node.mediaAssets) {
+        const reference = await collect(asset.sourcePath, asset)
+        if (reference) {
+          mediaAssets.push(reference)
+          if (asset.assetId === node.mediaActiveAssetId) mediaActiveAssetId = reference.assetId
+        } else {
+          const { sourcePath: _sourcePath, ...portable } = asset
+          mediaAssets.push({ ...portable, missing: true })
+        }
+      }
+      nodes.push({ ...node, mediaAssets, mediaActiveAssetId })
+      continue
+    }
+    nodes.push(node)
+  }
+  return { project: { ...project, nodes }, media: [...byAsset.values()], omissions }
+}
+
 export class ProjectArchiveService {
   constructor(
     private readonly history: LocalHistoryStore,
@@ -329,7 +430,14 @@ export class ProjectArchiveService {
     // New saves use the schema 3 portable projection. The legacy V2 writer remains below as a
     // compatibility reference for older fixtures and readers, but is no longer the production
     // export path: repository files, vaults, process state, and machine paths must not travel.
-    const snapshot = projectToPortableCanvasV3(project)
+    const mediaCapture = await collectProjectMedia(project)
+    const mediaManifest = mediaCapture.media.length > 0
+      ? createPortableMediaManifest(mediaCapture.media.map((item) => item.asset))
+      : undefined
+    const snapshot = projectToPortableCanvasV3(
+      mediaCapture.project,
+      mediaManifest ? { media: mediaManifest } : {}
+    )
     const snapshotText = Buffer.from(serializePortableCanvasProjectionV3(snapshot))
     await this.history.record({
       domain: `project_${project.id}`,
@@ -345,9 +453,14 @@ export class ProjectArchiveService {
       { path: 'credentials', reason: 'credential' as const, detail: 'Credentials and provider sessions never enter a portable project.' },
       { path: 'process-state', reason: 'unsupported' as const, detail: 'Running processes and session state are not portable project content.' },
       { path: 'working-directory', reason: 'machine-local' as const, detail: 'Absolute paths are destination-specific and are not carried.' },
+      ...mediaCapture.omissions,
       ...(opts.vault ? [{ path: 'vault', reason: 'credential' as const, detail: 'The local vault remains on this machine and must be configured again.' }] : [])
     ]
-    const portable = await exportPortableProjectV3(project, { historyBundle, omissions })
+    const portable = await exportPortableProjectV3(mediaCapture.project, {
+      historyBundle,
+      omissions,
+      media: mediaCapture.media
+    })
     return {
       bytes: portable.bytes,
       archiveVersion: 3,

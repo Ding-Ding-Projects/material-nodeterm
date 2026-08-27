@@ -1,5 +1,6 @@
 import { DEFAULT_WORD_SEPARATORS } from './word-separators'
 import type { ServiceConnection } from './node-exec'
+import type { DockerHostManagerApi } from './docker-host-manager'
 import type { NsisSpec, NsisLocalPaths } from './nsis-form-types'
 // Types shared across the main, preload, and renderer processes.
 
@@ -4147,6 +4148,8 @@ export interface RelayPeerPending {
  */
 export interface RelayHostApi {
   dockerContexts(): Promise<Array<{ name: string; current: boolean; endpoint: string }>>
+  /** Guided local/SSH Docker management. Desktop owns the CLI; Server Edition refuses it. */
+  manager: DockerHostManagerApi
   /**
    * Enter host mode over the relay: connect and return a pairing offer string to hand to a client.
    * Rejects when Docker or the configured relay is unavailable. `projectId` is the
