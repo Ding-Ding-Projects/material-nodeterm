@@ -14,6 +14,15 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## Shipped and verified
 
+- [ ] **Combined merge-recovery pull request**: repair the parser-invalid merge remnants across
+      core services, host and bridge code, renderer surfaces, shared contracts, account and
+      identity handling, and release workflow wiring; add the source-parse validation path and
+      align the unsigned Squirrel.Windows installer contract. Source changes are in progress and
+      remain unchecked until the parent integration lane records parser, type-check, build,
+      packaging, and release-workflow evidence. The ultra-speed pass intentionally omits tests,
+      reviews, accessibility and security checks, runtime interaction, and screen captures after
+      activation.
+
 - [ ] Easter egg catalog (#103): 60 local, bounded, accessible desktop surprises are implemented
       in `src/shared/easter-eggs.ts` and `src/renderer/components/EasterEggs.tsx`, with the
       cabinet and documentation in place. Runtime interaction, tests, builds, and captures remain

@@ -2835,3 +2835,20 @@ verification state.
 No tests, lint, type checks, builds, packaging, runtime interaction, reviews, audits, or HuiShots
 were run, as required by issue #103. The feature jer remains separate from `main`; the parent Dog
 must perform integration and any later verification.
+
+# 2026-08-27, combined parser and release recovery
+
+The recovery work is being consolidated into one pull request so related repairs reach the default
+branch together. The implementation scope covers parser-invalid merge remnants across core
+services, host and bridge code, renderer surfaces, shared contracts, account and identity handling,
+and release workflow wiring. The same recovery also adds the source-parse validation path and
+aligns the Windows installer contract with the unsigned Squirrel.Windows packaging policy.
+
+The parent integration lane owns the final merge and all verification. At handoff, the parser,
+type-check, build, packaging, and release-workflow verdicts are not yet recorded here. The
+ultra-speed pass intentionally skipped tests, reviews, accessibility and security checks,
+runtime interaction, and screen captures after activation. Earlier results remain historical and must not
+be reused as verification for the combined recovery commit.
+
+Only the three public records in this lane are changed: `CHANGELOG.md`, `ROADMAP.md`, and
+`HANDOFF.md`. No pull request, merge, or push was performed by this lane.
