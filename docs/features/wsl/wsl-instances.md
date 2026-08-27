@@ -53,6 +53,19 @@ an empty list — "we could not look" and "there is nothing here" are different 
 second one is invisible once it has been rendered as the first: a name that really does collide
 would look free, and a live bound frame would look gone.
 
+The dialog keeps one hand-written copy inventory in `src/renderer/wsl/wslCopy.ts`. Each rendered
+label, status, validation message, and progress explanation names its catalogue id and English
+fallback exactly once. The coverage check compares that inventory with the WSL catalogue entries,
+their five English and Cantonese levels, and the dialog's use sites, so removing a row is a visible
+failure rather than a silently smaller check. Authored copy is passed through the local vocabulary
+mapper. Runtime facts from `wsl.exe`, distribution names, instance names, and operation ids are
+typed separately and remain byte-for-byte intact while vocabulary replacements may apply to the
+authored text around them. The host progress channel sends a phase id plus bounded placeholder
+facts, never an already-rendered English sentence, and the renderer localizes it at the active
+language and funny level. Catalogue failures likewise carry a typed code, an authored template id,
+and exact executable or parser facts, so a failed read cannot become an empty catalogue or a
+rewritten diagnostic. School mode disables the mapper and restores the shipped wording.
+
 ## Creating an instance
 
 The **New WSL instance** surface is a guided Material Design 3 dialog. It loads the live online

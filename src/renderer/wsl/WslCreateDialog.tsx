@@ -9,14 +9,21 @@ import { validateWslCreateForm } from './wslCreateForm'
 import { useI18n } from '../lib/i18n'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { formatText } from '@shared/i18n'
+import { mapAroundExactFacts } from '../nodes/nodeVocabulary'
+import {
+  WSL_COPY,
+  type WslCopyKey,
+  type WslDialogError,
+  wslCopyKeyForFallback
+} from './wslCopy'
 
 interface WslCreateDialogProps {
   catalogue: WslCatalogueEntry[]
   catalogueLoading: boolean
-  catalogueError: string | null
+  catalogueError: WslDialogError | null
   existingNames: ReadonlySet<string>
   busy: boolean
-  error: string | null
+  error: WslDialogError | null
   onCreate: (v: { operationId: string; catalogueId: string; name: string }) => void
   onCancelCreate: (operationId: string) => Promise<boolean>
   onCancel: () => void
@@ -133,6 +140,7 @@ export function WslCreateDialog({
   const [cancelError, setCancelError] = useState<WslDialogError | null>(null)
   const [elapsedMs, setElapsedMs] = useState(0)
   const startedAtRef = useRef<number | null>(null)
+  const wasBusyRef = useRef(false)
   const search = useRegexSearchField({ mode: 'text' })
   const searchInputRef = useRef<HTMLInputElement>(null)
   const nameInputRef = useRef<HTMLInputElement>(null)
@@ -164,10 +172,29 @@ export function WslCreateDialog({
       value,
       { brand: WSL_BRAND }
     )
+  const copy = (key: WslCopyKey, facts: readonly string[] = [], params?: Record<string, string>): string => {
+    const entry = WSL_COPY[key]
+    return mapAroundExactFacts(ts(entry.id, entry.fallback, params), facts, mapVocabulary)
+  }
+
+  const copyFromFallback = (fallback: string, facts: readonly string[] = []): string => {
+    const key = wslCopyKeyForFallback(fallback)
+    return key ? copy(key, facts) : mapAroundExactFacts(fallback, facts, mapVocabulary)
+  }
+
+  const renderError = (value: WslDialogError): string => {
+    if (value.ownership === 'authored') return copy(value.copy)
+    const authored = value.authoredTemplate
+      ? copy(value.authoredTemplate)
+      : value.authoredPrefix
+        ? copy(value.authoredPrefix)
+        : ''
+    const factual = value.text ? mapAroundExactFacts(value.text, value.facts, mapVocabulary) : ''
+    return [authored, factual].filter(Boolean).join(' ')
   }
 
   const cancel = async (): Promise<void> => {
-    if (!busy) {
+    if (!busy && !operationIdRef.current) {
       onCancel()
       return
     }
@@ -175,6 +202,7 @@ export function WslCreateDialog({
     if (!activeOperationId) {
       setCancelRequested(false)
       setCancelError({ ownership: 'authored', copyId: 'errorNoActive', text: '' })
+      setCancelError({ ownership: 'authored', copy: 'noActive' })
       return
     }
     if (cancelRequested) return
@@ -185,6 +213,7 @@ export function WslCreateDialog({
       if (!accepted) {
         setCancelRequested(false)
         setCancelError({ ownership: 'authored', copyId: 'errorCancelRejected', text: '' })
+        setCancelError({ ownership: 'authored', copy: 'cancelRejected' })
       }
     } catch (e) {
       setCancelRequested(false)
@@ -193,6 +222,8 @@ export function WslCreateDialog({
         ownership: 'external-factual',
         text: detail,
         authoredPrefixId: 'errorCancelPrefix'
+        facts: [detail],
+        authoredPrefix: 'cancelErrorPrefix'
       })
     }
   }
@@ -205,20 +236,22 @@ export function WslCreateDialog({
   }, [operationId])
 
   useEffect(() => {
-    if (!busy && operationId) {
+    if (busy) wasBusyRef.current = true
+    if (wasBusyRef.current && !busy && operationId) {
       operationIdRef.current = null
       setOperationId(null)
       startedAtRef.current = null
+      wasBusyRef.current = false
     }
   }, [busy, operationId])
 
   useEffect(() => {
-    if (!busy || !startedAtRef.current) return
+    if (!operationId || !startedAtRef.current) return
     const timer = window.setInterval(() => {
       setElapsedMs(Date.now() - (startedAtRef.current ?? Date.now()))
     }, 1000)
     return () => window.clearInterval(timer)
-  }, [busy, operationId])
+  }, [operationId])
 
   useEffect(() => {
     searchInputRef.current?.focus()
@@ -237,6 +270,7 @@ export function WslCreateDialog({
     catalogueError,
     busy
   })
+  const operationActive = busy || operationId !== null
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
@@ -251,13 +285,21 @@ export function WslCreateDialog({
   }, [isTop, onCancel, onCancelCreate, busy, operationId])
 
   const submit = (): void => {
-    if (busy || operationIdRef.current || !validation.valid || !catalogueId) return
+    if (operationActive || operationIdRef.current || !validation.valid || !catalogueId) return
     const nextOperationId = operationIdRef.current ?? crypto.randomUUID()
     operationIdRef.current = nextOperationId
     setOperationId(nextOperationId)
     startedAtRef.current = Date.now()
     setElapsedMs(0)
-    setProgress({ operationId: nextOperationId, stage: 'validating', step: 1, steps: 4, determinate: false, elapsedMs: 0, message: 'Validating the selected distribution and name.' })
+    setProgress({
+      operationId: nextOperationId,
+      stage: 'validating',
+      step: 1,
+      steps: 4,
+      determinate: false,
+      elapsedMs: 0,
+      message: { id: 'validating', params: {}, facts: [] }
+    })
     setCancelRequested(false)
     setCancelError(null)
     onCreate({ operationId: nextOperationId, catalogueId, name: name.trim() })
@@ -267,7 +309,7 @@ export function WslCreateDialog({
     <Dialog
       open
       onClose={cancel}
-      closeOnScrimClick={!busy}
+      closeOnScrimClick={!operationActive}
       closeOnEscape={false}
       className="wsl-create-dialog"
       title={copy(WSL_COPY_IDS.title, 'New {brand} instance', { brand: WSL_BRAND })}
@@ -277,6 +319,11 @@ export function WslCreateDialog({
             {cancelRequested
               ? copy(WSL_COPY_IDS.cancelling, 'Cancelling {brand} creation…', { brand: WSL_BRAND })
               : copy(WSL_COPY_IDS.cancel, 'Cancel')}
+      title={copy('title')}
+      actions={
+        <>
+          <Button type="button" variant="text" onClick={() => void cancel()} disabled={cancelRequested}>
+            {cancelRequested ? copy('cancelling') : copy('cancel')}
           </Button>
           <Button
             type="button"
@@ -288,6 +335,11 @@ export function WslCreateDialog({
             {busy
               ? copy(WSL_COPY_IDS.creating, 'Creating {brand} instance…', { brand: WSL_BRAND })
               : copy(WSL_COPY_IDS.create, 'Create')}
+            disabled={operationActive || !validation.valid}
+            title={validation.disabledReason ? copyFromFallback(validation.disabledReason) : undefined}
+            onClick={submit}
+          >
+            {operationActive ? copy('creating') : copy('create')}
           </Button>
         </>
       }
@@ -299,6 +351,7 @@ export function WslCreateDialog({
             'Choose a distribution from the live {brand} catalogue, then give this machine-local instance a unique name.',
             { brand: WSL_BRAND }
           )}
+          {copy('description')}
         </p>
 
         <div className="menu-filter wsl-create-dialog__search">
@@ -308,13 +361,16 @@ export function WslCreateDialog({
               className="wsl-create-dialog__search-field"
               label={copy(WSL_COPY_IDS.filterLabel, 'Filter distributions')}
               aria-label={copy(WSL_COPY_IDS.filterLabel, 'Filter distributions')}
+              label={copy('filterLabel')}
+              aria-label={copy('filterLabel')}
               value={search.value}
               spellCheck={false}
-              disabled={busy}
+              disabled={operationActive}
               trailingSlot={<AnchoredRegexBuilder
                 search={search}
                 fieldRef={searchInputRef}
                 label={copy(WSL_COPY_IDS.filterRegex, 'Regex for {brand} distributions', { brand: WSL_BRAND })}
+                label={copy('filterRegex')}
                 zIndex={93}
               />}
               onChange={(e) => search.setValue(e.target.value)}
@@ -337,6 +393,16 @@ export function WslCreateDialog({
               {catalogue.length === 0
                 ? copy(WSL_COPY_IDS.emptyNone, 'No distributions available.')
                 : copy(WSL_COPY_IDS.emptyNoMatch, 'No distributions match that filter.')}
+        <div className="wsl-create-dialog__list" role="listbox" aria-label={copy('listAria')} aria-busy={catalogueLoading}>
+          {catalogueLoading ? (
+            <div className="wsl-create-dialog__empty" role="status">{copy('loading')}</div>
+          ) : catalogueError ? (
+            <div className="wsl-create-dialog__empty wsl-create-dialog__empty--error" role="alert">
+              {renderError(catalogueError)}
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="wsl-create-dialog__empty">
+              {catalogue.length === 0 ? copy('emptyNone') : copy('emptyNoMatch')}
             </div>
           ) : (
             filtered.map((c) => (
@@ -345,8 +411,8 @@ export function WslCreateDialog({
                 type="button"
                 role="option"
                 aria-selected={catalogueId === c.id}
-                aria-disabled={busy || undefined}
-                disabled={busy}
+                aria-disabled={operationActive || undefined}
+                disabled={operationActive}
                 className={`wsl-create-dialog__option${catalogueId === c.id ? ' is-active' : ''}`}
                 onClick={() => setCatalogueId(c.id)}
               >
@@ -369,6 +435,14 @@ export function WslCreateDialog({
             supportText={validation.nameError
               ? copyValidation(validation.nameError)
               : copy(WSL_COPY_IDS.nameSupport, 'Letters, numbers, spaces, dots, hyphens, and underscores are accepted.')}
+            label={copy('nameLabel')}
+            aria-label={copy('nameAria')}
+            value={name}
+            spellCheck={false}
+            placeholder={copy('namePlaceholder')}
+            disabled={operationActive}
+            invalid={!!validation.nameError}
+            supportText={validation.nameError ? copyFromFallback(validation.nameError) : copy('nameSupport')}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') submit()
@@ -379,13 +453,14 @@ export function WslCreateDialog({
           <div className="wsl-create-dialog__field-error" role="alert">
             {error
               ? <>{copy(WSL_COPY_IDS.errorPrefix, 'The {brand} operation reported an error:', { brand: WSL_BRAND })} {error}</>
+              ? renderError(error)
               : cancelError
                 ? renderError(cancelError)
                 : null}
           </div>
         )}
 
-        {busy && (
+        {operationActive && (
           <div className="wsl-create-dialog__progress" role="status" aria-live="polite">
             <div className="wsl-create-dialog__progress-heading">
               <strong>
@@ -403,6 +478,12 @@ export function WslCreateDialog({
                 {copy(WSL_COPY_IDS.progressStep, 'Step')} {progress?.step ?? 1}{' '}
                 {copy(WSL_COPY_IDS.progressOf, 'of')} {progress?.steps ?? 4}
               </span>
+                  ? copy('cancellingProgress')
+                  : progress
+                    ? copy(progress.message.id as WslCopyKey, progress.message.facts, progress.message.params)
+                    : copy('starting')}
+              </strong>
+              <span>{copy('step')} {progress?.step ?? 1} {copy('of')} {progress?.steps ?? 4}</span>
             </div>
             <div
               className={`wsl-create-dialog__progress-track${progress?.determinate ? '' : ' is-indeterminate'}`}
@@ -412,6 +493,17 @@ export function WslCreateDialog({
               aria-valuenow={progress?.step ?? 1}
               aria-valuetext={`${copy(WSL_COPY_IDS.progressStep, 'Step')} ${progress?.step ?? 1} ${copy(WSL_COPY_IDS.progressOf, 'of')} ${progress?.steps ?? 4}`}
               aria-label={copy(WSL_COPY_IDS.progressAria, '{brand} creation phase progress', { brand: WSL_BRAND })}
+              aria-valuetext={copy(
+                'progressValue',
+                [progress?.stage ?? 'validating', 'wsl.exe'],
+                {
+                  step: String(progress?.step ?? 1),
+                  steps: String(progress?.steps ?? 4),
+                  stage: progress?.stage ?? 'validating',
+                  detail: progress?.determinate ? '' : copy('installing', ['wsl.exe'])
+                }
+              )}
+              aria-label={copy('progressAria')}
             >
               <span style={progress?.determinate ? { width: '100%' } : undefined} />
             </div>
@@ -424,6 +516,10 @@ export function WslCreateDialog({
                   { exe: 'wsl.exe' }
                 )
                 : copy(WSL_COPY_IDS.progressCancellable, 'The operation is bounded and can be cancelled.')}
+              {copy('elapsed')} {Math.floor((Math.max(elapsedMs, progress?.elapsedMs ?? 0)) / 1000)} {copy('seconds')}{' '}
+              {progress?.stage === 'installing'
+                ? copy('installingDetail', ['wsl.exe'])
+                : copy('cancellable')}
             </p>
             {progress?.message && (
               <p className="wsl-create-dialog__progress-detail" data-vocabulary-ownership="external-factual">

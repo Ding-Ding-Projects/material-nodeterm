@@ -18,7 +18,7 @@ import { IPC } from '../../shared/ipc'
 import { initPlatform, resetPlatformForTests } from '../platform'
 import { fakePlatform, type FakePlatform } from '../platform-fake'
 import { startWslService } from './service'
-import { fakeWslRuntime, STATUS_OK, utf16leFixture } from './__fixtures__'
+import { fakeWslRuntime, STATUS_OK, VERBOSE_LIST_FIXTURE, utf16leFixture } from './__fixtures__'
 import { inMemoryWslOwnershipStore } from './ownership'
 import type { WslInstanceSummary } from '../../shared/wsl'
 
@@ -33,6 +33,8 @@ afterEach(() => resetPlatformForTests())
 
 const list = (): Promise<WslInstanceSummary[]> =>
   platform.handlers[IPC.wslList]() as Promise<WslInstanceSummary[]>
+
+const catalogue = (): Promise<unknown> => platform.handlers[IPC.wslCatalogue]() as Promise<unknown>
 
 /** `wsl --list --verbose` output, in the UTF-16LE the real executable emits and in the fixed-width
  *  columns its parser reads: it takes NAME and STATE from the header's own offsets, so a row
@@ -94,5 +96,71 @@ describe('the WSL list channel', () => {
     )
     // Including the one whose name looks like ours. A prefix is not provenance.
     expect(rows.every((r) => r.ownedByApp === false)).toBe(true)
+  })
+})
+
+describe('the WSL catalogue and creation progress channels', () => {
+  it('rejects the catalogue with a typed template and executable facts', async () => {
+    startWslService({ runtime: fakeWslRuntime({ wslExePath: null }), ownership: inMemoryWslOwnershipStore([]) })
+    await expect(catalogue()).rejects.toMatchObject({
+      code: 'not-installed',
+      messageId: 'catalogueNotInstalled',
+      facts: []
+    })
+  })
+
+  it('classifies a command failure without flattening the wsl.exe fact', async () => {
+    const runtime = fakeWslRuntime({
+      responses: {
+        '--status': STATUS_OK,
+        '--list --online': { stdout: Buffer.alloc(0), stderr: Buffer.from('access denied'), exitCode: 1 }
+      }
+    })
+    startWslService({ runtime, ownership: inMemoryWslOwnershipStore([]) })
+    await expect(catalogue()).rejects.toMatchObject({
+      code: 'command-failed', messageId: 'catalogueCommandFailed', facts: ['wsl.exe']
+    })
+  })
+
+  it('classifies a parser failure while retaining the executable fact', async () => {
+    const runtime = fakeWslRuntime({
+      responses: {
+        '--status': STATUS_OK,
+        '--list --online': { stdout: utf16leFixture('not a WSL table\r\n'), stderr: Buffer.alloc(0), exitCode: 0 }
+      }
+    })
+    startWslService({ runtime, ownership: inMemoryWslOwnershipStore([]) })
+    await expect(catalogue()).rejects.toMatchObject({
+      code: 'parse-failed', messageId: 'catalogueParseFailed', facts: ['wsl.exe']
+    })
+  })
+
+  it('broadcasts progress ids and facts instead of pre-rendered English', async () => {
+    const operationId = '123e4567-e89b-42d3-a456-426614174000'
+    const runtime = fakeWslRuntime({
+      responses: {
+        '--status': STATUS_OK,
+        '--list --verbose': VERBOSE_LIST_FIXTURE,
+        '--install --distribution Ubuntu --name my-project --no-launch': {
+          stdout: Buffer.alloc(0), stderr: Buffer.alloc(0), exitCode: 0
+        }
+      }
+    })
+    startWslService({ runtime, ownership: inMemoryWslOwnershipStore([]) })
+    const result = await platform.handlers[IPC.wslCreate]({ operationId, catalogueId: 'Ubuntu', name: 'my-project' }) as { ok: boolean }
+    expect(result).toEqual({ ok: true, name: 'my-project' })
+    const progress = platform.sent
+      .filter((entry) => entry.channel === IPC.wslCreateProgress)
+      .map((entry) => entry.args[0])
+    expect(progress.map((entry) => entry.message.id)).toEqual([
+      'validating', 'checking', 'installing', 'recording', 'completed'
+    ])
+    const installing = progress.find((entry) => entry.message.id === 'installing')!
+    expect(installing.operationId).toBe(operationId)
+    expect(installing.message.params).toMatchObject({
+      name: 'my-project', catalogue: 'Ubuntu', operationId
+    })
+    expect(installing.message.facts).toEqual(expect.arrayContaining(['wsl.exe', 'my-project', 'Ubuntu', operationId]))
+    expect(progress.every((entry) => typeof entry.message === 'object' && typeof entry.message.id === 'string')).toBe(true)
   })
 })

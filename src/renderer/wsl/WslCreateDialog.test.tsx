@@ -10,6 +10,7 @@ import { useSchoolMode } from '../state/schoolMode'
 import { useSettings } from '../state/settings'
 import { DEFAULT_SETTINGS } from '@shared/types'
 import { CATALOG } from '@shared/i18n'
+import { WSL_COPY, WSL_COPY_INVENTORY, type WslExternalFactError } from './wslCopy'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -135,7 +136,9 @@ describe('WslCreateDialog', () => {
       entries: {
         'New {brand} instance': 'New {brand} Linux workspace',
         'Filter distributions': 'Find distributions',
-        Create: 'Make it happen'
+        Create: 'Make it happen',
+        WSL: 'Linux',
+        'could not create': 'could not make'
       },
       status: 'loaded',
       entryCount: 3,
@@ -144,10 +147,21 @@ describe('WslCreateDialog', () => {
     })
     render({ error: 'wsl.exe could not create "my-project" from "Ubuntu 24.04 LTS".' })
     expect(document.body.textContent).toContain('New WSL Linux workspace')
+    const externalError = 'wsl.exe could not create "my-project" from "Ubuntu 24.04 LTS".'
+    render({
+      error: {
+        ownership: 'external-factual',
+        text: externalError,
+        facts: ['wsl.exe', 'my-project', 'Ubuntu 24.04 LTS'],
+        authoredPrefix: 'operationErrorPrefix'
+      } satisfies WslExternalFactError
+    })
+    expect(document.body.textContent).toContain('New Linux workspace')
     expect(document.querySelector('input[aria-label="Find distributions"]')).not.toBeNull()
     expect(document.body.textContent).toContain('Ubuntu 24.04 LTS')
     expect(document.body.textContent).toContain('my-project')
-    expect(document.body.textContent).toContain('wsl.exe could not create')
+    expect(document.body.textContent).toContain('The Linux operation reported an error:')
+    expect(document.body.textContent).toContain('wsl.exe could not make')
     expect(document.body.textContent).toContain('Make it happen')
   })
 
@@ -161,11 +175,41 @@ describe('WslCreateDialog', () => {
     expect(document.body.textContent).toContain(parserDetail)
     expect(document.body.textContent).toContain('The WSL operation reported an error:')
     expect(document.body.textContent).toContain('wsl.exe could not create "my-project" from "Ubuntu 24.04 LTS".')
+  it('renders a typed catalogue failure with mapped authored text around literal executable facts', () => {
+    usePersonalVocabulary.setState({
+      entries: { 'Could not load available distributions:': 'Catalogue unavailable:', 'could not be fetched': 'could not be read' },
+      status: 'loaded',
+      entryCount: 2,
+      loadedAt: Date.now(),
+      lastError: null
+    })
+    const diagnostic = 'wsl.exe --list --online failed, so the catalog could not be fetched.'
+    render({
+      catalogueError: {
+        ownership: 'external-factual',
+        text: diagnostic,
+        facts: ['wsl.exe'],
+        authoredPrefix: 'catalogueErrorPrefix'
+      }
+    })
+    expect(document.body.textContent).toContain('Catalogue unavailable:')
+    expect(document.body.textContent).toContain('wsl.exe --list --online failed')
+    expect(document.body.textContent).toContain('could not be read')
+    expect(document.body.textContent).not.toContain('could not be fetched')
+  })
+
+  it('renders the authored cancellation template when a busy operation has no captured id', () => {
+    const { onCancelCreate } = render({ busy: true })
+    const cancel = Array.from(document.querySelectorAll('button')).find((button) => button.textContent === 'Cancel')!
+    act(() => cancel.click())
+    expect(onCancelCreate).not.toHaveBeenCalled()
+    expect(document.body.textContent).toContain('Cancellation could not be sent because there is no active WSL operation.')
   })
 
   it('suppresses uploaded vocabulary in School mode without hiding WSL facts', () => {
     usePersonalVocabulary.setState({
       entries: { 'New {brand} instance': 'Secret {brand} workspace', 'Filter distributions': 'Secret filter' },
+      entries: { 'New WSL instance': 'Secret workspace', 'Filter distributions': 'Secret filter', WSL: 'Linux' },
       status: 'loaded',
       entryCount: 2,
       loadedAt: Date.now(),
@@ -173,13 +217,17 @@ describe('WslCreateDialog', () => {
     })
     render()
     expect(document.body.textContent).toContain('Secret workspace')
+    expect(document.body.textContent).toContain('Secret filter')
+    expect(document.querySelector('.wsl-create-dialog__description')?.textContent).toContain('Linux')
     act(() => root?.unmount())
     root = undefined
     useSchoolMode.setState({ enabled: true, hydrated: true })
     render()
-    expect(document.body.textContent).toContain('New WSL instance')
+    expect(document.body.textContent).toContain(WSL_COPY.title.fallback)
     expect(document.body.textContent).not.toContain('Secret workspace')
-    expect(document.querySelector('input[aria-label="Filter distributions"]')).not.toBeNull()
+    expect(document.body.textContent).not.toContain('Secret filter')
+    expect(document.querySelector(`input[aria-label="${WSL_COPY.filterLabel.fallback}"]`)).not.toBeNull()
+    expect(document.querySelector('.wsl-create-dialog__description')?.textContent).toContain('WSL')
     expect(document.body.textContent).toContain('Ubuntu 24.04 LTS')
   })
 
@@ -191,11 +239,41 @@ describe('WslCreateDialog', () => {
     for (const id of ids) {
       expect(CATALOG[id]?.en, id).toHaveLength(5)
       expect(CATALOG[id]?.yue, id).toHaveLength(5)
+    expect(WSL_COPY_INVENTORY.length).toBeGreaterThan(0)
+    const ids = WSL_COPY_INVENTORY.map((entry) => entry.id)
+    expect(new Set(ids).size).toBe(ids.length)
+    expect(Object.keys(CATALOG).filter((id) => id.startsWith('wsl.create.')).sort()).toEqual([...ids].sort())
+    for (const entry of WSL_COPY_INVENTORY) {
+      expect(CATALOG[entry.id]?.en, entry.id).toHaveLength(5)
+      expect(CATALOG[entry.id]?.yue, entry.id).toHaveLength(5)
+      expect(entry.fallback.length, entry.id).toBeGreaterThan(0)
     }
+  })
+
+  it('keeps operational, catalogue-error, and progress copy meaningfully different at levels 1 and 5', () => {
+    const expressive = WSL_COPY_INVENTORY.filter((entry) =>
+      entry.key === 'checking' || entry.key === 'installing' || entry.key === 'recording' ||
+      entry.key === 'completed' || entry.key === 'failed' || entry.key === 'cancelled' ||
+      entry.key === 'cancelledLate' || entry.key === 'catalogueNotInstalled' ||
+      entry.key === 'catalogueCommandFailed' || entry.key === 'catalogueParseFailed' ||
+      entry.key === 'progressValue'
+    )
+    expect(expressive.length).toBeGreaterThan(0)
+    for (const entry of expressive) {
+      expect(CATALOG[entry.id]?.en[0], `${entry.id} English`).not.toBe(CATALOG[entry.id]?.en[4])
+      expect(CATALOG[entry.id]?.yue[0], `${entry.id} Cantonese`).not.toBe(CATALOG[entry.id]?.yue[4])
+    }
+  })
+
+  it('rejects a missing catalogue inventory row instead of letting the coverage check disappear', () => {
+    const ids = WSL_COPY_INVENTORY.map((entry) => entry.id)
+    const withoutOne = ids.slice(1)
+    expect(Object.keys(CATALOG).filter((id) => id.startsWith('wsl.create.')).sort()).not.toEqual([...withoutOne].sort())
   })
 
   it('renders the dialog copy in English, Cantonese, and bilingual modes at both funny levels', () => {
     const modes = ['en', 'yue', 'bilingual'] as const
+    const descriptions = new Map<string, string>()
     for (const mode of modes) {
       for (const level of [1, 5] as const) {
         useSettings.setState({
@@ -206,6 +284,7 @@ describe('WslCreateDialog', () => {
         render()
         const description = document.querySelector('.wsl-create-dialog__description')?.textContent ?? ''
         expect(description.length, `${mode}/${level}`).toBeGreaterThan(0)
+        descriptions.set(`${mode}/${level}`, description)
         if (mode === 'en' && level === 1) expect(description).toContain('Choose a distribution')
         if (mode === 'yue' && level === 1) expect(description).toContain('喺即時 WSL')
         if (mode === 'bilingual') expect(description).toContain(' · ')
@@ -213,6 +292,8 @@ describe('WslCreateDialog', () => {
         root = undefined
       }
     }
+    expect(descriptions.get('en/1')).not.toBe(descriptions.get('en/5'))
+    expect(descriptions.get('yue/1')).not.toBe(descriptions.get('yue/5'))
   })
 
   it('renders live phase progress while preserving raw distribution, name, and operation facts', () => {
@@ -223,7 +304,7 @@ describe('WslCreateDialog', () => {
       steps: number
       determinate: boolean
       elapsedMs: number
-      message: string
+      message: { id: 'installing'; params: Readonly<Record<string, string>>; facts: readonly string[] }
     }) => void) | null = null
     ;(window as unknown as { nodeTerminal: unknown }).nodeTerminal = {
       wsl: {
@@ -247,17 +328,29 @@ describe('WslCreateDialog', () => {
     act(() => {
       onProgress?.({
         operationId: createdOperationId,
+    const created = onCreate.mock.calls[0]?.[0] as { operationId: string } | undefined
+    expect(created?.operationId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i)
+    act(() => {
+      onProgress?.({
+        operationId: created!.operationId,
         stage: 'installing',
         step: 3,
         steps: 4,
         determinate: false,
         elapsedMs: 2500,
         message: `Installing Ubuntu 24.04 LTS for my-project, operation ${createdOperationId}.`
+        message: {
+          id: 'installing',
+          params: { name: 'my-project', catalogue: 'Ubuntu 24.04 LTS', operationId: created!.operationId },
+          facts: ['wsl.exe', 'my-project', 'Ubuntu 24.04 LTS', created!.operationId]
+        }
       })
     })
     expect(document.body.textContent).toContain('Ubuntu 24.04 LTS')
     expect(document.body.textContent).toContain('my-project')
     expect(document.body.textContent).toContain(createdOperationId)
+    expect(document.body.textContent).toContain(created!.operationId)
     expect(document.querySelector('[aria-label="WSL creation phase progress"]')).not.toBeNull()
+    expect(document.querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow')).toBe('3')
   })
 })
