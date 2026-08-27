@@ -1,5 +1,25 @@
 # Handoff
 
+## 2026-08-27, personal vocabulary coverage parser repair
+
+Release run `33119050796` reached application build after the source identity, resource, icon,
+HTTPS, and metadata phases passed, then failed while parsing
+`scripts/check-personal-vocabulary-coverage.mjs:306` with
+`SyntaxError: Identifier 'CANONICAL_CANVAS_NOTIFY_CALL_IDS' has already been declared`.
+
+The repair removes the obsolete duplicate Canvas notification manifest and duplicate check block,
+restores the producer-array separators and duplicate-row cleanup left by the same merge, and keeps
+the detailed independent notification manifest that matches the current `Canvas.tsx` title markers.
+The notification call pipeline now filters `callArguments` to production object payloads before one
+set of inventory, title-ownership, and body-ownership checks. The source shape was inspected
+read-only to preserve the current notification title and body boundaries rather than deleting a
+manifest entry by guesswork.
+
+This lane intentionally ran no tests, checkers, lint, type checks, builds, packaging, installer
+execution, runtime interaction, reviews, audits, or UI captures. The repaired source therefore
+remains unverified by those activities, and the integration owner must evaluate the exact merged
+commit before treating the release workflow as recovered.
+
 ## 2026-08-27, Squirrel packaging asynchronous exit repair
 
 The Windows packaging wrapper now keeps its top-level asynchronous entrypoint alive until every
