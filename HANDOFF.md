@@ -574,6 +574,72 @@ Direct documentation is `docs/features/canvas/grouping-and-drill-through.md`, in
 No tests, lint, type checks, builds, packaging, runtime interaction, reviews, audits, or captures
 were run in this lane. The parent integration lane owns those checks, any docs-bundle regeneration,
 main integration, issue comments, release work, and cleanup.
+## 2026-08-27, guided branch dependency operations, issue #86
+
+This task branch was reconciled with the exact `origin/main` tip
+`54164b84dce0b7e62787b1de2885405ff4ed821c`, preserving the reviewed dependency-operation commit
+`e78ab1084216b62d289f9c015c24a9284a272d10` in the merge history. The direct implementation now
+includes the shared operation inventory and planner in `src/shared/dependency-operations.ts`, the
+shared `branchParentConfigKey()` helper, and typed Git IPC, preload, and Server Edition bridge
+forwarding.
+
+`src/core/git-service.ts` retains the five reviewed operations, adds bounded command output, and
+exposes a guided operation runner with project id and exact link id ownership checks. It reports
+queued, running, completed, failed, cancelled, and unavailable states. Only fixed `git` and `gh`
+argv forms are emitted. Branch refs are bounded and revalidated, paths are bounded, proposal output
+is bounded, cross-project and mismatched repository links are refused, and ship verifies that its
+target checkout is actually on the named parent before using `--ff-only`. A queued operation can be
+cancelled, while a running operation reports its actual process result rather than fabricating a
+stop acknowledgement.
+
+The direct feature article is `docs/features/source-control/dependency-operations.md`, indexed from
+the Source control category. The generated offline documentation bundle was not regenerated because
+this lane forbids builds and checks. Tests, type checks, lint, builds, packaging, runtime interaction,
+reviews, audits, and captures were not run. Renderer link authoring, link rendering, project-link
+storage, and the parent integration remain owned by their respective lanes.
+## 2026-08-27, custom agent harness persistence, issue #86
+
+This feature branch is reconciled with the exact current `origin/main` tip
+`54164b84dce0b7e62787b1de2885405ff4ed821c`. The custom harness implementation is committed as
+`20ce2fe4a974a388c7fea6adcae116f2d6bb9ab6`, with the current-main reconciliation pending in this
+follow-up merge commit.
+
+The bounded slice covers `agentBaseId` persistence, shared harness resolution for launch and resume,
+hook capability routing, remote hook capability routing, inherited pane-binary recognition, and
+custom harness icon and mascot identity. Current main's registered executable and terminal-profile
+allowlists, semantic profile picker, reviewed launch preview, bounded argument and environment
+handling, working-directory validation, arbitrary-shell refusal, and secret redaction remain
+preserved.
+
+Direct documentation is `docs/features/agents/custom-agent-harness.md`, indexed from the Agents
+category. The changelog and roadmap carry the same boundary. No tests, lint, type checks, builds,
+packaging, runtime interaction, reviews, audits, or captures were run in this source lane. The
+parent integration lane owns those checks, the final default-branch merge, issue updates, and closure.
+## 2026-08-27, per-node model switching, issue #86 and upstream PR #422
+
+The model-switching branch was reconciled with the exact current `origin/main` tip
+`54164b84dce0b7e62787b1de2885405ff4ed821c` by merge commit `0138fc8aed83b9075d3d5678ec4446ce97cbdd40`.
+The source slice is present in the shared agent
+capability and model-gateway modules, launch assembly, node/project persistence, Canvas context
+menu, TerminalNode recycle choreography, and host-side foreground ownership checks.
+
+The direct article is `docs/features/agents/model-switching.md`, indexed from the Agents category
+and linked from `docs/features/agents/agent-support.md`. It records available-model enumeration,
+explicit user choice, future-node versus running-node behavior, relay and project ownership,
+failure recovery, and the model-switching source locations. A stale same-model callback now stops
+before foreground termination or session recycling, and a recycle rejection leaves node data
+unchanged instead of claiming that the new model is active.
+
+The selected model remains per-node `agentModel` state. A future node applies it through the normal
+launch path. A running node retains its provider session identity, validates harness ownership,
+terminates only the expected foreground process, recycles the persistent session, and resumes with
+the selected model and current gateway environment. Gateway credentials remain host-side and are
+never placed in a launch command.
+
+No tests, lint, type checks, builds, packaging, runtime interaction, reviews, audits, debugging,
+or screenshots were taken, per the lane boundary. The generated offline documentation bundle was not
+regenerated because that requires the prohibited build step. The parent integration lane owns those
+checks and the final bundled-doc verification. No public issue or pull-request mutation was made.
 
 ## 2026-08-27, AWS core-service managers, issue #46 PR preparation
 

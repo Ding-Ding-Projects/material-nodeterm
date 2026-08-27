@@ -8,7 +8,8 @@ Cognition Devin are built in; any other CLI can be added as a custom agent.
   accounts, and the capability system that decides which agent gets which feature.
 - [Usage-threshold account rotation](./usage-account-rotation.md) - opt-in account selection for
   new default Claude sessions when the active account reaches a configured usage threshold.
-
+- [Custom agent harnesses](./custom-agent-harness.md) — builtin capability inheritance, persisted
+  harness identity, launch previews, environment expansion, and host-owned execution boundaries.
 - [Devin CLI](./devin-cli.md) — measured Cognition Devin CLI 3000.4.25 launch forms, lifecycle
   hooks, status mapping, notification fallback, and capability boundaries.
 - [Linked-agent inbox notifications](./linked-agent-inbox-notifications.md) — the fixed,
@@ -20,8 +21,8 @@ Cognition Devin are built in; any other CLI can be added as a custom agent.
   and touch route to the existing context-link behavior.
 - [Context-window progress](./context-window-progress.md) — provider telemetry sources, honest
   unknown and stale states, generation fencing, and the shared meter across node and board views.
-- [Context-window progress](./context-window-progress.md) — provider telemetry sources, honest
-  unknown and stale states, generation fencing, and the shared meter across node and board views.
+- [Per-node model switching](./model-switching.md) — gateway discovery, explicit model choice,
+  running-node recycle and resume, ownership checks, persistence, and recovery boundaries.
 
 See also [Canvas → Node kinds](../canvas/README.md) for the agent node itself,
 [Kanban](../kanban/README.md) for how agent status renders on a board card, and

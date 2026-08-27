@@ -44,6 +44,7 @@ import type {
 } from '@shared/types'
 import type { AgentId, AgentPermissionMode, BuiltinAgentId } from '@shared/agents/config'
 import { agentConfig, supportsSessionIdFlag } from '@shared/agents/config'
+import { resolveAgentBase } from '@shared/agents/custom-agent'
 import { assembleLaunchCommand } from '@shared/agents/launch'
 import { agentAccountColor } from '@shared/agents/account-color'
 import { boundAccountId } from '@shared/agents/account-binding'
@@ -328,6 +329,8 @@ export interface NodeData {
   homeAssistantSensorConfig?: HomeAssistantSensorConfig
   /** Which agent runs in this terminal node (claude/codex/gemini/custom). */
   agentId?: AgentId
+  /** Persisted builtin harness for the node's current agent association. */
+  agentBaseId?: BuiltinAgentId
   /** Model selected for this node through the shared model gateway. */
   agentModel?: string
   /**
@@ -951,6 +954,17 @@ export function createAgentNode(
       group: null,
       tags: [],
       agentId,
+      ...(resolveAgentBase(
+        agentId,
+        useSettings.getState().settings.customAgents.find((c) => c.id === agentId)
+      )
+        ? {
+            agentBaseId: resolveAgentBase(
+              agentId,
+              useSettings.getState().settings.customAgents.find((c) => c.id === agentId)
+            )
+          }
+        : {}),
       ...(bound ? { accountId: bound } : {}),
       // Persisted alongside the node (unlike initialCommand, which is consumed on first open), so
       // a cold restore months later still knows which conversation this node owns.
@@ -3048,6 +3062,11 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         // snapshots at the load boundary instead of letting malformed coordinates reach the UI.
         recoveryGame: n.recoveryGame ? normalizeRecoveryGameSnapshot(n.recoveryGame) : undefined,
         agentId,
+        agentBaseId:
+          n.agentBaseId ??
+          (agentId && agentConfig(agentId)
+            ? (agentId as BuiltinAgentId)
+            : useSettings.getState().settings.customAgents.find((c) => c.id === agentId)?.baseAgent),
         agentModel: n.agentModel,
         accountId: n.accountId,
         // Migrate the old title-only identity into an explicit true/false on the next save.
@@ -3201,6 +3220,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         // state, and normalization keeps old project files safe to reopen on another computer.
         recoveryGame: n.data.recoveryGame ? normalizeRecoveryGameSnapshot(n.data.recoveryGame) : undefined,
         agentId: n.data.agentId,
+        agentBaseId: n.data.agentBaseId,
         agentModel: n.data.agentModel,
         accountId: n.data.accountId,
         accountLogin: n.data.accountLogin,

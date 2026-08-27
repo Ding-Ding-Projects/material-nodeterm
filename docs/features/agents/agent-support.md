@@ -60,6 +60,13 @@ The sessions sidebar groups rows by workflow state in the order **Need attention
 so an unread completed session remains under **Done** and an unread session without state remains
 under **Unknown**.
 
+**Per-node model switching** lets a supported node choose one model from the configured gateway.
+The choice is persisted on that node and reused for future launches, cold restores, and resumes.
+Switching a running node validates the session and harness ownership, terminates only the expected
+foreground agent process, recycles the persistent terminal so its current gateway environment is
+present, and resumes the same provider conversation. See [Per-node model switching](./model-switching.md)
+for the explicit-choice, failure-recovery, project-ownership, and relay boundaries.
+
 ## Configuration
 
 - **Settings → Accounts**: account labels and optional default node colours for each managed Claude
@@ -69,8 +76,8 @@ under **Unknown**.
   long-lived canvases), and the custom-agent list (command, label, color).
 - Per-project — an override permission mode, so a project that genuinely needs broader
   permissions doesn't require changing your global default.
-- Per-node: which agent CLI launches, which managed account it uses, and the colour captured at
-  creation time.
+- Per-node: which agent CLI launches, its selected gateway model when supported, which managed
+  account it uses, and the colour captured at creation time.
 
 ## Failure modes
 
@@ -133,6 +140,13 @@ under **Unknown**.
 The current ultra-speed implementation lane intentionally did not run tests, lint, type checks,
 builds, packaging, runtime interaction, reviews, security or accessibility checks, or captures.
 Those checks remain pending against the reconciled default branch and packaged application.
+
+- Configure a model gateway, choose a discovered model for one supported node, and confirm the
+  selected model is stored on that node while another node remains unchanged. For a running node,
+  confirm the foreground process ownership check, persistent-session recycle, and same-conversation
+  resume. Also confirm that an invalid gateway, relay node, busy session, failed recycle, and stale
+same-model callback refuse without changing node data. This source-only lane did not run those
+checks.
 
 ## Suggested articles
 

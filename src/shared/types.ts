@@ -181,8 +181,12 @@ export interface PtyCreateOptions {
    * real value in a later phase.
    */
   agentId?: AgentId
+  /** Persisted builtin harness for the node's current agent association. */
+  agentBaseId?: BuiltinAgentId
   /** Per-node model override. Applied through the node's base harness on launch/cold restore. */
   agentModel?: string
+  /** One-shot vanilla launch: strip gateway and inherited provider environment variables. */
+  clearEnv?: boolean
   /** Managed Claude account: inject CLAUDE_CONFIG_DIR for this account into the session env. */
   accountId?: string
   /** Managed Codex account: run this node against that account's shared CODEX_HOME app-server. */
@@ -625,8 +629,12 @@ export interface CanvasNodeState {
   cwd?: string
   /** Which agent runs in this terminal node (claude/codex/gemini/custom). */
   agentId?: AgentId
+  /** Persisted builtin harness for a custom agent, retained if its registry record is removed. */
+  agentBaseId?: BuiltinAgentId
   /** Model selected for this agent node through the shared model gateway. */
   agentModel?: string
+  /** One-shot flag for the next fresh spawn to use the agent's default provider environment. */
+  clearEnv?: boolean
   /** Set while this node is armed but not yet launched — see PendingLaunch. */
   pendingLaunch?: PendingLaunch
   /**
@@ -2698,6 +2706,8 @@ export interface Settings {
    *  driver runs in `default`). Overridable per project via Project.defaultPermissionMode.
    *  `auto` is version-gated: CLIs below 2.1.71 reject the value, so it degrades to no flag. */
   claudePermissionMode: AgentPermissionMode
+  /** When enabled, every fresh eligible agent launch strips gateway/provider overrides. */
+  vanillaLaunchDefault: boolean
   /** "Eco": exit the agent CLI of a session that has been idle AND offscreen for
    *  `agentHibernationIdleMinutes`, reclaiming its RAM; the conversation is resumed automatically
    *  when the node is viewed again. Default OFF — opt-in, because it stops a real process.
@@ -3015,6 +3025,8 @@ export const DEFAULT_SETTINGS: Settings = {
   // Sessions start in auto mode out of the box. Existing users pick this up on hydrate
   // (settings hydrate merges over DEFAULT_SETTINGS) — a deliberate behavior change.
   claudePermissionMode: 'auto',
+  // Opt-in: fresh eligible launches use the agent's own provider instead of gateway overrides.
+  vanillaLaunchDefault: false,
   // Opt-in: hibernation exits a live CLI, so nobody gets it without asking. The 30-minute floor
   // is deliberately long — shorter windows exit sessions the user is between turns on.
   agentHibernationEnabled: false,
@@ -3640,6 +3652,26 @@ export interface GitApi {
   worktreeRemovalProof(repoPath: string, wtPath: string): Promise<GitWorktreeRemovalProofResult>
   /** Registration-only pruning or proof-bound live-directory removal. */
   worktreeRemove(repoPath: string, wtPath: string, request: GitWorktreeRemovalRequest): Promise<GitResult>
+  /** Store the parent branch for a dependency link in the shared git config. */
+  setBranchParent(repoPath: string, child: string, parent: string): Promise<GitResult>
+  /** Remove the parent branch projection for a dependency link. */
+  unsetBranchParent(repoPath: string, child: string): Promise<GitResult>
+  /** Rebase one dependency child branch onto its configured parent. */
+  syncBranch(cwd: string, child: string): Promise<GitResult>
+  /** Open a pull request for one dependency child branch against its configured parent. */
+  proposeBranch(cwd: string, child: string): Promise<GitResult>
+  /** Fast-forward a dependency parent branch to its child when the parent is current. */
+  shipBranch(cwd: string, child: string, parent: string): Promise<GitResult>
+  /** Execute one owned dependency link operation through the bounded typed operation plan. */
+  dependencyOperation(
+    request: import('./dependency-operations').DependencyOperationRequest
+  ): Promise<import('./dependency-operations').DependencyOperationResult>
+  /** Cancel an operation that has not started executing. */
+  cancelDependencyOperation(operationId: string): Promise<boolean>
+  /** Subscribe to dependency operation progress and terminal states. */
+  onDependencyOperationProgress(
+    listener: (progress: import('./dependency-operations').DependencyOperationProgress) => void
+  ): () => void
   /** Scope remote git routing to the active project: pass its id to route git over that SSH
    *  project's master, or null for a local project so all git ops run locally. */
   setActiveRemote(projectId: string | null): Promise<void>

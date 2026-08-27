@@ -32,6 +32,8 @@ export interface AgentConfig {
    */
   argvPromptSeparator?: string
   expectedProcess: string
+  /** Environment variable name pattern stripped for vanilla provider launches. */
+  vanillaEnvPattern?: string
 }
 
 export function codexRemoteCommand(): string {
@@ -54,7 +56,8 @@ export const AGENT_CONFIG: Record<BuiltinAgentId, AgentConfig> = {
     color: '#d97757',
     launchCmd: 'claude',
     promptInjectionMode: 'argv',
-    expectedProcess: 'claude'
+    expectedProcess: 'claude',
+    vanillaEnvPattern: '^(ANTHROPIC_|CLAUDE_CODE_OAUTH_TOKEN$)'
   },
   codex: {
     label: 'Codex',
@@ -65,7 +68,8 @@ export const AGENT_CONFIG: Record<BuiltinAgentId, AgentConfig> = {
     // either router gets a chance to choose its fail-closed plain-Codex fallback.
     launchCmd: 'codex',
     promptInjectionMode: 'argv',
-    expectedProcess: 'codex'
+    expectedProcess: 'codex',
+    vanillaEnvPattern: '^(OPENAI_BASE_URL|OPENAI_API_KEY)$'
   },
   gemini: {
     label: 'Gemini',
@@ -104,12 +108,12 @@ export const AGENT_CONFIG: Record<BuiltinAgentId, AgentConfig> = {
     // `--prompt` is explicitly non-interactive and exits after one response. The installed
     // 1.0.80 CLI's `--interactive <prompt>` starts the ordinary TUI and submits the prompt there.
     promptInjectionMode: 'flag-interactive',
-    expectedProcess: 'copilot'
+    expectedProcess: 'copilot',
+    vanillaEnvPattern: '^COPILOT_PROVIDER_'
   },
   devin: {
     label: 'Devin',
     color: '#7c3aed',
-    launchCmd: 'devin',
     // Devin 3000.4.25 takes an initial prompt after `--`. The separator is required because the
     // CLI also exposes subcommands, so a prompt such as "login" remains prompt text instead of
     // becoming a command. The same argv shape is used by interactive REPL launches and the
@@ -296,6 +300,22 @@ export function capabilityAgentId(id: AgentId): AgentId {
   return baseAgentOf(id) ?? id
 }
 
+const VANILLA_PATTERN_CACHE = new Map<string, RegExp | null>()
+export function vanillaEnvStripPattern(id: AgentId): RegExp | null {
+  const source = AGENT_CONFIG[capabilityAgentId(id) as BuiltinAgentId]?.vanillaEnvPattern
+  if (!source) return null
+  const cached = VANILLA_PATTERN_CACHE.get(source)
+  if (cached !== undefined) return cached
+  let compiled: RegExp | null
+  try {
+    compiled = new RegExp(source)
+  } catch {
+    compiled = null
+  }
+  VANILLA_PATTERN_CACHE.set(source, compiled)
+  return compiled
+}
+
 const includes = (list: readonly string[], id: AgentId): boolean =>
   list.includes(capabilityAgentId(id))
 
@@ -366,6 +386,30 @@ export function createdAgentId(
   if (typeof data.agentId === 'string' && data.agentId) return data.agentId as AgentId
   const tags = Array.isArray(data.tags) ? data.tags : []
   return tags.includes('claude') ? 'claude' : undefined
+}
+
+/** Resolve a node's current builtin harness from persisted data, then the live registry. */
+export function createdAgentBaseId(
+  data: { agentId?: unknown; agentBaseId?: unknown; tags?: unknown } | undefined
+): BuiltinAgentId | undefined {
+  if (!data) return undefined
+  const id = createdAgentId(data)
+  if (!id) return undefined
+  if (BUILTIN_AGENT_IDS.includes(id as BuiltinAgentId)) return id as BuiltinAgentId
+  if (
+    typeof data.agentBaseId === 'string' &&
+    BUILTIN_AGENT_IDS.includes(data.agentBaseId as BuiltinAgentId)
+  ) {
+    return data.agentBaseId as BuiltinAgentId
+  }
+  return baseAgentOf(id)
+}
+
+/** The agent id whose protocol and capabilities this node currently uses. */
+export function createdAgentHarnessId(
+  data: { agentId?: unknown; agentBaseId?: unknown; tags?: unknown } | undefined
+): AgentId | undefined {
+  return createdAgentBaseId(data) ?? createdAgentId(data)
 }
 
 // Session ids are interpolated into a shell command line (written into the live shell on a

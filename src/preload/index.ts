@@ -601,6 +601,18 @@ const api: NodeTerminalApi = {
       ipcRenderer.invoke(IPC.gitWorktreeRemovalProof, repoPath, wtPath),
     worktreeRemove: (repoPath, wtPath, request) =>
       ipcRenderer.invoke(IPC.gitWorktreeRemove, repoPath, wtPath, request),
+    setBranchParent: (repoPath, child, parent) =>
+      ipcRenderer.invoke(IPC.gitSetBranchParent, repoPath, child, parent),
+    unsetBranchParent: (repoPath, child) =>
+      ipcRenderer.invoke(IPC.gitUnsetBranchParent, repoPath, child),
+    syncBranch: (cwd, child) => ipcRenderer.invoke(IPC.gitSyncBranch, cwd, child),
+    proposeBranch: (cwd, child) => ipcRenderer.invoke(IPC.gitProposeBranch, cwd, child),
+    shipBranch: (cwd, child, parent) =>
+      ipcRenderer.invoke(IPC.gitShipBranch, cwd, child, parent),
+    dependencyOperation: (request) => ipcRenderer.invoke(IPC.gitDependencyOperation, request),
+    cancelDependencyOperation: (operationId) =>
+      ipcRenderer.invoke(IPC.gitDependencyCancel, operationId),
+    onDependencyOperationProgress: subscribe(IPC.gitDependencyProgress),
     setActiveRemote: (projectId) => ipcRenderer.invoke(IPC.gitSetActiveRemote, projectId)
   },
   clipboard: {
