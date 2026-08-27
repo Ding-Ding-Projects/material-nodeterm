@@ -256,6 +256,46 @@ placement; bounded placement refusal with a visible notification; fresh event id
 append coordination across shortcut, drop, paste, board, source-control, login, profile,
 automation, and peer creation; personal-vocabulary localization with bilingual secondary copy;
 in-app documentation navigation; and catalog-driven terminal-profile and authenticator dragging.
+## 2026-08-26, special-universe Shop node and scope enforcement, issue #17
+
+Implemented the lane-6 Shop invariant in `src/core/universe-shop.ts`. Each Multiverse or AWS
+Universe child canvas receives exactly one deterministic `shop-<canvas-id>` node, while root and
+other scopes receive none. The pure coordinator repairs missing, duplicate, normalized, and
+invalid-scope records without network or provider side effects, filters one shared catalog by
+universe scope and Multiverse depth, and keeps invalid regex searches visible and bounded. The
+catalog is supplied through `UniverseShopCatalogProvider`, so this lane does not fork p05 labels or
+factories. Until p05's unified registry is available at integration, the Shop remains visible but
+creation is disabled with an explicit dependency reason. A collision-safe stable suffix is selected
+when `shop-<canvas-id>` is already occupied; if both deterministic candidates are occupied, repair
+refuses creation and preserves the ordinary nodes.
+
+The projection now carries safe universe ownership and non-deletable metadata. `shop` is a typed
+canvas node kind with a fixed renderer card in `src/renderer/nodes/ShopNode.tsx`; its local search
+has an adjacent anchored full regex builder, accessible labels, result counts, visible focus, and
+English/Cantonese/bilingual copy from the shared language catalog. React Flow mutation boundaries
+refuse Shop drag, resize, deletion, duplication, grouping, movement, title rename, and ordinary
+undo paths. The core coordinator also refuses the same peer mutation operations, preserves ordinary
+nodes on Shop-id collisions, mints immutable creation event ids only for live universe creation,
+and deduplicates peer creation events. `createSpecialUniverseCanvas` is the live child-canvas
+constructor and inserts the Shop in the same operation. A live catalog creation callback is exposed
+for the unified p05 coordinator to provide collision-free placement and actual node creation.
+Missing or malformed
+scope, depth, and containing-canvas metadata fails closed instead of creating a Shop in an ambiguous
+location.
+
+Changed files: `src/core/universe-shop.ts`, `src/core/portable-canvas-projection.ts`,
+`src/shared/types.ts`, `src/shared/i18n/catalog.ts`, `src/renderer/state/workspace.ts`,
+`src/renderer/canvas/Canvas.tsx`, `src/renderer/nodes/ShopNode.tsx`,
+`src/renderer/state/projects.ts`, `src/shared/canvas-mutations.ts`,
+`src/renderer/styles.md3.css`, `docs/features/integrations/aws-universe-shop.md`,
+`docs/features/integrations/README.md`, `docs/features/projects/portable-canvas-projection.md`,
+`ROADMAP.md`, `CHANGELOG.md`, `docs/uh-feature-inventory.md`, and this handoff.
+
+No tests, type checks, lint, security checks, builds, packaging, runtime interaction, or captures
+were run, and no commit or dew was made, as explicitly required for this lane. The documentation
+bundle generator could not run because `esbuild` is not installed in this Gerk Tong Hui. The changed
+article entries were synchronized mechanically into `src/shared/docs-data.ts`, but the generator
+still needs to run once that See Fut is available before a release-grade handoff.
 
 ## 2026-08-26, portable canvas projection implementation
 

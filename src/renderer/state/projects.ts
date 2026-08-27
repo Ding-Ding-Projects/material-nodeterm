@@ -489,7 +489,9 @@ export const useProjects = create<ProjectsState>((set, get) => ({
     set((s) => ({
       projects: mapProjectNodes(s.projects, projectId, (nodes) =>
         // An explicit rename means the user owns the name now: stop auto-tracking the session.
-        nodes.map((n) => (n.id === nodeId ? { ...n, title, titleAuto: false } : n))
+        nodes.map((n) => n.id === nodeId && n.kind !== 'shop' && n.nonDeletable !== true
+          ? { ...n, title, titleAuto: false }
+          : n)
       )
     }))
   },
@@ -505,7 +507,9 @@ export const useProjects = create<ProjectsState>((set, get) => ({
   removeNode(projectId, nodeId) {
     set((s) => ({
       projects: mapProjectNodes(s.projects, projectId, (nodes) =>
-        nodes.filter((n) => n.id !== nodeId)
+        nodes.some((n) => n.id === nodeId && (n.kind === 'shop' || n.nonDeletable === true))
+          ? nodes
+          : nodes.filter((n) => n.id !== nodeId)
       )
     }))
   },
@@ -514,7 +518,7 @@ export const useProjects = create<ProjectsState>((set, get) => ({
     set((s) => ({
       projects: mapProjectNodes(s.projects, projectId, (nodes) => {
         const src = nodes.find((n) => n.id === nodeId)
-        if (!src) return nodes
+        if (!src || src.kind === 'shop' || src.nonDeletable === true) return nodes
         const copy = {
           ...src,
           id: `${src.kind}-${Math.random().toString(36).slice(2, 10)}`,
@@ -539,7 +543,7 @@ export const useProjects = create<ProjectsState>((set, get) => ({
     set((s) => ({
       projects: mapProjectNodes(s.projects, projectId, (nodes) => {
         const node = nodes.find((n) => n.id === nodeId)
-        if (!node) return nodes
+        if (!node || node.kind === 'shop' || node.nonDeletable === true) return nodes
         if ((node.parentId ?? null) === groupId) return nodes
         // A frame may be moved into another frame, but never into itself or its own subtree.
         if (groupId === nodeId || (groupId && stateIsDescendant(nodes, groupId, nodeId))) {
@@ -558,7 +562,7 @@ export const useProjects = create<ProjectsState>((set, get) => ({
         if (draggedId === beforeId) return nodes
         const dragged = nodes.find((n) => n.id === draggedId)
         const before = nodes.find((n) => n.id === beforeId)
-        if (!dragged || !before || dragged.kind === 'group') return nodes
+        if (!dragged || !before || dragged.kind === 'group' || dragged.kind === 'shop' || dragged.nonDeletable === true) return nodes
         const targetParent = before.parentId ?? null
         const moved =
           (dragged.parentId ?? null) === targetParent

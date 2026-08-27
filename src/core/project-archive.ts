@@ -57,6 +57,7 @@ export * from './portable-canvas-projection'
 export * from './portable-media-assets'
 export * from './portable-project-import'
 export * from './portable-bindings'
+export * from './universe-shop'
 
 /** V1 JSON-text archives keep their historical cap. */
 const MAX_ARCHIVE_BYTES_V1 = 180 * 1024 * 1024

@@ -191,6 +191,12 @@ intentionally unchecked because this task publishes the plan only.
       FAB, pane context menu, and command-palette routes landed in this implementation pass; the
       row remains unchecked until the required verification and packaged interaction evidence run.
 - [ ] Add one non-deletable Shop node to every Multiverse and AWS Universe child canvas.
+- [ ] Ship the unified Node Catalog and one creation coordinator.
+- [ ] Add one non-deletable Shop node to every Multiverse and AWS Universe child canvas. The
+      deterministic coordinator, collision-safe identity, provider-bound catalog callback, import
+      repair, immutable creation-event handling, and renderer refusal paths are now implemented;
+      runtime and built-artifact verification remain pending under issue #17's explicit
+      no-tests/no-builds/no-captures boundary.
 - [ ] Add shared account, credential-vault, OAuth callback, and provider-binding services.
 - [ ] Add guided Docker host management for local and SSH contexts.
 

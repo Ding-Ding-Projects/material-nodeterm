@@ -62,6 +62,13 @@
   Gallery, Torrent, VM, Home Assistant, planner, universe, AWS, and hosting blueprints remain
   explicit disabled rows; and the offline docs bundle includes the catalog article. Verification is
   intentionally pending under the ultra-speed delivery boundary.
+- Add the deterministic, non-deletable and non-duplicable Shop coordinator for Multiverse and AWS
+  Universe child canvases. Scope-bound catalog filtering, import repair, hydration and peer
+  idempotence, collision-safe identity, immutable creation-event handling, mutation refusal,
+  portable safe metadata, and the accessible Material Design 3 Shop card are implemented. The Shop
+  consumes a provider interface for the unified Node Catalog and remains creation-disabled until
+  that dependency is available. Tests, builds, packaging, runtime interaction, and captures were
+  not run under issue #17's explicit verification boundary.
 
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and

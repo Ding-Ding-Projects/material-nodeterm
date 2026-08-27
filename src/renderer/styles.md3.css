@@ -2266,6 +2266,153 @@ button.term-node__title-text:focus-visible {
 }
 
 /* ---------------------------------------------------------------------------------------------
+   Universe Shop — a fixed, scope-bound catalog card. The card paints its own surface and keeps
+   the filter and anchored regex trigger keyboard reachable at narrow widths.
+   --------------------------------------------------------------------------------------------- */
+.shop-node {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--md-outline-variant);
+  border-radius: 24px;
+  background: var(--md-surface-container);
+  color: var(--md-on-surface);
+  box-shadow: var(--md-elevation-2);
+}
+.shop-node.selected {
+  outline: 1.5px solid var(--md-primary);
+}
+.shop-node__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 58px;
+  padding: 10px 14px;
+}
+.shop-node__icon,
+.shop-node__fixed {
+  flex: 0 0 auto;
+  font-size: 20px;
+}
+.shop-node__fixed {
+  margin-left: auto;
+}
+.shop-node__title {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.2;
+}
+.shop-node__scope,
+.shop-node__description,
+.shop-node__hint,
+.shop-node__search-note,
+.shop-node__empty {
+  margin: 0;
+  color: var(--md-on-surface-variant);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.shop-node__body {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 9px;
+  padding: 12px 14px 14px;
+}
+.shop-node__search-row {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.shop-node__search-label {
+  color: var(--md-on-surface-variant);
+  font-size: 12px;
+  font-weight: 600;
+}
+.shop-node__search-control {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+}
+.shop-node__search {
+  min-width: 0;
+  flex: 1;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid var(--md-outline);
+  border-radius: var(--md-shape-sm);
+  background: var(--md-surface);
+  color: var(--md-on-surface);
+}
+.shop-node__search-control .md3-regex-trigger {
+  min-width: 44px;
+  min-height: 44px;
+}
+.shop-node__entries {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  overflow: auto;
+  margin: 0;
+  padding: 2px;
+  list-style: none;
+}
+.shop-node__entry-item {
+  display: block;
+}
+.shop-node__entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-sm);
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+  text-align: left;
+  cursor: pointer;
+}
+.shop-node__entry:hover,
+.shop-node__entry.selected {
+  border-color: var(--md-primary);
+  background: var(--md-secondary-container);
+}
+.shop-node__entry:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+.shop-node__entry-disabled {
+  flex: 0 0 auto;
+  color: var(--md-on-surface-variant);
+  font-size: 11px;
+}
+.shop-node__entry-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.shop-node__entry-kind {
+  flex: 0 0 auto;
+  color: var(--md-on-surface-variant);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.shop-node :is(button, input):focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+@media (max-width: 520px) {
+  .shop-node__entry-kind {
+    display: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------------------------
    Dino node (mini-game) — same card recipe, one flat radius.
    --------------------------------------------------------------------------------------------- */
 .dino-node {

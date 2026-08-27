@@ -25,6 +25,7 @@ import { useSettings } from './settings'
 import type { SessionSource } from '../session/session'
 import { supportsWindowsTerminalProfiles } from './terminal-profiles'
 import type { AnnotationRect, AnnotationVariant } from '../lib/annotation'
+import { newUniverseCreationEventId, shopNodeIdForCanvas } from '../../core/universe-shop'
 
 // Re-exported so Canvas (and anything else in the renderer) keeps importing it from here, while the
 // single implementation lives in src/shared and is shared with the relay host + the canvas-sync
@@ -58,6 +59,7 @@ const VIDEO_SIZE = { width: 640, height: 420 }
 const WEB_SIZE = { width: 720, height: 520 }
 const BROWSER_SIZE = { width: 800, height: 560 }
 const NATIVE_LOOP_SIZE = { width: 340, height: 280 }
+const SHOP_SIZE = { width: 480, height: 420 }
 /** Fallback bounding box `flowToNodeStates` uses if an annotation node somehow has no live
  *  width/height at all (every production creation path draws a real rect — see createAnnotationNode
  *  — so this is a defensive floor, matching how every other kind gets a fallback in `sizeFor`). */
@@ -175,6 +177,13 @@ export interface NodeData {
   highScore?: number
   /** service-kinds only: the display name the user gave this manager. See `CanvasNodeState`. */
   serviceLabel?: string
+  /** Safe ownership metadata for a special-universe Shop node. */
+  universeCanvasId?: string
+  universeScope?: 'multiverse' | 'aws-universe'
+  /** The Shop is permanently owned by its universe canvas. */
+  nonDeletable?: boolean
+  /** Last catalog choice is safe user intent only, not an execution or provider binding. */
+  shopSelection?: string
   /** service-kinds only, MACHINE-LOCAL: where this node reaches its service. Stripped from the
    *  shared document and from inbound peers; see shared/node-exec.ts. */
   serviceConnection?: ServiceConnection
@@ -968,6 +977,41 @@ export function createAuthenticatorNode(index: number, center?: { x: number; y: 
   }
 }
 
+/** Creates the permanent catalog surface for a special-universe child canvas. */
+export function createShopNode(
+  canvasId: string,
+  scope: 'multiverse' | 'aws-universe',
+  index = 0,
+  center?: { x: number; y: number },
+  options: { existingNodeIds?: readonly string[]; creationEventId?: string; universeDepth?: number } = {}
+): CanvasNode {
+  if (typeof options.universeDepth !== 'number' || !Number.isInteger(options.universeDepth) || options.universeDepth < 1 || (scope === 'multiverse' && options.universeDepth > 8)) {
+    throw new Error('A Shop needs a valid persisted universe depth.')
+  }
+  const id = shopNodeIdForCanvas(canvasId, options.existingNodeIds ?? [])
+  return {
+    id,
+    type: 'shop',
+    position: placeAt(center, index, SHOP_SIZE.width, SHOP_SIZE.height),
+    width: SHOP_SIZE.width,
+    height: SHOP_SIZE.height,
+    style: { width: SHOP_SIZE.width, height: SHOP_SIZE.height },
+    draggable: false,
+    selectable: true,
+    data: {
+      title: 'Shop',
+      color: '#6750a4',
+      group: null,
+      universeCanvasId: canvasId,
+      universeScope: scope,
+      universeDepth: options.universeDepth,
+      nonDeletable: true,
+      tags: ['universe-shop', scope],
+      creationEventId: options.creationEventId ?? newUniverseCreationEventId()
+    }
+  }
+}
+
 export function createStickyNode(index: number, center?: { x: number; y: number }): CanvasNode {
   return {
     id: nextId('sticky'),
@@ -1405,6 +1449,9 @@ export function groupSelectedNodes(
   if (members.length === 0 || new Set(members.map((n) => n.parentId ?? null)).size !== 1) {
     return nodes
   }
+  // A Shop is the fixed catalog entry point for its universe. Grouping it would make the
+  // supposedly permanent surface inherit a user frame and become movable with that frame.
+  if (members.some((member) => member.type === 'shop' || member.data.nonDeletable === true)) return nodes
   if (
     members.some((member) =>
       members.some((other) => other.id !== member.id && isDescendant(nodes, other.id, member.id))
@@ -1472,7 +1519,8 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   gitlab: true,
   homeassistant: true,
   freepbx: true,
-  nsis: true
+  nsis: true,
+  shop: true
 }
 
 /**
@@ -1511,7 +1559,8 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   gitlab: SERVICE_SUMMARY_SIZE,
   homeassistant: SERVICE_SUMMARY_SIZE,
   freepbx: SERVICE_SUMMARY_SIZE,
-  nsis: NSIS_SIZE
+  nsis: NSIS_SIZE,
+  shop: SHOP_SIZE
 }
 
 /** A `Set`, not `type in NODE_KIND_TABLE`: `in` walks the prototype, so `'constructor'` and
@@ -1555,6 +1604,9 @@ function duplicateKind(type: string | undefined): NodeKind {
  * make the copy claim a deleted file is there and try to read it.
  */
 export function duplicateNode(node: CanvasNode, offset = 28): CanvasNode {
+  if (node.type === 'shop' || node.data.nonDeletable === true) {
+    throw new Error('Shop nodes are permanent and cannot be duplicated.')
+  }
   const kind = duplicateKind(node.type)
   // Mirrors the factories exactly: `createTerminalNode` mints `term-…` and every other factory
   // uses its own kind as the prefix (`editor-`, `diff-`, `video-`, `web-`, `browser-`, `sticky-`,
@@ -1734,6 +1786,7 @@ export function reparentNode(
 ): CanvasNode[] {
   const node = nodes.find((n) => n.id === nodeId)
   if (!node) return nodes
+  if (node.type === 'shop' || node.data.nonDeletable === true) return nodes
   if ((node.parentId ?? null) === groupId) return nodes
   if (groupId === nodeId || (groupId && isDescendant(nodes, groupId, nodeId))) return nodes
 
@@ -1756,7 +1809,7 @@ export function addSelectionToGroup(
   const selected = new Set(selectedIds)
   const byId = new Map(nodes.map((node) => [node.id, node]))
   const roots = nodes.filter((node) => {
-    if (node.id === groupId || !selected.has(node.id)) return false
+    if (node.id === groupId || !selected.has(node.id) || node.type === 'shop' || node.data.nonDeletable === true) return false
     const seen = new Set<string>()
     let parentId = node.parentId
     while (parentId && !seen.has(parentId)) {
@@ -1784,7 +1837,7 @@ export function reorderGroupWithinParent<T extends { id: string; parentId?: stri
 ): T[] {
   if (draggedId === beforeId) return nodes
   const dragged = nodes.find((node) => node.id === draggedId)
-  if (!dragged || (dragged.parentId ?? null) !== parentId) return nodes
+  if (!dragged || (dragged.parentId ?? null) !== parentId || (dragged as { type?: string }).type === 'shop') return nodes
   const before = beforeId ? nodes.find((node) => node.id === beforeId) : undefined
   if (beforeId && (!before || (before.parentId ?? null) !== parentId)) return nodes
 
@@ -1824,7 +1877,7 @@ export function reorderNodeBefore(
   if (draggedId === beforeId) return nodes
   const dragged = nodes.find((n) => n.id === draggedId)
   const before = nodes.find((n) => n.id === beforeId)
-  if (!dragged || !before || dragged.type === 'group') return nodes
+  if (!dragged || !before || dragged.type === 'group' || dragged.type === 'shop' || dragged.data.nonDeletable === true) return nodes
 
   const targetParent = before.parentId ?? null
   const moved =
@@ -1925,6 +1978,12 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         cwd: n.cwd,
         text: n.text,
         serviceLabel: n.serviceLabel,
+        universeCanvasId: n.universeCanvasId,
+        universeScope: n.universeScope,
+        universeDepth: n.universeDepth,
+        nonDeletable: n.nonDeletable,
+        creationEventId: n.creationEventId,
+        shopSelection: (n as CanvasNodeState & { shopSelection?: string }).shopSelection,
         serviceConnection: n.serviceConnection,
         nsisSpec: n.nsisSpec,
         nsisLocalPaths: n.nsisLocalPaths,
@@ -2001,6 +2060,12 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         cwd: n.data.cwd,
         text: n.data.text,
         serviceLabel: n.data.serviceLabel,
+        universeCanvasId: n.data.universeCanvasId,
+        universeScope: n.data.universeScope,
+        universeDepth: n.data.universeDepth,
+        nonDeletable: n.data.nonDeletable,
+        creationEventId: n.data.creationEventId,
+        shopSelection: n.data.shopSelection,
         serviceConnection: n.data.serviceConnection,
         nsisSpec: n.data.nsisSpec,
         nsisLocalPaths: n.data.nsisLocalPaths,
