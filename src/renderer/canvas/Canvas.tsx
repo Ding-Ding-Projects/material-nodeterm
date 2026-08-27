@@ -426,6 +426,7 @@ import {
   agentRestartFn,
   guardConcurrentRestart,
   planBulkRestart,
+  clearEnvEligibility,
   restartEligibility,
   restartSessionId,
   settleRestart,
@@ -558,9 +559,11 @@ import {
   canRename,
   canContextLink,
   canSwitchModel,
+  capabilityAgentId,
   createdAgentId,
   explicitCodexResumeSession,
   resumeCommand,
+  vanillaEnvStripPattern,
   AGENT_CONFIG,
   BUILTIN_AGENT_IDS,
   type AgentId,
@@ -8361,13 +8364,6 @@ export function Canvas() {
     [assessProfileRestartForNode, restartWithTerminalProfile, profileText]
   )
 
-  // Restart ONE agent CLI in place: quit it and relaunch it with the provider's own `--resume`, so
-  // a newly released model shows up in its model list without losing the conversation. The node's
-  // registered closure owns the whole choreography (and re-checks eligibility + liveness at call
-  // time, so a stale menu cannot force a restart onto a session that just went busy); all that is
-  // left here is telling the user how it went. Up to ~6s of exit polling plus the echo-verified
-  // resume line, hence the await before the notice.
-  const restartAgentNode = useCallback(async (nodeId: string) => {
   // Restart ONE agent CLI while preserving its provider session. Ordinary restart/reopen asks the
   // harness to exit and types its resume command; model switching terminates the foreground agent
   // process and rebuilds the tmux session so gateway env is re-applied. The node closure owns that
@@ -8376,20 +8372,23 @@ export function Canvas() {
     nodeId: string,
     targetAgentId?: AgentId,
     targetModel?: string,
-    restartShell?: boolean
+    restartShell?: boolean,
+    clearEnv?: boolean
   ) => {
     const fn = agentRestartFn(nodeId)
     if (!fn) return // node unmounted between opening the menu and clicking
-    const action = restartShell
-      ? 'Restart'
-      : targetModel
-        ? 'Model switch'
-        : targetAgentId
-          ? 'Reopen'
-          : 'Restart'
+    const action = clearEnv
+      ? 'Restart on subscription'
+      : restartShell
+        ? 'Restart'
+        : targetModel
+          ? 'Model switch'
+          : targetAgentId
+            ? 'Reopen'
+            : 'Restart'
     let outcome: RestartOutcome
     try {
-      outcome = await fn(targetAgentId, targetModel, restartShell)
+      outcome = await fn(targetAgentId, targetModel, restartShell, clearEnv)
     } catch {
       // The transport under the restart threw (a relay socket still CONNECTING rejects the very
       // first write). Unhandled, this rejection made the action a silent no-op — the user clicked
@@ -8433,11 +8432,13 @@ export function Canvas() {
       outcome === 'restarted'
         ? {
             kind: 'info',
-            text: targetModel
-              ? `Switched to ${targetModel} — conversation resumed.`
-              : targetLabel
-                ? `Session reopened as ${targetLabel} — conversation resumed.`
-                : 'Agent restarted — conversation resumed.'
+            text: clearEnv
+              ? 'Restarted on subscription — conversation resumed.'
+              : targetModel
+                ? `Switched to ${targetModel} — conversation resumed.`
+                : targetLabel
+                  ? `Session reopened as ${targetLabel} — conversation resumed.`
+                  : 'Agent restarted — conversation resumed.'
           }
         : outcome === 'exit-timeout'
           ? {
@@ -10527,6 +10528,32 @@ export function Canvas() {
                     : 'Quits the CLI, respawns a fresh shell (picks up env/profile changes), then resumes.'),
                 onClick: () => void restartAgentNode(ids[0], undefined, undefined, true)
               },
+              ...(vanillaEnvStripPattern(sourceAgentId ?? ('claude' as AgentId)) &&
+              !isHidden('vanilla-restart', hidden)
+                ? [
+                    {
+                      label:
+                        capabilityAgentId(sourceAgentId ?? ('claude' as AgentId)) === 'copilot'
+                          ? 'Restart on Copilot defaults'
+                          : 'Restart on subscription',
+                      icon: <IconPower />,
+                      disabled:
+                        !clearEnvEligibility(sourceAgentId, sessionId).ok ||
+                        session.source === 'relay' ||
+                        !agentRestartFn(ids[0]),
+                      hint:
+                        !clearEnvEligibility(sourceAgentId, sessionId).ok
+                          ? 'Nothing to resume yet — this session has not reported an id.'
+                          : session.source === 'relay'
+                            ? 'Restart the shell on the machine hosting this relay session.'
+                            : !agentRestartFn(ids[0])
+                              ? 'This terminal is not attached right now.'
+                              : 'Restarts the session with gateway/provider environment stripped, using your own subscription credentials.',
+                      onClick: () =>
+                        void restartAgentNode(ids[0], undefined, undefined, undefined, true)
+                    }
+                  ]
+                : []),
               ...(variants.length
                 ? ([
                     {

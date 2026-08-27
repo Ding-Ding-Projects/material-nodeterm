@@ -94,6 +94,18 @@ export function restartSessionId(live: unknown, persisted: unknown): string | un
   return undefined
 }
 
+/** Eligibility for the vanilla-provider recycle path. Unlike in-band exit, it may interrupt a
+ * busy session because termination is identity-checked by the owning core. */
+export function clearEnvEligibility(
+  agentId: string | undefined,
+  sessionId: string | undefined
+): { ok: true } | { ok: false; reason: Exclude<IneligibleReason, 'working'> } {
+  if (!agentId || !canResume(agentId) || !exitSequence(agentId))
+    return { ok: false, reason: 'not-resumable' }
+  if (!sessionId) return { ok: false, reason: 'no-session' }
+  return { ok: true }
+}
+
 export type RestartOutcome = 'restarted' | 'exit-timeout' | 'not-eligible'
 
 export const RESTART_EXIT_TIMEOUT_MS = 6000
@@ -437,7 +449,8 @@ export function guardConcurrentRestart<T extends string, Args extends unknown[]>
 export type AgentRestartFn = (
   targetAgentId?: AgentId,
   targetModel?: string,
-  restartShell?: boolean
+  restartShell?: boolean,
+  clearEnv?: boolean
 ) => Promise<RestartOutcome>
 
 const restartFns = new Map<string, AgentRestartFn>()

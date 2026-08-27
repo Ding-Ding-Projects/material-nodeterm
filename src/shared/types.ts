@@ -179,6 +179,8 @@ export interface PtyCreateOptions {
   agentId?: AgentId
   /** Per-node model override. Applied through the node's base harness on launch/cold restore. */
   agentModel?: string
+  /** One-shot vanilla launch: strip gateway and inherited provider environment variables. */
+  clearEnv?: boolean
   /** Managed Claude account: inject CLAUDE_CONFIG_DIR for this account into the session env. */
   accountId?: string
   /** Managed Codex account: run this node against that account's shared CODEX_HOME app-server. */
@@ -590,6 +592,8 @@ export interface CanvasNodeState {
   agentId?: AgentId
   /** Model selected for this agent node through the shared model gateway. */
   agentModel?: string
+  /** One-shot flag for the next fresh spawn to use the agent's default provider environment. */
+  clearEnv?: boolean
   /** Set while this node is armed but not yet launched — see PendingLaunch. */
   pendingLaunch?: PendingLaunch
   /**
@@ -2510,6 +2514,8 @@ export interface Settings {
    *  driver runs in `default`). Overridable per project via Project.defaultPermissionMode.
    *  `auto` is version-gated: CLIs below 2.1.71 reject the value, so it degrades to no flag. */
   claudePermissionMode: AgentPermissionMode
+  /** When enabled, every fresh eligible agent launch strips gateway/provider overrides. */
+  vanillaLaunchDefault: boolean
   /** "Eco": exit the agent CLI of a session that has been idle AND offscreen for
    *  `agentHibernationIdleMinutes`, reclaiming its RAM; the conversation is resumed automatically
    *  when the node is viewed again. Default OFF — opt-in, because it stops a real process.
@@ -2815,6 +2821,8 @@ export const DEFAULT_SETTINGS: Settings = {
   // Sessions start in auto mode out of the box. Existing users pick this up on hydrate
   // (settings hydrate merges over DEFAULT_SETTINGS) — a deliberate behavior change.
   claudePermissionMode: 'auto',
+  // Opt-in: fresh eligible launches use the agent's own provider instead of gateway overrides.
+  vanillaLaunchDefault: false,
   // Opt-in: hibernation exits a live CLI, so nobody gets it without asking. The 30-minute floor
   // is deliberately long — shorter windows exit sessions the user is between turns on.
   agentHibernationEnabled: false,

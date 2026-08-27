@@ -136,6 +136,7 @@ import {
   queryPaneWithin,
   registerAgentHibernate,
   registerAgentRestart,
+  clearEnvEligibility,
   restartEligibility,
   restartSessionId,
   RESTART_EXIT_TIMEOUT_MS,
@@ -3311,6 +3312,7 @@ export function TerminalNode({
           ownerProjectId: sshProjectId ?? useProjects.getState().activeProjectId,
           agentId: data.agentId,
           agentModel: data.agentModel,
+          clearEnv: data.clearEnv === true,
           accountId: data.accountId,
           codexAccountId: data.codexAccountId as string | undefined,
           sshRemote,
@@ -3731,6 +3733,7 @@ export function TerminalNode({
             if (fresh && useAgentStatus.getState().byId[id]?.hibernated) {
               useAgentStatus.getState().setHibernated(id, false)
             }
+            if (data.clearEnv) updateNodeData(id, { clearEnv: undefined })
             // A local Windows profile never receives renderer-built agent shell syntax. The core
             // executed this semantic intent only for the fresh winner; warm/co-attach results omit
             // the outcome and still consume our stale one-shot because that generation is live.
@@ -3956,38 +3959,8 @@ export function TerminalNode({
     }
     const unregisterRestart = registerAgentRestart(
       id,
-      guardConcurrentRestart(id, async (targetAgentId?: AgentId, targetModel?: string, restartShell?: boolean) => {
+      guardConcurrentRestart(id, async (targetAgentId?: AgentId, targetModel?: string, restartShell?: boolean, clearEnv?: boolean) => {
         const st = useAgentStatus.getState().byId[id]
-        const agentSessionId = st?.sessionId
-        const gate = restartEligibility(agentId, st?.state, agentSessionId)
-        if (!gate.ok || !agentId || !agentSessionId || !restartTarget()) return 'not-eligible'
-        // Built HERE, not inside the choreography: the branded launch plan owns the renderer-side,
-        // async mode read — exactly as the cold-restore relaunch above does it. Without it a canvas
-        // running
-        // in acceptEdits/plan would come back from a restart in the default mode, silently.
-        // Re-resolved at call time for the same reason as there: the mode is a property of how a
-        // session is launched, not of the node.
-        // The launch-command override rides this restart the same way it rides cold restore — a
-        // property of how the agent is launched, read fresh here rather than persisted on the
-        // node. It is skipped on the SSH-codex managed-launcher branch: that path types the
-        // remote host's own launcher path, not a program on this machine's PATH, and a local
-        // wrapper override has no meaning there.
-        const restartOverride = agentLaunchOverride(agentId)
-        const base = resumeCommand(
-          agentId,
-          agentSessionId,
-          agentId === 'codex' && sshProjectId
-            ? {
-                codexProgram: useSshConn.getState().getCodexRuntime(sshProjectId).codexLauncherPath
-              }
-            : { base: restartOverride }
-        )
-        const command = base
-          ? commandForAgentLaunch(
-              base,
-              await ensureActiveAgentLaunchPlan('terminal-restart-resume', agentId)
-            )
-          : undefined
         const currentNode = getNode(id)
         const agentSessionId = restartSessionId(st?.sessionId, currentNode?.data.agentSessionId)
         // `data.agentId` can change after a successful same-base swap while this deliberately
@@ -3995,9 +3968,23 @@ export function TerminalNode({
         // value captured when the pane attached, or a later plain Restart would silently reopen
         // the old agent again.
         const sourceAgentId = createdAgentId(currentNode?.data)
-        const gate = restartEligibility(sourceAgentId, st?.state, agentSessionId)
+        const gate = clearEnv
+          ? clearEnvEligibility(sourceAgentId, agentSessionId)
+          : restartEligibility(sourceAgentId, st?.state, agentSessionId)
         if (!gate.ok || !sourceAgentId || !agentSessionId || !restartTarget())
           return 'not-eligible'
+        if (clearEnv) {
+          if (session.source === 'relay') return 'not-eligible'
+          const clearGate = clearEnvEligibility(sourceAgentId, agentSessionId)
+          if (!clearGate.ok) return 'not-eligible'
+          if (!(await api.pty.terminateForeground(id, sourceAgentId))) return 'not-eligible'
+          transport.recycle(id)
+          updateNodeData(id, (node) => ({
+            clearEnv: true,
+            respawnNonce: ((node.data.respawnNonce as number | undefined) ?? 0) + 1
+          }))
+          return 'restarted'
+        }
         const target = targetAgentId ?? sourceAgentId
         const settings = useSettings.getState().settings
         const builtinTarget = agentConfig(target)

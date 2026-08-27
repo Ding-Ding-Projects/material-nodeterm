@@ -97,7 +97,7 @@ import { ensureNodeToken, ensureRemoteNodeToken, sweepNodeToken } from './agents
 import { hasSharedIdentity, type AgentId } from '../shared/agents/config'
 import { quitWouldLoseWork } from './quit-risk'
 import { clearNode as clearNodeAgentStatus } from './agent-status-mirror'
-import { hasSharedIdentity, setCustomAgentBaseResolver, type AgentId } from '../shared/agents/config'
+import { hasSharedIdentity, setCustomAgentBaseResolver, vanillaEnvStripPattern, type AgentId } from '../shared/agents/config'
 import { findCustomAgent } from '../shared/agents/custom-agent'
 import { applyCustomAgentEnv, customAgentEnvArgs } from './custom-agent-env'
 import {
@@ -2845,7 +2845,11 @@ export class PtyManager {
     // A plain terminal has no agentId and must never receive provider credentials. The hook env's
     // historical Claude fallback does not apply here: gateway access is an explicit agent
     // capability, not a terminal default.
-    const gatewayEnv = options.agentId
+    const stripRe =
+      options.clearEnv || this.getSettings().vanillaLaunchDefault
+        ? vanillaEnvStripPattern((options.agentId ?? 'claude') as AgentId)
+        : null
+    const gatewayEnv = options.agentId && !stripRe
       ? modelGatewayEnv(
           this.getSettings().modelGateway,
           options.agentId,
@@ -2856,6 +2860,9 @@ export class PtyManager {
       : {}
     if (!options.sshRemote) {
       for (const [k, v] of Object.entries(gatewayEnv)) env[k] = v
+      if (stripRe) {
+        for (const k of Object.keys(env)) if (stripRe.test(k)) delete env[k]
+      }
     }
 
     // The OWNING project's env (`.nodeterm/settings.json`, local overlay + TRUSTED shared half —
