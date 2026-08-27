@@ -1,6 +1,92 @@
 # Handoff
 
-## 2026-08-27, portable board-attachment detector export
+## 2026-08-27, opening merge-recovery repairs
+
+### Main-process parser repair
+
+Release run `33126389977` reached the application build after both coverage checkers and all
+packaging and icon phases passed, then failed at `src/main/index.ts:884:4` with
+`ERROR: Expected "}" but found "detail"`. The exact cause was a merge splice in the quit-confirmation
+section: duplicate `confirmQuit` declarations, duplicate explanatory comments, and two `detail`
+properties with contradictory claims about whether terminal sessions survive quitting. The nearby
+browser-guest map comments also named two different registration helpers.
+
+The repair keeps the settings-aware `confirmQuit` implementation, the risk-specific warning that
+non-persistent terminals end on quit, all quit confirmation state, and the `registerBrowserGuestRequest`
+registration path. It removes the duplicate declaration and comment residue, restores valid object
+punctuation by retaining one truthful `detail`, and reconciles the browser-guest comment with the
+actual adapter function. AWS, Cloudflare, hosted services, diagnostics, browser guests, updater,
+account, relay, and no-signing registrations were preserved. No blanket historical restore or
+unrelated refactor was used.
+
+This lane intentionally ran no tests, checkers, lint, type checks, builds, packaging, installer
+execution, runtime interaction, reviews, audits, or UI captures. Read-only source and history scans
+were used to identify the exact duplicate splices. The integration owner must evaluate the exact
+commit and the follow-up remote workflow run before treating this repair as verified.
+
+### Canvas notification inventory repair
+
+Release run `33123084094` at `e6697feb31e5e59f36e916b4e5b00966e9b57891` executed the repaired
+coverage checker. Producer manifest, producer uniqueness, speech marker, project-save markers,
+surface manifest, and mutation checks passed. The remaining three base failures were the Canvas
+notification count, title-ownership, and body-ownership checks, with one aggregate complete-fixture
+failure.
+
+An independent parser matching the current `callArguments` algorithm selected 57 production object
+payloads. The hand-written Canvas call manifest now contains 57 IDs, with no unmatched calls or
+IDs. All 57 selected calls carry `titleKind`; 54 carry a body and all 54 carry `bodyKind`. The
+title-marker manifest was expanded for the current placement, unavailable-node, AWS Universe,
+media, planner, and project notification calls, while the separate save-cancelled and save-failed
+markers remain at one each. Canvas now supplies explicit title and body ownership for every selected
+notification payload.
+
+This lane intentionally ran no production checker, tests, lint, type checks, builds, packaging,
+installer execution, runtime interaction, reviews, audits, or UI captures. The parser comparison was
+read-only and separate from the production checker, so the repair remains unverified by those
+activities until the integration owner evaluates the exact merged commit.
+
+### Personal vocabulary producer and save-notification repair
+
+Release run `33121962513` at `9c5cbc2883c0218ff159cf39874d5e94c1db45c4` executed the coverage checker
+and reported eight base failures: the canonical producer mismatch, Canvas notification count and
+title/body ownership mismatches, incorrect Project save cancelled and Project save failed marker
+counts, the speech-settings marker, and duplicate producer IDs. The complete-fixture check added
+one aggregate failure.
+
+The repair keeps one producer row per ID and preserves the strongest boundary for each duplicate:
+the exact `const vocab = useVocabularyMapper()` row for `password-manager` and
+`authenticator-settings`, the single catalog row for `converter-adapter-catalog`, and the actual
+`SettingsText` row for `speech-settings`. The canonical producer list now matches the resulting
+126 unique producer rows in exact order. Canvas save handling now emits one cancellation notification
+from the cancelled branch and one failure notification from the failure branch, with title and body
+ownership retained.
+
+This lane intentionally ran no production checker, scripts, tests, lint, type checks, builds,
+packaging, installer execution, runtime interaction, reviews, audits, or UI captures. The repair
+remains unverified by those activities until the integration owner evaluates the exact merged
+commit.
+
+### Personal vocabulary coverage parser repair
+
+Release run `33119050796` reached application build after the source identity, resource, icon,
+HTTPS, and metadata phases passed, then failed while parsing
+`scripts/check-personal-vocabulary-coverage.mjs:306` with
+`SyntaxError: Identifier 'CANONICAL_CANVAS_NOTIFY_CALL_IDS' has already been declared`.
+
+The repair removes the obsolete duplicate Canvas notification manifest and duplicate check block,
+restores the producer-array separators and duplicate-row cleanup left by the same merge, and keeps
+the detailed independent notification manifest that matches the current `Canvas.tsx` title markers.
+The notification call pipeline now filters `callArguments` to production object payloads before one
+set of inventory, title-ownership, and body-ownership checks. The source shape was inspected
+read-only to preserve the current notification title and body boundaries rather than deleting a
+manifest entry by guesswork.
+
+This lane intentionally ran no tests, checkers, lint, type checks, builds, packaging, installer
+execution, runtime interaction, reviews, audits, or UI captures. The repaired source therefore
+remains unverified by those activities, and the integration owner must evaluate the exact merged
+commit before treating the release workflow as recovered.
+
+### Portable board-attachment detector export
 
 `src/core/board-attachments.ts` already consumed the shared byte-derived
 `detectBoardAttachmentKind` implementation, including the current file, image, audio, and video
