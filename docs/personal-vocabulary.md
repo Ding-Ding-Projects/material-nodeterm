@@ -196,9 +196,9 @@ the substitution without anyone remembering to opt in:
   Workspace, Custom Agents, SSH, Shortcuts, and Support Tickets callsites. Each row names its
   source file and exact shared boundary marker, so a section cannot pass merely because some other
   text in the same file happens to be mapped.
-- ✅ Settings navigation and routing share `SETTINGS_SECTION_REGISTRY`; the coverage Chut mutates
+- ✅ Settings navigation and routing share `SETTINGS_SECTION_REGISTRY`; the coverage check mutates
   the real registry in a fresh fixture in addition to mutating the Page and Sidebar registrations.
-- ✅ The coverage Chut also inventories the focused template, field, localization, and control
+- ✅ The coverage check also inventories the focused template, field, localization, and control
   intent tests. Its fixture mutations remove a mapper, `SettingsText`, a section registration, an
   audit row, and the fact-template test, then execute the complete checker against the mutation.
 - ✅ Node header chrome, dock, kanban cards/columns and the card modal, via the separate

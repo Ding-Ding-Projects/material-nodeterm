@@ -209,7 +209,7 @@ save without erasing later history (see [local-history.md](local-history.md)).
 ## Verification
 
 The queue, voice matching, School Mode decision, and both narration executors have focused
-automated Chuts. Platform voice quality, Canvas wiring, and audible output still require this
+automated checks. Platform voice quality, Canvas wiring, and audible output still require this
 device check:
 
 1. Settings → Interface → Narrator, toggle **Speak app events aloud** on.
