@@ -1,5 +1,28 @@
 # Handoff
 
+## 2026-08-27, cross-project link transport and storage, issue #86
+
+The feature branch was reconciled with the exact `origin/main` tip
+`54164b84dce0b7e62787b1de2885405ff4ed821c`. The current default source already contains the
+integrated link transport commit `fd1cb6c968ea4ef7c36befb64f7c6dc154c3a0f9`, which includes the
+Canvas-owned commit funnel, unified `Project.links` persistence, local node-only context-map
+extraction, and Server Edition persisted-canvas transport. The feature branch also preserves the
+earlier source commit `08d3b2169177bf85155301a64a26818f69484e3d` in its history without rewriting
+the pushed record.
+
+Direct documentation is `docs/features/projects/cross-project-link-transport.md`, indexed from
+`docs/features/projects/README.md`. `CHANGELOG.md` and `ROADMAP.md` record the same scope and
+verification boundary. The generated `src/shared/docs-data.ts` bundle was not regenerated because
+this lane explicitly forbids builds; the parent integration lane must regenerate it before treating
+the offline article as current.
+
+This lane excludes endpoint modeling, legacy migration, foreign-node projections, navigation,
+grouping and drill-through, dependency operations, custom-agent harness, model switching,
+restart-on-subscription, and account behavior. No tests, lint, type checks, builds, packaging,
+runtime interaction, reviews, audits, or captures were run. No public issue mutation, main merge,
+release, or cleanup was performed by this lane. The parent owns final verification, integration,
+issue progress, and closure.
+
 ## 2026-08-27, AWS core-service managers, issue #46 PR preparation
 
 The issue jer was reconciled with the exact `origin/main` tip `2472cf23b99559005476841d3db5e6bc4691ac06`.

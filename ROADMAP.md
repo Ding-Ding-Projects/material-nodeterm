@@ -392,6 +392,10 @@ intentionally unchecked because this task publishes the plan only.
 - [ ] Implement the outstanding upstream behavior from the planned issue and pull-request parity map.
 - [ ] Split the PR #422 behavior into independent link, endpoint, navigation, grouping, agent, and
       account lanes.
+- [ ] **Program 75 cross-project link transport and storage, issue #86.** Canvas-owned link commits,
+      persisted `Project.links`, background-project context transport, and local node-endpoint
+      filtering are recorded in `docs/features/projects/cross-project-link-transport.md`. Source
+      implementation is present, but the requested checks and runtime evidence remain pending.
 - [ ] Publish the new upstream pull request based on the final default branch with verified evidence.
 
 ## Deliberately not doing

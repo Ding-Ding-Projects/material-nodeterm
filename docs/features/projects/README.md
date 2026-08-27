@@ -14,6 +14,8 @@ A project is one canvas — one page of nodes, with its own working directory an
   validation, and the Include, Omit, Locate Later decision flow.
 - [Portable project binding wizard](./portable-bindings.md): atomic staging, hash validation,
   legacy migration, collision refusal, and explicit destination binding routes.
+- [Cross-project link transport and storage](./cross-project-link-transport.md): Canvas-owned link
+  commits, persisted `Project.links`, background-project context transport, and endpoint filtering.
 - [Alarm Clock nodes](../../alarm-clock.md): one-shot and recurring wall-clock reminders with
   timezone and DST handling, snooze, dismiss, and missed-occurrence history.
 
