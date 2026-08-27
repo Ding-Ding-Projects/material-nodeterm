@@ -79,7 +79,6 @@ function grantedNow(): boolean {
 beforeEach(() => {
   useProjects.setState({
     projects: [project({ [cap]: true })],
-    activeProjectId: 'p1'
     activeProjectId: 'p1',
     reloadNonce: 0
   })
@@ -116,7 +115,6 @@ describe('the one-time clone notice', () => {
     expect(useProjects.getState().getProject('p1')?.capabilityAck).toBeUndefined()
   })
 
-  it('holds focus on NO button, so a native Enter/Space mid-typing cannot answer it', () => {
   it('holds focus on NO button, so a native Enter/Space mid-typing cannot answer it (I1)', () => {
     // The real-browser hole: autoFocus would steal focus from whatever the user was typing in,
     // and their next Enter/Space would NATIVELY activate the focused button — a path the window
@@ -160,10 +158,6 @@ describe('the one-time clone notice', () => {
     expect(dialog()).toBeNull()
   })
 
-  it('a declined switch whose hostile true RE-ARRIVES is refused AND re-noticed — never a silent grant', () => {
-    mount()
-    act(() => button('Turn it off').click())
-    unmount()
   it('C1: a declined switch whose hostile true RE-ARRIVES is refused AND re-noticed — never a silent grant', () => {
     mount()
     act(() => button('Turn it off').click())
@@ -199,17 +193,6 @@ describe('the one-time clone notice', () => {
     expect(grantedNow()).toBe(false)
     unmount()
     mount()
-    expect(dialog()).toBeTruthy()
-  })
-
-  it('an overlay misclick is a NON-answer too', () => {
-    expect(dialog()).toBeNull() // closed for this session…
-    const p = useProjects.getState().getProject('p1')!
-    expect(p.capabilityAck).toBeUndefined() // …but no answer was recorded
-    expect(p[cap]).toBe(true) // and the user's working copy was not silently edited
-    expect(grantedNow()).toBe(false)
-    unmount()
-    mount() // next launch
     expect(dialog()).toBeTruthy()
   })
 

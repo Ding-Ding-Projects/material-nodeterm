@@ -55,6 +55,8 @@ describe('ProjectGlyph', () => {
       />
     )
     expect(host.textContent).toBe('B')
+  })
+
   // Task 4 swapped the placeholder for the real curated lucide-react map. lucide renders an <svg>
   // whose `stroke` is the `color` prop, so these two pin the same thing 1:1 (tinted / currentColor)
   // against the real glyph instead of the former placeholder rect.
