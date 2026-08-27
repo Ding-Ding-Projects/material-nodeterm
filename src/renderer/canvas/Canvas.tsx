@@ -198,6 +198,7 @@ import {
   IconColor,
   IconExplorer,
   IconFit,
+  IconFocus,
   IconGear,
   IconGrid,
   IconGroup,
@@ -786,8 +787,10 @@ import {
   sshAccountsHint,
   ungroupNodes,
   placeNodeInRect,
+  drillSingleNode,
+  mergeSingleNode,
   type CanvasNode,
-  type TerminalNodeCreationOptions
+  type TerminalNodeCreationOptions,
   maximizeNodeToRect,
   restoreMaximizedNode,
   placeNodeInRect,
@@ -799,10 +802,20 @@ import type { CodexAccount } from '@shared/codex-account'
 import { useSystemCodexAccount } from '../state/systemCodexAccount'
 import { toKanbanSession } from './toKanbanSession'
 import type { SavedCanvasLayout } from '@shared/types'
+import { setFocusNodeHandler } from '../nodes/focus-handler'
 
 const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
 
 const GRID = 24
+
+/** Transient state for the single-node project-aware canvas view. */
+interface NodeFocusSession {
+  projectId: string
+  nodeId: string
+  fullStored: ReturnType<typeof flowToNodeStates>
+  fullFlow: CanvasNode[]
+  returnViewport: Viewport
+}
 
 /** Codex accounts usable from this canvas. A local canvas may host remote nodes; a full SSH
  * project remains restricted to its own host. */
@@ -1904,6 +1917,13 @@ export function Canvas() {
    * the initial empty `useNodesState([])` can never be committed as some project's canvas.
    */
   const nodesProjectIdRef = useRef<string | null>(null)
+  // A focused canvas is a transient projection of one project's full node set. Keep the source
+  // snapshot outside React so autosave and project switches can merge the edited node back without
+  // ever replacing the project with the one-node view.
+  const nodeFocusSessionRef = useRef<NodeFocusSession | null>(null)
+  const nodeFocusTransitionRef = useRef(false)
+  const exitNodeCanvasRef = useRef<() => void>(() => {})
+  const [nodeFocusSession, setNodeFocusSession] = useState<NodeFocusSession | null>(null)
   /**
    * The project whose webview nodes the NEXT load must retire into the keep-alive pool. Separate
    * from `nodesProjectIdRef` on purpose: the epoch tag is invalidated on the load effect's
@@ -2982,6 +3002,13 @@ export function Canvas() {
   // 2) Whenever the active project changes — or an in-place reload is requested (`reloadNonce`,
   //    which changes even when the SAME project is reloaded) — load its canvas into React Flow.
   useEffect(() => {
+    // A project switch or reload leaves the transient focus projection behind. The source snapshot
+    // has already been merged by switchProject or the caller's normal save path before this effect
+    // runs, so clear only the navigation state here and let the ordinary load install the target.
+    if (nodeFocusSessionRef.current) {
+      nodeFocusSessionRef.current = null
+      setNodeFocusSession(null)
+    }
     // Team presence: tell the hub which canvas we are on (this effect fires on load AND on every
     // tab switch). Peers only draw each other's cursors and node chips when the project matches —
     // each project is its own canvas with its own coordinate space. No project open (welcome
@@ -3329,6 +3356,20 @@ export function Canvas() {
     [markDirty, api, seedBoard]
   )
 
+  // Navigation is transient: a focused view must publish and persist the full project, never the
+  // one-node projection that happens to be mounted in React Flow at that moment.
+  const nodeStatesForProject = useCallback((flow: CanvasNode[]): CanvasNodeState[] => {
+    const focusedSession = nodeFocusSessionRef.current
+    const liveStates = flowToNodeStates(flow)
+    if (!focusedSession || focusedSession.projectId !== useProjects.getState().activeProjectId) {
+      return liveStates
+    }
+    const focusedState = liveStates[0]
+    return focusedState
+      ? mergeSingleNode(focusedSession.fullStored, focusedState, focusedSession.fullFlow)
+      : focusedSession.fullStored
+  }, [])
+
   // The node states that go on the wire: React Flow's managed nodes minus the ephemeral cards
   // (subagent / loop), which every client derives for itself from the agent:status stream.
   //
@@ -3356,14 +3397,14 @@ export function Canvas() {
       return () =>
         publishableScene(
           {
-            nodes: flowToNodeStates(flow),
+            nodes: nodeStatesForProject(flow),
             bridges: (overrideBridges ?? linkEdgesRef.current).map(toBridgeLink),
             ropes: (overrideRopes ?? controlEdgesRef.current).map(toBridgeLink)
           },
           ephIds
         )
     },
-    []
+    [nodeStatesForProject]
   )
 
   // ---- persistence helpers ----
@@ -3378,14 +3419,17 @@ export function Canvas() {
       {
         nodesProjectId: nodesProjectIdRef.current,
         activeProjectId: store.activeProjectId,
-        nodes: flowToNodeStates(nodesRef.current),
-        viewport: viewportRef.current,
+        nodes: nodeStatesForProject(nodesRef.current),
+        viewport:
+          nodeFocusSessionRef.current?.projectId === store.activeProjectId
+            ? nodeFocusSessionRef.current.returnViewport
+            : viewportRef.current,
         bridges: linkEdgesRef.current.map(toBridgeLink),
         ropes: controlEdgesRef.current.map(toBridgeLink)
       },
       store.commitCanvas
     )
-  }, [])
+  }, [nodeStatesForProject])
 
   const navigateMultiverseCanvas = useCallback((canvasId: string) => {
     if (!activeProjectId) return
@@ -4031,6 +4075,11 @@ export function Canvas() {
 
   // Record an undo snapshot when the canvas settles (debounced; skips drag frames/loads).
   useEffect(() => {
+    if (nodeFocusTransitionRef.current) {
+      nodeFocusTransitionRef.current = false
+      committedRef.current = nodes
+      return
+    }
     if (loadingRef.current) {
       committedRef.current = nodes
       return
@@ -9823,6 +9872,116 @@ export function Canvas() {
   const goBack = useCallback(() => stepAndFrame('back'), [stepAndFrame])
   const goForward = useCallback(() => stepAndFrame('forward'), [stepAndFrame])
 
+  /** Enter the project-aware single-node canvas used by the node header and F11. */
+  const openNodeAsCanvas = useCallback(
+    (nodeId: string): void => {
+      const projectId = useProjects.getState().activeProjectId
+      if (!projectId || isKanbanOpen(projectId) || nodeFocusSessionRef.current) return
+      const fullFlow = nodesRef.current
+      const drilled = drillSingleNode(fullFlow, nodeId)
+      if (!drilled.found || drilled.flow.length !== 1) return
+      const session: NodeFocusSession = {
+        projectId,
+        nodeId,
+        fullStored: flowToNodeStates(fullFlow),
+        fullFlow,
+        returnViewport: viewportRef.current
+      }
+      nodeFocusSessionRef.current = session
+      setNodeFocusSession(session)
+      const focusedFlow = drilled.flow.map((node) => ({ ...node, selected: true }))
+      nodeFocusTransitionRef.current = true
+      nodesRef.current = focusedFlow
+      setNodes(focusedFlow)
+      // React Flow may not have measured the retained node until the next paint. The existing
+      // framing path has a persisted-size fallback, so two animation frames are enough to avoid
+      // racing its ResizeObserver while still making entry feel immediate.
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (nodeFocusSessionRef.current?.nodeId !== nodeId) return
+          const focused = nodesRef.current.find((node) => node.id === nodeId)
+          if (focused) frameNode(focused)
+        })
+      })
+    },
+    [frameNode, setNodes]
+  )
+
+  /** Leave the focused canvas and restore the saved parent viewport after the node merge. */
+  const exitNodeCanvas = useCallback((): void => {
+    const session = nodeFocusSessionRef.current
+    if (!session) return
+    const focused = nodesRef.current.find((node) => node.id === session.nodeId)
+    const focusedState = focused ? flowToNodeStates([focused])[0] : undefined
+    const restoredStates = focusedState
+      ? mergeSingleNode(session.fullStored, focusedState, session.fullFlow)
+      : session.fullStored
+    const restoredFlow = nodeStatesToFlow(restoredStates)
+    nodeFocusSessionRef.current = null
+    setNodeFocusSession(null)
+    nodeFocusTransitionRef.current = true
+    nodesRef.current = restoredFlow
+    committedRef.current = restoredFlow
+    setNodes(restoredFlow)
+    viewportRef.current = session.returnViewport
+    void setViewport(session.returnViewport, { duration: 300 })
+    commitActiveToStore()
+  }, [commitActiveToStore, setNodes, setViewport])
+  exitNodeCanvasRef.current = exitNodeCanvas
+
+  /** Palette equivalent of the node header and F11 focus toggle. */
+  const toggleNodeCanvasFocus = useCallback((): void => {
+    if (nodeFocusSessionRef.current) {
+      exitNodeCanvas()
+      return
+    }
+    const activeNodeId = document.activeElement
+      ?.closest('.react-flow__node')
+      ?.getAttribute('data-id')
+    const selected = nodesRef.current.find((node) => node.selected && node.type !== 'group')
+    const nodeId = activeNodeId ?? selected?.id
+    if (nodeId) openNodeAsCanvas(nodeId)
+  }, [exitNodeCanvas, openNodeAsCanvas])
+
+  // The focus handler is an imperative bridge because React Flow constructs node components
+  // without receiving Canvas callbacks as props. It is cleared when this Canvas unmounts.
+  useEffect(() => {
+    setFocusNodeHandler(openNodeAsCanvas)
+    return () => setFocusNodeHandler(null)
+  }, [openNodeAsCanvas])
+
+  // F11 enters or leaves the single-node canvas. Escape leaves it only when the terminal does not
+  // own the keyboard, preserving the shell's normal interrupt behavior.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      const target = document.activeElement as HTMLElement | null
+      const terminalOwnsKey = isTerminalTarget(target as unknown as ContextElement | null)
+      if (event.code === 'Escape' && nodeFocusSessionRef.current && !terminalOwnsKey) {
+        event.preventDefault()
+        exitNodeCanvas()
+        return
+      }
+      if (event.code !== 'F11' || event.defaultPrevented) return
+      if (
+        !terminalOwnsKey &&
+        (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.isContentEditable)
+      ) return
+      if (nodeFocusSessionRef.current) {
+        event.preventDefault()
+        exitNodeCanvas()
+        return
+      }
+      const focusedId = target?.closest('.react-flow__node')?.getAttribute('data-id')
+      const selected = nodesRef.current.find((node) => node.selected && node.type !== 'group')
+      const nodeId = focusedId ?? selected?.id
+      if (!nodeId) return
+      event.preventDefault()
+      openNodeAsCanvas(nodeId)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [exitNodeCanvas, openNodeAsCanvas])
+
   // Breadcrumb trail back/forward via the configured shortcuts (defaults Ctrl+[ / Ctrl+]). Same
   // shape as the undo/redo effect above: a canvas-scope chord dispatched from one window-level
   // listener, refused while the kanban board is open or while a plain text field is focused.
@@ -12183,7 +12342,22 @@ export function Canvas() {
   // project, switch there first and let the project-load effect finish the focus.
   const focusNodeById = useCallback(
     (nodeId: string) => {
+      const activeId = useProjects.getState().activeProjectId
+      const focusedSession = nodeFocusSessionRef.current
       const node = nodesRef.current.find((n) => n.id === nodeId)
+      // Same-project targets are absent from the focused React Flow set by design. Restore the
+      // full canvas first, then retry through the stable ref once React Flow has installed it.
+      if (
+        !node &&
+        focusedSession?.projectId === activeId &&
+        focusedSession.fullFlow.some((candidate) => candidate.id === nodeId)
+      ) {
+        exitNodeCanvasRef.current()
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => focusNodeRef.current(nodeId))
+        })
+        return
+      }
       if (node) {
         // The board is a full-page overlay: framing the node on the canvas underneath it is
         // invisible, which is why the notch's Go (and every other "go to node" path) read as
@@ -16962,8 +17136,8 @@ export function Canvas() {
         label: 'Focus node',
         hint: 'zen fullscreen fill distraction',
         section: 'View',
-        icon: <IconFit />,
-        run: toggleFocusMode
+        icon: <IconFocus />,
+        run: toggleNodeCanvasFocus
       },
       { id: 'fit', label: 'Fit view', icon: <IconFit />, run: fitAll },
       {
@@ -17296,6 +17470,7 @@ export function Canvas() {
     openSettingsTo,
     profileText,
     toggleFocusMode,
+    toggleNodeCanvasFocus,
     // Not read directly in this closure (the body reads `useSettings.getState().settings` fresh
     // on every call) — a dependency purely so a settings change while the palette is open
     // rebuilds the list and the inline toggle rows' `checked` stays live rather than frozen at
@@ -17460,6 +17635,19 @@ export function Canvas() {
       />
 
       <div className="top-banners">
+        {nodeFocusSession && (
+          <div className="announce-banner announce-banner--info" role="status">
+            <span className="announce-banner__dot" />
+            <div className="announce-banner__content">
+              <span className="announce-banner__body">
+                Focused on <strong>{nodeFocusSession.fullFlow.find((node) => node.id === nodeFocusSession.nodeId)?.data.title ?? nodeFocusSession.nodeId}</strong> · press F11 or Escape to return
+              </span>
+            </div>
+            <button className="announce-banner__close" title="Return to canvas" onClick={exitNodeCanvas}>
+              ← back
+            </button>
+          </div>
+        )}
         <MinecraftConnectBanner minecraftNodeIds={minecraftNodeIds} />
         <AnnouncementBanner />
         <TmuxBanner onInstall={runInTerminal} />

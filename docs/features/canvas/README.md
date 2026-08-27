@@ -31,6 +31,8 @@ The pan/zoom surface nodeterm is built around, and everything that lives on it.
   bounded wheel zoom speed.
 - [Canvas zones and saved layouts](./zones-and-saved-layouts.md) - edge and corner drag overlays,
   complete half, third, and quarter targets, and bounded named arrangements.
+- [Project-aware navigation](./project-aware-navigation.md) — single-node focus, safe return,
+  project ownership, and honest missing or unavailable target handling.
 - [Bounded wheel zoom and speed](./wheel-zoom-speed.md) — the shared 40 ms burst budget, plain-
   wheel-only speed multiplier, point-of-use validation, persistence, and verification boundary.
   desktop trackpad gesture facts for wheel routing.

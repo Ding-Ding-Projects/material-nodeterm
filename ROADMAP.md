@@ -485,6 +485,9 @@ intentionally unchecked because this task publishes the plan only.
       persisted `Project.links`, background-project context transport, and local node-endpoint
       filtering are recorded in `docs/features/projects/cross-project-link-transport.md`. Source
       implementation is present, but the requested checks and runtime evidence remain pending.
+- [ ] Project-aware navigation source is present on the issue #86 branch, including single-node focus,
+      safe return, ownership-aware target routing, and direct documentation. Tests, type checks,
+      lint, builds, packaging, runtime interaction, reviews, audits, and captures remain pending.
 - [ ] Publish the new upstream pull request based on the final default branch with verified evidence.
 
 ## Deliberately not doing

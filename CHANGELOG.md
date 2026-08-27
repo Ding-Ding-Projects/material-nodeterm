@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add project-aware single-node canvas focus for issue #86. The terminal header, command palette,
+  and desktop F11 path now promote one node into a transient canvas, merge edits back into the full
+  project, restore nested coordinates and the parent viewport, and refuse missing or unavailable
+  targets without inventing a destination. This lane did not run tests, type checks, lint, builds,
+  packaging, runtime interaction, reviews, audits, or captures.
+
 - Add viewport-relative canvas zones and named saved layouts. Nodes can preview and snap into half,
   third, or quarter regions while dragging, and a saved arrangement restores portable geometry and
   the camera without carrying sessions, credentials, process state, or machine paths. This

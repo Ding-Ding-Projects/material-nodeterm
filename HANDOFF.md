@@ -1,5 +1,31 @@
 # Handoff
 
+## 2026-08-27, project-aware navigation, issue #86
+
+This task branch was reconciled with the exact remote `origin/main` tip
+`54164b84dce0b7e62787b1de2885405ff4ed821c` in merge commit `8582d087`. The implementation commit is
+`db8189b4d3cf1efc84f4588b28eb2e7b726c32d1`.
+
+The Canvas now owns a transient single-node focus view. A terminal header control, the command-palette
+Focus node action, and desktop `F11` promote the selected node into root coordinates. The full source
+node set and parent viewport stay in memory, while autosave, explicit save, and canvas synchronization
+merge the focused edit back into the owning project. Returning restores the original parent relationship,
+nested coordinates, and viewport. Same-project navigation exits focus before resolving a sibling target.
+
+Project-linked navigation keeps ownership explicit: open projects switch normally, closed projects reopen
+before focus, unavailable projects are refused, and missing project or node ids are no-ops. No project
+display name, stale projection flag, credential, process, provider operation, or external network action
+is used as an ownership substitute. Projection, link, grouping, dependency, harness, model, restart, and
+account behavior remains outside this branch.
+
+Direct documentation is `docs/features/canvas/project-aware-navigation.md`, indexed from
+`docs/features/canvas/README.md` and cross-linked from `docs/features/canvas/canvas-and-lifecycle.md`.
+`CHANGELOG.md` and `ROADMAP.md` record the same scope and evidence boundary.
+
+This implementation lane did not run tests, lint, type checks, builds, packaging, runtime interaction,
+reviews, audits, or captures. The branch remains separate from the default branch, and no release or cleanup
+was performed here.
+
 ## 2026-08-27, canvas zones and saved layouts, issue #82
 
 The lane is implemented on `feat/program-71-zones-layouts` and reconciled with the exact

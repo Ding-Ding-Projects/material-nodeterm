@@ -146,7 +146,7 @@ import {
 import { WakeInputBuffer } from '../terminal/wake-input-buffer'
 import { FindBar } from '../components/FindBar'
 import { IconSearch, IconChat, IconMic, IconReload, IconPictureInPicture } from '../components/icons'
-import { IconSearch, IconChat, IconMic, IconReload, IconEye, IconEyeOff, IconGrid } from '../components/icons'
+import { IconSearch, IconChat, IconMic, IconReload, IconEye, IconEyeOff, IconGrid, IconFocus } from '../components/icons'
 import { NodeLabels } from '../components/kanban/NodeLabels'
 import { Tooltip } from '../components/Tooltip'
 import { useTerminalSearch } from '../terminal/useTerminalSearch'
@@ -263,6 +263,7 @@ import { ColumnPill } from '../components/kanban/ColumnPill'
 import { BoardLogPanel } from '../components/kanban/BoardLogPanel'
 import { AgentMascot } from './AgentMascot'
 import { MaximizeButton } from './MaximizeButton'
+import { focusNode } from './focus-handler'
 import { connectHostAttachment } from '../lib/sshAttachments'
 import { appearanceId } from '../lib/appearance/registry'
 import { uuid } from '../lib/uuid'
@@ -5965,6 +5966,21 @@ export function TerminalNode({
               </button>
             </Tooltip>
           )}
+        {!isHidden('maximize', hiddenHeaderButtons) && (
+          <Tooltip label="Focus this node alone (F11 to return)">
+            <button
+              className="term-node__focus nodrag"
+              title="Focus this node alone (F11 to return)"
+              aria-label="Focus this node alone"
+              onClick={(e) => {
+                e.stopPropagation()
+                focusNode(id)
+              }}
+            >
+              <IconFocus />
+            </button>
+          </Tooltip>
+        )}
         {!collapsed && !isHidden('maximize', hiddenHeaderButtons) && (
           <MaximizeButton id={id} maximized={!!data.premaxRect} />
         )}
