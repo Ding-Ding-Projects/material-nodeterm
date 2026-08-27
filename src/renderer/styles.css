@@ -15537,3 +15537,11 @@ body.focus-mode .dock:hover {
   border: 1px solid var(--warn);
   background: transparent;
 }
+
+.github-work-item-node { min-height: 300px; overflow: hidden; border: 1px solid var(--md-sys-color-outline); border-radius: 16px; background: var(--md-sys-color-surface-container); color: var(--md-sys-color-on-surface); box-shadow: var(--md-sys-elevation-1); }
+.github-work-item-node__header { display: flex; gap: 10px; align-items: center; padding: 12px 16px; background: var(--md-sys-color-surface-container-high); border-bottom: 1px solid var(--md-sys-color-outline-variant); }
+.github-work-item-node__header span:last-child { margin-left: auto; text-transform: capitalize; }
+.github-work-item-node__body { padding: 14px 16px; overflow: auto; max-height: 370px; }
+.github-work-item-node__body h3 { margin: 0 0 10px; font-size: 1.05rem; }
+.github-work-item-node__body p { margin: 6px 0; }
+.github-work-item-node footer { padding: 8px 16px; color: var(--md-sys-color-on-surface-variant); font-size: .82rem; }

@@ -2835,3 +2835,13 @@ verification state.
 No tests, lint, type checks, builds, packaging, runtime interaction, reviews, audits, or HuiShots
 were run, as required by issue #103. The feature jer remains separate from `main`; the parent Dog
 must perform integration and any later verification.
+# GitHub work-item canvas lane
+
+Source implementation for upstream issue #462 and downstream issue #132 is on
+`feat/github-pr-issue-canvas`. It adds a typed safe projection, a canvas node, catalog creation,
+serialization, and the categorized article at `docs/features/integrations/github-work-items.md`.
+
+The lane intentionally ran no tests, lint, typecheck, build, packaging, runtime interaction,
+review, audit, debugging, repair, or HuiShot. The next owner must verify Desktop and Server Edition
+bridge parity, guided repository/item actions, refresh and permission/offline states, local search
+and anchored regex builder behavior, and real built-artifact interaction.
