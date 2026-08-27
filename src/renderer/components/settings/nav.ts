@@ -112,9 +112,7 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
       { id: 'schedule', title: 'Schedule' },
       { id: 'planner', title: 'Planner' },
       { id: 'adhd-modes', title: 'ADHD modes' },
-      { id: 'shortcuts', title: 'Shortcuts' }
-      { id: 'speech', title: 'Speech' },
-      { id: 'shortcuts', title: 'Keyboard Shortcuts' }
+       { id: 'shortcuts', title: 'Shortcuts' }
     ]
   },
   {
@@ -147,7 +145,7 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
     sections: [
       { id: 'toylocks', title: 'Toy locks' },
       { id: 'authenticator', title: 'Authenticator' },
-      { id: 'support', title: 'Support Tickets' }
+       { id: 'support', title: 'Support Tickets' },
       { id: 'debug', title: 'Debug' }
     ]
   }
