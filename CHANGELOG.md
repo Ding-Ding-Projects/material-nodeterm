@@ -44,6 +44,13 @@
   reviews, security or accessibility checks, builds, packaging, installer execution, runtime
   interaction, or UI captures.
 
+- Add the review-first Cloudflare Tunnel wizard with populated account, zone, hostname, host,
+  discovered container, network, port, and origin pickers. Each picker has isolated local search
+  and an anchored regex builder; the host boundary receives only opaque selections, progress is
+  cancellable, failures retain a recovery preview, and local provider credential binding stays
+  separate from schema 3 portable intent. This ultra-speed lane intentionally did not run tests,
+  type checks, lint, reviews, security or accessibility checks, builds, packaging, installer
+  execution, runtime interaction, or UI captures.
 - Mount the seven AWS core-service routes on the shared AWS manager: S3, EC2, IAM, STS, Lambda,
   CloudWatch, and CloudWatch Logs. Typed operation controls now cover bounded reads, selected writes,
   destructive confirmation, pagination, cancellation, and progress while reusing the current local
@@ -197,7 +204,6 @@
   text search and adjacent anchored full regex builder. Tests, type checks, lint, reviews, security
   and accessibility checks, builds, packaging, installer execution, runtime interaction, and UI
   captures were intentionally not run in this ultra-speed lane.
-
 - Complete the Express File Converter flow with queue-wide collision-safe destination names,
   visible rename disclosure, final atomic no-clobber publication, and a completed-output action that
   opens the exact result in Visual Studio Code through the active project API. The converter queue

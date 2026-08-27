@@ -2785,6 +2785,99 @@ button.term-node__title-text:focus-visible {
   outline-offset: 2px;
 }
 
+/* Cloudflare Tunnel wizard: every discovery list paints its own bounded surface and keeps its
+   local search plus anchored regex affordance usable when the node is narrow. */
+.cloudflare-tunnel-wizard {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-height: min(86vh, 860px);
+  overflow: auto;
+  padding: 18px;
+  background: var(--md-surface);
+  color: var(--md-on-surface);
+}
+.cloudflare-tunnel-wizard__header,
+.cloudflare-tunnel-wizard__preview,
+.cloudflare-tunnel-wizard__progress {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-lg);
+  background: var(--md-surface-container);
+}
+.cloudflare-tunnel-wizard__header h2,
+.cloudflare-tunnel-wizard__preview h3 { margin: 0; }
+.cloudflare-tunnel-wizard__header p,
+.cloudflare-tunnel-wizard__preview p { margin: 0; color: var(--md-on-surface-variant); }
+.cloudflare-tunnel-wizard__form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.cloudflare-tunnel-wizard__picker {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+  margin: 0;
+  padding: 10px;
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-md);
+  background: var(--md-surface-container-low);
+}
+.cloudflare-tunnel-wizard__picker legend { padding: 0 4px; font-weight: 650; }
+.cloudflare-tunnel-wizard__search { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.cloudflare-tunnel-wizard__search > input { min-width: 0; flex: 1 1 auto; }
+.cloudflare-tunnel-wizard__choices {
+  display: grid;
+  gap: 6px;
+  max-height: 150px;
+  overflow: auto;
+  padding: 2px;
+}
+.cloudflare-tunnel-wizard__choices button {
+  display: grid;
+  gap: 2px;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-md);
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+  text-align: left;
+  cursor: pointer;
+}
+.cloudflare-tunnel-wizard__choices button[aria-selected='true'] {
+  border-color: var(--md-primary);
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+.cloudflare-tunnel-wizard__choices button:disabled { cursor: not-allowed; opacity: .65; }
+.cloudflare-tunnel-wizard__choices small { color: var(--md-on-surface-variant); overflow-wrap: anywhere; }
+.cloudflare-tunnel-wizard__error {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--md-shape-md);
+  background: var(--md-error-container);
+  color: var(--md-on-error-container);
+}
+.cloudflare-tunnel-wizard__preview dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 5px 12px; margin: 0; }
+.cloudflare-tunnel-wizard__preview dt { color: var(--md-on-surface-variant); }
+.cloudflare-tunnel-wizard__preview dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.cloudflare-tunnel-wizard__preview ul { margin: 0; padding-left: 20px; }
+.cloudflare-tunnel-wizard__progress { grid-template-columns: max-content minmax(0, 1fr); align-items: center; }
+.cloudflare-tunnel-wizard__progress progress { grid-column: 1 / -1; width: 100%; accent-color: var(--md-primary); }
+.cloudflare-tunnel-wizard__message { margin: 0; color: var(--md-on-surface-variant); }
+.cloudflare-tunnel-wizard__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.cloudflare-tunnel-wizard :is(button, input, select):focus-visible { outline: 2px solid var(--md-primary); outline-offset: 2px; }
+@media (max-width: 700px) {
+  .cloudflare-tunnel-wizard__form { grid-template-columns: minmax(0, 1fr); }
+  .cloudflare-tunnel-wizard__progress { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cloudflare-tunnel-wizard *, .cloudflare-tunnel-wizard *::before, .cloudflare-tunnel-wizard *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+}
 /* Guided AWS core-service manager (issue #46). The manager uses the same Material Design roles as the
  * other service panels, with an internal scroll region so long JSON and localized labels never
  * escape the node at narrow widths or high display scales. */

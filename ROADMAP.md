@@ -392,6 +392,10 @@ intentionally unchecked because this task publishes the plan only.
   bootstrap states, persistent data, health, backup, restore, update, rollback, and local bindings.
 - [ ] Add Cloudflare account, zone, DNS, security, Workers, Pages, storage, queue, Access, and
       analytics managers.
+- [ ] Add one-click Cloudflare Tunnel setup with private-first routing and connector choices. The
+      wizard source surface is implemented in `src/shared/cloudflare-tunnel-wizard.ts` and
+      `src/renderer/components/cloudflare/CloudflareTunnelWizard.tsx`; provider and host adapters,
+      built-artifact verification, and release evidence remain pending.
 - [x] Add typed Cloudflare Access, Zero Trust, Workers, Pages, R2, D1, and Queues managers with
       local protected credentials, portable neutral intent, bounded fixed-route API calls,
       progress/cancellation, per-field regex builders, and destructive confirmation. Verification

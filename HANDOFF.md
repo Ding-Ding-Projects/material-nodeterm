@@ -2895,6 +2895,22 @@ This ultra-speed lane intentionally ran no tests, type checks, lint, builds, pac
 interaction, accessibility or security audits, reviews, or captures. The parent integration lane
 must supply every verification verdict and release evidence before describing the feature as
 verified.
+# Issue #60, Cloudflare Tunnel wizard source lane
+
+The isolated `feat/program-49-tunnel-wizard` lane adds the bounded wizard contract in
+`src/shared/cloudflare-tunnel-wizard.ts` and the Material Design 3 renderer surface in
+`src/renderer/components/cloudflare/CloudflareTunnelWizard.tsx`. It presents populated account,
+zone, hostname, host, discovered container, network, port, and verified-origin choices; each picker
+has isolated local search and an anchored regex builder. The host boundary receives only opaque
+selection ids and the generated hostname, while the portable intent keeps desired labels and
+network-independent values separate from local provider binding.
+
+The direct article is `docs/features/remote/cloudflare-tunnel-wizard.md`, with the remote category
+index, roadmap, and changelog updated. Progress, cancellation, retry, stale-selection refusal,
+route review, and local vault-key binding are represented in the source contract. No tests, type
+checks, lint, review, security or accessibility checks, builds, packaging, installer execution,
+runtime interaction, or captures were run under the issue's ultra-speed boundary. Provider adapter
+wiring and integration into the Cloudflare manager remain for the parent integration lane.
 ## Issue #58, Cloudflare manager lane
 
 The isolated `feat/program-47-cloudflare-zero-trust` lane adds `src/shared/cloudflare-zero-trust.ts`,
