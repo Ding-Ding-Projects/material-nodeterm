@@ -63,6 +63,7 @@ export interface AwsManagerBinding {
 }
 
 export type AwsManagerOperation =
+  | 'generic'
   | 'resource-list-views'
   | 'cloud-list-types'
   | 'cloud-list-resources'
@@ -96,6 +97,7 @@ export type AwsManagerOperation =
 export type AwsPlatformOperation = Extract<AwsManagerOperation, `${AwsPlatformServiceId}-${string}`>
 
 export type AwsCoreOperation = Exclude<AwsManagerOperation,
+  'generic' |
   'resource-list-views' | 'resource-search' | 'cloud-list-types' | 'cloud-list-resources' |
   'cloud-get-resource' | 'cloud-create-resource' | 'cloud-update-resource' | 'cloud-delete-resource' |
   'cloud-request-status' | 'cloudformation-validate-template' | 'cloudformation-list-stacks' |
@@ -126,6 +128,14 @@ export const AWS_CORE_OPERATIONS: Record<AwsCoreServiceId, readonly AwsCoreOpera
 
 export interface AwsManagerRequest {
   operation: AwsManagerOperation
+  /** Model-generated operation input. The core reloads and validates the installed model before
+   * building argv, so a renderer cannot smuggle an arbitrary command or raw request through this
+   * field. */
+  generic?: {
+    serviceId: string
+    commandName: string
+    input: unknown
+  }
   service?: AwsCoreServiceId | AwsPlatformServiceId
   input?: Record<string, unknown>
   query?: string
@@ -150,7 +160,7 @@ export interface AwsManagerRequest {
 export type AwsOperationRisk = 'read-only' | 'write' | 'destructive'
 
 export interface AwsOperationPreview {
-  service: AwsCoreServiceId | AwsPlatformServiceId | 'resource-explorer-2' | 'cloudcontrol' | 'cloudformation'
+  service: string
   operation: string
   profileName: string
   region: string

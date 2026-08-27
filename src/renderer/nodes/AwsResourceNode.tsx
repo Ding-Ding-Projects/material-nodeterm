@@ -52,6 +52,7 @@ const CLOUDFORMATION_OPERATIONS: readonly AwsManagerOperation[] = [
 const CORE_SERVICE_LABELS: Record<AwsCoreServiceId, string> = { s3: 'S3', ec2: 'EC2', iam: 'IAM', sts: 'STS', lambda: 'Lambda', cloudwatch: 'CloudWatch', logs: 'CloudWatch Logs' }
 
 const OPERATION_LABELS: Record<AwsManagerOperation, string> = {
+  generic: 'Generic modeled operation',
   'resource-list-views': 'List views',
   'resource-search': 'Search resources',
   'cloud-list-types': 'List public resource types',

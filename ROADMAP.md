@@ -369,6 +369,10 @@ intentionally unchecked because this task publishes the plan only.
       selection, trust review, synth, diff, reviewed deploy, and safe portable intent. Focused
       focused checks, built interaction, packaging, and screen-capture evidence remain unrun.
 - [ ] Add the generic all-service AWS GUI without a command textbox fallback.
+  The AWS Shop now routes installed-model operations through the shared AWS resource manager, with
+  schema-derived controls, fixed argv previews, bounded output and pagination, cancellation,
+  progress, and destructive confirmation. Focused verification and packaged interaction evidence
+  remain open for issue #50.
 
 ### Hosting and Cloudflare
 

@@ -30,6 +30,13 @@
   manager. This issue #49 lane intentionally did not run tests, type checks, lint, builds,
   packaging, runtime interaction, reviews, accessibility or security checks, or captures.
 
+- Add the generic all-service AWS operation route to the AWS Universe Shop. It reads installed CLI
+  models, opens the shared schema-driven operation wizard with independent anchored regex searches,
+  sends validated input through the shared AWS resource manager, previews fixed argv, bounds output
+  and pagination, supports cancellation and progress, and uses destructive confirmation. No tests,
+  type checks, lint, builds, packaging, runtime interaction, reviews, accessibility or security
+  checks, or captures were run in this ultra-speed lane.
+
 - Mount the seven AWS core-service routes on the shared AWS manager: S3, EC2, IAM, STS, Lambda,
   CloudWatch, and CloudWatch Logs. Typed operation controls now cover bounded reads, selected writes,
   destructive confirmation, pagination, cancellation, and progress while reusing the current local

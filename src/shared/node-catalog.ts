@@ -698,8 +698,19 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
   awsPlatformEntry('aws-route53', 'route53', 'Amazon Route 53', 'Manage hosted zones and records through reviewed operations.', 'docs/features/integrations/aws-resource-managers.md'),
   awsPlatformEntry('aws-cost', 'cost', 'AWS cost management', 'Explore cost and usage data with explicit account, period, and grouping controls.', 'docs/features/integrations/aws-resource-managers.md'),
   {
-    ...plannedEntry('aws-service', 'universes', 'All AWS services', 'Create a typed AWS service workspace from installed CLI models without a raw command fallback.', 'aws-all-services-manager', 'aws-universe'),
-    documentationPath: 'docs/features/integrations/aws-cli-model-documentation.md'
+    id: 'aws-service',
+    nodeKind: null,
+    category: 'universes',
+    label: 'All AWS services',
+    description: 'Open typed controls for every service and command in the installed AWS CLI model inventory.',
+    keywords: ['aws', 'service', 'command', 'model', 'cli', 'all-service'],
+    documentationPath: 'docs/features/integrations/aws-all-services.md',
+    safeDefaults: {},
+    dependencies: ['aws-all-services-manager'],
+    status: 'available',
+    availabilityMode: 'configure-later',
+    scope: 'aws-universe',
+    availability: unsupportedInRelay
   },
   {
     id: 'cloudflare-core-managers',
@@ -852,7 +863,7 @@ export const NODE_CATALOG_COMPLETENESS: readonly NodeCatalogCompletenessRecord[]
   { id: 'aws-vpc', state: 'current', scope: 'aws-universe', reason: 'guided VPC operations through shared AWS manager' },
   { id: 'aws-route53', state: 'current', scope: 'aws-universe', reason: 'guided Route 53 operations through shared AWS manager' },
   { id: 'aws-cost', state: 'current', scope: 'aws-universe', reason: 'guided cost operations through shared AWS manager' },
-  { id: 'aws-service', state: 'planned', scope: 'aws-universe', reason: 'All-service AWS manager not implemented' },
+  { id: 'aws-service', state: 'current', scope: 'aws-universe', reason: 'model-driven all-service AWS wizard through the shared manager' },
   { id: 'cloudflare-core-managers', state: 'current', scope: 'any', reason: 'typed Cloudflare account, zone, DNS, SSL/TLS, ruleset, redirect, cache, and analytics managers' },
   { id: 'cloudflare-hosting', state: 'planned', scope: 'any', reason: 'Cloudflare hosting not implemented' },
   { id: 'gitlab-hosting', state: 'current', scope: 'any', reason: 'guided private GitLab Server hosting node' },

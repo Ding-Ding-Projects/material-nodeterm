@@ -79,7 +79,7 @@ export class AwsWizardModelService {
     return path.join(path.dirname(details.dependency.executablePath), 'awscli', 'botocore', 'data')
   }
 
-  private async serviceModel(serviceId: string): Promise<{ model: JsonRecord; versions: string[] }> {
+  private async serviceModel(serviceId: string): Promise<{ model: JsonRecord; versions: string[]; versionRoot: string }> {
     id(serviceId, 'serviceId')
     const root = await this.modelRoot()
     const serviceRoot = path.join(root, serviceId)
@@ -103,7 +103,7 @@ export class AwsWizardModelService {
       }
     }
     if (!bytes) throw new Error(`The installed AWS model file is missing for service ${serviceId}.`)
-    return { model: record(JSON.parse(bytes.toString('utf8')), `AWS model ${serviceId}`), versions }
+    return { model: record(JSON.parse(bytes.toString('utf8')), `AWS model ${serviceId}`), versions, versionRoot }
   }
 
   async catalog(): Promise<readonly AwsWizardServiceOption[]> {
@@ -121,7 +121,7 @@ export class AwsWizardModelService {
   }
 
   async commands(serviceId: string): Promise<readonly AwsWizardCommandOption[]> {
-    const { model } = await this.serviceModel(serviceId)
+    const { model, versionRoot } = await this.serviceModel(serviceId)
     const operations = model.operations && typeof model.operations === 'object' ? model.operations as JsonRecord : {}
     return Object.entries(operations).map(([apiName, raw]) => {
       const operation = record(raw, `operation ${apiName}`)
@@ -139,11 +139,25 @@ export class AwsWizardModelService {
     const operation = record(operationEntry[1], `operation ${operationEntry[0]}`)
     const rawShapes = model.shapes && typeof model.shapes === 'object' ? model.shapes as JsonRecord : {}
     const shapes = Object.entries(rawShapes).map(([name, raw]) => sourceShape(name, record(raw, `shape ${name}`)))
+    const paginatorRaw = await readFile(path.join(versionRoot, 'paginators-1.json')).catch(() => null)
+    let pagination = false
+    if (paginatorRaw) {
+      try {
+        const paginator = record(JSON.parse(paginatorRaw.toString('utf8')), 'paginator model')
+        const entries = paginator.pagination && typeof paginator.pagination === 'object' && !Array.isArray(paginator.pagination)
+          ? paginator.pagination as JsonRecord
+          : {}
+        pagination = Object.hasOwn(entries, operationEntry[0])
+      } catch {
+        pagination = false
+      }
+    }
     return {
       serviceId,
       commandName,
       inputShape: shapeReference(operation.input),
-      shapes
+      shapes,
+      pagination
     }
   }
 }

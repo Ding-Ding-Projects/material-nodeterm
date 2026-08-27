@@ -21,6 +21,8 @@ import {
 import { AtomicJsonArrayStore } from './atomic-json-store'
 import type { CorePlatform } from './platform'
 import { validateCloudFormationPreviewInput } from '../shared/cloudformation'
+import { buildAwsWizardDefinition, validateAwsWizardValue, type AwsWizardFieldDefinition } from '../shared/aws-wizard'
+import type { AwsWizardModelService } from './aws-wizard/service'
 
 const MAX_OUTPUT_BYTES = 8 * 1024 * 1024
 const MAX_TEXT_BYTES = 128 * 1024
@@ -108,6 +110,34 @@ function coreInputNumber(request: AwsManagerRequest, key: string, label: string,
   const value = coreInput(request)[key]
   if (typeof value !== 'number' || !Number.isInteger(value) || value < minimum || value > maximum) throw new Error(`${label} must be an integer from ${minimum} to ${maximum}.`)
   return value
+}
+
+function genericRisk(commandName: string): AwsOperationRisk {
+  const name = commandName.toLowerCase()
+  if (/(delete|deregister|destroy|terminate|revoke|remove|purge|decommission|cancel)/.test(name)) return 'destructive'
+  if (/(create|put|post|update|modify|start|stop|run|attach|detach|register|enable|disable|set|associate|disassociate)/.test(name)) return 'write'
+  return 'read-only'
+}
+
+function kebab(value: string): string {
+  return value.replace(/([A-Z]+)([A-Z][a-z])/gu, '$1-$2').replace(/([a-z0-9])([A-Z])/gu, '$1-$2').replace(/[_\s]+/gu, '-').replace(/-+/gu, '-').replace(/^-|-$/gu, '').toLowerCase()
+}
+
+function genericFieldArgs(field: AwsWizardFieldDefinition, value: unknown, args: string[]): void {
+  if (value === undefined || value === null || value === '') return
+  const option = `--${kebab(field.name)}`
+  if (field.kind === 'boolean') {
+    args.push(value === true ? option : `--no-${kebab(field.name)}`)
+    return
+  }
+  if (field.kind === 'file') {
+    const file = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+    const selected = typeof file.path === 'string' ? file.path : ''
+    if (!selected || !isAbsolute(selected)) throw new Error(`${field.name} must be selected through the local file picker.`)
+    args.push(option, `fileb://${selected}`)
+    return
+  }
+  args.push(option, typeof value === 'object' ? JSON.stringify(value) : String(value))
 }
 
 function localTemplate(value: unknown): string {
@@ -345,6 +375,7 @@ function rowsFor(operation: AwsManagerOperation, payload: Record<string, unknown
     return [identity]
   }
   const keys: Record<AwsManagerOperation, string> = {
+    generic: '',
     'resource-list-views': 'Views',
     'resource-search': 'Resources',
     'cloud-list-types': 'TypeSummaries',
@@ -408,7 +439,11 @@ export class AwsResourceManagerService {
   private readonly running = new Map<string, ChildProcessWithoutNullStreams>()
   private runtimeCache: { executable: string; status: AwsCliRuntimeStatus } | null = null
 
-  constructor(private readonly platform: CorePlatform, private readonly resolveAwsCli?: AwsCliResolver) {
+  constructor(
+    private readonly platform: CorePlatform,
+    private readonly resolveAwsCli?: AwsCliResolver,
+    private readonly wizardModels?: AwsWizardModelService
+  ) {
     this.bindings = new AtomicJsonArrayStore(join(platform.userDataDir, 'aws', 'resource-manager-bindings.json'))
   }
 
@@ -460,10 +495,34 @@ export class AwsResourceManagerService {
     return true
   }
 
+  private async genericSpec(request: AwsManagerRequest): Promise<CommandSpec> {
+    if (!this.wizardModels || !request.generic) throw new Error('The generic AWS model manager is unavailable in this build.')
+    const serviceId = text(request.generic.serviceId, 'AWS service', 128)
+    const commandName = text(request.generic.commandName, 'AWS command', 256)
+    const source = await this.wizardModels.source(serviceId, commandName)
+    if (!source) throw new Error('The selected AWS operation is not present in the current model inventory. Refresh and choose it again.')
+    const definition = buildAwsWizardDefinition(source)
+    const validation = validateAwsWizardValue(definition, request.generic.input)
+    if (!validation.ok) throw new Error(validation.issues[0]?.message ?? 'The modeled AWS input is invalid.')
+    const root = validation.value && typeof validation.value === 'object' && !Array.isArray(validation.value)
+      ? validation.value as Record<string, unknown>
+      : {}
+    const args = [serviceId, commandName]
+    for (const field of definition.root.children) genericFieldArgs(field, root[field.name], args)
+    if (source.pagination && request.maxResults !== undefined) args.push('--max-items', String(maxResults(request.maxResults)))
+    return {
+      service: serviceId,
+      operation: commandName,
+      args,
+      risk: genericRisk(commandName),
+      pagination: source.pagination && request.maxResults !== undefined ? 'manual-next-token' : 'none'
+    }
+  }
+
   async preview(nodeId: string, request: AwsManagerRequest): Promise<AwsOperationPreview> {
     const binding = await this.binding(nodeId)
     if (!binding) throw new Error('Configure a local AWS profile and region before running this operation.')
-    const spec = operationSpec(request)
+    const spec = request.operation === 'generic' ? await this.genericSpec(request) : operationSpec(request)
     const argv = [
       ...spec.args,
       '--profile', binding.profileName,
@@ -502,7 +561,7 @@ export class AwsResourceManagerService {
       } catch {
         throw new Error('AWS CLI returned output that was not valid JSON.')
       }
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('AWS CLI returned an unexpected JSON shape.')
+      if (!parsed || typeof parsed !== 'object') throw new Error('AWS CLI returned an unexpected JSON shape.')
       if (request.operation === 'cloudformation-create-change-set') {
         const changeSetId = typeof (parsed as Record<string, unknown>).Id === 'string'
           ? (parsed as Record<string, unknown>).Id as string
@@ -538,10 +597,14 @@ export class AwsResourceManagerService {
         if (!complete) throw new Error('CloudFormation did not finish the change-set preview before the bounded wait expired.')
         parsed = complete
       }
-      const payload = request.operation.startsWith('s3-') || request.operation.startsWith('ec2-') || request.operation.startsWith('iam-') || request.operation.startsWith('sts-') || request.operation.startsWith('lambda-') || request.operation.startsWith('cloudwatch-') || request.operation.startsWith('logs-')
+      const payload = request.operation === 'generic' || request.operation.startsWith('s3-') || request.operation.startsWith('ec2-') || request.operation.startsWith('iam-') || request.operation.startsWith('sts-') || request.operation.startsWith('lambda-') || request.operation.startsWith('cloudwatch-') || request.operation.startsWith('logs-')
         ? redactCorePayload(parsed) as Record<string, unknown>
         : parsed as Record<string, unknown>
-      const rows = rowsFor(request.operation, payload)
+      const rows = request.operation === 'generic'
+        ? (Array.isArray(payload)
+            ? payload.filter((item): item is Record<string, unknown> => !!item && typeof item === 'object' && !Array.isArray(item))
+            : [payload])
+        : rowsFor(request.operation, payload)
       const nextToken = typeof payload.NextToken === 'string' && payload.NextToken.length <= 16_384 ? payload.NextToken : null
       const result: AwsManagerResult = {
         operationId: id,

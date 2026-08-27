@@ -8,6 +8,8 @@ import { generateCommitMessage } from '../../core/commit-message'
 import { registerFsHandlers } from '../../core/fs-handlers'
 import { registerConverterIpc } from '../../core/converter/register-ipc'
 import { registerNodeDependencyIpc } from '../../core/node-dependencies/register-ipc'
+import { registerAwsResourceIpc } from '../../core/aws-resource-register-ipc'
+import { AwsWizardModelService } from '../../core/aws-wizard/service'
 import { registerOllamaIpc } from '../../core/ollama/register-ipc'
 import { registerMinecraftIpc } from '../../core/minecraft/register-ipc'
 import { registerTorrentIpc } from '../../core/torrent/register-ipc'
@@ -85,6 +87,7 @@ export function registerCoreHandlers(
   // docs/ollama-manager.md and docs/minecraft-server-manager.md.
   registerConverterIpc(platform)
   const nodeDependencyService = registerNodeDependencyIpc(platform)
+  const awsWizardModels = new AwsWizardModelService(nodeDependencyService)
   registerOllamaIpc(platform)
   const { manager: minecraftServers } = registerMinecraftIpc(platform)
   registerTorrentIpc(platform)
@@ -102,6 +105,10 @@ export function registerCoreHandlers(
       return { path: dependency.executablePath, reason: dependency.disabledReason }
     }
   })
+  registerAwsResourceIpc(platform, async () => {
+    const dependency = await nodeDependencyService.status('aws-cli-v2')
+    return { path: dependency.executablePath ?? null, reason: dependency.disabledReason }
+  }, awsWizardModels)
   // "Open in Visual Studio Code" + local settings history — same registrars the desktop shell
   // uses (src/main/index.ts), over the generic platform.handle seam, so the browser gets the
   // identical feature acting on the SERVER's own machine (docs/exports.md, docs/local-history.md).

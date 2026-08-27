@@ -13,7 +13,7 @@ substrate described in CLAUDE.md rather than inventing a surface each.
 | [Home Assistant client](home-assistant-client.md) | multi-instance machine-local registration with bounded REST and WebSocket entity discovery |
 | [Minecraft server](minecraft-server.md) | research only: cited constraints, not implemented |
 | [Research findings](research-findings.md) | all seven subjects, adversarially checked |
-| [Special-universe Shop nodes](aws-universe-shop.md) | implemented deterministic, scope-bound Shop coordinator and catalog surface; AWS executors remain visibly unavailable until their later lanes |
+| [Special-universe Shop nodes](aws-universe-shop.md) | implemented deterministic, scope-bound Shop coordinator and catalog surface; generic AWS operations now route through the shared manager |
 | [AWS CDK manager](cdk-manager.md) | local folder picker, trust review, synth, diff, and reviewed deploy implementation; focused verification remains unrun in the ultra-speed lane |
 | [CloudFormation manager](cloudformation-manager.md) | guided local template inspection and AWS CloudFormation change-set preview; runtime evidence is intentionally unverified in the ultra-speed lane |
 | [AWS CLI model documentation index](aws-cli-model-documentation.md) | platform-free bounded index for official service, command, option, paginator, waiter, input, output, and skeleton metadata; runtime verification remains unrun |
@@ -21,6 +21,7 @@ substrate described in CLAUDE.md rather than inventing a surface each.
 | [AWS managers](../aws/README.md) | Resource Explorer and Cloud Control manager nodes with local bindings, operation previews, bounded results, cancellation, and destructive confirmation |
 | [AWS core-service managers](aws-core-services.md) | S3, EC2, IAM, STS, Lambda, CloudWatch, and CloudWatch Logs mounted on the shared AWS manager with typed actions and local bindings; integration Chuts remain pending |
 | [AWS container, database, network, DNS, and cost managers](aws-container-database-cost-managers.md) | ECR, ECS, EKS, RDS, database, VPC, Route 53, and cost operations mounted on the shared AWS manager with typed previews, bounded inputs, and local bindings |
+| [Generic AWS all-service interface](aws-all-services.md) | AWS Shop route generated from installed CLI models, with schema-derived controls, shared-manager previews, bounded execution, cancellation, and destructive confirmation |
 | [Torrent Downloader](../torrents/torrent-downloader.md) | local WebTorrent downloads with safe machine-local task state |
 | [Linux ISO VM](linux-iso-vm.md) | implemented canvas node with bundled QEMU, WHPX preference, QMP lifecycle, loopback display, persistent/disposable modes, and network-off default |
 | [Planner occurrences](planner-occurrences.md) | host-owned durable recurrence, timezone/DST handling, missed history, UI-closure continuity, and schema 3 definition transfer with explicit destination Configure |

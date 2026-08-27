@@ -77,6 +77,33 @@ Verification boundary: no tests, lint, type checks, builds, packaging, runtime i
 security or accessibility checks, installer execution, or UI captures were run. No issue, pull
 request, default-branch, or cleanup mutation was performed. The feature branch was pushed to
 `origin/feat/program-38-aws-containers` and retained for downstream integration.
+## 2026-08-27, generic all-service AWS GUI, issue #50
+
+The issue branch is `feat/program-39-aws-all-services`, reconciled with the exact
+`origin/main` tip `54164b84dce0b7e62787b1de2885405ff4ed821c`. The generic lane now uses the current
+AWS Universe Shop and shared AWS resource manager rather than maintaining a second AWS execution
+stack. `ShopNode.tsx` routes the all-service entry to the installed-model service and operation
+pickers, while `AwsOperationWizard.tsx` supplies typed controls for structures, unions, lists, maps,
+enums, booleans, numbers, dates, times, files, and synchronized JSON or YAML views. Every picker
+search has its own anchored regex builder.
+
+`AwsResourceManagerService` accepts a model-generated `generic` operation, reloads and validates the
+current wizard model before generating argv, adds the selected local profile, region, output, and
+bounded pagination settings, and invokes the bundled AWS CLI through the existing `shell: false`
+runner. Previews include the service, operation, profile, region, risk, pagination, retry, endpoint,
+and argv. Destructive operations remain behind the existing two-key confirmation flow. Results are
+bounded and redact credential-shaped fields. Desktop and Server Edition register the same shared
+manager, while relay tabs retain an explicit unsupported state.
+
+The direct records are `docs/features/integrations/aws-all-services.md`,
+`site/docs/aws-all-services.html`, the integrations index, `CHANGELOG.md`, and `ROADMAP.md`. The
+earlier duplicate `src/core/aws-all-services.ts`, `src/shared/aws-all-services.ts`, and standalone
+AWS panel were removed after reconciliation, because they duplicated the existing AWS manager and
+would have allowed the two execution paths to drift.
+
+The implementation lane intentionally ran no tests, type checks, lint, builds, packaging, installer
+execution, runtime interaction, reviews, accessibility or security audits, or screenshots. The parent
+integration lane owns those checks and the default branch merge.
 
 ## 2026-08-27, AWS core-service managers, issue #46 PR preparation
 
