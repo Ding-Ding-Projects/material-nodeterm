@@ -513,6 +513,22 @@ export function validateReleaseWorkflow(workflow, packageJson) {
   const packageAt = stepIndex(steps, 'package')
   const packageStep = steps[packageAt]
   const packageCommands = logicalCommands(packageStep?.run)
+  const windowsTargets = packageJson?.build?.win?.target
+  const squirrelTargetOnly = Array.isArray(windowsTargets) &&
+    windowsTargets.length === 1 &&
+    windowsTargets[0]?.target === 'squirrel' &&
+    Array.isArray(windowsTargets[0]?.arch) &&
+    windowsTargets[0].arch.length === 1 &&
+    windowsTargets[0].arch[0] === 'x64'
+  if (!squirrelTargetOnly) {
+    issues.push('Windows delivery must declare exactly one x64 Squirrel target')
+  }
+  if (hasOwn(packageJson?.build ?? {}, 'nsis')) {
+    issues.push('NSIS configuration must not remain as a supported Windows delivery route')
+  }
+  if (packageJson?.build?.squirrelWindows?.msi !== false) {
+    issues.push('Squirrel.Windows MSI generation must be explicitly disabled')
+  }
   if (
     !packageCommands.includes('npm run dist:win') ||
     packageJson?.scripts?.['dist:win'] !== 'node scripts/windows-installer.mjs build'

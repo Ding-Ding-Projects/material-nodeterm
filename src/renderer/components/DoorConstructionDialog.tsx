@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { AnchoredPopover } from '../ui/AnchoredPopover'
 import { Dialog } from '../ui/md3/Dialog'
 import { AnchoredRegexBuilder } from './regex/AnchoredRegexBuilder'
@@ -22,6 +22,7 @@ export interface DoorConstructionDialogProps {
   targetCanvasId: string
   doorId: string
   pairedDoorId: string
+  initialLabel?: string
   onConstruct: (construction: PortableDoorConstructionV3) => void
 }
 
@@ -171,12 +172,20 @@ function PartPicker({ part, selected, onChoose, ts }: PartPickerProps): React.JS
 }
 
 /** Guided, keyboard-operable construction of one portable door side. */
-export function DoorConstructionDialog({ open, onClose, canvasId, targetCanvasId, doorId, pairedDoorId, onConstruct }: DoorConstructionDialogProps): React.JSX.Element {
+export function DoorConstructionDialog({ open, onClose, canvasId, targetCanvasId, doorId, pairedDoorId, initialLabel, onConstruct }: DoorConstructionDialogProps): React.JSX.Element {
   const ts = useLocalizedVocabularyText()
   const [label, setLabel] = useState('New Multiverse door')
   const [parts, setParts] = useState(DEFAULT_PARTS)
   const [armed, setArmed] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+    setLabel(initialLabel?.trim() || 'New Multiverse door')
+    setParts(DEFAULT_PARTS)
+    setArmed(false)
+    setMessage(null)
+  }, [initialLabel, open])
 
   const construction = useMemo(() => createPortableDoorConstruction({
     doorId,

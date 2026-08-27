@@ -161,6 +161,8 @@ export function buildStubApi(): Omit<
   | 'logs'
   | 'githubIssues'
   | 'githubControl'
+  | 'githubApi'
+  | 'githubCliAccounts'
   | 'canvas'
   | 'dialog'
   | 'onAgentStatus'
@@ -179,6 +181,7 @@ export function buildStubApi(): Omit<
   | 'toylock'
   | 'authenticator'
   | 'passwordManager'
+  | 'universeDoorEntry'
 > {
   const api = {
     providerServices: {
@@ -190,15 +193,26 @@ export function buildStubApi(): Omit<
       removeAccount: () => Promise.resolve({ ok: false as const, error: mapLocalVocabularyText('Provider accounts are not connected on this surface.') })
     },
     cloudflareTunnels: {
-      saveCredential: U('cloudflareTunnels.saveCredential'),
-      clearCredential: U('cloudflareTunnels.clearCredential'),
-      credentialStatus: U('cloudflareTunnels.credentialStatus'),
+      zones: U('cloudflareTunnels.zones'),
       inventory: U('cloudflareTunnels.inventory'),
       planRoute: U('cloudflareTunnels.planRoute'),
       planDnsAdoption: U('cloudflareTunnels.planDnsAdoption'),
       saveRoute: U('cloudflareTunnels.saveRoute'),
       adoptDnsRecord: U('cloudflareTunnels.adoptDnsRecord'),
       cancel: noop,
+      onProgress: noopUnsub
+    },
+    cloudflareCoreManagers: {
+      runtime: U('cloudflareCoreManagers.runtime'),
+      credentials: U('cloudflareCoreManagers.credentials'),
+      saveCredential: U('cloudflareCoreManagers.saveCredential'),
+      removeCredential: U('cloudflareCoreManagers.removeCredential'),
+      binding: U('cloudflareCoreManagers.binding'),
+      bind: U('cloudflareCoreManagers.bind'),
+      unbind: U('cloudflareCoreManagers.unbind'),
+      preview: U('cloudflareCoreManagers.preview'),
+      execute: U('cloudflareCoreManagers.execute'),
+      cancel: U('cloudflareCoreManagers.cancel'),
       onProgress: noopUnsub
     },
     ssh: {
@@ -525,6 +539,19 @@ export function buildStubApi(): Omit<
         snapshot: U('relayHost.manager.snapshot'),
         logs: U('relayHost.manager.logs'),
         run: U('relayHost.manager.run'),
+        gitlab: {
+          status: U('relayHost.manager.gitlab.status'),
+          backups: U('relayHost.manager.gitlab.backups'),
+          handoffInitialCredential: U('relayHost.manager.gitlab.handoffInitialCredential'),
+          run: U('relayHost.manager.gitlab.run')
+        },
+        cancel: noop,
+        onProgress: noopUnsub
+      },
+      nextcloudAio: {
+        contexts: U('relayHost.nextcloudAio.contexts'),
+        snapshot: U('relayHost.nextcloudAio.snapshot'),
+        run: U('relayHost.nextcloudAio.run'),
         cancel: noop,
         onProgress: noopUnsub
       },
@@ -643,6 +670,9 @@ export function buildStubApi(): Omit<
     // here (see the note beside createPtyPressureMonitor in src/server/index.ts). The fix itself
     // rejects rather than pretending, so a stray call can never look like it worked.
     onPtyPressure: noopUnsub,
+    // A browser tab has no raw input stream. Keep the documented renderer heuristic instead of
+    // inventing a device-fact event that this shell cannot observe.
+    onCanvasTrackpadGesture: noopUnsub,
     raisePtyDeviceLimit: async () => ({
       ok: false as const,
       error: mapLocalVocabularyText('Raising the terminal limit must be done on the machine running the server.')
@@ -676,11 +706,35 @@ export function buildStubApi(): Omit<
     nodeDependencies: {
       catalog: U('nodeDependencies.catalog'),
       status: U('nodeDependencies.status'),
+      details: U('nodeDependencies.details'),
       install: U('nodeDependencies.install'),
       cancel: U('nodeDependencies.cancel'),
       repair: U('nodeDependencies.repair'),
       reconcile: U('nodeDependencies.reconcile'),
       onState: noopUnsub,
+      onProgress: noopUnsub
+    },
+    awsWizardModels: {
+      catalog: U('awsWizardModels.catalog'),
+      commands: U('awsWizardModels.commands'),
+      source: U('awsWizardModels.source')
+    },
+    awsIdentity: {
+      discover: U('awsIdentity.discover'),
+      start: U('awsIdentity.start'),
+      cancel: U('awsIdentity.cancel'),
+      onOperation: noopUnsub
+    },
+    cloudflareZeroTrust: {
+      catalog: U('cloudflareZeroTrust.catalog'),
+      accounts: U('cloudflareZeroTrust.accounts'),
+      configure: U('cloudflareZeroTrust.configure'),
+      removeAccount: U('cloudflareZeroTrust.removeAccount'),
+      binding: U('cloudflareZeroTrust.binding'),
+      saveBinding: U('cloudflareZeroTrust.saveBinding'),
+      resources: U('cloudflareZeroTrust.resources'),
+      execute: U('cloudflareZeroTrust.execute'),
+      cancel: U('cloudflareZeroTrust.cancel'),
       onProgress: noopUnsub
     },
     ollama: {
@@ -829,6 +883,7 @@ export function buildStubApi(): Omit<
     | 'toylock'
     | 'authenticator'
     | 'passwordManager'
+    | 'universeDoorEntry'
     | 'fs'
     | 'git'
     | 'files'
@@ -837,6 +892,8 @@ export function buildStubApi(): Omit<
     | 'logs'
     | 'githubIssues'
     | 'githubControl'
+    | 'githubApi'
+    | 'githubCliAccounts'
     | 'canvas'
     | 'dialog'
     | 'onAgentStatus'

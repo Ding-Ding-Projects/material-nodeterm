@@ -19,8 +19,22 @@ export function projectCanvasView(project: Project): ProjectCanvasView {
   const selected = project.activeCanvasId
     ? project.multiverseCanvases?.find((canvas) => canvas.id === project.activeCanvasId)
     : undefined
+  const awsSelected = !selected && project.activeCanvasId
+    ? project.childCanvases?.find((canvas) => canvas.id === project.activeCanvasId && canvas.scope === 'aws-universe')
+    : undefined
   return selected
     ? { ...selected }
+    : awsSelected
+      ? {
+          id: awsSelected.id,
+          title: awsSelected.title,
+          depth: awsSelected.depth,
+          parentCanvasId: awsSelected.parentCanvasId,
+          viewport: awsSelected.viewport ?? { x: 0, y: 0, zoom: 1 },
+          nodes: awsSelected.nodes,
+          bridges: awsSelected.bridges,
+          ropes: awsSelected.ropes
+        }
     : {
         id: ROOT_CANVAS_ID,
         title: project.name,

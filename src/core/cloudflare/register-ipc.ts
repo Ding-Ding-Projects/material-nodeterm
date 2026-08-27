@@ -1,20 +1,19 @@
 import type { CorePlatform } from '../platform'
 import { IPC } from '../../shared/ipc'
 import { CloudflareTunnelService } from './tunnel-service'
+import type { CloudflareCoreManagers } from '../cloudflare-core-managers'
 import type { CloudflareDnsAdoptionInput, CloudflareTunnelRouteInput } from '../../shared/cloudflare-tunnels'
 
 /** Registers the typed Cloudflare Tunnel inventory over the shared core seam.
  *
- * This registrar is intentionally shared by Desktop and Server Edition. The provider token is
- * accepted only by the write-only credential handler, and every other handler carries ids and
- * closed route choices rather than raw Cloudflare request data.
+ * This registrar is intentionally shared by Desktop and Server Edition. The existing Cloudflare
+ * core manager supplies the local token, and every tunnel handler carries ids and closed route
+ * choices rather than raw Cloudflare request data.
  */
-export function registerCloudflareTunnelIpc(platform: CorePlatform): CloudflareTunnelService {
-  const service = new CloudflareTunnelService(platform)
+export function registerCloudflareTunnelIpc(platform: CorePlatform, coreManagers: CloudflareCoreManagers): CloudflareTunnelService {
+  const service = new CloudflareTunnelService(platform, fetch, (accountId) => coreManagers.tokenForAccount(accountId))
   service.onProgress((progress) => platform.broadcast(IPC.cloudflareTunnelProgress, progress))
-  platform.handle(IPC.cloudflareTunnelCredentialSave, (accountId: string, token: string) => service.saveCredential(accountId, token))
-  platform.handle(IPC.cloudflareTunnelCredentialClear, (accountId: string) => service.clearCredential(accountId))
-  platform.handle(IPC.cloudflareTunnelCredentialStatus, (accountId: string) => service.credentialStatus(accountId))
+  platform.handle(IPC.cloudflareTunnelZones, (accountId: string) => service.zones(accountId))
   platform.handle(IPC.cloudflareTunnelInventory, (accountId: string, zoneId?: string) => service.inventory(accountId, zoneId))
   platform.handle(IPC.cloudflareTunnelPlanRoute, (input: CloudflareTunnelRouteInput) => service.planRoute(input))
   platform.handle(IPC.cloudflareTunnelPlanDnsAdoption, (input: CloudflareDnsAdoptionInput) => service.planDnsAdoption(input))

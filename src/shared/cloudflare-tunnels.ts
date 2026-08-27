@@ -53,6 +53,13 @@ export interface CloudflareDnsRecordSummary {
   sourceRevision: string
 }
 
+export interface CloudflareZoneSummary {
+  id: string
+  name: string
+  status: 'active' | 'pending' | 'other'
+  sourceRevision: string
+}
+
 export interface CloudflareTunnelInventory {
   accountId: string
   zoneId: string | null
@@ -131,9 +138,7 @@ export interface CloudflareTunnelProgress {
 }
 
 export interface CloudflareTunnelApi {
-  saveCredential(accountId: string, token: string): Promise<{ present: true }>
-  clearCredential(accountId: string): Promise<{ cleared: true }>
-  credentialStatus(accountId: string): Promise<{ present: boolean }>
+  zones(accountId: string): Promise<CloudflareZoneSummary[]>
   inventory(accountId: string, zoneId?: string): Promise<CloudflareTunnelInventory>
   planRoute(input: CloudflareTunnelRouteInput): Promise<CloudflareRoutePlan>
   planDnsAdoption(input: CloudflareDnsAdoptionInput): Promise<CloudflareDnsAdoptionPlan>

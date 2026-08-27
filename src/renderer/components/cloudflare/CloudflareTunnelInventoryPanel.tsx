@@ -3,13 +3,15 @@ import type {
   CloudflareAdoptionAction,
   CloudflareDnsAdoptionInput,
   CloudflareTunnelInventory,
-  CloudflareTunnelRouteInput
+  CloudflareTunnelRouteInput,
+  CloudflareZoneSummary
 } from '@shared/cloudflare-tunnels'
 import { AnchoredRegexBuilder } from '../regex/AnchoredRegexBuilder'
 import { useRegexSearchField } from '../../lib/regex/useRegexSearchField'
 import { openDestructiveGate } from '../../state/destructiveGate'
 import { Button } from '../../ui/Button'
 import { Input } from '../../ui/Input'
+import type { CloudflareCredentialSummary } from '@shared/cloudflare-core-managers'
 
 function rowCorpus(row: unknown): string {
   if (!row || typeof row !== 'object') return ''
@@ -27,7 +29,8 @@ export function CloudflareTunnelInventoryPanel({ nodeId, onPortableIntent }: { n
   const api = window.nodeTerminal.cloudflareTunnels
   const [accountId, setAccountId] = useState('')
   const [zoneId, setZoneId] = useState('')
-  const [token, setToken] = useState('')
+  const [zones, setZones] = useState<CloudflareZoneSummary[]>([])
+  const [credentials, setCredentials] = useState<CloudflareCredentialSummary[]>([])
   const [inventory, setInventory] = useState<CloudflareTunnelInventory | null>(null)
   const [selectedTunnelId, setSelectedTunnelId] = useState('')
   const [hostname, setHostname] = useState('')
@@ -38,15 +41,36 @@ export function CloudflareTunnelInventoryPanel({ nodeId, onPortableIntent }: { n
   const [adoptionAction, setAdoptionAction] = useState<CloudflareAdoptionAction>('adopt-existing')
   const [reviewText, setReviewText] = useState('')
   const [message, setMessage] = useState('')
+  const [operationId, setOperationId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [routePlan, setRoutePlan] = useState<Awaited<ReturnType<typeof api.planRoute>> | null>(null)
   const [adoptionPlan, setAdoptionPlan] = useState<Awaited<ReturnType<typeof api.planDnsAdoption>> | null>(null)
   const tunnelSearch = useRegexSearchField()
   const routeSearch = useRegexSearchField()
   const dnsSearch = useRegexSearchField()
+  const zoneSearch = useRegexSearchField()
   const tunnelSearchRef = useRef<HTMLInputElement>(null)
   const routeSearchRef = useRef<HTMLInputElement>(null)
   const dnsSearchRef = useRef<HTMLInputElement>(null)
+  const zoneSearchRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    const core = window.nodeTerminal.cloudflareCoreManagers
+    if (!core) { setMessage('Cloudflare credentials are unavailable. Configure one in the Cloudflare manager first.'); return }
+    void core.credentials().then((items) => {
+      setCredentials(items)
+      const account = items.find((item) => item.accountId)?.accountId ?? ''
+      setAccountId((current) => current || account || '')
+    }).catch(() => setMessage('Cloudflare credentials are unavailable. Configure one in the Cloudflare manager first.'))
+  }, [])
+
+  useEffect(() => {
+    if (!accountId) { setZones([]); setZoneId(''); return }
+    void api.zones(accountId).then((items) => {
+      setZones(items)
+      setZoneId((current) => items.some((item) => item.id === current) ? current : items[0]?.id ?? '')
+    }).catch((error) => setMessage(error instanceof Error ? error.message : 'Cloudflare zones could not be read.'))
+  }, [accountId, api])
 
   const refresh = async (): Promise<void> => {
     if (!accountId || !zoneId) { setMessage('Choose the Cloudflare account and zone ids before refreshing the inventory.'); return }
@@ -60,15 +84,10 @@ export function CloudflareTunnelInventoryPanel({ nodeId, onPortableIntent }: { n
     finally { setBusy(false) }
   }
 
-  const saveCredential = async (): Promise<void> => {
-    if (!accountId || !token) { setMessage('Choose an account id and enter the token in the secure field first.'); return }
-    setBusy(true)
-    try { await api.saveCredential(accountId, token); setToken(''); setMessage('The Cloudflare token is stored locally. Its value is never returned.'); }
-    catch (error) { setMessage(error instanceof Error ? error.message : 'The Cloudflare token could not be stored.') }
-    finally { setBusy(false) }
-  }
-
-  useEffect(() => api.onProgress((progress) => { if (progress.phase !== 'completed') setMessage(progress.message) }), [api])
+  useEffect(() => api.onProgress((progress) => {
+    setOperationId(progress.phase === 'completed' || progress.phase === 'failed' || progress.phase === 'cancelled' ? null : progress.operationId)
+    setMessage(progress.message)
+  }), [api])
 
   const selectedTunnel = inventory?.tunnels.find((tunnel) => tunnel.id === selectedTunnelId) ?? null
   const tunnels = useMemo(() => (inventory?.tunnels ?? []).filter((item) => tunnelSearch.test(rowCorpus(item))), [inventory, tunnelSearch])
@@ -120,12 +139,12 @@ export function CloudflareTunnelInventoryPanel({ nodeId, onPortableIntent }: { n
     <div className="cloudflare-tunnel-manager__status" role="status" aria-live="polite"><strong>{selectedTunnel?.name ?? 'No tunnel selected'}</strong><span>{message || 'Choose an account and zone, then refresh.'}</span></div>
 
     <div className="cloudflare-tunnel-manager__guided-form" aria-label="Cloudflare account and zone selection">
-      <label>Cloudflare account id<Input value={accountId} onChange={(event) => setAccountId(event.target.value.trim())} placeholder="32-character account id" spellCheck={false} /></label>
-      <label>Zone id<Input value={zoneId} onChange={(event) => setZoneId(event.target.value.trim())} placeholder="32-character zone id" spellCheck={false} /></label>
-      <label>API token<Input type="password" autoComplete="off" value={token} onChange={(event) => setToken(event.target.value)} placeholder="Write-only secure field" /></label>
-      <Button disabled={busy || !accountId || !token} title={!accountId || !token ? 'Choose an account id and enter a token first.' : 'Store the token in the host credential boundary.'} onClick={() => void saveCredential()}>Save token</Button>
-      <Button disabled={busy || !accountId || !zoneId} title={!accountId || !zoneId ? 'Choose both an account id and a zone id first.' : 'Read the current bounded inventory.'} onClick={() => void refresh()}>{busy ? 'Refreshing…' : 'Refresh inventory'}</Button>
-      <p className="service-node__note">Account and zone ids are used only for this local provider request. The token is saved through the host credential store and is never returned to this surface.</p>
+      <label>Cloudflare account<select value={accountId} onChange={(event) => setAccountId(event.target.value)}><option value="">Choose a configured account</option>{credentials.filter((item) => item.accountId).map((item) => <option key={item.id} value={item.accountId!}>{item.label} · {item.accountId}</option>)}</select></label>
+      <label>Cloudflare zone<select value={zoneId} onChange={(event) => setZoneId(event.target.value)} disabled={!zones.length}><option value="">Choose a zone from the account</option>{zones.filter((item) => zoneSearch.test(`${item.name} ${item.status}`)).map((item) => <option key={item.id} value={item.id}>{item.name} · {item.status}</option>)}</select></label>
+      <div className="cloudflare-tunnel-manager__search-row"><Input ref={zoneSearchRef} type="search" value={zoneSearch.value} onChange={(event) => zoneSearch.setValue(event.target.value)} placeholder="Search zones" aria-label="Search zones" /><AnchoredRegexBuilder search={zoneSearch} fieldRef={zoneSearchRef} label="Regex builder for zone search" /></div>
+      <Button disabled={busy || !accountId || !zoneId} title={!accountId || !zoneId ? 'Choose a configured account and a discovered zone first.' : 'Read the current bounded inventory.'} onClick={() => void refresh()}>{busy ? 'Refreshing…' : 'Refresh inventory'}</Button>
+      <Button disabled={!operationId} title={!operationId ? 'No inventory request is running.' : 'Cancel the current inventory request.'} onClick={() => { if (operationId) api.cancel(operationId) }}>Cancel inventory</Button>
+      <p className="service-node__note">Choose a configured Cloudflare credential from the existing Cloudflare manager. The token remains in the host credential store and is never returned to this surface.</p>
     </div>
 
     <div className="cloudflare-tunnel-manager__search-row"><Input ref={tunnelSearchRef} type="search" value={tunnelSearch.value} onChange={(event) => tunnelSearch.setValue(event.target.value)} placeholder="Search tunnels" aria-label="Search tunnels" /><AnchoredRegexBuilder search={tunnelSearch} fieldRef={tunnelSearchRef} label="Regex builder for tunnel search" /></div>

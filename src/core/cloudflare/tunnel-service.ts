@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile, unlink } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { renameAtomic, tempNameFor } from '../fs-atomic'
@@ -24,7 +24,8 @@ import {
   type CloudflareTunnelInventory,
   type CloudflareTunnelProgress,
   type CloudflareTunnelRoute,
-  type CloudflareTunnelSummary
+  type CloudflareTunnelSummary,
+  type CloudflareZoneSummary
 } from '../../shared/cloudflare-tunnels'
 
 const MAX_RESPONSE_BYTES = 5 * 1024 * 1024
@@ -32,10 +33,8 @@ const MAX_PAGES = 100
 const MAX_TUNNELS = 2_000
 const MAX_ROUTES = 10_000
 const MAX_DNS_RECORDS = 10_000
+const MAX_ZONES = 500
 const REQUEST_TIMEOUT_MS = 20_000
-const TOKEN = /^[^\r\n\0]{1,4096}$/
-
-interface StoredSecret { version: 1; tokenEnc: string }
 interface StoredRoute {
   id: string
   accountId: string
@@ -156,13 +155,13 @@ function mapDns(item: Record<string, unknown>, zone: string, revision: string): 
 }
 
 /** Keep provider catch-all and otherwise unmanaged ingress rules when adding one route. */
-function safeIngressRule(value: unknown): Record<string, string> | null {
+function safeIngressRule(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
   const item = value as Record<string, unknown>
   if (typeof item.service !== 'string') return null
   try {
     const origin = normalizeCloudflareService(item.service)
-    const rule: Record<string, string> = { service: origin.service }
+    const rule: Record<string, unknown> = { ...item, service: origin.service }
     if (typeof item.hostname === 'string' && item.hostname.trim()) rule.hostname = normalizeCloudflareHostname(item.hostname)
     if (typeof item.path === 'string' && item.path.trim()) rule.path = normalizeCloudflarePath(item.path)
     return rule
@@ -172,57 +171,26 @@ function safeIngressRule(value: unknown): Record<string, string> | null {
 export class CloudflareTunnelService implements CloudflareTunnelApi {
   private readonly root: string
   private readonly routesFile: string
-  private readonly credentialsRoot: string
   private readonly operations = new Map<string, AbortController>()
   private readonly progressListeners = new Set<(progress: CloudflareTunnelProgress) => void>()
 
   constructor(
     private readonly host: CorePlatform = platform(),
-    private readonly request: FetchLike = fetch
+    private readonly request: FetchLike = fetch,
+    private readonly resolveToken: (accountId: string) => Promise<string> = async () => {
+      throw new Error('Choose a Cloudflare credential from the Cloudflare manager before using tunnels.')
+    }
   ) {
     this.root = path.join(host.userDataDir, 'cloudflare-tunnels')
     this.routesFile = path.join(this.root, 'routes.json')
-    this.credentialsRoot = path.join(this.root, 'credentials')
   }
 
   private emit(progress: CloudflareTunnelProgress): void { this.progressListeners.forEach((listener) => listener(progress)) }
 
   onProgress(listener: (progress: CloudflareTunnelProgress) => void): () => void { this.progressListeners.add(listener); return () => this.progressListeners.delete(listener) }
 
-  async saveCredential(rawAccountId: string, token: string): Promise<{ present: true }> {
-    const id = accountId(rawAccountId)
-    if (typeof token !== 'string' || !TOKEN.test(token.trim()) || token.trim() !== token) throw new Error('Cloudflare API token is empty or malformed.')
-    await mkdir(this.credentialsRoot, { recursive: true })
-    const target = path.join(this.credentialsRoot, `${id}.json`)
-    const payload: StoredSecret = this.host.sealSecret ? { version: 1, tokenEnc: this.host.sealSecret(Buffer.from(token)).toString('base64') } : { version: 1, tokenEnc: Buffer.from(token).toString('base64') }
-    const temporary = tempNameFor(target)
-    await writeFile(temporary, `${JSON.stringify(payload)}\n`, { encoding: 'utf8', mode: 0o600 })
-    await renameAtomic(temporary, target)
-    return { present: true }
-  }
-
-  async clearCredential(rawAccountId: string): Promise<{ cleared: true }> {
-    const id = accountId(rawAccountId)
-    try { await unlink(path.join(this.credentialsRoot, `${id}.json`)) } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
-    return { cleared: true }
-  }
-
-  async credentialStatus(rawAccountId: string): Promise<{ present: boolean }> {
-    const id = accountId(rawAccountId)
-    try { await readFile(path.join(this.credentialsRoot, `${id}.json`)); return { present: true } } catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { present: false }; throw error }
-  }
-
   private async token(rawAccountId: string): Promise<string> {
-    const id = accountId(rawAccountId)
-    let parsed: StoredSecret
-    try { parsed = JSON.parse(await readFile(path.join(this.credentialsRoot, `${id}.json`), 'utf8')) as StoredSecret } catch { throw new Error('No Cloudflare API token is stored for this account. Add one through the secure credential field.') }
-    if (parsed?.version !== 1 || typeof parsed.tokenEnc !== 'string') throw new Error('The stored Cloudflare API token is malformed.')
-    try {
-      const bytes = Buffer.from(parsed.tokenEnc, 'base64')
-      const value = (this.host.unsealSecret ? this.host.unsealSecret(bytes) : bytes).toString('utf8')
-      if (!TOKEN.test(value)) throw new Error()
-      return value
-    } catch { throw new Error('The stored Cloudflare API token is unavailable or malformed.') }
+    return this.resolveToken(accountId(rawAccountId))
   }
 
   private async get(account: string, pathname: string, query: Record<string, string>, controller: AbortController): Promise<Record<string, unknown>> {
@@ -302,6 +270,22 @@ export class CloudflareTunnelService implements CloudflareTunnelApi {
     } finally { clearTimeout(timeout); this.operations.delete(operationId) }
   }
 
+  async zones(rawAccountId: string): Promise<CloudflareZoneSummary[]> {
+    const account = accountId(rawAccountId)
+    const controller = new AbortController()
+    const zones: CloudflareZoneSummary[] = []
+    for (let page = 1; page <= MAX_PAGES && zones.length < MAX_ZONES; page += 1) {
+      const body = await this.get(account, `/accounts/${account}/zones`, { page: String(page), per_page: '100' }, controller)
+      const info = resultInfo(body)
+      zones.push(...resultArray(body).flatMap((item): CloudflareZoneSummary[] => {
+        if (!isCloudflareZoneId(item.id) || typeof item.name !== 'string' || !item.name.trim()) return []
+        return [{ id: item.id, name: item.name.trim().toLowerCase(), status: item.status === 'active' || item.status === 'pending' ? item.status : 'other', sourceRevision: 'cloudflare-api-v1' }]
+      }))
+      if (page >= info.totalPages) break
+    }
+    return zones.slice(0, MAX_ZONES)
+  }
+
   async planRoute(input: CloudflareTunnelRouteInput): Promise<CloudflareRoutePlan> {
     const route = validateCloudflareRouteInput(input)
     const inventory = await this.inventoryFor(route)
@@ -330,7 +314,7 @@ export class CloudflareTunnelService implements CloudflareTunnelApi {
       if (!Array.isArray(configResult.ingress) || configResult.ingress.length > MAX_ROUTES) throw new Error('Cloudflare returned an unsupported ingress configuration. No route was changed.')
       const ingress = configResult.ingress.map(safeIngressRule)
       if (ingress.some((item) => item === null)) throw new Error('Cloudflare returned an ingress rule this manager cannot preserve. No route was changed.')
-      const safeIngress = ingress as Record<string, string>[]
+      const safeIngress = ingress as Record<string, unknown>[]
       await this.mutate(routeAccount(route, inventory), `/accounts/${routeAccount(route, inventory)}/cfd_tunnel/${route.tunnelId}/configurations`, 'PUT', { config: { ingress: [...safeIngress, { hostname: route.hostname, path: route.path, service: route.service }] } }, controller)
       const saved: CloudflareTunnelRoute = { id: `route-${randomUUID()}`, tunnelId: route.tunnelId, hostname: route.hostname, path: route.path, origin: normalizeCloudflareService(route.service, route.protocol), ownership: 'managed', dnsRecordId: null, dnsProxied: null, sourceRevision: 'local-pending-refresh' }
       await this.saveLocalRoute(route, saved)

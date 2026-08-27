@@ -6,7 +6,8 @@ choices, not a raw API client or a shell wrapper.
 
 ## Guided route configuration
 
-Choose an account and zone, refresh the inventory, then select a tunnel from the returned list.
+Choose a configured Cloudflare credential and account in the existing Cloudflare manager, choose a
+zone from the bounded zone list, refresh the inventory, then select a tunnel from the returned list.
 Enter the hostname, path, and origin service in the route form. The host process validates the
 hostname, path, protocol, and service again immediately before sending the provider request. Existing
 ingress routes are read and sent back together with the new route, so a new route never replaces
@@ -34,10 +35,10 @@ application's two-key destructive confirmation flow. Other records in the zone a
 
 ## Local and portable state
 
-API tokens are write-only through the credential field and are sealed with the host's existing
-credential boundary, or stored as owner-only bytes on a shell without sealing support. Tokens never
-cross the renderer bridge. Local route metadata is bounded and kept below the application data
-directory.
+API tokens are selected from the existing Cloudflare core manager's local credential list and are
+sealed with the host's credential boundary. The tunnel manager never accepts or stores a second
+copy of a token and no token crosses the renderer bridge. Local route metadata is bounded and kept
+below the application data directory.
 
 Schema 3 portable intent stores only the display label, hostname, path, origin service, protocol,
 and the required preserve-existing-routes choice. Account ids, zone ids, tunnel ids, DNS ids, token
@@ -49,7 +50,7 @@ another computer the node must be configured or rebound explicitly, or left unbo
 
 | Situation | Result |
 | --- | --- |
-| Missing token | The inventory remains unavailable and asks for a token through the secure field. |
+| Missing token | The inventory remains unavailable and asks you to configure a credential in the existing Cloudflare manager. |
 | Invalid or expired token | The provider refusal is shown without exposing the token. |
 | Redirect or non-success API response | The request stops; no route or DNS mutation is reported. |
 | Malformed or oversized response | The response is refused at the bounded parser. |

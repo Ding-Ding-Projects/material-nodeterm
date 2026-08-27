@@ -1,12 +1,13 @@
 import { create } from 'zustand'
 import type { AgentPermissionMode } from '@shared/agents/config'
 import type {
-  BridgeLink,
   BrowserProfile,
   CanvasMutation,
   CanvasNodeState,
+  Link,
   NavStop,
   Project,
+  ProjectAwsUniverseCanvas,
   ProjectKanban,
   Viewport,
   Workspace
@@ -23,6 +24,10 @@ import {
   ROOT_CANVAS_ID
 } from '@shared/multiverse-canvases'
 import { createSpecialUniverseCanvas } from '../../core/universe-shop'
+import { AWS_UNIVERSE_ROOT_ID, MAX_AWS_UNIVERSE_INSTANCES, nextAwsUniverseId } from '@shared/aws-universes'
+import type { PortableDoorConstructionV3 } from '@shared/door-construction'
+import { deletePortablePortal, navigatePortablePortal } from '../../core/portal-lifecycle'
+import { portableCanvasProjectionToProject, projectToPortableCanvasV3 } from '../../core/portable-canvas-projection'
 import type { ProjectCapability } from '@shared/project-capabilities'
 import type { ProjectIcon } from '@shared/project-icon'
 import { recordCapabilityAck, type CapabilityAnswer } from '@shared/project-capability-consent'
@@ -58,6 +63,23 @@ interface ProjectsState {
     canvasId?: string
     reason?: string
   }
+  /** Opens the root or one AWS-only child canvas through the shared active-canvas runtime path. */
+  openAwsUniverseCanvas(projectId: string, canvasId: string): boolean
+  /** Creates one AWS-only child canvas and its root portal intent. */
+  createAwsUniverseCanvas(projectId: string, title: string): { canvasId?: string; reason?: string }
+  /** Attach one validated construction to both sides of a newly-created Multiverse portal. */
+  attachMultiverseDoor(projectId: string, input: {
+    parentCanvasId: string
+    childCanvasId: string
+    entryDoorId: string
+    returnDoorId: string
+    title: string
+    entryConstruction: PortableDoorConstructionV3
+    returnConstruction: PortableDoorConstructionV3
+  }): { portalId?: string; reason?: string }
+  setPortalStatus(projectId: string, portalId: string, status: 'open' | 'closed'): boolean
+  deletePortal(projectId: string, portalId: string): { ok: true; preservedNodeIds: string[] } | { ok: false; reason: string }
+  openPortal(projectId: string, portalId: string, fromCanvasId: string): { ok: true; canvasId: string; returnDoorId: string } | { ok: false; reason: string }
   /** Adds a new project and returns it (caller commits the current canvas first). */
   addProject(name?: string, cwd?: string, ssh?: Project['ssh']): Project
   /** "Open folder…": a folder maps to one project. Reuses the existing project with that
@@ -126,14 +148,8 @@ interface ProjectsState {
   /** Replaces the project's browser-profile list (create/rename/remove all funnel through this).
    *  See `BrowserProfile` in @shared/types and `shared/browser-profiles.ts`. */
   setProjectBrowserProfiles(id: string, browserProfiles: BrowserProfile[]): void
-  /** Writes the serialized canvas (nodes + viewport + bridge links + control ropes) back into a project. */
-  commitCanvas(
-    id: string,
-    nodes: CanvasNodeState[],
-    viewport: Viewport,
-    bridges?: BridgeLink[],
-    ropes?: BridgeLink[]
-  ): void
+  /** Writes the serialized canvas (nodes + viewport + unified links) back into a project. */
+  commitCanvas(id: string, nodes: CanvasNodeState[], viewport: Viewport, links?: Link[]): void
   /**
    * Applies ONE peer canvas mutation to a project's serialized nodes — the path for a project
    * that is loaded but NOT active (React Flow only holds the active project's nodes). Returns
@@ -310,7 +326,10 @@ function mapProjectNodes(
     const multiverseCanvases = p.multiverseCanvases?.map((canvas) =>
       canvas.id === p.activeCanvasId ? { ...canvas, nodes: fn(canvas.nodes) } : canvas
     )
-    return { ...p, multiverseCanvases }
+    const childCanvases = p.childCanvases?.map((canvas) =>
+      canvas.id === p.activeCanvasId && canvas.scope === 'aws-universe' ? { ...canvas, nodes: fn(canvas.nodes) } : canvas
+    )
+    return { ...p, multiverseCanvases, childCanvases }
   })
 }
 
@@ -329,6 +348,21 @@ function newMultiverseCanvasId(project: Project): string {
     if (!used.has(candidate)) return candidate
   }
   return base
+}
+
+/** Apply a portal projection back onto the live project while retaining machine-local fields and
+ * the current project identity. Portable conversion owns only canvases, nodes, links, and portal
+ * intent, so settings, bindings, and session metadata never get replaced by a dialog action. */
+function withPortalProjection(project: Project, projection: ReturnType<typeof projectToPortableCanvasV3>): Project {
+  const hydrated = portableCanvasProjectionToProject(projection, { id: project.id, ...(project.cwd ? { cwd: project.cwd } : {}) })
+  return {
+    ...project,
+    nodes: hydrated.nodes,
+    viewport: hydrated.viewport,
+    multiverseCanvases: hydrated.multiverseCanvases,
+    portals: hydrated.portals,
+    ...(hydrated.childCanvases ? { childCanvases: hydrated.childCanvases } : {})
+  }
 }
 
 export const useProjects = create<ProjectsState>((set, get) => ({
@@ -392,6 +426,9 @@ export const useProjects = create<ProjectsState>((set, get) => ({
       return { reason: created.reason ?? 'The child canvas could not be created.' }
     }
     const shop: CanvasNodeState = { ...created.shop, kind: 'shop' }
+    const portalId = `portal-${created.canvas!.id}`
+    const entryDoorId = `door-${created.canvas!.id}-entry`
+    const returnDoorId = `door-${created.canvas!.id}-return`
     set((state) => ({
       projects: state.projects.map((item) => item.id === projectId
         ? {
@@ -403,13 +440,171 @@ export const useProjects = create<ProjectsState>((set, get) => ({
               depth: created.canvas!.depth!,
               order: created.canvas!.order,
               viewport: created.canvas!.viewport ?? { x: 0, y: 0, zoom: 1 },
-              nodes: [shop]
+               nodes: [shop]
+             }],
+            portals: [...(item.portals ?? []), {
+              id: portalId,
+              parentCanvasId,
+              childCanvasId: created.canvas!.id,
+              entryDoorId,
+              returnDoorId,
+              title,
+              depth,
+              status: 'open' as const
             }]
           }
         : item
       )
     }))
     return { canvasId }
+  },
+
+  openAwsUniverseCanvas(projectId, canvasId) {
+    const project = get().projects.find((item) => item.id === projectId)
+    if (!project) return false
+    const activeCanvasId = canvasId === AWS_UNIVERSE_ROOT_ID
+      ? undefined
+      : project.childCanvases?.some((canvas) => canvas.scope === 'aws-universe' && canvas.id === canvasId)
+        ? canvasId
+        : null
+    if (activeCanvasId === null) return false
+    set((state) => ({
+      projects: state.projects.map((item) => item.id === projectId ? { ...item, activeCanvasId } : item),
+      reloadNonce: state.reloadNonce + 1
+    }))
+    return true
+  },
+
+  createAwsUniverseCanvas(projectId, rawTitle) {
+    const project = get().projects.find((item) => item.id === projectId)
+    if (!project) return { reason: 'Choose an open project before creating an AWS Universe.' }
+    const title = rawTitle.trim()
+    if (!title || title.length > 160) return { reason: 'Enter a Universe name from 1 to 160 characters.' }
+    const existing = (project.childCanvases ?? []).filter((canvas): canvas is ProjectAwsUniverseCanvas => canvas.scope === 'aws-universe' && canvas.parentCanvasId === AWS_UNIVERSE_ROOT_ID && canvas.depth === 1 && !!canvas.viewport)
+    if (existing.length >= MAX_AWS_UNIVERSE_INSTANCES) return { reason: 'The portable resource safety bound has been reached.' }
+    const id = nextAwsUniverseId(existing)
+    let shop: CanvasNodeState
+    try {
+      shop = createUniverseShopNode({ id, scope: 'aws-universe', depth: 1 }) as CanvasNodeState
+    } catch (error) {
+      return { reason: error instanceof Error ? error.message : 'The AWS Universe Shop could not be created.' }
+    }
+    const portal: CanvasNodeState = {
+      id: `aws-universe-portal-${id}`,
+      kind: 'aws-universe',
+      position: { x: 80 + (existing.length % 4) * 460, y: 80 + Math.floor(existing.length / 4) * 300 },
+      size: { width: 420, height: 260 },
+      title,
+      color: '#7d5260',
+      group: null,
+      universeCanvasId: id,
+      universeScope: 'aws-universe',
+      universeDepth: 1,
+      tags: ['aws-universe', 'universe-portal']
+    }
+    const child = {
+      id,
+      scope: 'aws-universe' as const,
+      title,
+      parentCanvasId: AWS_UNIVERSE_ROOT_ID,
+      depth: 1,
+      order: existing.length,
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [shop]
+    }
+    set((state) => ({
+      projects: state.projects.map((item) => item.id !== projectId ? item : {
+        ...item,
+        nodes: [...item.nodes, portal],
+        childCanvases: [...(item.childCanvases ?? []), child]
+      })
+    }))
+    return { canvasId: id }
+  },
+
+  attachMultiverseDoor(projectId, input) {
+    const project = get().projects.find((item) => item.id === projectId)
+    if (!project) return { reason: 'Choose an open project before attaching a door.' }
+    const child = project.multiverseCanvases?.find((canvas) => canvas.id === input.childCanvasId)
+    const parent = input.parentCanvasId === ROOT_CANVAS_ID || project.multiverseCanvases?.some((canvas) => canvas.id === input.parentCanvasId)
+    if (!child || !parent) return { reason: 'The selected parent or child canvas is no longer available.' }
+    if (child.parentCanvasId !== input.parentCanvasId) return { reason: 'The child canvas is not beneath the selected parent.' }
+    if (input.entryConstruction.doorId !== input.entryDoorId || input.entryConstruction.canvasId !== input.parentCanvasId || input.entryConstruction.targetCanvasId !== input.childCanvasId || input.entryConstruction.pairedDoorId !== input.returnDoorId) {
+      return { reason: 'The entry construction identity does not match the selected door route.' }
+    }
+    if (input.returnConstruction.doorId !== input.returnDoorId || input.returnConstruction.canvasId !== input.childCanvasId || input.returnConstruction.targetCanvasId !== input.parentCanvasId || input.returnConstruction.pairedDoorId !== input.entryDoorId) {
+      return { reason: 'The return construction identity does not match the selected door route.' }
+    }
+    const portalId = `portal-${input.childCanvasId}`
+    if (project.portals?.some((portal) => portal.childCanvasId === input.childCanvasId || portal.id === portalId)) {
+      return { reason: 'This child canvas already has a portal.' }
+    }
+    set((state) => ({
+      projects: state.projects.map((item) => item.id !== projectId ? item : {
+        ...item,
+        portals: [...(item.portals ?? []), {
+          id: portalId,
+          parentCanvasId: input.parentCanvasId,
+          childCanvasId: input.childCanvasId,
+          entryDoorId: input.entryDoorId,
+          returnDoorId: input.returnDoorId,
+          title: input.title,
+          depth: child.depth,
+          status: 'open' as const,
+          entryConstruction: input.entryConstruction,
+          returnConstruction: input.returnConstruction
+        }]
+      })
+    }))
+    return { portalId }
+  },
+
+  setPortalStatus(projectId, portalId, status) {
+    const project = get().projects.find((item) => item.id === projectId)
+    if (!project || !(project.portals ?? []).some((portal) => portal.id === portalId)) return false
+    set((state) => ({
+      projects: state.projects.map((item) => item.id === projectId
+        ? { ...item, portals: (item.portals ?? []).map((portal) => portal.id === portalId ? { ...portal, status } : portal) }
+        : item
+      )
+    }))
+    return true
+  },
+
+  openPortal(projectId, portalId, fromCanvasId) {
+    const project = get().projects.find((item) => item.id === projectId)
+    if (!project) return { ok: false, reason: 'Choose an open project before entering a portal.' }
+    let projection: ReturnType<typeof projectToPortableCanvasV3>
+    try {
+      projection = projectToPortableCanvasV3(project)
+    } catch (error) {
+      return { ok: false, reason: error instanceof Error ? error.message : 'Portal data could not be read.' }
+    }
+    const decision = navigatePortablePortal(projection, portalId, fromCanvasId)
+    if (!decision.allowed) return { ok: false, reason: `${decision.reason} ${decision.nextAction}` }
+    if (!get().openMultiverseCanvas(projectId, decision.targetCanvasId)) return { ok: false, reason: 'The portal target canvas is no longer available.' }
+    return { ok: true, canvasId: decision.targetCanvasId, returnDoorId: decision.returnDoorId }
+  },
+
+  deletePortal(projectId, portalId) {
+    const project = get().projects.find((item) => item.id === projectId)
+    if (!project) return { ok: false, reason: 'Choose an open project before deleting a portal.' }
+    try {
+      const result = deletePortablePortal(projectToPortableCanvasV3(project), portalId)
+      if (result.refused || !result.projection) return { ok: false, reason: result.reason ?? 'Portal deletion was refused.' }
+      const next = withPortalProjection(project, result.projection)
+      const activeRemoved = !!project.activeCanvasId && result.removedCanvasIds.includes(project.activeCanvasId)
+      set((state) => ({
+        projects: state.projects.map((item) => item.id === projectId
+          ? { ...next, ...(activeRemoved ? { activeCanvasId: undefined } : {}) }
+          : item
+        ),
+        reloadNonce: state.reloadNonce + 1
+      }))
+      return { ok: true, preservedNodeIds: result.preservedNodeIds }
+    } catch (error) {
+      return { ok: false, reason: error instanceof Error ? error.message : 'Portal deletion was refused.' }
+    }
   },
 
   addProject(name, cwd, ssh) {
@@ -590,15 +785,26 @@ export const useProjects = create<ProjectsState>((set, get) => ({
     }))
   },
 
-  commitCanvas(id, nodes, viewport, bridges, ropes) {
+  commitCanvas(id, nodes, viewport, links) {
     set((s) => ({
       projects: s.projects.map((p) => {
         if (p.id !== id) return p
-        if (!p.activeCanvasId) return { ...p, nodes, viewport, ...(bridges ? { bridges } : {}), ...(ropes ? { ropes } : {}) }
+        if (!p.activeCanvasId) {
+          const { bridges: _bridges, ropes: _ropes, ...rest } = p
+          return { ...rest, nodes, viewport, ...(links ? { links } : {}) }
+        }
+        if (!p.multiverseCanvases?.some((canvas) => canvas.id === p.activeCanvasId)) {
+          return {
+            ...p,
+            childCanvases: p.childCanvases?.map((canvas) => canvas.id === p.activeCanvasId && canvas.scope === 'aws-universe'
+              ? { ...canvas, nodes, viewport }
+              : canvas)
+          }
+        }
         return {
           ...p,
           multiverseCanvases: p.multiverseCanvases?.map((canvas) => canvas.id === p.activeCanvasId
-            ? { ...canvas, nodes, viewport, ...(bridges ? { bridges } : {}), ...(ropes ? { ropes } : {}) }
+            ? { ...canvas, nodes, viewport }
             : canvas)
         }
       })
@@ -621,8 +827,11 @@ export const useProjects = create<ProjectsState>((set, get) => ({
       projects: s.projects.map((p) => {
         if (p.id !== projectId) return p
         const selected = p.activeCanvasId ? p.multiverseCanvases?.find((canvas) => canvas.id === p.activeCanvasId) : undefined
-        const bridgeInput = selected?.bridges ?? p.bridges ?? []
-        const ropeInput = selected?.ropes ?? p.ropes ?? []
+        const child = !selected && p.activeCanvasId
+          ? p.childCanvases?.find((canvas) => canvas.id === p.activeCanvasId && canvas.scope === 'aws-universe')
+          : undefined
+        const bridgeInput = selected?.bridges ?? child?.bridges ?? p.bridges ?? []
+        const ropeInput = selected?.ropes ?? child?.ropes ?? p.ropes ?? []
         const bridges = applyEdgeMutation(bridgeInput, 'bridge', mutation)
         const ropes = applyEdgeMutation(ropeInput, 'rope', mutation)
         // `applyEdgeMutation` returns the SAME array when the mutation is not about that list, so
@@ -637,6 +846,14 @@ export const useProjects = create<ProjectsState>((set, get) => ({
           return {
             ...p,
             multiverseCanvases: p.multiverseCanvases?.map((canvas) => canvas.id === selected.id
+              ? { ...canvas, bridges: nextBridges, ropes: nextRopes }
+              : canvas)
+          }
+        }
+        if (child) {
+          return {
+            ...p,
+            childCanvases: p.childCanvases?.map((canvas) => canvas.id === child.id
               ? { ...canvas, bridges: nextBridges, ropes: nextRopes }
               : canvas)
           }
