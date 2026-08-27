@@ -20,9 +20,6 @@ import { ProjectGlyph } from './ProjectGlyph'
 export function canDismissWelcomeScreen(hasOpenProjects: boolean): boolean {
   return hasOpenProjects
 }
-import { useEffect } from 'react'
-import type { ProjectIcon } from '@shared/project-icon'
-import { ProjectGlyph } from './ProjectGlyph'
 
 interface WelcomeScreenProps {
   onNewProject: () => void
@@ -39,8 +36,6 @@ interface WelcomeScreenProps {
   onOpenProjectFile: () => void
   /** Closed projects that can be reopened (id + display name + folder). */
   closedProjects?: { id: string; name: string; cwd?: string; color?: string; icon?: import('@shared/project-icon').ProjectIcon }[]
-  /** Closed projects that can be reopened (id + display name + folder + icon/color). */
-  closedProjects?: { id: string; name: string; cwd?: string; color?: string; icon?: ProjectIcon }[]
   /** Reopen a closed project (restores its nodes + sessions). */
   onReopen?: (id: string) => void
   /**
@@ -414,43 +409,8 @@ export function WelcomeScreen({
                     stroke="currentColor"
                     strokeWidth="1.6"
                     strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-      {closedProjects.length > 0 && (
-        <div className="welcome__recent">
-          <div className="welcome__recent-title">Recently closed</div>
-          <div className="welcome__recent-list">
-            {closedProjects.map((p) => (
-              <div
-                key={p.id}
-                className="welcome__recent-item"
-                role="button"
-                tabIndex={0}
-                title={p.cwd || p.name}
-                onClick={() => onReopen?.(p.id)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') onReopen?.(p.id)
-                }}
-              >
-                <ProjectGlyph
-                  icon={p.icon}
-                  color={p.color}
-                  name={p.name}
-                  variant="monogram"
-                  size={15}
-                  className="welcome__recent-mark"
-                />
-                <span className="welcome__recent-name">{p.name}</span>
-                {p.cwd && <span className="welcome__recent-path">{p.cwd}</span>}
-                {onDeleteClosed && (
-                  <button
-                    className="welcome__recent-del"
-                    title="Delete permanently (ends its sessions)"
-                    aria-label="Delete permanently"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onDeleteClosed(p.id)
-                    }}
+                   strokeLinejoin="round"
+                   aria-hidden="true"
                   >
                     <path d="M7 17L17 7M9 7h8v8" />
                   </svg>
@@ -459,7 +419,6 @@ export function WelcomeScreen({
             </div>
           </div>
         )}
-
         {/* The version and the build time it was stamped with, to the second and with the timezone
             named: two builds a minute apart are routine while bisecting, and a bare local time is
             ambiguous the moment this line is pasted into an issue. An unstamped build (a dev
