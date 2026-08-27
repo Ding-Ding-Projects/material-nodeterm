@@ -71,8 +71,10 @@
   not run under issue #17's explicit verification boundary.
 - Add the issue #20 media catalogue and Photo, Video, and mixed-media Gallery canvas node kinds.
   Local media is routed through the existing allowlisted protocol, gallery references carry bounded
-  portable metadata, and missing assets remain visible instead of disappearing. Verification is
-  pending in the parent integration lane.
+  portable metadata, and missing assets remain visible instead of disappearing. Machine paths now
+  round-trip only through the local workspace index; schema 3 binds node references to validated
+  content-addressed archive entries and re-proves byte count, signature, and SHA-256 before export
+  or resolution. Verification is pending in the parent integration lane.
 - Add the Torrent Downloader canvas node with packaged or pinned user-scoped WebTorrent runtime
   discovery, magnet and `.torrent` intake, metadata/file selection, safe destination preflight,
   progress/speed/peer/ETA reporting, pause/resume/cancel/retry, restart reconciliation, bounded

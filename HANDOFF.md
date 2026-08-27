@@ -310,6 +310,21 @@ roadmap and changelog.
 This lane deliberately did not run tests, type checking, builds, packaging, UI interaction, or
 captures, and made no commit or dew. The parent integration lane must run those checks and inspect
 the built artifact before treating issue #20 as verified.
+
+The resumed issue #20 lane completed the checkpoint's missing serialization and durable-byte
+boundaries. Photo and Video `filePath` values plus Gallery `sourcePath` values now round-trip only
+through the machine-local node overlay. Schema 3 carries ordered media references and the active
+Gallery asset, reconciles each reference against the media manifest, and marks references missing
+when no byte carrier exists. Archive export collects supported media by bounded streaming, re-reads
+and verifies byte count, signature, and SHA-256, writes content-addressed `assets/media/` entries,
+and records them in the outer manifest. Import validates those entries before writing, stages them
+inside the new project root, and publishes atomically. The shared resolver now requires byte-count
+and digest evidence instead of returning a path-shaped guess.
+
+This resumed lane ran no tests, type checks, lint, reviews, security or accessibility checks,
+builds, packaging, installer execution, runtime interaction, or captures, as required by the
+ultra-speed boundary. The coordinating integration lane owns those verdicts, default-branch
+integration, release publication, and capture evidence.
 ## 2026-08-26, Torrent Downloader implementation lane
 
 Added the dedicated `torrent` canvas node, shared downloader contract, CorePlatform-backed service,
