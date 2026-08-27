@@ -10,6 +10,13 @@
   did not run tests, type checks, lint, reviews, security or accessibility checks, builds, packaging,
   installer execution, runtime interaction, or captures.
 
+- Rebuild the README from the ground up around the current Windows delivery path, genuine product
+  captures, explicit evidence boundaries, and a compact top-level index. Keep 9 current key
+  screenshots visible without disclosure controls, add 25 committed feature GIF recordings for
+  the documentation site, remove stale non-Windows delivery references from the README and active
+  site content, and verify every recorded file by exact hash with three deliberate negative
+  regressions.
+
 - Add the guided GitLab Server hosting node. Choose the pinned official Community Edition or
   Enterprise Edition image, create four managed volumes, probe readiness, hand off the initial
   root credential once without logging it, and run backup, restore, update, and rollback actions

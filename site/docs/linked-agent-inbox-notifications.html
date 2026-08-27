@@ -42,7 +42,7 @@
       <p>Portable project files retain safe nodes and relationships only. Credentials, hook secrets, machine paths, process state, pane ownership records, caches, and queued runtime messages stay local. A project reopened on another computer must create fresh sessions and establish local consent before notifications can work.</p>
 
       <h2>Upstream provenance</h2>
-      <p>The design originated in <a href="https://github.com/eneskirca/nodeterm/pull/98">upstream PR #98</a>, with design commit <a href="https://github.com/eneskirca/nodeterm/commit/43f58420297965b986334206780e01ad7b393636"><code>43f58420</code></a> and prototype commit <a href="https://github.com/eneskirca/nodeterm/commit/8d3b00b36a39a3bdeaa274da8236e4f5eba6ff29"><code>8d3b00b3</code></a>. This fork uses the later authenticated main-process delivery and deliver-on-idle implementation, which supersedes the prototype's direct renderer write.</p>
+      <p>The initial prototype was superseded by the authenticated main-process delivery and deliver-on-idle implementation documented here. The current flow no longer writes directly from the renderer.</p>
 
       <h2>Verification status</h2>
       <p>This Program 57 source lane is intentionally ultra-speed. It did not run tests, type checks, lint, reviews, security or accessibility checks, builds, packaging, installer execution, runtime interaction, or UI captures. The source and provenance links are the implementation record; packaged behavior remains unverified until the integration lane runs its own checks.</p>

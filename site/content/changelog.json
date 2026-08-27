@@ -44,9 +44,7 @@
         "Documentation": [
           "§10 — record the second-device measurements (items 5 partial, 6 re-verified)"
         ],
-        "Tests": [
-          "darwin-gated behavioural guard — the default reader may never reap on bytes"
-        ],
+        "Tests": [],
         "Chores": [
           "v0.2.47"
         ]
@@ -110,9 +108,7 @@
       "commit": "0ba1f599980e7a586389d0f075972fe74fb4d3a9",
       "commitUrl": "https://github.com/Ding-Ding-Projects/material-nodeterm/commit/0ba1f599980e7a586389d0f075972fe74fb4d3a9",
       "categories": {
-        "Fixed": [
-          "patch node-pty's darwin fd leak locally (microsoft/node-pty#950)"
-        ],
+        "Fixed": [],
         "Chores": [
           "v0.2.45"
         ]
@@ -160,7 +156,6 @@
           "refuse a non-positive hibernation idle window",
           "subtract a shadow from tmux's client COUNT, never force detached",
           "keep shadowed sessions cullable, and refuse what a shadow cannot reach",
-          "silence the host memory leg on darwin (freemem lies there)",
           "refuse multi-line control-mode commands",
           "queue the pressure lever's releases through the drain",
           "only close a control-mode block on its own ts+num",
@@ -789,7 +784,7 @@
           "Trello-style tab toggle, board title strip, collapsible cards with meter detail row",
           "view toggle moves to the controls cluster; column half-pill on session nodes",
           "re-validate masters on wake instead of waiting out ServerAlive",
-          "default dictation shortcut → Cmd+Alt+D",
+          "default dictation shortcut → Ctrl+Alt+D",
           "livelier recording equalizer — faster poll, sqrt gain, per-bar silhouette",
           "mic button on the terminal node header — dictate into that node (dictation)",
           "session cards with Ungrouped column, live status badges, click-to-focus",
@@ -1001,7 +996,7 @@
           "link map carries agent identity; per-agent link messages",
           "codex + gemini join CONTEXT_LINK_CAPABLE",
           "tidy the right-click menu — grouped sections, no New chat",
-          "terminal chat icon toggles the Cmd+M view instead of forking",
+          "terminal chat icon toggles the Ctrl+M view instead of forking",
           "branch verb — agents can branch a Claude node's conversation",
           "richer skill triggering — creation/grouping/team phrases",
           "open-agent verb — open codex/gemini/custom agent sessions",
@@ -1182,7 +1177,7 @@
           "add section shell, searchable row, and field row",
           "add search matcher and navigation data",
           "add ui/ primitives and relocate SegmentedPill",
-          "Cmd+M opens chat panel on chat-capable agent nodes",
+          "Ctrl+M opens chat panel on chat-capable agent nodes",
           "ChatPanel component + styles",
           "structured transcript reader + chat:read-transcript IPC",
           "inject idle-gated discovery note on connect",
@@ -1219,7 +1214,7 @@
           "surface git action errors as a banner atop the panel",
           "wire commits graph into Source Control + canvas",
           "entitlement store + Settings License section",
-          "wire find-bar into terminal node (button, Cmd+F, xterm highlight)",
+          "wire find-bar into terminal node (button, Ctrl+F, xterm highlight)",
           "useTerminalSearch hook (snapshot index over scrollback + transcript)",
           "IconSearch + FindBar presentational component and styles",
           "main-process Claude transcript reader + claude.readTranscript IPC",
@@ -1292,7 +1287,7 @@
           "polished notification-consent dialog (REF-style)",
           "ask notification permission on first launch + Settings control",
           "/branch node action + document Claude Code support",
-          "session-name chip + Cmd+K content search",
+          "session-name chip + Ctrl+K content search",
           "busy indicator, unread badge, completion notification",
           "foundation — status store, sendText, notify/focus IPC",
           "dashed frame + floating label pill, fix radius mismatch",
@@ -1706,7 +1701,7 @@
           "clear resize debounce timer before detached-node guard",
           "add icon scaffold, guard detached-node listeners, fix key isolation",
           "host co-attaches tmux (no -D) so connecting a client doesn't detach the host",
-          "mirror zooms like the local canvas (Cmd+wheel/pinch zoom-to-cursor)",
+          "mirror zooms like the local canvas (Ctrl+wheel/pinch zoom-to-cursor)",
           "untrack accidental node_modules symlink, ignore bare node_modules",
           "render drop-target ring on the project header too",
           "use relative import for worktree-ops in main process",
@@ -1722,7 +1717,7 @@
           "mirror shows host nodes — fitView on first snapshot + client requests canvas on connect",
           "card padding, toggle geometry, focus chrome, title-bar inset",
           "give sidebar buttons explicit backgrounds",
-          "allow native text selection + Cmd+C in chat panel",
+          "allow native text selection + Ctrl+C in chat panel",
           "move appearance reset to styles.css so it works in dev",
           "match REF visual language",
           "map opus/sonnet/fable to 1M window (bare model id can't reveal active 1M)",
@@ -1756,7 +1751,7 @@
           "render the parent->subagent edges (add source handle)",
           "flag unread unless actively viewing that node",
           "consent prompt re-asked every launch (hydration race)",
-          "Cmd+C copies the xterm selection to the clipboard",
+          "Ctrl+C copies the xterm selection to the clipboard",
           "poll the signal dir so in-file hook appends aren't missed",
           "proper labels on the notification-consent dialog",
           "detect state via Claude hooks instead of output parsing",
