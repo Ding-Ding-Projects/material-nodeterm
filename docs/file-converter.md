@@ -1,7 +1,7 @@
 # Universal file converter
 
-A local, offline file-conversion surface reachable from the converter icon in the canvas'
-controls cluster, the command palette ("File converter"), or `⌘K` → *File converter*. It runs
+A local, offline file-conversion surface reachable from the navigation rail's Tools destination or
+the command palette (`Ctrl+Shift+F` → *File converter*). It runs
 identically on Desktop (Electron) and the Server Edition (browser) — the whole engine lives in
 `src/core/converter/*`, registered once via `registerConverterIpc()` and consumed by both shells
 (`src/main/index.ts`, `src/server/handlers/index.ts`).
@@ -106,16 +106,20 @@ of objects survives the round trip through a spreadsheet shape") and requires an
 queue as `needs-confirm` (reason `lossy`) rather than running; resolving that reason (per item, via
 `converter.resolvePending`) is what allows the queue runner to pick it up.
 
-## Overwrite protection
+## Collision-safe names and overwrite protection
 
-A destination path that already exists is never silently overwritten. The item is queued as
-`needs-confirm` (reason `overwrite`); the queue runner re-checks before writing for a quick prompt,
-but that check is not the safety boundary because another writer can still create the path one
-instruction later. An unapproved conversion publishes its completed, same-directory temporary file
-with an atomic no-clobber hard link. Exactly one of two racing writers can claim an absent name; the
-other receives `EEXIST` and returns to `needs-confirm`. A filesystem that cannot provide that
-primitive fails closed. Only `item.overwriteAllowed === true` — set by an explicit
-`resolvePending(id, { overwrite: true })` — permits replacement through `renameAtomic`.
+When a file enters the queue, the service reserves the first unused name in the familiar sequence
+`name.ext`, `name (2).ext`, `name (3).ext`, and so on. It checks both the destination directory and
+every current queue reservation. The second reservation check after the asynchronous filesystem
+probe prevents two simultaneous add requests from selecting the same absent path. The chosen suffix
+is shown on the queue item, so avoiding a collision never looks like a mysterious rename.
+
+The queue runner re-checks immediately before writing because another program can still create the
+reserved path after admission. An unapproved conversion publishes its completed, same-directory
+temporary file with an atomic no-clobber hard link. Exactly one of two racing writers can claim an
+absent name; the other receives `EEXIST` and returns to `needs-confirm`. A filesystem that cannot
+provide that primitive fails closed. Only `item.overwriteAllowed === true`, set by an explicit
+`resolvePending(id, { overwrite: true })`, permits replacement through `renameAtomic`.
 
 ## Resource bounds
 
@@ -174,6 +178,26 @@ unavailable, file missing, over the size limit, not a regular file). Every queue
 state is one of `done | failed | cancelled | skipped`, each shown distinctly in the panel — a
 partially-successful batch is never presented as a uniform success or a uniform failure.
 
+## Completed-output handoff
+
+Every completed queue row offers **Open in Visual Studio Code**. The action uses the active
+project's API rather than the viewer-global bridge, so switching projects cannot send a stale path
+to the wrong machine. The desktop shell opens the output on the local computer. Server Edition asks
+the server process to open the path there. Relay sessions retain their explicit unsupported result
+until converter and editor routing are carried over the relay together. If Visual Studio Code is not
+installed or cannot open the path, the existing detector's exact result is shown as a non-blocking
+error notification. Desktop rows also retain **Reveal** for the operating system file manager.
+
+## Portable project boundary
+
+The converter is a global tool, not a canvas node. Its source paths, destinations, queue status,
+progress, errors, temporary names, and editor-launch results are machine-local runtime state stored
+under `<userData>/converter/queue.json`. None of those fields enter the schema 3 project projection,
+and importing a project performs no file detection, conversion, folder creation, process launch, or
+editor launch. Because no node is created, there is no converter node identity, layout, relationship,
+or creation-event id to serialize. The omission is deliberate and keeps project import side-effect
+free while the same project can use a different local queue on each computer.
+
 ## Known gaps (deliberately out of scope this pass)
 
 - **No document/image/audio/video adapters are bundled.** Every row in those four categories is
@@ -183,9 +207,6 @@ partially-successful batch is never presented as a uniform success or a uniform 
   rule.
 - **No ZIP/TAR/7-Zip container support**, bundled or otherwise — listed disabled with their exact
   missing library.
-- **Per-category search is plain substring matching**, not the full anchored regex-builder popover
-  described in the house UI contract. A future pass should give each category's search field (and
-  every other search field in these two panels) a real regex-builder affordance.
 - **The overwrite/lossy confirmation is the app's existing inline `ConfirmDialog`-style flow**
   (a message + explicit acknowledgement), not the full two-key, slider-gated destructive-action
   super-confirmation used elsewhere in the codebase for irreversible actions. Overwriting a file is

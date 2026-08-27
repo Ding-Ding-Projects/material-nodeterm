@@ -13,6 +13,7 @@ substrate described in CLAUDE.md rather than inventing a surface each.
 | [Torrent Downloader](../torrents/torrent-downloader.md) | local WebTorrent downloads with safe machine-local task state |
 | [Linux ISO VM](linux-iso-vm.md) | implemented canvas node with bundled QEMU, WHPX preference, QMP lifecycle, loopback display, persistent/disposable modes, and network-off default |
 | [Planner occurrences](planner-occurrences.md) | host-owned durable recurrence, timezone/DST handling, missed history, and UI-closure continuity |
+| [Shared provider services](provider-services.md) | shared account metadata, sealed credentials, bounded OAuth PKCE callbacks, resource discovery, and local binding integration |
 
 Planned, not yet researched here:
 

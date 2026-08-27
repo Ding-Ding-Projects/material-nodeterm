@@ -110,6 +110,7 @@ import { normalizeAddress } from '../nodes/browserUrl'
 import VideoNode from '../nodes/VideoNode'
 import PhotoNode from '../nodes/PhotoNode'
 import GalleryNode from '../nodes/GalleryNode'
+import WildDimSumNode from '../nodes/WildDimSumNode'
 import WebNode from '../nodes/WebNode'
 import { NativeLoopNode, setNativeLoopRunHandler } from '../nodes/NativeLoopNode'
 import TimerNode from '../nodes/TimerNode'
@@ -716,6 +717,7 @@ import {
   createVideoNode,
   createPhotoNode,
   createGalleryNode,
+  createWildDimSumNode,
   createWebNode,
   isVideoFile,
   duplicateNode,
@@ -2050,6 +2052,7 @@ export function Canvas() {
       dino: withNodeBoundary(DinoNode),
       photo: withNodeBoundary(PhotoNode),
       gallery: withNodeBoundary(GalleryNode),
+      'wild-dim-sum': withNodeBoundary(WildDimSumNode),
       video: withNodeBoundary(VideoNode),
       web: withNodeBoundary(WebNode),
       browser: withNodeBoundary(BrowserNode),
@@ -5362,7 +5365,9 @@ export function Canvas() {
             if (catalogEntry.id === 'authenticator') return createAuthenticatorNode(index, center)
             if (catalogEntry.id === 'dino') return createDinoNode(index, center)
             if (catalogEntry.id === 'loop') return createNativeLoopNode(index, center)
+            if (catalogEntry.id === 'alarm') return createAlarmClockNode(index, center)
             if (catalogEntry.id === 'nsis') return createNsisNode(index, center)
+            if (catalogEntry.id === 'wild-dim-sum') return createWildDimSumNode(index, undefined, center)
             if (catalogEntry.id.startsWith('service:')) {
               return createServiceNode(catalogEntry.nodeKind as ServiceNodeKind, index, center)
             }

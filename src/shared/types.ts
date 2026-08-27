@@ -1,5 +1,6 @@
 import { DEFAULT_WORD_SEPARATORS } from './word-separators'
 import type { ServiceConnection } from './node-exec'
+import type { DockerHostManagerApi } from './docker-host-manager'
 import type { NsisSpec, NsisLocalPaths } from './nsis-form-types'
 // Types shared across the main, preload, and renderer processes.
 
@@ -365,6 +366,7 @@ export type NodeKind =
   | 'diff'
   | 'photo'
   | 'gallery'
+  | 'wild-dim-sum'
   | 'video'
   | 'web'
   | 'browser'
@@ -665,6 +667,8 @@ export interface CanvasNodeState {
   mediaAssets?: import('./media-catalog').MediaAssetReference[]
   /** Gallery selection is an ordered list of asset ids. */
   mediaActiveAssetId?: string
+  /** Wild dim sum only: portable public-catalog identity and display copy, never image bytes or cache state. */
+  wildDimSumDish?: import('./public-dim-sum').PublicDimSumSelection
   /**
    * editor/diff-only: true once `filePath` was confirmed gone (e.g. its worktree was removed —
    * see `displacedByWorktree` in `./worktree.ts`). There is nothing to re-point the node at, so
@@ -1384,9 +1388,9 @@ export interface PortableBindingApi {
   apply(input: {
     nodeId: string
     action: PortableBindingAction
-    providerOrHostIdentity?: string
-    localResourceReferences?: Record<string, string | number | boolean>
-    credentialKeys?: string[]
+    featureId?: string
+    providerAccountId?: string
+    resourceId?: string
   }): Promise<{ ok: true; state: 'bound' | 'unbound' } | { ok: false; error: string }>
 }
 
@@ -2926,6 +2930,19 @@ export interface PlannerApi {
   onOccurrence(listener: (occurrence: import('./planner-occurrences').PlannerOccurrence) => void): () => void
 }
 
+/** Machine-local Alarm Clock execution. Project data remains the portable source of safe intent;
+ * this mirror keeps due evaluation alive when the renderer closes. */
+export interface AlarmApi {
+  state(): Promise<import('./alarm-clock').AlarmPlannerSnapshot>
+  upsert(
+    alarm: Omit<import('./alarm-clock').AlarmDefinition, 'createdAt' | 'updatedAt'> & { id?: string }
+  ): Promise<import('./alarm-clock').AlarmPlannerSnapshot>
+  remove(alarmId: string): Promise<boolean>
+  snooze(occurrenceId: string, minutes: number): Promise<import('./alarm-clock').AlarmPlannerSnapshot>
+  dismiss(occurrenceId: string): Promise<import('./alarm-clock').AlarmPlannerSnapshot>
+  onDue(listener: (event: import('./alarm-clock').AlarmDueEvent) => void): () => void
+}
+
 /** A downloadable whisper model plus its on-disk status, as returned by `speech.models()`. */
 export interface SpeechModelInfo extends WhisperModelInfo {
   downloaded: boolean
@@ -4147,6 +4164,8 @@ export interface RelayPeerPending {
  */
 export interface RelayHostApi {
   dockerContexts(): Promise<Array<{ name: string; current: boolean; endpoint: string }>>
+  /** Guided local/SSH Docker management. Desktop owns the CLI; Server Edition refuses it. */
+  manager: DockerHostManagerApi
   /**
    * Enter host mode over the relay: connect and return a pairing offer string to hand to a client.
    * Rejects when Docker or the configured relay is unavailable. `projectId` is the
@@ -4476,6 +4495,8 @@ export interface NodeTerminalApi {
   /** Desktop-only Windows profile detection; absent on Server Edition and mobile bridges. */
   terminalProfiles?: TerminalProfilesApi
   workspace: WorkspaceApi
+  /** Shared provider-account, credential-vault, OAuth-callback, and resource-picker services. */
+  providerServices: import('./provider-services').ProviderServicesApi
   timer: TimerApi
   serverDeployment: ServerDeploymentApi
   projectSettings: ProjectSettingsApi
@@ -4487,6 +4508,9 @@ export interface NodeTerminalApi {
   kidsMode: KidsModeApi
   scheduledSettings: ScheduledSettingsApi
   planner: PlannerApi
+  /** Desktop exposes the host Alarm Clock mirror. Other shells may omit it and retain the
+   * renderer-local fallback until their bridge supplies the same namespace. */
+  alarm?: AlarmApi
   speech: SpeechApi
   /** Universal file converter — docs/file-converter.md. */
   converter: import('./converter').ConverterApi

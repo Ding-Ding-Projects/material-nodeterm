@@ -11,6 +11,7 @@ import {
   createVideoNode,
   createPhotoNode,
   createGalleryNode,
+  createWildDimSumNode,
   createWebNode,
   createBrowserNode,
   createDiffNode,
@@ -182,6 +183,8 @@ function buildBase(snapshot: ReopenNodeSnapshot, ctx: RecreateContext): CanvasNo
       return d.filePath ? createPhotoNode(0, d.filePath, undefined, d.sshFs) : null
     case 'gallery':
       return createGalleryNode(0, (d.mediaAssets as import('@shared/media-catalog').MediaAssetReference[]) ?? [])
+    case 'wild-dim-sum':
+      return createWildDimSumNode(0, d.wildDimSumDish)
     case 'diff':
       return d.cwd && d.filePath
         ? createDiffNode(0, d.cwd, d.filePath, !!d.diffStaged, undefined, d.commitOid)

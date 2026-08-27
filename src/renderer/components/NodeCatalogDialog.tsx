@@ -82,14 +82,15 @@ export function NodeCatalogDialog({ open, onClose, context, terminalProfileChoic
   }, [open])
 
   const visible = useMemo(() => {
+    const permittedEntries = schoolModeEnabled ? NODE_CATALOG.filter((entry) => entry.id !== 'wild-dim-sum') : NODE_CATALOG
     const categoryEntries =
-      category === 'all' ? NODE_CATALOG : NODE_CATALOG.filter((entry) => entry.category === category)
+      category === 'all' ? permittedEntries : permittedEntries.filter((entry) => entry.category === category)
     return searchNodeCatalog(
       categoryEntries,
       field.query,
       field.mode === 'regex' && field.query.length > 0 ? field.test : undefined
     )
-  }, [category, field.mode, field.query, field.pattern, field.flags, field.test])
+  }, [category, field.mode, field.query, field.pattern, field.flags, field.test, schoolModeEnabled])
 
   const availability = (entry: NodeCatalogEntry) => nodeCatalogAvailability(entry, context)
   const create = (entry: NodeCatalogEntry) => {

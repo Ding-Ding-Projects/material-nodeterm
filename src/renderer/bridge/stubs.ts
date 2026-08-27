@@ -181,6 +181,14 @@ export function buildStubApi(): Omit<
   | 'passwordManager'
 > {
   const api = {
+    providerServices: {
+      catalog: () => Promise.resolve([]),
+      accounts: () => Promise.resolve([]),
+      resources: () => Promise.resolve([]),
+      beginOAuth: (providerId: string) => Promise.resolve({ status: 'unsupported' as const, providerId, authorizationUrl: null, redirectUri: null, expiresAt: null, reason: mapLocalVocabularyText('Provider accounts are not connected on this surface.') }),
+      completeOAuth: () => Promise.resolve({ status: 'rejected' as const, account: null, reason: mapLocalVocabularyText('Provider callbacks are not accepted on this surface.') }),
+      removeAccount: () => Promise.resolve({ ok: false as const, error: mapLocalVocabularyText('Provider accounts are not connected on this surface.') })
+    },
     ssh: {
       list: U('ssh.list'),
       save: U('ssh.save'),
@@ -500,6 +508,14 @@ export function buildStubApi(): Omit<
     // inert no-ops (there is no connectionId to act on) and the subscriptions are no-op unsubscribes.
     relayHost: {
       dockerContexts: U('relayHost.dockerContexts'),
+      manager: {
+        contexts: U('relayHost.manager.contexts'),
+        snapshot: U('relayHost.manager.snapshot'),
+        logs: U('relayHost.manager.logs'),
+        run: U('relayHost.manager.run'),
+        cancel: noop,
+        onProgress: noopUnsub
+      },
       start: U('relayHost.start'),
       invite: U('relayHost.invite'),
       stop: U('relayHost.stop'),
@@ -721,6 +737,7 @@ export function buildStubApi(): Omit<
       setSeedPolicy: U('torrent.setSeedPolicy'),
       reconcile: U('torrent.reconcile'),
       onTask: noopUnsub
+    },
     virtualMachine: {
       tools: U('virtualMachine.tools'),
       status: U('virtualMachine.status'),
@@ -733,6 +750,7 @@ export function buildStubApi(): Omit<
       openDisplay: U('virtualMachine.openDisplay'),
       reset: U('virtualMachine.reset'),
       onEvent: noopUnsub
+    },
     calendar: {
       status: U('calendar.status'),
       accounts: U('calendar.accounts'),

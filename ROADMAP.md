@@ -57,6 +57,12 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## In progress / partially landed
 
+- [ ] **Shared provider services, issue #18**: provider catalog, account metadata, sealed
+      credential payloads, bounded one-time OAuth PKCE callbacks, adapter-owned resource discovery,
+      and shared Desktop/Server local bindings are implemented in source. Individual provider
+      adapters, build/package evidence, runtime interaction, and captures remain pending under the
+      stated ultra-speed no-check boundary.
+
 - [ ] Desktop Material Design 3 and personal vocabulary reconciliation: the source audit and focused
   Material Design 3 fixes are present in the audit scripts and shared primitives. The Material Design 3 audit is green
   with deliberate negative regressions. Personal-vocabulary coverage is intentionally red with
@@ -198,21 +204,33 @@ intentionally unchecked because this task publishes the plan only.
       runtime and built-artifact verification remain pending under issue #17's explicit
       no-tests/no-builds/no-captures boundary.
 - [ ] Add shared account, credential-vault, OAuth callback, and provider-binding services.
-- [ ] Add guided Docker host management for local and SSH contexts.
+- [ ] Add guided Docker host management for local and SSH contexts. The typed manager, local and
+      saved SSH context discovery, guided resource operations, safe portable blueprint, progress,
+      cancellation, destructive confirmation, documentation, offline article, and site article are
+      implemented on issue #19's feature branch. Tests, type checks, lint, reviews, security and
+      accessibility checks, builds, packaging, runtime interaction, and captures remain unrun under
+      the ultra-speed boundary, so this roadmap claim remains unchecked.
 
 ### Media, torrents, virtual machines, and planning
 
 - [ ] Add Photo, Video, mixed-media Gallery, and wild Dim Sum nodes. Photo, Video, and Gallery
-      source implementation is present for issue #20; tests, builds, and packaged captures remain
-      pending in the parent integration lane.
-- [ ] Add the categorized local file-converter and advanced media, archive, PDF, and OCR pipelines.
+      source implementation, machine-local path round-trip, schema 3 node references, validated
+      content-addressed archive bytes, atomic import staging, and explicit missing-asset states are
+      present for issue #20. Wild Dim Sum source implementation is present for issue #25 with
+      public-catalog selection and portable schema 3 state. Tests, builds, packaging, release
+      evidence, and packaged captures remain pending in the parent integration lane, so the
+      combined row stays unticked.
+- [ ] Verify the categorized local file converter delivered for issue #21. The source now includes
+      collision-safe destination reservations, atomic publication, resumable progress, cancellation,
+      partial outcomes, per-category regex builders, and completed-output editor handoff; this
+      ultra-speed lane intentionally left tests, builds, runtime interaction, and captures unrun.
+- [ ] Add advanced media, archive-container, PDF-operation, and OCR pipelines.
 - [ ] Add the bundled WebTorrent downloader with resumable per-task lifecycle. The implementation
-      lane now contains the local runtime, guided intake, metadata selection, progress controls,
-      restart reconciliation, bounded seeding, and machine-local state; focused verification and
-      release evidence remain pending.
-- [ ] Add the bundled QEMU Linux ISO VM with persistent and disposable modes.
-- [ ] Add the bundled WebTorrent downloader with resumable per-task lifecycle.
-- [ ] Add the bundled QEMU Linux ISO VM with persistent and disposable modes. Implementation landed in `src/core/virtual-machine/` and `src/renderer/nodes/VirtualMachineNode.tsx`; tests, build, packaging, runtime interaction, and captures remain unrun in the ultra-speed lane.
+      lane now contains ESM-compatible local runtime loading, guided inspect-then-start intake,
+      searchable metadata and seeding controls, progress controls, restart reconciliation,
+      completion-based bounded seeding, and machine-local state; focused verification and release
+      evidence remain pending.
+- [ ] Add the bundled QEMU Linux ISO VM with persistent and disposable modes. Source implementation landed in `src/core/virtual-machine/` and `src/renderer/nodes/VirtualMachineNode.tsx`; automated checks, build, packaging, runtime interaction, and captures remain intentionally unrun in the ultra-speed lane.
 - [ ] Add Home Assistant multi-instance controls and sensor displays.
 - [ ] Add Calendar, Timer, and Alarm Clock nodes. Planner occurrence service is implemented in the
       current lane, but remains unticked until its required checks and packaged interaction evidence land.
@@ -225,11 +243,14 @@ intentionally unchecked because this task publishes the plan only.
 - [x] Add Timer nodes and persistent planner occurrence service. Calendar and Alarm Clock remain
   separate follow-up surfaces.
 - [ ] Add Calendar and Timer occurrence services.
-- [x] Add Alarm Clock nodes and planner occurrence history with timezone and DST-safe recurrence.
+- [x] Add Alarm Clock nodes, the host-owned file planner lifecycle and desktop bridge, active Node
+      Catalog creation, and occurrence history with timezone and DST-safe recurrence.
 
 ### Multiverse and AWS
 
 - [ ] Add door-only Multiverse canvases to depth 8.
+- [ ] Wire the implemented paired-door navigation policy into the pending Multiverse canvas and
+      door-rendering lanes; tab, palette, history, and direct-selection bypasses are refused in core.
 - [ ] Add interactive door construction, numeric or passphrase entry, and recovery game.
 - [ ] Add unlimited AWS Universes with AWS-only scope and AWS Shop nodes.
 - [ ] Bundle AWS CLI v2 and maintain verified model and documentation indexing.

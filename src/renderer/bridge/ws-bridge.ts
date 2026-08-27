@@ -470,15 +470,8 @@ export function buildRealApi(
       error: mapLocalVocabularyText('Project archive import is available in the Windows desktop app.')
     }),
     portableBindings: {
-      state: async (input: { nodeId: string; featureId: string; displayLabel: string; hasMissingAssets?: boolean }) => [{
-        nodeId: input.nodeId,
-        featureId: input.featureId,
-        displayLabel: input.displayLabel,
-        action: 'leave-unbound' as const,
-        enabled: true,
-        bound: false
-      }],
-      apply: async () => ({ ok: false as const, error: 'Destination bindings are available only in the desktop app.' })
+      state: (input) => client.request(IPC.portableBindingState, input) as ReturnType<WorkspaceApi['portableBindings']['state']>,
+      apply: (input) => client.request(IPC.portableBindingApply, input) as ReturnType<WorkspaceApi['portableBindings']['apply']>
     },
     onArchiveProgress: () => () => {},
     cancelArchiveImport: async () => false,
@@ -721,6 +714,21 @@ export function buildGitHubApi(
   }
 
   return { githubIssues, githubControl }
+}
+
+export function buildProviderServicesApi(
+  client: RpcClient
+): Pick<NodeTerminalApi, 'providerServices'> {
+  return {
+    providerServices: {
+      catalog: () => client.request(IPC.providerCatalog) as ReturnType<NodeTerminalApi['providerServices']['catalog']>,
+      accounts: (providerId) => client.request(IPC.providerAccounts, providerId) as ReturnType<NodeTerminalApi['providerServices']['accounts']>,
+      resources: (accountId, capability) => client.request(IPC.providerResources, accountId, capability) as ReturnType<NodeTerminalApi['providerServices']['resources']>,
+      beginOAuth: (providerId) => client.request(IPC.providerBeginOAuth, providerId) as ReturnType<NodeTerminalApi['providerServices']['beginOAuth']>,
+      completeOAuth: (callbackUrl) => client.request(IPC.providerCompleteOAuth, callbackUrl) as ReturnType<NodeTerminalApi['providerServices']['completeOAuth']>,
+      removeAccount: (accountId) => client.request(IPC.providerRemoveAccount, accountId) as ReturnType<NodeTerminalApi['providerServices']['removeAccount']>
+    }
+  }
 }
 
 /**
@@ -1152,6 +1160,7 @@ export function buildTorrentApi(client: RpcClient): Pick<NodeTerminalApi, 'torre
     onTask: (listener) => client.subscribe(IPC.torrentTask, listener as (payload: TorrentTaskState) => void)
   }
   return { torrent }
+}
 /** Linux ISO VM manager. The server process owns QEMU and exposes only the bounded lifecycle API. */
 export function buildVirtualMachineApi(client: RpcClient): Pick<NodeTerminalApi, 'virtualMachine'> {
   const virtualMachine: VirtualMachineApi = {
@@ -1168,6 +1177,7 @@ export function buildVirtualMachineApi(client: RpcClient): Pick<NodeTerminalApi,
     onEvent: (listener) => client.subscribe(IPC.virtualMachineEvent, listener as Listener)
   }
   return { virtualMachine }
+}
 /** Calendar nodes use the same host-owned CorePlatform in the desktop and Server Edition. */
 export function buildCalendarApi(client: RpcClient): Pick<NodeTerminalApi, 'calendar'> {
   const calendar: CalendarApi = {
@@ -1645,6 +1655,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildTorrentApi(client),
     ...buildVirtualMachineApi(client),
     ...buildCalendarApi(client),
+    ...buildProviderServicesApi(client),
     ...buildUsageApi(client),
     ...buildSessionMemoryApi(client),
     ...buildVsCodeApi(client),

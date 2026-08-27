@@ -53,6 +53,8 @@ export interface VirtualMachineStatus {
   networkEnabled: boolean
   displayUrl: string | null
   qmpEndpoint: string | null
+  /** Machine-local snapshot catalogue used by the guided restore picker. */
+  snapshotNames: string[]
   memoryMiB: number
   cpus: number
   progress: number

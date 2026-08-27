@@ -1,4 +1,5 @@
 import type { NodeKind } from './types'
+import { DOCKER_HOST_PORTABLE_BLUEPRINT } from './docker-host-manager'
 
 /** The guided categories shown by the Node Catalog. Keep this list explicit so a new category
  * cannot disappear from the picker simply because no current entry happens to use it. */
@@ -363,8 +364,8 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
     label: 'Docker host manager',
     description: 'Open a typed manager for a local or saved Docker host.',
     keywords: ['service', 'container', 'docker', 'host'],
-    documentationPath: 'docs/features/canvas/node-kinds.md',
-    safeDefaults: { serviceLabel: '' },
+    documentationPath: 'docs/features/remote/docker-host.md',
+    safeDefaults: { serviceLabel: '', dockerHostBlueprint: DOCKER_HOST_PORTABLE_BLUEPRINT },
     dependencies: ['service-binding'],
     availability: alwaysAvailable
   },
@@ -453,12 +454,34 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
   plannedEntry('gallery', 'media', 'Gallery', 'Arrange project-owned photos and videos in a mixed-media gallery.', 'gallery-adapter'),
   plannedEntry('torrent', 'tools', 'Torrent downloader', 'Queue a bounded, resumable torrent download with an explicit destination.', 'webtorrent-runtime'),
   plannedEntry('linux-vm', 'tools', 'Linux VM', 'Create a guided QEMU Linux VM blueprint with network off by default.', 'qemu-runtime'),
-  plannedEntry('wild-dim-sum', 'tools', 'Wild dim sum', 'Add a public-catalog dim-sum surprise node without copying the photo.', 'dim-sum-catalog'),
+  {
+    id: 'wild-dim-sum',
+    nodeKind: 'wild-dim-sum',
+    category: 'tools',
+    label: 'Wild dim sum',
+    description: 'Browse or randomly choose a dish from the public catalog without copying its photo.',
+    keywords: ['dim sum', 'dish', 'photo', 'public catalog', 'surprise'],
+    documentationPath: 'docs/features/canvas/wild-dim-sum-node.md',
+    safeDefaults: {},
+    dependencies: ['public-network'],
+    availability: alwaysAvailable
+  },
   plannedEntry('homeassistant-control', 'managers', 'Home Assistant control', 'Create a typed Home Assistant control node from a verified domain schema.', 'homeassistant-adapter'),
   plannedEntry('homeassistant-sensor', 'managers', 'Home Assistant sensor', 'Create a typed Home Assistant sensor display with safe binding intent.', 'homeassistant-adapter'),
   plannedEntry('calendar', 'automation', 'Calendar', 'Create a portable calendar definition with local account binding later.', 'calendar-service'),
   plannedEntry('timer', 'automation', 'Timer', 'Create a timer blueprint with a local execution binding later.', 'planner-service'),
-  plannedEntry('alarm', 'automation', 'Alarm clock', 'Create an alarm definition without writing a machine-specific schedule.', 'planner-service'),
+  {
+    id: 'alarm',
+    nodeKind: 'alarm',
+    category: 'automation',
+    label: 'Alarm clock',
+    description: 'Create a one-shot or recurring wall-clock alarm with an explicit timezone.',
+    keywords: ['alarm', 'clock', 'reminder', 'timezone', 'snooze'],
+    documentationPath: 'docs/alarm-clock.md',
+    safeDefaults: { enabled: false, recurrence: 'once', time: '09:00' },
+    dependencies: ['planner-service'],
+    availability: alwaysAvailable
+  },
   plannedEntry('planner', 'automation', 'Planner', 'Create a planner occurrence definition with explicit local binding.', 'planner-service'),
   plannedEntry('multiverse-portal', 'universes', 'Multiverse portal', 'Create a door-only Multiverse canvas below the depth limit.', 'multiverse-service', 'multiverse', 8),
   plannedEntry('aws-universe', 'universes', 'AWS Universe', 'Create an AWS-only child canvas with a dedicated Shop node.', 'aws-cli-v2', 'aws-universe'),
@@ -510,12 +533,12 @@ export const NODE_CATALOG_COMPLETENESS: readonly NodeCatalogCompletenessRecord[]
   { id: 'gallery', state: 'planned', scope: 'any', reason: 'gallery adapter not implemented' },
   { id: 'torrent', state: 'planned', scope: 'any', reason: 'WebTorrent runtime not implemented' },
   { id: 'linux-vm', state: 'planned', scope: 'any', reason: 'QEMU runtime not implemented' },
-  { id: 'wild-dim-sum', state: 'planned', scope: 'any', reason: 'public dim-sum node not implemented' },
+  { id: 'wild-dim-sum', state: 'current', scope: 'any', reason: 'portable public-catalog selection node' },
   { id: 'homeassistant-control', state: 'planned', scope: 'any', reason: 'schema-driven control not implemented' },
   { id: 'homeassistant-sensor', state: 'planned', scope: 'any', reason: 'sensor display not implemented' },
   { id: 'calendar', state: 'planned', scope: 'any', reason: 'calendar service not implemented' },
   { id: 'timer', state: 'planned', scope: 'any', reason: 'timer service not implemented' },
-  { id: 'alarm', state: 'planned', scope: 'any', reason: 'alarm service not implemented' },
+  { id: 'alarm', state: 'current', scope: 'any', reason: 'persisted Alarm Clock node with host planner' },
   { id: 'planner', state: 'planned', scope: 'any', reason: 'planner service not implemented' },
   { id: 'multiverse-portal', state: 'planned', scope: 'multiverse', reason: 'Multiverse portal not implemented' },
   { id: 'aws-universe', state: 'planned', scope: 'aws-universe', reason: 'AWS Universe not implemented' },

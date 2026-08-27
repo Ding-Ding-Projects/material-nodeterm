@@ -3464,6 +3464,24 @@ body,
 .gallery-node__add input { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .gallery-node__remove { min-height: 28px; border: 0; border-radius: 8px; padding: 0 8px; background: var(--md-error-container); color: var(--md-on-error-container); cursor: pointer; }
 .gallery-node__count { font-size: 12px; color: var(--md-on-surface-variant); margin-inline-end: 8px; }
+.wild-dim-sum-node { min-width: 380px; min-height: 360px; background: var(--md-surface); color: var(--md-on-surface); }
+.wild-dim-sum-node__body { height: calc(100% - 40px); overflow: auto; padding: 12px; display: grid; align-content: start; gap: 12px; }
+.wild-dim-sum-node__selection { display: grid; grid-template-columns: minmax(120px, 42%) 1fr; gap: 12px; border-radius: var(--md-shape-large, 16px); background: var(--md-surface-container); padding: 10px; }
+.wild-dim-sum-node__selection img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: var(--md-shape-medium, 12px); background: var(--md-surface-container-high); }
+.wild-dim-sum-node__selection h3, .wild-dim-sum-node__selection p { margin: 0 0 6px; }
+.wild-dim-sum-node__actions, .wild-dim-sum-node__search { display: flex; gap: 8px; align-items: center; }
+.wild-dim-sum-node__actions button, .wild-dim-sum-node__selection button, .wild-dim-sum-node__list button { min-height: 40px; border: 0; border-radius: var(--md-shape-full, 999px); padding: 8px 14px; background: var(--md-primary-container); color: var(--md-on-primary-container); font: inherit; cursor: pointer; }
+.wild-dim-sum-node__actions button:disabled { opacity: .55; cursor: not-allowed; }
+.wild-dim-sum-node__search input { min-width: 0; flex: 1; min-height: 44px; border: 1px solid var(--md-outline); border-radius: var(--md-shape-small, 8px); padding: 0 12px; background: var(--md-surface-container-low); color: var(--md-on-surface); }
+.wild-dim-sum-node__list { max-height: 210px; overflow: auto; list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.wild-dim-sum-node__list button { width: 100%; border-radius: var(--md-shape-medium, 12px); text-align: start; display: grid; gap: 3px; background: var(--md-surface-container-high); color: var(--md-on-surface); }
+.wild-dim-sum-node__list button[aria-pressed='true'] { outline: 3px solid var(--md-primary); }
+.wild-dim-sum-node__list button:focus-visible, .wild-dim-sum-node__actions button:focus-visible, .wild-dim-sum-node__search input:focus-visible { outline: 3px solid var(--md-primary); outline-offset: 2px; }
+.wild-dim-sum-node__count, .wild-dim-sum-node__source { margin: 4px 0; color: var(--md-on-surface-variant); font-size: 12px; }
+.wild-dim-sum-node__notice { border-radius: var(--md-shape-medium, 12px); padding: 10px; background: var(--md-error-container); color: var(--md-on-error-container); }
+.wild-dim-sum-node__progress { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
+.wild-dim-sum-node__progress progress { width: 100%; accent-color: var(--md-primary); }
+@media (max-width: 520px) { .wild-dim-sum-node__selection { grid-template-columns: 1fr; } .wild-dim-sum-node__actions { flex-wrap: wrap; } }
 
 /* PDF: the viewer fills the node body — it brings its own toolbar, scrollbars and page chrome,
    so no padding or checkerboard here, and centering only applies to the loading/error text. */
