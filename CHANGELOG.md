@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Route macOS desktop canvas wheel input from main-process trackpad gesture facts. A depth-safe
+  ledger sends scroll and pinch edge transitions over typed IPC, the desktop router keeps a bounded
+  500 ms momentum-gap linger, and precise-pixel mouse packets zoom when no gesture is reported.
+  Server Edition keeps its documented browser heuristic and mobile remains not applicable. This
+  issue #108 implementation lane intentionally did not run tests, lint, type checks, builds,
+  packaging, runtime interaction, reviews, audits, or captures.
+
 - Rebuild the README from the ground up around the current Windows delivery path, genuine product
   captures, explicit evidence boundaries, and a compact top-level index. Keep 9 current key
   screenshots visible without disclosure controls, add 25 committed feature GIF recordings for

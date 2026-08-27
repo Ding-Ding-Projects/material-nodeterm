@@ -57,6 +57,12 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## In progress / partially landed
 
+- [ ] **Desktop trackpad gesture facts, issue #108**: main-process scroll and pinch edges now feed
+      a depth-safe typed bridge so macOS desktop wheel routing distinguishes a precise-pixel mouse
+      from a trackpad, including the bounded momentum-gap linger. Server Edition keeps its browser
+      heuristic and mobile is not applicable. This implementation lane intentionally has no tests,
+      lint, type checks, builds, packaging, runtime interaction, reviews, audits, or captures yet.
+
 - [ ] **Shared provider services, issue #18**: provider catalog, account metadata, sealed
       credential payloads, bounded one-time OAuth PKCE callbacks, adapter-owned resource discovery,
       and shared Desktop/Server local bindings are implemented in source. Individual provider

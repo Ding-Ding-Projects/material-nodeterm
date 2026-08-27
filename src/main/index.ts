@@ -52,6 +52,7 @@ import { writeFilesToClipboard } from './clipboard-files'
 import { NodeTermBrowserUseBackend } from './browser-use-backend'
 import { matchesShortcut } from '../shared/shortcut'
 import { registerFsHandlers } from '../core/fs-handlers'
+import { TrackpadGestureLedger } from './trackpad-gesture'
 import { registerConverterIpc } from '../core/converter/register-ipc'
 import { registerNodeDependencyIpc } from '../core/node-dependencies/register-ipc'
 import { registerOllamaIpc } from '../core/ollama/register-ipc'
@@ -1253,6 +1254,16 @@ function createWindow(): BrowserWindow {
   // its webContents are destroyed by then.)
   const presenceId = win.webContents.id
   presenceHub.join(presenceId, 'desktop')
+  // macOS reports trackpad scroll and pinch edges only to the main process. Reduce the raw input
+  // stream to depth-safe transitions before sending it over IPC, so the renderer receives facts
+  // per physical gesture rather than a message for every pointer packet.
+  const trackpadLedger = new TrackpadGestureLedger()
+  win.webContents.on('input-event', (_event, input) => {
+    const active = trackpadLedger.observe(input.type)
+    if (active !== null && !win.isDestroyed()) {
+      win.webContents.send(IPC.canvasTrackpadGesture, active)
+    }
+  })
   win.on('closed', () => {
     presenceHub.leave(presenceId)
     // This webContents is a pty SUBSCRIBER (co-attach: one pty, N subscribers, keyed by the

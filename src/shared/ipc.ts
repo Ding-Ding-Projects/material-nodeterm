@@ -40,6 +40,10 @@ export const IPC = {
    *  for a held band at most once every five minutes; `level: 'none'` is what clears the banner.
    *  Desktop only — see the Server Edition note beside the monitor in src/server/index.ts. */
   ptyPressure: 'pty:pressure',
+  /** Main → renderer: a trackpad scroll or pinch opened or closed on the main window. The main
+   *  ledger emits only edge transitions, not the raw pointer-packet stream. Server Edition keeps
+   *  its renderer heuristic because a browser has no equivalent raw input source. */
+  canvasTrackpadGesture: 'canvas:trackpad-gesture',
   /** Renderer → main: the user clicked "Fix automatically…" on the pty-pressure banner. Raises
    *  `kern.tty.ptmx_max` now AND installs a LaunchDaemon so it survives reboot, via ONE
    *  administrator-privileges osascript (macOS's own password dialog). Resolves
