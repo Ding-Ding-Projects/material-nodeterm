@@ -1,5 +1,81 @@
 # Handoff
 
+## 2026-08-26, desktop layout safety sweep
+
+Implemented a source-driven clipping repair for the Windows desktop renderer on
+`fix/desktop-clipping-sweep` at `3b7a846902bd762cf50a61c36a795af3a0f032ba`. `ContextMenu` now
+automatically bounds every root dynamic menu, including roots that contain submenus. Open flyouts
+are portaled to `document.body` and positioned from their trigger, so root scrolling cannot clip
+the child surface. The anchored popover geometry no longer enforces a 120px height when the anchor
+has less space, so it uses the actual available viewport space and scrolls its inner content. A new
+`src/renderer/styles.clipping.css` layer bounds menus, flyouts, dialogs, settings, onboarding,
+command palette, and documentation content, and wraps long localized or user-renamed values.
+Narrow settings rows stack, focus remains visible, and reduced-motion transitions are disabled.
+`src/renderer/components/ContextMenu.viewport.test.tsx` adds source coverage for a long root menu
+with a submenu and a taller-than-viewport anchored surface. Root and flyout overflow are separated
+so the WSL lane can add fixed title and action regions without a later global `.mdx-dialog` rule
+overriding them. Those tests were added but not run in this lane.
+
+This lane updated `docs/features/appearance/desktop-clipping-inventory.md`, the appearance index,
+`CHANGELOG.md`, and `ROADMAP.md`. It did not edit the WSL creator, worktree picker, Source Control,
+or landing page surfaces. It did not run tests, type checks, builds, packaging, captures, reviews,
+or audits, per the lane boundary. Parent integration must independently run the cheap headless
+route against the built Windows artifact at narrow and high-scale tuples, then resolve any overlap
+with the WSL creator, worktree picker, comment attachments, or Material Design 3 audit lanes.
+
+## 2026-08-26, WSL creator repair
+
+The WSL instance creator lane added operation-scoped progress and cancellation across the shared
+types, IPC channels, Electron preload, Server Edition WebSocket bridge, core WSL service, and the
+renderer dialog. Creation now emits validation, checking, installing, recording, completed,
+failed, and cancelled states with bounded four-step phase progress and elapsed time. The
+installation phase is explicitly indeterminate because `wsl.exe` provides no byte or percentage
+telemetry. A per-operation AbortController prevents duplicate submissions and aborts the active
+`wsl.exe` child process on cancel. The renderer now
+uses the shared Material Design 3 dialog and outlined text field primitives, a searchable
+distribution listbox, an accessible phase progress bar with an indeterminate installation phase
+and explicit aria-valuetext, UUID v4 operation-id validation,
+reduced-motion handling, disabled
+submit state, and inline recovery copy. WSL remains separate from the Linux ISO VM surface.
+
+Changed files: `src/shared/ipc.ts`, `src/shared/wsl.ts`, `src/core/wsl/runtime.ts`,
+`src/core/wsl/create.ts`, `src/core/wsl/service.ts`, `src/preload/index.ts`,
+`src/renderer/bridge/ws-bridge.ts`, `src/renderer/wsl/wslCoreApi.ts`,
+`src/renderer/wsl/WslCreateDialog.tsx`, `src/renderer/canvas/Canvas.tsx`,
+`src/renderer/styles.md3.css`, `docs/features/wsl/wsl-instances.md`, `CHANGELOG.md`,
+`ROADMAP.md`, and this file.
+
+This implementation lane intentionally did not run tests, type checks, lint, builds, packaging,
+reviews, audits, installer execution, runtime interaction, or captures. The owning coordinator
+must independently review the diff, run focused verification in a quiet checkout, exercise the
+real packaged flow, and post the exact result on issue #92 before integration.
+
+## 2026-08-26, existing-worktree picker viewport repair
+
+Repaired the existing-worktree section in `src/renderer/components/WorktreeDialog.tsx` and its
+styles in `src/renderer/styles.css` and `src/renderer/styles.md3.css`. The picker now marks the
+long adoption collection as an accessible counted list inside a dedicated scroll region. The
+dialog has a scoped opaque Material surface with overflow containment, while the title, repository
+context, branch/path controls, and actions remain outside the scrolling list. Rows keep visible
+focus, Material Design 3 token styling, adequate targets, full branch/path values that wrap rather
+than ellipsize, and responsive sizing at narrow widths. Normal layouts scroll only the collection;
+an exceptionally short viewport gets a bounded card-scroll fallback so fixed controls remain
+reachable.
+The picker now filters visible branch and path text with a plain-text-first search and an adjacent
+anchored full regex builder, retaining synchronized pattern, flags, validation, and mode state.
+The WSL creator and other dialogs are not changed.
+
+The exact cause was an unbounded direct row list inside a flex dialog. The shell's `max-height`
+alone did not make that child shrink, so rows continued painting beyond the card and viewport.
+The new flex constraints and `.bind-existing__list` overflow region keep the rows inside the
+dialog surface.
+
+This lane did not run tests, type checking, linting, builds, packaging, installer execution,
+runtime interaction, captures, reviews, or audits, and made no commit or dew. Integration must
+independently inspect the final diff and verify the built desktop picker with a long list, narrow
+widths, high display scales, keyboard traversal, and screen-reader list count/state before this
+roadmap item can be ticked.
+
 ## 2026-08-26, automatic node dependency foundation
 
 Implemented the shared node-feature dependency foundation in `src/shared/node-dependencies.ts` and

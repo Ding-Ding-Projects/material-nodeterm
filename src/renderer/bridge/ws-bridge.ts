@@ -1052,6 +1052,10 @@ export function buildWslApi(client: RpcClient): Pick<NodeTerminalApi, 'wsl'> {
         client.request(IPC.wslCatalogue) as ReturnType<import('@shared/wsl').WslApi['catalogue']>,
       create: (input) =>
         client.request(IPC.wslCreate, input) as ReturnType<import('@shared/wsl').WslApi['create']>,
+      cancelCreate: (operationId) =>
+        client.request(IPC.wslCreateCancel, operationId) as ReturnType<import('@shared/wsl').WslApi['cancelCreate']>,
+      onCreateProgress: (listener) =>
+        client.subscribe(IPC.wslCreateProgress, listener as Listener),
       sleep: (name) =>
         client.request(IPC.wslSleep, name) as ReturnType<import('@shared/wsl').WslApi['sleep']>,
       wake: (name) =>

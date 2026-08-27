@@ -22,6 +22,7 @@ export interface WslCommandResult {
 
 export interface WslExecOptions {
   timeoutMs?: number
+  signal?: AbortSignal
 }
 
 /** Everything a wsl.exe-driven module needs from the operating system, all replaceable in tests. */
@@ -70,7 +71,8 @@ export function defaultWslRuntime(): WslRuntime {
             encoding: 'buffer',
             windowsHide: true,
             timeout: options?.timeoutMs ?? WSL_COMMAND_TIMEOUT_MS,
-            maxBuffer: WSL_COMMAND_MAX_BUFFER
+            maxBuffer: WSL_COMMAND_MAX_BUFFER,
+            signal: options?.signal
           },
           (error, stdout, stderr) => {
             const errorCode: unknown = error ? (error as { code?: unknown }).code : undefined

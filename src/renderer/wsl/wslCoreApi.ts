@@ -44,6 +44,8 @@ export function createUnsupportedWslApi(): WslCoreApi {
     list: async () => [],
     catalogue: async () => [],
     create: async () => ({ ok: false, error: WSL_UNSUPPORTED_ERROR }),
+    cancelCreate: async () => false,
+    onCreateProgress: () => () => {},
     sleep: async () => unsupportedResult(),
     wake: async () => unsupportedResult(),
     delete: async () => unsupportedResult()

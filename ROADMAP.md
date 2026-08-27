@@ -57,6 +57,16 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## In progress / partially landed
 
+- [ ] **Desktop layout safety sweep** — viewport-bounded menus, flyouts, anchored popovers, dialogs,
+      settings, onboarding, command palette, and documentation surfaces are repaired in
+      `src/renderer/styles.clipping.css`, `src/renderer/ui/AnchoredPopover.tsx`, and
+      `src/renderer/components/ContextMenu.tsx`. Source implementation is present; packaged
+      Windows captures at narrow widths and 100/125/150/200% display scale remain pending.
+- [ ] **WSL instance creator repair**: the guided Material Design 3 surface now has staged,
+      cancellable operation plumbing and duplicate-submit protection in `src/core/wsl/`,
+      `src/shared/wsl.ts`, the bridges, and `src/renderer/wsl/WslCreateDialog.tsx`. Focused
+      verification and real built-artifact interaction remain pending.
+
 - [ ] **Portable canvas projection**: schema 3 root and future universe canvas payloads now have
       a deterministic, bounded, platform-free projection and validator in
       `src/core/portable-canvas-projection.ts`; archive export/import wiring and verification
@@ -84,6 +94,11 @@ later commit, since this file will not be kept in lockstep with every merge).
       section; subagent visualization and Context Link remain claude-only/unbuilt for Grok
       specifically (`SUBAGENT_CAPABLE`/`CONTEXT_LINK_CAPABLE` exclude Grok — its
       `updates.jsonl` parser is unbuilt).
+- [ ] **Existing-worktree picker viewport containment** — the adoption list now has a bounded,
+      internally scrollable region, a plain-text-first branch/path search with an adjacent full
+      regex builder, full wrapping branch/path values, and clipped row overflow inside a responsive
+      Material surface. Built-artifact interaction at long-list, narrow-width, and high-display-
+      scale states remains unverified.
 
 ## Known open defects (filed, unfixed)
 

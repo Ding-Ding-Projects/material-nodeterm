@@ -75,6 +75,31 @@ describe('createWslDistribution', () => {
     ])
   })
 
+  it('reports truthful phase progress without inventing installation percentages', async () => {
+    const runtime = fakeWslRuntime({
+      responses: {
+        '--status': STATUS_OK,
+        '--install --distribution Ubuntu --name my-project --no-launch': {
+          stdout: Buffer.alloc(0),
+          stderr: Buffer.alloc(0),
+          exitCode: 0
+        }
+      }
+    })
+    const progress: Array<{ stage: string; step: number; steps: number; determinate: boolean }> = []
+    await createWslDistribution(runtime, inMemoryWslOwnershipStore(), {
+      name: 'my-project',
+      catalogName: 'Ubuntu',
+      existingNames: []
+    }, {
+      onProgress: (value) => progress.push(value)
+    })
+    expect(progress.map((value) => value.stage)).toEqual(['validating', 'checking', 'installing', 'recording', 'completed'])
+    expect(progress.every((value) => value.steps === 4)).toBe(true)
+    expect(progress.find((value) => value.stage === 'installing')?.determinate).toBe(false)
+    expect(progress.find((value) => value.stage === 'completed')?.determinate).toBe(true)
+  })
+
   it('reports failure (not silent success) when wsl.exe succeeds but the ownership write fails', async () => {
     const runtime = fakeWslRuntime({
       responses: {
