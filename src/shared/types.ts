@@ -812,6 +812,32 @@ export interface BridgeLink {
 }
 
 /**
+ * One endpoint of a typed Link. The ref discriminator keeps endpoint handling exhaustive and
+ * avoids inferring meaning from legacy id prefixes.
+ *
+ * A node endpoint names a node in the project that owns the link. An xnode endpoint names a node
+ * in another project without copying that node. A branch endpoint names a git branch for links
+ * that model branch relationships.
+ */
+export type Endpoint =
+  | { ref: 'node'; nodeId: string }
+  | { ref: 'xnode'; projectId: string; nodeId: string }
+  | { ref: 'branch'; repoPath: string; branch: string }
+
+/** The persisted kind discriminator for the unified link model. */
+export type LinkKind = 'context' | 'lineage' | 'dependency'
+
+/** A typed link between two endpoints. */
+export interface Link {
+  id: string
+  kind: LinkKind
+  source: Endpoint
+  target: Endpoint
+  /** Optional kind-specific metadata, such as display-only or note information. */
+  meta?: Record<string, unknown>
+}
+
+/**
  * A named browser profile for one project. Browser nodes assigned to the same profile id share
  * that profile's cookies/localStorage/session state (an isolated Electron session partition
  * derived from `projectId + profileId` — see `shared/browser-profiles.ts`); nodes on different
@@ -1156,6 +1182,8 @@ export interface Project {
    * behavior.
    */
   browserProfiles?: BrowserProfile[]
+  /** Unified typed links whose source belongs to this project. */
+  links?: Link[]
   /** Bridge links between Claude nodes (optional; absent in pre-bridge files). */
   bridges?: BridgeLink[]
   /**
