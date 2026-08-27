@@ -148,9 +148,11 @@ import {
   NODE_CATALOG,
   nodeCatalogAvailability,
   newCreationEventId,
+  type NodeCatalogAvailabilityContext,
   type NodeCatalogEntry
 } from '@shared/node-catalog'
 import { NodeCreationCoordinator } from '../state/nodeCreationCoordinator'
+import { setUniverseShopCatalogRuntime } from '../state/universeShopCatalogProvider'
 import {
   IconAgent,
   IconAnnotationArea,
@@ -5298,7 +5300,17 @@ export function Canvas() {
    * event, and searches for a free rectangle before the node is published.
    */
   const createCatalogNode = useCallback(
-    (entry: NodeCatalogEntry, creationEventId: string, at?: { x: number; y: number }, groupId?: string, options?: { terminalProfileId?: string }) => {
+    (
+      entry: NodeCatalogEntry,
+      creationEventId: string,
+      at?: { x: number; y: number },
+      groupId?: string,
+      options?: { terminalProfileId?: string },
+      universeContext?: Pick<
+        NodeCatalogAvailabilityContext,
+        'universeScope' | 'universeId' | 'universeDepth' | 'hasShopNode' | 'parentCanvasId'
+      >
+    ) => {
       const project = useProjects.getState().getProject(activeProjectId)
       const availability = nodeCatalogAvailability(entry, {
         sessionSource,
@@ -5306,9 +5318,11 @@ export function Canvas() {
         isSshProject: !!project?.ssh,
         hasRemoteConnection: useSshServers.getState().servers.length > 0,
         supportsWindowsTerminalProfiles: offersTerminalProfiles,
-        universeScope: 'root',
-        universeDepth: 0,
-        hasShopNode: false
+        universeScope: universeContext?.universeScope ?? 'root',
+        universeId: universeContext?.universeId,
+        universeDepth: universeContext?.universeDepth ?? 0,
+        hasShopNode: universeContext?.hasShopNode ?? false,
+        parentCanvasId: universeContext?.parentCanvasId
       })
       if (!availability.available) {
         notify({ kind: 'error', title: 'Node unavailable', body: availability.reason ?? 'Choose another node.' })
@@ -5381,6 +5395,28 @@ export function Canvas() {
     },
     [activeProjectId, emptyNodePos, offersTerminalProfiles, parentInto, sessionSource, setNodes]
   )
+
+  useEffect(() => {
+    const project = useProjects.getState().getProject(activeProjectId)
+    setUniverseShopCatalogRuntime({
+      context: {
+        sessionSource,
+        hasProjectFolder: !!(project?.cwd || project?.ssh?.remoteCwd),
+        isSshProject: !!project?.ssh,
+        hasRemoteConnection: useSshServers.getState().servers.length > 0,
+        supportsWindowsTerminalProfiles: offersTerminalProfiles
+      },
+      create: (entry, context) => {
+        createCatalogNode(entry, context.creationEventId, undefined, undefined, undefined, {
+          universeScope: context.scope,
+          universeId: context.canvasId,
+          universeDepth: context.depth,
+          hasShopNode: true
+        })
+      }
+    })
+    return () => setUniverseShopCatalogRuntime(null)
+  }, [activeProjectId, createCatalogNode, offersTerminalProfiles, sessionSource])
 
   // Task 6: the Settings → Accounts "Add account" flow dispatches 'nodeterm:add-account-login'
   // to open a terminal node running `claude /login` under the new account's config dir.

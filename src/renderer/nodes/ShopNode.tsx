@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import { NodeResizer, useReactFlow, type NodeProps } from '@xyflow/react'
 import {
   catalogForUniverse,
+  requestUniverseShopCatalogCreation,
   universeShopCatalogProvider,
   newUniverseCreationEventId,
   searchShopCatalog,
@@ -29,6 +30,7 @@ export function ShopNode({ id, data, selected }: NodeProps<CanvasNode>): React.J
   const search = useRegexSearchField({ mode: 'text' })
   const inputRef = useRef<HTMLInputElement>(null)
   const [chosen, setChosen] = useState<string | null>((data.shopSelection as string | undefined) ?? null)
+  const [creationError, setCreationError] = useState<string | null>(null)
   const rawScope = data.universeScope
   const scope: SpecialUniverseScope | null = rawScope === 'aws-universe' || rawScope === 'multiverse' ? rawScope : null
   const canvasId = typeof data.universeCanvasId === 'string' && data.universeCanvasId.trim() ? data.universeCanvasId : null
@@ -45,10 +47,22 @@ export function ShopNode({ id, data, selected }: NodeProps<CanvasNode>): React.J
   const scopeLabel = scope === 'aws-universe' ? 'AWS Universe' : scope === 'multiverse' ? 'Multiverse' : 'Unknown universe'
 
   const choose = (entry: ShopCatalogEntry): void => {
-    if (entry.available === false || !canvasId || !scope || !provider?.create) return
+    if (entry.available === false || !canvasId || !scope || !provider?.create || depth === null) return
+    const result = requestUniverseShopCatalogCreation({
+      canvasId,
+      scope,
+      depth,
+      entryId: entry.id,
+      creationEventId: newUniverseCreationEventId(),
+      catalog: provider
+    })
+    if (!result.created) {
+      setCreationError(result.reason ?? ts('universeShop.creation.refused', 'This catalog entry could not be created. Review its unavailable reason and try again.'))
+      return
+    }
+    setCreationError(null)
     setChosen(entry.id)
     updateNodeData(id, { shopSelection: entry.id })
-    provider.create(entry, { canvasId, scope, creationEventId: newUniverseCreationEventId() })
   }
 
   return (
@@ -123,17 +137,18 @@ export function ShopNode({ id, data, selected }: NodeProps<CanvasNode>): React.J
                   aria-describedby={`${id}-entry-${entry.id}-note`}
                   data-appearance-id={appearanceId('node', `${id}:shop-entry:${entry.id}`)}
                   title={entry.available === false
-                    ? ts(entry.disabledReasonKey ?? 'universeShop.entryUnavailable', 'This catalog entry is unavailable until its executor is available.')
+                    ? ts(entry.disabledReasonKey ?? 'universeShop.entryUnavailable', entry.disabledReason ?? 'This catalog entry is unavailable until its executor is available.')
                     : ts(entry.descriptionKey, 'Catalog entry details')}
                 >
                   <span className="shop-node__entry-label">{ts(entry.labelKey, 'Catalog entry')}</span>
                   <span className="shop-node__entry-kind">{entry.nodeKind}</span>
-                  {entry.available === false && <span id={`${id}-entry-${entry.id}-note`} className="shop-node__entry-disabled">{ts(entry.disabledReasonKey ?? 'universeShop.entryUnavailable', 'This catalog entry is unavailable until its executor is available.')}</span>}
+                  {entry.available === false && <span id={`${id}-entry-${entry.id}-note`} className="shop-node__entry-disabled">{ts(entry.disabledReasonKey ?? 'universeShop.entryUnavailable', entry.disabledReason ?? 'This catalog entry is unavailable until its executor is available.')}</span>}
                 </button>
               </li>
             ))
           )}
         </ul>
+        {creationError && <p className="shop-node__creation-error" role="alert">{creationError}</p>}
         <p className="shop-node__hint">
           {chosen
             ? ts('universeShop.selected', '{entry} selected. Use the shared creation action to continue.', {

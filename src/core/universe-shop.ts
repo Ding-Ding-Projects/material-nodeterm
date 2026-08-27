@@ -49,6 +49,8 @@ export interface ShopCatalogEntry {
   nodeKind: string
   /** False when the catalog contract is known but its executor belongs to a later lane. */
   available?: boolean
+  /** Exact provider reason. Keep literal capability facts separate from localized copy keys. */
+  disabledReason?: string
   disabledReasonKey?: string
 }
 
@@ -56,7 +58,10 @@ export interface ShopCatalogEntry {
  * factories. A later lane can adapt `NODE_CATALOG` to this source and supply real creation. */
 export interface UniverseShopCatalogProvider {
   list(): readonly ShopCatalogEntry[]
-  create?: (entry: ShopCatalogEntry, context: { canvasId: string; scope: SpecialUniverseScope; creationEventId: string }) => void
+  create?: (
+    entry: ShopCatalogEntry,
+    context: { canvasId: string; scope: SpecialUniverseScope; depth: number; creationEventId: string }
+  ) => void
 }
 
 export interface ShopCatalogOptions {
@@ -74,6 +79,29 @@ export interface ShopCatalogSearchOptions {
 export interface ShopCatalogSearchResult {
   entries: ShopCatalogEntry[]
   error: string | null
+}
+
+export interface UniverseShopCatalogCreationRequest {
+  canvasId: string
+  scope: SpecialUniverseScope
+  depth: number
+  entryId: string
+  creationEventId: string
+  catalog?: UniverseShopCatalogProvider | null
+}
+
+export interface UniverseShopCatalogCreationResult {
+  created: boolean
+  refused: boolean
+  code:
+    | 'created'
+    | 'invalid-request'
+    | 'catalog-unavailable'
+    | 'entry-out-of-scope'
+    | 'entry-unavailable'
+    | 'creation-failed'
+  entry: ShopCatalogEntry | null
+  reason?: string
 }
 
 export type ShopMutationKind = 'delete' | 'duplicate' | 'move' | 'group' | 'undo-remove'
@@ -489,11 +517,14 @@ export function catalogForUniverse(options: ShopCatalogOptions): ShopCatalogEntr
     keywords: [...entry.keywords],
     scopes: [...entry.scopes],
     available: entry.available !== false && typeof source.create === 'function',
-    disabledReasonKey: entry.available === false
-      ? entry.disabledReasonKey
+    disabledReason: entry.available === false
+      ? entry.disabledReason
       : typeof source.create === 'function'
         ? undefined
-        : 'The unified Node Catalog creation coordinator is unavailable in this build.'
+        : 'The unified Node Catalog creation coordinator is unavailable in this build.',
+    disabledReasonKey: entry.available === false
+      ? entry.disabledReasonKey
+      : undefined
   }))
 }
 
@@ -534,6 +565,134 @@ export function searchShopCatalog(
     return { entries: [...entries], error: error instanceof Error ? error.message : 'The pattern is not valid.' }
   }
 }
+
+function boundedVisibleIdentifier(value: unknown, label: string): string {
+  if (typeof value !== 'string') throw new Error(`${label} must be a string.`)
+  const trimmed = value.trim()
+  if (
+    !trimmed ||
+    trimmed !== value ||
+    [...trimmed].length > 256 ||
+    [...trimmed].some((char) => {
+      const codePoint = char.codePointAt(0) ?? 0
+      return codePoint <= 0x1f || (codePoint >= 0x7f && codePoint <= 0x9f)
+    })
+  ) {
+    throw new Error(`${label} must be a bounded visible identifier without surrounding whitespace.`)
+  }
+  return trimmed
+}
+
+/**
+ * Execute one Shop selection through the already-registered Node Catalog coordinator.
+ *
+ * The row is resolved again at the execution boundary, so a stale renderer selection cannot cross
+ * universe scope, depth, or availability policy. The immutable creation event is forwarded
+ * unchanged to the provider, whose NodeCreationCoordinator owns placement and retry idempotence.
+ */
+export function createFromUniverseShopCatalog(
+  request: UniverseShopCatalogCreationRequest
+): UniverseShopCatalogCreationResult {
+  let canvasId: string
+  let entryId: string
+  let creationEventId: string
+  try {
+    canvasId = boundedVisibleIdentifier(request?.canvasId, 'The universe canvas id')
+    entryId = boundedVisibleIdentifier(request?.entryId, 'The catalog entry id')
+    creationEventId = boundedVisibleIdentifier(request?.creationEventId, 'The creation event id')
+  } catch (error) {
+    return {
+      created: false,
+      refused: true,
+      code: 'invalid-request',
+      entry: null,
+      reason: error instanceof Error ? error.message : 'The Shop creation request was invalid.'
+    }
+  }
+
+  if (!isSpecialScope(request.scope)) {
+    return {
+      created: false,
+      refused: true,
+      code: 'invalid-request',
+      entry: null,
+      reason: 'Only a Multiverse or AWS Universe Shop may create a scoped catalog entry.'
+    }
+  }
+  if (
+    !Number.isInteger(request.depth) ||
+    request.depth < 1 ||
+    (request.scope === 'multiverse' && request.depth > MAX_MULTIVERSE_DEPTH)
+  ) {
+    return {
+      created: false,
+      refused: true,
+      code: 'invalid-request',
+      entry: null,
+      reason: request.scope === 'multiverse'
+        ? `The Multiverse Shop depth must be an integer from 1 through ${MAX_MULTIVERSE_DEPTH}.`
+        : 'The AWS Universe Shop depth must be a positive integer.'
+    }
+  }
+
+  const source = request.catalog ?? sharedCatalogProvider
+  if (!source) {
+    return {
+      created: false,
+      refused: true,
+      code: 'catalog-unavailable',
+      entry: null,
+      reason: 'The unified Node Catalog is unavailable in this build.'
+    }
+  }
+
+  let entry: ShopCatalogEntry | undefined
+  try {
+    entry = catalogForUniverse({ scope: request.scope, depth: request.depth, catalog: source })
+      .find((candidate) => candidate.id === entryId)
+  } catch (error) {
+    return {
+      created: false,
+      refused: true,
+      code: 'catalog-unavailable',
+      entry: null,
+      reason: error instanceof Error ? error.message : 'The unified Node Catalog could not be read.'
+    }
+  }
+  if (!entry) {
+    return {
+      created: false,
+      refused: true,
+      code: 'entry-out-of-scope',
+      entry: null,
+      reason: 'The requested catalog entry is not available in this Shop scope and depth.'
+    }
+  }
+  if (entry.available === false || typeof source.create !== 'function') {
+    return {
+      created: false,
+      refused: true,
+      code: 'entry-unavailable',
+      entry,
+      reason: entry.disabledReason ?? entry.disabledReasonKey ?? 'This catalog entry is unavailable in this build.'
+    }
+  }
+
+  try {
+    source.create(entry, { canvasId, scope: request.scope, depth: request.depth, creationEventId })
+    return { created: true, refused: false, code: 'created', entry }
+  } catch (error) {
+    return {
+      created: false,
+      refused: false,
+      code: 'creation-failed',
+      entry,
+      reason: error instanceof Error ? error.message : 'The catalog creation coordinator failed.'
+    }
+  }
+}
+
+export const requestUniverseShopCatalogCreation = createFromUniverseShopCatalog
 
 export function shopMutationDecision(request: ShopMutationRequest): ShopMutationDecision | null {
   if (request.nodeKind !== SHOP_NODE_KIND && request.nonDeletable !== true && !request.nodeId.startsWith('shop-')) return null
