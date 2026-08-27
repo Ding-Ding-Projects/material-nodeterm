@@ -15,8 +15,15 @@ export interface AwsProfileSummary {
   mode: AwsIdentityMode
   region: string | null
   roleConfigured: boolean
+  roleArn: string | null
+  sourceProfile: string | null
   mfaConfigured: boolean
+  mfaSerial: string | null
   identityCenterConfigured: boolean
+  ssoStartUrl: string | null
+  ssoRegion: string | null
+  ssoAccountId: string | null
+  ssoRoleName: string | null
 }
 export interface AwsIdentityDiscovery {
   state: 'ready' | 'empty' | 'unavailable'
@@ -61,6 +68,8 @@ export interface AwsIdentityPlan {
   callerIdentityArgs: string[]
   /** Fixed argv for `aws sso login`, present only for an Identity Center profile. */
   signInArgs: string[] | null
+  roleArgs: string[] | null
+  mfaRequired: boolean
   region: string | null
   endpointServices: string[]
 }
@@ -87,8 +96,11 @@ export const AWS_REGIONS = [
   'ap-southeast-7',
   'ca-central-1',
   'ca-west-1',
+  'cn-north-1',
+  'cn-northwest-1',
   'eu-central-1',
   'eu-central-2',
+  'eu-isoe-west-1',
   'eu-north-1',
   'eu-south-1',
   'eu-south-2',
@@ -104,6 +116,10 @@ export const AWS_REGIONS = [
   'us-east-2',
   'us-gov-east-1',
   'us-gov-west-1',
+  'us-iso-east-1',
+  'us-iso-west-1',
+  'us-isob-east-1',
+  'us-isof-south-1',
   'us-west-1',
   'us-west-2'
 ] as const
@@ -231,6 +247,8 @@ export function planAwsIdentity(
       profile: null,
       callerIdentityArgs: [],
       signInArgs: null,
+      roleArgs: null,
+      mfaRequired: false,
       region: null,
       endpointServices: []
     }
@@ -243,6 +261,8 @@ export function planAwsIdentity(
       profile: null,
       callerIdentityArgs: [],
       signInArgs: null,
+      roleArgs: null,
+      mfaRequired: false,
       region: binding.region,
       endpointServices: binding.endpoints.map((endpoint) => endpoint.service)
     }
@@ -258,6 +278,10 @@ export function planAwsIdentity(
     profile,
     callerIdentityArgs,
     signInArgs: profile.identityCenterConfigured ? ['sso', 'login', '--profile', profile.name] : null,
+    roleArgs: profile.roleConfigured && profile.roleArn
+      ? ['sts', 'assume-role', '--profile', profile.name, '--role-arn', profile.roleArn, '--role-session-name', 'nodeterm-session']
+      : null,
+    mfaRequired: profile.mfaConfigured,
     region,
     endpointServices: binding.endpoints.map((endpoint) => endpoint.service)
   }

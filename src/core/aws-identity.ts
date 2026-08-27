@@ -12,7 +12,8 @@ import {
 const MAX_CONFIG_BYTES = 1024 * 1024
 const MAX_PROFILES = 512
 const SAFE_PROFILE = /^[A-Za-z0-9][A-Za-z0-9_.@+-]{0,127}$/
-const SAFE_REGION = /^[a-z]{2}(?:-gov)?-[a-z]+-\d$/
+const SAFE_REGION = /^[a-z]{2,8}(?:-[a-z0-9]+){1,3}-\d$/
+const SAFE_METADATA = /^[^\u0000-\u001f\u007f]{1,2048}$/
 
 interface ProfileFacts {
   name: string
@@ -20,8 +21,15 @@ interface ProfileFacts {
   inCredentials: boolean
   region: string | null
   roleConfigured: boolean
+  roleArn: string | null
+  sourceProfile: string | null
   mfaConfigured: boolean
+  mfaSerial: string | null
   identityCenterConfigured: boolean
+  ssoStartUrl: string | null
+  ssoRegion: string | null
+  ssoAccountId: string | null
+  ssoRoleName: string | null
 }
 export interface AwsIdentityServiceOptions {
   configPath?: string
@@ -75,8 +83,15 @@ function ensureProfile(profiles: Map<string, ProfileFacts>, name: string): Profi
     inCredentials: false,
     region: null,
     roleConfigured: false,
+    roleArn: null,
+    sourceProfile: null,
     mfaConfigured: false,
-    identityCenterConfigured: false
+    mfaSerial: null,
+    identityCenterConfigured: false,
+    ssoStartUrl: null,
+    ssoRegion: null,
+    ssoAccountId: null,
+    ssoRoleName: null
   }
   profiles.set(name, created)
   return created
@@ -107,9 +122,28 @@ export function parseAwsProfileMetadata(
       const key = match[1]?.toLowerCase()
       const value = match[2] ?? ''
       if (key === 'region' && SAFE_REGION.test(value)) current.region = value
-      if (key === 'role_arn' && value.trim().length > 0) current.roleConfigured = true
-      if (key === 'mfa_serial' && value.trim().length > 0) current.mfaConfigured = true
-      if (['sso_session', 'sso_start_url', 'sso_account_id', 'sso_role_name'].includes(key ?? '') && value.trim().length > 0) {
+      const metadata = SAFE_METADATA.test(value.trim()) ? value.trim() : null
+      if (key === 'role_arn' && metadata) {
+        current.roleConfigured = true
+        current.roleArn = metadata
+      }
+      if (key === 'source_profile' && metadata) current.sourceProfile = metadata
+      if (key === 'mfa_serial' && metadata) {
+        current.mfaConfigured = true
+        current.mfaSerial = metadata
+      }
+      if (key === 'sso_start_url' && metadata) {
+        try {
+          const url = new URL(metadata)
+          if (url.protocol === 'https:' && !url.username && !url.password && !url.hash) current.ssoStartUrl = url.href
+        } catch {
+          // Keep the profile visible, but do not retain an invalid SSO URL.
+        }
+      }
+      if (key === 'sso_region' && SAFE_REGION.test(metadata ?? '')) current.ssoRegion = metadata
+      if (key === 'sso_account_id' && /^[0-9]{12}$/.test(metadata ?? '')) current.ssoAccountId = metadata
+      if (key === 'sso_role_name' && metadata) current.ssoRoleName = metadata
+      if (['sso_session', 'sso_start_url', 'sso_region', 'sso_account_id', 'sso_role_name'].includes(key ?? '') && metadata) {
         current.identityCenterConfigured = true
       }
     }
@@ -130,8 +164,15 @@ export function parseAwsProfileMetadata(
       mode: profile.identityCenterConfigured ? 'identity-center' : profile.roleConfigured ? 'assume-role' : 'profile',
       region: profile.region,
       roleConfigured: profile.roleConfigured,
+      roleArn: profile.roleArn,
+      sourceProfile: profile.sourceProfile,
       mfaConfigured: profile.mfaConfigured,
-      identityCenterConfigured: profile.identityCenterConfigured
+      mfaSerial: profile.mfaSerial,
+      identityCenterConfigured: profile.identityCenterConfigured,
+      ssoStartUrl: profile.ssoStartUrl,
+      ssoRegion: profile.ssoRegion,
+      ssoAccountId: profile.ssoAccountId,
+      ssoRoleName: profile.ssoRoleName
     }))
     .sort((left, right) => left.name.localeCompare(right.name))
 }

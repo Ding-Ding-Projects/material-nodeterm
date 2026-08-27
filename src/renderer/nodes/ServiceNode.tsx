@@ -13,11 +13,12 @@ import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText
 import { mapAroundExactFacts } from './nodeVocabulary'
 
 /**
- * One component for the whole service family — Minecraft, Docker, Proxmox, GitLab, Home Assistant
- * and FreePBX. They differ in what they will eventually manage, not in how they behave as canvas
- * objects, so six near-identical components would be six copies of one rule waiting to drift.
+ * One component for the whole service family, including the guided AWS identity manager. They
+ * differ in what they manage, not in how they behave as canvas objects, so near-identical
+ * components would be copies of one rule waiting to drift.
  *
- * WHAT THIS DELIBERATELY DOES NOT DO for five of the six kinds, and why the emptiness is the point:
+ * WHAT THIS DELIBERATELY DOES NOT DO for the still-unwired manager kinds, and why the emptiness is
+ * the point:
  *
  * Docker/Proxmox/GitLab/Home Assistant/FreePBX are not connected to anything yet. CLAUDE.md is
  * explicit that a control which is styled as operable while being inert is a defect rather than a
@@ -50,8 +51,8 @@ const ENDPOINT_PLACEHOLDER: Record<ServiceNodeKind, string> = {
   proxmox: 'https://proxmox.local:8006',
   gitlab: 'https://gitlab.example.com',
   homeassistant: 'http://homeassistant.local:8123',
-  freepbx: 'https://pbx.local'
-  ,awsidentity: 'https://sts.amazonaws.com'
+  freepbx: 'https://pbx.local',
+  awsidentity: 'https://sts.amazonaws.com'
 }
 
 /**

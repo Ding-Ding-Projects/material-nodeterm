@@ -120,9 +120,15 @@ export function AwsIdentityManager({ binding: inputBinding, intent, onChange }: 
   const [endpointService, setEndpointService] = useState<string>('sts')
   const [endpointDraft, setEndpointDraft] = useState('')
   const [endpointError, setEndpointError] = useState<string | null>(null)
+  const endpointSearch = useRegexSearchField()
+  const endpointSearchRef = useRef<HTMLInputElement>(null)
   const binding = normalizeAwsIdentityBinding(inputBinding)
   const profileMap = useMemo(() => new Map(discovery.profiles.map((profile) => [profile.name, profile])), [discovery.profiles])
   const plan = useMemo(() => planAwsIdentity(discovery, binding), [discovery, binding])
+  const visibleEndpoints = useMemo(
+    () => binding?.endpoints.filter((endpoint) => endpointSearch.test(`${endpoint.service} ${endpoint.url}`)) ?? [],
+    [binding, endpointSearch.mode, endpointSearch.query, endpointSearch.pattern, endpointSearch.flags]
+  )
 
   const refresh = async () => {
     setLoading(true)
@@ -148,8 +154,23 @@ export function AwsIdentityManager({ binding: inputBinding, intent, onChange }: 
       onChange(undefined, intent)
       return
     }
-    const profile = profileMap.get(next.profileName)
-    onChange(next, profile ? awsIdentityIntentFor(profile, next) : intent)
+    const normalized = normalizeAwsIdentityBinding(next)
+    if (!normalized) return
+    const profile = profileMap.get(normalized.profileName)
+    onChange(normalized, profile ? awsIdentityIntentFor(profile, normalized) : intent)
+  }
+
+  const updateIntent = (changes: Partial<AwsIdentityIntent>) => {
+    const profile = plan.profile
+    const current: AwsIdentityIntent = intent ?? {
+      schemaVersion: 1,
+      mode: profile?.mode ?? 'profile',
+      preferredRegion: binding?.region ?? profile?.region ?? null,
+      requireMfa: profile?.mfaConfigured ?? false,
+      requireRole: profile?.roleConfigured ?? false,
+      endpointServices: binding?.endpoints.map((endpoint) => endpoint.service).sort() ?? []
+    }
+    onChange(binding ?? undefined, { ...current, ...changes })
   }
 
   const chooseProfile = (profileName: string) => {
@@ -238,7 +259,48 @@ export function AwsIdentityManager({ binding: inputBinding, intent, onChange }: 
               <div><dt>Region</dt><dd>{plan.region ?? 'AWS default resolution'}</dd></div>
               <div><dt>Portable reopen</dt><dd>Rebind to a local profile. Provider identity never travels with the project.</dd></div>
             </dl>
-            {plan.signInArgs && <p>IAM Identity Center sign-in is planned as fixed arguments for this profile. No browser URL or session is stored in the canvas.</p>}
+            {plan.profile?.identityCenterConfigured && (
+              <div className="aws-identity__subsection">
+                <h5>IAM Identity Center</h5>
+                <p>
+                  {plan.profile.ssoStartUrl ? `Start URL: ${plan.profile.ssoStartUrl}` : 'This profile has an IAM Identity Center configuration.'}
+                  {' '}The sign-in session remains in AWS local storage and never enters the canvas.
+                </p>
+                {plan.signInArgs && <code>{['aws', ...plan.signInArgs].join(' ')}</code>}
+              </div>
+            )}
+            {plan.profile?.roleConfigured && (
+              <div className="aws-identity__subsection">
+                <h5>Role assumption</h5>
+                <p>
+                  The selected profile resolves its role through the AWS CLI
+                  {plan.profile.sourceProfile ? ` from source profile “${plan.profile.sourceProfile}”.` : '.'}
+                  {' '}Role credentials are never copied into project data.
+                </p>
+                {plan.roleArgs && <code>{['aws', ...plan.roleArgs].join(' ')}</code>}
+              </div>
+            )}
+            <fieldset className="aws-identity__requirements">
+              <legend>Portable identity requirements</legend>
+              <label title={plan.profile?.mfaConfigured ? undefined : 'Enable MFA in the selected profile before requiring it here.'}>
+                <input
+                  type="checkbox"
+                  checked={intent?.requireMfa ?? plan.mfaRequired}
+                  disabled={!plan.profile?.mfaConfigured}
+                  onChange={(event) => updateIntent({ requireMfa: event.target.checked })}
+                />
+                Require MFA when the profile asks for it
+              </label>
+              <label title={plan.profile?.roleConfigured ? undefined : 'Choose a profile with role_arn before requiring role assumption.'}>
+                <input
+                  type="checkbox"
+                  checked={intent?.requireRole ?? !!plan.roleArgs}
+                  disabled={!plan.profile?.roleConfigured}
+                  onChange={(event) => updateIntent({ requireRole: event.target.checked })}
+                />
+                Require role assumption for this node
+              </label>
+            </fieldset>
           </section>
 
           <section className="aws-identity__endpoint-editor" aria-label="Custom AWS endpoints">
@@ -271,9 +333,21 @@ export function AwsIdentityManager({ binding: inputBinding, intent, onChange }: 
               </button>
             </div>
             {endpointError && <p className="aws-identity__error">{endpointError}</p>}
+            <div className="aws-identity__search-row">
+              <input
+                ref={endpointSearchRef}
+                className="aws-identity__input nodrag"
+                value={endpointSearch.value}
+                onChange={(event) => endpointSearch.setValue(event.target.value)}
+                placeholder="Search saved endpoints…"
+                aria-label="Search saved endpoints"
+              />
+              <AnchoredRegexBuilder search={endpointSearch} fieldRef={endpointSearchRef} label="Regex — saved endpoints" />
+            </div>
             <div className="aws-identity__endpoint-list">
               {binding.endpoints.length === 0 && <p className="aws-identity__empty">No custom endpoints. AWS standard endpoints will be used.</p>}
-              {binding.endpoints.map((endpoint) => (
+              {binding.endpoints.length > 0 && visibleEndpoints.length === 0 && <p className="aws-identity__empty">No saved endpoint matches this search.</p>}
+              {visibleEndpoints.map((endpoint) => (
                 <div key={endpoint.service}>
                   <span><strong>{endpoint.service}</strong><small>{endpoint.url}</small></span>
                   <button type="button" onClick={() => saveBinding({ ...binding, endpoints: binding.endpoints.filter((candidate) => candidate.service !== endpoint.service), verifiedAt: Date.now() })}>

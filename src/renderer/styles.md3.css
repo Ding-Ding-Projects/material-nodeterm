@@ -12095,3 +12095,179 @@ button.term-node__title-text:focus-visible {
     justify-content: flex-start;
   }
 }
+
+/* AWS identity manager. Every picker is a real list with its own search and anchored regex
+   builder. The card keeps long endpoint and SSO values readable without leaking into the canvas. */
+.aws-identity {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px;
+  overflow: auto;
+  color: var(--md-on-surface);
+  background: var(--md-surface-container);
+}
+.aws-identity__summary,
+.aws-identity__picker-head,
+.aws-identity__endpoint-row,
+.aws-identity__search-row,
+.aws-identity__endpoint-list > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.aws-identity__summary {
+  justify-content: space-between;
+  align-items: flex-start;
+}
+.aws-identity__summary h3,
+.aws-identity__facts h4,
+.aws-identity__facts h5,
+.aws-identity__endpoint-editor h4,
+.aws-identity__plan h4 {
+  margin: 0;
+}
+.aws-identity__summary p,
+.aws-identity__subsection p {
+  max-width: 64ch;
+  margin: 4px 0 0;
+  color: var(--md-on-surface-variant);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.aws-identity__picker,
+.aws-identity__facts,
+.aws-identity__endpoint-editor,
+.aws-identity__plan {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-medium);
+  background: var(--md-surface-container-low);
+}
+.aws-identity__picker-head {
+  justify-content: space-between;
+}
+.aws-identity__picker-head span {
+  color: var(--md-on-surface-variant);
+  font-size: 11px;
+}
+.aws-identity__search-row {
+  align-items: stretch;
+}
+.aws-identity__input {
+  min-width: 0;
+  flex: 1;
+  min-height: 36px;
+  padding: 8px 10px;
+  color: var(--md-on-surface);
+  background: var(--md-surface-container-highest);
+  border: 1px solid var(--md-outline);
+  border-radius: var(--md-shape-small);
+}
+.aws-identity__choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 6px;
+  max-height: 180px;
+  overflow: auto;
+}
+.aws-identity__choices button,
+.aws-identity__endpoint-list button,
+.aws-identity__summary button,
+.aws-identity__endpoint-row button,
+.aws-identity__unbind {
+  min-height: 36px;
+  padding: 7px 10px;
+  color: var(--md-on-surface);
+  background: var(--md-surface-container-high);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-small);
+  cursor: pointer;
+}
+.aws-identity__choices button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+}
+.aws-identity__choices button.is-selected {
+  color: var(--md-on-primary-container);
+  background: var(--md-primary-container);
+  border-color: var(--md-primary);
+}
+.aws-identity__choice-copy,
+.aws-identity__endpoint-list span {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+.aws-identity__choice-copy small,
+.aws-identity__endpoint-list small {
+  overflow-wrap: anywhere;
+  color: var(--md-on-surface-variant);
+  font-size: 11px;
+}
+.aws-identity__facts dl {
+  display: grid;
+  grid-template-columns: minmax(120px, auto) 1fr;
+  gap: 4px 10px;
+  margin: 0;
+  font-size: 12px;
+}
+.aws-identity__facts dt { color: var(--md-on-surface-variant); }
+.aws-identity__facts dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.aws-identity__subsection { display: flex; flex-direction: column; gap: 4px; }
+.aws-identity__subsection code,
+.aws-identity__plan code {
+  display: block;
+  max-width: 100%;
+  padding: 6px 8px;
+  overflow: auto;
+  color: var(--md-on-surface);
+  background: var(--md-surface-container-highest);
+  border-radius: var(--md-shape-small);
+  font: 11px/1.4 var(--mono-font);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.aws-identity__requirements {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 8px;
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-small);
+}
+.aws-identity__requirements label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  font-size: 12px;
+}
+.aws-identity__endpoint-row { align-items: flex-end; }
+.aws-identity__endpoint-row label { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 4px; }
+.aws-identity__endpoint-list { display: grid; gap: 6px; }
+.aws-identity__endpoint-list > div { justify-content: space-between; align-items: flex-start; min-width: 0; }
+.aws-identity__endpoint-list span { flex: 1; }
+.aws-identity__notice,
+.aws-identity__error,
+.aws-identity__empty { margin: 0; font-size: 12px; line-height: 1.4; }
+.aws-identity__notice.is-unavailable,
+.aws-identity__error { color: var(--md-error); }
+.aws-identity__notice.is-empty { color: var(--md-warning); }
+.aws-identity__plan.is-profile-missing { border-color: var(--md-error); }
+.aws-identity :is(button, input):focus-visible { outline: 2px solid var(--md-primary); outline-offset: 2px; }
+
+@media (max-width: 560px) {
+  .aws-identity__summary,
+  .aws-identity__endpoint-row { flex-direction: column; align-items: stretch; }
+  .aws-identity__facts dl { grid-template-columns: 1fr; }
+  .aws-identity__facts dd { margin-bottom: 4px; }
+}

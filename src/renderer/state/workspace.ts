@@ -2267,7 +2267,10 @@ export function duplicateNode(node: CanvasNode, offset = 28): CanvasNode {
       loopNextRunAt: undefined,
       loopLastRunAt: undefined,
       // A duplicate owns a fresh VM identity and must never inherit another VM's ISO or disk.
-      virtualMachineLocalPaths: undefined
+      virtualMachineLocalPaths: undefined,
+      // AWS profiles are machine-local bindings. A duplicate keeps safe portable intent but must
+      // require an explicit local profile selection rather than silently sharing one.
+      awsIdentityBinding: undefined,
       ...(kind === 'timer' ? {
         running: false, paused: false, elapsedMs: 0, remainingMs: (node.data as TimerNodeData).durationMs,
         lapsMs: [], sequenceIndex: 0, repeatRemaining: 0, occurrenceId: undefined,
