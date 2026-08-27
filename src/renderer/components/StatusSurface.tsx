@@ -196,7 +196,7 @@ export function StatusSurface(): JSX.Element {
   const version = readVersion(packageJsonRaw)
 
   return (
-    <div className="md3-status-screen" data-screen-label="Status">
+    <div className="md3-status-screen" data-screen-label="Status" data-easter-surface="status">
       <div className="md3-status-screen__head">
         <div className="md3-status-screen__heading">
           <h2 className="md3-status-screen__title">{vocab('Status')}</h2>

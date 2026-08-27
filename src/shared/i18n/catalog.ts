@@ -1,4 +1,4 @@
-import type { Catalog, FiveVariants } from './types'
+import type { Catalog, FunnyVariants } from './types'
 
 /**
  * ============================================================================================
@@ -6,7 +6,7 @@ import type { Catalog, FiveVariants } from './types'
  * ============================================================================================
  *
  * It applies to every category of message in this catalogue, with NO exemptions — destructive
- * actions, security prompts, accessibility copy and error text included. At any level 1-5 a
+ * actions, security prompts, accessibility copy and error text included. At any level 1-10 a
  * string must still name, in unambiguous words, what happened, what is affected, and what the
  * user's options are: which file, which account, which action is irreversible, what the error
  * actually was. Level 5 may wrap those facts in a joke; it must never REPLACE, SOFTEN or OMIT
@@ -22,18 +22,18 @@ import type { Catalog, FiveVariants } from './types'
  * version number, a count) into the catalogue text itself — that value belongs to the CALLER,
  * which is the one place that actually knows it.
  *
- * Adding a new string: pick a dotted id (`surface.element.purpose`), write five English variants
- * (level 1 plain, level 5 playful, 2-4 stepping between) and five Cantonese ones. Reusing a
- * neighbour's text across levels is fine and often correct for a plain label — the array must
- * still have five entries. See docs/language-modes.md.
+ * Adding a new string: pick a dotted id (`surface.element.purpose`), write ten English variants
+ * (level 1 plain, level 10 playful, stepping between) and ten Cantonese ones. Legacy five-slot
+ * rows are expanded by the resolver with distinct voice-only level 6-10 tails until migrated.
+ * See docs/language-modes.md.
  * ============================================================================================
  */
 
 /** For a plain factual label that has no meaningful "funnier" version (a settings-nav noun, an
  *  aria-label) — repeats the same text at all five levels. Still satisfies the five-variant
  *  shape; it just declines to invent forced jokes for something that shouldn't have any. */
-function flat(text: string): FiveVariants {
-  return [text, text, text, text, text]
+function flat(text: string): FunnyVariants {
+  return [text, text, text, text, text, text, text, text, text, text]
 }
 
 export const CATALOG: Catalog = {
@@ -86,6 +86,37 @@ export const CATALOG: Catalog = {
   'settings.section.language': { en: flat('Language'), yue: flat('語言') },
   'settings.section.privacy': { en: flat('Privacy'), yue: flat('私隱') },
 
+  // Context-window meter copy. Values are interpolated by the component, while these variants
+  // keep status and threshold wording in the same language/funny-level pipeline as other chrome.
+  'contextWindow.title': { en: flat('Context window'), yue: flat('內容視窗') },
+  'contextWindow.shortLabel': { en: flat('Context'), yue: flat('內容') },
+  'contextWindow.provider.unknown': { en: flat('agent'), yue: flat('代理') },
+  'contextWindow.updated': { en: flat('updated'), yue: flat('更新於') },
+  'contextWindow.status.known': { en: flat('reported'), yue: flat('已回報') },
+  'contextWindow.status.stale': { en: flat('stale'), yue: flat('過期') },
+  'contextWindow.status.unavailable': { en: flat('unavailable'), yue: flat('未能提供') },
+  'contextWindow.status.unknown': { en: flat('unknown'), yue: flat('未知') },
+  'contextWindow.status.notReported': { en: flat('not reported'), yue: flat('未有回報') },
+  'contextWindow.level.healthy': { en: flat('Healthy'), yue: flat('健康') },
+  'contextWindow.level.warning': { en: flat('Warning'), yue: flat('注意') },
+  'contextWindow.level.critical': { en: flat('Critical'), yue: flat('危急') },
+  'contextWindow.detail': {
+    en: [
+      'Used {used} of {total} tokens, {remaining} remaining, {percent}% used',
+      'Used {used} of {total} tokens, with {remaining} still in the tank, {percent}% used',
+      '{used} of {total} tokens used, {remaining} left, {percent}% used',
+      '{used}/{total} tokens have joined the queue, {remaining} remain, {percent}% used',
+      '{used} of {total} tokens are partying, {remaining} remain, {percent}% used'
+    ],
+    yue: [
+      '已用 {used} / {total} tokens，剩返 {remaining}，已用 {percent}%',
+      '用咗 {used} / {total} tokens，仲有 {remaining}，已用 {percent}%',
+      '{used} / {total} tokens 已用，剩返 {remaining}，已用 {percent}%',
+      '{used} / {total} tokens 排緊隊，仲有 {remaining}，已用 {percent}%',
+      '{used} / {total} tokens 開緊派對，仲有 {remaining}，已用 {percent}%'
+    ]
+  },
+
   // ---------------------------------------------------------------------------------------
   // Language settings section — this feature's own copy. Playful escalation across levels,
   // because a sentence about a joke slider is a fair place to demonstrate the joke slider.
@@ -130,13 +161,25 @@ export const CATALOG: Catalog = {
     en: flat('Cantonese funny level'),
     yue: flat('廣東話抵死程度')
   },
+  'settings.language.level.10': {
+    en: flat('10 — Maximum playfulness'),
+    yue: flat('10 — 抵死到爆')
+  },
+  'settings.language.funnyEn.provenance': {
+    en: flat('English saved value: level {level}.'),
+    yue: flat('英文已儲存值：第 {level} 級。')
+  },
+  'settings.language.funnyYue.provenance': {
+    en: flat('Cantonese saved value: level {level}.'),
+    yue: flat('廣東話已儲存值：第 {level} 級。')
+  },
   'settings.language.level.1': {
     en: flat('1 — Fully professional'),
     yue: flat('1 — 正正經經')
   },
   'settings.language.level.5': {
-    en: flat('5 — Maximum playfulness'),
-    yue: flat('5 — 抵死到爆')
+    en: flat('5 — Playful'),
+    yue: flat('5 — 有啲玩味')
   },
   'settings.language.disclosure': {
     en: [
@@ -173,6 +216,74 @@ export const CATALOG: Catalog = {
       '俾對話框同訊息框加少少表情符號情趣，按鈕標籤同任何可以撳嘅嘢一律唔會有。',
       '等你嘅對話框同訊息框戴返個得體嘅表情符號，按鈕標籤依然係表情符號禁區。'
     ]
+  },
+  'settings.behavior.wheelZoom.label': {
+    en: flat('Scroll wheel zooms'),
+    yue: flat('滑鼠滾輪縮放')
+  },
+  'settings.behavior.wheelZoom.description': {
+    en: [
+      'Zoom with a plain mouse wheel (no Command). Two-finger trackpad scroll still pans.',
+      'A plain mouse wheel zooms; two-finger trackpad scroll keeps panning.',
+      'Use the wheel for zoom and two fingers for pan, with both gestures staying distinct.',
+      'The wheel handles zooming while two fingers keep the map wandering politely.',
+      'Spin the wheel to zoom; let two fingers pan, because even gestures deserve separate jobs.'
+    ],
+    yue: [
+      '用普通滑鼠滾輪縮放（唔使 Command）。雙指觸控板捲動仍然平移。',
+      '普通滾輪負責縮放，雙指觸控板捲動繼續平移。',
+      '滾輪縮放、雙指平移，兩種手勢各自做返自己份工。',
+      '滾輪處理縮放，雙指就禮貌咁帶住張圖周圍行。',
+      '轉滾輪就縮放，雙指就平移，手勢都有自己嘅崗位㗎。'
+    ]
+  },
+
+  // Canvas wheel-zoom speed is a real setting, so its label, explanation, and provenance all
+  // follow the live language mode and per-language funny levels. The numeric multiplier remains
+  // a factual value and is supplied by the renderer rather than baked into catalogue copy.
+  'settings.behavior.wheelZoomSpeed.label': {
+    en: flat('Wheel zoom speed'),
+    yue: flat('滑輪縮放速度')
+  },
+  'settings.behavior.wheelZoomSpeed.description': {
+    en: [
+      'How far one plain wheel click zooms. Lower it if one click jumps too far.',
+      'Controls the zoom distance for each plain wheel click. Turn it down for gentler jumps.',
+      'Sets how much canvas zoom one plain wheel click spends.',
+      'Tunes the canvas jump for each plain wheel click, so the map does not go sightseeing.',
+      'Sets the plain-wheel zoom jump. Turn it down before one click sends the canvas on a world tour.'
+    ],
+    yue: [
+      '每一下普通滑輪撳落去縮放幾多。一下跳得太遠就調低啲。',
+      '控制普通滑輪每一下縮放幾遠，一下太大步就收細啲。',
+      '設定普通滑輪一下會用幾多畫布縮放幅度。',
+      '調校普通滑輪每一下嘅畫布跳步，唔好等張圖周圍去旅行。',
+      '設定普通滑輪嘅縮放跳步，調低啲先，唔好一下就送張畫布環遊世界。'
+    ]
+  },
+  'settings.behavior.wheelZoomSpeed.provenance.default': {
+    en: flat('Matches the compiled-in default of 1.0×. An explicit saved 1.0× cannot be distinguished from that same value.'),
+    yue: flat('同編譯入去嘅 1.0× 預設值一致。明確儲存嘅 1.0× 無法同呢個值分辨。')
+  },
+  'settings.behavior.wheelZoomSpeed.provenance.saved': {
+    en: flat('Using the saved value from settings.json.'),
+    yue: flat('使用 settings.json 入面儲存嘅數值。')
+  },
+  'settings.behavior.wheelZoomSpeed.provenance.clamped': {
+    en: flat('The saved value is outside 0.2×–2.0×; using the clamped value of {speed}×.'),
+    yue: flat('儲存嘅數值唔喺 0.2×–2.0× 範圍內，而家使用夾返正嘅 {speed}×。')
+  },
+  'settings.behavior.wheelZoomSpeed.provenance.invalid': {
+    en: flat('The saved value is invalid; using the compiled-in 1.0× value.'),
+    yue: flat('儲存嘅數值無效，而家使用編譯入去嘅 1.0× 數值。')
+  },
+  'settings.behavior.wheelZoomSpeed.provenance.loading': {
+    en: flat('Using the compiled-in 1.0× value while saved settings load.'),
+    yue: flat('儲存設定載入緊，暫時使用編譯入去嘅 1.0× 數值。')
+  },
+  'settings.behavior.wheelZoomSpeed.provenance.scheduled': {
+    en: flat('A scheduled value is active. The saved base value is {speed}×.'),
+    yue: flat('而家有排程數值生效，儲存嘅基礎值係 {speed}×。')
   },
 
   // ---------------------------------------------------------------------------------------
@@ -293,12 +404,61 @@ export const CATALOG: Catalog = {
   'dockerHost.runTaskReady': { en: flat('Run the selected fixed task'), yue: flat('執行揀好嘅固定工作') },
   'dockerHost.chooseContainer': { en: flat('Choose a container first.'), yue: flat('請先揀一個容器。') },
   'dockerHost.runTask': { en: flat('Run task'), yue: flat('執行工作') },
+  'nextcloudAio.title': { en: flat('Nextcloud AIO hosting'), yue: flat('Nextcloud AIO 託管') },
+  'nextcloudAio.authorityTitle': { en: flat('Docker authority disclosure'), yue: flat('Docker 權限披露') },
+  'nextcloudAio.authority': { en: flat('This profile mounts the Docker socket read-only so the official AIO master container can manage its child containers. Docker socket access can control the Docker host. It is not a security boundary.'), yue: flat('呢個 profile 會以唯讀方式掛載 Docker socket，等官方 AIO 主容器管理子容器。Docker socket 權限可以控制 Docker 主機，唔係安全邊界。') },
+  'nextcloudAio.safety': { en: flat('The image source is pinned to the official Nextcloud AIO image. Privileged mode, arbitrary images, shell commands, Compose text, and free-form environment values are never accepted.'), yue: flat('映像來源鎖定官方 Nextcloud AIO 映像。永遠唔接受 privileged mode、任意映像、shell 指令、Compose 文字或者自由環境值。') },
+  'nextcloudAio.source': { en: flat('Review the pinned official source'), yue: flat('查看鎖定嘅官方來源') },
+  'nextcloudAio.tabs': { en: flat('Nextcloud AIO sections'), yue: flat('Nextcloud AIO 分區') },
+  'nextcloudAio.overview': { en: flat('Overview'), yue: flat('概覽') },
+  'nextcloudAio.backups': { en: flat('Backups'), yue: flat('備份') },
+  'nextcloudAio.recovery': { en: flat('Restore and rollback'), yue: flat('還原同回滾') },
+  'nextcloudAio.search': { en: flat('Search contexts and backups'), yue: flat('搜尋環境同備份') },
+  'nextcloudAio.searchContexts': { en: flat('Search Docker contexts'), yue: flat('搜尋 Docker 環境') },
+  'nextcloudAio.searchBackups': { en: flat('Search backups'), yue: flat('搜尋備份') },
+  'nextcloudAio.regex': { en: flat('Regex builder for Nextcloud AIO search'), yue: flat('Nextcloud AIO 搜尋正則建立器') },
+  'nextcloudAio.regexContexts': { en: flat('Regex builder for Docker context search'), yue: flat('Docker 環境搜尋正則建立器') },
+  'nextcloudAio.regexBackups': { en: flat('Regex builder for backup search'), yue: flat('備份搜尋正則建立器') },
+  'nextcloudAio.refresh': { en: flat('Refresh'), yue: flat('重新整理') },
+  'nextcloudAio.refreshing': { en: flat('Refreshing…'), yue: flat('重新整理緊…') },
+  'nextcloudAio.contexts': { en: flat('Available Docker contexts'), yue: flat('可用 Docker 環境') },
+  'nextcloudAio.noContexts': { en: flat('No available Docker context matches this search. Start Docker or choose another search.'), yue: flat('冇可用 Docker 環境符合搜尋。請啟動 Docker 或換個搜尋。') },
+  'nextcloudAio.configure': { en: flat('Configure Nextcloud AIO'), yue: flat('設定 Nextcloud AIO') },
+  'nextcloudAio.binding': { en: flat('Local binding'), yue: flat('本機綁定') },
+  'nextcloudAio.port': { en: flat('Local port'), yue: flat('本機連接埠') },
+  'nextcloudAio.portHint': { en: flat('Loopback keeps the service on this computer. Private network exposes it only on the selected private binding. Port must be between 1024 and 65535.'), yue: flat('Loopback 會將服務留喺呢部電腦。私人網絡只會喺揀好嘅私人綁定公開。連接埠必須係 1024 至 65535。') },
+  'nextcloudAio.deploy': { en: flat('Deploy pinned profile'), yue: flat('部署鎖定 profile') },
+  'nextcloudAio.createBackupReady': { en: flat('Create a local backup of the selected Nextcloud AIO data volume'), yue: flat('建立揀好嘅 Nextcloud AIO 資料卷本機備份') },
+  'nextcloudAio.deployReady': { en: flat('Deploy the pinned profile to the selected Docker context'), yue: flat('將鎖定 profile 部署到揀好嘅 Docker 環境') },
+  'nextcloudAio.chooseContext': { en: flat('Choose an available Docker context first.'), yue: flat('請先揀可用 Docker 環境。') },
+  'nextcloudAio.operations': { en: flat('Operations'), yue: flat('操作') },
+  'nextcloudAio.noBackups': { en: flat('No local backup records are available yet. Create one after deployment.'), yue: flat('暫時冇本機備份紀錄。部署後可以建立一個。') },
+  'nextcloudAio.recoveryNote': { en: flat('Restore and rollback are explicit local operations. Choose a discovered backup record; no path or shell input is accepted.'), yue: flat('還原同回滾係明確嘅本機操作。請揀已發現嘅備份紀錄；唔接受路徑或者 shell 輸入。') },
+  'nextcloudAio.chooseBackup': { en: flat('Search for and select a discovered backup record first.'), yue: flat('請先搜尋同揀一個已發現嘅備份紀錄。') },
   'nodeCatalog.entry.service.proxmox.label': { en: flat('Proxmox manager'), yue: flat('Proxmox 管理器') },
   'nodeCatalog.entry.service.proxmox.description': { en: flat('Open a typed manager for a saved Proxmox connection.'), yue: flat('開已儲存 Proxmox 連線嘅有類型管理器。') },
   'nodeCatalog.entry.service.gitlab.label': { en: flat('GitLab manager'), yue: flat('GitLab 管理器') },
   'nodeCatalog.entry.service.gitlab.description': { en: flat('Open a typed manager for a saved GitLab connection.'), yue: flat('開已儲存 GitLab 連線嘅有類型管理器。') },
   'nodeCatalog.entry.service.homeassistant.label': { en: flat('Home Assistant manager'), yue: flat('Home Assistant 管理器') },
   'nodeCatalog.entry.service.homeassistant.description': { en: flat('Open a typed manager for a saved Home Assistant connection.'), yue: flat('開已儲存 Home Assistant 連線嘅有類型管理器。') },
+  'nodeCatalog.entry.homeassistant-control.label': { en: flat('Home Assistant control'), yue: flat('Home Assistant 控制器') },
+  'nodeCatalog.entry.homeassistant-control.description': { en: flat('Control a locally bound Home Assistant entity with rich domain controls and verified service schemas.'), yue: flat('用本機綁定連線、豐富類別控制同已驗證服務格式控制 Home Assistant 實體。') },
+  'homeAssistantControl.title': { en: flat('Home Assistant control'), yue: flat('Home Assistant 控制器') },
+  'homeAssistantControl.connection.heading': { en: flat('Connection on this computer'), yue: flat('呢部電腦嘅連線') },
+  'homeAssistantControl.connection.search': { en: flat('Search connections'), yue: flat('搜尋連線') },
+  'homeAssistantControl.connection.label': { en: flat('Connection'), yue: flat('連線') },
+  'homeAssistantControl.connection.unbound': { en: flat('Leave unbound'), yue: flat('保持未綁定') },
+  'homeAssistantControl.discover': { en: flat('Discover or retry'), yue: flat('探索或重試') },
+  'homeAssistantControl.configure': { en: flat('Configure a connection'), yue: flat('設定連線') },
+  'homeAssistantControl.entity.heading': { en: flat('Entity'), yue: flat('實體') },
+  'homeAssistantControl.entity.search': { en: flat('Search entities'), yue: flat('搜尋實體') },
+  'homeAssistantControl.entity.choose': { en: flat('Choose an entity'), yue: flat('揀一個實體') },
+  'homeAssistantControl.fallback.heading': { en: flat('Verified schema fallback'), yue: flat('已驗證格式後備控制') },
+  'homeAssistantControl.service.search': { en: flat('Search services'), yue: flat('搜尋服務') },
+  'homeAssistantControl.service.choose': { en: flat('Choose a service'), yue: flat('揀一項服務') },
+  'homeAssistantControl.service.run': { en: flat('Run verified service'), yue: flat('執行已驗證服務') },
+  'nodeCatalog.entry.homeassistant-sensor.label': { en: flat('Home Assistant sensor'), yue: flat('Home Assistant 感應器') },
+  'nodeCatalog.entry.homeassistant-sensor.description': { en: flat('Display selected Home Assistant values, states, gauges, trends, events, weather, calendars, and attributes through a local binding.'), yue: flat('用本機綁定顯示揀好嘅 Home Assistant 數值、狀態、儀表、趨勢、事件、天氣、日曆同屬性。') },
   'nodeCatalog.entry.service.freepbx.label': { en: flat('FreePBX manager'), yue: flat('FreePBX 管理器') },
   'nodeCatalog.entry.service.freepbx.description': { en: flat('Open a typed manager for a saved FreePBX connection.'), yue: flat('開已儲存 FreePBX 連線嘅有類型管理器。') },
   'nodeCatalog.entry.editor.label': { en: flat('Editor'), yue: flat('編輯器') },
@@ -347,6 +507,24 @@ export const CATALOG: Catalog = {
   'nodeCatalog.entry.aws-cost.description': { en: flat('Explore cost and usage data with explicit account, period, and grouping controls.'), yue: flat('用清楚嘅帳戶、時段同分組控制項瀏覽成本同使用量資料。') },
   'nodeCatalog.entry.aws-service.label': { en: flat('All AWS services'), yue: flat('所有 AWS 服務') },
   'nodeCatalog.entry.aws-service.description': { en: flat('Create a typed AWS service workspace from installed CLI models without a raw command fallback.'), yue: flat('用已安裝 CLI 模型建立有類型 AWS 服務工作區，唔提供 raw command 後備路徑。') },
+  'nodeCatalog.entry.aws-universe.label': { en: flat('AWS Universe'), yue: flat('AWS 宇宙') },
+  'nodeCatalog.entry.aws-universe.description': { en: flat('Create an AWS-only child canvas with a dedicated Shop node.'), yue: flat('建立只限 AWS、附有專屬 Shop 節點嘅子畫布。') },
+  'awsUniverse.title': { en: flat('AWS Universe'), yue: flat('AWS 宇宙') },
+  'awsUniverse.description': { en: flat('An AWS-only canvas. Provider credentials and runtime bindings stay on this computer.'), yue: flat('只限 AWS 嘅畫布。供應商憑證同執行綁定留喺呢部電腦。') },
+  'awsUniverse.open': { en: flat('Open AWS Universe'), yue: flat('開啟 AWS 宇宙') },
+  'awsUniverse.scope': { en: flat('AWS-only scope'), yue: flat('只限 AWS 範圍') },
+  'awsUniverse.search.label': { en: flat('Search AWS Universes'), yue: flat('搜尋 AWS 宇宙') },
+  'awsUniverse.search.placeholder': { en: flat('Name or instance id'), yue: flat('名稱或 instance id') },
+  'awsUniverse.search.regex': { en: flat('Open regex builder for AWS Universe search'), yue: flat('開啟 AWS 宇宙搜尋正則建立器') },
+  'awsUniverse.search.count': { en: flat('{count} AWS Universe instances shown'), yue: flat('顯示 {count} 個 AWS 宇宙 instance') },
+  'awsUniverse.empty': { en: flat('No AWS Universe instances match this search.'), yue: flat('冇 AWS 宇宙 instance 符合呢個搜尋。') },
+  'awsUniverse.new': { en: flat('New AWS Universe'), yue: flat('新增 AWS 宇宙') },
+  'awsUniverse.name': { en: flat('Universe name'), yue: flat('宇宙名稱') },
+  'awsUniverse.nameRequired': { en: flat('Enter a name before creating the AWS Universe.'), yue: flat('建立 AWS 宇宙之前請先輸入名稱。') },
+  'awsUniverse.create': { en: flat('Create and open'), yue: flat('建立並開啟') },
+  'awsUniverse.created': { en: flat('AWS Universe created.'), yue: flat('AWS 宇宙已建立。') },
+  'awsUniverse.createFailed': { en: flat('The AWS Universe could not be created.'), yue: flat('AWS 宇宙未能建立。') },
+  'awsUniverse.preview': { en: flat('Creates one AWS-only child canvas with one permanent scoped Shop.'), yue: flat('建立一個只限 AWS、附有一個永久範圍 Shop 嘅子畫布。') },
 
   // ---------------------------------------------------------------------------------------
   // Confirm / delete dialog defaults (ConfirmDialog.tsx). Custom labels a caller passes in
@@ -1227,6 +1405,72 @@ export const CATALOG: Catalog = {
     en: flat('This Shop belongs to its universe and cannot be moved or deleted.'),
     yue: flat('呢間商店屬於自己嘅宇宙，唔可以移動或者刪除。')
   },
+  // ---------------------------------------------------------------------------------------
+  // Multiverse door construction. Part names and material names are localized here rather
+  // than embedded in the guided picker, so the constructor follows every language mode.
+  // ---------------------------------------------------------------------------------------
+  'doorConstruction.title': { en: flat('Construct a Multiverse door'), yue: flat('砌一度多重宇宙門') },
+  'doorConstruction.description': {
+    en: [
+      'Build the frame, hinges, panel, handle, and activation core. Only safe door intent travels with the project; local credentials and runtime state stay on this computer.',
+      'Choose each physical door part and arm its activation core. The project carries safe intent, while local credentials and runtime state stay here.',
+      'Pick the frame, hinges, panel, handle, and core. Portable data remembers the design, not this computer\'s credentials or running state.',
+      'Assemble the five parts, then arm the core. A copied project gets the door plan and none of the machine-local baggage.',
+      'Build the whole door, wake its core, and let the project pack only the safe blueprint. Local secrets and live machinery stay home.'
+    ],
+    yue: [
+      '砌好門框、鉸鏈、門板、門柄同啟動核心。專案只會帶安全門意圖，本機憑證同執行狀態留返喺呢部電腦。',
+      '逐件揀實體門零件，再啟動核心。專案只帶安全意圖，本機憑證同執行狀態留返喺度。',
+      '揀門框、鉸鏈、門板、門柄同核心。可攜資料記住設計，唔會帶走呢部電腦嘅憑證或者執行狀態。',
+      '砌齊五件零件，再啟動核心。拎走專案只會拎走門嘅藍圖，唔會順手拎埋本機資料。',
+      '砌完整度門、叫醒個核心，等專案只打包安全藍圖。本機秘密同執行中嘅機件留喺屋企。'
+    ]
+  },
+  'doorConstruction.route': { en: flat('Route: {from} → {to}'), yue: flat('路線：{from} → {to}') },
+  'doorConstruction.name': { en: flat('Door name'), yue: flat('門名稱') },
+  'doorConstruction.parts': { en: flat('Door parts'), yue: flat('門零件') },
+  'doorConstruction.part.frame': { en: flat('Frame'), yue: flat('門框') },
+  'doorConstruction.part.hinges': { en: flat('Hinges'), yue: flat('鉸鏈') },
+  'doorConstruction.part.panel': { en: flat('Panel'), yue: flat('門板') },
+  'doorConstruction.part.handle': { en: flat('Handle'), yue: flat('門柄') },
+  'doorConstruction.part.activationCore': { en: flat('Activation core'), yue: flat('啟動核心') },
+  'doorConstruction.picker.hint': { en: flat('Choose a real part, then continue to the next step.'), yue: flat('揀一件真正零件，再去下一步。') },
+  'doorConstruction.search.label': { en: flat('Search available parts'), yue: flat('搜尋可用零件') },
+  'doorConstruction.search.placeholder': { en: flat('Name or material'), yue: flat('名稱或物料') },
+  'doorConstruction.search.regex': { en: flat('Open regex builder for this part search'), yue: flat('開啟呢個零件搜尋嘅正則建立器') },
+  'doorConstruction.search.count': { en: flat('{count} parts shown'), yue: flat('顯示 {count} 件零件') },
+  'doorConstruction.search.empty': { en: flat('No parts match this search.'), yue: flat('冇零件符合呢個搜尋。') },
+  'doorConstruction.nameRequired': { en: flat('Give the door a name before continuing.'), yue: flat('繼續之前請先幫道門改個名。') },
+  'doorConstruction.missingParts': { en: flat('Configure {parts} before activating the door.'), yue: flat('啟動道門之前請先設定 {parts}。') },
+  'doorConstruction.armed': { en: flat('Activation core armed. Review the construction, then activate the door.'), yue: flat('啟動核心已上膛。檢查好門，再啟動。') },
+  'doorConstruction.core.armed': { en: flat('Armed and ready for activation.'), yue: flat('已上膛，準備啟動。') },
+  'doorConstruction.core.waiting': { en: flat('Waiting until the other four parts are configured.'), yue: flat('等緊其餘四件零件設定好。') },
+  'doorConstruction.core.disabled': { en: flat('Configure the four physical parts first.'), yue: flat('請先設定四件實體零件。') },
+  'doorConstruction.arm': { en: flat('Arm activation core'), yue: flat('啟動核心上膛') },
+  'doorConstruction.cancel': { en: flat('Cancel'), yue: flat('取消') },
+  'doorConstruction.activate': { en: flat('Activate door'), yue: flat('啟動道門') },
+  'doorConstruction.choice.frame.stone.title': { en: flat('Stone frame'), yue: flat('石門框') },
+  'doorConstruction.choice.frame.stone.description': { en: flat('A sturdy frame that marks the doorway.'), yue: flat('穩陣門框，清楚標示門口。') },
+  'doorConstruction.choice.frame.wood.title': { en: flat('Wood frame'), yue: flat('木門框') },
+  'doorConstruction.choice.frame.wood.description': { en: flat('A warm frame with a simple grain.'), yue: flat('帶住簡單木紋嘅溫暖門框。') },
+  'doorConstruction.choice.frame.metal.title': { en: flat('Metal frame'), yue: flat('金屬門框') },
+  'doorConstruction.choice.frame.metal.description': { en: flat('A clean frame for a technical doorway.'), yue: flat('俐落嘅技術門口門框。') },
+  'doorConstruction.choice.hinges.metal.title': { en: flat('Metal hinges'), yue: flat('金屬鉸鏈') },
+  'doorConstruction.choice.hinges.metal.description': { en: flat('A pair of visible hinges for the swing.'), yue: flat('一對睇得見、負責擺動嘅鉸鏈。') },
+  'doorConstruction.choice.hinges.stone.title': { en: flat('Stone pivots'), yue: flat('石樞紐') },
+  'doorConstruction.choice.hinges.stone.description': { en: flat('Heavy pivots for a grounded door.'), yue: flat('沉實門扉用嘅厚重樞紐。') },
+  'doorConstruction.choice.panel.wood.title': { en: flat('Wood panel'), yue: flat('木門板') },
+  'doorConstruction.choice.panel.wood.description': { en: flat('A solid panel that fills the frame.'), yue: flat('填滿門框嘅實心門板。') },
+  'doorConstruction.choice.panel.metal.title': { en: flat('Metal panel'), yue: flat('金屬門板') },
+  'doorConstruction.choice.panel.metal.description': { en: flat('A durable panel with a crisp finish.'), yue: flat('耐用又俐落嘅門板。') },
+  'doorConstruction.choice.panel.glass.title': { en: flat('Glass panel'), yue: flat('玻璃門板') },
+  'doorConstruction.choice.panel.glass.description': { en: flat('A transparent panel that keeps the room visible.'), yue: flat('透明門板，入面間房照樣睇得見。') },
+  'doorConstruction.choice.handle.metal.title': { en: flat('Metal handle'), yue: flat('金屬門柄') },
+  'doorConstruction.choice.handle.metal.description': { en: flat('A tactile handle for deliberate activation.'), yue: flat('一掂就知、用嚟有意識啟動嘅門柄。') },
+  'doorConstruction.choice.handle.wood.title': { en: flat('Wood handle'), yue: flat('木門柄') },
+  'doorConstruction.choice.handle.wood.description': { en: flat('A compact handle matching a timber door.'), yue: flat('配合木門嘅細巧門柄。') },
+  'multiverse.door.failed': { en: flat('The door could not be attached to the new canvas.'), yue: flat('道門未能連接到新畫布。') },
+  'multiverse.door.created': { en: flat('Door constructed and paired.'), yue: flat('道門已砌好並完成配對。') },
   'wildDimSum.title': { en: flat('Wild dim sum'), yue: flat('野生點心') },
   'wildDimSum.aria': { en: flat('Wild dim sum node'), yue: flat('野生點心節點') },
   'wildDimSum.close': { en: flat('Close'), yue: flat('關閉') },

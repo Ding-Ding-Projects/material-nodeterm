@@ -97,6 +97,7 @@ import { startSessionMemoryService, sshScopePredicate } from '../core/session-me
 import { startWslService, defaultWslRuntime, fileWslOwnershipStore } from '../core/wsl'
 import { startToyLockService } from '../core/toylocks/toylock-service'
 import { startAuthenticatorService } from '../core/toylocks/authenticator-service'
+import { startUniverseDoorEntryService } from '../core/universe-door-entry-service'
 import { createMemoryPressureMonitor } from '../core/memory-pressure'
 import { createPtyPressureMonitor } from '../core/pty-pressure'
 import { claudeCliCaps, type ClaudeCliCaps } from '../core/claude-cli'
@@ -647,7 +648,7 @@ export async function startServer(
   // Context Link: core owns the whole feature (read handler, shim, skill, instruction blocks) and
   // writes everything under `dataDir`; what it needs from a shell is the link map. The desktop's
   // renderer pushes it from the live canvas — headless there may be no browser attached at all, so
-  // we derive the same map from the persisted `bridges[]` of every canvas instead. See
+  // we derive the same map from the persisted `links[]` of every canvas instead. See
   // src/server/context-link.ts.
   const contextLink = initServerContextLink({
     ptyManager,
@@ -655,7 +656,7 @@ export async function startServer(
     installAgentIntegrations: config.installHooks !== false
   })
   // Every load()/save() is a canvas change as far as links are concerned: a browser drawing a
-  // bridge edge reaches us as the workspace save it triggers.
+  // context-link change reaches us as the workspace save it triggers.
   workspaceStore.onPersist = () => {
     contextLink.refresh()
     refreshNodeTokens()
@@ -776,6 +777,7 @@ export async function startServer(
   // both raw shells change together (CLAUDE.md, agent-support section).
   ptyManager.setTextWriteGate((persistKey) => toyLockService.mayWriteToNode(persistKey))
   startAuthenticatorService()
+  startUniverseDoorEntryService()
 
   // Headless notification host: every core service above (incl. the loopback hook server, which
   // is its own listener and MUST run) is booted, but we bind NO public HTTP/WS listener — no
