@@ -97,6 +97,79 @@
   background: var(--md-surface-container-high);
 }
 
+.multiverse-nav__portal-trigger {
+  min-height: 40px;
+  min-width: 84px;
+  margin-inline-start: 8px;
+  padding: 0 16px;
+  border: 1px solid var(--md-outline);
+  border-radius: 20px;
+  color: var(--md-on-surface);
+  background: var(--md-surface-container);
+  font: inherit;
+  cursor: pointer;
+}
+
+.multiverse-nav__portal-trigger:hover,
+.multiverse-nav__portal-trigger:focus-visible {
+  background: var(--md-surface-container-high);
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+
+.portal-lifecycle-dialog__create,
+.portal-lifecycle-dialog__list {
+  display: grid;
+  gap: 12px;
+}
+
+.portal-lifecycle-dialog__create label {
+  display: grid;
+  gap: 6px;
+  color: var(--md-on-surface-variant);
+}
+
+.portal-lifecycle-dialog__create select {
+  min-height: 40px;
+  border: 1px solid var(--md-outline);
+  border-radius: 12px;
+  padding: 0 12px;
+  color: var(--md-on-surface);
+  background: var(--md-surface-container-high);
+}
+
+.portal-lifecycle-dialog__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--md-outline-variant);
+  border-radius: 12px;
+  background: var(--md-surface-container);
+}
+
+.portal-lifecycle-dialog__row > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.portal-lifecycle-dialog__row > div span {
+  color: var(--md-on-surface-variant);
+  font-size: 0.82rem;
+}
+
+@media (max-width: 720px) {
+  .portal-lifecycle-dialog__row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .portal-lifecycle-dialog__row > div {
+    grid-column: 1 / -1;
+  }
+}
+
 .multiverse-nav__trigger:hover,
 .multiverse-nav__trigger:focus-visible {
   color: var(--md-on-secondary-container);

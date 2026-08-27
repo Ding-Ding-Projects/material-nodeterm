@@ -137,7 +137,9 @@ import {
 import { TopAppBar } from '../components/TopAppBar'
 import { ProjectSwitcher } from '../components/ProjectSwitcher'
 import { MultiverseNavigator } from '../components/MultiverseNavigator'
+import { PortalLifecycleDialog } from '../components/PortalLifecycleDialog'
 import { projectCanvasView } from '@shared/multiverse-canvases'
+import { portableCanvasProjectionToProject, projectToPortableCanvasV3 } from '../../core/portable-canvas-projection'
 import { type MenuItem } from '../components/ContextMenu'
 import { devicePixelSnapOffset } from '../terminal/device-pixel-fit'
 import { VocabularyContextMenu } from '../components/menu/VocabularyContextMenu'
@@ -1899,6 +1901,15 @@ export function Canvas() {
   }, [getViewport, setViewport])
 
   const activeProjectId = useProjects((s) => s.activeProjectId)
+  const activeProject = useProjects((s) => s.projects.find((p) => p.id === s.activeProjectId))
+  const portalProjection = useMemo(() => {
+    if (!activeProject) return null
+    try {
+      return projectToPortableCanvasV3(activeProject)
+    } catch {
+      return null
+    }
+  }, [activeProject])
   const activeProjectSettingsOverrides = useProjects(
     (s) => s.projects.find((p) => p.id === s.activeProjectId)?.settingsOverrides
   )
@@ -3229,6 +3240,48 @@ export function Canvas() {
     if (result.portalId) bumpDirty()
     return result
   }, [activeProjectId, bumpDirty, commitActiveToStore])
+
+  const updatePortalProjection = useCallback((projection: ReturnType<typeof projectToPortableCanvasV3>) => {
+    if (!activeProjectId) return
+    commitActiveToStore()
+    const current = useProjects.getState().getProject(activeProjectId)
+    if (!current) return
+    const hydrated = portableCanvasProjectionToProject(projection, { id: current.id, ...(current.cwd ? { cwd: current.cwd } : {}) })
+    useProjects.getState().replaceProject({
+      ...current,
+      nodes: hydrated.nodes,
+      viewport: hydrated.viewport,
+      multiverseCanvases: hydrated.multiverseCanvases,
+      portals: hydrated.portals,
+      ...(hydrated.childCanvases ? { childCanvases: hydrated.childCanvases } : {})
+    })
+    bumpDirty()
+  }, [activeProjectId, bumpDirty, commitActiveToStore])
+
+  const openPortal = useCallback((portalId: string) => {
+    if (!activeProjectId) return
+    commitActiveToStore()
+    const result = useProjects.getState().openPortal(activeProjectId, portalId, useProjects.getState().getProject(activeProjectId)?.activeCanvasId ?? 'root')
+    if (!result.ok) setNotice({ kind: 'error', text: result.reason })
+  }, [activeProjectId, commitActiveToStore, setNotice])
+
+  const requestDeletePortal = useCallback((portal: import('../../core/portal-lifecycle').PortablePortalV3) => {
+    const anchor = document.activeElement instanceof HTMLElement ? document.activeElement : undefined
+    openDestructiveGate({
+      title: `Delete portal “${portal.title}” permanently`,
+      description: 'This removes the portal and its child canvas records, then preserves the child nodes in the containing canvas. It cannot be undone.',
+      ...(anchor ? { restoreFocusEl: anchor } : {}),
+      onConfirm: () => {
+        if (!activeProjectId) return
+        const result = useProjects.getState().deletePortal(activeProjectId, portal.id)
+        if (!result.ok) {
+          setNotice({ kind: 'error', text: result.reason })
+          return
+        }
+        bumpDirty()
+      }
+    })
+  }, [activeProjectId, bumpDirty, setNotice])
 
   const writeDisk = useCallback(async () => {
     // Captured BEFORE the snapshot is built (`toWorkspace()` runs synchronously on this line), so
@@ -15567,6 +15620,7 @@ export function Canvas() {
     candidates: PortableMediaCandidate[]
     resolve: (plan: PortableMediaExportPlan | null) => void
   } | null>(null)
+  const [portalLifecycleOpen, setPortalLifecycleOpen] = useState(false)
   const choosePortableMedia = useCallback(async (project: Project): Promise<PortableMediaExportPlan | null> => {
     const selected = await window.nodeTerminal.dialog.selectFiles()
     if (!selected || selected.length === 0) return null
@@ -15734,12 +15788,15 @@ export function Canvas() {
         useProjects.getState().adoptProject(result.project)
         await writeDisk()
         const where = result.restoredTo ? `Repository and files restored to ${result.restoredTo}. ` : ''
+        const repairNote = result.repairs?.length
+          ? ` ${result.repairs.length} portal repair${result.repairs.length === 1 ? '' : 's'} applied; child content was preserved.`
+          : ''
         const plannerDefinitions = result.plannerDefinitions
         notify({
           kind: 'success',
           titleKind: 'authored',
           title: 'Project opened from file',
-          body: `${where}${archiveContentsSummary(result.contents)}`.trim() || 'The project and its complete local history are ready.',
+          body: `${where}${archiveContentsSummary(result.contents)}${repairNote}`.trim() || 'The project and its complete local history are ready.',
           bodyKind: 'fact',
           ...(plannerDefinitions ? {
             actions: [{
@@ -16654,6 +16711,17 @@ export function Canvas() {
           archiveBusy={() => projectArchiveBusyRef.current}
         />
         <MultiverseNavigator onNavigate={navigateMultiverseCanvas} onCreate={createMultiverseCanvas} onConstructDoor={attachMultiverseDoor} />
+        <button
+          type="button"
+          className="multiverse-nav__portal-trigger"
+          title="Manage portal lifecycle"
+          onClick={() => {
+            commitActiveToStore()
+            setPortalLifecycleOpen(true)
+          }}
+        >
+          Portals
+        </button>
         <div className="md3-app-bar__spacer" />
         {/* The docked search bar — the SAME `.cluster-search` button/title the packaged-app
             driver script selects; re-themed, never renamed. */}
@@ -17723,6 +17791,18 @@ export function Canvas() {
             setDocsInitialPath(path)
             setDocsOpen(true)
           }}
+        />
+      )}
+
+      {portalLifecycleOpen && portalProjection && activeProject && (
+        <PortalLifecycleDialog
+          open
+          projection={portalProjection}
+          currentCanvasId={activeProject.activeCanvasId ?? 'root'}
+          onClose={() => setPortalLifecycleOpen(false)}
+          onChange={updatePortalProjection}
+          onOpenCanvas={openPortal}
+          onRequestDelete={requestDeletePortal}
         />
       )}
 
