@@ -1,5 +1,6 @@
 import type { GroupWorktree } from './worktree'
 import type { BoundGroup } from './worktree-reconcile'
+import type { GitNestedRepository } from './types'
 
 /**
  * One checkout the Source Control panel can operate on.
@@ -9,7 +10,7 @@ import type { BoundGroup } from './worktree-reconcile'
  * A third encoding of the same fact is one more thing that can drift out of step with the other two.
  */
 export interface ScmScope {
-  /** 'main' for the project's own checkout, else the bound group's node id. */
+  /** 'main' for the project's own checkout, a group id for worktrees, or `nested:<path>`. */
   id: string
   label: string
   cwd: string
@@ -36,8 +37,12 @@ export function boundGroups(nodes: ScmScopeNode[]): BoundGroup[] {
   return out
 }
 
-/** The main checkout first, then one scope per bound worktree. */
-export function scmScopes(project: { cwd?: string; name: string }, bound: BoundGroup[]): ScmScope[] {
+/** The main checkout first, then bound worktrees and verified child repositories. */
+export function scmScopes(
+  project: { cwd?: string; name: string },
+  bound: BoundGroup[],
+  nested: GitNestedRepository[] = []
+): ScmScope[] {
   if (!project.cwd) return []
   return [
     { id: 'main', label: `${project.name} (main checkout)`, cwd: project.cwd },
@@ -45,6 +50,11 @@ export function scmScopes(project: { cwd?: string; name: string }, bound: BoundG
       id: b.groupId,
       label: `${b.worktree.branch} (worktree)`,
       cwd: b.worktree.path
+    })),
+    ...nested.map((repo) => ({
+      id: `nested:${repo.relativePath}`,
+      label: `${repo.relativePath} (nested repository)`,
+      cwd: repo.path
     }))
   ]
 }

@@ -216,6 +216,25 @@ const REMOTE_WORKTREE_REFUSAL = (): worktreeOps.WorktreeOpResult => ({
   message: 'Worktrees are not supported in SSH projects. Nothing was changed.'
 })
 
+const NESTED_REPOSITORY_MAX_DEPTH = 3
+const NESTED_REPOSITORY_MAX_DIRECTORIES = 512
+const NESTED_REPOSITORY_BLOCKLIST = new Set([
+  '.git',
+  '.nodeterm',
+  'node_modules',
+  'dist',
+  'build',
+  'out',
+  '.cache',
+  '.venv'
+])
+
+function sameLocalPath(left: string, right: string): boolean {
+  const a = path.resolve(left).replace(/[\\/]$/, '')
+  const b = path.resolve(right).replace(/[\\/]$/, '')
+  return process.platform === 'win32' ? a.toLocaleLowerCase('en-US') === b.toLocaleLowerCase('en-US') : a === b
+}
+
 function parseRepoName(url: string, fallback: string): string {
   const m = url.match(/[:/]([^/:]+\/[^/]+?)(?:\.git)?$/)
   return m ? m[1] : fallback
@@ -345,6 +364,7 @@ export class GitService {
       this.checkoutCommit(cwd, oid)
     )
     platform().handle(IPC.gitRepoRoot, (cwd: string) => this.repoRoot(cwd))
+    platform().handle(IPC.gitDiscoverNestedRepos, (cwd: string) => this.discoverNestedRepos(cwd))
     platform().handle(IPC.gitWorktreeList, (repoPath: string) => this.worktreeList(repoPath))
     platform().handle(IPC.gitWorktreeAdd, (repoPath: string, wtPath: string, branch: string, baseRef: string, isNew: boolean) =>
       this.worktreeAdd(repoPath, wtPath, branch, baseRef, isNew)
@@ -362,6 +382,78 @@ export class GitService {
 
   repoRoot(cwd: string) {
     return worktreeOps.repoRoot(git, cwd)
+  }
+
+  /**
+   * Find child repositories for a project folder that is not itself a checkout (and also expose
+   * nested repositories inside a normal checkout). The scan is deliberately shallow and bounded:
+   * it follows real directories only, skips generated/dependency trees, verifies every `.git`
+   * marker with Git, and never treats a failed read as an empty successful scan.
+   */
+  async discoverNestedRepos(cwd: string): Promise<import('../shared/types').GitNestedRepositoryDiscovery> {
+    if (!cwd) return { ok: false, repositories: [], message: 'A project folder is required.' }
+    if (isRemoteRepo(cwd)) {
+      return {
+        ok: false,
+        repositories: [],
+        message: 'Nested repository discovery is unavailable for SSH projects.'
+      }
+    }
+    const root = path.resolve(cwd)
+    try {
+      const stat = await fs.promises.stat(root)
+      if (!stat.isDirectory()) return { ok: false, repositories: [], message: 'The project folder is not a directory.' }
+    } catch {
+      return { ok: false, repositories: [], message: 'The project folder could not be read.' }
+    }
+
+    const queue: Array<{ directory: string; depth: number }> = [{ directory: root, depth: 0 }]
+    const repositories: import('../shared/types').GitNestedRepository[] = []
+    let readable = true
+    while (queue.length > 0 && queue.length + repositories.length <= NESTED_REPOSITORY_MAX_DIRECTORIES) {
+      const current = queue.shift() as { directory: string; depth: number }
+      let entries: import('fs').Dirent[]
+      try {
+        entries = await fs.promises.readdir(current.directory, { withFileTypes: true })
+      } catch {
+        readable = false
+        continue
+      }
+
+      const hasGitMarker = entries.some((entry) => entry.name === '.git')
+      if (current.depth > 0 && hasGitMarker) {
+        const rootResult = await git(current.directory, ['rev-parse', '--show-toplevel'])
+        if (rootResult.ok && sameLocalPath(rootResult.out.trim(), current.directory)) {
+          const relativePath = path.relative(root, current.directory).replace(/\\/g, '/')
+          if (relativePath && !repositories.some((repo) => sameLocalPath(repo.path, current.directory))) {
+            repositories.push({
+              path: current.directory,
+              relativePath,
+              name: path.basename(current.directory)
+            })
+          }
+        } else if (!rootResult.ok) {
+          readable = false
+        }
+      }
+
+      if (current.depth >= NESTED_REPOSITORY_MAX_DEPTH) continue
+      for (const entry of entries) {
+        if (!entry.isDirectory() || entry.isSymbolicLink() || NESTED_REPOSITORY_BLOCKLIST.has(entry.name)) continue
+        queue.push({ directory: path.join(current.directory, entry.name), depth: current.depth + 1 })
+        if (queue.length + repositories.length >= NESTED_REPOSITORY_MAX_DIRECTORIES) break
+      }
+    }
+
+    repositories.sort((a, b) => a.relativePath.localeCompare(b.relativePath))
+    if (!readable) {
+      return {
+        ok: false,
+        repositories,
+        message: `Nested repository discovery could not read every folder within ${NESTED_REPOSITORY_MAX_DEPTH} levels.`
+      }
+    }
+    return { ok: true, repositories }
   }
   worktreeList(repoPath: string): Promise<WorktreeListResult> {
     // A repo on an SSH host cannot be stat'd from here (see `isRemoteRepo`): answer "the read

@@ -3259,6 +3259,23 @@ export interface GitStatus {
   changes: GitFileChange[]
 }
 
+/** A verified Git repository found below a project's configured folder. */
+export interface GitNestedRepository {
+  /** Absolute path used as the cwd for scoped Git operations. */
+  path: string
+  /** Project-root-relative display path, always using `/` separators. */
+  relativePath: string
+  /** Folder name used as the compact scope label. */
+  name: string
+}
+
+/** Result of the bounded nested-repository scan. A failed scan is never an empty success. */
+export interface GitNestedRepositoryDiscovery {
+  ok: boolean
+  repositories: GitNestedRepository[]
+  message?: string
+}
+
 /** Core-owned provenance for one exact physical worktree generation. */
 export interface GitWorktreeOwnership {
   /** Opaque machine-local ownership record id. Canvas JSON cannot mint or replace it. */
@@ -3389,6 +3406,8 @@ export interface GitApi {
   /** Checkout a commit (detached HEAD). */
   checkoutCommit(cwd: string, oid: string): Promise<GitResult>
   repoRoot(cwd: string): Promise<string | null>
+  /** Find verified child repositories below a project folder without mutating the filesystem. */
+  discoverNestedRepos(cwd: string): Promise<GitNestedRepositoryDiscovery>
   /** `{ ok: false, entries: [] }` when git itself could not be read — which is NOT the same fact as
    *  "this repo has no worktrees", and no caller may treat it as one (see worktree-ops). */
   worktreeList(repoPath: string): Promise<import('./worktree').WorktreeListResult>

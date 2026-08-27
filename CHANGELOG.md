@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add bounded nested Git repository discovery to Source Control. Projects whose configured folder
+  contains child checkouts can select each verified repository as an independent scope, while
+  unreadable scans remain distinct from an empty result and SSH projects retain their explicit
+  remote limitation. This ultra-speed implementation lane intentionally did not run tests, type
+  checks, lint, reviews, security or accessibility checks, builds, packaging, installer execution,
+  runtime interaction, or UI captures.
+
 - Add the bundled AWS CLI v2 dependency lane. Windows packaging now stages the pinned official
   `2.36.32` MSI, verifies its SHA-256, falls back through a verified local cache or canonical
   HTTPS download, extracts it into application-local storage, exposes the installed version, and

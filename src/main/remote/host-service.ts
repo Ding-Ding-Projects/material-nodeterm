@@ -120,6 +120,7 @@ export interface HostFsOps {
 // execution. Same cwd jail as `fs.*` (isWithinRoots); no injected instance ⇒ not served at all.
 export interface HostGitOps {
   status(cwd: string): Promise<unknown>
+  discoverNestedRepos?(cwd: string): Promise<unknown>
   diff(cwd: string, path: string, staged: boolean, untracked: boolean): Promise<string>
   stage(cwd: string, paths: string[]): Promise<unknown>
   unstage(cwd: string, paths: string[]): Promise<unknown>
@@ -411,6 +412,11 @@ export function createHostHandlers(
       switch (req.method) {
         case 'git.status':
           return git.status(cwd)
+        case 'git.discoverNestedRepos':
+        case 'git:discover-nested-repos':
+          return git.discoverNestedRepos
+            ? git.discoverNestedRepos(cwd)
+            : Promise.reject(new Error('Nested repository discovery is unavailable on this host.'))
         case 'git.diff':
           return git.diff(cwd, str(p.path) ?? '', p.staged === true, p.untracked === true)
         case 'git.stage':
@@ -553,6 +559,8 @@ export function createHostHandlers(
           handleFs(req)
           break
         case 'git.status':
+        case 'git.discoverNestedRepos':
+        case 'git:discover-nested-repos':
         case 'git.diff':
         case 'git.stage':
         case 'git.unstage':

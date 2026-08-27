@@ -581,6 +581,7 @@ export const IPC = {
   gitBranchAt: 'git:branch-at',
   gitCheckoutCommit: 'git:checkout-commit',
   gitRepoRoot: 'git:repo-root',
+  gitDiscoverNestedRepos: 'git:discover-nested-repos',
   gitWorktreeList: 'git:worktree-list',
   gitWorktreeAdd: 'git:worktree-add',
   gitWorktreeMerge: 'git:worktree-merge',
