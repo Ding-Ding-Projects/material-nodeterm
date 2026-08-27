@@ -19,10 +19,12 @@ export const REPO_BLOB_DOCS = REPO_URL + '/blob/main/docs/features/README.md'
 export const REPO_RELEASES = REPO_URL + '/releases'
 export const REPO_ISSUES = REPO_URL + '/issues'
 export const REPO_CHANGELOG = REPO_URL + '/blob/main/CHANGELOG.md'
+export const CURRENT_VERSION = '0.4.120'
+export const WINDOWS_SETUP_URL = REPO_URL + '/releases/download/v' + CURRENT_VERSION + '/nodeterm-Setup-' + CURRENT_VERSION + '.exe'
 
 export const FEATURES = [
   { id: 'nodes', icon: '🖥', color: 'var(--yellow)', title: 'Real terminals as blocks', body: 'Every block runs its own shell. Drag them, resize them, zoom out and see the whole map at once.' },
-  { id: 'tmux', icon: '♻️', color: 'var(--green)', title: 'Nothing gets lost', body: 'tmux keeps your terminals — and whatever they were running — alive across restarts, even a full reboot.' },
+  { id: 'tmux', icon: '♻️', color: 'var(--green)', title: 'Warm reconnect and cold restore', body: 'A live session host can reconnect after the app closes. After a computer restart, nodeterm restores layout and saved scrollback without pretending the old process survived.' },
   { id: 'projects', icon: '🗂', color: 'var(--blue)', title: 'Projects and tabs', body: 'Each project is its own canvas with its own folder. Reorder them, close them, bring them back from history.' },
   { id: 'agents', icon: '🤖', color: 'var(--pink)', title: 'Robot helpers', body: 'Claude Code, Codex, Gemini, opencode, Grok and your own CLIs — one click each, with a live status badge.' },
   { id: 'super', icon: '✦', color: 'var(--purple)', title: 'Helper superpowers', body: 'Link two helpers so they read each other, branch a conversation, or let a helper open new blocks for you.' },
@@ -60,7 +62,7 @@ export const DOCS = [
   ['Speech / dictation', 'on-device Whisper', 'speech-dictation'],
   ['Terminal sessions & continuity', 'tmux, and the Windows session host', 'terminal-sessions'],
   ['Toy locks', 'a padlock for fun, not for safety', 'toy-locks'],
-  ['Windows support', 'what works and what does not yet', 'windows-support'],
+  ['Windows support', 'the current desktop package and its known limits', 'windows-support'],
 ]
 
 // A hand-picked six from the design's dumpling list, kept to exactly the
