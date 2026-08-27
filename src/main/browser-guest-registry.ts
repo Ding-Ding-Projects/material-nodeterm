@@ -65,7 +65,7 @@ export function registerBrowserGuest(
   if (typeof webContentsId !== 'number' || !Number.isInteger(webContentsId) || webContentsId <= 0)
     return false
   if (typeof nodeId !== 'string' || !isSafeNodeId(nodeId)) return false
-  if (surface !== 'canvas' && surface !== 'modal') return false
+  if (surface !== undefined && surface !== 'canvas' && surface !== 'modal') return false
   // Either lookup or inspection can throw when destruction races registration. A guest that
   // cannot be inspected all the way through is not a guest.
   let contents: { getType(): string } | null = null
@@ -75,7 +75,7 @@ export function registerBrowserGuest(
   } catch {
     return false
   }
-  guests.set(webContentsId, { nodeId, surface })
+  guests.set(webContentsId, surface === undefined ? { nodeId } : { nodeId, surface })
   return true
 }
 
@@ -101,8 +101,7 @@ export function registerBrowserGuestRequest(
   lookup: WebContentsLookup,
   onRefused: (details: BrowserGuestRegistrationRefusal) => void
 ): boolean {
-  const kind = surface === undefined ? 'canvas' : surface
-  const accepted = registerBrowserGuest(guests, webContentsId, nodeId, kind, lookup)
+  const accepted = registerBrowserGuest(guests, webContentsId, nodeId, surface, lookup)
   if (!accepted) onRefused({ webContentsId, nodeId, surface })
   return accepted
 }

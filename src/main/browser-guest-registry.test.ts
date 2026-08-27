@@ -141,7 +141,7 @@ describe('browserDiscardedMessage', () => {
 })
 
 describe('registerBrowserGuestRequest', () => {
-  it('keeps the legacy omitted surface as a validated canvas registration', () => {
+  it('keeps the legacy omitted surface as an unknown registration', () => {
     const guests = new Map<number, BrowserGuest>()
     const refused: unknown[] = []
     expect(
@@ -154,7 +154,7 @@ describe('registerBrowserGuestRequest', () => {
         (details) => refused.push(details)
       )
     ).toBe(true)
-    expect(guests.get(21)).toEqual({ nodeId: 'browser-legacy', surface: 'canvas' })
+    expect(guests.get(21)).toEqual({ nodeId: 'browser-legacy' })
     expect(refused).toEqual([])
   })
 
@@ -201,7 +201,7 @@ describe('registerBrowserGuestRequest', () => {
 describe('the IPC handler is wired through it', () => {
   it('main never writes to browserGuests directly', () => {
     const src = readFileSync(resolve(__dirname, 'index.ts'), 'utf8')
-    expect(src).toContain('registerBrowserGuest(browserGuests')
+    expect(src).toContain('registerBrowserGuestRequest(')
     // `.set(` anywhere on this map would be a second, unguarded door.
     expect(src).not.toContain('browserGuests.set(')
   })
@@ -210,7 +210,8 @@ describe('the IPC handler is wired through it', () => {
     // The unit test above pins the registry; this pins the caller. A `surface ?? 'canvas'` here
     // would reintroduce the false claim one layer up, where no unit test can see it.
     const src = readFileSync(resolve(__dirname, 'index.ts'), 'utf8')
-    expect(src).toContain('nodeId, surface, (id)')
+    expect(src).toContain('registerBrowserGuestRequest(')
+    expect(src).toContain('nodeId,\n        undefined,')
     expect(src).not.toMatch(/surface\s*(\?\?|\|\|)/)
   })
 })

@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
-import { checkCdpCommand, type CdpContext } from './browser-cdp-allowlist'
 import { checkCdpCommand, COOKIE_WRITE_METHODS, type CdpContext } from './browser-cdp-allowlist'
 import { NT_SCRIPTS } from './browser-nt-scripts'
 

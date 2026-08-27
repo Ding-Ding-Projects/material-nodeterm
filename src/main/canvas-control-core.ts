@@ -132,11 +132,6 @@ export type ControlVerb =
   | 'board'
   | 'assign'
   | 'browser'
-  | 'send'
-  | 'reply'
-  | 'notify'
-  | 'sticky'
-  | 'browser'
   | 'open-project'
 
 export interface ControlCommand {
@@ -180,8 +175,6 @@ const VERBS: ControlVerb[] = [
   'board',
   'assign',
   'browser',
-  'send',
-  'reply',
   'notify',
   'sticky',
   'browser',
