@@ -9,16 +9,17 @@ import { ColorMenu } from '../components/color/ColorMenu'
 import { MinecraftServerPanel } from '../components/minecraft/MinecraftServerPanel'
 import { DockerHostManagerPanel } from '../components/docker/DockerHostManagerPanel'
 import { HomeAssistantPanel } from '../components/home-assistant/HomeAssistantPanel'
+import { NextcloudManagedPanel } from '../components/nextcloud/NextcloudManagedPanel'
 import { EditableNodeTitle } from '../components/EditableNodeTitle'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { mapAroundExactFacts } from './nodeVocabulary'
 
 /**
- * One component for the whole service family — Minecraft, Docker, Proxmox, GitLab, Home Assistant
- * and FreePBX. They differ in what they will eventually manage, not in how they behave as canvas
+ * One component for the whole service family — Minecraft, Docker, Proxmox, GitLab, Home Assistant,
+ * FreePBX, and managed Nextcloud. They differ in what they manage, not in how they behave as canvas
  * objects, so six near-identical components would be six copies of one rule waiting to drift.
  *
- * WHAT THIS DELIBERATELY DOES NOT DO for four of the six kinds, and why the emptiness is the point:
+ * WHAT THIS DELIBERATELY DOES NOT DO for the generic manager kinds, and why the emptiness is the point:
  *
  * Proxmox/GitLab/FreePBX are not connected to anything yet. Home Assistant is implemented
  * by HomeAssistantPanel through the host-owned REST/WebSocket client. CLAUDE.md is
@@ -52,7 +53,8 @@ const ENDPOINT_PLACEHOLDER: Record<ServiceNodeKind, string> = {
   proxmox: 'https://proxmox.local:8006',
   gitlab: 'https://gitlab.example.com',
   homeassistant: 'http://homeassistant.local:8123',
-  freepbx: 'https://pbx.local'
+  freepbx: 'https://pbx.local',
+  'nextcloud-managed': 'https://nextcloud.local'
 }
 
 /**
@@ -245,7 +247,9 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
           />
         )}
 
-        {!collapsed && kind !== 'minecraft' && kind !== 'dockerhost' && kind !== 'homeassistant' && (
+        {!collapsed && kind === 'nextcloud-managed' && <NextcloudManagedPanel nodeId={id} intent={data.nextcloudManagedIntent} binding={data.nextcloudManagedBinding} onIntentChange={(nextcloudManagedIntent) => updateNodeData(id, { nextcloudManagedIntent })} onBindingChange={(nextcloudManagedBinding) => updateNodeData(id, { nextcloudManagedBinding })} />}
+
+        {!collapsed && kind !== 'minecraft' && kind !== 'dockerhost' && kind !== 'homeassistant' && kind !== 'nextcloud-managed' && (
           <div className="service-node__body">
             <label className="service-node__field" htmlFor={`${id}-endpoint`}>
               <span className="service-node__field-label">{vocab('Address')}</span>

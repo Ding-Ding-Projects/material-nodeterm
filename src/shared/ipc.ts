@@ -656,6 +656,10 @@ export const IPC = {
   dockerHostManagerRun: 'docker-host-manager:run',
   dockerHostManagerCancel: 'docker-host-manager:cancel',
   dockerHostManagerProgress: 'docker-host-manager:progress',
+  nextcloudManagedRun: 'docker-host-manager:nextcloud-run',
+  nextcloudManagedSnapshots: 'docker-host-manager:nextcloud-snapshots',
+  nextcloudManagedCancel: 'docker-host-manager:nextcloud-cancel',
+  nextcloudManagedProgress: 'docker-host-manager:nextcloud-progress',
   // Team Access (multi-seat): `relayHostInvite` ADDS a seat (invoke, `{ projectId?, email? }` →
   // `{ offer }`, cap-checked → rejects `E_SEATS_FULL`); `relayHostRevoke` (send, `{ id }`) cuts one
   // bridged peer's live session. `relayHostPeerPending`/`relayHostOpen` now also carry the seat

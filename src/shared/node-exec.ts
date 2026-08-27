@@ -31,6 +31,7 @@ import { sshExtraArgsEnableLocalExec } from './ssh'
 import type { AgentLaunchIntent, CanvasNodeState, PendingLaunch } from './types'
 import type { NsisLocalPaths } from './nsis-form-types'
 import { normalizeVirtualMachineLocalPaths, safeVirtualMachinePath, type VirtualMachineLocalPaths } from './virtual-machine'
+import { validateNextcloudManagedBinding, type NextcloudManagedBinding } from './nextcloud-managed'
 
 /** Per-node exec values the LOCAL machine typed. Persisted only in the machine-local index. */
 export interface LocalNodeExec {
@@ -60,6 +61,8 @@ export interface LocalNodeExec {
    * endpoint with a password embedded in it is refused rather than stored.
    */
   serviceConnection?: ServiceConnection
+  /** Managed Nextcloud destination paths and vault-key names, kept off shared project data. */
+  nextcloudManagedBinding?: NextcloudManagedBinding
   /**
    * `NodeState.nsisLocalPaths` — the NSIS installer-builder node's source/license/icon paths on
    * this machine. Belongs on this boundary for the same reason `serviceConnection` does: it is
@@ -378,6 +381,7 @@ function stripNodeExec(n: CanvasNodeState): CanvasNodeState {
     withoutMediaPaths.terminalProfileId === undefined &&
     withoutMediaPaths.pendingLaunch === undefined &&
     withoutMediaPaths.serviceConnection === undefined &&
+    withoutMediaPaths.nextcloudManagedBinding === undefined &&
     withoutMediaPaths.nsisLocalPaths === undefined &&
     withoutMediaPaths.virtualMachineLocalPaths === undefined &&
     withoutMediaPaths.ssh?.extraArgs === undefined &&
@@ -389,6 +393,7 @@ function stripNodeExec(n: CanvasNodeState): CanvasNodeState {
   delete out.terminalProfileId
   delete out.pendingLaunch
   delete out.serviceConnection
+  delete out.nextcloudManagedBinding
   delete out.nsisLocalPaths
   delete out.virtualMachineLocalPaths
   if (out.ssh) {
@@ -480,6 +485,9 @@ export function carryLocalNodeExec(
   const vmPaths = normalizeVirtualMachineLocalPaths(prev.virtualMachineLocalPaths)
   const mediaFilePath = safePathString(prev.filePath) ? prev.filePath : undefined
   const mediaSourcePaths = localMediaSourcePaths(prev)
+  const nextcloudBinding = prev.kind === 'nextcloud-managed' && next.kind === 'nextcloud-managed'
+    ? (() => { try { return validateNextcloudManagedBinding(prev.nextcloudManagedBinding) } catch { return undefined } })()
+    : undefined
   if (
     prev.shell === undefined &&
     prev.terminalProfileId === undefined &&
@@ -489,6 +497,7 @@ export function carryLocalNodeExec(
     Object.keys(vmPaths).length === 0 &&
     mediaFilePath === undefined &&
     mediaSourcePaths === undefined
+    && nextcloudBinding === undefined
   )
     return next
   const out: CanvasNodeState = { ...next }
@@ -499,6 +508,7 @@ export function carryLocalNodeExec(
   if (pendingLaunch !== undefined) out.pendingLaunch = pendingLaunch
   if (nsisPaths !== undefined) out.nsisLocalPaths = nsisPaths
   if (Object.keys(vmPaths).length > 0) out.virtualMachineLocalPaths = vmPaths
+  if (nextcloudBinding) out.nextcloudManagedBinding = nextcloudBinding
   return restoreMediaPaths(out, { mediaFilePath, mediaSourcePaths })
 }
 
@@ -543,6 +553,10 @@ export function localNodeExec(nodes: CanvasNodeState[]): LocalNodeExecMap | unde
     // endpoint into the trusted store — the exact laundering `sanitizeInboundNode` exists to stop.
     const conn = safeServiceConnection(n.serviceConnection)
     if (conn) entry.serviceConnection = conn
+    const nextcloudBinding = n.kind === 'nextcloud-managed'
+      ? (() => { try { return validateNextcloudManagedBinding(n.nextcloudManagedBinding) } catch { return undefined } })()
+      : undefined
+    if (nextcloudBinding) entry.nextcloudManagedBinding = nextcloudBinding
     const nsisPaths = safeNsisLocalPaths(n.nsisLocalPaths)
     if (nsisPaths) entry.nsisLocalPaths = nsisPaths
     const vmPaths = normalizeVirtualMachineLocalPaths(n.virtualMachineLocalPaths)
@@ -560,6 +574,7 @@ export function localNodeExec(nodes: CanvasNodeState[]): LocalNodeExecMap | unde
       entry.sshExtraArgs ||
       entry.pendingLaunch ||
       entry.serviceConnection ||
+      entry.nextcloudManagedBinding ||
       entry.nsisLocalPaths ||
       entry.virtualMachineLocalPaths ||
       entry.mediaFilePath ||
@@ -600,6 +615,10 @@ export function applyLocalNodeExec(
     // that would be refused today must not be honoured merely because it is already on disk.
     const conn = safeServiceConnection(mine?.serviceConnection)
     if (conn) out.serviceConnection = conn
+    const nextcloudBinding = out.kind === 'nextcloud-managed'
+      ? (() => { try { return validateNextcloudManagedBinding(mine?.nextcloudManagedBinding) } catch { return undefined } })()
+      : undefined
+    if (nextcloudBinding) out.nextcloudManagedBinding = nextcloudBinding
     const nsisPaths = safeNsisLocalPaths(mine?.nsisLocalPaths)
     if (nsisPaths) out.nsisLocalPaths = nsisPaths
     const vmPaths = normalizeVirtualMachineLocalPaths(mine?.virtualMachineLocalPaths)

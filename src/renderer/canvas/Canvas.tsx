@@ -2067,7 +2067,7 @@ export function Canvas() {
       video: withNodeBoundary(VideoNode),
       web: withNodeBoundary(WebNode),
       browser: withNodeBoundary(BrowserNode),
-      // The service family. One component for all six: they differ in what they manage, not in how
+      // The service family. One component for all seven: they differ in what they manage, not in how
       // they behave as canvas objects, and React Flow hands each its own `type` so the component can
       // tell them apart without six registrations of six near-identical files.
       nsis: withNodeBoundary(NsisInstallerNode),
@@ -2079,6 +2079,7 @@ export function Canvas() {
       gitlab: withNodeBoundary(ServiceNode),
       homeassistant: withNodeBoundary(ServiceNode),
       freepbx: withNodeBoundary(ServiceNode),
+      'nextcloud-managed': withNodeBoundary(ServiceNode),
       'linux-vm': withNodeBoundary(VirtualMachineNode)
     }),
     []
@@ -5133,7 +5134,7 @@ export function Canvas() {
   )
 
   /**
-   * Adds a service-manager node. One handler for all six kinds rather than six copies of the same
+   * Adds a service-manager node. One handler for all service kinds rather than copies of the same
    * three lines — the kind is data, so it is a parameter.
    */
   const addService = useCallback(

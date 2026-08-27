@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { promisify } from 'node:util'
 import { ipcMain, type BrowserWindow } from 'electron'
 import { IPC } from '../../shared/ipc'
+import { registerNextcloudManaged } from './nextcloud-managed'
 import {
   DOCKER_GUIDED_IMAGES,
   DOCKER_TYPED_EXEC_TASKS,
@@ -253,6 +254,7 @@ async function actionArgs(action: DockerHostAction): Promise<{ context: string; 
 }
 
 export function registerDockerHostManager(win: BrowserWindow): { dispose(): void } {
+  const nextcloud = registerNextcloudManaged(win)
   const jobs = new Map<string, ChildProcess>()
   const send = (progress: DockerHostJobProgress): void => {
     if (!win.isDestroyed()) win.webContents.send(IPC.dockerHostManagerProgress, progress)
@@ -295,6 +297,7 @@ export function registerDockerHostManager(win: BrowserWindow): { dispose(): void
       jobs.clear()
       for (const channel of [IPC.dockerHostManagerContexts, IPC.dockerHostManagerSnapshot, IPC.dockerHostManagerLogs, IPC.dockerHostManagerRun]) ipcMain.removeHandler(channel)
       ipcMain.removeAllListeners(IPC.dockerHostManagerCancel)
+      nextcloud.dispose()
     }
   }
 }

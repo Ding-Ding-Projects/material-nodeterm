@@ -1,16 +1,17 @@
 # Service nodes (manager placeholders)
 
-Status: **implemented as canvas objects; not yet connected to anything.** This is the honest
+Status: **implemented as canvas objects; the managed Nextcloud profile is connected through its
+fixed host adapter.** The remaining generic service kinds stay honest manager shells. This is the honest
 midpoint between "planned" and "working": the node exists, drags and resizes and persists like
 any other node, and it stores where it would reach a service — but nothing dials that address yet.
 Read this document alongside the "what does not work yet" section below before assuming a control
 does more than it says.
 
-## The six kinds, and why one is called a manager and not a host
+## The service kinds, and why one is called a manager and not a host
 
-Six new node kinds join the canvas's `NodeKind` union
+The service node kinds join the canvas's `NodeKind` union
 (`src/shared/types.ts` `SERVICE_NODE_KINDS`): `minecraft`, `dockerhost`, `proxmox`, `gitlab`,
-`homeassistant`, `freepbx`. Each shares the same service-node shell,
+`homeassistant`, `freepbx`, and `nextcloud-managed`. Each shares the same service-node shell,
 `src/renderer/nodes/ServiceNode.tsx` — one component with six callers, because the only thing that
 varies between them is a label and a starting size, and this codebase's most repeated lesson is
 that a duplicated rule drifts from its copies.
@@ -29,7 +30,7 @@ but the node itself, as shipped, is exactly as inert as its five siblings; see
 [`minecraft-server.md`](minecraft-server.md) for the researched design of the part that would
 actually create one.
 
-None of the six kinds appear in `docs/features/integrations/README.md`'s old "planned, not yet
+None of the generic manager kinds appear in `docs/features/integrations/README.md`'s old "planned, not yet
 researched" list by accident of naming — they are the same six products that list already named.
 What changed is that the canvas object for each now exists; the research and the real client work
 for most of them has not started.
@@ -199,7 +200,7 @@ field could ever store. `ssh://localhost` is: bare `ssh://` with no `user@` defa
 platform and every OS the same way the plain `ssh` command does, to whoever is currently logged in
 — there is nothing to branch on per platform and nothing to go and ask the OS for.
 
-## What does not work yet
+## What does not work yet for the generic manager kinds
 
 State this plainly, because CLAUDE.md's rule against decorative controls cuts both ways: it forbids
 a control that *looks* wired and is not, and it equally forbids a document that implies more than
@@ -223,6 +224,13 @@ The body copy on every node says as much in place — "Talking to a real {produc
 so this node stores where it would connect and nothing more. There is deliberately no button here
 that looks like it would connect." — so a user reading the node itself gets the same honest answer
 this document does.
+
+## Managed Nextcloud
+
+The `nextcloud-managed` kind is the implemented hosting exception in this family. Its complete
+operation and privacy contract lives in [Managed Nextcloud, no socket](nextcloud-managed.md).
+It uses the same draggable, resizable service shell but replaces the generic address field with
+the fixed PostgreSQL, Redis, and web-service manager. It is not an arbitrary Docker Compose editor.
 
 ## Surfaces
 

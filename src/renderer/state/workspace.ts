@@ -10,6 +10,7 @@ import { DEFAULT_HOME_ASSISTANT_CONTROL_CONFIG, validateHomeAssistantControlConf
 import { DEFAULT_HOME_ASSISTANT_SENSOR_CONFIG, type HomeAssistantSensorConfig } from '@shared/home-assistant-sensor'
 import type { AlarmOccurrence, AlarmRecurrence } from '@shared/alarm-clock'
 import type { ServiceConnection } from '@shared/node-exec'
+import { DEFAULT_NEXTCLOUD_MANAGED_INTENT, type NextcloudManagedBinding, type NextcloudManagedIntent } from '@shared/nextcloud-managed'
 import type { NsisLocalPaths, NsisSpec } from '@shared/nsis-form-types'
 import { defaultNsisLocalPaths, defaultNsisSpec } from '@shared/nsis-form-types'
 import type { AgentId, AgentPermissionMode, BuiltinAgentId } from '@shared/agents/config'
@@ -269,6 +270,9 @@ export interface NodeData {
   /** service-kinds only, MACHINE-LOCAL: where this node reaches its service. Stripped from the
    *  shared document and from inbound peers; see shared/node-exec.ts. */
   serviceConnection?: ServiceConnection
+  /** Safe project intent for the managed Nextcloud no-socket profile. */
+  nextcloudManagedIntent?: NextcloudManagedIntent
+  nextcloudManagedBinding?: NextcloudManagedBinding
   /** Safe torrent magnet intent shared with the canvas. */
   torrentMagnet?: string
   /** nsis-only, GIT-SHARED: the installer's description. See `NsisSpec`. */
@@ -1553,7 +1557,8 @@ export const SERVICE_NODE_LABELS: Record<ServiceNodeKind, string> = {
   proxmox: 'Proxmox',
   gitlab: 'GitLab',
   homeassistant: 'Home Assistant',
-  freepbx: 'FreePBX'
+  freepbx: 'FreePBX',
+  'nextcloud-managed': 'Managed Nextcloud'
 }
 
 /**
@@ -1589,7 +1594,8 @@ export function createServiceNode(
       color: NODE_COLORS[index % NODE_COLORS.length],
       group: null,
       serviceLabel: '',
-      ...(kind === 'homeassistant' ? { homeAssistantIntent: { ...DEFAULT_HOME_ASSISTANT_NODE_INTENT } } : {})
+      ...(kind === 'homeassistant' ? { homeAssistantIntent: { ...DEFAULT_HOME_ASSISTANT_NODE_INTENT } } : {}),
+      ...(kind === 'nextcloud-managed' ? { nextcloudManagedIntent: { ...DEFAULT_NEXTCLOUD_MANAGED_INTENT } } : {})
     }
   }
 }
@@ -2211,6 +2217,7 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   homeassistant: true,
   'homeassistant-sensor': true,
   freepbx: true,
+  'nextcloud-managed': true,
   nsis: true,
   shop: true,
   torrent: true,
@@ -2262,6 +2269,7 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   homeassistant: SERVICE_SUMMARY_SIZE,
   'homeassistant-sensor': HOME_ASSISTANT_SENSOR_SIZE,
   freepbx: SERVICE_SUMMARY_SIZE,
+  'nextcloud-managed': SERVICE_CONSOLE_SIZE,
   nsis: NSIS_SIZE,
   shop: SHOP_SIZE,
   torrent: TORRENT_SIZE,
@@ -2717,6 +2725,8 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         cwd: n.cwd,
         text: n.text,
         serviceLabel: n.serviceLabel,
+        nextcloudManagedIntent: n.nextcloudManagedIntent,
+        nextcloudManagedBinding: n.nextcloudManagedBinding,
         homeAssistantIntent: n.homeAssistantIntent,
         universeCanvasId: n.universeCanvasId,
         universeScope: n.universeScope,
@@ -2842,6 +2852,8 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         cwd: n.data.cwd,
         text: n.data.text,
         serviceLabel: n.data.serviceLabel,
+        nextcloudManagedIntent: n.data.nextcloudManagedIntent,
+        nextcloudManagedBinding: n.data.nextcloudManagedBinding,
         homeAssistantIntent: n.data.homeAssistantIntent,
         universeCanvasId: n.data.universeCanvasId,
         universeScope: n.data.universeScope,

@@ -30,6 +30,7 @@ import type { ClientId, PeerDiff, PeerIdentity, PeerState } from '../shared/pres
 import type { ConvertQueueItem, ConverterQueueState } from '../shared/converter'
 import type { PullQueueItem, PullQueueState } from '../shared/ollama'
 import type { DockerHostAction, DockerHostJobProgress } from '../shared/docker-host-manager'
+import type { NextcloudManagedAction, NextcloudManagedBinding, NextcloudManagedProgress } from '../shared/nextcloud-managed'
 import type { MinecraftEvent } from '../shared/minecraft'
 import type { NodeDependencyAvailability, NodeDependencyProgress, NodeDependencyInstallResult } from '../shared/node-dependencies'
 import type { WslCreateProgress } from '../shared/wsl'
@@ -895,6 +896,16 @@ const api: NodeTerminalApi = {
         const handler = (_event: unknown, progress: DockerHostJobProgress) => listener(progress)
         ipcRenderer.on(IPC.dockerHostManagerProgress, handler)
         return () => ipcRenderer.removeListener(IPC.dockerHostManagerProgress, handler)
+      },
+      nextcloud: {
+        run: (action: NextcloudManagedAction) => ipcRenderer.invoke(IPC.nextcloudManagedRun, action),
+        snapshots: (binding: NextcloudManagedBinding) => ipcRenderer.invoke(IPC.nextcloudManagedSnapshots, binding),
+        cancel: (jobId: string) => ipcRenderer.send(IPC.nextcloudManagedCancel, jobId),
+        onProgress: (listener: (progress: NextcloudManagedProgress) => void) => {
+          const handler = (_event: unknown, progress: NextcloudManagedProgress) => listener(progress)
+          ipcRenderer.on(IPC.nextcloudManagedProgress, handler)
+          return () => ipcRenderer.removeListener(IPC.nextcloudManagedProgress, handler)
+        }
       }
     },
     start: (projectId?: string) => ipcRenderer.invoke(IPC.relayHostStart, projectId),

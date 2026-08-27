@@ -421,6 +421,8 @@ export type NodeKind =
   | 'homeassistant'
   | 'homeassistant-sensor'
   | 'freepbx'
+  /** Managed Nextcloud stack without a container-runtime socket mount. */
+  | 'nextcloud-managed'
   | 'torrent'
   /** One-shot Linux ISO virtual machine, distinct from the WSL terminal profile. */
   | 'linux-vm'
@@ -436,7 +438,8 @@ export const SERVICE_NODE_KINDS = [
   'proxmox',
   'gitlab',
   'homeassistant',
-  'freepbx'
+  'freepbx',
+  'nextcloud-managed'
 ] as const
 
 export type ServiceNodeKind = (typeof SERVICE_NODE_KINDS)[number]
@@ -656,6 +659,10 @@ export interface CanvasNodeState {
    * reasons. It never carries a secret; see `ServiceConnection` in shared/node-exec.ts.
    */
   serviceConnection?: ServiceConnection
+  /** Managed Nextcloud safe project intent; its destination binding and secret keys stay local. */
+  nextcloudManagedIntent?: import('./nextcloud-managed').NextcloudManagedIntent
+  /** Machine-local destination and vault-key bindings for the managed Nextcloud profile. */
+  nextcloudManagedBinding?: import('./nextcloud-managed').NextcloudManagedBinding
   /**
    * nsis-only, GIT-SHARED: the installer's description (app name, version, publisher, output
    * filename, install root, shortcut/uninstaller/compression choices). Nothing here names a
