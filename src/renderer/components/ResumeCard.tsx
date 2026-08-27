@@ -62,6 +62,11 @@ export function ResumeCard({ project, nodes, onOpen }: ResumeCardProps): JSX.Ele
           className="resume-card__close"
           title={vocab('Dismiss')}
           aria-label={vocab('Dismiss')}
+        <span className="resume-card__title">Resume where you left off</span>
+        <button
+          className="resume-card__close"
+          title="Dismiss"
+          aria-label="Dismiss"
           onClick={() => setDismissed(true)}
         >
           ✕

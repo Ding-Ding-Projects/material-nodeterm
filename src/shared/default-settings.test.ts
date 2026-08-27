@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_SETTINGS } from './types'
+import { DEFAULT_WORKTREE_PATH_TEMPLATE } from './worktree'
 
 describe('DEFAULT_SETTINGS', () => {
   it('uses automatic Windows profile detection for new and migrated settings', () => {
@@ -30,5 +31,11 @@ describe('DEFAULT_SETTINGS', () => {
     expect(DEFAULT_SETTINGS.remoteSystemAccountLabels).not.toBe(
       DEFAULT_SETTINGS.remoteSystemCodexAccountLabels
     )
+  it('uses the shared worktree path template default', () => {
+    expect(DEFAULT_SETTINGS.worktreePathTemplate).toBe(DEFAULT_WORKTREE_PATH_TEMPLATE)
+  })
+
+  it('keeps common identifier and path characters inside terminal word selections', () => {
+    expect(DEFAULT_SETTINGS.terminalWordSeparator).not.toMatch(/[-_/.]/)
   })
 })

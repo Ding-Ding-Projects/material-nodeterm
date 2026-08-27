@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   buildSessionList,
+  buildStatusList,
   groupCollapseKey,
   groupSessionCount,
   groupSessionRows,
@@ -10,10 +11,14 @@ import {
   projectHeadClickAction,
   projectSignalCounts,
   pruneCollapsedItems,
+  sessionStateAgeLabel,
   type GroupBucket,
-  type SessionNodeInput
+  type SessionNodeInput,
+  type SessionRowVM,
+  type StatusSection
 } from '../lib/sessionList'
 import { SessionRow } from './SessionRow'
+import { ProjectGlyph } from './ProjectGlyph'
 import { IconBellFilled, IconCircleCheck, IconPin } from './icons'
 import { useProjects } from '../state/projects'
 import { useSettings } from '../state/settings'
@@ -42,7 +47,9 @@ export interface SessionsSidebarProps {
    *  or the outgoing project's unsaved edits are dropped by the active-project reload and the
    *  new activeProjectId never reaches disk (the app reopens on the old project). */
   onSwitchProject(projectId: string): void
-  onAddToProject(projectId: string): void
+  /** "+" on a project header: open the add-node menu at the cursor (switching to the project
+   *  first if it isn't active). The event positions the menu. */
+  onAddToProject(projectId: string, e: { clientX: number; clientY: number }): void
   /** Move a node into a canvas group (groupId) or out to the top level (null). */
   onMoveToGroup(projectId: string, nodeId: string, groupId: string | null): void
   /** Name a canvas group with AI from its member terminals' output. */
@@ -76,6 +83,7 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
   const { api } = useSession()
 
   const [filter, setFilter] = useState('')
+  const [statusNow, setStatusNow] = useState(() => Date.now())
   const [branches, setBranches] = useState<Record<string, string>>({})
   // Drag-to-group: the object being dragged, and the current drop target for highlighting.
   // A group drag also remembers its parent frame, so a sibling-reorder drop zone can refuse a
@@ -100,6 +108,8 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
   // sidebarAutoCollapse now only supplies the DEFAULT for a row nobody ever toggled.
   const autoCollapse = useSettings((s) => s.settings.sidebarAutoCollapse)
   const collapsedItems = useSettings((s) => s.settings.sidebarCollapsedItems)
+  const grouping = useSettings((s) => s.settings.sidebarGrouping)
+  const updateSettings = useSettings((s) => s.update)
 
   // Look up the current git branch for each project cwd (best-effort, cached). Gated on `open`
   // and caches a NEGATIVE result too — without the '' fallback a non-git cwd re-fired a git
@@ -134,6 +144,24 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
       open ? buildSessionList(projects, liveActiveNodes, activeProjectId, statusById, filter) : [],
     [open, projects, liveActiveNodes, activeProjectId, statusById, filter]
   )
+  // Status-grouped sections (only computed in status mode — flattens all projects' sessions by
+  // live agent status so attention floats to the top). Same inputs as `groups`.
+  const statusSections = useMemo(
+    () =>
+      open && grouping === 'status'
+        ? buildStatusList(projects, liveActiveNodes, activeProjectId, statusById, filter)
+        : [],
+    [open, grouping, projects, liveActiveNodes, activeProjectId, statusById, filter]
+  )
+
+  // Relative state ages need to advance even when no hook event arrives. Keep the clock dormant
+  // unless the status view is visible; 30s catches minute boundaries without per-row timers.
+  useEffect(() => {
+    if (!open || grouping !== 'status') return
+    setStatusNow(Date.now())
+    const timer = window.setInterval(() => setStatusNow(Date.now()), 30_000)
+    return () => window.clearInterval(timer)
+  }, [open, grouping])
 
   const projectCount = (g: (typeof groups)[number]): number =>
     g.groups.reduce((n, b) => n + groupSessionCount(b), 0) + g.ungrouped.length
@@ -405,6 +433,27 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
     )
   }
 
+  // A status-mode row. Unlike project mode, the row carries its own project id (rows are flattened
+  // across projects), so the project-scoped callbacks read it off the row. Drag/drop reorder and
+  // move-to-group are project-mode concepts — their drop targets (project headers, sub-groups)
+  // aren't rendered in status mode, so the row is not draggable here. It stays clickable,
+  // closable, renameable, and right-clickable.
+  const renderStatusRow = (row: SessionRowVM): JSX.Element => (
+    <div key={row.id} className="ss-rowdrop">
+      <SessionRow
+        row={row}
+        onClick={() => props.onFocusNode(row.id)}
+        onClose={() => props.onCloseSession(row.projectId!, row.id)}
+        onRename={(title) => props.onRenameSession(row.projectId!, row.id, title)}
+        onAiName={() => props.onAiNameSession(row.projectId!, row.id, row.cwd)}
+        onContextMenu={(e) => props.onRowContextMenu(e, row.projectId!, row.id)}
+        onDragStart={() => {}}
+        onDragEnd={() => {}}
+        stateAgeLabel={sessionStateAgeLabel(row.statusUpdatedAt, statusNow)}
+      />
+    </div>
+  )
+
   if (!open) return null
 
   return (
@@ -428,6 +477,27 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
             ×
           </button>
         </div>
+      </div>
+
+      {/* Grouping tabs: plain text with a 2px accent underline on the active one, sitting on the
+          hairline that separates the header from the list — quieter than a pill toggle. */}
+      <div className="ss-tabs" role="tablist" aria-label="Group sessions by">
+        <button
+          role="tab"
+          aria-selected={grouping === 'project'}
+          className={`ss-tab${grouping === 'project' ? ' is-active' : ''}`}
+          onClick={() => updateSettings({ sidebarGrouping: 'project' })}
+        >
+          Project
+        </button>
+        <button
+          role="tab"
+          aria-selected={grouping === 'status'}
+          className={`ss-tab${grouping === 'status' ? ' is-active' : ''}`}
+          onClick={() => updateSettings({ sidebarGrouping: 'status' })}
+        >
+          Status
+        </button>
       </div>
 
       <div className="sessions-sidebar__search">
@@ -457,6 +527,30 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
       >
         {groups.length === 0 && <div className="sessions-sidebar__empty">{vocab('No sessions yet.')}</div>}
         {groups.map((g) => {
+        {groups.length === 0 && grouping !== 'status' && (
+          <div className="sessions-sidebar__empty">No sessions yet.</div>
+        )}
+        {grouping === 'status' ? (
+          statusSections.map((section: StatusSection) => (
+            <div key={section.kind} className="ss-status">
+              <div className="ss-status__head">
+                {section.kind === 'attention' ? (
+                  <span className="ss-status__icon ss-status__icon--attention">
+                    <IconBellFilled />
+                  </span>
+                ) : (
+                  <span className={`ss-status__icon ss-status__icon--${section.kind}`} />
+                )}
+                <span className="ss-status__label">{section.label}</span>
+                <span className="ss-status__count">{section.rows.length}</span>
+              </div>
+              <div className="ss-status__rows">
+                {section.rows.map((row) => renderStatusRow(row))}
+              </div>
+            </div>
+          ))
+        ) : (
+          groups.map((g) => {
           const collapseKey = projectCollapseKey(g.projectId)
           // While filtering, never collapse — a collapsed project would hide its own matches.
           const isCollapsed = filter
@@ -516,6 +610,11 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
                   icon={g.projectIcon}
                   color={g.projectColor}
                   name={g.projectName}
+                  icon={g.projectIcon}
+                  color={g.projectColor}
+                  name={g.projectName}
+                  variant="monogram"
+                  className="ss-group__monogram"
                 />
                 <span className="ss-group__name">{g.projectName}</span>
                 {branches[g.projectId] && (
@@ -543,9 +642,10 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
                 <button
                   className="ss-group__add"
                   title={vocab('New terminal in this project')}
+                  title="Add a node to this project"
                   onClick={(e) => {
                     e.stopPropagation()
-                    props.onAddToProject(g.projectId)
+                    props.onAddToProject(g.projectId, { clientX: e.clientX, clientY: e.clientY })
                   }}
                 >
                   +
@@ -601,7 +701,8 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
               )}
             </div>
           )
-        })}
+        })
+        )}
       </div>
     </aside>
   )

@@ -124,6 +124,8 @@ export function SshSection({
       id="ssh"
       title="Remote machines (SSH)"
       description="Add a machine once, then run terminals and isolated Codex accounts on it from any local canvas."
+      title="Remote (SSH)"
+      description="Saved SSH servers appear under “New remote”, and can host nodes on a local canvas. Each also becomes a machine in Accounts, where its own isolated Codex logins live. Opening remote terminals over SSH is free."
       isActive={isActive}
       searchEntries={ENTRIES}
     >

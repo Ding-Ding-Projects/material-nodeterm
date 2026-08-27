@@ -105,6 +105,8 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
       joinParts: () => relayUnsupported('workspace.joinParts')
     },
     userDataDir: real.userDataDir, // the host's writable base — worktree default paths live there
+    workspace: real.workspace, // the host's canvas/project files
+    userDataDir: real.userDataDir, // the host's writable base
     fs: files.fs,
     git: {
       ...files.git,
@@ -216,6 +218,12 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     minecraft: stub.minecraft,
     torrent: stub.torrent
     calendar: stub.calendar
+    // Browser control never rides the relay either (no CDP off the desktop) — inert no-ops.
+    onBrowserControlResolve: stub.onBrowserControlResolve,
+    sendBrowserControlResolveResult: stub.sendBrowserControlResolveResult,
+    // Messaging rides the same decision: the browser client is never a sender (constraint 5 of
+    // the messaging plan — the phone drives canvas control over relay→IPC, not /control/*).
+    agentMessage: stub.agentMessage
   } satisfies NodeTerminalApi
 
   return {

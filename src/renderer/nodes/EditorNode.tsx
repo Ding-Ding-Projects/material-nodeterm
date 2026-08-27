@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Handle, NodeResizer, Position, useReactFlow, type NodeProps } from '@xyflow/react'
+import { NODE_MIN_SIZES } from '../lib/nodeSizing'
 import { monaco } from '../editor/monaco-setup'
 import { monacoTheme } from '../lib/appTheme'
 import { useAppTheme } from '../state/useAppTheme'
@@ -11,9 +12,11 @@ import { useSession } from '../session/session'
 import type { CanvasNode } from '../state/workspace'
 import { tooLargeSize, formatBytes } from '@shared/fsLimits'
 import { hintLabel } from '@shared/platform-utils'
+import { chipFor, commandTooltip } from '../lib/keybindingOverrides'
 import { pdfBlobUrl } from '../lib/pdfBlob'
 import { nodeHeaderFillStyle } from '../lib/nodeColor'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { MaximizeButton } from './MaximizeButton'
 
 // Image extensions get a visual preview instead of the Monaco text editor.
 const IMAGE_MIME: Record<string, string> = {
@@ -243,6 +246,9 @@ export function EditorNode({ id, data, selected }: NodeProps<CanvasNode>) {
   }), [])
 
   const headerFill = nodeHeaderFillStyle(data.color)
+  // Whatever the markdown toggle is bound to; '' when the user unbound it, in which case the
+  // preview's hint names the action instead of promising a chord that never fires.
+  const mdChip = chipFor('node.toggleMarkdown')
 
   return (
     <div
@@ -251,7 +257,7 @@ export function EditorNode({ id, data, selected }: NodeProps<CanvasNode>) {
       onMouseEnter={() => (hoveredRef.current = true)}
       onMouseLeave={() => (hoveredRef.current = false)}
     >
-      <NodeResizer minWidth={320} minHeight={200} isVisible={selected} color={data.color} />
+      <NodeResizer minWidth={NODE_MIN_SIZES.editor.width} minHeight={NODE_MIN_SIZES.editor.height} isVisible={selected} color={data.color} />
       {/* Invisible target handle so a rope from an agent node that opened this can attach. */}
       <Handle
         id="flow-in"
@@ -279,6 +285,7 @@ export function EditorNode({ id, data, selected }: NodeProps<CanvasNode>) {
             <button
               className="editor-node__toggle"
               title={hintLabel(`${vocab('Toggle markdown preview')} (⌘M)`)}
+              title={commandTooltip('Toggle markdown preview', 'node.toggleMarkdown')}
               onClick={togglePreview}
             >
               {vocab(preview ? 'Edit' : 'Preview')}
@@ -293,6 +300,7 @@ export function EditorNode({ id, data, selected }: NodeProps<CanvasNode>) {
             </button>
           </>
         )}
+        <MaximizeButton id={id} maximized={!!data.premaxRect} />
         <button
           className="term-node__close"
           title={vocab('Close')}
@@ -347,6 +355,8 @@ export function EditorNode({ id, data, selected }: NodeProps<CanvasNode>) {
                 <div className="term-md__bar">
                   <span>{vocab('Preview')}</span>
                   <span className="term-md__hint">{hintLabel(`⌘M ${vocab('to edit')}`)}</span>
+                  <span>Preview</span>
+                  <span className="term-md__hint">{mdChip ? `${mdChip} to edit` : 'Edit'}</span>
                 </div>
                 <div
                   className="term-md__content"

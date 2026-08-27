@@ -105,6 +105,10 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
       setRemoteLoginHelp({ opened: 'none', command: 'sudo systemctl enable --now ssh' })
     }
   }
+  // What the last revoke has to say, and whether it is a WARNING or a receipt. A successful
+  // removal owes the user a sentence too (the phone keeps Pro for a few days), and printing that
+  // in the warning colour would read as a failure.
+  const [revokeNote, setRevokeNote] = useState<{ text: string; warn: boolean } | null>(null)
 
   const phoneAccessEnabled = useSettings((s) => s.settings.phoneAccessEnabled)
   const updateSettings = useSettings((s) => s.update)
@@ -134,9 +138,13 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
   }, [])
 
   // The shared pairing machine (also behind the top-right quick-pair popover); a completed
-  // pairing refreshes the device list below.
+  // pairing refreshes the device list below — and drops the last revoke note, which names a device
+  // by name and would otherwise outlive the very phone it warns about being re-paired.
   const { phase, qr, sshOpen, sshHealed, relayResult, relayPlan, error, busy, start, stop, reset } = usePhonePairing(
-    () => void refreshDevices()
+    () => {
+      setRevokeNote(null)
+      void refreshDevices()
+    }
   )
 
   const togglePhoneAccess = (next: boolean): void => {
@@ -183,8 +191,23 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
     })
   }
 
+  // Removing local access and taking the phone's Pro back are DIFFERENT facts, and the second one
+  // used to be missing entirely — Remove unpinned the key here while the server kept minting Pro
+  // for that phone forever. So both legs are surfaced:
+  //  - 'skipped' says nothing. It means we had nothing of ours to revoke — a free-tier desktop
+  //    holds no entitlement to sign the request with, or the device was already gone from the
+  //    registry — and warning there would tell a free user their phone's Pro is stuck when it
+  //    never had any of ours. (A device paired before we recorded the phone's relay id does NOT
+  //    land here: it falls back to our own pairing id, which is the row's key in that case, so the
+  //    server leg really does run — see `revokeDevice` in main/pairing-service.ts.)
+  //  - 'ok' still owes a sentence: the phone keeps the entitlement it already holds until that
+  //    expires, so Pro does not stop the instant the row goes. Saying nothing produced exactly the
+  //    support mail this branch exists to end ("I removed it and it still has Pro").
+  //  - 'failed' warns — and does not prescribe waiting. It collapses a 403 (not our row), a 401,
+  //    a 5xx and an unreachable server, and only the last of those clears by itself.
   const revokeDevice = async (device: PairedDevice): Promise<void> => {
     setPendingRevoke(null)
+    setRevokeNote(null)
     try {
       await window.nodeTerminal.pairing.revokeDevice(device.id)
       // A successful retry is the only thing that clears the persistent warning.
@@ -197,6 +220,38 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
         `Couldn’t revoke “${device.name}”${detail}. Its SSH access may still be active. ` +
           'The device remains listed; fix the file-access problem and retry Revoke.'
       )
+      const result = await window.nodeTerminal.pairing.revokeDevice(device.id)
+      // Additive, not exclusive: both legs can fail at once (an unwritable ~/.ssh while offline),
+      // and being told only half of that leaves the other half to be discovered by accident.
+      const notes: string[] = []
+      if (!result.local) {
+        notes.push(`Couldn’t remove “${device.name}” from this machine — try again.`)
+      }
+      if (result.server === 'failed') {
+        // Deliberately not "pair it and remove it again": that used to be the whole advice, and it
+        // is wrong twice over — a 403 will never clear however long you wait, and pairing RESTORES
+        // the phone's Pro (the mint upserts its row) before the second removal tries again. It is
+        // offered as what it is — a retry that costs something — with support as the reliable path.
+        notes.push(
+          (result.local ? `Removed “${device.name}” from this machine, but its` : 'Its') +
+            ' Pro access couldn’t be revoked — we were refused or couldn’t reach the server — so' +
+            ' that phone may keep Pro. Pairing it again and removing it retries the revoke, though' +
+            ' pairing restores its Pro in the meantime. Get in touch if it keeps failing.'
+        )
+      }
+      if (notes.length) {
+        setRevokeNote({ text: notes.join(' '), warn: true })
+      } else if (result.server === 'ok') {
+        // Not instant, and we say so. The phone holds a signed entitlement minted for up to seven
+        // days; revoking the row stops the NEXT one, it cannot reach into the phone.
+        setRevokeNote({
+          text: `Removed “${device.name}”. Its Pro ends when the pass it already holds expires — within 7 days.`,
+          warn: false
+        })
+      }
+    } catch {
+      // The call itself never got an answer (main is gone, or the surface doesn't support it).
+      setRevokeNote({ text: `Couldn’t remove “${device.name}” — try again.`, warn: true })
     } finally {
       void refreshDevices()
     }
@@ -457,6 +512,14 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
               ))}
             </ul>
           )}
+          {revokeNote ? (
+            <p
+              className={revokeNote.warn ? 'text-sm' : 'text-sm text-muted'}
+              style={revokeNote.warn ? { color: '#ff9f0a' } : undefined}
+            >
+              {revokeNote.text}
+            </p>
+          ) : null}
         </div>
       </SearchableRow>
 
@@ -475,7 +538,10 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
           off the existing single confirm is unchanged. */}
       {pendingRevoke && !kidsGateRequired ? (
         <ConfirmDialog
-          message={`Revoke “${pendingRevoke.name}”? Its key is removed from this machine and it will no longer be able to connect.`}
+          // Both legs, and the timing of the one that is not instant. "If" rather than a flat
+          // claim: a free-tier desktop has no Pro of ours on that phone to take back, and this
+          // dialog cannot tell — the server leg reports that only after the fact ('skipped').
+          message={`Revoke “${pendingRevoke.name}”? Its key is removed from this machine and it will no longer be able to connect. If its Pro comes from this Mac’s license, that is revoked too — the phone loses Pro within 7 days.`}
           confirmLabel="Revoke"
           onConfirm={() => void revokeDevice(pendingRevoke)}
           onCancel={() => setPendingRevoke(null)}

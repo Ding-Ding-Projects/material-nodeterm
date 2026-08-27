@@ -11,7 +11,10 @@
 // separate option-bearing confirmation route and intentionally answers false here. Typed on string
 // because renderer dispatch receives a raw IPC verb and cannot import main's `ControlVerb` type.
 
-export const DESTRUCTIVE_VERBS: ReadonlySet<string> = new Set(['write', 'close'])
+// `open-project` (issue #338): create/adopt/first-attach all raise a human confirm (spec B2 +
+// Q1), and its early-handled block in Canvas.tsx reads `isDestructiveVerb(verb)` before its
+// `confirmBusy()` refusal exactly as write/close's cases do — the drift alarm covers all three.
+export const DESTRUCTIVE_VERBS: ReadonlySet<string> = new Set(['write', 'close', 'open-project'])
 
 /**
  * Is this verb owned by the renderer's destructive-control dispatcher?

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { Handle, NodeResizer, Position, type NodeProps } from '@xyflow/react'
+import { NODE_MIN_SIZES } from '../lib/nodeSizing'
 import type { CanvasNode } from '../state/workspace'
 import { useAgentNodes } from '../state/agentNodes'
 import { applyLoopDismiss } from '../lib/loopCard'
@@ -58,6 +59,7 @@ export function LoopNode({ id, data, selected }: NodeProps<CanvasNode>) {
   return (
     <div onPointerDownCapture={select} className={`loop-node${active ? ' working' : ''}`}>
       <NodeResizer isVisible={selected} minWidth={180} minHeight={84} color="var(--md-primary)" />
+      <NodeResizer isVisible={selected} minWidth={NODE_MIN_SIZES.loop.width} minHeight={NODE_MIN_SIZES.loop.height} color="#bf7af0" />
       <Handle type="target" position={Position.Top} isConnectable={false} />
       <div className="loop-node__head nodrag" onClick={toggle} style={{ cursor: 'pointer' }}>
         <button

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { NodeResizer, useReactFlow, type NodeProps } from '@xyflow/react'
+import { NODE_MIN_SIZES } from '../lib/nodeSizing'
 import { useShallow } from 'zustand/react/shallow'
 import { type CanvasNode } from '../state/workspace'
 import { useProjects } from '../state/projects'
@@ -98,7 +99,7 @@ export function DinoNode({ id, data, selected }: NodeProps<CanvasNode>) {
 
   return (
     <div className={`dino-node${selected ? ' selected' : ''}`} style={{ borderColor: data.color }}>
-      <NodeResizer minWidth={400} minHeight={160} isVisible={selected} color={data.color} />
+      <NodeResizer minWidth={NODE_MIN_SIZES.dino.width} minHeight={NODE_MIN_SIZES.dino.height} isVisible={selected} color={data.color} />
 
       {/* alphaTint, NOT `${data.color}33`: appending hex alpha only yields a colour when the string
           is 6-digit hex, and `data.color` is a plain string a node menu's full picker can set to

@@ -34,6 +34,11 @@ describe('endpoint file v2', () => {
     // `C:\...` path, so an unquoted line here silently mangled it before any shim ever read it.
     expect(body).toContain(`NODETERM_NODE_TOKEN_DIR=${posixQuote(nodeTokenDir())}\n`)
     expect(body).toContain('NODETERM_HOOK_VERSION=2\n')
+    expect(fs.statSync(p).mode & 0o777).toBe(0o600)
+    // Values are single-quoted (issue #351): the managed script SOURCES this file under /bin/sh,
+    // so a space or shell metachar in the path/token must be quoted to source cleanly.
+    expect(body).toContain(`NODETERM_NODE_TOKEN_DIR='${nodeTokenDir()}'\n`)
+    expect(body).toContain("NODETERM_HOOK_VERSION='2'\n")
     // The token dir is under this run's userDataDir, not a compiled-in path.
     expect(nodeTokenDir().startsWith(dir)).toBe(true)
   })

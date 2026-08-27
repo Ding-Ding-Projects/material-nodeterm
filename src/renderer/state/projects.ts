@@ -16,6 +16,9 @@ import type { ProjectCapability } from '@shared/project-capabilities'
 import { recordCapabilityAck, type CapabilityAnswer } from '@shared/project-capability-consent'
 import { applyEdgeMutation } from '@shared/canvas-mutations'
 import { collisionSeed, derivedProjectId } from '@shared/project-id'
+import type { ProjectCapability } from '@shared/project-capabilities'
+import type { ProjectIcon } from '@shared/project-icon'
+import { recordCapabilityAck, type CapabilityAnswer } from '@shared/project-capability-consent'
 import { applyCanvasMutation, createProject, reorderGroupWithinParent } from './workspace'
 import { markWorkspaceDirty } from './workspaceDirty'
 
@@ -63,6 +66,8 @@ interface ProjectsState {
   renameProject(id: string, name: string): void
   /** Sets a project's sidebar/monogram accent color. No-op for an unknown id. */
   setProjectColor(id: string, color: string): void
+  /** Sets (or clears, with undefined = fall back to the color monogram) the project's icon. Stored
+   *  on `Project.icon` and git-shared via project.json like name/color. No-op for an unknown id. */
   setProjectIcon(id: string, icon: ProjectIcon | undefined): void
   setProjectCwd(id: string, cwd: string): void
   /** Grey (or un-grey) a project tab as "unavailable" WITHOUT dropping it — runtime-only, never
@@ -83,6 +88,19 @@ interface ProjectsState {
    * MACHINE-LOCAL by construction: `Project.capabilityAck` rides `IndexEntryV3.capabilityAck`
    * and is never serialized into the shared project file. Records the clone notice's answer.
    */
+  /**
+   * THE strict per-project capability setter (@shared/project-capabilities). `on` writes the
+   * literal `true` the validators accept AND records this machine's 'kept' answer — setting a
+   * switch yourself is its own consent, so the clone notice never fires on your own decision.
+   * `off` deletes the field outright (an off capability adds no bytes to the shared file) AND
+   * records 'declined': if a teammate's (or a hostile) `true` re-arrives via git, the capability
+   * is refused and re-noticed rather than silently re-granted (PR #213 C1/M-2). */
+  setProjectCapability(id: string, cap: ProjectCapability, on: boolean): void
+  /**
+   * Records this machine's ANSWER ('kept' | 'declined') to the one-time clone notice.
+   * MACHINE-LOCAL by construction: `Project.capabilityAck` rides `IndexEntryV3.capabilityAck`
+   * through splitWorkspace on the next save and is never written into .nodeterm/project.json
+   * (workspace-files.test.ts pins the file bytes; capability-notice.test.tsx pins this path). */
   recordProjectCapabilityAck(id: string, cap: ProjectCapability, answer: CapabilityAnswer): void
   /** Raises the project's dino high score (never lowers it). */
   setDinoHighScore(id: string, score: number): void
@@ -156,6 +174,30 @@ interface ProjectsState {
   closeProject(id: string): string
   /** Restores a closed project and makes it active. No-op if the id is unknown. */
   reopenProject(id: string): void
+
+  /**
+   * Registers (or finds) the project for a local directory WITHOUT activating it — the store half
+   * of the `open-project` control verb (issue #338, spec §2.1 steps 2–4). The human paths
+   * (`openFolderProject`/`adoptProject`/`reopenProject`) all set `activeProjectId`; an agent verb
+   * must not travel the user's view (spec P6), so this action NEVER writes it, in any branch.
+   *
+   * `resolvedCwd` is main's already-validated, `path.resolve`d form (spec P7) — this action only
+   * re-applies the trailing-slash normalization so the exact-string dedupe cannot be split by a
+   * cosmetic slash. Branches, in order:
+   *  - idempotent hit (B1): a project with this cwd is returned as-is; a `closed` one is
+   *    un-closed (its tab reappears) without activation. `name`/`color` are NOT applied — an
+   *    existing project's identity is never mutated on an agent's say-so.
+   *  - adopt: `probed` (the folder's own .nodeterm/project.json, from `probeFolder`) is added,
+   *    defending against an id collision exactly as `adoptProject` does (derived id, nodes kept).
+   *  - create: the same `createProject` factory `addProject` uses; `name` defaults to the folder
+   *    basename, `color` applies on create only.
+   */
+  registerProject(input: {
+    resolvedCwd: string
+    name?: string
+    color?: string
+    probed?: Project
+  }): { project: Project; created: boolean; adopted: boolean }
 
   toWorkspace(): Workspace
 }
@@ -353,6 +395,12 @@ export const useProjects = create<ProjectsState>((set, get) => ({
     }))
   },
 
+  setProjectIcon(id, icon) {
+    set((s) => ({
+      projects: s.projects.map((p) => (p.id === id ? { ...p, icon } : p))
+    }))
+  },
+
   setProjectCwd(id, cwd) {
     set((s) => ({
       projects: s.projects.map((p) => (p.id === id ? { ...p, cwd } : p))
@@ -392,6 +440,9 @@ export const useProjects = create<ProjectsState>((set, get) => ({
     // The setter owns the persist: its call sites (the AgentsSection toggle, the clone notice's
     // decline) schedule no save of their own, so without this the choice would be lost on
     // restart unless an unrelated canvas edit happened to dirty the workspace afterwards.
+    // The setter owns the persist (issue #318): its call sites — the AgentsSection toggle, the
+    // clone notice's decline — schedule no save of their own, so without this the choice was lost
+    // on restart unless an unrelated canvas edit happened to dirty the workspace afterwards.
     markWorkspaceDirty()
   },
 
@@ -639,6 +690,49 @@ export const useProjects = create<ProjectsState>((set, get) => ({
         activeProjectId: id
       }
     })
+  },
+
+  registerProject({ resolvedCwd, name, color, probed }) {
+    // The same exact-match rule as `openFolderProject` (a folder maps to one project), with the
+    // trailing slash stripped so `/a/b/` and `/a/b` cannot mint two tabs for one directory.
+    // Root stays '/': stripping it to '' would match every cwd-less project.
+    const cwd = resolvedCwd.length > 1 ? resolvedCwd.replace(/\/+$/, '') : resolvedCwd
+    const existing = get().projects.find((p) => p.cwd === cwd)
+    if (existing) {
+      if (existing.closed) {
+        // Un-close WITHOUT activation — reopenProject also activates, which is the exact
+        // mutation the register tests are checked against (spec P6).
+        set((s) => ({
+          projects: s.projects.map((p) => (p.id === existing.id ? { ...p, closed: false } : p))
+        }))
+      }
+      return {
+        project: get().projects.find((p) => p.id === existing.id) ?? existing,
+        created: false,
+        adopted: false
+      }
+    }
+    if (probed) {
+      // adoptProject's collision defense verbatim (deterministic in (id, folder)) — but appended
+      // WITHOUT the `activeProjectId` write that makes adoptProject a human path.
+      const taken = get().projects.some((p) => p.id === probed.id)
+      const adopted = taken
+        ? {
+            ...probed,
+            id: derivedProjectId(probed.id, collisionSeed(probed), (c) =>
+              get().projects.some((p) => p.id === c))
+          }
+        : probed
+      set((s) => ({ projects: [...s.projects, adopted] }))
+      return { project: adopted, created: false, adopted: true }
+    }
+    const fallbackName = cwd.split('/').filter(Boolean).pop() || 'Project'
+    const project = {
+      ...createProject(get().projects.length, name ?? fallbackName, cwd),
+      ...(color ? { color } : {})
+    }
+    set((s) => ({ projects: [...s.projects, project] }))
+    return { project, created: true, adopted: false }
   },
 
   toWorkspace() {

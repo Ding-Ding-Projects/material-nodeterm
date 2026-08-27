@@ -17,6 +17,7 @@ const roots: string[] = []
 
 afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+  for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
 })
 
 function shellPath(nativePath: string): string {

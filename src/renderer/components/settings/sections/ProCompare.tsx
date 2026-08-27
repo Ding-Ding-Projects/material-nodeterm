@@ -1,4 +1,5 @@
 import { SettingsText } from '../SettingsText'
+import { AGENT_CONFIG, BUILTIN_AGENT_IDS } from '@shared/agents/config'
 
 const CORE = [
   'Unlimited local terminals & canvas',
@@ -7,6 +8,9 @@ const CORE = [
   'Agent nodes (Claude / Codex / Gemini)',
   'Desktop app: QR phone pairing on your LAN',
   'Desktop app: remote access from your phone (relay, E2E encrypted)'
+  `Agent nodes (${BUILTIN_AGENT_IDS.map((id) => AGENT_CONFIG[id].label).join(' / ')})`,
+  'QR phone pairing on your LAN',
+  'Remote access from your phone (relay, E2E encrypted)'
 ]
 const PRO = [
   'nodeterm mobile Pro included',

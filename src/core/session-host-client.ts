@@ -4,6 +4,10 @@
 
 import net from 'net'
 import { randomUUID } from 'crypto'
+// The REAL scheduler, immune to vi.useFakeTimers (which patches the global, not this module's
+// exports): requestOnSocket defers each frame's write by one genuine event-loop turn so queued
+// socket 'close' events dispatch first, even inside fake-timer tests.
+import { setImmediate as realSetImmediate } from 'timers'
 import { sessionHostPaths } from '../session-host/paths'
 import { readExistingSessionHostIdentity } from '../session-host/existing-host-state'
 import {
@@ -43,6 +47,9 @@ const KILL_CONFIRMATION_ATTEMPTS = 2
 type PendingEntry = {
   socket: net.Socket
   timer: ReturnType<typeof setTimeout> | null
+  /** True once the frame has been handed to socket.write. Until then the frame provably never
+   * left this process, so a transport drop rejects the entry as resendable (see dropSocket). */
+  sent: boolean
   resolve: (result: unknown) => void
   reject: (error: Error) => void
 }
@@ -140,6 +147,31 @@ export class SessionHostProtocolCompatibilityError extends Error {
     this.name = 'SessionHostProtocolCompatibilityError'
   }
 }
+
+/** A request frame that provably never left this process: the tracked socket was already gone
+ * when the write was attempted, or the write callback itself reported the failure. Unlike a
+ * timeout or a mid-flight connection drop — where the host may have received and acted on the
+ * frame — resending this exact request on a fresh connection cannot double-apply anything.
+ * `code` carries the underlying errno so `isTransportUncertainty` classification is unchanged
+ * for any caller the bounded resend in `request()` re-throws to. */
+class SessionHostRequestNotDeliveredError extends Error {
+  code?: string
+  /** The raw transport failure. `request()` surfaces THIS when a resend cannot happen (reconnect
+   * refused, attempts exhausted), so callers keep the exact error object shape they always got. */
+  readonly original: Error
+
+  constructor(original: Error) {
+    super(original.message)
+    this.original = original
+    const code = (original as NodeJS.ErrnoException).code
+    if (code) this.code = code
+  }
+}
+
+/** How many times `request()` re-runs connect + send for a frame that provably never left the
+ * process. Purely a spin bound: each retry only happens after a successful fresh hello, so a
+ * host that dies right after every accept cannot loop this forever. */
+const SESSION_HOST_RESEND_ATTEMPTS = 3
 
 function requireAttachResult(
   result: AttachResult | undefined,
@@ -461,6 +493,15 @@ export class SessionHostClient {
       }
       const onHandshakeData = (chunk: Buffer): void => {
         const frames = framer.push<SessionHostFrame>(chunk.toString('utf8'))
+        let frames: SessionHostFrame[]
+        try {
+          frames = framer.push<SessionHostFrame>(chunk.toString('utf8'))
+        } catch (error) {
+          // Whatever is bound to the endpoint streamed an oversized un-terminated line — a broken
+          // or impostor host. Fail the handshake rather than buffer it unbounded.
+          failHandshake(asError(error))
+          return
+        }
         for (let index = 0; index < frames.length; index++) {
           const frame = frames[index]
           if ('type' in frame || frame.id !== helloId) continue
@@ -518,6 +559,16 @@ export class SessionHostClient {
     const framer = new LineFramer()
     socket.on('data', (chunk: Buffer) => {
       for (const frame of framer.push<SessionHostFrame>(chunk.toString('utf8'))) {
+      let frames: SessionHostFrame[]
+      try {
+        frames = framer.push<SessionHostFrame>(chunk.toString('utf8'))
+      } catch (error) {
+        // Oversized un-terminated line from the host — drop and destroy so a broken/impostor peer
+        // cannot grow this process's buffer without limit.
+        this.dropSocket(socket, asError(error), true)
+        return
+      }
+      for (const frame of frames) {
         this.handleFrame(socket, frame)
       }
     })
@@ -545,6 +596,9 @@ export class SessionHostClient {
       this.pending.delete(id)
       if (entry.timer) clearTimeout(entry.timer)
       entry.reject(error)
+      // A frame never handed to socket.write is CERTAINLY undelivered — reject it as resendable
+      // so request() can replay it on a fresh connection. A written frame stays uncertainty.
+      entry.reject(entry.sent ? error : new SessionHostRequestNotDeliveredError(error))
     }
     if (destroy && !socket.destroyed) {
       try {
@@ -703,6 +757,32 @@ export class SessionHostClient {
     const socket = this.socket
     if (!socket) throw new Error('session-host: not connected')
     return this.requestOnSocket(socket, request, onSuccess)
+    // A peer-initiated close races the client's own 'close' event: a cached socket can look live
+    // here while the peer already hung up, and a frame written into that gap fails (EPIPE) for
+    // work the host never saw. requestOnSocket defers the actual write by one REAL event-loop
+    // turn, so a raced hangup is discovered before any bytes are committed; such a frame is the
+    // one provably-undelivered case and the only one resent here on a fresh connection. A failure
+    // discovered by the write itself stays a plain rejection: by then the frame's delivery is the
+    // transport's business and other requests may already ride on it.
+    let undelivered: SessionHostRequestNotDeliveredError | undefined
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await this.ensureConnected()
+      } catch (connectError) {
+        // A resend that cannot even reconnect reports the transport failure the caller actually
+        // hit, not the follow-up connect refusal; a cold first connect keeps its own error.
+        throw undelivered?.original ?? connectError
+      }
+      const socket = this.socket
+      if (!socket) throw new Error('session-host: not connected')
+      try {
+        return await this.requestOnSocket(socket, request, onSuccess)
+      } catch (error) {
+        if (!(error instanceof SessionHostRequestNotDeliveredError)) throw error
+        if (attempt + 1 >= SESSION_HOST_RESEND_ATTEMPTS) throw error.original
+        undelivered = error
+      }
+    }
   }
 
   /** Request on an already-authenticated socket. Reconnect restoration uses this directly because
@@ -714,6 +794,9 @@ export class SessionHostClient {
   ): Promise<T> {
     if (this.socket !== socket || socket.destroyed) {
       return Promise.reject(new Error('session-host connection lost'))
+      return Promise.reject(
+        new SessionHostRequestNotDeliveredError(new Error('session-host connection lost'))
+      )
     }
     const id = this.nextId++
     const full = { id, ...request } as SessionHostRequest
@@ -721,6 +804,7 @@ export class SessionHostClient {
       const pending: PendingEntry = {
         socket,
         timer: null,
+        sent: false,
         resolve: (result) => {
           try {
             const typed = result as T
@@ -752,6 +836,38 @@ export class SessionHostClient {
       } catch (error) {
         if (this.pending.get(id) === pending) this.dropSocket(socket, asError(error), true)
       }
+        const deadline = new Error(`session-host request timed out: ${request.cmd}`)
+        // The deadline is uncertainty even for a frame still queued behind the send turn below:
+        // reject THIS entry directly (never as resendable), then retire the socket for the rest.
+        this.pending.delete(id)
+        pending.reject(deadline)
+        this.dropSocket(socket, deadline, true)
+      }, SESSION_HOST_REQUEST_TIMEOUT_MS)
+      pending.timer.unref?.()
+      this.pending.set(id, pending)
+      // The send is deferred one REAL event-loop turn (immune to fake timers — the deadline above
+      // is already armed). A peer hangup that has reached this process marks the socket destroyed
+      // during the poll phase, BEFORE immediates run, so the recheck sees the loss while the frame
+      // is still provably unwritten and dropSocket can reject it as resendable; writes stay FIFO
+      // because immediates run in scheduling order.
+      realSetImmediate(() => {
+        if (this.pending.get(id) !== pending) return
+        if (this.socket !== socket || socket.destroyed) {
+          this.dropSocket(socket, new Error('session-host connection lost'), true)
+          return
+        }
+        pending.sent = true
+        try {
+          socket.write(encodeFrame(full), (error) => {
+            // A response may beat a late write callback. Identity-check this exact pending entry so
+            // that callback can neither settle nor delete a newer request that reused surrounding state.
+            if (!error || this.pending.get(id) !== pending) return
+            this.dropSocket(socket, asError(error), true)
+          })
+        } catch (error) {
+          if (this.pending.get(id) === pending) this.dropSocket(socket, asError(error), true)
+        }
+      })
     })
   }
 
@@ -834,6 +950,72 @@ export class SessionHostClient {
           this.applyAttachment(state, socket, paused, size)
           if (result.screen && state.appliedSocket === socket) {
             this.deliverData(state, RECONNECT_REPAINT_PREFIX + result.screen)
+          }
+          // Validation and repaint delivery run SYNCHRONOUSLY inside the response frame's parse
+          // pass (requestOnSocket's onSuccess), not in the awaited continuation below. On a unix
+          // socket the host's next raw 'data' frame can share one read chunk with this response;
+          // deferring the repaint to the microtask behind `await` would let that live frame reach
+          // deliverData first and reverse the repaint-then-live order subscribers depend on.
+          let staleAttachment = false
+          const applyReplay = (response: AttachResult, replaySocket: net.Socket): void => {
+            const result = requireAttachResult(response, state.name, protocolVersion)
+            if (result.fresh) {
+              throw new Error(
+                protocolVersion === 1
+                  ? `legacy session-host lost '${state.name}' before warm replay; no requested shell was spawned`
+                  : `session-host protocol violation: attachExisting '${state.name}' reported a fresh session`
+              )
+            }
+            if (
+              protocolVersion === 2 &&
+              expectedGeneration &&
+              result.generation !== expectedGeneration
+            ) {
+              throw new Error(
+                `session-host generation changed while '${state.name}' was detached; warm replay is unsafe`
+              )
+            }
+            if (this.sessions.get(state.name) !== state || !this.hasAttachedEntry(state)) {
+              staleAttachment = true
+              return
+            }
+            state.protocolVersion = protocolVersion
+            state.generation = result.generation ?? expectedGeneration
+            if (state.generation) this.sessionGenerations.set(state.name, state.generation)
+            this.applyAttachment(state, replaySocket, paused, size)
+            if (result.screen && state.appliedSocket === replaySocket) {
+              this.deliverData(state, RECONNECT_REPAINT_PREFIX + result.screen)
+            }
+          }
+          if (protocolVersion === 1) {
+            await this.requestOnSocket<AttachResult>(
+              socket,
+              {
+                cmd: 'attach',
+                name: state.name,
+                spawn: legacyWarmOnlySentinel(this.deps.userDataDir),
+                scrollback: 1,
+                paused
+              },
+              applyReplay
+            )
+          } else {
+            await this.requestOnSocket<AttachResult>(
+              socket,
+              {
+                cmd: 'attachExisting',
+                name: state.name,
+                expectedGeneration,
+                cols: size.cols,
+                rows: size.rows,
+                paused
+              },
+              applyReplay
+            )
+          }
+          if (staleAttachment) {
+            await this.requestOnSocket(socket, { cmd: 'detach', name: state.name })
+            continue
           }
           await this.reconcileOnSocket(state, socket)
         } catch (error) {

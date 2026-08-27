@@ -3,7 +3,7 @@ import { renderMarkdown } from '../lib/markdown'
 import { useAgentStatus } from '../state/agentStatus'
 import { useSession } from '../session/session'
 import type { ChatMessage } from '@shared/types'
-import { hintLabel } from '@shared/platform-utils'
+import { chipFor } from '../lib/keybindingOverrides'
 import { E_UNSUPPORTED } from '@shared/rpc'
 import { TextArea } from '@renderer/ui/md3'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
@@ -125,11 +125,17 @@ export function ChatPanel({ nodeId, sessionId, cwd, accountId }: ChatPanelProps)
     }
   }
 
+  // Whatever the markdown/chat toggle is bound to; '' when unbound, in which case the bar names
+  // the action instead of promising a chord that never fires.
+  const mdChip = chipFor('node.toggleMarkdown')
+
   return (
     <div className="term-chat nodrag nowheel">
       <div className="term-chat__bar">
         <span>{vocab('Chat')}</span>
         <span className="term-chat__hint">{hintLabel(`⌘M ${vocab('to exit')}`)}</span>
+        <span>Chat</span>
+        <span className="term-chat__hint">{mdChip ? `${mdChip} to exit` : 'Exit'}</span>
       </div>
       <div className="term-chat__msgs" ref={msgsRef}>
         {messages.length === 0 && loadState !== 'loading' && (

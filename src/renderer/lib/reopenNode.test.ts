@@ -8,12 +8,23 @@ import type { ActiveAgentLaunchPlan } from '@renderer/state/permissionMode'
 // through `agentLaunchPlanForProject`.
 const launchPlan = (agentId: AgentId, mode: AgentPermissionMode = 'manual'): ActiveAgentLaunchPlan =>
   ({ surface: 'reopen-last-closed', agentId, mode }) as ActiveAgentLaunchPlan
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { snapshotNode, recreateNodeFromSnapshot, type ReopenNodeSnapshot } from './reopenNode'
+
+// createAgentNode reads settings/CLI-caps singletons — none of that matters for these tests,
+// so stub the pieces snapshotNode/recreateNodeFromSnapshot actually touch.
+vi.mock('@renderer/state/settings', () => ({
+  useSettings: { getState: () => ({ settings: { customAgents: [], defaultNodeWidth: undefined, defaultNodeHeight: undefined, agentLaunchCommands: {} } }) }
+}))
+vi.mock('@renderer/state/permissionMode', () => ({ claudeCliCapsNow: () => ({ sessionIdFlag: false }) }))
+vi.mock('@renderer/state/codexIdentity', () => ({ codexSharedIdentity: () => undefined }))
 
 const baseCtx = () => ({
   liveNodeIds: new Set<string>(),
   project: undefined,
   resolveAccountId: (id: string | undefined) => id,
   permissionModeFor: (agentId: AgentId) => launchPlan(agentId)
+  permissionModeFor: () => undefined
 })
 
 describe('snapshotNode', () => {
@@ -88,6 +99,7 @@ describe('recreateNodeFromSnapshot', () => {
         position: { x: 5, y: 5 },
         absolutePosition: { x: 105, y: 205 }
       }),
+      snap({ parentId: 'group-1', extent: 'parent', position: { x: 5, y: 5 }, absolutePosition: { x: 105, y: 205 } }),
       ctx
     )
     expect(node!.parentId).toBe('group-1')

@@ -15,6 +15,7 @@ export function Switch({
   disabled = false,
   vocabularyMode = 'authored',
   ariaLabelParams
+  disabled = false
 }: {
   checked: boolean
   onChange: (v: boolean) => void
@@ -36,6 +37,15 @@ export function Switch({
       aria-disabled={disabled || undefined}
       onClick={() => onChange(!checked)}
       className="md3-switch"
+      aria-label={ariaLabel}
+      disabled={disabled}
+      aria-disabled={disabled || undefined}
+      onClick={() => onChange(!checked)}
+      className={cn(
+        'relative box-border block h-[24px] w-[42px] shrink-0 rounded-full border-0 p-0 outline-none transition-colors duration-200',
+        disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
+        checked ? 'bg-accent' : 'bg-fill'
+      )}
     >
       <span className="md3-switch__knob" />
     </button>

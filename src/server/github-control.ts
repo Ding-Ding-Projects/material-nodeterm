@@ -14,6 +14,9 @@ import {
   validGitHubToken,
   type GitHubTokenDocument
 } from '../core/github/token-document'
+import { renameAtomic, tempNameFor } from '../core/fs-atomic'
+import type { GitHubSecretStore } from '../core/github/credentials'
+import type { SecretStore } from '../core/secret-store'
 import type { CorePlatform } from '../core/platform'
 import type { GitHubHostController } from '../core/github/host'
 import { IPC } from '../shared/ipc'
@@ -22,6 +25,8 @@ const FILE_NAME = 'github-issues-token.json'
 
 export class ServerGitHubSecretError extends Error {
   constructor(readonly code: 'invalid-token' | 'clear-incomplete') {
+export class ServerSecretStoreError extends Error {
+  constructor(readonly code: 'invalid-token') {
     super(code)
   }
 }
@@ -38,9 +43,45 @@ async function atomicWrite(
     encoding: 'utf8',
     mode: 0o600
   })
+function validToken(token: string): boolean {
+  return token.trim() === token && token.length > 0 && token.length <= 4096 && !/[\r\n\0]/.test(token)
 }
 
-export class ServerGitHubSecretStore implements GitHubSecretStore {
+/**
+ * Remove temp files no writer in THIS process owns: the legacy fixed `<file>.tmp` (written by
+ * builds before per-call names) and any `<file>.<pid>.<seq>[.<uuid>].tmp` whose pid is not ours.
+ * Best effort — a failure here must never break a save.
+ *
+ * The token file is not config: an orphan here is a live PAT at 0600 that nothing will ever
+ * overwrite, because a unique name is never written twice. So it has to be collected rather than
+ * left. Temps bearing our own pid are untouchable: one may belong to a concurrent write sitting
+ * between its `writeFile` and its `rename`, and deleting it would recreate the exact race the
+ * unique names fixed. A foreign pid can be a second LIVE server on the same data dir; that setup
+ * has no lock to begin with, and the worst case is that process's rename failing cleanly (ENOENT,
+ * rethrown to its caller) instead of a forgotten PAT sitting on disk forever.
+ */
+async function sweepStaleTmp(target: string): Promise<void> {
+  try {
+    const directory = path.dirname(target)
+    const base = path.basename(target)
+    for (const entry of await fs.readdir(directory)) {
+      if (!entry.startsWith(base) || !entry.endsWith('.tmp')) continue
+      const middle = entry.slice(base.length, -'.tmp'.length) // '' or '.<pid>.<seq>[.<uuid>]'
+      const owner =
+        /^\.(\d+)\.\d+(?:\.[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})?$/
+          .exec(middle)?.[1]
+      if (middle === '' || (owner && owner !== String(process.pid))) {
+        await fs.rm(path.join(directory, entry), { force: true }).catch(() => undefined)
+      }
+    }
+  } catch {
+    // A dir we cannot read is not a reason to fail (or skip) the write below.
+  }
+}
+
+/** Generic headless secret store. Server Edition has no OS keyring, so callers receive the same
+ *  owner-only atomic file semantics instead of copying the GitHub token implementation. */
+export class ServerSecretStore implements SecretStore {
   readonly availability = 'restricted-file' as const
 
   /** Mutations run FIFO (the WorkspaceStore.saveChain idiom): a clear's rm must never land inside
@@ -48,7 +89,10 @@ export class ServerGitHubSecretStore implements GitHubSecretStore {
    *  UI just reported cleared. Each caller still sees only its own mutation's failure. */
   private chain: Promise<unknown> = Promise.resolve()
 
-  constructor(private readonly userDataDir: string) {}
+  constructor(
+    private readonly userDataDir: string,
+    private readonly fileName: string
+  ) {}
 
   private chained<T>(fn: () => Promise<T>): Promise<T> {
     const run = this.chain.then(fn)
@@ -57,7 +101,7 @@ export class ServerGitHubSecretStore implements GitHubSecretStore {
   }
 
   private get filePath(): string {
-    return path.join(this.userDataDir, FILE_NAME)
+    return path.join(this.userDataDir, this.fileName)
   }
 
   save(token: string): Promise<void> {
@@ -84,6 +128,29 @@ export class ServerGitHubSecretStore implements GitHubSecretStore {
           'The stored GitHub credential requires Desktop keyring access and was preserved.'
         )
       }
+  private async saveNow(token: string): Promise<void> {
+    if (!validToken(token)) throw new ServerSecretStoreError('invalid-token')
+    await fs.mkdir(this.userDataDir, { recursive: true })
+    await sweepStaleTmp(this.filePath)
+    // The store's per-instance chain orders this write against its sibling mutations; the per-call
+    // temp name covers the writers the chain cannot see — a second `nodeterm-server --data-dir X`
+    // process on the same dir (every process's counter starts at 0, hence the pid) and a crash
+    // between tmp-write and rename. With a shared name one writer's rename publishes the other's
+    // half-written PAT, or moves the file out from under it entirely and the loser's rename fails.
+    const temporary = tempNameFor(this.filePath)
+    try {
+      await fs.writeFile(temporary, JSON.stringify({ version: 1, token }), {
+        encoding: 'utf-8',
+        mode: 0o600
+      })
+      await fs.chmod(temporary, 0o600)
+      await renameAtomic(temporary, this.filePath)
+    } catch (error) {
+      // A failed write MUST remove its own temp, because here a leaked temp IS a leaked PAT: a
+      // unique name is never written again, so only this cleanup (or a later run's sweep above,
+      // once the pid is dead) will ever collect it. The error still propagates.
+      await fs.rm(temporary, { force: true }).catch(() => {})
+      throw error
     }
     await atomicWrite(
       this.filePath,
@@ -121,6 +188,12 @@ export class ServerGitHubSecretStore implements GitHubSecretStore {
       )
     }
     return document.token
+  }
+}
+
+export class ServerGitHubSecretStore extends ServerSecretStore implements GitHubSecretStore {
+  constructor(userDataDir: string) {
+    super(userDataDir, FILE_NAME)
   }
 }
 

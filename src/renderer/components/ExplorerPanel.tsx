@@ -39,6 +39,7 @@ export interface ExplorerFolderAction {
   projectId: string
   path: string
 }
+import { IconPin } from './icons'
 
 export interface ExplorerPanelProps {
   onClose: () => void
@@ -593,6 +594,14 @@ export function ExplorerPanel({
     >
       <aside
         className={pinned ? 'drawer md3-explorer drawer--pinned' : 'drawer md3-explorer'}
+      className={pinned ? 'drawer-overlay drawer-overlay--pinned' : 'drawer-overlay'}
+      // Pinned: no handler, so a CSS miss still cannot dismiss the docked tree. The overlay
+      // also has pointer-events:none (styles.css) — without that it would steal canvas clicks
+      // even with a no-op handler. Both halves are load-bearing.
+      onClick={explorerOverlayClickCloses(pinned) ? onClose : undefined}
+    >
+      <aside
+        className={pinned ? 'drawer drawer--pinned' : 'drawer'}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="drawer__head">
@@ -600,6 +609,8 @@ export function ExplorerPanel({
           <div className="ex-head-actions">
             <button title={vocab('Refresh')} aria-label={vocab('Refresh')} onClick={() => setVersion((v) => v + 1)}>
               <MaterialSymbol name="refresh" size={18} />
+            <button type="button" title="Refresh" aria-label="Refresh" onClick={() => setVersion((v) => v + 1)}>
+              ↻
             </button>
             {onTogglePin && (
               <button
@@ -607,6 +618,8 @@ export function ExplorerPanel({
                 className={pinned ? 'is-on' : ''}
                 title={vocab(pinned ? 'Unpin' : 'Pin')}
                 aria-label={vocab(pinned ? 'Unpin' : 'Pin')}
+                title={pinned ? 'Unpin' : 'Pin'}
+                aria-label={pinned ? 'Unpin' : 'Pin'}
                 aria-pressed={pinned}
                 onClick={onTogglePin}
               >
@@ -615,6 +628,8 @@ export function ExplorerPanel({
             )}
             <button className="drawer__close" aria-label={vocab('Close')} onClick={onClose}>
               <MaterialSymbol name="close" size={19} />
+            <button type="button" className="drawer__close" title="Close" aria-label="Close" onClick={onClose}>
+              ×
             </button>
           </div>
         </div>
@@ -720,8 +735,10 @@ export function ExplorerPanel({
         createPortal(
           <>
             {/* stopPropagation everywhere (same as ContextMenu): this portal's React parent is the
-                drawer OVERLAY (not the aside), so a bubbled click lands on the overlay's
-                onClick={onClose} and closes the whole Explorer along with the menu. */}
+                drawer OVERLAY (not the aside), so a bubbled click on the unpinned modal lands on
+                the overlay's onClick={onClose} and closes the whole Explorer along with the menu.
+                A pinned overlay has no close handler, but the stop is still what keeps the
+                click off the canvas. */}
             <div
               className="tab-backdrop"
               style={{ zIndex: 78 }}

@@ -100,8 +100,12 @@ jobs:
       # Moved AHEAD of the version steps when releasing became automatic: the planner below is a
       # `node scripts/…` call, and check-release-workflow.mjs refuses to let one run before its
       # dependencies exist.
+      # caffeinate on EVERY long-running step in this job, not just build+upload: the Air
+      # sleeping during npm ci or the tmux compile cancels the step just the same (the
+      # v0.3.1 attempt died mid tmux build). -dims only blocks idle sleep — a closed lid
+      # still sleeps the machine — but it removes the "opened the lid, walked away" window.
       - name: Install dependencies
-        run: npm ci
+        run: caffeinate -dims npm ci
 
       # Works out what to release so nobody has to remember to bump package.json. The rule lives
       # in `planReleaseVersion` (scripts/release-assets.mjs) and is unit-tested in
@@ -128,6 +132,17 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+      # RUNNER TOOLCHAIN: the Xcode command line tools and nothing else — curl, cc, make, ar, yacc,
+      # lipo, strip, otool, nm. Explicitly NOT needed: cmake (utf8proc is built through its plain
+      # Makefile, not its CMakeLists), autoconf (release tarballs ship a generated `configure`, and
+      # each arch is extracted fresh so no maintainer rule fires), pkg-config (deliberately
+      # disabled — a Homebrew .pc file would link the bundle to dylibs users don't have), Homebrew,
+      # Rosetta (the cross slice is configured with --host, so no test binary is ever executed) and
+      # npm packages (node stdlib only).
+      - name: Build bundled tmux (universal, static libevent + utf8proc)
+        run: caffeinate -dims node scripts/build-tmux.mjs
+
+      - name: Build, sign & notarize
         run: |
           gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/tags?per_page=100" > "$RUNNER_TEMP/tags-for-plan.json"
           gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/releases?per_page=100" > "$RUNNER_TEMP/releases-for-plan.json"

@@ -1,6 +1,7 @@
 import type { NodeKind, Project } from '@shared/types'
 import type { AgentId } from '@shared/agents/config'
 import type { ActiveAgentLaunchPlan } from '@renderer/state/permissionMode'
+import type { AgentId, AgentPermissionMode } from '@shared/agents/config'
 import {
   type CanvasNode,
   type NodeData,
@@ -75,6 +76,7 @@ export function snapshotNode(
       { id: '__snapshot__', position: node.position, parentId: node.parentId },
       all
     ),
+    absolutePosition: absolutePosition({ id: '__snapshot__', position: node.position, parentId: node.parentId }, all),
     ...(node.parentId ? { parentId: node.parentId } : {}),
     ...(node.extent === 'parent' ? { extent: 'parent' as const } : {}),
     ...(size ? { size } : {}),
@@ -103,6 +105,11 @@ export interface RecreateContext {
 
 const COSMETIC_KEYS = [
   'title', 'titleAuto', 'color', 'group', 'tags', 'collapsed', 'expandedHeight', 'shell', 'torrentMagnet'
+  permissionModeFor: (agentId: AgentId) => AgentPermissionMode | undefined
+}
+
+const COSMETIC_KEYS = [
+  'title', 'titleAuto', 'color', 'group', 'tags', 'collapsed', 'expandedHeight', 'shell', 'agentModel'
 ] as const
 
 function withCosmetics(node: CanvasNode, data: NodeData): CanvasNode {
@@ -204,6 +211,14 @@ function buildBase(snapshot: ReopenNodeSnapshot, ctx: RecreateContext): CanvasNo
       const node = createTimerNode(0)
       return { ...node, data: { ...node.data, ...d, running: false, paused: false, elapsedMs: 0, lapsMs: [], occurrenceId: undefined, occurrenceState: 'scheduled' } }
     }
+    case 'diff':
+      return d.cwd && d.filePath ? createDiffNode(0, d.cwd, d.filePath, !!d.diffStaged, undefined, d.commitOid) : null
+    case 'web':
+      return createWebNode(0, { url: d.url, filePath: d.filePath })
+    case 'browser':
+      return createBrowserNode(0, d.url ?? '', undefined, d.partition)
+    case 'dino':
+      return createDinoNode(0, undefined, d.highScore ?? 0)
     default:
       return null
   }
@@ -219,6 +234,7 @@ export function recreateNodeFromSnapshot(
   snapshot: ReopenNodeSnapshot,
   ctx: RecreateContext
 ): CanvasNode | null {
+export function recreateNodeFromSnapshot(snapshot: ReopenNodeSnapshot, ctx: RecreateContext): CanvasNode | null {
   const base = buildBase(snapshot, ctx)
   if (!base) return null
   const node = withCosmetics(base, snapshot.data)

@@ -17,6 +17,12 @@ it unread. It is here so that the diff exists somewhere other than our machine, 
 that this is an offer rather than a joke at your expense.
 
 You may close it. We will understand. We will not be okay, but we will understand.
+Hello. We are one of your 126 forks. We are writing to inform you that we have
+accidentally written a second application, and that we would like someone else to know
+about it before we are left alone with it forever.
+
+This document proposes no code. You may close it immediately. We will understand. We
+will not be okay, but we will understand.
 
 ## Exhibit A: the damage
 
@@ -36,6 +42,9 @@ that did not stop when the room went dark, and nobody willing to be the one who 
 We would like to stress that at no point did a human being sit down and decide that a
 terminal manager needed a Minecraft server in it. That decision was arrived at. We are
 still working out by whom.
+There was no plan. There was a nightly agent, a laptop with the patience of a saint, and
+nobody in the building willing to be the person who says *"perhaps that is enough
+Material Design for one evening."*
 
 ## Exhibit B: the tokens, which we would like you to feel bad about with us
 

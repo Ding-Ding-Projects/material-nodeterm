@@ -16,6 +16,7 @@ import { mkdtempSync, rmSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { hookServer } from './hook-server'
+import { reduceEntry } from '../agent-status-mirror'
 import { nodeAuthToken } from './node-auth-token'
 import { initPlatform, resetPlatformForTests } from '../platform'
 import { fakePlatform } from '../platform-fake'
@@ -138,6 +139,12 @@ describe('both shells register a 4-arg raw listener', () => {
 
   /** Source with comments removed — a comment that mentions `meta.verified` (both shells have one,
    *  saying why they do NOT read it) is documentation, not a branch. */
+   *  saying why they do NOT read it) is documentation, not a branch.
+   *
+   *  KNOWN BLIND SPOT, deliberately not fixed with a hand-rolled lexer: this also truncates at a
+   *  `//` inside a string literal, so a real branch sharing a line with a URL would be invisible.
+   *  The cost of missing that is a parity check that passes; the cost of a bespoke JS tokenizer
+   *  here is a guard nobody trusts. If it ever matters, put the branch on its own line. */
   const code = (rel: string): string =>
     readFileSync(join(root, rel), 'utf8').replace(/\/\/.*|\/\*[\s\S]*?\*\//g, '')
 
@@ -149,6 +156,23 @@ describe('both shells register a 4-arg raw listener', () => {
   it('neither raw listener branches on meta.verified — and if one ever does, both must', () => {
     const branches = (s: string): boolean => /_?meta(\.verified|\?\.verified)/.test(s)
     expect(branches(code('src/main/index.ts'))).toBe(branches(code('src/server/agent-status.ts')))
+  })
+
+  // Same one-shell-drift rule, next instance: the codex subagent branch (spawn_agent fan-out).
+  // Both raw listeners must (a) tail the child rollout off SubagentStart via trackFile and
+  // (b) skip the context-meter track for agent_id-tagged child events — a shell missing (a)
+  // silently has no live activity, and one missing (b) re-points the parent's meter at the
+  // child's rollout (SubagentStart carries the parent session_id with the CHILD's path).
+  it('both raw listeners carry the codex subagent branch (trackFile + agent_id gate)', () => {
+    for (const rel of ['src/main/index.ts', 'src/server/agent-status.ts']) {
+      const src = code(rel)
+      expect(src, `${rel} misses the SubagentStart trackFile branch`).toMatch(
+        /SubagentStart'\s*\)\s*\{\s*subagentTail\.trackFile/
+      )
+      expect(src, `${rel} misses the agent_id child-event gate`).toMatch(
+        /agentId === 'codex' && p\.agent_id/
+      )
+    }
   })
 
   it('the normalized listener is where verified travels, and it is the only gate input', () => {
@@ -170,6 +194,23 @@ describe('both shells register a 4-arg raw listener', () => {
     }
     const mirror = readFileSync(join(root, 'src/core/agent-status-mirror.ts'), 'utf8')
     expect(mirror).toContain('next.stateVerified = ev.verified === true')
+    // writes it runs wherever hook events land — i.e. if both shells feed the same mirror. The
+    // SHELL ENTRYPOINTS are what must import it; `server/agent-status.ts` is a module the server
+    // entrypoint wires up, so it is deliberately not in this list (an earlier version iterated
+    // `shells` and then `continue`d past it, which checked two files while reading like three).
+    for (const rel of ['src/main/index.ts', 'src/server/index.ts']) {
+      const src = readFileSync(join(root, rel), 'utf8')
+      expect(src, `${rel} does not import the status mirror`).toMatch(/agent-status-mirror/)
+    }
+    // Asserted by RUNNING the reducer, not by grepping it: the first version of this line matched
+    // an exact source string and went red on a pure refactor of the same behaviour, which is a
+    // guard that trains people to edit the guard.
+    const proven = reduceEntry(
+      undefined,
+      { kind: 'state', state: 'done', nodeId: 'n1', agentId: 'claude', verified: true } as NormalizedAgentEvent,
+      1
+    )
+    expect(proven.stateVerified).toBe(true)
   })
 
   for (const rel of shells) {

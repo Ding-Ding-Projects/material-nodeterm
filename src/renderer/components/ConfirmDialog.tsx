@@ -44,6 +44,7 @@ interface ConfirmDialogProps {
    * steals focus from whatever they were typing in, and their next Enter/Space then NATIVELY
    * activates the focused button — a path `enterConfirms`/confirm-key never sees, because the
    * browser's default button activation is not the window keydown listener.
+   * browser's default button activation is not the window keydown listener (PR #213 review, I1).
    */
   autoFocusButtons?: boolean
   onConfirm: () => void
@@ -54,6 +55,8 @@ interface ConfirmDialogProps {
    * ANSWER (the capability clone notice's "Turn it off"), a stray Escape aimed at a terminal or a
    * misclick outside the box must be a non-answer — close for now, decide nothing — not a
    * consent-recording cancel. Absent = historical behavior (dismissal cancels).
+   * consent-recording cancel (PR #213 review, I1). Absent = historical behavior (dismissal
+   * cancels).
    */
   onDismiss?: () => void
 }
@@ -142,11 +145,13 @@ export function ConfirmDialog({
       if (!action) return
       e.preventDefault()
       if (action === 'confirm' && !busy) onConfirm()
+      if (action === 'confirm') onConfirm()
       else dismiss()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [id, enterConfirms, onConfirm, dismiss, busy])
+  }, [id, enterConfirms, onConfirm, dismiss])
 
   return createPortal(
     <div className="confirm-overlay" onClick={dismiss}>
@@ -176,6 +181,7 @@ export function ConfirmDialog({
           {!alert && (
             <button className="confirm__btn" autoFocus={autoFocusButtons && danger} onClick={onCancel}>
               {cancelText}
+              {cancelLabel}
             </button>
           )}
           <button

@@ -16,6 +16,9 @@ import { ConfirmDialog } from './ConfirmDialog'
  * git (a recorded "no" makes a re-appearing switch a new event, not a settled one). Pure and
  * per-capability so a future capability gets this dialog by adding a copy entry — there is
  * nothing per-feature below.
+ * git (C1: a recorded "no" makes a re-appearing switch a new event, not a settled one). Pure and
+ * per-capability so agent messaging's switch (its PR 6) gets this dialog by adding a copy entry —
+ * there is nothing per-feature below.
  */
 export function pendingCapabilityNotice(p: Project | undefined): ProjectCapability | null {
   if (!p) return null
@@ -50,6 +53,21 @@ export function pendingCapabilityNotice(p: Project | undefined): ProjectCapabili
  *    `git checkout` restoring the hostile flag can never convert a "no" into a grant.
  *  - While it is unanswered (or declined) the capability GRANTS NOTHING: every consumer reads
  *    `projectCapabilityGrantedFor`, which requires the recorded 'kept'.
+ *    commit `agentBrowserControl: true`, and the user who cloned it was never asked. The warning
+ *    at the point of SETTING (Settings → Agents) cannot reach them; this dialog can.
+ *  - ONLY THE TWO BUTTONS ARE ANSWERS (PR #213 review, I1). "Keep it on" records 'kept'; "Turn it
+ *    off" records 'declined' and sheds the field. Escape, an overlay misclick, and a keystroke
+ *    aimed at a terminal are NON-answers: `enterConfirms={false}` blocks the window-listener path,
+ *    `autoFocusButtons={false}` means no button holds focus for a native Enter/Space to activate,
+ *    and `onDismiss` closes the dialog for this app session without recording anything — it
+ *    re-shows on the next launch (capability-notice.test.tsx "dismissal is not an answer").
+ *  - The answers are machine-local and carry WHICH answer was given: `Project.capabilityAck` →
+ *    `IndexEntryV3.capabilityAck`, never the shared file. 'kept' silences the notice for this
+ *    entry forever; 'declined' + a re-arriving `true` re-notices AND stays refused (C1) — a
+ *    routine `git checkout` restoring the hostile flag can never convert a "no" into a grant.
+ *  - While it is unanswered (or declined) the capability GRANTS NOTHING: every consumer reads
+ *    `projectCapabilityGrantedFor`, which requires the recorded 'kept' ("does not grant while
+ *    unanswered", "a DECLINED switch grants nothing even when the file says true again").
  *
  * Renders against the ACTIVE project (the project-load path re-evaluates it on every switch), so
  * a background project's hostile file cannot pop a dialog about a canvas the user is not looking
@@ -90,6 +108,7 @@ export function CapabilityNotice(): React.JSX.Element | null {
         // The explicit decline: records 'declined' AND sheds the stranger's grant from the file
         // on the next save. The recorded 'declined' is what keeps a re-arriving `true` refused
         // and re-noticed instead of silently granted.
+        // and re-noticed instead of silently granted (C1).
         setProjectCapability(project.id, cap, false)
       }}
       onDismiss={() => {

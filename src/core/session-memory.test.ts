@@ -251,3 +251,286 @@ describe('collectSessionMemory', () => {
   })
 })
 
+import { parseVmStat, darwinMemInfo, parseTopFootprint } from './session-memory'
+
+/** Shaped from Apple's documented `vm_stat` format, at a 16 KiB page (Apple Silicon). COMPOSED, not
+ *  captured — nobody in this loop has a Mac. Numbers chosen so the arithmetic is checkable by hand:
+ *  anonymous 800k - purgeable 50k + wired 150k + compressor 100k = 1,000,000 pages.
+ *  1,000,000 x 16384 B = 15625 MiB used of a 24576 MiB machine, i.e. 8951 MiB available. */
+const VM_STAT = [
+  'Mach Virtual Memory Statistics: (page size of 16384 bytes)',
+  'Pages free:                                50000.',
+  'Pages active:                             600000.',
+  'Pages inactive:                           400000.',
+  'Pages speculative:                         30000.',
+  'Pages throttled:                               0.',
+  'Pages wired down:                         150000.',
+  'Pages purgeable:                           50000.',
+  '"Translation faults":                  987654321.',
+  'Pages occupied by compressor:             100000.',
+  'File-backed pages:                        700000.',
+  'Anonymous pages:                          800000.'
+].join('\n')
+
+const TOTAL_BYTES = 24576 * 1048576
+
+describe('parseVmStat', () => {
+  it('reports app+wired+compressed as used, not the near-zero free page count', () => {
+    // The bug this exists for: `Pages free` is 50000 (≈781 MiB) on a machine with 8.4 GiB genuinely
+    // available, because macOS holds the rest as reclaimable cache.
+    expect(parseVmStat(VM_STAT, TOTAL_BYTES)).toEqual({ availableMb: 8951, totalMb: 24576 })
+  })
+
+  it('reads the page size from the header rather than assuming 4096', () => {
+    // Same class as the Linux statm bug: a hard-coded 4096 would report a QUARTER of the real usage
+    // on Apple Silicon, i.e. an alarmingly empty machine.
+    const fourK = parseVmStat(VM_STAT.replace('16384 bytes', '4096 bytes'), TOTAL_BYTES)
+    // 1,000,000 x 4096 B = 3906 MiB, so the machine would read 5044 MiB emptier than it is.
+    expect(fourK).toEqual({ availableMb: 20670, totalMb: 24576 })
+  })
+
+  it('subtracts purgeable pages from anonymous — they are droppable cache, not app memory', () => {
+    const noPurge = parseVmStat(VM_STAT.replace(/Pages purgeable:.*\n/, ''), TOTAL_BYTES)
+    // Without the subtraction the machine reads 50000 pages (781 MiB) fuller than it is.
+    expect(noPurge?.availableMb).toBe(8951 - 781)
+  })
+
+  it('returns null when a field it needs is missing, rather than a partial number', () => {
+    expect(parseVmStat(VM_STAT.replace(/Pages wired down:.*\n/, ''), TOTAL_BYTES)).toBeNull()
+    expect(parseVmStat('not vm_stat output', TOTAL_BYTES)).toBeNull()
+    expect(parseVmStat(VM_STAT, 0)).toBeNull()
+  })
+
+  it('never reports negative availability on a heavily compressed machine', () => {
+    const tiny = parseVmStat(VM_STAT, 1024 * 1048576)
+    expect(tiny?.availableMb).toBe(0)
+  })
+})
+
+describe('darwinMemInfo', () => {
+  it('reports null when vm_stat cannot run — never the os.freemem() value', () => {
+    // The whole point. Falling back to os.freemem() here would restore the bug: on macOS it reads
+    // near zero, the reaper's 10%-of-RAM watermark reads as permanent pressure, and idle detached
+    // sessions get reaped every sweep. A confirmed field symptom ("my sessions keep disappearing").
+    // planReap treats null as NO pressure, so no signal is the safe answer.
+    expect(
+      darwinMemInfo(() => {
+        throw new Error('spawn vm_stat ENOENT')
+      }, TOTAL_BYTES)
+    ).toBeNull()
+  })
+
+  it('reports null on output it cannot parse', () => {
+    expect(darwinMemInfo(() => 'garbage', TOTAL_BYTES)).toBeNull()
+  })
+
+  it('passes a good reading through', () => {
+    expect(darwinMemInfo(() => VM_STAT, TOTAL_BYTES)).toEqual({ availableMb: 8951, totalMb: 24576 })
+  })
+})
+
+/** CAPTURED from a real Mac (2026-08-12), not composed: the exact header block, the blank line, the
+ *  `PID    MEM` header and real rows. The bracketed spacing quirks the capture surfaced are kept —
+ *  the MEM column is LEFT-aligned in five chars, so short values carry trailing spaces. */
+const TOP_REAL = [
+  'Processes: 973 total, 5 running, 968 sleeping, 5566 threads',
+  '2026/08/12 04:40:17',
+  'Load Avg: 4.13, 4.82, 6.19',
+  'CPU usage: 22.1% user, 19.11% sys, 58.86% idle',
+  'SharedLibs: 501M resident, 114M data, 85M linkedit.',
+  'MemRegions: 887125 total, 6692M resident, 248M private, 2163M shared.',
+  'PhysMem: 23G used (2941M wired, 8908M compressor), 83M unused.',
+  'VM: 460T vsize, 6144M framework vsize, 210882(0) swapins, 517764(0) swapouts.',
+  'Networks: packets: 754492311/1003G in, 62312609/20G out.',
+  'Disks: 43587984/769G read, 23106973/357G written.',
+  '',
+  'PID    MEM  ',
+  '99554  3696K',
+  '99132  6288K',
+  '98779  12M  ',
+  '97530  8433K',
+  '97519  29M  ',
+  '70698  1314M',
+  '0      36M  '
+].join('\n')
+
+describe('parseTopFootprint', () => {
+  it('parses the real capture, including the left-aligned trailing spaces', () => {
+    const m = parseTopFootprint(TOP_REAL)
+    expect(m.get(99554)).toBe(3696)
+    expect(m.get(8433)).toBeUndefined()
+    expect(m.get(97530)).toBe(8433)
+    // `12M  ` carries two trailing spaces — the quirk that makes a /M$/ regex miss two thirds of
+    // the column on a real host.
+    expect(m.get(98779)).toBe(12 * 1024)
+    expect(m.get(70698)).toBe(1314 * 1024)
+  })
+
+  it('reads pid 0 (kernel_task), which is present and accessible', () => {
+    expect(parseTopFootprint(TOP_REAL).get(0)).toBe(36 * 1024)
+  })
+
+  it('ignores the header block — those lines contain digits and units too', () => {
+    // `PhysMem: 23G used (2941M wired, ...)` would be a tempting false match.
+    const m = parseTopFootprint(TOP_REAL)
+    expect(m.size).toBe(7)
+  })
+
+  it('accepts G even though it was never observed on the capture host', () => {
+    // A 1314M process stayed in M, so the G threshold is unknown — but top's own header prints
+    // `PhysMem: 23G`, so the unit exists and the parser must not choke on it.
+    expect(parseTopFootprint('PID    MEM\n42     3G   ').get(42)).toBe(3 * 1024 * 1024)
+  })
+
+  it('SKIPS a row whose unit it does not recognise rather than guessing a scale', () => {
+    // `B` and any restricted-process rendering were not observed on the capture host and are
+    // deliberately not invented. A wrong scale is a wrong number presented as a fact.
+    const m = parseTopFootprint('PID    MEM\n42     500Q \n43     7K')
+    expect(m.has(42)).toBe(false)
+    expect(m.get(43)).toBe(7)
+  })
+
+  it('returns an empty map when there is no PID/MEM header at all', () => {
+    expect(parseTopFootprint('not top output').size).toBe(0)
+  })
+})
+
+describe('collectSessionMemory on darwin', () => {
+  const asDarwin = (fn: () => Promise<void>) => async (): Promise<void> => {
+    const real = Object.getOwnPropertyDescriptor(process, 'platform')!
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
+    try {
+      await fn()
+    } finally {
+      Object.defineProperty(process, 'platform', real)
+    }
+  }
+
+  const run = async (): Promise<{ calls: string[]; rows: unknown }> => {
+    const calls: string[] = []
+    const r = await collectSessionMemory({
+      tmuxBin: () => '/usr/bin/tmux',
+      sockets: ['s1'],
+      exec: async (bin, args) => {
+        calls.push(bin)
+        if (bin.includes('tmux')) return 'nt-a|4242|claude\n'
+        if (bin === 'ps') return 'PID PPID RSS\n4242 1 100000\n'
+        // 4242's footprint is DOUBLE its rss — the measured idle-process shape.
+        return 'PID    MEM  \n4242   200000K'
+      },
+      readTable: undefined,
+      readMem: () => null
+    })
+    return { calls, rows: r.rows }
+  }
+
+  it(
+    'prefers phys_footprint over rss — the idle-session number rss halves',
+    asDarwin(async () => {
+      const { calls, rows } = await run()
+      expect(calls).toContain('top')
+      // 200000 kB, not the 100000 kB `ps` reported.
+      expect((rows as { selfMb: number }[])[0].selfMb).toBe(Math.round(200000 / 1024))
+    })
+  )
+})
+
+import { parseMemInfoText, parsePsiMemory, readMemInfo } from './session-memory'
+
+/** A verbatim excerpt of the production host's /proc/meminfo, 2026-08-15 (62.7 GB, swap 74% spent). */
+const MEMINFO = `MemTotal:       65697400 kB
+MemFree:         4154020 kB
+MemAvailable:   13804628 kB
+Buffers:          412300 kB
+Cached:          9216440 kB
+SwapCached:       501232 kB
+SwapTotal:       8388604 kB
+SwapFree:        2192260 kB
+Dirty:               736 kB
+`
+
+const PSI = `some avg10=0.00 avg60=1.25 avg300=0.18 total=29288181130
+full avg10=0.00 avg60=0.75 avg300=0.15 total=25621111809
+`
+
+describe('parseMemInfoText', () => {
+  it('reads the required pair and the optional swap pair from ONE snapshot', () => {
+    expect(parseMemInfoText(MEMINFO)).toEqual({
+      availableMb: 13481,
+      totalMb: 64158,
+      swapTotalMb: 8192,
+      swapFreeMb: 2141
+    })
+  })
+
+  it('MemAvailable/MemTotal are required — a /proc we do not understand yields NO reading', () => {
+    // Not a partial object: a reading missing its primary field would be a number the watermark
+    // could still compare against, which is the "wrong number presented as a fact" failure.
+    expect(parseMemInfoText(MEMINFO.replace(/MemAvailable:.*\n/, ''))).toBeNull()
+    expect(parseMemInfoText(MEMINFO.replace(/MemTotal:.*\n/, ''))).toBeNull()
+    expect(parseMemInfoText('garbage')).toBeNull()
+  })
+
+  it('swap is OMITTED, not zeroed, when the kernel does not report it', () => {
+    // The distinction the swap term depends on: `undefined` means "did not measure" and disables
+    // the term, whereas `0` would read as "swap totally exhausted" and could only ever reap MORE.
+    const noSwap = parseMemInfoText(MEMINFO.replace(/SwapTotal:.*\n/, '').replace(/SwapFree:.*\n/, ''))
+    expect(noSwap).toEqual({ availableMb: 13481, totalMb: 64158 })
+    expect(noSwap).not.toHaveProperty('swapTotalMb')
+    expect(noSwap).not.toHaveProperty('swapFreeMb')
+  })
+
+  it('half a swap reading is no swap reading (a free without a total cannot be a ratio)', () => {
+    const half = parseMemInfoText(MEMINFO.replace(/SwapTotal:.*\n/, ''))
+    expect(half).not.toHaveProperty('swapFreeMb')
+  })
+
+  it('a swapless host reports a real zero TOTAL, which every consumer guard turns off', () => {
+    const off = parseMemInfoText(MEMINFO.replace(/SwapTotal:.*/, 'SwapTotal:             0 kB').replace(/SwapFree:.*/, 'SwapFree:              0 kB'))
+    expect(off).toMatchObject({ swapTotalMb: 0, swapFreeMb: 0 })
+  })
+})
+
+describe('parsePsiMemory', () => {
+  it('reads avg60 from both lines', () => {
+    expect(parsePsiMemory(PSI)).toEqual({ psiSomeAvg60: 1.25, psiFullAvg60: 0.75 })
+  })
+
+  it('takes avg60 specifically — not avg10 and not avg300', () => {
+    // The cadence argument: the reaper sweeps every 10 minutes, so avg10 is noise and avg300 stays
+    // elevated through a recovery. Distinct values in every column make a mix-up visible.
+    const distinct = 'some avg10=11.00 avg60=22.00 avg300=33.00 total=1\nfull avg10=44.00 avg60=55.00 avg300=66.00 total=2\n'
+    expect(parsePsiMemory(distinct)).toEqual({ psiSomeAvg60: 22, psiFullAvg60: 55 })
+  })
+
+  it('does not confuse the some line for the full line', () => {
+    expect(parsePsiMemory('some avg10=0.00 avg60=9.00 avg300=0.00 total=1\n')).toEqual({ psiSomeAvg60: 9 })
+  })
+
+  it('an unreadable or absent PSI file yields NO figures, never zeros', () => {
+    expect(parsePsiMemory('')).toEqual({})
+    expect(parsePsiMemory('garbage')).toEqual({})
+    expect(parsePsiMemory('some avg10=0.00 avg300=0.18 total=1\n')).toEqual({})
+  })
+})
+
+describe('readMemInfo on this Linux host (integration)', () => {
+  const onLinux = it.skipIf(process.platform !== 'linux')
+
+  onLinux('carries swap alongside the available/total pair', () => {
+    const m = readMemInfo()
+    expect(m).not.toBeNull()
+    expect(m!.totalMb).toBeGreaterThan(0)
+    // Swap is not guaranteed configured, but if the kernel reports a total it must report a free.
+    if (m!.swapTotalMb !== undefined) {
+      expect(m!.swapFreeMb).toBeDefined()
+      expect(m!.swapFreeMb!).toBeLessThanOrEqual(m!.swapTotalMb!)
+    }
+  })
+
+  onLinux('PSI is optional and never breaks the reading', () => {
+    const m = readMemInfo()
+    expect(m).not.toBeNull()
+    if (m!.psiFullAvg60 !== undefined) expect(m!.psiFullAvg60).toBeGreaterThanOrEqual(0)
+  })
+})
