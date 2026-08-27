@@ -5,6 +5,7 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { resolveTranscriptPath } from '../transcript-reader'
+import { codexHome } from '../usage/codex-usage'
 
 // claude: ~/.claude/projects/<proj>/<sessionId>.jsonl — already implemented (searches all
 // project dirs for the exact <sessionId>.jsonl). `accountId` scopes to a managed account's
@@ -17,7 +18,7 @@ export function locateClaude(sessionId: string, accountId?: string): Promise<str
 // match a .jsonl filename containing the sessionId. Managed accounts are Claude-only, so the
 // codex/gemini locators ignore accountId (present only to satisfy the shared Locator type).
 export async function locateCodex(sessionId: string): Promise<string | undefined> {
-  const root = path.join(os.homedir(), '.codex', 'sessions')
+  const root = path.join(codexHome(), 'sessions')
   const stack = [root]
   while (stack.length) {
     const dir = stack.pop() as string
@@ -58,7 +59,15 @@ export async function locateGemini(sessionId: string): Promise<string | undefine
       if (!f.endsWith('.jsonl')) continue
       const p = path.join(chats, f)
       try {
-        const head = (await fs.promises.readFile(p, 'utf8')).split('\n', 1)[0]
+        const fd = await fs.promises.open(p, 'r')
+        let head: string
+        try {
+          const buf = Buffer.alloc(64 * 1024)
+          const { bytesRead } = await fd.read(buf, 0, buf.length, 0)
+          head = buf.subarray(0, bytesRead).toString('utf8').split('\n', 1)[0]
+        } finally {
+          await fd.close()
+        }
         const o = JSON.parse(head) as { sessionId?: string }
         if (o.sessionId === sessionId) return p
       } catch {

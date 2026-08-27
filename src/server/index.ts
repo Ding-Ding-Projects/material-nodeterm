@@ -652,7 +652,7 @@ export async function startServer(
   // Context Link: core owns the whole feature (read handler, shim, skill, instruction blocks) and
   // writes everything under `dataDir`; what it needs from a shell is the link map. The desktop's
   // renderer pushes it from the live canvas — headless there may be no browser attached at all, so
-  // we derive the same map from the persisted `bridges[]` of every canvas instead. See
+  // we derive the same map from the persisted `links[]` of every canvas instead. See
   // src/server/context-link.ts.
   const contextLink = initServerContextLink({
     ptyManager,
@@ -660,7 +660,7 @@ export async function startServer(
     installAgentIntegrations: config.installHooks !== false
   })
   // Every load()/save() is a canvas change as far as links are concerned: a browser drawing a
-  // bridge edge reaches us as the workspace save it triggers.
+  // context-link change reaches us as the workspace save it triggers.
   workspaceStore.onPersist = () => {
     contextLink.refresh()
     refreshNodeTokens()
