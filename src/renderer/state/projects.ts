@@ -23,6 +23,7 @@ import {
   ROOT_CANVAS_ID
 } from '@shared/multiverse-canvases'
 import { createSpecialUniverseCanvas } from '../../core/universe-shop'
+import type { PortableDoorConstructionV3 } from '@shared/door-construction'
 import type { ProjectCapability } from '@shared/project-capabilities'
 import type { ProjectIcon } from '@shared/project-icon'
 import { recordCapabilityAck, type CapabilityAnswer } from '@shared/project-capability-consent'
@@ -58,6 +59,16 @@ interface ProjectsState {
     canvasId?: string
     reason?: string
   }
+  /** Attach one validated construction to both sides of a newly-created Multiverse portal. */
+  attachMultiverseDoor(projectId: string, input: {
+    parentCanvasId: string
+    childCanvasId: string
+    entryDoorId: string
+    returnDoorId: string
+    title: string
+    entryConstruction: PortableDoorConstructionV3
+    returnConstruction: PortableDoorConstructionV3
+  }): { portalId?: string; reason?: string }
   /** Adds a new project and returns it (caller commits the current canvas first). */
   addProject(name?: string, cwd?: string, ssh?: Project['ssh']): Project
   /** "Open folder…": a folder maps to one project. Reuses the existing project with that
@@ -410,6 +421,43 @@ export const useProjects = create<ProjectsState>((set, get) => ({
       )
     }))
     return { canvasId }
+  },
+
+  attachMultiverseDoor(projectId, input) {
+    const project = get().projects.find((item) => item.id === projectId)
+    if (!project) return { reason: 'Choose an open project before attaching a door.' }
+    const child = project.multiverseCanvases?.find((canvas) => canvas.id === input.childCanvasId)
+    const parent = input.parentCanvasId === ROOT_CANVAS_ID || project.multiverseCanvases?.some((canvas) => canvas.id === input.parentCanvasId)
+    if (!child || !parent) return { reason: 'The selected parent or child canvas is no longer available.' }
+    if (child.parentCanvasId !== input.parentCanvasId) return { reason: 'The child canvas is not beneath the selected parent.' }
+    if (input.entryConstruction.doorId !== input.entryDoorId || input.entryConstruction.canvasId !== input.parentCanvasId || input.entryConstruction.targetCanvasId !== input.childCanvasId || input.entryConstruction.pairedDoorId !== input.returnDoorId) {
+      return { reason: 'The entry construction identity does not match the selected door route.' }
+    }
+    if (input.returnConstruction.doorId !== input.returnDoorId || input.returnConstruction.canvasId !== input.childCanvasId || input.returnConstruction.targetCanvasId !== input.parentCanvasId || input.returnConstruction.pairedDoorId !== input.entryDoorId) {
+      return { reason: 'The return construction identity does not match the selected door route.' }
+    }
+    const portalId = `portal-${input.childCanvasId}`
+    if (project.portals?.some((portal) => portal.childCanvasId === input.childCanvasId || portal.id === portalId)) {
+      return { reason: 'This child canvas already has a portal.' }
+    }
+    set((state) => ({
+      projects: state.projects.map((item) => item.id !== projectId ? item : {
+        ...item,
+        portals: [...(item.portals ?? []), {
+          id: portalId,
+          parentCanvasId: input.parentCanvasId,
+          childCanvasId: input.childCanvasId,
+          entryDoorId: input.entryDoorId,
+          returnDoorId: input.returnDoorId,
+          title: input.title,
+          depth: child.depth,
+          status: 'open' as const,
+          entryConstruction: input.entryConstruction,
+          returnConstruction: input.returnConstruction
+        }]
+      })
+    }))
+    return { portalId }
   },
 
   addProject(name, cwd, ssh) {
