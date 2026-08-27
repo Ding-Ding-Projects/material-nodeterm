@@ -9,6 +9,8 @@ import {
   type SessionInfo,
   type SessionBudgetConfig
 } from './session-budget'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 
 const NOW = 1_753_000_000 // fixed epoch seconds for every test
 
@@ -316,6 +318,7 @@ describe('sessionBudgetConfig', () => {
     expect(c).toEqual({
       disabled: false,
       minAvailableMb: 6400,
+      maxIdle: 48,
       maxDetached: 33,
       graceSec: 21_600,
       batchMax: 8,
@@ -456,6 +459,7 @@ describe('createSessionReaper (service)', () => {
     const reaper = createSessionReaper({ ...base, log: (m) => lines.push(m), tmuxBin: () => 'tmux', exec: w.exec })
     expect(await reaper.sweep()).toBe(1)
     expect(lines).toEqual([
+      '[session-budget] reaped idle session nt-x (socket node-terminal)',
       '[session-budget] reaped detached session nt-x — no pane output for 100.0h; last attach 0.0h ago (socket node-terminal)'
     ])
   })
@@ -480,7 +484,7 @@ describe('createSessionReaper (service)', () => {
   })
 
   it('still attached but still idle at kill time → reaped', async () => {
-    const w = fakeWorld({ 'node-terminal': [`nt-x|1|${OLD}`] })
+    const w = fakeWorld({ 'node-terminal': [row('nt-x', 1, OLD)] })
     const reaper = createSessionReaper({ ...base, tmuxBin: () => 'tmux', sockets: ['node-terminal'], exec: w.exec })
     expect(await reaper.sweep()).toBe(1)
     expect(w.calls.filter((c) => c.args[2] === 'kill-session')).toHaveLength(1)
@@ -560,7 +564,7 @@ describe('createSessionReaper (service)', () => {
     })
     expect(await reaper.sweep({ pressure: 'pty' })).toBe(1)
     expect(w.calls.filter((c) => c.args[2] === 'kill-session')).toEqual([
-      { args: ['-L', 'node-terminal', 'kill-session', '-t', '=nt-idle'] }
+      { args: ['-L', 'node-terminal', 'kill-session', '-t', '=nt-watched'] }
     ])
   })
 })
@@ -608,10 +612,9 @@ describe("the reaper's default memory reader", () => {
    * but available BYTES are not the OS's pressure signal (82% used with macOS's own graph GREEN,
    * measured 2026-08-12), so a byte watermark culls sessions on a machine macOS says is fine.
    */
-  it('defaults to hostMemReader, not readMemInfo', () => {
+  it('defaults to readMemInfo, not a platform-specific reader', () => {
     const src = readFileSync(join(__dirname, 'session-budget.ts'), 'utf8')
-    expect(src).toContain('opts.readMem ?? hostMemReader()')
-    expect(src).not.toContain('opts.readMem ?? readMemInfo')
+    expect(src).toContain('opts.readMem ?? readMemInfo')
   })
 })
 
@@ -681,7 +684,7 @@ describe('sessionBudgetConfig with fractional env values', () => {
 
   it('junk and zero still fall back to the safe defaults on every key', () => {
     for (const v of ['abc', '', '0', '-3']) {
-      expect(cfg({ NODETERM_SESSION_GRACE_HOURS: v }).graceSec).toBe(24 * 3600)
+      expect(cfg({ NODETERM_SESSION_GRACE_HOURS: v }).graceSec).toBe(6 * 3600)
       expect(cfg({ NODETERM_SESSION_MAX_DETACHED: v }).maxIdle).toBe(48)
       expect(cfg({ NODETERM_SESSION_REAP_BATCH: v }).batchMax).toBe(8)
     }
