@@ -643,6 +643,26 @@ const FEATURES = [
     docs: ['docs/features/agents/agent-support.md'],
   },
   {
+    id: 'linked-agent-inbox-notifications',
+    label: 'Linked-agent inbox notifications',
+    files: [
+      'src/main/canvas-control-core.ts',
+      'src/main/agent-messaging.ts',
+      'src/core/agents/delivery-queue.ts',
+      'src/shared/agents/agent-messaging.ts',
+      'src/shared/project-capabilities.ts',
+    ],
+    contentChecks: [
+      ['src/main/canvas-control-core.ts', "| 'notify'"],
+      ['src/shared/agents/agent-messaging.ts', 'export const NOTIFY_BODY'],
+      ['src/main/agent-messaging.ts', 'export async function deliverFromControl('],
+      ['src/core/agents/delivery-queue.ts', 'export class DeliveryQueue'],
+      ['src/shared/project-capabilities.ts', "'agentMessaging'"],
+    ],
+    settingsSection: 'agents',
+    docs: ['docs/features/agents/linked-agent-inbox-notifications.md'],
+  },
+  {
     id: 'canvas',
     label: 'The canvas',
     files: ['src/renderer/canvas/Canvas.tsx'],

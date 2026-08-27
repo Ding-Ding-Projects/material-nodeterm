@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Document Program 57 linked-agent inbox notifications and register the feature in the offline
+  documentation bundle and the documentation site. The current source uses the upstream PR #98
+  fixed app-authored prompt intent through authenticated main-process delivery, project capability
+  consent, runtime pane ownership checks, flow limits, traces, and the bounded deliver-on-idle
+  queue. This ultra-speed lane intentionally did not run tests, type checks, lint, reviews,
+  security or accessibility checks, builds, packaging, installer execution, runtime interaction,
+  or UI captures.
+
 - Add the bundled AWS CLI v2 dependency lane. Windows packaging now stages the pinned official
   `2.36.32` MSI, verifies its SHA-256, falls back through a verified local cache or canonical
   HTTPS download, extracts it into application-local storage, exposes the installed version, and
