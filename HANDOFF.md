@@ -2,7 +2,7 @@
 
 ## 2026-08-27, generic all-service AWS GUI, issue #50
 
-The issue jer is `feat/program-39-aws-all-services`, reconciled with the exact
+The issue branch is `feat/program-39-aws-all-services`, reconciled with the exact
 `origin/main` tip `54164b84dce0b7e62787b1de2885405ff4ed821c`. The generic lane now uses the current
 AWS Universe Shop and shared AWS resource manager rather than maintaining a second AWS execution
 stack. `ShopNode.tsx` routes the all-service entry to the installed-model service and operation
@@ -25,8 +25,8 @@ AWS panel were removed after reconciliation, because they duplicated the existin
 would have allowed the two execution paths to drift.
 
 The implementation lane intentionally ran no tests, type checks, lint, builds, packaging, installer
-execution, runtime interaction, reviews, accessibility or security audits, or HuiShots. The parent
-integration lane owns those checks and the default-jer merge.
+execution, runtime interaction, reviews, accessibility or security audits, or screenshots. The parent
+integration lane owns those checks and the default branch merge.
 
 ## 2026-08-27, AWS core-service managers, issue #46 PR preparation
 
