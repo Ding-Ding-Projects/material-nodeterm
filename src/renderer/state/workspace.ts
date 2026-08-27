@@ -8,6 +8,7 @@ import { DEFAULT_HOME_ASSISTANT_NODE_INTENT } from '@shared/home-assistant'
 import type { HomeAssistantControlConfig } from '@shared/home-assistant-control'
 import { DEFAULT_HOME_ASSISTANT_CONTROL_CONFIG, validateHomeAssistantControlConfig } from '@shared/home-assistant-control'
 import { DEFAULT_HOME_ASSISTANT_SENSOR_CONFIG, type HomeAssistantSensorConfig } from '@shared/home-assistant-sensor'
+import { NEXTCLOUD_AIO_DEFAULT_CONFIG } from '@shared/nextcloud-aio'
 import type { AlarmOccurrence, AlarmRecurrence } from '@shared/alarm-clock'
 import type { ServiceConnection } from '@shared/node-exec'
 import type { NsisLocalPaths, NsisSpec } from '@shared/nsis-form-types'
@@ -255,6 +256,8 @@ export interface NodeData {
   recoveryGame?: RecoveryGameSnapshot
   /** service-kinds only: the display name the user gave this manager. See `CanvasNodeState`. */
   serviceLabel?: string
+  /** Nextcloud AIO safe deployment intent; live Docker bindings remain outside project data. */
+  nextcloudAioConfig?: import('@shared/nextcloud-aio').NextcloudAioConfig
   homeAssistantIntent?: HomeAssistantNodeIntent
   /** Safe ownership metadata for a special-universe Shop node. */
   universeCanvasId?: string
@@ -1553,7 +1556,8 @@ export const SERVICE_NODE_LABELS: Record<ServiceNodeKind, string> = {
   proxmox: 'Proxmox',
   gitlab: 'GitLab',
   homeassistant: 'Home Assistant',
-  freepbx: 'FreePBX'
+  freepbx: 'FreePBX',
+  'nextcloud-aio': 'Nextcloud AIO'
 }
 
 /**
@@ -1589,7 +1593,8 @@ export function createServiceNode(
       color: NODE_COLORS[index % NODE_COLORS.length],
       group: null,
       serviceLabel: '',
-      ...(kind === 'homeassistant' ? { homeAssistantIntent: { ...DEFAULT_HOME_ASSISTANT_NODE_INTENT } } : {})
+      ...(kind === 'homeassistant' ? { homeAssistantIntent: { ...DEFAULT_HOME_ASSISTANT_NODE_INTENT } } : {}),
+      ...(kind === 'nextcloud-aio' ? { nextcloudAioConfig: { ...NEXTCLOUD_AIO_DEFAULT_CONFIG } } : {})
     }
   }
 }
@@ -2211,6 +2216,7 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   homeassistant: true,
   'homeassistant-sensor': true,
   freepbx: true,
+  'nextcloud-aio': true,
   nsis: true,
   shop: true,
   torrent: true,
@@ -2262,6 +2268,7 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   homeassistant: SERVICE_SUMMARY_SIZE,
   'homeassistant-sensor': HOME_ASSISTANT_SENSOR_SIZE,
   freepbx: SERVICE_SUMMARY_SIZE,
+  'nextcloud-aio': SERVICE_CONSOLE_SIZE,
   nsis: NSIS_SIZE,
   shop: SHOP_SIZE,
   torrent: TORRENT_SIZE,
@@ -2717,6 +2724,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         cwd: n.cwd,
         text: n.text,
         serviceLabel: n.serviceLabel,
+        nextcloudAioConfig: n.nextcloudAioConfig,
         homeAssistantIntent: n.homeAssistantIntent,
         universeCanvasId: n.universeCanvasId,
         universeScope: n.universeScope,
@@ -2842,6 +2850,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         cwd: n.data.cwd,
         text: n.data.text,
         serviceLabel: n.data.serviceLabel,
+        nextcloudAioConfig: n.data.nextcloudAioConfig,
         homeAssistantIntent: n.data.homeAssistantIntent,
         universeCanvasId: n.data.universeCanvasId,
         universeScope: n.data.universeScope,

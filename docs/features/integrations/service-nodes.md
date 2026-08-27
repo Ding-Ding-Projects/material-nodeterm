@@ -6,11 +6,11 @@ any other node, and it stores where it would reach a service — but nothing dia
 Read this document alongside the "what does not work yet" section below before assuming a control
 does more than it says.
 
-## The six kinds, and why one is called a manager and not a host
+## The seven kinds, and why one is called a manager and not a host
 
-Six new node kinds join the canvas's `NodeKind` union
+Seven service node kinds join the canvas's `NodeKind` union
 (`src/shared/types.ts` `SERVICE_NODE_KINDS`): `minecraft`, `dockerhost`, `proxmox`, `gitlab`,
-`homeassistant`, `freepbx`. Each shares the same service-node shell,
+`homeassistant`, `freepbx`, and `nextcloud-aio`. Each shares the same service-node shell,
 `src/renderer/nodes/ServiceNode.tsx` — one component with six callers, because the only thing that
 varies between them is a label and a starting size, and this codebase's most repeated lesson is
 that a duplicated rule drifts from its copies.
@@ -23,13 +23,15 @@ canvas right-click to spin up. A Proxmox node's whole job, once it does somethin
 window onto an installation that is already running somewhere. The same framing holds for the rest
 of the family in softer form: a `dockerhost` node manages a Docker daemon that is already running on
 some machine, a `gitlab` node manages a GitLab instance, `homeassistant` discovers a running Home
-Assistant, and `freepbx` manages a running FreePBX box. `minecraft` is the closest thing to an
+Assistant, and `freepbx` manages a running FreePBX box. `nextcloud-aio` manages a pinned official
+Nextcloud AIO master container through an explicitly disclosed Docker socket, without privileged
+mode. `minecraft` is the closest thing to an
 exception — a Minecraft server is realistically something *this* app would help stand up in Docker —
 but the node itself, as shipped, is exactly as inert as its five siblings; see
 [`minecraft-server.md`](minecraft-server.md) for the researched design of the part that would
 actually create one.
 
-None of the six kinds appear in `docs/features/integrations/README.md`'s old "planned, not yet
+None of the original six kinds appear in `docs/features/integrations/README.md`'s old "planned, not yet
 researched" list by accident of naming — they are the same six products that list already named.
 What changed is that the canvas object for each now exists; the research and the real client work
 for most of them has not started.

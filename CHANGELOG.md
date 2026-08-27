@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add the guided Nextcloud AIO hosting profile for issue #52. It uses a pinned official image,
+  explicitly discloses read-only Docker socket authority, refuses privileged mode and arbitrary
+  shell input, and provides local binding, health, update, backup, restore, rollback, cancellation,
+  and progress states. Schema 3 carries safe intent only; Docker context, socket, host paths,
+  container state, backup data, and credentials remain local. This ultra-speed lane intentionally
+  did not run tests, type checks, lint, reviews, security or accessibility checks, builds, packaging,
+  installer execution, runtime interaction, or captures.
+
 - Complete the Express File Converter flow with queue-wide collision-safe destination names,
   visible rename disclosure, final atomic no-clobber publication, and a completed-output action that
   opens the exact result in Visual Studio Code through the active project API. The converter queue

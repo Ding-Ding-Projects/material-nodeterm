@@ -26,6 +26,7 @@ import {
 import type { PlannerSchedule } from '../shared/planner-occurrences'
 import { normalizeRecoveryGameSnapshot, RECOVERY_ENERGY_KEYS, type RecoveryGameSnapshot } from '../shared/recovery-game'
 import { repairPortablePortals, validatePortablePortals, type PortablePortalV3 } from './portal-lifecycle'
+import { normalizeNextcloudAioConfig, type NextcloudAioConfig } from '../shared/nextcloud-aio'
 
 export type PortableCanvasScope = 'root' | 'multiverse' | 'aws-universe'
 
@@ -68,6 +69,8 @@ export interface PortableCanvasNodeV3 {
   homeAssistantIntent?: { transport: 'rest' | 'websocket'; domain: string }
   homeAssistantControlConfig?: HomeAssistantControlConfig
   alarmSchedule?: { recurrence: string; date?: string; time: string; weekdays?: number[]; monthDay?: number }
+  /** Safe Nextcloud AIO hosting intent; Docker context and live state remain local. */
+  nextcloudAioConfig?: NextcloudAioConfig
   alarmTimeZone?: string
   alarmEnabled?: boolean
   alarmSnoozeMinutes?: number
@@ -149,6 +152,7 @@ const ALLOWED_NODE = new Set([
   'universeCanvasId', 'universeScope', 'universeDepth', 'nonDeletable', 'shopSelection',
   'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel',
   'wildDimSumDish', 'homeAssistantIntent', 'homeAssistantControlConfig', 'homeAssistantSensorConfig',
+  'nextcloudAioConfig',
   'alarmSchedule', 'alarmTimeZone', 'alarmEnabled', 'alarmSnoozeMinutes',
   'alarmSoundEnabled', 'alarmNarratorEnabled', 'alarmHistory', 'mediaAssets',
   'mediaActiveAssetId', 'recoveryGame'
@@ -285,6 +289,11 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
     out.homeAssistantIntent = { transport: node.homeAssistantIntent.transport as 'rest' | 'websocket', domain }
   }
   if (node.homeAssistantControlConfig !== undefined) out.homeAssistantControlConfig = validateHomeAssistantControlConfig(node.homeAssistantControlConfig)
+  if (node.nextcloudAioConfig !== undefined) {
+    const normalized = normalizeNextcloudAioConfig(node.nextcloudAioConfig)
+    if (node.kind !== 'nextcloud-aio' || !normalized || (strict && JSON.stringify(normalized) !== JSON.stringify(node.nextcloudAioConfig))) throw new PortableProjectV3Error('manifest', 'Portable Nextcloud AIO intent is invalid or exceeds its bounds.')
+    out.nextcloudAioConfig = normalized
+  }
   if (node.recoveryGame !== undefined) {
     if (!record(node.recoveryGame)) throw new PortableProjectV3Error('manifest', 'Portable recovery game state is invalid.')
     exactKeys(node.recoveryGame, ALLOWED_RECOVERY_GAME, 'recovery game state')
@@ -622,6 +631,7 @@ export function portableCanvasProjectionToProject(
     ...(node.wildDimSumDish !== undefined ? { wildDimSumDish: node.wildDimSumDish } : {}),
     ...(node.homeAssistantIntent !== undefined ? { homeAssistantIntent: { ...node.homeAssistantIntent } } : {}),
     ...(node.homeAssistantControlConfig !== undefined ? { homeAssistantControlConfig: validateHomeAssistantControlConfig(node.homeAssistantControlConfig) } : {}),
+    ...(node.nextcloudAioConfig !== undefined ? { nextcloudAioConfig: normalizeNextcloudAioConfig(node.nextcloudAioConfig) } : {}),
     ...(node.homeAssistantSensorConfig !== undefined ? { homeAssistantSensorConfig: validateHomeAssistantSensorConfig(node.homeAssistantSensorConfig) } : {}),
     ...(node.recoveryGame !== undefined ? { recoveryGame: normalizeRecoveryGameSnapshot(node.recoveryGame) } : {})
   })

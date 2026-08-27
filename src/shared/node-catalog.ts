@@ -1,5 +1,6 @@
 import type { NodeKind } from './types'
 import { DOCKER_HOST_PORTABLE_BLUEPRINT } from './docker-host-manager'
+import { NEXTCLOUD_AIO_PORTABLE_BLUEPRINT } from './nextcloud-aio'
 
 /** The guided categories shown by the Node Catalog. Keep this list explicit so a new category
  * cannot disappear from the picker simply because no current entry happens to use it. */
@@ -527,7 +528,21 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
   plannedEntry('aws-service', 'universes', 'AWS service node', 'Create a typed AWS service blueprint from installed CLI models.', 'aws-cli-v2', 'aws-universe'),
   plannedEntry('cloudflare-hosting', 'hosting', 'Cloudflare hosting', 'Create a private-first hosting blueprint with explicit tunnel exposure later.', 'hosting-adapter'),
   plannedEntry('gitlab-hosting', 'hosting', 'GitLab hosting', 'Create a guided GitLab hosting blueprint with local credentials later.', 'hosting-adapter'),
-  plannedEntry('nextcloud-hosting', 'hosting', 'Nextcloud hosting', 'Create a managed Nextcloud hosting blueprint with local binding later.', 'hosting-adapter'),
+  {
+    id: 'nextcloud-hosting',
+    nodeKind: 'nextcloud-aio',
+    category: 'hosting',
+    label: 'Nextcloud AIO hosting',
+    description: 'Deploy a private-first Nextcloud AIO profile with disclosed Docker socket authority and no privileged mode.',
+    keywords: ['hosting', 'nextcloud', 'aio', 'backup', 'restore', 'rollback', 'docker socket'],
+    documentationPath: 'docs/features/integrations/nextcloud-aio-hosting.md',
+    safeDefaults: { nextcloudAioBlueprint: NEXTCLOUD_AIO_PORTABLE_BLUEPRINT },
+    dependencies: ['docker-cli', 'nextcloud-aio-image'],
+    status: 'available',
+    availabilityMode: 'configure-later',
+    scope: 'any',
+    availability: alwaysAvailable
+  },
   plannedEntry('open-webui-hosting', 'hosting', 'Open WebUI hosting', 'Create an Open WebUI hosting blueprint that can reuse local Ollama.', 'hosting-adapter')
 ] as const
 
@@ -585,7 +600,7 @@ export const NODE_CATALOG_COMPLETENESS: readonly NodeCatalogCompletenessRecord[]
   { id: 'aws-service', state: 'planned', scope: 'aws-universe', reason: 'AWS service node not implemented' },
   { id: 'cloudflare-hosting', state: 'planned', scope: 'any', reason: 'Cloudflare hosting not implemented' },
   { id: 'gitlab-hosting', state: 'planned', scope: 'any', reason: 'GitLab hosting not implemented' },
-  { id: 'nextcloud-hosting', state: 'planned', scope: 'any', reason: 'Nextcloud hosting not implemented' },
+  { id: 'nextcloud-hosting', state: 'current', scope: 'any', reason: 'Nextcloud AIO hosting profile' },
   { id: 'open-webui-hosting', state: 'planned', scope: 'any', reason: 'Open WebUI hosting not implemented' }
 ]
 

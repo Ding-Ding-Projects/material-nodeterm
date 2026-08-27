@@ -1,6 +1,7 @@
 import { DEFAULT_WORD_SEPARATORS } from './word-separators'
 import type { ServiceConnection } from './node-exec'
 import type { DockerHostManagerApi } from './docker-host-manager'
+import type { NextcloudAioManagerApi } from './nextcloud-aio'
 import type { NsisSpec, NsisLocalPaths } from './nsis-form-types'
 // Types shared across the main, preload, and renderer processes.
 
@@ -421,6 +422,7 @@ export type NodeKind =
   | 'homeassistant'
   | 'homeassistant-sensor'
   | 'freepbx'
+  | 'nextcloud-aio'
   | 'torrent'
   /** One-shot Linux ISO virtual machine, distinct from the WSL terminal profile. */
   | 'linux-vm'
@@ -436,7 +438,8 @@ export const SERVICE_NODE_KINDS = [
   'proxmox',
   'gitlab',
   'homeassistant',
-  'freepbx'
+  'freepbx',
+  'nextcloud-aio'
 ] as const
 
 export type ServiceNodeKind = (typeof SERVICE_NODE_KINDS)[number]
@@ -640,6 +643,8 @@ export interface CanvasNodeState {
    * `localExec` on the index entry, exactly where the shell and Windows profile already live.
    */
   serviceLabel?: string
+  /** Nextcloud AIO safe deployment intent. Context, container state, backups, and socket bindings remain local. */
+  nextcloudAioConfig?: import('./nextcloud-aio').NextcloudAioConfig
   /** Home Assistant node presentation intent safe for schema 3. Hosts, instance ids, credentials,
    *  sessions, and entity caches stay in the machine-local service and binding overlay. */
   homeAssistantIntent?: import('./home-assistant').HomeAssistantNodeIntent
@@ -4243,6 +4248,8 @@ export interface RelayHostApi {
   dockerContexts(): Promise<Array<{ name: string; current: boolean; endpoint: string }>>
   /** Guided local/SSH Docker management. Desktop owns the CLI; Server Edition refuses it. */
   manager: DockerHostManagerApi
+  /** Guided Nextcloud AIO lifecycle manager. Desktop-only; the browser shell reports unsupported. */
+  nextcloudAio: NextcloudAioManagerApi
   /**
    * Enter host mode over the relay: connect and return a pairing offer string to hand to a client.
    * Rejects when Docker or the configured relay is unavailable. `projectId` is the

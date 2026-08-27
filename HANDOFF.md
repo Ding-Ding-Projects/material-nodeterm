@@ -1,5 +1,30 @@
 # Handoff
 
+## 2026-08-27, Nextcloud AIO hosting implementation, issue #52
+
+The implementation lane is `feat/program-41-nextcloud-aio`, based on `12055e96`. The canvas
+catalog now creates a `nextcloud-aio` service node from `nextcloud-hosting`, with a typed shared
+contract in `src/shared/nextcloud-aio.ts`, a desktop manager in
+`src/main/remote/nextcloud-aio-manager.ts`, and a guided renderer surface in
+`src/renderer/components/nextcloud/NextcloudAioPanel.tsx`.
+
+The profile pins `nextcloud/all-in-one:2025.8.0` from the official source, discloses that its
+read-only Docker socket mount can control the Docker host, refuses `--privileged`, uses dropped
+capabilities and `no-new-privileges`, and sends fixed argument arrays only. It exposes discovered
+context selection, loopback/private binding, bounded port validation, health, lifecycle, update,
+backup, restore, rollback, cancellation, partial progress, and explicit failure recovery. Every
+search field has its own adjacent anchored regex builder.
+
+Schema 3 carries only `nextcloudAioConfig` safe intent. Context names, endpoints, socket paths,
+container ids, volume contents, backup records, process state, host paths, and credentials remain
+local and import has no external side effect. Direct documentation is in
+`docs/features/integrations/nextcloud-aio-hosting.md`, the category index, the offline docs bundle,
+and `site/docs/nextcloud-aio-hosting.html`.
+
+No tests, type checks, lint, reviews, security or accessibility checks, builds, packaging,
+installer execution, runtime interaction, or captures were run in this ultra-speed lane. The source
+is committed for the parent integration lane to verify against the exact integrated commit.
+
 ## 2026-08-27, Express File Converter completion, issue #21
 
 The implementation lane is `feat/program-10-file-converter`, refreshed by fast-forward before edits

@@ -656,6 +656,13 @@ export const IPC = {
   dockerHostManagerRun: 'docker-host-manager:run',
   dockerHostManagerCancel: 'docker-host-manager:cancel',
   dockerHostManagerProgress: 'docker-host-manager:progress',
+  // Guided Nextcloud AIO hosting. The manager accepts only fixed profile operations and reports
+  // progress; Docker socket authority is disclosed in the renderer and privileged mode is refused.
+  nextcloudAioContexts: 'nextcloud-aio:contexts',
+  nextcloudAioSnapshot: 'nextcloud-aio:snapshot',
+  nextcloudAioRun: 'nextcloud-aio:run',
+  nextcloudAioCancel: 'nextcloud-aio:cancel',
+  nextcloudAioProgress: 'nextcloud-aio:progress',
   // Team Access (multi-seat): `relayHostInvite` ADDS a seat (invoke, `{ projectId?, email? }` →
   // `{ offer }`, cap-checked → rejects `E_SEATS_FULL`); `relayHostRevoke` (send, `{ id }`) cuts one
   // bridged peer's live session. `relayHostPeerPending`/`relayHostOpen` now also carry the seat

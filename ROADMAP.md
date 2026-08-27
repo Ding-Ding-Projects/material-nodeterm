@@ -98,6 +98,13 @@ later commit, since this file will not be kept in lockstep with every merge).
       an honest Server Edition boundary. Tests, build/package evidence, generated docs bundle,
       runtime interaction, and captures remain outstanding.
 
+- [ ] **Nextcloud AIO hosting, issue #52**: the guided pinned official image profile is implemented
+      on `feat/program-41-nextcloud-aio` with explicit Docker socket authority disclosure, no
+      privileged mode, local loopback/private binding, fixed lifecycle operations, health and
+      progress states, backup/restore/rollback records, portable safe intent, localized copy, and
+      dedicated docs. Tests, type checks, builds, packaging, runtime interaction, reviews, and
+      captures remain outstanding under the issue's ultra-speed boundary.
+
 - [ ] **ADHD modes** — Focus, Low stimulation, Time awareness, One thing at a time, and Momentum
       are all specced in `docs/adhd-modes.md`. Time awareness, Momentum, and the
       notification-filtering half of Low stimulation were wired 2026-08-20 (`d697f78f`). Still
