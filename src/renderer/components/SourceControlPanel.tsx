@@ -452,7 +452,7 @@ export function SourceControlPanel({
 
   return createPortal(
     <div className="drawer-overlay" onClick={onClose}>
-      <aside className="drawer scm md3-source-control" onClick={(e) => e.stopPropagation()}>
+      <aside className="drawer scm md3-source-control" data-easter-surface="source-control" onClick={(e) => e.stopPropagation()}>
         <div className="drawer__head">
           <h2>Source Control</h2>
           <button className="drawer__close" aria-label="Close" onClick={onClose}>

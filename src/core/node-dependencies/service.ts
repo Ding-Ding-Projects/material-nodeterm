@@ -15,9 +15,11 @@ import {
   NODE_DEPENDENCY_MANIFEST,
   type NodeDependencyArchitecture,
   type NodeDependencyAvailability,
+  type NodeDependencyDetails,
   type NodeDependencyInstallRecord,
   type NodeDependencyInstallResult,
   type NodeDependencyManifestEntry,
+  type NodeDependencyModelInventoryEntry,
   type NodeDependencyPlatform,
   type NodeDependencyProgress,
   type NodeDependencyState
@@ -29,6 +31,9 @@ export const NODE_DEPENDENCY_MAX_ARCHIVE_BYTES = 512 * 1024 * 1024
 export const NODE_DEPENDENCY_MAX_UNPACKED_BYTES = 1 * 1024 * 1024 * 1024
 export const NODE_DEPENDENCY_MAX_REDIRECTS = 3
 export const NODE_DEPENDENCY_DOWNLOAD_TIMEOUT_MS = 5 * 60 * 1000
+
+const AWS_MODEL_INVENTORY_MAX_ENTRIES = 20_000
+const AWS_MODEL_INVENTORY_MAX_SERVICES = 2_000
 
 const RECORDS_VERSION = 1
 
@@ -135,11 +140,24 @@ function validPersistedRecord(
   if (typeof value.updatedAt !== 'number' || !Number.isFinite(value.updatedAt) || value.updatedAt < 0) return false
   if (typeof value.error !== 'string' && value.error !== null) return false
   if (typeof value.error === 'string' && value.error.length > 4096) return false
+  if (value.archiveSource !== undefined && value.archiveSource !== null &&
+    value.archiveSource !== 'bundled' && value.archiveSource !== 'verified-cache' && value.archiveSource !== 'verified-download') return false
   return validResume(value.resume)
 }
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+function awsCliVersion(output: string): string | null {
+  const match = /^aws-cli\/(\d+\.\d+\.\d+)\b/u.exec(output.trim())
+  return match?.[1] ?? null
+}
+
+function dependencyVersion(id: string, output: string): string | null {
+  if (id === 'aws-cli-v2') return awsCliVersion(output)
+  const match = /^v?(\d+\.\d+\.\d+)\b/u.exec(output.trim())
+  return match?.[1] ?? null
 }
 
 function aborted(signal: AbortSignal): void {
@@ -232,7 +250,8 @@ export class NodeDependencyService {
       executablePath: null,
       updatedAt: Date.now(),
       error: null,
-      resume: null
+      resume: null,
+      archiveSource: null
     }
   }
 
@@ -347,6 +366,79 @@ export class NodeDependencyService {
     return this.availability(entry)
   }
 
+  async details(id: string): Promise<NodeDependencyDetails> {
+    const dependency = await this.status(id)
+    const archiveSource = dependency.record?.archiveSource ?? null
+    if (!dependency.available || !dependency.executablePath) {
+      return { dependency, version: null, versionOutput: null, archiveSource, models: [], modelCount: 0, inventoryComplete: false, inventoryError: dependency.disabledReason }
+    }
+
+    let versionOutput: string
+    try {
+      const result = await execFileAsync(dependency.executablePath, ['--version'], { timeout: 10_000, windowsHide: true, encoding: 'utf8' })
+      versionOutput = String(result.stdout || result.stderr).trim()
+    } catch (error) {
+      return { dependency, version: null, versionOutput: null, archiveSource, models: [], modelCount: 0, inventoryComplete: false, inventoryError: `AWS CLI version probe failed: ${errorMessage(error)}` }
+    }
+    const version = dependencyVersion(id, versionOutput)
+    if (version !== dependency.manifest.version) {
+      return {
+        dependency,
+        version,
+        versionOutput,
+        archiveSource,
+        models: [],
+        modelCount: 0,
+        inventoryComplete: false,
+        inventoryError: `Dependency reported version ${version ?? 'unknown'}; expected ${dependency.manifest.version}.`
+      }
+    }
+    if (id !== 'aws-cli-v2') {
+      return { dependency, version, versionOutput, archiveSource, models: [], modelCount: 0, inventoryComplete: true, inventoryError: null }
+    }
+
+    const root = path.join(path.dirname(dependency.executablePath), 'awscli', 'botocore', 'data')
+    const models: NodeDependencyModelInventoryEntry[] = []
+    let visited = 0
+    let visitedServices = 0
+    try {
+      for (const serviceEntry of await fs.readdir(root, { withFileTypes: true })) {
+        if (!serviceEntry.isDirectory()) continue
+        visitedServices += 1
+        if (visitedServices > AWS_MODEL_INVENTORY_MAX_SERVICES) throw new Error('AWS CLI model inventory exceeded its service limit.')
+        const serviceRoot = path.join(root, serviceEntry.name)
+        const versions: string[] = []
+        let modelFileCount = 0
+        for (const versionEntry of await fs.readdir(serviceRoot, { withFileTypes: true })) {
+          if (!versionEntry.isDirectory()) continue
+          const files = await fs.readdir(path.join(serviceRoot, versionEntry.name), { withFileTypes: true })
+          visited += files.length
+          if (visited > AWS_MODEL_INVENTORY_MAX_ENTRIES) throw new Error('AWS CLI model inventory exceeded its file limit.')
+          const count = files.filter((file) => file.isFile() && /^service-2(?:\.sdk-extras)?\.json(?:\.gz)?$/u.test(file.name)).length
+          if (count > 0) {
+            versions.push(versionEntry.name)
+            modelFileCount += count
+          }
+        }
+        if (versions.length) models.push({ service: serviceEntry.name, versions: versions.sort(), modelFileCount })
+      }
+      models.sort((left, right) => left.service.localeCompare(right.service))
+      const complete = models.length > 0
+      return {
+        dependency,
+        version,
+        versionOutput,
+        archiveSource,
+        models,
+        modelCount: models.reduce((total, item) => total + item.modelFileCount, 0),
+        inventoryComplete: complete,
+        inventoryError: complete ? null : 'AWS CLI model inventory contained no service models.'
+      }
+    } catch (error) {
+      return { dependency, version, versionOutput, archiveSource, models: [], modelCount: 0, inventoryComplete: false, inventoryError: errorMessage(error) }
+    }
+  }
+
   async reconcile(): Promise<NodeDependencyAvailability[]> {
     await this.loadRecords()
     const detectedPlatform = platformName()
@@ -432,6 +524,7 @@ export class NodeDependencyService {
       await fs.mkdir(this.installsDir, { recursive: true })
       const cachePath = path.join(this.cacheDir, `${entry.id}-${entry.version}-${entry.platform}-${entry.architecture}.${entry.archiveFormat.replace('.', '-')}`)
       let archivePath: string | null = null
+      let archiveSource: NodeDependencyInstallRecord['archiveSource'] = record.archiveSource ?? null
       const resourcesPath = currentPlatform().resourcesPath
       if (entry.bundledSource && resourcesPath && isSafeRelative(entry.bundledSource)) {
         const resourceRoot = path.resolve(resourcesPath)
@@ -446,6 +539,7 @@ export class NodeDependencyService {
             if (await this.verifySha(bundleStage, entry.sha256, controller.signal)) {
               await removeBestEffort(cachePath)
               await renameAtomic(bundleStage, cachePath)
+              archiveSource = 'bundled'
             }
           } finally {
             await removeBestEffort(bundleStage)
@@ -454,6 +548,7 @@ export class NodeDependencyService {
       }
       if (await pathExists(cachePath) && await this.verifySha(cachePath, entry.sha256, controller.signal)) {
         archivePath = cachePath
+        archiveSource ??= 'verified-cache'
         record = await this.transition(entry, 'verifying', { archiveSha256: entry.sha256, resume: null })
         this.emitProgress(operationId, entry, 'verifying', 0, null, 'Reusing the verified dependency cache.')
       } else {
@@ -471,6 +566,7 @@ export class NodeDependencyService {
         aborted(controller.signal)
         await renameAtomic(archiveStage, cachePath)
         archiveStage = null
+        archiveSource = 'verified-download'
         record = await this.transition(entry, 'verifying', { archiveSha256: entry.sha256, resume: null })
         archivePath = cachePath
       }
@@ -505,7 +601,7 @@ export class NodeDependencyService {
         // The cancellation fence is deliberately immediately before the durable ready record.
         // Once this write succeeds, a late cancellation cannot delete a healthy published target.
         aborted(controller.signal)
-        record = await this.transition(entry, 'ready', { installPath: target, executablePath: path.join(target, entry.healthProbe.relativePath), archiveSha256: entry.sha256, error: null, resume: null })
+        record = await this.transition(entry, 'ready', { installPath: target, executablePath: path.join(target, entry.healthProbe.relativePath), archiveSha256: entry.sha256, archiveSource, error: null, resume: null })
         readyDurablyRecorded = true
         // Rollback material is retained until the record above is durable. Cleanup is best effort;
         // leaving a previous backup is safe and never changes the recorded ready target.
@@ -640,6 +736,18 @@ export class NodeDependencyService {
   }
 
   private async extract(entry: NodeDependencyManifestEntry, archive: string, destination: string, signal: AbortSignal, operationId: string): Promise<void> {
+    if (entry.archiveFormat === 'msi') {
+      if (process.platform !== 'win32') throw new Error('MSI extraction is available only on Windows.')
+      aborted(signal)
+      await execFileAsync('msiexec.exe', ['/a', archive, '/qn', '/norestart', `TARGETDIR=${destination}`], {
+        timeout: NODE_DEPENDENCY_DOWNLOAD_TIMEOUT_MS,
+        windowsHide: true,
+        encoding: 'utf8'
+      })
+      aborted(signal)
+      this.emitProgress(operationId, entry, 'installing', entry.unpackedSizeBytes, entry.unpackedSizeBytes, 'Extracted the verified MSI payload.')
+      return
+    }
     if (entry.archiveFormat !== 'zip') throw new Error(`Archive format ${entry.archiveFormat} is not supported by this packaged installer.`)
     const directory = await unzipper.Open.file(archive)
     let unpacked = 0
@@ -690,7 +798,9 @@ export class NodeDependencyService {
       if (!stat.isFile()) return false
       if (entry.healthProbe.kind === 'file') return true
       const result = await execFileAsync(file, [...(entry.healthProbe.args ?? [])], { timeout: 10_000, windowsHide: true, encoding: 'utf8' })
-      return typeof entry.healthProbe.expectedVersion !== 'string' || String(result.stdout).trim() === entry.healthProbe.expectedVersion
+      const output = String(result.stdout || result.stderr).trim()
+      if (typeof entry.healthProbe.expectedVersion === 'string' && output !== entry.healthProbe.expectedVersion) return false
+      return typeof entry.healthProbe.expectedVersionPrefix !== 'string' || output.startsWith(entry.healthProbe.expectedVersionPrefix)
     } catch {
       return false
     }

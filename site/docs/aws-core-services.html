@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AWS core-service managers: nodeterm docs</title>
+    <meta name="description" content="Guided S3, EC2, IAM, STS, Lambda, CloudWatch, and CloudWatch Logs operations." />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+  </head>
+  <body>
+    <div class="doc-topbar"><a href="../index.html">← nodeterm</a><span aria-hidden="true">/</span><a href="./index.html">Docs</a></div>
+    <article class="doc-body">
+      <p class="doc-kicker">AWS</p>
+      <h1>AWS core-service managers</h1>
+      <p>The AWS Shop exposes S3, EC2, IAM, STS, Lambda, CloudWatch, and CloudWatch Logs through the
+        existing AWS manager node and shared AWS CLI service. Each operation is typed, previewed, and
+        bounded. There is no raw shell or arbitrary argument editor.</p>
+      <h2>Guided operations</h2>
+      <ul>
+        <li>S3: list buckets and objects, create buckets, and delete buckets.</li>
+        <li>EC2: describe instances and security groups, start, stop, and terminate instances.</li>
+        <li>IAM: list and inspect users and roles, create users, and delete users.</li>
+        <li>STS: get caller identity only. Session credentials are never returned to the renderer.</li>
+        <li>Lambda: list, inspect, and delete functions.</li>
+        <li>CloudWatch: list metrics and request metric data.</li>
+        <li>CloudWatch Logs: inspect groups and streams, read events, and filter events.</li>
+      </ul>
+      <h2>Portability and privacy</h2>
+      <p>Project data stores only safe AWS mode, service, operation, region intent, and typed input.
+        Profiles, endpoints, sessions, request tokens, results, CLI paths, process state, and
+        credentials remain local. Import performs no provider request or process launch.</p>
+      <h2>Verification</h2>
+      <p>This implementation lane has not run tests, builds, packaging, runtime interaction, reviews,
+        accessibility or security checks, or captures. Those Chuts remain pending for integration.</p>
+      <section class="doc-suggested"><h2>Suggested articles</h2><ul><li><a href="./aws-universe-shop.html">AWS Universe Shop</a></li><li><a href="./aws-universe.html">AWS Universe</a></li><li><a href="./node-catalog.html">Unified Node Catalog</a></li></ul></section>
+    </article>
+  </body>
+</html>
