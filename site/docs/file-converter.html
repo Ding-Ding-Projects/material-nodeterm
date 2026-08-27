@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>File converter: nodeterm</title>
+    <meta name="description" content="Use nodeterm's local categorized file converter with collision-safe names, atomic output, progress, cancellation, and editor handoff." />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+  </head>
+  <body>
+    <div class="doc-topbar"><a href="../index.html">← nodeterm</a></div>
+    <article class="doc-body">
+      <p class="doc-kicker">Files</p>
+      <h1>File converter</h1>
+      <p>The installed app provides a local conversion queue under Tools. Pick files with the guided browser, choose a categorized adapter, review any lossy change, choose a destination, and start the queue. This documentation site remains a landing and documentation surface; its Turn-it-into room demonstrates structured text conversion in visitor-local browser state and is not the installed converter runtime.</p>
+      <h2>Catalog and detection</h2>
+      <p>Documents/PDF, images, audio, video, archives, structured data/spreadsheets, code/text, and binary encodings each have their own search with an adjacent anchored regex builder. Bundled offline adapters are enabled. Known formats that need an unbundled dependency remain visible and disabled with the exact reason.</p>
+      <p>Detection reads a bounded prefix of the selected file and inspects its bytes rather than trusting the extension alone. Adapter input limits and output validation fail closed before publication.</p>
+      <h2>Queue and destinations</h2>
+      <p>The queue supports bounded parallelism, progress, pause, resume, cancellation, retry, folder discovery in pages, persistent crash recovery, storage preflight, and distinct converted, failed, skipped, and cancelled outcomes.</p>
+      <p>Each item reserves the first free destination using <code>name.ext</code>, <code>name (2).ext</code>, and later suffixes. The queue tells you when it adjusted a name. Publication still uses a same-directory temporary file and an atomic no-clobber boundary, so a late race never silently replaces an output.</p>
+      <h2>Completed outputs</h2>
+      <p>A completed row can reveal the result in the desktop file manager or open the exact output in Visual Studio Code. The action follows the active project API, and an unavailable editor produces an honest non-blocking error.</p>
+      <h2>Privacy and portability</h2>
+      <p>Conversion is local to the machine that owns the active session. Source paths, destinations, queue state, progress, and editor-launch state remain in private app data and do not enter a portable project file. Importing a project starts no conversion and launches no process.</p>
+      <h2>Verification boundary</h2>
+      <p>The ultra-speed implementation lane intentionally did not run tests, lint, type checks, builds, packaging, installer execution, runtime interaction, reviews, security or accessibility audits, or UI captures.</p>
+      <h2>Suggested articles</h2>
+      <ul><li><a href="./exports-and-history.html">Exports, notifications, and local history</a></li><li><a href="./projects-and-tabs.html">Projects and tabs</a></li><li><a href="./server-edition.html">Server Edition</a></li></ul>
+    </article>
+  </body>
+</html>
