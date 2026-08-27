@@ -103,11 +103,14 @@ import RecoveryGameNode from '../nodes/RecoveryGameNode'
 import { SERVICE_NODE_KINDS, type ServiceNodeKind, type ProjectArchiveContents } from '@shared/types'
 import { VIRTUAL_MACHINE_NODE_CATALOG } from '@shared/virtual-machine'
 import type { ProjectIcon } from '@shared/project-icon'
+import type { PortableDoorConstructionV3 } from '@shared/door-construction'
 import BrowserNode from '../nodes/BrowserNode'
 import { ServiceNode } from '../nodes/ServiceNode'
+import CloudflareCoreManagersNode from '../nodes/CloudflareCoreManagersNode'
 import VirtualMachineNode from '../nodes/VirtualMachineNode'
 import NsisInstallerNode from '../nodes/NsisInstallerNode'
 import ShopNode from '../nodes/ShopNode'
+import { AwsUniversePortalNode } from '../nodes/AwsUniversePortalNode'
 import TorrentNode from '../nodes/TorrentNode'
 import { normalizeAddress } from '../nodes/browserUrl'
 import VideoNode from '../nodes/VideoNode'
@@ -136,7 +139,10 @@ import {
 import { TopAppBar } from '../components/TopAppBar'
 import { ProjectSwitcher } from '../components/ProjectSwitcher'
 import { MultiverseNavigator } from '../components/MultiverseNavigator'
+import { AwsUniverseNavigator } from '../components/AwsUniverseNavigator'
+import { PortalLifecycleDialog } from '../components/PortalLifecycleDialog'
 import { projectCanvasView } from '@shared/multiverse-canvases'
+import { portableCanvasProjectionToProject, projectToPortableCanvasV3 } from '../../core/portable-canvas-projection'
 import { type MenuItem } from '../components/ContextMenu'
 import { devicePixelSnapOffset } from '../terminal/device-pixel-fit'
 import { VocabularyContextMenu } from '../components/menu/VocabularyContextMenu'
@@ -720,6 +726,7 @@ import {
   createTerminalNode,
   nodeSshFor,
   createServiceNode,
+  createCloudflareCoreManagersNode,
   createVirtualMachineNode,
   SERVICE_NODE_LABELS,
   createVideoNode,
@@ -1898,6 +1905,15 @@ export function Canvas() {
   }, [getViewport, setViewport])
 
   const activeProjectId = useProjects((s) => s.activeProjectId)
+  const activeProject = useProjects((s) => s.projects.find((p) => p.id === s.activeProjectId))
+  const portalProjection = useMemo(() => {
+    if (!activeProject) return null
+    try {
+      return projectToPortableCanvasV3(activeProject)
+    } catch {
+      return null
+    }
+  }, [activeProject])
   const activeProjectSettingsOverrides = useProjects(
     (s) => s.projects.find((p) => p.id === s.activeProjectId)?.settingsOverrides
   )
@@ -2072,6 +2088,7 @@ export function Canvas() {
       // tell them apart without six registrations of six near-identical files.
       nsis: withNodeBoundary(NsisInstallerNode),
       shop: withNodeBoundary(ShopNode),
+      'aws-universe': withNodeBoundary(AwsUniversePortalNode),
       torrent: withNodeBoundary(TorrentNode),
       minecraft: withNodeBoundary(ServiceNode),
       dockerhost: withNodeBoundary(ServiceNode),
@@ -2080,6 +2097,7 @@ export function Canvas() {
       homeassistant: withNodeBoundary(ServiceNode),
       freepbx: withNodeBoundary(ServiceNode),
       'cloudflare-zero-trust': withNodeBoundary(ServiceNode),
+      'cloudflare-core-managers': withNodeBoundary(CloudflareCoreManagersNode),
       'linux-vm': withNodeBoundary(VirtualMachineNode)
     }),
     []
@@ -3213,6 +3231,87 @@ export function Canvas() {
     if (result.canvasId) bumpDirty()
     return result
   }, [activeProjectId, bumpDirty, commitActiveToStore])
+
+  const navigateAwsUniverse = useCallback((canvasId: string) => {
+    if (!activeProjectId) return
+    commitActiveToStore()
+    nodesProjectIdRef.current = null
+    useProjects.getState().openAwsUniverseCanvas(activeProjectId, canvasId)
+  }, [activeProjectId, commitActiveToStore])
+
+  const createAwsUniverse = useCallback((title: string) => {
+    if (!activeProjectId) return { reason: 'Choose an open project before creating an AWS Universe.' }
+    commitActiveToStore()
+    const result = useProjects.getState().createAwsUniverseCanvas(activeProjectId, title)
+    if (result.canvasId) bumpDirty()
+    return result
+  }, [activeProjectId, bumpDirty, commitActiveToStore])
+
+  useEffect(() => {
+    const onOpen = (event: Event): void => {
+      const canvasId = (event as CustomEvent<{ canvasId?: string }>).detail?.canvasId
+      if (canvasId) navigateAwsUniverse(canvasId)
+    }
+    window.addEventListener('nodeterm:open-aws-universe', onOpen)
+    return () => window.removeEventListener('nodeterm:open-aws-universe', onOpen)
+  }, [navigateAwsUniverse])
+  const attachMultiverseDoor = useCallback((input: {
+    parentCanvasId: string
+    childCanvasId: string
+    entryDoorId: string
+    returnDoorId: string
+    title: string
+    entryConstruction: PortableDoorConstructionV3
+    returnConstruction: PortableDoorConstructionV3
+  }) => {
+    if (!activeProjectId) return { reason: 'Choose an open project before attaching a door.' }
+    commitActiveToStore()
+    const result = useProjects.getState().attachMultiverseDoor(activeProjectId, input)
+    if (result.portalId) bumpDirty()
+    return result
+  }, [activeProjectId, bumpDirty, commitActiveToStore])
+
+  const updatePortalProjection = useCallback((projection: ReturnType<typeof projectToPortableCanvasV3>) => {
+    if (!activeProjectId) return
+    commitActiveToStore()
+    const current = useProjects.getState().getProject(activeProjectId)
+    if (!current) return
+    const hydrated = portableCanvasProjectionToProject(projection, { id: current.id, ...(current.cwd ? { cwd: current.cwd } : {}) })
+    useProjects.getState().replaceProject({
+      ...current,
+      nodes: hydrated.nodes,
+      viewport: hydrated.viewport,
+      multiverseCanvases: hydrated.multiverseCanvases,
+      portals: hydrated.portals,
+      ...(hydrated.childCanvases ? { childCanvases: hydrated.childCanvases } : {})
+    })
+    bumpDirty()
+  }, [activeProjectId, bumpDirty, commitActiveToStore])
+
+  const openPortal = useCallback((portalId: string) => {
+    if (!activeProjectId) return
+    commitActiveToStore()
+    const result = useProjects.getState().openPortal(activeProjectId, portalId, useProjects.getState().getProject(activeProjectId)?.activeCanvasId ?? 'root')
+    if (!result.ok) setNotice({ kind: 'error', text: result.reason })
+  }, [activeProjectId, commitActiveToStore, setNotice])
+
+  const requestDeletePortal = useCallback((portal: import('../../core/portal-lifecycle').PortablePortalV3) => {
+    const anchor = document.activeElement instanceof HTMLElement ? document.activeElement : undefined
+    openDestructiveGate({
+      title: `Delete portal “${portal.title}” permanently`,
+      description: 'This removes the portal and its child canvas records, then preserves the child nodes in the containing canvas. It cannot be undone.',
+      ...(anchor ? { restoreFocusEl: anchor } : {}),
+      onConfirm: () => {
+        if (!activeProjectId) return
+        const result = useProjects.getState().deletePortal(activeProjectId, portal.id)
+        if (!result.ok) {
+          setNotice({ kind: 'error', text: result.reason })
+          return
+        }
+        bumpDirty()
+      }
+    })
+  }, [activeProjectId, bumpDirty, setNotice])
 
   const writeDisk = useCallback(async () => {
     // Captured BEFORE the snapshot is built (`toWorkspace()` runs synchronously on this line), so
@@ -5347,6 +5446,12 @@ export function Canvas() {
         notify({ kind: 'error', title: 'Node unavailable', body: availability.reason ?? 'Choose another node.' })
         return
       }
+      if (entry.id === 'aws-universe') {
+        const result = createAwsUniverse('New AWS Universe')
+        if (result.canvasId) navigateAwsUniverse(result.canvasId)
+        else notify({ kind: 'error', title: 'AWS Universe unavailable', body: result.reason ?? 'The AWS Universe could not be created.' })
+        return
+      }
       setNodes((existing) => {
         const appended = nodeCreationCoordinatorRef.current.append(
           existing,
@@ -5404,6 +5509,7 @@ export function Canvas() {
             if (catalogEntry.id.startsWith('service:')) {
               return createServiceNode(catalogEntry.nodeKind as ServiceNodeKind, index, center)
             }
+            if (catalogEntry.id === 'cloudflare-core-managers') return createCloudflareCoreManagersNode(index, center)
             // File and diff rows stay visible but disabled until their picker prerequisites exist.
             return null
           },
@@ -5417,7 +5523,7 @@ export function Canvas() {
       // The shared node-data signature effect marks a real append dirty after React commits. This
       // keeps duplicate retries a true no-op rather than writing an unnecessary project snapshot.
     },
-    [activeProjectId, emptyNodePos, offersTerminalProfiles, parentInto, sessionSource, setNodes]
+    [activeProjectId, createAwsUniverse, emptyNodePos, navigateAwsUniverse, offersTerminalProfiles, parentInto, sessionSource, setNodes]
   )
 
   // Task 6: the Settings → Accounts "Add account" flow dispatches 'nodeterm:add-account-login'
@@ -15551,6 +15657,7 @@ export function Canvas() {
     candidates: PortableMediaCandidate[]
     resolve: (plan: PortableMediaExportPlan | null) => void
   } | null>(null)
+  const [portalLifecycleOpen, setPortalLifecycleOpen] = useState(false)
   const choosePortableMedia = useCallback(async (project: Project): Promise<PortableMediaExportPlan | null> => {
     const selected = await window.nodeTerminal.dialog.selectFiles()
     if (!selected || selected.length === 0) return null
@@ -15718,12 +15825,15 @@ export function Canvas() {
         useProjects.getState().adoptProject(result.project)
         await writeDisk()
         const where = result.restoredTo ? `Repository and files restored to ${result.restoredTo}. ` : ''
+        const repairNote = result.repairs?.length
+          ? ` ${result.repairs.length} portal repair${result.repairs.length === 1 ? '' : 's'} applied; child content was preserved.`
+          : ''
         const plannerDefinitions = result.plannerDefinitions
         notify({
           kind: 'success',
           titleKind: 'authored',
           title: 'Project opened from file',
-          body: `${where}${archiveContentsSummary(result.contents)}`.trim() || 'The project and its complete local history are ready.',
+          body: `${where}${archiveContentsSummary(result.contents)}${repairNote}`.trim() || 'The project and its complete local history are ready.',
           bodyKind: 'fact',
           ...(plannerDefinitions ? {
             actions: [{
@@ -16637,7 +16747,19 @@ export function Canvas() {
           onOpenArchive={() => void importProjectArchive()}
           archiveBusy={() => projectArchiveBusyRef.current}
         />
-        <MultiverseNavigator onNavigate={navigateMultiverseCanvas} onCreate={createMultiverseCanvas} />
+        <AwsUniverseNavigator onNavigate={navigateAwsUniverse} onCreate={createAwsUniverse} />
+        <MultiverseNavigator onNavigate={navigateMultiverseCanvas} onCreate={createMultiverseCanvas} onConstructDoor={attachMultiverseDoor} />
+        <button
+          type="button"
+          className="multiverse-nav__portal-trigger"
+          title="Manage portal lifecycle"
+          onClick={() => {
+            commitActiveToStore()
+            setPortalLifecycleOpen(true)
+          }}
+        >
+          Portals
+        </button>
         <div className="md3-app-bar__spacer" />
         {/* The docked search bar — the SAME `.cluster-search` button/title the packaged-app
             driver script selects; re-themed, never renamed. */}
@@ -17707,6 +17829,18 @@ export function Canvas() {
             setDocsInitialPath(path)
             setDocsOpen(true)
           }}
+        />
+      )}
+
+      {portalLifecycleOpen && portalProjection && activeProject && (
+        <PortalLifecycleDialog
+          open
+          projection={portalProjection}
+          currentCanvasId={activeProject.activeCanvasId ?? 'root'}
+          onClose={() => setPortalLifecycleOpen(false)}
+          onChange={updatePortalProjection}
+          onOpenCanvas={openPortal}
+          onRequestDelete={requestDeletePortal}
         />
       )}
 

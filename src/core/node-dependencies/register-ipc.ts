@@ -13,6 +13,7 @@ export function registerNodeDependencyIpc(platform: CorePlatform): NodeDependenc
 
   platform.handle(IPC.nodeDependencyCatalog, () => service.catalog())
   platform.handle(IPC.nodeDependencyStatus, (id: string) => service.status(id))
+  platform.handle(IPC.nodeDependencyDetails, (id: string) => service.details(id))
   platform.handle(IPC.nodeDependencyInstall, (id: string) => service.install(id))
   platform.handle(IPC.nodeDependencyCancel, (operationId: string) => service.cancel(operationId))
   platform.handle(IPC.nodeDependencyRepair, (id: string) => service.repair(id))

@@ -13,6 +13,7 @@ import { registerMinecraftIpc } from '../../core/minecraft/register-ipc'
 import { registerTorrentIpc } from '../../core/torrent/register-ipc'
 import { registerVirtualMachineIpc } from '../../core/virtual-machine/register-ipc'
 import { registerCalendarIpc } from '../../core/calendar/register-ipc'
+import { registerCloudflareCoreManagersIpc } from '../../core/cloudflare-core-managers'
 import { registerProviderServicesIpc } from '../../core/provider-services'
 import { registerHomeAssistantIpc } from '../../core/home-assistant/register-ipc'
 import { registerHomeAssistantControlIpc } from '../../core/home-assistant-control/register-ipc'
@@ -88,6 +89,7 @@ export function registerCoreHandlers(
   registerTorrentIpc(platform)
   const { manager: virtualMachineManager } = registerVirtualMachineIpc(platform)
   registerCalendarIpc(platform)
+  registerCloudflareCoreManagersIpc(platform)
   registerProviderServicesIpc(platform)
   registerHomeAssistantIpc(platform)
   registerHomeAssistantControlIpc(platform)
