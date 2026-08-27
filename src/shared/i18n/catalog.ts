@@ -86,6 +86,37 @@ export const CATALOG: Catalog = {
   'settings.section.language': { en: flat('Language'), yue: flat('語言') },
   'settings.section.privacy': { en: flat('Privacy'), yue: flat('私隱') },
 
+  // Context-window meter copy. Values are interpolated by the component, while these variants
+  // keep status and threshold wording in the same language/funny-level pipeline as other chrome.
+  'contextWindow.title': { en: flat('Context window'), yue: flat('內容視窗') },
+  'contextWindow.shortLabel': { en: flat('Context'), yue: flat('內容') },
+  'contextWindow.provider.unknown': { en: flat('agent'), yue: flat('代理') },
+  'contextWindow.updated': { en: flat('updated'), yue: flat('更新於') },
+  'contextWindow.status.known': { en: flat('reported'), yue: flat('已回報') },
+  'contextWindow.status.stale': { en: flat('stale'), yue: flat('過期') },
+  'contextWindow.status.unavailable': { en: flat('unavailable'), yue: flat('未能提供') },
+  'contextWindow.status.unknown': { en: flat('unknown'), yue: flat('未知') },
+  'contextWindow.status.notReported': { en: flat('not reported'), yue: flat('未有回報') },
+  'contextWindow.level.healthy': { en: flat('Healthy'), yue: flat('健康') },
+  'contextWindow.level.warning': { en: flat('Warning'), yue: flat('注意') },
+  'contextWindow.level.critical': { en: flat('Critical'), yue: flat('危急') },
+  'contextWindow.detail': {
+    en: [
+      'Used {used} of {total} tokens, {remaining} remaining, {percent}% used',
+      'Used {used} of {total} tokens, with {remaining} still in the tank, {percent}% used',
+      '{used} of {total} tokens used, {remaining} left, {percent}% used',
+      '{used}/{total} tokens have joined the queue, {remaining} remain, {percent}% used',
+      '{used} of {total} tokens are partying, {remaining} remain, {percent}% used'
+    ],
+    yue: [
+      '已用 {used} / {total} tokens，剩返 {remaining}，已用 {percent}%',
+      '用咗 {used} / {total} tokens，仲有 {remaining}，已用 {percent}%',
+      '{used} / {total} tokens 已用，剩返 {remaining}，已用 {percent}%',
+      '{used} / {total} tokens 排緊隊，仲有 {remaining}，已用 {percent}%',
+      '{used} / {total} tokens 開緊派對，仲有 {remaining}，已用 {percent}%'
+    ]
+  },
+
   // ---------------------------------------------------------------------------------------
   // Language settings section — this feature's own copy. Playful escalation across levels,
   // because a sentence about a joke slider is a fair place to demonstrate the joke slider.

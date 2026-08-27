@@ -62,6 +62,12 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## In progress / partially landed
 
+- [ ] **Context-window progress, issue #89**: every agent-backed node, session row, Kanban card,
+      and card modal now keeps a visible meter with provider-scoped telemetry, exact known values,
+      explicit unknown/not-reported/stale/unavailable states, restart-safe generation fencing, and
+      bounded local/remote transcript reads. The implementation lane intentionally has no tests,
+      lint, type checks, builds, packaging, runtime interaction, reviews, audits, or captures yet.
+
 - [ ] **Desktop trackpad gesture facts, issue #108**: main-process scroll and pinch edges now feed
       a depth-safe typed bridge so macOS desktop wheel routing distinguishes a precise-pixel mouse
       from a trackpad, including the bounded momentum-gap linger. Server Edition keeps its browser

@@ -1,5 +1,35 @@
 # Handoff
 
+## 2026-08-27, context-window progress, issue #89
+
+The implementation is on `feat/context-window-progress`, based on the reconciled hui tip `0d22ff88`.
+`ContextMeter` now renders on every agent-backed node, session list row, Kanban card, and card modal,
+including providers without telemetry. It shows exact used, total, remaining, and percentage values
+only for finite provider readings, with explicit known, unknown, not-reported, stale, and unavailable
+states. The meter has a visible Material Design 3 focus ring, accessible value text, a viewport-bounded
+details surface, narrow-layout sizing, and reduced-motion behavior.
+
+`ContextWindowUsage` carries provider and source scope plus a process source epoch and monotonic
+generation. The renderer persists only bounded machine-local numeric snapshots and rejects older
+generations within one epoch, so a fresh process generation 1 reading is accepted after restart.
+Local and SSH source keys cannot overwrite one another. The remote first read now records the remote
+file's absolute byte length, so a large transcript is not transferred again from byte zero on the
+next poll. Codex rehydration honours `CODEX_HOME`; Gemini header reads are capped; concurrent locator
+requests are coalesced; and the Server Edition registers the same mount-time rehydration route.
+
+Documentation is in `docs/features/agents/context-window-progress.md`, indexed from the agents
+category, and the offline bundle includes the new article. Full bundle regeneration remains pending:
+`node scripts/build-docs-bundle.mjs` could not start because `esbuild` is absent in this clean
+checkout, and this ultra-speed lane does not install dependencies or run builds. The parent integration
+lane must regenerate and verify the bundle before merging. The current funny-level-10 lane remains
+separate and unverified; this lane only routes its meter copy through the existing localization
+boundary.
+
+This source lane intentionally did not run tests, lint, type checks, builds, packaging, runtime
+interaction, reviews, security or accessibility audits, or UI captures. The parent integration lane
+must verify the exact commit and handle the dedicated pull request, issue progress and closure, and
+any later evidence without treating these unrun checks as green.
+
 ## 2026-08-27, desktop trackpad gesture facts, issue #108
 
 The implementation is on `feat/trackpad-gesture-facts`, based on the current `origin/main` tip

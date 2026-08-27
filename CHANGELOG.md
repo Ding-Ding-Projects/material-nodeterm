@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add the context-window progress meter to every agent-backed node and session surface. Provider
+  telemetry is source-scoped and generation-fenced, exact values are shown only when reported, and
+  unknown, not-reported, stale, and unavailable states remain visible. Local and remote transcript
+  reads are bounded and machine-local. This issue #89 implementation lane intentionally did not run
+  tests, lint, type checks, builds, packaging, runtime interaction, reviews, audits, or captures.
+
 - Route macOS desktop canvas wheel input from main-process trackpad gesture facts. A depth-safe
   ledger sends scroll and pinch edge transitions over typed IPC, the desktop router keeps a bounded
   500 ms momentum-gap linger, and precise-pixel mouse packets zoom when no gesture is reported.
