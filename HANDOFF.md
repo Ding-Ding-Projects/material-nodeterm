@@ -48,6 +48,12 @@ HTTPS, and metadata phases passed, then failed while parsing
 `scripts/check-personal-vocabulary-coverage.mjs:306` with
 `SyntaxError: Identifier 'CANONICAL_CANVAS_NOTIFY_CALL_IDS' has already been declared`.
 
+Later release run `33121962513` at `9c5cbc2883c0218ff159cf39874d5e94c1db45c4`
+executed the coverage checker and reported eight base failures: the canonical producer mismatch,
+Canvas notification count and title/body ownership mismatches, incorrect `Project save cancelled`
+and `Project save failed` marker counts, the speech settings marker, and duplicate producer IDs.
+The complete-fixture check added one aggregate failure.
+
 The merge had combined several complete producer changes while retaining an older canonical
 manifest, an obsolete Canvas notification declaration, duplicate ownership checks, malformed
 producer separators, duplicate rows, and an unclosed mutation block. The repaired checker keeps one
@@ -56,6 +62,13 @@ array of 61 production surfaces, and one detailed list of 57 checker-retained Ca
 calls. It filters parsed calls to production object payloads before one inventory, title-ownership,
 body-ownership, and title-marker pass. The two planner notifications nested inside the project-open
 success action keep their own explicit ownership fields in source.
+
+Duplicate producer evidence now resolves to one row per ID. The password manager and authenticator
+rows use the exact `const vocab = useVocabularyMapper()` boundary, the converter catalog keeps one
+mapper row, and speech keeps its direct `useVocabularyMapper()` boundary while `SettingsText`
+remains independently recorded by the mixed-copy manifest. Canvas project saving emits one
+cancellation notification from the cancelled branch and one failure notification from the failure
+branch, with title and body ownership retained.
 
 The settings shell also retained parts of two incompatible implementations. `SettingsPage.tsx` now
 owns one coherent search, navigation, project-scope, School-mode, and local vocabulary boundary;
