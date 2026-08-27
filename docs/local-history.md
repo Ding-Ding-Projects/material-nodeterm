@@ -66,7 +66,7 @@ This is also crash recovery. A process killed after its private index/commit con
 the ref CAS leaves immutable Git objects, an owner-unique index and the complete journal. The next
 recorder replays the journal and preserves the requested revision. It does **not** remove the killed
 process's index or journal, because PID visibility and age are not authority to destroy possibly-live
-foreign work. The two-process Chuts bundle the real store into ordinary Node workers, suspend one at
+foreign work. The two-process checks bundle the real store into ordinary Node workers, suspend one at
 the CAS, kill one at that boundary, and prove correct labels/bytes, replay, fencing, and byte-for-byte
 preservation of foreign files.
 

@@ -659,3 +659,43 @@ export function readCodexThreadRollout(
   })
 }
 
+/**
+ * The READ leg for `TITLE_READ_CAPABLE`. Memoized for `CACHE_MS` and coalesced, because the
+ * session-name sweep asks once a minute PER NODE and every ask is a socket connect.
+ *
+ * When the shared app-server reports no name, fall back to the relay's on-disk copy
+ * (`relayedCodexSessionName`) so a conversation forked in the TUI still shows its title.
+ */
+export function readCodexSessionName(
+  threadId: string,
+  socketPath = defaultCodexAppServerSocket()
+): Promise<string | null> {
+  if (!isSafeThreadId(threadId)) return Promise.resolve(null)
+  const key = `${socketPath}\0${threadId}`
+  const cached = names.get(key)
+  if (cached && Date.now() - cached.at < CACHE_MS) return Promise.resolve(cached.name)
+  const running = inflight.get(key)
+  if (running) return running
+  const request = readCodexSessionNameAt(socketPath, threadId).then(
+    (serverName) => {
+      // A native in-TUI /resume can fork a cloud conversation into a local app-server thread whose
+      // Thread.name is null. The persistent shared relay observed the source id and copied its
+      // session_index title here; a later real Thread.name always wins.
+      const name = serverName ?? relayedCodexSessionName(socketPath, threadId)
+      names.set(key, { name, at: Date.now() })
+      inflight.delete(key)
+      return name
+    },
+    () => {
+      inflight.delete(key)
+      return null
+    }
+  )
+  inflight.set(key, request)
+  return request
+}
+
+export function forgetCodexSessionNames(): void {
+  names.clear()
+  inflight.clear()
+}

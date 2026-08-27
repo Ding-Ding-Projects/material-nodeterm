@@ -288,7 +288,7 @@
   structured status normalization, and BEL/OSC notification fallback. Context usage, permission
   control, titles, subagents, transfer, canvas control, and structured transcripts remain explicitly
   unavailable until measured. The real Devin CLI was not available, so this ultra-speed lane ran no
-  tests, lint, type checks, builds, packaging, runtime interaction, reviews, audits, or HuiShots.
+  tests, lint, type checks, builds, packaging, runtime interaction, reviews, audits, or screenshots.
 - Add a shared 40 ms burst budget for plain-wheel canvas zoom and a persisted 0.2×–2.0× wheel
   zoom speed control. The historical 1.0× feel remains the default; modifier zoom and trackpad
   pinch keep their fixed behavior. Hand-edited values are clamped at the point of use, and the
@@ -368,6 +368,11 @@
   54164b84dce0b7e62787b1de2885405ff4ed821c and recorded in commit 95e8eb8e19e4a568bf7286b35a9cdf789a6983ac.
   Tests, lint, type checks, builds, packaging, runtime interaction, reviews, accessibility checks,
   security audits, and UI captures were intentionally not run.
+- Restore one coherent managed Codex account lifecycle and same-machine switching implementation.
+  Duplicate account handlers, app-server readers, and rollout-link publication paths were removed;
+  account-id validation, owner-bound reservations, no-overwrite hardlinks, rollback, and credential
+  boundaries remain intact. This lane intentionally did not run tests, lint, type checks, builds,
+  packaging, runtime interaction, reviews, audits, or UI captures.
 
 - Add the bundled AWS CLI v2 dependency lane. Windows packaging now stages the pinned official
   `2.36.32` MSI, verifies its SHA-256, falls back through a verified local cache or canonical

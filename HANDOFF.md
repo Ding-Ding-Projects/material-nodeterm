@@ -190,7 +190,7 @@ Windows service, and Docker connector contracts, fixed argument builders, guided
 disabled reasons, bounded progress and health shapes, local ownership fields, and schema 3 portable
 blueprint. The main-process manager owns discovery, protected credential storage, token-file
 materialization, process/service/container lifecycle, cancellation, restart, health reads, and local
-runtime records. The current HuiFlare Zero Trust and tunnel stack from `origin/main` is preserved.
+runtime records. The current Cloudflare Zero Trust and tunnel stack from `origin/main` is preserved.
 
 Direct records remain current in `docs/features/remote/cloudflared-runtimes.md`,
 `site/docs/cloudflared-runtimes.html`, `docs/features/remote/README.md`, `site/docs/index.html`,
@@ -643,7 +643,7 @@ checks and the final bundled-doc verification. No public issue or pull-request m
 
 ## 2026-08-27, AWS core-service managers, issue #46 PR preparation
 
-The issue jer was reconciled with the exact `origin/main` tip `2472cf23b99559005476841d3db5e6bc4691ac06`.
+The issue branch was reconciled with the exact `origin/main` tip `2472cf23b99559005476841d3db5e6bc4691ac06`.
 The earlier standalone AWS core-service stack was removed. The current AWS Resource Explorer and Cloud
 Control stack now owns the complete core-service lane through `src/shared/aws-resource.ts`,
 `src/core/aws-resource-manager.ts`, `src/renderer/nodes/AwsResourceNode.tsx`, and the existing AWS
@@ -663,8 +663,8 @@ credentials remain local. The feature article is
 `docs/features/integrations/aws-core-services.md`, with the AWS index and site page updated too.
 
 No tests, type checks, lint, builds, packaging, runtime interaction, reviews, accessibility or
-security audits, or HuiShots were run in this PR-preparation lane. The parent owns the next Chuts,
-integration into the default jer, PR creation, issue comments and closure, and upstream PR #463.
+security audits, or screenshots were run in this PR-preparation lane. The parent owns the next checks,
+integration into the default branch, PR creation, issue comments and closure, and upstream PR #463.
 
 ## 2026-08-27, portable Comment and Activity attachments, issue #94
 
@@ -698,7 +698,7 @@ issue closure, retention, and upstream PR #463.
 
 ## 2026-08-27, agent-to-agent drag collaboration, issue #90
 
-The implementation is on `feat/agent-drag-collaboration`, based on the reconciled hui tip
+The implementation is on `feat/agent-drag-collaboration`, based on the reconciled remote tip
 `0d22ff8839a33b6cee9bb93ecc8070a18398c2f1`. `src/renderer/lib/agentCollaborationDrag.ts` defines a
 bounded versioned drag payload, validates context-link capability through the existing agent
 registry, and exposes the keyboard/touch pick event used by the Canvas. `TerminalNode.tsx` adds a
@@ -723,7 +723,7 @@ pull request, append-only issue comments, upstream PR #463, merge, and issue clo
 
 ## 2026-08-27, context-window progress, issue #89
 
-The implementation is on `feat/context-window-progress`, based on the reconciled hui tip `0d22ff88`.
+The implementation is on `feat/context-window-progress`, based on the reconciled remote tip `0d22ff88`.
 `ContextMeter` now renders on every agent-backed node, session list row, Kanban card, and card modal,
 including providers without telemetry. It shows exact used, total, remaining, and percentage values
 only for finite provider readings, with explicit known, unknown, not-reported, stale, and unavailable
@@ -774,11 +774,11 @@ shared identity, and transcript rendering remain out of the capability lists unt
 contracts are measured.
 
 The real Devin CLI was unavailable in this lane. No tests, lint, type checks, builds, packaging,
-debugging, reviews, audits, runtime interaction, or HuiShots were run. The docs bundle generator
+debugging, reviews, audits, runtime interaction, or screenshots were run. The docs bundle generator
 was attempted but could not start because this isolated worktree has no `esbuild` installation;
 the source Markdown article, indexes, changelog, roadmap, and this handoff are updated, while
-`src/shared/docs-data.ts` still needs regeneration in an environment with the declared See Fut.
-The feature jer remains separate and is not integrated, dewed, or cleaned here.
+`src/shared/docs-data.ts` still needs regeneration in an environment with the declared dependency.
+The feature branch remains separate and is not integrated, pushed, or cleaned here.
 ## 2026-08-27, bounded wheel zoom and speed, issue #107
 
 This implementation lane is `feat/wheel-zoom-speed` in the task-owned linked checkout. It ports
@@ -811,7 +811,7 @@ commit their outputs before treating the offline viewer as current.
 
 No tests, type checks, lint, builds, packaging, runtime interaction, reviews, security or
 accessibility audits, or UI captures were run in this lane, per issue #107. The linked checkout is
-clean after the implementation commit. The feature jer was not integrated into `main`, no release
+ clean after the implementation commit. The feature branch was not integrated into `main`, no release
 was created, and no cleanup was performed here.
 ## 2026-08-27, ten-level funny controls, issue #113
 
@@ -899,10 +899,31 @@ This source lane intentionally did not run tests, lint, type checks, builds, pac
 - Tip: `1665f63d96d9d95e2f1d11cde9aa04763ddff997`, verified equal to `refs/heads/feat/program-59-usage-default-account` on origin. The implementation commit remains `95e8eb8e19e4a568bf7286b35a9cdf789a6983ac`.
 - Working tree: clean after the commit.
 - No merge into main, release, deletion, or cleanup was performed.
+## 2026-08-27, managed Codex account behavior, issue #86
+
+The account behavior lane is implemented on `feat/program-75-account-behavior` at
+`e91c4ee610307302fb427efc1b12f75b65e7d254`. It removes duplicated account lifecycle registration,
+app-server readers, and rollout-link publication paths from the current base while preserving the
+shared safe account-id predicate, isolated account homes, owner-bound switch reservations,
+no-overwrite same-machine rollout hardlinks, rollback, and removal coordination.
+
+The lane was compared with `origin/main` at
+`54164b84dce0b7e62787b1de2885405ff4ed821c`. That ref was 108 commits ahead and would introduce
+unrelated changes across 284 files, so no unrelated base merge was retained in this account-only
+lane. The working tree remains clean after the account commit and the normal push.
+
+Direct records are in `docs/features/agents/codex-account-behavior.md` and the agents category
+index. Migration, endpoint modeling, cross-project transport, projections, navigation, grouping,
+dependency operations, custom-agent harnesses, model switching, and restart logic remain outside
+this handoff.
+
+Tests, lint, type checks, builds, packaging, runtime interaction, reviews, audits, and screenshots were
+not run by explicit lane scope. No main merge, release, deletion, or cleanup was performed.
+
 ## 2026-08-27, bundled AWS CLI v2 lane, issue #41
 
 Issue #41 is implemented on `feat/program-30-bundled-aws-cli`, reconciled with
-`origin/main` at `12055e96d66c7e4cfdb143295b78ed20d68fd97e`, and dewed at
+`origin/main` at `12055e96d66c7e4cfdb143295b78ed20d68fd97e`, and pushed at
 `d60a25fa0f8d4665cc3e898c531cb4440ea72d9b` plus the reconciliation commit recorded below.
 The lane keeps AWS CLI v2 `2.36.32` in the immutable dependency manifest and stages the official
 Windows x64 MSI through `scripts/ensure-aws-cli-resources.mjs`. The resource path checks the
@@ -933,8 +954,8 @@ contains exactly one AWS preparation script and one AWS packaged-resource entry.
 the dependency manifest, installer, IPC, bridge, and shared-type changes from main are retained.
 
 No tests, type checks, lint, reviews, security or accessibility checks, builds, packaging, installer
-execution, runtime interaction, or HuiShots were run, per the issue's explicit ultra-speed boundary.
-The feature jer was not integrated into main and no cleanup was performed in this lane.
+execution, runtime interaction, or screenshots were run, per the issue's explicit ultra-speed boundary.
+The feature branch was not integrated into main and no cleanup was performed in this lane.
 
 ## 2026-08-27, AWS CLI model documentation index
 
@@ -1446,7 +1467,7 @@ documentation index, Pages article, roadmap note, and changelog entry.
 This lane deliberately did not run tests, type checking, linting, reviews, security checks, builds,
 packaging, installer execution, runtime interaction, or captures. Archive entry production/import
 wiring, destination Locate Asset handling, and built-artifact evidence remain pending. No commit or
-dew was made by this lane.
+push was made by this lane.
 
 ## 2026-08-26, portable media validation and guided export follow-up
 
@@ -1464,7 +1485,7 @@ shows the searchable Include/Omit/Locate Later decision surface, and leaves the 
 operation untouched when the picker is cancelled. The selected source path and source name remain
 transient renderer state only. The archive writer still needs a follow-up adapter to consume the
 selected streaming sources and emit schema 3 media entries; no portable record claims those paths.
-No tests, builds, type checks, captures, commits, or dews were made.
+No tests, builds, type checks, captures, commits, or pushes were made.
 ## 2026-08-27, shared provider services and local binding integration, issue #18
 
 Added `src/shared/provider-services.ts` and `src/core/provider-services.ts` as the shared provider
@@ -1532,7 +1553,7 @@ desktop-only boundary and keeps imported projects unbound.
 Updated `docs/features/projects/portable-bindings.md`, the projects index, `ROADMAP.md`, and this
 handoff. The generated offline docs bundle still needs regeneration. No tests, type checks, lint,
 security checks, builds, packaging, installer execution, runtime interaction, captures, commit,
-dew, or publication were performed in this lane.
+push, or publication were performed in this lane.
 ## 2026-08-26, unified Node Catalog implementation
 
 Implemented the typed Node Catalog registry in `src/shared/node-catalog.ts` and the renderer
@@ -1553,7 +1574,7 @@ security or accessibility checks, builds, packaging, installer execution, runtim
 UI captures. The generated offline documentation bundle was refreshed through the docs generator's
 equivalent TypeScript-strip route because the checkout has no installed `esbuild`; this was a docs
 generation step, not a product build. Build and packaging evidence therefore proves artifact
-production only. No commit or dew was made by this lane.
+production only. No commit or push was made by this lane.
 
 The refuter repair adds an explicit current, ephemeral, and planned catalog completeness inventory;
 universe scope and depth metadata; configure-later versus required-for-creation states; disabled
@@ -1598,10 +1619,10 @@ Changed files: `src/core/universe-shop.ts`, `src/core/portable-canvas-projection
 `ROADMAP.md`, `CHANGELOG.md`, `docs/uh-feature-inventory.md`, and this handoff.
 
 No tests, type checks, lint, security checks, builds, packaging, runtime interaction, or captures
-were run, and no commit or dew was made, as explicitly required for this lane. The documentation
-bundle generator could not run because `esbuild` is not installed in this Gerk Tong Hui. The changed
+were run, and no commit or push was made, as explicitly required for this lane. The documentation
+bundle generator could not run because `esbuild` is not installed in this working copy. The changed
 article entries were synchronized mechanically into `src/shared/docs-data.ts`, but the generator
-still needs to run once that See Fut is available before a release-grade handoff.
+still needs to run once that dependency is available before a release-grade handoff.
 ## 2026-08-26, issue #20 media node implementation
 
 Added `src/shared/media-catalog.ts` with Photo, Video, and mixed Gallery catalogue registration,
@@ -1614,7 +1635,7 @@ asset states. Added the feature article at
 roadmap and changelog.
 
 This lane deliberately did not run tests, type checking, builds, packaging, UI interaction, or
-captures, and made no commit or dew. The parent integration lane must run those checks and inspect
+captures, and made no commit or push. The parent integration lane must run those checks and inspect
 the built artifact before treating issue #20 as verified.
 
 The resumed issue #20 lane completed the checkpoint's missing serialization and durable-byte
@@ -1697,7 +1718,7 @@ offline docs data, site docs, `CHANGELOG.md`, `ROADMAP.md`, and this handoff.
 This lane deliberately did not run tests, type checks, lint, reviews, security checks, accessibility
 checks, builds, packaging, installer execution, runtime interaction, or captures. The docs bundle
 generator was attempted but could not run because `esbuild` is absent in this isolated checkout;
-the generated offline data entry was added directly. No commit or dew was made by this lane.
+the generated offline data entry was added directly. No commit or push was made by this lane.
 
 ### Refuter repair pass
 
@@ -1710,7 +1731,7 @@ loopback port preflight/retry, QMP and display socket startup handshakes, bounde
 startup cancellation generations, stale-process reconciliation, serialized atomic state writes with
 transient rename retries, awaited shutdown, a desktop display-open action, and a Server Edition
 honest no-proxy response. VM duplication now clears machine-local ISO and disk bindings. Added
-source coverage entries for these boundaries. No tests, builds, captures, commit, or dew was made.
+source coverage entries for these boundaries. No tests, builds, captures, commit, or push was made.
 ## 2026-08-26, planner occurrence service lane
 
 Implemented a host-owned planner occurrence service that keeps durable schedules alive after the
@@ -1773,8 +1794,8 @@ No secret export or arbitrary URL entry point was added.
 
 This ultra-speed lane deliberately ran no tests, type checks, lint, security/accessibility review,
 build, packaging, installer execution, runtime interaction, or captures. The docs bundle generator
-could not run because `esbuild` is absent in this Gerk Tong Hui, so the new article was recorded in
-the existing Canvas node-kind article and the categorized feature index instead. No commit or dew
+could not run because `esbuild` is absent in this working copy, so the new article was recorded in
+the existing Canvas node-kind article and the categorized feature index instead. No commit or push
 was made by this lane.
 
 Refuter repair: remote provider catalogs no longer synthesize connected accounts, primary calendars,
@@ -1814,7 +1835,7 @@ runtime or packaged-artifact verdict.
 
 ## 2026-08-27, Calendar node portability and synchronization repair
 
-This pig lane keeps the Calendar scope on `feat/program-19-calendar-nodes`. Incremental Google and
+This worker lane keeps the Calendar scope on `feat/program-19-calendar-nodes`. Incremental Google and
 Microsoft 365 synchronization now merges changed records into the existing cache and applies
 provider tombstones, so a delta response cannot erase unchanged events. Provider response bodies
 are streamed through an 8 MB bound before decoding. Calendar project-file boundaries now normalize
@@ -3399,7 +3420,7 @@ commit is `86aac4f4b3684b4e67036c8e5846dcd42fab4552`; the later documentation an
 is being committed on `feat/program-29-aws-shop` before it is pushed.
 ## Issue #51: GitLab Server hosting source lane
 
-The `feat/program-40-gitlab-hosting` jer adds the `gitlab-hosting` canvas node and the typed
+The `feat/program-40-gitlab-hosting` branch adds the `gitlab-hosting` canvas node and the typed
 GitLab hosting surface. The implementation lives in `src/shared/gitlab-hosting.ts`, the guided
 Docker manager extension in `src/main/remote/docker-host-manager.ts`, the preload and unsupported
 bridge shape in `src/preload/index.ts` and `src/renderer/bridge/stubs.ts`, the node factory and
@@ -3431,7 +3452,7 @@ registered as `timer`, has add-node, context-menu, and command-palette creation 
 countdown, stopwatch, interval sequences, pause/resume, laps, repeats, missed/completed occurrence
 state, one-shot non-blocking alarms, and versioned JSON export data.
 
-Documentation is in `docs/features/canvas/timer-nodes.md`. Tests, builds, captures, commits, and dews
+Documentation is in `docs/features/canvas/timer-nodes.md`. Tests, builds, captures, commits, and pushes
 were intentionally left to the parent integration lane.
 # Issue #25: Wild dim sum node source lane
 
@@ -3550,7 +3571,7 @@ was not rebuilt because issue #101 forbids builds and verification; the feature 
 run the normal docs-bundle path before claiming a complete packaged surface.
 
 No tests, type checks, lint, reviews, security or accessibility checks, builds, packaging, installer
-execution, runtime interaction, audits, or HuiShots were run, per the issue's explicit boundary.
+execution, runtime interaction, audits, or screenshots were run, per the issue's explicit boundary.
 The feature branch remains separate from `main` and is intended to remain available for the dedicated
 pull request.
 
@@ -3574,8 +3595,8 @@ Documentation is in `docs/features/appearance/easter-eggs.md` and indexed from t
 category. `ROADMAP.md` and `CHANGELOG.md` record the implementation and its intentionally pending
 verification state.
 
-No tests, lint, type checks, builds, packaging, runtime interaction, reviews, audits, or HuiShots
-were run, as required by issue #103. The feature jer remains separate from `main`; the parent Dog
+No tests, lint, type checks, builds, packaging, runtime interaction, reviews, audits, or screenshots
+were run, as required by issue #103. The feature branch remains separate from `main`; the parent agent
 must perform integration and any later verification.
 
 # 2026-08-27, combined parser and release recovery
@@ -3622,7 +3643,7 @@ Only the three public records in this lane are changed: `CHANGELOG.md`, `ROADMAP
 `HANDOFF.md`. No pull request, merge, or push was performed by this lane.
 # 2026-08-27, Easter egg contextual-trigger correction, issue #103
 
-Reconciled the task-owned feature jer with the exact `origin/main` tip
+Reconciled the task-owned feature branch with the exact `origin/main` tip
 `54164b84dce0b7e62787b1de2885405ff4ed821c`. Corrected the Easter egg suite so every one of the 60
 entries is a contextual, bounded surprise from natural interaction with its marked real surface.
 Removed the `Ctrl+Alt+Shift+E` opener, all typed/code/chord activation, Alt-click force discovery,

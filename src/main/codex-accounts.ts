@@ -35,6 +35,7 @@ import { readCodexAccountAt, readCodexThreadAt } from '../core/codex-session-nam
 import { platform } from '../core/platform'
 import { findInLoginPath } from '../core/pty-manager'
 import type { SshProjectManager } from './remote-ssh/ssh-project'
+import { ensureCodexRelayRoot } from './codex-relay-daemon'
 
 const execFileP = promisify(execFile)
 const LOGIN_POLL_MS = 2000
@@ -103,10 +104,6 @@ export async function ensureCodexAccountDaemon(accountId?: string): Promise<void
       if (!codex) throw new Error('Codex CLI unavailable')
       await execFileP(codex, ['app-server', 'daemon', 'start'], {
         cwd: os.homedir(),
-        env: {
-          ...process.env,
-          ...codexSessionEnv(platform().userDataDir, accountId)
-        },
         env: { ...process.env, ...codexSessionEnv(platform().userDataDir, accountId) },
         timeout: 15_000,
         maxBuffer: 1024 * 1024
@@ -186,6 +183,8 @@ export function initCodexAccounts(getSshManager?: () => SshProjectManager | unde
     if (!mgr) throw new Error('SSH Codex account manager is unavailable')
     return { mgr, projectId }
   }
+  // Create the shared relay root before any account daemon or relay reaches it on a fresh profile.
+  ensureCodexRelayRoot()
   // Synchronous before renderer hydration/PTY restore: legacy long CODEX_HOMEs cannot host the
   // app-server Unix socket, and an already persisted managed node must see its migrated home on
   // its very first spawn.

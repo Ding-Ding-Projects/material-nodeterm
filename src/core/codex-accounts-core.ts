@@ -255,12 +255,9 @@ export function needsCodexAccountScope(
   return isCodexAccount ? isCodexAccount(accountId) : true
 }
 
-/**
- * Usage discovery follows actual account HOMES, not the renderer's eventually-consistent `pending`
- * marker: a completed auth file can exist after a restart before settings reconciles, and the
- * provider itself safely reports `unavailable` when a home is not logged in yet. Consumed by the
- * usage PR.
- */
+/** Usage discovery follows actual account homes, not the renderer's eventually-consistent
+ * `pending` marker. A completed auth file can exist after a restart before settings reconciles;
+ * the provider safely reports `unavailable` when a home is not logged in yet. */
 export function codexUsageAccounts(
   accounts: ReadonlyArray<{
     id: string
