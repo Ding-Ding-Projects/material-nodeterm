@@ -446,6 +446,19 @@ export function buildRealApi(
       ok: false,
       error: 'Project archive import is available in the Windows desktop app.'
     }),
+    portableBindings: {
+      state: async (input: { nodeId: string; featureId: string; displayLabel: string; hasMissingAssets?: boolean }) => [{
+        nodeId: input.nodeId,
+        featureId: input.featureId,
+        displayLabel: input.displayLabel,
+        action: 'leave-unbound' as const,
+        enabled: true,
+        bound: false
+      }],
+      apply: async () => ({ ok: false as const, error: 'Destination bindings are available only in the desktop app.' })
+    },
+    onArchiveProgress: () => () => {},
+    cancelArchiveImport: async () => false,
     // Archive save/open are desktop-only here, so their password prompt — and therefore its
     // ladder — cannot be reached in the browser at all. No wait exists to end.
     archiveLadderIssue: async () => ({ challenge: null, budgetLeft: 0, waitMs: 0 }),

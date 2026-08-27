@@ -7,7 +7,7 @@
  * module acquiring filesystem or host capabilities.
  */
 
-import type { BridgeLink, CanvasNodeState, Project, Viewport } from '../shared/types'
+import type { BridgeLink, CanvasNodeState, Project, Viewport, NodeKind } from '../shared/types'
 import { PortableProjectV3Error, PORTABLE_PROJECT_SCHEMA, PORTABLE_PROJECT_SCHEMA_VERSION } from './portable-project-v3'
 import { sanitizeProjectIcon } from '../shared/project-icon'
 import type { PortableMediaManifest } from './portable-media-assets'
@@ -307,6 +307,58 @@ export function validatePortableCanvasProjectionV3(value: unknown): PortableCanv
 export function parsePortableCanvasProjectionV3(bytes: Uint8Array): PortableCanvasProjectionV3 {
   if (bytes.byteLength > PORTABLE_CANVAS_LIMITS.maxJsonBytes) throw new PortableProjectV3Error('raw-limit', 'Portable project.json exceeds its byte bound.')
   try { return validatePortableCanvasProjectionV3(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes))) } catch (error) { if (error instanceof PortableProjectV3Error) throw error; throw new PortableProjectV3Error('manifest', 'Portable project.json is not valid UTF-8 JSON.') }
+}
+
+/**
+ * Hydrate a validated projection into a runtime project without granting it any local
+ * authority.  The projection deliberately has no cwd, credentials, process state, or provider
+ * session, so this function only supplies the caller's fresh runtime id and optional local cwd.
+ * Keeping this conversion beside the validator prevents an importer from accidentally reviving
+ * fields that the projection never carried.
+ */
+export function portableCanvasProjectionToProject(
+  input: PortableCanvasProjectionV3,
+  base: { id: string; cwd?: string } = { id: 'imported-project' }
+): Project {
+  const value = validatePortableCanvasProjectionV3(input)
+  const nodes: CanvasNodeState[] = value.nodes.map((node) => ({
+    id: node.id,
+    kind: node.kind as NodeKind,
+    position: { ...node.position },
+    size: { ...node.size },
+    title: node.title,
+    color: node.color,
+    group: node.group,
+    ...(node.collapsed !== undefined ? { collapsed: node.collapsed } : {}),
+    ...(node.parentId !== undefined ? { parentId: node.parentId } : {}),
+    ...(node.tags ? { tags: [...node.tags] } : {}),
+    ...(node.text !== undefined ? { text: node.text } : {}),
+    ...(node.url !== undefined ? { url: node.url } : {}),
+    ...(node.browserTabs ? { browserTabs: node.browserTabs.map((tab) => ({ ...tab })) } : {}),
+    ...(node.serviceLabel !== undefined ? { serviceLabel: node.serviceLabel } : {})
+  }))
+  const bridgeLinks = value.relationships
+    .filter((link) => link.kind === 'bridge')
+    .map((link) => ({ id: link.id, source: link.source, target: link.target }))
+  const ropeLinks = value.relationships
+    .filter((link) => link.kind === 'rope')
+    .map((link) => ({ id: link.id, source: link.source, target: link.target }))
+  const icon = value.project.icon
+    ? value.project.icon.type === 'emoji'
+      ? { type: 'emoji' as const, emoji: value.project.icon.name }
+      : { type: 'material-symbol' as const, name: value.project.icon.name }
+    : undefined
+  return {
+    id: base.id,
+    name: value.project.name,
+    color: value.project.color,
+    ...(icon ? { icon } : {}),
+    viewport: value.canvases.find((canvas) => canvas.id === value.rootCanvasId)?.viewport ?? { x: 0, y: 0, zoom: 1 },
+    nodes,
+    ...(bridgeLinks.length > 0 ? { bridges: bridgeLinks } : {}),
+    ...(ropeLinks.length > 0 ? { ropes: ropeLinks } : {}),
+    ...(base.cwd ? { cwd: base.cwd } : {})
+  }
 }
 
 // Short aliases keep the schema seam convenient for archive callers while the explicit V3 names

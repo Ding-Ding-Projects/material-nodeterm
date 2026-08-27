@@ -83,13 +83,15 @@ export function looksLikeContainer(bytes: Buffer): boolean {
  * change is a programmer error here, not user input, so it throws.
  */
 export function packContainer(entries: ContainerEntry[]): Buffer {
-  const now = dosDateTime(new Date())
+  // Portable archives must be byte-stable for the same ordered payload. ZIP timestamps are
+  // metadata, not project content, so use the DOS epoch rather than the wall clock.
+  const now = dosDateTime(new Date('1980-01-01T00:00:00Z'))
   const localChunks: Buffer[] = []
   const centralChunks: Buffer[] = []
   const seen = new Set<string>()
   let offset = 0
 
-  for (const entry of entries) {
+  for (const entry of [...entries].sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0)) {
     if (sanitizeZipPath(entry.path) !== entry.path) {
       throw new Error(`Container entry path is not clean: ${entry.path}`)
     }

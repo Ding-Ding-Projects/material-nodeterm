@@ -550,6 +550,32 @@ const FEATURES = [
     ],
   },
   {
+    id: 'portable-project-import-and-bindings',
+    label: 'Atomic schema 3 import and destination binding wizard',
+    files: [
+      'src/core/portable-project-v3.ts',
+      'src/core/portable-project-import.ts',
+      'src/core/portable-bindings.ts',
+      'src/core/portable-canvas-projection.ts',
+      'src/renderer/components/PortableBindingWizard.tsx',
+      'src/main/index.ts',
+      'src/preload/index.ts',
+      'src/renderer/bridge/ws-bridge.ts'
+    ],
+    contentChecks: [
+      ['src/core/portable-project-import.ts', 'export async function importPortableProjectV3('],
+      ['src/core/portable-project-import.ts', 'await validatePortableProjectV3Entries('],
+      ['src/core/portable-project-import.ts', 'await renameAtomic(stage, finalPath)'],
+      ['src/core/portable-bindings.ts', 'export type PortableBindingAction'],
+      ['src/core/portable-bindings.ts', 'export class LocalNodeBindingStore'],
+      ['src/renderer/components/PortableBindingWizard.tsx', 'export function PortableBindingWizard('],
+      ['src/main/index.ts', 'IPC.portableBindingState'],
+      ['src/main/index.ts', 'IPC.portableBindingApply'],
+      ['src/renderer/bridge/ws-bridge.ts', 'Destination bindings are available only in the desktop app.']
+    ],
+    docs: ['docs/features/projects/portable-bindings.md', 'docs/features/projects/portable-schema3.md']
+  },
+  {
     // The sessions-sidebar project-header right-click menu and the project switcher's per-row
     // actions panel are two independently-typed menus that drifted apart (the switcher had no
     // archive save/open, the sidebar menu had no appearance editor). Both must consume the one

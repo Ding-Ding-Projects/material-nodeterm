@@ -774,12 +774,13 @@ const archiveContentsSummary = (contents: ProjectArchiveContents | undefined): s
     parts.push(`${contents.workingFiles.toLocaleString()} files (${archiveBytesLabel(contents.workingBytes)})`)
   }
   if (contents.repository === 'git-bundle') parts.push('full Git history')
+  if (contents.repository === 'portable-projection') parts.push('schema 3 project intent')
   const head = parts.length > 0 ? `Included: ${parts.join(' + ')}.` : ''
   const note = contents.repositoryNote ? ` ${contents.repositoryNote}` : ''
   const atLeast = contents.excluded.some((e) => e.atLeast) ? 'at least ' : ''
   const excluded =
     contents.excludedFiles > 0 || contents.excluded.length > 0
-      ? ` Excluded (listed in the file's archive.json): ${atLeast}${contents.excludedFiles.toLocaleString()} ignored/skipped files (${archiveBytesLabel(contents.excludedBytes)}).`
+      ? ` Excluded (listed in the file's ${contents.repository === 'portable-projection' ? 'manifest.json' : 'archive.json'}): ${atLeast}${contents.excludedFiles.toLocaleString()} ${contents.repository === 'portable-projection' ? 'omitted items' : 'ignored/skipped files'} (${archiveBytesLabel(contents.excludedBytes)}).`
       : ''
   return `${head}${note}${excluded}`.trim()
 }

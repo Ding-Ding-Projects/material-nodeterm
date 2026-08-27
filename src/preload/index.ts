@@ -178,6 +178,18 @@ const api: NodeTerminalApi = {
       ipcRenderer.invoke(IPC.projectArchiveExport, project, password),
     importProject: (opts?: { path?: string; password?: string }) =>
       ipcRenderer.invoke(IPC.projectArchiveImport, opts),
+    portableBindings: {
+      state: (input: { nodeId: string; featureId: string; displayLabel: string; hasMissingAssets?: boolean }) =>
+        ipcRenderer.invoke(IPC.portableBindingState, input),
+      apply: (input: { nodeId: string; action: import('../shared/types').PortableBindingAction; providerOrHostIdentity?: string; localResourceReferences?: Record<string, string | number | boolean>; credentialKeys?: string[] }) =>
+        ipcRenderer.invoke(IPC.portableBindingApply, input)
+    },
+    onArchiveProgress: (cb: (event: import('../shared/types').ProjectArchiveProgress) => void) => {
+      const handler = (_event: unknown, progress: import('../shared/types').ProjectArchiveProgress) => cb(progress)
+      ipcRenderer.on(IPC.projectArchiveProgress, handler)
+      return () => ipcRenderer.removeListener(IPC.projectArchiveProgress, handler)
+    },
+    cancelArchiveImport: () => ipcRenderer.invoke(IPC.projectArchiveCancel),
     archiveLadderIssue: (filePath: string) =>
       ipcRenderer.invoke(IPC.projectArchiveLadderIssue, filePath),
     archiveLadderVerify: (input: unknown) =>

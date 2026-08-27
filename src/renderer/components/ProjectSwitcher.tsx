@@ -38,6 +38,7 @@ import { useToyLocks } from '../state/toylocks'
 import { LockWizard } from './toylocks/LockWizard'
 import { UnlockPrompt } from './toylocks/UnlockPrompt'
 import { ConfirmDialog } from './ConfirmDialog'
+import { PortableBindingWizardPopover } from './PortableBindingWizard'
 
 export function unreadCountSegments(count: number, suffix = ' unread') {
   return [fact(String(count)), copy(suffix)]
@@ -201,6 +202,8 @@ export function ProjectSwitcher({
   // Per-row DOM refs, so a row's "Edit tab appearance…" action can anchor the (non-modal)
   // appearance editor to the actual row element rather than the trigger that opened the dropdown.
   const rowElRef = useRef<Record<string, HTMLElement | null>>({})
+  const portableBindingAnchorRef = useRef<HTMLElement | null>(null)
+  const [portableBindingProjectId, setPortableBindingProjectId] = useState<string | null>(null)
   const switcherBtnRef = useRef<HTMLButtonElement | null>(null)
   const claudeAccounts = useSettings((s) => s.settings.claudeAccounts)
   // The mode a project without an override falls back to, shown in the "Use global (…)" entry.
@@ -713,6 +716,15 @@ export function ProjectSwitcher({
                         </button>
                         <button
                           onClick={() => {
+                            portableBindingAnchorRef.current = rowElRef.current[p.id]
+                            setPortableBindingProjectId(p.id)
+                            closeMenu()
+                          }}
+                        >
+                          Configure local binding…
+                        </button>
+                        <button
+                          onClick={() => {
                             onRemoteAccess()
                             closeMenu()
                           }}
@@ -971,6 +983,19 @@ export function ProjectSwitcher({
             />
           )
         })()}
+      {portableBindingProjectId && portableBindingAnchorRef.current && (
+        <PortableBindingWizardPopover
+          open
+          nodeId={portableBindingProjectId}
+          featureId="project"
+          displayLabel={projects.find((p) => p.id === portableBindingProjectId)?.name ?? 'this project'}
+          anchorRef={portableBindingAnchorRef}
+          onClose={() => {
+            setPortableBindingProjectId(null)
+            portableBindingAnchorRef.current = null
+          }}
+        />
+      )}
       {storageConfirm && (
         <ConfirmDialog
           message=""

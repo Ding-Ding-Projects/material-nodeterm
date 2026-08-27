@@ -40,6 +40,13 @@
 - Add the schema 3 portable media contract: content-addressed image, audio, and video assets,
   byte/signature validation, explicit Include/Omit/Locate Later decisions, unresolved placeholders,
   and machine-local source-path exclusion. Archive wiring and verification remain pending.
+- Add schema 3 portable project import and export wiring with complete entry hash validation,
+  bounded in-memory legacy migration, collision-safe atomic destination staging, cancellation,
+  rollback, and an explicit omission report. Keep provider credentials, machine paths, process
+  state, vaults, and local bindings out of the project file.
+- Add the guided Desktop binding wizard with Configure, Rebind, Adopt, Deploy, Locate Asset, and
+  Leave Unbound routes, local binding separation, progress and cancellation state, and an honest
+  Server Edition desktop-only boundary. Verification remains pending by design for this lane.
 
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and

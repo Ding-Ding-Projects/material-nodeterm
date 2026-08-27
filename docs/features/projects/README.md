@@ -12,6 +12,8 @@ A project is one canvas — one page of nodes, with its own working directory an
   payloads for root and future universe scopes, with machine-local state excluded.
 - [Portable media assets](./portable-media-assets.md): content-addressed media, signature
   validation, and the Include, Omit, Locate Later decision flow.
+- [Portable project binding wizard](./portable-bindings.md): atomic staging, hash validation,
+  legacy migration, collision refusal, and explicit destination binding routes.
 
 See also [Canvas](../canvas/README.md) for what lives inside a project, and
 [Source control](../source-control/README.md) for how a project's working directory relates to

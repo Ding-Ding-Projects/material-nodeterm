@@ -1097,7 +1097,9 @@ export type WorkspaceMigrationKind = 'v2' | 'exec'
 export interface ProjectArchiveExclusion {
   /** Project-folder-relative path, '/'-separated. A grouped directory ends with '/'. */
   path: string
-  reason: 'gitignored' | 'nested-repository' | 'symlink' | 'special' | 'missing' | 'unreadable'
+  reason: 'gitignored' | 'nested-repository' | 'symlink' | 'special' | 'missing' | 'unreadable' | 'machine-local' | 'credential' | 'unsupported'
+  /** Human-readable reason for portable schema omissions; absent on legacy file exclusions. */
+  detail?: string
   /** File count under a grouped directory exclusion. Absent for a single file. */
   files?: number
   bytes?: number
@@ -1121,6 +1123,8 @@ export interface ProjectArchiveContents {
    * - 'no-folder'        — inline (cwd-less) project; canvas+history only.
    * - 'folder-missing'   — the project's folder no longer exists on disk; canvas+history only.
    * - 'not-in-archive'   — a V1 archive: the format carried no repository or working files.
+   * - 'portable-projection' — schema 3 safe intent only; local bindings and machine state stay
+   *   on the source machine and are configured explicitly after import.
    */
   repository:
     | 'git-bundle'
@@ -1130,6 +1134,7 @@ export interface ProjectArchiveContents {
     | 'no-folder'
     | 'folder-missing'
     | 'not-in-archive'
+    | 'portable-projection'
   /** Plain-words caveat when `repository` is not 'git-bundle' (why, and what that means). */
   repositoryNote?: string
   /** Working files included under `files/` (count and raw bytes before compression). */
@@ -1142,9 +1147,44 @@ export interface ProjectArchiveContents {
   excludedBytes: number
 }
 
+/** The explicit destination route shown after schema 3 import. Values are ids, not UI copy. */
+export type PortableBindingAction = 'configure' | 'rebind' | 'adopt' | 'deploy' | 'locate-asset' | 'leave-unbound'
+
+export interface PortableBindingState {
+  nodeId: string
+  featureId: string
+  displayLabel: string
+  action: PortableBindingAction
+  enabled: boolean
+  reason?: string
+  bound: boolean
+}
+
+export interface PortableBindingApi {
+  state(input: { nodeId: string; featureId: string; displayLabel: string; hasMissingAssets?: boolean }): Promise<PortableBindingState[]>
+  apply(input: {
+    nodeId: string
+    action: PortableBindingAction
+    providerOrHostIdentity?: string
+    localResourceReferences?: Record<string, string | number | boolean>
+    credentialKeys?: string[]
+  }): Promise<{ ok: true; state: 'bound' | 'unbound' } | { ok: false; error: string }>
+}
+
+export interface ProjectArchiveProgress {
+  phase: 'reading' | 'validating' | 'migrating' | 'staging' | 'publishing' | 'completed' | 'cancelled'
+  progress: number
+  message: string
+}
+
 export interface WorkspaceApi {
   load(): Promise<Workspace>
   save(workspace: Workspace): Promise<void>
+  /** Local destination binding controls. Import never invokes these controls implicitly. */
+  portableBindings: PortableBindingApi
+  /** Progress and cancellation for the schema 3 import operation. */
+  onArchiveProgress(cb: (event: ProjectArchiveProgress) => void): () => void
+  cancelArchiveImport(): Promise<boolean>
   /** Reads <folder>/.nodeterm/project.json and returns the assembled Project (cwd resolved), or null. */
   probeFolder(folder: string): Promise<Project | null>
   /** True when `cwd`'s project is currently stored as sized parts + a manifest, rather than a
@@ -1164,9 +1204,9 @@ export interface WorkspaceApi {
    *  currently split, or if the parts fail verification (a broken parts set is never silently
    *  joined from partial data). LOCAL-ONLY, same as splitIntoParts. */
   joinParts(cwd: string): Promise<{ ok: true } | { ok: false; reason: string }>
-  /** Save the whole project as ONE file: canvas snapshot, app-owned local history, the project's
-   *  git repository (as a bundle) and its working files, in a ZIP container. `contents` states
-   *  exactly what was included and every exclusion with its reason. */
+  /** Save safe project intent and app-owned local history as ONE schema 3 file in a ZIP container.
+   *  Machine-local bindings, credentials, repository working files, process state, and caches
+   *  stay on the source machine; `contents` states every omission. */
   exportProject(
     project: Project,
     /** When given, the finished archive is wrapped whole in AES-256-GCM under a key derived from
@@ -1181,8 +1221,8 @@ export interface WorkspaceApi {
     encrypted?: boolean
     contents?: ProjectArchiveContents
   }>
-  /** Open and validate a one-file project archive, restoring a fresh project, its history and —
-   *  for a V2 archive — its repository and working files into `restoredTo`. */
+  /** Open and validate a one-file project archive. Schema 3 stages safe intent atomically and
+   *  leaves destination bindings unbound; legacy V1/V2 archives retain their compatibility path. */
   importProject(opts?: {
     /** Skip the file picker and open exactly this file — the second leg of the password prompt:
      *  the first call found the file protected and returned its path, and this one supplies the
@@ -1208,7 +1248,7 @@ export interface WorkspaceApi {
      *  ends the WAITING and never the password. */
     ladderAvailable?: boolean
     path?: string
-    archiveVersion?: 1 | 2
+    archiveVersion?: 1 | 2 | 3
     contents?: ProjectArchiveContents
     restoredTo?: string
   }>
