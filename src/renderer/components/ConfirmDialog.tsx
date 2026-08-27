@@ -103,14 +103,6 @@ export function ConfirmDialog({
   const cancelText = vocab(cancelLabel ?? ts('dialog.confirm.cancel', 'Cancel'))
   const confirmText = vocab(confirmLabel ?? (alert ? ts('dialog.confirm.ok', 'OK') : ts('dialog.confirm.delete', 'Delete')))
   const messageText = messageSegments ? mapOwnedSentence(vocab, messageSegments) : vocab(message)
-  const cancelText = cancelLabel ? vocab(cancelLabel) : ts('dialog.confirm.cancel', 'Cancel')
-  const confirmText = confirmLabel
-    ? vocab(confirmLabel)
-    : alert
-      ? ts('dialog.confirm.ok', 'OK')
-      : ts('dialog.confirm.delete', 'Delete')
-  const messageText = vocab(message)
-  const optionLabel = vocab(option?.label)
   // Non-semantic decoration only (Settings → Language → "Show emojis…"): purely visual, never
   // part of the accessible name, and never a substitute for the message's actual words.
   const emojiChar = emoji(alert ? 'ℹ️' : danger ? '🗑️' : '❓')
@@ -144,14 +136,13 @@ export function ConfirmDialog({
       })
       if (!action) return
       e.preventDefault()
-      if (action === 'confirm' && !busy) onConfirm()
-      if (action === 'confirm') onConfirm()
-      else dismiss()
+      if (action === 'confirm') {
+        if (!busy) onConfirm()
+      } else dismiss()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [id, enterConfirms, onConfirm, dismiss, busy])
-  }, [id, enterConfirms, onConfirm, dismiss])
 
   return createPortal(
     <div className="confirm-overlay" onClick={dismiss}>
