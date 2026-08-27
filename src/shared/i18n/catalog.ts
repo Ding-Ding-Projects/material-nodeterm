@@ -904,6 +904,102 @@ export const CATALOG: Catalog = {
     yue: flat('揀執行檔…')
   },
 
+  'terminalProfiles.named.heading': {
+    en: flat('Named terminal profiles'),
+    yue: flat('已命名終端機設定檔')
+  },
+  'terminalProfiles.named.description': {
+    en: flat('Save a name, initial directory, and optional startup command for new terminal or agent nodes. These values stay on this computer and are not written to shared project files.'),
+    yue: flat('為新終端機或代理節點儲存名稱、初始目錄同可選啟動指令。呢啲值只留喺呢部電腦，唔會寫入共享項目檔案。')
+  },
+  'terminalProfiles.named.search': {
+    en: flat('Search named profiles'),
+    yue: flat('搜尋已命名設定檔')
+  },
+  'terminalProfiles.named.listLabel': {
+    en: flat('Saved named terminal profiles'),
+    yue: flat('已儲存嘅已命名終端機設定檔')
+  },
+  'terminalProfiles.named.empty': {
+    en: flat('No named profiles match this search. Create one below.'),
+    yue: flat('冇已命名設定檔符合呢次搜尋。可以喺下面建立一個。')
+  },
+  'terminalProfiles.named.noStartup': {
+    en: flat('No startup command'),
+    yue: flat('冇啟動指令')
+  },
+  'terminalProfiles.named.default': {
+    en: flat('Default'),
+    yue: flat('預設')
+  },
+  'terminalProfiles.named.useDefault': {
+    en: flat('Use for new nodes'),
+    yue: flat('用於新節點')
+  },
+  'terminalProfiles.named.defaultStatus': {
+    en: flat('{profile} is used for one-click new nodes.'),
+    yue: flat('{profile} 會用於一按建立嘅新節點。')
+  },
+  'terminalProfiles.named.edit': {
+    en: flat('Edit'),
+    yue: flat('編輯')
+  },
+  'terminalProfiles.named.remove': {
+    en: flat('Remove'),
+    yue: flat('移除')
+  },
+  'terminalProfiles.named.confirmRemove': {
+    en: flat('Confirm remove'),
+    yue: flat('確認移除')
+  },
+  'terminalProfiles.named.editorTitle': {
+    en: flat('Create named profile'),
+    yue: flat('建立已命名設定檔')
+  },
+  'terminalProfiles.named.nameLabel': {
+    en: flat('Name'),
+    yue: flat('名稱')
+  },
+  'terminalProfiles.named.nameDescription': {
+    en: flat('A short label shown in profile pickers.'),
+    yue: flat('喺設定檔選擇器顯示嘅簡短標籤。')
+  },
+  'terminalProfiles.named.cwdLabel': {
+    en: flat('Initial directory'),
+    yue: flat('初始目錄')
+  },
+  'terminalProfiles.named.cwdDescription': {
+    en: flat('The directory opened before the startup command runs.'),
+    yue: flat('啟動指令執行之前先開啟嘅目錄。')
+  },
+  'terminalProfiles.named.browse': {
+    en: flat('Browse…'),
+    yue: flat('瀏覽…')
+  },
+  'terminalProfiles.named.commandLabel': {
+    en: flat('Startup command'),
+    yue: flat('啟動指令')
+  },
+  'terminalProfiles.named.commandDescription': {
+    en: flat('Optional text sent once after the shell is ready. It is user-authored and runs locally.'),
+    yue: flat('Shell 準備好之後可選擇傳送一次嘅文字。由使用者撰寫，並喺本機執行。')
+  },
+  'terminalProfiles.named.invalid': {
+    en: flat('Enter a name and initial directory. Keep each value within its stated limit.'),
+    yue: flat('請輸入名稱同初始目錄，每個值都要符合旁邊列出嘅限制。')
+  },
+  'terminalProfiles.named.cancel': {
+    en: flat('Cancel'),
+    yue: flat('取消')
+  },
+  'terminalProfiles.named.saveChanges': {
+    en: flat('Save changes'),
+    yue: flat('儲存更改')
+  },
+  'terminalProfiles.named.create': {
+    en: flat('Create profile'),
+    yue: flat('建立設定檔')
+  },
   'terminalProfiles.create.menuLabel': {
     en: flat('New terminal with profile…'),
     yue: flat('用設定檔新增終端機…')

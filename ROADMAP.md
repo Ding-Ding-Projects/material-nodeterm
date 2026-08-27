@@ -161,7 +161,8 @@ Feature requests open on GitHub with no landed implementation yet, newest first:
 - [ ] **#291** — Node type icons alongside color coding.
 - [ ] **#290** — Source control for monorepos with multiple nested git repos.
 - [ ] **#289** — Custom sounds for agent alerts.
-- [ ] **#286** — Named terminal profiles (start directory).
+- [ ] **#286** — Named terminal profiles (start directory). Implementation is present in the
+      Program 66 lane, with tests, packaged interaction, and capture evidence still pending.
 - [ ] **#284** — Per-terminal independent "repo context".
 - [ ] **#145** — Basic annotation tools (colored frame, lines, arrows) — note: an `annotation`
       node kind already exists in `NodeKind` per CLAUDE.md; verify against #145 before assuming

@@ -1,5 +1,5 @@
 import type { Node } from '@xyflow/react'
-import type { AgentLaunchIntent, BrowserTab, CanvasMutation, CanvasNodeState, ClaudeAccount, NodeKind, PendingLaunch, Project, ServiceNodeKind } from '@shared/types'
+import type { AgentLaunchIntent, BrowserTab, CanvasMutation, CanvasNodeState, ClaudeAccount, NamedTerminalProfile, NodeKind, PendingLaunch, Project, ServiceNodeKind } from '@shared/types'
 import { normalizeMediaReference, type MediaAssetReference } from '@shared/media-catalog'
 import { normalizePublicDimSumSelection, type PublicDimSumSelection } from '@shared/public-dim-sum'
 import type { CalendarNodeConfig } from '@shared/calendar'
@@ -50,6 +50,7 @@ import { sshHostKey } from '@shared/ssh'
 import { useSettings } from './settings'
 import type { SessionSource } from '../session/session'
 import { supportsWindowsTerminalProfiles } from './terminal-profiles'
+import { namedTerminalProfileForId } from '../lib/named-terminal-profiles'
 import type { AnnotationRect, AnnotationVariant } from '../lib/annotation'
 import { newUniverseCreationEventId, shopNodeIdForCanvas } from '../../core/universe-shop'
 import { TORRENT_NODE_CATALOG_ENTRY } from '@shared/torrent'
@@ -419,6 +420,8 @@ export interface TerminalNodeCreationOptions {
   sessionSource: SessionSource
   /** Explicit selection from a profile picker; omitted means snapshot the current default. */
   terminalProfileId?: string
+  /** Explicit user-owned named profile; omitted means the saved default named profile. */
+  namedTerminalProfileId?: string
 }
 
 /**
@@ -434,6 +437,16 @@ function terminalProfileForNewNode(
   return options?.terminalProfileId ?? useSettings.getState().settings.defaultTerminalProfileId
 }
 
+function namedTerminalProfileForNewNode(
+  ssh: Project['ssh'] | undefined,
+  options: TerminalNodeCreationOptions | undefined
+): NamedTerminalProfile | undefined {
+  if (ssh || options?.sessionSource !== 'local' || !supportsWindowsTerminalProfiles()) return undefined
+  const settings = useSettings.getState().settings
+  const id = options?.namedTerminalProfileId ?? settings.defaultNamedTerminalProfileId
+  return namedTerminalProfileForId(id, settings.namedTerminalProfiles)
+}
+
 export function createTerminalNode(
   index: number,
   cwd?: string,
@@ -444,6 +457,10 @@ export function createTerminalNode(
 ): CanvasNode {
   const size = terminalNodeSize()
   const terminalProfileId = terminalProfileForNewNode(ssh, options)
+  const namedProfile = namedTerminalProfileForNewNode(ssh, options)
+  const effectiveCwd = namedProfile?.cwd ?? (ssh ? ssh.remoteCwd : cwd)
+  const effectiveInitialCommand =
+    initialCommand ?? (namedProfile?.startupCommand || undefined)
   return {
     id: nextId('term'),
     type: 'terminal',
@@ -456,9 +473,10 @@ export function createTerminalNode(
       color: NODE_COLORS[index % NODE_COLORS.length],
       group: null,
       tags: [],
-      cwd: ssh ? ssh.remoteCwd : cwd,
-      initialCommand,
+      cwd: effectiveCwd,
+      initialCommand: effectiveInitialCommand,
       ...(terminalProfileId !== undefined ? { terminalProfileId } : {}),
+      ...(namedProfile ? { namedTerminalProfileId: namedProfile.id } : {}),
       accountLogin: false,
       ...(ssh ? { ssh: ssh.server, sshRemoteTmux: true } : {})
     }
@@ -937,6 +955,13 @@ export function createAgentNode(
   }
   const size = terminalNodeSize()
   const terminalProfileId = terminalProfileForNewNode(ssh, options)
+  const namedProfile = namedTerminalProfileForNewNode(ssh, options)
+  const effectiveCwd = namedProfile?.cwd ?? (ssh ? ssh.remoteCwd : cwd)
+  const effectiveInitialCommand = namedProfile?.startupCommand
+    ? initialCommand
+      ? `${namedProfile.startupCommand}\n${initialCommand}`
+      : namedProfile.startupCommand
+    : initialCommand
   return {
     id: nextId('term'),
     type: 'terminal',
@@ -969,10 +994,11 @@ export function createAgentNode(
       // A model chosen at creation (Transfer-to-agent-with-model). Persisted so cold-restore and
       // later restarts keep it; `withAgentModel` re-applies it on relaunch. Only stamped when set.
       ...(model ? { agentModel: model } : {}),
-      cwd: ssh ? ssh.remoteCwd : cwd,
-      initialCommand,
+      cwd: effectiveCwd,
+      initialCommand: effectiveInitialCommand,
       agentLaunchIntent,
       ...(terminalProfileId !== undefined ? { terminalProfileId } : {}),
+      ...(namedProfile ? { namedTerminalProfileId: namedProfile.id } : {}),
       ...(ssh ? { ssh: ssh.server, sshRemoteTmux: true } : {})
     }
   }
@@ -2738,6 +2764,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         premaxRect: n.premaxRect,
         shell: n.shell,
         terminalProfileId: n.ssh ? undefined : n.terminalProfileId,
+        namedTerminalProfileId: n.ssh ? undefined : n.namedTerminalProfileId,
         cwd: n.cwd,
         text: n.text,
         serviceLabel: n.serviceLabel,
@@ -2863,6 +2890,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         parentId: n.parentId,
         shell: n.data.shell,
         terminalProfileId: n.data.ssh ? undefined : n.data.terminalProfileId,
+        namedTerminalProfileId: n.data.ssh ? undefined : n.data.namedTerminalProfileId,
         cwd: n.data.cwd,
         text: n.data.text,
         serviceLabel: n.data.serviceLabel,
@@ -2989,6 +3017,7 @@ export function applyMutationToFlow(
       ...incoming.data,
       shell: prev.data.shell,
       terminalProfileId: incoming.data.ssh ? undefined : prev.data.terminalProfileId,
+      namedTerminalProfileId: incoming.data.ssh ? undefined : prev.data.namedTerminalProfileId,
       // The peer's pending launch was stripped at ingress. Preserve the already-held local typed
       // intent exactly like the other machine-local exec fields, or a harmless peer drag would
       // silently disarm this station before its dependencies finish.

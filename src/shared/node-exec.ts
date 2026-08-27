@@ -38,6 +38,8 @@ export interface LocalNodeExec {
   shell?: string
   /** `NodeState.terminalProfileId` — this machine's snapshotted Windows profile choice. */
   terminalProfileId?: string
+  /** `NodeState.namedTerminalProfileId` — this machine's saved profile choice. */
+  namedTerminalProfileId?: string
   /** `NodeState.ssh.extraArgs` — raw advanced ssh args for this node's connection. */
   sshExtraArgs?: string
   /** A delayed launch authorized on this machine; never accepted from project files or peers. */
@@ -376,6 +378,7 @@ function stripNodeExec(n: CanvasNodeState): CanvasNodeState {
   if (
     withoutMediaPaths.shell === undefined &&
     withoutMediaPaths.terminalProfileId === undefined &&
+    withoutMediaPaths.namedTerminalProfileId === undefined &&
     withoutMediaPaths.pendingLaunch === undefined &&
     withoutMediaPaths.serviceConnection === undefined &&
     withoutMediaPaths.nsisLocalPaths === undefined &&
@@ -387,6 +390,7 @@ function stripNodeExec(n: CanvasNodeState): CanvasNodeState {
   const out: CanvasNodeState = { ...withoutMediaPaths }
   delete out.shell
   delete out.terminalProfileId
+  delete out.namedTerminalProfileId
   delete out.pendingLaunch
   delete out.serviceConnection
   delete out.nsisLocalPaths
@@ -483,6 +487,7 @@ export function carryLocalNodeExec(
   if (
     prev.shell === undefined &&
     prev.terminalProfileId === undefined &&
+    prev.namedTerminalProfileId === undefined &&
     extraArgs === undefined &&
     pendingLaunch === undefined &&
     nsisPaths === undefined &&
@@ -494,6 +499,7 @@ export function carryLocalNodeExec(
   const out: CanvasNodeState = { ...next }
   if (prev.shell !== undefined) out.shell = prev.shell
   if (prev.terminalProfileId !== undefined) out.terminalProfileId = prev.terminalProfileId
+  if (prev.namedTerminalProfileId !== undefined) out.namedTerminalProfileId = prev.namedTerminalProfileId
   if (extraArgs !== undefined && out.ssh)
     out.ssh = { ...out.ssh, extraArgs, execTrusted: prev.ssh?.execTrusted }
   if (pendingLaunch !== undefined) out.pendingLaunch = pendingLaunch
@@ -534,6 +540,7 @@ export function localNodeExec(nodes: CanvasNodeState[]): LocalNodeExecMap | unde
     // node is saved. The trusted core resolver validates it at spawn and reports an unavailable
     // profile rather than silently switching shells. This boundary only decides provenance.
     if (n.terminalProfileId !== undefined) entry.terminalProfileId = n.terminalProfileId
+    if (n.namedTerminalProfileId !== undefined) entry.namedTerminalProfileId = n.namedTerminalProfileId
     const extraArgs = n.ssh?.extraArgs
     if (extraArgs && (n.ssh?.execTrusted || !sshExtraArgsEnableLocalExec(extraArgs)))
       entry.sshExtraArgs = extraArgs
@@ -557,6 +564,7 @@ export function localNodeExec(nodes: CanvasNodeState[]): LocalNodeExecMap | unde
     if (
       entry.shell ||
       entry.terminalProfileId !== undefined ||
+      entry.namedTerminalProfileId !== undefined ||
       entry.sshExtraArgs ||
       entry.pendingLaunch ||
       entry.serviceConnection ||
@@ -586,6 +594,7 @@ export function applyLocalNodeExec(
     const out: CanvasNodeState = stripNodeExec(n)
     if (mine?.shell) out.shell = mine.shell
     if (mine?.terminalProfileId !== undefined) out.terminalProfileId = mine.terminalProfileId
+    if (mine?.namedTerminalProfileId !== undefined) out.namedTerminalProfileId = mine.namedTerminalProfileId
     if (out.ssh && mine?.sshExtraArgs) {
       // Ours: it came out of the machine-local index, so the exec site may honor an option like
       // ProxyCommand (a jump host is a legitimate thing to have configured).

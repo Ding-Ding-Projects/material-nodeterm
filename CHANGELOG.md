@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add user-named terminal profiles for the upstream #286 workflow. Settings now stores a bounded
+  name, initial directory, and optional startup command, with a native folder picker, local search,
+  edit/remove/default controls, and creation-time selection for terminal and agent nodes. Stable
+  ids remain in the machine-local execution overlay, while paths and commands stay out of portable
+  project files and peer traffic. Tests, type checks, lint, builds, packaging, runtime interaction,
+  and captures remain unrun under the Program 66 issue boundary.
+
 - Add the bundled AWS CLI v2 dependency lane. Windows packaging now stages the pinned official
   `2.36.32` MSI, verifies its SHA-256, falls back through a verified local cache or canonical
   HTTPS download, extracts it into application-local storage, exposes the installed version, and

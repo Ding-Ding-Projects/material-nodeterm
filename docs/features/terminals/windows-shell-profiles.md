@@ -59,6 +59,32 @@ Settings migrate without changing existing custom-shell behaviour:
 The selected label appears in terminal metadata so PowerShell, Command Prompt, Git Bash, and
 individual WSL distributions remain distinguishable on a mixed canvas.
 
+## Named terminal profiles
+
+Settings → Shell also stores user-owned named profiles for the workflow described by upstream
+issue [#286](https://github.com/eneskirca/nodeterm/issues/286). Each profile has a label, an
+initial directory, and an optional startup command. The directory can be entered directly or
+chosen with the native folder picker. A local profile can be edited, removed, or selected as the
+default for one-click creation, and the list has its own plain-text search with the adjacent regex
+builder.
+
+The same picker is available while creating a Terminal or Agent node. Selecting a named profile
+snapshots its stable id on that node. The factory resolves the saved directory locally and sends
+the startup command once the shell is ready. For an Agent node, the profile command runs before the
+agent launch command. Existing nodes keep their snapshot when the profile default changes; deleting
+a profile does not rewrite an existing node's directory or command.
+
+Named profile ids, directories, and commands are machine-local execution data. They are stored in
+the settings store and the `LocalNodeExec` overlay, stripped from `.nodeterm/project.json`, portable
+exports, and inbound canvas traffic, and never accepted from a peer. SSH, relay, Server Edition,
+and non-Windows surfaces leave the named-profile picker unavailable because those sessions run on a
+different host or do not expose the local Windows profile catalog.
+
+The profile editor validates bounded, control-character-free labels, directories, and commands.
+An empty directory is rejected, while an empty startup command means the shell opens ready for
+manual input. If a saved id no longer resolves, the picker keeps it visible as unavailable rather
+than silently choosing another profile.
+
 ## WSL working directories
 
 A WSL profile means the selected distribution's configured default Linux shell. Before spawning,
@@ -105,6 +131,10 @@ exports, and inbound canvas traffic. A cloned project or peer mutation therefore
 local executable, inject arguments, or replace this machine's profile snapshot. SSH-project nodes
 remain remote and never receive a local Windows profile.
 
+Named profiles follow the same boundary through `namedTerminalProfileId`; only the id is carried by
+the local overlay, while the directory and startup command remain in the settings store and the
+node's local execution state. They are not portable project intent.
+
 ## Session continuity
 
 The selected shell runs through nodeterm's Windows session host when that persistence backend is
@@ -126,6 +156,11 @@ registered for every shipped app language and passes through the local personal-
 boundary; detected profile names, WSL distribution names, executable paths, and host diagnostics
 remain verbatim facts. Capture evidence is recorded only after it has been exercised through the
 required cheap Lowlevel MCP headless Windows route.
+
+The named-profile implementation in issue #77 is intentionally recorded separately from the
+existing detected-profile evidence. This lane did not run tests, type checks, lint, builds,
+packaging, runtime interaction, or captures. Those Chuts remain open for the named-profile form,
+creation picker, local overlay, and startup-command sequencing.
 
 Packaged-app interaction **is** exercised, by `npm run check:wired` against the real built
 artifact. Three cases in `scripts/check-app-wired.mjs` drive this feature end to end over CDP in

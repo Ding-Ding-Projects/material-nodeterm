@@ -48,6 +48,7 @@ function stripRawNodeExec(node: Record<string, unknown>): Record<string, unknown
   const {
     shell: _shell,
     terminalProfileId: _terminalProfileId,
+    namedTerminalProfileId: _namedTerminalProfileId,
     pendingLaunch: _pendingLaunch,
     ...portable
   } = node

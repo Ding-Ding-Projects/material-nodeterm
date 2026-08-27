@@ -584,6 +584,8 @@ export interface CanvasNodeState {
   // terminal-only
   /** Machine-local Windows terminal profile selection; never execution arguments. */
   terminalProfileId?: string
+  /** Machine-local named profile selection; its path and command never enter project files. */
+  namedTerminalProfileId?: string
   shell?: string
   cwd?: string
   /** Which agent runs in this terminal node (claude/codex/gemini/custom). */
@@ -1269,6 +1271,18 @@ export interface WindowsTerminalProfile {
   kind: WindowsTerminalProfileKind
   available: boolean
   unavailableReason?: string
+}
+
+/** A user-owned local profile for repeatable terminal and agent creation. */
+export interface NamedTerminalProfile {
+  /** Stable local id. This id is safe to persist in machine-local node state. */
+  id: string
+  /** User-facing label shown in Settings and node-creation pickers. */
+  name: string
+  /** Initial directory. It never crosses the portable project-file boundary. */
+  cwd: string
+  /** Optional command sent once after the shell is ready. */
+  startupCommand: string
 }
 
 /** Optional desktop capability for detecting the Windows terminal profiles on this machine. */
@@ -2271,6 +2285,10 @@ export interface Settings {
   defaultTerminalProfileId: string
   /** Compatibility field for the custom profile executable. Empty string = no custom executable. */
   defaultShell: string
+  /** User-owned local profiles used when creating terminals or agent nodes. */
+  namedTerminalProfiles: NamedTerminalProfile[]
+  /** Profile selected for one-click local terminal and agent creation, or null for none. */
+  defaultNamedTerminalProfileId: string | null
   gridSize: number
   /** Drag-time snap: while ON, dragging a node rounds its position to the grid. A live editor in
    *  BehaviorSection; the canvas reads it for the React Flow `snapToGrid` prop. Distinct from
@@ -2745,6 +2763,8 @@ export const DEFAULT_SETTINGS: Settings = {
   terminalLetterSpacing: 0,
   defaultTerminalProfileId: 'auto',
   defaultShell: '',
+  namedTerminalProfiles: [],
+  defaultNamedTerminalProfileId: null,
   gridSize: 24,
   snapToGrid: false,
   autoAlignGrid: false,

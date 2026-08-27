@@ -1120,11 +1120,13 @@ const NO_KANBAN_SESSIONS: KanbanSession[] = []
  * this capability fact to snapshot Windows profiles only for local desktop sessions. */
 function terminalCreationOptionsFor(
   projectId: string | null | undefined,
-  terminalProfileId?: string
+  terminalProfileId?: string,
+  namedTerminalProfileId?: string
 ): TerminalNodeCreationOptions {
   return {
     sessionSource: sessionForProject(projectId ?? '').source,
-    ...(terminalProfileId ? { terminalProfileId } : {})
+    ...(terminalProfileId ? { terminalProfileId } : {}),
+    ...(namedTerminalProfileId ? { namedTerminalProfileId } : {})
   }
 }
 
@@ -5426,7 +5428,7 @@ export function Canvas() {
    * event, and searches for a free rectangle before the node is published.
    */
   const createCatalogNode = useCallback(
-    (entry: NodeCatalogEntry, creationEventId: string, at?: { x: number; y: number }, groupId?: string, options?: { terminalProfileId?: string }) => {
+    (entry: NodeCatalogEntry, creationEventId: string, at?: { x: number; y: number }, groupId?: string, options?: { terminalProfileId?: string; namedTerminalProfileId?: string }) => {
       const project = useProjects.getState().getProject(activeProjectId)
       const availability = nodeCatalogAvailability(entry, {
         sessionSource,
@@ -5460,7 +5462,7 @@ export function Canvas() {
                 center,
                 undefined,
                 project?.ssh,
-                terminalCreationOptionsFor(activeProjectId, options?.terminalProfileId)
+                terminalCreationOptionsFor(activeProjectId, options?.terminalProfileId, options?.namedTerminalProfileId)
               )
             }
             if (catalogEntry.id.startsWith('agent:')) {
@@ -5486,7 +5488,7 @@ export function Canvas() {
                 ssh,
                 selectedAccount,
                 activeAgentLaunchPlan('canvas-new-agent', agentId),
-                terminalCreationOptionsFor(activeProjectId)
+                terminalCreationOptionsFor(activeProjectId, options?.terminalProfileId, options?.namedTerminalProfileId)
               )
             }
             if (catalogEntry.id === 'sticky') return createStickyNode(index, center)
@@ -17816,6 +17818,7 @@ export function Canvas() {
             hasShopNode: false
           }}
           terminalProfileChoices={terminalProfileMenuChoices}
+          namedTerminalProfiles={offersTerminalProfiles ? settings.namedTerminalProfiles : []}
           onCreate={(entry, creationEventId, options) =>
             createCatalogNode(entry, creationEventId, nodeCatalog.at, nodeCatalog.groupId, options)
           }

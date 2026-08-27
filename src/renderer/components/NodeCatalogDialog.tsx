@@ -21,14 +21,20 @@ import { usePersonalVocabulary } from '../state/personalVocabulary'
 import { useSchoolMode } from '../state/schoolMode'
 import { applyVocabulary } from '../lib/personalVocabulary/apply'
 import type { TerminalProfileChoice } from '../lib/terminal-profile-actions'
+import type { NamedTerminalProfile } from '@shared/types'
 
 export interface NodeCatalogDialogProps {
   open: boolean
   onClose: () => void
   context: NodeCatalogAvailabilityContext
   terminalProfileChoices?: readonly TerminalProfileChoice[]
+  namedTerminalProfiles?: readonly NamedTerminalProfile[]
   /** Called with one stable event id so retries cannot mint duplicate nodes. */
-  onCreate: (entry: NodeCatalogEntry, creationEventId: string, options?: { terminalProfileId?: string }) => void
+  onCreate: (
+    entry: NodeCatalogEntry,
+    creationEventId: string,
+    options?: { terminalProfileId?: string; namedTerminalProfileId?: string }
+  ) => void
   /** Opens the article in the bundled in-app documentation browser. */
   onOpenDocumentation: (path: string) => void
 }
@@ -54,7 +60,7 @@ function entryText(entry: NodeCatalogEntry, kind: 'label' | 'description'): { id
 }
 
 /** Guided registry picker shared by the FAB, pane context menu and command palette. */
-export function NodeCatalogDialog({ open, onClose, context, terminalProfileChoices = [], onCreate, onOpenDocumentation }: NodeCatalogDialogProps) {
+export function NodeCatalogDialog({ open, onClose, context, terminalProfileChoices = [], namedTerminalProfiles = [], onCreate, onOpenDocumentation }: NodeCatalogDialogProps) {
   const { t, emoji } = useI18n()
   const profileText = useLocalizedVocabularyText()
   const docsLabel = profileText('nodeCatalog.docs', 'Documentation')
@@ -71,12 +77,14 @@ export function NodeCatalogDialog({ open, onClose, context, terminalProfileChoic
   const [category, setCategory] = useState<NodeCatalogCategory | 'all'>('all')
   const [active, setActive] = useState(0)
   const [terminalProfileId, setTerminalProfileId] = useState<string | undefined>(undefined)
+  const [namedTerminalProfileId, setNamedTerminalProfileId] = useState<string | undefined>(undefined)
 
   useEffect(() => {
     if (open) {
       setActive(0)
       setCategory('all')
       setTerminalProfileId(undefined)
+      setNamedTerminalProfileId(undefined)
       window.setTimeout(() => inputRef.current?.focus(), 0)
     }
   }, [open])
@@ -96,7 +104,16 @@ export function NodeCatalogDialog({ open, onClose, context, terminalProfileChoic
   const create = (entry: NodeCatalogEntry) => {
     const state = availability(entry)
     if (!state.available) return
-    onCreate(entry, newCreationEventId(), entry.id === 'terminal' && terminalProfileId ? { terminalProfileId } : undefined)
+    onCreate(
+      entry,
+      newCreationEventId(),
+      entry.category === 'terminals' || entry.category === 'agents'
+        ? {
+            ...(terminalProfileId ? { terminalProfileId } : {}),
+            ...(namedTerminalProfileId ? { namedTerminalProfileId } : {})
+          }
+        : undefined
+    )
     onClose()
   }
 
@@ -166,10 +183,10 @@ export function NodeCatalogDialog({ open, onClose, context, terminalProfileChoic
         })}
       </div>
 
-      {terminalProfileChoices.length > 0 && (
+      {(terminalProfileChoices.length > 0 || namedTerminalProfiles.length > 0) && (
         <div className="node-catalog-dialog__profiles" role="group" aria-label={profileText('nodeCatalog.profile.label', 'Terminal profile')}>
           <span className="node-catalog-dialog__profile-label">{profileText('nodeCatalog.profile.label', 'Terminal profile')}</span>
-          <button type="button" className={!terminalProfileId ? 'is-selected' : ''} onClick={() => setTerminalProfileId(undefined)}>
+          <button type="button" className={!terminalProfileId && !namedTerminalProfileId ? 'is-selected' : ''} onClick={() => { setTerminalProfileId(undefined); setNamedTerminalProfileId(undefined) }}>
             {profileText('nodeCatalog.profile.auto', 'Use saved default')}
           </button>
           {terminalProfileChoices.map((profile) => (
@@ -177,11 +194,22 @@ export function NodeCatalogDialog({ open, onClose, context, terminalProfileChoic
               key={profile.id}
               type="button"
               disabled={profile.disabled}
-              className={terminalProfileId === profile.id ? 'is-selected' : ''}
+              className={terminalProfileId === profile.id && !namedTerminalProfileId ? 'is-selected' : ''}
               title={profile.hint}
-              onClick={() => setTerminalProfileId(profile.id)}
+              onClick={() => { setTerminalProfileId(profile.id); setNamedTerminalProfileId(undefined) }}
             >
               {profile.label}
+            </button>
+          ))}
+          {namedTerminalProfiles.map((profile) => (
+            <button
+              key={profile.id}
+              type="button"
+              className={namedTerminalProfileId === profile.id ? 'is-selected' : ''}
+              title={`${profile.cwd}${profile.startupCommand ? ` · ${profile.startupCommand}` : ''}`}
+              onClick={() => { setNamedTerminalProfileId(profile.id); setTerminalProfileId(undefined) }}
+            >
+              {profile.name}
             </button>
           ))}
         </div>
