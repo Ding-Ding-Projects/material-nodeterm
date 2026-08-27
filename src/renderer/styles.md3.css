@@ -82,6 +82,190 @@
   flex: 1;
 }
 
+.multiverse-nav__trigger {
+  -webkit-app-region: no-drag;
+  display: grid;
+  grid-template-columns: auto minmax(80px, 220px) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  max-width: 420px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 20px;
+  color: var(--md-on-surface-variant);
+  background: var(--md-surface-container-high);
+}
+
+.multiverse-nav__trigger:hover,
+.multiverse-nav__trigger:focus-visible {
+  color: var(--md-on-secondary-container);
+  background: var(--md-secondary-container);
+}
+
+.multiverse-nav__path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.multiverse-nav__depth {
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.multiverse-nav__popover h2,
+.multiverse-nav__popover p {
+  margin: 0;
+}
+
+.multiverse-nav__header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+}
+
+.multiverse-nav__header p,
+.multiverse-nav__create p,
+.multiverse-nav__search > span,
+.multiverse-nav__message {
+  color: var(--md-on-surface-variant);
+  font-size: 12px;
+}
+
+.multiverse-nav__search,
+.multiverse-nav__create {
+  display: grid;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--md-outline-variant);
+}
+
+.multiverse-nav__search-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.multiverse-nav__search input,
+.multiverse-nav__create input {
+  min-height: 40px;
+  min-width: 0;
+  border: 1px solid var(--md-outline);
+  border-radius: 12px;
+  padding: 0 12px;
+  color: var(--md-on-surface);
+  background: var(--md-surface-container-lowest);
+}
+
+.multiverse-nav__parent-list {
+  display: grid;
+  gap: 4px;
+  max-height: 168px;
+  overflow: auto;
+  padding: 4px;
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-medium);
+  background: var(--md-surface-container-low);
+}
+
+.multiverse-nav__parent-list button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  min-height: 44px;
+  align-items: center;
+  border: 0;
+  border-radius: var(--md-shape-small);
+  padding: 8px 12px;
+  background: transparent;
+  color: var(--md-on-surface);
+  text-align: start;
+}
+
+.multiverse-nav__parent-list button:hover,
+.multiverse-nav__parent-list button:focus-visible,
+.multiverse-nav__parent-list button.is-selected {
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+
+.multiverse-nav__parent-list button[aria-disabled='true'] {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
+.multiverse-nav__parent-list button span:last-child {
+  max-width: 220px;
+  color: var(--md-on-surface-variant);
+  font-size: 0.75rem;
+  text-align: end;
+}
+
+.multiverse-nav__create button,
+.multiverse-nav__header button {
+  min-height: 40px;
+  border: 0;
+  border-radius: 20px;
+  padding: 0 16px;
+  color: var(--md-on-primary);
+  background: var(--md-primary);
+}
+
+.multiverse-nav__create button:disabled {
+  color: var(--md-on-surface);
+  background: color-mix(in srgb, var(--md-on-surface) 12%, transparent);
+  opacity: 0.7;
+}
+
+.multiverse-nav__error {
+  color: var(--md-error) !important;
+}
+
+.multiverse-nav__list {
+  display: grid;
+  padding: 8px;
+  border-top: 1px solid var(--md-outline-variant);
+}
+
+.multiverse-nav__list button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  border: 0;
+  border-radius: 12px;
+  padding-inline-end: 14px;
+  color: var(--md-on-surface);
+  background: transparent;
+  text-align: left;
+}
+
+.multiverse-nav__list button:hover,
+.multiverse-nav__list button:focus-visible,
+.multiverse-nav__list button.is-active {
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+
+.multiverse-nav__message {
+  padding: 10px 16px 16px;
+}
+
+@media (max-width: 980px) {
+  .multiverse-nav__trigger {
+    grid-template-columns: auto auto;
+    padding-inline: 12px;
+  }
+  .multiverse-nav__path {
+    display: none;
+  }
+}
+
 /* The docked search bar re-themes the EXISTING `.cluster-search` button (kept verbatim — same
    class, same title="Command palette" — so the packaged-app driver script needs no changes). */
 .cluster-search {
@@ -2652,6 +2836,9 @@ button.term-node__title-text:focus-visible {
 .virtual-machine-node__status { color:var(--md-primary); }
 .virtual-machine-node__status.is-error { color:var(--md-error); }
 .virtual-machine-node__actions,.virtual-machine-node__snapshot { display:flex; gap:6px; align-items:center; }
+.virtual-machine-node__snapshot { flex-wrap:wrap; }
+.virtual-machine-node__snapshot-search,.virtual-machine-node__picker-search { display:flex; flex:1 1 260px; align-items:center; gap:4px; }
+.virtual-machine-node__picker-search { width:100%; }
 .virtual-machine-node__snapshot .mdx-input { flex:1; }
 .virtual-machine-node__display code { user-select:all; }
 .virtual-machine-node :is(button,input,select):focus-visible { outline:2px solid var(--md-primary); outline-offset:2px; }
@@ -3638,6 +3825,249 @@ button.term-node__title-text:focus-visible {
     --md-motion-effect: 0ms linear;
     --md3-motion-spatial: 0ms linear;
     --md3-motion-effect: 0ms linear;
+  }
+}
+
+/* ---------------------------------------------------------------------------------------------
+   Recovery game node
+   --------------------------------------------------------------------------------------------- */
+
+.recovery-game-node {
+  min-width: 480px;
+  min-height: 520px;
+  overflow: hidden;
+  background: var(--md-surface-container-low);
+  border: 1px solid var(--md-outline-variant);
+  border-top: 4px solid var(--md-primary);
+  border-radius: var(--md-shape-large, 16px);
+  color: var(--md-on-surface);
+}
+
+.recovery-game-node.selected {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+
+.recovery-game-node__header {
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--md-surface-container);
+  color: var(--md-on-surface);
+}
+
+.recovery-game-node__glyph {
+  color: var(--md-primary);
+  font-size: 22px;
+}
+
+.recovery-game-node__body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+}
+
+.recovery-game-node__mission,
+.recovery-game-node__search {
+  display: grid;
+  gap: 4px;
+}
+
+.recovery-game-node__mission strong,
+.recovery-game-node__search label {
+  color: var(--md-on-surface);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.recovery-game-node__mission span,
+.recovery-game-node__search-count,
+.recovery-game-node__search-error,
+.recovery-game-node__status,
+.recovery-game-node__meta {
+  color: var(--md-on-surface-variant);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.recovery-game-node__search-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.recovery-game-node__search-row input {
+  min-width: 0;
+  flex: 1;
+  min-height: 36px;
+  padding: 7px 10px;
+  border: 1px solid var(--md-outline);
+  border-radius: var(--md-shape-small, 8px);
+  background: var(--md-surface-container-highest);
+  color: var(--md-on-surface);
+}
+
+.recovery-game-node__search-row input:focus-visible,
+.recovery-game-node__cell:focus-visible,
+.recovery-game-node__controls button:focus-visible {
+  outline: 2px solid var(--md-primary);
+  outline-offset: 2px;
+}
+
+.recovery-game-node__search-error {
+  color: var(--md-error);
+}
+
+.recovery-game-node__keys {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.recovery-game-node__keys > span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 32px;
+  padding: 5px 8px;
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-small, 8px);
+  color: var(--md-on-surface-variant);
+  font-size: 11px;
+}
+
+.recovery-game-node__keys > span.is-online {
+  border-color: var(--md-success);
+  background: color-mix(in srgb, var(--md-success-container) 72%, transparent);
+  color: var(--md-on-success-container);
+}
+
+.recovery-game-node__board {
+  display: grid;
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  gap: 3px;
+  padding: 6px;
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-medium, 12px);
+  background: var(--md-surface-container-lowest);
+}
+
+.recovery-game-node__cell {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  min-width: 30px;
+  min-height: 30px;
+  padding: 0;
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-extra-small, 4px);
+  background: var(--md-surface-container);
+  color: var(--md-on-surface-variant);
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.recovery-game-node__cell:disabled {
+  opacity: 0.72;
+  cursor: default;
+}
+
+.recovery-game-node__cell.is-start {
+  color: var(--md-secondary);
+}
+
+.recovery-game-node__cell.is-energy-key {
+  border-color: var(--md-tertiary);
+  color: var(--md-tertiary);
+}
+
+.recovery-game-node__cell.is-hazard {
+  border-color: var(--md-error);
+  color: var(--md-error);
+}
+
+.recovery-game-node__cell.is-core {
+  border-color: var(--md-primary);
+  color: var(--md-primary);
+}
+
+.recovery-game-node__cell.is-player {
+  background: var(--md-primary-container);
+  color: var(--md-on-primary-container);
+}
+
+.recovery-game-node__cell.is-online {
+  background: var(--md-success-container);
+  color: var(--md-on-success-container);
+}
+
+.recovery-game-node__cell.is-search-match {
+  box-shadow: inset 0 0 0 2px var(--md-secondary);
+}
+
+.recovery-game-node__cell.is-activated {
+  background: var(--md-success-container);
+  color: var(--md-on-success-container);
+}
+
+.recovery-game-node__controls {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(38px, 1fr)) 1.5fr 1.2fr;
+  gap: 6px;
+}
+
+.recovery-game-node__controls button {
+  min-height: 40px;
+  border: 1px solid var(--md-outline);
+  border-radius: var(--md-shape-small, 8px);
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.recovery-game-node__controls button:hover:not(:disabled) {
+  background: var(--md-surface-container-highest);
+}
+
+.recovery-game-node__controls button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.recovery-game-node__controls .recovery-game-node__activate {
+  border-color: var(--md-primary);
+  background: var(--md-primary-container);
+  color: var(--md-on-primary-container);
+}
+
+.recovery-game-node__controls .recovery-game-node__reset {
+  border-color: var(--md-outline-variant);
+  color: var(--md-on-surface-variant);
+}
+
+@media (max-width: 620px) {
+  .recovery-game-node {
+    min-width: 0;
+  }
+
+  .recovery-game-node__keys,
+  .recovery-game-node__controls {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .recovery-game-node__board {
+    gap: 2px;
+    padding: 4px;
+  }
+
+  .recovery-game-node__cell {
+    min-width: 22px;
+    min-height: 22px;
+    font-size: 13px;
   }
 }
 
@@ -9691,6 +10121,26 @@ button.term-node__title-text:focus-visible {
   color: var(--md-on-warning-container);
 }
 
+.md3-converter .cv-pipeline-intent {
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-md);
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+  padding: 12px;
+  font-family: var(--font-ui);
+}
+.md3-converter .cv-pipeline-intent p {
+  margin: 0 0 8px;
+}
+.md3-converter .cv-pipeline-intent p:first-child {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.md3-converter .cv-pipeline-intent p:last-child {
+  margin-bottom: 0;
+}
+
 .md3-converter .cv-destdir,
 .md3-converter .cv-preflight {
   color: var(--md-on-surface-variant);
@@ -12345,5 +12795,160 @@ button.term-node__title-text:focus-visible {
 
   .torrent-node__stats {
     justify-content: flex-start;
+  }
+}
+/* Door construction ---------------------------------------------------------
+ * The constructor is a guided surface, not a free-form request editor. Each part picker paints
+ * its own anchored surface and keeps the regex builder beside its own search field. */
+.door-construction-dialog {
+  width: min(720px, calc(100vw - 32px));
+  max-height: min(860px, calc(100vh - 32px));
+  overflow: auto;
+}
+.door-construction__intro,
+.door-construction__route,
+.door-construction__status,
+.door-construction__message { margin: 0 0 14px; color: var(--md-on-surface-variant); line-height: 1.5; }
+.door-construction__route { padding: 10px 12px; border: 1px solid var(--md-outline-variant); border-radius: var(--md-shape-medium); font-family: var(--mono-font); overflow-wrap: anywhere; }
+.door-construction__field { display: grid; gap: 6px; margin: 14px 0; }
+.door-construction__field span,
+.door-construction__picker-label { font-weight: 650; color: var(--md-on-surface); }
+.door-construction__field input,
+.door-construction__search input { min-height: 44px; border: 1px solid var(--md-outline); border-radius: var(--md-shape-medium); background: var(--md-surface-container-low); color: var(--md-on-surface); padding: 0 12px; }
+.door-construction__parts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.door-construction__picker,
+.door-construction__core { display: grid; gap: 8px; padding: 14px; border: 1px solid var(--md-outline-variant); border-radius: var(--md-shape-large); background: var(--md-surface-container-low); }
+.door-construction__core { grid-column: 1 / -1; background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
+.door-construction__picker-trigger { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 48px; width: 100%; padding: 0 14px; border: 1px solid var(--md-outline); border-radius: var(--md-shape-medium); background: var(--md-surface-container); color: var(--md-on-surface); text-align: start; }
+.door-construction__picker-trigger:focus-visible,
+.door-construction__core button:focus-visible,
+.door-construction__actions button:focus-visible,
+.door-construction__picker-list button:focus-visible { outline: 3px solid var(--md-primary); outline-offset: 2px; }
+.door-construction__search { display: grid; gap: 6px; }
+.door-construction__search-row { display: flex; align-items: stretch; gap: 6px; }
+.door-construction__search-row input { min-width: 0; flex: 1; }
+.door-construction__search-row .md3-regex-trigger { min-width: 44px; }
+.door-construction__picker-heading { display: grid; gap: 3px; margin-bottom: 10px; }
+.door-construction__picker-heading span,
+.door-construction__search > span { color: var(--md-on-surface-variant); font-size: 0.82rem; }
+.door-construction__picker-list { display: grid; gap: 6px; max-height: 280px; overflow: auto; }
+.door-construction__picker-list button { display: grid; gap: 3px; padding: 10px 12px; border: 1px solid var(--md-outline-variant); border-radius: var(--md-shape-medium); background: var(--md-surface-container); color: var(--md-on-surface); text-align: start; }
+.door-construction__picker-list button.is-selected { border-color: var(--md-primary); background: var(--md-primary-container); color: var(--md-on-primary-container); }
+.door-construction__picker-list button span { color: var(--md-on-surface-variant); font-size: 0.85rem; }
+.door-construction__picker-list button small { text-transform: capitalize; color: var(--md-on-surface-variant); }
+.door-construction__core button,
+.door-construction__actions button { min-height: 44px; padding: 0 16px; border: 1px solid var(--md-outline); border-radius: var(--md-shape-full); background: var(--md-primary); color: var(--md-on-primary); font-weight: 650; }
+.door-construction__core button:disabled,
+.door-construction__actions button:disabled { cursor: not-allowed; opacity: 0.55; }
+.door-construction__actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+.door-construction__actions button:first-child { background: var(--md-surface-container-high); color: var(--md-on-surface); }
+@media (max-width: 560px) {
+  .door-construction__parts { grid-template-columns: 1fr; }
+  .door-construction__core { grid-column: auto; }
+  .door-construction__actions { justify-content: stretch; }
+  .door-construction__actions button { flex: 1; }
+}
+
+/* Multiverse door entry. The panel is an anchored, non-modal surface owned by the door that
+   opened it. It keeps the method search beside its own regex builder and stays usable when a
+   bilingual label or narrow viewport needs more room. */
+.universe-door-entry {
+  display: grid;
+  gap: 16px;
+  width: min(560px, calc(100vw - 32px));
+  max-height: min(720px, calc(100vh - 32px));
+  overflow-y: auto;
+  padding: 24px;
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-extra-large);
+  background: var(--md-surface-container);
+  color: var(--md-on-surface);
+  font-family: var(--md-font-ui);
+}
+
+.universe-door-entry__header {
+  display: grid;
+  gap: 6px;
+}
+
+.universe-door-entry__form {
+  display: grid;
+  gap: 16px;
+}
+
+.universe-door-entry__title {
+  margin: 0;
+  color: var(--md-on-surface);
+  font-size: 22px;
+  line-height: 1.25;
+}
+
+.universe-door-entry__description,
+.universe-door-entry__destination,
+.universe-door-entry__secondary,
+.universe-door-entry__hint,
+.universe-door-entry__search-error,
+.universe-door-entry__error,
+.universe-door-entry__empty {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.universe-door-entry__destination {
+  color: var(--md-on-surface);
+  font-weight: 600;
+}
+
+.universe-door-entry__secondary {
+  color: var(--md-on-surface-variant);
+  font-size: 0.9em;
+}
+
+.universe-door-entry__search {
+  display: grid;
+  gap: 6px;
+}
+
+.universe-door-entry__search-error,
+.universe-door-entry__error {
+  color: var(--md-error);
+}
+
+.universe-door-entry__methods {
+  width: 100%;
+}
+
+.universe-door-entry__form-field {
+  display: grid;
+  gap: 8px;
+}
+
+.universe-door-entry__hint {
+  color: var(--md-on-surface-variant);
+  font-size: 13px;
+}
+
+.universe-door-entry__empty {
+  padding: 16px;
+  border: 1px dashed var(--md-outline);
+  border-radius: var(--md-shape-large);
+  color: var(--md-on-surface-variant);
+}
+
+.universe-door-entry__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 600px) {
+  .universe-door-entry {
+    width: calc(100vw - 24px);
+    padding: 16px;
+  }
+
+  .universe-door-entry__actions > * {
+    flex: 1 1 120px;
   }
 }

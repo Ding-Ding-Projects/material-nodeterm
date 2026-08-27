@@ -7,6 +7,7 @@ import type {
   CanvasNodeState,
   NavStop,
   Project,
+  ProjectAwsUniverseCanvas,
   ProjectKanban,
   Viewport,
   Workspace
@@ -16,8 +17,14 @@ import type { ProjectCapability } from '@shared/project-capabilities'
 import { recordCapabilityAck, type CapabilityAnswer } from '@shared/project-capability-consent'
 import { applyEdgeMutation } from '@shared/canvas-mutations'
 import { collisionSeed, derivedProjectId } from '@shared/project-id'
+import {
+  canvasDepth,
+  MAX_MULTIVERSE_CANVASES,
+  MAX_MULTIVERSE_DEPTH,
+  ROOT_CANVAS_ID
+} from '@shared/multiverse-canvases'
+import { createSpecialUniverseCanvas } from '../../core/universe-shop'
 import { AWS_UNIVERSE_ROOT_ID, MAX_AWS_UNIVERSE_INSTANCES, nextAwsUniverseId } from '@shared/aws-universes'
-import { createUniverseShopNode } from '../../core/universe-shop'
 import type { ProjectCapability } from '@shared/project-capabilities'
 import type { ProjectIcon } from '@shared/project-icon'
 import { recordCapabilityAck, type CapabilityAnswer } from '@shared/project-capability-consent'
@@ -46,7 +53,16 @@ interface ProjectsState {
   getProject(id: string): Project | undefined
 
   setActive(id: string): void
+  /** Opens the root or one persisted Multiverse child canvas and requests an in-place reload. */
+  openMultiverseCanvas(projectId: string, canvasId: string): boolean
+  /** Creates one safe child canvas. The caller decides when to navigate to it. */
+  createMultiverseCanvas(projectId: string, parentCanvasId: string, title: string): {
+    canvasId?: string
+    reason?: string
+  }
+  /** Opens the root or one AWS-only child canvas through the shared active-canvas runtime path. */
   openAwsUniverseCanvas(projectId: string, canvasId: string): boolean
+  /** Creates one AWS-only child canvas and its root portal intent. */
   createAwsUniverseCanvas(projectId: string, title: string): { canvasId?: string; reason?: string }
   /** Adds a new project and returns it (caller commits the current canvas first). */
   addProject(name?: string, cwd?: string, ssh?: Project['ssh']): Project
@@ -296,20 +312,32 @@ function mapProjectNodes(
 ): Project[] {
   return projects.map((p) => {
     if (p.id !== projectId) return p
-    if (!p.activeAwsUniverseId) return { ...p, nodes: fn(p.nodes) }
-    return {
-      ...p,
-      awsUniverses: p.awsUniverses?.map((canvas) => canvas.id === p.activeAwsUniverseId
-        ? { ...canvas, nodes: fn(canvas.nodes) }
-        : canvas)
-    }
+    if (!p.activeCanvasId) return { ...p, nodes: fn(p.nodes) }
+    const multiverseCanvases = p.multiverseCanvases?.map((canvas) =>
+      canvas.id === p.activeCanvasId ? { ...canvas, nodes: fn(canvas.nodes) } : canvas
+    )
+    const childCanvases = p.childCanvases?.map((canvas) =>
+      canvas.id === p.activeCanvasId && canvas.scope === 'aws-universe' ? { ...canvas, nodes: fn(canvas.nodes) } : canvas
+    )
+    return { ...p, multiverseCanvases, childCanvases }
   })
 }
 
-function withoutActiveAwsUniverse(project: Project): Project {
+function withoutActiveCanvas(project: Project): Project {
   const copy = { ...project }
-  delete copy.activeAwsUniverseId
+  delete copy.activeCanvasId
   return copy
+}
+
+function newMultiverseCanvasId(project: Project): string {
+  const used = new Set((project.multiverseCanvases ?? []).map((canvas) => canvas.id))
+  const base = `multiverse-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+  if (!used.has(base)) return base
+  for (let suffix = 2; suffix <= MAX_MULTIVERSE_CANVASES; suffix += 1) {
+    const candidate = `${base}-${suffix}`
+    if (!used.has(candidate)) return candidate
+  }
+  return base
 }
 
 export const useProjects = create<ProjectsState>((set, get) => ({
@@ -318,7 +346,7 @@ export const useProjects = create<ProjectsState>((set, get) => ({
   reloadNonce: 0,
 
   hydrate(ws) {
-    set({ projects: withUniqueIds(ws.projects.map(withoutActiveAwsUniverse)), activeProjectId: ws.activeProjectId })
+    set({ projects: withUniqueIds(ws.projects.map(withoutActiveCanvas)), activeProjectId: ws.activeProjectId })
   },
 
   requestReload() {
@@ -333,15 +361,77 @@ export const useProjects = create<ProjectsState>((set, get) => ({
     set({ activeProjectId: id })
   },
 
+  openMultiverseCanvas(projectId, canvasId) {
+    const project = get().projects.find((item) => item.id === projectId)
+    if (!project) return false
+    const activeCanvasId = canvasId === ROOT_CANVAS_ID
+      ? undefined
+      : project.multiverseCanvases?.some((canvas) => canvas.id === canvasId)
+        ? canvasId
+        : null
+    if (activeCanvasId === null) return false
+    set((state) => ({
+      projects: state.projects.map((item) => item.id === projectId ? { ...item, activeCanvasId } : item),
+      reloadNonce: state.reloadNonce + 1
+    }))
+    return true
+  },
+
+  createMultiverseCanvas(projectId, parentCanvasId, rawTitle) {
+    const project = get().projects.find((item) => item.id === projectId)
+    if (!project) return { reason: 'Choose an open project before creating a child canvas.' }
+    const title = rawTitle.trim()
+    if (!title || title.length > 160) return { reason: 'Enter a canvas name from 1 to 160 characters.' }
+    const parentDepth = canvasDepth(project, parentCanvasId)
+    if (parentDepth === null) return { reason: 'Choose an existing parent canvas.' }
+    const depth = parentDepth + 1
+    if (depth > MAX_MULTIVERSE_DEPTH) return { reason: `Depth ${MAX_MULTIVERSE_DEPTH} is the deepest Multiverse canvas.` }
+    if ((project.multiverseCanvases?.length ?? 0) >= MAX_MULTIVERSE_CANVASES) return { reason: 'This project has reached the bounded child-canvas limit.' }
+    const canvasId = newMultiverseCanvasId(project)
+    const created = createSpecialUniverseCanvas({
+      id: canvasId,
+      scope: 'multiverse',
+      parentCanvasId,
+      depth,
+      title,
+      order: project.multiverseCanvases?.length ?? 0,
+      viewport: { x: 0, y: 0, zoom: 1 }
+    })
+    if (created.refused || !created.canvas || !created.shop) {
+      return { reason: created.reason ?? 'The child canvas could not be created.' }
+    }
+    const shop: CanvasNodeState = { ...created.shop, kind: 'shop' }
+    set((state) => ({
+      projects: state.projects.map((item) => item.id === projectId
+        ? {
+            ...item,
+            multiverseCanvases: [...(item.multiverseCanvases ?? []), {
+              id: created.canvas!.id,
+              title: created.canvas!.title,
+              parentCanvasId: created.canvas!.parentCanvasId!,
+              depth: created.canvas!.depth!,
+              order: created.canvas!.order,
+              viewport: created.canvas!.viewport ?? { x: 0, y: 0, zoom: 1 },
+              nodes: [shop]
+            }]
+          }
+        : item
+      )
+    }))
+    return { canvasId }
+  },
+
   openAwsUniverseCanvas(projectId, canvasId) {
     const project = get().projects.find((item) => item.id === projectId)
     if (!project) return false
-    const activeAwsUniverseId = canvasId === AWS_UNIVERSE_ROOT_ID
+    const activeCanvasId = canvasId === AWS_UNIVERSE_ROOT_ID
       ? undefined
-      : project.awsUniverses?.some((canvas) => canvas.id === canvasId) ? canvasId : null
-    if (activeAwsUniverseId === null) return false
+      : project.childCanvases?.some((canvas) => canvas.scope === 'aws-universe' && canvas.id === canvasId)
+        ? canvasId
+        : null
+    if (activeCanvasId === null) return false
     set((state) => ({
-      projects: state.projects.map((item) => item.id === projectId ? { ...item, activeAwsUniverseId } : item),
+      projects: state.projects.map((item) => item.id === projectId ? { ...item, activeCanvasId } : item),
       reloadNonce: state.reloadNonce + 1
     }))
     return true
@@ -352,23 +442,14 @@ export const useProjects = create<ProjectsState>((set, get) => ({
     if (!project) return { reason: 'Choose an open project before creating an AWS Universe.' }
     const title = rawTitle.trim()
     if (!title || title.length > 160) return { reason: 'Enter a Universe name from 1 to 160 characters.' }
-    const existing = project.awsUniverses ?? []
-    const id = nextAwsUniverseId(existing)
+    const existing = (project.childCanvases ?? []).filter((canvas): canvas is ProjectAwsUniverseCanvas => canvas.scope === 'aws-universe' && canvas.parentCanvasId === AWS_UNIVERSE_ROOT_ID && canvas.depth === 1 && !!canvas.viewport)
     if (existing.length >= MAX_AWS_UNIVERSE_INSTANCES) return { reason: 'The portable resource safety bound has been reached.' }
+    const id = nextAwsUniverseId(existing)
     let shop: CanvasNodeState
     try {
       shop = createUniverseShopNode({ id, scope: 'aws-universe', depth: 1 }) as CanvasNodeState
     } catch (error) {
       return { reason: error instanceof Error ? error.message : 'The AWS Universe Shop could not be created.' }
-    }
-    const canvas = {
-      id,
-      title,
-      parentCanvasId: AWS_UNIVERSE_ROOT_ID as const,
-      depth: 1 as const,
-      order: existing.length,
-      viewport: { x: 0, y: 0, zoom: 1 },
-      nodes: [shop]
     }
     const portal: CanvasNodeState = {
       id: `aws-universe-portal-${id}`,
@@ -383,11 +464,21 @@ export const useProjects = create<ProjectsState>((set, get) => ({
       universeDepth: 1,
       tags: ['aws-universe', 'universe-portal']
     }
+    const child = {
+      id,
+      scope: 'aws-universe' as const,
+      title,
+      parentCanvasId: AWS_UNIVERSE_ROOT_ID,
+      depth: 1,
+      order: existing.length,
+      viewport: { x: 0, y: 0, zoom: 1 },
+      nodes: [shop]
+    }
     set((state) => ({
       projects: state.projects.map((item) => item.id !== projectId ? item : {
         ...item,
         nodes: [...item.nodes, portal],
-        awsUniverses: [...(item.awsUniverses ?? []), canvas]
+        childCanvases: [...(item.childCanvases ?? []), child]
       })
     }))
     return { canvasId: id }
@@ -575,10 +666,18 @@ export const useProjects = create<ProjectsState>((set, get) => ({
     set((s) => ({
       projects: s.projects.map((p) => {
         if (p.id !== id) return p
-        if (!p.activeAwsUniverseId) return { ...p, nodes, viewport, ...(bridges ? { bridges } : {}), ...(ropes ? { ropes } : {}) }
+        if (!p.activeCanvasId) return { ...p, nodes, viewport, ...(bridges ? { bridges } : {}), ...(ropes ? { ropes } : {}) }
+        if (!p.multiverseCanvases?.some((canvas) => canvas.id === p.activeCanvasId)) {
+          return {
+            ...p,
+            childCanvases: p.childCanvases?.map((canvas) => canvas.id === p.activeCanvasId && canvas.scope === 'aws-universe'
+              ? { ...canvas, nodes, viewport, ...(bridges ? { bridges } : {}), ...(ropes ? { ropes } : {}) }
+              : canvas)
+          }
+        }
         return {
           ...p,
-          awsUniverses: p.awsUniverses?.map((canvas) => canvas.id === p.activeAwsUniverseId
+          multiverseCanvases: p.multiverseCanvases?.map((canvas) => canvas.id === p.activeCanvasId
             ? { ...canvas, nodes, viewport, ...(bridges ? { bridges } : {}), ...(ropes ? { ropes } : {}) }
             : canvas)
         }
@@ -601,11 +700,12 @@ export const useProjects = create<ProjectsState>((set, get) => ({
     set((s) => ({
       projects: s.projects.map((p) => {
         if (p.id !== projectId) return p
-        const active = p.activeAwsUniverseId
-          ? p.awsUniverses?.find((canvas) => canvas.id === p.activeAwsUniverseId)
+        const selected = p.activeCanvasId ? p.multiverseCanvases?.find((canvas) => canvas.id === p.activeCanvasId) : undefined
+        const child = !selected && p.activeCanvasId
+          ? p.childCanvases?.find((canvas) => canvas.id === p.activeCanvasId && canvas.scope === 'aws-universe')
           : undefined
-        const bridgeInput = active?.bridges ?? p.bridges ?? []
-        const ropeInput = active?.ropes ?? p.ropes ?? []
+        const bridgeInput = selected?.bridges ?? child?.bridges ?? p.bridges ?? []
+        const ropeInput = selected?.ropes ?? child?.ropes ?? p.ropes ?? []
         const bridges = applyEdgeMutation(bridgeInput, 'bridge', mutation)
         const ropes = applyEdgeMutation(ropeInput, 'rope', mutation)
         // `applyEdgeMutation` returns the SAME array when the mutation is not about that list, so
@@ -616,11 +716,18 @@ export const useProjects = create<ProjectsState>((set, get) => ({
         // array, defeats the identity test, and dirties a rope-only project with `bridges: []`.
         const nextBridges = bridges === bridgeInput ? p.bridges : bridges
         const nextRopes = ropes === ropeInput ? p.ropes : ropes
-        if (active) {
-          if (nextBridges === active.bridges && nextRopes === active.ropes) return p
+        if (selected) {
           return {
             ...p,
-            awsUniverses: p.awsUniverses?.map((canvas) => canvas.id === active.id
+            multiverseCanvases: p.multiverseCanvases?.map((canvas) => canvas.id === selected.id
+              ? { ...canvas, bridges: nextBridges, ropes: nextRopes }
+              : canvas)
+          }
+        }
+        if (child) {
+          return {
+            ...p,
+            childCanvases: p.childCanvases?.map((canvas) => canvas.id === child.id
               ? { ...canvas, bridges: nextBridges, ropes: nextRopes }
               : canvas)
           }
@@ -839,7 +946,7 @@ export const useProjects = create<ProjectsState>((set, get) => ({
     return {
       version: 2,
       activeProjectId,
-      projects: projects.filter((p) => !p.remote).map(withoutActiveAwsUniverse)
+      projects: projects.filter((project) => !project.remote).map(withoutActiveCanvas)
     }
   }
 }))

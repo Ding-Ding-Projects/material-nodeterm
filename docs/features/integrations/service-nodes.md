@@ -10,7 +10,7 @@ does more than it says.
 
 Six new node kinds join the canvas's `NodeKind` union
 (`src/shared/types.ts` `SERVICE_NODE_KINDS`): `minecraft`, `dockerhost`, `proxmox`, `gitlab`,
-`homeassistant`, `freepbx`. Each is rendered by the **same** component,
+`homeassistant`, `freepbx`. Each shares the same service-node shell,
 `src/renderer/nodes/ServiceNode.tsx` — one component with six callers, because the only thing that
 varies between them is a label and a starting size, and this codebase's most repeated lesson is
 that a duplicated rule drifts from its copies.
@@ -22,7 +22,7 @@ directly onto a physical machine's disk — it does not run inside Docker, and t
 canvas right-click to spin up. A Proxmox node's whole job, once it does something, is to be a
 window onto an installation that is already running somewhere. The same framing holds for the rest
 of the family in softer form: a `dockerhost` node manages a Docker daemon that is already running on
-some machine, a `gitlab` node manages a GitLab instance, `homeassistant` manages a running Home
+some machine, a `gitlab` node manages a GitLab instance, `homeassistant` discovers a running Home
 Assistant, and `freepbx` manages a running FreePBX box. `minecraft` is the closest thing to an
 exception — a Minecraft server is realistically something *this* app would help stand up in Docker —
 but the node itself, as shipped, is exactly as inert as its five siblings; see

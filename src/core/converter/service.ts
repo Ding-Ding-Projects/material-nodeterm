@@ -492,7 +492,7 @@ export class ConverterService {
     let output: Buffer
     let warnings: string[] = []
     try {
-      const result = adapter.convert(input)
+      const result = await adapter.convert(input)
       output = result.output
       warnings = result.warnings
     } catch (e) {
@@ -502,7 +502,7 @@ export class ConverterService {
     item.progressBytes = Math.round(item.totalBytes * 0.7)
     this.touch(item)
 
-    const validationError = adapter.validate(output)
+    const validationError = await adapter.validate(output)
     if (validationError) return bail('failed', validationError)
 
     // Re-check overwrite right before the write — the destination could have appeared since the

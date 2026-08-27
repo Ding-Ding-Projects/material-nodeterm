@@ -22,6 +22,9 @@ import type { FunnyLevel, LanguageMode } from './i18n/types'
 import type { VsCodeInstall, VsCodeOpenResult } from './vscode'
 import type { HistoryFilters, HistoryListResult, HistoryRestoreResult } from './local-history'
 import type { CalendarApi, CalendarNodeConfig } from './calendar'
+import type { HomeAssistantApi } from './home-assistant'
+import type { HomeAssistantControlApi, HomeAssistantControlConfig } from './home-assistant-control'
+import type { HomeAssistantSensorApi, HomeAssistantSensorConfig } from './home-assistant-sensor'
 import type {
   ToyLockBeginTotpInput,
   ToyLockBeginTotpResult,
@@ -366,6 +369,7 @@ export type NodeKind =
   | 'diff'
   | 'photo'
   | 'gallery'
+  | 'wild-dim-sum'
   | 'video'
   | 'web'
   | 'browser'
@@ -373,13 +377,13 @@ export type NodeKind =
   | 'loop'
   | 'scheduler'
   | 'dino'
+  | 'recovery-game'
   | 'annotation'
   // A permanent catalog surface owned by each Multiverse or AWS Universe child canvas. Shop is
   // intentionally a distinct kind so the canvas can refuse deletion, duplication, grouping, and
   // cross-universe movement at every mutation boundary.
   | 'shop'
-  // AWS Universe portal. The portal is a safe project intent; its child canvas owns the fixed
-  // AWS Shop and keeps provider credentials and runtime bindings in local application data.
+  // AWS Universe portal. The portal is a safe project intent and never carries provider state.
   | 'aws-universe'
   // A GUI for authoring a Windows NSIS installer script for ANOTHER project (not this app's
   // own installer, which stays Squirrel.Windows — see CLAUDE.md's Packaging section). See
@@ -392,6 +396,7 @@ export type NodeKind =
   // A portable calendar view. Provider credentials and event cache stay in the core vault/local
   // data, while this node carries only safe selection intent.
   | 'calendar'
+  | 'homeassistant-control'
   | 'timer'
   // Alarm Clock nodes persist wall-clock intent and occurrence history. Runtime timers and
   // notification handles stay machine-local; a shared project never claims powered-off wake.
@@ -416,6 +421,7 @@ export type NodeKind =
   | 'proxmox'
   | 'gitlab'
   | 'homeassistant'
+  | 'homeassistant-sensor'
   | 'freepbx'
   | 'torrent'
   /** One-shot Linux ISO virtual machine, distinct from the WSL terminal profile. */
@@ -625,6 +631,8 @@ export interface CanvasNodeState {
   textUpdatedBy?: string
   // dino-only: best score reached in the T-Rex Runner game.
   highScore?: number
+  /** recovery-game-only: bounded portable progress with no process, account, or host state. */
+  recoveryGame?: import('./recovery-game').RecoveryGameSnapshot
   /**
    * service-kinds only: the display name the user gave this manager ("Home lab Proxmox", "Survival
    * server"). This is the ONLY thing a service node persists, and the restraint is deliberate — the
@@ -634,6 +642,9 @@ export interface CanvasNodeState {
    * `localExec` on the index entry, exactly where the shell and Windows profile already live.
    */
   serviceLabel?: string
+  /** Home Assistant node presentation intent safe for schema 3. Hosts, instance ids, credentials,
+   *  sessions, and entity caches stay in the machine-local service and binding overlay. */
+  homeAssistantIntent?: import('./home-assistant').HomeAssistantNodeIntent
   /** torrent-only: safe display intent shared with the canvas; task state and paths stay local. */
   torrentMagnet?: string
   /** Linux ISO VM settings stored in the shared project projection. */
@@ -663,12 +674,20 @@ export interface CanvasNodeState {
   /** calendar-only, GIT-SHARED safe intent. Tokens, provider sessions, paths and event cache stay
    * in the machine-local calendar service. */
   calendarConfig?: CalendarNodeConfig
+  /** Home Assistant control-only portable selection intent. Local connection identity, URL,
+   * bearer, discovery cache and request state never enter project data. */
+  homeAssistantControlConfig?: HomeAssistantControlConfig
+  /** Home Assistant sensor-only, project-portable selection and presentation intent. Instance
+   * URLs, credentials, observed values, and history remain machine-local. */
+  homeAssistantSensorConfig?: HomeAssistantSensorConfig
   // editor / diff
   filePath?: string
   /** Photo/video/gallery media is represented by a portable content reference, never an absolute path. */
   mediaAssets?: import('./media-catalog').MediaAssetReference[]
   /** Gallery selection is an ordered list of asset ids. */
   mediaActiveAssetId?: string
+  /** Wild dim sum only: portable public-catalog identity and display copy, never image bytes or cache state. */
+  wildDimSumDish?: import('./public-dim-sum').PublicDimSumSelection
   /**
    * editor/diff-only: true once `filePath` was confirmed gone (e.g. its worktree was removed —
    * see `displacedByWorktree` in `./worktree.ts`). There is nothing to re-point the node at, so
@@ -971,6 +990,20 @@ export interface LogRecord {
   msg: string
 }
 
+/** A portable child canvas inside one project. Root canvas content remains on Project itself. */
+export interface ProjectMultiverseCanvas {
+  id: string
+  title: string
+  parentCanvasId: string
+  /** Persisted depth from the project root. Multiverse canvases are limited to 1 through 8. */
+  depth: number
+  order: number
+  viewport: Viewport
+  nodes: CanvasNodeState[]
+  bridges?: BridgeLink[]
+  ropes?: BridgeLink[]
+}
+
 export interface LogApi {
   /** The whole ring, oldest-first — the panel's initial fill. */
   snapshot(): Promise<LogRecord[]>
@@ -999,17 +1032,39 @@ export interface NavStop {
   note: string
 }
 
-/** A portable AWS-only child canvas owned by one AWS Universe portal instance. */
-export interface ProjectAwsUniverseCanvas {
+/** A portable child canvas carried by a project after a Multiverse import. The node list is
+ * content, not a live process or destination binding, so it remains safe to move between hosts. */
+export interface ProjectChildCanvas {
   id: string
+  scope: 'multiverse' | 'aws-universe'
+  parentCanvasId: string
+  depth: number
   title: string
-  parentCanvasId: 'root'
-  depth: 1
   order: number
-  viewport: Viewport
+  viewport?: Viewport
   nodes: CanvasNodeState[]
   bridges?: BridgeLink[]
   ropes?: BridgeLink[]
+}
+
+/** Narrow AWS Universe view over the shared child-canvas projection. */
+export type ProjectAwsUniverseCanvas = ProjectChildCanvas & {
+  scope: 'aws-universe'
+  parentCanvasId: 'root'
+  depth: 1
+  viewport: Viewport
+}
+
+/** Safe portal intent shared by the runtime project and schema 3 projection. */
+export interface ProjectPortalState {
+  id: string
+  parentCanvasId: string
+  childCanvasId: string
+  entryDoorId: string
+  returnDoorId: string
+  title: string
+  depth: number
+  status: 'open' | 'closed'
 }
 
 /** A project is one canvas/page: its own nodes, viewport, and default working dir. */
@@ -1030,11 +1085,15 @@ export interface Project {
   ssh?: { server: import('./ssh').SshConnection; remoteCwd: string }
   viewport: Viewport
   nodes: CanvasNodeState[]
-  /** Safe, git-shared AWS Universe child canvases. Each instance is directly rooted and unlimited
-   * in product semantics; portable readers still apply bounded resource limits. */
-  awsUniverses?: ProjectAwsUniverseCanvas[]
-  /** Runtime-only selected AWS Universe child. Never written into a shared project file. */
-  activeAwsUniverseId?: string
+  /** Safe, git-shared child canvases. Credentials, paths and runtime bindings stay on nodes' local overlays. */
+  multiverseCanvases?: ProjectMultiverseCanvas[]
+  /** Runtime-only selection. The shared project file stores hierarchy, never one person's current view. */
+  activeCanvasId?: string
+  /** Child universe canvases imported from schema 3. Their node content remains addressable even
+   * when the containing portal is removed, so deleting a portal cannot delete child work. */
+  childCanvases?: ProjectChildCanvas[]
+  /** Door-only Multiverse portal intent. Credentials and runtime bindings never fit this shape. */
+  portals?: ProjectPortalState[]
   /** Default managed Claude account for new Claude/chat nodes in this project. */
   defaultAccountId?: string
   /** Permission mode for new Claude TERMINAL (CLI) sessions in this project. SDK chat nodes are
@@ -1338,7 +1397,7 @@ export type WorkspaceMigrationKind = 'v2' | 'exec'
 export interface ProjectArchiveExclusion {
   /** Project-folder-relative path, '/'-separated. A grouped directory ends with '/'. */
   path: string
-  reason: 'gitignored' | 'nested-repository' | 'symlink' | 'special' | 'missing' | 'unreadable' | 'machine-local' | 'credential' | 'unsupported'
+  reason: 'gitignored' | 'nested-repository' | 'symlink' | 'special' | 'missing' | 'unreadable' | 'machine-local' | 'credential' | 'unsupported' | 'user-choice' | 'validation-failed'
   /** Human-readable reason for portable schema omissions; absent on legacy file exclusions. */
   detail?: string
   /** File count under a grouped directory exclusion. Absent for a single file. */
@@ -1406,9 +1465,9 @@ export interface PortableBindingApi {
   apply(input: {
     nodeId: string
     action: PortableBindingAction
-    providerOrHostIdentity?: string
-    localResourceReferences?: Record<string, string | number | boolean>
-    credentialKeys?: string[]
+    featureId?: string
+    providerAccountId?: string
+    resourceId?: string
   }): Promise<{ ok: true; state: 'bound' | 'unbound' } | { ok: false; error: string }>
 }
 
@@ -1421,6 +1480,8 @@ export interface ProjectArchiveProgress {
 export interface WorkspaceApi {
   load(): Promise<Workspace>
   save(workspace: Workspace): Promise<void>
+  /** Path-free preparation and cancellation for portable project media. */
+  portableMedia: import('./portable-media').PortableMediaApi
   /** Local destination binding controls. Import never invokes these controls implicitly. */
   portableBindings: PortableBindingApi
   /** Progress and cancellation for the schema 3 import operation. */
@@ -1453,7 +1514,8 @@ export interface WorkspaceApi {
     /** When given, the finished archive is wrapped whole in AES-256-GCM under a key derived from
      *  this password (core/project-archive-encryption.ts) and the file leaks nothing about the
      *  project — not its name, not its file list. Omitted ⇒ the historical plain container. */
-    password?: string
+    password?: string,
+    media?: import('./portable-media').PortableMediaExportPlan
   ): Promise<{
     ok: boolean
     path?: string
@@ -1491,6 +1553,13 @@ export interface WorkspaceApi {
     path?: string
     archiveVersion?: 1 | 2 | 3
     contents?: ProjectArchiveContents
+    /** Safe planner definitions from schema 3, not yet applied to this machine. */
+    plannerDefinitions?: {
+      schemaVersion: 1
+      featureId: 'planner'
+      displayLabel: string
+      schedules: import('./planner-occurrences').PlannerSchedule[]
+    }
     restoredTo?: string
   }>
   /** Hand out the next unlock-ladder question for a rate-limited protected project file. `null`
@@ -2945,7 +3014,22 @@ export interface PlannerApi {
   save(file: import('./planner-occurrences').PlannerFile): Promise<{ ok: true } | { ok: false; error: string }>
   history(): Promise<import('./planner-occurrences').PlannerOccurrence[]>
   export(format: 'json' | 'csv'): Promise<{ filename: string; content: string }>
+  /** Apply imported schedule intent only after the user explicitly chooses Configure. */
+  configure(schedules: import('./planner-occurrences').PlannerSchedule[]): Promise<{ ok: true } | { ok: false; error: string }>
   onOccurrence(listener: (occurrence: import('./planner-occurrences').PlannerOccurrence) => void): () => void
+}
+
+/** Machine-local Alarm Clock execution. Project data remains the portable source of safe intent;
+ * this mirror keeps due evaluation alive when the renderer closes. */
+export interface AlarmApi {
+  state(): Promise<import('./alarm-clock').AlarmPlannerSnapshot>
+  upsert(
+    alarm: Omit<import('./alarm-clock').AlarmDefinition, 'createdAt' | 'updatedAt'> & { id?: string }
+  ): Promise<import('./alarm-clock').AlarmPlannerSnapshot>
+  remove(alarmId: string): Promise<boolean>
+  snooze(occurrenceId: string, minutes: number): Promise<import('./alarm-clock').AlarmPlannerSnapshot>
+  dismiss(occurrenceId: string): Promise<import('./alarm-clock').AlarmPlannerSnapshot>
+  onDue(listener: (event: import('./alarm-clock').AlarmDueEvent) => void): () => void
 }
 
 /** A downloadable whisper model plus its on-disk status, as returned by `speech.models()`. */
@@ -4500,6 +4584,8 @@ export interface NodeTerminalApi {
   /** Desktop-only Windows profile detection; absent on Server Edition and mobile bridges. */
   terminalProfiles?: TerminalProfilesApi
   workspace: WorkspaceApi
+  /** Shared provider-account, credential-vault, OAuth-callback, and resource-picker services. */
+  providerServices: import('./provider-services').ProviderServicesApi
   timer: TimerApi
   serverDeployment: ServerDeploymentApi
   projectSettings: ProjectSettingsApi
@@ -4511,6 +4597,9 @@ export interface NodeTerminalApi {
   kidsMode: KidsModeApi
   scheduledSettings: ScheduledSettingsApi
   planner: PlannerApi
+  /** Desktop exposes the host Alarm Clock mirror. Other shells may omit it and retain the
+   * renderer-local fallback until their bridge supplies the same namespace. */
+  alarm?: AlarmApi
   speech: SpeechApi
   /** Universal file converter — docs/file-converter.md. */
   converter: import('./converter').ConverterApi
@@ -4524,6 +4613,12 @@ export interface NodeTerminalApi {
   minecraft: import('./minecraft').MinecraftApi
   /** Local Linux ISO VM lifecycle — docs/linux-iso-vm.md. */
   virtualMachine: import('./virtual-machine').VirtualMachineApi
+  /** Machine-local Home Assistant instances with bounded REST and WebSocket discovery. */
+  homeAssistant: HomeAssistantApi
+  /** Schema-driven Home Assistant controls through host-owned local connection bindings. */
+  homeAssistantControl: HomeAssistantControlApi
+  /** Machine-local Home Assistant sensor discovery and bounded observations. */
+  homeAssistantSensor: HomeAssistantSensorApi
   ssh: SshApi
   sshProject: SshProjectApi
   sshFs: SshFsApi

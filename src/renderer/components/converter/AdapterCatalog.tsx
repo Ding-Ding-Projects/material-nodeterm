@@ -23,7 +23,9 @@ export interface AdapterCatalogProps {
 /** Categorized, searchable catalog of every known conversion — bundled AND disabled, per
  *  docs/file-converter.md. Every category renders, even one that is entirely disabled, so a gap
  *  in bundled coverage is visible rather than silently hidden. Each category has its own isolated,
- *  plain-text-first search field and adjacent anchored regex builder. */
+ *  plain-text-first search field and adjacent anchored full regex builder. Search state stays
+ *  isolated per category so
+ *  filtering one catalog section never changes another section's query or flags. */
 export function AdapterCatalog({ catalog, selectedId, onSelect, suggestedIds }: AdapterCatalogProps) {
   const vocab = useVocabularyMapper()
   const [openCategory, setOpenCategory] = useState<ConverterCategoryId | null>('data')

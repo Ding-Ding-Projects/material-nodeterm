@@ -43,8 +43,17 @@ function safeCanvasId(value: unknown): string | null {
 }
 
 export function projectAwsUniverseCanvas(project: Project, id: string): AwsUniverseCanvasView {
-  const selected = project.awsUniverses?.find((canvas) => canvas.id === id)
-  if (selected) return { ...selected, depth: 1, parentCanvasId: AWS_UNIVERSE_ROOT_ID }
+  const selected = project.childCanvases?.find((canvas) => canvas.scope === 'aws-universe' && canvas.id === id)
+  if (selected) return {
+    id: selected.id,
+    title: selected.title,
+    depth: 1,
+    parentCanvasId: AWS_UNIVERSE_ROOT_ID,
+    viewport: selected.viewport ?? { x: 0, y: 0, zoom: 1 },
+    nodes: selected.nodes,
+    bridges: selected.bridges,
+    ropes: selected.ropes
+  }
   return {
     id: AWS_UNIVERSE_ROOT_ID,
     title: project.name,
@@ -82,6 +91,7 @@ export function sanitizeAwsUniverses(value: unknown): ProjectAwsUniverseCanvas[]
     accepted.push({
       id,
       title,
+      scope: 'aws-universe',
       parentCanvasId: AWS_UNIVERSE_ROOT_ID,
       depth: 1,
       order: item.order,

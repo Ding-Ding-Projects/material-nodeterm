@@ -340,8 +340,16 @@ export const IPC = {
   workspaceHasPartsManifest: 'workspace:has-parts-manifest',
   projectArchiveExport: 'project-archive:export',
   projectArchiveImport: 'project-archive:import',
+  portableMediaPrepare: 'portable-media:prepare',
+  portableMediaDiscard: 'portable-media:discard',
   portableBindingState: 'portable-binding:state',
   portableBindingApply: 'portable-binding:apply',
+  providerCatalog: 'provider-services:catalog',
+  providerAccounts: 'provider-services:accounts',
+  providerResources: 'provider-services:resources',
+  providerBeginOAuth: 'provider-services:begin-oauth',
+  providerCompleteOAuth: 'provider-services:complete-oauth',
+  providerRemoveAccount: 'provider-services:remove-account',
   projectArchiveProgress: 'project-archive:progress',
   projectArchiveCancel: 'project-archive:cancel',
   /** The unlock ladder for a protected project file's password prompt — issue a challenge, and
@@ -494,7 +502,16 @@ export const IPC = {
   plannerSave: 'planner:save',
   plannerHistory: 'planner:history',
   plannerExport: 'planner:export',
+  plannerConfigure: 'planner:configure',
   plannerOccurrence: 'planner:occurrence',
+  // Alarm Clock nodes keep portable schedule intent in project data and mirror active execution
+  // into a bounded, machine-local host snapshot. Due events carry no path or host identity.
+  alarmPlannerState: 'alarm:planner-state',
+  alarmPlannerUpsert: 'alarm:planner-upsert',
+  alarmPlannerRemove: 'alarm:planner-remove',
+  alarmPlannerSnooze: 'alarm:planner-snooze',
+  alarmPlannerDismiss: 'alarm:planner-dismiss',
+  alarmPlannerDue: 'alarm:planner-due',
   sshList: 'ssh:list',
   sshSave: 'ssh:save',
   sshDelete: 'ssh:delete',
@@ -805,9 +822,34 @@ export const IPC = {
   calendarImportIcs: 'calendar:import-ics',
   calendarRefresh: 'calendar:refresh',
   calendarBeginOAuth: 'calendar:begin-oauth',
+  calendarConnectCalDav: 'calendar:connect-caldav',
+  calendarDisconnectAccount: 'calendar:disconnect-account',
   calendarCreate: 'calendar:create',
   calendarUpdate: 'calendar:update',
   calendarRemove: 'calendar:remove',
+  // Home Assistant multi-instance client. Instance metadata and credentials remain machine-local;
+  // only bounded entity metadata and progress events cross the renderer boundary.
+  homeAssistantInstances: 'home-assistant:instances',
+  homeAssistantSaveInstance: 'home-assistant:save-instance',
+  homeAssistantRemoveInstance: 'home-assistant:remove-instance',
+  homeAssistantDiscover: 'home-assistant:discover',
+  homeAssistantCancel: 'home-assistant:cancel',
+  homeAssistantEvent: 'home-assistant:event',
+  homeAssistantConnections: 'home-assistant-control:connections',
+  homeAssistantConfigure: 'home-assistant-control:configure',
+  homeAssistantBind: 'home-assistant-control:bind',
+  homeAssistantStatus: 'home-assistant-control:status',
+  homeAssistantEntities: 'home-assistant-control:entities',
+  homeAssistantServices: 'home-assistant-control:services',
+  homeAssistantCall: 'home-assistant-control:call',
+  homeAssistantControlCancel: 'home-assistant-control:cancel',
+  // Home Assistant sensor nodes. Shared projects carry only entity/presentation intent; these
+  // channels operate on a machine-local binding whose credential never crosses back to the UI.
+  homeAssistantSensorBinding: 'home-assistant-sensor:binding',
+  homeAssistantSensorConfigure: 'home-assistant-sensor:configure',
+  homeAssistantSensorLeaveUnbound: 'home-assistant-sensor:leave-unbound',
+  homeAssistantSensorDiscover: 'home-assistant-sensor:discover',
+  homeAssistantSensorRefresh: 'home-assistant-sensor:refresh',
   // "Open in Visual Studio Code" (src/core/vscode-detect.ts, src/core/vscode-handlers.ts).
   // Registered on BOTH shells via the generic `platform.handle` seam, so it opens VS Code on
   // whichever machine is actually running the shell (this desktop, or the Server Edition host).

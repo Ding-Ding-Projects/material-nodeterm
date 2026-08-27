@@ -1,7 +1,13 @@
 import type { Node } from '@xyflow/react'
 import type { AgentLaunchIntent, BrowserTab, CanvasMutation, CanvasNodeState, ClaudeAccount, NodeKind, PendingLaunch, Project, ServiceNodeKind } from '@shared/types'
 import { normalizeMediaReference, type MediaAssetReference } from '@shared/media-catalog'
+import { normalizePublicDimSumSelection, type PublicDimSumSelection } from '@shared/public-dim-sum'
 import type { CalendarNodeConfig } from '@shared/calendar'
+import type { HomeAssistantNodeIntent } from '@shared/home-assistant'
+import { DEFAULT_HOME_ASSISTANT_NODE_INTENT } from '@shared/home-assistant'
+import type { HomeAssistantControlConfig } from '@shared/home-assistant-control'
+import { DEFAULT_HOME_ASSISTANT_CONTROL_CONFIG, validateHomeAssistantControlConfig } from '@shared/home-assistant-control'
+import { DEFAULT_HOME_ASSISTANT_SENSOR_CONFIG, type HomeAssistantSensorConfig } from '@shared/home-assistant-sensor'
 import type { AlarmOccurrence, AlarmRecurrence } from '@shared/alarm-clock'
 import type { ServiceConnection } from '@shared/node-exec'
 import type { NsisLocalPaths, NsisSpec } from '@shared/nsis-form-types'
@@ -49,6 +55,7 @@ import { newUniverseCreationEventId, shopNodeIdForCanvas } from '../../core/univ
 import { TORRENT_NODE_CATALOG_ENTRY } from '@shared/torrent'
 import { DEFAULT_VIRTUAL_MACHINE_CONFIG } from '@shared/virtual-machine'
 import { TIMER_DEFAULT_DURATION_MS, type TimerNodeData } from '@shared/timer'
+import { createRecoveryGameSnapshot, normalizeRecoveryGameSnapshot, type RecoveryGameSnapshot } from '@shared/recovery-game'
 
 // Re-exported so Canvas (and anything else in the renderer) keeps importing it from here, while the
 // single implementation lives in src/shared and is shared with the relay host + the canvas-sync
@@ -78,9 +85,11 @@ export const WORKTREE_GROUP_SIZE = { width: 760, height: 540 }
 const EDITOR_SIZE = { width: 660, height: 460 }
 const DIFF_SIZE = { width: 860, height: 500 }
 const DINO_SIZE = { width: 600, height: 200 }
+const RECOVERY_GAME_SIZE = { width: 540, height: 620 }
 const VIDEO_SIZE = { width: 640, height: 420 }
 const PHOTO_SIZE = { width: 560, height: 440 }
 const GALLERY_SIZE = { width: 760, height: 520 }
+const WILD_DIM_SUM_SIZE = { width: 560, height: 560 }
 const WEB_SIZE = { width: 720, height: 520 }
 const BROWSER_SIZE = { width: 800, height: 560 }
 const NATIVE_LOOP_SIZE = { width: 340, height: 280 }
@@ -200,6 +209,8 @@ export interface NodeData {
   textUpdatedAt?: number
   textUpdatedBy?: string
   filePath?: string
+  /** Wild dim sum only: validated portable selection from the public catalog. */
+  wildDimSumDish?: PublicDimSumSelection
   /**
    * editor/diff-only: true once this node's `filePath` was confirmed gone — e.g. a worktree
    * that contained it was removed (`displacedByWorktree` in @shared/worktree sweeps these up
@@ -240,8 +251,11 @@ export interface NodeData {
   commitOid?: string
   /** dino-only: best score reached in the T-Rex Runner game. */
   highScore?: number
+  /** recovery-game-only: bounded portable progress. */
+  recoveryGame?: RecoveryGameSnapshot
   /** service-kinds only: the display name the user gave this manager. See `CanvasNodeState`. */
   serviceLabel?: string
+  homeAssistantIntent?: HomeAssistantNodeIntent
   /** Safe ownership metadata for a special-universe Shop node. */
   universeCanvasId?: string
   universeScope?: 'multiverse' | 'aws-universe'
@@ -264,6 +278,10 @@ export interface NodeData {
   nsisLocalPaths?: NsisLocalPaths
   /** calendar-only, portable selection intent; local cache and credentials are never here. */
   calendarConfig?: CalendarNodeConfig
+  /** Home Assistant control portable intent. Local connection state belongs to the host service. */
+  homeAssistantControlConfig?: HomeAssistantControlConfig
+  /** Home Assistant sensor-only portable entity and display intent. */
+  homeAssistantSensorConfig?: HomeAssistantSensorConfig
   /** Which agent runs in this terminal node (claude/codex/gemini/custom). */
   agentId?: AgentId
   /** Model selected for this node through the shared model gateway. */
@@ -1262,6 +1280,15 @@ export function createGalleryNode(index: number, assets: MediaAssetReference[] =
   }
 }
 
+export function createWildDimSumNode(index: number, selection?: PublicDimSumSelection, center?: { x: number; y: number }): CanvasNode {
+  const dish = normalizePublicDimSumSelection(selection)
+  return {
+    id: nextId('wild-dim-sum'), type: 'wild-dim-sum', position: placeAt(center, index, WILD_DIM_SUM_SIZE.width, WILD_DIM_SUM_SIZE.height),
+    width: WILD_DIM_SUM_SIZE.width, height: WILD_DIM_SUM_SIZE.height, style: { width: WILD_DIM_SUM_SIZE.width, height: WILD_DIM_SUM_SIZE.height },
+    data: { title: dish ? `Wild dim sum · ${dish.name.en}` : 'Wild dim sum', color: '#f59e0b', group: null, ...(dish ? { wildDimSumDish: dish } : {}) }
+  }
+}
+
 /** Creates a web (webview) node showing a live URL or a local html file. */
 export function createWebNode(
   index: number,
@@ -1363,6 +1390,8 @@ export function createDiffNode(
 /** Creates a new sticky note. */
 const AUTHENTICATOR_SIZE = { width: 340, height: 260 }
 const CALENDAR_SIZE = { width: 620, height: 520 }
+const HOME_ASSISTANT_CONTROL_SIZE = { width: 620, height: 620 }
+const HOME_ASSISTANT_SENSOR_SIZE = { width: 660, height: 560 }
 const NSIS_SIZE = { width: 460, height: 520 }
 
 /**
@@ -1461,20 +1490,16 @@ export function createTimerNode(index: number, center?: { x: number; y: number }
   return { id: nextId('timer'), type: 'timer', position: placeAt(center, index, TIMER_SIZE.width, TIMER_SIZE.height), width: TIMER_SIZE.width, height: TIMER_SIZE.height, style: { width: TIMER_SIZE.width, height: TIMER_SIZE.height }, data }
 }
 
-/** Creates an AWS-only portal node that opens its directly-owned child canvas. */
-export function createAwsUniversePortalNode(
-  index: number,
-  canvasId: string,
-  title: string,
-  center?: { x: number; y: number }
-): CanvasNode {
+/** Creates a root portal card for one AWS-only child canvas. */
+export function createAwsUniversePortalNode(index: number, canvasId: string, title: string, center?: { x: number; y: number }): CanvasNode {
+  const size = NODE_START_SIZE['aws-universe']
   return {
     id: nextId('aws-universe'),
     type: 'aws-universe',
-    position: placeAt(center, index, 420, 260),
-    width: 420,
-    height: 260,
-    style: { width: 420, height: 260 },
+    position: placeAt(center, index, size.width, size.height),
+    width: size.width,
+    height: size.height,
+    style: { width: size.width, height: size.height },
     data: {
       title,
       color: '#7d5260',
@@ -1483,6 +1508,24 @@ export function createAwsUniversePortalNode(
       universeScope: 'aws-universe',
       universeDepth: 1,
       tags: ['aws-universe', 'universe-portal']
+    }
+  }
+}
+
+/** Creates an unbound Home Assistant control. Import and creation perform no network request. */
+export function createHomeAssistantControlNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  return {
+    id: nextId('homeassistant-control'),
+    type: 'homeassistant-control',
+    position: placeAt(center, index, HOME_ASSISTANT_CONTROL_SIZE.width, HOME_ASSISTANT_CONTROL_SIZE.height),
+    width: HOME_ASSISTANT_CONTROL_SIZE.width,
+    height: HOME_ASSISTANT_CONTROL_SIZE.height,
+    style: { width: HOME_ASSISTANT_CONTROL_SIZE.width, height: HOME_ASSISTANT_CONTROL_SIZE.height },
+    data: {
+      title: 'Home Assistant control',
+      color: NODE_COLORS[index % NODE_COLORS.length],
+      group: null,
+      homeAssistantControlConfig: { ...DEFAULT_HOME_ASSISTANT_CONTROL_CONFIG }
     }
   }
 }
@@ -1500,6 +1543,24 @@ export function createStickyNode(index: number, center?: { x: number; y: number 
       color: '#ffd60a',
       group: null,
       text: ''
+    }
+  }
+}
+
+/** Creates an unbound Home Assistant sensor display. Importing it performs no network action. */
+export function createHomeAssistantSensorNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  return {
+    id: nextId('homeassistant-sensor'),
+    type: 'homeassistant-sensor',
+    position: placeAt(center, index, HOME_ASSISTANT_SENSOR_SIZE.width, HOME_ASSISTANT_SENSOR_SIZE.height),
+    width: HOME_ASSISTANT_SENSOR_SIZE.width,
+    height: HOME_ASSISTANT_SENSOR_SIZE.height,
+    style: { width: HOME_ASSISTANT_SENSOR_SIZE.width, height: HOME_ASSISTANT_SENSOR_SIZE.height },
+    data: {
+      title: 'Home Assistant sensors',
+      color: NODE_COLORS[(index + 4) % NODE_COLORS.length],
+      group: null,
+      homeAssistantSensorConfig: { ...DEFAULT_HOME_ASSISTANT_SENSOR_CONFIG, entities: [] }
     }
   }
 }
@@ -1549,7 +1610,8 @@ export function createServiceNode(
       title: SERVICE_NODE_LABELS[kind],
       color: NODE_COLORS[index % NODE_COLORS.length],
       group: null,
-      serviceLabel: ''
+      serviceLabel: '',
+      ...(kind === 'homeassistant' ? { homeAssistantIntent: { ...DEFAULT_HOME_ASSISTANT_NODE_INTENT } } : {})
     }
   }
 }
@@ -1667,6 +1729,28 @@ export function createDinoNode(
       color: '#a2a2a2',
       group: null,
       highScore
+    }
+  }
+}
+
+/** Creates the deterministic three-key recovery game without launching any external operation. */
+export function createRecoveryGameNode(
+  index: number,
+  center?: { x: number; y: number },
+  recoveryGame: RecoveryGameSnapshot = createRecoveryGameSnapshot()
+): CanvasNode {
+  return {
+    id: nextId('recovery-game'),
+    type: 'recovery-game',
+    position: placeAt(center, index, RECOVERY_GAME_SIZE.width, RECOVERY_GAME_SIZE.height),
+    width: RECOVERY_GAME_SIZE.width,
+    height: RECOVERY_GAME_SIZE.height,
+    style: { width: RECOVERY_GAME_SIZE.width, height: RECOVERY_GAME_SIZE.height },
+    data: {
+      title: 'Recovery game',
+      color: NODE_COLORS[index % NODE_COLORS.length],
+      group: null,
+      recoveryGame
     }
   }
 }
@@ -2123,6 +2207,7 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   terminal: true,
   authenticator: true,
   calendar: true,
+  'homeassistant-control': true,
   timer: true,
   alarm: true,
   sticky: true,
@@ -2131,6 +2216,7 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   diff: true,
   photo: true,
   gallery: true,
+  'wild-dim-sum': true,
   video: true,
   web: true,
   browser: true,
@@ -2138,12 +2224,14 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   loop: true,
   scheduler: true,
   dino: true,
+  'recovery-game': true,
   annotation: true,
   minecraft: true,
   dockerhost: true,
   proxmox: true,
   gitlab: true,
   homeassistant: true,
+  'homeassistant-sensor': true,
   freepbx: true,
   nsis: true,
   shop: true,
@@ -2169,6 +2257,7 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   terminal: TERMINAL_SIZE,
   authenticator: AUTHENTICATOR_SIZE,
   calendar: CALENDAR_SIZE,
+  'homeassistant-control': HOME_ASSISTANT_CONTROL_SIZE,
   timer: TIMER_SIZE,
   alarm: ALARM_SIZE,
   sticky: STICKY_SIZE,
@@ -2177,6 +2266,7 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   diff: DIFF_SIZE,
   photo: PHOTO_SIZE,
   gallery: GALLERY_SIZE,
+  'wild-dim-sum': WILD_DIM_SUM_SIZE,
   video: VIDEO_SIZE,
   web: WEB_SIZE,
   browser: BROWSER_SIZE,
@@ -2186,16 +2276,18 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   loop: NATIVE_LOOP_SIZE,
   scheduler: NATIVE_LOOP_SIZE,
   dino: DINO_SIZE,
+  'recovery-game': RECOVERY_GAME_SIZE,
   annotation: ANNOTATION_SIZE,
   minecraft: SERVICE_CONSOLE_SIZE,
   dockerhost: SERVICE_CONSOLE_SIZE,
   proxmox: SERVICE_CONSOLE_SIZE,
   gitlab: SERVICE_SUMMARY_SIZE,
   homeassistant: SERVICE_SUMMARY_SIZE,
+  'homeassistant-sensor': HOME_ASSISTANT_SENSOR_SIZE,
   freepbx: SERVICE_SUMMARY_SIZE,
   nsis: NSIS_SIZE,
   shop: SHOP_SIZE,
-  'aws-universe': { width: 420, height: 260 },
+  'aws-universe': { width: 320, height: 220 },
   torrent: TORRENT_SIZE,
   'linux-vm': LINUX_VM_SIZE
 }
@@ -2291,7 +2383,7 @@ export function duplicateNode(node: CanvasNode, offset = 28): CanvasNode {
       loopNextRunAt: undefined,
       loopLastRunAt: undefined,
       // A duplicate owns a fresh VM identity and must never inherit another VM's ISO or disk.
-      virtualMachineLocalPaths: undefined
+      virtualMachineLocalPaths: undefined,
       ...(kind === 'timer' ? {
         running: false, paused: false, elapsedMs: 0, remainingMs: (node.data as TimerNodeData).durationMs,
         lapsMs: [], sequenceIndex: 0, repeatRemaining: 0, occurrenceId: undefined,
@@ -2649,6 +2741,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         cwd: n.cwd,
         text: n.text,
         serviceLabel: n.serviceLabel,
+        homeAssistantIntent: n.homeAssistantIntent,
         universeCanvasId: n.universeCanvasId,
         universeScope: n.universeScope,
         universeDepth: n.universeDepth,
@@ -2662,11 +2755,14 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         virtualMachineConfig: n.virtualMachineConfig,
         virtualMachineLocalPaths: n.virtualMachineLocalPaths,
         calendarConfig: n.calendarConfig,
+        homeAssistantControlConfig: n.kind === 'homeassistant-control' ? validateHomeAssistantControlConfig(n.homeAssistantControlConfig) : undefined,
+        homeAssistantSensorConfig: n.homeAssistantSensorConfig,
         textUpdatedAt: n.textUpdatedAt,
         textUpdatedBy: n.textUpdatedBy,
         filePath: n.filePath,
         mediaAssets: n.mediaAssets?.map(normalizeMediaReference).filter((reference): reference is MediaAssetReference => !!reference),
         mediaActiveAssetId: n.mediaActiveAssetId,
+        wildDimSumDish: normalizePublicDimSumSelection(n.wildDimSumDish) ?? undefined,
         fileMissing: n.fileMissing,
         url: n.url,
         browserProfileId: n.browserProfileId,
@@ -2676,6 +2772,9 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         diffStaged: n.diffStaged,
         commitOid: n.commitOid,
         highScore: n.highScore,
+        // The recovery board is project-portable intent, so normalize legacy or hand-edited
+        // snapshots at the load boundary instead of letting malformed coordinates reach the UI.
+        recoveryGame: n.recoveryGame ? normalizeRecoveryGameSnapshot(n.recoveryGame) : undefined,
         agentId,
         agentModel: n.agentModel,
         accountId: n.accountId,
@@ -2767,6 +2866,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         cwd: n.data.cwd,
         text: n.data.text,
         serviceLabel: n.data.serviceLabel,
+        homeAssistantIntent: n.data.homeAssistantIntent,
         universeCanvasId: n.data.universeCanvasId,
         universeScope: n.data.universeScope,
         universeDepth: n.data.universeDepth,
@@ -2783,9 +2883,12 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         filePath: n.data.filePath,
         mediaAssets: n.data.mediaAssets?.map((reference) => ({ ...reference })),
         mediaActiveAssetId: n.data.mediaActiveAssetId,
+        wildDimSumDish: normalizePublicDimSumSelection(n.data.wildDimSumDish) ?? undefined,
         virtualMachineConfig: n.data.virtualMachineConfig,
         virtualMachineLocalPaths: n.data.virtualMachineLocalPaths,
         calendarConfig: n.data.calendarConfig,
+        homeAssistantControlConfig: kind === 'homeassistant-control' ? validateHomeAssistantControlConfig(n.data.homeAssistantControlConfig) : undefined,
+        homeAssistantSensorConfig: n.data.homeAssistantSensorConfig,
         fileMissing: n.data.fileMissing,
         url: n.data.url,
         browserProfileId: n.data.browserProfileId,
@@ -2799,6 +2902,9 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         diffStaged: n.data.diffStaged,
         commitOid: n.data.commitOid,
         highScore: n.data.highScore,
+        // Persist only the bounded board snapshot. It contains no path, process, host, or account
+        // state, and normalization keeps old project files safe to reopen on another computer.
+        recoveryGame: n.data.recoveryGame ? normalizeRecoveryGameSnapshot(n.data.recoveryGame) : undefined,
         agentId: n.data.agentId,
         agentModel: n.data.agentModel,
         accountId: n.data.accountId,
@@ -2811,7 +2917,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         sshFs: n.data.sshFs,
         worktree: n.data.worktree,
         annotationVariant: n.data.annotationVariant,
-        annotationDir: n.data.annotationDir
+        annotationDir: n.data.annotationDir,
         premaxRect: n.data.premaxRect
       }
     })

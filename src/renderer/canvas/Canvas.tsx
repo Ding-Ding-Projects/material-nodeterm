@@ -93,10 +93,13 @@ import { GroupNode, setWorktreeActionHandler, setWslActionHandler } from '../nod
 import { AnnotationNode } from '../nodes/AnnotationNode'
 import AuthenticatorNode from '../nodes/AuthenticatorNode'
 import CalendarNode from '../nodes/CalendarNode'
+import HomeAssistantControlNode from '../nodes/HomeAssistantControlNode'
+import HomeAssistantSensorNode from '../nodes/HomeAssistantSensorNode'
 import { useAnnotationDrawTool } from './useAnnotationDrawTool'
 import { annotationEndpoints } from '../lib/annotation'
 import { LazyEditorNode, LazyDiffNode } from '../nodes/lazyMonacoNodes'
 import { DinoNode } from '../nodes/DinoNode'
+import RecoveryGameNode from '../nodes/RecoveryGameNode'
 import { SERVICE_NODE_KINDS, type ServiceNodeKind, type ProjectArchiveContents } from '@shared/types'
 import { VIRTUAL_MACHINE_NODE_CATALOG } from '@shared/virtual-machine'
 import type { ProjectIcon } from '@shared/project-icon'
@@ -111,6 +114,7 @@ import { normalizeAddress } from '../nodes/browserUrl'
 import VideoNode from '../nodes/VideoNode'
 import PhotoNode from '../nodes/PhotoNode'
 import GalleryNode from '../nodes/GalleryNode'
+import WildDimSumNode from '../nodes/WildDimSumNode'
 import WebNode from '../nodes/WebNode'
 import { NativeLoopNode, setNativeLoopRunHandler } from '../nodes/NativeLoopNode'
 import TimerNode from '../nodes/TimerNode'
@@ -132,8 +136,10 @@ import {
 } from '../lib/adhdModes'
 import { TopAppBar } from '../components/TopAppBar'
 import { ProjectSwitcher } from '../components/ProjectSwitcher'
+import { MultiverseNavigator } from '../components/MultiverseNavigator'
 import { AwsUniverseNavigator } from '../components/AwsUniverseNavigator'
 import { projectAwsUniverseCanvas, AWS_UNIVERSE_ROOT_ID } from '@shared/aws-universes'
+import { projectCanvasView } from '@shared/multiverse-canvases'
 import { type MenuItem } from '../components/ContextMenu'
 import { devicePixelSnapOffset } from '../terminal/device-pixel-fit'
 import { VocabularyContextMenu } from '../components/menu/VocabularyContextMenu'
@@ -306,7 +312,7 @@ import { peerApprovalView } from '@shared/remote/approval'
 import { promptDialog } from '../components/promptDialog'
 import { requestArchivePassword } from '../components/archiveUnlockDialog'
 import { PortableMediaDecisionDialog } from '../components/PortableMediaDecisionDialog'
-import { collectPortableMedia, sha256Media, type PortableMediaCandidate, type PortableMediaDecision } from '../../core/portable-media-assets'
+import type { PortableMediaCandidate, PortableMediaDecision, PortableMediaExportPlan } from '@shared/portable-media'
 import { RemotePicker } from '../components/RemotePicker'
 import { WorktreeDialog } from '../components/WorktreeDialog'
 import { GroupPickerDialog, type GroupPickerOption } from '../components/canvas/GroupPickerDialog'
@@ -698,6 +704,7 @@ import {
   createBrowserNode,
   defaultBrowserTabs,
   createDinoNode,
+  createRecoveryGameNode,
   createDiffNode,
   createEditorNode,
   createGroupNode,
@@ -708,6 +715,8 @@ import {
   createSshTerminalNode,
   createAuthenticatorNode,
   createCalendarNode,
+  createHomeAssistantControlNode,
+  createHomeAssistantSensorNode,
   createNsisNode,
   createTorrentNode,
   createStickyNode,
@@ -719,6 +728,7 @@ import {
   createVideoNode,
   createPhotoNode,
   createGalleryNode,
+  createWildDimSumNode,
   createWebNode,
   isVideoFile,
   duplicateNode,
@@ -2043,6 +2053,8 @@ export function Canvas() {
       annotation: withNodeBoundary(AnnotationNode),
       authenticator: withNodeBoundary(AuthenticatorNode),
       calendar: withNodeBoundary(CalendarNode),
+      'homeassistant-control': withNodeBoundary(HomeAssistantControlNode),
+      'homeassistant-sensor': withNodeBoundary(HomeAssistantSensorNode),
       editor: withNodeBoundary(LazyEditorNode),
       diff: withNodeBoundary(LazyDiffNode),
       subagent: withNodeBoundary(SubagentNode),
@@ -2051,8 +2063,10 @@ export function Canvas() {
       timer: withNodeBoundary(TimerNode),
       alarm: withNodeBoundary(AlarmClockNode),
       dino: withNodeBoundary(DinoNode),
+      'recovery-game': withNodeBoundary(RecoveryGameNode),
       photo: withNodeBoundary(PhotoNode),
       gallery: withNodeBoundary(GalleryNode),
+      'wild-dim-sum': withNodeBoundary(WildDimSumNode),
       video: withNodeBoundary(VideoNode),
       web: withNodeBoundary(WebNode),
       browser: withNodeBoundary(BrowserNode),
@@ -2804,7 +2818,7 @@ export function Canvas() {
       nodesProjectIdRef.current = null
       return
     }
-    const canvasView = projectAwsUniverseCanvas(project, project.activeAwsUniverseId ?? AWS_UNIVERSE_ROOT_ID)
+    const canvasView = projectCanvasView(project)
     // SSH project: (re)open its ControlMaster and record the controlPath so this project's
     // terminal nodes can run over it. Idempotent in main (a live master is reused), so a tab
     // switch back to a connected project is a no-op. Remote tmux is unaffected by the master.
@@ -3185,6 +3199,23 @@ export function Canvas() {
       store.commitCanvas
     )
   }, [])
+
+  const navigateMultiverseCanvas = useCallback((canvasId: string) => {
+    if (!activeProjectId) return
+    commitActiveToStore()
+    // The project id stays the same during an intra-project canvas switch. Invalidate the epoch
+    // explicitly so an old autosave cannot pair the outgoing nodes with the incoming child.
+    nodesProjectIdRef.current = null
+    useProjects.getState().openMultiverseCanvas(activeProjectId, canvasId)
+  }, [activeProjectId, commitActiveToStore])
+
+  const createMultiverseCanvas = useCallback((parentCanvasId: string, title: string) => {
+    if (!activeProjectId) return { reason: 'Choose an open project before creating a child canvas.' }
+    commitActiveToStore()
+    const result = useProjects.getState().createMultiverseCanvas(activeProjectId, parentCanvasId, title)
+    if (result.canvasId) bumpDirty()
+    return result
+  }, [activeProjectId, bumpDirty, commitActiveToStore])
 
   const navigateAwsUniverse = useCallback((canvasId: string) => {
     if (!activeProjectId) return
@@ -5396,8 +5427,13 @@ export function Canvas() {
             if (catalogEntry.id === 'web') return createWebNode(index, { url: '' }, center)
             if (catalogEntry.id === 'authenticator') return createAuthenticatorNode(index, center)
             if (catalogEntry.id === 'dino') return createDinoNode(index, center)
+            if (catalogEntry.id === 'recovery-game') return createRecoveryGameNode(index, center)
             if (catalogEntry.id === 'loop') return createNativeLoopNode(index, center)
+            if (catalogEntry.id === 'alarm') return createAlarmClockNode(index, center)
             if (catalogEntry.id === 'nsis') return createNsisNode(index, center)
+            if (catalogEntry.id === 'wild-dim-sum') return createWildDimSumNode(index, undefined, center)
+            if (catalogEntry.id === 'homeassistant-control') return createHomeAssistantControlNode(index, center)
+            if (catalogEntry.id === 'homeassistant-sensor') return createHomeAssistantSensorNode(index, center)
             if (catalogEntry.id.startsWith('service:')) {
               return createServiceNode(catalogEntry.nodeKind as ServiceNodeKind, index, center)
             }
@@ -15544,24 +15580,20 @@ export function Canvas() {
   // independently, and the menu rows read the same ref for their disabled state.
   const projectArchiveBusyRef = useRef(false)
   const [portableMediaDialog, setPortableMediaDialog] = useState<{
+    preparationId: string
     candidates: PortableMediaCandidate[]
-    resolve: (decisions: ReadonlyMap<string, PortableMediaDecision> | null) => void
+    resolve: (plan: PortableMediaExportPlan | null) => void
   } | null>(null)
-  const choosePortableMedia = useCallback(async (): Promise<ReadonlyMap<string, PortableMediaDecision> | null> => {
+  const choosePortableMedia = useCallback(async (project: Project): Promise<PortableMediaExportPlan | null> => {
     const selected = await window.nodeTerminal.dialog.selectFiles()
     if (!selected || selected.length === 0) return null
-    const candidates: PortableMediaCandidate[] = []
-    for (const sourcePath of selected) {
-      try {
-        const collected = await collectPortableMedia(sourcePath)
-        candidates.push({ assetId: collected.asset.id, kind: collected.asset.kind, label: collected.asset.label ?? collected.sourceName, sourceName: collected.sourceName, decision: 'include' })
-      } catch (error) {
-        const sourceName = sourcePath.split(/[\\/]/).pop() ?? 'Unavailable media'
-        candidates.push({ assetId: sha256Media(new TextEncoder().encode(sourceName)), kind: 'image', label: sourceName, sourceName, decision: 'locate-later', reason: error instanceof Error ? error.message : 'Media validation failed.' })
-      }
+    const prepared = await api.workspace.portableMedia.prepare({ projectId: project.id, sourcePaths: selected, ...(project.cwd ? { projectRoot: project.cwd } : {}) })
+    if (!prepared.ok) {
+      notify({ kind: 'error', titleKind: 'authored', title: 'Media inspection failed', body: prepared.error, bodyKind: 'fact' })
+      return null
     }
-    return new Promise((resolve) => setPortableMediaDialog({ candidates, resolve }))
-  }, [])
+    return new Promise((resolve) => setPortableMediaDialog({ preparationId: prepared.preparationId, candidates: prepared.candidates, resolve }))
+  }, [api])
   const exportProjectArchive = useCallback(
     async (projectId: string, password?: string) => {
       if (projectArchiveBusyRef.current) {
@@ -15570,11 +15602,12 @@ export function Canvas() {
       }
       projectArchiveBusyRef.current = true
       try {
-        if ((await choosePortableMedia()) === null) return
         if (projectId === useProjects.getState().activeProjectId) commitActiveToStore()
         await writeDisk()
         const project = useProjects.getState().projects.find((candidate) => candidate.id === projectId)
         if (!project) return
+        const portableMedia = await choosePortableMedia(project)
+        if (!portableMedia) return
         // Progress where the action started: packing a repository takes real time, and there is no
         // byte-progress channel — so the copy is honestly indeterminate, never a fabricated %.
         notify({
@@ -15584,7 +15617,7 @@ export function Canvas() {
           body: `Packing "${project.name}" — canvas, history, repository and working files. A large repository can take a moment.`,
           bodyKind: 'fact'
         })
-        const result = await api.workspace.exportProject(project, password)
+        const result = await api.workspace.exportProject(project, password, portableMedia)
         if (result.ok) {
           // The archive packs the project's OWN git-tracked working files verbatim (see
           // project-archive.ts), and a password-manager vault (core/password-manager/vault-store.ts)
@@ -15618,6 +15651,7 @@ export function Canvas() {
             bodyKind: 'fact'
           })
         } else if (result.canceled) {
+          await api.workspace.portableMedia.discard(portableMedia.preparationId)
           notify({ kind: 'info', titleKind: 'authored', title: 'Project save cancelled' })
         } else {
           notify(
@@ -15717,12 +15751,25 @@ export function Canvas() {
         useProjects.getState().adoptProject(result.project)
         await writeDisk()
         const where = result.restoredTo ? `Repository and files restored to ${result.restoredTo}. ` : ''
+        const plannerDefinitions = result.plannerDefinitions
         notify({
           kind: 'success',
           titleKind: 'authored',
           title: 'Project opened from file',
           body: `${where}${archiveContentsSummary(result.contents)}`.trim() || 'The project and its complete local history are ready.',
-          bodyKind: 'fact'
+          bodyKind: 'fact',
+          ...(plannerDefinitions ? {
+            actions: [{
+              label: `Configure ${plannerDefinitions.schedules.length} imported planner schedule${plannerDefinitions.schedules.length === 1 ? '' : 's'}`,
+              onClick: () => {
+                void api.planner.configure(plannerDefinitions.schedules).then((configured) => {
+                  notify(configured.ok
+                    ? { kind: 'success', titleKind: 'authored', title: 'Planner definitions configured', body: 'Imported schedule intent is now active on this computer.', bodyKind: 'fact' }
+                    : { kind: 'error', titleKind: 'authored', title: 'Planner configuration failed', body: configured.error, bodyKind: 'fact' })
+                }).catch((error) => notify({ kind: 'error', titleKind: 'authored', title: 'Planner configuration failed', body: error instanceof Error ? error.message : 'The imported planner definitions could not be configured.', bodyKind: 'fact' }))
+              }
+            }]
+          } : {})
         })
       } else if (!result.canceled) {
         notify({ kind: 'error', titleKind: 'authored', title: 'Project open failed', body: result.error, bodyKind: 'fact' })
@@ -15897,8 +15944,12 @@ export function Canvas() {
       const projectScope = projectSessionScope(id)
       const projectSession = projectScope.session
       const projectAgentStatus = projectScope.stores.agentStatus.store
+      const projectNodes = [
+        ...project.nodes,
+        ...(project.childCanvases?.flatMap((canvas) => canvas.nodes) ?? [])
+      ]
       const terminalIds =
-        project.nodes
+        projectNodes
           .filter((node) => (node.kind ?? 'terminal') === 'terminal')
           .map((node) => node.id)
       void settleProjectSessionDestroys(id, terminalIds).then(
@@ -15931,7 +15982,7 @@ export function Canvas() {
             return
           }
           // Every terminal is confirmed ended: dispose parked xterms and drop persisted status.
-          project.nodes.forEach((n) => {
+          projectNodes.forEach((n) => {
             if ((n.kind ?? 'terminal') === 'terminal')
               disposeTerminalOnUnmount(projectSession.id, n.id)
             projectAgentStatus.getState().remove(n.id)
@@ -15939,7 +15990,7 @@ export function Canvas() {
           // SSH project: the scoped destroy above reaches the core that owns the project, while
           // this separate leg authoritatively ends remote tmux sessions with no mounted client.
           if (project.ssh) {
-            const nodeIds = project.nodes
+            const nodeIds = projectNodes
               .filter((n) => (n.kind ?? 'terminal') === 'terminal')
               .map((n) => n.id)
             void window.nodeTerminal.sshProject
@@ -15952,7 +16003,7 @@ export function Canvas() {
           // deleting the canvas is the only chance to tear their masters down.
           for (const scopeId of useSshConn.getState().attachmentScopesOf(id)) {
             const nodeIds =
-              hostAttachmentsFor(id, project.nodes, project.ssh?.server).find(
+              hostAttachmentsFor(id, projectNodes, project.ssh?.server).find(
                 (a) => a.scopeId === scopeId
               )?.nodeIds ?? []
             void window.nodeTerminal.sshProject
@@ -16619,6 +16670,7 @@ export function Canvas() {
           onOpenArchive={() => void importProjectArchive()}
           archiveBusy={() => projectArchiveBusyRef.current}
         />
+        <MultiverseNavigator onNavigate={navigateMultiverseCanvas} onCreate={createMultiverseCanvas} />
         <AwsUniverseNavigator onNavigate={navigateAwsUniverse} onCreate={createAwsUniverse} />
         <div className="md3-app-bar__spacer" />
         {/* The docked search bar — the SAME `.cluster-search` button/title the packaged-app
@@ -17905,11 +17957,15 @@ export function Canvas() {
         <PortableMediaDecisionDialog
           candidates={portableMediaDialog.candidates}
           onDecisions={(decisions) => {
-            portableMediaDialog.resolve(decisions)
+            portableMediaDialog.resolve({
+              preparationId: portableMediaDialog.preparationId,
+              decisions: [...decisions].map(([assetId, decision]) => ({ assetId, decision }))
+            })
             setPortableMediaDialog(null)
           }}
           onCancel={() => {
             portableMediaDialog.resolve(null)
+            void api.workspace.portableMedia.discard(portableMediaDialog.preparationId)
             setPortableMediaDialog(null)
           }}
         />

@@ -258,10 +258,16 @@ canvas has no Shop. See the
 [special-universe Shop article](./docs/features/integrations/aws-universe-shop.md) for the
 portable metadata, repair records, disabled AWS entries, and verification boundary.
 
-The AWS Universe navigator now creates unlimited AWS-only child canvases in the project root. Each
-instance starts with a fixed scoped Shop, remains searchable through the adjacent regex builder,
-and preserves safe intent through portable schema 3 without carrying credentials or local runtime
-bindings. See the [AWS Universe portal article](./docs/features/canvas/aws-universe.md).
+The AWS Universe navigator creates unlimited AWS-only child canvases in the project root. Each
+instance starts with one fixed scoped Shop, supports guided local search with an adjacent regex
+builder, and preserves safe schema 3 intent without carrying credentials or local runtime state.
+See the [AWS Universe portal article](./docs/features/canvas/aws-universe.md).
+
+A project can now create and navigate a scoped **Multiverse canvas hierarchy** from the canvas app
+bar. The guided parent picker searches names, depths, and identifiers with its adjacent regex
+builder, explains why depth-8 parents cannot accept another child, and preserves each child canvas
+through ordinary project files and portable schema 3 import and export. See the
+[Multiverse child canvases article](./docs/features/canvas/multiverse-canvases.md).
 
 ### Agent support — Claude Code, Codex, Gemini, opencode, Grok, or your own
 

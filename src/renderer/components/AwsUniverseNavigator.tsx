@@ -23,14 +23,14 @@ export function AwsUniverseNavigator({ onNavigate, onCreate }: AwsUniverseNaviga
   const searchRef = useRef<HTMLInputElement>(null)
   const search = useRegexSearchField()
 
-  const rows = useMemo(() => project ? (project.awsUniverses ?? []) : [], [project])
+  const rows = useMemo(() => project ? (project.childCanvases ?? []).filter((canvas) => canvas.scope === 'aws-universe') : [], [project])
   const visible = useMemo(
     () => rows.filter((row) => search.test(`${row.title} ${row.id} AWS Universe`)),
     [rows, search]
   )
   if (!project) return null
 
-  const activeId = project.activeAwsUniverseId ?? AWS_UNIVERSE_ROOT_ID
+  const activeId = project.activeCanvasId ?? AWS_UNIVERSE_ROOT_ID
   const active = rows.find((row) => row.id === activeId)
   const activePath = active ? awsUniverseCanvasPath(project, activeId) : [{
     id: AWS_UNIVERSE_ROOT_ID,
