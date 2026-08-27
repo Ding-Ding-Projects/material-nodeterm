@@ -2396,6 +2396,9 @@ export interface Settings {
    *  scroll keeps panning independently (see canvas/wheel-gesture.ts), so mouse and trackpad
    *  coexist; elsewhere this still trades away scroll-to-pan, so it stays opt-in. */
   wheelZoom: boolean
+  /** Multiplier for plain-wheel zoom exponent, bounded to 0.2–2 at point of use. The historical
+   *  feel is preserved at 1; modifier zoom and trackpad pinch always use the fixed multiplier. */
+  wheelZoomSpeed: number
   /** macOS only: a two-finger trackpad scroll pans the canvas, independently of `wheelZoom`
    *  (see canvas/wheel-gesture.ts). Off restores the pre-router behavior — `wheelZoom` alone
    *  decides — which is also the recourse for a precise-pixel MOUSE that reads as a trackpad. */
@@ -2814,6 +2817,7 @@ export const DEFAULT_SETTINGS: Settings = {
   doubleClickFocus: true,
   terminalMiddleClickPaste: false,
   wheelZoom: true,
+  wheelZoomSpeed: 1,
   trackpadPan: true,
   canvasDragMode: 'pan',
   browserMemorySaver: true,

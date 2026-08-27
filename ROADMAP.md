@@ -64,6 +64,13 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## In progress / partially landed
 
+- [ ] **Bounded wheel zoom and persisted wheel speed, issue #107**: the renderer now shares a ±50
+      `deltaY` budget across each 40 ms burst and applies a persisted 0.2×–2.0× multiplier only to
+      plain-wheel zoom. The Behavior setting has localized copy, point-of-use validation, and
+      provenance text. Server Edition shares the same renderer and settings record. Tests, type
+      checks, lint, builds, packaging, runtime interaction, reviews, audits, and captures remain
+      unrun in this implementation lane; the generated offline-doc bundle awaits the normal docs
+      generation step in integration.
 - [ ] **Ten-level funny controls, issue #113**: source and localization range now covers independent
       English and Cantonese levels 1–10, schema-versioned settings migration, scheduled values,
       site storage, exports, provenance copy, Easter eggs, and feature resolvers. This implementation

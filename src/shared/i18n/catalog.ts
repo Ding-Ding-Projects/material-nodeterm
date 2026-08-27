@@ -207,6 +207,54 @@ export const CATALOG: Catalog = {
     ]
   },
 
+  // Canvas wheel-zoom speed is a real setting, so its label, explanation, and provenance all
+  // follow the live language mode and per-language funny levels. The numeric multiplier remains
+  // a factual value and is supplied by the renderer rather than baked into catalogue copy.
+  'settings.behavior.wheelZoomSpeed.label': {
+    en: flat('Wheel zoom speed'),
+    yue: flat('滑輪縮放速度')
+  },
+  'settings.behavior.wheelZoomSpeed.description': {
+    en: [
+      'How far one plain wheel click zooms. Lower it if one click jumps too far.',
+      'Controls the zoom distance for each plain wheel click. Turn it down for gentler jumps.',
+      'Sets how much canvas zoom one plain wheel click spends.',
+      'Tunes the canvas jump for each plain wheel click, so the map does not go sightseeing.',
+      'Sets the plain-wheel zoom jump. Turn it down before one click sends the canvas on a world tour.'
+    ],
+    yue: [
+      '每一下普通滑輪撳落去縮放幾多。一下跳得太遠就調低啲。',
+      '控制普通滑輪每一下縮放幾遠，一下太大步就收細啲。',
+      '設定普通滑輪一下會用幾多畫布縮放幅度。',
+      '調校普通滑輪每一下嘅畫布跳步，唔好等張圖周圍去旅行。',
+      '設定普通滑輪嘅縮放跳步，調低啲先，唔好一下就送張畫布環遊世界。'
+    ]
+  },
+  'settings.behavior.wheelZoomSpeed.provenance.default': {
+    en: flat('Matches the compiled-in default of 1.0×. An explicit saved 1.0× cannot be distinguished from that same value.'),
+    yue: flat('同編譯入去嘅 1.0× 預設值一致。明確儲存嘅 1.0× 無法同呢個值分辨。')
+  },
+  'settings.behavior.wheelZoomSpeed.provenance.saved': {
+    en: flat('Using the saved value from settings.json.'),
+    yue: flat('使用 settings.json 入面儲存嘅數值。')
+  },
+  'settings.behavior.wheelZoomSpeed.provenance.clamped': {
+    en: flat('The saved value is outside 0.2×–2.0×; using the clamped value of {speed}×.'),
+    yue: flat('儲存嘅數值唔喺 0.2×–2.0× 範圍內，而家使用夾返正嘅 {speed}×。')
+  },
+  'settings.behavior.wheelZoomSpeed.provenance.invalid': {
+    en: flat('The saved value is invalid; using the compiled-in 1.0× value.'),
+    yue: flat('儲存嘅數值無效，而家使用編譯入去嘅 1.0× 數值。')
+  },
+  'settings.behavior.wheelZoomSpeed.provenance.loading': {
+    en: flat('Using the compiled-in 1.0× value while saved settings load.'),
+    yue: flat('儲存設定載入緊，暫時使用編譯入去嘅 1.0× 數值。')
+  },
+  'settings.behavior.wheelZoomSpeed.provenance.scheduled': {
+    en: flat('A scheduled value is active. The saved base value is {speed}×.'),
+    yue: flat('而家有排程數值生效，儲存嘅基礎值係 {speed}×。')
+  },
+
   // ---------------------------------------------------------------------------------------
   // Unified Node Catalog. Registry rows carry stable ids and English fallbacks; this catalogue
   // supplies the live language mode and funny-level voice for the picker itself and its common

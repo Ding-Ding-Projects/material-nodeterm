@@ -1,5 +1,39 @@
 # Handoff
 
+## 2026-08-27, bounded wheel zoom and speed, issue #107
+
+This implementation lane is `feat/wheel-zoom-speed` in the task-owned linked checkout. It ports
+the behavior from upstream PR `eneskirca/nodeterm#451` at commit
+`e98333c35fcb7846c1e9c86eb7a1b786f255587a`, while retaining the newer canvas gesture routing and
+the current renderer architecture.
+
+`src/renderer/canvas/wheel-zoom.ts` provides a shared ±50 `deltaY` budget per 40 ms burst,
+point-of-use speed clamping from 0.2× through 2.0×, and bounded next-zoom calculation. The canvas
+capture-phase handler owns one limiter per mounted canvas. Its speed multiplier is selected only
+for plain-wheel input; Cmd/Ctrl+wheel and trackpad pinch use the fixed historical multiplier.
+`Settings.wheelZoomSpeed` defaults to 1.0, so the historical feel remains intact, and the shared
+settings persistence path supplies the value to Desktop and Server Edition.
+
+`BehaviorSection.tsx` adds the guided slider with 0.2× minimum, 2.0× maximum, 0.1× steps, accessible
+value text, live language-mode copy, funny-level variants, and a provenance line that distinguishes
+loading, saved, compiled-default-equivalent, and scheduled states. The direct feature article is
+`docs/features/canvas/wheel-zoom-speed.md`, linked from the Canvas category and expanded in
+`docs/features/canvas/canvas-and-lifecycle.md`.
+
+After the current-main merge, this feature consumes the shared funny-level 1–10 types, resolver,
+and catalogue layers from issue #113. The wheel feature additions define no five-level type, range,
+resolver, migration, or duplicate catalogue implementation; all ten-level behavior comes from the
+shared implementation.
+
+The root `CHANGELOG.md` and `ROADMAP.md` record the feature and its verification boundary. The
+generated `src/shared/changelog-data.ts` and `src/shared/docs-data.ts` were not regenerated because
+this checkout has no installed `esbuild`; the integration lane must run the normal generators and
+commit their outputs before treating the offline viewer as current.
+
+No tests, type checks, lint, builds, packaging, runtime interaction, reviews, security or
+accessibility audits, or UI captures were run in this lane, per issue #107. The linked checkout is
+clean after the implementation commit. The feature jer was not integrated into `main`, no release
+was created, and no cleanup was performed here.
 ## 2026-08-27, ten-level funny controls, issue #113
 
 The implementation lane is `feat/funny-level-10`. It expands the shared funny-level union and
