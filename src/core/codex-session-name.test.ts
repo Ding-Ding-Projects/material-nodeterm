@@ -10,7 +10,6 @@ import os from 'node:os'
 import http from 'node:http'
 import { createServer, type Server } from 'node:http'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
-import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { WebSocketServer, type WebSocket } from 'ws'
@@ -18,10 +17,6 @@ import { createHash } from 'node:crypto'
 import {
   codexThreadExistsAt,
   codexUnixWebSocketUrl,
-  readCodexAccountAt,
-  readCodexSessionNameAt,
-  relayedCodexSessionName,
-  startCodexThreadAt,
   forgetCodexSessionNames,
   readCodexAccountAt,
   readCodexSessionName,
@@ -382,6 +377,7 @@ describe.skipIf(process.platform === 'win32')('Codex shared app-server session n
     (value) =>
       expect(() => codexUnixWebSocketUrl(value)).toThrow('Unsupported Codex app-server socket path')
   )
+})
 describe('relayedCodexSessionName (the on-disk relay fallback)', () => {
   it('reads, trims and caps the name the relay stored under the socket-scoped path', () => {
     const home = fs.mkdtempSync(path.join(os.tmpdir(), 'nt-relay-name-'))
