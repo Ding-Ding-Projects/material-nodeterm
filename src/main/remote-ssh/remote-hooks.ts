@@ -662,13 +662,16 @@ export class RemoteHooks {
       // Idempotently (re)write the shim: installCanvasControl may not have run (fail-open) yet.
       await this.writeRemoteShim(conn, controlPath, shim, CONTROL_SHIM_SCRIPT)
       const accountDir = `${remoteHome}/.nodeterm/claude-accounts/${accountId}`
+      // Keep the managed account's skill view live with the user's complete host skill set. The
+      // generated skill is written to the system directory first, then the account points there.
       await this.writeRemoteSkill(
         conn,
         controlPath,
-        accountDir,
+        `${remoteHome}/.claude`,
         'manage-nodeterm-canvas',
         buildCanvasSkillBody(shim)
       )
+      await this.ensureRemoteClaudeSkillsLink(conn, controlPath, remoteHome, accountDir)
     } catch {
       /* fail-open */
     }
@@ -720,13 +723,15 @@ export class RemoteHooks {
     try {
       const shim = `${remoteHome}/.nodeterm/context.sh`
       await this.writeRemoteShim(conn, controlPath, shim, CONTEXT_SHIM_SCRIPT)
+      const accountDir = `${remoteHome}/.nodeterm/claude-accounts/${accountId}`
       await this.writeRemoteSkill(
         conn,
         controlPath,
-        `${remoteHome}/.nodeterm/claude-accounts/${accountId}`,
+        `${remoteHome}/.claude`,
         'get-linked-context',
         buildContextLinkSkillBody(shim)
       )
+      await this.ensureRemoteClaudeSkillsLink(conn, controlPath, remoteHome, accountDir)
     } catch {
       /* fail-open */
     }
@@ -743,6 +748,36 @@ export class RemoteHooks {
       childArgs(conn, controlPath, `mkdir -p ${posixQuote(dirnameOf(shim))} && cat > ${q} && chmod 755 ${q}`),
       body
     )
+  }
+
+  /**
+   * Link a remote managed Claude account's skills directory to the host user's complete skills
+   * directory. Existing account-local content is moved to a unique backup before linking, so a
+   * managed account cannot hide user-installed skills while still allowing recovery of old files.
+   */
+  private async ensureRemoteClaudeSkillsLink(
+    conn: SshConnection,
+    controlPath: string,
+    remoteHome: string,
+    accountDir: string
+  ): Promise<void> {
+    const shared = `${remoteHome}/.claude/skills`
+    const target = `${accountDir}/skills`
+    const backupBase = `${target}.bak-`
+    const qShared = posixQuote(shared)
+    const qTarget = posixQuote(target)
+    const qBackup = posixQuote(`${target}.bak`)
+    const qBackupBase = posixQuote(backupBase)
+    const cmd =
+      `mkdir -p ${qShared} ${posixQuote(accountDir)} && ` +
+      `if [ -L ${qTarget} ] && [ "$(readlink -f ${qTarget} 2>/dev/null)" = "$(readlink -f ${qShared} 2>/dev/null)" ]; then :; ` +
+      `elif [ -e ${qTarget} ] || [ -L ${qTarget} ]; then ` +
+      `backup=${qBackup}; i=0; while [ -e "$backup" ] || [ -L "$backup" ]; do i=$((i + 1)); backup=${qBackupBase}$i; done; ` +
+      `if mv ${qTarget} "$backup" && ln -s ${qShared} ${qTarget}; then :; ` +
+      `else if [ ! -e ${qTarget} ] && [ ! -L ${qTarget} ] && { [ -e "$backup" ] || [ -L "$backup" ]; }; then mv "$backup" ${qTarget}; fi; exit 73; fi; ` +
+      `else ln -s ${qShared} ${qTarget}; fi`
+    const result = await this.r.run(childArgs(conn, controlPath, cmd))
+    if (result.code !== 0) throw new Error('remote Claude skills link could not be installed')
   }
 
   private async writeRemoteSkill(

@@ -20,7 +20,7 @@ export function calendarTimezones(): string[] {
 export const CALENDAR_PROVIDER_CATALOG: readonly { id: CalendarProvider; label: string; configuredBy: 'local' | 'file' | 'vault'; availability: 'available' | 'requires-account' | 'requires-adapter' }[] = [
   { id: 'local', label: 'Local calendar', configuredBy: 'local', availability: 'available' },
   { id: 'ics', label: 'ICS file', configuredBy: 'file', availability: 'available' },
-  { id: 'caldav', label: 'CalDAV', configuredBy: 'vault', availability: 'requires-adapter' },
+  { id: 'caldav', label: 'CalDAV', configuredBy: 'vault', availability: 'requires-account' },
   { id: 'google', label: 'Google Calendar', configuredBy: 'vault', availability: 'requires-account' },
   { id: 'microsoft365', label: 'Microsoft 365', configuredBy: 'vault', availability: 'requires-account' }
 ] as const
@@ -106,6 +106,14 @@ export interface CalendarOAuthStart {
   reason: string | null
 }
 
+export interface CalendarCalDavConnectInput {
+  displayName: string
+  email: string | null
+  endpoint: string
+  username: string
+  password: string
+}
+
 export interface CalendarCreateInput {
   nodeId: string
   event: Omit<CalendarEvent, 'id' | 'updatedAt'>
@@ -125,6 +133,8 @@ export interface CalendarApi {
   importIcs(nodeId: string, icsText: string, sourceName?: string): Promise<CalendarCache>
   refresh(nodeId: string, config: CalendarNodeConfig): Promise<CalendarCache>
   beginOAuth(provider: Exclude<CalendarProvider, 'local' | 'ics'>): Promise<CalendarOAuthStart>
+  connectCalDav(input: CalendarCalDavConnectInput): Promise<CalendarAccount>
+  disconnectAccount(accountId: string): Promise<boolean>
   create(input: CalendarCreateInput): Promise<CalendarEvent>
   update(input: CalendarUpdateInput): Promise<CalendarEvent | null>
   remove(nodeId: string, eventId: string): Promise<boolean>

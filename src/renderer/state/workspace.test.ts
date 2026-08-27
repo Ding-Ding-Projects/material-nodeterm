@@ -1222,14 +1222,23 @@ describe('duplicateNode across every node kind', () => {
     gitlab: 'gitlab',
     homeassistant: 'homeassistant',
     freepbx: 'freepbx',
-    cloudformation: 'cloudformation',
+    'nextcloud-aio': 'nextcloud-aio',
     // A GUI for authoring an NSIS installer script for another project (never this app's own
     // installer, which stays Squirrel.Windows).
     nsis: 'nsis',
-    shop: 'shop'
-    torrent: 'torrent'
-    'linux-vm': 'linux-vm'
+    shop: 'shop',
+    torrent: 'torrent',
+    'linux-vm': 'linux-vm',
     calendar: 'calendar',
+    'homeassistant-control': 'homeassistant-control',
+    'awsidentity': 'awsidentity',
+    'cloudflare-zero-trust': 'cloudflare-zero-trust',
+    'cloudflare-core-managers': 'cloudflare-core-managers',
+    'aws-universe': 'aws-universe',
+    'aws-resource': 'aws-resource',
+    'recovery-game': 'recovery-game',
+    'homeassistant-sensor': 'homeassistant-sensor',
+    'gitlab-hosting': 'gitlab-hosting',
     nsis: 'nsis'
   }
   const ALL_KINDS = Object.keys(EXPECTED_PREFIX) as NodeKind[]

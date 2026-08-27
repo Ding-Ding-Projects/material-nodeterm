@@ -1,9 +1,9 @@
 # CloudFormation manager
 
-The CloudFormation manager is a canvas service node that keeps stack and template operations
-guided. It discovers the locally available AWS CLI, lists stacks for a selected profile and region,
-validates a local YAML or JSON template, and creates a CloudFormation change set so the user can
-review resource-level changes before any deployment action.
+The CloudFormation manager is an AWS Shop entry backed by the shared AWS Resource manager node.
+It keeps stack and template operations guided. It discovers the locally available AWS CLI, lists
+stacks for a selected profile and region, validates a local YAML or JSON template, and creates a
+CloudFormation change set so the user can review resource-level changes before any deployment action.
 
 ## Scope and safe boundaries
 
@@ -21,16 +21,20 @@ review resource-level changes before any deployment action.
 
 ## Guided workflow
 
-1. Choose an AWS profile and region from the detected lists. An empty or unavailable list reports
+1. Open **AWS CloudFormation** from the AWS Shop and choose an AWS profile and region from the
+   shared manager's local binding controls. An empty or unavailable list reports
    the exact missing AWS CLI or profile state instead of inventing a value.
 2. Choose a local template with the Browse control, then inspect it. CloudFormation's own
    `validate-template` response supplies parameter names, descriptions, defaults, and capabilities.
 3. Choose Create or Update, a stack name, a change-set name, parameter values or Use previous, and
    any required capability acknowledgement.
-4. Select Preview change set. The manager creates the change set and polls its status with a bounded
+4. Select Preview change set. The shared manager creates the change set and polls its status with a bounded
    timeout, showing the real status and resource changes. The preview is not a deploy and cannot
    mutate the stack beyond the provider's change-set creation operation.
-5. Cancel a running preview with the Cancel control. A cancelled child process is not reported as
+5. After reviewing the preview, Execute change set or Delete change set are available as typed
+   operations. Delete is destructive and must pass the existing two-key confirmation flow. Execute
+   and Delete receive the same profile, region, stack, and change-set binding as the preview.
+6. Cancel a running preview with the Cancel control. A cancelled child process is not reported as
    a successful preview, and a timed-out or malformed response remains an explicit error.
 
 Every search field in the node has its own anchored full regex builder. Stack, profile, and region
@@ -58,10 +62,11 @@ the user selects a local profile, region, and template.
 
 ## Surface availability
 
-The Windows desktop surface is the active implementation for this lane. The Server Edition and
-mobile companion do not expose this provider operation yet, so they must show an explicit
-unavailable state rather than a fake manager or a local-machine fallback. The shared blueprint
-shape is ready for a later host-owned implementation.
+The Windows desktop surface is the active implementation for this lane. The Server Edition keeps
+the shared AWS Resource manager route, and reports an explicit unavailable state when the host
+does not expose the AWS CLI or local binding. The mobile companion does not expose this provider
+operation yet and must show an explicit unavailable state rather than a fake manager or a
+local-machine fallback.
 
 ## Verification boundary
 

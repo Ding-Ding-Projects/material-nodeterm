@@ -268,7 +268,12 @@ export class DurableAlarmPlanner {
     this.snapshot = (await this.options.store.load()) ?? emptyAlarmPlannerSnapshot()
     if (this.snapshot.version !== 1 || !Array.isArray(this.snapshot.alarms) || !Array.isArray(this.snapshot.history)) this.snapshot = emptyAlarmPlannerSnapshot()
     const now = this.now()
-    this.snapshot.alarms = this.snapshot.alarms.map((alarm) => ({ ...alarm, nextOccurrenceAt: alarm.enabled ? (alarm.nextOccurrenceAt ?? nextAlarmOccurrence(alarm, now - 1)) : undefined }))
+    this.snapshot.alarms = this.snapshot.alarms.map((alarm) => {
+      const nextOccurrenceAt = alarm.enabled
+        ? alarm.nextOccurrenceAt ?? nextAlarmOccurrence(alarm, now - 1) ?? undefined
+        : undefined
+      return { ...alarm, enabled: alarm.enabled && nextOccurrenceAt !== undefined, nextOccurrenceAt }
+    })
     await this.persist()
     await this.tick(now)
     this.timer = setInterval(() => void this.tick(), this.intervalMs)
@@ -283,7 +288,15 @@ export class DurableAlarmPlanner {
     const now = this.now()
     const id = input.id ?? `alarm-${now.toString(36)}-${Math.random().toString(36).slice(2, 10)}`
     const existing = this.snapshot.alarms.find((alarm) => alarm.id === id)
-    const alarm: AlarmDefinition = { ...input, id, createdAt: existing?.createdAt ?? now, updatedAt: now, nextOccurrenceAt: input.enabled ? nextAlarmOccurrence(input, now - 1) : undefined }
+    const nextOccurrenceAt = input.enabled ? nextAlarmOccurrence(input, now - 1) ?? undefined : undefined
+    const alarm: AlarmDefinition = {
+      ...input,
+      id,
+      enabled: input.enabled && nextOccurrenceAt !== undefined,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+      nextOccurrenceAt
+    }
     const check = validateAlarm(alarm)
     if (!check.ok) throw new Error(check.error)
     this.snapshot.alarms = existing ? this.snapshot.alarms.map((item) => item.id === id ? alarm : item) : [...this.snapshot.alarms, alarm]
@@ -302,9 +315,10 @@ export class DurableAlarmPlanner {
   async setEnabled(alarmId: string, enabled: boolean): Promise<AlarmDefinition | null> {
     const alarm = this.snapshot.alarms.find((item) => item.id === alarmId)
     if (!alarm) return null
-    alarm.enabled = enabled
+    const nextOccurrenceAt = enabled ? nextAlarmOccurrence(alarm, this.now() - 1) ?? undefined : undefined
+    alarm.enabled = enabled && nextOccurrenceAt !== undefined
     alarm.updatedAt = this.now()
-    alarm.nextOccurrenceAt = enabled ? nextAlarmOccurrence(alarm, this.now() - 1) ?? undefined : undefined
+    alarm.nextOccurrenceAt = nextOccurrenceAt
     await this.persist()
     return alarm
   }

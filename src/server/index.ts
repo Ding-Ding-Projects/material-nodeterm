@@ -17,6 +17,7 @@ import { SchoolModeStore } from '../core/school-mode'
 import { KidsModeStore } from '../core/kids-mode'
 import { ScheduledSettingsRuntime } from '../core/scheduled-settings-runtime'
 import { PlannerOccurrenceRuntime } from '../core/planner-occurrence-service'
+import { AlarmPlannerRuntime } from '../core/alarm-planner'
 import { WorkspaceStore } from '../core/workspace-store'
 import { registerAgentEnvIpc } from '../core/agent-env-ipc'
 import { PtyManager } from '../core/pty-manager'
@@ -96,6 +97,7 @@ import { startSessionMemoryService, sshScopePredicate } from '../core/session-me
 import { startWslService, defaultWslRuntime, fileWslOwnershipStore } from '../core/wsl'
 import { startToyLockService } from '../core/toylocks/toylock-service'
 import { startAuthenticatorService } from '../core/toylocks/authenticator-service'
+import { startUniverseDoorEntryService } from '../core/universe-door-entry-service'
 import { createMemoryPressureMonitor } from '../core/memory-pressure'
 import { createPtyPressureMonitor } from '../core/pty-pressure'
 import { claudeCliCaps, type ClaudeCliCaps } from '../core/claude-cli'
@@ -208,6 +210,7 @@ export async function startServer(
   const kidsModeStore = new KidsModeStore()
   const scheduledSettingsRuntime = new ScheduledSettingsRuntime()
   const plannerRuntime = new PlannerOccurrenceRuntime()
+  const alarmPlannerRuntime = new AlarmPlannerRuntime(path.join(config.dataDir, 'alarm-clock-planner.json'))
   const ptyManager = new PtyManager()
   const workspaceStore = new WorkspaceStore()
 
@@ -245,6 +248,7 @@ export async function startServer(
   // The planner remains host-owned after every browser tab closes. A machine that is powered off
   // cannot evaluate time, so overdue entries are recorded as missed on the next startup.
   plannerRuntime.start()
+  await alarmPlannerRuntime.start()
   ptyManager.init(() => settingsStore.get())
   // Gateway discovery/credential IPC. NO env snapshot on the server: every registered handler
   // here is dispatchable by any authenticated WS client, and the server process environment is
@@ -644,7 +648,7 @@ export async function startServer(
   // Context Link: core owns the whole feature (read handler, shim, skill, instruction blocks) and
   // writes everything under `dataDir`; what it needs from a shell is the link map. The desktop's
   // renderer pushes it from the live canvas — headless there may be no browser attached at all, so
-  // we derive the same map from the persisted `bridges[]` of every canvas instead. See
+  // we derive the same map from the persisted `links[]` of every canvas instead. See
   // src/server/context-link.ts.
   const contextLink = initServerContextLink({
     ptyManager,
@@ -652,7 +656,7 @@ export async function startServer(
     installAgentIntegrations: config.installHooks !== false
   })
   // Every load()/save() is a canvas change as far as links are concerned: a browser drawing a
-  // bridge edge reaches us as the workspace save it triggers.
+  // context-link change reaches us as the workspace save it triggers.
   workspaceStore.onPersist = () => {
     contextLink.refresh()
     refreshNodeTokens()
@@ -773,6 +777,7 @@ export async function startServer(
   // both raw shells change together (CLAUDE.md, agent-support section).
   ptyManager.setTextWriteGate((persistKey) => toyLockService.mayWriteToNode(persistKey))
   startAuthenticatorService()
+  startUniverseDoorEntryService()
 
   // Headless notification host: every core service above (incl. the loopback hook server, which
   // is its own listener and MUST run) is booted, but we bind NO public HTTP/WS listener — no
@@ -792,6 +797,7 @@ export async function startServer(
         // listener live after SIGTERM-driven teardown (including NODETERM_HEADLESS containers).
         await scheduledSettingsRuntime.stop()
         await plannerRuntime.stop()
+        alarmPlannerRuntime.stop()
         ackSweeper.stop()
         pendingSweeper.stop()
         sessionReaper.stop()
@@ -857,6 +863,7 @@ export async function startServer(
       // Detach PTY clients — tmux sessions keep running (Phase 1 contract; never kill the server).
       await scheduledSettingsRuntime.stop()
       await plannerRuntime.stop()
+      alarmPlannerRuntime.stop()
       ackSweeper.stop()
       pendingSweeper.stop()
       sessionReaper.stop()

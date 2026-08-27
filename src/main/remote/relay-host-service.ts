@@ -37,6 +37,7 @@ import { RELAY_URL, relayAllowed as hostRelayAllowed, mintPairingToken } from '.
 import { canAcceptSeat } from './seat-cap'
 import { discoverDockerContexts, startDockerHostRuntime, type DockerHostRuntime } from './docker-host-runtime'
 import { registerDockerHostManager } from './docker-host-manager'
+import { registerNextcloudAioManager } from './nextcloud-aio-manager'
 import type { DockerHostSettings } from '../../shared/types'
 
 /** Thrown (as an Error message) when a new invite would exceed the licensed seat cap. The renderer
@@ -112,6 +113,7 @@ export function initRelayHost(
 
   ipcMain.handle(IPC.relayHostDockerContexts, () => discoverDockerContexts())
   registerDockerHostManager(win)
+  registerNextcloudAioManager(win)
 
   function send(channel: string, ...args: unknown[]): void {
     if (!win.isDestroyed()) win.webContents.send(channel, ...args)

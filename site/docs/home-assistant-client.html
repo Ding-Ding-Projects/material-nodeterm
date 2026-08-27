@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Home Assistant client | nodeterm documentation</title>
+    <meta name="description" content="Configure multiple local Home Assistant instances and discover entities with bounded REST or WebSocket requests." />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+  </head>
+  <body>
+    <div class="doc-topbar"><a href="./index.html">Back to documentation</a></div>
+    <article class="doc-body">
+      <p class="doc-kicker">Integrations</p>
+      <h1>Home Assistant multi-instance client</h1>
+      <p>A Home Assistant service node can register several machine-local instances, bind one explicitly, and discover current entities through the REST API or Home Assistant WebSocket API.</p>
+      <h2>Guided operation</h2>
+      <ol>
+        <li>Add an instance with a display name, HTTPS address, and long-lived access token.</li>
+        <li>Filter the instance picker with plain text or its anchored regex builder, then bind the selected instance.</li>
+        <li>Choose REST or WebSocket discovery. Progress, cancellation, retry, and exact recovery messages remain in the node.</li>
+        <li>Filter discovered domains and entities with their independent search and regex controls.</li>
+      </ol>
+      <h2>Privacy and portability</h2>
+      <p>The address, instance id, access token, request state, socket, and entity cache remain on this computer. Schema 3 carries only the node label, layout, relationships, discovery preference, and domain preference. Import makes no network request and leaves the node explicitly unbound until Configure or Rebind is chosen.</p>
+      <h2>Failure behavior</h2>
+      <p>Requests refuse redirects and oversized responses, have a bounded deadline, preserve prior results after cancellation or failure, and distinguish token refusal from unavailable metadata or malformed provider responses. Removing an instance uses the two-key confirmation flow and clears its stored token.</p>
+      <h2>Verification boundary</h2>
+      <p>Issue #26 intentionally ran no tests, type checks, lint, builds, packaging, reviews, security checks, accessibility checks, installer execution, runtime interaction checks, or UI captures in its implementation lane.</p>
+      <h2>Suggested articles</h2>
+      <ul><li><a href="./node-kinds.html">Canvas node kinds</a></li><li><a href="./portable-media-assets.html">Portable project data</a></li><li><a href="./node-catalog.html">Node Catalog</a></li></ul>
+    </article>
+  </body>
+</html>

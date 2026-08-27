@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Advanced file pipelines — nodeterm</title>
+    <meta name="description" content="Bounded local media, archive, PDF, OCR, and structured-data pipelines in nodeterm." />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+  </head>
+  <body>
+    <div class="doc-topbar"><a href="./index.html">← Documentation</a></div>
+    <article class="doc-body">
+      <p class="doc-kicker">File conversion</p>
+      <h1>Advanced media, archive, PDF, OCR, and structured-data pipelines</h1>
+      <p>The installed desktop app is the primary runtime. This documentation page explains the feature and does not convert files itself.</p>
+
+      <h2>Bundled operations</h2>
+      <p>The File converter runs PDF text extraction, inspection, split-to-ZIP, merge-from-ZIP, first-page extraction, reverse ordering, clockwise page rotation, metadata removal, supported image conversion, local English OCR, bounded ZIP inventory, deterministic JSON key ordering, and the structured-data conversion mesh. Audio, video, TAR, 7-Zip, DOCX, HEIC, and ICO rows remain visible with an exact unavailable reason when no packaged adapter exists.</p>
+
+      <h2>Guided queue</h2>
+      <p>File and folder pickers, byte-based detection, categorized searches with adjacent regex builders, lossy-operation acknowledgement, destination capacity preflight, pause, cancellation, retry, partial results, and restart recovery are part of one persistent queue. Output is validated and published atomically.</p>
+
+      <h2>Resource limits</h2>
+      <ul>
+        <li>Images: 40 million pixels, one frame, and the adapter byte ceiling.</li>
+        <li>PDF: 500 pages and the adapter byte ceiling.</li>
+        <li>ZIP inventory: 2,048 entries and 512 MiB declared expanded data, with unsafe paths refused.</li>
+        <li>OCR: packaged English data only, with no network fallback.</li>
+      </ul>
+
+      <h2>Portable intent</h2>
+      <p>A transferred project keeps only the operation identity and resource profile. It omits paths, credentials, provider sessions, processes, host and machine identifiers, caches, and generated output. Import performs no conversion or external action. On another computer, use Configure, Rebind, Adopt, Deploy, Locate Asset, or Leave Unbound.</p>
+
+      <h2>Verification boundary</h2>
+      <p>This ultra-speed implementation lane did not run tests, type checks, lint, builds, packaging, installer execution, runtime interaction, reviews, audits, or UI captures.</p>
+
+      <h2>Suggested articles</h2>
+      <ul>
+        <li><a href="./portable-media-assets.html">Portable media assets</a></li>
+        <li><a href="./node-kinds.html">Node kinds</a></li>
+        <li><a href="./packaging-updates.html">Packaging and updates</a></li>
+      </ul>
+    </article>
+  </body>
+</html>
