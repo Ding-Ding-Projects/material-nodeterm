@@ -103,6 +103,6 @@ captures remain pending for the integration lane.
 ## Suggested articles
 
 - [Agent support](./agent-support.md), for shared capabilities, status, and launch behavior.
-- [Copilot CLI](../../../docs/copilot-agent.md), for Copilot's provider routing and model mapping.
+- [Copilot CLI](../../copilot-agent.md), for Copilot's provider routing and model mapping.
 - [Session continuity](../terminals/session-continuity.md), for persistent sessions and cold resume.
 - [Projects and tabs](../projects/projects-and-tabs.md), for node persistence and project ownership.
