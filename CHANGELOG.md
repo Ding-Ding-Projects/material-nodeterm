@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add guided `cloudflared` connector runtimes for a per-user process, an owned Windows service,
+  and a pinned Docker connector. The main process validates discovered executables, contexts,
+  networks, tunnel references, and generated ownership names; invokes fixed argument arrays with
+  bounded progress and health; stores tunnel credentials locally; materializes only short-lived
+  token files; and keeps portable schema 3 intent free of paths, credentials, process state, and
+  host identifiers. Tests, type checks, lint, reviews, security or accessibility checks, builds,
+  packaging, installer execution, runtime interaction, and captures were intentionally not run in
+  this ultra-speed implementation lane.
+
 - Complete the Express File Converter flow with queue-wide collision-safe destination names,
   visible rename disclosure, final atomic no-clobber publication, and a completed-output action that
   opens the exact result in Visual Studio Code through the active project API. The converter queue

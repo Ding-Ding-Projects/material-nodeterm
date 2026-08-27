@@ -8,6 +8,8 @@ Two different ways nodeterm reaches a machine that isn't the one in front of you
   browser over plain HTTP/WebSocket.
 - [Docker host manager](./docker-host.md) - guided local and SSH context management for containers,
   images, volumes, networks, Compose profiles, statistics, logs, and fixed typed tasks.
+- [cloudflared connector runtimes](./cloudflared-runtimes.md) - guided per-user process, Windows
+  service, and pinned Docker connector lifecycles with local token storage and portable intent.
 
 See also [Agents](../agents/README.md) for how agent hooks and permission modes work across an
 SSH connection, and [Packaging](../packaging/README.md) for how the headless notification host

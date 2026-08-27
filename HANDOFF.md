@@ -1,5 +1,28 @@
 # Handoff
 
+## 2026-08-27, cloudflared connector runtimes, issue #61
+
+The implementation lane is `feat/program-50-cloudflared-runtimes` in the isolated issue-61
+checkout, based on `12055e96`. `src/shared/cloudflared-runtime.ts` defines the typed per-user
+process, Windows service, and Docker connector contracts, fixed argument builders, guided picker
+inventory, disabled reasons, bounded progress and health shapes, local ownership fields, and the
+schema 3 portable blueprint. `src/main/remote/cloudflared-runtime.ts` owns discovery, protected
+credential storage, token-file materialization, process/service/container lifecycle, cancellation,
+restart, health reads, and local runtime records. No renderer command, shell string, arbitrary image,
+entrypoint, argument list, or environment map is accepted.
+
+Direct records are current in `docs/features/remote/cloudflared-runtimes.md`,
+`site/docs/cloudflared-runtimes.html`, `docs/features/remote/README.md`, `site/docs/index.html`,
+`docs/uh-feature-inventory.md`, `ROADMAP.md`, `CHANGELOG.md`, and this handoff. The offline docs
+bundle entry is updated to the normalized new article. The documented generator could not run
+because this checkout has no installed `esbuild` dependency; the generated-file refresh remains an
+integration-lane follow-up.
+
+No tests, type checks, lint, reviews, security or accessibility checks, builds, packaging, installer
+execution, runtime interaction, or UI captures were run in this ultra-speed implementation lane.
+The owning integration lane must verify the exact merged commit and may not infer those verdicts
+from source inspection.
+
 ## 2026-08-27, Express File Converter completion, issue #21
 
 The implementation lane is `feat/program-10-file-converter`, refreshed by fast-forward before edits

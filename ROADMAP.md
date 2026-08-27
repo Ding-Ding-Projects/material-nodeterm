@@ -287,6 +287,9 @@ intentionally unchecked because this task publishes the plan only.
 - [ ] Add Cloudflare account, zone, DNS, security, Workers, Pages, storage, queue, Access, and
       analytics managers.
 - [ ] Add one-click Cloudflare Tunnel setup with private-first routing and connector choices.
+  - [ ] Add per-user process, Windows service, and pinned Docker connector runtimes for `cloudflared`.
+        Source contracts and local credential handling are present in issue #61; tests, builds,
+        packaging, runtime interaction, and capture evidence remain pending.
 
 ### Clean-room features and upstream parity
 

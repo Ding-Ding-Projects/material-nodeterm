@@ -302,6 +302,10 @@ over HTTP/WebSocket from a host you own, reached from any browser, with passkey 
 One command (`./host.sh`, or `host.bat` on Windows) builds and starts it in a container. Phone
 pairing is a free feature, not a paywalled one.
 
+Cloudflare Tunnel connectors can run as a guided per-user process, an owned Windows service, or a
+pinned Docker connector. Tokens stay in local protected storage and are materialized only as
+short-lived token files. See [`docs/features/remote/cloudflared-runtimes.md`](./docs/features/remote/cloudflared-runtimes.md).
+
 ### Source control and git worktrees
 
 A full git panel — stage/unstage, discard, diff nodes, branch switch/create, commit (with an
