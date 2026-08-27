@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add the typed Cloudflare Tunnel inventory and route manager. It reads bounded tunnel, ingress,
+  and DNS records, preserves existing routes, reports hostname conflicts, and supports explicit
+  CNAME adoption or one-record replacement behind the existing two-key confirmation. Portable
+  schema 3 intent excludes account, zone, tunnel, DNS ids, credentials, provider sessions, paths,
+  caches, and live state. The ultra-speed lane intentionally did not run tests, type checks, lint,
+  reviews, security or accessibility checks, builds, packaging, installer execution, runtime
+  interaction, or UI captures.
+
 - Complete the Express File Converter flow with queue-wide collision-safe destination names,
   visible rename disclosure, final atomic no-clobber publication, and a completed-output action that
   opens the exact result in Visual Studio Code through the active project API. The converter queue

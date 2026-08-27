@@ -26,6 +26,7 @@ import type { CalendarApi, CalendarProvider } from '../../shared/calendar'
 import type { HomeAssistantApi } from '../../shared/home-assistant'
 import type { HomeAssistantControlApi } from '../../shared/home-assistant-control'
 import type { HomeAssistantSensorApi } from '../../shared/home-assistant-sensor'
+import type { CloudflareTunnelApi } from '../../shared/cloudflare-tunnels'
 import {
   UNKNOWN_CLAUDE_CLI_CAPS,
   type BoardLogApi,
@@ -741,6 +742,23 @@ export function buildProviderServicesApi(
       removeAccount: (accountId) => client.request(IPC.providerRemoveAccount, accountId) as ReturnType<NodeTerminalApi['providerServices']['removeAccount']>
     }
   }
+}
+
+/** Cloudflare Tunnel inventory uses the same host-owned core seam in Desktop and Server Edition. */
+export function buildCloudflareTunnelApi(client: RpcClient): Pick<NodeTerminalApi, 'cloudflareTunnels'> {
+  const cloudflareTunnels: CloudflareTunnelApi = {
+    saveCredential: (accountId, token) => client.request(IPC.cloudflareTunnelCredentialSave, accountId, token) as ReturnType<CloudflareTunnelApi['saveCredential']>,
+    clearCredential: (accountId) => client.request(IPC.cloudflareTunnelCredentialClear, accountId) as ReturnType<CloudflareTunnelApi['clearCredential']>,
+    credentialStatus: (accountId) => client.request(IPC.cloudflareTunnelCredentialStatus, accountId) as ReturnType<CloudflareTunnelApi['credentialStatus']>,
+    inventory: (accountId, zoneId) => client.request(IPC.cloudflareTunnelInventory, accountId, zoneId) as ReturnType<CloudflareTunnelApi['inventory']>,
+    planRoute: (input) => client.request(IPC.cloudflareTunnelPlanRoute, input) as ReturnType<CloudflareTunnelApi['planRoute']>,
+    planDnsAdoption: (input) => client.request(IPC.cloudflareTunnelPlanDnsAdoption, input) as ReturnType<CloudflareTunnelApi['planDnsAdoption']>,
+    saveRoute: (input) => client.request(IPC.cloudflareTunnelSaveRoute, input) as ReturnType<CloudflareTunnelApi['saveRoute']>,
+    adoptDnsRecord: (input) => client.request(IPC.cloudflareTunnelAdoptDnsRecord, input) as ReturnType<CloudflareTunnelApi['adoptDnsRecord']>,
+    cancel: (operationId) => client.cast(IPC.cloudflareTunnelCancel, operationId),
+    onProgress: (listener) => client.subscribe(IPC.cloudflareTunnelProgress, listener as Listener)
+  }
+  return { cloudflareTunnels }
 }
 
 /**
@@ -1709,6 +1727,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildVirtualMachineApi(client),
     ...buildCalendarApi(client),
     ...buildProviderServicesApi(client),
+    ...buildCloudflareTunnelApi(client),
     ...buildHomeAssistantApi(client),
     ...buildHomeAssistantControlApi(client),
     ...buildHomeAssistantSensorApi(client),

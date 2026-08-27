@@ -1553,7 +1553,8 @@ export const SERVICE_NODE_LABELS: Record<ServiceNodeKind, string> = {
   proxmox: 'Proxmox',
   gitlab: 'GitLab',
   homeassistant: 'Home Assistant',
-  freepbx: 'FreePBX'
+  freepbx: 'FreePBX',
+  'cloudflare-tunnel': 'Cloudflare Tunnel'
 }
 
 /**
@@ -2262,6 +2263,7 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   homeassistant: SERVICE_SUMMARY_SIZE,
   'homeassistant-sensor': HOME_ASSISTANT_SENSOR_SIZE,
   freepbx: SERVICE_SUMMARY_SIZE,
+  'cloudflare-tunnel': SERVICE_CONSOLE_SIZE,
   nsis: NSIS_SIZE,
   shop: SHOP_SIZE,
   torrent: TORRENT_SIZE,

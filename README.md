@@ -28,6 +28,15 @@ fit in a stack of hidden tabs — a map you arrange, not a list you scroll.
 > (Windows `Setup.exe` today — see [Windows](#windows) for the unsigned-installer note), or build
 > it yourself with `build.bat` / `build.sh` — see [Install / build](#install--build).
 
+## Cloudflare Tunnel inventory
+
+The Cloudflare Tunnel manager offers a bounded, searchable inventory of tunnels, ingress routes,
+and DNS records. Route saves preserve existing ingress rules. Hostname conflicts are shown before
+mutation, and DNS adoption is an explicit reviewed action; replacing one record requires the
+existing two-key confirmation. Portable schema 3 intent carries route choices only, while account
+ids, provider sessions, credentials, paths, caches, and live state remain local. See the
+[Cloudflare Tunnel article](docs/features/remote/cloudflare-tunnel-inventory.md).
+
 This is a fork of [eneskirca/nodeterm](https://github.com/eneskirca/nodeterm). The site's own
 custom domain belongs to the upstream repository, so this fork publishes its documentation at
 [ding-ding-projects.github.io/material-nodeterm](https://ding-ding-projects.github.io/material-nodeterm/)

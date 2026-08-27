@@ -24,6 +24,53 @@
   --nav-rail-w: 88px;
 }
 
+/* Cloudflare Tunnel inventory: all values use the shared MD3 token roles and stay scrollable on
+ * narrow canvases. The panel deliberately presents provider records as typed choices, not a raw
+ * request editor. */
+.cloudflare-tunnel-manager {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  color: var(--md-on-surface);
+  background: var(--md-surface-container-low);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-large);
+  overflow: auto;
+  max-height: 100%;
+}
+.cloudflare-tunnel-manager__status,
+.cloudflare-tunnel-manager__guided-form,
+.cloudflare-tunnel-manager__route-form,
+.cloudflare-tunnel-manager__dns {
+  display: grid;
+  gap: 8px;
+}
+.cloudflare-tunnel-manager__status { padding: 10px 12px; background: var(--md-surface-container); border-radius: var(--md-shape-medium); }
+.cloudflare-tunnel-manager__status span { color: var(--md-on-surface-variant); overflow-wrap: anywhere; }
+.cloudflare-tunnel-manager__guided-form { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); align-items: end; }
+.cloudflare-tunnel-manager__guided-form .service-node__note { grid-column: 1 / -1; }
+.cloudflare-tunnel-manager__search-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.cloudflare-tunnel-manager__search-row > :first-child { flex: 1 1 auto; min-width: 0; }
+.cloudflare-tunnel-manager__pills,
+.cloudflare-tunnel-manager__rows { display: grid; gap: 8px; max-height: 210px; overflow: auto; }
+.cloudflare-tunnel-manager__pills button,
+.cloudflare-tunnel-manager__rows article,
+.cloudflare-tunnel-manager__rows button { display: grid; gap: 3px; text-align: left; padding: 10px 12px; min-height: 48px; color: var(--md-on-surface); background: var(--md-surface-container); border: 1px solid var(--md-outline-variant); border-radius: var(--md-shape-medium); }
+.cloudflare-tunnel-manager__pills button[aria-selected="true"],
+.cloudflare-tunnel-manager__rows button[aria-selected="true"] { border-color: var(--md-primary); background: var(--md-secondary-container); }
+.cloudflare-tunnel-manager__pills small,
+.cloudflare-tunnel-manager__rows span,
+.cloudflare-tunnel-manager__rows small { color: var(--md-on-surface-variant); overflow-wrap: anywhere; }
+.cloudflare-tunnel-manager__route-form { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); border: 1px solid var(--md-outline-variant); border-radius: var(--md-shape-medium); padding: 12px; }
+.cloudflare-tunnel-manager__route-form legend { padding: 0 4px; color: var(--md-on-surface-variant); }
+.cloudflare-tunnel-manager__route-form .cloudflare-tunnel-manager__actions { grid-column: 1 / -1; }
+.cloudflare-tunnel-manager__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.cloudflare-tunnel-manager__warning { color: var(--md-on-error-container); background: var(--md-error-container); border-radius: var(--md-shape-small); padding: 8px; overflow-wrap: anywhere; }
+@media (max-width: 520px) {
+  .cloudflare-tunnel-manager { padding: 10px; }
+  .cloudflare-tunnel-manager__actions > * { flex: 1 1 140px; }
+}
+
 /* ---------------------------------------------------------------------------------------------
    Top app bar
    --------------------------------------------------------------------------------------------- */

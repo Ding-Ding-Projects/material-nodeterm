@@ -9,6 +9,7 @@ import { ColorMenu } from '../components/color/ColorMenu'
 import { MinecraftServerPanel } from '../components/minecraft/MinecraftServerPanel'
 import { DockerHostManagerPanel } from '../components/docker/DockerHostManagerPanel'
 import { HomeAssistantPanel } from '../components/home-assistant/HomeAssistantPanel'
+import { CloudflareTunnelInventoryPanel } from '../components/cloudflare/CloudflareTunnelInventoryPanel'
 import { EditableNodeTitle } from '../components/EditableNodeTitle'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { mapAroundExactFacts } from './nodeVocabulary'
@@ -52,7 +53,8 @@ const ENDPOINT_PLACEHOLDER: Record<ServiceNodeKind, string> = {
   proxmox: 'https://proxmox.local:8006',
   gitlab: 'https://gitlab.example.com',
   homeassistant: 'http://homeassistant.local:8123',
-  freepbx: 'https://pbx.local'
+  freepbx: 'https://pbx.local',
+  'cloudflare-tunnel': 'https://api.cloudflare.com/client/v4'
 }
 
 /**
@@ -245,7 +247,11 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
           />
         )}
 
-        {!collapsed && kind !== 'minecraft' && kind !== 'dockerhost' && kind !== 'homeassistant' && (
+        {!collapsed && kind === 'cloudflare-tunnel' && (
+          <CloudflareTunnelInventoryPanel nodeId={id} />
+        )}
+
+        {!collapsed && kind !== 'minecraft' && kind !== 'dockerhost' && kind !== 'homeassistant' && kind !== 'cloudflare-tunnel' && (
           <div className="service-node__body">
             <label className="service-node__field" htmlFor={`${id}-endpoint`}>
               <span className="service-node__field-label">{vocab('Address')}</span>

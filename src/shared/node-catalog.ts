@@ -430,6 +430,18 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
     availability: alwaysAvailable
   },
   {
+    id: 'service:cloudflare-tunnel',
+    nodeKind: 'cloudflare-tunnel',
+    category: 'managers',
+    label: 'Cloudflare Tunnel inventory',
+    description: 'Inventory tunnels, preserve routes, resolve hostname conflicts, and review DNS adoption.',
+    keywords: ['service', 'cloudflare', 'tunnel', 'hostname', 'dns', 'route'],
+    documentationPath: 'docs/features/remote/cloudflare-tunnel-inventory.md',
+    safeDefaults: { serviceLabel: '' },
+    dependencies: ['cloudflare-account'],
+    availability: alwaysAvailable
+  },
+  {
     id: 'editor',
     nodeKind: 'editor',
     category: 'files',
@@ -567,6 +579,7 @@ export const NODE_CATALOG_COMPLETENESS: readonly NodeCatalogCompletenessRecord[]
   { id: 'service:gitlab', state: 'current', scope: 'any', reason: 'service manager node' },
   { id: 'service:homeassistant', state: 'current', scope: 'any', reason: 'service manager node' },
   { id: 'service:freepbx', state: 'current', scope: 'any', reason: 'service manager node' },
+  { id: 'service:cloudflare-tunnel', state: 'current', scope: 'any', reason: 'typed Cloudflare Tunnel inventory and reviewed DNS adoption' },
   { id: 'subagent', state: 'ephemeral', scope: 'none', reason: 'hook-derived render-only card' },
   { id: 'loop-card', state: 'ephemeral', scope: 'none', reason: 'schedule-derived render-only card' },
   { id: 'photo', state: 'planned', scope: 'any', reason: 'photo adapter not implemented' },

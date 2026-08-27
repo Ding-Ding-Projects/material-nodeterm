@@ -1,5 +1,33 @@
 # Handoff
 
+## 2026-08-27, Cloudflare Tunnel inventory implementation, issue #59
+
+Issue #59 is implemented on `feat/program-48-tunnel-inventory` in the isolated task-owned
+worktree. `src/shared/cloudflare-tunnels.ts` defines bounded tunnel, route, DNS, conflict, adoption,
+progress, and schema 3 portable-intent contracts. Route validation rejects wildcard or malformed
+hostnames, unsafe paths, credential-bearing origins, and any attempt to disable existing-route
+preservation. Conflict planning distinguishes an existing route, another tunnel, and an existing
+DNS record. DNS adoption keeps an existing CNAME unchanged unless the user explicitly chooses the
+single-record replacement path and types `ADOPT <hostname>` before the app's two-key confirmation.
+
+`src/core/cloudflare/tunnel-service.ts` owns the HTTPS Cloudflare API calls, bounded pagination and
+response parsing, local route metadata, and write-only sealed token storage. `src/core/cloudflare/
+register-ipc.ts`, `src/shared/ipc.ts`, `src/shared/types.ts`, the preload, Server Edition bridge,
+and relay refusal wire the typed API without exposing a raw request editor or token. The renderer
+manager is `src/renderer/components/cloudflare/CloudflareTunnelInventoryPanel.tsx`, mounted by the
+new `cloudflare-tunnel` service node with independent plain-text-first searches and anchored regex
+builders for tunnels, routes, and DNS records.
+
+Direct documentation is in `docs/features/remote/cloudflare-tunnel-inventory.md`, its category
+index, and `site/docs/cloudflare-tunnel-inventory.html`; the changelog and roadmap record the same
+state. The generated offline documentation bundle was not regenerated in this lane because the
+ultra-speed boundary forbids build work; the integration owner must run the supported docs-bundle
+generation before packaging.
+
+No tests, type checks, lint, reviews, security or accessibility checks, builds, packaging, installer
+execution, runtime interaction, or UI captures were run. The source is therefore unverified at
+runtime and the parent integration lane must run its own checks against the merged commit.
+
 ## 2026-08-27, Express File Converter completion, issue #21
 
 The implementation lane is `feat/program-10-file-converter`, refreshed by fast-forward before edits

@@ -37,6 +37,7 @@ import type { TorrentTaskState } from '../shared/torrent'
 import type { VirtualMachineEvent } from '../shared/virtual-machine'
 import type { CalendarProvider } from '../shared/calendar'
 import type { HomeAssistantClientEvent } from '../shared/home-assistant'
+import type { CloudflareTunnelProgress, CloudflareTunnelRouteInput, CloudflareDnsAdoptionInput } from '../shared/cloudflare-tunnels'
 import type { ProjectConsentRequest, ProjectSetupEvent } from '../shared/project-settings'
 
 // Fan a single ipcRenderer listener per channel out to many renderer subscribers. Without
@@ -76,6 +77,7 @@ const subscribePeerPendingCleared = subscribe<[{ id: string | null; pub?: string
 // New relay tunnel (Stage 4). Non-per-id host events reuse the fan-out helper; per-connection
 // client events (sas/approved/frame/closed) attach directly per connectionId.
 const subscribeConverterItem = subscribe<[ConvertQueueItem]>(IPC.converterItem)
+const subscribeCloudflareTunnelProgress = subscribe<[CloudflareTunnelProgress]>(IPC.cloudflareTunnelProgress)
 const subscribeConverterSummary = subscribe<
   [Pick<ConverterQueueState, 'running' | 'scanning' | 'concurrency' | 'total'>]
 >(IPC.converterSummary)
@@ -207,6 +209,18 @@ const api: NodeTerminalApi = {
     beginOAuth: (providerId: string) => ipcRenderer.invoke(IPC.providerBeginOAuth, providerId),
     completeOAuth: (callbackUrl: string) => ipcRenderer.invoke(IPC.providerCompleteOAuth, callbackUrl),
     removeAccount: (accountId: string) => ipcRenderer.invoke(IPC.providerRemoveAccount, accountId)
+  },
+  cloudflareTunnels: {
+    saveCredential: (accountId: string, token: string) => ipcRenderer.invoke(IPC.cloudflareTunnelCredentialSave, accountId, token),
+    clearCredential: (accountId: string) => ipcRenderer.invoke(IPC.cloudflareTunnelCredentialClear, accountId),
+    credentialStatus: (accountId: string) => ipcRenderer.invoke(IPC.cloudflareTunnelCredentialStatus, accountId),
+    inventory: (accountId: string, zoneId?: string) => ipcRenderer.invoke(IPC.cloudflareTunnelInventory, accountId, zoneId),
+    planRoute: (input: CloudflareTunnelRouteInput) => ipcRenderer.invoke(IPC.cloudflareTunnelPlanRoute, input),
+    planDnsAdoption: (input: CloudflareDnsAdoptionInput) => ipcRenderer.invoke(IPC.cloudflareTunnelPlanDnsAdoption, input),
+    saveRoute: (input: CloudflareTunnelRouteInput) => ipcRenderer.invoke(IPC.cloudflareTunnelSaveRoute, input),
+    adoptDnsRecord: (input: CloudflareDnsAdoptionInput) => ipcRenderer.invoke(IPC.cloudflareTunnelAdoptDnsRecord, input),
+    cancel: (operationId: string) => ipcRenderer.send(IPC.cloudflareTunnelCancel, operationId),
+    onProgress: (listener: (progress: CloudflareTunnelProgress) => void) => subscribeCloudflareTunnelProgress(listener)
   },
   workspace: {
     load: () => ipcRenderer.invoke(IPC.workspaceLoad),
