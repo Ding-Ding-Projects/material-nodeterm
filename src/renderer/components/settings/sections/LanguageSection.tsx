@@ -8,7 +8,7 @@ import { SegmentedPill } from '@renderer/ui/SegmentedPill'
 import { SectionReset } from '../SectionReset'
 import { LANGUAGE_RESET_KEYS } from '@renderer/lib/settingsReset'
 import type { FunnyLevel, LanguageMode } from '@shared/i18n'
-import { normalizeLanguageMode } from '@shared/i18n'
+import { FUNNY_LEVEL_MAX, FUNNY_LEVEL_MIN, normalizeLanguageMode } from '@shared/i18n'
 import { useSchoolMode } from '../../../state/schoolMode'
 import { schoolModeAllowsOptionalFeatures } from '../../../lib/schoolModePolicy'
 import { Slider } from '@renderer/ui/md3'
@@ -35,7 +35,7 @@ const ROWS = {
 }
 const ENTRIES = Object.values(ROWS)
 
-/** A funny-level 1..5 slider. Shared shape for the English and Cantonese sliders — the only
+/** A funny-level 1..10 slider. Shared shape for the English and Cantonese sliders — the only
  *  difference between them is which settings key they write. */
 function FunnyLevelSlider({
   value,
@@ -55,15 +55,15 @@ function FunnyLevelSlider({
     emoji: settingsSearchEntryWithVocabulary(ROWS.emoji, vocab)
   }
   const lowLabel = t('settings.language.level.1', '1 — Fully professional').primary
-  const highLabel = t('settings.language.level.5', '5 — Maximum playfulness').primary
+  const highLabel = t('settings.language.level.10', '10 — Maximum playfulness').primary
   return (
     <div className="flex items-center gap-3">
       <span className="w-[132px] shrink-0 text-right text-[11px] leading-tight text-muted-2">
         {lowLabel}
       </span>
       <Slider
-        min={1}
-        max={5}
+        min={FUNNY_LEVEL_MIN}
+        max={FUNNY_LEVEL_MAX}
         step={1}
         value={value}
         aria-label={ariaLabel}
@@ -91,6 +91,8 @@ export function LanguageSection({ isActive }: { isActive: boolean }): React.JSX.
   const languageMode = useSettings((s) => s.settings.languageMode)
   const funnyLevelEn = useSettings((s) => s.settings.funnyLevelEn)
   const funnyLevelYue = useSettings((s) => s.settings.funnyLevelYue)
+  const baseFunnyLevelEn = useSettings((s) => s.base.funnyLevelEn)
+  const baseFunnyLevelYue = useSettings((s) => s.base.funnyLevelYue)
   const showEmojiInDialogs = useSettings((s) => s.settings.showEmojiInDialogs)
   const update = useSettings((s) => s.update)
   const schoolModeEnabled = useSchoolMode((s) => s.enabled)
@@ -154,7 +156,7 @@ export function LanguageSection({ isActive }: { isActive: boolean }): React.JSX.
           control={
             <FunnyLevelSlider
               value={funnyLevelEn}
-              ariaLabel="English funny level, 1 to 5"
+              ariaLabel="English funny level, 1 to 10"
               onChange={(v) => updateIfAllowed({ funnyLevelEn: v })}
             />
           }
@@ -167,12 +169,30 @@ export function LanguageSection({ isActive }: { isActive: boolean }): React.JSX.
           control={
             <FunnyLevelSlider
               value={funnyLevelYue}
-              ariaLabel="Cantonese funny level, 1 to 5"
+              ariaLabel="Cantonese funny level, 1 to 10"
               onChange={(v) => updateIfAllowed({ funnyLevelYue: v })}
             />
           }
         />
       </SearchableRow>
+
+      <p className="text-[12px] leading-relaxed text-muted-2">
+        {t(
+          'settings.language.funnyEn.provenance',
+          funnyLevelEn === baseFunnyLevelEn
+            ? 'English saved value: level {level}.'
+            : 'English scheduled value: level {level}; saved value remains level {base}.',
+          { level: String(funnyLevelEn), base: String(baseFunnyLevelEn) }
+        ).primary}
+        {' '}
+        {t(
+          'settings.language.funnyYue.provenance',
+          funnyLevelYue === baseFunnyLevelYue
+            ? 'Cantonese saved value: level {level}.'
+            : 'Cantonese scheduled value: level {level}; saved value remains level {base}.',
+          { level: String(funnyLevelYue), base: String(baseFunnyLevelYue) }
+        ).primary}
+      </p>
 
       {/* Disclosure — required, not optional decoration: states plainly that the sliders style
           tone (including errors/warnings) and never facts, and that the choice can change any
@@ -181,7 +201,7 @@ export function LanguageSection({ isActive }: { isActive: boolean }): React.JSX.
       <p className="text-[12px] leading-relaxed text-muted-2">
         {t(
           'settings.language.disclosure',
-          'This changes the tone of every message, including errors and warnings — never the facts inside them. Change or reset it at any time.'
+          'Levels 1 through 10 change the tone of every message, including errors and warnings — never the facts inside them. New installations start at level 10 for both languages. Change or reset either value at any time.'
         ).primary}
       </p>
 
