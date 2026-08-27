@@ -170,8 +170,7 @@ The complete capture run is preserved in the
 These images demonstrate that recorded build. They are not a claim that current `HEAD` is
 pixel-identical.
 
-<details open>
-<summary><strong>Main desktop surfaces</strong></summary>
+#### Main desktop surfaces
 
 | Canvas | Board |
 | --- | --- |
@@ -187,10 +186,7 @@ pixel-identical.
 
 The Status destination keeps operational state separate from promotional messaging.
 
-</details>
-
-<details>
-<summary><strong>Language, narration, appearance, scheduling, and attention settings</strong></summary>
+#### Language, narration, appearance, and attention settings
 
 | Language | Narrator |
 | --- | --- |
@@ -202,10 +198,7 @@ The Status destination keeps operational state separate from promotional messagi
 
 ![App name and logo settings with preset marks, local custom-image controls, and reset actions](./docs/assets/shots/app-settings-app-identity.png)
 
-</details>
-
-<details>
-<summary><strong>Kids mode and grown-up controls</strong></summary>
+#### Kids mode and grown-up controls
 
 | Kids home | Grown-up gate | Grown-up screen |
 | --- | --- | --- |
@@ -213,8 +206,6 @@ The Status destination keeps operational state separate from promotional messagi
 
 Kids mode is a user-experience surface. Its gate is not described as encryption or protection from
 someone who controls the computer.
-
-</details>
 
 <details>
 <summary><strong>Docker host settings</strong></summary>
@@ -245,13 +236,102 @@ text, so this public README deliberately does not promote them.
 > This packaged run recorded partial acceptance, not complete installer acceptance. Its remaining
 > blockers were lossless clipboard restore and proof from an installed Squirrel artifact.
 
-### Deployed documentation surface
+### Current documentation and landing surface
 
-The documentation and landing surface is a separate shipped interface. Its historical captures are
-catalogued in [`docs/assets/shots/README.md`](./docs/assets/shots/README.md), including the isolated
-headless-browser method and deployment commit. They are not embedded here because that older receipt
-does not carry the current built-artifact hash contract and the captured pages show superseded
-multi-platform download copy. They do not prove the active Windows-only delivery scope.
+The documentation and landing surface was recaptured from commit
+[`1ec54fa8`](https://github.com/Ding-Ding-Projects/material-nodeterm/commit/1ec54fa88552e9286090597d048534fcc8d51e93)
+after its Windows-only release copy was brought current. The static output was hashed, served from a
+task-owned loopback endpoint, and opened as the sole page in an isolated Microsoft Edge profile on an
+off-screen Windows desktop. Desktop and emulated mobile audit receipts both validated with zero
+console errors, unhandled exceptions, failed resources, unexpected third-party requests, unnamed
+interactive accessibility nodes, or body overflow.
+
+| Hallway | Home |
+| --- | --- |
+| ![The current nodeterm documentation hallway with searchable feature doors and a single Jump control](docs/assets/shots/site-current/site-hall-current.png) | ![The current nodeterm documentation Home room showing version 0.4.120, Windows download actions, feature cards, and the navigation rail](docs/assets/shots/site-current/site-home-current.png) |
+
+| Documentation | Changelog |
+| --- | --- |
+| ![The current nodeterm documentation index with bulk selection, per-article actions, local search, and 23 guide entries](docs/assets/shots/site-current/site-docs-current.png) | ![The current nodeterm changelog showing the published version 0.4.120 release and Windows-scope history](docs/assets/shots/site-current/site-changelog-current.png) |
+
+| Settings | Screenshot gallery |
+| --- | --- |
+| ![The current nodeterm settings room showing language, appearance, identity, School mode, narrator, and personal-vocabulary cards](docs/assets/shots/site-current/site-settings-current.png) | ![The current nodeterm screenshot room showing the built desktop capture gallery and searchable navigation](docs/assets/shots/site-current/site-screenshots-current.png) |
+
+| Pattern builder | Appearance controls |
+| --- | --- |
+| ![The current nodeterm pattern builder open beside the settings search with guided tokens, sample text, and apply controls](docs/assets/shots/site-current/site-search-regex-current.png) | ![The current nodeterm appearance settings card filtered in place with theme, color, preset, text-size, logo, save, load, and reset controls](docs/assets/shots/site-current/site-appearance-current.png) |
+
+![The current nodeterm documentation navigation at a 390 pixel emulated mobile viewport with touch-sized controls and no body overflow](docs/assets/shots/site-current/site-mobile-home-current.png)
+
+The complete hashes, viewport tuples, audit summary, and raw-frame relationships are recorded in
+[`docs/assets/recordings/site/`](docs/assets/recordings/site/README.md).
+
+## Feature usage recordings
+
+Each GIF below records real navigation or settings search against the same static output at commit
+`1ec54fa8`. The GIFs are 720 by 450 visual derivatives of retained raw PNG frame sequences. They
+contain no audio and do not replace the full-resolution still captures as evidence.
+
+<details>
+<summary><strong>Every documentation destination</strong></summary>
+
+| Home | Guide book |
+| --- | --- |
+| ![Animated use of the Home destination](docs/assets/recordings/site/site-room-home.gif) | ![Animated use of the Guide book destination](docs/assets/recordings/site/site-room-docs.gif) |
+
+| What changed | Messages |
+| --- | --- |
+| ![Animated use of the What changed destination](docs/assets/recordings/site/site-room-changelog.gif) | ![Animated use of the Messages destination](docs/assets/recordings/site/site-room-notes.gif) |
+
+| Time machine | Code maker |
+| --- | --- |
+| ![Animated use of the Time machine destination](docs/assets/recordings/site/site-room-history.gif) | ![Animated use of the Code maker destination](docs/assets/recordings/site/site-room-auth.gif) |
+
+| Model shop | Turn-it-into |
+| --- | --- |
+| ![Animated use of the Model shop destination](docs/assets/recordings/site/site-room-shop.gif) | ![Animated use of the Turn-it-into destination](docs/assets/recordings/site/site-room-convert.gif) |
+
+| Take it home | Dim sum |
+| --- | --- |
+| ![Animated use of the Take it home destination](docs/assets/recordings/site/site-room-export.gif) | ![Animated use of the Dim sum destination](docs/assets/recordings/site/site-room-dish.gif) |
+
+| Checklist | Screenshots |
+| --- | --- |
+| ![Animated use of the Checklist destination](docs/assets/recordings/site/site-room-coverage.gif) | ![Animated use of the Screenshots destination](docs/assets/recordings/site/site-room-shots.gif) |
+
+| Remote access | Playroom |
+| --- | --- |
+| ![Animated use of the Remote access destination](docs/assets/recordings/site/site-room-pair.gif) | ![Animated use of the Playroom destination](docs/assets/recordings/site/site-room-play.gif) |
+
+![Animated use of the Settings destination](docs/assets/recordings/site/site-room-settings.gif)
+
+</details>
+
+<details>
+<summary><strong>Every settings feature card</strong></summary>
+
+| About you | How it looks |
+| --- | --- |
+| ![Animated settings search revealing the About you card](docs/assets/recordings/site/site-setting-you.gif) | ![Animated settings search revealing the How it looks card](docs/assets/recordings/site/site-setting-look.gif) |
+
+| Words and jokes | Read it to me |
+| --- | --- |
+| ![Animated settings search revealing the Words and jokes card](docs/assets/recordings/site/site-setting-words.gif) | ![Animated settings search revealing the Read it to me card](docs/assets/recordings/site/site-setting-narrator.gif) |
+
+| School mode | My own words |
+| --- | --- |
+| ![Animated settings search revealing the School mode card](docs/assets/recordings/site/site-setting-school.gif) | ![Animated settings search revealing the My own words card](docs/assets/recordings/site/site-setting-vocab.gif) |
+
+| Toy locks | Timers |
+| --- | --- |
+| ![Animated settings search revealing the Toy locks card](docs/assets/recordings/site/site-setting-safety.gif) | ![Animated settings search revealing the Timers card](docs/assets/recordings/site/site-setting-timers.gif) |
+
+| Download demo | ADHD modes |
+| --- | --- |
+| ![Animated settings search revealing the Download demo card](docs/assets/recordings/site/site-setting-demo.gif) | ![Animated settings search revealing the ADHD modes card](docs/assets/recordings/site/site-setting-adhd.gif) |
+
+</details>
 
 ### Evidence that is still missing
 
@@ -263,7 +343,6 @@ The repository does not claim visual proof it does not have. Current gaps includ
 - The elapsed-time chip for Time awareness.
 - Complete packaged clipboard-restore acceptance.
 - Interaction proof from an installed Squirrel package.
-- A current documentation-home and narrow-layout capture with the active Windows-only download copy.
 
 See [`docs/assets/shots/README.md`](./docs/assets/shots/README.md) for the longer capture history,
 including discarded captures and known harness limits.
