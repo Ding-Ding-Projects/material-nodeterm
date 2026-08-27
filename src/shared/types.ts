@@ -614,6 +614,8 @@ export interface CanvasNodeState {
   hideFanout?: boolean
   /** Parent group node id, if this node belongs to a group frame. */
   parentId?: string
+  /** Safe display intent for a group that drills into another open project. */
+  projectRef?: { projectId: string }
   // terminal-only
   /** Machine-local Windows terminal profile selection; never execution arguments. */
   terminalProfileId?: string

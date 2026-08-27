@@ -33,6 +33,9 @@ The pan/zoom surface nodeterm is built around, and everything that lives on it.
   complete half, third, and quarter targets, and bounded named arrangements.
 - [Project-aware navigation](./project-aware-navigation.md) — single-node focus, safe return,
   project ownership, and honest missing or unavailable target handling.
+- [Repository grouping and canvas drill-through](./grouping-and-drill-through.md) - repository
+  grouping, adoptable worktrees, reversible group views, linked-project references, and honest
+  unavailable states.
 - [Bounded wheel zoom and speed](./wheel-zoom-speed.md) — the shared 40 ms burst budget, plain-
   wheel-only speed multiplier, point-of-use validation, persistence, and verification boundary.
   desktop trackpad gesture facts for wheel routing.

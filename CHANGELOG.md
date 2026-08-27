@@ -194,12 +194,22 @@
   idempotent conversion. The issue #86 and upstream PR #422 migration lane was reconciled with
   `origin/main` at `54164b84dce0b7e62787b1de2885405ff4ed821c`. This source lane did not run tests,
   lint, type checks, builds, packaging, runtime interaction, reviews, audits, or captures.
-- Add the cross-project link transport and storage slice for issue #86 and upstream PR #422. The
+ - Add the cross-project link transport and storage slice for issue #86 and upstream PR #422. The
   Canvas-owned commit funnel keeps live link state and persisted `Project.links` together, while
   background-project context transport accepts only local node-to-node context links. Branch,
   dependency, lineage, and foreign-node behaviors remain in their dedicated lanes. This source lane
-  intentionally did not run tests, lint, type checks, builds, packaging, runtime interaction,
-  reviews, audits, or captures.
+   intentionally did not run tests, lint, type checks, builds, packaging, runtime interaction,
+   reviews, audits, or captures.
+
+- Add repository-aware session grouping and reversible canvas drill-through for issue #86. The
+  sidebar now groups projects by resolved repository root, keeps local and SSH project identities
+  separate, exposes active-repository unbound worktrees as bindable rows, and preserves the existing
+  project and group ownership callbacks. Group frames can open a temporary child view whose edits
+  merge back into the complete parent snapshot without dropping siblings. Safe `projectRef` intent
+  supports linked-project drill-through with muted unavailable and closed targets, normal project
+  travel, and a breadcrumb return route. Implementation commit:
+  `451605b314c709da56c67bc176c78424898ecc26`. This lane did not run tests, lint, type checks,
+  builds, packaging, runtime interaction, reviews, audits, or captures.
 
 - Mount the seven AWS core-service routes on the shared AWS manager: S3, EC2, IAM, STS, Lambda,
   CloudWatch, and CloudWatch Logs. Typed operation controls now cover bounded reads, selected writes,
