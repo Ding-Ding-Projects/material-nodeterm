@@ -14,6 +14,7 @@ import type { PortableMediaManifest } from './portable-media-assets'
 import { validatePortableMediaManifest } from './portable-media-assets'
 import { normalizeMediaReference, type MediaAssetReference } from '../shared/media-catalog'
 import { repairUniverseShops } from './universe-shop'
+import { validatePortableUniverseDoors, type PortableUniverseDoorV3 } from './universe-door-navigation'
 
 export type PortableCanvasScope = 'root' | 'multiverse' | 'aws-universe'
 
@@ -85,6 +86,8 @@ export interface PortableCanvasProjectionV3 {
   canvases: PortableCanvasV3[]
   nodes: PortableCanvasNodeV3[]
   relationships: PortableRelationshipV3[]
+  /** Safe paired-door intent. Runtime history, sessions, and machine bindings are never stored. */
+  doors?: PortableUniverseDoorV3[]
   appearance?: Record<string, unknown>
   media?: PortableMediaManifest
 }
@@ -95,6 +98,8 @@ export interface PortableCanvasProjectionInput {
   appearance?: Record<string, unknown>
   /** Project-owned media manifest. Source paths and machine bindings are intentionally absent. */
   media?: PortableMediaManifest
+  /** Door-only universe navigation intent supplied by the Multiverse construction lane. */
+  doors?: PortableUniverseDoorV3[]
 }
 
 export const PORTABLE_CANVAS_LIMITS = {
@@ -107,7 +112,7 @@ export const PORTABLE_CANVAS_LIMITS = {
 } as const
 
 const UNSAFE_KEYS = new Set(['__proto__', 'prototype', 'constructor'])
-const ALLOWED_TOP = new Set(['format', 'schemaVersion', 'project', 'rootCanvasId', 'canvases', 'nodes', 'relationships', 'appearance', 'media'])
+const ALLOWED_TOP = new Set(['format', 'schemaVersion', 'project', 'rootCanvasId', 'canvases', 'nodes', 'relationships', 'doors', 'appearance', 'media'])
 const ALLOWED_PROJECT = new Set(['name', 'color', 'icon'])
 const ALLOWED_ICON = new Set(['type', 'name'])
 const ALLOWED_CANVAS = new Set(['id', 'scope', 'parentCanvasId', 'depth', 'title', 'order', 'viewport', 'nodeIds'])
@@ -327,7 +332,9 @@ export function projectToPortableCanvasV3(project: Project, input: PortableCanva
   const canvases = [root, ...children].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))
   const icon = project.icon && sanitizeProjectIcon(project.icon)
   const portableIcon = icon?.type === 'emoji' ? { type: icon.type, name: icon.emoji } : icon ? { type: icon.type, name: icon.name } : undefined
-  const result: PortableCanvasProjectionV3 = { format: PORTABLE_PROJECT_SCHEMA, schemaVersion: PORTABLE_PROJECT_SCHEMA_VERSION, project: { name: text(project.name, 'project name'), color: text(project.color, 'project color'), ...(portableIcon ? { icon: portableIcon } : {}) }, rootCanvasId: 'root', canvases, nodes, relationships: relationships(project), ...(input.appearance ? { appearance: safeAppearance(input.appearance) as Record<string, unknown> } : {}), ...(media ? { media } : {}) }
+  const doorCanvasIds = new Set(canvases.map((canvas) => canvas.id))
+  const doors = input.doors === undefined ? undefined : validatePortableUniverseDoors(input.doors, doorCanvasIds)
+  const result: PortableCanvasProjectionV3 = { format: PORTABLE_PROJECT_SCHEMA, schemaVersion: PORTABLE_PROJECT_SCHEMA_VERSION, project: { name: text(project.name, 'project name'), color: text(project.color, 'project color'), ...(portableIcon ? { icon: portableIcon } : {}) }, rootCanvasId: 'root', canvases, nodes, relationships: relationships(project), ...(doors ? { doors } : {}), ...(input.appearance ? { appearance: safeAppearance(input.appearance) as Record<string, unknown> } : {}), ...(media ? { media } : {}) }
   if (result.relationships.length > PORTABLE_CANVAS_LIMITS.maxRelationships) throw new PortableProjectV3Error('entry-limit', 'Portable relationship count exceeds its bound.')
   return repairUniverseShops(validatePortableCanvasProjectionV3(result)).projection
 }
@@ -427,11 +434,16 @@ export function validatePortableCanvasProjectionV3(value: unknown): PortableCanv
   const relationshipIds = new Set<string>(); const foldedRelationshipIds = new Set<string>()
   for (const link of value.relationships) { const folded = link.id.toLocaleLowerCase('en-US'); if (relationshipIds.has(link.id) || foldedRelationshipIds.has(folded)) throw new PortableProjectV3Error('manifest', `Duplicate or case-colliding relationship: ${link.id}`); relationshipIds.add(link.id); foldedRelationshipIds.add(folded) }
   if (!canvasIds.has(value.rootCanvasId)) throw new PortableProjectV3Error('manifest', 'Portable root canvas is missing.')
+  const doors = value.doors === undefined
+    ? undefined
+    : Array.isArray(value.doors)
+      ? validatePortableUniverseDoors(value.doors as unknown as PortableUniverseDoorV3[], canvasIds)
+      : (() => { throw new PortableProjectV3Error('manifest', 'Portable doors must be an array.') })()
   if (value.appearance !== undefined) safeAppearance(value.appearance)
   const normalizedRelationships = value.relationships.map((link) => ({ id: link.id, kind: link.kind as 'bridge' | 'rope', source: link.source, target: link.target, order: link.order }))
   const media = value.media === undefined ? undefined : validatePortableMediaManifest(value.media)
   const mediaNodes = reconcileMediaReferences(normalizedNodes, media)
-  return { format: PORTABLE_PROJECT_SCHEMA, schemaVersion: 3, project: { name: value.project.name, color: value.project.color, ...(icon ? { icon } : {}) }, rootCanvasId: value.rootCanvasId, canvases: normalizedCanvases, nodes: mediaNodes, relationships: normalizedRelationships, ...(value.appearance !== undefined ? { appearance: safeAppearance(value.appearance) as Record<string, unknown> } : {}), ...(media ? { media } : {}) }
+  return { format: PORTABLE_PROJECT_SCHEMA, schemaVersion: 3, project: { name: value.project.name, color: value.project.color, ...(icon ? { icon } : {}) }, rootCanvasId: value.rootCanvasId, canvases: normalizedCanvases, nodes: mediaNodes, relationships: normalizedRelationships, ...(doors ? { doors } : {}), ...(value.appearance !== undefined ? { appearance: safeAppearance(value.appearance) as Record<string, unknown> } : {}), ...(media ? { media } : {}) }
 }
 
 export function parsePortableCanvasProjectionV3(bytes: Uint8Array): PortableCanvasProjectionV3 {

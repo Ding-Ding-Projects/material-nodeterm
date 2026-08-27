@@ -54,6 +54,24 @@ No tests, type checks, lint, reviews, security or accessibility checks, builds, 
 execution, runtime interaction, or captures were run in this ultra-speed lane. The owning integration
 lane must treat every such verdict as unverified.
 
+## 2026-08-27, door-only universe navigation policy
+
+Issue #37 now has a platform-free paired-door policy in
+`src/core/universe-door-navigation.ts`. It validates reciprocal entry and return doors, requires
+known distinct canvases, returns the exact matching exit-door id after a permitted activation, and
+refuses tab, palette, history, or direct canvas selection. `src/core/portable-canvas-projection.ts`
+accepts and validates the safe door records in schema 3. The transferable fields contain no
+credentials, local paths, provider sessions, process state, host identifiers, caches, or navigation
+history.
+
+The visual door construction and Multiverse child-canvas lanes are still pending, so their shells
+must call `decideUniverseDoorNavigation` before switching the active universe canvas and must not
+expose child canvases as ordinary tabs. Direct documentation is in
+`docs/features/canvas/door-only-universe-navigation.md` and the canvas category index links it.
+
+No tests, type checks, lint, reviews, security or accessibility checks, builds, packaging,
+installer execution, runtime interaction, or UI captures were run in this ultra-speed lane.
+
 ## 2026-08-26, desktop Material Design 3 and personal vocabulary reconciliation
 
 This source-only lane is on feat/full-app-material3-reconciliation at the current integration tip.

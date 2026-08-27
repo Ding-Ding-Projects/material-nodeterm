@@ -17,6 +17,11 @@
   The ultra-speed lane intentionally did not run tests, type checks, lint, reviews, security or
   accessibility checks, builds, packaging, installer execution, runtime interaction, or captures.
 
+- Add a platform-free universe navigation policy that permits canvas transitions only through
+  reciprocal entry and return doors, refuses tab, palette, history, and direct-selection bypasses,
+  and records only safe paired-door intent in schema 3. No tests, type checks, lint, reviews,
+  builds, packaging, runtime interaction, or captures were run in this ultra-speed lane.
+
 - Add a source-only desktop Material Design 3 audit with a hand-written inventory of 212 rendered
   surfaces, including onboarding, profile picking, conversion, password management, Minecraft
   management, dialogs, find bars, and notifications. Shared NumberField, Radio, Progress, and Tabs
