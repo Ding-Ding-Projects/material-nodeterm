@@ -38,6 +38,10 @@
   unverified until the parent integration lane completes its parser, type-check, build, packaging,
   and release-workflow checks. The ultra-speed pass does not run tests, reviews, accessibility or
   security checks, runtime interaction, or screen captures after activation.
+- Use a bounded Node HTTPS stream for the production immutable icon download, retaining the
+  fetch-style injection seam for tests. The wrapper rejects redirects and invalid status or length,
+  stops oversized or stalled responses, compares exact bytes, and reports each source-icon phase.
+  No tests, builds, packaging, or captures were run for this repair.
 
 - Make the Windows Squirrel wrapper await its complete asynchronous entrypoint and emit synchronous
   phase diagnostics through icon verification, application build, packaging, and contract checks.
