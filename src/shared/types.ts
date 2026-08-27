@@ -4715,6 +4715,8 @@ export interface NodeTerminalApi {
   converter: import('./converter').ConverterApi
   /** Shared automatic dependency lifecycle for node-feature installers. */
   nodeDependencies: import('./node-dependencies').NodeDependenciesApi
+  /** Current installed AWS CLI model source for the AWS Shop operation wizard. */
+  awsWizardModels: import('./aws-wizard').AwsWizardModelsApi
   /** Local Ollama suite manager — docs/ollama-manager.md. */
   ollama: import('./ollama').OllamaApi
   /** Guided Cloudflare managers — docs/features/integrations/cloudflare-core-managers.md. */

@@ -65,6 +65,13 @@
 .aws-wizard__issues { margin: 12px 0; padding: 12px 12px 12px 30px; color: var(--md-on-error-container); background: var(--md-error-container); border-radius: 12px; }
 .aws-wizard__field--unsupported { color: var(--md-on-error-container); background: var(--md-error-container); }
 .aws-wizard :focus-visible { outline: 3px solid var(--md-primary); outline-offset: 2px; }
+.shop-node__aws-wizard-entry { display: grid; gap: 6px; margin: 12px 0; }
+.shop-node__aws-wizard-entry > span { color: var(--md-on-surface-variant); font-size: .8rem; }
+.shop-node__aws-wizard-entry label { display: grid; gap: 4px; font-size: .8rem; }
+.shop-node__aws-wizard-entry select, .shop-node__aws-wizard-entry input { min-width: 0; width: 100%; box-sizing: border-box; }
+.shop-node__aws-wizard-search { display: flex; gap: 6px; align-items: center; }
+.shop-node__aws-wizard-search input { flex: 1; }
+.shop-node__aws-wizard-popover { width: min(1080px, calc(100vw - 16px)); }
 @media (max-width: 760px) {
   .aws-wizard { width: calc(100vw - 16px); max-height: calc(100vh - 16px); padding: 16px; }
   .aws-wizard__body { grid-template-columns: 1fr; }

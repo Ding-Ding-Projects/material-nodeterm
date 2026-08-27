@@ -786,6 +786,9 @@ export const IPC = {
   nodeDependencyReconcile: 'node-dependency:reconcile',
   nodeDependencyState: 'node-dependency:state',
   nodeDependencyProgress: 'node-dependency:progress',
+  awsWizardCatalog: 'aws-wizard:catalog',
+  awsWizardCommands: 'aws-wizard:commands',
+  awsWizardSource: 'aws-wizard:source',
   /** Electron only: a multi-file picker (dialog:select-file only returns one path). Browser (Server
    *  Edition) uses a plain `<input type="file" multiple>` + files.saveUpload instead — see
    *  FileConverterPanel.tsx. */

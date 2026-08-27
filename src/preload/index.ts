@@ -1188,6 +1188,11 @@ const api: NodeTerminalApi = {
     onState: (listener) => subscribeNodeDependencyState(listener),
     onProgress: (listener) => subscribeNodeDependencyProgress(listener)
   },
+  awsWizardModels: {
+    catalog: () => ipcRenderer.invoke(IPC.awsWizardCatalog),
+    commands: (serviceId) => ipcRenderer.invoke(IPC.awsWizardCommands, serviceId),
+    source: (serviceId, commandName) => ipcRenderer.invoke(IPC.awsWizardSource, serviceId, commandName)
+  },
   ollama: {
     status: () => ipcRenderer.invoke(IPC.ollamaStatus),
     models: () => ipcRenderer.invoke(IPC.ollamaModels),

@@ -61,6 +61,24 @@ export interface AwsWizardModelSource {
   shapes: readonly AwsWizardSourceShape[] | Readonly<Record<string, Omit<AwsWizardSourceShape, 'name'>>>
 }
 
+export interface AwsWizardServiceOption {
+  id: string
+  label: string
+  versions: readonly string[]
+  commandCount: number
+}
+
+export interface AwsWizardCommandOption {
+  name: string
+  documentation: string
+}
+
+export interface AwsWizardModelsApi {
+  catalog(): Promise<readonly AwsWizardServiceOption[]>
+  commands(serviceId: string): Promise<readonly AwsWizardCommandOption[]>
+  source(serviceId: string, commandName: string): Promise<AwsWizardModelSource | null>
+}
+
 export interface AwsWizardFieldDefinition {
   id: string
   name: string
