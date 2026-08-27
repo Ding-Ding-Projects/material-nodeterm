@@ -2,7 +2,7 @@
 
 ## 2026-08-27, per-node model switching, issue #86 and upstream PR #422
 
-The model-switching jer was reconciled with the exact current `origin/main` tip
+The model-switching branch was reconciled with the exact current `origin/main` tip
 `54164b84dce0b7e62787b1de2885405ff4ed821c` by merge commit `0138fc8aed83b9075d3d5678ec4446ce97cbdd40`.
 The source slice is present in the shared agent
 capability and model-gateway modules, launch assembly, node/project persistence, Canvas context
@@ -22,7 +22,7 @@ the selected model and current gateway environment. Gateway credentials remain h
 never placed in a launch command.
 
 No tests, lint, type checks, builds, packaging, runtime interaction, reviews, audits, debugging,
-or HuiShots were run, per the lane boundary. The generated offline documentation bundle was not
+or screenshots were taken, per the lane boundary. The generated offline documentation bundle was not
 regenerated because that requires the prohibited build step. The parent integration lane owns those
 checks and the final bundled-doc verification. No public issue or pull-request mutation was made.
 
