@@ -76,7 +76,12 @@ export class SettingsStore {
   private async saveNow(settings: Settings, historyOverride?: { action: HistoryAction; label: string }): Promise<void> {
     const before = this.cache
     this.cache = mergeSettings(settings)
-    await writeFileAtomic(this.filePath, JSON.stringify(this.cache, null, 2), { mode: 0o600 })
+    try {
+      await writeFileAtomic(this.filePath, JSON.stringify(this.cache, null, 2), { mode: 0o600 })
+    } catch (error) {
+      this.cache = before
+      throw error
+    }
     for (const cb of this.listeners) { try { cb(this.cache) } catch { /* observers cannot fail a save */ } }
     try { await this.historyRecorder?.(before, this.cache, historyOverride) } catch { /* history is best effort */ }
   }
