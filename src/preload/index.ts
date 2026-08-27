@@ -31,6 +31,7 @@ import type { ConvertQueueItem, ConverterQueueState } from '../shared/converter'
 import type { PullQueueItem, PullQueueState } from '../shared/ollama'
 import type { DockerHostAction, DockerHostJobProgress } from '../shared/docker-host-manager'
 import type { GitLabHostingAction } from '../shared/gitlab-hosting'
+import type { NextcloudAioAction, NextcloudAioJobProgress } from '../shared/nextcloud-aio'
 import type { MinecraftEvent } from '../shared/minecraft'
 import type { NodeDependencyAvailability, NodeDependencyProgress, NodeDependencyInstallResult } from '../shared/node-dependencies'
 import type { WslCreateProgress } from '../shared/wsl'
@@ -41,6 +42,7 @@ import type { CloudflareProgress } from '../shared/cloudflare-core-managers'
 import type { HomeAssistantClientEvent } from '../shared/home-assistant'
 import type { ProjectConsentRequest, ProjectSetupEvent } from '../shared/project-settings'
 import type { CloudflareApi, CloudflareCatalog, CloudflareExecutionProgress, CloudflareExecutionResult } from '../shared/cloudflare-zero-trust'
+import type { GitHubApiRequest, GitHubApiProgress } from '../shared/github-api'
 
 // Fan a single ipcRenderer listener per channel out to many renderer subscribers. Without
 // this, every node that subscribes (e.g. Cmd+M markdown toggle on each terminal/editor) adds
@@ -427,6 +429,21 @@ const api: NodeTerminalApi = {
     selectProvider: (input) => ipcRenderer.invoke(IPC.githubControlSelectProvider, input),
     saveToken: (token) => ipcRenderer.invoke(IPC.githubControlSaveToken, token),
     clearToken: () => ipcRenderer.invoke(IPC.githubControlClearToken)
+  },
+  githubApi: {
+    capabilities: () => ipcRenderer.invoke(IPC.githubApiCapabilities),
+    execute: (request: GitHubApiRequest) => ipcRenderer.invoke(IPC.githubApiExecute, request),
+    cancel: (operationId: string) => ipcRenderer.invoke(IPC.githubApiCancel, operationId),
+    onProgress: subscribe<[GitHubApiProgress]>(IPC.githubApiProgress)
+  },
+  githubCliAccounts: {
+    list: () => ipcRenderer.invoke(IPC.githubCliAccountsList),
+    switchActive: (host, login) => ipcRenderer.invoke(IPC.githubCliAccountsSwitch, host, login),
+    signOut: (host, login) => ipcRenderer.invoke(IPC.githubCliAccountsSignOut, host, login),
+    startLogin: () => ipcRenderer.invoke(IPC.githubCliAccountsStartLogin),
+    loginStatus: (id) => ipcRenderer.invoke(IPC.githubCliAccountsLoginStatus, id),
+    cancelLogin: (id) => ipcRenderer.invoke(IPC.githubCliAccountsCancelLogin, id),
+    refreshAuthorization: (input) => ipcRenderer.invoke(IPC.githubCliAccountsRefresh, input)
   },
   speech: {
     // IPC carries the raw Float32 samples as an ArrayBuffer (structured clone; decodePcmPayload's
@@ -926,6 +943,17 @@ const api: NodeTerminalApi = {
         const handler = (_event: unknown, progress: DockerHostJobProgress) => listener(progress)
         ipcRenderer.on(IPC.dockerHostManagerProgress, handler)
         return () => ipcRenderer.removeListener(IPC.dockerHostManagerProgress, handler)
+      }
+    },
+    nextcloudAio: {
+      contexts: () => ipcRenderer.invoke(IPC.nextcloudAioContexts),
+      snapshot: (context?: string) => ipcRenderer.invoke(IPC.nextcloudAioSnapshot, context),
+      run: (action: NextcloudAioAction) => ipcRenderer.invoke(IPC.nextcloudAioRun, action),
+      cancel: (jobId: string) => ipcRenderer.send(IPC.nextcloudAioCancel, jobId),
+      onProgress: (listener: (progress: NextcloudAioJobProgress) => void) => {
+        const handler = (_event: unknown, progress: NextcloudAioJobProgress) => listener(progress)
+        ipcRenderer.on(IPC.nextcloudAioProgress, handler)
+        return () => ipcRenderer.removeListener(IPC.nextcloudAioProgress, handler)
       }
     },
     start: (projectId?: string) => ipcRenderer.invoke(IPC.relayHostStart, projectId),
