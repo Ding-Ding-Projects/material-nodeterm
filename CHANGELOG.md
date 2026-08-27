@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add the guided Cloudflare core manager node for accounts, zones, DNS, SSL/TLS, rulesets,
+  redirects, cache, and analytics. Typed host operations use a fixed HTTPS API, bounded result
+  bodies, safe previews, cancellation, local sealed credentials, explicit unavailable states, and
+  destructive confirmation. Schema 3 carries only safe operation intent and never carries tokens,
+  provider sessions, local paths, responses, or request state. Every result list has its own plain
+  text search and adjacent anchored full regex builder. Tests, type checks, lint, reviews, security
+  and accessibility checks, builds, packaging, installer execution, runtime interaction, and UI
+  captures were intentionally not run in this ultra-speed lane.
+
 - Complete the Express File Converter flow with queue-wide collision-safe destination names,
   visible rename disclosure, final atomic no-clobber publication, and a completed-output action that
   opens the exact result in Visual Studio Code through the active project API. The converter queue

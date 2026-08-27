@@ -656,6 +656,19 @@ export const IPC = {
   dockerHostManagerRun: 'docker-host-manager:run',
   dockerHostManagerCancel: 'docker-host-manager:cancel',
   dockerHostManagerProgress: 'docker-host-manager:progress',
+  // Guided Cloudflare account, zone, DNS, SSL/TLS, ruleset, redirect, cache, and analytics managers.
+  // Tokens stay in the host credential vault; canvas data carries only safe intent.
+  cloudflareCoreRuntime: 'cloudflare-core:runtime',
+  cloudflareCoreCredentials: 'cloudflare-core:credentials',
+  cloudflareCoreSaveCredential: 'cloudflare-core:save-credential',
+  cloudflareCoreRemoveCredential: 'cloudflare-core:remove-credential',
+  cloudflareCoreBinding: 'cloudflare-core:binding',
+  cloudflareCoreBind: 'cloudflare-core:bind',
+  cloudflareCoreUnbind: 'cloudflare-core:unbind',
+  cloudflareCorePreview: 'cloudflare-core:preview',
+  cloudflareCoreExecute: 'cloudflare-core:execute',
+  cloudflareCoreCancel: 'cloudflare-core:cancel',
+  cloudflareCoreProgress: 'cloudflare-core:progress',
   // Team Access (multi-seat): `relayHostInvite` ADDS a seat (invoke, `{ projectId?, email? }` →
   // `{ offer }`, cap-checked → rejects `E_SEATS_FULL`); `relayHostRevoke` (send, `{ id }`) cuts one
   // bridged peer's live session. `relayHostPeerPending`/`relayHostOpen` now also carry the seat

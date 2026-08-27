@@ -189,6 +189,19 @@ export function buildStubApi(): Omit<
       completeOAuth: () => Promise.resolve({ status: 'rejected' as const, account: null, reason: mapLocalVocabularyText('Provider callbacks are not accepted on this surface.') }),
       removeAccount: () => Promise.resolve({ ok: false as const, error: mapLocalVocabularyText('Provider accounts are not connected on this surface.') })
     },
+    cloudflareCoreManagers: {
+      runtime: U('cloudflareCoreManagers.runtime'),
+      credentials: U('cloudflareCoreManagers.credentials'),
+      saveCredential: U('cloudflareCoreManagers.saveCredential'),
+      removeCredential: U('cloudflareCoreManagers.removeCredential'),
+      binding: U('cloudflareCoreManagers.binding'),
+      bind: U('cloudflareCoreManagers.bind'),
+      unbind: U('cloudflareCoreManagers.unbind'),
+      preview: U('cloudflareCoreManagers.preview'),
+      execute: U('cloudflareCoreManagers.execute'),
+      cancel: U('cloudflareCoreManagers.cancel'),
+      onProgress: noopUnsub
+    },
     ssh: {
       list: U('ssh.list'),
       save: U('ssh.save'),
