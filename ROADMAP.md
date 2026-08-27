@@ -37,6 +37,14 @@ later commit, since this file will not be kept in lockstep with every merge).
       branches inside one guarded operation, preserving the fail-closed ownership and adoption
       predicates; its single-file esbuild transform reports syntax-only success.
 
+      Portable board-comment attachments now re-export the shared byte-derived detector through
+      `src/core/board-attachments.ts`, so `src/core/portable-project-import.ts` retains one
+      classification boundary while preserving path safety, MIME checks, attachment limits, and
+      archive integrity validation. Syntax-only evidence was unavailable in this isolated lane
+      because `esbuild` is not installed; broader verification remains pending. The ultra-speed
+      pass intentionally omits tests, type checks, lint, reviews, accessibility and security
+      checks, runtime interaction, and screen captures after activation.
+
       The residual duplicate pass now removes the stale recursive PTY end-session wrapper, keeps
       the current Windows font fallback and explicit no-dictation speech default, and separates
       the torrent callback field from its task subscription method. All three changed source files

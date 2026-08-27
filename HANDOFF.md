@@ -1,5 +1,28 @@
 # Handoff
 
+## 2026-08-27, portable board-attachment detector export
+
+`src/core/board-attachments.ts` already consumed the shared byte-derived
+`detectBoardAttachmentKind` implementation, including the current file, image, audio, and video
+classification contract. A merge left the imported value unexported from the core attachment
+boundary, while `src/core/portable-project-import.ts` correctly imported it from that boundary.
+
+The repair adds one explicit re-export and keeps the shared implementation as the single source of
+truth. Portable import therefore continues to validate bounded attachment bytes, MIME and kind,
+SHA-256, archive paths, and symlink-safe destinations without duplicating the detector or changing
+the attachment schema. The adjacent source scan found one detector definition in
+`src/shared/comment-attachments.ts`, one core re-export, one import in portable import, and the
+expected materialize, read, and archive-validation call sites.
+
+Direct records are `CHANGELOG.md`, `ROADMAP.md`, and this handoff. No tests, type checks, lint,
+reviews, audits, builds, packaging, runtime interaction, or screen captures were run under the
+ultra-speed boundary. The parent integration lane owns broader verification, release work, and
+the combined pull request.
+
+Board attachment merge leftovers 清走晒：shared detector 保留一份，core export boundary 補返，
+portable import 繼續用同一個 classification，limits、path safety、hash 同 archive validation
+冇改。今次只做 source-level repair，其他 checks 留返 parent integration lane。
+
 ## 2026-08-27, Cloudflare Tunnel route-planner merge reconstruction
 
 `src/shared/cloudflare-tunnels.ts` retained the one-line existing-route conflict return from one
