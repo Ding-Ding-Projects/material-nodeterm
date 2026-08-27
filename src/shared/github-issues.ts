@@ -176,6 +176,55 @@ export interface GitHubControlView {
   }
 }
 
+/** Public account metadata returned by the host-owned `gh` account manager. Tokens and other
+ * credential material are deliberately absent. Empty arrays mean the CLI could not provide that
+ * metadata, not that the account has no scopes or organizations. */
+export interface GitHubCliAccount {
+  host: string
+  login: string
+  active: boolean
+  state: 'authenticated' | 'unauthenticated' | 'unknown'
+  tokenSource?: string
+  scopes: string[]
+  organizations: string[]
+  writableOwners: string[]
+}
+
+export interface GitHubCliAccountList {
+  accounts: GitHubCliAccount[]
+  active: GitHubCliAccount | null
+  ghInstalled: boolean
+  refreshedAt: number
+  error?: string
+}
+
+export interface GitHubCliLoginSession {
+  id: string
+  state: 'starting' | 'waiting' | 'completed' | 'failed' | 'cancelled' | 'expired'
+  startedAt: number
+  expiresAt: number
+  verificationUri?: string
+  userCode?: string
+  message?: string
+  opened?: boolean
+}
+
+export interface GitHubCliRefreshInput {
+  host: string
+  login: string
+  scopes?: string[]
+}
+
+export interface GitHubCliAccountsApi {
+  list(): Promise<GitHubCliAccountList>
+  switchActive(host: string, login: string): Promise<GitHubCliAccountList>
+  signOut(host: string, login: string): Promise<GitHubCliAccountList>
+  startLogin(): Promise<GitHubCliLoginSession>
+  loginStatus(sessionId: string): GitHubCliLoginSession
+  cancelLogin(sessionId: string): Promise<void>
+  refreshAuthorization(input: GitHubCliRefreshInput): Promise<GitHubCliLoginSession>
+}
+
 export interface GitHubIssuesApi {
   subscribe(projectId: string): Promise<GitHubIssuePage>
   unsubscribe(projectId: string): Promise<void>

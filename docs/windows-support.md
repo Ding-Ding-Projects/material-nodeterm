@@ -7,13 +7,12 @@ platform-difference defects were found, what now guards against them, and what i
 Keep the split — a user reading "what degrades" should not have to wade through regex archaeology,
 and a contributor about to touch a path needs the archaeology.
 
-**The Windows installer workflow is manual-only and accepts only `main`, on `windows-latest`.** It
-is designed to build a real Squirrel.Windows set (`Setup.exe`, full `.nupkg`, `RELEASES`), unsigned
-by policy, then stage it as a draft, verify the complete hosted inventory, and only then make it
-non-draft and downloadable. Automatic publication is disabled because there is no push trigger.
-The committed definition is manually dispatchable, while the hosted workflow is recorded as
-manually disabled. This change does not publish `0.4.0`, and publication remains pending the two
-packaged interactions below.
+**The Windows installer workflow accepts pushes to `main` and manual dispatch on `windows-latest`.**
+It builds a real unsigned Squirrel.Windows set (`Setup.exe`, full `.nupkg`, `RELEASES`, and any
+matching delta), stages it as a draft, verifies the complete hosted inventory, and only then makes
+it non-draft and downloadable. The workflow contains no test or lint step. The active delivery
+scope is Windows only, and ZIP, NSIS-only, MSI-only, MSIX-only, and portable-only parallel routes
+are not supported.
 
 **A prior revision also built locally**, which it did not for most of this work. At
 `19e8296b9f355e0e11e5ee7ab25856f9d3351cef`, `build.bat /s` completed in about 107 s and
@@ -322,11 +321,10 @@ outside that branding gate because the pinned builder has no supported resource-
 
    Visual Studio has no per-user Build Tools install, and Microsoft forbids programmatic
    `--quiet`/`--passive` use by an unelevated user. The script checks elevation before starting the
-   installer and exits access-denied with an absolute **helper-only** Administrator Command Prompt
-   remedy. Run only the printed `ensure-windows-build-toolchain.mjs ...
-   --elevated-toolchain-only` command elevated, close that prompt, and rerun the root BAT normally.
-   The root BAT refuses to continue toward Python/npm under an Administrator token. It does not
-   trigger UAC, because `/s` is prompt-free and ordinary dependency installs are automatic too.
+   installer. An interactive root BAT hands only the helper to UAC, waits for completion, and then
+   verifies the result from the normal user process. A `/s` run never opens UAC and exits
+   access-denied with the exact elevated-helper requirement. The root BAT refuses to continue toward
+   Python/npm under an Administrator token.
    An observed non-elevated `setup.exe modify ... --quiet --norestart` parsed the command but exited
    5007 with “run elevated from the beginning,” matching the documented boundary.
 3. **Python is missing or unsupported.** npm lifecycle scripts compile `smart-whisper`/`node-pty`
