@@ -25,6 +25,12 @@ Renaming validates the same name contract. A profile name is project intent, so 
 `.nodeterm/project.json`; cookies, local storage, cache, extension directories, process handles, and
 other session data are not.
 
+The picker never borrows the user's unrelated browser profile or a running browser window. Each
+embedded guest is created in the partition selected by the node, and main records the exact guest
+window and surface identity before it can accept popup or agent-control events. A canvas guest and a
+kanban modal guest for the same node remain distinct owners, so closing one cannot leave the other
+with a stale lifecycle handle.
+
 Two nodes using the same profile share that profile's local browser session. Different profiles use
 different persistent Electron partitions. A node keeps its selected profile identifier even if the
 name is later removed, so an accidental name removal cannot silently merge the node into the default
@@ -41,6 +47,12 @@ and returns the exact failure to the caller.
 Removing a profile removes only its portable project name. Existing nodes retain their isolated
 partition until the user deliberately resets it. This distinction avoids claiming local data was
 deleted when only a project label changed.
+
+Reset is bounded and cancellable at the operation surface. The confirmation action disables its
+submit path while the local session is being cleared, reports success or the exact failure through a
+reviewable notification, and never retries an unknown partition. A node close, project switch,
+renderer restart, guest crash, or memory-saver discard unregisters the guest and revokes any agent
+control lease. Reopening uses the saved URL and partition intent, not a stale process or window id.
 
 ## Portability
 
@@ -70,6 +82,9 @@ and no claim that a login travelled with the project file.
   parity.
 - Electron supports unpacked extensions only and does not implement all Chrome extension APIs. The
   extension surface reports those limits instead of claiming Chrome Web Store parity.
+- Embedded Chromium progress is limited to the events Electron actually exposes for the guest. The
+  surface reports loading, stopped, failed, and cancelled states, but never invents byte progress
+  for a page navigation whose engine does not provide it.
 
 ## Security and privacy
 
@@ -78,6 +93,11 @@ IPC reset input is checked again at the main-process boundary. Local browser dat
 the project sync path, included in an export, or copied into a portable archive. Agent control is
 revoked when the guest is unregistered or the node closes, so a stale debugger lease cannot survive
 the browser lifecycle.
+
+The lifecycle also owns the exact process and window boundary: no arbitrary browser process is
+attached, no external browser profile is reused, and no renderer-supplied web contents identifier is
+accepted without main-process type validation. A crash or unexpected guest disappearance degrades to
+an explicit unavailable state and can be recovered by reopening the node.
 
 The browser address route accepts only HTTP(S) and file URLs according to the shared URL policy;
 unsupported schemes become searches rather than executable page navigation. No arbitrary shell

@@ -1,5 +1,17 @@
 # Handoff
 
+## 2026-08-27, Browser Portal record refresh, issue #63
+
+The Browser Portal records were refreshed after fetching and inspecting the exact `origin/main`
+tip `54164b84dce0b7e62787b1de2885405ff4ed821c`. The feature article, site article, and offline
+article now state the no-profile-borrowing boundary, exact canvas/modal guest ownership, bounded
+navigation states, safe close/restart/crash recovery, and the Server Edition and mobile limitations.
+The roadmap remains unticked because built-artifact evidence is still pending.
+
+This pass did not merge the diverged 128-commit `origin/main` history into the feature jer and did
+not rewrite the existing Browser Portal commit. No Chuts, lint, type checks, builds, packaging,
+runtime interaction, reviews, audits, or HuiShots were run.
+
 ## 2026-08-27, Browser Portal implementation, issue #63
 
 The Browser Portal lane is implemented on `feat/program-52-browser-portal`. The browser profile

@@ -8,6 +8,11 @@
   lint, reviews, security or accessibility checks, builds, packaging, runtime interaction, or UI
   captures.
 
+- Refresh the Browser Portal documentation with the exact no-profile-borrowing boundary, guest
+  process/window ownership, restart and crash recovery, bounded navigation states, and the honest
+  Server Edition and mobile boundaries. This record-only pass reconciled against fetched
+  `origin/main` `54164b84dce0b7e62787b1de2885405ff4ed821c` without rewriting the lane history.
+
 - Complete the Express File Converter flow with queue-wide collision-safe destination names,
   visible rename disclosure, final atomic no-clobber publication, and a completed-output action that
   opens the exact result in Visual Studio Code through the active project API. The converter queue
