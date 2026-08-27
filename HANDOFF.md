@@ -1,5 +1,21 @@
 # Handoff
 
+## 2026-08-27, repository grouping and linked-project drill-through, issue #86
+
+This feature checkout was reconciled with exact `origin/main` tip
+`54164b84dce0b7e62787b1de2885405ff4ed821c` in merge commit `cc2a1941`. The implementation commit
+`451605b314c709da56c67bc176c78424898ecc26` adds repository-root session grouping, per-project
+repository-root facts, active-repository unbound worktree rows, reversible group drill-through,
+and safe linked-project `projectRef` drill-through. Local and SSH projects remain separate, group
+edits merge back into the complete parent snapshot, and missing, unavailable, or closed linked
+projects remain visible but cannot be opened.
+
+Direct documentation is `docs/features/canvas/grouping-and-drill-through.md`, indexed from
+`docs/features/canvas/README.md`. `CHANGELOG.md` records the same scope and verification boundary.
+No tests, lint, type checks, builds, packaging, runtime interaction, reviews, audits, or captures
+were run in this lane. The parent integration lane owns those checks, any docs-bundle regeneration,
+main integration, issue comments, release work, and cleanup.
+
 ## 2026-08-27, AWS core-service managers, issue #46 PR preparation
 
 The issue jer was reconciled with the exact `origin/main` tip `2472cf23b99559005476841d3db5e6bc4691ac06`.

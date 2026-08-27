@@ -27,6 +27,9 @@ The pan/zoom surface nodeterm is built around, and everything that lives on it.
 - [Canvas & node lifecycle](./canvas-and-lifecycle.md) — how nodes mount, unmount, park, and
   release memory as you pan around a large canvas; context menus, undo/redo, selection, and
   bounded wheel zoom speed.
+- [Repository grouping and canvas drill-through](./grouping-and-drill-through.md) - repository
+  grouping, adoptable worktrees, reversible group views, linked-project references, and honest
+  unavailable states.
 - [Bounded wheel zoom and speed](./wheel-zoom-speed.md) — the shared 40 ms burst budget, plain-
   wheel-only speed multiplier, point-of-use validation, persistence, and verification boundary.
   desktop trackpad gesture facts for wheel routing.
