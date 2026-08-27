@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add the guided Nextcloud AIO hosting profile for issue #52. It uses a pinned official image,
+  explicitly discloses read-only Docker socket authority, refuses privileged mode and arbitrary
+  shell input, and provides local binding, health, update, backup, restore, rollback, cancellation,
+  and progress states. Schema 3 carries safe intent only; Docker context, socket, host paths,
+  container state, backup data, and credentials remain local. This ultra-speed lane intentionally
+  did not run tests, type checks, lint, reviews, security or accessibility checks, builds, packaging,
+  installer execution, runtime interaction, or captures.
+
 - Rebuild the README from the ground up around the current Windows delivery path, genuine product
   captures, explicit evidence boundaries, and a compact top-level index. Keep 9 current key
   screenshots visible without disclosure controls, add 25 committed feature GIF recordings for

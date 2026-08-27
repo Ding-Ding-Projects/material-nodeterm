@@ -11,6 +11,7 @@ import { DEFAULT_HOME_ASSISTANT_SENSOR_CONFIG, type HomeAssistantSensorConfig } 
 import type { AlarmOccurrence, AlarmRecurrence } from '@shared/alarm-clock'
 import type { ServiceConnection } from '@shared/node-exec'
 import { DEFAULT_GITLAB_HOSTING_CONFIG, type GitLabHostingConfig } from '@shared/gitlab-hosting'
+import { NEXTCLOUD_AIO_DEFAULT_CONFIG } from '@shared/nextcloud-aio'
 import type { NsisLocalPaths, NsisSpec } from '@shared/nsis-form-types'
 import { defaultNsisLocalPaths, defaultNsisSpec } from '@shared/nsis-form-types'
 import type { AgentId, AgentPermissionMode, BuiltinAgentId } from '@shared/agents/config'
@@ -259,6 +260,8 @@ export interface NodeData {
   /** service-kinds only: the display name the user gave this manager. See `CanvasNodeState`. */
   serviceLabel?: string
   gitlabHostingConfig?: GitLabHostingConfig
+  /** Nextcloud AIO safe deployment intent; live Docker bindings remain outside project data. */
+  nextcloudAioConfig?: import('@shared/nextcloud-aio').NextcloudAioConfig
   /** Cloudflare manager safe intent; local credential and provider state never enters project data. */
   cloudflareCoreIntent?: CloudflarePortableIntent
   /** Access, Zero Trust, Workers, Pages, R2, D1 and Queues intent; account state stays local. */
@@ -1584,7 +1587,8 @@ export const SERVICE_NODE_LABELS: Record<ServiceNodeKind, string> = {
   gitlab: 'GitLab',
   homeassistant: 'Home Assistant',
   freepbx: 'FreePBX',
-  'cloudflare-zero-trust': 'Cloudflare managers'
+  'cloudflare-zero-trust': 'Cloudflare managers',
+  'nextcloud-aio': 'Nextcloud AIO'
 }
 
 /**
@@ -1621,7 +1625,8 @@ export function createServiceNode(
       group: null,
       serviceLabel: '',
       ...(kind === 'homeassistant' ? { homeAssistantIntent: { ...DEFAULT_HOME_ASSISTANT_NODE_INTENT } } : {}),
-      ...(kind === 'cloudflare-zero-trust' ? { cloudflareZeroTrustIntent: { schemaVersion: 1, manager: null, operation: null, accountHint: null, resourceHint: null, values: {} } } : {})
+      ...(kind === 'cloudflare-zero-trust' ? { cloudflareZeroTrustIntent: { schemaVersion: 1, manager: null, operation: null, accountHint: null, resourceHint: null, values: {} } } : {}),
+      ...(kind === 'nextcloud-aio' ? { nextcloudAioConfig: { ...NEXTCLOUD_AIO_DEFAULT_CONFIG } } : {})
     }
   }
 }
@@ -2282,6 +2287,7 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   homeassistant: true,
   'homeassistant-sensor': true,
   freepbx: true,
+  'nextcloud-aio': true,
   'gitlab-hosting': true,
   'cloudflare-zero-trust': true,
   'cloudflare-core-managers': true,
@@ -2337,6 +2343,7 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   homeassistant: SERVICE_SUMMARY_SIZE,
   'homeassistant-sensor': HOME_ASSISTANT_SENSOR_SIZE,
   freepbx: SERVICE_SUMMARY_SIZE,
+  'nextcloud-aio': SERVICE_CONSOLE_SIZE,
   'gitlab-hosting': { width: 700, height: 620 },
   'cloudflare-zero-trust': SERVICE_CONSOLE_SIZE,
   'cloudflare-core-managers': CLOUDFLARE_CORE_MANAGERS_SIZE,
@@ -2797,6 +2804,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         text: n.text,
         serviceLabel: n.serviceLabel,
         gitlabHostingConfig: n.gitlabHostingConfig,
+        nextcloudAioConfig: n.nextcloudAioConfig,
         homeAssistantIntent: n.homeAssistantIntent,
         universeCanvasId: n.universeCanvasId,
         universeScope: n.universeScope,
@@ -2925,6 +2933,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         text: n.data.text,
         serviceLabel: n.data.serviceLabel,
         gitlabHostingConfig: n.data.gitlabHostingConfig,
+        nextcloudAioConfig: n.data.nextcloudAioConfig,
         homeAssistantIntent: n.data.homeAssistantIntent,
         universeCanvasId: n.data.universeCanvasId,
         universeScope: n.data.universeScope,
