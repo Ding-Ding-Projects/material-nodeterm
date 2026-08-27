@@ -1485,7 +1485,7 @@ shows the searchable Include/Omit/Locate Later decision surface, and leaves the 
 operation untouched when the picker is cancelled. The selected source path and source name remain
 transient renderer state only. The archive writer still needs a follow-up adapter to consume the
 selected streaming sources and emit schema 3 media entries; no portable record claims those paths.
-No tests, builds, type checks, captures, commits, or dews were made.
+No tests, builds, type checks, captures, commits, or pushes were made.
 ## 2026-08-27, shared provider services and local binding integration, issue #18
 
 Added `src/shared/provider-services.ts` and `src/core/provider-services.ts` as the shared provider
@@ -3452,7 +3452,7 @@ registered as `timer`, has add-node, context-menu, and command-palette creation 
 countdown, stopwatch, interval sequences, pause/resume, laps, repeats, missed/completed occurrence
 state, one-shot non-blocking alarms, and versioned JSON export data.
 
-Documentation is in `docs/features/canvas/timer-nodes.md`. Tests, builds, captures, commits, and dews
+Documentation is in `docs/features/canvas/timer-nodes.md`. Tests, builds, captures, commits, and pushes
 were intentionally left to the parent integration lane.
 # Issue #25: Wild dim sum node source lane
 
