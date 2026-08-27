@@ -23,6 +23,9 @@ import type { NodeDependenciesApi } from '../../shared/node-dependencies'
 import type { TorrentApi, TorrentTaskState } from '../../shared/torrent'
 import type { VirtualMachineApi } from '../../shared/virtual-machine'
 import type { CalendarApi, CalendarProvider } from '../../shared/calendar'
+import type { HomeAssistantApi } from '../../shared/home-assistant'
+import type { HomeAssistantControlApi } from '../../shared/home-assistant-control'
+import type { HomeAssistantSensorApi } from '../../shared/home-assistant-sensor'
 import {
   UNKNOWN_CLAUDE_CLI_CAPS,
   type BoardLogApi,
@@ -469,16 +472,16 @@ export function buildRealApi(
       ok: false,
       error: mapLocalVocabularyText('Project archive import is available in the Windows desktop app.')
     }),
+    portableMedia: {
+      prepare: async () => ({
+        ok: false,
+        error: mapLocalVocabularyText('Portable media preparation is available in the Windows desktop app.')
+      }),
+      discard: async () => false
+    },
     portableBindings: {
-      state: async (input: { nodeId: string; featureId: string; displayLabel: string; hasMissingAssets?: boolean }) => [{
-        nodeId: input.nodeId,
-        featureId: input.featureId,
-        displayLabel: input.displayLabel,
-        action: 'leave-unbound' as const,
-        enabled: true,
-        bound: false
-      }],
-      apply: async () => ({ ok: false as const, error: 'Destination bindings are available only in the desktop app.' })
+      state: (input) => client.request(IPC.portableBindingState, input) as ReturnType<WorkspaceApi['portableBindings']['state']>,
+      apply: (input) => client.request(IPC.portableBindingApply, input) as ReturnType<WorkspaceApi['portableBindings']['apply']>
     },
     onArchiveProgress: () => () => {},
     cancelArchiveImport: async () => false,
@@ -627,7 +630,9 @@ export function buildRealApi(
     save: (file: PlannerFile) => client.request(IPC.plannerSave, file) as ReturnType<PlannerApi['save']>,
     history: () => client.request(IPC.plannerHistory) as Promise<PlannerOccurrence[]>,
     export: (format) => client.request(IPC.plannerExport, format) as ReturnType<PlannerApi['export']>,
+    configure: (schedules) => client.request(IPC.plannerConfigure, schedules) as ReturnType<PlannerApi['configure']>,
     onOccurrence: (cb) => client.subscribe(IPC.plannerOccurrence, cb as Listener)
+  }
   const agent: NodeTerminalApi['agent'] = {
     // Deliberately NOT a request: the server registers no env-snapshot handler (a full host-env
     // dump answerable by any authenticated WS client is the PR #195 leak class at the RPC layer).
@@ -721,6 +726,21 @@ export function buildGitHubApi(
   }
 
   return { githubIssues, githubControl }
+}
+
+export function buildProviderServicesApi(
+  client: RpcClient
+): Pick<NodeTerminalApi, 'providerServices'> {
+  return {
+    providerServices: {
+      catalog: () => client.request(IPC.providerCatalog) as ReturnType<NodeTerminalApi['providerServices']['catalog']>,
+      accounts: (providerId) => client.request(IPC.providerAccounts, providerId) as ReturnType<NodeTerminalApi['providerServices']['accounts']>,
+      resources: (accountId, capability) => client.request(IPC.providerResources, accountId, capability) as ReturnType<NodeTerminalApi['providerServices']['resources']>,
+      beginOAuth: (providerId) => client.request(IPC.providerBeginOAuth, providerId) as ReturnType<NodeTerminalApi['providerServices']['beginOAuth']>,
+      completeOAuth: (callbackUrl) => client.request(IPC.providerCompleteOAuth, callbackUrl) as ReturnType<NodeTerminalApi['providerServices']['completeOAuth']>,
+      removeAccount: (accountId) => client.request(IPC.providerRemoveAccount, accountId) as ReturnType<NodeTerminalApi['providerServices']['removeAccount']>
+    }
+  }
 }
 
 /**
@@ -1152,6 +1172,7 @@ export function buildTorrentApi(client: RpcClient): Pick<NodeTerminalApi, 'torre
     onTask: (listener) => client.subscribe(IPC.torrentTask, listener as (payload: TorrentTaskState) => void)
   }
   return { torrent }
+}
 /** Linux ISO VM manager. The server process owns QEMU and exposes only the bounded lifecycle API. */
 export function buildVirtualMachineApi(client: RpcClient): Pick<NodeTerminalApi, 'virtualMachine'> {
   const virtualMachine: VirtualMachineApi = {
@@ -1168,6 +1189,7 @@ export function buildVirtualMachineApi(client: RpcClient): Pick<NodeTerminalApi,
     onEvent: (listener) => client.subscribe(IPC.virtualMachineEvent, listener as Listener)
   }
   return { virtualMachine }
+}
 /** Calendar nodes use the same host-owned CorePlatform in the desktop and Server Edition. */
 export function buildCalendarApi(client: RpcClient): Pick<NodeTerminalApi, 'calendar'> {
   const calendar: CalendarApi = {
@@ -1178,11 +1200,52 @@ export function buildCalendarApi(client: RpcClient): Pick<NodeTerminalApi, 'cale
     importIcs: (id, text, name) => client.request(IPC.calendarImportIcs, id, text, name) as ReturnType<CalendarApi['importIcs']>,
     refresh: (id, config) => client.request(IPC.calendarRefresh, id, config) as ReturnType<CalendarApi['refresh']>,
     beginOAuth: (provider: Exclude<CalendarProvider, 'local' | 'ics'>) => client.request(IPC.calendarBeginOAuth, provider) as ReturnType<CalendarApi['beginOAuth']>,
+    connectCalDav: (input) => client.request(IPC.calendarConnectCalDav, input) as ReturnType<CalendarApi['connectCalDav']>,
+    disconnectAccount: (accountId) => client.request(IPC.calendarDisconnectAccount, accountId) as ReturnType<CalendarApi['disconnectAccount']>,
     create: (input) => client.request(IPC.calendarCreate, input) as ReturnType<CalendarApi['create']>,
     update: (input) => client.request(IPC.calendarUpdate, input) as ReturnType<CalendarApi['update']>,
     remove: (id, eventId) => client.request(IPC.calendarRemove, id, eventId) as ReturnType<CalendarApi['remove']>
   }
   return { calendar }
+}
+
+/** Home Assistant uses the same host-owned core service in both shells. */
+export function buildHomeAssistantApi(client: RpcClient): Pick<NodeTerminalApi, 'homeAssistant'> {
+  const homeAssistant: HomeAssistantApi = {
+    instances: () => client.request(IPC.homeAssistantInstances) as ReturnType<HomeAssistantApi['instances']>,
+    saveInstance: (input) => client.request(IPC.homeAssistantSaveInstance, input) as ReturnType<HomeAssistantApi['saveInstance']>,
+    removeInstance: (id) => client.request(IPC.homeAssistantRemoveInstance, id) as ReturnType<HomeAssistantApi['removeInstance']>,
+    discover: (request) => client.request(IPC.homeAssistantDiscover, request) as ReturnType<HomeAssistantApi['discover']>,
+    cancel: (operationId) => client.request(IPC.homeAssistantCancel, operationId) as ReturnType<HomeAssistantApi['cancel']>,
+    onEvent: (listener) => client.subscribe(IPC.homeAssistantEvent, listener as Listener)
+  }
+  return { homeAssistant }
+}
+
+export function buildHomeAssistantControlApi(client: RpcClient): Pick<NodeTerminalApi, 'homeAssistantControl'> {
+  const homeAssistantControl: HomeAssistantControlApi = {
+    connections: () => client.request(IPC.homeAssistantConnections) as ReturnType<HomeAssistantControlApi['connections']>,
+    configure: (input) => client.request(IPC.homeAssistantConfigure, input) as ReturnType<HomeAssistantControlApi['configure']>,
+    bind: (nodeId, connectionId) => client.request(IPC.homeAssistantBind, nodeId, connectionId) as ReturnType<HomeAssistantControlApi['bind']>,
+    status: (nodeId) => client.request(IPC.homeAssistantStatus, nodeId) as ReturnType<HomeAssistantControlApi['status']>,
+    entities: (nodeId) => client.request(IPC.homeAssistantEntities, nodeId) as ReturnType<HomeAssistantControlApi['entities']>,
+    services: (nodeId) => client.request(IPC.homeAssistantServices, nodeId) as ReturnType<HomeAssistantControlApi['services']>,
+    call: (input) => client.request(IPC.homeAssistantCall, input) as ReturnType<HomeAssistantControlApi['call']>,
+    cancel: (nodeId) => client.request(IPC.homeAssistantControlCancel, nodeId) as ReturnType<HomeAssistantControlApi['cancel']>
+  }
+  return { homeAssistantControl }
+}
+
+/** Home Assistant sensor requests run on the host-owned core in both desktop and Server Edition. */
+export function buildHomeAssistantSensorApi(client: RpcClient): Pick<NodeTerminalApi, 'homeAssistantSensor'> {
+  const homeAssistantSensor: HomeAssistantSensorApi = {
+    binding: (nodeId) => client.request(IPC.homeAssistantSensorBinding, nodeId) as ReturnType<HomeAssistantSensorApi['binding']>,
+    configure: (input) => client.request(IPC.homeAssistantSensorConfigure, input) as ReturnType<HomeAssistantSensorApi['configure']>,
+    leaveUnbound: (nodeId) => client.request(IPC.homeAssistantSensorLeaveUnbound, nodeId) as ReturnType<HomeAssistantSensorApi['leaveUnbound']>,
+    discover: (nodeId) => client.request(IPC.homeAssistantSensorDiscover, nodeId) as ReturnType<HomeAssistantSensorApi['discover']>,
+    refresh: (nodeId, config) => client.request(IPC.homeAssistantSensorRefresh, nodeId, config) as ReturnType<HomeAssistantSensorApi['refresh']>
+  }
+  return { homeAssistantSensor }
 }
 
 /**
@@ -1645,6 +1708,10 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildTorrentApi(client),
     ...buildVirtualMachineApi(client),
     ...buildCalendarApi(client),
+    ...buildProviderServicesApi(client),
+    ...buildHomeAssistantApi(client),
+    ...buildHomeAssistantControlApi(client),
+    ...buildHomeAssistantSensorApi(client),
     ...buildUsageApi(client),
     ...buildSessionMemoryApi(client),
     ...buildVsCodeApi(client),

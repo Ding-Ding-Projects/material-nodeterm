@@ -5,7 +5,7 @@ import { useSettings } from '../state/settings'
 import { useNotifications } from '../state/notifications'
 import { playSfx } from '../lib/sfx'
 import { narrate } from '../lib/narrator'
-import { nextAlarmOccurrence, alarmOccurrenceId, localDateTimeToEpoch, type AlarmOccurrence, type AlarmRecurrence, type AlarmSchedule } from '@shared/alarm-clock'
+import { nextAlarmOccurrence, alarmOccurrenceId, localDateTimeToEpoch, validateAlarm, type AlarmOccurrence, type AlarmRecurrence, type AlarmSchedule } from '@shared/alarm-clock'
 import { nodeHeaderFillStyle } from '../lib/nodeColor'
 import { EditableNodeTitle } from '../components/EditableNodeTitle'
 
@@ -70,8 +70,10 @@ export default function AlarmClockNode({ id, data, selected }: NodeProps<CanvasN
   const [regexFlags, setRegexFlags] = useState('i')
   const emittedRef = useRef(new Set<string>())
   const schedule = safeSchedule(data)
+  const scheduleSignature = JSON.stringify(schedule)
   const timeZone = typeof data.alarmTimeZone === 'string' && data.alarmTimeZone ? data.alarmTimeZone : 'UTC'
   const history = Array.isArray(data.alarmHistory) ? data.alarmHistory as AlarmOccurrence[] : []
+  const hostAlarm = window.nodeTerminal.alarm
   const regex = regexOpen && regexPattern ? compileSearch(regexPattern, regexFlags) : null
   const visibleHistory = useMemo(() => {
     const query = search.trim().toLocaleLowerCase()
@@ -90,6 +92,20 @@ export default function AlarmClockNode({ id, data, selected }: NodeProps<CanvasN
     patch({ alarmSchedule: { ...schedule, ...next } })
   }, [patch, schedule])
 
+  const applyHostSnapshot = useCallback((snapshot: Awaited<ReturnType<NonNullable<typeof hostAlarm>['state']>>) => {
+    const alarm = snapshot.alarms.find((item) => item.id === id)
+    if (!alarm) return
+    const hostHistory = snapshot.history.filter((item) => item.alarmId === id)
+    const combined = new Map(history.map((item) => [item.id, item]))
+    hostHistory.forEach((item) => combined.set(item.id, item))
+    const alarmHistory = [...combined.values()].sort((a, b) => a.createdAt - b.createdAt).slice(-1000)
+    const next: Partial<CanvasNode['data']> = {}
+    if (data.alarmEnabled !== alarm.enabled) next.alarmEnabled = alarm.enabled
+    if (data.alarmNextOccurrenceAt !== alarm.nextOccurrenceAt) next.alarmNextOccurrenceAt = alarm.nextOccurrenceAt
+    if (JSON.stringify(history) !== JSON.stringify(alarmHistory)) next.alarmHistory = alarmHistory
+    if (Object.keys(next).length) patch(next)
+  }, [data.alarmEnabled, data.alarmNextOccurrenceAt, history, id, patch])
+
   const deliver = useCallback((occurrence: AlarmOccurrence, kind: 'due' | 'snooze' | 'missed') => {
     const title = String(data.title || 'Alarm Clock')
     const body = kind === 'missed' ? `${title} was missed at ${displayTime(occurrence.scheduledAt, timeZone)}.` : `${title} is due now.`
@@ -99,15 +115,21 @@ export default function AlarmClockNode({ id, data, selected }: NodeProps<CanvasN
       body: `${body} This app cannot wake a powered-off computer.`,
       autoDismissMs: kind === 'missed' ? null : 12_000,
       actions: kind === 'missed' ? undefined : [
-        { label: `Snooze ${data.alarmSnoozeMinutes ?? 10} min`, onClick: () => patch({ alarmHistory: history.map((item) => item.id === occurrence.id ? { ...item, status: 'snoozed', snoozedUntil: Date.now() + Number(data.alarmSnoozeMinutes ?? 10) * 60_000, resolvedAt: undefined } : item) }) },
-        { label: 'Dismiss', onClick: () => patch({ alarmHistory: history.map((item) => item.id === occurrence.id ? { ...item, status: 'dismissed', resolvedAt: Date.now(), snoozedUntil: undefined } : item) }) }
+        { label: `Snooze ${data.alarmSnoozeMinutes ?? 10} min`, onClick: () => {
+          if (hostAlarm) void hostAlarm.snooze(occurrence.id, Number(data.alarmSnoozeMinutes ?? 10)).then(applyHostSnapshot)
+          else patch({ alarmHistory: history.map((item) => item.id === occurrence.id ? { ...item, status: 'snoozed', snoozedUntil: Date.now() + Number(data.alarmSnoozeMinutes ?? 10) * 60_000, resolvedAt: undefined } : item) })
+        } },
+        { label: 'Dismiss', onClick: () => {
+          if (hostAlarm) void hostAlarm.dismiss(occurrence.id).then(applyHostSnapshot)
+          else patch({ alarmHistory: history.map((item) => item.id === occurrence.id ? { ...item, status: 'dismissed', resolvedAt: Date.now(), snoozedUntil: undefined } : item) })
+        } }
       ]
     })
     if (data.alarmSoundEnabled !== false) playSfx('needsYou', settings.soundVolume)
     if (data.alarmNarratorEnabled !== false && settings.narratorEnabled) {
       narrate({ category: `alarm:${id}`, language: settings.narratorLanguage, en: body, yue: kind === 'missed' ? '鬧鐘錯過咗，呢部電腦熄機時唔可以叫醒佢。' : '鬧鐘到喇，呢部電腦熄機時唔可以叫醒佢。', rate: settings.narratorRate, pitch: settings.narratorPitch, voiceEn: settings.narratorVoiceEn, voiceYue: settings.narratorVoiceYue, important: kind !== 'due' })
     }
-  }, [data, history, id, patch, settings, timeZone])
+  }, [applyHostSnapshot, data, history, hostAlarm, id, patch, settings, timeZone])
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000)
@@ -115,6 +137,43 @@ export default function AlarmClockNode({ id, data, selected }: NodeProps<CanvasN
   }, [])
 
   useEffect(() => {
+    if (!hostAlarm) return
+    const input = {
+      id,
+      title: String(data.title || 'Alarm Clock'),
+      enabled: data.alarmEnabled === true,
+      timeZone,
+      schedule,
+      snoozeMinutes: Number(data.alarmSnoozeMinutes ?? 10),
+      soundEnabled: data.alarmSoundEnabled !== false,
+      narratorEnabled: data.alarmNarratorEnabled !== false,
+      nextOccurrenceAt: typeof data.alarmNextOccurrenceAt === 'number' ? data.alarmNextOccurrenceAt : undefined
+    }
+    if (!validateAlarm({ ...input, createdAt: 0, updatedAt: 0 }).ok) return
+    let active = true
+    void hostAlarm.upsert(input).then((snapshot) => {
+      if (active) applyHostSnapshot(snapshot)
+    }).catch(() => {
+      if (active) useNotifications.getState().push({ kind: 'error', title: 'Alarm planner unavailable', body: 'The host could not persist this alarm. The canvas copy remains unchanged.', autoDismissMs: null })
+    })
+    return () => { active = false }
+  }, [applyHostSnapshot, data.alarmEnabled, data.alarmNarratorEnabled, data.alarmNextOccurrenceAt, data.alarmSnoozeMinutes, data.alarmSoundEnabled, data.title, hostAlarm, id, scheduleSignature, timeZone])
+
+  useEffect(() => {
+    if (!hostAlarm) return
+    return hostAlarm.onDue((event) => {
+      if (event.alarm.id !== id) return
+      const alarmHistory = [...history.filter((item) => item.id !== event.occurrence.id), event.occurrence].slice(-1000)
+      const next = event.alarm.schedule.recurrence === 'once'
+        ? null
+        : nextAlarmOccurrence(event.alarm, event.occurrence.scheduledAt)
+      patch({ alarmHistory, alarmEnabled: next !== null, alarmNextOccurrenceAt: next ?? undefined })
+      deliver(event.occurrence, event.kind)
+    })
+  }, [deliver, history, hostAlarm, id, patch])
+
+  useEffect(() => {
+    if (hostAlarm) return
     if (!data.alarmEnabled) return
     const current = typeof data.alarmNextOccurrenceAt === 'number' ? data.alarmNextOccurrenceAt : nextAlarmOccurrence({ timeZone, schedule }, now - 1)
     if (current === null || current === undefined) {
@@ -134,15 +193,16 @@ export default function AlarmClockNode({ id, data, selected }: NodeProps<CanvasN
     const next = schedule.recurrence === 'once' ? null : nextAlarmOccurrence({ timeZone, schedule }, current)
     patch({ alarmHistory: [...history, occurrence].slice(-1000), alarmEnabled: next !== null, alarmNextOccurrenceAt: next ?? undefined })
     deliver(occurrence, late ? 'missed' : 'due')
-  }, [data.alarmEnabled, data.alarmNextOccurrenceAt, deliver, history, id, now, patch, schedule, timeZone])
+  }, [data.alarmEnabled, data.alarmNextOccurrenceAt, deliver, history, hostAlarm, id, now, patch, schedule, timeZone])
 
   useEffect(() => {
+    if (hostAlarm) return
     const expired = history.find((item) => item.status === 'snoozed' && typeof item.snoozedUntil === 'number' && item.snoozedUntil <= now)
     if (!expired) return
     const nextHistory = history.map((item) => item.id === expired.id ? { ...item, status: 'fired' as const, snoozedUntil: undefined } : item)
     patch({ alarmHistory: nextHistory })
     deliver({ ...expired, status: 'fired', snoozedUntil: undefined }, 'snooze')
-  }, [deliver, history, now, patch])
+  }, [deliver, history, hostAlarm, now, patch])
 
   const validDateTime = localDateTimeToEpoch(schedule.date ?? '', schedule.time, timeZone) !== null || schedule.recurrence !== 'once'
   const validWeekdays = schedule.recurrence !== 'weekly' || (schedule.weekdays?.length ?? 0) > 0
@@ -152,8 +212,14 @@ export default function AlarmClockNode({ id, data, selected }: NodeProps<CanvasN
     const next = enabled ? nextAlarmOccurrence({ timeZone, schedule }, now - 1) : null
     patch({ alarmEnabled: enabled && next !== null, alarmNextOccurrenceAt: next ?? undefined })
   }
-  const snooze = (occurrence: AlarmOccurrence) => patch({ alarmHistory: history.map((item) => item.id === occurrence.id ? { ...item, status: 'snoozed', snoozedUntil: now + Number(data.alarmSnoozeMinutes ?? 10) * 60_000, resolvedAt: undefined } : item) })
-  const dismiss = (occurrence: AlarmOccurrence) => patch({ alarmHistory: history.map((item) => item.id === occurrence.id ? { ...item, status: 'dismissed', resolvedAt: now, snoozedUntil: undefined } : item) })
+  const snooze = (occurrence: AlarmOccurrence) => {
+    if (hostAlarm) void hostAlarm.snooze(occurrence.id, Number(data.alarmSnoozeMinutes ?? 10)).then(applyHostSnapshot)
+    else patch({ alarmHistory: history.map((item) => item.id === occurrence.id ? { ...item, status: 'snoozed', snoozedUntil: now + Number(data.alarmSnoozeMinutes ?? 10) * 60_000, resolvedAt: undefined } : item) })
+  }
+  const dismiss = (occurrence: AlarmOccurrence) => {
+    if (hostAlarm) void hostAlarm.dismiss(occurrence.id).then(applyHostSnapshot)
+    else patch({ alarmHistory: history.map((item) => item.id === occurrence.id ? { ...item, status: 'dismissed', resolvedAt: now, snoozedUntil: undefined } : item) })
+  }
   const headerFill = nodeHeaderFillStyle(data.color)
 
   return (
@@ -163,7 +229,10 @@ export default function AlarmClockNode({ id, data, selected }: NodeProps<CanvasN
         <span aria-hidden="true" className="alarm-clock-node__glyph">⏰</span>
         <EditableNodeTitle value={String(data.title ?? '')} onChange={(title) => patch({ title })} emptyLabel="Alarm Clock" title="Click to rename" ariaLabel="Alarm Clock node name" rejectEmpty={false} />
         <span className="term-node__spacer" />
-        <button className="term-node__close" title="Close" aria-label="Close Alarm Clock" onClick={() => void deleteElements({ nodes: [{ id }] })}>×</button>
+        <button className="term-node__close" title="Close" aria-label="Close Alarm Clock" onClick={() => {
+          if (hostAlarm) void hostAlarm.remove(id)
+          void deleteElements({ nodes: [{ id }] })
+        }}>×</button>
       </div>
       <div className="alarm-clock-node__body nodrag nowheel">
         <label>Schedule

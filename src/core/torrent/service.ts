@@ -1,10 +1,10 @@
 import { execFile } from 'node:child_process'
-import { createRequire } from 'node:module'
 import { access, mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
 import { constants as fsConstants, statfsSync } from 'node:fs'
 import { join, resolve, sep } from 'node:path'
 import { promisify } from 'node:util'
 import { randomUUID } from 'node:crypto'
+import { pathToFileURL } from 'node:url'
 import {
   isMagnetUri,
   normalizeSeedPolicy,
@@ -138,6 +138,7 @@ export class TorrentService implements TorrentApi {
   private readonly runtimeRoot: string
   private readonly tasks = new Map<string, TorrentTaskState>()
   private readonly handles = new Map<string, TorrentLike>()
+  private readonly seedTimers = new Map<string, ReturnType<typeof setTimeout>>()
   private readonly listeners = new Set<(task: TorrentTaskState) => void>()
   private readonly onTask?: (task: TorrentTaskState) => void
   private client: WebTorrentClientLike | null = null
@@ -191,16 +192,22 @@ export class TorrentService implements TorrentApi {
     void this.persist()
   }
 
+  private async importRuntime(specifier: string): Promise<WebTorrentCtor> {
+    const loaded = await import(specifier) as { default?: unknown }
+    if (typeof loaded.default !== 'function') throw new Error('WebTorrent did not expose its constructor.')
+    return loaded.default as WebTorrentCtor
+  }
+
   private async resolveRuntime(): Promise<{ ctor: WebTorrentCtor; origin: 'bundled' | 'auto-installed' }> {
     const candidates = [
-      ...(this.options.resourcesPath ? [join(this.options.resourcesPath, 'webtorrent-runtime', 'node_modules', 'webtorrent')] : []),
+      ...(this.options.resourcesPath
+        ? [pathToFileURL(join(this.options.resourcesPath, 'webtorrent-runtime', 'node_modules', 'webtorrent', 'index.js')).href]
+        : []),
       'webtorrent'
     ]
     for (const candidate of candidates) {
       try {
-        const req = candidate === 'webtorrent' ? createRequire(import.meta.url) : createRequire(join(candidate, 'package.json'))
-        const loaded = req(candidate === 'webtorrent' ? candidate : 'webtorrent') as { default?: WebTorrentCtor } | WebTorrentCtor
-        return { ctor: (typeof loaded === 'function' ? loaded : loaded.default) as WebTorrentCtor, origin: 'bundled' }
+        return { ctor: await this.importRuntime(candidate), origin: 'bundled' }
       } catch {
         // Try the next sanctioned location, then the user-scoped auto-install below.
       }
@@ -210,9 +217,8 @@ export class TorrentService implements TorrentApi {
       await execFileAsync(process.platform === 'win32' ? 'npm.cmd' : 'npm', [
         'install', '--prefix', this.runtimeRoot, '--no-save', '--ignore-scripts', `webtorrent@${WEBTORRENT_VERSION}`
       ], { cwd: this.runtimeRoot, windowsHide: true, maxBuffer: 1024 * 1024 })
-      const req = createRequire(join(this.runtimeRoot, 'package.json'))
-      const loaded = req('webtorrent') as { default?: WebTorrentCtor } | WebTorrentCtor
-      return { ctor: (typeof loaded === 'function' ? loaded : loaded.default) as WebTorrentCtor, origin: 'auto-installed' }
+      const specifier = pathToFileURL(join(this.runtimeRoot, 'node_modules', 'webtorrent', 'index.js')).href
+      return { ctor: await this.importRuntime(specifier), origin: 'auto-installed' }
     } catch (error) {
       throw new Error(`WebTorrent runtime unavailable: ${error instanceof Error ? error.message : String(error)}`)
     }
@@ -255,12 +261,12 @@ export class TorrentService implements TorrentApi {
     }
   }
 
-  async inspect(input: { sourceKind: TorrentSourceKind; sourceRef: string }): Promise<TorrentTaskState> {
+  async inspect(input: { nodeId: string; sourceKind: TorrentSourceKind; sourceRef: string }): Promise<TorrentTaskState> {
     await this.initPromise
     await this.readTorrentSource(input)
     const runtime = await this.runtime()
     if (!runtime.available || !this.client) throw new Error(runtime.detail ?? 'WebTorrent runtime is unavailable.')
-    const task = this.newTask({ nodeId: '', sourceKind: input.sourceKind, sourceRef: input.sourceRef, destination: '' })
+    const task = this.newTask({ nodeId: input.nodeId, sourceKind: input.sourceKind, sourceRef: input.sourceRef, destination: '' })
     await this.attach(task, true)
     return safeTask(this.tasks.get(task.id) ?? task)
   }
@@ -311,7 +317,8 @@ export class TorrentService implements TorrentApi {
     const update = (): void => {
       const current = this.tasks.get(task.id)
       if (!current) return
-      const files = (torrent.files ?? []).slice(0, TORRENT_MAX_FILES).map((file) => {
+      const runtimeFiles = (torrent.files ?? []).slice(0, TORRENT_MAX_FILES)
+      const files = runtimeFiles.length > 0 ? runtimeFiles.map((file) => {
         const relativePath = (file.path ?? file.name ?? '').replaceAll('\\', '/')
         return {
           path: relativePath,
@@ -320,18 +327,16 @@ export class TorrentService implements TorrentApi {
           selected: current.files.find((entry) => entry.path === relativePath)?.selected ?? true,
           downloadedBytes: Math.min(finiteNumber(file.downloaded), finiteNumber(file.length))
         } satisfies TorrentFileInfo
-      }).filter((file) => safeTorrentRelativePath(file.path))
+      }).filter((file) => safeTorrentRelativePath(file.path)) : current.files
       const totalBytes = files.reduce((sum, file) => sum + file.sizeBytes, 0) || finiteNumber(torrent.length)
       const downloadedBytes = files.reduce((sum, file) => sum + file.downloadedBytes, 0) || finiteNumber(torrent.downloaded)
       const speed = finiteNumber(torrent.downloadSpeed)
       const ratio = finiteNumber(torrent.ratio) || (downloadedBytes > 0 ? finiteNumber(torrent.uploaded) / downloadedBytes : 0)
       const progress = totalBytes > 0 ? Math.min(1, downloadedBytes / totalBytes) : Math.min(1, finiteNumber(torrent.progress))
       const status: TorrentTaskStatus = current.status === 'paused' ? 'paused' : progress >= 1 ? 'completed' : 'downloading'
-      this.emit({ ...current, name: torrent.name || current.name, files, totalBytes, downloadedBytes, progress, speedBytesPerSecond: speed, peers: Math.round(finiteNumber(torrent.numPeers)), etaSeconds: speed > 0 && totalBytes > downloadedBytes ? Math.ceil((totalBytes - downloadedBytes) / speed) : null, uploadedBytes: finiteNumber(torrent.uploaded), ratio, status, error: null })
-      if (status === 'completed' && current.seedPolicy.kind === 'never') void this.stopHandle(task.id, false)
-      if (status === 'completed' && current.seedPolicy.kind === 'ratio' && ratio >= current.seedPolicy.ratio) {
-        void this.stopHandle(task.id, false)
-      }
+      const next = { ...current, name: torrent.name || current.name, files, totalBytes, downloadedBytes, progress, speedBytesPerSecond: speed, peers: Math.round(finiteNumber(torrent.numPeers)), etaSeconds: speed > 0 && totalBytes > downloadedBytes ? Math.ceil((totalBytes - downloadedBytes) / speed) : null, uploadedBytes: finiteNumber(torrent.uploaded), ratio, status, error: null }
+      this.emit(next)
+      if (status === 'completed') this.applyCompletionSeedPolicy(next)
     }
     const metadata = (): void => {
       update()
@@ -377,7 +382,11 @@ export class TorrentService implements TorrentApi {
     await this.initPromise
     const task = this.tasks.get(taskId)
     if (!task || !destination || destination.length > 4096) return null
-    this.emit({ ...task, destination })
+    const next = { ...task, destination, status: 'metadata' as const, error: null }
+    await this.stopHandle(taskId, false)
+    this.emit(next)
+    const runtime = await this.runtime()
+    if (runtime.available && this.client) await this.attach(next, true)
     return safeTask(this.tasks.get(taskId)!)
   }
 
@@ -415,6 +424,39 @@ export class TorrentService implements TorrentApi {
     this.handles.delete(taskId)
   }
 
+  private clearSeedTimer(taskId: string): void {
+    const timer = this.seedTimers.get(taskId)
+    if (timer) clearTimeout(timer)
+    this.seedTimers.delete(taskId)
+  }
+
+  private applyCompletionSeedPolicy(task: TorrentTaskState): void {
+    if (task.seedPolicy.kind === 'never') {
+      this.clearSeedTimer(task.id)
+      void this.stopHandle(task.id, false)
+      return
+    }
+    if (task.seedPolicy.kind === 'ratio') {
+      this.clearSeedTimer(task.id)
+      if (task.ratio >= task.seedPolicy.ratio) void this.stopHandle(task.id, false)
+      return
+    }
+    if (this.seedTimers.has(task.id)) return
+    const minutes = task.seedPolicy.minutes
+    if (minutes <= 0) {
+      void this.stopHandle(task.id, false)
+      return
+    }
+    const timer = setTimeout(() => {
+      this.seedTimers.delete(task.id)
+      const current = this.tasks.get(task.id)
+      if (current?.status === 'completed' && current.seedPolicy.kind === 'minutes' && current.seedPolicy.minutes === minutes) {
+        void this.stopHandle(task.id, false)
+      }
+    }, minutes * 60_000)
+    this.seedTimers.set(task.id, timer)
+  }
+
   async start(taskId: string): Promise<TorrentTaskState | null> {
     const task = this.tasks.get(taskId)
     if (!task) return null
@@ -448,6 +490,7 @@ export class TorrentService implements TorrentApi {
   async cancel(taskId: string): Promise<TorrentTaskState | null> {
     const task = this.tasks.get(taskId)
     if (!task) return null
+    this.clearSeedTimer(taskId)
     await this.stopHandle(taskId, false)
     this.emit({ ...task, status: 'cancelled', speedBytesPerSecond: 0, etaSeconds: null })
     return safeTask(this.tasks.get(taskId)!)
@@ -456,6 +499,7 @@ export class TorrentService implements TorrentApi {
   async retry(taskId: string): Promise<TorrentTaskState | null> {
     const task = this.tasks.get(taskId)
     if (!task) return null
+    this.clearSeedTimer(taskId)
     await this.stopHandle(taskId, false)
     this.emit({ ...task, status: 'metadata', error: null, speedBytesPerSecond: 0, etaSeconds: null })
     await this.attach(this.tasks.get(taskId)!, false)
@@ -464,6 +508,7 @@ export class TorrentService implements TorrentApi {
 
   async remove(taskId: string): Promise<void> {
     await this.initPromise
+    this.clearSeedTimer(taskId)
     await this.stopHandle(taskId, false)
     this.tasks.delete(taskId)
     await this.persist()
@@ -475,13 +520,10 @@ export class TorrentService implements TorrentApi {
     const seedPolicy = normalizeSeedPolicy(policy)
     if (seedPolicy.kind === 'minutes' && seedPolicy.minutes > TORRENT_MAX_SEED_MINUTES) return safeTask(task)
     if (seedPolicy.kind === 'ratio' && seedPolicy.ratio > TORRENT_MAX_SEED_RATIO) return safeTask(task)
-    this.emit({ ...task, seedPolicy })
-    if (seedPolicy.kind === 'minutes' && seedPolicy.minutes > 0) {
-      setTimeout(() => {
-        const current = this.tasks.get(taskId)
-        if (current?.seedPolicy.kind === 'minutes' && current.status === 'completed') void this.stopHandle(taskId, false)
-      }, seedPolicy.minutes * 60_000)
-    }
+    this.clearSeedTimer(taskId)
+    const next = { ...task, seedPolicy }
+    this.emit(next)
+    if (next.status === 'completed') this.applyCompletionSeedPolicy(next)
     return safeTask(this.tasks.get(taskId)!)
   }
 

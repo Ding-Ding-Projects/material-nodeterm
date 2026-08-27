@@ -57,6 +57,12 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## In progress / partially landed
 
+- [ ] **Shared provider services, issue #18**: provider catalog, account metadata, sealed
+      credential payloads, bounded one-time OAuth PKCE callbacks, adapter-owned resource discovery,
+      and shared Desktop/Server local bindings are implemented in source. Individual provider
+      adapters, build/package evidence, runtime interaction, and captures remain pending under the
+      stated ultra-speed no-check boundary.
+
 - [ ] Desktop Material Design 3 and personal vocabulary reconciliation: the source audit and focused
   Material Design 3 fixes are present in the audit scripts and shared primitives. The Material Design 3 audit is green
   with deliberate negative regressions. Personal-vocabulary coverage is intentionally red with
@@ -182,9 +188,10 @@ intentionally unchecked because this task publishes the plan only.
 - [ ] Import schema 3 archives atomically without external side effects.
 - [ ] Preserve root, Multiverse, AWS Universe, portal, Shop, node, relationship, and appearance data.
 - [ ] Bundle project-owned media and provide Include, Omit, and Locate Later decisions. Core
-  content-addressing, signature validation, omission records, schema 3 projection support, and a
-  guided decision component are implemented but remain unverified until archive wiring and the
-  required built-artifact checks land.
+  content-addressing, typed desktop preparation, explicit decisions, parser proof, real
+  `assets/media/` container entries, repeated import validation, and atomic destination staging are
+  implemented. The item remains unchecked because all tests, builds, packaging, runtime
+  interaction, accessibility checks, and captures are intentionally unrun.
 - [ ] Separate portable blueprints from machine-local bindings and credential references.
 - [ ] Ship the unified Node Catalog and one creation coordinator. The typed registry,
       availability-aware dialog, immutable creation-event coordinator, collision-free placement,
@@ -198,39 +205,72 @@ intentionally unchecked because this task publishes the plan only.
       runtime and built-artifact verification remain pending under issue #17's explicit
       no-tests/no-builds/no-captures boundary.
 - [ ] Add shared account, credential-vault, OAuth callback, and provider-binding services.
-- [ ] Add guided Docker host management for local and SSH contexts.
+- [ ] Add guided Docker host management for local and SSH contexts. The typed manager, local and
+      saved SSH context discovery, guided resource operations, safe portable blueprint, progress,
+      cancellation, destructive confirmation, documentation, offline article, and site article are
+      implemented on issue #19's feature branch. Tests, type checks, lint, reviews, security and
+      accessibility checks, builds, packaging, runtime interaction, and captures remain unrun under
+      the ultra-speed boundary, so this roadmap claim remains unchecked.
 
 ### Media, torrents, virtual machines, and planning
 
 - [ ] Add Photo, Video, mixed-media Gallery, and wild Dim Sum nodes. Photo, Video, and Gallery
-      source implementation is present for issue #20; tests, builds, and packaged captures remain
-      pending in the parent integration lane.
-- [ ] Add the categorized local file-converter and advanced media, archive, PDF, and OCR pipelines.
+      source implementation, machine-local path round-trip, schema 3 node references, validated
+      content-addressed archive bytes, atomic import staging, and explicit missing-asset states are
+      present for issue #20. Wild Dim Sum source implementation is present for issue #25 with
+      public-catalog selection and portable schema 3 state. Tests, builds, packaging, release
+      evidence, and packaged captures remain pending in the parent integration lane, so the
+      combined row stays unticked.
+- [ ] Verify the categorized local file converter delivered for issue #21. The source now includes
+      collision-safe destination reservations, atomic publication, resumable progress, cancellation,
+      partial outcomes, per-category regex builders, and completed-output editor handoff; this
+      ultra-speed lane intentionally left tests, builds, runtime interaction, and captures unrun.
+- [ ] Add advanced media, archive, PDF, OCR, and
+      structured-data pipelines. Issue #22 source implementation now provides packaged PDF,
+      supported image, local English OCR, bounded ZIP inventory, deterministic JSON, portable
+      unbound intent, queue progress, cancellation, retry, and recovery. The item remains unticked
+      until the required tests, built-artifact interaction, packaging, and capture evidence run.
 - [ ] Add the bundled WebTorrent downloader with resumable per-task lifecycle. The implementation
-      lane now contains the local runtime, guided intake, metadata selection, progress controls,
-      restart reconciliation, bounded seeding, and machine-local state; focused verification and
-      release evidence remain pending.
-- [ ] Add the bundled QEMU Linux ISO VM with persistent and disposable modes.
-- [ ] Add the bundled WebTorrent downloader with resumable per-task lifecycle.
-- [ ] Add the bundled QEMU Linux ISO VM with persistent and disposable modes. Implementation landed in `src/core/virtual-machine/` and `src/renderer/nodes/VirtualMachineNode.tsx`; tests, build, packaging, runtime interaction, and captures remain unrun in the ultra-speed lane.
+      lane now contains ESM-compatible local runtime loading, guided inspect-then-start intake,
+      searchable metadata and seeding controls, progress controls, restart reconciliation,
+      completion-based bounded seeding, and machine-local state; focused verification and release
+      evidence remain pending.
+- [ ] Add the bundled QEMU Linux ISO VM with persistent and disposable modes. Source implementation landed in `src/core/virtual-machine/` and `src/renderer/nodes/VirtualMachineNode.tsx`; automated checks, build, packaging, runtime interaction, and captures remain intentionally unrun in the ultra-speed lane.
+- [x] Add the Home Assistant multi-instance client with REST and WebSocket discovery. Dedicated
+      control and sensor display nodes remain Program 16 and Program 17.
 - [ ] Add Home Assistant multi-instance controls and sensor displays.
+  - [x] Add schema-driven Home Assistant control nodes with local connection binding.
+  - [x] Add Home Assistant sensor display nodes with portable entity and presentation intent,
+        machine-local sealed binding, typed values, binary state, enums, gauges, bounded trends,
+        events, weather, calendars, and selected attributes. Verification remains unrun.
 - [ ] Add Calendar, Timer, and Alarm Clock nodes. Planner occurrence service is implemented in the
-      current lane, but remains unticked until its required checks and packaged interaction evidence land.
+       current lane, including UI-close continuity, ordered durable occurrence delivery, schema 3
+       planner-definition transfer, and the destination Configure action. It remains unticked until
+       required checks and packaged interaction evidence land.
 - [ ] Add Calendar nodes for local calendars and ICS, with guided CalDAV, Google Calendar, and
       Microsoft 365 provider bindings, recurrence/timezone views, offline cache, and create/edit/
-      delete flows. Provider adapters still report an honest unavailable state until trusted OAuth
-      vault wiring is supplied. Ultra-speed lane intentionally skipped tests, builds, packaging,
-      runtime interaction, and captures.
+      delete flows. Host-owned provider adapters, credential storage, loopback OAuth PKCE, bounded
+      pagination, validators, retry backoff, and remote writes are implemented but remain unticked
+      because the ultra-speed lane intentionally skipped tests, type checking, lint, builds,
+      packaging, runtime interaction, reviews, audits, and captures.
 - [ ] Add Timer, Alarm Clock, and planner occurrence services.
 - [x] Add Timer nodes and persistent planner occurrence service. Calendar and Alarm Clock remain
   separate follow-up surfaces.
 - [ ] Add Calendar and Timer occurrence services.
-- [x] Add Alarm Clock nodes and planner occurrence history with timezone and DST-safe recurrence.
+- [x] Add Alarm Clock nodes, the host-owned file planner lifecycle and desktop bridge, active Node
+      Catalog creation, and occurrence history with timezone and DST-safe recurrence.
 
 ### Multiverse and AWS
 
+- [x] Add scoped Multiverse child canvases with guided hierarchy navigation and a depth-8 boundary.
+      Source implementation and delivery records are present; tests, type checks, builds, packaging,
+      runtime interaction, and captures remain explicitly unrun under issue #33's delivery boundary.
 - [ ] Add door-only Multiverse canvases to depth 8.
-- [ ] Add interactive door construction, numeric or passphrase entry, and recovery game.
+- [ ] Wire the implemented paired-door navigation policy into the pending Multiverse canvas and
+      door-rendering lanes; tab, palette, history, and direct-selection bypasses are refused in core.
+- [ ] Add interactive door construction and numeric or passphrase entry. Source components and
+      portable intent are present; live navigator wiring remains pending.
+- [x] Add the top-down recovery game with three energy keys, hazards, core activation, and portable state. Source implementation is complete; built-artifact verification remains for integration.
 - [ ] Add unlimited AWS Universes with AWS-only scope and AWS Shop nodes.
 - [ ] Bundle AWS CLI v2 and maintain verified model and documentation indexing.
 - [x] Add the platform-free AWS CLI model documentation index for services, commands, options,

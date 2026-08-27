@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import {
   CONVERTER_CATALOG,
   converterAdapterById,
+  portableAdvancedPipelineIntent,
   type ConvertQueueItem,
   type ConverterAdapterDescriptor,
   type ConverterDetectionResult,
@@ -19,14 +20,13 @@ import { useActiveSessionApi } from '../../session/session'
 import { mapLocalVocabularyText } from '../../lib/personalVocabulary/hostMessage'
 import { MaterialSymbol, type MaterialSymbolName } from '../MaterialSymbol'
 import { AdapterCatalog } from './AdapterCatalog'
-import { Checkbox } from '@renderer/ui/md3'
 import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 import { copy, fact, mapOwnedSentence } from '../../lib/personalVocabulary/ownedCopy'
+import { Checkbox, Progress } from '@renderer/ui/md3'
 
 export function detectionSummarySegments(note: string, confidence: 'high' | 'medium' | 'low') {
   return [copy('Detection: '), fact(note), copy(' (confidence: '), fact(confidence), copy(')')]
 }
-import { Checkbox, Progress } from '@renderer/ui/md3'
 
 export interface FileConverterPanelProps {
   onClose: () => void
@@ -119,7 +119,8 @@ function QueueRow({
   onRetry,
   onRemove,
   onResolve,
-  onReveal
+  onReveal,
+  onOpenInEditor
 }: {
   item: ConvertQueueItem
   onCancel: (id: string) => void
@@ -127,6 +128,7 @@ function QueueRow({
   onRemove: (id: string) => void
   onResolve: (id: string, opts: { overwrite?: boolean; lossyAcknowledged?: boolean }) => void
   onReveal: (path: string) => void
+  onOpenInEditor: (path: string) => void
 }) {
   const vocab = useVocabularyMapper()
   const pct = item.totalBytes > 0 ? Math.round((item.progressBytes / item.totalBytes) * 100) : 0
@@ -180,6 +182,11 @@ function QueueRow({
         </div>
       )}
       {item.error && <p className="cv-item__error">{item.error}</p>}
+      {item.destinationCollisionIndex !== undefined && item.destinationCollisionIndex > 1 && (
+        <p className="cv-item__warning">
+          {vocab('Name adjusted to avoid replacing an existing or queued file.')}
+        </p>
+      )}
       {item.warnings && item.warnings.length > 0 && (
         <p className="cv-item__warning">{item.warnings.join(' ')}</p>
       )}
@@ -199,6 +206,11 @@ function QueueRow({
             {vocab('Reveal')}
           </button>
         )}
+        {item.status === 'done' && (
+          <button className="cv-item__link" onClick={() => onOpenInEditor(item.destPath)}>
+            {vocab('Open in Visual Studio Code')}
+          </button>
+        )}
         {(item.status === 'done' || item.status === 'failed' || item.status === 'cancelled') && (
           <button className="cv-item__link" onClick={() => onRemove(item.id)}>
             {vocab('Remove')}
@@ -216,7 +228,6 @@ function QueueRow({
  * concurrency queue with pause/resume/cancel/retry.
  *
  * Known gaps versus the full house contract, left for a follow-up (see docs/file-converter.md):
- * the per-category search boxes are plain substring search, not the full anchored regex builder;
  * the overwrite/lossy gate is the app's existing ConfirmDialog-style inline confirm rather than the
  * full two-key destructive-action slider; and the queue list here shows the first page only (no
  * pager control yet) — the engine itself is already paginated (converter.state(offset, limit)).
@@ -358,6 +369,15 @@ function FileConverterPanelForApi({
     () => (selectedAdapterId ? converterAdapterById(selectedAdapterId) ?? catalog.find((a) => a.id === selectedAdapterId) : null),
     [selectedAdapterId, catalog]
   )
+
+  const selectedPipelineIntent = useMemo(() => {
+    if (!selectedAdapter?.pipeline) return null
+    try {
+      return portableAdvancedPipelineIntent(selectedAdapter.id)
+    } catch {
+      return null
+    }
+  }, [selectedAdapter])
 
   const suggestedIds = useMemo(() => {
     const ids = new Set<string>()
@@ -510,6 +530,20 @@ function FileConverterPanelForApi({
     runConverterAction(api, () => (summary.running ? api.converter.pause() : api.converter.start()))
   }, [api, runConverterAction, summary.running])
 
+  const handleOpenInEditor = useCallback(async (path: string) => {
+    const operationApi = api
+    if (!apiStillActive(operationApi)) return
+    try {
+      const result = await operationApi.vscode.open(path)
+      if (!apiStillActive(operationApi)) return
+      if (!result.ok) toast(result.error || 'Visual Studio Code could not open this output.', 'error')
+    } catch (cause) {
+      if (apiStillActive(operationApi)) {
+        toast(errorMessage(cause, 'Visual Studio Code could not open this output.'), 'error')
+      }
+    }
+  }, [api, apiStillActive])
+
   const counts = useMemo(() => {
     const c = { queued: 0, running: 0, done: 0, failed: 0, cancelled: 0, needsConfirm: 0 }
     for (const i of queue) {
@@ -596,6 +630,26 @@ function FileConverterPanelForApi({
               }}
               suggestedIds={suggestedIds}
             />
+            {selectedPipelineIntent && (
+              <div className="cv-pipeline-intent" aria-label={vocab('Portable pipeline intent')}>
+                <p>
+                  <MaterialSymbol name="database" size={16} />
+                  <strong>{vocab('Portable pipeline intent')}</strong>
+                </p>
+                <p>
+                  {mapOwnedSentence(vocab, [
+                    copy('Operation: '), fact(selectedPipelineIntent.operation),
+                    copy(' · Resource profile: '), fact(selectedPipelineIntent.resourceProfile)
+                  ])}
+                </p>
+                <p>
+                  {vocab('A transferred project keeps only this safe operation intent. Import does not read a file, start processing, create output, or contact a service.')}
+                </p>
+                <p>
+                  {vocab('On another computer choose Configure, Rebind, Adopt, Deploy, Locate Asset, or Leave Unbound. Source and destination paths, credentials, sessions, process state, host identifiers, caches, and generated output are omitted.')}
+                </p>
+              </div>
+            )}
             {selectedAdapter && selectedAdapter.lossy && (
               <div className="cv-lossy">
                 <p>
@@ -696,6 +750,7 @@ function FileConverterPanelForApi({
                       runConverterAction(api, () => api.converter.resolvePending([id], opts))
                     }
                     onReveal={(path) => api.shell.reveal(path)}
+                    onOpenInEditor={(path) => void handleOpenInEditor(path)}
                   />
                 ))}
               </ul>

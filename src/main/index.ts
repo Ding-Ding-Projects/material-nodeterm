@@ -59,12 +59,17 @@ import { registerMinecraftIpc } from '../core/minecraft/register-ipc'
 import { registerTorrentIpc } from '../core/torrent/register-ipc'
 import { registerVirtualMachineIpc } from '../core/virtual-machine/register-ipc'
 import { registerCalendarIpc } from '../core/calendar/register-ipc'
+import { registerHomeAssistantIpc } from '../core/home-assistant/register-ipc'
+import { registerHomeAssistantControlIpc } from '../core/home-assistant-control/register-ipc'
+import { registerHomeAssistantSensorIpc } from '../core/home-assistant-sensor/register-ipc'
 import { AtomicJsonArrayStore } from '../core/atomic-json-store'
 import { TimerOccurrenceService } from '../core/timer-service'
 import type { TimerOccurrence } from '../shared/timer'
 import { registerVsCodeHandlers } from '../core/vscode-handlers'
 import { LocalHistoryStore } from '../core/local-history'
 import { ProjectArchiveService } from '../core/project-archive'
+import { preparePortableMedia, type PortableMediaPreparation } from '../core/portable-media-assets'
+import type { PortableMediaExportPlan, PortableMediaPrepareInput } from '../shared/portable-media'
 import { ServerDeploymentService, resolveServerDeploymentRoot } from './server-deployment'
 import { registerLocalHistoryHandlers } from '../core/local-history-handlers'
 import { describeSettingsChange } from '../shared/settings-diff'
@@ -147,6 +152,7 @@ import { SchoolModeStore } from '../core/school-mode'
 import { KidsModeStore } from '../core/kids-mode'
 import { ScheduledSettingsRuntime } from '../core/scheduled-settings-runtime'
 import { PlannerOccurrenceRuntime } from '../core/planner-occurrence-service'
+import { AlarmPlannerRuntime } from '../core/alarm-planner'
 import { registerAgentEnvIpc } from '../core/agent-env-ipc'
 import { presenceHub } from '../core/presence/hub'
 import { SshStore } from './ssh-store'
@@ -179,7 +185,7 @@ import { generateCommitMessage, generateGroupName, generateTerminalName } from '
 import { initUpdater } from './updater'
 import { decryptArchive, encryptArchive, looksLikeEncryptedArchive } from '../core/project-archive-encryption'
 import { ArchiveUnlockGuard } from '../core/archive-unlock-guard'
-import { LocalNodeBindingStore, bindingActionStates, validateLocalNodeBinding } from '../core/portable-bindings'
+import { registerProviderServicesIpc } from '../core/provider-services'
 import { desktopBuildPaths } from './desktop-build-paths'
 import { applyWindowsSquirrelAppUserModelId } from './windows-squirrel-identity'
 import { fetchCheck } from '../core/check'
@@ -477,6 +483,29 @@ const plannerRuntime = new PlannerOccurrenceRuntime({
     retainUntilDismissed(notification)
   }
 })
+const alarmPlannerRuntime = new AlarmPlannerRuntime(
+  join(corePlatform.userDataDir, 'alarm-clock-planner.json'),
+  {
+    onDue: (event) => {
+      const win = getMainWindow()
+      if (win && !win.isDestroyed() && win.isFocused()) return
+      if (!Notification.isSupported()) return
+      const title = event.alarm.title || 'Alarm Clock'
+      const body = event.kind === 'missed'
+        ? `${title} was missed while the app or computer was unavailable.`
+        : `${title} is due now. This app cannot wake a powered-off computer.`
+      const notification = new Notification({ title, body })
+      notification.on('click', () => {
+        const current = getMainWindow()
+        if (!current || current.isDestroyed()) return
+        if (current.isMinimized()) current.restore()
+        current.show()
+        current.focus()
+      })
+      retainUntilDismissed(notification)
+    }
+  }
+)
 // ⌘M / ⌘W are registry commands (`node.toggleMarkdown` / `node.close`), so what the window
 // intercepts follows the user's settings. Resolved LAZILY (first keystroke, long after
 // `settingsStore.init()` in `whenReady`) rather than at module load, where `get()` would still be
@@ -1290,11 +1319,6 @@ function createWindow(): BrowserWindow {
       win.hide()
       return
     }
-    // The real close: on win32/linux the native title-bar × reaches this directly with no
-    // app.quit() first (see window-all-closed below), so the confirm gate has to sit here too —
-    // not only in before-quit, where the window (the only place left to show a dialog) would
-    // already be destroyed by the time we asked.
-    if (shouldConfirmQuit()) {
     if (action === 'leave-fullscreen-then-hide') {
       e.preventDefault()
       if (!leavingFullScreen) {
@@ -1307,11 +1331,15 @@ function createWindow(): BrowserWindow {
       }
       return
     }
+    // A title-bar close is a UI close, not an explicit host shutdown. When the planner owns an
+    // enabled schedule, let this window be destroyed and let window-all-closed keep the process
+    // alive. Menu Quit and app shutdown still reach before-quit and stop the planner normally.
+    if (!quitting && plannerRuntime.hasEnabledSchedules()) return
     // action === 'default': the window is really closing. On Windows/Linux the native title-bar
     // × reaches this directly (no app.quit() first), so the confirm gate must sit here too, not
     // only in before-quit — otherwise the window (and with it the only place to show a dialog)
     // would already be gone by the time we asked.
-    if (!quitConfirmed && !skipQuitConfirmation) {
+    if (shouldConfirmQuit() && !quitConfirmed && !skipQuitConfirmation) {
       e.preventDefault()
       void confirmQuit(win).then((ok) => {
         if (ok) app.quit()
@@ -1542,11 +1570,40 @@ app.whenReady().then(async () => {
   // Planner occurrence evaluation stays in the host process. Closing the UI leaves this service
   // alive, while a powered-off computer cannot evaluate time and is reported as missed on restart.
   plannerRuntime.start()
+  // Alarm Clock evaluation uses its own bounded, file-backed snapshot. Keeping it beside the
+  // generic planner runtime makes the same no-powered-off-wake behavior explicit at boot.
+  await alarmPlannerRuntime.start()
   // Local, git-backed settings history (docs/local-history.md). One append-only revision per
   // save; the diff-based label lives in shared/settings-diff.ts so it is shared with any future
   // shell that saves settings, rather than re-derived per process.
   const localHistoryStore = new LocalHistoryStore(app.getPath('userData'))
-  const projectArchives = new ProjectArchiveService(localHistoryStore)
+  const projectArchives = new ProjectArchiveService(localHistoryStore, undefined, () => plannerRuntime.store.get().schedules)
+  // One core registrar owns provider accounts, credential references, OAuth callbacks, and local
+  // bindings for both shells. Import never calls these handlers, so opening a project cannot start
+  // consent, contact a provider, or mutate a destination resource as a side effect.
+  registerProviderServicesIpc(corePlatform)
+  const portableMediaPreparations = new Map<string, { createdAt: number; projectId: string; preparation: PortableMediaPreparation }>()
+  const discardExpiredPortableMedia = (): void => {
+    const expiresBefore = Date.now() - 10 * 60 * 1000
+    for (const [id, value] of portableMediaPreparations) if (value.createdAt < expiresBefore) portableMediaPreparations.delete(id)
+  }
+  ipcMain.handle(IPC.portableMediaPrepare, async (_event, input: unknown) => {
+    discardExpiredPortableMedia()
+    if (!input || typeof input !== 'object' || Array.isArray(input)) return { ok: false, error: 'Portable media preparation is invalid.' }
+    const value = input as Record<string, unknown>
+    if (typeof value.projectId !== 'string' || !Array.isArray(value.sourcePaths) || value.sourcePaths.some((item) => typeof item !== 'string') || (value.projectRoot !== undefined && typeof value.projectRoot !== 'string')) return { ok: false, error: 'Portable media preparation is invalid.' }
+    try {
+      const preparation = await preparePortableMedia(value as unknown as PortableMediaPrepareInput)
+      const preparationId = randomUUID()
+      portableMediaPreparations.set(preparationId, { createdAt: Date.now(), projectId: value.projectId, preparation })
+      return { ok: true, preparationId, candidates: preparation.items.map((item) => item.candidate) }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  })
+  ipcMain.handle(IPC.portableMediaDiscard, (_event, preparationId: unknown) =>
+    typeof preparationId === 'string' ? portableMediaPreparations.delete(preparationId) : false
+  )
   const portableBindings = new LocalNodeBindingStore(app.getPath('userData'))
   ipcMain.handle(IPC.portableBindingState, async (_event, input: unknown) => {
     if (!input || typeof input !== 'object' || Array.isArray(input)) return []
@@ -1694,7 +1751,7 @@ app.whenReady().then(async () => {
   const archiveUnlock = new ArchiveUnlockGuard({ schoolMode: () => schoolModeStore.get().enabled })
   ipcMain.handle(
     IPC.projectArchiveExport,
-    async (_event, project: import('../shared/types').Project, password?: string) => {
+    async (_event, project: import('../shared/types').Project, password?: string, media?: PortableMediaExportPlan) => {
     if (projectArchiveBusy) return { ok: false, error: 'Another project export or import is still running.' }
     projectArchiveBusy = true
     try {
@@ -1712,7 +1769,16 @@ app.whenReady().then(async () => {
       // its own files and is captured with the rest; passing it here too would put two copies in
       // one save file. See core/password-manager/vault-location.ts.
       const vault = project.cwd ? undefined : await readFolderlessVault(project.id)
-      const exported = await projectArchives.export(project, vault ? { vault } : {})
+      let portableMedia: { preparation: PortableMediaPreparation; decisions: PortableMediaExportPlan['decisions'] } | undefined
+      if (media !== undefined) {
+        if (!media || typeof media.preparationId !== 'string' || !Array.isArray(media.decisions)) throw new Error('Portable media export plan is invalid.')
+        const prepared = portableMediaPreparations.get(media.preparationId)
+        if (!prepared) throw new Error('Portable media preparation expired. Choose the media again.')
+        if (prepared.projectId !== project.id) throw new Error('Portable media preparation belongs to a different project.')
+        portableMediaPreparations.delete(media.preparationId)
+        portableMedia = { preparation: prepared.preparation, decisions: media.decisions }
+      }
+      const exported = await projectArchives.export(project, { ...(vault ? { vault } : {}), ...(portableMedia ? { portableMedia } : {}) })
       // Encrypt the FINISHED container, never its entries: a ZIP's entry names alone would say
       // which repository travelled and what the project is called. See project-archive-encryption.ts.
       const bytes = password ? encryptArchive(exported.bytes, password) : exported.bytes
@@ -1807,6 +1873,7 @@ app.whenReady().then(async () => {
         project: outcome.project,
         archiveVersion: outcome.archiveVersion,
         contents: outcome.contents,
+        ...(outcome.plannerDefinitions ? { plannerDefinitions: outcome.plannerDefinitions } : {}),
         ...(outcome.restoredTo ? { restoredTo: outcome.restoredTo } : {})
       }
     } catch (error) {
@@ -2295,6 +2362,9 @@ app.whenReady().then(async () => {
   registerTorrentIpc(corePlatform)
   virtualMachineManager = registerVirtualMachineIpc(corePlatform).manager
   registerCalendarIpc(corePlatform)
+  registerHomeAssistantIpc(corePlatform)
+  registerHomeAssistantControlIpc(corePlatform)
+  registerHomeAssistantSensorIpc(corePlatform)
 
   const githubSecret = new ElectronGitHubSecretStore(app.getPath('userData'), safeStorage)
   const github = registerGitHubIntegration({
@@ -4709,6 +4779,7 @@ app.on('before-quit', (e) => {
   destroyNotchHud()
   const scheduledSettingsStop = scheduledSettingsRuntime.stop()
   const plannerStop = plannerRuntime.stop()
+  alarmPlannerRuntime.stop()
   // Electron releases power assertions at exit anyway; disposing keeps the hold/release log honest.
   keepAwake?.dispose()
   // Electron releases power assertions at exit anyway; disposing keeps the hold/release log
