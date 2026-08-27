@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { BOARD_LOG_TEXT_MAX, type BoardLogEntry, type NodeTerminalApi } from '@shared/types'
+import type { BoardAttachmentDraft, BoardLogAppendResult } from '@shared/comment-attachments'
 import { loadIdentity } from './presence'
 import { uuid } from '../lib/uuid'
 
@@ -42,6 +43,7 @@ interface BoardLogState {
   load(api: NodeTerminalApi, projectId: string): Promise<void>
   /** Stamp + optimistically prepend an entry, then fire-and-forget the api append. */
   append(api: NodeTerminalApi, projectId: string, input: BoardLogAppendInput): void
+  appendWithAttachments(api: NodeTerminalApi, projectId: string, input: BoardLogAppendInput, drafts: BoardAttachmentDraft[]): Promise<BoardLogAppendResult>
   /** Wire `onChanged` → reload for a project; returns the unsubscribe. */
   subscribeChanged(api: NodeTerminalApi, projectId: string): () => void
 }
@@ -101,6 +103,36 @@ export const useBoardLog = create<BoardLogState>((set, get) => ({
         if (!ok) flagError()
       })
       .catch(flagError)
+  },
+
+  appendWithAttachments: async (api, projectId, input, drafts) => {
+    const id = loadIdentity()
+    const author = id ? { name: id.name, color: id.color } : ANON_AUTHOR
+    const text = input.text !== undefined && input.text.length > BOARD_LOG_TEXT_MAX
+      ? input.text.slice(0, BOARD_LOG_TEXT_MAX) + '…'
+      : input.text
+    const entry: BoardLogEntry = {
+      id: uuid(),
+      ts: Date.now(),
+      author,
+      kind: input.kind,
+      ...(input.nodeId !== undefined ? { nodeId: input.nodeId } : {}),
+      ...(text !== undefined ? { text } : {}),
+      ...(input.event !== undefined ? { event: input.event } : {})
+    }
+    try {
+      const result = await api.boardLog.appendWithAttachments(projectId, entry, drafts)
+      if (result.ok) {
+        set((s) => ({ entriesByProject: { ...s.entriesByProject, [projectId]: [result.entry, ...(s.entriesByProject[projectId] ?? EMPTY)] } }))
+      } else {
+        set((s) => ({ errorByProject: { ...s.errorByProject, [projectId]: true } }))
+      }
+      return result
+    } catch {
+      const result: BoardLogAppendResult = { ok: false, reason: 'log-failed', message: 'The comment could not be saved.' }
+      set((s) => ({ errorByProject: { ...s.errorByProject, [projectId]: true } }))
+      return result
+    }
   },
 
   subscribeChanged: (api, projectId) =>

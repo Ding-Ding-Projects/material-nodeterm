@@ -2,6 +2,152 @@
 
 ## Unreleased
 
+- Extend the special-universe Shop with the complete AWS catalog inventory: identity, Resource
+  Explorer, Cloud Control, S3, EC2, IAM, STS, Lambda, CloudWatch, CloudWatch Logs, CloudFormation,
+  CDK, ECR, ECS, EKS, RDS, databases, VPC, Route 53, cost management, and all-service rows. The
+  AWS projection is scope-bound, revalidates selected entries at creation time, and keeps every
+  later-wave executor visible with its exact disabled reason. The issue #40 ultra-speed lane did
+  not run tests, type checks, lint, security or accessibility checks, builds, packaging, runtime
+  interaction, or captures.
+- Add portable Comments and Activity attachments for generic files plus image, audio, and video
+  previews. The composer now has picker, drag/drop, and paste routes, a removable validation queue,
+  bounded byte-signature detection, transactional board-log storage, remote-safe atomic writes, and
+  schema 3 archive carriers with hash, length, name, kind, and reference validation. This issue #94
+  implementation lane intentionally did not run tests, type checks, lint, builds, packaging,
+  runtime interaction, reviews, security or accessibility checks, or captures.
+
+- Add upstream-compatible agent-to-agent drag collaboration for issue #90. A bounded,
+  namespaced collaboration handle links two existing context-capable agent sessions through the
+  existing Context Link path. Valid targets show an honest Material Design 3 drop state, while
+  keyboard, touch, and screen-reader users can activate two link buttons or use **Link selected
+  agents**. No process, account, credential, project, working-directory, or conversation-transfer
+  state moves. This implementation lane intentionally did not run tests, lint, type checks, builds,
+  packaging, runtime interaction, reviews, audits, or captures.
+
+- Add the context-window progress meter to every agent-backed node and session surface. Provider
+  telemetry is source-scoped and generation-fenced, exact values are shown only when reported, and
+  unknown, not-reported, stale, and unavailable states remain visible. Local and remote transcript
+  reads are bounded and machine-local. This issue #89 implementation lane intentionally did not run
+  tests, lint, type checks, builds, packaging, runtime interaction, reviews, audits, or captures.
+
+- Add first-class Cognition Devin CLI support from the measured `devin 3000.4.25 (7e8e528a)`
+  contract: builtin registry and mark, argv/interactive prompt forms, prompt-file and print
+  helpers, resume and continue commands, project-level `.devin/hooks.v1.json` lifecycle hooks,
+  structured status normalization, and BEL/OSC notification fallback. Context usage, permission
+  control, titles, subagents, transfer, canvas control, and structured transcripts remain explicitly
+  unavailable until measured. The real Devin CLI was not available, so this ultra-speed lane ran no
+  tests, lint, type checks, builds, packaging, runtime interaction, reviews, audits, or HuiShots.
+- Add a shared 40 ms burst budget for plain-wheel canvas zoom and a persisted 0.2×–2.0× wheel
+  zoom speed control. The historical 1.0× feel remains the default; modifier zoom and trackpad
+  pinch keep their fixed behavior. Hand-edited values are clamped at the point of use, and the
+  Behavior setting explains its compiled-in, saved, or scheduled provenance in the active language
+  mode and funny-level voice. This source lane intentionally did not run tests, lint, type checks,
+  builds, packaging, runtime interaction, reviews, audits, or UI captures.
+- Expand English and Cantonese funny-level controls from 1–5 to 1–10 for issue #113. New
+  installations default both values to level 10, while settings schema version 2 preserves valid
+  established choices and safely normalizes malformed hand-edited values. Scheduled settings,
+  site-local storage, exports, provenance copy, and the Easter-egg and feature copy resolvers now
+  accept the complete range. This source lane intentionally did not run tests, type checks, lint,
+  builds, packaging, runtime interaction, reviews, audits, or UI captures.
+- Route macOS desktop canvas wheel input from main-process trackpad gesture facts. A depth-safe
+  ledger sends scroll and pinch edge transitions over typed IPC, the desktop router keeps a bounded
+  500 ms momentum-gap linger, and precise-pixel mouse packets zoom when no gesture is reported.
+  Server Edition keeps its documented browser heuristic and mobile remains not applicable. This
+  issue #108 implementation lane intentionally did not run tests, lint, type checks, builds,
+  packaging, runtime interaction, reviews, audits, or captures.
+
+- Add the guided GitHub API capability surface. A hand-written operation catalog now covers
+  repository, source control, collaboration, Actions, release, package, deployment, organization,
+  account, search, security, ruleset, webhook, and app resources through fixed REST routes plus a
+  fixed GraphQL account profile query. The host derives approved repositories, keeps credentials out
+  of the renderer, bounds pagination and response data, reports progress and rate limits, supports
+  cancellation, and requires operation-scoped destructive confirmation. Tests, type checks, lint,
+  reviews, security or accessibility checks, builds, packaging, installer execution, runtime
+  interaction, and UI captures remain intentionally unrun for issue #101.
+
+- Add the guided Nextcloud AIO hosting profile for issue #52. It uses a pinned official image,
+  explicitly discloses read-only Docker socket authority, refuses privileged mode and arbitrary
+  shell input, and provides local binding, health, update, backup, restore, rollback, cancellation,
+  and progress states. Schema 3 carries safe intent only; Docker context, socket, host paths,
+  container state, backup data, and credentials remain local. This ultra-speed lane intentionally
+  did not run tests, type checks, lint, reviews, security or accessibility checks, builds, packaging,
+  installer execution, runtime interaction, or captures.
+
+- Rebuild the README from the ground up around the current Windows delivery path, genuine product
+  captures, explicit evidence boundaries, and a compact top-level index. Keep 9 current key
+  screenshots visible without disclosure controls, add 25 committed feature GIF recordings for
+  the documentation site, remove stale non-Windows delivery references from the README and active
+  site content, and verify every recorded file by exact hash with three deliberate negative
+  regressions.
+
+- Add the guided GitLab Server hosting node. Choose the pinned official Community Edition or
+  Enterprise Edition image, create four managed volumes, probe readiness, hand off the initial
+  root credential once without logging it, and run backup, restore, update, and rollback actions
+  behind the existing confirmation flow. Binding is loopback-only and all Docker arguments are
+  generated from typed controls. This ultra-speed lane intentionally did not run tests, type
+  checks, lint, reviews, security or accessibility checks, builds, packaging, installer execution,
+  runtime interaction, or captures.
+
+- Add Windows `psmux` discovery to terminal persistence. Executable lookup now honors `PATHEXT`,
+  prefers `tmux` and then `psmux`, uses the shared executable predicate for Windows Package
+  Manager detection, and keeps the missing-multiplexer banner visible on Windows with an exact
+  `winget install -e --id marlocarlo.psmux` action when available. The ultra-speed lane intentionally
+  did not run tests, type checks, lint, reviews, security or accessibility checks, builds, packaging,
+  installer execution, runtime interaction, or UI captures.
+
+- Document Program 57 linked-agent inbox notifications and register the feature in the offline
+  documentation bundle and the documentation site. The current source uses the upstream PR #98
+  fixed app-authored prompt intent through authenticated main-process delivery, project capability
+  consent, runtime pane ownership checks, flow limits, traces, and the bounded deliver-on-idle
+  queue. This ultra-speed lane intentionally did not run tests, type checks, lint, reviews,
+  security or accessibility checks, builds, packaging, installer execution, runtime interaction,
+  or UI captures.
+
+- Add typed Cloudflare Access, Zero Trust, Workers, Pages, R2, D1, and Queues managers. The canvas
+  node uses guided pickers, local protected credentials, portable neutral intent, fixed API routes,
+  bounded responses, progress and cancellation, anchored regex builders for each search, and the
+  existing two-key destructive confirmation. This ultra-speed lane intentionally ran no tests, type
+  checks, lint, builds, packaging, reviews, security or accessibility checks, installer execution,
+  runtime interaction, or UI captures.
+
+- Add the bundled AWS CLI v2 dependency lane. Windows packaging now stages the pinned official
+  `2.36.32` MSI, verifies its SHA-256, falls back through a verified local cache or canonical
+  HTTPS download, extracts it into application-local storage, exposes the installed version, and
+  inventories the installed service models through typed desktop and Server Edition bridges. The
+  implementation and documentation lane intentionally did not run tests, type checks, lint,
+  reviews, security or accessibility checks, builds, packaging, installer execution, runtime
+  interaction, or UI captures.
+
+- Harden the AWS CLI model documentation index against malformed source records, duplicate service
+  tokens, missing required members, and unfamiliar future shape kinds. Bundle its feature article in
+  the offline documentation corpus. This ultra-speed lane intentionally did not run tests, type
+  checks, lint, reviews, security or accessibility checks, builds, packaging, installer execution,
+  runtime interaction, or UI captures.
+
+- Add an AWS Universe navigator and portal cards for unlimited AWS-only child canvases. Each
+  instance receives a permanent scoped Shop, searchable guided controls, and portable schema 3
+  intent without credentials, profiles, local paths, or runtime bindings. Tests, type checks, lint,
+  reviews, security checks, accessibility checks, builds, packaging, installer execution, runtime
+  interaction, and captures remain unrun under issue #39's ultra-speed boundary.
+
+- Add the shared hosted-resource backup and restore framework. Versioned manifests now carry safe
+  resource, edition, ownership, payload-hash, omission, and byte-budget evidence; bounded ZIP
+  validation rejects unsafe paths and malformed payloads; staged operations report progress and
+  cancellation; local publication is collision-safe and atomic; restore review and expiry-bound
+   rollback contracts keep later hosting nodes from applying an unverified destination change.
+   This ultra-speed implementation lane intentionally did not run tests, type checks, lint, reviews,
+   security or accessibility checks, builds, packaging, installer execution, runtime interaction,
+   or UI captures.
+
+- Add the guided Cloudflare core manager node for accounts, zones, DNS, SSL/TLS, rulesets,
+  redirects, cache, and analytics. Typed host operations use a fixed HTTPS API, bounded result
+  bodies, safe previews, cancellation, local sealed credentials, explicit unavailable states, and
+  destructive confirmation. Schema 3 carries only safe operation intent and never carries tokens,
+  provider sessions, local paths, responses, or request state. Every result list has its own plain
+  text search and adjacent anchored full regex builder. Tests, type checks, lint, reviews, security
+  and accessibility checks, builds, packaging, installer execution, runtime interaction, and UI
+  captures were intentionally not run in this ultra-speed lane.
+
 - Complete the Express File Converter flow with queue-wide collision-safe destination names,
   visible rename disclosure, final atomic no-clobber publication, and a completed-output action that
   opens the exact result in Visual Studio Code through the active project API. The converter queue
@@ -35,6 +181,58 @@
   cancellation, retry, bilingual factual dish details, portable schema 3 selection state, and
   explicit offline/photo recovery without vendoring images. This ultra-speed lane ran no tests,
   type checks, lint, builds, packaging, runtime interaction, audits, reviews, or captures.
+
+- Add the Home Assistant multi-instance client with machine-local instance registration, sealed
+  write-only access tokens, explicit node binding, bounded REST and WebSocket entity discovery,
+  cancellable progress, retry and recovery states, searchable instance/domain/entity pickers with
+  adjacent anchored regex builders, and schema 3 safe discovery intent. Hosts, credentials,
+  sessions, sockets, caches, and entity results stay out of portable projects. This ultra-speed
+  lane intentionally ran no tests, type checks, lint, builds, packaging, reviews, security checks,
+  accessibility checks, installer execution, runtime interaction checks, or UI captures.
+
+- Add Home Assistant control nodes with machine-local sealed connections, real entity and service
+  discovery, rich controls for common domains, a schema-driven fallback, cancellation, recovery,
+  and portable selection intent that omits credentials, endpoints, caches, and host identity. This
+  ultra-speed lane intentionally ran no tests, type checks, lint, reviews, security checks,
+  accessibility checks, builds, packaging, installer execution, runtime interaction, or captures.
+
+- Add Home Assistant sensor display nodes with guided Configure, Rebind, Adopt, Deploy, Locate
+  Asset, and Leave Unbound routes; real entity discovery; value, binary, enum, gauge, trend, event,
+  weather, calendar, and selected-attribute presentations; bounded machine-local observations;
+  schema 3 portable display intent; sealed machine-local credentials; desktop and Server Edition
+  host services; and an explicit relay refusal. This ultra-speed implementation lane intentionally
+  keeps the last successful selected-entity observation visible and marked stale during a live
+  outage, and intentionally did not run tests, type checks, lint, reviews, security checks, accessibility checks, builds,
+  packaging, installer execution, runtime interaction, or UI captures.
+
+- Harden advanced pipeline publication with a 512 MiB produced-output ceiling and a 4 KiB ZIP
+  entry-name bound. Repair the issue lane's package manifest so the pinned PDF, OCR, and image
+  dependencies remain installable as valid JSON. This source-only correction intentionally did not run
+  tests, type checks, lint, builds, packaging, installer execution, runtime interaction, reviews,
+  audits, or UI captures.
+
+- Add bounded advanced file pipelines to the existing guided converter: packaged PDF inspection,
+  text extraction, split, merge, first-page extraction, reverse ordering, page rotation, and
+  metadata removal; supported Sharp image conversion; local
+  English OCR with packaged language data; safe ZIP entry inventory; and deterministic JSON key
+  ordering. Portable pipeline intent imports unbound and omits paths, credentials, sessions,
+  process and host identity, caches, and generated output. Audio/video and other formats without a
+  packaged adapter remain visibly disabled. This ultra-speed lane intentionally did not run tests,
+  type checks, lint, builds, packaging, installer execution, runtime interaction, reviews, audits,
+  or UI captures.
+
+- Add scoped Multiverse child canvases with a searchable hierarchy navigator, a guided searchable
+  parent picker, exact depth-8 refusal reasons, independent viewport and graph state, deterministic
+  scoped Shops, ordinary project persistence, and portable schema 3 projection. Import validates
+  hierarchy structure and reconstructs data without launching external work. Tests, type checks,
+  lint, builds, packaging, reviews, audits, runtime interaction, and captures remain unrun under
+  issue #33's ultra-speed boundary.
+
+- Add a portable top-down recovery game node with three energy keys, hazard reset behavior, central
+  core activation, keyboard and button controls, board-location search with an anchored regex
+  builder, explicit disabled-state guidance, and bounded schema 3 state that imports without
+  external side effects. Runtime, build, and capture verification remain pending in the integration
+  lane.
 
 - Add a source-only desktop Material Design 3 audit with a hand-written inventory of 212 rendered
   surfaces, including onboarding, profile picking, conversion, password management, Minecraft
@@ -71,9 +269,12 @@
   documentation page, with a fail-closed source checker and shared numeric, radio, progress,
   keyboard-roving tabs, tooltip, and shape-token remediation. Built-artifact clipping and pixel evidence remain pending;
   the documentation and landing site stays in its existing Kids-mode visual style.
-- Add the schema 3 portable media contract: content-addressed image, audio, and video assets,
-  byte/signature validation, explicit Include/Omit/Locate Later decisions, unresolved placeholders,
-  and machine-local source-path exclusion. Archive wiring and verification remain pending.
+- Complete the schema 3 portable media source path: the typed desktop bridge now prepares
+  path-free decision candidates, Include requires parser-proved media facts, selected bytes are
+  content-addressed under `assets/media/`, and import validates and stages the real bytes before one
+  atomic destination rename. Tests, type checks, lint, reviews, security and accessibility checks,
+  builds, packaging, installer execution, runtime interaction, and captures remain intentionally
+  unrun.
 - Add schema 3 portable project import and export wiring with complete entry hash validation,
   bounded in-memory legacy migration, collision-safe atomic destination staging, cancellation,
   rollback, and an explicit omission report. Keep provider credentials, machine paths, process
@@ -135,14 +336,30 @@
   builder state.
 - Add a host-owned planner occurrence service with durable local schedules, recurrence choices,
   timezone and DST semantics, cross-midnight descriptions, missed-occurrence history, JSON/CSV
-  export, Desktop IPC and Server Edition WS-RPC events, and a guided Planner settings surface.
+  export, Desktop IPC and Server Edition WS-RPC events, and a guided Planner settings surface. The
+  service now survives Desktop title-bar closure while enabled schedules exist, records each
+  occurrence before notification delivery, preserves host-owned history across stale UI saves,
+  exposes save retry recovery, and gates schedule deletion behind two-key confirmation.
   This ultra-speed lane intentionally leaves tests, builds, packaging, runtime interaction, and
   captures unrun.
+- Extend planner occurrences with a validated schema 3 planner-definition projection and an
+  explicit destination Configure action. Portable import carries schedule intent only, keeps
+  occurrence history and host state local, and merges configured definitions without overwriting a
+  conflicting destination schedule. The generated offline documentation bundle was refreshed from
+  the planner article. Tests, type checks, lint, builds, packaging, runtime interaction, and
+  captures remain unrun under the ultra-speed boundary.
 - Add Calendar nodes for local calendars and ICS import, with guided CalDAV, Google Calendar, and
   Microsoft 365 provider/account/calendar selection, recurrence and timezone views, offline cache,
   create/edit previews, and destructive delete confirmation. Provider credentials stay behind the
   trusted shell's vault boundary. This ultra-speed lane deliberately ran no tests, type checks,
   builds, packaging, runtime interaction, or captures.
+- Complete the Calendar provider boundary with verified HTTPS CalDAV account intake, loopback PKCE
+  for Google and Microsoft 365, machine-local credential storage, bounded paginated synchronization,
+  provider validators, retry backoff, and provider-confirmed event writes. Incremental provider
+  updates now merge changed records and tombstones into the existing cache, and project-file
+  boundaries strip unknown calendar configuration fields. This continuation ran no
+  tests, type checks, lint, builds, packaging, installer execution, runtime interaction, reviews,
+  audits, or captures.
 - Add Alarm Clock canvas nodes with one-shot and recurring wall-clock schedules, explicit IANA
   timezones, daylight-saving-safe occurrence planning, snooze, dismiss, missed history, sound and
   narrator integration, and an honest no-powered-off-wake notice. Verification is intentionally
@@ -2284,3 +2501,10 @@ git tag --sort=-creatordate
 or on GitHub's [tags](https://github.com/eneskirca/nodeterm/tags) and
 [releases](https://github.com/eneskirca/nodeterm/releases) pages.
 
+# Unreleased
+
+- Add issue #103's local Easter egg cabinet with 60 stable, non-blocking surprises across the
+  desktop surfaces. Each entry has English and Cantonese copy, ten funny levels, keyboard and
+  touch discovery, reduced-motion behavior, local discovery-only persistence, reset support, and
+  complete School-mode suppression. No tests, builds, runtime interaction, or captures were run in
+  this lane by explicit scope.

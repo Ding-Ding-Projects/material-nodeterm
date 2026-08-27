@@ -19,22 +19,25 @@ Before export, the guided media picker lists every candidate and offers three ex
 The picker has a plain-text search field and an adjacent anchored full regex builder. Each row is a
 real set of buttons, with keyboard focus, pressed state, and an accessible decision group. A missing,
 unsupported, or invalid source remains represented by an omission or placeholder and includes a
-bounded reason. No blank path textbox or arbitrary command is used as a fallback.
+bounded reason. Include is disabled with that exact reason when no bundled parser can prove the
+media facts. No blank path textbox or arbitrary command is used as a fallback.
 
 ## Validation and privacy
 
-Collection uses a regular-file check, a bounded streaming read, signature detection, MIME and extension
-normalisation, and SHA-256 hashing. Large sources are never allocated as one in-memory buffer: the
-collector hashes the stream, retains only a small signature prefix, and returns a machine-local
-stream source for the archive writer to consume later. At publication time the writer opens that
-source again and requires the same byte count, signature, MIME, extension, and SHA-256 before adding
-`assets/media/<sha256>.<extension>` to both the container and its outer manifest. A source that changed
-after selection is omitted with an explicit explanation rather than being published under stale
-metadata. Extension-only claims are rejected. Recognised signatures cover
+Collection uses a regular-file check, a bounded streaming hash, signature detection, MIME and extension
+normalisation, and SHA-256. Large sources are hashed without first allocating the whole input, and
+the collector retains only a small signature prefix plus a machine-local stream source. Export
+re-reads the selected file under the 512 MiB per-asset bound, requires the same byte count, signature,
+MIME, extension, and SHA-256, refuses a file that changed after preparation, and requires parser-
+proved facts before publication.
+Images decode through the bundled image parser, WAV parses its format and data chunks, and MP4 or
+QuickTime parses movie timing plus video-track dimensions. Frame counts are recorded for decoded
+images. Formats with a recognised signature but no bundled structural parser remain available for
+Locate Later or Omit, never Include. Extension-only claims are rejected. Recognised signatures cover
 common PNG, JPEG, GIF, WebP, AVIF-labelled image inputs, WAV, MP3, Ogg, FLAC, MP4, QuickTime, and
 WebM media. The schema bounds each asset at 512 MiB and the manifest at 10,000 assets. Imported
 manifests require schema 3, matching content addresses, safe labels, valid media kinds, and bounded
-dimensions and durations.
+dimensions, durations, and frame counts.
 
 Portable media does not contain credentials, provider sessions, process state, host identifiers,
 absolute paths, cache data, or generated runtime data. Import validation is pure and has no network,
@@ -52,15 +55,25 @@ container first, stages accepted media beneath the new project root, and publish
 atomically. The browser edition and mobile companion should use the same platform-free manifest and
 document their carrier limitations before wiring a picker.
 
+The desktop bridge returns only path-free decision candidates and a single-use preparation id.
+Decisions cross the bridge as bounded `{ assetId, decision }` records. Included bytes are written
+under `assets/media/<sha256>.<extension>` and are covered by the outer schema 3 entry hashes. Import
+matches every resolved manifest record to exactly one archive entry and repeats signature, hash,
+size, and parser-fact validation before writing anything. Project data and media are staged together
+beside a new destination, then the complete directory is published by one atomic rename. Failure or
+cancellation removes only that task's temporary directory.
+
 ## Verification status
 
-The core media contract, content-addressed collection, manifest validation, omission decisions, and
-guided renderer component are implemented in `src/core/portable-media-assets.ts`,
-`src/core/portable-canvas-projection.ts`, and
-`src/renderer/components/PortableMediaDecisionDialog.tsx`. This lane deliberately did not run
-tests, type checking, linting, reviews, security checks, builds, packaging, installer execution,
-runtime interaction, or captures. Archive production/import wiring is implemented in source; every
-listed check and built-artifact evidence remains pending.
+The media contract and parser proof are implemented in `src/core/portable-media-assets.ts`; real
+container bytes and atomic destination publication are implemented in
+`src/core/portable-project-import.ts`; the typed desktop bridge is declared in
+`src/shared/portable-media.ts` and carried through `src/shared/ipc.ts`, `src/preload/index.ts`, and
+`src/main/index.ts`; and the guided surface is
+`src/renderer/components/PortableMediaDecisionDialog.tsx`. This lane deliberately did not run tests,
+type checking, linting, reviews, security checks, accessibility checks, builds, packaging, installer
+execution, runtime interaction, or captures. These source changes are therefore implemented but
+unverified.
 
 ## Suggested articles
 

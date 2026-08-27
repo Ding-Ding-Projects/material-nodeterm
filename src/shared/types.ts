@@ -1,6 +1,7 @@
 import { DEFAULT_WORD_SEPARATORS } from './word-separators'
 import type { ServiceConnection } from './node-exec'
 import type { DockerHostManagerApi } from './docker-host-manager'
+import type { NextcloudAioManagerApi } from './nextcloud-aio'
 import type { NsisSpec, NsisLocalPaths } from './nsis-form-types'
 // Types shared across the main, preload, and renderer processes.
 
@@ -18,10 +19,14 @@ import type { ProjectKanbanGitHub } from './github-issues'
 import type { ProjectIcon } from './project-icon'
 import type { ShortcutMap } from './shortcuts'
 import { DEFAULT_SHORTCUTS } from './shortcuts'
-import type { FunnyLevel, LanguageMode } from './i18n/types'
+import { DEFAULT_FUNNY_LEVEL, type FunnyLevel, type LanguageMode } from './i18n/types'
+import type { PortableDoorConstructionV3 } from './door-construction'
 import type { VsCodeInstall, VsCodeOpenResult } from './vscode'
 import type { HistoryFilters, HistoryListResult, HistoryRestoreResult } from './local-history'
 import type { CalendarApi, CalendarNodeConfig } from './calendar'
+import type { HomeAssistantApi } from './home-assistant'
+import type { HomeAssistantControlApi, HomeAssistantControlConfig } from './home-assistant-control'
+import type { HomeAssistantSensorApi, HomeAssistantSensorConfig } from './home-assistant-sensor'
 import type {
   ToyLockBeginTotpInput,
   ToyLockBeginTotpResult,
@@ -216,6 +221,9 @@ export interface PtyCreateOptions {
    * "not connected" overlay and re-spawns when the master is back.
    */
   requireRemote?: boolean
+  /** Join an already-live session only. Foreign canvas projections are viewers, never owners, so
+   * a missing target session is returned as `unavailable: 'no-session'` instead of spawning it. */
+  requireExisting?: boolean
 }
 
 /** A tmux pane's cursor, as tmux reports it: 0-based column/row within the pane, plus whether the
@@ -340,7 +348,8 @@ export interface PtyCreateResult {
    * managed account whose home is missing refuses rather than spawning against the system login
    * (§5 property 4). Same contract — nothing spawned, the renderer shows the node's refusal.
    */
-  unavailable?: 'ssh' | 'codex-account'
+  /** Refusal for a foreign projection that had no live session to join. */
+  unavailable?: 'ssh' | 'codex-account' | 'no-session'
 }
 
 /** Payload of `pty:recycled` — see IPC.ptyRecycled and `recycleAction` in the renderer. */
@@ -374,11 +383,14 @@ export type NodeKind =
   | 'loop'
   | 'scheduler'
   | 'dino'
+  | 'recovery-game'
   | 'annotation'
   // A permanent catalog surface owned by each Multiverse or AWS Universe child canvas. Shop is
   // intentionally a distinct kind so the canvas can refuse deletion, duplication, grouping, and
   // cross-universe movement at every mutation boundary.
   | 'shop'
+  // AWS Universe portal. The portal is a safe project intent and never carries provider state.
+  | 'aws-universe'
   // A GUI for authoring a Windows NSIS installer script for ANOTHER project (not this app's
   // own installer, which stays Squirrel.Windows — see CLAUDE.md's Packaging section). See
   // `NsisSpec`/`NsisLocalPaths` in `./nsis-form-types` for the shared-vs-machine-local split.
@@ -390,6 +402,7 @@ export type NodeKind =
   // A portable calendar view. Provider credentials and event cache stay in the core vault/local
   // data, while this node carries only safe selection intent.
   | 'calendar'
+  | 'homeassistant-control'
   | 'timer'
   // Alarm Clock nodes persist wall-clock intent and occurrence history. Runtime timers and
   // notification handles stay machine-local; a shared project never claims powered-off wake.
@@ -413,8 +426,14 @@ export type NodeKind =
   | 'dockerhost'
   | 'proxmox'
   | 'gitlab'
+  | 'gitlab-hosting'
   | 'homeassistant'
+  | 'homeassistant-sensor'
   | 'freepbx'
+  | 'nextcloud-aio'
+  | 'cloudflare-zero-trust'
+  /** Guided Cloudflare account, zone, DNS, SSL/TLS, ruleset, redirect, cache, and analytics manager. */
+  | 'cloudflare-core-managers'
   | 'torrent'
   /** One-shot Linux ISO virtual machine, distinct from the WSL terminal profile. */
   | 'linux-vm'
@@ -430,7 +449,9 @@ export const SERVICE_NODE_KINDS = [
   'proxmox',
   'gitlab',
   'homeassistant',
-  'freepbx'
+  'freepbx',
+  'cloudflare-zero-trust',
+  'nextcloud-aio'
 ] as const
 
 export type ServiceNodeKind = (typeof SERVICE_NODE_KINDS)[number]
@@ -623,6 +644,8 @@ export interface CanvasNodeState {
   textUpdatedBy?: string
   // dino-only: best score reached in the T-Rex Runner game.
   highScore?: number
+  /** recovery-game-only: bounded portable progress with no process, account, or host state. */
+  recoveryGame?: import('./recovery-game').RecoveryGameSnapshot
   /**
    * service-kinds only: the display name the user gave this manager ("Home lab Proxmox", "Survival
    * server"). This is the ONLY thing a service node persists, and the restraint is deliberate — the
@@ -632,6 +655,17 @@ export interface CanvasNodeState {
    * `localExec` on the index entry, exactly where the shell and Windows profile already live.
    */
   serviceLabel?: string
+  /** Nextcloud AIO safe deployment intent. Context, container state, backups, and socket bindings remain local. */
+  nextcloudAioConfig?: import('./nextcloud-aio').NextcloudAioConfig
+  /** Cloudflare manager selection intent. Account ids, credentials and resource ids stay local. */
+  cloudflareZeroTrustIntent?: import('./cloudflare-zero-trust').CloudflarePortableIntent
+  /** Cloudflare manager safe intent. Credentials and local bindings stay in the host overlay. */
+  cloudflareCoreIntent?: import('./cloudflare-core-managers').CloudflarePortableIntent
+  /** Home Assistant node presentation intent safe for schema 3. Hosts, instance ids, credentials,
+   *  sessions, and entity caches stay in the machine-local service and binding overlay. */
+  homeAssistantIntent?: import('./home-assistant').HomeAssistantNodeIntent
+  /** GitLab hosting intent. Docker context, container, volumes, credentials, and process state stay local. */
+  gitlabHostingConfig?: import('./gitlab-hosting').GitLabHostingConfig
   /** torrent-only: safe display intent shared with the canvas; task state and paths stay local. */
   torrentMagnet?: string
   /** Linux ISO VM settings stored in the shared project projection. */
@@ -661,6 +695,12 @@ export interface CanvasNodeState {
   /** calendar-only, GIT-SHARED safe intent. Tokens, provider sessions, paths and event cache stay
    * in the machine-local calendar service. */
   calendarConfig?: CalendarNodeConfig
+  /** Home Assistant control-only portable selection intent. Local connection identity, URL,
+   * bearer, discovery cache and request state never enter project data. */
+  homeAssistantControlConfig?: HomeAssistantControlConfig
+  /** Home Assistant sensor-only, project-portable selection and presentation intent. Instance
+   * URLs, credentials, observed values, and history remain machine-local. */
+  homeAssistantSensorConfig?: HomeAssistantSensorConfig
   // editor / diff
   filePath?: string
   /** Photo/video/gallery media is represented by a portable content reference, never an absolute path. */
@@ -789,6 +829,32 @@ export interface BridgeLink {
   id: string
   source: string
   target: string
+}
+
+/**
+ * One endpoint of a typed Link. The ref discriminator keeps endpoint handling exhaustive and
+ * avoids inferring meaning from legacy id prefixes.
+ *
+ * A node endpoint names a node in the project that owns the link. An xnode endpoint names a node
+ * in another project without copying that node. A branch endpoint names a git branch for links
+ * that model branch relationships.
+ */
+export type Endpoint =
+  | { ref: 'node'; nodeId: string }
+  | { ref: 'xnode'; projectId: string; nodeId: string }
+  | { ref: 'branch'; repoPath: string; branch: string }
+
+/** The persisted kind discriminator for the unified link model. */
+export type LinkKind = 'context' | 'lineage' | 'dependency'
+
+/** A typed link between two endpoints. */
+export interface Link {
+  id: string
+  kind: LinkKind
+  source: Endpoint
+  target: Endpoint
+  /** Optional kind-specific metadata, such as display-only or note information. */
+  meta?: Record<string, unknown>
 }
 
 /**
@@ -926,6 +992,8 @@ export interface BoardLogEntry {
   kind: 'comment' | 'event'
   text?: string
   event?: BoardLogEvent
+  /** Content-addressed files copied into the project's portable attachment carrier. */
+  attachments?: import('./comment-attachments').BoardAttachmentRef[]
 }
 
 /** Max chars kept for a comment's `text`. On an SSH project the whole JSON line becomes one
@@ -971,6 +1039,20 @@ export interface LogRecord {
   msg: string
 }
 
+/** A portable child canvas inside one project. Root canvas content remains on Project itself. */
+export interface ProjectMultiverseCanvas {
+  id: string
+  title: string
+  parentCanvasId: string
+  /** Persisted depth from the project root. Multiverse canvases are limited to 1 through 8. */
+  depth: number
+  order: number
+  viewport: Viewport
+  nodes: CanvasNodeState[]
+  bridges?: BridgeLink[]
+  ropes?: BridgeLink[]
+}
+
 export interface LogApi {
   /** The whole ring, oldest-first — the panel's initial fill. */
   snapshot(): Promise<LogRecord[]>
@@ -984,6 +1066,18 @@ export interface LogApi {
 export interface BoardLogApi {
   /** Append one entry. Resolves `false` on any failure (unsupported project, fs/exec error). */
   append(projectId: string, entry: BoardLogEntry): Promise<boolean>
+  /** Append one comment and its files as one host-side transaction. Source paths are consumed and
+   * never persisted in the resulting entry. */
+  appendWithAttachments(
+    projectId: string,
+    entry: BoardLogEntry,
+    attachments: import('./comment-attachments').BoardAttachmentDraft[]
+  ): Promise<import('./comment-attachments').BoardLogAppendResult>
+  /** Re-read and integrity-check a posted attachment after restart. */
+  readAttachment(
+    projectId: string,
+    attachment: import('./comment-attachments').BoardAttachmentRef
+  ): Promise<import('./comment-attachments').BoardAttachmentReadResult>
   /** Read the log newest-first (see BoardLogReadResult). */
   read(projectId: string, opts?: BoardLogReadOpts): Promise<BoardLogReadResult>
   /** Subscribe to change pushes for one project; returns an unsubscribe. */
@@ -997,6 +1091,44 @@ export interface NavStop {
   nodeId: string
   at: number
   note: string
+}
+
+/** A portable child canvas carried by a project after a Multiverse import. The node list is
+ * content, not a live process or destination binding, so it remains safe to move between hosts. */
+export interface ProjectChildCanvas {
+  id: string
+  scope: 'multiverse' | 'aws-universe'
+  parentCanvasId: string
+  depth: number
+  title: string
+  order: number
+  viewport?: Viewport
+  nodes: CanvasNodeState[]
+  bridges?: BridgeLink[]
+  ropes?: BridgeLink[]
+}
+
+/** Narrow AWS Universe view over the shared child-canvas projection. */
+export type ProjectAwsUniverseCanvas = ProjectChildCanvas & {
+  scope: 'aws-universe'
+  parentCanvasId: 'root'
+  depth: 1
+  viewport: Viewport
+}
+
+/** Safe portal intent shared by the runtime project and schema 3 projection. */
+export interface ProjectPortalState {
+  id: string
+  parentCanvasId: string
+  childCanvasId: string
+  entryDoorId: string
+  returnDoorId: string
+  title: string
+  depth: number
+  status: 'open' | 'closed'
+  /** Safe construction intent for each side. Credentials and runtime bindings are never stored. */
+  entryConstruction?: PortableDoorConstructionV3
+  returnConstruction?: PortableDoorConstructionV3
 }
 
 /** A project is one canvas/page: its own nodes, viewport, and default working dir. */
@@ -1017,6 +1149,15 @@ export interface Project {
   ssh?: { server: import('./ssh').SshConnection; remoteCwd: string }
   viewport: Viewport
   nodes: CanvasNodeState[]
+  /** Safe, git-shared child canvases. Credentials, paths and runtime bindings stay on nodes' local overlays. */
+  multiverseCanvases?: ProjectMultiverseCanvas[]
+  /** Runtime-only selection. The shared project file stores hierarchy, never one person's current view. */
+  activeCanvasId?: string
+  /** Child universe canvases imported from schema 3. Their node content remains addressable even
+   * when the containing portal is removed, so deleting a portal cannot delete child work. */
+  childCanvases?: ProjectChildCanvas[]
+  /** Door-only Multiverse portal intent. Credentials and runtime bindings never fit this shape. */
+  portals?: ProjectPortalState[]
   /** Default managed Claude account for new Claude/chat nodes in this project. */
   defaultAccountId?: string
   /** Permission mode for new Claude TERMINAL (CLI) sessions in this project. SDK chat nodes are
@@ -1075,6 +1216,8 @@ export interface Project {
    * behavior.
    */
   browserProfiles?: BrowserProfile[]
+  /** Unified typed links whose source belongs to this project. */
+  links?: Link[]
   /** Bridge links between Claude nodes (optional; absent in pre-bridge files). */
   bridges?: BridgeLink[]
   /**
@@ -1320,7 +1463,7 @@ export type WorkspaceMigrationKind = 'v2' | 'exec'
 export interface ProjectArchiveExclusion {
   /** Project-folder-relative path, '/'-separated. A grouped directory ends with '/'. */
   path: string
-  reason: 'gitignored' | 'nested-repository' | 'symlink' | 'special' | 'missing' | 'unreadable' | 'machine-local' | 'credential' | 'unsupported'
+  reason: 'gitignored' | 'nested-repository' | 'symlink' | 'special' | 'missing' | 'unreadable' | 'machine-local' | 'credential' | 'unsupported' | 'user-choice' | 'validation-failed'
   /** Human-readable reason for portable schema omissions; absent on legacy file exclusions. */
   detail?: string
   /** File count under a grouped directory exclusion. Absent for a single file. */
@@ -1403,6 +1546,8 @@ export interface ProjectArchiveProgress {
 export interface WorkspaceApi {
   load(): Promise<Workspace>
   save(workspace: Workspace): Promise<void>
+  /** Path-free preparation and cancellation for portable project media. */
+  portableMedia: import('./portable-media').PortableMediaApi
   /** Local destination binding controls. Import never invokes these controls implicitly. */
   portableBindings: PortableBindingApi
   /** Progress and cancellation for the schema 3 import operation. */
@@ -1435,7 +1580,8 @@ export interface WorkspaceApi {
     /** When given, the finished archive is wrapped whole in AES-256-GCM under a key derived from
      *  this password (core/project-archive-encryption.ts) and the file leaks nothing about the
      *  project — not its name, not its file list. Omitted ⇒ the historical plain container. */
-    password?: string
+    password?: string,
+    media?: import('./portable-media').PortableMediaExportPlan
   ): Promise<{
     ok: boolean
     path?: string
@@ -1473,7 +1619,16 @@ export interface WorkspaceApi {
     path?: string
     archiveVersion?: 1 | 2 | 3
     contents?: ProjectArchiveContents
+    /** Safe planner definitions from schema 3, not yet applied to this machine. */
+    plannerDefinitions?: {
+      schemaVersion: 1
+      featureId: 'planner'
+      displayLabel: string
+      schedules: import('./planner-occurrences').PlannerSchedule[]
+    }
     restoredTo?: string
+    /** Non-fatal portal metadata repairs applied while preserving child content. */
+    repairs?: Array<{ portalId?: string; canvasId?: string; action: string; detail: string; preservedNodeIds: string[] }>
   }>
   /** Hand out the next unlock-ladder question for a rate-limited protected project file. `null`
    *  means no ladder is on offer (no wait to end, this climb already failed to the bottom, or the
@@ -2121,6 +2276,9 @@ export interface CanvasWidgetState {
 
 /** User-configurable application settings (settings.json). */
 export interface Settings {
+  /** Versioned settings shape. Version 2 expands funny levels to 1–10 while preserving every
+   * valid persisted value from the five-level shape. */
+  settingsSchemaVersion: typeof SETTINGS_SCHEMA_VERSION
   /** ADHD modes — five independent accommodations, all off by default. See `AdhdModes`. */
   adhdModes: AdhdModes
   dockerHost: DockerHostSettings
@@ -2252,6 +2410,9 @@ export interface Settings {
    *  scroll keeps panning independently (see canvas/wheel-gesture.ts), so mouse and trackpad
    *  coexist; elsewhere this still trades away scroll-to-pan, so it stays opt-in. */
   wheelZoom: boolean
+  /** Multiplier for plain-wheel zoom exponent, bounded to 0.2–2 at point of use. The historical
+   *  feel is preserved at 1; modifier zoom and trackpad pinch always use the fixed multiplier. */
+  wheelZoomSpeed: number
   /** macOS only: a two-finger trackpad scroll pans the canvas, independently of `wheelZoom`
    *  (see canvas/wheel-gesture.ts). Off restores the pre-router behavior — `wheelZoom` alone
    *  decides — which is also the recourse for a precise-pixel MOUSE that reads as a trackpad. */
@@ -2525,7 +2686,7 @@ export interface Settings {
    *  bilingual (English prominent, Cantonese compact secondary). See src/shared/i18n and
    *  docs/language-modes.md. Applies live — no restart. */
   languageMode: LanguageMode
-  /** Funny-level slider for ENGLISH copy, 1 (fully professional) to 5 (maximum playfulness).
+  /** Funny-level slider for ENGLISH copy, 1 (fully professional) to 10 (maximum playfulness).
    *  Independent of `funnyLevelYue` — a user may want plain English with playful Cantonese, or
    *  the reverse. Applies to every message category, errors and warnings included; only the
    *  VOICE changes, never the facts (see src/shared/i18n/catalog.ts). */
@@ -2603,8 +2764,10 @@ export interface Settings {
  *  `#0a84ff` (systemBlue) — see `mergeSettings`'s migration in `core/settings-store.ts` for the
  *  one-time upgrade of an existing install's saved `#0a84ff`. */
 export const DEFAULT_ACCENT = '#6750a4'
+export const SETTINGS_SCHEMA_VERSION = 2 as const
 
 export const DEFAULT_SETTINGS: Settings = {
+  settingsSchemaVersion: 2,
   adhdModes: {
     focus: false,
     lowStimulation: false,
@@ -2668,6 +2831,7 @@ export const DEFAULT_SETTINGS: Settings = {
   doubleClickFocus: true,
   terminalMiddleClickPaste: false,
   wheelZoom: true,
+  wheelZoomSpeed: 1,
   trackpadPan: true,
   canvasDragMode: 'pan',
   browserMemorySaver: true,
@@ -2755,13 +2919,10 @@ export const DEFAULT_SETTINGS: Settings = {
   notchHoverExpand: true,
   speech: { engine: 'whisper', model: 'tiny', language: 'auto', shortcut: 'Cmd+Alt' },
   languageMode: 'en',
-  // Level 2, not 5: the default install is a developer tool a stranger just downloaded, and a
-  // maximally-playful error message is the wrong first impression for someone who hasn't yet
-  // chosen to have fun with their terminal manager. Level 2 keeps copy mostly plain with a
-  // little character — the kind of tone that reads as "friendly", not "trying too hard". Users
-  // who want more crank both sliders themselves.
-  funnyLevelEn: 2,
-  funnyLevelYue: 2,
+  // New installations start at the maximum deliberate voice level. Existing saved values are
+  // preserved by the versioned settings migration in core/settings-store.ts.
+  funnyLevelEn: DEFAULT_FUNNY_LEVEL,
+  funnyLevelYue: DEFAULT_FUNNY_LEVEL,
   showEmojiInDialogs: false,
   // Narrator: opt-in and silent out of the box. Voices default to automatic — never a named
   // voice, since we can't know what's installed until we ask the platform.
@@ -2927,6 +3088,8 @@ export interface PlannerApi {
   save(file: import('./planner-occurrences').PlannerFile): Promise<{ ok: true } | { ok: false; error: string }>
   history(): Promise<import('./planner-occurrences').PlannerOccurrence[]>
   export(format: 'json' | 'csv'): Promise<{ filename: string; content: string }>
+  /** Apply imported schedule intent only after the user explicitly chooses Configure. */
+  configure(schedules: import('./planner-occurrences').PlannerSchedule[]): Promise<{ ok: true } | { ok: false; error: string }>
   onOccurrence(listener: (occurrence: import('./planner-occurrences').PlannerOccurrence) => void): () => void
 }
 
@@ -3692,18 +3855,31 @@ export interface UsageApi {
   onUpdate(listener: (usage: ClaudeUsage) => void): () => void
 }
 
-/** A Claude session's context-window fill, pushed per sessionId from the transcript tailer. */
+export type ContextWindowStatus = 'known' | 'unknown' | 'not-reported' | 'stale' | 'unavailable'
+
+/** A session's context-window telemetry, pushed per sessionId from a provider tailer. */
 export interface ContextWindowUsage {
   sessionId: string
-  /** input + cache_read + cache_creation tokens of the latest assistant message. */
-  usedTokens: number
-  /** Model context window (200k default, 1M for 1m-context models). */
-  windowTokens: number
-  /** 0–100 fullness. */
-  usedPercent: number
+  /** Provider id that produced this snapshot, for example claude, codex, or gemini. */
+  provider: string
+  /** Stable machine scope, never a portable-project identifier. */
+  sourceKey: string
+  /** input-side tokens of the latest request, when the provider reports them. */
+  usedTokens: number | null
+  /** Provider-reported or otherwise verified model context window. */
+  windowTokens: number | null
+  /** 0–100 fullness, only when both token values are finite and verified. */
+  usedPercent: number | null
+  /** Explicit state keeps unknown, stale, and unavailable distinct. */
+  status: ContextWindowStatus
   /** Model id from the transcript, or null if not seen yet. */
   model: string | null
-  updatedAt: number
+  /** Monotonic generation within one source epoch. Never persist this field. */
+  generation: number
+  /** Source epoch changes on process restart, so generation 1 is always fresh. */
+  sourceEpoch: string
+  /** Unix ms when this snapshot was produced, or null when no telemetry arrived. */
+  updatedAt: number | null
 }
 
 export interface ContextApi {
@@ -3715,7 +3891,7 @@ export interface ContextApi {
    * the continuing session is idle. `cwd` is a transcript-path fallback only.
    * `accountId` scopes resolution to a managed Claude account's transcript root (default `~/.claude`).
    */
-  ensure(sessionId: string, cwd?: string, accountId?: string): void
+  ensure(sessionId: string, cwd?: string, accountId?: string, agentId?: string): void
 }
 
 /**
@@ -4166,6 +4342,8 @@ export interface RelayHostApi {
   dockerContexts(): Promise<Array<{ name: string; current: boolean; endpoint: string }>>
   /** Guided local/SSH Docker management. Desktop owns the CLI; Server Edition refuses it. */
   manager: DockerHostManagerApi
+  /** Guided Nextcloud AIO lifecycle manager. Desktop-only; the browser shell reports unsupported. */
+  nextcloudAio: NextcloudAioManagerApi
   /**
    * Enter host mode over the relay: connect and return a pairing offer string to hand to a client.
    * Rejects when Docker or the configured relay is unavailable. `projectId` is the
@@ -4463,6 +4641,25 @@ export interface PasswordManagerApi {
   listCredentials(projectId: string, managerId: string): Promise<ListCredentialsResult>
 }
 
+/** Portal-door entry uses a separate host-owned local vault, never toy-lock state. Values cross
+ * the protected renderer boundary only for the immediate configure or verify call and are never
+ * returned, projected, logged, or exported. */
+export interface UniverseDoorEntryApi {
+  configure(input: {
+    doorId: string
+    method: 'numeric-code' | 'passphrase'
+    value: string
+    numericCodeDigits?: number
+    passphraseMinLength?: number
+  }): Promise<{ ok: true; credentialKey: string } | { ok: false; error: string }>
+  verify(input: {
+    doorId: string
+    method: 'numeric-code' | 'passphrase'
+    value: string
+  }): Promise<{ verified: true } | { verified: false; reason: string }>
+  remove(doorId: string): Promise<void>
+}
+
 export interface TimerApi {
   occurrences(): Promise<import('./timer').TimerOccurrence[]>
   schedule(timerId: string, scheduledAt: number): Promise<import('./timer').TimerOccurrence | null>
@@ -4497,6 +4694,8 @@ export interface NodeTerminalApi {
   workspace: WorkspaceApi
   /** Shared provider-account, credential-vault, OAuth-callback, and resource-picker services. */
   providerServices: import('./provider-services').ProviderServicesApi
+  /** Typed Cloudflare Access, Zero Trust, Workers, Pages, R2, D1 and Queues managers. */
+  cloudflareZeroTrust: import('./cloudflare-zero-trust').CloudflareApi
   timer: TimerApi
   serverDeployment: ServerDeploymentApi
   projectSettings: ProjectSettingsApi
@@ -4518,12 +4717,20 @@ export interface NodeTerminalApi {
   nodeDependencies: import('./node-dependencies').NodeDependenciesApi
   /** Local Ollama suite manager — docs/ollama-manager.md. */
   ollama: import('./ollama').OllamaApi
+  /** Guided Cloudflare managers — docs/features/integrations/cloudflare-core-managers.md. */
+  cloudflareCoreManagers?: import('./cloudflare-core-managers').CloudflareCoreManagersApi
   /** Local WebTorrent downloader — docs/torrent-downloader.md. */
   torrent: import('./torrent').TorrentApi
   /** Local Minecraft server create-and-manage — docs/minecraft-server-manager.md. */
   minecraft: import('./minecraft').MinecraftApi
   /** Local Linux ISO VM lifecycle — docs/linux-iso-vm.md. */
   virtualMachine: import('./virtual-machine').VirtualMachineApi
+  /** Machine-local Home Assistant instances with bounded REST and WebSocket discovery. */
+  homeAssistant: HomeAssistantApi
+  /** Schema-driven Home Assistant controls through host-owned local connection bindings. */
+  homeAssistantControl: HomeAssistantControlApi
+  /** Machine-local Home Assistant sensor discovery and bounded observations. */
+  homeAssistantSensor: HomeAssistantSensorApi
   ssh: SshApi
   sshProject: SshProjectApi
   sshFs: SshFsApi
@@ -4542,6 +4749,10 @@ export interface NodeTerminalApi {
   logs: LogApi
   githubIssues: import('./github-issues').GitHubIssuesApi
   githubControl: import('./github-issues').GitHubControlApi
+  /** Typed, allowlisted REST and GraphQL capability catalog for contextual GitHub actions. */
+  githubApi: import('./github-api').GitHubApiApi
+  /** Host-owned GitHub CLI account discovery and selection. Credential material never crosses this boundary. */
+  githubCliAccounts: import('./github-issues').GitHubCliAccountsApi
   usage: UsageApi
   sessionMemory: SessionMemoryApi
   vscode: VsCodeApi
@@ -4573,6 +4784,8 @@ export interface NodeTerminalApi {
   toylock: ToylockApi
   authenticator: AuthenticatorApi
   passwordManager: PasswordManagerApi
+  /** Host-owned portal-door entry vault. This is deliberately separate from toy locks. */
+  universeDoorEntry: UniverseDoorEntryApi
   /** "Escape to widget" — one node's session in its own always-on-top-configurable window. */
   canvasWidget: CanvasWidgetApi
   shortcuts: ShortcutsApi
@@ -4631,6 +4844,10 @@ export interface NodeTerminalApi {
    *  minutes; `level: 'none'` means the banner should come down. Returns unsubscribe.
    *  Server Edition: never fires — the reaper leg runs host-side only (see src/server/index.ts). */
   onPtyPressure(listener: (reading: PtyPressure) => void): () => void
+  /** Fires when the desktop main process observes a trackpad scroll or pinch edge. The payload is
+   *  the depth-safe active state, and only edge transitions are sent. Server Edition never fires:
+   *  its browser tab has no raw input stream and keeps the wheel router's heuristic path. */
+  onCanvasTrackpadGesture(listener: (active: boolean) => void): () => void
   /** Raise this Mac's pty-device ceiling (`kern.tty.ptmx_max`) now AND across reboots, behind
    *  macOS's own administrator-password dialog. Called ONLY from the banner's explicit
    *  "Fix automatically…" click — never on the app's initiative. macOS only; a dismissed password

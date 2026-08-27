@@ -17,9 +17,12 @@ import {
   createDiffNode,
   createStickyNode,
   createDinoNode,
+  createRecoveryGameNode,
   createVirtualMachineNode,
   createTorrentNode,
   createCalendarNode,
+  createHomeAssistantControlNode,
+  createGitLabHostingNode,
   createTimerNode,
   isAccountLoginNode
 } from '@renderer/state/workspace'
@@ -195,6 +198,8 @@ function buildBase(snapshot: ReopenNodeSnapshot, ctx: RecreateContext): CanvasNo
       return createBrowserNode(0, d.url ?? '', undefined, undefined, d.browserProfileId)
     case 'dino':
       return createDinoNode(0, undefined, d.highScore ?? 0)
+    case 'recovery-game':
+      return createRecoveryGameNode(0, undefined, d.recoveryGame)
     case 'linux-vm': {
       const node = createVirtualMachineNode(0)
       return {
@@ -210,6 +215,14 @@ function buildBase(snapshot: ReopenNodeSnapshot, ctx: RecreateContext): CanvasNo
       return createTorrentNode(0)
     case 'calendar':
       return createCalendarNode(0)
+    case 'homeassistant-control': {
+      const node = createHomeAssistantControlNode(0)
+      return { ...node, data: { ...node.data, homeAssistantControlConfig: d.homeAssistantControlConfig } }
+    }
+    case 'gitlab-hosting': {
+      const node = createGitLabHostingNode(0)
+      return { ...node, data: { ...node.data, gitlabHostingConfig: d.gitlabHostingConfig ?? node.data.gitlabHostingConfig } }
+    }
     case 'timer': {
       const node = createTimerNode(0)
       return { ...node, data: { ...node.data, ...d, running: false, paused: false, elapsedMs: 0, lapsMs: [], occurrenceId: undefined, occurrenceState: 'scheduled' } }

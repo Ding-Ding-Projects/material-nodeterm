@@ -52,6 +52,7 @@ import { writeFilesToClipboard } from './clipboard-files'
 import { NodeTermBrowserUseBackend } from './browser-use-backend'
 import { matchesShortcut } from '../shared/shortcut'
 import { registerFsHandlers } from '../core/fs-handlers'
+import { TrackpadGestureLedger } from './trackpad-gesture'
 import { registerConverterIpc } from '../core/converter/register-ipc'
 import { registerNodeDependencyIpc } from '../core/node-dependencies/register-ipc'
 import { registerOllamaIpc } from '../core/ollama/register-ipc'
@@ -59,12 +60,19 @@ import { registerMinecraftIpc } from '../core/minecraft/register-ipc'
 import { registerTorrentIpc } from '../core/torrent/register-ipc'
 import { registerVirtualMachineIpc } from '../core/virtual-machine/register-ipc'
 import { registerCalendarIpc } from '../core/calendar/register-ipc'
+import { registerCloudflareCoreManagersIpc } from '../core/cloudflare-core-managers'
+import { registerHomeAssistantIpc } from '../core/home-assistant/register-ipc'
+import { registerHomeAssistantControlIpc } from '../core/home-assistant-control/register-ipc'
+import { registerHomeAssistantSensorIpc } from '../core/home-assistant-sensor/register-ipc'
+import { registerCloudflareZeroTrustIpc } from '../core/cloudflare-zero-trust/service'
 import { AtomicJsonArrayStore } from '../core/atomic-json-store'
 import { TimerOccurrenceService } from '../core/timer-service'
 import type { TimerOccurrence } from '../shared/timer'
 import { registerVsCodeHandlers } from '../core/vscode-handlers'
 import { LocalHistoryStore } from '../core/local-history'
 import { ProjectArchiveService } from '../core/project-archive'
+import { preparePortableMedia, type PortableMediaPreparation } from '../core/portable-media-assets'
+import type { PortableMediaExportPlan, PortableMediaPrepareInput } from '../shared/portable-media'
 import { ServerDeploymentService, resolveServerDeploymentRoot } from './server-deployment'
 import { registerLocalHistoryHandlers } from '../core/local-history-handlers'
 import { describeSettingsChange } from '../shared/settings-diff'
@@ -258,6 +266,7 @@ import { startSessionMemoryService, sshScopePredicate } from '../core/session-me
 import { startWslService, defaultWslRuntime, fileWslOwnershipStore } from '../core/wsl'
 import { startToyLockService } from '../core/toylocks/toylock-service'
 import { startAuthenticatorService } from '../core/toylocks/authenticator-service'
+import { startUniverseDoorEntryService } from '../core/universe-door-entry-service'
 import { createMemoryPressureMonitor } from '../core/memory-pressure'
 import { createPtyPressureMonitor } from '../core/pty-pressure'
 import { registerPtmxLimitHandler } from './ptmx-limit'
@@ -274,6 +283,7 @@ import { createSubagentTail } from '../core/subagent-tail'
 import { createContextTail, type TaskNotification } from '../core/context-tail'
 import { geminiContextParse } from '../core/gemini-session'
 import { codexContextParse } from '../core/codex-session'
+import { locateCodex, locateGemini } from '../core/handoff/locate'
 import { createCodexSubagentFormatter } from '../core/codex-subagent-format'
 import { codexHome } from '../core/usage/codex-usage'
 import { grokRawFields, isAsyncSubagentLaunch, type NormalizedAgentEvent } from '../shared/agents/normalize'
@@ -366,7 +376,7 @@ import { loadOrCreatePeerKeyPair } from './remote/peer-identity'
 import { initSshProject } from './remote-ssh/ssh-project'
 import { resyncProjectAgents, RESYNC_TRANSCRIPT_TAIL_BYTES } from './remote-ssh/agent-resync'
 import { setGitRemoteResolver, type GitRemoteRef } from '../core/remote-ssh/remote-git'
-import { SshFs, sshAppendArgs, sshTailArgs, sshSizeArgs, sshWriteArgs } from './ssh-fs'
+import { SshFs, sshAppendArgs, sshTailArgs, sshSizeArgs, sshWriteArgs, sshWriteAttachmentArgs, sshReadAttachmentArgs, sshRemoveAttachmentArgs } from './ssh-fs'
 import { makeRemoteWorkspaceIO } from './remote-workspace-io'
 import {
   registerMediaScheme,
@@ -893,6 +903,7 @@ const browserGuests = new Map<number, BrowserGuest>()
 // nodeId → the agent session id of whichever hook-capable CLI runs in that node (claude's, and
 // since the grok branch in the raw listener, grok's).
 const nodeContextSession = new Map<string, string>()
+const nodeContextSource = new Map<string, string>()
 const nodeSubagents = new Map<string, Set<string>>() // nodeId → active subagent tool_use_ids
 const browserUseBackend = new NodeTermBrowserUseBackend((sessionId) => {
   for (const [nodeId, mappedSessionId] of nodeContextSession) {
@@ -1245,6 +1256,16 @@ function createWindow(): BrowserWindow {
   // its webContents are destroyed by then.)
   const presenceId = win.webContents.id
   presenceHub.join(presenceId, 'desktop')
+  // macOS reports trackpad scroll and pinch edges only to the main process. Reduce the raw input
+  // stream to depth-safe transitions before sending it over IPC, so the renderer receives facts
+  // per physical gesture rather than a message for every pointer packet.
+  const trackpadLedger = new TrackpadGestureLedger()
+  win.webContents.on('input-event', (_event, input) => {
+    const active = trackpadLedger.observe(input.type)
+    if (active !== null && !win.isDestroyed()) {
+      win.webContents.send(IPC.canvasTrackpadGesture, active)
+    }
+  })
   win.on('closed', () => {
     presenceHub.leave(presenceId)
     // This webContents is a pty SUBSCRIBER (co-attach: one pty, N subscribers, keyed by the
@@ -1314,11 +1335,6 @@ function createWindow(): BrowserWindow {
       win.hide()
       return
     }
-    // The real close: on win32/linux the native title-bar × reaches this directly with no
-    // app.quit() first (see window-all-closed below), so the confirm gate has to sit here too —
-    // not only in before-quit, where the window (the only place left to show a dialog) would
-    // already be destroyed by the time we asked.
-    if (shouldConfirmQuit()) {
     if (action === 'leave-fullscreen-then-hide') {
       e.preventDefault()
       if (!leavingFullScreen) {
@@ -1331,11 +1347,15 @@ function createWindow(): BrowserWindow {
       }
       return
     }
+    // A title-bar close is a UI close, not an explicit host shutdown. When the planner owns an
+    // enabled schedule, let this window be destroyed and let window-all-closed keep the process
+    // alive. Menu Quit and app shutdown still reach before-quit and stop the planner normally.
+    if (!quitting && plannerRuntime.hasEnabledSchedules()) return
     // action === 'default': the window is really closing. On Windows/Linux the native title-bar
     // × reaches this directly (no app.quit() first), so the confirm gate must sit here too, not
     // only in before-quit — otherwise the window (and with it the only place to show a dialog)
     // would already be gone by the time we asked.
-    if (!quitConfirmed && !skipQuitConfirmation) {
+    if (shouldConfirmQuit() && !quitConfirmed && !skipQuitConfirmation) {
       e.preventDefault()
       void confirmQuit(win).then((ok) => {
         if (ok) app.quit()
@@ -1573,11 +1593,98 @@ app.whenReady().then(async () => {
   // save; the diff-based label lives in shared/settings-diff.ts so it is shared with any future
   // shell that saves settings, rather than re-derived per process.
   const localHistoryStore = new LocalHistoryStore(app.getPath('userData'))
-  const projectArchives = new ProjectArchiveService(localHistoryStore)
+  const projectArchives = new ProjectArchiveService(localHistoryStore, undefined, () => plannerRuntime.store.get().schedules)
   // One core registrar owns provider accounts, credential references, OAuth callbacks, and local
   // bindings for both shells. Import never calls these handlers, so opening a project cannot start
   // consent, contact a provider, or mutate a destination resource as a side effect.
   registerProviderServicesIpc(corePlatform)
+  const portableMediaPreparations = new Map<string, { createdAt: number; projectId: string; preparation: PortableMediaPreparation }>()
+  const discardExpiredPortableMedia = (): void => {
+    const expiresBefore = Date.now() - 10 * 60 * 1000
+    for (const [id, value] of portableMediaPreparations) if (value.createdAt < expiresBefore) portableMediaPreparations.delete(id)
+  }
+  ipcMain.handle(IPC.portableMediaPrepare, async (_event, input: unknown) => {
+    discardExpiredPortableMedia()
+    if (!input || typeof input !== 'object' || Array.isArray(input)) return { ok: false, error: 'Portable media preparation is invalid.' }
+    const value = input as Record<string, unknown>
+    if (typeof value.projectId !== 'string' || !Array.isArray(value.sourcePaths) || value.sourcePaths.some((item) => typeof item !== 'string') || (value.projectRoot !== undefined && typeof value.projectRoot !== 'string')) return { ok: false, error: 'Portable media preparation is invalid.' }
+    try {
+      const preparation = await preparePortableMedia(value as unknown as PortableMediaPrepareInput)
+      const preparationId = randomUUID()
+      portableMediaPreparations.set(preparationId, { createdAt: Date.now(), projectId: value.projectId, preparation })
+      return { ok: true, preparationId, candidates: preparation.items.map((item) => item.candidate) }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  })
+  ipcMain.handle(IPC.portableMediaDiscard, (_event, preparationId: unknown) =>
+    typeof preparationId === 'string' ? portableMediaPreparations.delete(preparationId) : false
+  )
+  const portableBindings = new LocalNodeBindingStore(app.getPath('userData'))
+  ipcMain.handle(IPC.portableBindingState, async (_event, input: unknown) => {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) return []
+    const value = input as Record<string, unknown>
+    if (typeof value.nodeId !== 'string' || typeof value.featureId !== 'string' || typeof value.displayLabel !== 'string') return []
+    const bindings = await portableBindings.load()
+    const current = bindings[value.nodeId]
+    return bindingActionStates(
+      {
+        schemaVersion: 1,
+        featureId: value.featureId,
+        displayLabel: value.displayLabel,
+        requestedCapabilities: [],
+        safeSettings: {},
+        relationships: []
+      },
+      {
+        hasBinding: Boolean(current),
+        hasMatchingResource: Boolean(current),
+        canConfigure: true,
+        canDeploy: false,
+        hasMissingAssets: value.hasMissingAssets === true
+      }
+    ).map((state) => ({
+      nodeId: value.nodeId as string,
+      featureId: value.featureId as string,
+      displayLabel: value.displayLabel as string,
+      action: state.action,
+      enabled: state.enabled,
+      ...(state.reason ? { reason: state.reason } : {}),
+      bound: Boolean(current)
+    }))
+  })
+  ipcMain.handle(IPC.portableBindingApply, async (_event, input: unknown) => {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) return { ok: false, error: 'Binding input is invalid.' }
+    const value = input as Record<string, unknown>
+    if (typeof value.nodeId !== 'string' || typeof value.action !== 'string') return { ok: false, error: 'Binding input is invalid.' }
+    if (value.action === 'leave-unbound') {
+      await portableBindings.remove(value.nodeId)
+      return { ok: true, state: 'unbound' as const }
+    }
+    if (!['configure', 'rebind', 'adopt', 'locate-asset'].includes(value.action)) {
+      return { ok: false, error: 'Deploy requires an explicit provider flow and is not performed by import.' }
+    }
+    try {
+      const binding = validateLocalNodeBinding({
+        nodeId: value.nodeId,
+        bindingVersion: 1,
+        providerOrHostIdentity: value.providerOrHostIdentity,
+        localResourceReferences: value.localResourceReferences,
+        credentialKeys: value.credentialKeys ?? [],
+        lastVerifiedAt: Date.now()
+      })
+      const snapshot = await portableBindings.snapshot()
+      try {
+        await portableBindings.apply(value.nodeId, binding)
+      } catch (error) {
+        await portableBindings.restore(snapshot)
+        throw error
+      }
+      return { ok: true, state: 'bound' as const }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  })
   // The packaged extraResources directory in a production install, the repo root in dev (see
   // resolveServerDeploymentRoot's own doc comment; `build.extraResources` in package.json ships
   // the matching `server-deployment/` directory). Writable state (the generated .env password,
@@ -1660,7 +1767,7 @@ app.whenReady().then(async () => {
   const archiveUnlock = new ArchiveUnlockGuard({ schoolMode: () => schoolModeStore.get().enabled })
   ipcMain.handle(
     IPC.projectArchiveExport,
-    async (_event, project: import('../shared/types').Project, password?: string) => {
+    async (_event, project: import('../shared/types').Project, password?: string, media?: PortableMediaExportPlan) => {
     if (projectArchiveBusy) return { ok: false, error: 'Another project export or import is still running.' }
     projectArchiveBusy = true
     try {
@@ -1678,7 +1785,16 @@ app.whenReady().then(async () => {
       // its own files and is captured with the rest; passing it here too would put two copies in
       // one save file. See core/password-manager/vault-location.ts.
       const vault = project.cwd ? undefined : await readFolderlessVault(project.id)
-      const exported = await projectArchives.export(project, vault ? { vault } : {})
+      let portableMedia: { preparation: PortableMediaPreparation; decisions: PortableMediaExportPlan['decisions'] } | undefined
+      if (media !== undefined) {
+        if (!media || typeof media.preparationId !== 'string' || !Array.isArray(media.decisions)) throw new Error('Portable media export plan is invalid.')
+        const prepared = portableMediaPreparations.get(media.preparationId)
+        if (!prepared) throw new Error('Portable media preparation expired. Choose the media again.')
+        if (prepared.projectId !== project.id) throw new Error('Portable media preparation belongs to a different project.')
+        portableMediaPreparations.delete(media.preparationId)
+        portableMedia = { preparation: prepared.preparation, decisions: media.decisions }
+      }
+      const exported = await projectArchives.export(project, { ...(vault ? { vault } : {}), ...(portableMedia ? { portableMedia } : {}) })
       // Encrypt the FINISHED container, never its entries: a ZIP's entry names alone would say
       // which repository travelled and what the project is called. See project-archive-encryption.ts.
       const bytes = password ? encryptArchive(exported.bytes, password) : exported.bytes
@@ -1773,7 +1889,9 @@ app.whenReady().then(async () => {
         project: outcome.project,
         archiveVersion: outcome.archiveVersion,
         contents: outcome.contents,
-        ...(outcome.restoredTo ? { restoredTo: outcome.restoredTo } : {})
+        ...(outcome.plannerDefinitions ? { plannerDefinitions: outcome.plannerDefinitions } : {}),
+        ...(outcome.restoredTo ? { restoredTo: outcome.restoredTo } : {}),
+        ...(outcome.repairs?.length ? { repairs: outcome.repairs } : {})
       }
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
@@ -2261,6 +2379,11 @@ app.whenReady().then(async () => {
   registerTorrentIpc(corePlatform)
   virtualMachineManager = registerVirtualMachineIpc(corePlatform).manager
   registerCalendarIpc(corePlatform)
+  registerCloudflareCoreManagersIpc(corePlatform)
+  registerHomeAssistantIpc(corePlatform)
+  registerHomeAssistantControlIpc(corePlatform)
+  registerHomeAssistantSensorIpc(corePlatform)
+  registerCloudflareZeroTrustIpc(corePlatform)
 
   const githubSecret = new ElectronGitHubSecretStore(app.getPath('userData'), safeStorage)
   const github = registerGitHubIntegration({
@@ -2337,6 +2460,18 @@ app.whenReady().then(async () => {
           tail: async (p, lines) => {
             const { code, stdout } = await run(sshTailArgs(ref.conn, ref.controlPath, p, lines))
             return code === 0 ? stdout : ''
+          },
+          writeAttachment: async (p, dataBase64) => {
+            const { code } = await run(sshWriteAttachmentArgs(ref.conn, ref.controlPath, p), dataBase64)
+            if (code !== 0) throw new Error('board attachment ssh write failed')
+          },
+          readAttachment: async (p) => {
+            const { code, stdout } = await run(sshReadAttachmentArgs(ref.conn, ref.controlPath, p, 6 * 1024 * 1024))
+            return code === 0 ? stdout.replace(/\s+/g, '') : null
+          },
+          removeAttachment: async (p) => {
+            const { code } = await run(sshRemoveAttachmentArgs(ref.conn, ref.controlPath, p))
+            if (code !== 0) throw new Error('board attachment ssh remove failed')
           }
         }
         const remotePath = boardLogRemotePath(ref.remoteCwd)
@@ -3053,13 +3188,22 @@ app.whenReady().then(async () => {
     // sessionId; map it back to the node via the raw-listener's nodeId↔sessionId association.
     const cw = payload as { sessionId?: string; usedPercent?: number }
     for (const [nid, sid] of nodeContextSession) {
-      if (sid === cw.sessionId && typeof cw.usedPercent === 'number') {
+      if (
+        sid === cw.sessionId &&
+        (!cw.sourceKey || nodeContextSource.get(nid) === cw.sourceKey) &&
+        typeof cw.usedPercent === 'number'
+      ) {
         recordContextUsage(nid, cw.usedPercent)
         break
       }
     }
   }
-  const contextTail = createContextTail(pushContextUpdate, { onTaskNotification, onToolResult })
+  const contextTail = createContextTail(pushContextUpdate, {
+    provider: 'claude',
+    sourceKey: 'claude:local',
+    onTaskNotification,
+    onToolResult
+  })
   // ONE TAIL PER AGENT, each with its own parser — not one tail switching on an agent id, which
   // would mean changing `ContextTail.track(sessionId, path)` and the four call sites that depend on
   // it. The poller (offset reads, torn-line carry, change-gated push) is written once in
@@ -3068,11 +3212,19 @@ app.whenReady().then(async () => {
   // sniff exists because claude's hooks never send the async subagent's real end; codex's
   // SubagentStop hook IS the real end, so its subagent cards need no transcript sniffing —
   // and the declined-ask rescue is claude-only too).
-  const geminiContextTail = createContextTail(pushContextUpdate, { parse: geminiContextParse })
+  const geminiContextTail = createContextTail(pushContextUpdate, {
+    provider: 'gemini',
+    sourceKey: 'gemini:local',
+    parse: geminiContextParse
+  })
   // Hand the gemini session-name reader its path authority (declared above the handlers that use
   // it, assigned here where the tail exists).
   geminiTranscriptPathFor = (sessionId) => geminiContextTail.pathFor(sessionId)
-  const codexContextTail = createContextTail(pushContextUpdate, { parse: codexContextParse })
+  const codexContextTail = createContextTail(pushContextUpdate, {
+    provider: 'codex',
+    sourceKey: 'codex:local',
+    parse: codexContextParse
+  })
   // Remote (SSH-project) counterparts: a node whose pty runs on a remote host has its Claude
   // transcript on that host, so its meter / subagent transcript / search must read over the
   // project's ControlMaster. One RemoteFile bound to the SSH-project manager's own ssh runner
@@ -3082,7 +3234,12 @@ app.whenReady().then(async () => {
   const remoteFile = new RemoteFile((args) =>
     sshProjectManager ? sshProjectManager.sshRun(args) : Promise.resolve({ code: 1, stdout: '' })
   )
-  const remoteContextTail = createRemoteContextTail(win, remoteFile, { onTaskNotification, onToolResult })
+  const remoteContextTail = createRemoteContextTail(win, remoteFile, {
+    provider: 'claude',
+    sourceKey: 'claude:remote',
+    onTaskNotification,
+    onToolResult
+  })
   const remoteSubagentTail = createRemoteSubagentTail(win, remoteFile)
   // Remote transcript ref learned from the hook raw-listener, keyed by sessionId — lets the
   // search/chat read handlers (which receive only sessionId + cwd) read remotely without a
@@ -3249,11 +3406,32 @@ app.whenReady().then(async () => {
   // Shares core's `resolveTranscript` with the read channels — including its `accountId`-scoped
   // cwd fallback. This copy dropped the account, so a managed-account node could track (and then
   // meter, and then SERVE as the chat's first-choice path) an unrelated session's transcript.
-  corePlatform.on(IPC.contextEnsure, async (sessionId?: string, cwd?: string, accountId?: string) => {
-    if (!sessionId || !SESSION_ID_RE.test(sessionId)) return
-    const p = await resolveTranscript({ sessionId, cwd, accountId }, (s) => contextTail.pathFor(s))
-    if (p) contextTail.track(sessionId, p)
-  })
+  const contextEnsureInFlight = new Map<string, Promise<void>>()
+  corePlatform.on(
+    IPC.contextEnsure,
+    async (sessionId?: string, cwd?: string, accountId?: string, agentId?: string) => {
+      if (!sessionId || !SESSION_ID_RE.test(sessionId)) return
+      if (agentId === 'claude:remote') return
+      const provider = agentId === 'codex' || agentId === 'gemini' ? agentId : 'claude'
+      const key = `${provider}:${sessionId}:${accountId ?? ''}:${cwd ?? ''}`
+      const active = contextEnsureInFlight.get(key)
+      if (active) return active
+      const work = (async (): Promise<void> => {
+        let p: string | undefined
+        if (provider === 'codex') p = await locateCodex(sessionId)
+        else if (provider === 'gemini') p = await locateGemini(sessionId)
+        else p = await resolveTranscript({ sessionId, cwd, accountId }, (s) => contextTail.pathFor(s))
+        if (!p) return
+        if (provider === 'codex') codexContextTail.track(sessionId, p)
+        else if (provider === 'gemini') geminiContextTail.track(sessionId, p)
+        else contextTail.track(sessionId, p)
+      })().finally(() => {
+        contextEnsureInFlight.delete(key)
+      })
+      contextEnsureInFlight.set(key, work)
+      return work
+    }
+  )
   // The remote half of a handoff. Same three-line shape as the context-link deps above and for
   // the same reason: reading (and here also WRITING) on an SSH project's host is the one thing
   // the handoff builder cannot answer for itself. Absent deps ⇒ local-only, as before.
@@ -3485,6 +3663,7 @@ app.whenReady().then(async () => {
   // a node (see pty-manager.sendText). Wired here because the service starts after the manager.
   ptyManager.setTextWriteGate((persistKey) => toyLockService.mayWriteToNode(persistKey))
   startAuthenticatorService()
+  startUniverseDoorEntryService()
 
   const ackSweeper = createAckSweeper({
     handlers: { ackDone, onUnreadClear: (id) => sendToMain(IPC.agentUnreadClear, id) }
@@ -3572,7 +3751,10 @@ app.whenReady().then(async () => {
       // snake_case) are decoded in exactly one place.
       const g = grokRawFields(payload)
       // 1. node → session: read by the phone's context ring and the ⌘K session lookup.
-      if (nodeId && g.sessionId) nodeContextSession.set(nodeId, g.sessionId)
+      if (nodeId && g.sessionId) {
+        nodeContextSession.set(nodeId, g.sessionId)
+        nodeContextSource.set(nodeId, 'grok:local')
+      }
       // 2. session → its session DIRECTORY, derived from (cwd, sessionId) — the two fields every
       // grok hook does carry — and remembered here, the one place they arrive together. That is
       // what lets the session-name read (core/grok-session.ts) be a direct open rather than a scan
@@ -3644,7 +3826,10 @@ app.whenReady().then(async () => {
       const transcriptPath = safeTranscriptPath(p.transcript_path)
       const tail = agentId === 'gemini' ? geminiContextTail : codexContextTail
       if (p.session_id && transcriptPath) tail.track(p.session_id, transcriptPath)
-      if (nodeId && p.session_id) nodeContextSession.set(nodeId, p.session_id)
+      if (nodeId && p.session_id) {
+        nodeContextSession.set(nodeId, p.session_id)
+        nodeContextSource.set(nodeId, `${agentId}:local`)
+      }
       // gemini subscribes SessionEnd (GEMINI_HOOK_EVENTS); codex does NOT today (CODEX_EVENTS stops
       // at Stop), so for codex the tail is released by `releaseNodeTails` on pty:destroy/recycle
       // instead. Handling it here regardless costs nothing and is correct the day codex's event
@@ -3679,7 +3864,10 @@ app.whenReady().then(async () => {
         remoteContextTail.track(p.session_id, ref)
         remoteTranscriptBySession.set(p.session_id, ref)
       }
-      if (nodeId && p.session_id) nodeContextSession.set(nodeId, p.session_id)
+      if (nodeId && p.session_id) {
+        nodeContextSession.set(nodeId, p.session_id)
+        nodeContextSource.set(nodeId, 'claude:remote')
+      }
       // Context Link: remember the node's transcript path for remote nodes too. This branch used
       // to `return` without it, which is why a remote node was never readable through a link —
       // the local locators are no substitute (they search the wrong machine's disk, so
@@ -3733,7 +3921,10 @@ app.whenReady().then(async () => {
     const transcriptPath = safeTranscriptPath(p.transcript_path)
     // Context-window meter: tail the session transcript (any event carrying both fields).
     if (p.session_id && transcriptPath) contextTail.track(p.session_id, transcriptPath)
-    if (nodeId && p.session_id) nodeContextSession.set(nodeId, p.session_id)
+    if (nodeId && p.session_id) {
+      nodeContextSession.set(nodeId, p.session_id)
+      nodeContextSource.set(nodeId, 'claude:local')
+    }
     if (nodeId && p.session_id && transcriptPath) setNodeTranscript(nodeId, p.session_id, transcriptPath)
     if (p.hook_event_name === 'SessionEnd' && p.session_id) contextTail.untrack(p.session_id)
     // Subagent live transcript: track on PreToolUse / finish on PostToolUse for subagent tools.
@@ -3781,6 +3972,7 @@ app.whenReady().then(async () => {
       remoteTranscriptBySession.delete(sessionId)
       locatedTranscriptSessions.delete(sessionId)
       nodeContextSession.delete(nodeId)
+      nodeContextSource.delete(nodeId)
     }
     const subs = nodeSubagents.get(nodeId)
     if (subs) {
