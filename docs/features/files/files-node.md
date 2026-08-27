@@ -2,7 +2,8 @@
 
 The Files node keeps one directory listing on the canvas beside the terminals that work in that
 directory. It is a persisted canvas node, not a second Explorer tree. Each node has its own
-directory, title, filter state, position, size, colour, and group membership.
+directory, title, position, size, colour, and group membership, while its active filter stays
+local to the mounted node.
 
 ## Behaviour
 
