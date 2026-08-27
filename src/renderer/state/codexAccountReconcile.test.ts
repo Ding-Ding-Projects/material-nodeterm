@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import type { CodexAccount } from '@shared/types'
 import {
   applyResolvedCodexAccounts,
-  discoverResolvedCodexAccounts
+  discoverResolvedCodexAccounts,
+  type ResolvedCodexAccount
 } from './codexAccountReconcile'
 
 const accounts: CodexAccount[] = [
@@ -10,6 +11,14 @@ const accounts: CodexAccount[] = [
   { id: 'pending-ok', label: 'New Codex account', pending: true, createdAt: 2 },
   { id: 'pending-no', label: 'Waiting', pending: true, createdAt: 3 }
 ]
+
+const pending = (id: string, over: Partial<CodexAccount> = {}): CodexAccount => ({
+  id,
+  label: 'New Codex account',
+  pending: true,
+  createdAt: 1,
+  ...over
+})
 
 describe('Codex account startup reconciliation', () => {
   it('discovers only authenticated pending accounts', async () => {
@@ -39,41 +48,6 @@ describe('Codex account startup reconciliation', () => {
         pending: false
       }
     ])
-import type { CodexAccount } from '@shared/codex-account'
-import {
-  applyResolvedCodexAccounts,
-  discoverResolvedCodexAccounts,
-  type ResolvedCodexAccount
-} from './codexAccountReconcile'
-
-const pending = (id: string, over: Partial<CodexAccount> = {}): CodexAccount => ({
-  id,
-  label: 'New Codex account',
-  pending: true,
-  ...over
-})
-
-describe('discoverResolvedCodexAccounts', () => {
-  it('discovers only authenticated pending accounts', async () => {
-    const accounts: CodexAccount[] = [
-      pending('a'), // authenticated
-      pending('b'), // still logging in (identity null)
-      { id: 'c', label: 'Settled', email: 'c@x', pending: false } // not pending → never probed
-    ]
-    const identity = vi.fn(async (id: string) =>
-      id === 'a' ? { email: 'a@x' } : null
-    )
-    const resolved = await discoverResolvedCodexAccounts(accounts, identity)
-    expect(resolved).toEqual<ResolvedCodexAccount[]>([{ id: 'a', email: 'a@x' }])
-    // The settled account 'c' is never read — probing a non-pending account is the mutation.
-    expect(identity).not.toHaveBeenCalledWith('c')
-  })
-
-  it('drops an account whose identity read throws (fail-closed, no fabrication)', async () => {
-    const identity = vi.fn(async () => {
-      throw new Error('unreachable host')
-    })
-    expect(await discoverResolvedCodexAccounts([pending('a')], identity)).toEqual([])
   })
 })
 
