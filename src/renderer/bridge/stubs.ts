@@ -284,7 +284,10 @@ export function buildStubApi(): Omit<
         pickDir: U('browser.extensions.pickDir'),
         add: U('browser.extensions.add'),
         remove: U('browser.extensions.remove')
-      }
+      },
+      profile: {
+        reset: U('browser.profile.reset')
+      },
       // Browser control does not exist off the desktop shell (no <webview>, no CDP), so there is no
       // lease to push and nothing to stop — the chip simply never appears.
       onLeaseChanged: noopUnsub,

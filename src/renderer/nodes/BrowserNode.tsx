@@ -9,6 +9,7 @@ import { useProjects } from '../state/projects'
 import { BrowserSurface } from './BrowserSurface'
 import { BrowserProfilePicker } from './BrowserProfilePicker'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { notify } from '../lib/adhdNotify'
 
 /** Debounce for persisting a tab's live URL/title while the user navigates — matches the SSH
  *  mirror's 5s write-throttle intent (this repo's established pattern for "don't rewrite the
@@ -231,6 +232,16 @@ export default function BrowserNode({ id, data, selected }: NodeProps<CanvasNode
             // picker. A node that was ON the removed profile keeps its own cookie jar rather than
             // silently merging into the default session.
           }}
+          onReset={(profileId) => {
+            const profilePartition = browserPartitionForNode(activeProjectId, profileId, undefined)
+            void window.nodeTerminal.browser.profile.reset(profilePartition).then((result) => {
+              notify(
+                result.ok
+                  ? { kind: 'success', title: vocab('Browser profile reset'), body: vocab('The local browser session was cleared. Project tabs and the profile name remain.') }
+                  : { kind: 'error', title: vocab('Browser profile reset failed'), body: result.error, bodyKind: 'fact' }
+              )
+            })
+          }}
         />
         <button className="term-node__close" title={vocab('Close')} onClick={() => deleteElements({ nodes: [{ id }] })}>
           ×
@@ -278,7 +289,7 @@ export default function BrowserNode({ id, data, selected }: NodeProps<CanvasNode
       </div>
 
       <div className="editor-node__body">
-        {activeTab && (
+        {!ghost && activeTab && (
           <BrowserSurface
             // Keyed by tab id AND partition: switching tabs must tear down and rebuild the
             // <webview> onto the new tab's live URL, and switching profiles must rebuild onto
@@ -287,6 +298,7 @@ export default function BrowserNode({ id, data, selected }: NodeProps<CanvasNode
             key={`${activeTab.id}::${partition ?? 'default'}`}
             nodeId={id}
             ownerNodeId={data.browserOwnerNodeId as string | undefined}
+            surface="canvas"
             url={activeTab.url}
             onUrlChange={(u) => {
               const next = tabs.map((t) => (t.id === activeTabId ? { ...t, url: u } : t))
@@ -301,18 +313,18 @@ export default function BrowserNode({ id, data, selected }: NodeProps<CanvasNode
             partition={partition}
           />
         )}
-        <BrowserSurface
-          nodeId={id}
-          url={(data.url as string) ?? ''}
-          partition={data.partition as string | undefined}
-          onUrlChange={(u) =>
-            ghost ? useWebviewKeepAlive.getState().updateGhostData(id, { url: u }) : updateNodeData(id, { url: u })
-          }
-          onTitleChange={(t) =>
-            ghost ? useWebviewKeepAlive.getState().updateGhostData(id, { title: t }) : updateNodeData(id, { title: t })
-          }
-          onGuestDiscarded={ghost ? () => useWebviewKeepAlive.getState().drop(id) : undefined}
-        />
+        {ghost && (
+          <BrowserSurface
+            nodeId={id}
+            ownerNodeId={data.browserOwnerNodeId as string | undefined}
+            surface="canvas"
+            url={(data.url as string) ?? ''}
+            partition={data.partition as string | undefined}
+            onUrlChange={(u) => useWebviewKeepAlive.getState().updateGhostData(id, { url: u })}
+            onTitleChange={(t) => useWebviewKeepAlive.getState().updateGhostData(id, { title: t })}
+            onGuestDiscarded={() => useWebviewKeepAlive.getState().drop(id)}
+          />
+        )}
       </div>
     </div>
   )

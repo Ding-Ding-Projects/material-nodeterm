@@ -1353,7 +1353,7 @@ export function createBrowserNode(
       ...(url ? { url } : {}),
       ...(ownerNodeId ? { browserOwnerNodeId: ownerNodeId } : {}),
       ...(profileId ? { browserProfileId: profileId } : {}),
-      ...(temporary ? { temporary: true } : {})
+      ...(temporary ? { temporary: true } : {}),
       ...(partition ? { partition } : {})
     }
   }

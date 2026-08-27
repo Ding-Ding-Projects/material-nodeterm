@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add Browser Portal lifecycle ownership with guided isolated profile creation, profile reset and
+  removal semantics, explicit canvas/modal guest ownership, safe schema 3 browser-profile intent,
+  and local-only browser data. The implementation lane intentionally ran no tests, type checks,
+  lint, reviews, security or accessibility checks, builds, packaging, runtime interaction, or UI
+  captures.
+
 - Complete the Express File Converter flow with queue-wide collision-safe destination names,
   visible rename disclosure, final atomic no-clobber publication, and a completed-output action that
   opens the exact result in Visual Studio Code through the active project API. The converter queue
