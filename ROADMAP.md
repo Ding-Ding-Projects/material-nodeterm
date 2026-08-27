@@ -208,8 +208,10 @@ intentionally unchecked because this task publishes the plan only.
 ### Media, torrents, virtual machines, and planning
 
 - [ ] Add Photo, Video, mixed-media Gallery, and wild Dim Sum nodes. Photo, Video, and Gallery
-      source implementation is present for issue #20; tests, builds, and packaged captures remain
-      pending in the parent integration lane.
+      source implementation, machine-local path round-trip, schema 3 node references, validated
+      content-addressed archive bytes, atomic import staging, and explicit missing-asset states are
+      present for issue #20. Tests, builds, packaging, release evidence, and packaged captures remain
+      pending in the parent integration lane; wild Dim Sum remains a separate lane.
 - [ ] Verify the categorized local file converter delivered for issue #21. The source now includes
       collision-safe destination reservations, atomic publication, resumable progress, cancellation,
       partial outcomes, per-category regex builders, and completed-output editor handoff; this

@@ -26,7 +26,11 @@ bounded reason. No blank path textbox or arbitrary command is used as a fallback
 Collection uses a regular-file check, a bounded streaming read, signature detection, MIME and extension
 normalisation, and SHA-256 hashing. Large sources are never allocated as one in-memory buffer: the
 collector hashes the stream, retains only a small signature prefix, and returns a machine-local
-stream source for an archive writer to consume later. Extension-only claims are rejected. Recognised signatures cover
+stream source for the archive writer to consume later. At publication time the writer opens that
+source again and requires the same byte count, signature, MIME, extension, and SHA-256 before adding
+`assets/media/<sha256>.<extension>` to both the container and its outer manifest. A source that changed
+after selection is omitted with an explicit explanation rather than being published under stale
+metadata. Extension-only claims are rejected. Recognised signatures cover
 common PNG, JPEG, GIF, WebP, AVIF-labelled image inputs, WAV, MP3, Ogg, FLAC, MP4, QuickTime, and
 WebM media. The schema bounds each asset at 512 MiB and the manifest at 10,000 assets. Imported
 manifests require schema 3, matching content addresses, safe labels, valid media kinds, and bounded
@@ -40,10 +44,13 @@ the asset rather than applying partial bytes.
 ## Persistence and availability
 
 The portable manifest belongs in the schema 3 `project.json` projection. The source path is a
-machine-local binding used only by the export picker. Included bytes are archive entries; omissions
-and unresolved placeholders remain in the manifest so the destination can present Configure,
-Locate Asset, or Leave Unbound actions later. The browser edition and mobile companion should use
-the same platform-free manifest and document their carrier limitations before wiring a picker.
+machine-local binding used only by the current computer and retained in its workspace index. Node
+records keep their ordered content references and active Gallery selection. Included bytes are
+archive entries; omissions and unresolved placeholders remain in the manifest so the destination can
+present Configure, Locate Asset, or Leave Unbound actions later. Import validates the complete
+container first, stages accepted media beneath the new project root, and publishes the destination
+atomically. The browser edition and mobile companion should use the same platform-free manifest and
+document their carrier limitations before wiring a picker.
 
 ## Verification status
 
@@ -52,8 +59,8 @@ guided renderer component are implemented in `src/core/portable-media-assets.ts`
 `src/core/portable-canvas-projection.ts`, and
 `src/renderer/components/PortableMediaDecisionDialog.tsx`. This lane deliberately did not run
 tests, type checking, linting, reviews, security checks, builds, packaging, installer execution,
-runtime interaction, or captures. Archive production/import wiring and built-artifact evidence remain
-pending.
+runtime interaction, or captures. Archive production/import wiring is implemented in source; every
+listed check and built-artifact evidence remains pending.
 
 ## Suggested articles
 
