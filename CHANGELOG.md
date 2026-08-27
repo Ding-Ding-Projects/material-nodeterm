@@ -8,6 +8,25 @@
   reads are bounded and machine-local. This issue #89 implementation lane intentionally did not run
   tests, lint, type checks, builds, packaging, runtime interaction, reviews, audits, or captures.
 
+- Add first-class Cognition Devin CLI support from the measured `devin 3000.4.25 (7e8e528a)`
+  contract: builtin registry and mark, argv/interactive prompt forms, prompt-file and print
+  helpers, resume and continue commands, project-level `.devin/hooks.v1.json` lifecycle hooks,
+  structured status normalization, and BEL/OSC notification fallback. Context usage, permission
+  control, titles, subagents, transfer, canvas control, and structured transcripts remain explicitly
+  unavailable until measured. The real Devin CLI was not available, so this ultra-speed lane ran no
+  tests, lint, type checks, builds, packaging, runtime interaction, reviews, audits, or HuiShots.
+- Add a shared 40 ms burst budget for plain-wheel canvas zoom and a persisted 0.2×–2.0× wheel
+  zoom speed control. The historical 1.0× feel remains the default; modifier zoom and trackpad
+  pinch keep their fixed behavior. Hand-edited values are clamped at the point of use, and the
+  Behavior setting explains its compiled-in, saved, or scheduled provenance in the active language
+  mode and funny-level voice. This source lane intentionally did not run tests, lint, type checks,
+  builds, packaging, runtime interaction, reviews, audits, or UI captures.
+- Expand English and Cantonese funny-level controls from 1–5 to 1–10 for issue #113. New
+  installations default both values to level 10, while settings schema version 2 preserves valid
+  established choices and safely normalizes malformed hand-edited values. Scheduled settings,
+  site-local storage, exports, provenance copy, and the Easter-egg and feature copy resolvers now
+  accept the complete range. This source lane intentionally did not run tests, type checks, lint,
+  builds, packaging, runtime interaction, reviews, audits, or UI captures.
 - Route macOS desktop canvas wheel input from main-process trackpad gesture facts. A depth-safe
   ledger sends scroll and pinch edge transitions over typed IPC, the desktop router keeps a bounded
   500 ms momentum-gap linger, and precise-pixel mouse packets zoom when no gesture is reported.

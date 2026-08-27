@@ -13,9 +13,10 @@ running app (or a real installer) by running one of them, and a broken one is wo
 None of the three ever installs a secret, a credential, or a code-signing certificate. None of
 them weakens the machine's persistent execution policy or requires administrator/sudo rights when
 a user-scoped install path exists. Visual Studio Build Tools is the one Windows dependency with no
-user-scoped installation. The root BAT never continues under an Administrator token: when Build
-Tools needs work, it prints one helper-only command to run in an Administrator Command Prompt; close
-that prompt afterward and rerun the root BAT normally.
+user-scoped installation. On an interactive run, the root BAT hands only the helper to a bounded UAC
+launch, waits for its result, and then independently verifies the installed component as the normal
+user. The root BAT and npm lifecycle never continue under an Administrator token. Silent mode never
+opens UAC and reports the exact elevation requirement instead.
 
 ## Flags
 
@@ -102,11 +103,10 @@ Tools is necessarily machine-wide.
 
    Microsoft requires quiet/passive Visual Studio commands to start elevated, even when enterprise
    policy delegates some Installer UI to a standard user. The bootstrap checks the token before
-   starting an installer. If work is needed and the prompt is not elevated, it exits access-denied
-   and prints an absolute command ending in `--silent --elevated-toolchain-only`. Run **only that
-   helper command** in an Administrator Command Prompt, close the elevated prompt, then rerun the
-   root BAT normally. Never run the root BAT or npm as Administrator. The helper never launches
-   UAC: `/s` promises no prompts, and non-silent dependency installation is automatic too.
+   starting an installer. If work is needed on an interactive run, the root BAT launches only the
+   helper through UAC, waits for its result, then reruns normal-user verification. Never run the
+   root BAT or npm as Administrator. `/s` promises no prompts, so a silent run reports the exact
+   elevated-helper requirement and exits without opening UAC.
 5. **Windows Python for node-gyp.** The locked dependency graph runs node-gyp during `npm ci`, and
    the C++ workload does not include Python. `scripts/ensure-windows-python.mjs` reuses a supported
    explicitly selected 64-bit Python 3.10-3.14 or its pinned private interpreter when available.

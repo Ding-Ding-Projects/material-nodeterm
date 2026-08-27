@@ -9,6 +9,10 @@ import { SegmentedPill } from '@renderer/ui/SegmentedPill'
 import { Input } from '@renderer/ui/Input'
 import { hintLabel } from '@shared/platform-utils'
 import { DEFAULT_WORKTREE_PATH_TEMPLATE } from '@shared/worktree'
+import { DEFAULT_SETTINGS } from '@shared/types'
+import { useI18n } from '@renderer/lib/i18n'
+import { clampWheelZoomSpeed } from '@renderer/canvas/wheel-zoom'
+import { Slider } from '@renderer/ui/md3'
 
 const ROWS = {
   defaultView: {
@@ -40,6 +44,10 @@ const ROWS = {
     keywords: ['worktree', 'git', 'path', 'folder', 'repo', 'branch', 'template']
   },
   wheelZoom: { title: 'Scroll wheel zooms', keywords: ['zoom', 'wheel', 'scroll', 'mouse', 'pan'] },
+  wheelZoomSpeed: {
+    title: 'Wheel zoom speed',
+    keywords: ['zoom', 'wheel', 'speed', 'sensitivity', 'step', 'jump', 'mouse', 'scroll']
+  },
   trackpadPan: {
     title: 'Trackpad scroll pans',
     keywords: ['trackpad', 'pan', 'scroll', 'zoom', 'magic', 'mouse', 'two-finger', 'macos']
@@ -65,7 +73,60 @@ const ENTRIES = Object.values(ROWS)
 
 export function BehaviorSection({ isActive }: { isActive: boolean }): React.JSX.Element {
   const settings = useSettings((s) => s.settings)
+  const baseSettings = useSettings((s) => s.base)
+  const settingsHydrated = useSettings((s) => s.hydrated)
   const update = useSettings((s) => s.update)
+  const { t, ts } = useI18n()
+  const wheelZoomSpeed = clampWheelZoomSpeed(settings.wheelZoomSpeed)
+  const baseWheelZoomSpeed = clampWheelZoomSpeed(baseSettings.wheelZoomSpeed)
+  const rawBaseWheelZoomSpeed = baseSettings.wheelZoomSpeed as unknown
+  const rawBaseWheelZoomSpeedNumber =
+    typeof rawBaseWheelZoomSpeed === 'number' ? rawBaseWheelZoomSpeed : null
+  const baseWheelZoomSpeedIsInvalid =
+    rawBaseWheelZoomSpeedNumber === null || !Number.isFinite(rawBaseWheelZoomSpeedNumber)
+  const baseWheelZoomSpeedIsOutOfRange =
+    rawBaseWheelZoomSpeedNumber !== null &&
+    Number.isFinite(rawBaseWheelZoomSpeedNumber) &&
+    (rawBaseWheelZoomSpeedNumber < 0.2 || rawBaseWheelZoomSpeedNumber > 2)
+  let wheelZoomSpeedProvenance
+  if (!settingsHydrated) {
+    wheelZoomSpeedProvenance = t(
+      'settings.behavior.wheelZoomSpeed.provenance.loading',
+      'Using the compiled-in 1.0× value while saved settings load.'
+    )
+  } else if (wheelZoomSpeed !== baseWheelZoomSpeed) {
+    wheelZoomSpeedProvenance = t(
+      'settings.behavior.wheelZoomSpeed.provenance.scheduled',
+      'A scheduled value is active. The saved base value is {speed}×.',
+      { speed: baseWheelZoomSpeed.toFixed(1) }
+    )
+  } else if (baseWheelZoomSpeedIsInvalid) {
+    wheelZoomSpeedProvenance = t(
+      'settings.behavior.wheelZoomSpeed.provenance.invalid',
+      'The saved value is invalid; using the compiled-in 1.0× value.'
+    )
+  } else if (baseWheelZoomSpeedIsOutOfRange) {
+    wheelZoomSpeedProvenance = t(
+      'settings.behavior.wheelZoomSpeed.provenance.clamped',
+      'The saved value is outside 0.2×–2.0×; using the clamped value of {speed}×.',
+      { speed: baseWheelZoomSpeed.toFixed(1) }
+    )
+  } else if (baseWheelZoomSpeed === DEFAULT_SETTINGS.wheelZoomSpeed) {
+    wheelZoomSpeedProvenance = t(
+      'settings.behavior.wheelZoomSpeed.provenance.default',
+      'Matches the compiled-in default of 1.0×. An explicit saved 1.0× cannot be distinguished from that same value.'
+    )
+  } else {
+    wheelZoomSpeedProvenance = t(
+      'settings.behavior.wheelZoomSpeed.provenance.saved',
+      'Using the saved value from settings.json.'
+    )
+  }
+  const wheelZoomSpeedLabel = ts('settings.behavior.wheelZoomSpeed.label', 'Wheel zoom speed')
+  const wheelZoomSpeedDescription = t(
+    'settings.behavior.wheelZoomSpeed.description',
+    'How far one plain wheel click zooms. Lower it if one click jumps too far.'
+  )
   return (
     <SettingsSection id="behavior" title="Behavior" isActive={isActive} searchEntries={ENTRIES}>
       <SearchableRow {...ROWS.defaultView}>
@@ -222,14 +283,37 @@ export function BehaviorSection({ isActive }: { isActive: boolean }): React.JSX.
       </SearchableRow>
       <SearchableRow {...ROWS.wheelZoom}>
         <FieldRow
-          label="Scroll wheel zooms"
-          description={hintLabel('Zoom with a plain mouse wheel (no ⌘). Two-finger trackpad scroll still pans.')}
+          label={t('settings.behavior.wheelZoom.label', 'Scroll wheel zooms').primary}
+          description={t('settings.behavior.wheelZoom.description', 'Zoom with a plain mouse wheel (no Command). Two-finger trackpad scroll still pans.').primary}
           control={
             <Switch
               checked={settings.wheelZoom}
               onChange={(v) => update({ wheelZoom: v })}
-              ariaLabel="Scroll wheel zooms"
+              ariaLabel={t('settings.behavior.wheelZoom.label', 'Scroll wheel zooms').primary}
             />
+          }
+        />
+      </SearchableRow>
+      <SearchableRow {...ROWS.wheelZoomSpeed}>
+        <FieldRow
+          label={wheelZoomSpeedLabel}
+          description={`${wheelZoomSpeedDescription.primary}${wheelZoomSpeedDescription.secondary ? ` ${wheelZoomSpeedDescription.secondary}` : ''} ${wheelZoomSpeedProvenance.primary}${wheelZoomSpeedProvenance.secondary ? ` ${wheelZoomSpeedProvenance.secondary}` : ''}`}
+          control={
+            <div className="flex min-w-0 items-center gap-3">
+              <Slider
+                min={0.2}
+                max={2}
+                step={0.1}
+                value={wheelZoomSpeed}
+                aria-label={wheelZoomSpeedLabel}
+                aria-valuetext={`${wheelZoomSpeed.toFixed(1)}×`}
+                onChange={(e) => update({ wheelZoomSpeed: Number(e.target.value) })}
+                className="w-40 accent-[var(--accent)]"
+              />
+              <span className="w-12 shrink-0 text-right text-[12px] text-muted tabular-nums">
+                {wheelZoomSpeed.toFixed(1)}×
+              </span>
+            </div>
           }
         />
       </SearchableRow>
