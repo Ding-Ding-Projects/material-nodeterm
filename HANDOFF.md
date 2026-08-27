@@ -1,5 +1,27 @@
 # Handoff
 
+## 2026-08-27, main-process parser repair
+
+Release run `33126389977` reached the application build after both coverage checkers and all
+packaging and icon phases passed, then failed at `src/main/index.ts:884:4` with
+`ERROR: Expected "}" but found "detail"`. The exact cause was a merge splice in the quit-confirmation
+section: duplicate `confirmQuit` declarations, duplicate explanatory comments, and two `detail`
+properties with contradictory claims about whether terminal sessions survive quitting. The nearby
+browser-guest map comments also named two different registration helpers.
+
+The repair keeps the settings-aware `confirmQuit` implementation, the risk-specific warning that
+non-persistent terminals end on quit, all quit confirmation state, and the `registerBrowserGuestRequest`
+registration path. It removes the duplicate declaration and comment residue, restores valid object
+punctuation by retaining one truthful `detail`, and reconciles the browser-guest comment with the
+actual adapter function. AWS, Cloudflare, hosted services, diagnostics, browser guests, updater,
+account, relay, and no-signing registrations were preserved. No blanket historical restore or
+unrelated refactor was used.
+
+This lane intentionally ran no tests, checkers, lint, type checks, builds, packaging, installer
+execution, runtime interaction, reviews, audits, or UI captures. Read-only source and history scans
+were used to identify the exact duplicate splices. The integration owner must evaluate the exact
+commit and the follow-up Der Machine run before treating this repair as verified.
+
 ## 2026-08-27, Canvas notification inventory repair
 
 Release run `33123084094` at `e6697feb31e5e59f36e916b4e5b00966e9b57891` executed the repaired
