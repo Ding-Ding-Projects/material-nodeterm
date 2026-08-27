@@ -483,7 +483,7 @@ function OllamaManagerPanelForApi({
 
   return createPortal(
     <div className="drawer-overlay md3-ollama" onClick={onClose}>
-      <aside className="drawer ollama" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={vocab('Ollama manager')}>
+      <aside className="drawer ollama" data-easter-surface="ollama" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={vocab('Ollama manager')}>
         <div className="drawer__head">
           <h2>{vocab('Ollama manager')}</h2>
           <button className="drawer__close" onClick={onClose} aria-label={vocab('Close')}>

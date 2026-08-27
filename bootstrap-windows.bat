@@ -17,7 +17,7 @@ rem fails even though the file exists, because cmd refuses to search the current
 rem
 rem After it succeeds:
 rem   npm run dev        - development mode with HMR
-rem   npm run dist:win   - unsigned NSIS installer + zip into dist\ (packaging smoke test)
+rem   npm run dist:win   - unsigned Squirrel.Windows set in dist\squirrel-windows\
 rem =============================================================================================
 
 set "REPO=%~dp0"
@@ -94,5 +94,5 @@ if not "%NPM_EXIT%"=="0" (
 echo.
 echo [DONE] Dependencies installed and native modules rebuilt against Electron's ABI.
 echo   npm run dev        - development mode with HMR
-echo   npm run dist:win   - unsigned NSIS installer + zip into dist\
+echo   npm run dist:win   - unsigned Squirrel.Windows set in dist\squirrel-windows\
 exit /b 0
