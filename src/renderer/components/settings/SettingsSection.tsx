@@ -1,10 +1,9 @@
 import type React from 'react'
 import { SettingsVocabularyContext, resolutionIncludes, useSettingsSearchState, type SettingsVocabularyResolution } from './context'
-import { matchesEntry, type SettingsSearchEntry } from './search'
+import { matchesEntry, matchesQuery, type SettingsSearchEntry } from './search'
 import { useVocabularyMapper, useVocabularyText } from '../../lib/personalVocabulary/useVocabularyText'
 import { settingsSearchEntryWithVocabulary } from './vocabulary'
-import { SettingsSearchContext, useSettingsSearch } from './context'
-import { matchesQuery, type SettingsSearchEntry } from './search'
+import { SettingsSearchContext } from './context'
 
 /**
  * THE section-visibility predicate. Every gate in the settings dialog calls this one function:
@@ -46,6 +45,7 @@ export function SettingsSection({
   isActive: boolean
   searchEntries?: SettingsSearchEntry[]
   resolvedVocabulary?: SettingsVocabularyResolution
+  forceVisible?: boolean
   children: React.ReactNode
 }): React.JSX.Element | null {
   // Mode-aware — the same state SearchableRow and the sidebar already match against. This used
@@ -78,25 +78,9 @@ export function SettingsSection({
   } else if (!isActive) {
     return null
   }
+  const childQuery = forceVisible ? '' : (search.mode === 'text' ? search.query : search.pattern)
   return (
     <SettingsVocabularyContext.Provider value={resolvedVocabulary ?? null}>
-      <section id={id} data-settings-section={id} className="space-y-5">
-      <div className="md3-settings-header">
-        <h2 className="md3-settings-header__title">{vocabTitle}</h2>
-        {vocabDescription ? <p className="md3-settings-header__desc">{vocabDescription}</p> : null}
-  /** "This query named the SECTION, not a field in it" — set by a project pane when the query
-   *  matches the project's own name. The section then renders whole: its rows are shown
-   *  unfiltered (see the cleared search context below), because naming a section is navigation,
-   *  not filtering, and a name query matches none of the individual rows. */
-  forceVisible?: boolean
-  children: React.ReactNode
-}): React.JSX.Element | null {
-  const query = useSettingsSearch()
-  if (!sectionVisible(query, isActive, searchEntries, forceVisible)) return null
-  // Children see an EMPTY query when this section was forced open, so every `SearchableRow` (and
-  // every other query-reading descendant) renders. Identical to `query` otherwise.
-  const childQuery = forceVisible ? '' : query
-  return (
     <section id={id} data-settings-section={id} className="space-y-6">
       <div className="border-b border-border pb-5">
         <h2 className="text-[28px] font-bold leading-tight tracking-tight text-text">{title}</h2>
@@ -107,7 +91,9 @@ export function SettingsSection({
       <div className="divide-y divide-border/60 rounded-2xl border border-border bg-white/[0.02] px-6 shadow-sm [&>*]:py-5">
         <SettingsSearchContext.Provider value={childQuery}>{children}</SettingsSearchContext.Provider>
       </div>
-      <div className="md3-settings-card">{children}</div>
+      <SettingsSearchContext.Provider value={childQuery}>
+        <div className="md3-settings-card">{children}</div>
+      </SettingsSearchContext.Provider>
       </section>
     </SettingsVocabularyContext.Provider>
   )

@@ -35,13 +35,6 @@ const project = (over: Partial<Project> = {}): Project => ({
 let root: Root
 let host: HTMLElement
 
-async function mount(): Promise<void> {
-  host = document.createElement('div')
-  document.body.appendChild(host)
-  root = createRoot(host)
-  await act(async () => {
-    root.render(<AgentsSection isActive />)
-  })
 function mount(): void {
   host = document.createElement('div')
   document.body.appendChild(host)
@@ -71,8 +64,6 @@ afterEach(() => {
 })
 
 describe('per-project capability rows, generated from PROJECT_CAPABILITIES', () => {
-  it('renders one row per capability, naming the active project, and what travels', async () => {
-    await mount()
   it('renders one row per capability, naming the active project, the grant and what travels', () => {
     mount()
     const text = host.textContent ?? ''
@@ -94,14 +85,6 @@ describe('per-project capability rows, generated from PROJECT_CAPABILITIES', () 
       act(() => capSwitch(PROJECT_CAPABILITY_COPY[cap].label).click())
       const p = useProjects.getState().getProject('p1')!
       expect(p[cap]).toBe(true) // === true, not "true"/1 -- projectCapabilityFlagInFile is strict
-    (cap) => {
-      mount()
-      act(() => capSwitch(PROJECT_CAPABILITY_COPY[cap].label).click())
-      const p = useProjects.getState().getProject('p1')!
-      expect(p[cap]).toBe(true) // === true, not "true"/1 — projectCapabilityFlagInFile is strict
-      // Setting it yourself records its own KEPT: no clone notice for the user's own switch.
-      expect(p.capabilityAck?.[cap]).toBe('kept')
-      expect(projectCapabilityFlagInFile(p, cap)).toBe(true)
     }
   )
 
@@ -115,23 +98,10 @@ describe('per-project capability rows, generated from PROJECT_CAPABILITIES', () 
       expect(p[cap]).toBeUndefined()
       // ...and records DECLINED: if a teammate re-commits `true`, the project is re-noticed and
       // refused instead of silently re-granted through the old consent.
-    'toggling %s off deletes the field outright — no bytes, and never a stored false',
-    (cap) => {
-      useProjects.getState().setProjectCapability('p1', cap, true)
-      mount()
-      act(() => capSwitch(PROJECT_CAPABILITY_COPY[cap].label).click())
-      const p = useProjects.getState().getProject('p1')!
-      expect(p[cap]).toBeUndefined()
-      // …and records DECLINED (PR #213 C1/M-2): if a teammate re-commits `true`, the project is
-      // re-noticed and refused instead of silently re-granted through the old consent.
       expect(p.capabilityAck?.[cap]).toBe('declined')
     }
   )
 
-  it('turning a capability off takes effect LIVE: every read consults the store, nothing caches', async () => {
-    // A consuming feature's admission check reads the switch per call. Simulate two consecutive
-    // calls around an off-toggle and require the second to see the refusal immediately -- no
-    // lease-start snapshot may answer for it.
   it('turning a capability off takes effect LIVE: every read consults the store, nothing caches', () => {
     // PR 6 Task 6.4 depends on this shape: the browser ledger / messagingEnabled read the switch
     // per call. Simulate two consecutive calls around an off-toggle and require the second to see
@@ -141,15 +111,11 @@ describe('per-project capability rows, generated from PROJECT_CAPABILITIES', () 
     const grantedNow = (): boolean =>
       projectCapabilityGrantedFor(useProjects.getState().getProject('p1'), cap)
     expect(grantedNow()).toBe(true)
-    await mount()
     mount()
     act(() => capSwitch(PROJECT_CAPABILITY_COPY[cap].label).click())
     expect(grantedNow()).toBe(false)
   })
 
-  it('with no project open the switch is disabled -- a capability needs a project to belong to', async () => {
-    useProjects.setState({ projects: [], activeProjectId: '' })
-    await mount()
   it('with no project open the switch is disabled — a capability needs a project to belong to', () => {
     useProjects.setState({ projects: [], activeProjectId: '' })
     mount()

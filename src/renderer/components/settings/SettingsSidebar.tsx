@@ -137,8 +137,6 @@ export function SettingsSidebar({
                   aria-current={isActive ? 'page' : undefined}
                   className={cn('md3-settings-nav-row', dimmed && 'md3-settings-nav-row--dimmed')}
                 >
-                  <span className="md3-settings-nav-row__icon">
-                    <SectionIcon id={s.id} />
                   <span
                     className={cn(
                       'flex size-4 shrink-0 items-center justify-center transition-colors',
