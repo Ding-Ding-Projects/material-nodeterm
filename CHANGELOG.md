@@ -99,7 +99,9 @@
   builds, packaging, runtime interaction, or captures.
 - Complete the Calendar provider boundary with verified HTTPS CalDAV account intake, loopback PKCE
   for Google and Microsoft 365, machine-local credential storage, bounded paginated synchronization,
-  provider validators, retry backoff, and provider-confirmed event writes. This continuation ran no
+  provider validators, retry backoff, and provider-confirmed event writes. Incremental provider
+  updates now merge changed records and tombstones into the existing cache, and project-file
+  boundaries strip unknown calendar configuration fields. This continuation ran no
   tests, type checks, lint, builds, packaging, installer execution, runtime interaction, reviews,
   audits, or captures.
 - Add Alarm Clock canvas nodes with one-shot and recurring wall-clock schedules, explicit IANA

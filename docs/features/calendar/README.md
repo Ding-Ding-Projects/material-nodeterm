@@ -5,13 +5,16 @@ guided canvas node.
 
 ## Behaviour
 
-Use Agenda, Week, and Month views with previous and next navigation, explicit timezone selection,
-recurrence display, event search, and a shared anchored regex builder. Local and ICS sources are
+Use Agenda, Week, and Month views with previous and next navigation (day, week, or month steps
+match the active view), explicit timezone selection, recurrence display, and a shared anchored
+regex builder. Local and ICS sources are
 available immediately. CalDAV accounts use a guided HTTPS endpoint form. Google and Microsoft 365
 use provider consent through a loopback PKCE callback when this computer has the corresponding
 public OAuth client registration. Account and calendar pickers expose only real provider results.
 
-Create and edit forms validate title and time ranges before enabling save. Delete uses the existing
+Create and edit forms validate title and time ranges before enabling save, and edit fields display
+the saved instant in the selected timezone before converting it back to an instant. The weekend
+visibility setting is applied to ranged views. Delete uses the existing
 two-key destructive confirmation. Event selection supports export of selected or visible records,
 and local changes have an undo path.
 
@@ -23,10 +26,13 @@ refresh tokens, host identifiers, and cached events never enter project data or 
 
 ICS import is read through the core service, bounded by UTF-8 bytes and event count, and cached in
 the app's local data directory. Remote refresh is bounded by response bytes, page count, event
-count, request timeout, provider host allowlists, and HTTPS. Cache identity includes the selected
-source and account, plus provider revision or ETag validators, completeness, partial-result state,
-and exponential retry timing. Refresh preserves the last valid cache and reports stale or offline
-state rather than claiming a provider result.
+count, request timeout, provider host allowlists, and HTTPS. Response bodies are streamed into a
+bounded buffer before decoding, so a provider that omits Content-Length cannot make the host
+allocate an unbounded string. Cache identity includes the selected source and account, plus provider
+revision or ETag validators, completeness, partial-result state, and exponential retry timing.
+Google sync tokens and Microsoft 365 delta links merge changed records and apply provider tombstones
+to the existing cache, preserving unchanged events. Refresh preserves the last valid cache and
+reports stale or offline state rather than claiming a provider result.
 
 ## Provider security
 

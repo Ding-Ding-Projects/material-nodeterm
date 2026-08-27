@@ -33,6 +33,13 @@ function validAccount(value: unknown): value is RemoteCalendarAccount {
 function makeId(prefix: string, bytes = 12): string { return `${prefix}-${randomBytes(bytes).toString('hex')}` }
 function base64url(bytes: Buffer): string { return bytes.toString('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_') }
 
+function mergeIncrementalEvents(cached: CalendarEvent[], changed: CalendarEvent[], deletedIds: string[]): CalendarEvent[] {
+  const deleted = new Set(deletedIds)
+  const byId = new Map(cached.filter((event) => !deleted.has(event.id)).map((event) => [event.id, event]))
+  for (const event of changed) byId.set(event.id, event)
+  return [...byId.values()].sort((a, b) => a.start.localeCompare(b.start)).slice(0, 10_000)
+}
+
 /** Host-owned provider boundary. Portable projects never contain the records managed here. */
 export class CalendarService implements CalendarApi {
   private readonly root: string
@@ -95,7 +102,14 @@ export class CalendarService implements CalendarApi {
     const account = await this.record(config.accountId, config.provider)
     if (!account || !config.calendarId) { const value = await this.events(nodeId, config); return { ...value, state: value.events.length ? 'offline' : 'empty', reason: 'Choose a connected account and calendar. Existing cache was retained.', complete: false } }
     try {
-      const result = await this.adapters[account.provider].sync(account, config.calendarId, { revision: cached.sourceId === config.calendarId ? cached.sourceRevision : null, etag: cached.sourceId === config.calendarId ? cached.etag : null }); const fetchedAt = Date.now(); const events = result.events.length === 0 && cached.sourceId === config.calendarId && cached.events.length > 0 ? cached.events : result.events
+      const sameSource = cached.sourceId === config.calendarId
+      const result = await this.adapters[account.provider].sync(account, config.calendarId, { revision: sameSource ? cached.sourceRevision : null, etag: sameSource ? cached.etag : null }); const fetchedAt = Date.now()
+      // Google sync tokens and Microsoft delta links return only changes after the
+      // initial full page. Replacing the cache with that short response silently
+      // erased every unchanged event, so merge updates and provider tombstones.
+      const events = result.incremental && sameSource
+        ? mergeIncrementalEvents(cached.events, result.events, result.deletedEventIds ?? [])
+        : result.events.length === 0 && sameSource && cached.events.length > 0 ? cached.events : result.events
       await this.write({ version: 2, nodeId, sourceId: config.calendarId, provider: account.provider, accountId: account.id, events, sourceName: config.calendarId.slice(0, 200), fetchedAt, sourceRevision: result.sourceRevision, etag: result.etag, complete: result.complete, partial: result.partial, retryAt: null, backoffMs: 0 })
       return { nodeId, sourceId: config.calendarId, fetchedAt, expiresAt: fetchedAt + 15 * 60_000, events, state: events.length ? 'fresh' : 'empty', reason: result.partial ? 'The provider result reached a safety bound. Refresh again to continue.' : null, sourceRevision: result.sourceRevision, etag: result.etag, complete: result.complete, partial: result.partial, retryAt: null, backoffMs: 0 }
     } catch (error) {

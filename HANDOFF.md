@@ -447,6 +447,27 @@ No tests, type checks, lint, builds, packaging, installer execution, runtime int
 accessibility or security review, audits, or captures were run in the continuation. Provider
 behavior and release assets therefore remain unverified, and this handoff must not be read as a
 runtime or packaged-artifact verdict.
+
+## 2026-08-27, Calendar node portability and synchronization repair
+
+This pig lane keeps the Calendar scope on `feat/program-19-calendar-nodes`. Incremental Google and
+Microsoft 365 synchronization now merges changed records into the existing cache and applies
+provider tombstones, so a delta response cannot erase unchanged events. Provider response bodies
+are streamed through an 8 MB bound before decoding. Calendar project-file boundaries now normalize
+calendar node configuration to the documented portable allowlist, dropping unknown fields on both
+read and write.
+
+Calendar picker regex builders are anchored to their adjacent filter fields, not to the native
+select controls. Week and agenda navigation uses the active period, weekend visibility is applied
+to ranged views, and edit forms render saved instants in the selected timezone before converting
+them back for persistence. Changed files are `src/core/calendar/providers.ts`,
+`src/core/calendar/service.ts`, `src/core/workspace-files.ts`,
+`src/renderer/nodes/CalendarNode.tsx`, `docs/features/calendar/README.md`,
+`src/shared/docs-data.ts`, and `CHANGELOG.md`.
+
+Commit: `fe35fc986e06d857ca7c2ae67193b9785be20b39`. Tests, type checks, lint, builds, packaging,
+installer execution, runtime interaction, accessibility or security review, audits, and captures
+remain unrun by the issue's ultra-speed boundary.
 ## 2026-08-26, Alarm Clock node lane
 
 Implemented the Alarm Clock canvas node and shared durable planner primitives for one-shot, daily,

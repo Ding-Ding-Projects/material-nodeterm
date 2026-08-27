@@ -14,6 +14,10 @@ export interface RemoteCalendarAccount {
 export interface CalendarSyncCursor { revision: string | null; etag: string | null }
 export interface CalendarSyncResult {
   events: CalendarEvent[]
+  /** Incremental providers return only changed records after the first full sync. */
+  incremental?: boolean
+  /** Provider tombstones, kept separate so a delta cannot silently resurrect a deleted event. */
+  deletedEventIds?: string[]
   sourceRevision: string | null
   etag: string | null
   complete: boolean
@@ -45,9 +49,37 @@ function iso(value: unknown): string | null {
 
 async function textResponse(response: Response): Promise<string> {
   const declared = Number(response.headers.get('content-length') ?? '0')
-  if (declared > MAX_RESPONSE_BYTES) throw new Error('Calendar provider response exceeds the 8 MB limit.')
-  const text = await response.text()
-  if (Buffer.byteLength(text, 'utf8') > MAX_RESPONSE_BYTES) throw new Error('Calendar provider response exceeds the 8 MB limit.')
+  if (Number.isFinite(declared) && declared > MAX_RESPONSE_BYTES) throw new Error('Calendar provider response exceeds the 8 MB limit.')
+  // Do not call response.text() before enforcing the bound. A provider that omits
+  // Content-Length can otherwise make the host allocate an unbounded string before
+  // the size check gets a chance to run.
+  if (!response.body) {
+    const text = await response.text()
+    if (Buffer.byteLength(text, 'utf8') > MAX_RESPONSE_BYTES) throw new Error('Calendar provider response exceeds the 8 MB limit.')
+    if (!response.ok) throw new Error(`Calendar provider request failed with HTTP ${response.status}.`)
+    return text
+  }
+  const reader = response.body.getReader()
+  const chunks: Uint8Array[] = []
+  let total = 0
+  try {
+    while (true) {
+      const next = await reader.read()
+      if (next.done) break
+      total += next.value.byteLength
+      if (total > MAX_RESPONSE_BYTES) throw new Error('Calendar provider response exceeds the 8 MB limit.')
+      chunks.push(next.value)
+    }
+  } catch (error) {
+    await reader.cancel().catch(() => {})
+    throw error
+  } finally {
+    reader.releaseLock()
+  }
+  const bytes = new Uint8Array(total)
+  let offset = 0
+  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength }
+  const text = new TextDecoder().decode(bytes)
   if (!response.ok) throw new Error(`Calendar provider request failed with HTTP ${response.status}.`)
   return text
 }
@@ -154,7 +186,7 @@ class CalDavAdapter extends CredentialedAdapter implements CalendarProviderAdapt
     const endpoint = validateEndpoint(calendarId)
     const body = '<?xml version="1.0"?><c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:prop><d:getetag/><c:calendar-data/></d:prop><c:filter><c:comp-filter name="VCALENDAR"><c:comp-filter name="VEVENT"/></c:comp-filter></c:filter></c:calendar-query>'
     const response = await this.request(account, endpoint, { method: 'REPORT', headers: { depth: '1', 'content-type': 'application/xml; charset=utf-8', ...(cursor.etag ? { 'if-none-match': cursor.etag } : {}) }, body })
-    if (response.status === 304) return { events: [], sourceRevision: cursor.revision, etag: cursor.etag, complete: true, partial: false }
+    if (response.status === 304) return { events: [], incremental: false, sourceRevision: cursor.revision, etag: cursor.etag, complete: true, partial: false }
     const xml = await textResponse(response)
     const { parseIcs } = await import('../../shared/calendar')
     const events: CalendarEvent[] = []
@@ -219,17 +251,24 @@ abstract class JsonCalendarAdapter extends CredentialedAdapter implements Calend
     return result.slice(0, 1000)
   }
   async sync(account: RemoteCalendarAccount, calendarId: string, cursor: CalendarSyncCursor): Promise<CalendarSyncResult> {
-    const events: CalendarEvent[] = []; let next: string | null = this.eventsUrl(calendarId, cursor); let revision: string | null = null; let pages = 0
+    const events: CalendarEvent[] = []; const deletedEventIds: string[] = []; let next: string | null = this.eventsUrl(calendarId, cursor); let revision: string | null = null; let pages = 0
     while (next && pages++ < MAX_PAGES && events.length < MAX_EVENTS) {
       const currentUrl = next
       const response = await this.request(account, currentUrl, { headers: cursor.etag ? { 'if-none-match': cursor.etag } : {} })
-      if (response.status === 304) return { events: [], sourceRevision: cursor.revision, etag: cursor.etag, complete: true, partial: false }
+      if (response.status === 304) return { events: [], incremental: true, sourceRevision: cursor.revision, etag: cursor.etag, complete: true, partial: false }
       const json = await jsonResponse(response); const rows = Array.isArray(json.items) ? json.items : Array.isArray(json.value) ? json.value : []
-      for (const row of rows) { if (row && typeof row === 'object') { const event = this.event(row as Json, calendarId); if (event) events.push(event) } }
+      for (const row of rows) {
+        if (!row || typeof row !== 'object') continue
+        const raw = row as Json
+        const removed = raw['@removed'] || raw.status === 'cancelled'
+        const removedId = bounded(raw.id, 1000)
+        if (removed && removedId) { deletedEventIds.push(removedId); continue }
+        const event = this.event(raw, calendarId); if (event) events.push(event)
+      }
       revision = this.revision(json) ?? revision; next = this.next(json, currentUrl)
     }
     const partial = !!next || events.length >= MAX_EVENTS
-    return { events: events.slice(0, MAX_EVENTS), sourceRevision: revision, etag: null, complete: !partial, partial }
+    return { events: events.slice(0, MAX_EVENTS), incremental: !!cursor.revision, deletedEventIds: deletedEventIds.slice(0, MAX_EVENTS), sourceRevision: revision, etag: null, complete: !partial, partial }
   }
   async create(account: RemoteCalendarAccount, input: CalendarCreateInput): Promise<CalendarEvent> {
     const json = await jsonResponse(await this.request(account, this.eventUrl(input.event.calendarId), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(this.eventPayload(input.event)) }))
@@ -251,7 +290,7 @@ class GoogleAdapter extends JsonCalendarAdapter {
   protected next = (json: Json, currentUrl: string): string | null => { const token = bounded(json.nextPageToken, 2000); if (!token) return null; const url = new URL(currentUrl); url.searchParams.set('pageToken', token); return url.toString() }
   protected revision = (json: Json): string | null => bounded(json.nextSyncToken, 4000)
   protected source(row: Json, account: RemoteCalendarAccount): CalendarSource | null { const id = bounded(row.id, 1000); if (!id) return null; return { id, accountId: account.id, provider: 'google', name: bounded(row.summary, 200) ?? id, timezone: bounded(row.timeZone, 100) ?? 'local', color: bounded(row.backgroundColor, 20) ?? '#1A73E8', readOnly: row.accessRole === 'reader' || row.accessRole === 'freeBusyReader', writable: row.accessRole !== 'reader' && row.accessRole !== 'freeBusyReader' } }
-  protected eventsUrl(calendarId: string, cursor: CalendarSyncCursor): string { const url = new URL(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`); url.searchParams.set('singleEvents', 'true'); url.searchParams.set('showDeleted', 'false'); url.searchParams.set('maxResults', '2500'); if (cursor.revision) url.searchParams.set('syncToken', cursor.revision); return url.toString() }
+  protected eventsUrl(calendarId: string, cursor: CalendarSyncCursor): string { const url = new URL(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`); url.searchParams.set('singleEvents', 'true'); url.searchParams.set('showDeleted', cursor.revision ? 'true' : 'false'); url.searchParams.set('maxResults', '2500'); if (cursor.revision) url.searchParams.set('syncToken', cursor.revision); return url.toString() }
   protected eventUrl(calendarId: string, eventId?: string): string { return `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events${eventId ? `/${encodeURIComponent(eventId)}` : ''}` }
   protected event(row: Json, calendarId: string): CalendarEvent | null { const id = bounded(row.id, 1000); const summary = bounded(row.summary, 500); const startObj = row.start as Json | undefined; const endObj = row.end as Json | undefined; const start = iso(startObj?.dateTime) ?? (bounded(startObj?.date, 20) ? `${startObj?.date}T00:00:00Z` : null); const end = iso(endObj?.dateTime) ?? (bounded(endObj?.date, 20) ? `${endObj?.date}T00:00:00Z` : null); if (!id || !summary || !start || !end) return null; return { id, calendarId, title: summary, start, end, timezone: bounded(startObj?.timeZone, 100) ?? 'local', allDay: !!startObj?.date, location: bounded(row.location, 500), description: bounded(row.description, 4000), recurrence: Array.isArray(row.recurrence) ? bounded(row.recurrence[0], 500) : null, updatedAt: Date.parse(String(row.updated ?? '')) || Date.now() } }
   protected eventPayload(event: Partial<CalendarEvent>): Json { const allDay = event.allDay === true; return { summary: event.title, description: event.description, location: event.location, start: allDay ? { date: event.start?.slice(0, 10) } : { dateTime: event.start, timeZone: event.timezone === 'local' ? undefined : event.timezone }, end: allDay ? { date: event.end?.slice(0, 10) } : { dateTime: event.end, timeZone: event.timezone === 'local' ? undefined : event.timezone }, recurrence: event.recurrence ? [event.recurrence] : undefined } }
