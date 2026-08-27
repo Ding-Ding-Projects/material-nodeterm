@@ -10,11 +10,14 @@ occurrences are recorded as missed when the service starts again.
 Settings → Planner provides a guided schedule editor with native date/time controls, a populated
 IANA timezone picker, recurrence choices (once, daily, weekdays, selected weekdays, and bounded
 intervals), an optional end time, and notification copy. The list has its own plain-text search and
-an adjacent anchored regex builder. Every save is validated again in the host process.
+an adjacent anchored regex builder. Every save is validated again in the host process. Failed saves
+reload the durable host state and expose an explicit retry action. Schedule deletion uses the
+two-key destructive confirmation surface before removing the selected definition.
 
 The host stores schedules and redacted occurrence history in `planner-schedules.json` under its
 application-data directory. A bounded background sweep evaluates due occurrences, deduplicates by
-schedule id and scheduled instant, and emits a non-blocking event. The Desktop shell shows an OS
+schedule id and scheduled instant, durably records the result, and only then emits a non-blocking
+event. The Desktop shell shows an OS
 notification when no focused window is available. Attached UIs receive the same event over IPC or
 Server Edition WS-RPC and place it in the reviewable notification stream.
 
@@ -33,8 +36,10 @@ before saving.
 
 ## Missed occurrences and lifecycle
 
-The service starts with both Desktop and Server Edition boot, before any UI is attached. Closing a
-window or browser tab therefore does not stop evaluation. Each sweep advances a durable last-tick
+The service starts with both Desktop and Server Edition boot, before any UI is attached. Closing the
+last browser tab or the Desktop title-bar window keeps the host alive while enabled schedules exist,
+so evaluation continues without an attached UI. Explicit application quit still stops the service.
+Each sweep advances a durable last-tick
 marker. A due instant older than two minutes is recorded as `missed`; a current due instant is
 `fired` and is delivered to the notification seams. A clock moving backwards advances the marker to
 the new time without replaying future entries. The bounded history keeps the newest 2,000 records.
@@ -46,14 +51,18 @@ lane.
 
 ## Storage, export, and recovery
 
-The JSON file is written atomically with owner-only permissions. Corrupt or unreadable data leaves
-the original evidence untouched, starts with a disabled in-memory fallback, and refuses saves until
+The JSON file is written atomically with owner-only permissions. Host updates are ordered through a
+single store queue. A UI save replaces only user-authored schedule definitions, so a stale renderer
+snapshot cannot erase host-owned occurrence history or the last evaluation marker. Corrupt or
+unreadable data leaves the original evidence untouched, starts with a disabled in-memory fallback,
+and refuses saves until
 the file is repaired and the host is restarted. JSON and CSV exports contain schedule occurrence
 metadata and state, never credentials, private paths, process state, or host identifiers.
 
-Import is not part of this service. A future portable project importer must carry safe planner intent
-only and require an explicit local configure or rebind action; it must not start schedules or emit
-notifications while importing.
+Schema 3 planner-definition transfer is not wired in this lane. Until that project projection exists,
+planner schedules remain machine-local and the issue's portability contract is incomplete. A later
+portable import must carry safe planner intent only, require an explicit local Configure action, and
+must not start schedules or emit notifications while importing.
 
 ## Surface boundaries
 
@@ -70,6 +79,8 @@ installer execution, runtime interaction, or screenshots. Those checks remain re
 claim. The implementation paths are `src/shared/planner-occurrences.ts`,
 `src/core/planner-occurrence-service.ts`, `src/preload/index.ts`,
 `src/renderer/bridge/ws-bridge.ts`, and `src/renderer/components/settings/sections/PlannerSection.tsx`.
+The generated offline article bundle remains stale because its generator was intentionally not run
+under this lane's no-build boundary.
 
 ## Suggested articles
 

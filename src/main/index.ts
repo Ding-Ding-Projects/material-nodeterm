@@ -1290,11 +1290,6 @@ function createWindow(): BrowserWindow {
       win.hide()
       return
     }
-    // The real close: on win32/linux the native title-bar × reaches this directly with no
-    // app.quit() first (see window-all-closed below), so the confirm gate has to sit here too —
-    // not only in before-quit, where the window (the only place left to show a dialog) would
-    // already be destroyed by the time we asked.
-    if (shouldConfirmQuit()) {
     if (action === 'leave-fullscreen-then-hide') {
       e.preventDefault()
       if (!leavingFullScreen) {
@@ -1307,11 +1302,15 @@ function createWindow(): BrowserWindow {
       }
       return
     }
+    // A title-bar close is a UI close, not an explicit host shutdown. When the planner owns an
+    // enabled schedule, let this window be destroyed and let window-all-closed keep the process
+    // alive. Menu Quit and app shutdown still reach before-quit and stop the planner normally.
+    if (!quitting && plannerRuntime.hasEnabledSchedules()) return
     // action === 'default': the window is really closing. On Windows/Linux the native title-bar
     // × reaches this directly (no app.quit() first), so the confirm gate must sit here too, not
     // only in before-quit — otherwise the window (and with it the only place to show a dialog)
     // would already be gone by the time we asked.
-    if (!quitConfirmed && !skipQuitConfirmation) {
+    if (shouldConfirmQuit() && !quitConfirmed && !skipQuitConfirmation) {
       e.preventDefault()
       void confirmQuit(win).then((ok) => {
         if (ok) app.quit()

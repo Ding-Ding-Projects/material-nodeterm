@@ -89,7 +89,10 @@
   recovery, atomic state retries, and a truthful Server Edition display boundary.
 - Add a host-owned planner occurrence service with durable local schedules, recurrence choices,
   timezone and DST semantics, cross-midnight descriptions, missed-occurrence history, JSON/CSV
-  export, Desktop IPC and Server Edition WS-RPC events, and a guided Planner settings surface.
+  export, Desktop IPC and Server Edition WS-RPC events, and a guided Planner settings surface. The
+  service now survives Desktop title-bar closure while enabled schedules exist, records each
+  occurrence before notification delivery, preserves host-owned history across stale UI saves,
+  exposes save retry recovery, and gates schedule deletion behind two-key confirmation.
   This ultra-speed lane intentionally leaves tests, builds, packaging, runtime interaction, and
   captures unrun.
 - Add Calendar nodes for local calendars and ICS import, with guided CalDAV, Google Calendar, and
