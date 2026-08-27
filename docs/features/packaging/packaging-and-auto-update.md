@@ -8,10 +8,11 @@ newer one.
 ## Behaviour
 
 **Building.** The desktop app uses
-[electron-builder](https://www.electron.build/). Windows packages as an unsigned Squirrel set:
-`Setup.exe`, `RELEASES`, and a full `.nupkg`. Linux packages an x64 AppImage and `.deb`. (The
-macOS `.dmg`/`.zip` targets were deleted with the macOS desktop target.) Native dependencies are
-rebuilt against the Electron ABI during installation.
+[electron-builder](https://www.electron.build/). The active Windows delivery target is one
+unsigned Squirrel.Windows set: `Setup.exe`, `RELEASES`, one full `.nupkg`, and any delta package
+Squirrel emits for the candidate. ZIP, NSIS-only, MSI-only, MSIX-only, and portable-only Windows
+outputs are not supported parallel release routes. Native dependencies are rebuilt against the
+Electron ABI during installation.
 
 The supported Windows entry point is `npm run dist:win`. Its wrapper starts from a clean checkout,
 regenerates the committed seven-frame ICO, proves that the bytes match the current commit, derives
@@ -49,12 +50,11 @@ below, which proves only the updater code first shipped in `0.4.0`.
 
 **Release authority.** The updater does not decide whether a GitHub release came from the right
 branch by parsing release metadata in the app. Instead, the stable feed is controlled at its
-source: the release workflow is manual-only, refuses refs other than `main`, and publishes the
-single final stable version. The package/app version must advance; the next candidate is `0.4.0`
-after `0.3.0`. Feature-branch and prerelease packages must never be made the latest stable release.
-Automatic publication is disabled because the workflow has no push trigger. It remains manually
-dispatchable from `main`, but no `0.4.0` publication is claimed by this change; manual publication
-is pending the final packaged install/update interactions.
+source: the release workflow accepts pushes to `main` and manual dispatch, refuses refs other than
+`main`, and publishes one uniquely versioned stable release after the complete Squirrel asset set
+has been checked. Feature-branch and prerelease packages must never be made the latest stable
+release. Publication still does not claim installed-app interaction proof; that remains a separate
+verification boundary.
 
 **Other platforms.** Linux deliberately retains `electron-updater` and its existing
 feed/manual-download behavior. The Server Edition has no desktop installer, and the separately
@@ -68,7 +68,9 @@ applicable to those two surfaces.
   a clean commit that is already reachable in the public GitHub repository so its exact-SHA icon URL
   can be proved before packaging.
 - The stable Windows feed is fixed to the project's GitHub Release asset root; it is not an
-  end-user setting.
+  end-user setting. Squirrel consumes the HTTPS `RELEASES` metadata and its recorded package
+  hashes; the app does not add a second competing feed parser. The release is intentionally
+  unsigned, so Windows may show an unknown-publisher warning during installation.
 - Only a build whose version is in the `fixture` prerelease channel may honor
   `NODETERM_SQUIRREL_FIXTURE_URL`, and that override accepts only loopback HTTP(S). Stable and
   unrelated prerelease builds refuse it.

@@ -2,7 +2,7 @@
 // Design: an open AgentId string, a declarative config record, and
 // capabilities expressed as const membership lists (not a capability object).
 
-export type BuiltinAgentId = 'claude' | 'codex' | 'gemini' | 'opencode' | 'grok' | 'copilot'
+export type BuiltinAgentId = 'claude' | 'codex' | 'gemini' | 'opencode' | 'grok' | 'copilot' | 'devin'
 // Open type — custom agents are any string ('custom:<uuid>'). Never restrict the set.
 export type AgentId = BuiltinAgentId | (string & {})
 
@@ -44,7 +44,8 @@ export const BUILTIN_AGENT_IDS: readonly BuiltinAgentId[] = [
   'gemini',
   'opencode',
   'grok',
-  'copilot'
+  'copilot',
+  'devin'
 ]
 
 export const AGENT_CONFIG: Record<BuiltinAgentId, AgentConfig> = {
@@ -104,14 +105,26 @@ export const AGENT_CONFIG: Record<BuiltinAgentId, AgentConfig> = {
     // 1.0.80 CLI's `--interactive <prompt>` starts the ordinary TUI and submits the prompt there.
     promptInjectionMode: 'flag-interactive',
     expectedProcess: 'copilot'
+  },
+  devin: {
+    label: 'Devin',
+    color: '#7c3aed',
+    launchCmd: 'devin',
+    // Devin 3000.4.25 takes an initial prompt after `--`. The separator is required because the
+    // CLI also exposes subcommands, so a prompt such as "login" remains prompt text instead of
+    // becoming a command. The same argv shape is used by interactive REPL launches and the
+    // documented single-turn `-p` form (see devin.ts).
+    promptInjectionMode: 'argv',
+    argvPromptSeparator: '--',
+    expectedProcess: 'devin'
   }
 }
 
 // Capabilities = const builtin membership lists. A custom agent resolves through its declared
 // base harness (capabilityAgentId); one with no base automatically gets only spawn + terminal-title
 // + process status.
-export const AGENT_HOOK_TARGETS = ['claude', 'codex', 'gemini', 'opencode', 'grok', 'copilot'] as const
-export const RESUMABLE_AGENTS = ['claude', 'codex', 'gemini', 'opencode', 'grok', 'copilot'] as const
+export const AGENT_HOOK_TARGETS = ['claude', 'codex', 'gemini', 'opencode', 'grok', 'copilot', 'devin'] as const
+export const RESUMABLE_AGENTS = ['claude', 'codex', 'gemini', 'opencode', 'grok', 'copilot', 'devin'] as const
 // Agents whose session id we MINT at launch (`--session-id <uuid>`) instead of learning it only
 // from hook events. Each member must have a measured caller-chosen-id grammar below.
 //
@@ -533,6 +546,8 @@ export function resumeCommandWith(
       return `${launchCmd} --session ${sid}`
     case 'copilot':
       return `${launchCmd} --resume=${sid}`
+    case 'devin':
+      return `${launchCmd} -r ${sid}`
     case 'claude':
     case 'gemini':
     case 'grok':

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GitLab Server hosting - nodeterm docs</title>
+    <meta name="description" content="Guided private GitLab Server hosting with pinned official images, managed volumes, readiness, backups, restore, update, rollback, and loopback binding." />
+    <link rel="stylesheet" href="./assets/docs.css" />
+  </head>
+  <body>
+    <main class="article">
+      <p><a href="./index.html">← All documentation</a></p>
+      <h1>GitLab Server hosting</h1>
+      <p>The installed desktop application is the primary runtime. This documentation page explains the hosting node and does not deploy a server itself.</p>
+      <h2>Guided deployment</h2>
+      <p>Choose a discovered Docker context and either the official Community Edition or Enterprise Edition image. The selected image is pinned by digest. The node creates four managed volumes for configuration, logs, data, and backups, then binds HTTP and SSH to loopback addresses only.</p>
+      <p>The node checks GitLab's <code>/-/readiness</code> endpoint and keeps stopped and unready states distinct from ready. The lifecycle actions are Deploy, Back up, Restore, Update, and Roll back. Restore and rollback require the application's two-key confirmation surface.</p>
+      <h2>Initial credential handoff</h2>
+      <p>After readiness, the node can read GitLab's initial root credential file once and show it to the active user. The value stays in memory, is never persisted or included in progress output, and is hidden when the user closes the handoff.</p>
+      <h2>Portability and safety</h2>
+      <p>The portable project record contains only edition, pinned image reference, loopback binding, and guided port choices. Context names, container and volume identifiers, backup files, credentials, and process state remain on the machine that owns the binding. Import only restores intent and performs no deployment or network call.</p>
+      <p>There is no arbitrary image field, shell command field, entrypoint field, environment editor, or public binding. Context and backup lists use local plain-text search with an adjacent anchored regex builder.</p>
+      <h2>Verification status</h2>
+      <p>This implementation lane intentionally did not run tests, type checks, lint, builds, packaging, installer execution, runtime interaction, accessibility or security reviews, or UI captures. Those checks remain release-lane work.</p>
+      <h2>Suggested articles</h2>
+      <ul>
+        <li><a href="./docker-host-manager.html">Docker host manager</a></li>
+        <li><a href="./source-control-worktrees.html">Source control and worktrees</a></li>
+        <li><a href="./exports-and-history.html">Exports, notifications and local history</a></li>
+      </ul>
+    </main>
+  </body>
+</html>

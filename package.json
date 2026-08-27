@@ -52,7 +52,8 @@
     "postinstall": "node scripts/patch-node-pty.mjs && electron-rebuild -f -w node-pty,smart-whisper",
     "design:compare": "electron design/compare",
     "design:v2": "electron design/v2-preview",
-    "prepare:qemu": "node scripts/ensure-qemu-resources.mjs --output resources/qemu"
+    "prepare:qemu": "node scripts/ensure-qemu-resources.mjs --output resources/qemu",
+    "prepare:aws-cli": "node scripts/ensure-aws-cli-resources.mjs --output resources/aws-cli-v2"
   },
   "build": {
     "appId": "com.nodeterm.app",
@@ -83,6 +84,10 @@
       {
         "from": "resources/qemu",
         "to": "qemu"
+      },
+      {
+        "from": "resources/aws-cli-v2",
+        "to": "node-dependencies/aws-cli-v2"
       },
       {
         "from": "out/session-host",
@@ -210,28 +215,21 @@
           "arch": [
             "x64"
           ]
-        },
-        {
-          "target": "zip",
-          "arch": [
-            "x64"
-          ]
         }
       ],
       "forceCodeSigning": false,
-      "signExecutable": false
+      "signExecutable": false,
+      "signAndEditExecutable": true
     },
     "squirrelWindows": {
-      "artifactName": "${productName}-Setup-${version}.${ext}"
-    },
-    "nsis": {
       "artifactName": "${productName}-Setup-${version}.${ext}",
-      "oneClick": true,
-      "perMachine": false
+      "msi": false
     },
     "publish": {
-      "provider": "generic",
-      "url": "https://nodeterm.dev/updates"
+      "provider": "github",
+      "owner": "Ding-Ding-Projects",
+      "repo": "material-nodeterm",
+      "releaseType": "release"
     },
     "forceCodeSigning": false
   },
