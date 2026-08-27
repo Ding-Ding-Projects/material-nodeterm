@@ -5,6 +5,7 @@ import { useActiveSessionApi } from '../../session/session'
 import { openDestructiveGate } from '../../state/destructiveGate'
 import { useRegexSearchField } from '../../lib/regex/useRegexSearchField'
 import { AnchoredPopover } from '../../ui/AnchoredPopover'
+import { Radio } from '../../ui/md3'
 import { AnchoredRegexBuilder } from '../regex/AnchoredRegexBuilder'
 
 interface Props {
@@ -180,8 +181,8 @@ export function HomeAssistantPanel({ nodeId, boundEndpoint, onBind, intent = DEF
     <div className="ha-client__discovery">
       <fieldset disabled={!selected || !selected.hasToken || !!busyOperation}>
         <legend>Discovery transport</legend>
-        <label><input type="radio" name={`${nodeId}-ha-transport`} checked={transport === 'rest'} onChange={() => setTransport('rest')} /> REST snapshot</label>
-        <label><input type="radio" name={`${nodeId}-ha-transport`} checked={transport === 'websocket'} onChange={() => setTransport('websocket')} /> WebSocket snapshot</label>
+        <label><Radio name={`${nodeId}-ha-transport`} checked={transport === 'rest'} onChange={() => setTransport('rest')} /> REST snapshot</label>
+        <label><Radio name={`${nodeId}-ha-transport`} checked={transport === 'websocket'} onChange={() => setTransport('websocket')} /> WebSocket snapshot</label>
       </fieldset>
       <div className="ha-client__actions">
         <button type="button" onClick={() => void discover()} disabled={!selected || !selected.hasToken || !!busyOperation} title={!selected ? 'Select an instance first.' : !selected.hasToken ? 'Store an access token for this instance first.' : 'Discover current entities.'}>Discover entities</button>
