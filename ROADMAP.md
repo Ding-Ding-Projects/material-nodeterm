@@ -62,6 +62,12 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## In progress / partially landed
 
+- [ ] **Portable Comment and Activity attachments, issue #94**: source support is present in
+      `src/shared/comment-attachments.ts`, `src/core/board-attachments.ts`, the board-log bridge,
+      composer queue, and schema 3 comment carriers. Tests, type checks, lint, builds, packaging,
+      runtime interaction, reviews, security and accessibility audits, and captures remain pending
+      in the integration lane.
+
 - [ ] **Desktop trackpad gesture facts, issue #108**: main-process scroll and pinch edges now feed
       a depth-safe typed bridge so macOS desktop wheel routing distinguishes a precise-pixel mouse
       from a trackpad, including the bounded momentum-gap linger. Server Edition keeps its browser

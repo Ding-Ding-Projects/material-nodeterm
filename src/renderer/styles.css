@@ -9683,6 +9683,37 @@ button.group-node__setup:disabled {
   word-break: break-word;
   padding-left: 14px;
 }
+.board-log__attachment-drop {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 12px 8px;
+  padding: 8px;
+  min-height: 44px;
+  border: 1px dashed rgba(var(--tint-rgb), 0.25);
+  border-radius: 10px;
+  font-size: 11px;
+  color: rgba(var(--tint-rgb), 0.65);
+}
+.board-log__file-input { position: absolute; inline-size: 1px; block-size: 1px; opacity: 0; pointer-events: none; }
+.board-log__attachment-queue,
+.board-log__posted-attachments { display: flex; flex-direction: column; gap: 6px; margin: 0 12px 8px 26px; }
+.board-log__attachment-row,
+.board-log__posted-attachment { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; font-size: 11px; }
+.board-log__attachment-row { padding: 6px; border: 1px solid rgba(var(--tint-rgb), 0.13); border-radius: 10px; background: rgba(var(--tint-rgb), 0.04); }
+.board-log__attachment-row img,
+.board-log__posted-attachment img { width: 44px; height: 44px; object-fit: contain; border-radius: 6px; background: rgba(var(--tint-rgb), 0.08); }
+.board-log__attachment-row audio,
+.board-log__attachment-row video,
+.board-log__posted-attachment audio,
+.board-log__posted-attachment video { max-width: min(100%, 220px); max-height: 72px; }
+.board-log__attachment-icon { display: inline-grid; place-items: center; width: 44px; height: 44px; border-radius: 6px; background: rgba(var(--tint-rgb), 0.08); font-size: 18px; }
+.board-log__attachment-name { min-width: 0; max-width: 220px; overflow-wrap: anywhere; word-break: break-word; }
+.board-log__attachment-size, .board-log__attachment-status { color: rgba(var(--tint-rgb), 0.55); font-variant-numeric: tabular-nums; }
+.board-log__attachment-progress { width: 72px; height: 8px; accent-color: var(--accent); }
+.board-log__attachment-status--failed, .board-log__attachment-error { color: var(--danger); overflow-wrap: anywhere; }
+.board-log__posted-attachment a { max-width: 220px; overflow-wrap: anywhere; word-break: break-word; }
 .board-log__event {
   display: flex;
   align-items: baseline;

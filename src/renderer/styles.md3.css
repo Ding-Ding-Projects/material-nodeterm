@@ -3780,6 +3780,19 @@ button.term-node__title-text:focus-visible {
 .board-log__event-body {
   color: var(--md-on-surface-variant);
 }
+.board-log__attachment-drop {
+  border-color: var(--md-outline-variant);
+  background: var(--md-surface-container-low);
+  color: var(--md-on-surface-variant);
+}
+.board-log__attachment-row { border-color: var(--md-outline-variant); background: var(--md-surface-container-high); }
+.board-log__attachment-icon,
+.board-log__attachment-row img,
+.board-log__posted-attachment img { background: var(--md-surface-container-highest); }
+.board-log__attachment-size,
+.board-log__attachment-status { color: var(--md-on-surface-variant); }
+.board-log__attachment-status--failed,
+.board-log__attachment-error { color: var(--md-error); }
 
 /* ---------------------------------------------------------------------------------------------
    GitHub issue cards + summary modal

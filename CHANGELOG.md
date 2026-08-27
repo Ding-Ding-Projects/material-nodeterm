@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add portable Comments and Activity attachments for generic files plus image, audio, and video
+  previews. The composer now has picker, drag/drop, and paste routes, a removable validation queue,
+  bounded byte-signature detection, transactional board-log storage, remote-safe atomic writes, and
+  schema 3 archive carriers with hash, length, name, kind, and reference validation. This issue #94
+  implementation lane intentionally did not run tests, type checks, lint, builds, packaging,
+  runtime interaction, reviews, security or accessibility checks, or captures.
+
 - Route macOS desktop canvas wheel input from main-process trackpad gesture facts. A depth-safe
   ledger sends scroll and pinch edge transitions over typed IPC, the desktop router keeps a bounded
   500 ms momentum-gap linger, and precise-pixel mouse packets zoom when no gesture is reported.
