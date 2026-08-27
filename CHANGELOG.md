@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add display-only agent-state recovery and workflow-state sidebar grouping for issue #74. The
+  lifecycle-bound snapshot keeps the last known Claude, Gemini, or Codex state available after a
+  restart while expiring operational evidence remains separate. Recovered state cannot trigger
+  notifications, authorization, process control, or hibernation, and fresh hook events take
+  precedence. Unread remains a row-level affordance, so completed and unknown sessions stay in
+  their workflow sections. This ultra-speed lane did not run tests, type checks, lint, builds,
+  packaging, runtime interaction, reviews, security or accessibility checks, or captures.
+
 - Mount the seven AWS core-service routes on the shared AWS manager: S3, EC2, IAM, STS, Lambda,
   CloudWatch, and CloudWatch Logs. Typed operation controls now cover bounded reads, selected writes,
   destructive confirmation, pagination, cancellation, and progress while reusing the current local

@@ -1,5 +1,39 @@
 # Handoff
 
+## 2026-08-27, display-only agent-state recovery and workflow grouping, issue #74
+
+The implementation is on `feat/program-63-agent-state-recovery`. It was reconciled with the exact
+`origin/main` tip `54164b84dce0b7e62787b1de2885405ff4ed821c` in merge commit `82b2dcde6525f7831f0e7bd44c2fd33634b2650e`.
+The feature commit is `90c8d0d9f7b6d355448f2c357bf6376583929667`.
+
+The core mirror now keeps a lifecycle-bound `lastKnown` display snapshot separate from expiring
+operational state. Claude and Gemini transcript tails, plus Codex app-server thread status, can be
+inspected through the shared `agent-status-snapshot` handler. Recovery is bounded and fail-safe:
+missing, malformed, stale, unsupported, or remote evidence does not become a guessed completion.
+Recovered state is explicitly display-only and cannot drive notifications, authorization, process
+control, or hibernation. A live hook event always wins the request race, and session boundaries
+preserve only same-conversation display continuity.
+
+Desktop preload, Server Edition, and the WebSocket bridge expose the snapshot route. Renderer rows
+label recovered ages as `last known`, and the hibernation policy refuses recovered rows until live
+evidence arrives. The sessions sidebar groups by workflow state in the order Need attention, Done,
+Unknown, and Running. Unread stays a row-level notification affordance, so it does not move a row
+out of its actual workflow section.
+
+Directly related source files include `src/core/agent-status-recovery.ts`,
+`src/core/agent-status-handlers.ts`, `src/core/agent-status-mirror.ts`,
+`src/shared/agents/status-snapshot.ts`, the Desktop and Server bridge registrations,
+`src/renderer/state/agentStatus.ts`, `src/renderer/lib/sessionList.ts`,
+`src/renderer/terminal/hibernation-policy.ts`, and the corresponding focused test records and
+fixture. Public documentation is current in `docs/features/agents/agent-support.md` and
+`docs/features/agents/README.md`; the root changelog carries the same scope and boundary.
+
+The generated offline documentation bundle was not regenerated because this lane explicitly forbids
+builds and checks. The parent integration lane must regenerate it before claiming offline docs are
+current. This lane also did not run tests, type checks, lint, builds, packaging, runtime
+interaction, reviews, security or accessibility checks, or captures. No issue, pull request,
+release, main-jer merge, deletion, or cleanup mutation was performed by this lane.
+
 ## 2026-08-27, AWS core-service managers, issue #46 PR preparation
 
 The issue jer was reconciled with the exact `origin/main` tip `2472cf23b99559005476841d3db5e6bc4691ac06`.

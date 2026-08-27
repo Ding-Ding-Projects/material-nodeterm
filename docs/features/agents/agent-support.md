@@ -45,6 +45,18 @@ directory.
 demand by drawing a connection between them on the canvas — a pull, not a push: nothing is
 sent automatically, an agent has to ask for the linked context when it wants it.
 
+**Restart-safe display status** keeps a lifecycle-bound last-known workflow state for each node.
+The snapshot is display-only: it may restore a useful `RUNNING`, `NEEDS YOU`, or `DONE` label after
+the app restarts, but it is never treated as live evidence. Operational state still expires, and a
+fresh hook event always takes precedence over the snapshot. Claude and Gemini transcript tails, plus
+Codex app-server thread status, are inspected only through bounded local readers when recovery is
+requested. Remote-project nodes are left unknown when the local host cannot inspect their evidence.
+
+The sessions sidebar groups rows by workflow state in the order **Need attention**, **Done**,
+**Unknown**, and **Running**. Unread is a row-level notification affordance, not a workflow bucket,
+so an unread completed session remains under **Done** and an unread session without state remains
+under **Unknown**.
+
 ## Configuration
 
 - **Settings → Agents** — default permission mode, agent hibernation (auto-exiting an idle,
@@ -66,6 +78,12 @@ sent automatically, an agent has to ask for the linked context when it wants it.
 - **A hook event never arrives** (the agent crashed, or hooks were never installed for it): the
   node's status simply never updates rather than being guessed. An unknown state is never
   treated as "finished" — that distinction matters for dependent nodes waiting on this one.
+- **Restart evidence is missing, stale, or malformed**: the row keeps its last-known display value
+  when one exists, otherwise it remains unknown. A failed transcript or app-server read never turns
+  into a guessed `DONE` state, and it never triggers a notification, process action, or hibernation.
+- **A restored row is considered for hibernation**: it is excluded until a live event establishes
+  current operational evidence. This prevents a display-only timestamp from being mistaken for an
+  idle clock.
 
 ## Security considerations
 
@@ -89,6 +107,15 @@ sent automatically, an agent has to ask for the linked context when it wants it.
 - Connect two agent-capable nodes with a context link and confirm one can pull the other's
   transcript on request, and that a plain terminal or an agent outside the capability list is
   not offered the option.
+- Restart with a previously active node and confirm its last-known state is labelled as display
+  continuity, while a fresh hook event replaces it and recovered state cannot trigger notification,
+  authorization, or hibernation.
+- Open the sessions sidebar with unread completed and unknown rows and confirm they remain in their
+  workflow sections instead of moving into an Unread section.
+
+The current ultra-speed implementation lane intentionally did not run tests, lint, type checks,
+builds, packaging, runtime interaction, reviews, security or accessibility checks, or captures.
+Those checks remain pending against the reconciled default branch and packaged application.
 
 ## Suggested articles
 
