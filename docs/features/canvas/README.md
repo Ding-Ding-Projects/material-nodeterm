@@ -6,6 +6,8 @@ The pan/zoom surface nodeterm is built around, and everything that lives on it.
   what each one is for.
 - [Unified Node Catalog](./node-catalog.md) — the typed registry, guided picker, creation event
   idempotence, availability reasons, and collision-free placement shared by every creation path.
+- [Door-only universe navigation](./door-only-universe-navigation.md) - paired entry and return
+  doors, shared refusal of tab and direct-selection bypasses, and safe schema 3 intent.
 - [Alarm Clock nodes](../../alarm-clock.md) — one-shot and recurring reminders with timezone,
   daylight-saving, snooze, dismiss, and missed-occurrence handling.
 - [Canvas & node lifecycle](./canvas-and-lifecycle.md) — how nodes mount, unmount, park, and
