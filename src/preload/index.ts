@@ -36,6 +36,7 @@ import type { TorrentTaskState } from '../shared/torrent'
 import type { VirtualMachineEvent } from '../shared/virtual-machine'
 import type { CalendarProvider } from '../shared/calendar'
 import type { ProjectConsentRequest, ProjectSetupEvent } from '../shared/project-settings'
+import type { CdkDeployResult, CdkDiffResult, CdkOperationInput, CdkProjectInput, CdkSynthesisResult, CdkStatus, CdkTrustInput, CdkTrustReview } from '../shared/cdk'
 
 // Fan a single ipcRenderer listener per channel out to many renderer subscribers. Without
 // this, every node that subscribes (e.g. Cmd+M markdown toggle on each terminal/editor) adds
@@ -257,6 +258,15 @@ const api: NodeTerminalApi = {
       ipcRenderer.on(IPC.serverDeploymentProgress, h)
       return () => ipcRenderer.removeListener(IPC.serverDeploymentProgress, h)
     }
+  },
+  cdk: {
+    status: () => ipcRenderer.invoke(IPC.cdkStatus) as Promise<CdkStatus>,
+    inspectProject: (input: CdkProjectInput) => ipcRenderer.invoke(IPC.cdkInspectProject, input) as Promise<CdkTrustReview>,
+    approveTrust: (input: CdkTrustInput) => ipcRenderer.invoke(IPC.cdkApproveTrust, input) as Promise<CdkTrustReview>,
+    synth: (input: CdkOperationInput) => ipcRenderer.invoke(IPC.cdkSynth, input) as Promise<CdkSynthesisResult>,
+    diff: (input: CdkOperationInput) => ipcRenderer.invoke(IPC.cdkDiff, input) as Promise<CdkDiffResult>,
+    deploy: (input: CdkOperationInput & { diffReviewToken: string }) => ipcRenderer.invoke(IPC.cdkDeploy, input) as Promise<CdkDeployResult>,
+    cancel: (requestId: string) => ipcRenderer.invoke(IPC.cdkCancel, requestId) as Promise<boolean>
   },
   projectSettings: {
     read: (projectId: string) => ipcRenderer.invoke(IPC.projectSettingsRead, projectId),

@@ -4493,6 +4493,8 @@ export interface NodeTerminalApi {
   speech: SpeechApi
   /** Universal file converter — docs/file-converter.md. */
   converter: import('./converter').ConverterApi
+  /** Local AWS CDK manager. The browser bridge exposes an explicit unsupported response. */
+  cdk: import('./cdk').CdkApi
   /** Shared automatic dependency lifecycle for node-feature installers. */
   nodeDependencies: import('./node-dependencies').NodeDependenciesApi
   /** Local Ollama suite manager — docs/ollama-manager.md. */

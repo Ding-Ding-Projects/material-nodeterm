@@ -10,6 +10,7 @@ substrate described in CLAUDE.md rather than inventing a surface each.
 | [Minecraft server](minecraft-server.md) | research only: cited constraints, not implemented |
 | [Research findings](research-findings.md) | all seven subjects, adversarially checked |
 | [Special-universe Shop nodes](aws-universe-shop.md) | implemented deterministic, scope-bound Shop coordinator and catalog surface; AWS executors remain visibly unavailable until their later lanes |
+| [AWS CDK manager](cdk-manager.md) | local folder picker, trust review, synth, diff, and reviewed deploy implementation; focused verification remains unrun in the ultra-speed lane |
 | [Torrent Downloader](../torrents/torrent-downloader.md) | local WebTorrent downloads with safe machine-local task state |
 | [Linux ISO VM](linux-iso-vm.md) | implemented canvas node with bundled QEMU, WHPX preference, QMP lifecycle, loopback display, persistent/disposable modes, and network-off default |
 | [Planner occurrences](planner-occurrences.md) | host-owned durable recurrence, timezone/DST handling, missed history, and UI-closure continuity |

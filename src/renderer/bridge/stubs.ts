@@ -653,6 +653,15 @@ export function buildStubApi(): Omit<
       onItem: noopUnsub,
       onSummary: noopUnsub
     },
+    cdk: {
+      status: U('cdk.status'),
+      inspectProject: U('cdk.inspectProject'),
+      approveTrust: U('cdk.approveTrust'),
+      synth: U('cdk.synth'),
+      diff: U('cdk.diff'),
+      deploy: U('cdk.deploy'),
+      cancel: U('cdk.cancel')
+    },
     nodeDependencies: {
       catalog: U('nodeDependencies.catalog'),
       status: U('nodeDependencies.status'),

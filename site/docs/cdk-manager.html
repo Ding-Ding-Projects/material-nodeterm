@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AWS CDK manager: nodeterm docs</title>
+    <meta name="description" content="Select a local CDK project, review trust, synthesize, inspect a diff, and deploy reviewed infrastructure changes." />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+  </head>
+  <body>
+    <div class="doc-topbar">
+      <a href="../index.html">← nodeterm</a>
+      <span aria-hidden="true">/</span>
+      <a href="./index.html">Docs</a>
+    </div>
+    <article class="doc-body">
+      <p class="doc-kicker">AWS</p>
+      <h1>AWS CDK manager</h1>
+      <p>The desktop manager selects a local folder through the native picker, reviews its CDK app command, synthesizes templates, shows a diff, and deploys only after the exact diff is acknowledged.</p>
+      <h2>Review-first flow</h2>
+      <ol>
+        <li>Choose the folder containing <code>cdk.json</code>, then inspect it.</li>
+        <li>Read the app command, context keys, known manifests, and warnings before approving trust.</li>
+        <li>Run <code>cdk synth</code> and select the synthesized stacks with the local search field.</li>
+        <li>Open <code>cdk diff</code>, read the complete output, and acknowledge it.</li>
+        <li>Deploy the reviewed stack set. Removal and replacement changes open the two-key confirmation surface first.</li>
+      </ol>
+      <h2>Portability and privacy</h2>
+      <p>Portable project data contains safe intent only, such as an app label and stack names. The selected folder, context values, credentials, profiles, generated templates, process state, and command output remain local. Importing a project does not run CDK or contact AWS.</p>
+      <h2>Accessibility and failure states</h2>
+      <p>The manager uses labelled controls, visible focus, keyboard-operable checkboxes, bounded scrolling output, responsive layout, and a local plain-text stack search with an adjacent anchored full regex builder. Missing CDK, an invalid folder, expired review, oversized output, cancellation, and a stale diff all report an actionable message.</p>
+      <h2>Verification</h2>
+      <p>This lane intentionally did not run tests, type checks, lint, security checks, accessibility checks, builds, packaging, installer execution, runtime interaction, or captures. The implementation is present, while release-grade evidence remains unrun.</p>
+      <section class="doc-suggested">
+        <h2>Suggested articles</h2>
+        <ul>
+          <li><a href="./aws-universe-shop.html">AWS Universe Shop nodes</a></li>
+          <li><a href="./node-catalog.html">Unified Node Catalog</a></li>
+          <li><a href="./exports-and-history.html">Exports and local history</a></li>
+        </ul>
+      </section>
+    </article>
+  </body>
+</html>
