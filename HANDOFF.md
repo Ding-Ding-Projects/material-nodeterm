@@ -16,7 +16,7 @@ unsupported state because a local process cannot inspect the remote filesystem. 
 is `docs/features/source-control/source-control-and-worktrees.md`, indexed from the Source Control
 category; `CHANGELOG.md` and `ROADMAP.md` carry the same scope and verification boundary.
 
-No tests, type checks, lint, builds, packaging, runtime interaction, reviews, audits, or HuiShots
+No tests, type checks, lint, builds, packaging, runtime interaction, reviews, audits, or screen captures
 were run in this ultra-speed lane. The generated `src/shared/docs-data.ts` bundle remains pending
 because `esbuild` is absent from this checkout and this lane does not install dependencies or run
 builds. The parent owns the final current-main integration, offline-bundle regeneration, release
