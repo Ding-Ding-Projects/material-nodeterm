@@ -55,6 +55,7 @@ import { isAgentEnabled, launchableDefaultAgent } from './agentAvailability'
 import { codexSharedIdentity } from './codexIdentity'
 import { sshHostKey } from '@shared/ssh'
 import { useSettings } from './settings'
+import { rotatedClaudeAccount } from '../lib/usageAccountRotation'
 import type { SessionSource } from '../session/session'
 import { supportsWindowsTerminalProfiles } from './terminal-profiles'
 import { namedTerminalProfileForId } from '../lib/named-terminal-profiles'
@@ -831,7 +832,16 @@ export function resolveNewNodeAccount(
   if (explicit === null) return undefined
   const id = explicit ?? project?.defaultAccountId
   // A stale default (account since removed) must not stamp dead ids onto new nodes.
-  return id && accountsForProject(accounts, project).some((a) => a.id === id) ? id : undefined
+  const selected = id && accountsForProject(accounts, project).some((a) => a.id === id) ? id : undefined
+  // An explicit account pick is a pin and must never be moved by the rotation policy. Only the
+  // project default is eligible, and the policy is consulted synchronously from the latest
+  // usage-indicator snapshots so node creation remains a single atomic canvas update.
+  if (explicit !== undefined || !useSettings.getState().settings.claudeUsageRotationEnabled) {
+    return selected
+  }
+  const rawThreshold = Number(useSettings.getState().settings.claudeUsageRotationThreshold)
+  const threshold = Number.isFinite(rawThreshold) ? Math.max(1, Math.min(100, rawThreshold)) : 90
+  return rotatedClaudeAccount(selected, accounts, threshold)
 }
 
 /**

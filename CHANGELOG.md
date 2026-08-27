@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add opt-in Claude account rotation for new default sessions. When the selected account reaches the
+  configured usage threshold, the launch funnel chooses the configured account with the most
+  headroom, preserves explicit account picks and running sessions, and fails safe when usage is
+  unavailable. This ultra-speed lane intentionally did not run tests, type checks, lint, reviews,
+  security or accessibility checks, builds, packaging, installer execution, runtime interaction, or
+  UI captures.
+
 - Mount the AWS CDK manager through the shared AWS resource node and AWS Shop. The guided route
   uses the existing local profile and region binding, a native project-folder picker, bounded
   trust review of `cdk.json` and dependency manifests, fixed synth and diff actions, stack search

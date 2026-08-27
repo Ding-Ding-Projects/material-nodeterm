@@ -2664,6 +2664,10 @@ export interface Settings {
    *  have no token counts and fall back to 'used' display). 'remaining' is the historical
    *  default; users coming from other tools expect 'used'. */
   usagePercentMode: 'used' | 'remaining' | 'tokens'
+  /** Rotate new default Claude nodes when the selected account reaches this usage threshold. */
+  claudeUsageRotationEnabled: boolean
+  /** Percentage threshold for default-account rotation, bounded to 1..100 at use time. */
+  claudeUsageRotationThreshold: number
   /** Which agent the ⌘⇧C shortcut / quick-add launches. Always a launchable builtin. */
   defaultAgent: AgentId
   /** The permission mode Claude TERMINAL (CLI) sessions START in — passed as `--permission-mode`
@@ -2982,6 +2986,8 @@ export const DEFAULT_SETTINGS: Settings = {
   // reads as noise to users who navigate by the trail chords/Dock buttons instead.
   showResumeCard: false,
   usagePercentMode: 'remaining',
+  claudeUsageRotationEnabled: false,
+  claudeUsageRotationThreshold: 90,
   defaultAgent: 'claude',
   // Sessions start in auto mode out of the box. Existing users pick this up on hydrate
   // (settings hydrate merges over DEFAULT_SETTINGS) — a deliberate behavior change.

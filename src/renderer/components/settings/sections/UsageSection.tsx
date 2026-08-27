@@ -16,6 +16,10 @@ const ROWS = {
     title: 'Usage percentages',
     keywords: ['usage', 'percent', 'used', 'remaining', 'left', 'display']
   },
+  rotation: {
+    title: 'Account rotation',
+    keywords: ['usage', 'account', 'rotate', 'rotation', 'threshold', 'Claude', 'headroom', 'new sessions']
+  },
   visibility: {
     title: 'Providers',
     keywords: [
@@ -219,6 +223,38 @@ export function UsageSection({ isActive }: { isActive: boolean }): React.JSX.Ele
               onChange={(v) => update({ usagePercentMode: v })}
               ariaLabel="Usage percentage display"
             />
+          }
+        />
+      </SearchableRow>
+      <SearchableRow {...ROWS.rotation}>
+        <FieldRow
+          label="Rotate Claude accounts"
+          description="When the project default account reaches the threshold, new default Claude sessions use the configured account with the most headroom. Explicit account picks and running sessions stay unchanged."
+          note="Off by default. Rotation uses the latest successful per-account usage read and never blocks a new session when usage is unavailable."
+          control={
+            <div className="flex flex-wrap items-center gap-3">
+              <Switch
+                checked={settings.claudeUsageRotationEnabled}
+                onChange={(enabled) => update({ claudeUsageRotationEnabled: enabled })}
+                ariaLabel="Rotate Claude accounts by usage"
+              />
+              <label className="flex items-center gap-2 text-xs">
+                <span>Threshold</span>
+                <input
+                  type="range"
+                  min={50}
+                  max={100}
+                  step={1}
+                  value={Math.max(1, Math.min(100, Number(settings.claudeUsageRotationThreshold) || 90))}
+                  disabled={!settings.claudeUsageRotationEnabled}
+                  onChange={(event) =>
+                    update({ claudeUsageRotationThreshold: Number(event.target.value) })
+                  }
+                  aria-label="Claude account rotation threshold"
+                />
+                <output>{Math.max(1, Math.min(100, Number(settings.claudeUsageRotationThreshold) || 90))}%</output>
+              </label>
+            </div>
           }
         />
       </SearchableRow>
