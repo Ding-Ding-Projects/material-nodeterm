@@ -3,7 +3,7 @@
 import { spawnSync } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
 import { createRequire } from 'node:module'
-import { createReadStream, readFileSync } from 'node:fs'
+import { createReadStream, readFileSync, writeSync } from 'node:fs'
 import { mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -80,6 +80,26 @@ export const SQUIRREL_SETUP_VENDOR_ICON_POLICY = Object.freeze([
 
 function fail(message) {
   throw new Error(message)
+}
+
+function writeDiagnostic(stream, message) {
+  try {
+    writeSync(stream, `${message}\n`)
+  } catch {
+    // The original failure remains authoritative when the diagnostic stream itself is unavailable.
+  }
+}
+
+async function runStage(description, operation) {
+  writeDiagnostic(1, `windows-installer: ${description} started`)
+  try {
+    const result = await operation()
+    writeDiagnostic(1, `windows-installer: ${description} completed`)
+    return result
+  } catch (error) {
+    writeDiagnostic(2, `windows-installer: ${description} failed: ${error instanceof Error ? error.message : String(error)}`)
+    throw error
+  }
 }
 
 function sha256(value) {
@@ -767,18 +787,18 @@ async function buildWindowsInstaller() {
   if (process.platform !== 'win32') fail('the Windows installer build must run on Windows')
   const metadataFile = path.join(REPO_ROOT, 'dist', 'windows-icon-contract.json')
   const squirrelOutput = path.join(REPO_ROOT, 'dist', 'squirrel-windows')
-  await cleanWindowsPackageOutputs(REPO_ROOT)
-  run(process.execPath, [path.join(REPO_ROOT, 'scripts', 'check-build-preflight.mjs')], { description: 'build preflight' })
-  run(process.execPath, [path.join(REPO_ROOT, 'scripts', 'ensure-qemu-resources.mjs'), '--output', path.join(REPO_ROOT, 'resources', 'qemu')], { description: 'pinned QEMU resource bootstrap' })
-  run(process.execPath, [path.join(REPO_ROOT, 'scripts', 'ensure-aws-cli-resources.mjs'), '--output', path.join(REPO_ROOT, 'resources', 'aws-cli-v2')], { description: 'pinned AWS CLI v2 resource bootstrap' })
-  run(process.execPath, [path.join(REPO_ROOT, 'scripts', 'make-icon.mjs')], { description: 'icon generation' })
-  const metadata = await verifySourceIcon(REPO_ROOT)
-  await writeMetadataAtomic(metadataFile, metadata)
+  await runStage('clean Windows package outputs', () => cleanWindowsPackageOutputs(REPO_ROOT))
+  await runStage('build preflight', () => run(process.execPath, [path.join(REPO_ROOT, 'scripts', 'check-build-preflight.mjs')], { description: 'build preflight' }))
+  await runStage('pinned QEMU resource bootstrap', () => run(process.execPath, [path.join(REPO_ROOT, 'scripts', 'ensure-qemu-resources.mjs'), '--output', path.join(REPO_ROOT, 'resources', 'qemu')], { description: 'pinned QEMU resource bootstrap' }))
+  await runStage('pinned AWS CLI resource bootstrap', () => run(process.execPath, [path.join(REPO_ROOT, 'scripts', 'ensure-aws-cli-resources.mjs'), '--output', path.join(REPO_ROOT, 'resources', 'aws-cli-v2')], { description: 'pinned AWS CLI v2 resource bootstrap' }))
+  await runStage('icon generation', () => run(process.execPath, [path.join(REPO_ROOT, 'scripts', 'make-icon.mjs')], { description: 'icon generation' }))
+  const metadata = await runStage('source icon verification', () => verifySourceIcon(REPO_ROOT))
+  await runStage('write Windows icon contract metadata', () => writeMetadataAtomic(metadataFile, metadata))
   const npmCli = process.env.npm_execpath
   if (!npmCli) fail('npm_execpath is required; invoke the Windows installer through npm run dist:win')
-  run(process.execPath, [npmCli, 'run', 'build'], { description: 'application build' })
-  const builderCli = require.resolve('electron-builder/cli.js')
-  run(
+  await runStage('application build', () => run(process.execPath, [npmCli, 'run', 'build'], { description: 'application build' }))
+  const builderCli = await runStage('resolve electron-builder CLI', () => require.resolve('electron-builder/cli.js'))
+  await runStage('electron-builder Squirrel packaging', () => run(
     process.execPath,
     [
       builderCli,
@@ -793,8 +813,8 @@ async function buildWindowsInstaller() {
       description: 'electron-builder Squirrel packaging',
       env: { ...process.env, CSC_IDENTITY_AUTO_DISCOVERY: 'false' },
     },
-  )
-  await assertPackagedIconContract(squirrelOutput, metadataFile)
+  ))
+  await runStage('packaged Windows icon contract verification', () => assertPackagedIconContract(squirrelOutput, metadataFile))
 }
 
 async function main(argv) {
@@ -822,8 +842,10 @@ async function main(argv) {
 
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === SCRIPT_FILE
 if (isMain) {
-  main(process.argv.slice(2)).catch((error) => {
-    console.error(`windows-installer: ${error instanceof Error ? error.message : String(error)}`)
+  try {
+    await main(process.argv.slice(2))
+  } catch (error) {
+    writeDiagnostic(2, `windows-installer: ${error instanceof Error ? error.message : String(error)}`)
     process.exitCode = Number.isInteger(error?.exitCode) ? error.exitCode : 1
-  })
+  }
 }
