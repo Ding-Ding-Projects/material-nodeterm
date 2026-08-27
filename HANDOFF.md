@@ -1,5 +1,27 @@
 # Handoff
 
+## 2026-08-27, canvas zones and saved layouts, issue #82
+
+The lane is implemented on `feat/program-71-zones-layouts` and reconciled with the exact
+`origin/main` tip `54164b84dce0b7e62787b1de2885405ff4ed821c`. It completes the upstream issue #394
+follow-up beyond the v1 zone menu: edge and corner drag previews, half, third, and quarter targets,
+and named per-project saved layouts now share one placement and validation path. Saved records carry
+only node ids, geometry, grouping, collapsed state, and the viewport. They exclude sessions,
+credentials, process state, machine paths, and other runtime data.
+
+The implementation paths are `src/renderer/lib/nodeZones.ts`, `src/renderer/lib/nodeLayouts.ts`,
+`src/renderer/canvas/Canvas.tsx`, `src/renderer/state/workspace.ts`, `src/renderer/state/projects.ts`,
+`src/shared/types.ts`, and `src/core/workspace-files.ts`. The feature article is
+`docs/features/canvas/zones-and-saved-layouts.md`, indexed from the canvas category and noted in
+`CHANGELOG.md` and `ROADMAP.md`.
+
+This ultra-speed lane intentionally did not run tests, type checks, lint, reviews, security or
+accessibility checks, builds, packaging, installer execution, runtime interaction, or captures.
+The generated offline documentation bundle was not regenerated because that is a build step; the
+next integration lane must run the supported generator and verify the generated output before
+claiming the documentation browser is current. The lane was not integrated into `main`, and no
+release or cleanup was performed here.
+
 ## 2026-08-27, AWS CDK manager, issue #48 PR preparation
 
 The issue branch was reconciled with the exact remote `origin/main` tip
