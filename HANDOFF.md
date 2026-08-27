@@ -1,32 +1,37 @@
 # Handoff
 
-## 2026-08-27, personal-vocabulary contract recovery
+## 2026-08-27, personal vocabulary coverage and settings recovery
 
-The merge recovery had combined several complete producer lanes into
-`scripts/check-personal-vocabulary-coverage.mjs` while retaining an older independent canonical
-manifest. The resulting array held duplicate producer identifiers and omitted 19 rows that were
-already documented in `docs/features/appearance/material-3-audit.md`. The source and canonical
-manifests now contain the same 145 unique identifiers in the same order. The documentary source
-markers were refreshed where later typed-copy helpers replaced their older callsite shapes.
+Release run `33119050796` reached application build after the source identity, resource, icon,
+HTTPS, and metadata phases passed, then failed while parsing
+`scripts/check-personal-vocabulary-coverage.mjs:306` with
+`SyntaxError: Identifier 'CANONICAL_CANVAS_NOTIFY_CALL_IDS' has already been declared`.
 
-The settings shell also retained half of two implementations. `SettingsPage.tsx` now owns one
-coherent search, navigation, project-scope, School-mode, and local-vocabulary boundary;
+The merge had combined several complete producer changes while retaining an older canonical
+manifest, an obsolete Canvas notification declaration, duplicate ownership checks, malformed
+producer separators, duplicate rows, and an unclosed mutation block. The repaired checker keeps one
+ordered array of 145 unique producer identifiers, one matching canonical producer list, one ordered
+array of 61 production surfaces, and one detailed list of 57 checker-retained Canvas notification
+calls. It filters parsed calls to production object payloads before one inventory, title-ownership,
+body-ownership, and title-marker pass. The two planner notifications nested inside the project-open
+success action keep their own explicit ownership fields in source.
+
+The settings shell also retained parts of two incompatible implementations. `SettingsPage.tsx` now
+owns one coherent search, navigation, project-scope, School-mode, and local vocabulary boundary;
 `SettingsSidebar.tsx` keeps its shared registry and project-icon route; and `SpeechSection.tsx`
 keeps one free-model, explicit-off, central-shortcut implementation with mapped authored copy.
 Canvas project export keeps one cancellation path and one failure path, and every retained direct
-notification declares title and body ownership without changing external facts. The independent
-Canvas list names 57 checker-retained calls in source order; the two planner notifications nested in
-the project-open action keep their own explicit ownership fields.
+notification declares title and body ownership without changing external facts.
 
 Changed files are `scripts/check-personal-vocabulary-coverage.mjs`,
 `docs/features/appearance/material-3-audit.md`, `src/renderer/canvas/Canvas.tsx`,
 `src/renderer/components/settings/SettingsPage.tsx`,
 `src/renderer/components/settings/SettingsSidebar.tsx`,
 `src/renderer/components/settings/sections/SpeechSection.tsx`, `CHANGELOG.md`, `ROADMAP.md`, and
-this handoff. `node --check scripts/check-personal-vocabulary-coverage.mjs` passed. No test,
-type-check, lint, review, audit, runtime-interaction, packaging, or screen-capture workflow was run
-in this ultra-speed lane. The parent integration lane must rerun the supported build from the final
-combined commit before treating the prior build blocker as resolved.
+this handoff. The source-only repair recorded JavaScript syntax and source-record consistency
+evidence before integration. No tests, type checks, lint, reviews, audits, builds, packaging,
+installer execution, runtime interaction, or UI captures were run in that lane. The integration
+owner must evaluate the exact merged commit before treating the release workflow as recovered.
 
 ## 2026-08-27, Squirrel packaging asynchronous exit repair
 
