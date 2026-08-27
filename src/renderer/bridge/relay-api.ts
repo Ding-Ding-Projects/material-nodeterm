@@ -171,6 +171,8 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     // `onChanged` casts subscribe/unsubscribe (fire-and-forget, no reject) and rides the host push.
     boardLog: {
       append: (projectId, entry) => files.boardLog.append(projectId, entry).catch(() => false),
+      appendWithAttachments: (projectId, entry, attachments) => files.boardLog.appendWithAttachments(projectId, entry, attachments).catch(() => ({ ok: false, reason: 'unsupported', message: 'This relay host does not support comment attachments.' })),
+      readAttachment: (projectId, attachment) => files.boardLog.readAttachment(projectId, attachment).catch(() => ({ ok: false, reason: 'unsupported', message: 'This relay host does not support comment attachments.' })),
       read: (projectId, opts) =>
         files.boardLog.read(projectId, opts).catch(() => ({ entries: [], unsupported: true })),
       onChanged: (projectId, cb) => files.boardLog.onChanged(projectId, cb)

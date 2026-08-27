@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add portable Comments and Activity attachments for generic files plus image, audio, and video
+  previews. The composer now has picker, drag/drop, and paste routes, a removable validation queue,
+  bounded byte-signature detection, transactional board-log storage, remote-safe atomic writes, and
+  schema 3 archive carriers with hash, length, name, kind, and reference validation. This issue #94
+  implementation lane intentionally did not run tests, type checks, lint, builds, packaging,
+  runtime interaction, reviews, security or accessibility checks, or captures.
+
 - Add upstream-compatible agent-to-agent drag collaboration for issue #90. A bounded,
   namespaced collaboration handle links two existing context-capable agent sessions through the
   existing Context Link path. Valid targets show an honest Material Design 3 drop state, while

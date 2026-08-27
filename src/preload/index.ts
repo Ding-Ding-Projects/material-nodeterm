@@ -1050,6 +1050,8 @@ const api: NodeTerminalApi = {
   },
   boardLog: {
     append: (projectId, entry) => ipcRenderer.invoke(IPC.boardLogAppend, projectId, entry),
+    appendWithAttachments: (projectId, entry, attachments) => ipcRenderer.invoke(IPC.boardLogAppendWithAttachments, projectId, entry, attachments),
+    readAttachment: (projectId, attachment) => ipcRenderer.invoke(IPC.boardLogReadAttachment, projectId, attachment),
     read: (projectId, opts) => ipcRenderer.invoke(IPC.boardLogRead, projectId, opts),
     onChanged: (projectId, cb) => {
       const ch = IPC.boardLogChanged(projectId)

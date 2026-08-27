@@ -346,6 +346,8 @@ export const IPC = {
   projectArchiveImport: 'project-archive:import',
   portableMediaPrepare: 'portable-media:prepare',
   portableMediaDiscard: 'portable-media:discard',
+  boardLogAppendWithAttachments: 'board-log:append-with-attachments',
+  boardLogReadAttachment: 'board-log:read-attachment',
   portableBindingState: 'portable-binding:state',
   portableBindingApply: 'portable-binding:apply',
   providerCatalog: 'provider-services:catalog',

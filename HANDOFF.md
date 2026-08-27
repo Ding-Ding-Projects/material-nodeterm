@@ -1,5 +1,35 @@
 # Handoff
 
+## 2026-08-27, portable Comment and Activity attachments, issue #94
+
+The implementation is on `feat/comment-attachments`, based on the reconciled `origin/main` tip
+`0d22ff88`. `src/shared/comment-attachments.ts` defines bounded path-free attachment references,
+drafts, failure results, byte-signature detection, and stable archive paths. The host implementation
+in `src/core/board-attachments.ts` reads bounded sources, rejects symlink or reparse-point
+ancestors, hashes and classifies bytes, writes collision-safe carriers atomically, and rechecks
+integrity after restart. `src/core/board-log.ts` and `src/core/board-log-handlers.ts` append files
+and comments transactionally, remove newly-created carriers when the log append fails, support
+connected SSH projects through portable base64 decoding, and return a distinct failed-read result.
+
+The Comments and Activity composer in `src/renderer/components/kanban/BoardLogPanel.tsx` now has a
+semantic multi-file picker, drag/drop and clipboard-file routes, a removable queue with kind, size,
+status and errors, safe local media previews, and posted-carrier integrity reads. The typed preload,
+WebSocket bridge, relay surface, and IPC names carry the feature on Desktop, Server Edition, and
+relay paths. Schema 3 now recognizes `comments/` and `assets/attachments/`, exports board history
+and referenced carriers, validates their metadata before staging, and restores them below the new
+project's `.nodeterm` directory.
+
+Direct documentation is `docs/features/canvas/comment-attachments.md`, indexed from the Canvas
+category. The roadmap and changelog record the same boundary. The generated `src/shared/docs-data.ts`
+bundle was not regenerated because this lane explicitly forbids builds and checks. The parent
+integration lane must regenerate it and verify that the bundled article matches the Markdown file.
+
+This source lane intentionally did not run tests, lint, type checks, builds, packaging, runtime
+interaction, reviews, security or accessibility audits, or captures. Focused archive round-trip,
+failure rollback, remote decoding, Desktop and Server Edition interaction, and real capture proof
+remain pending. The parent owns the dedicated pull request, append-only issue comments, integration,
+issue closure, retention, and upstream PR #463.
+
 ## 2026-08-27, agent-to-agent drag collaboration, issue #90
 
 The implementation is on `feat/agent-drag-collaboration`, based on the reconciled hui tip

@@ -992,6 +992,8 @@ export interface BoardLogEntry {
   kind: 'comment' | 'event'
   text?: string
   event?: BoardLogEvent
+  /** Content-addressed files copied into the project's portable attachment carrier. */
+  attachments?: import('./comment-attachments').BoardAttachmentRef[]
 }
 
 /** Max chars kept for a comment's `text`. On an SSH project the whole JSON line becomes one
@@ -1064,6 +1066,18 @@ export interface LogApi {
 export interface BoardLogApi {
   /** Append one entry. Resolves `false` on any failure (unsupported project, fs/exec error). */
   append(projectId: string, entry: BoardLogEntry): Promise<boolean>
+  /** Append one comment and its files as one host-side transaction. Source paths are consumed and
+   * never persisted in the resulting entry. */
+  appendWithAttachments(
+    projectId: string,
+    entry: BoardLogEntry,
+    attachments: import('./comment-attachments').BoardAttachmentDraft[]
+  ): Promise<import('./comment-attachments').BoardLogAppendResult>
+  /** Re-read and integrity-check a posted attachment after restart. */
+  readAttachment(
+    projectId: string,
+    attachment: import('./comment-attachments').BoardAttachmentRef
+  ): Promise<import('./comment-attachments').BoardAttachmentReadResult>
   /** Read the log newest-first (see BoardLogReadResult). */
   read(projectId: string, opts?: BoardLogReadOpts): Promise<BoardLogReadResult>
   /** Subscribe to change pushes for one project; returns an unsubscribe. */

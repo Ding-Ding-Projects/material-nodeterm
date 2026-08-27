@@ -10,6 +10,8 @@ The pan/zoom surface nodeterm is built around, and everything that lives on it.
   scoped Shop ownership, and portable schema 3 intent.
 - [Photo, Video, and Gallery nodes](./media-gallery.md): content-addressed media, mixed galleries,
   portable byte carriers, local bindings, and explicit missing-asset recovery.
+- [Comment attachments](./comment-attachments.md): bounded file and media queues, safe previews,
+  transactional board-log storage, and portable archive carriers.
 - [Door-only universe navigation](./door-only-universe-navigation.md) - paired entry and return
   doors, shared refusal of tab and direct-selection bypasses, and safe schema 3 intent.
 - [Interactive Multiverse door construction](./door-construction.md) - guided frame, hinges, panel,

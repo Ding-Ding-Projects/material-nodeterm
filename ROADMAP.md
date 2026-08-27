@@ -69,6 +69,12 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## In progress / partially landed
 
+- [ ] **Portable Comment and Activity attachments, issue #94**: source support is present in
+      `src/shared/comment-attachments.ts`, `src/core/board-attachments.ts`, the board-log bridge,
+      composer queue, and schema 3 comment carriers. Tests, type checks, lint, builds, packaging,
+      runtime interaction, reviews, security and accessibility audits, and captures remain pending
+      in the integration lane.
+
 - [ ] **Agent-to-agent drag collaboration, issue #90**: the bounded collaboration handle and
       keyboard/touch equivalent now reuse the existing context-link path for two compatible agent
       nodes. Credentials, accounts, projects, working directories, and live sessions remain

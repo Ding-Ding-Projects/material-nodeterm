@@ -909,6 +909,10 @@ export function buildFilesApi(
   const boardLog: BoardLogApi = {
     append: (projectId, entry) =>
       client.request(IPC.boardLogAppend, projectId, entry) as Promise<boolean>,
+    appendWithAttachments: (projectId, entry, attachments) =>
+      client.request(IPC.boardLogAppendWithAttachments, projectId, entry, attachments) as Promise<import('@shared/comment-attachments').BoardLogAppendResult>,
+    readAttachment: (projectId, attachment) =>
+      client.request(IPC.boardLogReadAttachment, projectId, attachment) as Promise<import('@shared/comment-attachments').BoardAttachmentReadResult>,
     read: (projectId, opts) =>
       client.request(IPC.boardLogRead, projectId, opts) as Promise<BoardLogReadResult>,
     onChanged: (projectId, cb) => {
