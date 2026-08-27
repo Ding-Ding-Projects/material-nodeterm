@@ -1,5 +1,29 @@
 # Handoff
 
+## 2026-08-27, guided branch dependency operations, issue #86
+
+This task jer was reconciled with the exact `origin/main` tip
+`54164b84dce0b7e62787b1de2885405ff4ed821c`, preserving the reviewed dependency-operation commit
+`e78ab1084216b62d289f9c015c24a9284a272d10` in the merge history. The direct implementation now
+includes the shared operation inventory and planner in `src/shared/dependency-operations.ts`, the
+shared `branchParentConfigKey()` helper, and typed Git IPC, preload, and Server Edition bridge
+forwarding.
+
+`src/core/git-service.ts` retains the five reviewed operations, adds bounded command output, and
+exposes a guided operation runner with project id and exact link id ownership checks. It reports
+queued, running, completed, failed, cancelled, and unavailable states. Only fixed `git` and `gh`
+argv forms are emitted. Branch refs are bounded and revalidated, paths are bounded, proposal output
+is bounded, cross-project and mismatched repository links are refused, and ship verifies that its
+target checkout is actually on the named parent before using `--ff-only`. A queued operation can be
+cancelled, while a running operation reports its actual process result rather than fabricating a
+stop acknowledgement.
+
+The direct feature article is `docs/features/source-control/dependency-operations.md`, indexed from
+the Source control category. The generated offline documentation bundle was not regenerated because
+this lane forbids builds and checks. Tests, type checks, lint, builds, packaging, runtime interaction,
+reviews, audits, and HuiShots were not run. Renderer link authoring, link rendering, project-link
+storage, and the parent integration remain owned by their respective lanes.
+
 ## 2026-08-27, AWS core-service managers, issue #46 PR preparation
 
 The issue jer was reconciled with the exact `origin/main` tip `2472cf23b99559005476841d3db5e6bc4691ac06`.

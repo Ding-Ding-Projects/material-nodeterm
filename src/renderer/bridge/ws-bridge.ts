@@ -887,6 +887,12 @@ export function buildFilesApi(
       client.request(IPC.gitProposeBranch, cwd, child) as ReturnType<GitApi['proposeBranch']>,
     shipBranch: (cwd, child, parent) =>
       client.request(IPC.gitShipBranch, cwd, child, parent) as ReturnType<GitApi['shipBranch']>,
+    dependencyOperation: (request) =>
+      client.request(IPC.gitDependencyOperation, request) as ReturnType<GitApi['dependencyOperation']>,
+    cancelDependencyOperation: (operationId) =>
+      client.request(IPC.gitDependencyCancel, operationId) as ReturnType<GitApi['cancelDependencyOperation']>,
+    onDependencyOperationProgress: (listener) =>
+      client.subscribe(IPC.gitDependencyProgress, listener as Listener),
     setActiveRemote: (projectId) =>
       client.request(IPC.gitSetActiveRemote, projectId) as Promise<void>
   }

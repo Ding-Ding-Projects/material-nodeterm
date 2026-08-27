@@ -3489,6 +3489,16 @@ export interface GitApi {
   proposeBranch(cwd: string, child: string): Promise<GitResult>
   /** Fast-forward a dependency parent branch to its child when the parent is current. */
   shipBranch(cwd: string, child: string, parent: string): Promise<GitResult>
+  /** Execute one owned dependency link operation through the bounded typed operation plan. */
+  dependencyOperation(
+    request: import('./dependency-operations').DependencyOperationRequest
+  ): Promise<import('./dependency-operations').DependencyOperationResult>
+  /** Cancel an operation that has not started executing. */
+  cancelDependencyOperation(operationId: string): Promise<boolean>
+  /** Subscribe to dependency operation progress and terminal states. */
+  onDependencyOperationProgress(
+    listener: (progress: import('./dependency-operations').DependencyOperationProgress) => void
+  ): () => void
   /** Scope remote git routing to the active project: pass its id to route git over that SSH
    *  project's master, or null for a local project so all git ops run locally. */
   setActiveRemote(projectId: string | null): Promise<void>

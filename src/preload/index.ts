@@ -576,6 +576,10 @@ const api: NodeTerminalApi = {
     proposeBranch: (cwd, child) => ipcRenderer.invoke(IPC.gitProposeBranch, cwd, child),
     shipBranch: (cwd, child, parent) =>
       ipcRenderer.invoke(IPC.gitShipBranch, cwd, child, parent),
+    dependencyOperation: (request) => ipcRenderer.invoke(IPC.gitDependencyOperation, request),
+    cancelDependencyOperation: (operationId) =>
+      ipcRenderer.invoke(IPC.gitDependencyCancel, operationId),
+    onDependencyOperationProgress: subscribe(IPC.gitDependencyProgress),
     setActiveRemote: (projectId) => ipcRenderer.invoke(IPC.gitSetActiveRemote, projectId)
   },
   clipboard: {

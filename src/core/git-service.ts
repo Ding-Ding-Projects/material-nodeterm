@@ -1,5 +1,5 @@
 import { execFile, spawn } from 'child_process'
-import { createHash } from 'crypto'
+import { createHash, randomUUID } from 'crypto'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
@@ -17,6 +17,15 @@ import { loadGitHistoryFromExecutor } from '../shared/git-history'
 import * as worktreeOps from '../shared/worktree-ops'
 import type { WorktreeListResult } from '../shared/worktree'
 import { branchParentConfigKey, isValidGitRef } from '../shared/worktree'
+import {
+  DEPENDENCY_MAX_OUTPUT_BYTES,
+  dependencyOperationAvailability,
+  planDependencyOperation,
+  type DependencyOperationPhase,
+  type DependencyOperationProgress,
+  type DependencyOperationRequest,
+  type DependencyOperationResult
+} from '../shared/dependency-operations'
 import type { GitHistoryOptions, GitHistoryResult } from '../shared/git-history'
 import { resolveGitRemote, runRemoteGit } from './remote-ssh/remote-git'
 import { platform } from './platform'
@@ -166,17 +175,17 @@ interface Exec {
   err: string
 }
 
-async function git(cwd: string, args: string[]): Promise<Exec> {
+async function git(cwd: string, args: string[], maxOutputBytes = 20 * 1024 * 1024, signal?: AbortSignal): Promise<Exec> {
   // SSH projects route every pure-git op over the project's ControlMaster. runRemoteGit returns
   // the same { ok, out, err } shape, so the rest of GitService is transport-agnostic. Local path
   // (and gh ops) are untouched when no remote owns this cwd.
   const ref = resolveGitRemote(cwd)
   if (ref) {
-    const r = await runRemoteGit(ref, cwd, args, 20 * 1024 * 1024)
+    const r = await runRemoteGit(ref, cwd, args, maxOutputBytes)
     return { ok: r.ok, out: r.out, err: r.err }
   }
   try {
-    const { stdout } = await run('git', args, { cwd, env: GIT_ENV, maxBuffer: 20 * 1024 * 1024 })
+    const { stdout } = await run('git', args, { cwd, env: GIT_ENV, maxBuffer: maxOutputBytes, signal })
     return { ok: true, out: stdout.replace(/\n$/, ''), err: '' }
   } catch (e) {
     const err = e as { stdout?: string; stderr?: string; message?: string }
@@ -232,6 +241,11 @@ function isValidRef(name: string): boolean {
   return !/[\s~^:?*[\\]|\.\.|^\/|\/$|@\{/.test(n)
 }
 
+function isBoundedDependencyRef(name: string): boolean {
+  const value = name.trim()
+  return value.length > 0 && value.length <= 256 && isValidGitRef(value)
+}
+
 /** path -> {added, deleted} from `git diff --numstat` output. */
 function parseNumstat(out: string): Map<string, { added: number; deleted: number }> {
   const map = new Map<string, { added: number; deleted: number }>()
@@ -282,6 +296,10 @@ export class GitService {
     path.join(platform().userDataDir, 'git-worktree-ownership.json')
   )
   private readonly worktreeProofs = new WorktreeRemovalProofRegistry()
+  private readonly dependencyOperations = new Map<
+    string,
+    { controller: AbortController; started: boolean; request: DependencyOperationRequest }
+  >()
 
   /** One physical repository gets one kernel-backed removal transaction in every app process. */
   private worktreeRemovalLock(commonDir: string): string {
@@ -369,6 +387,13 @@ export class GitService {
     platform().handle(IPC.gitProposeBranch, (cwd: string, child: string) => this.proposeBranch(cwd, child))
     platform().handle(IPC.gitShipBranch, (cwd: string, child: string, parent: string) =>
       this.shipBranch(cwd, child, parent)
+    )
+    platform().handle(
+      IPC.gitDependencyOperation,
+      (request: DependencyOperationRequest) => this.dependencyOperation(request)
+    )
+    platform().handle(IPC.gitDependencyCancel, (operationId: string) =>
+      this.cancelDependencyOperation(operationId)
     )
   }
 
@@ -546,8 +571,10 @@ export class GitService {
   async setBranchParent(repoPath: string, child: string, parent: string): Promise<GitResult> {
     const key = branchParentConfigKey(child)
     const parentName = parent.trim()
-    if (!key || !isValidGitRef(parentName)) return { ok: false, message: 'Invalid branch name.' }
-    const result = await git(repoPath, ['config', key, parentName])
+    if (repoPath.trim().length > 4096 || !key || !isBoundedDependencyRef(parentName) || !isBoundedDependencyRef(child)) {
+      return { ok: false, message: 'Invalid branch name.' }
+    }
+    const result = await git(repoPath, ['config', key, parentName], DEPENDENCY_MAX_OUTPUT_BYTES)
     return result.ok
       ? { ok: true, message: `Set ${child.trim()} parent to ${parentName}.` }
       : fail(result)
@@ -556,8 +583,8 @@ export class GitService {
   /** Clear a branch dependency projection. Clearing an absent key is idempotent. */
   async unsetBranchParent(repoPath: string, child: string): Promise<GitResult> {
     const key = branchParentConfigKey(child)
-    if (!key) return { ok: false, message: 'Invalid branch name.' }
-    const result = await git(repoPath, ['config', '--unset', key])
+    if (repoPath.trim().length > 4096 || !key || !isBoundedDependencyRef(child)) return { ok: false, message: 'Invalid branch name.' }
+    const result = await git(repoPath, ['config', '--unset', key], DEPENDENCY_MAX_OUTPUT_BYTES)
     if (result.ok || /exit code 5|not found/i.test(result.err)) {
       return { ok: true, message: `Cleared parent of ${child.trim()}.` }
     }
@@ -568,8 +595,8 @@ export class GitService {
   async syncBranch(cwd: string, child: string): Promise<GitResult> {
     const childName = child.trim()
     const key = branchParentConfigKey(childName)
-    if (!key) return { ok: false, message: 'Invalid branch name.' }
-    const parentResult = await git(cwd, ['config', '--get', key])
+    if (cwd.trim().length > 4096 || !key || !isBoundedDependencyRef(childName)) return { ok: false, message: 'Invalid branch name.' }
+    const parentResult = await git(cwd, ['config', '--get', key], DEPENDENCY_MAX_OUTPUT_BYTES)
     const parentName = parentResult.out.trim()
     if (!parentResult.ok || !parentName) {
       return {
@@ -577,8 +604,8 @@ export class GitService {
         message: `No parent configured for ${childName}. Declare the dependency first.`
       }
     }
-    if (!isValidGitRef(parentName)) return { ok: false, message: 'Invalid parent branch.' }
-    const result = await git(cwd, ['rebase', parentName])
+    if (!isBoundedDependencyRef(parentName)) return { ok: false, message: 'Invalid parent branch.' }
+    const result = await git(cwd, ['rebase', parentName], DEPENDENCY_MAX_OUTPUT_BYTES)
     if (result.ok) return { ok: true, message: result.out || `Rebased ${childName} onto ${parentName}.` }
     if (/conflict|could not apply|merge/i.test(result.err)) {
       return {
@@ -596,7 +623,7 @@ export class GitService {
   async proposeBranch(cwd: string, child: string): Promise<GitResult> {
     const childName = child.trim()
     const key = branchParentConfigKey(childName)
-    if (!key) return { ok: false, message: 'Invalid branch name.' }
+    if (cwd.trim().length > 4096 || !key || !isBoundedDependencyRef(childName)) return { ok: false, message: 'Invalid branch name.' }
     if (!GH_PATH) return { ok: false, message: 'GitHub CLI (gh) not found.' }
     const parentResult = await git(cwd, ['config', '--get', key])
     const parentName = parentResult.out.trim()
@@ -606,7 +633,7 @@ export class GitService {
         message: `No parent configured for ${childName}. Declare the dependency first.`
       }
     }
-    if (!isValidGitRef(parentName)) return { ok: false, message: 'Invalid parent branch.' }
+    if (!isBoundedDependencyRef(parentName)) return { ok: false, message: 'Invalid parent branch.' }
 
     const env: NodeJS.ProcessEnv = { ...GIT_ENV }
     if (!(await ghAuthed())) {
@@ -629,7 +656,7 @@ export class GitService {
           '--body',
           `This pull request stacks ${childName} on ${parentName}.`
         ],
-        { cwd, env, maxBuffer: 10 * 1024 * 1024 }
+        { cwd, env, maxBuffer: DEPENDENCY_MAX_OUTPUT_BYTES }
       )
       return { ok: true, message: `Opened a pull request for ${childName} against ${parentName}.` }
     } catch (error) {
@@ -649,17 +676,131 @@ export class GitService {
   async shipBranch(cwd: string, child: string, parent: string): Promise<GitResult> {
     const childName = child.trim()
     const parentName = parent.trim()
-    if (!isValidGitRef(childName) || !isValidGitRef(parentName)) {
+    if (cwd.trim().length > 4096 || !isBoundedDependencyRef(childName) || !isBoundedDependencyRef(parentName)) {
       return { ok: false, message: 'Invalid branch name.' }
     }
-    const head = await git(cwd, ['rev-parse', '--abbrev-ref', 'HEAD'])
+    const head = await git(cwd, ['rev-parse', '--abbrev-ref', 'HEAD'], DEPENDENCY_MAX_OUTPUT_BYTES)
     if (!head.ok || head.out.trim() !== parentName) {
       return { ok: false, message: `The target checkout is not on parent branch ${parentName}.` }
     }
-    const result = await git(cwd, ['merge', '--ff-only', childName])
+    const result = await git(cwd, ['merge', '--ff-only', childName], DEPENDENCY_MAX_OUTPUT_BYTES)
     return result.ok
       ? { ok: true, message: result.out || `Shipped ${childName} into ${parentName} by fast-forward.` }
       : fail(result)
+  }
+
+  private emitDependencyProgress(progress: DependencyOperationProgress): void {
+    platform().broadcast(IPC.gitDependencyProgress, progress)
+  }
+
+  /** Execute one validated dependency plan with bounded output and a cancellable local process. */
+  private async executeDependencyPlan(
+    plan: NonNullable<ReturnType<typeof planDependencyOperation>>,
+    signal: AbortSignal
+  ): Promise<GitResult> {
+    if (signal.aborted) return { ok: false, message: 'Dependency operation was cancelled before execution.' }
+    if (plan.operationId === 'propose') {
+      if (!GH_PATH) return { ok: false, message: 'GitHub CLI (gh) is unavailable on this machine.' }
+      const auth = await ghAuthed()
+      if (signal.aborted) return { ok: false, message: 'Dependency operation was cancelled before execution.' }
+      const env: NodeJS.ProcessEnv = { ...GIT_ENV }
+      if (!auth) {
+        const token = await githubTokenFromGitCredentials(plan.cwd)
+        if (!token) return { ok: false, message: 'GitHub sign-in is unavailable for this operation.' }
+        env.GH_TOKEN = token
+      }
+      try {
+        const { stdout } = await run(GH_PATH, [...plan.args], {
+          cwd: plan.cwd,
+          env,
+          maxBuffer: DEPENDENCY_MAX_OUTPUT_BYTES,
+          signal
+        })
+        return { ok: true, message: stdout.trim() || 'Pull request proposed.' }
+      } catch (error) {
+        const detail = error as { stderr?: string; message?: string }
+        return fail({ ok: false, out: '', err: (detail.stderr || detail.message || 'gh failed').trim() })
+      }
+    }
+    if (plan.operationId === 'ship') {
+      const head = await git(plan.cwd, ['rev-parse', '--abbrev-ref', 'HEAD'], plan.maxOutputBytes, signal)
+      if (!head.ok || head.out.trim() !== plan.branch.parent) {
+        return { ok: false, message: `The target checkout is not on parent branch ${plan.branch.parent}.` }
+      }
+    }
+    const result = await git(plan.cwd, [...plan.args], plan.maxOutputBytes, signal)
+    if (result.ok) return { ok: true, message: result.out || 'Dependency operation completed.' }
+    if (plan.operationId === 'clear-parent' && /exit code 5|not found/i.test(result.err)) {
+      return { ok: true, message: 'Branch parent was already clear.' }
+    }
+    if (plan.operationId === 'sync' && /conflict|could not apply|merge/i.test(result.err)) {
+      return {
+        ok: false,
+        message:
+          'Rebase stopped on a conflict. Resolve it in this terminal, then run ' +
+          '`git rebase --continue` (or `git rebase --abort` to give up). ' +
+          `Parent: ${plan.branch.parent}.`
+      }
+    }
+    return fail(result)
+  }
+
+  /** Run one project-owned dependency link operation with explicit progress and cancellation state. */
+  async dependencyOperation(request: DependencyOperationRequest): Promise<DependencyOperationResult> {
+    const operation = request.operation
+    const projectId = request.projectId.trim()
+    const linkId = request.linkId.trim()
+    const unavailable = (message: string): DependencyOperationResult => ({
+      ok: false,
+      operationId: null,
+      operation,
+      phase: 'unavailable',
+      message,
+      projectId,
+      linkId
+    })
+    const plan = planDependencyOperation(request)
+    if (!plan) {
+      const reason = dependencyOperationAvailability(request).reason ?? 'Dependency operation is unavailable.'
+      return unavailable(reason)
+    }
+    const operationId = randomUUID()
+    const controller = new AbortController()
+    this.dependencyOperations.set(operationId, { controller, started: false, request })
+    const emit = (phase: DependencyOperationPhase, completed: number, message: string): void => {
+      this.emitDependencyProgress({ operationId, operation, phase, completed, total: 1, message })
+    }
+    emit('queued', 0, 'Dependency operation queued.')
+    await Promise.resolve()
+    const state = this.dependencyOperations.get(operationId)
+    if (!state || state.controller.signal.aborted) {
+      this.dependencyOperations.delete(operationId)
+      emit('cancelled', 0, 'Dependency operation cancelled before execution.')
+      return { ok: false, operationId, operation, phase: 'cancelled', message: 'Dependency operation cancelled before execution.', projectId, linkId }
+    }
+    state.started = true
+    emit('running', 0, 'Dependency operation is running.')
+    try {
+      const result = await this.executeDependencyPlan(plan, controller.signal)
+      const phase: DependencyOperationPhase = result.ok
+        ? 'completed'
+        : controller.signal.aborted
+          ? 'cancelled'
+          : 'failed'
+      emit(phase, result.ok ? 1 : 0, result.message)
+      return { ok: result.ok, operationId, operation, phase, message: result.message, projectId, linkId }
+    } finally {
+      this.dependencyOperations.delete(operationId)
+    }
+  }
+
+  /** Cancel only a queued operation. A running Git process is reported as non-cancellable. */
+  async cancelDependencyOperation(operationId: string): Promise<boolean> {
+    if (typeof operationId !== 'string' || operationId.length < 1 || operationId.length > 128) return false
+    const state = this.dependencyOperations.get(operationId)
+    if (!state || state.started) return false
+    state.controller.abort()
+    return true
   }
 
   async status(cwd: string): Promise<GitStatus> {

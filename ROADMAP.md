@@ -126,6 +126,13 @@ later commit, since this file will not be kept in lockstep with every merge).
       cancellable operation plumbing and duplicate-submit protection in `src/core/wsl/`,
       `src/shared/wsl.ts`, the bridges, and `src/renderer/wsl/WslCreateDialog.tsx`. Focused
       verification and real built-artifact interaction remain pending.
+- [ ] **Guided branch dependency operations, issue #86**: project-owned same-repository branch
+      links now have bounded typed plans for setting and clearing parents, syncing a child by
+      rebase, proposing a pull request against its parent, and fast-forward shipping into the
+      parent checkout. Progress, cancellation, unavailable states, ownership checks, bounded
+      output, and no-arbitrary-shell arguments are present in `src/shared/dependency-operations.ts`
+      and `src/core/git-service.ts`; tests, type checks, lint, builds, packaging, runtime
+      interaction, reviews, audits, and captures remain pending.
 - [ ] **Full Material Design 3 surface audit (#91)**: source-level inventory and remediation are
       recorded in `docs/features/appearance/material-3-audit.md` and checked by
       `scripts/check-material-audit.mjs` (201 rows, including every desktop shell, node,
