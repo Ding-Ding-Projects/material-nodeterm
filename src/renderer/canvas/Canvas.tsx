@@ -117,6 +117,7 @@ import GitLabHostingNode from '../nodes/GitLabHostingNode'
 import CloudflareCoreManagersNode from '../nodes/CloudflareCoreManagersNode'
 import VirtualMachineNode from '../nodes/VirtualMachineNode'
 import NsisInstallerNode from '../nodes/NsisInstallerNode'
+import OpenWebUiHostingNode from '../nodes/OpenWebUiHostingNode'
 import ShopNode from '../nodes/ShopNode'
 import { AwsUniversePortalNode } from '../nodes/AwsUniversePortalNode'
 import TorrentNode from '../nodes/TorrentNode'
@@ -740,6 +741,7 @@ import {
   createTerminalNode,
   nodeSshFor,
   createServiceNode,
+  createOpenWebUiNode,
   createGitLabHostingNode,
   createCloudflareCoreManagersNode,
   createVirtualMachineNode,
@@ -2117,7 +2119,7 @@ export function Canvas() {
       gitlab: withNodeBoundary(ServiceNode),
       homeassistant: withNodeBoundary(ServiceNode),
       freepbx: withNodeBoundary(ServiceNode),
-      'linux-vm': withNodeBoundary(VirtualMachineNode),
+      'open-webui-hosting': withNodeBoundary(OpenWebUiHostingNode),
       awsidentity: withNodeBoundary(ServiceNode),
       'gitlab-hosting': withNodeBoundary(GitLabHostingNode),
       'cloudflare-zero-trust': withNodeBoundary(ServiceNode),
@@ -5704,6 +5706,10 @@ export function Canvas() {
             if (catalogEntry.id === 'wild-dim-sum') return createWildDimSumNode(index, undefined, center)
             if (catalogEntry.id === 'homeassistant-control') return createHomeAssistantControlNode(index, center)
             if (catalogEntry.id === 'homeassistant-sensor') return createHomeAssistantSensorNode(index, center)
+            if (catalogEntry.id === 'open-webui-hosting') return createOpenWebUiNode(index, center)
+            if (catalogEntry.id.startsWith('service:')) {
+              return createServiceNode(catalogEntry.nodeKind as ServiceNodeKind, index, center)
+            }
             if (catalogEntry.id === 'gitlab-hosting') return createGitLabHostingNode(index, center)
             if (catalogEntry.id === 'nextcloud-hosting') return createServiceNode('nextcloud-aio', index, center)
             if (catalogEntry.id.startsWith('service:')) {

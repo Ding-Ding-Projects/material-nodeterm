@@ -374,7 +374,8 @@ intentionally unchecked because this task publishes the plan only.
       present in issue #51; tests, builds, packaging, runtime interaction, and captures remain
       unrun under the ultra-speed boundary.
 - [ ] Add Nextcloud AIO and managed no-socket hosting profiles.
-- [ ] Add Open WebUI hosting with existing Ollama reuse and honest bootstrap states.
+- [x] Add Open WebUI hosting with existing Ollama reuse, OpenAI-compatible provider choice, honest
+  bootstrap states, persistent data, health, backup, restore, update, rollback, and local bindings.
 - [ ] Add Cloudflare account, zone, DNS, security, Workers, Pages, storage, queue, Access, and
       analytics managers.
 - [x] Add typed Cloudflare Access, Zero Trust, Workers, Pages, R2, D1, and Queues managers with

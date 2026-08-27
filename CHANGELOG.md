@@ -2526,6 +2526,9 @@ or on GitHub's [tags](https://github.com/eneskirca/nodeterm/tags) and
 
 # Unreleased
 
+- Add a guided Open WebUI hosting node with persistent data, local Ollama reuse, an
+  OpenAI-compatible provider option, honest first-user setup and health states, backup and restore,
+  pinned-image update and rollback, local-only bindings, and anchored regex search for its pickers.
 - Add issue #103's local Easter egg cabinet with 60 stable, non-blocking surprises across the
   desktop surfaces. Each entry has English and Cantonese copy, ten funny levels, keyboard and
   touch discovery, reduced-motion behavior, local discovery-only persistence, reset support, and

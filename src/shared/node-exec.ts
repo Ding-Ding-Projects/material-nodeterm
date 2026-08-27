@@ -30,6 +30,7 @@ import { BUILTIN_AGENT_IDS, isPermissionMode } from './agents/config'
 import { sshExtraArgsEnableLocalExec } from './ssh'
 import type { AgentLaunchIntent, CanvasNodeState, PendingLaunch } from './types'
 import type { NsisLocalPaths } from './nsis-form-types'
+import { safeOpenWebUiLocalBinding, type OpenWebUiLocalBinding } from './open-webui-hosting'
 import { normalizeVirtualMachineLocalPaths, safeVirtualMachinePath, type VirtualMachineLocalPaths } from './virtual-machine'
 import { normalizeAwsIdentityBinding, type AwsIdentityBinding } from './aws-identity'
 
@@ -61,6 +62,8 @@ export interface LocalNodeExec {
    * endpoint with a password embedded in it is refused rather than stored.
    */
   serviceConnection?: ServiceConnection
+  /** Open WebUI container and provider binding, kept in the machine-local index. */
+  openWebUiLocalBinding?: OpenWebUiLocalBinding
   /** Local AWS profile, region and endpoint binding. Contains no credential bytes. */
   awsIdentityBinding?: AwsIdentityBinding
   /**
@@ -381,6 +384,7 @@ function stripNodeExec(n: CanvasNodeState): CanvasNodeState {
     withoutMediaPaths.terminalProfileId === undefined &&
     withoutMediaPaths.pendingLaunch === undefined &&
     withoutMediaPaths.serviceConnection === undefined &&
+    withoutMediaPaths.openWebUiLocalBinding === undefined &&
     withoutMediaPaths.awsIdentityBinding === undefined &&
     withoutMediaPaths.nsisLocalPaths === undefined &&
     withoutMediaPaths.virtualMachineLocalPaths === undefined &&
@@ -393,6 +397,7 @@ function stripNodeExec(n: CanvasNodeState): CanvasNodeState {
   delete out.terminalProfileId
   delete out.pendingLaunch
   delete out.serviceConnection
+  delete out.openWebUiLocalBinding
   delete out.awsIdentityBinding
   delete out.nsisLocalPaths
   delete out.virtualMachineLocalPaths
@@ -483,6 +488,7 @@ export function carryLocalNodeExec(
   const pendingLaunch = next.kind === 'terminal' ? clonePendingLaunch(prev.pendingLaunch) : undefined
   const nsisPaths = safeNsisLocalPaths(prev.nsisLocalPaths)
   const vmPaths = normalizeVirtualMachineLocalPaths(prev.virtualMachineLocalPaths)
+  const openWebUiBinding = prev.kind === 'open-webui-hosting' ? prev.openWebUiLocalBinding : undefined
   const awsIdentityBinding = normalizeAwsIdentityBinding(prev.awsIdentityBinding)
   const mediaFilePath = safePathString(prev.filePath) ? prev.filePath : undefined
   const mediaSourcePaths = localMediaSourcePaths(prev)
@@ -494,6 +500,7 @@ export function carryLocalNodeExec(
     nsisPaths === undefined &&
     awsIdentityBinding === null &&
     Object.keys(vmPaths).length === 0 &&
+    openWebUiBinding === undefined &&
     mediaFilePath === undefined &&
     mediaSourcePaths === undefined
   )
@@ -506,6 +513,7 @@ export function carryLocalNodeExec(
   if (pendingLaunch !== undefined) out.pendingLaunch = pendingLaunch
   if (nsisPaths !== undefined) out.nsisLocalPaths = nsisPaths
   if (Object.keys(vmPaths).length > 0) out.virtualMachineLocalPaths = vmPaths
+  if (openWebUiBinding) out.openWebUiLocalBinding = openWebUiBinding
   if (awsIdentityBinding) out.awsIdentityBinding = awsIdentityBinding
   return restoreMediaPaths(out, { mediaFilePath, mediaSourcePaths })
 }
@@ -551,6 +559,10 @@ export function localNodeExec(nodes: CanvasNodeState[]): LocalNodeExecMap | unde
     // endpoint into the trusted store — the exact laundering `sanitizeInboundNode` exists to stop.
     const conn = safeServiceConnection(n.serviceConnection)
     if (conn) entry.serviceConnection = conn
+    if (n.kind === 'open-webui-hosting') {
+      const openWebUiBinding = safeOpenWebUiLocalBinding(n.openWebUiLocalBinding)
+      if (openWebUiBinding) entry.openWebUiLocalBinding = openWebUiBinding
+    }
     const awsIdentityBinding = normalizeAwsIdentityBinding(n.awsIdentityBinding)
     if (awsIdentityBinding) entry.awsIdentityBinding = awsIdentityBinding
     const nsisPaths = safeNsisLocalPaths(n.nsisLocalPaths)
@@ -570,6 +582,7 @@ export function localNodeExec(nodes: CanvasNodeState[]): LocalNodeExecMap | unde
       entry.sshExtraArgs ||
       entry.pendingLaunch ||
       entry.serviceConnection ||
+      entry.openWebUiLocalBinding ||
       entry.awsIdentityBinding ||
       entry.nsisLocalPaths ||
       entry.virtualMachineLocalPaths ||
@@ -611,6 +624,10 @@ export function applyLocalNodeExec(
     // that would be refused today must not be honoured merely because it is already on disk.
     const conn = safeServiceConnection(mine?.serviceConnection)
     if (conn) out.serviceConnection = conn
+    if (n.kind === 'open-webui-hosting') {
+      const openWebUiBinding = safeOpenWebUiLocalBinding(mine?.openWebUiLocalBinding)
+      if (openWebUiBinding) out.openWebUiLocalBinding = openWebUiBinding
+    }
     const awsIdentityBinding = normalizeAwsIdentityBinding(mine?.awsIdentityBinding)
     if (awsIdentityBinding) out.awsIdentityBinding = awsIdentityBinding
     const nsisPaths = safeNsisLocalPaths(mine?.nsisLocalPaths)

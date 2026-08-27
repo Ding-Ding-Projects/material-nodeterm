@@ -28,6 +28,7 @@ empty-canvas context menu, group context menu, and command palette all expose th
 | **Calendar** | A guided calendar view for local events and imported ICS files, with provider account and calendar pickers for CalDAV, Google Calendar, and Microsoft 365. Agenda, week, month, recurrence, timezone, offline cache, create/edit preview, and destructive delete confirmation all live in the node. |
 | **Home Assistant control** | A schema-driven entity controller with machine-local connection binding, rich controls for common domains, and a verified service-schema fallback. See [Home Assistant controls](../integrations/home-assistant-controls.md). |
 | **Alarm Clock** | A one-shot or recurring wall-clock reminder with an explicit timezone, DST-safe planning, snooze, dismiss, and missed-occurrence history. See [Alarm Clock nodes](../../alarm-clock.md). |
+| **Open WebUI hosting** | A guided Docker hosting node with persistent data, local Ollama reuse, OpenAI-compatible provider choice, honest first-user setup, health, backup, restore, update, and rollback. See [Open WebUI hosting](../hosting/open-webui-hosting.md). |
 
 Two other things render *on* the canvas but are not persisted node kinds: **subagent cards**
 (ephemeral cards showing an agent's spawned subagents, connected by an edge to the parent
@@ -56,6 +57,9 @@ travel with the project; notification handles and any machine-specific runtime s
 - Alarm Clock nodes additionally persist the recurrence, local wall-clock time, selected IANA
   timezone, snooze interval, sound and narrator choices, and bounded occurrence history. They never
   persist a claim or mechanism for waking a powered-off computer.
+- Open WebUI nodes persist only provider mode, model, Ollama reuse, and port in the project. Docker
+  context, container and volume ids, endpoint, provider key reference, backups, and image state stay
+  in the machine-local execution overlay. Import therefore has no external side effect.
 
 ## Failure modes
 

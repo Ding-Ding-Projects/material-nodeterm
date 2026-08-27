@@ -10,6 +10,7 @@ import { DEFAULT_HOME_ASSISTANT_CONTROL_CONFIG, validateHomeAssistantControlConf
 import { DEFAULT_HOME_ASSISTANT_SENSOR_CONFIG, type HomeAssistantSensorConfig } from '@shared/home-assistant-sensor'
 import type { AlarmOccurrence, AlarmRecurrence } from '@shared/alarm-clock'
 import type { ServiceConnection } from '@shared/node-exec'
+import { OPEN_WEBUI_DEFAULT_INTENT, type OpenWebUiIntent, type OpenWebUiLocalBinding } from '@shared/open-webui-hosting'
 import { DEFAULT_GITLAB_HOSTING_CONFIG, type GitLabHostingConfig } from '@shared/gitlab-hosting'
 import { NEXTCLOUD_AIO_DEFAULT_CONFIG } from '@shared/nextcloud-aio'
 import type { NsisLocalPaths, NsisSpec } from '@shared/nsis-form-types'
@@ -105,6 +106,7 @@ export const CLOUDFLARE_CORE_MANAGERS_SIZE = { width: 760, height: 680 }
 const LINUX_VM_SIZE = { width: 760, height: 560 }
 const TIMER_SIZE = { width: 380, height: 360 }
 const ALARM_SIZE = { width: 380, height: 360 }
+const OPEN_WEBUI_SIZE = { width: 680, height: 560 }
 /** Fallback bounding box `flowToNodeStates` uses if an annotation node somehow has no live
  *  width/height at all (every production creation path draws a real rect — see createAnnotationNode
  *  — so this is a defensive floor, matching how every other kind gets a fallback in `sizeFor`). */
@@ -283,6 +285,9 @@ export interface NodeData {
   /** service-kinds only, MACHINE-LOCAL: where this node reaches its service. Stripped from the
    *  shared document and from inbound peers; see shared/node-exec.ts. */
   serviceConnection?: ServiceConnection
+  /** Open WebUI safe provider/port intent is project-portable; the live binding stays local. */
+  openWebUiIntent?: OpenWebUiIntent
+  openWebUiLocalBinding?: OpenWebUiLocalBinding
   /** Safe torrent magnet intent shared with the canvas. */
   torrentMagnet?: string
   /** AWS Resource Explorer and Cloud Control safe portable intent. */
@@ -1706,6 +1711,24 @@ export function createCloudflareCoreManagersNode(index: number, center?: { x: nu
   }
 }
 
+/** Creates a guided Open WebUI hosting node. Only safe provider intent enters the project file. */
+export function createOpenWebUiNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  return {
+    id: nextId('open-webui-hosting'),
+    type: 'open-webui-hosting',
+    position: placeAt(center, index, OPEN_WEBUI_SIZE.width, OPEN_WEBUI_SIZE.height),
+    width: OPEN_WEBUI_SIZE.width,
+    height: OPEN_WEBUI_SIZE.height,
+    style: { width: OPEN_WEBUI_SIZE.width, height: OPEN_WEBUI_SIZE.height },
+    data: {
+      title: 'Open WebUI hosting',
+      color: '#6ac4dc',
+      group: null,
+      openWebUiIntent: { ...OPEN_WEBUI_DEFAULT_INTENT }
+    }
+  }
+}
+
 /** Creates a Linux ISO VM node. The node is a canvas object, not a WSL terminal profile. */
 export function createVirtualMachineNode(index: number, center?: { x: number; y: number }): CanvasNode {
   return {
@@ -2333,7 +2356,8 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   'aws-universe': true,
   'aws-resource': true,
   torrent: true,
-  'linux-vm': true
+  'linux-vm': true,
+  'open-webui-hosting': true
 }
 
 /**
@@ -2391,7 +2415,8 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   'aws-universe': { width: 320, height: 220 },
   'aws-resource': AWS_RESOURCE_SIZE,
   torrent: TORRENT_SIZE,
-  'linux-vm': LINUX_VM_SIZE
+  'linux-vm': LINUX_VM_SIZE,
+  'open-webui-hosting': OPEN_WEBUI_SIZE
 }
 
 /** A `Set`, not `type in NODE_KIND_TABLE`: `in` walks the prototype, so `'constructor'` and
@@ -2846,6 +2871,8 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         cwd: n.cwd,
         text: n.text,
         serviceLabel: n.serviceLabel,
+        openWebUiIntent: n.openWebUiIntent,
+        openWebUiLocalBinding: n.openWebUiLocalBinding,
         awsIdentityIntent: normalizeAwsIdentityIntent(n.awsIdentityIntent) ?? undefined,
         gitlabHostingConfig: n.gitlabHostingConfig,
         nextcloudAioConfig: n.nextcloudAioConfig,
@@ -2977,6 +3004,8 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         cwd: n.data.cwd,
         text: n.data.text,
         serviceLabel: n.data.serviceLabel,
+        openWebUiIntent: n.data.openWebUiIntent,
+        openWebUiLocalBinding: n.data.openWebUiLocalBinding,
         awsIdentityIntent: normalizeAwsIdentityIntent(n.data.awsIdentityIntent) ?? undefined,
         gitlabHostingConfig: n.data.gitlabHostingConfig,
         nextcloudAioConfig: n.data.nextcloudAioConfig,

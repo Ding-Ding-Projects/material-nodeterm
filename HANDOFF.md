@@ -27,6 +27,31 @@ reviews the merge result. No tests, type checks, lint, builds, packaging, runtim
 reviews, accessibility or security audits, or screen captures were run. The parent owns the next checks,
 the downstream and upstream PRs, issue comments and closure, and the final default-branch integration.
 
+## 2026-08-27, Open WebUI hosting implementation, issue #54
+
+Issue #54 is implemented on `feat/program-43-open-webui-hosting`. The lane adds the typed
+`open-webui-hosting` node kind, a guided renderer panel, a pinned official Open WebUI image, local
+Ollama reuse, an OpenAI-compatible provider choice, honest first-user setup and health states, and
+fixed-action deploy, backup, restore, update, rollback, and cancellation handling.
+
+Portable project data carries only `openWebUiIntent`: provider mode, model, Ollama reuse, and port.
+The selected Docker context, node-owned container and volume, endpoint, optional provider URL,
+image history, backup timestamp, and credential reference remain in the machine-local
+`open-webui-bindings.json` overlay. Import is data-only and does not contact Docker, pull an image,
+deploy, launch a process, or mutate a provider. Archive restore validates member paths and is gated
+by the existing two-key destructive confirmation. Provider secrets are never accepted in URLs,
+commands, project data, logs, or exports.
+
+Direct documentation is in `docs/features/hosting/open-webui-hosting.md`, its category index,
+`site/docs/open-webui-hosting.html`, the in-app generated `src/shared/docs-data.ts` entry, and the
+canvas node-kind article. `README.md`, `ROADMAP.md`, and `CHANGELOG.md` record the same scope.
+
+The active ultra-speed implementation boundary was honoured: no tests, type checks, lint, reviews,
+security or accessibility checks, builds, packaging, installer execution, runtime interaction, or
+UI captures were run. The docs bundle generator was attempted but could not run because `esbuild`
+is absent from this checkout; the generated offline article entry was updated directly and remains
+subject to the owning integration lane's normal bundle check.
+
 ## 2026-08-27, AWS core-service managers, issue #46 PR preparation
 
 The issue jer was reconciled with the exact `origin/main` tip `2472cf23b99559005476841d3db5e6bc4691ac06`.

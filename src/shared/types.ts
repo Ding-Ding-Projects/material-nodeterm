@@ -432,6 +432,7 @@ export type NodeKind =
   | 'homeassistant'
   | 'homeassistant-sensor'
   | 'freepbx'
+  | 'open-webui-hosting'
   | 'awsidentity'
   | 'nextcloud-aio'
   | 'cloudflare-zero-trust'
@@ -660,6 +661,10 @@ export interface CanvasNodeState {
    * `localExec` on the index entry, exactly where the shell and Windows profile already live.
    */
   serviceLabel?: string
+  /** Open WebUI provider and port intent safe to share in schema 3 project files. */
+  openWebUiIntent?: import('./open-webui-hosting').OpenWebUiIntent
+  /** Open WebUI container and provider binding kept only in the machine-local index. */
+  openWebUiLocalBinding?: import('./open-webui-hosting').OpenWebUiLocalBinding
   /** AWS-only portable requirements. Profile/account/role/endpoints remain machine-local. */
   awsIdentityIntent?: import('./aws-identity').AwsIdentityIntent
   /** AWS-only machine binding, stripped into IndexEntryV3.localExec by shared/node-exec.ts. */
@@ -4732,6 +4737,8 @@ export interface NodeTerminalApi {
   awsWizardModels: import('./aws-wizard').AwsWizardModelsApi
   /** Local Ollama suite manager — docs/ollama-manager.md. */
   ollama: import('./ollama').OllamaApi
+  /** Guided local Open WebUI hosting with persistent volume and explicit provider setup. */
+  openWebUi: import('./open-webui-hosting').OpenWebUiApi
   /** Guided Cloudflare managers — docs/features/integrations/cloudflare-core-managers.md. */
   cloudflareCoreManagers?: import('./cloudflare-core-managers').CloudflareCoreManagersApi
   /** Local WebTorrent downloader — docs/torrent-downloader.md. */

@@ -844,6 +844,13 @@ export const IPC = {
   /** main/server → renderer: a streamed chat token/finish/error for the session named in the
    *  payload. One shared channel (not per-session) — the renderer filters by sessionId. */
   ollamaChatStream: 'ollama:chat-stream',
+  // Open WebUI hosting node. The renderer submits a closed operation shape; Docker context,
+  // image, volume, archive, and provider secrets are validated and owned by the privileged host.
+  openWebUiContexts: 'open-webui:contexts',
+  openWebUiState: 'open-webui:state',
+  openWebUiRun: 'open-webui:run',
+  openWebUiCancel: 'open-webui:cancel',
+  openWebUiProgress: 'open-webui:progress',
   // Local Minecraft server create-and-manage (docs/minecraft-server-manager.md). Registered on
   // BOTH shells over the same `platform.handle`/`platform.broadcast` seam as Ollama above, so it
   // manages whichever machine is actually running the shell. NOT carried over the relay (a peer
