@@ -2825,6 +2825,7 @@ The contextual route uses a per-surface interaction counter, a three-interaction
 history route. No new force-trigger affordance was added.
 
 No tests, lint, type checks, builds, packaging, debugging, runtime interaction, reviews, audits, or
-HuiShots were run, as required by issue #103. The correction tip was dewed to the feature hui and
-verified by exact ref and ancestry checks. The feature jer remains separate from `main`; no PR,
-issue mutation, deletion, or Cup Chun was performed.
+UI captures were run, as required by issue #103. Correction commit
+`63ec24efa96f27880931d4cc3c6424f53f11feb9` was pushed to `feat/easter-egg-suite` and verified by
+exact ref and ancestry checks. The feature branch remains separate from `main`; no PR, issue
+mutation, deletion, or cleanup was performed.
