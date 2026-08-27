@@ -69,6 +69,8 @@ export interface PortableCanvasNodeV3 {
   tags?: string[]
   text?: string
   url?: string
+  /** Safe project intent naming the selected browser profile; its local session stays on-device. */
+  browserProfileId?: string
   browserTabs?: Array<{ id: string; url?: string; title: string }>
   serviceLabel?: string
   /** Safe AWS manager intent; local bindings and provider state remain outside the project file. */
@@ -165,8 +167,10 @@ const ALLOWED_VIEWPORT = new Set(['x', 'y', 'zoom'])
 const ALLOWED_NODE = new Set([
   'id', 'kind', 'creationEventId', 'position', 'size', 'title', 'color', 'group',
   'universeCanvasId', 'universeScope', 'universeDepth', 'nonDeletable', 'shopSelection',
-  'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel', 'awsManagerIntent',
-  'wildDimSumDish', 'homeAssistantIntent', 'homeAssistantControlConfig', 'homeAssistantSensorConfig', 'cloudflareZeroTrustIntent', 'cloudflareCoreIntent', 'cloudflareTunnelIntent', 'nextcloudAioConfig', 'nextcloudManagedIntent',
+  'collapsed', 'parentId', 'tags', 'text', 'url', 'browserProfileId', 'browserTabs', 'serviceLabel',
+  'wildDimSumDish', 'homeAssistantIntent', 'homeAssistantControlConfig', 'homeAssistantSensorConfig',
+  'awsManagerIntent', 'cloudflareZeroTrustIntent', 'cloudflareCoreIntent', 'cloudflareTunnelIntent',
+  'nextcloudAioConfig', 'nextcloudManagedIntent',
   'alarmSchedule', 'alarmTimeZone', 'alarmEnabled', 'alarmSnoozeMinutes',
   'alarmSoundEnabled', 'alarmNarratorEnabled', 'alarmHistory', 'mediaAssets',
   'mediaActiveAssetId', 'recoveryGame'
@@ -280,6 +284,7 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
     exactKeys(node.homeAssistantControlConfig, ALLOWED_HOME_ASSISTANT_CONTROL, 'Home Assistant control intent')
   }
   if (strict && node.browserTabs !== undefined && !Array.isArray(node.browserTabs)) throw new PortableProjectV3Error('manifest', 'Portable browser tabs must be an array.')
+  if (strict && node.browserProfileId !== undefined && (typeof node.browserProfileId !== 'string' || !/^[A-Za-z0-9._-]{1,128}$/.test(node.browserProfileId))) throw new PortableProjectV3Error('manifest', 'Portable browser profile id is invalid.')
   if (node.collapsed !== undefined) out.collapsed = node.collapsed
   if (node.universeCanvasId !== undefined) out.universeCanvasId = text(node.universeCanvasId, 'universe canvas id')
   if (node.universeScope !== undefined) out.universeScope = node.universeScope
@@ -290,6 +295,7 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
   if (node.tags !== undefined) { if (node.tags.length > 1024) throw new PortableProjectV3Error('entry-limit', 'Portable tag count exceeds its bound.'); out.tags = node.tags.map((tag) => text(tag, 'node tag')).sort() }
   if (node.text !== undefined) out.text = content(node.text, 'node text')
   if (node.url !== undefined) { const url = safeUrl(node.url, 'node URL'); if (url) out.url = url }
+  if (node.browserProfileId !== undefined) out.browserProfileId = text(node.browserProfileId, 'browser profile id')
   if (node.serviceLabel !== undefined) out.serviceLabel = text(node.serviceLabel, 'service label')
   if (node.awsManagerIntent !== undefined) {
     const intent = node.awsManagerIntent
@@ -695,6 +701,7 @@ export function portableCanvasProjectionToProject(
     ...(node.tags ? { tags: [...node.tags] } : {}),
     ...(node.text !== undefined ? { text: node.text } : {}),
     ...(node.url !== undefined ? { url: node.url } : {}),
+    ...(node.browserProfileId !== undefined ? { browserProfileId: node.browserProfileId } : {}),
     ...(node.browserTabs ? { browserTabs: node.browserTabs.map((tab) => ({ ...tab })) } : {}),
     ...(node.serviceLabel !== undefined ? { serviceLabel: node.serviceLabel } : {}),
     ...(node.awsManagerIntent !== undefined ? { awsManagerIntent: { ...node.awsManagerIntent } } : {}),

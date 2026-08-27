@@ -11,6 +11,7 @@ import { openDestructiveGate } from '../state/destructiveGate'
 import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
 import { AnchoredRegexBuilder } from '../components/regex/AnchoredRegexBuilder'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { normalizeBrowserProfileName } from '@shared/browser-portal'
 
 /** Same palette used by `groupSelectedNodes`/`createTerminalNode` for new-object color defaults —
  *  a browser profile is just another named, colored object on the project. */
@@ -31,14 +32,16 @@ interface BrowserProfilePickerProps {
   onCreate: (profile: BrowserProfile) => void
   onRename: (id: string, name: string) => void
   onRemove: (id: string) => void
+  /** Clear this profile's machine-local cookies, storage, cache, and loaded extensions. */
+  onReset: (id: string) => void
 }
 
 /**
  * Header control for a browser node's profile: shows the current profile's name (or "Default"),
- * and opens an anchored popover to switch, create, rename, or remove a profile. Removing a
- * profile deletes real stored credentials for every node still using it (its cookies/localStorage
- * partition persists on disk independently of the node), so it goes through the two-key
- * destructive-confirmation gate like every other irreversible action in this app.
+ * and opens an anchored popover to switch, create, rename, reset, or remove a profile. Removing a
+ * profile removes its portable name only. Its machine-local session remains isolated for any
+ * existing node that still references the id; the separate Reset action clears that session.
+ * Both actions go through the two-key destructive-confirmation gate.
  */
 export function BrowserProfilePicker({
   profiles,
@@ -46,14 +49,17 @@ export function BrowserProfilePicker({
   onSelect,
   onCreate,
   onRename,
-  onRemove
+  onRemove,
+  onReset
 }: BrowserProfilePickerProps): React.JSX.Element {
   const anchorRef = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
+  const [createError, setCreateError] = useState<string | null>(null)
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
+  const [renameError, setRenameError] = useState<string | null>(null)
   const search = useRegexSearchField()
   const searchRef = useRef<HTMLInputElement>(null)
   const vocab = useVocabularyMapper()
@@ -73,12 +79,17 @@ export function BrowserProfilePicker({
   const startCreate = (): void => {
     setCreating(true)
     setNewName('')
+    setCreateError(null)
   }
 
   const commitCreate = (): void => {
-    const name = newName.trim()
+    const name = normalizeBrowserProfileName(newName)
     if (!name) {
-      setCreating(false)
+      setCreateError(vocab(`Profile name is required and must be at most 80 characters.`))
+      return
+    }
+    if (profiles?.some((profile) => profile.name.localeCompare(name, undefined, { sensitivity: 'accent' }) === 0)) {
+      setCreateError(vocab('A browser profile with this name already exists. Choose another name.'))
       return
     }
     const profile: BrowserProfile = {
@@ -90,17 +101,28 @@ export function BrowserProfilePicker({
     onSelect(profile.id)
     setCreating(false)
     setNewName('')
+    setCreateError(null)
   }
 
   const startRename = (p: BrowserProfile): void => {
     setRenamingId(p.id)
     setRenameValue(p.name)
+    setRenameError(null)
   }
 
   const commitRename = (): void => {
-    const name = renameValue.trim()
-    if (renamingId && name) onRename(renamingId, name)
+    const name = normalizeBrowserProfileName(renameValue)
+    if (!name) {
+      setRenameError(vocab(`Profile name is required and must be at most 80 characters.`))
+      return
+    }
+    if (profiles?.some((profile) => profile.id !== renamingId && profile.name.localeCompare(name, undefined, { sensitivity: 'accent' }) === 0)) {
+      setRenameError(vocab('A browser profile with this name already exists. Choose another name.'))
+      return
+    }
+    if (renamingId) onRename(renamingId, name)
     setRenamingId(null)
+    setRenameError(null)
   }
 
   const requestRemove = (p: BrowserProfile, e: React.MouseEvent<HTMLButtonElement>): void => {
@@ -109,12 +131,28 @@ export function BrowserProfilePicker({
     openDestructiveGate({
       title: `${vocab('Delete browser profile')} "${p.name}"`,
       description:
-        vocab('Its cookies, sign-ins and site storage are deleted from this machine. Any browser tab still using this profile falls back to the default (unpartitioned) session. This cannot be undone.'),
+        vocab('The profile name is removed from this project. Existing tabs keep their isolated session and do not fall back to the shared session. Use Reset profile first if you also want to clear this machine\'s session data.'),
       affected: [p.name],
       confirmLabel: vocab('Delete profile'),
       anchor: { x: rect.left, y: rect.bottom },
       restoreFocusEl: anchorRef.current,
       onConfirm: () => onRemove(p.id)
+    })
+  }
+
+  const requestReset = (p: BrowserProfile, e: React.MouseEvent<HTMLButtonElement>): void => {
+    e.stopPropagation()
+    const rect = e.currentTarget.getBoundingClientRect()
+    openDestructiveGate({
+      title: `${vocab('Reset browser profile')} "${p.name}"`,
+      description: vocab(
+        'Cookies, sign-ins, site storage, cache and loaded extensions for this profile are cleared on this machine. Project tabs and the profile name stay. This cannot be undone.'
+      ),
+      affected: [p.name],
+      confirmLabel: vocab('Reset profile'),
+      anchor: { x: rect.left, y: rect.bottom },
+      restoreFocusEl: anchorRef.current,
+      onConfirm: () => onReset(p.id)
     })
   }
 
@@ -170,9 +208,14 @@ export function BrowserProfilePicker({
                   onChange={(e) => setRenameValue(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') commitRename()
-                    if (e.key === 'Escape') setRenamingId(null)
+                    if (e.key === 'Escape') {
+                      setRenamingId(null)
+                      setRenameError(null)
+                    }
                   }}
                   onBlur={commitRename}
+                  supportText={renameError ?? undefined}
+                  invalid={!!renameError}
                 />
               </div>
             ) : (
@@ -224,6 +267,12 @@ export function BrowserProfilePicker({
                     size="dense"
                     onClick={(e) => requestRemove(p, e)}
                   />
+                  <IconButton
+                    aria-label={`${vocab('Reset')} “${p.name}”`}
+                    icon="restart_alt"
+                    size="dense"
+                    onClick={(e) => requestReset(p, e)}
+                  />
                 </span>
               </div>
             )
@@ -240,9 +289,14 @@ export function BrowserProfilePicker({
                 onChange={(e) => setNewName(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') commitCreate()
-                  if (e.key === 'Escape') setCreating(false)
+                  if (e.key === 'Escape') {
+                    setCreating(false)
+                    setCreateError(null)
+                  }
                 }}
-                onBlur={commitCreate}
+                  onBlur={commitCreate}
+                  supportText={createError ?? undefined}
+                  invalid={!!createError}
               />
             </div>
           ) : (

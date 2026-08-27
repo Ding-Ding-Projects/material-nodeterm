@@ -72,7 +72,8 @@ function render(overrides: Partial<PickerProps> = {}) {
     onSelect: vi.fn<PickerProps['onSelect']>(),
     onCreate: vi.fn<PickerProps['onCreate']>(),
     onRename: vi.fn<PickerProps['onRename']>(),
-    onRemove: vi.fn<PickerProps['onRemove']>()
+    onRemove: vi.fn<PickerProps['onRemove']>(),
+    onReset: vi.fn<PickerProps['onReset']>()
   }
   const merged: PickerProps = { ...handlers, ...overrides }
   act(() => {

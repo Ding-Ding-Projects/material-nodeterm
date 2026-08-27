@@ -425,6 +425,10 @@ intentionally unchecked because this task publishes the plan only.
       deliver-on-idle queue. Feature documentation, the offline bundle, the documentation site,
       and the completeness inventory are recorded in this lane. Tests, builds, packaging, runtime
       interaction, and UI captures remain pending under the explicit ultra-speed boundary.
+- [ ] Add clean-room browser portal profiles and safe lifecycle ownership (implemented in issue #63;
+      direct records refreshed against `origin/main` at `54164b84dce0b7e62787b1de2885405ff4ed821c`;
+      verification and real built-artifact evidence remain pending). Kiosk, PWA, proxy, and
+      read-only diagnostics nodes remain separate lanes.
 - [ ] Implement the outstanding upstream behavior from the planned issue and pull-request parity map.
 - [ ] Split the PR #422 behavior into independent link, endpoint, navigation, grouping, agent, and
       account lanes.

@@ -91,7 +91,8 @@ import {
   addExtension,
   listLoadedExtensions,
   reloadPersistedBrowserExtensions,
-  removeExtensionByPath
+  removeExtensionByPath,
+  resetBrowserProfile
 } from './browser-extensions'
 import { registerBoardLogHandlers, type BoardLogRoute } from '../core/board-log-handlers'
 import {
@@ -135,11 +136,6 @@ import { registerFsHandlers } from '../core/fs-handlers'
 import { LogBuffer } from '../core/log-buffer'
 import { installLogSink, splitTag } from '../core/log-sink'
 import { registerLogHandlers } from '../core/log-handlers'
-import {
-  registerBrowserGuest,
-  type BrowserGuest,
-  type BrowserSurfaceKind
-} from './browser-guest-registry'
 import { appendBoardLogVia, registerBoardLogHandlers, type BoardLogRoute } from '../core/board-log-handlers'
 import {
   createDeliveryQueue,
@@ -2019,12 +2015,12 @@ app.whenReady().then(async () => {
 
   ipcMain.on(
     IPC.browserRegister,
-    (_e, webContentsId: unknown, nodeId: unknown, ownerNodeId?: unknown) => {
+    (_e, webContentsId: unknown, nodeId: unknown, ownerNodeId?: unknown, surface?: unknown) => {
       const accepted = registerBrowserGuestRequest(
         browserGuests,
         webContentsId,
         nodeId,
-        undefined,
+        surface,
         (id) => webContents.fromId(id) ?? null,
         // Loud, because the symptom otherwise is "popups from this node stopped opening" with
         // nothing anywhere to explain it.
@@ -2036,20 +2032,6 @@ app.whenReady().then(async () => {
           nodeId,
           typeof ownerNodeId === 'string' ? ownerNodeId : undefined
         )
-    (_e, webContentsId: number, nodeId: string, surface?: BrowserSurfaceKind) => {
-      // `surface` is passed through UNCHANGED, including when it is absent. Both mount sites
-      // (BrowserNode and the kanban CardModal) still send two arguments, so today it is always
-      // absent — and defaulting it to 'canvas' here would record every modal guest as a canvas
-      // guest, which is a false claim a later reverse lookup cannot detect. See `BrowserGuest`.
-      if (
-        !registerBrowserGuest(browserGuests, webContentsId, nodeId, surface, (id) =>
-          webContents.fromId(id) ?? null
-        )
-      ) {
-        // Loud, because the symptom otherwise is "popups from this node stopped opening" with
-        // nothing anywhere to explain it.
-        console.warn('[browser] refused guest registration', { webContentsId, nodeId, surface })
-      }
     }
   )
   ipcMain.on(IPC.browserUnregister, (_e, webContentsId: number) => {
@@ -2078,6 +2060,9 @@ app.whenReady().then(async () => {
   )
   ipcMain.handle(IPC.browserExtensionsRemove, (_e, partition: string | undefined, dirPath: string) =>
     removeExtensionByPath(partition, dirPath)
+  )
+  ipcMain.handle(IPC.browserProfileReset, (_e, partition: string | undefined) =>
+    resetBrowserProfile(partition)
   )
 
   // The naming agent runs LOCALLY on captured output, so it needs a cwd that exists on THIS

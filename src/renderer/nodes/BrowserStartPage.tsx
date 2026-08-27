@@ -1,9 +1,11 @@
-import { useState } from 'react'
+import { useRef } from 'react'
 import { searchOrUrl } from './browserUrl'
 import { SHORTCUTS, SiteIcon } from './browserIcons'
 import { useBrowserHistory } from '../state/browserHistory'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { mapAroundExactFacts } from './nodeVocabulary'
+import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
+import { AnchoredRegexBuilder } from '../components/regex/AnchoredRegexBuilder'
 
 function hostLabel(url: string): string {
   try {
@@ -16,31 +18,37 @@ function hostLabel(url: string): string {
 /** The Chrome-like new-tab page shown inside a blank browser node. */
 export function BrowserStartPage({ onNavigate }: { onNavigate: (url: string) => void }): JSX.Element {
   const vocab = useVocabularyMapper()
-  const [q, setQ] = useState('')
+  const search = useRegexSearchField()
+  const searchRef = useRef<HTMLInputElement>(null)
   const recent = useBrowserHistory((s) => s.recent(8))
   const submit = (): void => {
-    const u = searchOrUrl(q)
+    const u = searchOrUrl(search.value)
     if (u) onNavigate(u)
   }
+  const visibleShortcuts = SHORTCUTS.filter((shortcut) => search.test(`${shortcut.label} ${shortcut.url}`))
+  const visibleRecent = recent.filter((entry) => search.test(`${entry.title} ${entry.url}`))
   return (
     <div className="startpage nodrag nowheel">
       <div className="startpage__inner">
         <div className="startpage__searchbar">
           <span className="startpage__search-icon">⌕</span>
           <input
+            ref={searchRef}
             className="startpage__search"
             spellCheck={false}
-            value={q}
+            value={search.value}
             placeholder={mapAroundExactFacts('Search Google or type a URL', ['Google'], vocab)}
-            onChange={(e) => setQ(e.target.value)}
+            aria-label={vocab('Search Google or type a URL')}
+            onChange={(e) => search.setValue(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') submit()
             }}
           />
+          <AnchoredRegexBuilder search={search} fieldRef={searchRef} label={vocab('Regex — browser start page')} />
         </div>
 
         <div className="startpage__grid">
-          {SHORTCUTS.map((s) => (
+          {visibleShortcuts.map((s) => (
             <button
               key={s.url}
               className="startpage__tile"
@@ -53,10 +61,10 @@ export function BrowserStartPage({ onNavigate }: { onNavigate: (url: string) => 
           ))}
         </div>
 
-        {recent.length > 0 && (
+        {visibleRecent.length > 0 && (
           <div className="startpage__recent">
             <div className="startpage__recent-title">{vocab('Recent')}</div>
-            {recent.map((e) => (
+            {visibleRecent.map((e) => (
               <button
                 key={`${e.url}-${e.ts}`}
                 className="startpage__recent-item"

@@ -1989,13 +1989,20 @@ export interface BrowserExtensionsApi {
   remove(partition: string | undefined, dirPath: string): Promise<void>
 }
 
+/** Machine-local reset for one browser session. Project tabs and profile names remain portable. */
+export interface BrowserProfileApi {
+  /** Clear cookies, local storage, cache and loaded unpacked extensions for this partition. */
+  reset(partition: string | undefined): Promise<{ ok: true } | { ok: false; error: string }>
+}
+
 export interface BrowserApi {
   /** Map a browser node's <webview> guest to its node id (for new-window capture). */
-  register(webContentsId: number, nodeId: string, ownerNodeId?: string): void
+  register(webContentsId: number, nodeId: string, ownerNodeId?: string, surface?: 'canvas' | 'modal'): void
   unregister(webContentsId: number): void
   /** Fires when a browser guest requested a new window; the renderer opens another browser node. */
   onBrowserNewWindow(listener: (e: { url: string; sourceNodeId: string }) => void): () => void
   extensions: BrowserExtensionsApi
+  profile: BrowserProfileApi
 }
 
 /** A user-defined agent (BYO CLI). In no capability list, so it gets only spawn +

@@ -54,6 +54,12 @@ export function browserPartitionFor(projectId: string, profileId: string | undef
   return `${PARTITION_PREFIX}${sanitize(projectId)}-${sanitize(profileId)}`
 }
 
+/** True only for the default session or a partition this app's profile deriver can own. */
+export function isBrowserProfilePartition(partition: string | undefined): boolean {
+  if (partition === undefined) return true
+  return /^persist:browser-profile-[a-z0-9-]+-[a-z0-9-]+$/.test(partition)
+}
+
 /** Restricts a partition-string component to the id charset our own id generator already
  *  produces (`[a-z0-9-]`), so a hand-edited project.json can't smuggle path separators or other
  *  partition-breaking characters into the derived string. Never empty: an all-invalid input still

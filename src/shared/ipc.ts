@@ -635,6 +635,7 @@ export const IPC = {
   browserExtensionsAdd: 'browser:extensions-add',
   browserExtensionsRemove: 'browser:extensions-remove',
   browserExtensionsPickDir: 'browser:extensions-pick-dir',
+  browserProfileReset: 'browser:profile-reset',
   // Browser control indicator + Stop (S8 PR 6). Main pushes the current driven-lease set to the
   // renderer (the chip / rope / kill row); the renderer asks main to revoke — per node, all, or a
   // whole project's — and main detaches the debugger + drops the ledger entry for real.

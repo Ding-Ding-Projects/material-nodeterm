@@ -29,6 +29,7 @@ import {
   type BrowserExtensionsStore
 } from './browser-extensions-core'
 import { loadBrowserExtensions, mutateBrowserExtensions } from './browser-extensions-store'
+import { isBrowserProfilePartition } from '../shared/browser-profiles'
 
 /** What the renderer sees for one loaded extension. Electron assigns `id`/`name`/`version` from
  *  the extension's own manifest at load time — this app never invents them. */
@@ -88,6 +89,35 @@ export async function removeExtensionByPath(
   const match = ses.extensions.getAllExtensions().find((e) => e.path === dirPath)
   if (match) ses.extensions.removeExtension(match.id)
   await mutateBrowserExtensions((store) => removeBrowserExtension(store, key, dirPath))
+}
+
+/**
+ * Reset one browser profile's machine-local session. The project-owned tab list and profile name
+ * stay untouched, while cookies, storage, cache and loaded unpacked extensions are removed. The
+ * partition is checked here as well as at the UI boundary because IPC input is not trusted.
+ */
+export async function resetBrowserProfile(
+  partition: string | undefined
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isBrowserProfilePartition(partition)) {
+    return { ok: false, error: 'The requested browser profile session is not managed by this app.' }
+  }
+  const key = browserExtensionsKeyFor(partition)
+  const ses = sessionForPartitionKey(key)
+  try {
+    for (const ext of ses.extensions.getAllExtensions()) ses.extensions.removeExtension(ext.id)
+    await ses.clearStorageData()
+    await ses.clearCache()
+    await mutateBrowserExtensions((store) => {
+      if (!(key in store)) return store
+      const next = { ...store }
+      delete next[key]
+      return next
+    })
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
 }
 
 /** Replay every persisted extension path into its session at app startup. Electron forgets loaded

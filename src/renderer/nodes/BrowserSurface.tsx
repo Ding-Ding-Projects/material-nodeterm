@@ -26,6 +26,8 @@ interface BrowserSurfaceProps {
   nodeId: string
   /** Agent node allowed to expose this browser surface through the Codex Browser Plugin. */
   ownerNodeId?: string
+  /** Which mounted surface owns this guest, so lifecycle cleanup never confuses canvas and modal. */
+  surface?: 'canvas' | 'modal'
   /** Initial URL (seeded once at mount). */
   url: string
   /**
@@ -42,15 +44,6 @@ interface BrowserSurfaceProps {
   /** Persist the page title. */
   onTitleChange: (title: string) => void
   /**
-   * Electron session partition (see `shared/browser-profiles.ts`'s `browserPartitionFor`).
-   * Undefined = the app's default (unpartitioned) session — bit-for-bit the pre-profiles
-   * behavior. Two webviews given the SAME partition share cookies/localStorage/session state;
-   * different partitions are isolated from each other. Read once at mount: the caller (`BrowserNode`)
-   * keys this component by the partition string, so a profile CHANGE remounts a fresh
-   * `BrowserSurface` (and a fresh `<webview>`) on the new partition rather than trying to reparent
-   * a live guest across sessions — see `CanvasNodeState.browserProfileId`.
-   */
-  partition?: string
    * The memory saver released this surface's guest process. Optional; today's one caller is a
    * background keep-alive GHOST (see lib/webviewKeepAlive.ts), which answers by dropping its pool
    * entry — a hidden husk with no guest has nothing left to keep alive. An ACTIVE node passes
@@ -69,18 +62,14 @@ interface BrowserSurfaceProps {
 export function BrowserSurface({
   nodeId,
   ownerNodeId,
+  surface = 'canvas',
   url,
   onUrlChange,
   onTitleChange,
-  partition
-}: BrowserSurfaceProps) {
-  const vocab = useVocabularyMapper()
-  url,
   partition,
-  onUrlChange,
-  onTitleChange,
   onGuestDiscarded
 }: BrowserSurfaceProps) {
+  const vocab = useVocabularyMapper()
   const ref = useRef<WebviewEl | null>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const lastUrlRef = useRef('')
@@ -203,14 +192,14 @@ export function BrowserSurface({
     let wcId = 0
     const onReady = (): void => {
       wcId = wv.getWebContentsId()
-      window.nodeTerminal.browser.register(wcId, nodeId, ownerNodeId)
+      window.nodeTerminal.browser.register(wcId, nodeId, ownerNodeId, surface)
     }
     wv.addEventListener('dom-ready', onReady)
     return () => {
       wv.removeEventListener('dom-ready', onReady)
       if (wcId) window.nodeTerminal.browser.unregister(wcId)
     }
-  }, [nodeId, ownerNodeId, discarded])
+  }, [nodeId, ownerNodeId, surface, discarded])
 
   // ── Memory saver ────────────────────────────────────────────────────────────────────────────
   // A browser node parked off-screen is a whole Chromium renderer process doing nothing, and the
@@ -326,7 +315,6 @@ export function BrowserSurface({
             src={src || undefined}
             partition={partition || undefined}
             allowpopups={true}
-            {...(partition ? { partition } : {})}
             style={{ width: '100%', height: '100%' }}
           />
         )}

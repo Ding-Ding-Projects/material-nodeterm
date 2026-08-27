@@ -640,8 +640,8 @@ const api: NodeTerminalApi = {
     writeHtml: (html: string) => ipcRenderer.invoke(IPC.mediaWriteHtml, html)
   },
   browser: {
-    register: (webContentsId: number, nodeId: string, ownerNodeId?: string) =>
-      ipcRenderer.send(IPC.browserRegister, webContentsId, nodeId, ownerNodeId),
+    register: (webContentsId: number, nodeId: string, ownerNodeId?: string, surface?: 'canvas' | 'modal') =>
+      ipcRenderer.send(IPC.browserRegister, webContentsId, nodeId, ownerNodeId, surface),
     unregister: (webContentsId: number) => ipcRenderer.send(IPC.browserUnregister, webContentsId),
     onBrowserNewWindow: (listener) => {
       const handler = (_e: unknown, ev: { url: string; sourceNodeId: string }) => listener(ev)
@@ -653,7 +653,10 @@ const api: NodeTerminalApi = {
       pickDir: () => ipcRenderer.invoke(IPC.browserExtensionsPickDir),
       add: (partition, dirPath) => ipcRenderer.invoke(IPC.browserExtensionsAdd, partition, dirPath),
       remove: (partition, dirPath) => ipcRenderer.invoke(IPC.browserExtensionsRemove, partition, dirPath)
-    }
+    },
+    profile: {
+      reset: (partition) => ipcRenderer.invoke(IPC.browserProfileReset, partition)
+    },
     onLeaseChanged: (listener) => {
       const handler = (_e: unknown, push: Parameters<typeof listener>[0]) => listener(push)
       ipcRenderer.on(IPC.browserLeaseChanged, handler)

@@ -480,7 +480,7 @@ export function CardModal({
                     key={`${session.id}:${browserPartitionFor(projectId, session.browserProfileId) ?? 'default'}`}
                     nodeId={session.id}
                     url={session.url ?? ''}
-                    partition={session.partition}
+                    surface="modal"
                     onUrlChange={(u) => onBrowserNav({ url: u })}
                     onTitleChange={(t) => onBrowserNav({ title: t })}
                     partition={browserPartitionFor(projectId, session.browserProfileId)}

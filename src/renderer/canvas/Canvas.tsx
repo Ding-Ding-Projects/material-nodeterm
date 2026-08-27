@@ -13799,14 +13799,6 @@ export function Canvas() {
               reply({ ok: false, error: 'open-browser requires a valid http(s) --url' })
               return
             }
-            const id = addAndConnect(
-              createBrowserNode(nodesRef.current.length, browserUrl, placeBelow(), sourceNodeId)
-            )
-            reply({
-              ok: true,
-              message: `opened browser ${id}`,
-              result: { id }
-            })
             // An agent-opened browser gets its OWN per-project session jar — never the default
             // session the user's own browsing lives in (Probe A: a partition-less <webview> shares
             // session.defaultSession). The project id becomes a persisted storage key, so it must
@@ -13817,7 +13809,9 @@ export function Canvas() {
               reply({ ok: false, error: "open-browser: this project's id cannot be used as a browser session key" })
               return
             }
-            const id = addAndConnect(createBrowserNode(nodesRef.current.length, browserUrl, placeBelow(), partition))
+            const id = addAndConnect(
+              createBrowserNode(nodesRef.current.length, browserUrl, placeBelow(), sourceNodeId, undefined, false, partition)
+            )
             // Return the project id + partition so main can record ownership in its in-memory
             // ledger (browser-control-ledger.ts). Main gates the claim on its OWN `verified` verdict
             // and keys it to the verified caller — these fields are descriptive (release-by-project,
