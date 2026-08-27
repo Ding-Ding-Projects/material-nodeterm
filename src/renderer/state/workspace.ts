@@ -62,6 +62,7 @@ import { DEFAULT_VIRTUAL_MACHINE_CONFIG } from '@shared/virtual-machine'
 import { TIMER_DEFAULT_DURATION_MS, type TimerNodeData } from '@shared/timer'
 import { normalizeAwsIdentityIntent } from '@shared/aws-identity'
 import { createRecoveryGameSnapshot, normalizeRecoveryGameSnapshot, type RecoveryGameSnapshot } from '@shared/recovery-game'
+import type { PortableKioskPwaIntent } from '@shared/kiosk-pwa'
 import { CLOUDFLARE_DEFAULT_INTENT, type CloudflarePortableIntent } from '@shared/cloudflare-core-managers'
 import { AWS_MANAGER_DEFAULT_INTENT, type AwsManagerMode, type AwsManagerPortableIntent } from '@shared/aws-resource'
 import type { TunnelPortableIntent } from '@shared/tunnel-state'
@@ -243,6 +244,8 @@ export interface NodeData {
   browserTabs?: BrowserTab[]
   /** Browser-only: which `browserTabs[].id` is currently shown. Undefined = the first tab. */
   browserActiveTabId?: string
+  /** Portable kiosk/PWA launch intent only. Host profiles and runtime lifecycle are local. */
+  kioskPwaIntent?: PortableKioskPwaIntent
   /**
    * browser-only: the Electron session partition for this <webview>. Set ONCE at creation for an
    * AGENT-opened node (`agentBrowserPartition`, `persist:nt-agent-browser-<projectId>`) and never
@@ -1385,6 +1388,30 @@ export function createBrowserNode(
       ...(profileId ? { browserProfileId: profileId } : {}),
       ...(temporary ? { temporary: true } : {}),
       ...(partition ? { partition } : {})
+    }
+  }
+}
+
+/** Creates a browser-kind canvas node with a portable kiosk/PWA intent. Runtime profile state is
+ * deliberately not part of the project record and is created by KioskPwaNode on this host. */
+export function createKioskPwaNode(
+  index: number,
+  intent: PortableKioskPwaIntent,
+  center?: { x: number; y: number }
+): CanvasNode {
+  return {
+    id: nextId('kiosk-pwa'),
+    type: 'browser',
+    position: placeAt(center, index, BROWSER_SIZE.width, BROWSER_SIZE.height),
+    width: BROWSER_SIZE.width,
+    height: BROWSER_SIZE.height,
+    style: { width: BROWSER_SIZE.width, height: BROWSER_SIZE.height },
+    data: {
+      title: intent.displayName,
+      color: '#6ac4dc',
+      group: null,
+      kioskPwaIntent: intent,
+      url: intent.target.kind === 'url' ? intent.target.url : intent.target.startUrl
     }
   }
 }
@@ -2934,6 +2961,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         browserProfileId: n.browserProfileId,
         browserTabs,
         browserActiveTabId,
+        kioskPwaIntent: n.kioskPwaIntent,
         partition: n.partition,
         diffStaged: n.diffStaged,
         commitOid: n.commitOid,
@@ -3073,6 +3101,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         browserProfileId: n.data.browserProfileId,
         browserTabs: n.data.browserTabs,
         browserActiveTabId: n.data.browserActiveTabId,
+        kioskPwaIntent: n.data.kioskPwaIntent,
         textUpdatedAt: n.data.textUpdatedAt,
         textUpdatedBy: n.data.textUpdatedBy,
         fileMissing: n.data.fileMissing,

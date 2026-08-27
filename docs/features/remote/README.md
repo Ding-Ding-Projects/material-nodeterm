@@ -18,6 +18,9 @@ Two different ways nodeterm reaches a machine that isn't the one in front of you
 - [Cloudflare Tunnel state](./cloudflare-tunnel-state.md) - six independently observed facets for
   API creation, DNS routing, connector health, Access policy, origin reachability, and external
   reachability, with safe portable intent and local live observations.
+- [Kiosk and PWA sessions](./kiosk-pwa-sessions.md) - guided secure URL and installed web-app
+  sessions with isolated local profiles, portable intent, explicit permissions, lifecycle recovery,
+  and honest unavailable states.
 
 See also [Agents](../agents/README.md) for how agent hooks and permission modes work across an
 SSH connection, and [Packaging](../packaging/README.md) for how the headless notification host

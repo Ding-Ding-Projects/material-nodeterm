@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Kiosk and PWA sessions - nodeterm docs</title>
+    <meta name="description" content="Guided kiosk and PWA sessions with portable intent and isolated local state." />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+  </head>
+  <body>
+    <div class="doc-topbar"><a href="../index.html">← nodeterm</a><span aria-hidden="true">/</span><a href="./index.html">Docs</a></div>
+    <article class="doc-body">
+      <p class="doc-kicker">Remote and services</p>
+      <h1>Kiosk and PWA sessions</h1>
+      <p>Choose a secure URL for a popup-free kiosk surface, or choose an installed web app for a PWA session. Both are real canvas sessions with explicit lifecycle and recovery states.</p>
+      <h2>Guided selection</h2>
+      <p>The setup surface requires a display name and a reviewed target. HTTPS is required, while HTTP is accepted only for localhost development. PWA mode requires a host-detected installed app. The installed-app list has plain-text search and an adjacent anchored full regex builder. If discovery is unavailable, the list says so and does not invent choices.</p>
+      <h2>Portable intent and local profile</h2>
+      <p>Schema 3 carries only the mode, target, display name, and requested permission names. Cookies, local storage, credentials, profile state, permission grants, process state, window handles, and host identifiers remain local. Import reconstructs intent only and performs no navigation, launch, download, deployment, or provider change.</p>
+      <h2>Lifecycle and permissions</h2>
+      <p>Sessions move through idle, starting, running, stopping, stopped, unavailable, and error. Exit and Retry are explicit controls. Popups are disabled. Notifications, camera, microphone, location, and clipboard access are denied unless requested in the intent, and the current surface still denies browser permission events until a host confirmation route exists.</p>
+      <h2>Verification</h2>
+      <p>This ultra-speed implementation lane did not run tests, type checking, lint, review, security or accessibility checks, builds, packaging, installer execution, runtime interaction, or captures.</p>
+      <section class="doc-suggested"><h2>Suggested articles</h2><ul><li><a href="./docker-host-manager.html">Docker host manager</a></li><li><a href="./node-catalog.html">Unified Node Catalog</a></li><li><a href="./server-edition.html">Server Edition</a></li></ul></section>
+    </article>
+  </body>
+</html>

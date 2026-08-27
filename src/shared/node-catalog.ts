@@ -333,6 +333,34 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
     availability: alwaysAvailable
   },
   {
+    id: 'kiosk-session',
+    nodeKind: 'browser',
+    category: 'canvas',
+    label: 'Kiosk session',
+    description: 'Open one secure URL in a focused, popup-free kiosk surface.',
+    keywords: ['kiosk', 'fullscreen', 'secure url', 'web session'],
+    documentationPath: 'docs/features/remote/kiosk-pwa-sessions.md',
+    safeDefaults: { mode: 'kiosk', requestedPermissions: [] },
+    dependencies: ['secure-url'],
+    status: 'current',
+    availabilityMode: 'required-for-creation',
+    availability: alwaysAvailable
+  },
+  {
+    id: 'pwa-session',
+    nodeKind: 'browser',
+    category: 'canvas',
+    label: 'PWA session',
+    description: 'Open a host-detected installed web app with isolated local profile state.',
+    keywords: ['pwa', 'installed app', 'web app', 'local profile'],
+    documentationPath: 'docs/features/remote/kiosk-pwa-sessions.md',
+    safeDefaults: { mode: 'pwa', requestedPermissions: [] },
+    dependencies: ['installed-web-app'],
+    status: 'current',
+    availabilityMode: 'configure-later',
+    availability: alwaysAvailable
+  },
+  {
     id: 'web',
     nodeKind: 'web',
     category: 'media',
@@ -823,6 +851,8 @@ export const NODE_CATALOG_COMPLETENESS: readonly NodeCatalogCompletenessRecord[]
   { id: 'group', state: 'current', scope: 'any', reason: 'persisted group frame' },
   { id: 'annotation', state: 'current', scope: 'none', reason: 'geometry comes from a draw gesture' },
   { id: 'browser', state: 'current', scope: 'any', reason: 'persisted browser node' },
+  { id: 'kiosk-session', state: 'current', scope: 'any', reason: 'guided kiosk URL session' },
+  { id: 'pwa-session', state: 'current', scope: 'any', reason: 'guided installed web-app session' },
   { id: 'web', state: 'current', scope: 'any', reason: 'persisted web view node' },
   { id: 'video', state: 'current', scope: 'any', reason: 'media file picker required' },
   { id: 'editor', state: 'current', scope: 'any', reason: 'project file picker required' },

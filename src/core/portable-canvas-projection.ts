@@ -28,6 +28,7 @@ import type { PlannerSchedule } from '../shared/planner-occurrences'
 import { normalizeRecoveryGameSnapshot, RECOVERY_ENERGY_KEYS, type RecoveryGameSnapshot } from '../shared/recovery-game'
 import { repairPortablePortals, validatePortablePortals, type PortablePortalV3 } from './portal-lifecycle'
 import { validateCloudflareTunnelIntent, type CloudflareTunnelIntent } from '../shared/cloudflare-tunnel-handoff'
+import { portableKioskPwaIntent, type PortableKioskPwaIntent } from '../shared/kiosk-pwa'
 import { normalizeCloudflareIntent as normalizeCloudflareZeroTrustIntent, type CloudflarePortableIntent as CloudflareZeroTrustPortableIntent } from '../shared/cloudflare-zero-trust'
 import { normalizeCloudflareIntent as normalizeCloudflareCoreIntent, type CloudflarePortableIntent as CloudflareCorePortableIntent } from '../shared/cloudflare-core-managers'
 import { sanitizeTunnelPortableIntent, type TunnelPortableIntent } from '../shared/tunnel-state'
@@ -72,6 +73,7 @@ export interface PortableCanvasNodeV3 {
   /** Safe project intent naming the selected browser profile; its local session stays on-device. */
   browserProfileId?: string
   browserTabs?: Array<{ id: string; url?: string; title: string }>
+  kioskPwaIntent?: PortableKioskPwaIntent
   serviceLabel?: string
   /** Safe AWS manager intent; local bindings and provider state remain outside the project file. */
   awsManagerIntent?: AwsManagerPortableIntent
@@ -171,6 +173,7 @@ const ALLOWED_NODE = new Set([
   'wildDimSumDish', 'homeAssistantIntent', 'homeAssistantControlConfig', 'homeAssistantSensorConfig',
   'awsManagerIntent', 'cloudflareZeroTrustIntent', 'cloudflareCoreIntent', 'cloudflareTunnelIntent',
   'nextcloudAioConfig', 'nextcloudManagedIntent',
+  'kioskPwaIntent',
   'alarmSchedule', 'alarmTimeZone', 'alarmEnabled', 'alarmSnoozeMinutes',
   'alarmSoundEnabled', 'alarmNarratorEnabled', 'alarmHistory', 'mediaAssets',
   'mediaActiveAssetId', 'recoveryGame'
@@ -285,6 +288,11 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
   }
   if (strict && node.browserTabs !== undefined && !Array.isArray(node.browserTabs)) throw new PortableProjectV3Error('manifest', 'Portable browser tabs must be an array.')
   if (strict && node.browserProfileId !== undefined && (typeof node.browserProfileId !== 'string' || !/^[A-Za-z0-9._-]{1,128}$/.test(node.browserProfileId))) throw new PortableProjectV3Error('manifest', 'Portable browser profile id is invalid.')
+  if (node.kioskPwaIntent !== undefined) {
+    const intent = portableKioskPwaIntent(node.kioskPwaIntent)
+    if (!intent) throw new PortableProjectV3Error('manifest', 'Portable kiosk/PWA intent is invalid.')
+    out.kioskPwaIntent = intent
+  }
   if (node.collapsed !== undefined) out.collapsed = node.collapsed
   if (node.universeCanvasId !== undefined) out.universeCanvasId = text(node.universeCanvasId, 'universe canvas id')
   if (node.universeScope !== undefined) out.universeScope = node.universeScope
@@ -703,6 +711,7 @@ export function portableCanvasProjectionToProject(
     ...(node.url !== undefined ? { url: node.url } : {}),
     ...(node.browserProfileId !== undefined ? { browserProfileId: node.browserProfileId } : {}),
     ...(node.browserTabs ? { browserTabs: node.browserTabs.map((tab) => ({ ...tab })) } : {}),
+    ...(node.kioskPwaIntent ? { kioskPwaIntent: { ...node.kioskPwaIntent, target: { ...node.kioskPwaIntent.target }, requestedPermissions: [...node.kioskPwaIntent.requestedPermissions] } } : {}),
     ...(node.serviceLabel !== undefined ? { serviceLabel: node.serviceLabel } : {}),
     ...(node.awsManagerIntent !== undefined ? { awsManagerIntent: { ...node.awsManagerIntent } } : {}),
     ...(node.cloudflareZeroTrustIntent !== undefined ? { cloudflareZeroTrustIntent: normalizeCloudflareZeroTrustIntent(node.cloudflareZeroTrustIntent)! } : {}),

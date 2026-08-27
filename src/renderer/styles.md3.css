@@ -13524,6 +13524,75 @@ button.term-node__title-text:focus-visible {
   .cdk-manager__folder-row > input,
   .cdk-manager__folder-row > button { width: 100%; flex-basis: 100%; }
 
+.kiosk-pwa-setup-dialog {
+  width: min(680px, calc(100vw - 32px));
+  max-height: min(760px, calc(100vh - 32px));
+  overflow-y: auto;
+}
+
+.kiosk-pwa-setup-dialog__intro,
+.kiosk-pwa-setup-dialog__availability,
+.kiosk-pwa-setup-dialog__error {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.kiosk-pwa-setup-dialog__intro,
+.kiosk-pwa-setup-dialog__availability {
+  color: var(--md-on-surface-variant);
+}
+
+.kiosk-pwa-setup-dialog__error {
+  color: var(--md-error);
+}
+
+.kiosk-pwa-setup-dialog__modes,
+.kiosk-pwa-setup-dialog__target-kind {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.kiosk-pwa-setup-dialog__modes button,
+.kiosk-pwa-setup-dialog__target-kind button,
+.kiosk-pwa-setup-dialog__app-list button {
+  min-height: 40px;
+  border: 1px solid var(--md-outline);
+  border-radius: var(--md-shape-medium);
+  padding: 8px 14px;
+  background: var(--md-surface-container);
+  color: var(--md-on-surface);
+  cursor: pointer;
+}
+
+.kiosk-pwa-setup-dialog__modes button.is-selected,
+.kiosk-pwa-setup-dialog__target-kind button.is-selected,
+.kiosk-pwa-setup-dialog__app-list button.is-selected {
+  border-color: var(--md-primary);
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+}
+
+.kiosk-pwa-setup-dialog__modes button:disabled,
+.kiosk-pwa-setup-dialog__target-kind button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.kiosk-pwa-setup-dialog__app-list {
+  display: grid;
+  gap: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.kiosk-pwa-setup-dialog__app-list button {
+  display: grid;
+  gap: 3px;
+  text-align: left;
+}
+
 /* CloudFormation manager: compact guided controls inside a service node. */
 .cloudformation-manager {
   display: grid;
@@ -13612,6 +13681,61 @@ button.term-node__title-text:focus-visible {
   display: grid;
   gap: 3px;
   text-align: left;
+}
+
+.kiosk-pwa-setup-dialog__app-list small {
+  color: var(--md-on-surface-variant);
+  overflow-wrap: anywhere;
+}
+
+.kiosk-pwa-setup-dialog__permissions {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-large);
+  padding: 12px;
+}
+
+.kiosk-pwa-setup-dialog__permissions label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 40px;
+}
+
+.kiosk-pwa-node__body {
+  position: relative;
+}
+
+.kiosk-pwa-node__message {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  padding: 24px;
+  color: var(--md-on-surface-variant);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.kiosk-pwa-node__mode,
+.kiosk-pwa-node__state {
+  border-radius: var(--md-shape-small);
+  padding: 4px 8px;
+  background: var(--md-surface-container-high);
+  color: var(--md-on-surface-variant);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+  .kiosk-pwa-setup-dialog {
+    width: calc(100vw - 24px);
+  }
+
+  .kiosk-pwa-setup-dialog .mdx-dialog__actions > * {
+    flex: 1 1 120px;
+  }
 }
 
 .cloudformation-manager__rows {
@@ -13911,7 +14035,7 @@ button.term-node__title-text:focus-visible {
   .nextcloud-aio-panel *::before,
   .nextcloud-aio-panel *::after {
     animation-duration: 0.01ms !important;
-    transition-duration: 0.01ms !important;
+       transition-duration: 0.01ms !important;
   }
 }
 /* Door construction ---------------------------------------------------------

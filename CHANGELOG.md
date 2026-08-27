@@ -77,6 +77,13 @@
   identifiers machine-local, checks provider capabilities before enabling the action, and reports connector and external reachability as separate states. The
   ultra-speed lane did not run tests, type checks, lint, builds, packaging, reviews, security or
   accessibility checks, installer execution, runtime interaction, or captures.
+- Add guided Kiosk and PWA browser sessions. Schema 3 stores only validated secure target intent,
+  display name, mode, and requested permission names, while browser profile state, grants, cookies,
+  process state, and host identifiers remain local. Kiosk sessions deny popups and insecure targets;
+  PWA sessions require a real installed-app inventory and show an honest unavailable state when it
+  is missing. Exit, Retry, ownership checks, and lifecycle failure states are explicit. This
+  ultra-speed lane intentionally did not run tests, type checks, lint, reviews, security checks,
+  accessibility checks, builds, packaging, installer execution, runtime interaction, or captures.
 - Mount the seven AWS core-service routes on the shared AWS manager: S3, EC2, IAM, STS, Lambda,
   CloudWatch, and CloudWatch Logs. Typed operation controls now cover bounded reads, selected writes,
   destructive confirmation, pagination, cancellation, and progress while reusing the current local

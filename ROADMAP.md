@@ -418,8 +418,11 @@ intentionally unchecked because this task publishes the plan only.
 
 ### Clean-room features and upstream parity
 
-- [ ] Add clean-room browser, kiosk, PWA, proxy, and read-only diagnostics nodes.
-- [ ] **Program 57 / #68, linked-agent inbox notifications.** The source path already carries the
+- [ ] Add clean-room browser, proxy, and read-only diagnostics nodes.
+- [x] Add guided clean-room kiosk and PWA sessions with portable intent, isolated local profiles,
+      explicit permissions, lifecycle recovery, and honest unavailable states. Source-only lane,
+      no tests, builds, packaging, runtime interaction, or captures.
+-- [ ] **Program 57 / #68, linked-agent inbox notifications.** The source path already carries the
       upstream PR #98 intent through the authenticated `notify --node <id>` route, project-local
       consent, runtime ownership checks, fixed application-authored text, and the bounded
       deliver-on-idle queue. Feature documentation, the offline bundle, the documentation site,
