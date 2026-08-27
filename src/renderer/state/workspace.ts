@@ -2749,15 +2749,15 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         serviceConnection: n.data.serviceConnection,
         nsisSpec: n.data.nsisSpec,
         nsisLocalPaths: n.data.nsisLocalPaths,
-        // Photo/Gallery media is project-portable by reference; absolute paths remain machine-local.
-        filePath: kind === 'photo' ? undefined : n.data.filePath,
-        // `sourcePath` is a machine-local resolver hint and must never enter project.json.
-        mediaAssets: n.data.mediaAssets?.map(({ sourcePath: _sourcePath, ...reference }) => reference),
+        // Media paths remain in the live node long enough for the machine-local index to retain
+        // them. The shared-file boundary strips them in `stripSharedNodeExec`, while portable
+        // content references continue into the transferable projection.
+        filePath: n.data.filePath,
+        mediaAssets: n.data.mediaAssets?.map((reference) => ({ ...reference })),
         mediaActiveAssetId: n.data.mediaActiveAssetId,
         virtualMachineConfig: n.data.virtualMachineConfig,
         virtualMachineLocalPaths: n.data.virtualMachineLocalPaths,
         calendarConfig: n.data.calendarConfig,
-        filePath: n.data.filePath,
         fileMissing: n.data.fileMissing,
         url: n.data.url,
         browserProfileId: n.data.browserProfileId,
@@ -2765,7 +2765,6 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         browserActiveTabId: n.data.browserActiveTabId,
         textUpdatedAt: n.data.textUpdatedAt,
         textUpdatedBy: n.data.textUpdatedBy,
-        filePath: n.data.filePath,
         fileMissing: n.data.fileMissing,
         url: n.data.url,
         partition: n.data.partition,

@@ -165,6 +165,38 @@ export async function collectPortableMedia(sourcePath: string, label?: string, s
   return { asset: { ...asset, bytes }, source: { path: sourcePath, open: (streamSignal?: AbortSignal) => createReadStream(sourcePath, { signal: streamSignal }) }, sourceName: path.basename(sourcePath) }
 }
 
+/**
+ * Materialize one already-collected asset for the archive writer and re-prove its content address.
+ * Collection and publication are separate reads so a source changed between the picker and the
+ * archive cannot be published under the old SHA-256.
+ */
+export async function readPortableMediaBytes(collected: PortableMediaCollected, signal?: AbortSignal): Promise<Uint8Array> {
+  const chunks: Buffer[] = []
+  let bytes = 0
+  if (collected.data) {
+    chunks.push(Buffer.from(collected.data))
+    bytes = collected.data.byteLength
+  } else if (collected.source) {
+    for await (const chunk of collected.source.open(signal)) {
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Uint8Array)
+      bytes += buffer.byteLength
+      if (bytes > PORTABLE_MEDIA_LIMITS.maxAssetBytes) return fail(`Portable media changed beyond its byte limit: ${collected.sourceName}`)
+      chunks.push(buffer)
+    }
+  } else {
+    return fail(`Portable media has no durable byte source: ${collected.sourceName}`)
+  }
+  const data = Buffer.concat(chunks, bytes)
+  if (bytes !== collected.asset.bytes || sha256Media(data) !== collected.asset.sha256) {
+    return fail(`Portable media changed after selection: ${collected.sourceName}`)
+  }
+  const inspected = inspectPortableMedia(data.subarray(0, Math.min(data.byteLength, 4096)), collected.sourceName)
+  if (inspected.kind !== collected.asset.kind || inspected.mime !== collected.asset.mime || inspected.extension !== collected.asset.extension) {
+    return fail(`Portable media signature changed after selection: ${collected.sourceName}`)
+  }
+  return data
+}
+
 export function placeholderPortableMedia(assetId: string, kind: PortableMediaKind, label: string): PortableMediaAsset {
   if (!SHA256.test(assetId)) return fail('Portable media placeholder has an invalid content address.')
   const safeLabel = cleanLabel(label)

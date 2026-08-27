@@ -28,6 +28,7 @@ import type { HistoryFilters } from '../shared/local-history'
 import type { ClientId, PeerDiff, PeerIdentity, PeerState } from '../shared/presence'
 import type { ConvertQueueItem, ConverterQueueState } from '../shared/converter'
 import type { PullQueueItem, PullQueueState } from '../shared/ollama'
+import type { DockerHostAction, DockerHostJobProgress } from '../shared/docker-host-manager'
 import type { MinecraftEvent } from '../shared/minecraft'
 import type { NodeDependencyAvailability, NodeDependencyProgress, NodeDependencyInstallResult } from '../shared/node-dependencies'
 import type { WslCreateProgress } from '../shared/wsl'
@@ -195,6 +196,14 @@ const api: NodeTerminalApi = {
       return () => ipcRenderer.removeListener(channel, handler)
     }
   },
+  providerServices: {
+    catalog: () => ipcRenderer.invoke(IPC.providerCatalog),
+    accounts: (providerId?: string) => ipcRenderer.invoke(IPC.providerAccounts, providerId),
+    resources: (accountId: string, capability?: string) => ipcRenderer.invoke(IPC.providerResources, accountId, capability),
+    beginOAuth: (providerId: string) => ipcRenderer.invoke(IPC.providerBeginOAuth, providerId),
+    completeOAuth: (callbackUrl: string) => ipcRenderer.invoke(IPC.providerCompleteOAuth, callbackUrl),
+    removeAccount: (accountId: string) => ipcRenderer.invoke(IPC.providerRemoveAccount, accountId)
+  },
   workspace: {
     load: () => ipcRenderer.invoke(IPC.workspaceLoad),
     save: (workspace: Workspace) => ipcRenderer.invoke(IPC.workspaceSave, workspace),
@@ -210,7 +219,7 @@ const api: NodeTerminalApi = {
     portableBindings: {
       state: (input: { nodeId: string; featureId: string; displayLabel: string; hasMissingAssets?: boolean }) =>
         ipcRenderer.invoke(IPC.portableBindingState, input),
-      apply: (input: { nodeId: string; action: import('../shared/types').PortableBindingAction; providerOrHostIdentity?: string; localResourceReferences?: Record<string, string | number | boolean>; credentialKeys?: string[] }) =>
+      apply: (input: { nodeId: string; action: import('../shared/types').PortableBindingAction; featureId?: string; providerAccountId?: string; resourceId?: string }) =>
         ipcRenderer.invoke(IPC.portableBindingApply, input)
     },
     onArchiveProgress: (cb: (event: import('../shared/types').ProjectArchiveProgress) => void) => {
@@ -857,6 +866,18 @@ const api: NodeTerminalApi = {
   },
   relayHost: {
     dockerContexts: () => ipcRenderer.invoke(IPC.relayHostDockerContexts),
+    manager: {
+      contexts: () => ipcRenderer.invoke(IPC.dockerHostManagerContexts),
+      snapshot: (context: string) => ipcRenderer.invoke(IPC.dockerHostManagerSnapshot, context),
+      logs: (context: string, containerId: string) => ipcRenderer.invoke(IPC.dockerHostManagerLogs, context, containerId),
+      run: (action: DockerHostAction) => ipcRenderer.invoke(IPC.dockerHostManagerRun, action),
+      cancel: (jobId: string) => ipcRenderer.send(IPC.dockerHostManagerCancel, jobId),
+      onProgress: (listener: (progress: DockerHostJobProgress) => void) => {
+        const handler = (_event: unknown, progress: DockerHostJobProgress) => listener(progress)
+        ipcRenderer.on(IPC.dockerHostManagerProgress, handler)
+        return () => ipcRenderer.removeListener(IPC.dockerHostManagerProgress, handler)
+      }
+    },
     start: (projectId?: string) => ipcRenderer.invoke(IPC.relayHostStart, projectId),
     invite: (opts?: { projectId?: string; email?: string }) =>
       ipcRenderer.invoke(IPC.relayHostInvite, opts ?? {}),

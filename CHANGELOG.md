@@ -2,6 +2,34 @@
 
 ## Unreleased
 
+- Complete the Express File Converter flow with queue-wide collision-safe destination names,
+  visible rename disclosure, final atomic no-clobber publication, and a completed-output action that
+  opens the exact result in Visual Studio Code through the active project API. The converter queue
+  and all source/destination paths remain machine-local and absent from portable schema 3 projects.
+  Tests, lint, type checks, builds, packaging, runtime interaction, and captures were intentionally
+  not run in this ultra-speed implementation lane.
+
+- Add a guided Docker host manager for local and saved SSH contexts. The canvas node now exposes
+  searchable containers, images, volumes, networks, Compose projects, bounded statistics, redacted
+  logs, fixed typed container tasks, cancellable lifecycle progress, and destructive confirmation.
+  Main-process argument-array validation prevents renderer shell input, while schema 3 carries only
+  safe neutral intent and keeps credentials, endpoints, paths, live ids, and process state local.
+  The ultra-speed lane intentionally did not run tests, type checks, lint, reviews, security or
+  accessibility checks, builds, packaging, installer execution, runtime interaction, or captures.
+
+- Add a platform-free universe navigation policy that permits canvas transitions only through
+  reciprocal entry and return doors, refuses tab, palette, history, and direct-selection bypasses,
+  and records only safe paired-door intent in schema 3. No tests, type checks, lint, reviews,
+  builds, packaging, runtime interaction, or captures were run in this ultra-speed lane.
+
+- Add shared provider-account, sealed credential, OAuth PKCE callback, resource-discovery, and
+  local-binding services across Desktop and Server Edition. The guided binding wizard now uses
+  searchable account and resource pickers with adjacent regex builders and exact unavailable
+  reasons instead of accepting hand-typed provider identities or resource references. Project
+  import remains side-effect free. This ultra-speed lane did not run tests, type checks, lint,
+  reviews, security or accessibility checks, builds, packaging, installer execution, runtime
+  interaction, or UI captures.
+
 - Add a source-only desktop Material Design 3 audit with a hand-written inventory of 212 rendered
   surfaces, including onboarding, profile picking, conversion, password management, Minecraft
   management, dialogs, find bars, and notifications. Shared NumberField, Radio, Progress, and Tabs
@@ -71,13 +99,18 @@
   not run under issue #17's explicit verification boundary.
 - Add the issue #20 media catalogue and Photo, Video, and mixed-media Gallery canvas node kinds.
   Local media is routed through the existing allowlisted protocol, gallery references carry bounded
-  portable metadata, and missing assets remain visible instead of disappearing. Verification is
-  pending in the parent integration lane.
-- Add the Torrent Downloader canvas node with packaged or pinned user-scoped WebTorrent runtime
-  discovery, magnet and `.torrent` intake, metadata/file selection, safe destination preflight,
-  progress/speed/peer/ETA reporting, pause/resume/cancel/retry, restart reconciliation, bounded
-  per-task seeding, and machine-local task persistence. The ultra-speed lane intentionally did not
-  run tests, builds, packaging, installer execution, runtime interaction checks, or captures.
+  portable metadata, and missing assets remain visible instead of disappearing. Machine paths now
+  round-trip only through the local workspace index; schema 3 binds node references to validated
+  content-addressed archive entries and re-proves byte count, signature, and SHA-256 before export
+  or resolution. Verification is pending in the parent integration lane.
+- Add the Torrent Downloader canvas node with ESM-compatible packaged or pinned user-scoped
+  WebTorrent runtime discovery, explicit magnet and `.torrent` metadata inspection, searchable
+  file selection and seeding policy pickers with anchored regex builders, safe destination
+  preflight, explicit start/remove actions, progress/speed/peer/ETA reporting,
+  pause/resume/cancel/retry, restart reconciliation, completion-based bounded seeding, and
+  machine-local task persistence. The ultra-speed lane intentionally did not run tests, type
+  checks, lint, builds, packaging, installer execution, runtime interaction checks, captures,
+  audits, or reviews.
 - Add a guided Linux ISO VM canvas node backed by bundled QEMU and qemu-img resolution, bounded
   memory/CPU settings, WHPX preference, loopback VNC/QMP lifecycle, persistent-install and
   disposable-live modes, machine-local ISO/disk bindings, snapshot controls, and network-off

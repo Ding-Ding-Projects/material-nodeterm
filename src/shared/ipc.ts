@@ -342,6 +342,12 @@ export const IPC = {
   projectArchiveImport: 'project-archive:import',
   portableBindingState: 'portable-binding:state',
   portableBindingApply: 'portable-binding:apply',
+  providerCatalog: 'provider-services:catalog',
+  providerAccounts: 'provider-services:accounts',
+  providerResources: 'provider-services:resources',
+  providerBeginOAuth: 'provider-services:begin-oauth',
+  providerCompleteOAuth: 'provider-services:complete-oauth',
+  providerRemoveAccount: 'provider-services:remove-account',
   projectArchiveProgress: 'project-archive:progress',
   projectArchiveCancel: 'project-archive:cancel',
   /** The unlock ladder for a protected project file's password prompt — issue a challenge, and
@@ -633,6 +639,12 @@ export const IPC = {
   // main → renderer when a bridged peer becomes a live client / drops (payload `{ id }`).
   relayHostStart: 'relay:host:start',
   relayHostDockerContexts: 'relay:host:docker-contexts',
+  dockerHostManagerContexts: 'docker-host-manager:contexts',
+  dockerHostManagerSnapshot: 'docker-host-manager:snapshot',
+  dockerHostManagerLogs: 'docker-host-manager:logs',
+  dockerHostManagerRun: 'docker-host-manager:run',
+  dockerHostManagerCancel: 'docker-host-manager:cancel',
+  dockerHostManagerProgress: 'docker-host-manager:progress',
   // Team Access (multi-seat): `relayHostInvite` ADDS a seat (invoke, `{ projectId?, email? }` →
   // `{ offer }`, cap-checked → rejects `E_SEATS_FULL`); `relayHostRevoke` (send, `{ id }`) cuts one
   // bridged peer's live session. `relayHostPeerPending`/`relayHostOpen` now also carry the seat

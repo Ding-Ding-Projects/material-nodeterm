@@ -1,5 +1,6 @@
 import { DEFAULT_WORD_SEPARATORS } from './word-separators'
 import type { ServiceConnection } from './node-exec'
+import type { DockerHostManagerApi } from './docker-host-manager'
 import type { NsisSpec, NsisLocalPaths } from './nsis-form-types'
 // Types shared across the main, preload, and renderer processes.
 
@@ -1384,9 +1385,9 @@ export interface PortableBindingApi {
   apply(input: {
     nodeId: string
     action: PortableBindingAction
-    providerOrHostIdentity?: string
-    localResourceReferences?: Record<string, string | number | boolean>
-    credentialKeys?: string[]
+    featureId?: string
+    providerAccountId?: string
+    resourceId?: string
   }): Promise<{ ok: true; state: 'bound' | 'unbound' } | { ok: false; error: string }>
 }
 
@@ -4147,6 +4148,8 @@ export interface RelayPeerPending {
  */
 export interface RelayHostApi {
   dockerContexts(): Promise<Array<{ name: string; current: boolean; endpoint: string }>>
+  /** Guided local/SSH Docker management. Desktop owns the CLI; Server Edition refuses it. */
+  manager: DockerHostManagerApi
   /**
    * Enter host mode over the relay: connect and return a pairing offer string to hand to a client.
    * Rejects when Docker or the configured relay is unavailable. `projectId` is the
@@ -4476,6 +4479,8 @@ export interface NodeTerminalApi {
   /** Desktop-only Windows profile detection; absent on Server Edition and mobile bridges. */
   terminalProfiles?: TerminalProfilesApi
   workspace: WorkspaceApi
+  /** Shared provider-account, credential-vault, OAuth-callback, and resource-picker services. */
+  providerServices: import('./provider-services').ProviderServicesApi
   timer: TimerApi
   serverDeployment: ServerDeploymentApi
   projectSettings: ProjectSettingsApi
