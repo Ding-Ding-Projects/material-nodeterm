@@ -33,6 +33,10 @@ export function codexHome(): string {
   if (configured.startsWith('~/') || configured.startsWith('~\\')) {
     return path.resolve(os.homedir(), configured.slice(2))
   }
+  // Preserve an explicitly rooted value verbatim. This keeps a POSIX-style value stable in
+  // cross-platform configuration and avoids turning `/tmp/...` into a drive-relative path on
+  // Windows, while still resolving ordinary relative values against the current process.
+  if (configured.startsWith('/') || path.isAbsolute(configured)) return configured
   return path.resolve(configured)
 }
 
@@ -248,15 +252,6 @@ export async function fetchCodexUsage(
   home = codexHome(),
   identity?: { id?: string; label?: string | null; email?: string | null }
 ): Promise<ProviderUsage> {
-  try {
-    const viaBackend = await fetchViaBackend(home)
-    if (viaBackend) {
-      return {
-        ...viaBackend,
-        account: identity?.email || identity?.label || null,
-        accountId: identity?.id
-      }
-    }
   const account = identity?.email || identity?.label || null
   const accountId = identity?.id
   try {
@@ -267,22 +262,11 @@ export async function fetchCodexUsage(
   }
   try {
     const viaAppServer = await fetchViaAppServer(home)
-    if (viaAppServer) {
-      return {
-        ...viaAppServer,
-        account: identity?.email || identity?.label || null,
-        accountId: identity?.id
-      }
-    }
     if (viaAppServer) return { ...viaAppServer, account, accountId }
   } catch {
     // fall through to 'unavailable'
   }
   // Not signed in, no CLI, or both transports declined — nothing to show, same as Claude on
   // API-key billing. 'unavailable' hides the provider rather than showing a broken row.
-  return snapshot([], 'unavailable', identity?.email || identity?.label || null, identity?.id)
-  // API-key billing. 'unavailable' hides the provider rather than showing a broken row. Still
-  // stamped with this account's identity so an empty read fails closed to THIS account, never to
-  // a fabricated one or another account's numbers.
   return snapshot([], 'unavailable', account, accountId)
 }

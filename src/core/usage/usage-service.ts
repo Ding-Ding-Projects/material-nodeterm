@@ -299,11 +299,6 @@ export function startUsageService(opts: UsageServiceOptions = {}): UsageService 
   let providersInFlight: Promise<ProviderUsage[]> | null = null
   let codexAccountsFingerprint = ''
 
-  // The account set the current cache was built from. When it changes (an account added, removed,
-  // or relabelled) the cache is busted so a snapshot from a DIFFERENT account set is never served —
-  // switching accounts can't show stale numbers (S6 §4.3, cache fingerprint).
-  let codexAccountsFingerprint = ''
-
   // A throwing provider must never break the sweep — fail closed to the empty set (system-only),
   // never a fabricated account (S6 §4.3).
   const readCodexAccounts = (): ReturnType<NonNullable<UsageServiceOptions['codexAccounts']>> => {
@@ -314,30 +309,6 @@ export function startUsageService(opts: UsageServiceOptions = {}): UsageService 
     }
   }
 
-  const fingerprintCodexAccounts = (
-    accounts: ReturnType<NonNullable<UsageServiceOptions['codexAccounts']>>
-  ): string =>
-    accounts
-      .map(
-        (account) =>
-          `${account.id}\0${account.home}\0${account.label}\0${account.email ?? ''}`
-      )
-      .join('\x01')
-
-  const runProviders = async (): Promise<ProviderUsage[]> => {
-    if (providersInFlight) return providersInFlight
-    const codexAccounts = readCodexAccounts()
-    codexAccountsFingerprint = fingerprintCodexAccounts(codexAccounts)
-    const codexProviders = [
-      { id: 'codex', fetch: () => fetchCodexUsage() },
-      ...codexAccounts.map((account) => ({
-        id: 'codex',
-        fetch: () => fetchCodexUsage(account.home, account)
-      }))
-    ]
-    // One slow provider must not withhold the others — settle each independently.
-    providersInFlight = Promise.all(
-      [...codexProviders, ...OTHER_PROVIDERS].map((p) =>
   // `id\0home\0label\0email` per account, NUL-joined — every field that changes what a row reports
   // participates, so a relabel or a home move busts the cache too, not just add/remove.
   const fingerprintCodexAccounts = (
@@ -415,12 +386,12 @@ export function startUsageService(opts: UsageServiceOptions = {}): UsageService 
   })
 
   platform().handle(IPC.usageProviders, (force?: boolean) => {
-    const currentFingerprint = fingerprintCodexAccounts(readCodexAccounts())
+    const currentAccounts = readCodexAccounts()
+    const currentFingerprint = fingerprintCodexAccounts(currentAccounts)
     if (currentFingerprint !== codexAccountsFingerprint) providersAt = 0
     // Bust the debounce when the Codex account set has changed since the cache was built, so a
     // snapshot from a different account set (stale numbers after an add/remove/switch) is never
     // served (S6 §4.3). runProviders re-stamps the fingerprint from the fresh set.
-    if (fingerprintCodexAccounts(readCodexAccounts()) !== codexAccountsFingerprint) providersAt = 0
     if (!force && providersAt && Date.now() - providersAt < REFETCH_DEBOUNCE_MS) {
       return providersCache
     }
