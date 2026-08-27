@@ -94,7 +94,7 @@ That distinction is intentional. A restored view is not described as a process t
 
 | Area | What is available | Detailed documentation |
 | --- | --- | --- |
-| Canvas and nodes | Spatial projects, terminal and agent nodes, notes, groups, editors, diffs, browser surfaces, timers, calendars, media, and service nodes | [Canvas features](./docs/features/canvas/README.md) |
+| Canvas and nodes | Spatial projects, terminal and agent nodes, notes, groups, editors, diffs, browser surfaces, timers, calendars, media, service nodes, portal doors, child canvases, and recovery activities | [Canvas features](./docs/features/canvas/README.md) |
 | Terminals | Local shell profiles, persistent session backends, scrollback restoration, terminal rendering, and word-separator controls | [Terminal features](./docs/features/terminals/README.md) |
 | Coding agents | Launch profiles, status hooks, context links, account selection, messaging, and supported capability reporting | [Agent support](./docs/features/agents/agent-support.md) |
 | Projects and tabs | Multiple projects, portable project files, project settings, groups, searches, and tab organization | [Project features](./docs/features/projects/README.md) |
@@ -102,6 +102,8 @@ That distinction is intentional. A restored view is not described as a process t
 | Source control | Git status, staging, diffs, commits, publishing, branches, and linked checkouts | [Source control](./docs/features/source-control/README.md) |
 | Remote work | SSH projects, approved relay peers, browser-based hosting, and machine-scoped safety boundaries | [Remote features](./docs/features/remote/README.md) |
 | Files and media | File conversion, portable media attachments, galleries, downloads, and export workflows | [Feature index](./docs/features/README.md) |
+| Portals and multiverse | Depth-bounded child canvases, guided door construction, scope-owned catalogs, project import repair, and preserved portal lifecycle | [Multiverse canvases](./docs/features/canvas/multiverse-canvases.md) |
+| Sensors and pipelines | Home Assistant sensor displays plus advanced media, archive, PDF, OCR, and structured-data conversion pipelines | [Integration index](./docs/features/integrations/README.md) |
 | Interface | Material Design 3 primitives, appearance editing, logo and app-name controls, language modes, narrator, schedules, and notifications | [Appearance](./docs/features/appearance/README.md) |
 | History and recovery | Local Git-backed history, settings history, changelog browsing, exports, and explicit recovery states | [Local history](./docs/local-history.md) |
 | Accessibility | Keyboard operation, visible focus, reduced motion, language modes, attention accommodations, responsive layouts, and screen-reader semantics | [ADHD modes](./docs/adhd-modes.md) |
@@ -115,6 +117,8 @@ That distinction is intentional. A restored view is not described as a process t
 - Pan and zoom across a project rather than losing sessions inside a flat tab stack.
 - Create terminal, coding-agent, sticky-note, group, editor, diff, browser, timer, calendar,
   gallery, download, virtual-machine, and service-oriented nodes.
+- Create and navigate depth-bounded child canvases through guided doors, preserve portal state
+  through import and deletion, and use the scoped recovery activity where a portal requires it.
 - Nest and label groups, and bind a group to a linked Git checkout.
 - Move between Canvas, Board, Files, Tools, History, Status, Alerts, Settings, and Kids surfaces.
 - Keep project settings separate from global settings through explicit scope controls.
@@ -151,6 +155,9 @@ That distinction is intentional. A restored view is not described as a process t
 - Browse a local changelog with dates and commit references.
 - Export records and filtered views in formats that preserve their fields.
 - Use local file conversion adapters with explicit capability and loss warnings.
+- Use advanced media, archive, PDF, OCR, and structured-data pipelines through the same converter
+  boundary, including honest unavailable-adapter states.
+- Display Home Assistant sensor values as canvas nodes through the trusted local service boundary.
 - Manage local Ollama models and chats through the documented loopback API boundary.
 - Use toy locks as an explicitly non-security speed bump, with local recovery documentation.
 

@@ -759,6 +759,8 @@ export function buildStubApi(): Omit<
       importIcs: U('calendar.importIcs'),
       refresh: U('calendar.refresh'),
       beginOAuth: U('calendar.beginOAuth'),
+      connectCalDav: U('calendar.connectCalDav'),
+      disconnectAccount: U('calendar.disconnectAccount'),
       create: U('calendar.create'),
       update: U('calendar.update'),
       remove: U('calendar.remove')
@@ -780,6 +782,13 @@ export function buildStubApi(): Omit<
       services: U('homeAssistantControl.services'),
       call: U('homeAssistantControl.call'),
       cancel: U('homeAssistantControl.cancel')
+    },
+    homeAssistantSensor: {
+      binding: U('homeAssistantSensor.binding'),
+      configure: U('homeAssistantSensor.configure'),
+      leaveUnbound: U('homeAssistantSensor.leaveUnbound'),
+      discover: U('homeAssistantSensor.discover'),
+      refresh: U('homeAssistantSensor.refresh')
     },
     // Browser control is desktop-only (no <webview>, no CDP on the Server Edition / relay), so the
     // resolve round-trip is inert here — the verb is refused by name before it reaches a handler.

@@ -502,6 +502,7 @@ export const IPC = {
   plannerSave: 'planner:save',
   plannerHistory: 'planner:history',
   plannerExport: 'planner:export',
+  plannerConfigure: 'planner:configure',
   plannerOccurrence: 'planner:occurrence',
   // Alarm Clock nodes keep portable schedule intent in project data and mirror active execution
   // into a bounded, machine-local host snapshot. Due events carry no path or host identity.
@@ -821,6 +822,8 @@ export const IPC = {
   calendarImportIcs: 'calendar:import-ics',
   calendarRefresh: 'calendar:refresh',
   calendarBeginOAuth: 'calendar:begin-oauth',
+  calendarConnectCalDav: 'calendar:connect-caldav',
+  calendarDisconnectAccount: 'calendar:disconnect-account',
   calendarCreate: 'calendar:create',
   calendarUpdate: 'calendar:update',
   calendarRemove: 'calendar:remove',
@@ -840,6 +843,13 @@ export const IPC = {
   homeAssistantServices: 'home-assistant-control:services',
   homeAssistantCall: 'home-assistant-control:call',
   homeAssistantControlCancel: 'home-assistant-control:cancel',
+  // Home Assistant sensor nodes. Shared projects carry only entity/presentation intent; these
+  // channels operate on a machine-local binding whose credential never crosses back to the UI.
+  homeAssistantSensorBinding: 'home-assistant-sensor:binding',
+  homeAssistantSensorConfigure: 'home-assistant-sensor:configure',
+  homeAssistantSensorLeaveUnbound: 'home-assistant-sensor:leave-unbound',
+  homeAssistantSensorDiscover: 'home-assistant-sensor:discover',
+  homeAssistantSensorRefresh: 'home-assistant-sensor:refresh',
   // "Open in Visual Studio Code" (src/core/vscode-detect.ts, src/core/vscode-handlers.ts).
   // Registered on BOTH shells via the generic `platform.handle` seam, so it opens VS Code on
   // whichever machine is actually running the shell (this desktop, or the Server Edition host).

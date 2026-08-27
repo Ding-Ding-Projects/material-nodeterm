@@ -24,6 +24,7 @@ import type { HistoryFilters, HistoryListResult, HistoryRestoreResult } from './
 import type { CalendarApi, CalendarNodeConfig } from './calendar'
 import type { HomeAssistantApi } from './home-assistant'
 import type { HomeAssistantControlApi, HomeAssistantControlConfig } from './home-assistant-control'
+import type { HomeAssistantSensorApi, HomeAssistantSensorConfig } from './home-assistant-sensor'
 import type {
   ToyLockBeginTotpInput,
   ToyLockBeginTotpResult,
@@ -376,6 +377,7 @@ export type NodeKind =
   | 'loop'
   | 'scheduler'
   | 'dino'
+  | 'recovery-game'
   | 'annotation'
   // A permanent catalog surface owned by each Multiverse or AWS Universe child canvas. Shop is
   // intentionally a distinct kind so the canvas can refuse deletion, duplication, grouping, and
@@ -417,6 +419,7 @@ export type NodeKind =
   | 'proxmox'
   | 'gitlab'
   | 'homeassistant'
+  | 'homeassistant-sensor'
   | 'freepbx'
   | 'torrent'
   /** One-shot Linux ISO virtual machine, distinct from the WSL terminal profile. */
@@ -626,6 +629,8 @@ export interface CanvasNodeState {
   textUpdatedBy?: string
   // dino-only: best score reached in the T-Rex Runner game.
   highScore?: number
+  /** recovery-game-only: bounded portable progress with no process, account, or host state. */
+  recoveryGame?: import('./recovery-game').RecoveryGameSnapshot
   /**
    * service-kinds only: the display name the user gave this manager ("Home lab Proxmox", "Survival
    * server"). This is the ONLY thing a service node persists, and the restraint is deliberate — the
@@ -670,6 +675,9 @@ export interface CanvasNodeState {
   /** Home Assistant control-only portable selection intent. Local connection identity, URL,
    * bearer, discovery cache and request state never enter project data. */
   homeAssistantControlConfig?: HomeAssistantControlConfig
+  /** Home Assistant sensor-only, project-portable selection and presentation intent. Instance
+   * URLs, credentials, observed values, and history remain machine-local. */
+  homeAssistantSensorConfig?: HomeAssistantSensorConfig
   // editor / diff
   filePath?: string
   /** Photo/video/gallery media is represented by a portable content reference, never an absolute path. */
@@ -980,6 +988,20 @@ export interface LogRecord {
   msg: string
 }
 
+/** A portable child canvas inside one project. Root canvas content remains on Project itself. */
+export interface ProjectMultiverseCanvas {
+  id: string
+  title: string
+  parentCanvasId: string
+  /** Persisted depth from the project root. Multiverse canvases are limited to 1 through 8. */
+  depth: number
+  order: number
+  viewport: Viewport
+  nodes: CanvasNodeState[]
+  bridges?: BridgeLink[]
+  ropes?: BridgeLink[]
+}
+
 export interface LogApi {
   /** The whole ring, oldest-first — the panel's initial fill. */
   snapshot(): Promise<LogRecord[]>
@@ -1008,6 +1030,31 @@ export interface NavStop {
   note: string
 }
 
+/** A portable child canvas carried by a project after a Multiverse import. The node list is
+ * content, not a live process or destination binding, so it remains safe to move between hosts. */
+export interface ProjectChildCanvas {
+  id: string
+  scope: 'multiverse' | 'aws-universe'
+  parentCanvasId: string
+  depth: number
+  title: string
+  order: number
+  viewport?: Viewport
+  nodes: CanvasNodeState[]
+}
+
+/** Safe portal intent shared by the runtime project and schema 3 projection. */
+export interface ProjectPortalState {
+  id: string
+  parentCanvasId: string
+  childCanvasId: string
+  entryDoorId: string
+  returnDoorId: string
+  title: string
+  depth: number
+  status: 'open' | 'closed'
+}
+
 /** A project is one canvas/page: its own nodes, viewport, and default working dir. */
 export interface Project {
   id: string
@@ -1026,6 +1073,15 @@ export interface Project {
   ssh?: { server: import('./ssh').SshConnection; remoteCwd: string }
   viewport: Viewport
   nodes: CanvasNodeState[]
+  /** Safe, git-shared child canvases. Credentials, paths and runtime bindings stay on nodes' local overlays. */
+  multiverseCanvases?: ProjectMultiverseCanvas[]
+  /** Runtime-only selection. The shared project file stores hierarchy, never one person's current view. */
+  activeCanvasId?: string
+  /** Child universe canvases imported from schema 3. Their node content remains addressable even
+   * when the containing portal is removed, so deleting a portal cannot delete child work. */
+  childCanvases?: ProjectChildCanvas[]
+  /** Door-only Multiverse portal intent. Credentials and runtime bindings never fit this shape. */
+  portals?: ProjectPortalState[]
   /** Default managed Claude account for new Claude/chat nodes in this project. */
   defaultAccountId?: string
   /** Permission mode for new Claude TERMINAL (CLI) sessions in this project. SDK chat nodes are
@@ -1485,6 +1541,13 @@ export interface WorkspaceApi {
     path?: string
     archiveVersion?: 1 | 2 | 3
     contents?: ProjectArchiveContents
+    /** Safe planner definitions from schema 3, not yet applied to this machine. */
+    plannerDefinitions?: {
+      schemaVersion: 1
+      featureId: 'planner'
+      displayLabel: string
+      schedules: import('./planner-occurrences').PlannerSchedule[]
+    }
     restoredTo?: string
   }>
   /** Hand out the next unlock-ladder question for a rate-limited protected project file. `null`
@@ -2939,6 +3002,8 @@ export interface PlannerApi {
   save(file: import('./planner-occurrences').PlannerFile): Promise<{ ok: true } | { ok: false; error: string }>
   history(): Promise<import('./planner-occurrences').PlannerOccurrence[]>
   export(format: 'json' | 'csv'): Promise<{ filename: string; content: string }>
+  /** Apply imported schedule intent only after the user explicitly chooses Configure. */
+  configure(schedules: import('./planner-occurrences').PlannerSchedule[]): Promise<{ ok: true } | { ok: false; error: string }>
   onOccurrence(listener: (occurrence: import('./planner-occurrences').PlannerOccurrence) => void): () => void
 }
 
@@ -4540,6 +4605,8 @@ export interface NodeTerminalApi {
   homeAssistant: HomeAssistantApi
   /** Schema-driven Home Assistant controls through host-owned local connection bindings. */
   homeAssistantControl: HomeAssistantControlApi
+  /** Machine-local Home Assistant sensor discovery and bounded observations. */
+  homeAssistantSensor: HomeAssistantSensorApi
   ssh: SshApi
   sshProject: SshProjectApi
   sshFs: SshFsApi

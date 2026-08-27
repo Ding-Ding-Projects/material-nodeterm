@@ -50,6 +50,44 @@
   ultra-speed lane intentionally ran no tests, type checks, lint, reviews, security checks,
   accessibility checks, builds, packaging, installer execution, runtime interaction, or captures.
 
+- Add Home Assistant sensor display nodes with guided Configure, Rebind, Adopt, Deploy, Locate
+  Asset, and Leave Unbound routes; real entity discovery; value, binary, enum, gauge, trend, event,
+  weather, calendar, and selected-attribute presentations; bounded machine-local observations;
+  schema 3 portable display intent; sealed machine-local credentials; desktop and Server Edition
+  host services; and an explicit relay refusal. This ultra-speed implementation lane intentionally
+  keeps the last successful selected-entity observation visible and marked stale during a live
+  outage, and intentionally did not run tests, type checks, lint, reviews, security checks, accessibility checks, builds,
+  packaging, installer execution, runtime interaction, or UI captures.
+
+- Harden advanced pipeline publication with a 512 MiB produced-output ceiling and a 4 KiB ZIP
+  entry-name bound. Repair the issue lane's package manifest so the pinned PDF, OCR, and image
+  dependencies remain installable as valid JSON. This source-only correction intentionally did not run
+  tests, type checks, lint, builds, packaging, installer execution, runtime interaction, reviews,
+  audits, or UI captures.
+
+- Add bounded advanced file pipelines to the existing guided converter: packaged PDF inspection,
+  text extraction, split, merge, first-page extraction, reverse ordering, page rotation, and
+  metadata removal; supported Sharp image conversion; local
+  English OCR with packaged language data; safe ZIP entry inventory; and deterministic JSON key
+  ordering. Portable pipeline intent imports unbound and omits paths, credentials, sessions,
+  process and host identity, caches, and generated output. Audio/video and other formats without a
+  packaged adapter remain visibly disabled. This ultra-speed lane intentionally did not run tests,
+  type checks, lint, builds, packaging, installer execution, runtime interaction, reviews, audits,
+  or UI captures.
+
+- Add scoped Multiverse child canvases with a searchable hierarchy navigator, a guided searchable
+  parent picker, exact depth-8 refusal reasons, independent viewport and graph state, deterministic
+  scoped Shops, ordinary project persistence, and portable schema 3 projection. Import validates
+  hierarchy structure and reconstructs data without launching external work. Tests, type checks,
+  lint, builds, packaging, reviews, audits, runtime interaction, and captures remain unrun under
+  issue #33's ultra-speed boundary.
+
+- Add a portable top-down recovery game node with three energy keys, hazard reset behavior, central
+  core activation, keyboard and button controls, board-location search with an anchored regex
+  builder, explicit disabled-state guidance, and bounded schema 3 state that imports without
+  external side effects. Runtime, build, and capture verification remain pending in the integration
+  lane.
+
 - Add a source-only desktop Material Design 3 audit with a hand-written inventory of 212 rendered
   surfaces, including onboarding, profile picking, conversion, password management, Minecraft
   management, dialogs, find bars, and notifications. Shared NumberField, Radio, Progress, and Tabs
@@ -152,14 +190,30 @@
   builder state.
 - Add a host-owned planner occurrence service with durable local schedules, recurrence choices,
   timezone and DST semantics, cross-midnight descriptions, missed-occurrence history, JSON/CSV
-  export, Desktop IPC and Server Edition WS-RPC events, and a guided Planner settings surface.
+  export, Desktop IPC and Server Edition WS-RPC events, and a guided Planner settings surface. The
+  service now survives Desktop title-bar closure while enabled schedules exist, records each
+  occurrence before notification delivery, preserves host-owned history across stale UI saves,
+  exposes save retry recovery, and gates schedule deletion behind two-key confirmation.
   This ultra-speed lane intentionally leaves tests, builds, packaging, runtime interaction, and
   captures unrun.
+- Extend planner occurrences with a validated schema 3 planner-definition projection and an
+  explicit destination Configure action. Portable import carries schedule intent only, keeps
+  occurrence history and host state local, and merges configured definitions without overwriting a
+  conflicting destination schedule. The generated offline documentation bundle was refreshed from
+  the planner article. Tests, type checks, lint, builds, packaging, runtime interaction, and
+  captures remain unrun under the ultra-speed boundary.
 - Add Calendar nodes for local calendars and ICS import, with guided CalDAV, Google Calendar, and
   Microsoft 365 provider/account/calendar selection, recurrence and timezone views, offline cache,
   create/edit previews, and destructive delete confirmation. Provider credentials stay behind the
   trusted shell's vault boundary. This ultra-speed lane deliberately ran no tests, type checks,
   builds, packaging, runtime interaction, or captures.
+- Complete the Calendar provider boundary with verified HTTPS CalDAV account intake, loopback PKCE
+  for Google and Microsoft 365, machine-local credential storage, bounded paginated synchronization,
+  provider validators, retry backoff, and provider-confirmed event writes. Incremental provider
+  updates now merge changed records and tombstones into the existing cache, and project-file
+  boundaries strip unknown calendar configuration fields. This continuation ran no
+  tests, type checks, lint, builds, packaging, installer execution, runtime interaction, reviews,
+  audits, or captures.
 - Add Alarm Clock canvas nodes with one-shot and recurring wall-clock schedules, explicit IANA
   timezones, daylight-saving-safe occurrence planning, snooze, dismiss, missed history, sound and
   narrator integration, and an honest no-powered-off-wake notice. Verification is intentionally

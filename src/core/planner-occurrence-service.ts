@@ -13,6 +13,7 @@ import {
 } from '../shared/planner-occurrences'
 import { platform } from './platform'
 import { renameAtomic, tempNameFor } from './fs-atomic'
+import { mergePortablePlannerSchedules, validatePortablePlannerDefinitions } from './portable-planner'
 
 export interface PlannerOccurrenceNotifier {
   (occurrence: PlannerOccurrence): void
@@ -65,11 +66,28 @@ export class PlannerOccurrenceStore {
     return this.loadError ? this.loadError : { ok: true, file: this.file, error: null }
   }
 
+  /**
+   * Save user-authored schedule intent without accepting stale renderer copies of host-owned
+   * occurrence history. The planner timer and a settings window can write at the same time; a
+   * full-file replacement from the renderer would otherwise erase a just-fired occurrence.
+   */
   async save(next: PlannerFile): Promise<{ ok: true } | { ok: false; error: string }> {
     if (this.loadError) return { ok: false, error: 'Planner data is locked until the damaged file is repaired and the app is restarted.' }
     const error = validatePlannerFile(next)
     if (error) return { ok: false, error }
+    const result = await this.update((current) => ({ ...current, schedules: next.schedules }))
+    return result.ok ? { ok: true } : result
+  }
+
+  /** Queue one host-owned read/modify/write decision against the latest published snapshot. */
+  async update(
+    mutate: (current: PlannerFile) => PlannerFile
+  ): Promise<{ ok: true; file: PlannerFile } | { ok: false; error: string }> {
+    if (this.loadError) return { ok: false, error: 'Planner data is locked until the damaged file is repaired and the app is restarted.' }
     const run = this.writeChain.then(async () => {
+      const next = mutate(this.file)
+      const validationError = validatePlannerFile(next)
+      if (validationError) throw new Error(validationError)
       const filePath = this.filePath()
       const tmp = tempNameFor(filePath)
       await fsPromises.writeFile(tmp, JSON.stringify(next, null, 2), { encoding: 'utf8', mode: 0o600 })
@@ -80,11 +98,11 @@ export class PlannerOccurrenceStore {
         throw cause
       }
       this.file = next
+      return next
     })
-    this.writeChain = run.catch(() => undefined)
+    this.writeChain = run.then(() => undefined, () => undefined)
     try {
-      await run
-      return { ok: true }
+      return { ok: true, file: await run }
     } catch {
       return { ok: false, error: 'Planner data could not be saved.' }
     }
@@ -136,6 +154,25 @@ export class PlannerOccurrenceService {
     return this.store.get().schedules.some((schedule) => schedule.enabled)
   }
 
+  /** Apply safe imported definitions only after an explicit destination Configure action. */
+  async configure(schedules: PlannerFile['schedules']): Promise<{ ok: true } | { ok: false; error: string }> {
+    try {
+      const blueprint = validatePortablePlannerDefinitions({
+        schemaVersion: 1,
+        featureId: 'planner',
+        displayLabel: 'Planner',
+        schedules
+      })
+      const result = await this.store.update((current) => ({
+        ...current,
+        schedules: mergePortablePlannerSchedules(current.schedules, blueprint.schedules)
+      }))
+      return result.ok ? { ok: true } : result
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : 'Planner definitions could not be configured.' }
+    }
+  }
+
   /** Integration seam for future Calendar, Timer, and Alarm nodes. The callback receives only a
    * durable occurrence record, never a credential, process handle, or machine path. */
   onOccurrence(listener: PlannerOccurrenceNotifier): () => void {
@@ -148,6 +185,7 @@ export class PlannerOccurrenceService {
     platform().handle(IPC.plannerSave, (file: PlannerFile) => this.store.save(file))
     platform().handle(IPC.plannerHistory, () => this.store.get().occurrences)
     platform().handle(IPC.plannerExport, (format: 'json' | 'csv') => this.exportData(format))
+    platform().handle(IPC.plannerConfigure, (schedules: PlannerFile['schedules']) => this.configure(schedules))
   }
 
   private exportData(format: 'json' | 'csv'): { filename: string; content: string } {
@@ -161,7 +199,9 @@ export class PlannerOccurrenceService {
   private tick(): void {
     if (this.tickInFlight) return
     this.tickInFlight = true
-    const pending = this.tickNow().finally(() => {
+    // A timer callback has no caller to observe a rejection. Keep the process alive and leave the
+    // prior durable marker untouched so the next sweep can retry instead of silently skipping it.
+    const pending = this.tickNow().catch(() => undefined).finally(() => {
       this.tickInFlight = false
       if (this.tickPromise === pending) this.tickPromise = null
     })
@@ -169,42 +209,43 @@ export class PlannerOccurrenceService {
   }
 
   private async tickNow(): Promise<void> {
-    const file = this.store.get()
     const now = this.options.now?.() ?? Date.now()
-    const from = file.lastTickMs ?? now - DEFAULT_TICK_MS
-    if (now < from) {
-      await this.store.save({ ...file, lastTickMs: now })
-      return
-    }
-    const known = new Set(file.occurrences.map((occurrence) => occurrence.id))
     const additions: PlannerOccurrence[] = []
-    for (const schedule of file.schedules) {
-      const due = plannerOccurrencesBetween(schedule, from, now)
-      for (const scheduledAtMs of due.slice(0, PLANNER_LIMITS.maxCatchUpOccurrences)) {
-        const id = plannerOccurrenceId(schedule.id, scheduledAtMs)
-        if (known.has(id)) continue
-        const missed = scheduledAtMs < now - PLANNER_LIMITS.missedGraceMs
-        const occurrence: PlannerOccurrence = {
-          id,
-          scheduleId: schedule.id,
-          scheduledAtMs,
-          observedAtMs: now,
-          status: missed ? 'missed' : 'fired',
-          title: schedule.notification.title,
-          body: schedule.notification.body
+    const saved = await this.store.update((file) => {
+      const from = file.lastTickMs ?? now - DEFAULT_TICK_MS
+      if (now < from) return { ...file, lastTickMs: now }
+      const known = new Set(file.occurrences.map((occurrence) => occurrence.id))
+      for (const schedule of file.schedules) {
+        const due = plannerOccurrencesBetween(schedule, from, now)
+        for (const scheduledAtMs of due.slice(0, PLANNER_LIMITS.maxCatchUpOccurrences)) {
+          const id = plannerOccurrenceId(schedule.id, scheduledAtMs)
+          if (known.has(id)) continue
+          const missed = scheduledAtMs < now - PLANNER_LIMITS.missedGraceMs
+          const occurrence: PlannerOccurrence = {
+            id,
+            scheduleId: schedule.id,
+            scheduledAtMs,
+            observedAtMs: now,
+            status: missed ? 'missed' : 'fired',
+            title: schedule.notification.title,
+            body: schedule.notification.body
+          }
+          known.add(id)
+          additions.push(occurrence)
         }
-        known.add(id)
-        additions.push(occurrence)
-        if (!missed) this.deliver(occurrence)
       }
-    }
-    if (additions.length === 0 && file.lastTickMs === now) return
-    const next: PlannerFile = {
-      ...file,
-      lastTickMs: now,
-      occurrences: [...file.occurrences, ...additions].slice(-PLANNER_LIMITS.maxOccurrences)
-    }
-    await this.store.save(next)
+      return {
+        ...file,
+        lastTickMs: now,
+        occurrences: [...file.occurrences, ...additions].slice(-PLANNER_LIMITS.maxOccurrences)
+      }
+    })
+    if (!saved.ok) return
+    // Publish only after the occurrence and deduplication marker are durable. A failed write must
+    // not produce a notification that the next sweep can legitimately emit again.
+    additions
+      .filter((occurrence) => occurrence.status === 'fired')
+      .forEach((occurrence) => this.deliver(occurrence))
   }
 
   private deliver(occurrence: PlannerOccurrence): void {

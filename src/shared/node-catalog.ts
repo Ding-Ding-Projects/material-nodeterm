@@ -322,6 +322,18 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
     availability: alwaysAvailable
   },
   {
+    id: 'recovery-game',
+    nodeKind: 'recovery-game',
+    category: 'tools',
+    label: 'Recovery game',
+    description: 'Energize three keys, avoid hazards, and activate the central core.',
+    keywords: ['game', 'recovery', 'energy keys', 'hazards', 'activation core'],
+    documentationPath: 'docs/features/canvas/recovery-game.md',
+    safeDefaults: { recoveryGame: { player: { x: 1, y: 5 }, energizedKeys: [], coreActivated: false, hazardHits: 0 } },
+    dependencies: [],
+    availability: alwaysAvailable
+  },
+  {
     id: 'loop',
     nodeKind: 'scheduler',
     category: 'automation',
@@ -480,7 +492,21 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
     availabilityMode: 'configure-later',
     availability: inScope('any')
   },
-  plannedEntry('homeassistant-sensor', 'managers', 'Home Assistant sensor', 'Create a typed Home Assistant sensor display with safe binding intent.', 'homeassistant-adapter'),
+  {
+    id: 'homeassistant-sensor',
+    nodeKind: 'homeassistant-sensor',
+    category: 'managers',
+    label: 'Home Assistant sensor',
+    description: 'Display selected Home Assistant values, states, gauges, trends, events, weather, calendars, and attributes through a machine-local binding.',
+    keywords: ['home assistant', 'sensor', 'binary', 'gauge', 'trend', 'weather', 'calendar', 'event', 'history'],
+    documentationPath: 'docs/features/integrations/home-assistant-sensor-display.md',
+    safeDefaults: { entities: [], refreshSeconds: 30, historyLimit: 60 },
+    dependencies: ['homeassistant-adapter'],
+    status: 'current',
+    availabilityMode: 'configure-later',
+    scope: 'any',
+    availability: unsupportedInRelay
+  },
   plannedEntry('calendar', 'automation', 'Calendar', 'Create a portable calendar definition with local account binding later.', 'calendar-service'),
   plannedEntry('timer', 'automation', 'Timer', 'Create a timer blueprint with a local execution binding later.', 'planner-service'),
   {
@@ -532,6 +558,7 @@ export const NODE_CATALOG_COMPLETENESS: readonly NodeCatalogCompletenessRecord[]
   { id: 'diff', state: 'current', scope: 'any', reason: 'project file picker required' },
   { id: 'authenticator', state: 'current', scope: 'any', reason: 'local authenticator node' },
   { id: 'dino', state: 'current', scope: 'any', reason: 'local dino node' },
+  { id: 'recovery-game', state: 'current', scope: 'any', reason: 'portable local recovery game' },
   { id: 'loop', state: 'current', scope: 'any', reason: 'persisted scheduler node' },
   { id: 'nsis', state: 'current', scope: 'any', reason: 'persisted installer-builder node' },
   { id: 'service:minecraft', state: 'current', scope: 'any', reason: 'service manager node' },
@@ -548,7 +575,7 @@ export const NODE_CATALOG_COMPLETENESS: readonly NodeCatalogCompletenessRecord[]
   { id: 'linux-vm', state: 'planned', scope: 'any', reason: 'QEMU runtime not implemented' },
   { id: 'wild-dim-sum', state: 'current', scope: 'any', reason: 'portable public-catalog selection node' },
   { id: 'homeassistant-control', state: 'current', scope: 'any', reason: 'schema-driven local binding control node' },
-  { id: 'homeassistant-sensor', state: 'planned', scope: 'any', reason: 'sensor display not implemented' },
+  { id: 'homeassistant-sensor', state: 'current', scope: 'any', reason: 'portable sensor display with machine-local binding' },
   { id: 'calendar', state: 'planned', scope: 'any', reason: 'calendar service not implemented' },
   { id: 'timer', state: 'planned', scope: 'any', reason: 'timer service not implemented' },
   { id: 'alarm', state: 'current', scope: 'any', reason: 'persisted Alarm Clock node with host planner' },

@@ -25,6 +25,7 @@ the deep architecture reference these articles are distilled from.
 | [Dependency installation](./dependencies/README.md) | The manifest and machine-local lifecycle that installs prerequisites for node features. |
 | [Torrents](./torrents/README.md) | Explicit local WebTorrent tasks with safe destinations, progress, recovery, and bounded seeding. |
 | [Files and conversion](./files/README.md) | Local file conversion, collision-safe destinations, honest capability gaps, and completed-output handoff. |
+| [File conversion and pipelines](./converter/README.md) | Guided local media, archive, PDF, OCR, and structured-data operations with bounded resources. |
 | [Global and project settings](./global-and-project-settings.md) | Durable app defaults and complete sparse per-project overlays. |
 | [Help](./help/README.md) | The in-app offline documentation browser these articles are read in. |
 | [Calendar](./calendar/README.md) | Local, ICS, CalDAV, Google Calendar, and Microsoft 365 calendar nodes with offline cache and guided provider binding. |

@@ -94,10 +94,12 @@ import { AnnotationNode } from '../nodes/AnnotationNode'
 import AuthenticatorNode from '../nodes/AuthenticatorNode'
 import CalendarNode from '../nodes/CalendarNode'
 import HomeAssistantControlNode from '../nodes/HomeAssistantControlNode'
+import HomeAssistantSensorNode from '../nodes/HomeAssistantSensorNode'
 import { useAnnotationDrawTool } from './useAnnotationDrawTool'
 import { annotationEndpoints } from '../lib/annotation'
 import { LazyEditorNode, LazyDiffNode } from '../nodes/lazyMonacoNodes'
 import { DinoNode } from '../nodes/DinoNode'
+import RecoveryGameNode from '../nodes/RecoveryGameNode'
 import { SERVICE_NODE_KINDS, type ServiceNodeKind, type ProjectArchiveContents } from '@shared/types'
 import { VIRTUAL_MACHINE_NODE_CATALOG } from '@shared/virtual-machine'
 import type { ProjectIcon } from '@shared/project-icon'
@@ -133,6 +135,8 @@ import {
 } from '../lib/adhdModes'
 import { TopAppBar } from '../components/TopAppBar'
 import { ProjectSwitcher } from '../components/ProjectSwitcher'
+import { MultiverseNavigator } from '../components/MultiverseNavigator'
+import { projectCanvasView } from '@shared/multiverse-canvases'
 import { type MenuItem } from '../components/ContextMenu'
 import { devicePixelSnapOffset } from '../terminal/device-pixel-fit'
 import { VocabularyContextMenu } from '../components/menu/VocabularyContextMenu'
@@ -697,6 +701,7 @@ import {
   createBrowserNode,
   defaultBrowserTabs,
   createDinoNode,
+  createRecoveryGameNode,
   createDiffNode,
   createEditorNode,
   createGroupNode,
@@ -708,6 +713,7 @@ import {
   createAuthenticatorNode,
   createCalendarNode,
   createHomeAssistantControlNode,
+  createHomeAssistantSensorNode,
   createNsisNode,
   createTorrentNode,
   createStickyNode,
@@ -2045,6 +2051,7 @@ export function Canvas() {
       authenticator: withNodeBoundary(AuthenticatorNode),
       calendar: withNodeBoundary(CalendarNode),
       'homeassistant-control': withNodeBoundary(HomeAssistantControlNode),
+      'homeassistant-sensor': withNodeBoundary(HomeAssistantSensorNode),
       editor: withNodeBoundary(LazyEditorNode),
       diff: withNodeBoundary(LazyDiffNode),
       subagent: withNodeBoundary(SubagentNode),
@@ -2053,6 +2060,7 @@ export function Canvas() {
       timer: withNodeBoundary(TimerNode),
       alarm: withNodeBoundary(AlarmClockNode),
       dino: withNodeBoundary(DinoNode),
+      'recovery-game': withNodeBoundary(RecoveryGameNode),
       photo: withNodeBoundary(PhotoNode),
       gallery: withNodeBoundary(GalleryNode),
       'wild-dim-sum': withNodeBoundary(WildDimSumNode),
@@ -2806,6 +2814,7 @@ export function Canvas() {
       nodesProjectIdRef.current = null
       return
     }
+    const canvasView = projectCanvasView(project)
     // SSH project: (re)open its ControlMaster and record the controlPath so this project's
     // terminal nodes can run over it. Idempotent in main (a live master is reused), so a tab
     // switch back to a connected project is a no-op. Remote tmux is unaffected by the master.
@@ -2837,7 +2846,7 @@ export function Canvas() {
     // locally.
     // NOTE: git routing is deliberately NOT armed for an attachment. The project's own cwd is what
     // the Source Control panel is about, and an attached node must not repoint it at another host.
-    for (const attachment of hostAttachmentsFor(project.id, project.nodes, project.ssh?.server)) {
+    for (const attachment of hostAttachmentsFor(project.id, canvasView.nodes, project.ssh?.server)) {
       void connectHostAttachment(
         attachment.scopeId,
         {
@@ -2869,7 +2878,7 @@ export function Canvas() {
     // url/title already applied, in the SAME setNodes — a later correction would move the `url`
     // prop under the surviving surface and navigate the very page the pool preserved.
     const flow = overlayKeepAliveData(
-      nodeStatesToFlow(project.nodes),
+      nodeStatesToFlow(canvasView.nodes),
       useWebviewKeepAlive.getState().entries,
       project.id
     )
@@ -2890,11 +2899,11 @@ export function Canvas() {
     if (project.cwd && !project.ssh) {
       void useWorktrees.getState().refresh(project.cwd, boundGroups(flow))
     }
-    setLinkEdges((project.bridges ?? []).map((b) => ({ id: b.id, source: b.source, target: b.target })))
+    setLinkEdges((canvasView.bridges ?? []).map((b) => ({ id: b.id, source: b.source, target: b.target })))
     // Restore control ropes with the source agent's color (falls back to the browser blue).
     setControlEdges(
-      (project.ropes ?? []).map((r) => {
-        const srcState = project.nodes.find((n) => n.id === r.source)
+      (canvasView.ropes ?? []).map((r) => {
+        const srcState = canvasView.nodes.find((n) => n.id === r.source)
         const color = agentConfig((srcState?.agentId as AgentId) ?? '')?.color ?? '#0a84ff'
         return ropeEdge(r.id, r.source, r.target, color)
       })
@@ -2914,21 +2923,21 @@ export function Canvas() {
       // the file's viewport is where another machine last saved, not where this user looks.
       preserveViewportRef.current = false
     } else {
-      viewportRef.current = project.viewport
-      setViewport(project.viewport)
-      setZoomPct(Math.round(project.viewport.zoom * 100))
-      setGroupLabelBoost(project.viewport.zoom)
+      viewportRef.current = canvasView.viewport
+      setViewport(canvasView.viewport)
+      setZoomPct(Math.round(canvasView.viewport.zoom * 100))
+      setGroupLabelBoost(canvasView.viewport.zoom)
       // A project can load already zoomed IN past the crisp threshold (saved viewport) — seed
       // the gate before the mount-time IntersectionObserver reports make every node request a
       // context it would only have to give back.
       // A project can load already zoomed IN past the crisp threshold (saved viewport) — seed the
       // gate before the mount-time IntersectionObserver reports make every node request a context
       // it would only have to give back.
-      setWebglZoom(project.viewport.zoom)
+      setWebglZoom(canvasView.viewport.zoom)
       // Seed the shared glyph camera from the same viewport: `onMove` only fires once the user
       // actually pans, so without this a project that loads scrolled away would draw its grids
       // against the previous project's camera until the first gesture.
-      setSharedGlyphCamera(project.viewport)
+      setSharedGlyphCamera(canvasView.viewport)
     }
     // Let load-induced changes settle before we start tracking edits as dirty.
     const t = setTimeout(() => {
@@ -3186,6 +3195,23 @@ export function Canvas() {
       store.commitCanvas
     )
   }, [])
+
+  const navigateMultiverseCanvas = useCallback((canvasId: string) => {
+    if (!activeProjectId) return
+    commitActiveToStore()
+    // The project id stays the same during an intra-project canvas switch. Invalidate the epoch
+    // explicitly so an old autosave cannot pair the outgoing nodes with the incoming child.
+    nodesProjectIdRef.current = null
+    useProjects.getState().openMultiverseCanvas(activeProjectId, canvasId)
+  }, [activeProjectId, commitActiveToStore])
+
+  const createMultiverseCanvas = useCallback((parentCanvasId: string, title: string) => {
+    if (!activeProjectId) return { reason: 'Choose an open project before creating a child canvas.' }
+    commitActiveToStore()
+    const result = useProjects.getState().createMultiverseCanvas(activeProjectId, parentCanvasId, title)
+    if (result.canvasId) bumpDirty()
+    return result
+  }, [activeProjectId, bumpDirty, commitActiveToStore])
 
   const writeDisk = useCallback(async () => {
     // Captured BEFORE the snapshot is built (`toWorkspace()` runs synchronously on this line), so
@@ -5367,11 +5393,13 @@ export function Canvas() {
             if (catalogEntry.id === 'web') return createWebNode(index, { url: '' }, center)
             if (catalogEntry.id === 'authenticator') return createAuthenticatorNode(index, center)
             if (catalogEntry.id === 'dino') return createDinoNode(index, center)
+            if (catalogEntry.id === 'recovery-game') return createRecoveryGameNode(index, center)
             if (catalogEntry.id === 'loop') return createNativeLoopNode(index, center)
             if (catalogEntry.id === 'alarm') return createAlarmClockNode(index, center)
             if (catalogEntry.id === 'nsis') return createNsisNode(index, center)
             if (catalogEntry.id === 'wild-dim-sum') return createWildDimSumNode(index, undefined, center)
             if (catalogEntry.id === 'homeassistant-control') return createHomeAssistantControlNode(index, center)
+            if (catalogEntry.id === 'homeassistant-sensor') return createHomeAssistantSensorNode(index, center)
             if (catalogEntry.id.startsWith('service:')) {
               return createServiceNode(catalogEntry.nodeKind as ServiceNodeKind, index, center)
             }
@@ -15689,12 +15717,25 @@ export function Canvas() {
         useProjects.getState().adoptProject(result.project)
         await writeDisk()
         const where = result.restoredTo ? `Repository and files restored to ${result.restoredTo}. ` : ''
+        const plannerDefinitions = result.plannerDefinitions
         notify({
           kind: 'success',
           titleKind: 'authored',
           title: 'Project opened from file',
           body: `${where}${archiveContentsSummary(result.contents)}`.trim() || 'The project and its complete local history are ready.',
-          bodyKind: 'fact'
+          bodyKind: 'fact',
+          ...(plannerDefinitions ? {
+            actions: [{
+              label: `Configure ${plannerDefinitions.schedules.length} imported planner schedule${plannerDefinitions.schedules.length === 1 ? '' : 's'}`,
+              onClick: () => {
+                void api.planner.configure(plannerDefinitions.schedules).then((configured) => {
+                  notify(configured.ok
+                    ? { kind: 'success', titleKind: 'authored', title: 'Planner definitions configured', body: 'Imported schedule intent is now active on this computer.', bodyKind: 'fact' }
+                    : { kind: 'error', titleKind: 'authored', title: 'Planner configuration failed', body: configured.error, bodyKind: 'fact' })
+                }).catch((error) => notify({ kind: 'error', titleKind: 'authored', title: 'Planner configuration failed', body: error instanceof Error ? error.message : 'The imported planner definitions could not be configured.', bodyKind: 'fact' }))
+              }
+            }]
+          } : {})
         })
       } else if (!result.canceled) {
         notify({ kind: 'error', titleKind: 'authored', title: 'Project open failed', body: result.error, bodyKind: 'fact' })
@@ -15869,8 +15910,12 @@ export function Canvas() {
       const projectScope = projectSessionScope(id)
       const projectSession = projectScope.session
       const projectAgentStatus = projectScope.stores.agentStatus.store
+      const projectNodes = [
+        ...project.nodes,
+        ...(project.childCanvases?.flatMap((canvas) => canvas.nodes) ?? [])
+      ]
       const terminalIds =
-        project.nodes
+        projectNodes
           .filter((node) => (node.kind ?? 'terminal') === 'terminal')
           .map((node) => node.id)
       void settleProjectSessionDestroys(id, terminalIds).then(
@@ -15903,7 +15948,7 @@ export function Canvas() {
             return
           }
           // Every terminal is confirmed ended: dispose parked xterms and drop persisted status.
-          project.nodes.forEach((n) => {
+          projectNodes.forEach((n) => {
             if ((n.kind ?? 'terminal') === 'terminal')
               disposeTerminalOnUnmount(projectSession.id, n.id)
             projectAgentStatus.getState().remove(n.id)
@@ -15911,7 +15956,7 @@ export function Canvas() {
           // SSH project: the scoped destroy above reaches the core that owns the project, while
           // this separate leg authoritatively ends remote tmux sessions with no mounted client.
           if (project.ssh) {
-            const nodeIds = project.nodes
+            const nodeIds = projectNodes
               .filter((n) => (n.kind ?? 'terminal') === 'terminal')
               .map((n) => n.id)
             void window.nodeTerminal.sshProject
@@ -15924,7 +15969,7 @@ export function Canvas() {
           // deleting the canvas is the only chance to tear their masters down.
           for (const scopeId of useSshConn.getState().attachmentScopesOf(id)) {
             const nodeIds =
-              hostAttachmentsFor(id, project.nodes, project.ssh?.server).find(
+              hostAttachmentsFor(id, projectNodes, project.ssh?.server).find(
                 (a) => a.scopeId === scopeId
               )?.nodeIds ?? []
             void window.nodeTerminal.sshProject
@@ -16591,6 +16636,7 @@ export function Canvas() {
           onOpenArchive={() => void importProjectArchive()}
           archiveBusy={() => projectArchiveBusyRef.current}
         />
+        <MultiverseNavigator onNavigate={navigateMultiverseCanvas} onCreate={createMultiverseCanvas} />
         <div className="md3-app-bar__spacer" />
         {/* The docked search bar — the SAME `.cluster-search` button/title the packaged-app
             driver script selects; re-themed, never renamed. */}

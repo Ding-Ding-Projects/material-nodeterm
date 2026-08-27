@@ -25,6 +25,7 @@ import type { VirtualMachineApi } from '../../shared/virtual-machine'
 import type { CalendarApi, CalendarProvider } from '../../shared/calendar'
 import type { HomeAssistantApi } from '../../shared/home-assistant'
 import type { HomeAssistantControlApi } from '../../shared/home-assistant-control'
+import type { HomeAssistantSensorApi } from '../../shared/home-assistant-sensor'
 import {
   UNKNOWN_CLAUDE_CLI_CAPS,
   type BoardLogApi,
@@ -629,7 +630,9 @@ export function buildRealApi(
     save: (file: PlannerFile) => client.request(IPC.plannerSave, file) as ReturnType<PlannerApi['save']>,
     history: () => client.request(IPC.plannerHistory) as Promise<PlannerOccurrence[]>,
     export: (format) => client.request(IPC.plannerExport, format) as ReturnType<PlannerApi['export']>,
+    configure: (schedules) => client.request(IPC.plannerConfigure, schedules) as ReturnType<PlannerApi['configure']>,
     onOccurrence: (cb) => client.subscribe(IPC.plannerOccurrence, cb as Listener)
+  }
   const agent: NodeTerminalApi['agent'] = {
     // Deliberately NOT a request: the server registers no env-snapshot handler (a full host-env
     // dump answerable by any authenticated WS client is the PR #195 leak class at the RPC layer).
@@ -1197,6 +1200,8 @@ export function buildCalendarApi(client: RpcClient): Pick<NodeTerminalApi, 'cale
     importIcs: (id, text, name) => client.request(IPC.calendarImportIcs, id, text, name) as ReturnType<CalendarApi['importIcs']>,
     refresh: (id, config) => client.request(IPC.calendarRefresh, id, config) as ReturnType<CalendarApi['refresh']>,
     beginOAuth: (provider: Exclude<CalendarProvider, 'local' | 'ics'>) => client.request(IPC.calendarBeginOAuth, provider) as ReturnType<CalendarApi['beginOAuth']>,
+    connectCalDav: (input) => client.request(IPC.calendarConnectCalDav, input) as ReturnType<CalendarApi['connectCalDav']>,
+    disconnectAccount: (accountId) => client.request(IPC.calendarDisconnectAccount, accountId) as ReturnType<CalendarApi['disconnectAccount']>,
     create: (input) => client.request(IPC.calendarCreate, input) as ReturnType<CalendarApi['create']>,
     update: (input) => client.request(IPC.calendarUpdate, input) as ReturnType<CalendarApi['update']>,
     remove: (id, eventId) => client.request(IPC.calendarRemove, id, eventId) as ReturnType<CalendarApi['remove']>
@@ -1229,6 +1234,18 @@ export function buildHomeAssistantControlApi(client: RpcClient): Pick<NodeTermin
     cancel: (nodeId) => client.request(IPC.homeAssistantControlCancel, nodeId) as ReturnType<HomeAssistantControlApi['cancel']>
   }
   return { homeAssistantControl }
+}
+
+/** Home Assistant sensor requests run on the host-owned core in both desktop and Server Edition. */
+export function buildHomeAssistantSensorApi(client: RpcClient): Pick<NodeTerminalApi, 'homeAssistantSensor'> {
+  const homeAssistantSensor: HomeAssistantSensorApi = {
+    binding: (nodeId) => client.request(IPC.homeAssistantSensorBinding, nodeId) as ReturnType<HomeAssistantSensorApi['binding']>,
+    configure: (input) => client.request(IPC.homeAssistantSensorConfigure, input) as ReturnType<HomeAssistantSensorApi['configure']>,
+    leaveUnbound: (nodeId) => client.request(IPC.homeAssistantSensorLeaveUnbound, nodeId) as ReturnType<HomeAssistantSensorApi['leaveUnbound']>,
+    discover: (nodeId) => client.request(IPC.homeAssistantSensorDiscover, nodeId) as ReturnType<HomeAssistantSensorApi['discover']>,
+    refresh: (nodeId, config) => client.request(IPC.homeAssistantSensorRefresh, nodeId, config) as ReturnType<HomeAssistantSensorApi['refresh']>
+  }
+  return { homeAssistantSensor }
 }
 
 /**
@@ -1694,6 +1711,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildProviderServicesApi(client),
     ...buildHomeAssistantApi(client),
     ...buildHomeAssistantControlApi(client),
+    ...buildHomeAssistantSensorApi(client),
     ...buildUsageApi(client),
     ...buildSessionMemoryApi(client),
     ...buildVsCodeApi(client),

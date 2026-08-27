@@ -225,7 +225,11 @@ intentionally unchecked because this task publishes the plan only.
       collision-safe destination reservations, atomic publication, resumable progress, cancellation,
       partial outcomes, per-category regex builders, and completed-output editor handoff; this
       ultra-speed lane intentionally left tests, builds, runtime interaction, and captures unrun.
-- [ ] Add advanced media, archive-container, PDF-operation, and OCR pipelines.
+- [ ] Add advanced media, archive, PDF, OCR, and
+      structured-data pipelines. Issue #22 source implementation now provides packaged PDF,
+      supported image, local English OCR, bounded ZIP inventory, deterministic JSON, portable
+      unbound intent, queue progress, cancellation, retry, and recovery. The item remains unticked
+      until the required tests, built-artifact interaction, packaging, and capture evidence run.
 - [ ] Add the bundled WebTorrent downloader with resumable per-task lifecycle. The implementation
       lane now contains ESM-compatible local runtime loading, guided inspect-then-start intake,
       searchable metadata and seeding controls, progress controls, restart reconciliation,
@@ -236,14 +240,19 @@ intentionally unchecked because this task publishes the plan only.
       control and sensor display nodes remain Program 16 and Program 17.
 - [ ] Add Home Assistant multi-instance controls and sensor displays.
   - [x] Add schema-driven Home Assistant control nodes with local connection binding.
-  - [ ] Add Home Assistant sensor display nodes.
+  - [x] Add Home Assistant sensor display nodes with portable entity and presentation intent,
+        machine-local sealed binding, typed values, binary state, enums, gauges, bounded trends,
+        events, weather, calendars, and selected attributes. Verification remains unrun.
 - [ ] Add Calendar, Timer, and Alarm Clock nodes. Planner occurrence service is implemented in the
-      current lane, but remains unticked until its required checks and packaged interaction evidence land.
+       current lane, including UI-close continuity, ordered durable occurrence delivery, schema 3
+       planner-definition transfer, and the destination Configure action. It remains unticked until
+       required checks and packaged interaction evidence land.
 - [ ] Add Calendar nodes for local calendars and ICS, with guided CalDAV, Google Calendar, and
       Microsoft 365 provider bindings, recurrence/timezone views, offline cache, and create/edit/
-      delete flows. Provider adapters still report an honest unavailable state until trusted OAuth
-      vault wiring is supplied. Ultra-speed lane intentionally skipped tests, builds, packaging,
-      runtime interaction, and captures.
+      delete flows. Host-owned provider adapters, credential storage, loopback OAuth PKCE, bounded
+      pagination, validators, retry backoff, and remote writes are implemented but remain unticked
+      because the ultra-speed lane intentionally skipped tests, type checking, lint, builds,
+      packaging, runtime interaction, reviews, audits, and captures.
 - [ ] Add Timer, Alarm Clock, and planner occurrence services.
 - [x] Add Timer nodes and persistent planner occurrence service. Calendar and Alarm Clock remain
   separate follow-up surfaces.
@@ -253,10 +262,15 @@ intentionally unchecked because this task publishes the plan only.
 
 ### Multiverse and AWS
 
+- [x] Add scoped Multiverse child canvases with guided hierarchy navigation and a depth-8 boundary.
+      Source implementation and delivery records are present; tests, type checks, builds, packaging,
+      runtime interaction, and captures remain explicitly unrun under issue #33's delivery boundary.
 - [ ] Add door-only Multiverse canvases to depth 8.
 - [ ] Wire the implemented paired-door navigation policy into the pending Multiverse canvas and
       door-rendering lanes; tab, palette, history, and direct-selection bypasses are refused in core.
-- [ ] Add interactive door construction, numeric or passphrase entry, and recovery game.
+- [ ] Add interactive door construction and numeric or passphrase entry. Source components and
+      portable intent are present; live navigator wiring remains pending.
+- [x] Add the top-down recovery game with three energy keys, hazards, core activation, and portable state. Source implementation is complete; built-artifact verification remains for integration.
 - [ ] Add unlimited AWS Universes with AWS-only scope and AWS Shop nodes.
 - [ ] Bundle AWS CLI v2 and maintain verified model and documentation indexing.
 - [ ] Generate interactive wizard forms for every AWS service, command, option, paginator, waiter,

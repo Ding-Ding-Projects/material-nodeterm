@@ -315,6 +315,8 @@ export const CATALOG: Catalog = {
   'homeAssistantControl.service.search': { en: flat('Search services'), yue: flat('搜尋服務') },
   'homeAssistantControl.service.choose': { en: flat('Choose a service'), yue: flat('揀一項服務') },
   'homeAssistantControl.service.run': { en: flat('Run verified service'), yue: flat('執行已驗證服務') },
+  'nodeCatalog.entry.homeassistant-sensor.label': { en: flat('Home Assistant sensor'), yue: flat('Home Assistant 感應器') },
+  'nodeCatalog.entry.homeassistant-sensor.description': { en: flat('Display selected Home Assistant values, states, gauges, trends, events, weather, calendars, and attributes through a local binding.'), yue: flat('用本機綁定顯示揀好嘅 Home Assistant 數值、狀態、儀表、趨勢、事件、天氣、日曆同屬性。') },
   'nodeCatalog.entry.service.freepbx.label': { en: flat('FreePBX manager'), yue: flat('FreePBX 管理器') },
   'nodeCatalog.entry.service.freepbx.description': { en: flat('Open a typed manager for a saved FreePBX connection.'), yue: flat('開已儲存 FreePBX 連線嘅有類型管理器。') },
   'nodeCatalog.entry.editor.label': { en: flat('Editor'), yue: flat('編輯器') },

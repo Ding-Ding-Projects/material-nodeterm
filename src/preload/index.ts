@@ -369,6 +369,7 @@ const api: NodeTerminalApi = {
     save: (file: PlannerFile) => ipcRenderer.invoke(IPC.plannerSave, file),
     history: () => ipcRenderer.invoke(IPC.plannerHistory),
     export: (format: 'json' | 'csv') => ipcRenderer.invoke(IPC.plannerExport, format),
+    configure: (schedules: PlannerFile['schedules']) => ipcRenderer.invoke(IPC.plannerConfigure, schedules),
     onOccurrence: subscribePlannerOccurrence
   },
   alarm: {
@@ -1208,6 +1209,8 @@ const api: NodeTerminalApi = {
     importIcs: (id, text, name) => ipcRenderer.invoke(IPC.calendarImportIcs, id, text, name),
     refresh: (id, config) => ipcRenderer.invoke(IPC.calendarRefresh, id, config),
     beginOAuth: (provider: Exclude<CalendarProvider, 'local' | 'ics'>) => ipcRenderer.invoke(IPC.calendarBeginOAuth, provider),
+    connectCalDav: (input) => ipcRenderer.invoke(IPC.calendarConnectCalDav, input),
+    disconnectAccount: (accountId) => ipcRenderer.invoke(IPC.calendarDisconnectAccount, accountId),
     create: (input) => ipcRenderer.invoke(IPC.calendarCreate, input),
     update: (input) => ipcRenderer.invoke(IPC.calendarUpdate, input),
     remove: (id, eventId) => ipcRenderer.invoke(IPC.calendarRemove, id, eventId)
@@ -1229,6 +1232,13 @@ const api: NodeTerminalApi = {
     services: (nodeId) => ipcRenderer.invoke(IPC.homeAssistantServices, nodeId),
     call: (input) => ipcRenderer.invoke(IPC.homeAssistantCall, input),
     cancel: (nodeId) => ipcRenderer.invoke(IPC.homeAssistantControlCancel, nodeId)
+  },
+  homeAssistantSensor: {
+    binding: (nodeId) => ipcRenderer.invoke(IPC.homeAssistantSensorBinding, nodeId),
+    configure: (input) => ipcRenderer.invoke(IPC.homeAssistantSensorConfigure, input),
+    leaveUnbound: (nodeId) => ipcRenderer.invoke(IPC.homeAssistantSensorLeaveUnbound, nodeId),
+    discover: (nodeId) => ipcRenderer.invoke(IPC.homeAssistantSensorDiscover, nodeId),
+    refresh: (nodeId, config) => ipcRenderer.invoke(IPC.homeAssistantSensorRefresh, nodeId, config)
   },
   // The `browser` verb resolve round-trip (S8 PR 7): main asks the renderer which project owns the
   // source, whether it is control-capable, and whether the capability is on right now — the renderer
