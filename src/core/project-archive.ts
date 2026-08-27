@@ -64,6 +64,7 @@ import type { MediaAssetReference } from '../shared/media-catalog'
 import type { PortableMediaDecisionRecord } from '../shared/portable-media'
 import type { PortablePlannerDefinitions } from './portable-planner'
 import type { PlannerSchedule } from '../shared/planner-occurrences'
+import type { PortalRepairRecord } from './portal-lifecycle'
 
 // Schema 3 is exposed from the established archive seam while its validation remains platform-free.
 export * from './portable-project-v3'
@@ -73,6 +74,7 @@ export * from './portable-project-import'
 export * from './portable-bindings'
 export * from './portable-planner'
 export * from './universe-shop'
+export * from './portal-lifecycle'
 
 /** V1 JSON-text archives keep their historical cap. */
 const MAX_ARCHIVE_BYTES_V1 = 180 * 1024 * 1024
@@ -138,6 +140,8 @@ export interface ProjectArchiveImportResult {
   vault?: Buffer
   /** Safe planner definitions awaiting an explicit destination Configure action. */
   plannerDefinitions?: PortablePlannerDefinitions
+  /** Portal metadata repaired during import, with child node ids retained. */
+  repairs?: PortalRepairRecord[]
 }
 
 export interface ProjectArchiveExportOptions {
@@ -637,7 +641,8 @@ export class ProjectArchiveService {
           excludedBytes: 0
         },
         ...(imported.stagedPath ? { restoredTo: imported.stagedPath } : {}),
-        ...(imported.plannerDefinitions ? { plannerDefinitions: imported.plannerDefinitions } : {})
+        ...(imported.plannerDefinitions ? { plannerDefinitions: imported.plannerDefinitions } : {}),
+        ...(imported.repairs.length ? { repairs: imported.repairs } : {})
       }
     }
     if (!looksLikeContainer(bytes)) {

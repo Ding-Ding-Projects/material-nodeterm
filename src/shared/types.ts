@@ -1030,6 +1030,31 @@ export interface NavStop {
   note: string
 }
 
+/** A portable child canvas carried by a project after a Multiverse import. The node list is
+ * content, not a live process or destination binding, so it remains safe to move between hosts. */
+export interface ProjectChildCanvas {
+  id: string
+  scope: 'multiverse' | 'aws-universe'
+  parentCanvasId: string
+  depth: number
+  title: string
+  order: number
+  viewport?: Viewport
+  nodes: CanvasNodeState[]
+}
+
+/** Safe portal intent shared by the runtime project and schema 3 projection. */
+export interface ProjectPortalState {
+  id: string
+  parentCanvasId: string
+  childCanvasId: string
+  entryDoorId: string
+  returnDoorId: string
+  title: string
+  depth: number
+  status: 'open' | 'closed'
+}
+
 /** A project is one canvas/page: its own nodes, viewport, and default working dir. */
 export interface Project {
   id: string
@@ -1052,6 +1077,11 @@ export interface Project {
   multiverseCanvases?: ProjectMultiverseCanvas[]
   /** Runtime-only selection. The shared project file stores hierarchy, never one person's current view. */
   activeCanvasId?: string
+  /** Child universe canvases imported from schema 3. Their node content remains addressable even
+   * when the containing portal is removed, so deleting a portal cannot delete child work. */
+  childCanvases?: ProjectChildCanvas[]
+  /** Door-only Multiverse portal intent. Credentials and runtime bindings never fit this shape. */
+  portals?: ProjectPortalState[]
   /** Default managed Claude account for new Claude/chat nodes in this project. */
   defaultAccountId?: string
   /** Permission mode for new Claude TERMINAL (CLI) sessions in this project. SDK chat nodes are

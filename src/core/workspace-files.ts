@@ -14,6 +14,8 @@ import type {
   NavStop,
   Project,
   ProjectMultiverseCanvas,
+  ProjectChildCanvas,
+  ProjectPortalState,
   ProjectKanban,
   Viewport,
   Workspace
@@ -107,6 +109,9 @@ export interface ProjectFileV1 {
   nodes: CanvasNodeState[]
   /** Safe shared hierarchy. Runtime selection remains machine-local and is never written here. */
   multiverseCanvases?: ProjectMultiverseCanvas[]
+  /** Schema 3 child-canvas content. These fields contain safe presentation only. */
+  childCanvases?: ProjectChildCanvas[]
+  portals?: ProjectPortalState[]
   bridges?: BridgeLink[]
   ropes?: BridgeLink[]
   /**
@@ -275,6 +280,11 @@ export function projectToFile(
     ...canvas,
     nodes: sanitizeCalendarConfigs(stripSharedNodeExec(p.cwd ? toPortableNodes(canvas.nodes, p.cwd) : canvas.nodes))
   }))
+  const childCanvases = p.childCanvases?.map((canvas) => ({
+    ...canvas,
+    ...(canvas.viewport ? { viewport: { ...canvas.viewport } } : {}),
+    nodes: sanitizeCalendarConfigs(stripSharedNodeExec(p.cwd ? toPortableNodes(canvas.nodes, p.cwd) : canvas.nodes))
+  }))
   const icon = sanitizeProjectIcon(p.icon)
   return {
     version: 1,
@@ -286,6 +296,8 @@ export function projectToFile(
     viewport: framingViewport(nodes),
     nodes,
     ...(multiverseCanvases ? { multiverseCanvases } : {}),
+    ...(childCanvases && childCanvases.length > 0 ? { childCanvases } : {}),
+    ...(p.portals && p.portals.length > 0 ? { portals: p.portals.map((portal) => ({ ...portal })) } : {}),
     ...(icon ? { icon } : {}),
     ...(p.bridges ? { bridges: p.bridges } : {}),
     ...(p.ropes ? { ropes: p.ropes } : {}),
@@ -327,6 +339,53 @@ export function validBrowserProfiles(v: unknown): BrowserProfile[] | undefined {
       typeof (p as BrowserProfile).color === 'string'
   )
   return cleaned.length > 0 ? cleaned : undefined
+}
+
+/** Tolerant reader for imported child-canvas content. A malformed child record is omitted as an
+ * unavailable optional section, while valid sibling canvases and their nodes remain usable. */
+function validChildCanvases(value: unknown, _projectId: string): ProjectChildCanvas[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const result: ProjectChildCanvas[] = []
+  for (const item of value) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue
+    const candidate = item as Partial<ProjectChildCanvas>
+    if (
+      typeof candidate.id !== 'string' || !candidate.id ||
+      (candidate.scope !== 'multiverse' && candidate.scope !== 'aws-universe') ||
+      typeof candidate.parentCanvasId !== 'string' || !candidate.parentCanvasId ||
+      typeof candidate.depth !== 'number' || !Number.isInteger(candidate.depth) || candidate.depth < 1 ||
+      typeof candidate.title !== 'string' || !candidate.title ||
+      typeof candidate.order !== 'number' || !Number.isFinite(candidate.order) ||
+      !Array.isArray(candidate.nodes)
+    ) continue
+    const viewport = candidate.viewport && typeof candidate.viewport === 'object' &&
+      typeof candidate.viewport.x === 'number' && Number.isFinite(candidate.viewport.x) &&
+      typeof candidate.viewport.y === 'number' && Number.isFinite(candidate.viewport.y) &&
+      typeof candidate.viewport.zoom === 'number' && Number.isFinite(candidate.viewport.zoom)
+      ? { x: candidate.viewport.x, y: candidate.viewport.y, zoom: candidate.viewport.zoom }
+      : undefined
+    result.push({
+      id: candidate.id,
+      scope: candidate.scope,
+      parentCanvasId: candidate.parentCanvasId,
+      depth: candidate.depth,
+      title: candidate.title,
+      order: candidate.order,
+      ...(viewport ? { viewport } : {}),
+      nodes: candidate.nodes.filter((node): node is CanvasNodeState => !!node && typeof node === 'object' && typeof node.id === 'string' && typeof node.kind === 'string')
+    })
+  }
+  return result.length > 0 ? result : undefined
+}
+
+function validPortals(value: unknown): value is ProjectPortalState[] {
+  return Array.isArray(value) && value.every((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return false
+    const portal = item as Partial<ProjectPortalState>
+    return [portal.id, portal.parentCanvasId, portal.childCanvasId, portal.entryDoorId, portal.returnDoorId, portal.title].every((part) => typeof part === 'string' && part.length > 0) &&
+      typeof portal.depth === 'number' && Number.isInteger(portal.depth) && portal.depth > 0 &&
+      (portal.status === 'open' || portal.status === 'closed')
+  })
 }
 
 /**
@@ -374,6 +433,7 @@ export function fileToProject(
       base.id
     )
   }))
+  const childCanvases = validChildCanvases(f.childCanvases, base.id)
   const icon = sanitizeProjectIcon(f.icon)
   return {
     id: base.id,
@@ -392,6 +452,16 @@ export function fileToProject(
       base.id
     ),
     ...(multiverseCanvases ? { multiverseCanvases } : {}),
+    ...(childCanvases ? {
+      childCanvases: childCanvases.map((canvas) => ({
+        ...canvas,
+        nodes: sanitizeBrowserPartitions(
+          sanitizeCalendarConfigs(applyLocalNodeExec(base.cwd ? resolveNodes(canvas.nodes, base.cwd) : canvas.nodes, base.localExec)),
+          base.id
+        )
+      }))
+    } : {}),
+    ...(validPortals(f.portals) ? { portals: f.portals.map((portal) => ({ ...portal })) } : {}),
     ...(f.bridges ? { bridges: f.bridges } : {}),
     ...(f.ropes ? { ropes: f.ropes } : {}),
     ...(defaultAccountId ? { defaultAccountId } : {}),
