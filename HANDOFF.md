@@ -21,7 +21,7 @@ updater, account, relay, and no-signing registrations were preserved.
 This lane intentionally ran no tests, checkers, lint, type checks, builds, packaging, installer
 execution, runtime interaction, reviews, audits, or UI captures. Read-only source and history scans
 identified the duplicate registration boundary and import usage. The integration owner must evaluate
-the exact commit and the follow-up Der Machine run before treating this repair as verified.
+the exact commit and the follow-up GitHub Actions run before treating this repair as verified.
 
 ## 2026-08-27, main-process parser repair
 
@@ -43,7 +43,7 @@ unrelated refactor was used.
 This lane intentionally ran no tests, checkers, lint, type checks, builds, packaging, installer
 execution, runtime interaction, reviews, audits, or UI captures. Read-only source and history scans
 were used to identify the exact duplicate splices. The integration owner must evaluate the exact
-commit and the follow-up Der Machine run before treating this repair as verified.
+commit and the follow-up GitHub Actions run before treating this repair as verified.
 
 ## 2026-08-27, Canvas notification inventory repair
 
