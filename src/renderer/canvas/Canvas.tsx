@@ -16808,7 +16808,7 @@ export function Canvas() {
   const paletteChip = chipFor('app.commandPalette')
 
   return (
-    <div className="canvas-root">
+    <div className="canvas-root" data-easter-surface="canvas">
       <TopAppBar>
       <ProjectSwitcher
           onSwitch={switchProject}

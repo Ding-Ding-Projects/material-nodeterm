@@ -2484,3 +2484,26 @@ This ultra-speed lane intentionally ran no tests, type checks, lint, builds, pac
 security checks, accessibility checks, installer execution, runtime interaction, or UI captures.
 The parent integration lane must verify the exact commit, reconcile any central-file overlap with
 other lanes, and supply the remaining release evidence before claiming the feature verified.
+# 2026-08-27, Easter egg suite, issue #103
+
+Implemented a hand-written 60-entry Easter egg catalog in `src/shared/easter-eggs.ts` and a
+bounded renderer cabinet in `src/renderer/components/EasterEggs.tsx`. The cabinet is mounted at
+the app root, hidden fail-closed under School mode, and exposes a three-second keyboard arm route
+plus a functional Try button for keyboard, touch, and assistive technology users. Discovery state
+is private local storage containing only catalog ids, with an explicit reset action. The status card
+is non-blocking, uses a polite live region, and has a dismissal control. Reduced motion receives a
+static presentation.
+
+The catalog spans canvas, nodes, title bar, settings, command palette, notifications,
+documentation, changelog, search, project switcher, source control, media, scheduling, hosting,
+account, converter, local model management, authenticator, support, and status. Directly related
+surface markers were added to the app bar, canvas, navigation rail, project switcher,
+documentation, settings, history, source control, converter, and local model drawers.
+
+Documentation is in `docs/features/appearance/easter-eggs.md` and indexed from the appearance
+category. `ROADMAP.md` and `CHANGELOG.md` record the implementation and its intentionally pending
+verification state.
+
+No tests, lint, type checks, builds, packaging, runtime interaction, reviews, audits, or HuiShots
+were run, as required by issue #103. The feature jer remains separate from `main`; the parent Dog
+must perform integration and any later verification.

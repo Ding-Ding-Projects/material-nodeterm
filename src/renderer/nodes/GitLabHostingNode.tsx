@@ -28,7 +28,7 @@ export default function GitLabHostingNode({ id, data, selected }: NodeProps<Canv
   }
 
   return (
-    <div className={`gitlab-hosting-node${selected ? ' selected' : ''}${collapsed ? ' collapsed' : ''} ${border.className}`} style={border.style} role="group" aria-label={data.serviceLabel ? `GitLab hosting: ${data.serviceLabel}` : 'GitLab hosting'}>
+    <div className={`gitlab-hosting-node${selected ? ' selected' : ''}${collapsed ? ' collapsed' : ''} ${border.className}`} data-easter-surface="hosting" style={border.style} role="group" aria-label={data.serviceLabel ? `GitLab hosting: ${data.serviceLabel}` : 'GitLab hosting'}>
       <NodeResizer minWidth={560} minHeight={360} isVisible={selected && !collapsed} color={data.color} />
       <div className={`gitlab-hosting-node__header ${header.className}`} style={header.style}>
         <button type="button" className="term-node__collapse" title={vocab(collapsed ? 'Expand' : 'Collapse')} onClick={toggleCollapse}>{collapsed ? '▸' : '▾'}</button>
