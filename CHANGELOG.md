@@ -97,6 +97,11 @@
   create/edit previews, and destructive delete confirmation. Provider credentials stay behind the
   trusted shell's vault boundary. This ultra-speed lane deliberately ran no tests, type checks,
   builds, packaging, runtime interaction, or captures.
+- Complete the Calendar provider boundary with verified HTTPS CalDAV account intake, loopback PKCE
+  for Google and Microsoft 365, machine-local credential storage, bounded paginated synchronization,
+  provider validators, retry backoff, and provider-confirmed event writes. This continuation ran no
+  tests, type checks, lint, builds, packaging, installer execution, runtime interaction, reviews,
+  audits, or captures.
 - Add Alarm Clock canvas nodes with one-shot and recurring wall-clock schedules, explicit IANA
   timezones, daylight-saving-safe occurrence planning, snooze, dismiss, missed history, sound and
   narrator integration, and an honest no-powered-off-wake notice. Verification is intentionally

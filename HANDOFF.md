@@ -421,6 +421,32 @@ validation, UID deduplication, TZID validation, and source-identity-aware durabl
 Import runs through the core service rather than saving a renderer-only cache. The node now uses the
 shared anchored regex builder for event, source, and timezone searches, real period navigation and
 tabpanel ARIA wiring, event selection/export, and local undo. No verification commands were run.
+
+Provider continuation on `feat/program-19-calendar-nodes`: added host-owned CalDAV, Google Calendar,
+and Microsoft 365 adapters without duplicating the local and ICS foundation. The adapters enforce
+HTTPS and provider host boundaries, bound response size, pages, events, and request duration, retain
+revision or ETag evidence, and preserve the previous cache with exponential retry timing after a
+provider failure. Remote create, update, and delete return only provider-confirmed outcomes.
+
+Credentials now live below the machine's application-data directory through
+`src/core/calendar/vault.ts`. Desktop uses the core platform sealing hooks; Server Edition uses a
+restricted local file. OAuth uses an ephemeral loopback PKCE callback and a machine-local public
+client registration file. CalDAV uses a guided endpoint, username, and password form, verifies the
+calendar collection before saving the account, and removes the credential if verification fails.
+Account and calendar searches each have their own adjacent anchored regex builder. Disconnect uses
+the existing two-key confirmation flow and retains cached events.
+
+Changed continuation files: `src/shared/calendar.ts`, `src/shared/ipc.ts`,
+`src/core/calendar/providers.ts`, `src/core/calendar/vault.ts`, `src/core/calendar/service.ts`,
+`src/core/calendar/register-ipc.ts`, `src/preload/index.ts`,
+`src/renderer/bridge/ws-bridge.ts`, `src/renderer/bridge/stubs.ts`,
+`src/renderer/nodes/CalendarNode.tsx`, `docs/features/calendar/README.md`, `CHANGELOG.md`,
+`ROADMAP.md`, `HANDOFF.md`, and the offline documentation record.
+
+No tests, type checks, lint, builds, packaging, installer execution, runtime interaction,
+accessibility or security review, audits, or captures were run in the continuation. Provider
+behavior and release assets therefore remain unverified, and this handoff must not be read as a
+runtime or packaged-artifact verdict.
 ## 2026-08-26, Alarm Clock node lane
 
 Implemented the Alarm Clock canvas node and shared durable planner primitives for one-shot, daily,

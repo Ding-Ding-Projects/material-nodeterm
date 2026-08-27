@@ -73,10 +73,18 @@ export default function CalendarNode({ id, data, selected }: NodeProps<CanvasNod
   const searchInputRef = useRef<HTMLInputElement>(null)
   const sourceSearch = useRegexSearchField()
   const sourceSearchRef = useRef<HTMLSelectElement>(null)
+  const accountSearch = useRegexSearchField()
+  const accountSearchRef = useRef<HTMLSelectElement>(null)
+  const calendarSearch = useRegexSearchField()
+  const calendarSearchRef = useRef<HTMLSelectElement>(null)
   const timezoneSearch = useRegexSearchField()
   const timezoneSearchRef = useRef<HTMLSelectElement>(null)
   const [editing, setEditing] = useState<CalendarEvent | null | undefined>(undefined)
   const [busy, setBusy] = useState(false)
+  const [calDavName, setCalDavName] = useState('My CalDAV account')
+  const [calDavEndpoint, setCalDavEndpoint] = useState('')
+  const [calDavUsername, setCalDavUsername] = useState('')
+  const [calDavPassword, setCalDavPassword] = useState('')
   const [cursorDate, setCursorDate] = useState(() => new Date())
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const undoStack = useRef<CalendarEvent[][]>([])
@@ -146,11 +154,29 @@ export default function CalendarNode({ id, data, selected }: NodeProps<CanvasNod
 
   const connect = async (): Promise<void> => {
     if (config.provider === 'local' || config.provider === 'ics') return
+    if (config.provider === 'caldav') {
+      setBusy(true)
+      try {
+        const connected = await api.calendar.connectCalDav({ displayName: calDavName, email: null, endpoint: calDavEndpoint, username: calDavUsername, password: calDavPassword })
+        setCalDavPassword('')
+        setConfig({ accountId: connected.id, calendarId: null })
+        await loadCatalog()
+        setStatus('CalDAV account connected. Choose one of its calendars.')
+      } catch (error) { setStatus(`CalDAV account was not connected: ${error instanceof Error ? error.message : 'the provider refused the connection'}.`) }
+      finally { setBusy(false) }
+      return
+    }
     const result = await api.calendar.beginOAuth(config.provider)
     if (result.state === 'ready' && result.authorizationUrl) {
       await api.shell.openExternal(result.authorizationUrl)
-      setStatus('Consent is required in the provider window. Tokens are captured by the trusted shell and kept in the OS vault.')
+      setStatus('Complete consent in the provider window, then refresh the account list. Tokens stay in machine-local credential storage.')
     } else setStatus(result.reason ?? 'This provider is unavailable.')
+  }
+
+  const disconnect = (target: HTMLButtonElement): void => {
+    if (!account) return
+    const rect = target.getBoundingClientRect()
+    openDestructiveGate({ title: 'Disconnect this calendar account', description: `Remove the machine-local binding for “${account.displayName}”. Cached events remain available until replaced.`, affected: [account.displayName], confirmLabel: 'Disconnect account', anchor: { x: rect.left, y: rect.bottom }, restoreFocusEl: target, onConfirm: () => { void api.calendar.disconnectAccount(account.id).then(async (removed) => { if (removed) { setConfig({ accountId: null, calendarId: null }); await loadCatalog() }; setStatus(removed ? 'Calendar account disconnected. Cached events were retained.' : 'The account was already disconnected.') }).catch(() => setStatus('The account could not be disconnected.')) } })
   }
 
   const createEvent = async (event: CalendarEvent): Promise<void> => {
@@ -178,10 +204,11 @@ export default function CalendarNode({ id, data, selected }: NodeProps<CanvasNod
     <div className="calendar-node__toolbar" role="tablist" aria-label="Calendar views">{(['agenda', 'week', 'month'] as CalendarView[]).map((view) => <button key={view} id={`${id}-tab-${view}`} role="tab" aria-selected={config.view === view} aria-controls={`${id}-panel-${view}`} tabIndex={config.view === view ? 0 : -1} onClick={() => setConfig({ view })}>{view[0].toUpperCase() + view.slice(1)}</button>)}</div>
     <div className="calendar-node__body">
       <div className="calendar-node__filters"><label>Search events<input ref={searchInputRef} value={search.value} onChange={(e) => search.setValue(e.target.value)} placeholder="Plain text search" aria-label="Search calendar events" /></label><AnchoredRegexBuilder search={search} fieldRef={searchInputRef} label="Regex for calendar events" /></div>
-      <div className="calendar-node__source"><label>Source<select ref={sourceSearchRef} value={config.provider} onChange={(e) => { const provider = e.target.value as CalendarProvider; setConfig({ provider, accountId: null, calendarId: null }); setEvents(provider === 'local' ? readCached(id) : []); setStatus(providerHelp[provider]) }}>{PROVIDERS.filter((provider) => sourceSearch.test(calendarProviderName(provider))).map((provider) => <option key={provider} value={provider} disabled={provider !== 'local' && provider !== 'ics'}>{calendarProviderName(provider)}{provider !== 'local' && provider !== 'ics' ? ' (unavailable)' : ''}</option>)}</select><div className="calendar-node__picker-search"><input value={sourceSearch.value} onChange={(e) => sourceSearch.setValue(e.target.value)} placeholder="Filter sources" aria-label="Filter calendar sources" /><AnchoredRegexBuilder search={sourceSearch} fieldRef={sourceSearchRef} label="Regex for calendar sources" /></div></label><p className="calendar-node__hint">{providerHelp[config.provider]}</p>
+      <div className="calendar-node__source"><label>Source<select ref={sourceSearchRef} value={config.provider} onChange={(e) => { const provider = e.target.value as CalendarProvider; setConfig({ provider, accountId: null, calendarId: null }); setEvents(provider === 'local' ? readCached(id) : []); setStatus(providerHelp[provider]) }}>{PROVIDERS.filter((provider) => sourceSearch.test(calendarProviderName(provider))).map((provider) => <option key={provider} value={provider}>{calendarProviderName(provider)}</option>)}</select><div className="calendar-node__picker-search"><input value={sourceSearch.value} onChange={(e) => sourceSearch.setValue(e.target.value)} placeholder="Filter sources" aria-label="Filter calendar sources" /><AnchoredRegexBuilder search={sourceSearch} fieldRef={sourceSearchRef} label="Regex for calendar sources" /></div></label><p className="calendar-node__hint">{providerHelp[config.provider]}</p>
         {(config.provider === 'ics') && <button type="button" onClick={() => void importFile()} disabled={busy}>Choose local ICS file…</button>}
-        {config.provider !== 'local' && config.provider !== 'ics' && <><label>Account<select value={config.accountId ?? ''} disabled><option value="">No trusted account adapter available</option>{accounts.filter((a) => a.provider === config.provider).map((a) => <option key={a.id} value={a.id}>{a.displayName}{a.email ? ` · ${a.email}` : ''} ({a.state})</option>)}</select></label><button type="button" onClick={() => void connect()} disabled>Connect account unavailable</button><p className="calendar-node__error" role="alert">Remote provider actions are disabled until a trusted OAuth/PKCE adapter is installed.</p></>}
-        {config.provider !== 'local' && config.provider !== 'ics' && <label>Calendar<select value={config.calendarId ?? ''} onChange={(e) => setConfig({ calendarId: e.target.value || null })}><option value="">Choose a calendar…</option>{sources.map((s) => <option key={s.id} value={s.id}>{s.name} · {s.timezone}{s.readOnly ? ' (read only)' : ''}</option>)}</select></label>}
+        {config.provider === 'caldav' && !config.accountId && <div className="calendar-node__editor" role="region" aria-label="Connect CalDAV account"><h3>Connect CalDAV</h3><label>Account name<input value={calDavName} onChange={(event) => setCalDavName(event.target.value)} /></label><label>HTTPS server URL<input type="url" value={calDavEndpoint} onChange={(event) => setCalDavEndpoint(event.target.value)} placeholder="https://calendar.example.com/dav/" /></label><label>Username<input autoComplete="username" value={calDavUsername} onChange={(event) => setCalDavUsername(event.target.value)} /></label><label>Password<input type="password" autoComplete="current-password" value={calDavPassword} onChange={(event) => setCalDavPassword(event.target.value)} /></label><button type="button" onClick={() => void connect()} disabled={busy || !calDavName.trim() || !calDavEndpoint.trim() || !calDavUsername.trim() || !calDavPassword}>Connect and verify</button><p className="calendar-node__hint">The endpoint must use HTTPS. The password is sent once to the host and never stored in the project.</p></div>}
+        {config.provider !== 'local' && config.provider !== 'ics' && <><label>Account<select ref={accountSearchRef} value={config.accountId ?? ''} onChange={(event) => setConfig({ accountId: event.target.value || null, calendarId: null })}><option value="">Choose an account…</option>{accounts.filter((candidate) => candidate.provider === config.provider && accountSearch.test(`${candidate.displayName} ${candidate.email ?? ''}`)).map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.displayName}{candidate.email ? ` · ${candidate.email}` : ''} ({candidate.state})</option>)}</select><div className="calendar-node__picker-search"><input value={accountSearch.value} onChange={(event) => accountSearch.setValue(event.target.value)} placeholder="Filter accounts" aria-label="Filter calendar accounts" /><AnchoredRegexBuilder search={accountSearch} fieldRef={accountSearchRef} label="Regex for calendar accounts" /></div></label>{config.provider !== 'caldav' && <button type="button" onClick={() => void connect()} disabled={busy}>Connect another account…</button>}<button type="button" onClick={() => void loadCatalog()} disabled={busy}>Refresh accounts</button>{account && <button type="button" onClick={(event) => disconnect(event.currentTarget)} disabled={busy}>Disconnect account…</button>}</>}
+        {config.provider !== 'local' && config.provider !== 'ics' && <label>Calendar<select ref={calendarSearchRef} value={config.calendarId ?? ''} onChange={(e) => setConfig({ calendarId: e.target.value || null })}><option value="">Choose a calendar…</option>{sources.filter((candidate) => calendarSearch.test(`${candidate.name} ${candidate.timezone}`)).map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name} · {candidate.timezone}{candidate.readOnly ? ' (read only)' : ''}</option>)}</select><div className="calendar-node__picker-search"><input value={calendarSearch.value} onChange={(event) => calendarSearch.setValue(event.target.value)} placeholder="Filter calendars" aria-label="Filter provider calendars" /><AnchoredRegexBuilder search={calendarSearch} fieldRef={calendarSearchRef} label="Regex for provider calendars" /></div></label>}
         {account && <p className="calendar-node__hint">Account status: {account.state}{account.reason ? ` — ${account.reason}` : ''}. Credential value is never shown.</p>}{source && <p className="calendar-node__hint">Selected calendar: {source.name}; writes are {source.writable ? 'available' : 'disabled because this calendar is read only'}.</p>}
       </div>
       <div className="calendar-node__row"><label>Timezone<select ref={timezoneSearchRef} value={config.timezone} onChange={(e) => setConfig({ timezone: e.target.value })} aria-label="Calendar timezone">{calendarTimezones().filter((value) => timezoneSearch.test(value)).map((value) => <option key={value} value={value}>{value === 'local' ? 'This computer' : value}</option>)}</select><div className="calendar-node__picker-search"><input value={timezoneSearch.value} onChange={(e) => timezoneSearch.setValue(e.target.value)} placeholder="Filter timezones" aria-label="Filter calendar timezones" /><AnchoredRegexBuilder search={timezoneSearch} fieldRef={timezoneSearchRef} label="Regex for calendar timezones" /></div></label><label className="calendar-node__check"><input type="checkbox" checked={config.showWeekends} onChange={(e) => setConfig({ showWeekends: e.target.checked })} /> Show weekends</label></div>

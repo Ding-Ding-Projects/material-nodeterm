@@ -1,113 +1,148 @@
-import { mkdir, readFile } from 'node:fs/promises'
+import { createHash, randomBytes } from 'node:crypto'
+import { createServer, type Server } from 'node:http'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { renameAtomic, tempNameFor } from '../fs-atomic'
-import type { CalendarAccount, CalendarApi, CalendarCache, CalendarCreateInput, CalendarEvent, CalendarNodeConfig, CalendarOAuthStart, CalendarProvider, CalendarSource, CalendarStatus, CalendarUpdateInput } from '../../shared/calendar'
+import type { CalendarAccount, CalendarApi, CalendarCache, CalendarCalDavConnectInput, CalendarCreateInput, CalendarEvent, CalendarNodeConfig, CalendarOAuthStart, CalendarProvider, CalendarSource, CalendarStatus, CalendarUpdateInput } from '../../shared/calendar'
 import { isCalendarNodeId, parseIcs, validateCalendarConfig } from '../../shared/calendar'
+import type { CorePlatform } from '../platform'
+import { createCalendarProviderAdapters, type RemoteCalendarAccount, validateEndpoint } from './providers'
+import { CalendarCredentialVault } from './vault'
 
-interface LocalNodeFile { version: 1; nodeId: string; sourceId: string; events: CalendarEvent[]; sourceName: string; fetchedAt: number }
+interface LocalNodeFile {
+  version: 1 | 2; nodeId: string; sourceId: string; provider: CalendarProvider; accountId: string | null
+  events: CalendarEvent[]; sourceName: string; fetchedAt: number; sourceRevision: string | null; etag: string | null
+  complete: boolean; partial: boolean; retryAt: number | null; backoffMs: number
+}
+interface OAuthClientFile { version: 1; google?: { clientId: string }; microsoft365?: { clientId: string; tenant?: string } }
+
+const REMOTE = new Set<CalendarProvider>(['caldav', 'google', 'microsoft365'])
+const ACCOUNT_ID = /^[a-z0-9][a-z0-9-]{7,120}$/
+const MAX_BACKOFF = 15 * 60_000
 
 function validEvent(value: unknown): value is CalendarEvent {
   if (!value || typeof value !== 'object') return false
-  const e = value as Partial<CalendarEvent>
-  return typeof e.id === 'string' && e.id.length > 0 && e.id.length <= 240 &&
-    typeof e.calendarId === 'string' && e.calendarId.length <= 240 &&
-    typeof e.title === 'string' && e.title.length <= 500 &&
-    typeof e.start === 'string' && !Number.isNaN(Date.parse(e.start)) &&
-    typeof e.end === 'string' && !Number.isNaN(Date.parse(e.end)) &&
-    typeof e.timezone === 'string' && e.timezone.length <= 100 &&
-    typeof e.allDay === 'boolean' && typeof e.updatedAt === 'number' && Number.isFinite(e.updatedAt)
+  const event = value as Partial<CalendarEvent>
+  return typeof event.id === 'string' && event.id.length > 0 && event.id.length <= 1000 && typeof event.calendarId === 'string' && event.calendarId.length <= 1000 && typeof event.title === 'string' && event.title.length <= 500 && typeof event.start === 'string' && !Number.isNaN(Date.parse(event.start)) && typeof event.end === 'string' && !Number.isNaN(Date.parse(event.end)) && typeof event.timezone === 'string' && event.timezone.length <= 100 && typeof event.allDay === 'boolean' && typeof event.updatedAt === 'number' && Number.isFinite(event.updatedAt)
 }
+function validAccount(value: unknown): value is RemoteCalendarAccount {
+  if (!value || typeof value !== 'object') return false
+  const account = value as Partial<RemoteCalendarAccount>
+  return typeof account.id === 'string' && ACCOUNT_ID.test(account.id) && (account.provider === 'caldav' || account.provider === 'google' || account.provider === 'microsoft365') && typeof account.displayName === 'string' && account.displayName.length > 0 && account.displayName.length <= 200 && (account.email === null || (typeof account.email === 'string' && account.email.length <= 320)) && typeof account.credentialRef === 'string' && ACCOUNT_ID.test(account.credentialRef) && (account.endpoint === null || (typeof account.endpoint === 'string' && account.endpoint.length <= 2000))
+}
+function makeId(prefix: string, bytes = 12): string { return `${prefix}-${randomBytes(bytes).toString('hex')}` }
+function base64url(bytes: Buffer): string { return bytes.toString('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_') }
 
-function id(): string { return `local-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}` }
-
-/**
- * Calendar persistence and provider boundary. Only event metadata and opaque account references
- * are returned to the renderer. OAuth values are intentionally not accepted by this service's
- * public methods. A provider adapter can add vault-backed tokens behind the same boundary later.
- */
+/** Host-owned provider boundary. Portable projects never contain the records managed here. */
 export class CalendarService implements CalendarApi {
   private readonly root: string
   private readonly accountsFile: string
-  constructor(userDataDir: string) {
-    this.root = path.join(userDataDir, 'calendar-nodes')
-    this.accountsFile = path.join(userDataDir, 'calendar-accounts.json')
-  }
+  private readonly oauthClientsFile: string
+  private readonly vault: CalendarCredentialVault
+  private readonly adapters: ReturnType<typeof createCalendarProviderAdapters>
+  private readonly oauthServers = new Set<Server>()
 
-  private file(nodeId: string): string {
-    if (!isCalendarNodeId(nodeId)) throw new Error('Calendar node id is invalid.')
-    return path.join(this.root, `${nodeId}.json`)
+  constructor(private readonly platform: CorePlatform) {
+    this.root = path.join(platform.userDataDir, 'calendar-nodes')
+    this.accountsFile = path.join(platform.userDataDir, 'calendar-accounts.json')
+    this.oauthClientsFile = path.join(platform.userDataDir, 'calendar-oauth-clients.json')
+    this.vault = new CalendarCredentialVault(platform)
+    this.adapters = createCalendarProviderAdapters(this.vault)
   }
+  private file(nodeId: string): string { if (!isCalendarNodeId(nodeId)) throw new Error('Calendar node id is invalid.'); return path.join(this.root, `${nodeId}.json`) }
+  private empty(nodeId: string): LocalNodeFile { return { version: 2, nodeId, sourceId: 'local', provider: 'local', accountId: null, events: [], sourceName: 'Local calendar', fetchedAt: 0, sourceRevision: null, etag: null, complete: true, partial: false, retryAt: null, backoffMs: 0 } }
   private async read(nodeId: string): Promise<LocalNodeFile> {
     try {
       const parsed = JSON.parse(await readFile(this.file(nodeId), 'utf8')) as Partial<LocalNodeFile>
-      if (parsed.version !== 1 || parsed.nodeId !== nodeId || !Array.isArray(parsed.events) || parsed.events.length > 10000 || !parsed.events.every(validEvent)) throw new Error('Calendar cache has an unsupported shape.')
-      const sourceId = typeof (parsed as { sourceId?: unknown }).sourceId === 'string' ? (parsed as { sourceId: string }).sourceId.slice(0, 240) : 'local'
-      return { version: 1, nodeId, sourceId, events: parsed.events.slice(0, 10000), sourceName: typeof parsed.sourceName === 'string' ? parsed.sourceName.slice(0, 200) : 'Local calendar', fetchedAt: typeof parsed.fetchedAt === 'number' && Number.isFinite(parsed.fetchedAt) ? parsed.fetchedAt : 0 }
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { version: 1, nodeId, sourceId: 'local', events: [], sourceName: 'Local calendar', fetchedAt: 0 }
-      throw error
-    }
+      if ((parsed.version !== 1 && parsed.version !== 2) || parsed.nodeId !== nodeId || !Array.isArray(parsed.events) || parsed.events.length > 10_000 || !parsed.events.every(validEvent)) throw new Error('Calendar cache has an unsupported shape.')
+      const provider = typeof parsed.provider === 'string' && ['local', 'ics', 'caldav', 'google', 'microsoft365'].includes(parsed.provider) ? parsed.provider as CalendarProvider : 'local'
+      return { version: 2, nodeId, sourceId: typeof parsed.sourceId === 'string' ? parsed.sourceId.slice(0, 1000) : 'local', provider, accountId: typeof parsed.accountId === 'string' && ACCOUNT_ID.test(parsed.accountId) ? parsed.accountId : null, events: parsed.events.slice(0, 10_000), sourceName: typeof parsed.sourceName === 'string' ? parsed.sourceName.slice(0, 200) : 'Local calendar', fetchedAt: typeof parsed.fetchedAt === 'number' && Number.isFinite(parsed.fetchedAt) ? parsed.fetchedAt : 0, sourceRevision: typeof parsed.sourceRevision === 'string' ? parsed.sourceRevision.slice(0, 5000) : null, etag: typeof parsed.etag === 'string' ? parsed.etag.slice(0, 1000) : null, complete: parsed.complete !== false, partial: parsed.partial === true, retryAt: typeof parsed.retryAt === 'number' && Number.isFinite(parsed.retryAt) ? parsed.retryAt : null, backoffMs: typeof parsed.backoffMs === 'number' && Number.isFinite(parsed.backoffMs) ? Math.max(0, Math.min(parsed.backoffMs, MAX_BACKOFF)) : 0 }
+    } catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return this.empty(nodeId); throw error }
   }
-  private async write(value: LocalNodeFile): Promise<void> {
-    await mkdir(this.root, { recursive: true })
-    const tmp = tempNameFor(this.file(value.nodeId))
-    const { writeFile } = await import('node:fs/promises')
-    await writeFile(tmp, JSON.stringify(value, null, 2), { encoding: 'utf8', mode: 0o600 })
-    await renameAtomic(tmp, this.file(value.nodeId))
+  private async write(value: LocalNodeFile): Promise<void> { await mkdir(this.root, { recursive: true, mode: 0o700 }); const temporary = tempNameFor(this.file(value.nodeId)); await writeFile(temporary, JSON.stringify(value, null, 2), { encoding: 'utf8', mode: 0o600 }); await renameAtomic(temporary, this.file(value.nodeId)) }
+  private async records(): Promise<RemoteCalendarAccount[]> {
+    try { const parsed = JSON.parse(await readFile(this.accountsFile, 'utf8')) as unknown; const rows = Array.isArray(parsed) ? parsed : parsed && typeof parsed === 'object' && (parsed as { version?: unknown }).version === 1 ? (parsed as { accounts?: unknown }).accounts : []; return Array.isArray(rows) ? rows.filter(validAccount).slice(0, 100) : [] }
+    catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []; throw error }
   }
+  private async saveRecords(accounts: RemoteCalendarAccount[]): Promise<void> { await mkdir(path.dirname(this.accountsFile), { recursive: true, mode: 0o700 }); const temporary = tempNameFor(this.accountsFile); await writeFile(temporary, JSON.stringify({ version: 1, accounts }, null, 2), { encoding: 'utf8', mode: 0o600 }); await renameAtomic(temporary, this.accountsFile) }
+  private async record(id: string | null, provider?: CalendarProvider): Promise<RemoteCalendarAccount | null> { if (!id || !ACCOUNT_ID.test(id)) return null; const account = (await this.records()).find((candidate) => candidate.id === id) ?? null; return account && (!provider || account.provider === provider) ? account : null }
+  private expose(account: RemoteCalendarAccount, state: CalendarAccount['state'], reason: string | null): CalendarAccount { return { id: account.id, provider: account.provider, displayName: account.displayName, email: account.email, credentialRef: account.credentialRef, state, reason } }
+
   async accounts(): Promise<CalendarAccount[]> {
-    try {
-      const parsed = JSON.parse(await readFile(this.accountsFile, 'utf8')) as unknown
-      return Array.isArray(parsed) ? parsed.filter((a): a is CalendarAccount => !!a && typeof a === 'object' && typeof (a as CalendarAccount).id === 'string').map((a) => a.provider === 'local' || a.provider === 'ics' ? { ...a, credentialRef: null } : { ...a, state: 'unavailable' as const, credentialRef: null, reason: 'No trusted provider adapter is installed.' }) : []
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
-      throw error
+    const result: CalendarAccount[] = []
+    for (const account of await this.records()) {
+      try { const credential = await this.vault.read(account.credentialRef); result.push(this.expose(account, credential ? 'connected' : 'needs-consent', credential ? null : 'The machine-local credential is missing. Reconnect this account.')) }
+      catch { result.push(this.expose(account, 'unavailable', 'The machine-local credential could not be read.')) }
     }
+    return result
   }
   async calendars(accountId: string | null, provider: CalendarProvider): Promise<CalendarSource[]> {
     if (provider === 'local') return [{ id: 'local', accountId: null, provider, name: 'On this computer', timezone: 'local', color: '#6750A4', readOnly: false, writable: true }]
     if (provider === 'ics') return [{ id: accountId ?? 'ics-import', accountId: null, provider, name: 'Imported ICS file', timezone: 'local', color: '#386A20', readOnly: false, writable: true }]
-    if (!accountId) return []
-    // No remote provider adapter is installed in this lane. Never synthesize a connected or
-    // writable source from account metadata: an empty list is surfaced as unavailable by the UI.
-    return []
+    const account = await this.record(accountId, provider); return account ? this.adapters[account.provider].calendars(account) : []
   }
   async events(nodeId: string, config: CalendarNodeConfig): Promise<CalendarCache> {
-    config = validateCalendarConfig(config)
-    const data = await this.read(nodeId)
-    const sourceId = config.calendarId ?? 'local'
-    const sameSource = data.sourceId === sourceId || (config.provider === 'local' && data.sourceId === 'local')
-    const events = sameSource ? data.events : []
-    return { nodeId, sourceId, fetchedAt: sameSource ? data.fetchedAt : 0, expiresAt: sameSource && data.fetchedAt ? data.fetchedAt + 15 * 60_000 : 0, events, state: events.length ? (data.fetchedAt && Date.now() - data.fetchedAt < 15 * 60_000 ? 'fresh' : 'stale') : 'empty', reason: sameSource ? null : 'The selected source has no cached events yet.', sourceRevision: sameSource ? String(data.fetchedAt || '') || null : null, etag: null, complete: true, partial: false, retryAt: null, backoffMs: 0 }
+    config = validateCalendarConfig(config); const data = await this.read(nodeId); const sourceId = config.calendarId ?? 'local'; const same = data.sourceId === sourceId || (config.provider === 'local' && data.sourceId === 'local'); const events = same ? data.events : []
+    return { nodeId, sourceId, fetchedAt: same ? data.fetchedAt : 0, expiresAt: same && data.fetchedAt ? data.fetchedAt + 15 * 60_000 : 0, events, state: events.length ? (data.fetchedAt && Date.now() - data.fetchedAt < 15 * 60_000 ? 'fresh' : 'stale') : 'empty', reason: same ? null : 'The selected source has no cached events yet.', sourceRevision: same ? data.sourceRevision : null, etag: same ? data.etag : null, complete: same ? data.complete : true, partial: same ? data.partial : false, retryAt: same ? data.retryAt : null, backoffMs: same ? data.backoffMs : 0 }
   }
   async importIcs(nodeId: string, icsText: string, sourceName = 'Imported ICS file'): Promise<CalendarCache> {
-    const events = parseIcs(icsText, `ics-${nodeId}`)
-    const fetchedAt = Date.now()
-    await this.write({ version: 1, nodeId, sourceId: `ics-${nodeId}`, events, sourceName: sourceName.slice(0, 200), fetchedAt })
-    return { nodeId, sourceId: `ics-${nodeId}`, fetchedAt, expiresAt: fetchedAt + 365 * 24 * 60 * 60_000, events, state: events.length ? 'fresh' : 'empty', reason: events.length ? null : 'The ICS file contained no complete VEVENT records.', sourceRevision: String(fetchedAt), etag: null, complete: true, partial: false, retryAt: null, backoffMs: 0 }
+    const sourceId = `ics-${nodeId}`; const events = parseIcs(icsText, sourceId); const fetchedAt = Date.now(); await this.write({ version: 2, nodeId, sourceId, provider: 'ics', accountId: null, events, sourceName: sourceName.slice(0, 200), fetchedAt, sourceRevision: String(fetchedAt), etag: null, complete: true, partial: false, retryAt: null, backoffMs: 0 }); return { nodeId, sourceId, fetchedAt, expiresAt: fetchedAt + 365 * 24 * 60 * 60_000, events, state: events.length ? 'fresh' : 'empty', reason: events.length ? null : 'The ICS file contained no complete VEVENT records.', sourceRevision: String(fetchedAt), etag: null, complete: true, partial: false, retryAt: null, backoffMs: 0 }
   }
   async refresh(nodeId: string, config: CalendarNodeConfig): Promise<CalendarCache> {
-    config = validateCalendarConfig(config)
-    if (config.provider === 'local' || config.provider === 'ics') return this.events(nodeId, config)
-    const cached = await this.events(nodeId, config)
-    return { ...cached, state: cached.events.length ? 'offline' : 'empty', reason: 'This provider adapter is unavailable. Existing cache was retained; no network request was made.', complete: false, partial: false, retryAt: null, backoffMs: 0 }
+    config = validateCalendarConfig(config); if (config.provider === 'local' || config.provider === 'ics') return this.events(nodeId, config)
+    const cached = await this.read(nodeId)
+    if (cached.retryAt && cached.retryAt > Date.now()) { const value = await this.events(nodeId, config); return { ...value, state: value.events.length ? 'offline' : 'empty', reason: `The provider retry window begins at ${new Date(cached.retryAt).toISOString()}. Existing cache was retained.` } }
+    const account = await this.record(config.accountId, config.provider)
+    if (!account || !config.calendarId) { const value = await this.events(nodeId, config); return { ...value, state: value.events.length ? 'offline' : 'empty', reason: 'Choose a connected account and calendar. Existing cache was retained.', complete: false } }
+    try {
+      const result = await this.adapters[account.provider].sync(account, config.calendarId, { revision: cached.sourceId === config.calendarId ? cached.sourceRevision : null, etag: cached.sourceId === config.calendarId ? cached.etag : null }); const fetchedAt = Date.now(); const events = result.events.length === 0 && cached.sourceId === config.calendarId && cached.events.length > 0 ? cached.events : result.events
+      await this.write({ version: 2, nodeId, sourceId: config.calendarId, provider: account.provider, accountId: account.id, events, sourceName: config.calendarId.slice(0, 200), fetchedAt, sourceRevision: result.sourceRevision, etag: result.etag, complete: result.complete, partial: result.partial, retryAt: null, backoffMs: 0 })
+      return { nodeId, sourceId: config.calendarId, fetchedAt, expiresAt: fetchedAt + 15 * 60_000, events, state: events.length ? 'fresh' : 'empty', reason: result.partial ? 'The provider result reached a safety bound. Refresh again to continue.' : null, sourceRevision: result.sourceRevision, etag: result.etag, complete: result.complete, partial: result.partial, retryAt: null, backoffMs: 0 }
+    } catch (error) {
+      const backoffMs = Math.min(Math.max(cached.backoffMs ? cached.backoffMs * 2 : 5000, 5000), MAX_BACKOFF); const retryAt = Date.now() + backoffMs; const reason = error instanceof Error ? error.message : 'Calendar provider refresh failed.'
+      await this.write({ ...cached, version: 2, nodeId, sourceId: config.calendarId, provider: account.provider, accountId: account.id, retryAt, backoffMs }); const value = await this.events(nodeId, config); return { ...value, state: value.events.length ? 'offline' : 'empty', reason: `${reason} Existing cache was retained.`, complete: false, retryAt, backoffMs }
+    }
   }
   async status(nodeId: string, config: CalendarNodeConfig): Promise<CalendarStatus> {
-    const normalized = validateCalendarConfig(config)
-    const account = (await this.accounts()).find((a) => a.id === normalized.accountId) ?? null
-    const source = (await this.calendars(normalized.accountId, normalized.provider)).find((s) => s.id === normalized.calendarId) ?? (normalized.provider === 'local' ? (await this.calendars(null, 'local'))[0] : null)
-    const cache = await this.events(nodeId, normalized)
-    const state = normalized.provider === 'local' || normalized.provider === 'ics' ? 'ready' : account ? 'unavailable' : 'unconfigured'
-    return { nodeId, provider: normalized.provider, state, account, source, cache, reason: state === 'unconfigured' ? 'Choose a connected account.' : state === 'unavailable' ? 'No trusted provider adapter is installed; remote calendar actions are disabled.' : null }
+    const normalized = validateCalendarConfig(config); const account = (await this.accounts()).find((candidate) => candidate.id === normalized.accountId) ?? null; let source: CalendarSource | null = null
+    try { source = (await this.calendars(normalized.accountId, normalized.provider)).find((candidate) => candidate.id === normalized.calendarId) ?? (normalized.provider === 'local' ? (await this.calendars(null, 'local'))[0] : null) } catch { source = null }
+    const cache = await this.events(nodeId, normalized); const state: CalendarStatus['state'] = normalized.provider === 'local' || normalized.provider === 'ics' ? 'ready' : !account ? 'unconfigured' : account.state === 'connected' ? (source ? 'ready' : 'unconfigured') : account.state; const reason = state === 'unconfigured' ? (account ? 'Choose a calendar from the connected account.' : 'Choose or connect an account on this computer.') : account?.reason ?? null
+    return { nodeId, provider: normalized.provider, state, account, source, cache, reason }
   }
+  private async oauthClients(): Promise<OAuthClientFile> { try { const parsed = JSON.parse(await readFile(this.oauthClientsFile, 'utf8')) as Partial<OAuthClientFile>; if (parsed.version !== 1) throw new Error('Calendar OAuth client configuration has an unsupported version.'); return parsed as OAuthClientFile } catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { version: 1 }; throw error } }
   async beginOAuth(provider: Exclude<CalendarProvider, 'local' | 'ics'>): Promise<CalendarOAuthStart> {
-    return { provider, state: 'unsupported', authorizationUrl: null, redirectUri: null, reason: 'No trusted OAuth/PKCE provider adapter is installed; this provider is unavailable and its actions are disabled.' }
+    if (provider === 'caldav') return { provider, state: 'unsupported', authorizationUrl: null, redirectUri: null, reason: 'CalDAV uses the guided connection form instead of OAuth.' }
+    const clients = await this.oauthClients(); const config = clients[provider]; const clientId = config?.clientId?.trim()
+    if (!clientId || clientId.length > 512) return { provider, state: 'unsupported', authorizationUrl: null, redirectUri: null, reason: `This computer has no ${provider === 'google' ? 'Google' : 'Microsoft'} OAuth client registration in calendar-oauth-clients.json.` }
+    const verifier = base64url(randomBytes(48)); const challenge = base64url(createHash('sha256').update(verifier).digest()); const state = base64url(randomBytes(24)); const tenant = provider === 'microsoft365' && config && 'tenant' in config && typeof config.tenant === 'string' && /^[a-zA-Z0-9.-]{1,200}$/.test(config.tenant) ? config.tenant : 'common'; const scope = provider === 'google' ? 'openid email profile https://www.googleapis.com/auth/calendar' : 'openid profile email offline_access Calendars.ReadWrite User.Read'; const tokenUrl = provider === 'google' ? 'https://oauth2.googleapis.com/token' : `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`
+    let server: Server | null = null; let redirectUri = ''
+    redirectUri = await new Promise<string>((resolve, reject) => {
+      server = createServer((request, response) => {
+        const url = new URL(request.url ?? '/', 'http://127.0.0.1'); if (url.pathname !== '/calendar/oauth/callback') { response.writeHead(404).end('Not found'); return }
+        const code = url.searchParams.get('code'); const returnedState = url.searchParams.get('state'); response.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' }); response.end('<!doctype html><meta charset="utf-8"><title>Calendar connection</title><p>The calendar connection response was received. You can return to nodeterm.</p>'); if (server) { server.close(); this.oauthServers.delete(server) }
+        if (code && returnedState === state) void this.finishOAuth(provider, clientId, tokenUrl, scope, verifier, redirectUri, code).catch(() => {})
+      }); server.once('error', reject); server.listen(0, '127.0.0.1', () => { this.oauthServers.add(server!); const address = server!.address(); if (!address || typeof address === 'string') { reject(new Error('OAuth callback listener did not bind to loopback.')); return }; resolve(`http://127.0.0.1:${address.port}/calendar/oauth/callback`) })
+    })
+    setTimeout(() => { if (server) { server.close(); this.oauthServers.delete(server) } }, 10 * 60_000).unref()
+    const authorizationUrl = provider === 'google' ? new URL('https://accounts.google.com/o/oauth2/v2/auth') : new URL(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/authorize`); authorizationUrl.search = new URLSearchParams({ client_id: clientId, redirect_uri: redirectUri, response_type: 'code', scope, state, code_challenge: challenge, code_challenge_method: 'S256', ...(provider === 'google' ? { access_type: 'offline', prompt: 'consent' } : {}) }).toString(); return { provider, state: 'ready', authorizationUrl: authorizationUrl.toString(), redirectUri, reason: null }
   }
+  private async finishOAuth(provider: 'google' | 'microsoft365', clientId: string, tokenUrl: string, scope: string, verifier: string, redirectUri: string, code: string): Promise<void> {
+    const tokenResponse = await fetch(tokenUrl, { method: 'POST', signal: AbortSignal.timeout(30_000), headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ client_id: clientId, code, code_verifier: verifier, grant_type: 'authorization_code', redirect_uri: redirectUri, scope }) }); if (!tokenResponse.ok) throw new Error(`Calendar OAuth token exchange failed with HTTP ${tokenResponse.status}.`); const token = await tokenResponse.json() as Record<string, unknown>; const accessToken = typeof token.access_token === 'string' ? token.access_token : ''; if (!accessToken || accessToken.length > 16_384) throw new Error('Calendar OAuth response did not contain a valid access token.')
+    const profileUrl = provider === 'google' ? 'https://www.googleapis.com/oauth2/v2/userinfo' : 'https://graph.microsoft.com/v1.0/me?$select=id,displayName,mail,userPrincipalName'; const profileResponse = await fetch(profileUrl, { signal: AbortSignal.timeout(20_000), headers: { authorization: `Bearer ${accessToken}`, accept: 'application/json' } }); if (!profileResponse.ok) throw new Error(`Calendar account profile request failed with HTTP ${profileResponse.status}.`); const profile = await profileResponse.json() as Record<string, unknown>; const email = typeof profile.email === 'string' ? profile.email : typeof profile.mail === 'string' ? profile.mail : typeof profile.userPrincipalName === 'string' ? profile.userPrincipalName : null; const displayName = typeof profile.name === 'string' ? profile.name : typeof profile.displayName === 'string' ? profile.displayName : email ?? (provider === 'google' ? 'Google Calendar' : 'Microsoft 365'); const existing = (await this.records()).find((candidate) => candidate.provider === provider && candidate.email && candidate.email === email); const id = existing?.id ?? makeId(provider); const ref = existing?.credentialRef ?? makeId('calendar', 16); const expiresIn = typeof token.expires_in === 'number' && Number.isFinite(token.expires_in) ? Math.max(60, Math.min(token.expires_in, 86_400)) : 3600
+    await this.vault.save(ref, { kind: 'oauth', accessToken, refreshToken: typeof token.refresh_token === 'string' ? token.refresh_token : null, expiresAt: Date.now() + expiresIn * 1000, clientId, tokenUrl, scope }); const next: RemoteCalendarAccount = { id, provider, displayName: displayName.slice(0, 200), email: email?.slice(0, 320) ?? null, credentialRef: ref, endpoint: null }; await this.saveRecords([...(await this.records()).filter((candidate) => candidate.id !== id), next])
+  }
+  async connectCalDav(input: CalendarCalDavConnectInput): Promise<CalendarAccount> {
+    if (!input || typeof input !== 'object') throw new Error('CalDAV connection details are required.'); const endpoint = validateEndpoint(input.endpoint); const displayName = input.displayName.trim().slice(0, 200); const username = input.username.trim().slice(0, 320); if (!displayName || !username || typeof input.password !== 'string' || input.password.length === 0 || input.password.length > 4096) throw new Error('CalDAV display name, username, and password are required.'); const id = makeId('caldav'); const ref = makeId('calendar', 16); await this.vault.save(ref, { kind: 'caldav', username, password: input.password }); const account: RemoteCalendarAccount = { id, provider: 'caldav', displayName, email: typeof input.email === 'string' ? input.email.trim().slice(0, 320) || null : null, credentialRef: ref, endpoint }
+    try { if ((await this.adapters.caldav.calendars(account)).length === 0) throw new Error('The CalDAV endpoint returned no calendars.'); await this.saveRecords([...(await this.records()), account]); return this.expose(account, 'connected', null) } catch (error) { await this.vault.clear(ref); throw error }
+  }
+  async disconnectAccount(id: string): Promise<boolean> { const account = await this.record(id); if (!account) return false; await this.vault.clear(account.credentialRef); await this.saveRecords((await this.records()).filter((candidate) => candidate.id !== account.id)); return true }
+  private async remoteContext(nodeId: string, calendarId: string): Promise<{ account: RemoteCalendarAccount; adapter: ReturnType<typeof createCalendarProviderAdapters>[RemoteCalendarAccount['provider']] }> { const data = await this.read(nodeId); if (!data.accountId || data.sourceId !== calendarId || !REMOTE.has(data.provider)) throw new Error('Refresh this remote calendar before changing its events.'); const account = await this.record(data.accountId, data.provider); if (!account) throw new Error('The connected calendar account is unavailable.'); return { account, adapter: this.adapters[account.provider] } }
   async create(input: CalendarCreateInput): Promise<CalendarEvent> {
-    if (!isCalendarNodeId(input.nodeId) || typeof input.event?.calendarId !== 'string' || !['local', 'ics'].some((prefix) => input.event.calendarId === prefix || input.event.calendarId.startsWith(`${prefix}-`))) throw new Error('Remote calendar writes are unavailable until a trusted writable adapter is connected.')
-    if (typeof input.event.title !== 'string' || input.event.title.trim().length === 0 || input.event.title.length > 500 || typeof input.event.start !== 'string' || typeof input.event.end !== 'string' || Number.isNaN(Date.parse(input.event.start)) || Number.isNaN(Date.parse(input.event.end)) || Date.parse(input.event.end) <= Date.parse(input.event.start)) throw new Error('Calendar event fields are invalid.')
-    const data = await this.read(input.nodeId); const event = { calendarId: input.event.calendarId, title: input.event.title.trim(), start: input.event.start, end: input.event.end, timezone: input.event.timezone.slice(0, 100), allDay: input.event.allDay === true, location: typeof input.event.location === 'string' ? input.event.location.slice(0, 500) : null, description: typeof input.event.description === 'string' ? input.event.description.slice(0, 4000) : null, recurrence: typeof input.event.recurrence === 'string' ? input.event.recurrence.slice(0, 500) : null, id: id(), updatedAt: Date.now() }; await this.write({ ...data, events: [...data.events, event], fetchedAt: Date.now() }); return event
+    if (!isCalendarNodeId(input.nodeId) || typeof input.event?.calendarId !== 'string' || typeof input.event.title !== 'string' || !input.event.title.trim() || input.event.title.length > 500 || Number.isNaN(Date.parse(input.event.start)) || Number.isNaN(Date.parse(input.event.end)) || Date.parse(input.event.end) <= Date.parse(input.event.start)) throw new Error('Calendar event fields are invalid.'); if (!['local', 'ics'].some((prefix) => input.event.calendarId === prefix || input.event.calendarId.startsWith(`${prefix}-`))) { const { account, adapter } = await this.remoteContext(input.nodeId, input.event.calendarId); return adapter.create(account, input) }
+    const data = await this.read(input.nodeId); const event: CalendarEvent = { ...input.event, title: input.event.title.trim(), id: makeId('local', 5), updatedAt: Date.now() }; await this.write({ ...data, events: [...data.events, event], fetchedAt: Date.now() }); return event
   }
-  async update(input: CalendarUpdateInput): Promise<CalendarEvent | null> { if (!input || typeof input.nodeId !== 'string' || typeof input.eventId !== 'string' || !input.event || typeof input.event !== 'object') throw new Error('Calendar update fields are invalid.'); const data = await this.read(input.nodeId); const current = data.events.find((e) => e.id === input.eventId); if (!current) return null; if (!['local', 'ics'].some((prefix) => current.calendarId === prefix || current.calendarId.startsWith(`${prefix}-`))) throw new Error('Remote calendar writes are unavailable until a trusted writable adapter is connected.'); const patch = input.event; const event = { ...current, title: typeof patch.title === 'string' ? patch.title.slice(0, 500) : current.title, start: typeof patch.start === 'string' ? patch.start : current.start, end: typeof patch.end === 'string' ? patch.end : current.end, timezone: typeof patch.timezone === 'string' ? patch.timezone.slice(0, 100) : current.timezone, allDay: typeof patch.allDay === 'boolean' ? patch.allDay : current.allDay, location: typeof patch.location === 'string' ? patch.location.slice(0, 500) : patch.location === null ? null : current.location, description: typeof patch.description === 'string' ? patch.description.slice(0, 4000) : patch.description === null ? null : current.description, recurrence: typeof patch.recurrence === 'string' ? patch.recurrence.slice(0, 500) : patch.recurrence === null ? null : current.recurrence, id: current.id, updatedAt: Date.now() }; if (!event.title.trim() || Number.isNaN(Date.parse(event.start)) || Number.isNaN(Date.parse(event.end)) || Date.parse(event.end) <= Date.parse(event.start)) throw new Error('Calendar event fields are invalid.'); await this.write({ ...data, events: data.events.map((e) => e.id === current.id ? event : e), fetchedAt: Date.now() }); return event }
-  async remove(nodeId: string, eventId: string): Promise<boolean> { const data = await this.read(nodeId); const current = data.events.find((e) => e.id === eventId); if (current && !['local', 'ics'].some((prefix) => current.calendarId === prefix || current.calendarId.startsWith(`${prefix}-`))) throw new Error('Remote calendar writes are unavailable until a trusted writable adapter is connected.'); const next = data.events.filter((e) => e.id !== eventId); if (next.length === data.events.length) return false; await this.write({ ...data, events: next, fetchedAt: Date.now() }); return true }
+  async update(input: CalendarUpdateInput): Promise<CalendarEvent | null> {
+    if (!input || !isCalendarNodeId(input.nodeId) || typeof input.eventId !== 'string' || !input.event || typeof input.event !== 'object') throw new Error('Calendar update fields are invalid.'); const data = await this.read(input.nodeId); const current = data.events.find((event) => event.id === input.eventId); if (!current) return null; const event: CalendarEvent = { ...current, ...input.event, id: current.id, calendarId: current.calendarId, updatedAt: Date.now() }; if (!event.title.trim() || Number.isNaN(Date.parse(event.start)) || Number.isNaN(Date.parse(event.end)) || Date.parse(event.end) <= Date.parse(event.start)) throw new Error('Calendar event fields are invalid.'); if (!['local', 'ics'].some((prefix) => current.calendarId === prefix || current.calendarId.startsWith(`${prefix}-`))) { const { account, adapter } = await this.remoteContext(input.nodeId, current.calendarId); return adapter.update(account, { ...input, event }) }; await this.write({ ...data, events: data.events.map((candidate) => candidate.id === current.id ? event : candidate), fetchedAt: Date.now() }); return event
+  }
+  async remove(nodeId: string, eventId: string): Promise<boolean> { const data = await this.read(nodeId); const current = data.events.find((event) => event.id === eventId); if (!current) return false; if (!['local', 'ics'].some((prefix) => current.calendarId === prefix || current.calendarId.startsWith(`${prefix}-`))) { const { account, adapter } = await this.remoteContext(nodeId, current.calendarId); return adapter.remove(account, current.calendarId, eventId) }; await this.write({ ...data, events: data.events.filter((event) => event.id !== eventId), fetchedAt: Date.now() }); return true }
 }

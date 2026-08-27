@@ -799,6 +799,8 @@ export const IPC = {
   calendarImportIcs: 'calendar:import-ics',
   calendarRefresh: 'calendar:refresh',
   calendarBeginOAuth: 'calendar:begin-oauth',
+  calendarConnectCalDav: 'calendar:connect-caldav',
+  calendarDisconnectAccount: 'calendar:disconnect-account',
   calendarCreate: 'calendar:create',
   calendarUpdate: 'calendar:update',
   calendarRemove: 'calendar:remove',
