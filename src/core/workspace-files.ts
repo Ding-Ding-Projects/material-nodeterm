@@ -17,6 +17,7 @@ import type {
   ProjectChildCanvas,
   ProjectPortalState,
   ProjectKanban,
+  SavedCanvasLayout,
   Viewport,
   Workspace
 } from '../shared/types'
@@ -24,10 +25,7 @@ import { sanitizeMultiverseCanvases } from '../shared/multiverse-canvases'
 import { projectCapabilityFields, readProjectCapabilities } from '../shared/project-capabilities'
 import type { CapabilityAckMap } from '../shared/project-capability-consent'
 import { sanitizeProjectIcon, type ProjectIcon } from '../shared/project-icon'
-import type { BridgeLink, CanvasNodeState, NavStop, Project, ProjectKanban, Viewport, Workspace } from '../shared/types'
-import { projectCapabilityFields, readProjectCapabilities } from '../shared/project-capabilities'
 import { loadedAgentBrowserPartition } from '../shared/browser-partition'
-import { sanitizeProjectIcon, type ProjectIcon } from '../shared/project-icon'
 import { validatePortableDoorConstruction } from '../shared/door-construction'
 import { validateCalendarConfig } from '../shared/calendar'
 
@@ -108,6 +106,8 @@ export interface ProjectFileV1 {
    */
   viewport?: Viewport
   nodes: CanvasNodeState[]
+  /** Named portable canvas arrangements. Runtime sessions and machine paths are never stored. */
+  savedLayouts?: SavedCanvasLayout[]
   /** Safe shared hierarchy. Runtime selection remains machine-local and is never written here. */
   multiverseCanvases?: ProjectMultiverseCanvas[]
   /** Schema 3 child-canvas content. These fields contain safe presentation only. */
@@ -287,6 +287,7 @@ export function projectToFile(
     nodes: sanitizeCalendarConfigs(stripSharedNodeExec(p.cwd ? toPortableNodes(canvas.nodes, p.cwd) : canvas.nodes))
   }))
   const icon = sanitizeProjectIcon(p.icon)
+  const savedLayouts = validSavedLayouts(p.savedLayouts)
   return {
     version: 1,
     rev,
@@ -296,6 +297,7 @@ export function projectToFile(
     color: p.color,
     viewport: framingViewport(nodes),
     nodes,
+    ...(savedLayouts ? { savedLayouts } : {}),
     ...(multiverseCanvases ? { multiverseCanvases } : {}),
     ...(childCanvases && childCanvases.length > 0 ? { childCanvases } : {}),
     ...(p.portals && p.portals.length > 0 ? { portals: p.portals.map((portal) => ({ ...portal })) } : {}),
@@ -340,6 +342,55 @@ export function validBrowserProfiles(v: unknown): BrowserProfile[] | undefined {
       typeof (p as BrowserProfile).color === 'string'
   )
   return cleaned.length > 0 ? cleaned : undefined
+}
+
+/** Strict, bounded reader for saved canvas arrangements. Invalid entries are omitted so a
+ * hand-edited layout cannot make the project unreadable or introduce runtime-only data. */
+export function validSavedLayouts(v: unknown): SavedCanvasLayout[] | undefined {
+  if (!Array.isArray(v) || v.length > 32) return undefined
+  const result: SavedCanvasLayout[] = []
+  const ids = new Set<string>()
+  for (const item of v) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue
+    const candidate = item as Partial<SavedCanvasLayout>
+    if (
+      typeof candidate.id !== 'string' || candidate.id.length === 0 || candidate.id.length > 128 || ids.has(candidate.id) ||
+      typeof candidate.name !== 'string' || candidate.name.trim().length === 0 || candidate.name.length > 160 ||
+      typeof candidate.createdAt !== 'number' || !Number.isFinite(candidate.createdAt) ||
+      typeof candidate.updatedAt !== 'number' || !Number.isFinite(candidate.updatedAt) ||
+      !candidate.viewport || typeof candidate.viewport !== 'object' ||
+      typeof candidate.viewport.x !== 'number' || !Number.isFinite(candidate.viewport.x) ||
+      typeof candidate.viewport.y !== 'number' || !Number.isFinite(candidate.viewport.y) ||
+      typeof candidate.viewport.zoom !== 'number' || !Number.isFinite(candidate.viewport.zoom) || candidate.viewport.zoom <= 0 ||
+      !Array.isArray(candidate.nodes) || candidate.nodes.length > 1000
+    ) continue
+    const nodeIds = new Set<string>()
+    const nodes = candidate.nodes.filter((entry): entry is SavedCanvasLayout['nodes'][number] => {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return false
+      const n = entry as Partial<SavedCanvasLayout['nodes'][number]>
+      if (typeof n.id !== 'string' || n.id.length === 0 || n.id.length > 128 || nodeIds.has(n.id)) return false
+      const valid =
+        !!n.position && typeof n.position.x === 'number' && Number.isFinite(n.position.x) &&
+        typeof n.position.y === 'number' && Number.isFinite(n.position.y) &&
+        !!n.size && typeof n.size.width === 'number' && Number.isFinite(n.size.width) && n.size.width > 0 &&
+        typeof n.size.height === 'number' && Number.isFinite(n.size.height) && n.size.height > 0 &&
+        (n.parentId === undefined || (typeof n.parentId === 'string' && n.parentId.length <= 128)) &&
+        (n.collapsed === undefined || typeof n.collapsed === 'boolean')
+      if (valid) nodeIds.add(n.id)
+      return valid
+    })
+    if (nodes.length !== candidate.nodes.length) continue
+    ids.add(candidate.id)
+    result.push({
+      id: candidate.id,
+      name: candidate.name.trim(),
+      createdAt: candidate.createdAt,
+      updatedAt: candidate.updatedAt,
+      viewport: { x: candidate.viewport.x, y: candidate.viewport.y, zoom: candidate.viewport.zoom },
+      nodes: nodes.map((node) => ({ ...node, position: { ...node.position }, size: { ...node.size } }))
+    })
+  }
+  return result.length > 0 ? result : undefined
 }
 
 /** Tolerant reader for imported child-canvas content. A malformed child record is omitted as an
@@ -435,6 +486,7 @@ export function fileToProject(
 ): Project {
   const defaultAccountId = base.defaultAccountId ?? f.defaultAccountId
   const browserProfiles = validBrowserProfiles(f.browserProfiles)
+  const savedLayouts = validSavedLayouts(f.savedLayouts)
   const multiverseCanvases = sanitizeMultiverseCanvases(f.multiverseCanvases)?.map((canvas) => ({
     ...canvas,
     nodes: sanitizeBrowserPartitions(
@@ -460,6 +512,7 @@ export function fileToProject(
       sanitizeCalendarConfigs(applyLocalNodeExec(base.cwd ? resolveNodes(f.nodes, base.cwd) : f.nodes, base.localExec)),
       base.id
     ),
+    ...(savedLayouts ? { savedLayouts } : {}),
     ...(multiverseCanvases ? { multiverseCanvases } : {}),
     ...(childCanvases ? {
       childCanvases: childCanvases.map((canvas) => ({

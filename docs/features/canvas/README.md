@@ -24,6 +24,8 @@ The pan/zoom surface nodeterm is built around, and everything that lives on it.
   daylight-saving, snooze, dismiss, and missed-occurrence handling.
 - [Canvas & node lifecycle](./canvas-and-lifecycle.md) — how nodes mount, unmount, park, and
   release memory as you pan around a large canvas; context menus, undo/redo, and selection.
+- [Canvas zones and saved layouts](./zones-and-saved-layouts.md) - edge and corner drag overlays,
+  complete half, third, and quarter targets, and bounded named arrangements.
 - [Terminal sharpness under pan and zoom](./terminal-sharpness.md) — why terminal text goes soft on
   a fractional-dpr display, the two independent causes, and what the app does about each.
 - [Timer nodes](./timer-nodes.md) — countdowns, stopwatches, work/rest sequences, laps, repeats,

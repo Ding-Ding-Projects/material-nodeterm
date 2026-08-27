@@ -2428,46 +2428,6 @@ export function fitGroupToChildren(nodes: CanvasNode[], groupId: string): Canvas
 }
 
 /**
- * Zone snap (issue #394 v1, ported): place `nodeId` at `rect` — a zone of the visible viewport in
- * ROOT/flow coordinates (`zoneTargetRect`). Plain placement: the node is simply MOVED and resized,
- * exactly as if by hand. Refuses an unknown id, a group frame, or a collapsed node (a collapsed
- * node has no real height to occupy a zone with).
- *
- * `rect` is root-space; a grouped node's position is relative to its frame, so this subtracts the
- * ancestor origins (root position minus own offset = the parent chain's origin) the same way
- * `maximizeNodeToRect`-style placement would, then re-fits the ancestor frame chain — `extent:
- * 'parent'` would otherwise clamp a child bigger than its frame into an inverted range (the trap
- * `groupSelectedNodes` documents).
- */
-export function placeNodeInRect(
-  nodes: CanvasNode[],
-  nodeId: string,
-  rect: { x: number; y: number; width: number; height: number }
-): CanvasNode[] {
-  const node = nodes.find((n) => n.id === nodeId)
-  if (!node || node.type === 'group' || node.data.collapsed) return nodes
-  const root = rootPosition(node, nodes)
-  const originX = root.x - node.position.x
-  const originY = root.y - node.position.y
-  const next = nodes.map((n) =>
-    n.id === nodeId
-      ? {
-          ...n,
-          position: { x: rect.x - originX, y: rect.y - originY },
-          width: rect.width,
-          height: rect.height,
-          style: { ...n.style, width: rect.width, height: rect.height },
-          // Drop the stale measurement in the same tick: flowToNodeStates prefers `measured` over
-          // `width`/`height`, and a commit racing the re-measure would persist the OLD size.
-          measured: undefined,
-          data: { ...n.data, expandedHeight: rect.height }
-        }
-      : n
-  )
-  return fitAncestorChain(next, node.parentId)
-}
-
-/**
  * Removes a group frame, promoting its DIRECT children into the frame's own parent (the top
  * level for an unnested frame) without moving them on canvas. A nested frame's children land in
  * the grandparent, not at the root — sending them to the root would move them by the whole

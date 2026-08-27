@@ -1071,6 +1071,23 @@ export interface ProjectPortalState {
   returnConstruction?: PortableDoorConstructionV3
 }
 
+/** A named, portable snapshot of one canvas arrangement. Runtime sessions and machine paths are
+ * intentionally absent: only node identity, geometry, grouping, and the camera travel with it. */
+export interface SavedCanvasLayout {
+  id: string
+  name: string
+  createdAt: number
+  updatedAt: number
+  viewport: Viewport
+  nodes: Array<{
+    id: string
+    position: { x: number; y: number }
+    size: { width: number; height: number }
+    parentId?: string
+    collapsed?: boolean
+  }>
+}
+
 /** A project is one canvas/page: its own nodes, viewport, and default working dir. */
 export interface Project {
   id: string
@@ -1089,6 +1106,8 @@ export interface Project {
   ssh?: { server: import('./ssh').SshConnection; remoteCwd: string }
   viewport: Viewport
   nodes: CanvasNodeState[]
+  /** Named portable arrangements for this project's active canvas. */
+  savedLayouts?: SavedCanvasLayout[]
   /** Safe, git-shared child canvases. Credentials, paths and runtime bindings stay on nodes' local overlays. */
   multiverseCanvases?: ProjectMultiverseCanvas[]
   /** Runtime-only selection. The shared project file stores hierarchy, never one person's current view. */

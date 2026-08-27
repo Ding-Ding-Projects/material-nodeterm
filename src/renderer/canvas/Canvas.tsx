@@ -390,7 +390,6 @@ import {
   type FocusableNode
 } from '../lib/nodeFocus'
 import { maximizeTargetRect } from '../lib/nodeMaximize'
-import { ZONES, zoneTargetRect, type ZoneId } from '../lib/nodeZones'
 import {
   recordBreadcrumb,
   stepBreadcrumb,
@@ -644,7 +643,8 @@ import { assignNode, assignedTo, defaultKanban, labelsForCard, migrateProjectTag
 import { registerWorkspaceDirty } from '../state/workspaceDirty'
 import { canClearDirty, commitActiveCanvas } from '../state/persistGuards'
 import { isHidden, tidySeparators } from '../lib/ui-visibility'
-import { ZONES, ZONE_ARROW_KEYS, zoneTargetRect, type ZoneId } from '../lib/nodeZones'
+import { ZONES, ZONE_ARROW_KEYS, zoneForPointer, zoneTargetRect, type ZoneId } from '../lib/nodeZones'
+import { applySavedLayout, captureSavedLayout } from '../lib/nodeLayouts'
 import {
   explorerIsOpen,
   nextExplorerPin,
@@ -760,6 +760,7 @@ import { resolveNewCodexNodeAccount, planCodexAccountSwitch } from './codex-acco
 import type { CodexAccount } from '@shared/codex-account'
 import { useSystemCodexAccount } from '../state/systemCodexAccount'
 import { toKanbanSession } from './toKanbanSession'
+import type { SavedCanvasLayout } from '@shared/types'
 
 const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
 
@@ -1293,6 +1294,12 @@ export function Canvas() {
   const [canvasLocked, setCanvasLocked] = useState(false)
   /** SPACE is held: a left-drag pans instead of box-selecting, Figma-style (issue #86). */
   const [spacePan, setSpacePan] = useState(false)
+  /** Edge and corner target shown while one eligible node is being dragged. */
+  const [zonePreview, setZonePreview] = useState<{
+    zone: ZoneId
+    rect: { left: number; top: number; width: number; height: number }
+  } | null>(null)
+  const zoneDragNodeRef = useRef<string | null>(null)
 
   /**
    * Hold SPACE to pan — the Figma/Miro gesture, requested in issue #86 (where a user pressed it,
@@ -9128,6 +9135,107 @@ export function Canvas() {
     },
     [setNodes, markDirty, getViewport]
   )
+
+  const saveCurrentLayout = useCallback(async () => {
+    const projectId = useProjects.getState().activeProjectId
+    if (!projectId || !nodesRef.current.length) return
+    const name = (await promptDialog({ message: 'Name this saved layout:' }))?.trim()
+    if (!name) return
+    const now = Date.now()
+    const current = useProjects.getState().getProject(projectId)?.savedLayouts ?? []
+    const layout = captureSavedLayout(flowToNodeStates(nodesRef.current), viewportRef.current, {
+      id: crypto.randomUUID(),
+      name,
+      createdAt: now,
+      updatedAt: now
+    })
+    useProjects.getState().setProjectSavedLayouts(projectId, [...current, layout].slice(-32))
+    markDirty()
+    setNotice({ kind: 'info', text: `Saved layout "${name}".` })
+  }, [markDirty])
+
+  const restoreSavedLayout = useCallback((layout: SavedCanvasLayout) => {
+    const applied = applySavedLayout(flowToNodeStates(nodesRef.current), layout)
+    if (!applied.changed) {
+      setNotice({ kind: 'info', text: `Layout "${layout.name}" is already active.` })
+      return
+    }
+    setNodes(nodeStatesToFlow(applied.nodes))
+    setViewport(layout.viewport)
+    markDirty()
+    if (applied.missingNodeIds.length > 0) {
+      setNotice({ kind: 'info', text: `Restored "${layout.name}". ${applied.missingNodeIds.length} saved node(s) were not present.` })
+    } else {
+      setNotice({ kind: 'info', text: `Restored layout "${layout.name}".` })
+    }
+  }, [markDirty, setNodes, setViewport])
+
+  const deleteSavedLayout = useCallback((layoutId: string) => {
+    const projectId = useProjects.getState().activeProjectId
+    if (!projectId) return
+    const project = useProjects.getState().getProject(projectId)
+    const next = (project?.savedLayouts ?? []).filter((layout) => layout.id !== layoutId)
+    if (next.length === (project?.savedLayouts ?? []).length) return
+    useProjects.getState().setProjectSavedLayouts(projectId, next)
+    markDirty()
+  }, [markDirty])
+
+  const handleNodeDragStart = useCallback((_event: unknown, node: CanvasNode) => {
+    draggingRef.current = true
+    zoneDragNodeRef.current = canSnapToZone([node.id]) ? node.id : null
+    setZonePreview(null)
+  }, [canSnapToZone])
+
+  const handleNodeDrag = useCallback((event: unknown, node: CanvasNode) => {
+    if (zoneDragNodeRef.current !== node.id) return
+    const input = event as {
+      clientX?: number
+      clientY?: number
+      touches?: ArrayLike<{ clientX: number; clientY: number }>
+    }
+    const touch = input.touches?.[0]
+    const clientX = touch?.clientX ?? input.clientX
+    const clientY = touch?.clientY ?? input.clientY
+    const wrap = flowWrapRef.current
+    if (clientX === undefined || clientY === undefined || !wrap) return
+    const bounds = wrap.getBoundingClientRect()
+    const zone = zoneForPointer(clientX - bounds.left, clientY - bounds.top, bounds.width, bounds.height)
+    if (!zone) {
+      setZonePreview(null)
+      return
+    }
+    const viewport = getViewport()
+    const target = zoneTargetRect(viewport, bounds.width, bounds.height, zone)
+    if (!target) {
+      setZonePreview(null)
+      return
+    }
+    setZonePreview({
+      zone,
+      rect: {
+        left: target.x * viewport.zoom + viewport.x,
+        top: target.y * viewport.zoom + viewport.y,
+        width: target.width * viewport.zoom,
+        height: target.height * viewport.zoom
+      }
+    })
+  }, [getViewport])
+
+  const handleNodeDragStop = useCallback((_event: unknown, node: CanvasNode) => {
+    const preview = zonePreview
+    if (zoneDragNodeRef.current === node.id && preview) {
+      const wrap = flowWrapRef.current?.getBoundingClientRect()
+      if (wrap) {
+        const target = zoneTargetRect(getViewport(), wrap.width, wrap.height, preview.zone)
+        if (target) setNodes((ns) => placeNodeInRect(ns as CanvasNode[], node.id, target))
+      }
+    }
+    zoneDragNodeRef.current = null
+    setZonePreview(null)
+    draggingRef.current = false
+    publisherRef.current?.flush()
+    markDirty()
+  }, [getViewport, markDirty, setNodes, zonePreview])
   // Snap-to-grid MODE (like a desktop "Auto arrange"): when `autoAlignGrid` flips ON, snap EVERY
   // node to the grid at that moment (not just the selection — the one-shot `alignToGrid` is no
   // longer exposed in the UI; this is its replacement). `nodesRef.current` holds only the active
@@ -10123,18 +10231,9 @@ export function Canvas() {
         : ([
             { label: 'Duplicate', icon: <IconDuplicate />, onClick: () => duplicateNodes(ids, at) }
           ] as MenuItem[])),
-      // "Snap to zone" (issue #394 v1, ported): a single non-group, non-collapsed node only —
-      // a multi-node selection or a group frame has no single rect to snap.
+      // Zone placement is available for one expanded non-group node. The submenu includes halves,
+      // thirds, and quarters, while drag-to-edge uses the same geometry helper below.
       ...(!isHidden('snap-zone', hidden) && canSnapToZone(ids)
-      // Zone snap (issue #394 v1): place THIS node into a region of the visible canvas at that
-      // region's size — halves/quarters/thirds. Single non-group, non-collapsed target only (the
-      // same declines as the ⌃⌥arrow chords; a multi-selection stacking into one zone is noise).
-      ...(ids.length === 1 &&
-      !isHidden('snap-zone', hidden) &&
-      (() => {
-        const n = nodesRef.current.find((nd) => nd.id === ids[0])
-        return !!n && n.type !== 'group' && !n.data.collapsed
-      })()
         ? ([
             {
               type: 'submenu',
@@ -10143,7 +10242,6 @@ export function Canvas() {
               children: ZONES.map((z) => ({
                 label: z.label,
                 onClick: () => snapNodeToZone(ids[0], z.id)
-                onClick: () => snapNodeToZone(z.id, ids[0])
               }))
             }
           ] as MenuItem[])
@@ -11375,6 +11473,21 @@ export function Canvas() {
           ...(hasArrangeableNodes()
             ? [{ label: 'Tidy canvas', icon: <IconGrid />, onClick: arrangeAllNodes } as MenuItem]
             : []),
+          ...(activeProjectId
+            ? [
+                { type: 'label', label: 'Saved layouts' } as MenuItem,
+                { label: 'Save current layout…', icon: <IconGrid />, onClick: () => void saveCurrentLayout() } as MenuItem,
+                ...((useProjects.getState().getProject(activeProjectId)?.savedLayouts ?? []).map((layout) => ({
+                  type: 'submenu' as const,
+                  label: layout.name,
+                  icon: <IconGrid />,
+                  children: [
+                    { label: 'Restore layout', onClick: () => restoreSavedLayout(layout) },
+                    { label: 'Delete saved layout', onClick: () => deleteSavedLayout(layout.id) }
+                  ]
+                })))
+              ]
+            : []),
           // Project-wide: restart every idle agent CLI in place (new model pickup). Hidden on a
           // canvas with no restartable agent node — there it could only ever report "0 restarted".
           ...(hasRestartableAgents()
@@ -11419,6 +11532,9 @@ export function Canvas() {
       fitAll,
       arrangeAllNodes,
       hasArrangeableNodes,
+      saveCurrentLayout,
+      restoreSavedLayout,
+      deleteSavedLayout,
       hasRestartableAgents,
       restartIdleAgents,
       drawTool.startTool
@@ -16312,6 +16428,18 @@ export function Canvas() {
         note: isSshProject ? WORKTREE_SSH_HINT : undefined,
         run: () => openWorktreeDialog(null)
       },
+      {
+        id: 'layout-save',
+        label: 'Save current canvas layout…',
+        icon: <IconGrid />,
+        run: () => void saveCurrentLayout()
+      },
+      ...(useProjects.getState().getProject(activeProjectId)?.savedLayouts ?? []).map((layout) => ({
+        id: `layout-restore-${layout.id}`,
+        label: `Restore layout: ${layout.name}`,
+        icon: <IconGrid />,
+        run: () => restoreSavedLayout(layout)
+      })),
       // Draw tools (issue #145) — arms the next canvas drag; Esc cancels. Same three tools as the
       // pane context menu, see the comment there for why "colored area" reuses the group frame and
       // "line"/"arrow" are a brand-new, purely decorative node kind (never an edge/context link).
@@ -16696,6 +16824,8 @@ export function Canvas() {
     zoomTo100,
     arrangeAllNodes,
     hasArrangeableNodes,
+    saveCurrentLayout,
+    restoreSavedLayout,
     openSettingsTo,
     profileText,
     toggleFocusMode,
@@ -16703,8 +16833,8 @@ export function Canvas() {
     // on every call) — a dependency purely so a settings change while the palette is open
     // rebuilds the list and the inline toggle rows' `checked` stays live rather than frozen at
     // whatever it read when the palette was opened.
-    settings
-    toggleFocusMode
+    settings,
+    deleteSavedLayout
   ])
 
   // Build the palette's command list only when its inputs change — the inline `buildCommands()`
@@ -17434,6 +17564,21 @@ export function Canvas() {
               </svg>
             </div>
           ))}
+        {zonePreview && (
+          <div
+            className="canvas-zone-preview"
+            style={{
+              left: zonePreview.rect.left,
+              top: zonePreview.rect.top,
+              width: zonePreview.rect.width,
+              height: zonePreview.rect.height
+            }}
+            aria-live="polite"
+            aria-label={`Drop into ${ZONES.find((zone) => zone.id === zonePreview.zone)?.label ?? 'zone'}`}
+          >
+            <span>{ZONES.find((zone) => zone.id === zonePreview.zone)?.label ?? 'Zone'}</span>
+          </div>
+        )}
         {/* First-contact guidance: an empty canvas used to be a black void (field report:
             "didn't know what to do first"). Pointer-events-none so it can never eat a
             right-click or box-select; keyed off the LIVE nodes array, so it reappears on
@@ -17465,13 +17610,9 @@ export function Canvas() {
           onEdgeDoubleClick={onEdgeDoubleClick}
           onMove={onMove}
           onMoveEnd={onMoveEnd}
-          onNodeDragStart={() => (draggingRef.current = true)}
-          onNodeDragStop={() => {
-            draggingRef.current = false
-            // Send the final position now instead of waiting for the throttle's trailing timer.
-            publisherRef.current?.flush()
-            markDirty()
-          }}
+          onNodeDragStart={handleNodeDragStart}
+          onNodeDrag={handleNodeDrag}
+          onNodeDragStop={handleNodeDragStop}
           onSelectionDragStart={() => (draggingRef.current = true)}
           onSelectionDragStop={() => {
             draggingRef.current = false

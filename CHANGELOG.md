@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add viewport-relative canvas zones and named saved layouts. Nodes can preview and snap into half,
+  third, or quarter regions while dragging, and a saved arrangement restores portable geometry and
+  the camera without carrying sessions, credentials, process state, or machine paths. This
+  ultra-speed lane intentionally did not run tests, type checks, lint, reviews, security or
+  accessibility checks, builds, packaging, installer execution, runtime interaction, or UI captures.
+
 - Add the bundled AWS CLI v2 dependency lane. Windows packaging now stages the pinned official
   `2.36.32` MSI, verifies its SHA-256, falls back through a verified local cache or canonical
   HTTPS download, extracts it into application-local storage, exposes the installed version, and

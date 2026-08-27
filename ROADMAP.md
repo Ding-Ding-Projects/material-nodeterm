@@ -57,6 +57,12 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## In progress / partially landed
 
+- [ ] **Canvas zones and saved layouts, issue #82 / upstream issue #394**: edge and corner drag
+      previews, complete half, third, and quarter targets, and bounded named layout snapshots are
+      implemented in the source and project persistence path. Tests, type checks, lint, reviews,
+      built-artifact interaction, packaging, runtime verification, and captures remain pending
+      under the lane's ultra-speed boundary.
+
 - [ ] **Shared provider services, issue #18**: provider catalog, account metadata, sealed
       credential payloads, bounded one-time OAuth PKCE callbacks, adapter-owned resource discovery,
       and shared Desktop/Server local bindings are implemented in source. Individual provider
