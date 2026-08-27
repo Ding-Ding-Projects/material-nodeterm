@@ -19,9 +19,15 @@ export const NODE_MIN_SIZES: Record<NodeKind, { width: number; height: number }>
   video: { width: 320, height: 200 },
   web: { width: 320, height: 200 },
   browser: { width: 360, height: 240 },
+  'homeassistant-control': { width: 460, height: 480 },
+  'nextcloud-aio': { width: 520, height: 420 },
   subagent: { width: 180, height: 84 },
   loop: { width: 180, height: 84 },
-  dino: { width: 400, height: 160 }
+  dino: { width: 400, height: 160 },
+  'recovery-game': { width: 480, height: 520 },
+  'gitlab-hosting': { width: 560, height: 360 },
+  'aws-universe': { width: 320, height: 220 },
+  'aws-resource': { width: 520, height: 420 }
 }
 
 export interface Rect {

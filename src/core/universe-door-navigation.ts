@@ -6,6 +6,14 @@
  * and history shortcuts are refused here so every shell shares one policy.
  */
 
+import { validatePortableDoorConstruction, type PortableDoorConstructionV3 } from '../shared/door-construction'
+import {
+  validateUniverseDoorEntrySubmission,
+  validatePortableUniverseDoorEntry,
+  type PortableUniverseDoorEntryV3,
+  type UniverseDoorEntrySubmission
+} from './universe-door-entry'
+
 export type UniverseDoorRole = 'entry' | 'return'
 export type UniverseNavigationSource = 'door' | 'tab' | 'palette' | 'history' | 'direct'
 
@@ -17,6 +25,10 @@ export interface PortableUniverseDoorV3 {
   role: UniverseDoorRole
   label: string
   access: 'door-only'
+  /** Optional complete construction payload. Older paired-door records remain readable. */
+  construction?: PortableDoorConstructionV3
+  /** Safe schema 3 entry policy. Credential values remain in the host-owned local vault. */
+  entryPolicy?: PortableUniverseDoorEntryV3
 }
 
 export interface UniverseDoorNavigationRequest {
@@ -43,6 +55,11 @@ export type UniverseDoorNavigationDecision =
 
 const ID_LIMIT = 256
 const LABEL_LIMIT = 512
+const DOOR_KEYS = new Set(['id', 'canvasId', 'targetCanvasId', 'pairedDoorId', 'role', 'label', 'access', 'construction', 'entryPolicy'])
+
+function exactDoorKeys(value: object): void {
+  for (const key of Object.keys(value)) if (!DOOR_KEYS.has(key)) throw new Error(`Portable door contains an unsupported field: ${key}.`)
+}
 
 function boundedText(value: unknown, label: string, limit = ID_LIMIT): string {
   if (typeof value !== 'string' || value.trim().length === 0 || value.length > limit) {
@@ -60,6 +77,7 @@ export function validatePortableUniverseDoors(
   const folded = new Set<string>()
   for (const candidate of input) {
     if (!candidate || typeof candidate !== 'object') throw new Error('Portable door must be an object.')
+    exactDoorKeys(candidate)
     const door: PortableUniverseDoorV3 = {
       id: boundedText(candidate.id, 'Door id'),
       canvasId: boundedText(candidate.canvasId, 'Door canvas id'),
@@ -67,7 +85,13 @@ export function validatePortableUniverseDoors(
       pairedDoorId: boundedText(candidate.pairedDoorId, 'Paired door id'),
       role: candidate.role,
       label: boundedText(candidate.label, 'Door label', LABEL_LIMIT),
-      access: candidate.access
+      access: candidate.access,
+      ...(candidate.construction !== undefined
+        ? { construction: validatePortableDoorConstruction(candidate.construction) }
+        : {}),
+      ...(candidate.entryPolicy !== undefined
+        ? { entryPolicy: validatePortableUniverseDoorEntry(candidate.entryPolicy) }
+        : {})
     }
     const foldedId = door.id.toLocaleLowerCase('en-US')
     if (byId.has(door.id) || folded.has(foldedId)) throw new Error(`Duplicate or case-colliding door id: ${door.id}`)
@@ -75,6 +99,15 @@ export function validatePortableUniverseDoors(
     if (door.canvasId === door.targetCanvasId) throw new Error('Portable door cannot target its own canvas.')
     if (door.role !== 'entry' && door.role !== 'return') throw new Error('Portable door role is invalid.')
     if (door.access !== 'door-only') throw new Error('Portable universe access must be door-only.')
+    if (door.construction && (
+      door.construction.doorId !== door.id ||
+      door.construction.canvasId !== door.canvasId ||
+      door.construction.targetCanvasId !== door.targetCanvasId ||
+      door.construction.pairedDoorId !== door.pairedDoorId
+    )) throw new Error(`Portable door ${door.id} construction identity does not match its door record.`)
+    if (door.entryPolicy && door.entryPolicy.doorId !== door.id) {
+      throw new Error(`Portable door ${door.id} entry policy identity does not match its door record.`)
+    }
     byId.set(door.id, door)
     folded.add(foldedId)
   }
@@ -127,9 +160,39 @@ export function createPortableUniverseDoorPair(input: {
   childCanvasId: string
   entryLabel: string
   returnLabel: string
+  entryConstruction?: PortableDoorConstructionV3
+  returnConstruction?: PortableDoorConstructionV3
+  entryPolicy?: PortableUniverseDoorEntryV3
+  returnEntryPolicy?: PortableUniverseDoorEntryV3
 }): [PortableUniverseDoorV3, PortableUniverseDoorV3] {
   return [
-    { id: input.entryDoorId, canvasId: input.parentCanvasId, targetCanvasId: input.childCanvasId, pairedDoorId: input.returnDoorId, role: 'entry', label: input.entryLabel, access: 'door-only' },
-    { id: input.returnDoorId, canvasId: input.childCanvasId, targetCanvasId: input.parentCanvasId, pairedDoorId: input.entryDoorId, role: 'return', label: input.returnLabel, access: 'door-only' }
+    { id: input.entryDoorId, canvasId: input.parentCanvasId, targetCanvasId: input.childCanvasId, pairedDoorId: input.returnDoorId, role: 'entry', label: input.entryLabel, access: 'door-only', ...(input.entryConstruction ? { construction: input.entryConstruction } : {}), ...(input.entryPolicy ? { entryPolicy: input.entryPolicy } : {}) },
+    { id: input.returnDoorId, canvasId: input.childCanvasId, targetCanvasId: input.parentCanvasId, pairedDoorId: input.entryDoorId, role: 'return', label: input.returnLabel, access: 'door-only', ...(input.returnConstruction ? { construction: input.returnConstruction } : {}), ...(input.returnEntryPolicy ? { entryPolicy: input.returnEntryPolicy } : {}) }
   ]
 }
+
+export type UniverseDoorEntryVerification =
+  | { verified: true }
+  | { verified: false; reason: string }
+
+/**
+ * Host-owned verification seam. The renderer validates shape first, then supplies the value to a
+ * caller that owns the local vault. No credential value is written into the portable policy or
+ * returned by this helper.
+ */
+export async function verifyUniverseDoorEntry(
+  door: PortableUniverseDoorV3,
+  submission: UniverseDoorEntrySubmission,
+  verifyLocalCredential: (doorId: string, submission: UniverseDoorEntrySubmission) => Promise<boolean>
+): Promise<UniverseDoorEntryVerification> {
+  if (!door.entryPolicy) {
+    return { verified: false, reason: 'This door has no entry policy configured on this computer.' }
+  }
+  const validation = validateUniverseDoorEntrySubmission(door.entryPolicy, submission)
+  if (!validation.valid) return { verified: false, reason: validation.message }
+  const verified = await verifyLocalCredential(door.id, validation.submission)
+  return verified
+    ? { verified: true }
+    : { verified: false, reason: 'The supplied entry value did not match this door.' }
+}
+import { validatePortableDoorConstruction, type PortableDoorConstructionV3 } from '../shared/door-construction'

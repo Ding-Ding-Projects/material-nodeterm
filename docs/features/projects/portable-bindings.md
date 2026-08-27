@@ -38,8 +38,11 @@ The anchored binding wizard lists every route with its current availability and 
 
 The wizard uses plain-text search by default and an adjacent anchored full regex builder. It is
 keyboard-operable, announces disabled reasons, reports progress, supports cancellation, and keeps
-informational state non-blocking. Configure, Rebind, and Adopt write only opaque local references
-and credential key names. Credential values never cross the renderer boundary.
+informational state non-blocking. Configure, Rebind, and Adopt use the shared provider service.
+Connected accounts and verified resources are separate searchable pickers, each with its own
+adjacent anchored regex builder. The binding stores only opaque account/resource references and
+credential key names. Credential values, OAuth state, provider sessions, and callback payloads
+never cross the renderer boundary.
 
 The local binding store is `portable-node-bindings.json` under the application-data directory and
 is written atomically. It is versioned and validates every key before use. Explicit action failure
@@ -47,10 +50,11 @@ restores the prior snapshot. The portable project file is never modified by a bi
 
 ## Desktop and Server Edition
 
-The desktop shell owns the local binding store and the IPC handlers. Server Edition exposes the
-same workspace shape but reports that destination bindings are desktop-only in this release. Its
-import path therefore leaves the project unbound and does not pretend a browser viewer can access
-the desktop credential vault or host resources.
+Both shells register the same core provider and local-binding services against their own private
+application-data directory. Desktop seals provider credentials through the operating-system vault.
+Server Edition uses the established owner-only file fallback on the server host. A browser binds
+the server's resources, never the viewing computer's resources. Both import paths leave the project
+unbound until the user explicitly chooses a route.
 
 ## Verification status
 

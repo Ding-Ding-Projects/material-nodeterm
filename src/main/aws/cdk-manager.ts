@@ -17,6 +17,7 @@ import {
   type CdkDiffResult,
   type CdkOperationInput,
   type CdkProjectFileSummary,
+  type CdkProjectScript,
   type CdkProjectInput,
   type CdkSynthesisResult,
   type CdkStatus,
@@ -42,6 +43,8 @@ interface TrustRecord {
 interface DiffReviewRecord {
   projectPath: string
   stackNames: string[]
+  awsProfile?: string
+  awsRegion?: string
   expiresAt: number
 }
 
@@ -103,7 +106,7 @@ export class CdkManager implements CdkApi {
     ])
   }
 
-  private async run(args: string[], cwd: string, requestId?: string): Promise<CommandResult> {
+  private async run(args: string[], cwd: string, requestId?: string, aws?: { profile?: string; region?: string }): Promise<CommandResult> {
     if (!this.cdkPath) throw new Error('The AWS CDK CLI is unavailable. Install or repair the bundled CDK tool, then retry.')
     return await new Promise<CommandResult>((resolvePromise, reject) => {
       const isCmdShim = process.platform === 'win32' && this.cdkPath!.toLowerCase().endsWith('.cmd')
@@ -113,6 +116,11 @@ export class CdkManager implements CdkApi {
         : args
       const child = spawn(executable, commandArgs, {
         cwd,
+        env: {
+          ...process.env,
+          ...(aws?.profile ? { AWS_PROFILE: aws.profile } : {}),
+          ...(aws?.region ? { AWS_REGION: aws.region, AWS_DEFAULT_REGION: aws.region } : {})
+        },
         shell: false,
         windowsHide: true,
         stdio: ['ignore', 'pipe', 'pipe']
@@ -191,6 +199,8 @@ export class CdkManager implements CdkApi {
     if (appCommand.length > 4096) throw new Error('The CDK app command exceeds the bounded trust-review limit.')
     const context = asRecord(config.context)
     const files: CdkProjectFileSummary[] = [{ name: 'cdk.json', kind: 'cdk-config', bytes: configInfo.size }]
+    const scripts: CdkProjectScript[] = []
+    const dependencyNames: string[] = []
     const known: Array<[string, CdkProjectFileSummary['kind']]> = [
       ['package.json', 'package-manifest'],
       ['package-lock.json', 'dependency-manifest'],
@@ -204,15 +214,27 @@ export class CdkManager implements CdkApi {
       const item = await stat(join(projectPath, name)).catch(() => null)
       if (item?.isFile() && item.size <= CDK_MAX_PROJECT_FILE_BYTES) files.push({ name, kind, bytes: item.size })
     }
+    const packageInfo = files.find((file) => file.name === 'package.json')
+    if (packageInfo) {
+      const packageJson = parseJson(await readFile(join(projectPath, 'package.json'), 'utf8'), 'package.json')
+      const rawScripts = asRecord(packageJson.scripts)
+      for (const [name, command] of Object.entries(rawScripts).slice(0, 100)) {
+        if (typeof command === 'string' && command.length <= 4096) scripts.push({ name, command })
+      }
+      for (const key of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']) {
+        const dependencies = asRecord(packageJson[key])
+        dependencyNames.push(...Object.keys(dependencies).slice(0, 500))
+      }
+    }
     const warnings: string[] = []
     if (!appCommand) warnings.push('cdk.json does not declare an app command. CDK cannot synthesize this folder until it is repaired.')
     else warnings.push('Synth and deploy run the project app command from this folder after you approve this trust review.')
     if (files.some((file) => file.kind === 'package-manifest' || file.kind === 'dependency-manifest')) {
-      warnings.push('Project dependency and lifecycle files are present. Review them before allowing local code execution.')
+      warnings.push('Project dependency and lifecycle files are present. Review the listed scripts and dependency names before allowing local code execution.')
     }
     const reviewToken = randomUUID()
     this.trust.set(reviewToken, { projectPath, appCommand, expiresAt: Date.now() + REVIEW_TIMEOUT_MS, reviewed: false })
-    return { reviewToken, projectPath, cdkConfigPath: configPath, appCommand, contextKeys: Object.keys(context).slice(0, 500).sort(), files, warnings, reviewed: false }
+    return { reviewToken, projectPath, cdkConfigPath: configPath, appCommand, contextKeys: Object.keys(context).slice(0, 500).sort(), files, scripts, dependencyNames: [...new Set(dependencyNames)].sort().slice(0, 1000), warnings, reviewed: false }
   }
 
   async approveTrust(input: CdkTrustInput): Promise<CdkTrustReview> {
@@ -221,7 +243,7 @@ export class CdkManager implements CdkApi {
     if (!record || record.expiresAt < Date.now() || record.projectPath !== projectPath) throw new Error('The trust review expired. Inspect the CDK project again.')
     record.reviewed = true
     const configPath = join(projectPath, 'cdk.json')
-    return { reviewToken: input.reviewToken, projectPath, cdkConfigPath: configPath, appCommand: record.appCommand, contextKeys: [], files: [], warnings: [], reviewed: true }
+    return { reviewToken: input.reviewToken, projectPath, cdkConfigPath: configPath, appCommand: record.appCommand, contextKeys: [], files: [], scripts: [], dependencyNames: [], warnings: [], reviewed: true }
   }
 
   async synth(input: CdkOperationInput): Promise<CdkSynthesisResult> {
@@ -230,7 +252,7 @@ export class CdkManager implements CdkApi {
     const started = Date.now()
     const outputDir = await mkdtemp(join(tmpdir(), 'nodeterm-cdk-synth-'))
     try {
-      const result = await this.run(['synth', '--quiet', '--output', outputDir, ...value.stackNames], record.projectPath, value.requestId)
+      const result = await this.run(['synth', '--quiet', '--output', outputDir, ...value.stackNames], record.projectPath, value.requestId, { profile: value.awsProfile, region: value.awsRegion })
       const names = (await readdir(outputDir))
         .filter((name) => extname(name).toLowerCase() === '.json')
         .filter((name) => !['tree.json', 'manifest.json'].includes(name) && !name.endsWith('.assets.json'))
@@ -246,11 +268,11 @@ export class CdkManager implements CdkApi {
     const value = validateCdkOperationInput(input)
     const record = this.getTrust(value)
     const started = Date.now()
-    const result = await this.run(['diff', '--no-color', ...value.stackNames], record.projectPath, value.requestId)
+    const result = await this.run(['diff', '--no-color', ...value.stackNames], record.projectPath, value.requestId, { profile: value.awsProfile, region: value.awsRegion })
     const text = `${result.stdout}${result.stderr ? `\n${result.stderr}` : ''}`.slice(0, CDK_MAX_OUTPUT_BYTES)
     const changes = parseDiffChanges(text).map((change) => ({ ...change, stackName: value.stackNames[0] || change.stackName }))
     const reviewToken = randomUUID()
-    this.diffReviews.set(reviewToken, { projectPath: record.projectPath, stackNames: [...value.stackNames], expiresAt: Date.now() + REVIEW_TIMEOUT_MS })
+    this.diffReviews.set(reviewToken, { projectPath: record.projectPath, stackNames: [...value.stackNames], awsProfile: value.awsProfile, awsRegion: value.awsRegion, expiresAt: Date.now() + REVIEW_TIMEOUT_MS })
     return { requestId: value.requestId, projectPath: record.projectPath, stackNames: value.stackNames, text, changes, requiresConfirmation: changes.some((change) => change.action === 'remove' || change.action === 'replace') || /\b(replace|replacement|destroy|destroyed)\b/i.test(text), reviewToken, durationMs: Date.now() - started }
   }
 
@@ -258,14 +280,14 @@ export class CdkManager implements CdkApi {
     const value = validateCdkOperationInput(input)
     const record = this.getTrust(value)
     const review = this.diffReviews.get(input.diffReviewToken)
-    if (!review || review.expiresAt < Date.now() || review.projectPath !== record.projectPath || JSON.stringify(review.stackNames) !== JSON.stringify(value.stackNames)) {
+    if (!review || review.expiresAt < Date.now() || review.projectPath !== record.projectPath || review.awsProfile !== value.awsProfile || review.awsRegion !== value.awsRegion || JSON.stringify(review.stackNames) !== JSON.stringify(value.stackNames)) {
       throw new Error('Review a fresh CDK diff for the same stacks before deploying.')
     }
     const started = Date.now()
     const outputDir = await mkdtemp(join(tmpdir(), 'nodeterm-cdk-deploy-'))
     try {
       const outputsPath = join(outputDir, 'outputs.json')
-      const result = await this.run(['deploy', '--require-approval', 'never', '--outputs-file', outputsPath, ...value.stackNames], record.projectPath, value.requestId)
+      const result = await this.run(['deploy', '--require-approval', 'never', '--outputs-file', outputsPath, ...value.stackNames], record.projectPath, value.requestId, { profile: value.awsProfile, region: value.awsRegion })
       const outputBody = await readFile(outputsPath, 'utf8').catch((error: unknown) => {
         if (error && typeof error === 'object' && 'code' in error && (error as { code?: string }).code === 'ENOENT') return null
         throw error

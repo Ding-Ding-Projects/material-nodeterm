@@ -1,9 +1,10 @@
 # AWS CDK manager
 
-The AWS CDK manager is a local, review-first workflow for an existing CDK project. It selects a
-project directory with the native folder picker, reads `cdk.json` without executing it, presents a
-trust review, runs `cdk synth`, shows the synthesized stacks, opens `cdk diff`, and permits deploy
-only after the user acknowledges the exact diff. CDK code runs only after the trust acknowledgement.
+The AWS CDK manager is a local, review-first mode of the shared AWS resource manager for an existing
+CDK project. It uses that manager's local profile, region, and credential binding, selects a project
+directory with the native folder picker, reads `cdk.json` without executing it, presents a trust
+review, runs `cdk synth`, shows the synthesized stacks, opens `cdk diff`, and permits deploy only
+after the user acknowledges the exact diff. CDK code runs only after the trust acknowledgement.
 
 ## Operation
 
@@ -65,7 +66,6 @@ evidence of runtime correctness.
 
 ## Suggested articles
 
-- [AWS Universe Shop nodes](./aws-universe-shop.md)
 - [AWS Universe Shop nodes](./aws-universe-shop.md)
 - [Portable project schema 3](../projects/portable-schema3.md)
 - [Destructive confirmation](../../destructive-confirmation.md)

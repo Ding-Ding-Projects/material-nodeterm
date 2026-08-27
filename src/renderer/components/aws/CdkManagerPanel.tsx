@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { CdkDiffResult, CdkProjectFileSummary, CdkSynthesisResult, CdkTrustReview } from '@shared/cdk'
+import type { CdkDiffResult, CdkPortableBlueprint, CdkProjectFileSummary, CdkSynthesisResult, CdkTrustReview } from '@shared/cdk'
+import type { NodeTerminalApi } from '@shared/types'
 import { AnchoredRegexBuilder } from '../../regex/AnchoredRegexBuilder'
 import { useRegexSearchField } from '../../../lib/regex/useRegexSearchField'
 import { openDestructiveGate } from '../../../state/destructiveGate'
@@ -20,7 +21,13 @@ function fileSummary(file: CdkProjectFileSummary): string {
  * not executed until the trust notice is approved, and deployment requires a fresh reviewed diff.
  * The stack filter is local and owns its own anchored full regex builder.
  */
-export function CdkManagerPanel(): React.JSX.Element {
+export interface CdkManagerPanelProps {
+  api?: Pick<NodeTerminalApi, 'cdk' | 'dialog'>
+  awsBinding?: { profileName: string; region: string } | null
+  onIntentChange?: (intent: CdkPortableBlueprint) => void
+}
+
+export function CdkManagerPanel({ api = window.nodeTerminal, awsBinding, onIntentChange }: CdkManagerPanelProps = {}): React.JSX.Element {
   const { ts } = useI18n()
   const copy = (key: string, fallback: string): string => ts(`cdk.${key}`, fallback)
   const [projectPath, setProjectPath] = useState('')
@@ -37,12 +44,13 @@ export function CdkManagerPanel(): React.JSX.Element {
   const [notice, setNotice] = useState('')
   const stackSearch = useRegexSearchField()
   const stackSearchRef = useRef<HTMLInputElement>(null)
+  const hasAwsBinding = awsBinding === undefined || awsBinding !== null
 
   useEffect(() => {
-    void window.nodeTerminal.cdk.status().then(setStatus).catch((cause) => {
+    void api.cdk.status().then(setStatus).catch((cause) => {
       setStatus({ available: false, version: null, executable: null, reason: cause instanceof Error ? cause.message : String(cause) })
     })
-  }, [])
+  }, [api.cdk])
 
   const stacks = synthesis?.stackNames ?? []
   const visibleStacks = useMemo(
@@ -68,7 +76,7 @@ export function CdkManagerPanel(): React.JSX.Element {
 
   const chooseFolder = async (): Promise<void> => {
     setError('')
-    const folder = await window.nodeTerminal.dialog.selectFolder().catch(() => null)
+    const folder = await api.dialog.selectFolder().catch(() => null)
     if (!folder) return
     setProjectPath(folder)
     setReview(null)
@@ -81,7 +89,7 @@ export function CdkManagerPanel(): React.JSX.Element {
   }
 
   const inspect = (): void => {
-    void run('inspect', () => window.nodeTerminal.cdk.inspectProject({ projectPath }), (value) => {
+    void run('inspect', () => api.cdk.inspectProject({ projectPath }), (value) => {
       setReview(value)
       setSynthesis(null)
       setDiff(null)
@@ -93,28 +101,29 @@ export function CdkManagerPanel(): React.JSX.Element {
 
   const approve = (): void => {
     if (!review || !trustAcknowledged) return
-    void run('trust', () => window.nodeTerminal.cdk.approveTrust({ projectPath, reviewToken: review.reviewToken }), (value) => {
-      setReview({ ...review, ...value, files: review.files, contextKeys: review.contextKeys, warnings: review.warnings, reviewed: true })
+    void run('trust', () => api.cdk.approveTrust({ projectPath, reviewToken: review.reviewToken }), (value) => {
+      setReview({ ...review, ...value, files: review.files, scripts: review.scripts, dependencyNames: review.dependencyNames, contextKeys: review.contextKeys, warnings: review.warnings, reviewed: true })
       setNotice(copy('trustApproved', 'Trust approved for this project in this app session.'))
     })
   }
 
   const synth = (): void => {
-    if (!review?.reviewed) return
+    if (!review?.reviewed || !hasAwsBinding) return
     const id = requestId()
-    void run('synth', () => window.nodeTerminal.cdk.synth({ projectPath, reviewToken: review.reviewToken, requestId: id, stackNames: selected }), (value) => {
+    void run('synth', () => api.cdk.synth({ projectPath, reviewToken: review.reviewToken, requestId: id, stackNames: selected, ...(awsBinding ? { awsProfile: awsBinding.profileName, awsRegion: awsBinding.region } : {}) }), (value) => {
       setSynthesis(value)
       setDiff(null)
       setSelectedStacks(value.stackNames)
       setDiffAcknowledged(false)
+      onIntentChange?.({ schemaVersion: 1, appIntent: 'CDK project', stackNames: value.stackNames, contextKeys: review.contextKeys, omitLocalBinding: true })
       setNotice(copy('synthComplete', 'Synthesis completed. Review the generated stack list before opening a diff.'))
     }, id)
   }
 
   const inspectDiff = (): void => {
-    if (!review?.reviewed || !synthesis) return
+    if (!review?.reviewed || !synthesis || !hasAwsBinding) return
     const id = requestId()
-    void run('diff', () => window.nodeTerminal.cdk.diff({ projectPath, reviewToken: review.reviewToken, requestId: id, stackNames: selected }), (value) => {
+    void run('diff', () => api.cdk.diff({ projectPath, reviewToken: review.reviewToken, requestId: id, stackNames: selected, ...(awsBinding ? { awsProfile: awsBinding.profileName, awsRegion: awsBinding.region } : {}) }), (value) => {
       setDiff(value)
       setDiffAcknowledged(false)
       setNotice(copy('diffReady', 'Diff ready. Read the complete change list before reviewing deployment.'))
@@ -122,7 +131,7 @@ export function CdkManagerPanel(): React.JSX.Element {
   }
 
   const deploy = (): void => {
-    if (!review?.reviewed || !diff || !diffAcknowledged) return
+    if (!review?.reviewed || !diff || !diffAcknowledged || !hasAwsBinding) return
     const payload = {
       projectPath,
       reviewToken: review.reviewToken,
@@ -131,7 +140,7 @@ export function CdkManagerPanel(): React.JSX.Element {
       stackNames: diff.stackNames
     }
     const perform = (): void => {
-      void run('deploy', () => window.nodeTerminal.cdk.deploy(payload), (value) => {
+      void run('deploy', () => api.cdk.deploy({ ...payload, ...(awsBinding ? { awsProfile: awsBinding.profileName, awsRegion: awsBinding.region } : {}) }), (value) => {
         setNotice(copy('deployComplete', 'Deployment completed. The CDK CLI returned an operation result.'))
         setDiff(null)
         setDiffAcknowledged(false)
@@ -154,7 +163,7 @@ export function CdkManagerPanel(): React.JSX.Element {
 
   const cancel = (): void => {
     if (!activeRequestId) return
-    void window.nodeTerminal.cdk.cancel(activeRequestId).catch(() => false)
+    void api.cdk.cancel(activeRequestId).catch(() => false)
   }
 
   return (
@@ -182,6 +191,7 @@ export function CdkManagerPanel(): React.JSX.Element {
       {review ? <section className="cdk-manager__card" aria-labelledby="cdk-trust-heading">
         <h4 id="cdk-trust-heading">{copy('trustHeading', 'Trust review')}</h4>
         <p>{copy('trustIntro', 'CDK will execute the app command from this folder when you synthesize or deploy. Review these files and warnings first.')}</p>
+        {awsBinding === null ? <p className="cdk-manager__error" role="status">{copy('bindingRequired', 'Choose and save a local AWS profile and region in this manager before synth, diff, or deploy can run.')}</p> : null}
         <dl className="cdk-manager__facts">
           <dt>{copy('appCommand', 'App command')}</dt><dd><code>{review.appCommand || copy('missingApp', 'Not declared')}</code></dd>
           <dt>{copy('configPath', 'Config')}</dt><dd><code>{review.cdkConfigPath}</code></dd>
@@ -193,6 +203,10 @@ export function CdkManagerPanel(): React.JSX.Element {
         <ul className="cdk-manager__warnings" aria-label={copy('warnings', 'Trust warnings')}>
           {review.warnings.map((warning, index) => <li key={`${warning}-${index}`}>{warning}</li>)}
         </ul>
+        {review.scripts.length ? <ul className="cdk-manager__file-list" aria-label={copy('scripts', 'Project scripts')}>
+          {review.scripts.map((script) => <li key={script.name}><code>{script.name}</code>: <code>{script.command}</code></li>)}
+        </ul> : null}
+        {review.dependencyNames.length ? <p>{copy('dependencies', 'Declared dependencies')}: {review.dependencyNames.join(', ')}</p> : null}
         {!review.reviewed ? <>
           <label className="cdk-manager__check"><input type="checkbox" checked={trustAcknowledged} onChange={(event) => setTrustAcknowledged(event.target.checked)} /> {copy('trustAck', 'I reviewed the app command and allow this local project code to run.')}</label>
           <Button disabled={!trustAcknowledged || !!busy} onClick={approve}>{busy === 'trust' ? copy('approving', 'Approving…') : copy('approve', 'Approve trust review')}</Button>
@@ -200,7 +214,7 @@ export function CdkManagerPanel(): React.JSX.Element {
       </section> : null}
 
       {review?.reviewed ? <section className="cdk-manager__card" aria-labelledby="cdk-synth-heading">
-        <div className="cdk-manager__card-header"><h4 id="cdk-synth-heading">{copy('synthesisHeading', 'Synth and stack selection')}</h4><Button disabled={!!busy} onClick={synth}>{busy === 'synth' ? copy('synthesizing', 'Synthesizing…') : copy('synth', 'Synth')}</Button></div>
+        <div className="cdk-manager__card-header"><h4 id="cdk-synth-heading">{copy('synthesisHeading', 'Synth and stack selection')}</h4><Button disabled={!!busy || !hasAwsBinding} title={!hasAwsBinding ? copy('bindingRequired', 'Choose and save a local AWS profile and region first.') : undefined} onClick={synth}>{busy === 'synth' ? copy('synthesizing', 'Synthesizing…') : copy('synth', 'Synth')}</Button></div>
         <p>{copy('synthesisHelp', 'Synth runs the reviewed project app and keeps generated templates in a temporary local folder.')}</p>
         {synthesis ? <>
           <div className="cdk-manager__search-row">

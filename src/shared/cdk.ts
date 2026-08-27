@@ -26,6 +26,11 @@ export interface CdkProjectFileSummary {
   bytes: number
 }
 
+export interface CdkProjectScript {
+  name: string
+  command: string
+}
+
 export interface CdkTrustReview {
   reviewToken: string
   projectPath: string
@@ -33,6 +38,8 @@ export interface CdkTrustReview {
   appCommand: string
   contextKeys: string[]
   files: CdkProjectFileSummary[]
+  scripts: CdkProjectScript[]
+  dependencyNames: string[]
   warnings: string[]
   reviewed: boolean
 }
@@ -48,6 +55,9 @@ export interface CdkTrustInput extends CdkProjectInput {
 export interface CdkOperationInput extends CdkTrustInput {
   requestId: string
   stackNames: string[]
+  /** Machine-local AWS binding selected through the shared AWS resource manager. */
+  awsProfile?: string
+  awsRegion?: string
 }
 
 export interface CdkSynthesisResult {
@@ -100,6 +110,8 @@ export interface CdkApi {
 
 const SAFE_STACK = /^[A-Za-z][A-Za-z0-9-]{0,127}$/
 const SAFE_REQUEST = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/
+const SAFE_PROFILE = /^[A-Za-z0-9][A-Za-z0-9_.@+-]{0,127}$/
+const SAFE_REGION = /^[a-z]{2}(?:-gov)?-[a-z]+-\d$/
 
 function text(value: unknown, label: string, max: number): string {
   const result = String(value ?? '').trim()
@@ -125,7 +137,11 @@ export function validateCdkOperationInput(input: CdkOperationInput): CdkOperatio
   if (stackNames.some((name) => !SAFE_STACK.test(name))) {
     throw new Error('Choose stacks from the synthesized stack list.')
   }
-  return { ...project, reviewToken, requestId, stackNames }
+  const awsProfile = input.awsProfile === undefined ? undefined : text(input.awsProfile, 'AWS profile', 128)
+  const awsRegion = input.awsRegion === undefined ? undefined : text(input.awsRegion, 'AWS region', 64)
+  if (awsProfile !== undefined && !SAFE_PROFILE.test(awsProfile)) throw new Error('Choose the AWS profile from the shared local binding.')
+  if (awsRegion !== undefined && !SAFE_REGION.test(awsRegion)) throw new Error('Choose the AWS region from the shared local binding.')
+  return { ...project, reviewToken, requestId, stackNames, ...(awsProfile ? { awsProfile } : {}), ...(awsRegion ? { awsRegion } : {}) }
 }
 
 export function makeCdkPortableBlueprint(input: {
@@ -138,4 +154,21 @@ export function makeCdkPortableBlueprint(input: {
   if (stackNames.some((name) => !SAFE_STACK.test(name))) throw new Error('The CDK stack name is invalid.')
   const contextKeys = [...new Set(input.contextKeys.map((key) => text(key, 'CDK context key', 256)))]
   return { schemaVersion: CDK_SCHEMA_VERSION, appIntent, stackNames, contextKeys, omitLocalBinding: true }
+}
+
+export function normalizeCdkPortableBlueprint(value: unknown): CdkPortableBlueprint | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const raw = value as Record<string, unknown>
+  if (raw.schemaVersion !== CDK_SCHEMA_VERSION || raw.omitLocalBinding !== true) return undefined
+  if (!Array.isArray(raw.stackNames) || !Array.isArray(raw.contextKeys)) return undefined
+  if (typeof raw.appIntent !== 'string' || raw.stackNames.some((item) => typeof item !== 'string') || raw.contextKeys.some((item) => typeof item !== 'string')) return undefined
+  try {
+    return makeCdkPortableBlueprint({
+      appIntent: raw.appIntent,
+      stackNames: raw.stackNames,
+      contextKeys: raw.contextKeys
+    })
+  } catch {
+    return undefined
+  }
 }

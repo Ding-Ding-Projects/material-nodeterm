@@ -24,19 +24,28 @@ import type {
 } from '../shared/types'
 import type { ScheduledSettingsActiveState, ScheduledSettingsFile } from '../shared/scheduled-settings'
 import type { PlannerFile, PlannerLoadState, PlannerOccurrence } from '../shared/planner-occurrences'
+import type { AlarmDefinition, AlarmDueEvent } from '../shared/alarm-clock'
 import type { HistoryFilters } from '../shared/local-history'
 import type { ClientId, PeerDiff, PeerIdentity, PeerState } from '../shared/presence'
 import type { ConvertQueueItem, ConverterQueueState } from '../shared/converter'
 import type { PullQueueItem, PullQueueState } from '../shared/ollama'
 import type { DockerHostAction, DockerHostJobProgress } from '../shared/docker-host-manager'
+import type { GitLabHostingAction } from '../shared/gitlab-hosting'
+import type { NextcloudAioAction, NextcloudAioJobProgress } from '../shared/nextcloud-aio'
 import type { MinecraftEvent } from '../shared/minecraft'
 import type { NodeDependencyAvailability, NodeDependencyProgress, NodeDependencyInstallResult } from '../shared/node-dependencies'
 import type { WslCreateProgress } from '../shared/wsl'
 import type { TorrentTaskState } from '../shared/torrent'
 import type { VirtualMachineEvent } from '../shared/virtual-machine'
 import type { CalendarProvider } from '../shared/calendar'
+import type { CloudflareProgress } from '../shared/cloudflare-core-managers'
+import type { HomeAssistantClientEvent } from '../shared/home-assistant'
 import type { ProjectConsentRequest, ProjectSetupEvent } from '../shared/project-settings'
 import type { CdkDeployResult, CdkDiffResult, CdkOperationInput, CdkProjectInput, CdkSynthesisResult, CdkStatus, CdkTrustInput, CdkTrustReview } from '../shared/cdk'
+import type { CloudflareApi, CloudflareCatalog, CloudflareExecutionProgress, CloudflareExecutionResult } from '../shared/cloudflare-zero-trust'
+import type { GitHubApiRequest, GitHubApiProgress } from '../shared/github-api'
+import type { AwsIdentityAction, AwsIdentityBinding, AwsIdentityOperation } from '../shared/aws-identity'
+import type { AwsManagerProgress } from '../shared/aws-resource'
 
 // Fan a single ipcRenderer listener per channel out to many renderer subscribers. Without
 // this, every node that subscribes (e.g. Cmd+M markdown toggle on each terminal/editor) adds
@@ -90,6 +99,10 @@ const subscribeNodeDependencyState = subscribe<[NodeDependencyAvailability]>(IPC
 const subscribeNodeDependencyProgress = subscribe<[NodeDependencyProgress]>(IPC.nodeDependencyProgress)
 const subscribeTorrentTask = subscribe<[TorrentTaskState]>(IPC.torrentTask)
 const subscribeVirtualMachineEvent = subscribe<[VirtualMachineEvent]>(IPC.virtualMachineEvent)
+const subscribeCloudflareCoreProgress = subscribe<[CloudflareProgress]>(IPC.cloudflareCoreProgress)
+const subscribeHomeAssistantEvent = subscribe<[HomeAssistantClientEvent]>(IPC.homeAssistantEvent)
+const subscribeCloudflareProgress = subscribe<[CloudflareExecutionProgress & { nodeId: string }]>(IPC.cloudflareProgress)
+const subscribeAwsResourceProgress = subscribe<[AwsManagerProgress]>(IPC.awsResourceProgress)
 const subscribeWidgetState = subscribe<[CanvasWidgetLiveState]>(IPC.widgetStateChanged)
 
 const subscribeRelayPeerPending = subscribe<[RelayPeerPending]>(IPC.relayHostPeerPending)
@@ -103,6 +116,7 @@ const subscribeScheduledSettingsActive = subscribe<[ScheduledSettingsActiveState
   IPC.scheduledSettingsActiveChange
 )
 const subscribePlannerOccurrence = subscribe<[PlannerOccurrence]>(IPC.plannerOccurrence)
+const subscribeAlarmDue = subscribe<[AlarmDueEvent]>(IPC.alarmPlannerDue)
 // Project setup/archive (SDD: 2026-08-19-project-settings-trust): global (not per-project) main →
 // renderer prompts, fanned out the same way as the relay events above.
 const subscribeProjectSetupConsentRequest = subscribe<[ProjectConsentRequest]>(
@@ -197,6 +211,29 @@ const api: NodeTerminalApi = {
       return () => ipcRenderer.removeListener(channel, handler)
     }
   },
+  providerServices: {
+    catalog: () => ipcRenderer.invoke(IPC.providerCatalog),
+    accounts: (providerId?: string) => ipcRenderer.invoke(IPC.providerAccounts, providerId),
+    resources: (accountId: string, capability?: string) => ipcRenderer.invoke(IPC.providerResources, accountId, capability),
+    beginOAuth: (providerId: string) => ipcRenderer.invoke(IPC.providerBeginOAuth, providerId),
+    completeOAuth: (callbackUrl: string) => ipcRenderer.invoke(IPC.providerCompleteOAuth, callbackUrl),
+    removeAccount: (accountId: string) => ipcRenderer.invoke(IPC.providerRemoveAccount, accountId)
+  },
+  cloudflareZeroTrust: {
+    catalog: () => ipcRenderer.invoke(IPC.cloudflareCatalog) as Promise<CloudflareCatalog>,
+    accounts: () => ipcRenderer.invoke(IPC.cloudflareAccounts),
+    configure: (input) => ipcRenderer.invoke(IPC.cloudflareConfigure, input),
+    removeAccount: (id) => ipcRenderer.invoke(IPC.cloudflareRemoveAccount, id),
+    binding: (nodeId) => ipcRenderer.invoke(IPC.cloudflareBinding, nodeId),
+    saveBinding: (nodeId, binding) => ipcRenderer.invoke(IPC.cloudflareSaveBinding, nodeId, binding),
+    resources: (nodeId, manager) => ipcRenderer.invoke(IPC.cloudflareResources, nodeId, manager),
+    execute: (nodeId, request, onProgress) => {
+      const unsubscribe = subscribeCloudflareProgress((progress) => { if (progress.nodeId === nodeId) onProgress(progress) })
+      return (ipcRenderer.invoke(IPC.cloudflareExecute, nodeId, request) as Promise<CloudflareExecutionResult>).finally(unsubscribe)
+    },
+    cancel: (nodeId) => ipcRenderer.invoke(IPC.cloudflareCancel, nodeId),
+    onProgress: (listener) => subscribeCloudflareProgress(listener)
+  } satisfies CloudflareApi,
   workspace: {
     load: () => ipcRenderer.invoke(IPC.workspaceLoad),
     save: (workspace: Workspace) => ipcRenderer.invoke(IPC.workspaceSave, workspace),
@@ -205,14 +242,18 @@ const api: NodeTerminalApi = {
     splitIntoParts: (cwd: string, sizeValue: number, sizeUnit: 'KB' | 'MB' | 'GB') =>
       ipcRenderer.invoke(IPC.workspaceSplitIntoParts, cwd, sizeValue, sizeUnit),
     joinParts: (cwd: string) => ipcRenderer.invoke(IPC.workspaceJoinParts, cwd),
-    exportProject: (project: Project, password?: string) =>
-      ipcRenderer.invoke(IPC.projectArchiveExport, project, password),
+    exportProject: (project: Project, password?: string, media?: import('../shared/portable-media').PortableMediaExportPlan) =>
+      ipcRenderer.invoke(IPC.projectArchiveExport, project, password, media),
     importProject: (opts?: { path?: string; password?: string }) =>
       ipcRenderer.invoke(IPC.projectArchiveImport, opts),
+    portableMedia: {
+      prepare: (input: import('../shared/portable-media').PortableMediaPrepareInput) => ipcRenderer.invoke(IPC.portableMediaPrepare, input),
+      discard: (preparationId: string) => ipcRenderer.invoke(IPC.portableMediaDiscard, preparationId)
+    },
     portableBindings: {
       state: (input: { nodeId: string; featureId: string; displayLabel: string; hasMissingAssets?: boolean }) =>
         ipcRenderer.invoke(IPC.portableBindingState, input),
-      apply: (input: { nodeId: string; action: import('../shared/types').PortableBindingAction; providerOrHostIdentity?: string; localResourceReferences?: Record<string, string | number | boolean>; credentialKeys?: string[] }) =>
+      apply: (input: { nodeId: string; action: import('../shared/types').PortableBindingAction; featureId?: string; providerAccountId?: string; resourceId?: string }) =>
         ipcRenderer.invoke(IPC.portableBindingApply, input)
     },
     onArchiveProgress: (cb: (event: import('../shared/types').ProjectArchiveProgress) => void) => {
@@ -363,7 +404,18 @@ const api: NodeTerminalApi = {
     save: (file: PlannerFile) => ipcRenderer.invoke(IPC.plannerSave, file),
     history: () => ipcRenderer.invoke(IPC.plannerHistory),
     export: (format: 'json' | 'csv') => ipcRenderer.invoke(IPC.plannerExport, format),
+    configure: (schedules: PlannerFile['schedules']) => ipcRenderer.invoke(IPC.plannerConfigure, schedules),
     onOccurrence: subscribePlannerOccurrence
+  },
+  alarm: {
+    state: () => ipcRenderer.invoke(IPC.alarmPlannerState),
+    upsert: (alarm: Omit<AlarmDefinition, 'createdAt' | 'updatedAt'> & { id?: string }) =>
+      ipcRenderer.invoke(IPC.alarmPlannerUpsert, alarm),
+    remove: (alarmId: string) => ipcRenderer.invoke(IPC.alarmPlannerRemove, alarmId),
+    snooze: (occurrenceId: string, minutes: number) =>
+      ipcRenderer.invoke(IPC.alarmPlannerSnooze, occurrenceId, minutes),
+    dismiss: (occurrenceId: string) => ipcRenderer.invoke(IPC.alarmPlannerDismiss, occurrenceId),
+    onDue: subscribeAlarmDue
   },
   githubIssues: {
     subscribe: (projectId) => ipcRenderer.invoke(IPC.githubIssuesSubscribe, { projectId }),
@@ -390,6 +442,21 @@ const api: NodeTerminalApi = {
     selectProvider: (input) => ipcRenderer.invoke(IPC.githubControlSelectProvider, input),
     saveToken: (token) => ipcRenderer.invoke(IPC.githubControlSaveToken, token),
     clearToken: () => ipcRenderer.invoke(IPC.githubControlClearToken)
+  },
+  githubApi: {
+    capabilities: () => ipcRenderer.invoke(IPC.githubApiCapabilities),
+    execute: (request: GitHubApiRequest) => ipcRenderer.invoke(IPC.githubApiExecute, request),
+    cancel: (operationId: string) => ipcRenderer.invoke(IPC.githubApiCancel, operationId),
+    onProgress: subscribe<[GitHubApiProgress]>(IPC.githubApiProgress)
+  },
+  githubCliAccounts: {
+    list: () => ipcRenderer.invoke(IPC.githubCliAccountsList),
+    switchActive: (host, login) => ipcRenderer.invoke(IPC.githubCliAccountsSwitch, host, login),
+    signOut: (host, login) => ipcRenderer.invoke(IPC.githubCliAccountsSignOut, host, login),
+    startLogin: () => ipcRenderer.invoke(IPC.githubCliAccountsStartLogin),
+    loginStatus: (id) => ipcRenderer.invoke(IPC.githubCliAccountsLoginStatus, id),
+    cancelLogin: (id) => ipcRenderer.invoke(IPC.githubCliAccountsCancelLogin, id),
+    refreshAuthorization: (input) => ipcRenderer.invoke(IPC.githubCliAccountsRefresh, input)
   },
   speech: {
     // IPC carries the raw Float32 samples as an ArrayBuffer (structured clone; decodePcmPayload's
@@ -748,14 +815,19 @@ const api: NodeTerminalApi = {
     listCredentials: (projectId, managerId) =>
       ipcRenderer.invoke(IPC.passwordManagerListCredentials, projectId, managerId)
   },
+  universeDoorEntry: {
+    configure: (input) => ipcRenderer.invoke(IPC.universeDoorEntryConfigure, input),
+    verify: (input) => ipcRenderer.invoke(IPC.universeDoorEntryVerify, input),
+    remove: (doorId) => ipcRenderer.invoke(IPC.universeDoorEntryRemove, doorId)
+  },
   context: {
     onUpdate: (listener) => {
       const handler = (_e: unknown, payload: Parameters<typeof listener>[0]) => listener(payload)
       ipcRenderer.on(IPC.contextUpdate, handler)
       return () => ipcRenderer.removeListener(IPC.contextUpdate, handler)
     },
-    ensure: (sessionId, cwd, accountId) =>
-      ipcRenderer.send(IPC.contextEnsure, sessionId, cwd, accountId)
+    ensure: (sessionId, cwd, accountId, agentId) =>
+      ipcRenderer.send(IPC.contextEnsure, sessionId, cwd, accountId, agentId)
   },
   // Canvas sync: one channel in both directions. The cast goes to the reflector (src/core/canvas-sync),
   // which stamps it with the total order (`seq`) and fans it to every attached client — INCLUDING us.
@@ -873,11 +945,28 @@ const api: NodeTerminalApi = {
       snapshot: (context: string) => ipcRenderer.invoke(IPC.dockerHostManagerSnapshot, context),
       logs: (context: string, containerId: string) => ipcRenderer.invoke(IPC.dockerHostManagerLogs, context, containerId),
       run: (action: DockerHostAction) => ipcRenderer.invoke(IPC.dockerHostManagerRun, action),
+      gitlab: {
+        status: (context: string, nodeId: string) => ipcRenderer.invoke(IPC.dockerHostManagerGitlabStatus, context, nodeId),
+        backups: (context: string, nodeId: string) => ipcRenderer.invoke(IPC.dockerHostManagerGitlabBackups, context, nodeId),
+        handoffInitialCredential: (context: string, nodeId: string) => ipcRenderer.invoke(IPC.dockerHostManagerGitlabCredential, context, nodeId),
+        run: (action: GitLabHostingAction) => ipcRenderer.invoke(IPC.dockerHostManagerGitlabRun, action)
+      },
       cancel: (jobId: string) => ipcRenderer.send(IPC.dockerHostManagerCancel, jobId),
       onProgress: (listener: (progress: DockerHostJobProgress) => void) => {
         const handler = (_event: unknown, progress: DockerHostJobProgress) => listener(progress)
         ipcRenderer.on(IPC.dockerHostManagerProgress, handler)
         return () => ipcRenderer.removeListener(IPC.dockerHostManagerProgress, handler)
+      }
+    },
+    nextcloudAio: {
+      contexts: () => ipcRenderer.invoke(IPC.nextcloudAioContexts),
+      snapshot: (context?: string) => ipcRenderer.invoke(IPC.nextcloudAioSnapshot, context),
+      run: (action: NextcloudAioAction) => ipcRenderer.invoke(IPC.nextcloudAioRun, action),
+      cancel: (jobId: string) => ipcRenderer.send(IPC.nextcloudAioCancel, jobId),
+      onProgress: (listener: (progress: NextcloudAioJobProgress) => void) => {
+        const handler = (_event: unknown, progress: NextcloudAioJobProgress) => listener(progress)
+        ipcRenderer.on(IPC.nextcloudAioProgress, handler)
+        return () => ipcRenderer.removeListener(IPC.nextcloudAioProgress, handler)
       }
     },
     start: (projectId?: string) => ipcRenderer.invoke(IPC.relayHostStart, projectId),
@@ -974,6 +1063,8 @@ const api: NodeTerminalApi = {
   },
   boardLog: {
     append: (projectId, entry) => ipcRenderer.invoke(IPC.boardLogAppend, projectId, entry),
+    appendWithAttachments: (projectId, entry, attachments) => ipcRenderer.invoke(IPC.boardLogAppendWithAttachments, projectId, entry, attachments),
+    readAttachment: (projectId, attachment) => ipcRenderer.invoke(IPC.boardLogReadAttachment, projectId, attachment),
     read: (projectId, opts) => ipcRenderer.invoke(IPC.boardLogRead, projectId, opts),
     onChanged: (projectId, cb) => {
       const ch = IPC.boardLogChanged(projectId)
@@ -1046,6 +1137,11 @@ const api: NodeTerminalApi = {
     ipcRenderer.on(IPC.ptyPressure, handler)
     return () => ipcRenderer.removeListener(IPC.ptyPressure, handler)
   },
+  onCanvasTrackpadGesture: (listener) => {
+    const handler = (_e: unknown, active: boolean) => listener(active)
+    ipcRenderer.on(IPC.canvasTrackpadGesture, handler)
+    return () => ipcRenderer.removeListener(IPC.canvasTrackpadGesture, handler)
+  },
   raisePtyDeviceLimit: () => ipcRenderer.invoke(IPC.ptyRaiseDeviceLimit),
   answerPermission: (payload) => ipcRenderer.invoke(IPC.agentAnswerPermission, payload),
   ackDone: (nodeId) => {
@@ -1097,12 +1193,18 @@ const api: NodeTerminalApi = {
   nodeDependencies: {
     catalog: () => ipcRenderer.invoke(IPC.nodeDependencyCatalog),
     status: (id) => ipcRenderer.invoke(IPC.nodeDependencyStatus, id),
+    details: (id) => ipcRenderer.invoke(IPC.nodeDependencyDetails, id),
     install: (id) => ipcRenderer.invoke(IPC.nodeDependencyInstall, id) as Promise<NodeDependencyInstallResult>,
     cancel: (operationId) => ipcRenderer.invoke(IPC.nodeDependencyCancel, operationId),
     repair: (id) => ipcRenderer.invoke(IPC.nodeDependencyRepair, id) as Promise<NodeDependencyInstallResult>,
     reconcile: () => ipcRenderer.invoke(IPC.nodeDependencyReconcile),
     onState: (listener) => subscribeNodeDependencyState(listener),
     onProgress: (listener) => subscribeNodeDependencyProgress(listener)
+  },
+  awsWizardModels: {
+    catalog: () => ipcRenderer.invoke(IPC.awsWizardCatalog),
+    commands: (serviceId) => ipcRenderer.invoke(IPC.awsWizardCommands, serviceId),
+    source: (serviceId, commandName) => ipcRenderer.invoke(IPC.awsWizardSource, serviceId, commandName)
   },
   ollama: {
     status: () => ipcRenderer.invoke(IPC.ollamaStatus),
@@ -1134,6 +1236,19 @@ const api: NodeTerminalApi = {
     chatStop: (id) => ipcRenderer.invoke(IPC.ollamaChatStop, id),
     onChatStream: (listener) => subscribeOllamaChatStream(listener)
   },
+  cloudflareCoreManagers: {
+    runtime: () => ipcRenderer.invoke(IPC.cloudflareCoreRuntime),
+    credentials: () => ipcRenderer.invoke(IPC.cloudflareCoreCredentials),
+    saveCredential: (input) => ipcRenderer.invoke(IPC.cloudflareCoreSaveCredential, input),
+    removeCredential: (credentialId) => ipcRenderer.invoke(IPC.cloudflareCoreRemoveCredential, credentialId),
+    binding: (nodeId) => ipcRenderer.invoke(IPC.cloudflareCoreBinding, nodeId),
+    bind: (input) => ipcRenderer.invoke(IPC.cloudflareCoreBind, input),
+    unbind: (nodeId) => ipcRenderer.invoke(IPC.cloudflareCoreUnbind, nodeId),
+    preview: (nodeId, request) => ipcRenderer.invoke(IPC.cloudflareCorePreview, nodeId, request),
+    execute: (nodeId, request) => ipcRenderer.invoke(IPC.cloudflareCoreExecute, nodeId, request),
+    cancel: (operationId) => ipcRenderer.invoke(IPC.cloudflareCoreCancel, operationId),
+    onProgress: (listener) => subscribeCloudflareCoreProgress(listener)
+  },
   minecraft: {
     versions: () => ipcRenderer.invoke(IPC.minecraftVersions),
     status: (id) => ipcRenderer.invoke(IPC.minecraftStatus, id),
@@ -1153,6 +1268,23 @@ const api: NodeTerminalApi = {
     deleteBackup: (id, backupId) => ipcRenderer.invoke(IPC.minecraftBackupDelete, id, backupId),
     onEvent: (listener) => subscribeMinecraftEvent(listener)
   },
+  awsIdentity: {
+    discover: () => ipcRenderer.invoke(IPC.awsIdentityDiscover),
+    start: (action: AwsIdentityAction, profileName: string, binding?: AwsIdentityBinding) => ipcRenderer.invoke(IPC.awsIdentityStart, action, profileName, binding),
+    cancel: (operationId: string) => ipcRenderer.invoke(IPC.awsIdentityCancel, operationId),
+    onOperation: (listener: (operation: AwsIdentityOperation) => void) => subscribe<[AwsIdentityOperation]>(IPC.awsIdentityOperation)((operation) => listener(operation))
+  },
+  awsResource: {
+    runtime: () => ipcRenderer.invoke(IPC.awsResourceRuntime),
+    profiles: () => ipcRenderer.invoke(IPC.awsResourceProfiles),
+    binding: (nodeId) => ipcRenderer.invoke(IPC.awsResourceBinding, nodeId),
+    bind: (input) => ipcRenderer.invoke(IPC.awsResourceBind, input),
+    unbind: (nodeId) => ipcRenderer.invoke(IPC.awsResourceUnbind, nodeId),
+    preview: (nodeId, request) => ipcRenderer.invoke(IPC.awsResourcePreview, nodeId, request),
+    execute: (nodeId, operationId, request) => ipcRenderer.invoke(IPC.awsResourceExecute, nodeId, operationId, request),
+    cancel: (operationId) => ipcRenderer.invoke(IPC.awsResourceCancel, operationId),
+    onProgress: (listener) => subscribeAwsResourceProgress(listener)
+  },
   torrent: {
     runtime: () => ipcRenderer.invoke(IPC.torrentRuntime),
     list: (nodeId) => ipcRenderer.invoke(IPC.torrentList, nodeId),
@@ -1170,6 +1302,7 @@ const api: NodeTerminalApi = {
     setSeedPolicy: (id, policy) => ipcRenderer.invoke(IPC.torrentSetSeedPolicy, id, policy),
     reconcile: () => ipcRenderer.invoke(IPC.torrentReconcile),
     onTask: (listener) => subscribeTorrentTask(listener)
+  },
   virtualMachine: {
     tools: () => ipcRenderer.invoke(IPC.virtualMachineTools),
     status: (id) => ipcRenderer.invoke(IPC.virtualMachineStatus, id),
@@ -1182,6 +1315,7 @@ const api: NodeTerminalApi = {
     openDisplay: (id) => ipcRenderer.invoke(IPC.virtualMachineOpenDisplay, id),
     reset: (id) => ipcRenderer.invoke(IPC.virtualMachineReset, id),
     onEvent: (listener) => subscribeVirtualMachineEvent(listener)
+  },
   calendar: {
     status: (id, config) => ipcRenderer.invoke(IPC.calendarStatus, id, config),
     accounts: () => ipcRenderer.invoke(IPC.calendarAccounts),
@@ -1190,9 +1324,37 @@ const api: NodeTerminalApi = {
     importIcs: (id, text, name) => ipcRenderer.invoke(IPC.calendarImportIcs, id, text, name),
     refresh: (id, config) => ipcRenderer.invoke(IPC.calendarRefresh, id, config),
     beginOAuth: (provider: Exclude<CalendarProvider, 'local' | 'ics'>) => ipcRenderer.invoke(IPC.calendarBeginOAuth, provider),
+    connectCalDav: (input) => ipcRenderer.invoke(IPC.calendarConnectCalDav, input),
+    disconnectAccount: (accountId) => ipcRenderer.invoke(IPC.calendarDisconnectAccount, accountId),
     create: (input) => ipcRenderer.invoke(IPC.calendarCreate, input),
     update: (input) => ipcRenderer.invoke(IPC.calendarUpdate, input),
     remove: (id, eventId) => ipcRenderer.invoke(IPC.calendarRemove, id, eventId)
+  },
+  homeAssistant: {
+    instances: () => ipcRenderer.invoke(IPC.homeAssistantInstances),
+    saveInstance: (input) => ipcRenderer.invoke(IPC.homeAssistantSaveInstance, input),
+    removeInstance: (id) => ipcRenderer.invoke(IPC.homeAssistantRemoveInstance, id),
+    discover: (request) => ipcRenderer.invoke(IPC.homeAssistantDiscover, request),
+    cancel: (operationId) => ipcRenderer.invoke(IPC.homeAssistantCancel, operationId),
+    onEvent: (listener) => subscribeHomeAssistantEvent(listener)
+  },
+  homeAssistantControl: {
+    connections: () => ipcRenderer.invoke(IPC.homeAssistantConnections),
+    configure: (input) => ipcRenderer.invoke(IPC.homeAssistantConfigure, input),
+    bind: (nodeId, connectionId) => ipcRenderer.invoke(IPC.homeAssistantBind, nodeId, connectionId),
+    status: (nodeId) => ipcRenderer.invoke(IPC.homeAssistantStatus, nodeId),
+    entities: (nodeId) => ipcRenderer.invoke(IPC.homeAssistantEntities, nodeId),
+    services: (nodeId) => ipcRenderer.invoke(IPC.homeAssistantServices, nodeId),
+    call: (input) => ipcRenderer.invoke(IPC.homeAssistantCall, input),
+    cancel: (nodeId) => ipcRenderer.invoke(IPC.homeAssistantControlCancel, nodeId)
+  },
+  homeAssistantSensor: {
+    binding: (nodeId) => ipcRenderer.invoke(IPC.homeAssistantSensorBinding, nodeId),
+    configure: (input) => ipcRenderer.invoke(IPC.homeAssistantSensorConfigure, input),
+    leaveUnbound: (nodeId) => ipcRenderer.invoke(IPC.homeAssistantSensorLeaveUnbound, nodeId),
+    discover: (nodeId) => ipcRenderer.invoke(IPC.homeAssistantSensorDiscover, nodeId),
+    refresh: (nodeId, config) => ipcRenderer.invoke(IPC.homeAssistantSensorRefresh, nodeId, config)
+  },
   // The `browser` verb resolve round-trip (S8 PR 7): main asks the renderer which project owns the
   // source, whether it is control-capable, and whether the capability is on right now — the renderer
   // NEVER runs a CDP command.

@@ -3,6 +3,8 @@ import path from 'path'
 import { watch, type FSWatcher } from 'fs'
 import { renameAtomicSync } from './fs-atomic'
 import { BOARD_LOG_TEXT_MAX, type BoardLogEntry } from '@shared/types'
+import { validateBoardAttachmentRef, type BoardAttachmentDraft, type BoardAttachmentRef } from '../shared/comment-attachments'
+import { materializeBoardAttachment, readBoardAttachment, removeBoardAttachment } from './board-attachments'
 
 // Re-exported so callers of this module (and its tests) can reach the cap alongside buildLine.
 export { BOARD_LOG_TEXT_MAX }
@@ -55,6 +57,10 @@ export interface ParseOpts {
 export interface RemoteLogExec {
   append(path: string, line: string): Promise<void>
   tail(path: string, lines: number): Promise<string>
+  /** Optional binary carrier operations for Comments & Activity attachments. */
+  writeAttachment?(path: string, dataBase64: string): Promise<void>
+  readAttachment?(path: string): Promise<string | null>
+  removeAttachment?(path: string): Promise<void>
 }
 
 /** True when `x` is a structurally-valid BoardLogEntry. Tolerant callers use it to skip
@@ -69,6 +75,10 @@ export function validEntry(x: unknown): x is BoardLogEntry {
   if (e.nodeId !== undefined && typeof e.nodeId !== 'string') return false
   if (e.text !== undefined && typeof e.text !== 'string') return false
   if (e.event !== undefined && (typeof e.event !== 'object' || e.event === null)) return false
+  if (e.attachments !== undefined) {
+    if (!Array.isArray(e.attachments) || e.attachments.length > 16) return false
+    try { e.attachments.forEach(validateBoardAttachmentRef) } catch { return false }
+  }
   return true
 }
 
@@ -123,6 +133,7 @@ export class BoardLogStore {
 
   /** Append one entry. Fire-and-forget-safe: never throws — returns false on any fs/exec error. */
   async append(cwd: string, entry: BoardLogEntry): Promise<boolean> {
+    if (!validEntry(entry)) return false
     const line = buildLine(entry)
     if (this.remote) {
       try {
@@ -140,6 +151,52 @@ export class BoardLogStore {
     } catch {
       return false
     }
+  }
+
+  /**
+   * Materialize files, append the enriched entry, and remove only files created by this call when
+   * the log write fails. A failed source read is returned distinctly from an empty comment so the
+   * renderer can keep the user's draft and explain which queue item needs attention.
+   */
+  async appendWithAttachments(
+    cwd: string,
+    entry: BoardLogEntry,
+    drafts: readonly BoardAttachmentDraft[]
+  ): Promise<{ ok: true; entry: BoardLogEntry } | { ok: false; reason: 'invalid-entry' | 'empty-attachment' | 'read-failed' | 'write-failed' | 'log-failed'; message: string }> {
+    if (!validEntry({ ...entry, attachments: undefined })) return { ok: false, reason: 'invalid-entry', message: 'The comment entry is invalid.' }
+    if (!Array.isArray(drafts) || drafts.length > 16) return { ok: false, reason: 'invalid-entry', message: 'The attachment queue exceeds its limit.' }
+    if (drafts.length === 0) {
+      const ok = await this.append(cwd, entry)
+      return ok ? { ok: true, entry } : { ok: false, reason: 'log-failed', message: 'The comment could not be saved.' }
+    }
+    const materialized: Array<{ ref: BoardAttachmentRef; storedPath: string }> = []
+    try {
+      for (const draft of drafts) {
+        try {
+          const item = await materializeBoardAttachment(cwd, draft)
+          materialized.push({ ref: item.ref, storedPath: item.storedPath })
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'The attachment could not be read.'
+          const reason: 'empty-attachment' | 'read-failed' = message.includes('empty') ? 'empty-attachment' : 'read-failed'
+          throw Object.assign(new Error(message), { attachmentReason: reason })
+        }
+      }
+      const enriched = { ...entry, attachments: materialized.map((item) => item.ref) }
+      if (!await this.append(cwd, enriched)) throw Object.assign(new Error('The comment could not be saved; attachment files were rolled back.'), { attachmentReason: 'log-failed' })
+      return { ok: true, entry: enriched }
+    } catch (error) {
+      for (const item of materialized) await removeBoardAttachment(cwd, item.ref).catch(() => {})
+      const reason = (error as { attachmentReason?: 'empty-attachment' | 'read-failed' | 'log-failed' }).attachmentReason
+      if (reason === 'empty-attachment' || reason === 'read-failed' || reason === 'log-failed') {
+        return { ok: false, reason, message: error instanceof Error ? error.message : 'The comment could not be saved.' }
+      }
+      return { ok: false, reason: 'write-failed', message: error instanceof Error ? error.message : 'The attachment could not be stored.' }
+    }
+  }
+
+  /** Read a posted carrier and prove its metadata again before a preview or download. */
+  async readAttachment(cwd: string, attachment: BoardAttachmentRef): Promise<Uint8Array | null> {
+    try { return await readBoardAttachment(cwd, attachment) } catch { return null }
   }
 
   /**

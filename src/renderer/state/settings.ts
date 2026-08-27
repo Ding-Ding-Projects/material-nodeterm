@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { DEFAULT_SETTINGS, type Settings } from '@shared/types'
+import { DEFAULT_FUNNY_LEVEL, normalizeFunnyLevel } from '@shared/i18n'
 import type { SchedulableSettingsPatch } from '@shared/scheduled-settings'
 import type { HistoryRestoreResult } from '@shared/local-history'
 import {
@@ -110,7 +111,13 @@ let currentOverride: SchedulableSettingsPatch | null = null
 
 function withOverride(base: Settings, project: Partial<Settings>): Settings {
   const effective = { ...base, ...project }
-  return currentOverride ? { ...effective, ...currentOverride } : effective
+  const normalized = {
+    ...effective,
+    settingsSchemaVersion: 2 as const,
+    funnyLevelEn: normalizeFunnyLevel(effective.funnyLevelEn, DEFAULT_FUNNY_LEVEL),
+    funnyLevelYue: normalizeFunnyLevel(effective.funnyLevelYue, DEFAULT_FUNNY_LEVEL)
+  }
+  return currentOverride ? { ...normalized, ...currentOverride } : normalized
 }
 
 export const useSettings = create<SettingsState>((set, get) => ({
@@ -123,7 +130,7 @@ export const useSettings = create<SettingsState>((set, get) => ({
 
   async hydrate() {
     const s = await window.nodeTerminal.settings.load()
-    const base = { ...DEFAULT_SETTINGS, ...s }
+    const base = withOverride({ ...DEFAULT_SETTINGS, ...s }, {})
     set({ base, settings: withOverride(base, get().projectOverrides), hydrated: true })
     // Pending is renderer persistence, while auth.json/app-server identity is authoritative.
     // Reconcile at application startup so a completed login becomes selectable without requiring
@@ -230,7 +237,7 @@ export function restoreSettingsRevision(
       // publishing the restored object to the live UI; otherwise that callback is merely delayed,
       // not canceled, and can resurrect the state on the next timer turn.
       invalidateQueuedSave()
-      const base = { ...DEFAULT_SETTINGS, ...loaded }
+      const base = withOverride({ ...DEFAULT_SETTINGS, ...loaded }, {})
       useSettings.setState({
         base,
         settings: withOverride(base, useSettings.getState().projectOverrides),

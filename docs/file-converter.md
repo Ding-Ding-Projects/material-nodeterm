@@ -17,6 +17,7 @@ src/core/converter/
   structured-codec.ts          hand-rolled JSON/YAML/TOML/XML/CSV/TSV parse+serialize
   text-codec.ts                line-ending + text-encoding + Markdown→HTML adapters
   binary-codec.ts              base64/hex encode-decode + gzip/brotli (Node's own zlib)
+  advanced-pipeline.ts         bounded PDF, image, local OCR, and ZIP-inventory adapters
   registry.ts                  adapter id → real implementation; assertRegistryMatchesCatalog()
                                 fails loudly at boot if the catalog and the registry ever drift
   fs-scan.ts                   paged, constant-memory directory walk for "Add folder…"
@@ -48,9 +49,10 @@ preflight, queue mutation, cancellation and retry.
 ## The bundled rule
 
 Every row in `CONVERTER_CATALOG` declares `bundled` and `available` explicitly. A row is
-`bundled: true` **only** when `src/core/converter/registry.ts` has a real, offline, zero-new-
-dependency implementation for it — no PATH discovery, no developer-machine tool, no network call,
-no optional dependency that might not be installed. `assertRegistryMatchesCatalog()` runs once at
+`bundled: true` **only** when `src/core/converter/registry.ts` has a real offline implementation and
+every required package is in the application manifest and lockfile. There is no PATH discovery,
+developer-machine tool, network service, or optional dependency that might not be installed.
+`assertRegistryMatchesCatalog()` runs once at
 boot and throws if the catalog and the registry ever disagree, so a mismatch is a loud startup
 failure rather than a button that silently does nothing.
 
@@ -76,14 +78,23 @@ genuinely bundled adapters are the ones expressible in pure JS/Node with zero ne
   DOMPurify; raw HTML embedded in the Markdown source passes through unsanitized into the file,
   which is disclosed as a lossy note).
 - **Binary Encodings** — any file ⇄ Base64 text, any file ⇄ hex text (plain `Buffer` encodings).
-- **Archives** — any file ⇄ `.gz` and any file ⇄ `.br`, via Node's built-in `zlib`. Full ZIP/TAR/
-  7-Zip container support is **listed, disabled** (`requires a ZIP container library…`, etc.) —
-  none of those are bundled in this pass.
+- **Archives** — any file ⇄ `.gz` and any file ⇄ `.br`, via Node's built-in `zlib`, plus bounded
+  ZIP entry inventory through the bundled container reader. ZIP inventory rejects unsafe entry
+  names and size/count excess before emitting JSON; it never extracts or executes entries. ZIP
+  creation, TAR, and 7-Zip remain visible and disabled.
+- **Documents/PDF** — text extraction, page/metadata manifest, split-to-ZIP, merge-from-ZIP,
+  first-page extraction, reverse ordering, clockwise page rotation, and document-metadata removal
+  through the packaged PDF libraries. PDF work is capped at 500 pages, and produced PDF bytes are
+  reopened before publication.
+- **Images and OCR** — packaged Sharp conversions among supported PNG, JPEG, WebP, SVG, GIF, and
+  BMP inputs, capped at 40 million pixels and one frame, plus local English OCR using the packaged
+  language data. OCR does not fall back to a CDN.
+- **Advanced structured data** — deterministic recursive JSON key ordering in addition to the
+  directed format mesh. Array order is preserved.
 
-**Documents/PDF, Images, Audio and Video have no bundled adapters at all** — every row in those
-categories is listed disabled with its exact missing dependency (e.g. `pdf-to-text` needs
-`pdf-parse`, `png-to-jpeg` needs an image codec such as `sharp`, `mp3-to-wav` needs `ffmpeg`).
-Adding real support for any of these is a good next-pass target — see "Known gaps" below.
+**Audio and Video have no bundled transcode adapters.** Every row remains visible and disabled with
+the exact missing packaged transcoder reason. HEIC and ICO inputs also remain disabled because the
+active packaged image codec does not provide a stable decoder for them.
 
 ## Detection
 
@@ -125,6 +136,9 @@ provide that primitive fails closed. Only `item.overwriteAllowed === true`, set 
 
 - Every adapter declares `maxInputBytes`; a source over that limit is refused up front with an
   exact byte-count message, never partially read.
+- Advanced adapters cap produced output at 512 MiB and reject archive entry names longer than 4 KiB
+  before publication. An over-limit result remains a failed queue item and cannot replace the
+  destination.
 - The runner reads a whole file into memory per item (bounded by that limit), converts, then
   **validates the output before writing it** — every bundled adapter's `validate()` round-trips the
   produced bytes back through the target format's own parser (or, for gzip/brotli, decompresses
@@ -198,15 +212,17 @@ editor launch. Because no node is created, there is no converter node identity, 
 or creation-event id to serialize. The omission is deliberate and keeps project import side-effect
 free while the same project can use a different local queue on each computer.
 
-## Known gaps (deliberately out of scope this pass)
+## Known gaps
 
-- **No document/image/audio/video adapters are bundled.** Every row in those four categories is
-  listed disabled. Adding real ones (e.g. `pdf-parse` for PDF text extraction, `sharp` for images,
-  `ffmpeg`/`fluent-ffmpeg` for audio/video) is real, valuable follow-up work — but each is a new
-  native or sizeable dependency and was out of scope for this pass's "no new dependency" bundled
-  rule.
-- **No ZIP/TAR/7-Zip container support**, bundled or otherwise — listed disabled with their exact
-  missing library.
+- **Audio/video transcoding, ZIP creation/extraction, TAR, 7-Zip, DOCX, HEIC, and ICO remain
+  unavailable** until a verified packaged offline adapter exists. The catalog shows each gap and
+  its reason instead of hiding it.
+- **PDF rasterization and arbitrary page-range editing are not included.** The shipped PDF rows
+  inspect, extract text, split, merge, extract the first page, reverse, rotate all pages, or remove
+  metadata. They do not claim rendering parity,
+  redaction, signature preservation, or recovery of encrypted documents.
+- **OCR ships English data only.** Other languages stay unavailable rather than being downloaded
+  from a service during a conversion.
 - **The overwrite/lossy confirmation is the app's existing inline `ConfirmDialog`-style flow**
   (a message + explicit acknowledgement), not the full two-key, slider-gated destructive-action
   super-confirmation used elsewhere in the codebase for irreversible actions. Overwriting a file is
@@ -219,3 +235,6 @@ free while the same project can use a different local queue on each computer.
   browser path requires a separate resource/memory decision rather than weakening either guard.
 - **Relay (remote-desktop) tabs do not route the converter to the host.** The visible
   `E_UNSUPPORTED` refusal is intentional until that core namespace is carried over the relay.
+
+The detailed operation, portability, resource, privacy, and verification boundary is in
+[`features/converter/advanced-pipelines.md`](features/converter/advanced-pipelines.md).

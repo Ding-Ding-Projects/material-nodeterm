@@ -11,7 +11,11 @@ import { resolveProjectAvatarForProject } from './project-avatar'
 import { GitHubHostController } from './host'
 import { GitHubIssueService } from './service'
 import { registerGitHubIssueHandlers } from './handlers'
+import { GitHubApiService } from './api-service'
+import { registerGitHubApiHandlers } from './api-handlers'
 import { IPC } from '../../shared/ipc'
+import { GitHubCliAccountService } from './cli-accounts'
+import type { GitHubCliAccountsApi } from '../../shared/github-issues'
 
 type Dependencies = {
   platform: CorePlatform
@@ -25,6 +29,8 @@ type Dependencies = {
 export function registerGitHubIntegration(dependencies: Dependencies): {
   controller: GitHubHostController
   service: GitHubIssueService
+  api: GitHubApiService
+  cliAccounts: GitHubCliAccountsApi
 } {
   const validateToken = async (token: string) => {
     try {
@@ -67,6 +73,22 @@ export function registerGitHubIntegration(dependencies: Dependencies): {
       dependencies.platform.sendTo(uiId, IPC.githubIssuesChanged(projectId), changedIssueNumbers)
   })
   registerGitHubIssueHandlers(dependencies.platform, service)
+  const cliAccounts = new GitHubCliAccountService(
+    dependencies.run,
+    dependencies.platform.openExternal
+  ).register(dependencies.platform)
+
+  const api = new GitHubApiService({
+    platform: dependencies.platform,
+    contextForProject: (projectId) => controller.contextForProject(projectId),
+    credential: async () => {
+      const state = await controls.load()
+      const resolved = await resolver.resolve(state.authProvider)
+      return resolved ? { token: resolved.token, userId: resolved.userId } : null
+    },
+    client: (token) => new GitHubIssuesClient({ token })
+  })
+  registerGitHubApiHandlers(dependencies.platform, api)
 
   // Project org/user avatar. The handler receives only a projectId: it derives the owner host-side
   // from the project's own GitHub origin (a renderer never supplies a slug/owner) and resolves a
@@ -88,5 +110,5 @@ export function registerGitHubIntegration(dependencies: Dependencies): {
     }
   })
 
-  return { controller, service }
+  return { controller, service, api, cliAccounts }
 }
