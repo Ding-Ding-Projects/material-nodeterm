@@ -3983,3 +3983,29 @@ of checkout line endings.
 No production checker, tests, lint, typecheck, build, package, runtime interaction, review,
 audit, or screenshot was run in this ultra-speed repair lane. The change is committed and pushed
 on the feature branch for the coordinating task to integrate after review.
+
+# 2026-08-27, Codex relay daemon parser repair
+
+Release run `33124918918` passed repository guards, the personal-vocabulary checker with 1149
+clear entries, 48 WSL copy coverage rows plus its negative mutation, packaging provenance, icon,
+and HTTPS checks, then failed during the application build at
+`src/main/codex-relay-daemon.ts:14:1` with `ERROR: Expected identifier but found "*"`.
+
+The cause was a malformed merge splice at the file header: a short comment and import set had
+already closed, a raw long-comment continuation followed, then a second complete import set and
+duplicate `SAFE_NODE_TOKEN` declaration appeared. The same file also contained stale duplicate
+implementations for `ensureServer`, `hookEndpointOptions`, `register`, and `exposeThread`, plus
+duplicate lock inspection, endpoint parsing, route validation, reservation, response rewriting,
+and foreign-rollout copy blocks.
+
+The repair reconstructs one valid header comment containing the relay rationale and probe history,
+keeps one import per symbol, retains the protocol v6 account-isolated catalog and atomic rollout
+exposure path, and keeps the canonical `kid.mac` token pattern with a 43-character MAC. It removes
+only the stale duplicate or malformed fragments and keeps the descriptor-based lock inspection,
+quote-aware endpoint parser, synchronous reservation primitive, and target-side rollout discovery
+rollback behavior.
+
+Changed files: `src/main/codex-relay-daemon.ts` and `HANDOFF.md`. No tests, checkers, lint, type
+checks, builds, packaging, installer execution, runtime interaction, reviews, audits, or UI
+captures were run in this lane. The coordinating owner must evaluate the exact merged commit and
+the resulting remote workflow before treating the release as recovered.

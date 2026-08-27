@@ -1,6 +1,43 @@
 /* A single tiny, detached WebSocket relay shared by every local Codex node. It keeps the TUI
  * connected across Electron restarts while observing thread/resume on that node's own connection.
- * The authenticated Codex app-server remains shared per account; this is only a routing shim. */
+ * The authenticated Codex app-server remains shared per account; this is only a routing shim.
+ *
+ * Adapted from @Corvin's `src/main/codex-relay-daemon.ts` in external PR #112 (S6 PR 4 slice). The
+ * one deliberate divergence from the reference: cross-account rollout exposure does NOT re-implement
+ * `linkSync` here — it calls PR 3's atomic, never-overwrite primitive
+ * (`planCodexRolloutExposure`/`commitCodexRolloutExposure` in `src/core/codex-accounts-core.ts`) and
+ * then VERIFIES the target app-server can discover the copy before the caller recycles the node,
+ * rolling the published link back if it cannot (§4.2 step 4 / §6). Ships inert: no node connects
+ * until PR 5/6 wire it live.
+ *
+ * ── Task 4.0 probe results (Codex CLI 0.146.0, `/usr/bin/codex`, npm-managed; recorded in full in
+ *    docs/superpowers/probes/2026-08-codex-relay-daemon.md) ──
+ *  U4  PARTIAL/VERIFIED. `codex app-server daemon start|stop|version` honours `CODEX_HOME` (creates
+ *      `<CODEX_HOME>/app-server-daemon/`; `version` JSON reports
+ *      `socketPath=<CODEX_HOME>/app-server-control/app-server-control.sock`). The `SUN_LEN` limit is
+ *      REAL — a long `CODEX_HOME` makes the socket connect fail "path must be shorter than SUN_LEN",
+ *      which is exactly why the managed home digest is short. `--remote <ADDR>` and
+ *      `--remote-auth-token-env <ENV_VAR>` exist on the global/`resume`/`fork` commands (token by env
+ *      var name, never on argv — GC 6). NOT runnable headless: `daemon start` binding a live socket,
+ *      and the `account/read`→{email} / `thread/read`→{path,cwd} RPC shapes, need the curl-managed
+ *      standalone install (`<CODEX_HOME>/packages/standalone/current/codex`) absent here — owed
+ *      device-verification.
+ *  U1  UNVERIFIED headless (no standalone daemon). Does a RUNNING app-server surface a freshly
+ *      hardlinked rollout on `thread/read` WITHOUT a reindex? Cannot measure without the managed
+ *      install. The design does NOT rest on the optimistic answer: `exposeForeignThread` re-reads the
+ *      TARGET socket after linking (`thread-check`) and rolls the link back if the far side does not
+ *      report the thread — so a false U1 degrades to a refused copy, never a silent one. Owed
+ *      device-verification; not blocking.
+ *  U2  UNVERIFIED headless (needs auth + a second login + a running daemon). Does the conversation id
+ *      survive copy+switch? Safety net if not: hardlinked inode + resume-by-path (history deleted,
+ *      precedence history > path > id) and the `-32004` guard — `resolveRelayThreadResponse` flags a
+ *      changed id and the reply is rewritten to `-32004`, refusing the silent fork. Owed
+ *      device-verification; not blocking.
+ *  U6  Local self-spawn VERIFIED runnable: the `process.argv[2]` dispatch (serve/register/
+ *      account-read/thread-check/expose-thread) runs under plain `node` (proven by a child-process
+ *      test that self-spawns `serve` and completes a `/register` round-trip). In Electron main
+ *      `process.execPath` is the Electron binary; `ELECTRON_RUN_AS_NODE=1` runs it as Node. The
+ *      remote leg (uploaded `codex-relay.js` via `nodeterm-codex`) needs a live SSH host — owed. */
 import { createHash, randomUUID, timingSafeEqual } from 'crypto'
 import {
   closeSync,
