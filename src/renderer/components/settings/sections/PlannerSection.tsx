@@ -7,6 +7,7 @@ import { Switch } from '@renderer/ui/Switch'
 import { AnchoredRegexBuilder } from '../../regex/AnchoredRegexBuilder'
 import { useRegexSearchField } from '@renderer/lib/regex/useRegexSearchField'
 import { notify } from '@renderer/lib/adhdNotify'
+import { openDestructiveGate } from '@renderer/state/destructiveGate'
 import type { PlannerFile, PlannerOccurrence, PlannerSchedule, PlannerWeekday } from '@shared/planner-occurrences'
 
 const ROWS = {
@@ -49,6 +50,9 @@ export function PlannerSection({ isActive }: { isActive: boolean }): React.JSX.E
   const [history, setHistory] = useState<PlannerOccurrence[]>([])
   const [draft, setDraft] = useState<PlannerSchedule>(() => freshSchedule())
   const [error, setError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [retryFile, setRetryFile] = useState<PlannerFile | null>(null)
+  const saveGeneration = useRef(0)
   const search = useRegexSearchField({ mode: 'text' })
   const searchInputRef = useRef<HTMLInputElement>(null)
   const zones = useMemo(() => timeZoneChoices(), [])
@@ -79,11 +83,31 @@ export function PlannerSection({ isActive }: { isActive: boolean }): React.JSX.E
       setError('Planner is unavailable on this surface.')
       return
     }
+    const generation = ++saveGeneration.current
     setFile(next)
+    setSaving(true)
     setError(null)
     void planner.save(next).then((result) => {
-      if (!result.ok) setError(result.error)
-    }).catch(() => setError('Planner data could not be saved.'))
+      if (generation !== saveGeneration.current) return
+      setSaving(false)
+      if (result.ok) {
+        setRetryFile(null)
+        return
+      }
+      setRetryFile(next)
+      setError(`${result.error} The host kept the previous schedules. Retry this save after resolving the storage problem.`)
+      void planner.load().then((state) => {
+        if (generation === saveGeneration.current && state.ok) setFile(state.file)
+      }).catch(() => undefined)
+    }).catch(() => {
+      if (generation !== saveGeneration.current) return
+      setSaving(false)
+      setRetryFile(next)
+      setError('Planner data could not be saved. The host kept the previous schedules. Retry this save after checking local storage access.')
+      void planner.load().then((state) => {
+        if (generation === saveGeneration.current && state.ok) setFile(state.file)
+      }).catch(() => undefined)
+    })
   }
 
   const addSchedule = (): void => {
@@ -95,6 +119,22 @@ export function PlannerSection({ isActive }: { isActive: boolean }): React.JSX.E
   const updateSchedule = (schedule: PlannerSchedule, patch: Partial<PlannerSchedule>): void => {
     if (!file) return
     saveFile({ ...file, schedules: file.schedules.map((item) => item.id === schedule.id ? { ...item, ...patch } : item) })
+  }
+
+  const removeSchedule = (schedule: PlannerSchedule): void => {
+    if (!planner) return
+    void planner.load().then((state) => {
+      if (!state.ok) {
+        setError(state.error.message)
+        return
+      }
+      const current = state.file.schedules.find((item) => item.id === schedule.id)
+      if (!current || current.title !== schedule.title) {
+        setError('The schedule changed while confirmation was open. Nothing was deleted; review it and try again.')
+        return
+      }
+      saveFile({ ...state.file, schedules: state.file.schedules.filter((item) => item.id !== schedule.id) })
+    }).catch(() => setError('The schedule could not be re-read, so nothing was deleted. Retry after checking local storage access.'))
   }
 
   const visible = (file?.schedules ?? []).filter((schedule) => search.test(`${schedule.title} ${schedule.notification.title} ${schedule.notification.body} ${schedule.recurrence.kind} ${schedule.timeZone}`))
@@ -110,6 +150,10 @@ export function PlannerSection({ isActive }: { isActive: boolean }): React.JSX.E
           </div>
           {search.error ? <p className="text-sm text-[color:var(--caution)]" role="alert">{search.error}</p> : null}
           {error ? <p className="text-sm text-[color:var(--caution)]" role="alert">{error}</p> : null}
+          <div className="flex items-center gap-2 text-xs text-text-muted" aria-live="polite">
+            <span>{saving ? 'Saving planner schedules…' : retryFile ? 'The latest save needs attention.' : 'Planner schedules are synchronized with the host.'}</span>
+            {retryFile ? <Button variant="ghost" onClick={() => saveFile(retryFile)}>Retry save</Button> : null}
+          </div>
           <p className="text-xs text-text-muted">The host checks this durable file every few seconds. DST repeated times fire once at the earliest instant, and nonexistent spring-forward times move to the next valid minute. Cross-midnight end times are retained as a planning window description.</p>
           <div className="rounded-2xl border border-outline/30 bg-surface-container p-4 space-y-3">
             <h3 className="font-semibold">Add a schedule</h3>
@@ -125,7 +169,7 @@ export function PlannerSection({ isActive }: { isActive: boolean }): React.JSX.E
           </div>
           <div className="space-y-3" aria-live="polite">
             {visible.length === 0 ? <p className="text-sm text-text-muted">{file ? (search.active ? 'No schedules match this search.' : 'No schedules yet. Add one above.') : 'Loading planner schedules…'}</p> : null}
-            {visible.map((schedule) => <div key={schedule.id} className="rounded-2xl border border-outline/30 bg-surface-container p-4"><div className="flex items-center justify-between gap-3"><div className="min-w-0 flex-1 space-y-2"><input value={schedule.title} onChange={(event) => updateSchedule(schedule, { title: event.target.value })} className="w-full rounded-xl border border-outline/50 bg-surface px-3 py-2 font-semibold" aria-label={`Edit ${schedule.title}`} /><div className="flex flex-wrap items-center gap-2 text-xs text-text-muted"><input type="datetime-local" value={schedule.startLocal} onChange={(event) => updateSchedule(schedule, { startLocal: event.target.value })} className="rounded-lg border border-outline/50 bg-surface px-2 py-1" aria-label={`Edit start for ${schedule.title}`} /><span>{schedule.timeZone} · {schedule.recurrence.kind}{schedule.endTime && ` · window ends ${schedule.endTime}`}</span></div></div><Switch checked={schedule.enabled} ariaLabel={`Enable ${schedule.title}`} onChange={(enabled) => updateSchedule(schedule, { enabled })} /></div><p className="mt-2 text-sm text-text-muted">{schedule.notification.body}</p></div>)}
+            {visible.map((schedule) => <div key={schedule.id} className="rounded-2xl border border-outline/30 bg-surface-container p-4"><div className="flex items-center justify-between gap-3"><div className="min-w-0 flex-1 space-y-2"><input value={schedule.title} onChange={(event) => updateSchedule(schedule, { title: event.target.value })} className="w-full rounded-xl border border-outline/50 bg-surface px-3 py-2 font-semibold" aria-label={`Edit ${schedule.title}`} /><div className="flex flex-wrap items-center gap-2 text-xs text-text-muted"><input type="datetime-local" value={schedule.startLocal} onChange={(event) => updateSchedule(schedule, { startLocal: event.target.value })} className="rounded-lg border border-outline/50 bg-surface px-2 py-1" aria-label={`Edit start for ${schedule.title}`} /><span>{schedule.timeZone} · {schedule.recurrence.kind}{schedule.endTime && ` · window ends ${schedule.endTime}`}</span></div></div><div className="flex items-center gap-2"><Switch checked={schedule.enabled} ariaLabel={`Enable ${schedule.title}`} onChange={(enabled) => updateSchedule(schedule, { enabled })} /><Button variant="ghost" onClick={(event) => { const target = event.currentTarget; const rect = target.getBoundingClientRect(); openDestructiveGate({ title: 'Delete this planner schedule', description: `Permanently delete “${schedule.title}”. Its existing redacted occurrence history remains available for export.`, affected: [schedule.title], confirmLabel: 'Delete schedule', anchor: { x: rect.left, y: rect.bottom }, restoreFocusEl: target, onConfirm: () => removeSchedule(schedule) }) }}>Delete</Button></div></div><p className="mt-2 text-sm text-text-muted">{schedule.notification.body}</p></div>)}
           </div>
           <div className="rounded-2xl border border-outline/30 bg-surface-container p-4"><div className="flex items-center justify-between gap-3"><h3 className="font-semibold">Occurrence history</h3><div className="flex gap-2"><Button variant="ghost" disabled={!planner} onClick={() => planner && void planner.export('json').then((result) => window.nodeTerminal.export.saveText(result.filename, result.content, 'application/json'))}>Export JSON</Button><Button variant="ghost" disabled={!planner} onClick={() => planner && void planner.export('csv').then((result) => window.nodeTerminal.export.saveText(result.filename, result.content, 'text/csv'))}>Export CSV</Button></div></div>{history.length === 0 ? <p className="mt-2 text-sm text-text-muted">No occurrences have been observed yet.</p> : <ul className="mt-3 space-y-2">{history.slice(-20).reverse().map((occurrence) => <li key={occurrence.id} className="text-sm"><span className="font-medium">{occurrence.status}</span> · {new Date(occurrence.scheduledAtMs).toLocaleString()} · {occurrence.title}</li>)}</ul>}</div>
         </div>

@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Multiverse child canvases: nodeterm docs</title>
+    <meta name="description" content="Scoped Multiverse canvas hierarchy, guided navigation, depth-8 boundaries, persistence, and portable schema 3 behavior." />
+    <link rel="icon" href="../assets/nodeterm.png" />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+  </head>
+  <body>
+    <div class="doc-topbar">
+      <a href="../index.html">← nodeterm</a>
+      <span aria-hidden="true">/</span>
+      <a href="./index.html">Docs</a>
+    </div>
+    <article class="doc-body">
+      <p class="doc-kicker">Canvas</p>
+      <h1>Multiverse child canvases</h1>
+      <p>One project can contain a rooted hierarchy of scoped child canvases. The project canvas is depth 0, and children may nest through depth 8.</p>
+      <h2>Create and navigate</h2>
+      <p>The canvas app bar shows the active hierarchy path and depth. Its navigator searches every canvas locally with plain text by default and an adjacent full regex builder. The guided creator uses a separate searchable parent picker, states the resulting parent and depth, requires a name, and explains exactly why a depth-8 parent cannot accept another child.</p>
+      <h2>Scoped state</h2>
+      <p>Each child owns its viewport, nodes, bridges, ropes, title, parent, order, and depth. New children start with one deterministic scoped Shop. The root has no Shop. Switching commits the outgoing scope before loading the selected canvas.</p>
+      <h2>Persistence and portability</h2>
+      <p>Ordinary project files preserve the hierarchy. Portable schema 3 carries every child, its scoped nodes, and relationships tagged with the owning canvas identifier. Import validates identifiers, titles, parent ordering, depth, count, node lists, and viewports before rebuilding the hierarchy.</p>
+      <h2>Privacy and side effects</h2>
+      <p>The hierarchy contains no credentials, provider sessions, process state, runtime handles, or local terminal executable settings. Import reconstructs data only. It does not launch a process, download anything, contact a provider, or make a network request.</p>
+      <h2>Verification boundary</h2>
+      <p>The issue #33 ultra-speed lane did not run tests, type checks, lint, builds, packaging, reviews, audits, runtime interaction, accessibility checks, security checks, installer execution, or captures.</p>
+      <section class="doc-suggested">
+        <h2>Suggested articles</h2>
+        <ul>
+          <li><a href="./aws-universe-shop.html">Special-universe Shop nodes</a></li>
+          <li><a href="./node-catalog.html">Unified Node Catalog</a></li>
+          <li><a href="./projects-and-tabs.html">Projects and tabs</a></li>
+        </ul>
+      </section>
+    </article>
+  </body>
+</html>

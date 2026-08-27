@@ -12,7 +12,8 @@ Choose **Managers → New manager… → Linux ISO VM** from the canvas menu. Th
 file pickers for the ISO and, in persistent install mode, the disk image. It does not accept a raw
 QEMU command line or arbitrary arguments.
 
-Two modes are available:
+Two modes are available through a locally searchable picker whose adjacent anchored regex builder is
+bound only to that picker:
 
 * **Disposable live** starts the ISO with QEMU's snapshot mode. Writes go to a temporary overlay and
   are discarded when the VM stops. This is the default and is useful for safely trying a live image.
@@ -63,21 +64,25 @@ memory, CPU count, ISO, optional disk, snapshot mode, a loopback VNC display, an
 control socket. The process is spawned with `shell: false`; no user text is interpolated into a
 shell command. Informational status and progress stay in the node and do not block the canvas.
 
-The display and QMP endpoints bind to `127.0.0.1` only. Startup waits for both sockets and completes
-a QMP handshake before reporting running. An early QEMU exit, failed display bind, or QMP error is
+The display and QMP endpoints bind to `127.0.0.1` only. QEMU receives a VNC display number and the
+status reports its corresponding TCP port (`5900 + display number`). Startup waits for both sockets
+and completes a QMP handshake before reporting running. An early QEMU exit, failed display bind, or QMP error is
 persisted as an actionable error, with bounded stderr retained for diagnosis. The status surface
 shows the loopback VNC address only when the local desktop can open it, plus the running phase,
 selected mode, accelerator, and whether networking is enabled. Stop sends the
 QMP `quit` command, waits for the process to exit, and escalates to bounded termination if a guest
-does not respond. A QMP timeout is shown as an error rather than treated as a successful stop.
+does not respond. Stop remains available during startup so the operation can be cancelled. A QMP
+timeout is shown as an error after bounded termination rather than treated as a successful stop.
 
 The desktop's **Open display** action opens the verified loopback VNC address. Server Edition keeps
 the display host-local and reports that a browser-safe proxy is not available, so it never tells a
 browser to connect to its own `127.0.0.1` by mistake.
 
 Snapshots use QMP's `savevm` and `loadvm` commands and accept only bounded opaque names made from
-letters, numbers, dots, underscores, and hyphens. Snapshot names are persisted in the machine-local
-VM record with the process state, never in the shared project file.
+letters, numbers, dots, underscores, and hyphens. Restore uses a saved-snapshot picker with local
+plain-text filtering and its own adjacent anchored regex builder, rather than asking the user to
+retype a stored name. Snapshot names are persisted in the machine-local VM record with the process
+state, never in the shared project file.
 
 ## Persistence and recovery
 
@@ -90,8 +95,10 @@ If an ISO or disk is missing, the node remains present and says exactly which as
 The user can pick a replacement without editing project JSON. If the bundled tools are missing, the
 node remains unstarted and identifies the package resource that needs to be restored. Runtime
 process identifiers and startup generations are owned by the manager, and stale running records are
-reconciled to an error at startup rather than attaching to or killing a guessed process. Stopping a
-disposable VM removes its temporary changes by QEMU snapshot semantics; the selected source ISO is
+reconciled to an error at startup rather than attaching to or killing a guessed process. Corrupt or
+unreadable machine-local state is surfaced as an error rather than reported as an absent VM. State
+writes use unique, owner-identifying temporary files and the shared bounded atomic rename helper.
+Stopping a disposable VM removes its temporary changes by QEMU snapshot semantics; the selected source ISO is
 never modified.
 
 ## Security and limits

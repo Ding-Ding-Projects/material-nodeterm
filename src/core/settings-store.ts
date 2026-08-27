@@ -3,8 +3,9 @@ import path from 'path'
 import { IPC } from '../shared/ipc'
 import { platform } from './platform'
 import { renameAtomic, tempNameFor } from './fs-atomic'
-import { DEFAULT_ACCENT, DEFAULT_SETTINGS, type CanvasWidgetState, type Settings } from '../shared/types'
-import { normalizeLanguageMode } from '../shared/i18n'
+import { DEFAULT_ACCENT, DEFAULT_SETTINGS, SETTINGS_SCHEMA_VERSION, type CanvasWidgetState, type Settings } from '../shared/types'
+import { normalizeFunnyLevel, normalizeLanguageMode } from '../shared/i18n'
+import { DEFAULT_FUNNY_LEVEL } from '../shared/i18n'
 import type { HistoryAction } from '../shared/local-history'
 import { mergeCanvasWidgetState } from './canvas-widget'
 import { readFileSync } from "fs";
@@ -88,6 +89,16 @@ function mergeSettings(saved: Partial<Settings> | null | undefined): Settings {
   // returned `undefined` and took whole localized surfaces down. Normalize both load and save
   // through this merge so Desktop and Server Edition persist the same safe English fallback.
   merged.languageMode = normalizeLanguageMode(saved?.languageMode)
+  // Settings schema 2 expands both funny sliders from 1–5 to 1–10. The migration is deliberately
+  // versioned: valid legacy choices remain byte-for-byte meaningful, missing keys receive the new
+  // install default, and malformed hand-edited values fail safely to that default. Do not map old
+  // values onto a new scale, because that would silently change an established choice.
+  const savedSchema = (saved as { settingsSchemaVersion?: unknown } | null | undefined)?.settingsSchemaVersion
+  if (savedSchema !== SETTINGS_SCHEMA_VERSION) {
+    merged.settingsSchemaVersion = SETTINGS_SCHEMA_VERSION
+  }
+  merged.funnyLevelEn = normalizeFunnyLevel(saved?.funnyLevelEn, DEFAULT_FUNNY_LEVEL)
+  merged.funnyLevelYue = normalizeFunnyLevel(saved?.funnyLevelYue, DEFAULT_FUNNY_LEVEL)
   // The M3-baseline re-seed (2026-08) changed the shipped default accent from systemBlue
   // (`#0a84ff`) to the design's seed purple (`DEFAULT_ACCENT`, `#6750a4`). `{ ...DEFAULT_SETTINGS,
   // ...saved }` above already carries the NEW default forward for an install with no `accent` key

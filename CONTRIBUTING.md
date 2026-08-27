@@ -145,12 +145,12 @@ need it too, and wire it in the same change.
   Close every running instance of the app first: Windows will not delete a DLL a live process has
   loaded, so a dev window you forgot about makes the build die with an `EPERM` about a `.node`
   file that says nothing about the real cause. The bootstrap detects the
-  **Spectre-mitigated MSVC libs** and repairs them through the separately elevated helper-only
-  command when needed — node-pty asks for the mitigation in its own `binding.gyp`, and without them
-  the build dies minutes in with `MSB8040`. Visual Studio changes require elevation; the script
-  never triggers UAC, so an unelevated run exits access-denied and prints one exact
-  **helper-only** command. Run only that helper elevated, close the Administrator prompt, then rerun
-  the root BAT normally — npm lifecycle scripts must never inherit elevation. The BAT also ensures
+  **Spectre-mitigated MSVC libs** and repairs them through the narrowly scoped elevated helper when
+  needed — node-pty asks for the mitigation in its own `binding.gyp`, and without them the build
+  dies minutes in with `MSB8040`. Visual Studio changes require elevation; an interactive run hands
+  only that helper to UAC, waits for its result, and reruns normal-user verification. A silent run
+  stays prompt-free and exits access-denied with the exact helper route. The root BAT and npm
+  lifecycle scripts never inherit elevation. The BAT also ensures
   x86/x64 are always checked and ARM64 is added on ARM64 hosts. The BAT also ensures a supported
   per-user Python for node-gyp, with SHA-pinned fallbacks for machines without winget, and exports
   the verified interpreter through every node-gyp precedence channel.
@@ -721,6 +721,20 @@ image selections guided, validate again at use, bound CPU/memory/PIDs, drop capa
 privileged and socket mounts, default network to none and the project bind to read-only, and remove
 only the labelled random-name container the session created. Relay PTYs must be `docker exec`, never
 the local profile with a Docker-looking label painted over it.
+
+### Hosted-resource backup and restore
+
+Use `src/shared/backup-restore.ts` for every hosted-service backup contract. A manifest must record
+the framework schema, product, resource id and kind, edition, source, ownership evidence, version,
+payload hashes, byte totals, and explicit omissions. Credentials, provider sessions, machine paths,
+host identifiers, process state, caches, and generated runtime data never travel in the archive.
+
+Use `src/core/backup-restore.ts` for bounded ZIP framing and atomic local publication. Restore code
+must show the compatibility and ownership review before calling a provider, stage and validate
+before publication, report byte-aware progress and cancellation, and retain an expiry-bound rollback
+contract. Every list and picker added by a hosting node gets its own plain-text search and adjacent
+anchored regex builder, with a concrete disabled reason when verified metadata or review is absent.
+The framework intentionally does not deploy or mutate a provider on import.
 
 Two files, two audiences:
 

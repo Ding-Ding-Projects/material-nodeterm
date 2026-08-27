@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { AnchoredRegexBuilder } from './regex/AnchoredRegexBuilder'
 import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
-import type { PortableMediaCandidate, PortableMediaDecision } from '../../core/portable-media-assets'
+import type { PortableMediaCandidate, PortableMediaDecision } from '@shared/portable-media'
 
 export interface PortableMediaDecisionDialogProps {
   candidates: readonly PortableMediaCandidate[]
@@ -31,9 +31,12 @@ export function PortableMediaDecisionDialog({ candidates, onDecisions, onCancel 
       <div className="portable-media-decision__list" role="list" aria-label="Portable media choices">
         {filtered.length === 0 ? <p className="portable-media-decision__empty">No media matches this filter.</p> : filtered.map((candidate) => (
           <article key={candidate.assetId} className="portable-media-decision__row" role="listitem">
-            <div><strong>{candidate.label}</strong><small>{candidate.kind} · {candidate.sourceName}</small>{candidate.reason && <small>{candidate.reason}</small>}</div>
+            <div><strong>{candidate.label}</strong><small>{candidate.kind} · {candidate.sourceName} · {candidate.projectOwned ? 'Project-owned' : 'External source'}</small>{candidate.reason && <small>{candidate.reason}</small>}</div>
             <div className="portable-media-decision__actions" role="group" aria-label={`Decision for ${candidate.label}`}>
-              {(['include', 'omit', 'locate-later'] as const).map((decision) => <button key={decision} type="button" aria-pressed={decisions.get(candidate.assetId) === decision} onClick={() => choose(candidate.assetId, decision)}>{decision === 'include' ? 'Include' : decision === 'omit' ? 'Omit' : 'Locate Later'}</button>)}
+              {(['include', 'omit', 'locate-later'] as const).map((decision) => {
+                const disabled = decision === 'include' && !candidate.includeEnabled
+                return <button key={decision} type="button" disabled={disabled} title={disabled ? candidate.includeDisabledReason : undefined} aria-description={disabled ? candidate.includeDisabledReason : undefined} aria-pressed={decisions.get(candidate.assetId) === decision} onClick={() => choose(candidate.assetId, decision)}>{decision === 'include' ? 'Include' : decision === 'omit' ? 'Omit' : 'Locate Later'}</button>
+              })}
             </div>
           </article>
         ))}

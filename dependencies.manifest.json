@@ -64,6 +64,16 @@
       "repairStrategy": { "kind": "reinstall-from-cache-or-source", "description": "Reverify the cached archive, then republish a fresh user-scoped installation." }
     }
   ],
+  "awsCliV2": {
+    "version": "2.36.32",
+    "platform": "windows-x64",
+    "source": "https://awscli.amazonaws.com/AWSCLIV2-User-2.36.32.msi",
+    "sha256": "bc695531b7fd83490e02741777dfda109cfab7fd9bef85fa1d5db21684cbaee2",
+    "maxDownloadBytes": 67108864,
+    "signer": "Amazon Web Services, Inc.",
+    "payload": ["aws.exe", "awscli/data/ac.index"],
+    "notes": "The release bootstrap stages the official versioned current-user MSI as an app resource. Runtime verifies the pinned SHA-256 before app-local administrative extraction and never mutates PATH or the system installation."
+  },
   "python": {
     "version": "3.13.15",
     "winget": {
