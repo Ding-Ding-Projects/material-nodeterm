@@ -1,9 +1,12 @@
+import { useMemo, useRef, type KeyboardEvent } from 'react'
 import { NodeResizer, useReactFlow, type NodeProps } from '@xyflow/react'
 import type { CanvasNode } from '../state/workspace'
 import { EditableNodeTitle } from '../components/EditableNodeTitle'
 import { nodeHeaderFillStyle } from '../lib/nodeColor'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { useNotifications } from '../state/notifications'
+import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
+import { AnchoredRegexBuilder } from '../components/regex/AnchoredRegexBuilder'
 import {
   RECOVERY_BOARD_HEIGHT,
   RECOVERY_BOARD_WIDTH,
@@ -58,12 +61,21 @@ function transitionNotice(transition: RecoveryTransition, title: string): void {
       body: `${title} completed the recovery run with all three energy keys.`,
       autoDismissMs: 9000
     })
+  } else if (transition.event === 'core-ready') {
+    useNotifications.getState().push({
+      kind: 'info',
+      title: 'Activation core ready',
+      body: 'All three energy keys are online. Activate the core to finish the recovery run.',
+      autoDismissMs: 6000
+    })
   }
 }
 
 export default function RecoveryGameNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const { updateNodeData, deleteElements } = useReactFlow()
   const vocab = useVocabularyMapper()
+  const boardSearch = useRegexSearchField()
+  const boardSearchRef = useRef<HTMLInputElement>(null)
   const snapshot = normalizeRecoveryGameSnapshot(data.recoveryGame ?? createRecoveryGameSnapshot())
   const headerFill = nodeHeaderFillStyle(data.color)
   const coreReason = recoveryCoreDisabledReason(snapshot)
@@ -71,7 +83,7 @@ export default function RecoveryGameNode({ id, data, selected }: NodeProps<Canva
   const commit = (next: RecoveryGameSnapshot) => updateNodeData(id, { recoveryGame: next })
   const move = (direction: RecoveryMove) => {
     const transition = moveRecoveryGame(snapshot, direction)
-    if (transition.snapshot !== snapshot) commit(transition.snapshot)
+    if (transition.event !== 'blocked') commit(transition.snapshot)
     transitionNotice(transition, String(data.title || 'Recovery game'))
   }
   const moveTo = (point: RecoveryPoint) => {
@@ -86,7 +98,16 @@ export default function RecoveryGameNode({ id, data, selected }: NodeProps<Canva
     commit(transition.snapshot)
     transitionNotice(transition, String(data.title || 'Recovery game'))
   }
-  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+  const reset = () => {
+    commit(createRecoveryGameSnapshot())
+    useNotifications.getState().push({
+      kind: 'info',
+      title: 'Recovery game reset',
+      body: 'The board is back at the start. Energize all three keys to try again.',
+      autoDismissMs: 5000
+    })
+  }
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const direction: Record<string, RecoveryMove | undefined> = {
       ArrowUp: 'up', w: 'up', W: 'up',
       ArrowDown: 'down', s: 'down', S: 'down',
@@ -108,6 +129,16 @@ export default function RecoveryGameNode({ id, data, selected }: NodeProps<Canva
   const status = snapshot.coreActivated
     ? 'Activation core online. Recovery complete.'
     : coreReason ?? 'Activation core ready. Press Enter or choose Activate core.'
+  const matchingCells = useMemo(() => {
+    let count = 0
+    for (let y = 0; y < RECOVERY_BOARD_HEIGHT; y += 1) {
+      for (let x = 0; x < RECOVERY_BOARD_WIDTH; x += 1) {
+        if (boardSearch.test(pointLabel({ x, y }, snapshot))) count += 1
+      }
+    }
+    return count
+  }, [boardSearch, snapshot])
+  const statusId = `${id}-recovery-status`
 
   return (
     <section className={`term-node recovery-game-node${selected ? ' selected' : ''}`} style={{ borderTopColor: data.color }} aria-label={vocab('Top-down recovery game')}>
@@ -125,6 +156,23 @@ export default function RecoveryGameNode({ id, data, selected }: NodeProps<Canva
           <span>{vocab('Energize all three keys, avoid hazards, then stand on the core and activate it.')}</span>
         </div>
 
+        <div className="recovery-game-node__search">
+          <label htmlFor={`${id}-recovery-search`}>{vocab('Find a board location')}</label>
+          <div className="recovery-game-node__search-row">
+            <input
+              id={`${id}-recovery-search`}
+              ref={boardSearchRef}
+              value={boardSearch.value}
+              onChange={(event) => boardSearch.setValue(event.target.value)}
+              placeholder={vocab('Plain text search')}
+              aria-label={vocab('Find a board location')}
+            />
+            <AnchoredRegexBuilder search={boardSearch} fieldRef={boardSearchRef} label={vocab('Regex for recovery board')} />
+          </div>
+          <span className="recovery-game-node__search-count" role="status">{vocab(`${matchingCells} board locations match`)}</span>
+          {boardSearch.error && <span className="recovery-game-node__search-error" role="alert">{vocab(boardSearch.error)}</span>}
+        </div>
+
         <div className="recovery-game-node__keys" aria-label={vocab('Energy key status')}>
           {RECOVERY_ENERGY_KEYS.map((key) => (
             <span key={key} className={snapshot.energizedKeys.includes(key) ? 'is-online' : ''}>
@@ -138,6 +186,8 @@ export default function RecoveryGameNode({ id, data, selected }: NodeProps<Canva
           className="recovery-game-node__board"
           role="grid"
           aria-label={vocab('Recovery board. Use arrow keys or W A S D to move.')}
+          aria-describedby={statusId}
+          aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight W A S D"
           tabIndex={0}
           onKeyDown={onKeyDown}
         >
@@ -149,20 +199,25 @@ export default function RecoveryGameNode({ id, data, selected }: NodeProps<Canva
               const isPlayer = snapshot.player.x === x && snapshot.player.y === y
               const enabled = !snapshot.coreActivated && canRecoveryStep(snapshot.player, point)
               const keyOnline = key ? snapshot.energizedKeys.includes(key) : false
+              const matchesSearch = boardSearch.test(pointLabel(point, snapshot))
               const classes = [
                 'recovery-game-node__cell',
                 `is-${kind}`,
                 isPlayer ? 'is-player' : '',
                 keyOnline ? 'is-online' : '',
+                boardSearch.active && matchesSearch ? 'is-search-match' : '',
                 snapshot.coreActivated && x === RECOVERY_CORE.x && y === RECOVERY_CORE.y ? 'is-activated' : ''
               ].filter(Boolean).join(' ')
               return (
                 <button
                   type="button"
                   role="gridcell"
+                  aria-rowindex={y + 1}
+                  aria-colindex={x + 1}
                   key={`${x}:${y}`}
                   className={classes}
                   aria-label={vocab(pointLabel(point, snapshot))}
+                  aria-describedby={statusId}
                   aria-current={isPlayer ? 'true' : undefined}
                   disabled={!enabled}
                   title={enabled ? vocab(`Move to column ${x + 1}, row ${y + 1}`) : vocab(pointLabel(point, snapshot))}
@@ -178,14 +233,15 @@ export default function RecoveryGameNode({ id, data, selected }: NodeProps<Canva
         </div>
 
         <div className="recovery-game-node__controls" aria-label={vocab('Movement controls')}>
-          <button type="button" onClick={() => move('up')} disabled={snapshot.coreActivated || snapshot.player.y === 0} title={vocab(snapshot.player.y === 0 ? 'The top edge blocks this move.' : 'Move up')}>↑</button>
-          <button type="button" onClick={() => move('left')} disabled={snapshot.coreActivated || snapshot.player.x === 0} title={vocab(snapshot.player.x === 0 ? 'The left edge blocks this move.' : 'Move left')}>←</button>
-          <button type="button" onClick={() => move('down')} disabled={snapshot.coreActivated || snapshot.player.y === RECOVERY_BOARD_HEIGHT - 1} title={vocab(snapshot.player.y === RECOVERY_BOARD_HEIGHT - 1 ? 'The bottom edge blocks this move.' : 'Move down')}>↓</button>
-          <button type="button" onClick={() => move('right')} disabled={snapshot.coreActivated || snapshot.player.x === RECOVERY_BOARD_WIDTH - 1} title={vocab(snapshot.player.x === RECOVERY_BOARD_WIDTH - 1 ? 'The right edge blocks this move.' : 'Move right')}>→</button>
-          <button type="button" className="recovery-game-node__activate" onClick={activate} disabled={coreReason !== null} title={vocab(coreReason ?? 'Activate the core')}>{vocab('Activate core')}</button>
+          <button type="button" onClick={() => move('up')} disabled={snapshot.coreActivated || snapshot.player.y === 0} aria-describedby={statusId} title={vocab(snapshot.player.y === 0 ? 'The top edge blocks this move.' : 'Move up')}>↑</button>
+          <button type="button" onClick={() => move('left')} disabled={snapshot.coreActivated || snapshot.player.x === 0} aria-describedby={statusId} title={vocab(snapshot.player.x === 0 ? 'The left edge blocks this move.' : 'Move left')}>←</button>
+          <button type="button" onClick={() => move('down')} disabled={snapshot.coreActivated || snapshot.player.y === RECOVERY_BOARD_HEIGHT - 1} aria-describedby={statusId} title={vocab(snapshot.player.y === RECOVERY_BOARD_HEIGHT - 1 ? 'The bottom edge blocks this move.' : 'Move down')}>↓</button>
+          <button type="button" onClick={() => move('right')} disabled={snapshot.coreActivated || snapshot.player.x === RECOVERY_BOARD_WIDTH - 1} aria-describedby={statusId} title={vocab(snapshot.player.x === RECOVERY_BOARD_WIDTH - 1 ? 'The right edge blocks this move.' : 'Move right')}>→</button>
+          <button type="button" className="recovery-game-node__activate" onClick={activate} disabled={coreReason !== null} aria-describedby={statusId} title={vocab(coreReason ?? 'Activate the core')}>{vocab('Activate core')}</button>
+          <button type="button" className="recovery-game-node__reset" onClick={reset} aria-describedby={statusId} title={vocab('Reset the recovery game')}>{vocab('Reset game')}</button>
         </div>
 
-        <p className="recovery-game-node__status" role="status" aria-live="polite">{vocab(status)}</p>
+        <p id={statusId} className="recovery-game-node__status" role="status" aria-live="polite">{vocab(status)}</p>
         <p className="recovery-game-node__meta">{vocab(`Hazard contacts: ${snapshot.hazardHits}. Energized keys: ${snapshot.energizedKeys.length} of 3.`)}</p>
       </div>
     </section>

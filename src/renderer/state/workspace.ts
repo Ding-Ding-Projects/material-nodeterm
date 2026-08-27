@@ -49,7 +49,7 @@ import { newUniverseCreationEventId, shopNodeIdForCanvas } from '../../core/univ
 import { TORRENT_NODE_CATALOG_ENTRY } from '@shared/torrent'
 import { DEFAULT_VIRTUAL_MACHINE_CONFIG } from '@shared/virtual-machine'
 import { TIMER_DEFAULT_DURATION_MS, type TimerNodeData } from '@shared/timer'
-import { createRecoveryGameSnapshot, type RecoveryGameSnapshot } from '@shared/recovery-game'
+import { createRecoveryGameSnapshot, normalizeRecoveryGameSnapshot, type RecoveryGameSnapshot } from '@shared/recovery-game'
 
 // Re-exported so Canvas (and anything else in the renderer) keeps importing it from here, while the
 // single implementation lives in src/shared and is shared with the relay host + the canvas-sync
@@ -2676,7 +2676,9 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         diffStaged: n.diffStaged,
         commitOid: n.commitOid,
         highScore: n.highScore,
-        recoveryGame: n.recoveryGame,
+        // The recovery board is project-portable intent, so normalize legacy or hand-edited
+        // snapshots at the load boundary instead of letting malformed coordinates reach the UI.
+        recoveryGame: n.recoveryGame ? normalizeRecoveryGameSnapshot(n.recoveryGame) : undefined,
         agentId,
         agentModel: n.agentModel,
         accountId: n.accountId,
@@ -2801,7 +2803,9 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         diffStaged: n.data.diffStaged,
         commitOid: n.data.commitOid,
         highScore: n.data.highScore,
-        recoveryGame: n.data.recoveryGame,
+        // Persist only the bounded board snapshot. It contains no path, process, host, or account
+        // state, and normalization keeps old project files safe to reopen on another computer.
+        recoveryGame: n.data.recoveryGame ? normalizeRecoveryGameSnapshot(n.data.recoveryGame) : undefined,
         agentId: n.data.agentId,
         agentModel: n.data.agentModel,
         accountId: n.data.accountId,
@@ -2814,7 +2818,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         sshFs: n.data.sshFs,
         worktree: n.data.worktree,
         annotationVariant: n.data.annotationVariant,
-        annotationDir: n.data.annotationDir
+        annotationDir: n.data.annotationDir,
         premaxRect: n.data.premaxRect
       }
     })

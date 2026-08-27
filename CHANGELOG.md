@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add a portable top-down recovery game node with three energy keys, hazard reset behavior, central
+  core activation, keyboard and button controls, board-location search with an anchored regex
+  builder, explicit disabled-state guidance, and bounded schema 3 state that imports without
+  external side effects. Runtime, build, and capture verification remain pending in the integration
+  lane.
+
 - Add a source-only desktop Material Design 3 audit with a hand-written inventory of 212 rendered
   surfaces, including onboarding, profile picking, conversion, password management, Minecraft
   management, dialogs, find bars, and notifications. Shared NumberField, Radio, Progress, and Tabs

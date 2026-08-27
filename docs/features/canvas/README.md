@@ -14,6 +14,7 @@ The pan/zoom surface nodeterm is built around, and everything that lives on it.
   a fractional-dpr display, the two independent causes, and what the app does about each.
 - [Timer nodes](./timer-nodes.md) — countdowns, stopwatches, work/rest sequences, laps, repeats,
   occurrences, and non-blocking alarms.
+- [Top-down recovery game](./recovery-game.md) — a portable three-key route through hazards to an activation core.
 
 See also [Terminals](../terminals/README.md) for how a terminal node's own session survives
 independently of the canvas, and [Projects](../projects/README.md) for how a whole canvas is

@@ -13,6 +13,7 @@ import { sanitizeProjectIcon } from '../shared/project-icon'
 import type { PortableMediaManifest } from './portable-media-assets'
 import { validatePortableMediaManifest } from './portable-media-assets'
 import { repairUniverseShops } from './universe-shop'
+import { normalizeRecoveryGameSnapshot, RECOVERY_ENERGY_KEYS, type RecoveryGameSnapshot } from '../shared/recovery-game'
 
 export type PortableCanvasScope = 'root' | 'multiverse' | 'aws-universe'
 
@@ -57,6 +58,8 @@ export interface PortableCanvasNodeV3 {
   alarmSoundEnabled?: boolean
   alarmNarratorEnabled?: boolean
   alarmHistory?: Array<{ id: string; alarmId: string; scheduledAt: number; status: string; createdAt: number; resolvedAt?: number; snoozedUntil?: number; timeZone: string }>
+  /** Portable recovery-game progress only. It contains board intent, never host or process state. */
+  recoveryGame?: RecoveryGameSnapshot
 }
 
 export interface PortableRelationshipV3 {
@@ -108,9 +111,15 @@ const ALLOWED_PROJECT = new Set(['name', 'color', 'icon'])
 const ALLOWED_ICON = new Set(['type', 'name'])
 const ALLOWED_CANVAS = new Set(['id', 'scope', 'parentCanvasId', 'depth', 'title', 'order', 'viewport', 'nodeIds'])
 const ALLOWED_VIEWPORT = new Set(['x', 'y', 'zoom'])
-const ALLOWED_NODE = new Set(['id', 'kind', 'creationEventId', 'position', 'size', 'title', 'color', 'group', 'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel'])
-const ALLOWED_NODE = new Set(['id', 'kind', 'creationEventId', 'position', 'size', 'title', 'color', 'group', 'universeCanvasId', 'universeScope', 'universeDepth', 'nonDeletable', 'shopSelection', 'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel'])
-const ALLOWED_NODE = new Set(['id', 'kind', 'position', 'size', 'title', 'color', 'group', 'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel', 'alarmSchedule', 'alarmTimeZone', 'alarmEnabled', 'alarmSnoozeMinutes', 'alarmSoundEnabled', 'alarmNarratorEnabled', 'alarmHistory'])
+const ALLOWED_NODE = new Set([
+  'id', 'kind', 'creationEventId', 'position', 'size', 'title', 'color', 'group',
+  'universeCanvasId', 'universeScope', 'universeDepth', 'nonDeletable', 'shopSelection',
+  'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel',
+  'alarmSchedule', 'alarmTimeZone', 'alarmEnabled', 'alarmSnoozeMinutes',
+  'alarmSoundEnabled', 'alarmNarratorEnabled', 'alarmHistory', 'recoveryGame'
+])
+const ALLOWED_RECOVERY_GAME = new Set(['player', 'energizedKeys', 'coreActivated', 'hazardHits'])
+const ALLOWED_RECOVERY_POINT = new Set(['x', 'y'])
 const ALLOWED_POSITION = new Set(['x', 'y'])
 const ALLOWED_SIZE = new Set(['width', 'height'])
 const ALLOWED_TAB = new Set(['id', 'url', 'title'])
@@ -205,6 +214,19 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
   if (node.text !== undefined) out.text = content(node.text, 'node text')
   if (node.url !== undefined) { const url = safeUrl(node.url, 'node URL'); if (url) out.url = url }
   if (node.serviceLabel !== undefined) out.serviceLabel = text(node.serviceLabel, 'service label')
+  if (node.recoveryGame !== undefined) {
+    if (!record(node.recoveryGame)) throw new PortableProjectV3Error('manifest', 'Portable recovery game state is invalid.')
+    exactKeys(node.recoveryGame, ALLOWED_RECOVERY_GAME, 'recovery game state')
+    if (!record(node.recoveryGame.player)) throw new PortableProjectV3Error('manifest', 'Portable recovery game player is invalid.')
+    exactKeys(node.recoveryGame.player, ALLOWED_RECOVERY_POINT, 'recovery game player')
+    if (!Array.isArray(node.recoveryGame.energizedKeys) || node.recoveryGame.energizedKeys.length > RECOVERY_ENERGY_KEYS.length) throw new PortableProjectV3Error('entry-limit', 'Portable recovery game key count exceeds its bound.')
+    const keys = node.recoveryGame.energizedKeys
+    if (keys.some((key) => typeof key !== 'string' || !(RECOVERY_ENERGY_KEYS as readonly string[]).includes(key)) || new Set(keys).size !== keys.length) throw new PortableProjectV3Error('manifest', 'Portable recovery game key state is invalid.')
+    if (typeof node.recoveryGame.coreActivated !== 'boolean' || typeof node.recoveryGame.hazardHits !== 'number' || !Number.isInteger(node.recoveryGame.hazardHits) || node.recoveryGame.hazardHits < 0 || node.recoveryGame.hazardHits > 999_999) throw new PortableProjectV3Error('manifest', 'Portable recovery game progress is invalid.')
+    const normalized = normalizeRecoveryGameSnapshot(node.recoveryGame)
+    if (normalized.coreActivated !== node.recoveryGame.coreActivated) throw new PortableProjectV3Error('manifest', 'Portable recovery game core state is inconsistent.')
+    out.recoveryGame = normalized
+  }
   if (node.alarmSchedule !== undefined) {
     if (!record(node.alarmSchedule)) throw new PortableProjectV3Error('manifest', 'Portable alarm schedule is invalid.')
     exactKeys(node.alarmSchedule, ALLOWED_ALARM_SCHEDULE, 'alarm schedule')
@@ -402,7 +424,8 @@ export function portableCanvasProjectionToProject(
     ...(node.text !== undefined ? { text: node.text } : {}),
     ...(node.url !== undefined ? { url: node.url } : {}),
     ...(node.browserTabs ? { browserTabs: node.browserTabs.map((tab) => ({ ...tab })) } : {}),
-    ...(node.serviceLabel !== undefined ? { serviceLabel: node.serviceLabel } : {})
+    ...(node.serviceLabel !== undefined ? { serviceLabel: node.serviceLabel } : {}),
+    ...(node.recoveryGame !== undefined ? { recoveryGame: normalizeRecoveryGameSnapshot(node.recoveryGame) } : {})
   }))
   const bridgeLinks = value.relationships
     .filter((link) => link.kind === 'bridge')
