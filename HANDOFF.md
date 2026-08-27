@@ -19,9 +19,10 @@ credentials, profiles, provider sessions, account or role identity, endpoints, p
 waiter progress, results, and process state are explicitly omitted.
 
 Direct records were added in `docs/features/integrations/aws-cli-model-documentation.md`, the
-integrations index, `src/shared/node-catalog.ts`, `CHANGELOG.md`, `ROADMAP.md`, and this handoff. The
-AWS service catalog row remains planned for the later executor and typed-wizard lanes, but now links
-to the implemented documentation-index article rather than only the program plan.
+generated offline bundle `src/shared/docs-data.ts`, the integrations index,
+`src/shared/node-catalog.ts`, `CHANGELOG.md`, `ROADMAP.md`, and this handoff. The AWS service catalog
+row remains planned for the later executor and typed-wizard lanes, but now links to the implemented
+documentation-index article rather than only the program plan.
 
 This lane intentionally did not run tests, type checks, lint, reviews, security checks,
 accessibility checks, builds, packaging, installer execution, runtime interaction, or UI captures.

@@ -334,7 +334,12 @@ function shapeReference(value: unknown, label: string): string | null {
 }
 
 function buildShapeDocumentation(name: string, shape: JsonRecord): AwsShapeDocumentation {
-  const required = new Set(stringList(shape.required, `shape ${name}.required`))
+  const requiredNames = uniqueBy(
+    stringList(shape.required, `shape ${name}.required`),
+    (memberName) => memberName,
+    `shape ${name}.required`
+  )
+  const required = new Set(requiredNames)
   const members = entries(shape.members, `shape ${name}.members`, MAX_MEMBERS_PER_SHAPE).map(([memberName, member]) => {
     const memberShape = identifier(member.shape, `shape ${name}.members.${memberName}.shape`)
     return {
@@ -349,6 +354,14 @@ function buildShapeDocumentation(name: string, shape: JsonRecord): AwsShapeDocum
       max: numberOrNull(member.max, `shape ${name}.members.${memberName}.max`)
     }
   })
+  const memberNames = new Set(members.map((member) => member.name))
+  const missingRequired = requiredNames.filter((memberName) => !memberNames.has(memberName))
+  if (missingRequired.length > 0) {
+    throw new AwsModelDocumentationError(
+      'invalid-model',
+      `shape ${name}.required references missing member(s): ${missingRequired.join(', ')}.`
+    )
+  }
   return {
     name,
     type: shapeType(shape),
@@ -392,7 +405,10 @@ function skeletonForShape(
   if (type === 'blob') return '<base64>'
   if (type === 'timestamp') return '1970-01-01T00:00:00Z'
   const values = stringList(shape.enum, `shape ${name}.enum`)
-  return values[0] ?? ''
+  if (['string', 'char'].includes(type)) return values[0] ?? ''
+  // Keep an unfamiliar future shape visible instead of pretending it is a string. Official
+  // models can grow new shape kinds, and a visible marker is safer than a plausible-looking value.
+  return `<${type}>`
 }
 
 function paginatorFor(operationName: string, model: JsonRecord): AwsPaginatorDocumentation | null {
@@ -544,18 +560,19 @@ export function buildAwsModelDocumentationIndex(sources: readonly AwsOfficialMod
     throw new AwsModelDocumentationError('bounds', `AWS model inventory exceeds ${MAX_SERVICES} services.`)
   }
   const services = uniqueBy(sources.map((source, sourceIndex) => {
-    const serviceId = identifier(source.serviceId, `sources[${sourceIndex}].serviceId`)
-    const cliName = cliToken(source.cliName, `sources[${sourceIndex}].cliName`)
-    const modelVersion = identifier(source.modelVersion, `sources[${sourceIndex}].modelVersion`)
-    const serviceModel = record(source.serviceModel, `sources[${sourceIndex}].serviceModel`)
+    const sourceRecord = record(source, `sources[${sourceIndex}]`)
+    const serviceId = identifier(sourceRecord.serviceId, `sources[${sourceIndex}].serviceId`)
+    const cliName = cliToken(sourceRecord.cliName, `sources[${sourceIndex}].cliName`)
+    const modelVersion = identifier(sourceRecord.modelVersion, `sources[${sourceIndex}].modelVersion`)
+    const serviceModel = record(sourceRecord.serviceModel, `sources[${sourceIndex}].serviceModel`)
     const metadata = optionalRecord(serviceModel.metadata, `service ${serviceId}.metadata`)
     const operationRows = entries(serviceModel.operations, `service ${serviceId}.operations`, MAX_OPERATIONS_PER_SERVICE)
     const shapeRows = entries(serviceModel.shapes, `service ${serviceId}.shapes`, MAX_SHAPES_PER_SERVICE)
     const shapes = new Map(shapeRows)
     const shapeDocs = shapeRows.map(([name, shape]) => buildShapeDocumentation(name, shape))
     const shapeDocsByName = new Map(shapeDocs.map((shape) => [shape.name, shape]))
-    const paginatorModel = optionalRecord(source.paginatorModel, `service ${serviceId}.paginatorModel`)
-    const waiterModel = optionalRecord(source.waiterModel, `service ${serviceId}.waiterModel`)
+    const paginatorModel = optionalRecord(sourceRecord.paginatorModel, `service ${serviceId}.paginatorModel`)
+    const waiterModel = optionalRecord(sourceRecord.waiterModel, `service ${serviceId}.waiterModel`)
     const documentationUrl = `https://docs.aws.amazon.com/cli/latest/reference/${encodeURIComponent(cliName)}/index.html`
     const commands = uniqueBy(operationRows.map(([apiName, operation]) => {
       const name = kebab(apiName)
@@ -584,7 +601,7 @@ export function buildAwsModelDocumentationIndex(sources: readonly AwsOfficialMod
       id: serviceId,
       cliName,
       modelVersion,
-      displayName: text(metadata.serviceFullName, `service ${serviceId}.metadata.serviceFullName`, serviceId),
+      displayName: identifier(metadata.serviceFullName ?? serviceId, `service ${serviceId}.metadata.serviceFullName`),
       documentation: documentation(serviceModel.documentation, `service ${serviceId}.documentation`),
       documentationUrl,
       apiReferenceUrl: officialDocsUrl(source.apiReferenceUrl, `service ${serviceId}.apiReferenceUrl`),
@@ -592,11 +609,12 @@ export function buildAwsModelDocumentationIndex(sources: readonly AwsOfficialMod
       shapes: shapeDocs
     }
   }), (service) => service.id, 'AWS service inventory')
-    .sort((left, right) => left.displayName.localeCompare(right.displayName) || left.id.localeCompare(right.id))
-  for (const service of services) service.commands.sort((left, right) => left.name.localeCompare(right.name))
-  const rows = services.flatMap(serviceRows)
+  const servicesByCliName = uniqueBy(services, (service) => service.cliName, 'AWS CLI service inventory')
+  servicesByCliName.sort((left, right) => left.displayName.localeCompare(right.displayName) || left.id.localeCompare(right.id))
+  for (const service of servicesByCliName) service.commands.sort((left, right) => left.name.localeCompare(right.name))
+  const rows = servicesByCliName.flatMap(serviceRows)
   uniqueBy(rows, (row) => row.id, 'AWS documentation rows')
-  return { source: 'official-aws-cli-models', services, rows }
+  return { source: 'official-aws-cli-models', services: servicesByCliName, rows }
 }
 
 function regex(query: string, flags: string): RegExp {
