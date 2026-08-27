@@ -1114,6 +1114,7 @@ const api: NodeTerminalApi = {
   nodeDependencies: {
     catalog: () => ipcRenderer.invoke(IPC.nodeDependencyCatalog),
     status: (id) => ipcRenderer.invoke(IPC.nodeDependencyStatus, id),
+    details: (id) => ipcRenderer.invoke(IPC.nodeDependencyDetails, id),
     install: (id) => ipcRenderer.invoke(IPC.nodeDependencyInstall, id) as Promise<NodeDependencyInstallResult>,
     cancel: (operationId) => ipcRenderer.invoke(IPC.nodeDependencyCancel, operationId),
     repair: (id) => ipcRenderer.invoke(IPC.nodeDependencyRepair, id) as Promise<NodeDependencyInstallResult>,

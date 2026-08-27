@@ -1,5 +1,42 @@
 # Handoff
 
+## 2026-08-27, bundled AWS CLI v2 lane, issue #41
+
+Issue #41 is implemented on `feat/program-30-bundled-aws-cli`, reconciled with
+`origin/main` at `12055e96d66c7e4cfdb143295b78ed20d68fd97e`, and dewed at
+`d60a25fa0f8d4665cc3e898c531cb4440ea72d9b` plus the reconciliation commit recorded below.
+The lane keeps AWS CLI v2 `2.36.32` in the immutable dependency manifest and stages the official
+Windows x64 MSI through `scripts/ensure-aws-cli-resources.mjs`. The resource path checks the
+download size, rejects redirects, verifies SHA-256, and uses a unique staged file before packaging.
+
+The host-owned dependency service checks the packaged resource first, then a verified local cache,
+then the canonical HTTPS source. It extracts the MSI through `msiexec.exe /a` into application-local
+storage, records archive provenance, requires the pinned `aws-cli/2.36.32` version prefix, and
+returns parsed version details. The `nodeDependencyDetails` IPC route also inventories the installed
+`awscli/botocore/data` tree by service and model version, with bounded service and file traversal
+and an incomplete state for missing, empty, or truncated model data. Desktop preload, renderer
+stubs, and Server Edition WebSocket bridges expose the same typed route.
+
+Direct fetch evidence: the official URL returned HTTP 200, a 49,405,952-byte MSI, and SHA-256
+`bc695531b7fd83490e02741777dfda109cfab7fd9bef85fa1d5db21684cbaee2`, matching
+`dependencies.manifest.json`.
+
+Direct documentation is in `docs/features/dependencies/aws-cli-v2.md`, indexed from the dependency
+category. `src/shared/docs-data.ts` contains both the category link and bundled article. The roadmap
+item remains unticked because the full implementation lane has no test, build, package, installer,
+runtime, or UI evidence yet. A bundled-doc generator invocation was attempted but could not start
+because this isolated checkout has no `esbuild` installation; the generated entries were reconciled
+manually and matched the checked-in Markdown bodies.
+
+The reconciliation commit merged `origin/main` non-destructively and kept main's current package
+version, engine range, scripts, package dependencies, and unsigned Squirrel settings. `package.json`
+contains exactly one AWS preparation script and one AWS packaged-resource entry. `package-lock.json`,
+the dependency manifest, installer, IPC, bridge, and shared-type changes from main are retained.
+
+No tests, type checks, lint, reviews, security or accessibility checks, builds, packaging, installer
+execution, runtime interaction, or HuiShots were run, per the issue's explicit ultra-speed boundary.
+The feature jer was not integrated into main and no cleanup was performed in this lane.
+
 ## 2026-08-27, Express File Converter completion, issue #21
 
 The implementation lane is `feat/program-10-file-converter`, refreshed by fast-forward before edits

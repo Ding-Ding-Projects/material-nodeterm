@@ -728,6 +728,7 @@ export const IPC = {
   // readiness metadata and never writes them into projects.
   nodeDependencyCatalog: 'node-dependency:catalog',
   nodeDependencyStatus: 'node-dependency:status',
+  nodeDependencyDetails: 'node-dependency:details',
   nodeDependencyInstall: 'node-dependency:install',
   nodeDependencyCancel: 'node-dependency:cancel',
   nodeDependencyRepair: 'node-dependency:repair',

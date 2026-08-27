@@ -272,7 +272,11 @@ intentionally unchecked because this task publishes the plan only.
       portable intent are present; live navigator wiring remains pending.
 - [x] Add the top-down recovery game with three energy keys, hazards, core activation, and portable state. Source implementation is complete; built-artifact verification remains for integration.
 - [ ] Add unlimited AWS Universes with AWS-only scope and AWS Shop nodes.
-- [ ] Bundle AWS CLI v2 and maintain verified model and documentation indexing.
+- [ ] Bundle AWS CLI v2 and maintain verified model and documentation indexing. The pinned MSI,
+      verified fallback, version details route, bounded installed-model inventory, feature article,
+      and offline documentation entry are present on the issue #41 jer. Tests, builds, packaging,
+      installer execution, runtime interaction, and HuiShots remain pending, so this item stays
+      unticked.
 - [ ] Generate interactive wizard forms for every AWS service, command, option, paginator, waiter,
       skeleton, input, and output described by the installed CLI models.
 - [ ] Add AWS identity, SSO, role, MFA, Resource Explorer, Cloud Control, S3, EC2, IAM, STS,

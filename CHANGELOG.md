@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add the bundled AWS CLI v2 dependency lane. Windows packaging now stages the pinned official
+  `2.36.32` MSI, verifies its SHA-256, falls back through a verified local cache or canonical
+  HTTPS download, extracts it into application-local storage, exposes the installed version, and
+  inventories the installed service models through typed desktop and Server Edition bridges. The
+  implementation and documentation lane intentionally did not run tests, type checks, lint,
+  reviews, security or accessibility checks, builds, packaging, installer execution, runtime
+  interaction, or UI captures.
+
 - Complete the Express File Converter flow with queue-wide collision-safe destination names,
   visible rename disclosure, final atomic no-clobber publication, and a completed-output action that
   opens the exact result in Visual Studio Code through the active project API. The converter queue
