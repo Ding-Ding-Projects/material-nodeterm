@@ -1513,7 +1513,7 @@ export class WorkspaceStore {
   }
 
   /**
-   * Every persisted canvas as {id, nodes, bridges} — the raw material the Server Edition derives
+   * Every persisted canvas as {id, nodes, links} — the raw material the Server Edition derives
    * its context-link map from (src/server/context-link.ts). Same three-entry-kind scan as
    * `getNode`, but whole projects rather than one node, because a link edge only means anything
    * alongside the nodes it joins.
