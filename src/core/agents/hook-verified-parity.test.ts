@@ -138,8 +138,7 @@ describe('both shells register a 4-arg raw listener', () => {
   const shells = ['src/main/index.ts', 'src/server/agent-status.ts']
 
   /** Source with comments removed — a comment that mentions `meta.verified` (both shells have one,
-   *  saying why they do NOT read it) is documentation, not a branch. */
-   *  saying why they do NOT read it) is documentation, not a branch.
+   * saying why they do NOT read it) is documentation, not a branch.
    *
    *  KNOWN BLIND SPOT, deliberately not fixed with a hand-rolled lexer: this also truncates at a
    *  `//` inside a string literal, so a real branch sharing a line with a URL would be invisible.

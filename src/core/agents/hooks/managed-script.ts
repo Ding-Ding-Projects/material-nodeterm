@@ -120,29 +120,6 @@ export const MIN_TOKEN_AWARE_REVISION = 3
  * on purpose — rev 3 CAN read a token, which is the only question `MIN_TOKEN_AWARE_REVISION`
  * answers; calling it stale would tell a working session to reconnect for nothing. */
 
-/**
- * Bumped by hand whenever this script's CONTRACT with the server changes. Not a git sha and not a
- * date: the server COMPARES it (`>= MIN_TOKEN_AWARE_REVISION`), and a sha does not order.
- *
- * WHY THIS EXISTS AT ALL. Before it, an old script and a current script whose token file happened to
- * be missing were byte-identical on the wire: both POST `version=2` (that field is sourced from the
- * ENDPOINT FILE, so it reports the server's protocol version, never the client's) and neither sends
- * an X-Nodeterm-Node-Token header. The server therefore could not distinguish "this session cannot
- * read a token" from "there is no token to read" — and those need OPPOSITE advice. Messaging's gate
- * 2 would have told an SSH-only host's session to retry after its next turn, forever.
- *
- * Two stale windows this makes visible, and they are ONE mechanism:
- *   - LOCAL: none in practice. install-helper.ts rewrites the script unconditionally at every boot
- *     of both shells, so a host running nodeterm is current as of its last start.
- *   - REMOTE: real. remote-hooks.ts writes it only inside RemoteHooks.setup(), which runs on
- *     CONNECT. An already-connected project keeps the script it was given, so its remote nodes —
- *     and any session the PHONE spawns on that host, which runs the host's installed script — stay
- *     `legacy` until the project reconnects.
- */
-export const MANAGED_SCRIPT_REVISION = 3
-/** The first revision that reads NODETERM_NODE_TOKEN_DIR and sends the node token (PR #195). */
-export const MIN_TOKEN_AWARE_REVISION = 3
-
 function defaultIdentityResolver(): string {
   try {
     return codexThreadIdentityResolverSh(codexThreadIdentityRoot())
@@ -162,32 +139,6 @@ export function buildManagedScript(
         ? codexThreadIdentityResolverSh(identityRoot)
         : defaultIdentityResolver()
   return [
-    '#!/bin/sh',
-    ...(identityResolver ? [identityResolver] : []),
-    'if [ -n "$NODETERM_HOOK_ENDPOINT" ] && [ -r "$NODETERM_HOOK_ENDPOINT" ]; then',
-    '  . "$NODETERM_HOOK_ENDPOINT" 2>/dev/null || :',
-    'fi',
-    '# THIS SCRIPT\'s revision, stamped on every POST (X-Nodeterm-Hook-Client) so the server can tell',
-    '# a session running a pre-identity script from one whose token file is merely missing — they',
-    '# used to be byte-identical on the wire, because the `version` field below comes from the',
-    '# ENDPOINT FILE and therefore reports the SERVER\'s protocol version, never the client\'s.',
-    '# Deliberately set HERE, outside nt_pick_fallback\'s clearing block: sock/port/token-dir belong',
-    '# to whichever endpoint we adopt, but the revision is a property of this file on this disk.',
-    `nt_client_rev=${MANAGED_SCRIPT_REVISION}`,
-    '# The PER-NODE capability. The endpoint file (v2) advertises the directory; the token itself is',
-    '# one file in it named for THIS node id — a lookup by name, never a scan, so a session can only',
-    '# ever present its own. Absent (pre-v2 endpoint, pre-upgrade session, remote write that failed)',
-    '# leaves it EMPTY, and an empty header is exactly what the server reads as `legacy`: the POST',
-    '# still happens and nothing about it fails. Kept in a function because the failover below has to',
-    '# RE-read it against the dir of the endpoint it adopted.',
-    'nt_read_node_token() {',
-    '  nt_node_token=""',
-    '  if [ -n "$NODETERM_NODE_TOKEN_DIR" ] && [ -n "$NODETERM_NODE_ID" ]; then',
-    '    nt_node_token=$(head -n 1 "$NODETERM_NODE_TOKEN_DIR/$NODETERM_NODE_ID" 2>/dev/null)',
-    '  fi',
-    '}',
-    'nt_read_node_token',
-    HOOK_CURL_HEADERS_SH,
     ...(identityRoot ? [codexThreadIdentityResolverSh(identityRoot)] : []),
     '# GATE FIRST, and drain stdin before bailing (issues #186/#187). Order is load-bearing twice:',
     '#  - The codex thread-identity prelude above may DERIVE the node id (and endpoint) from its',
