@@ -421,6 +421,24 @@ validation, UID deduplication, TZID validation, and source-identity-aware durabl
 Import runs through the core service rather than saving a renderer-only cache. The node now uses the
 shared anchored regex builder for event, source, and timezone searches, real period navigation and
 tabpanel ARIA wiring, event selection/export, and local undo. No verification commands were run.
+## 2026-08-26, Alarm Clock node lane
+
+Implemented the Alarm Clock canvas node and shared durable planner primitives for one-shot, daily,
+weekday, weekly, and monthly wall-clock schedules. `src/shared/alarm-clock.ts` resolves IANA
+timezones with deterministic daylight-saving gap and fold handling, bounded occurrence history,
+snooze, dismiss, missed-occurrence classification, and persistence hooks. The node stores only safe
+schedule intent and redacted occurrence metadata in the project projection, exposes guided date,
+time, timezone, recurrence, weekday, monthly-day, sound, narrator, snooze, history search, and
+anchored regex controls, and visibly states that it cannot wake a powered-off computer. Due events
+use the existing non-blocking notification store, sound effect, and serialized narrator queue.
+
+Updated `src/shared/types.ts`, `src/renderer/state/workspace.ts`,
+`src/renderer/canvas/Canvas.tsx`, `src/renderer/components/FabMenu.tsx`,
+`src/core/portable-canvas-projection.ts`, both renderer style sheets,
+`docs/alarm-clock.md`, `docs/features/projects/README.md`, `ROADMAP.md`, and `CHANGELOG.md`.
+This ultra-speed lane intentionally did not run tests, type checks, lint, reviews, security checks,
+accessibility checks, builds, packaging, installer execution, runtime interaction, or captures. No
+commit or dew was made by this lane.
 
 ## 2026-08-26, portable canvas projection implementation
 

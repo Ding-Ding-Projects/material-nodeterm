@@ -113,6 +113,7 @@ import GalleryNode from '../nodes/GalleryNode'
 import WebNode from '../nodes/WebNode'
 import { NativeLoopNode, setNativeLoopRunHandler } from '../nodes/NativeLoopNode'
 import TimerNode from '../nodes/TimerNode'
+import AlarmClockNode from '../nodes/AlarmClockNode'
 import {
   loopMessageId,
   loopRunDue,
@@ -593,6 +594,7 @@ import {
   createGroupNode,
   createNativeLoopNode,
   createTimerNode,
+  createAlarmClockNode,
   WORKTREE_GROUP_SIZE,
   createSshTerminalNode,
   createAuthenticatorNode,
@@ -1840,6 +1842,7 @@ export function Canvas() {
       loop: withNodeBoundary(LoopNode),
       scheduler: withNodeBoundary(NativeLoopNode),
       timer: withNodeBoundary(TimerNode),
+      alarm: withNodeBoundary(AlarmClockNode),
       dino: withNodeBoundary(DinoNode),
       photo: withNodeBoundary(PhotoNode),
       gallery: withNodeBoundary(GalleryNode),
@@ -4733,6 +4736,17 @@ export function Canvas() {
     (center?: { x: number; y: number }, groupId?: string) => {
       setNodes((ns) => {
         const node = createTimerNode(ns.length, center ?? emptyNodePos())
+        return [...ns, groupId ? parentInto(node, groupId) : node]
+      })
+      markDirty()
+    },
+    [setNodes, markDirty, emptyNodePos, parentInto]
+  )
+
+  const addAlarmClock = useCallback(
+    (center?: { x: number; y: number }, groupId?: string) => {
+      setNodes((ns) => {
+        const node = createAlarmClockNode(ns.length, center ?? emptyNodePos())
         return [...ns, groupId ? parentInto(node, groupId) : node]
       })
       markDirty()
@@ -9069,6 +9083,11 @@ export function Canvas() {
           onClick: () => addNativeLoop(at, groupId)
         },
         {
+          label: 'New Alarm Clock',
+          icon: <IconBellFilled />,
+          onClick: () => addAlarmClock(at, groupId)
+        },
+        {
           label: 'New authenticator',
           icon: <IconLock />,
           onClick: () => addAuthenticator(at, groupId)
@@ -9141,6 +9160,7 @@ export function Canvas() {
       addAuthenticator,
       addNativeLoop,
       addTimer,
+      addAlarmClock,
       addToExistingGroup,
       groupSelection
     ]
@@ -9267,6 +9287,16 @@ export function Canvas() {
               icon: <IconReload />,
               onClick: () => addNativeLoop(at)
             },
+        {
+          label: 'New Loop',
+          icon: <IconReload />,
+          onClick: () => addNativeLoop(at)
+        },
+        {
+          label: 'New Alarm Clock',
+          icon: <IconBellFilled />,
+          onClick: () => addAlarmClock(at)
+        },
             {
               label: 'New authenticator',
               icon: <IconLock />,
@@ -9408,6 +9438,7 @@ export function Canvas() {
       addTorrent,
       addNativeLoop,
       addTimer,
+      addAlarmClock,
       addDino,
       addBrowser,
       openFileDialog,
@@ -13464,6 +13495,11 @@ export function Canvas() {
             label: 'New timer',
             icon: <span aria-hidden="true">◷</span>,
             run: () => addTimer()
+            id: 'new-alarm-clock',
+            label: 'New Alarm Clock',
+            hint: 'one shot recurring timezone snooze dismiss missed history powered off',
+            icon: <IconBellFilled />,
+            run: () => addAlarmClock()
           },
           {
             id: 'new-authenticator',
@@ -13869,6 +13905,7 @@ export function Canvas() {
     addTorrent,
     addNativeLoop,
     addTimer,
+    addAlarmClock,
     addDino,
     addWebView,
     addBrowser,
@@ -14456,6 +14493,7 @@ export function Canvas() {
             onAddAuthenticator={() => addAuthenticator()}
             onAddLoop={addNativeLoop}
             onAddTimer={() => addTimer()}
+            onAddAlarmClock={addAlarmClock}
             onAddDino={addDino}
             onAddAgent={(aid, accountId) => addAgentNode(aid, undefined, undefined, accountId)}
             onOpenFile={() => void openFileDialog()}

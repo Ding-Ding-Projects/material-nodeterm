@@ -615,6 +615,26 @@ const FEATURES = [
     docs: ['docs/features/integrations/service-nodes.md'],
   },
   {
+    id: 'alarm-clock-nodes',
+    label: 'Alarm Clock nodes and durable occurrence planner',
+    files: [
+      'src/shared/alarm-clock.ts',
+      'src/core/alarm-planner.ts',
+      'src/renderer/nodes/AlarmClockNode.tsx',
+      'src/renderer/state/workspace.ts',
+      'src/shared/types.ts'
+    ],
+    contentChecks: [
+      ['src/shared/alarm-clock.ts', 'export class DurableAlarmPlanner'],
+      ['src/shared/alarm-clock.ts', 'export function nextAlarmOccurrence('],
+      ['src/core/alarm-planner.ts', 'export class FileAlarmPlannerStore'],
+      ['src/renderer/nodes/AlarmClockNode.tsx', 'export default function AlarmClockNode('],
+      ['src/renderer/canvas/Canvas.tsx', "alarm: withNodeBoundary(AlarmClockNode)"],
+      ['src/renderer/canvas/Canvas.tsx', "label: 'New Alarm Clock'"],
+    ],
+    docs: ['docs/alarm-clock.md'],
+  },
+  {
     id: 'agent-support',
     label: 'Agent support (Claude / Codex / Gemini / opencode / Grok / custom)',
     files: ['src/shared/agents/config.ts'],

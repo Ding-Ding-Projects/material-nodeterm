@@ -97,6 +97,10 @@
   create/edit previews, and destructive delete confirmation. Provider credentials stay behind the
   trusted shell's vault boundary. This ultra-speed lane deliberately ran no tests, type checks,
   builds, packaging, runtime interaction, or captures.
+- Add Alarm Clock canvas nodes with one-shot and recurring wall-clock schedules, explicit IANA
+  timezones, daylight-saving-safe occurrence planning, snooze, dismiss, missed history, sound and
+  narrator integration, and an honest no-powered-off-wake notice. Verification is intentionally
+  pending in the ultra-speed lane.
 
 - Add a deterministic schema 3 portable canvas projection for root and future universe scopes,
   preserving safe canvas presentation and relationships while rejecting machine-local and

@@ -224,6 +224,8 @@ intentionally unchecked because this task publishes the plan only.
 - [ ] Add Timer, Alarm Clock, and planner occurrence services.
 - [x] Add Timer nodes and persistent planner occurrence service. Calendar and Alarm Clock remain
   separate follow-up surfaces.
+- [ ] Add Calendar and Timer occurrence services.
+- [x] Add Alarm Clock nodes and planner occurrence history with timezone and DST-safe recurrence.
 
 ### Multiverse and AWS
 
