@@ -201,7 +201,7 @@ export default function AuthenticatorNode({ id, data, selected }: NodeProps<Canv
   )
 
   return (
-    <div className={`term-node authenticator-node${selected ? ' selected' : ''}`} style={{ borderTopColor: data.color }}>
+    <div className={`term-node authenticator-node${selected ? ' selected' : ''}`} data-easter-surface="authenticator" style={{ borderTopColor: data.color }}>
       <NodeResizer minWidth={260} minHeight={160} isVisible={selected} color={data.color} />
       <div
         className={`term-node__header ${headerFill.className}${headerFill.filled ? ' term-node__header--filled' : ''}`}

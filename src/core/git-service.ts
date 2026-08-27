@@ -218,6 +218,8 @@ const REMOTE_WORKTREE_REFUSAL = (): worktreeOps.WorktreeOpResult => ({
 
 const NESTED_REPOSITORY_MAX_DEPTH = 3
 const NESTED_REPOSITORY_MAX_DIRECTORIES = 512
+const NESTED_REPOSITORY_DEFAULT_PAGE_SIZE = 64
+const NESTED_REPOSITORY_MAX_PAGE_SIZE = 128
 const NESTED_REPOSITORY_BLOCKLIST = new Set([
   '.git',
   '.nodeterm',
@@ -230,9 +232,34 @@ const NESTED_REPOSITORY_BLOCKLIST = new Set([
 ])
 
 function sameLocalPath(left: string, right: string): boolean {
-  const a = path.resolve(left).replace(/[\\/]$/, '')
-  const b = path.resolve(right).replace(/[\\/]$/, '')
+  const normalize = (value: string): string => {
+    const resolved = path.resolve(value)
+    const root = path.parse(resolved).root
+    return resolved.length > root.length ? resolved.replace(/[\\/]$/, '') : resolved
+  }
+  const a = normalize(left)
+  const b = normalize(right)
   return process.platform === 'win32' ? a.toLocaleLowerCase('en-US') === b.toLocaleLowerCase('en-US') : a === b
+}
+
+async function safeNestedDirectory(
+  root: string,
+  parent: string,
+  name: string
+): Promise<'directory' | 'skip' | 'error'> {
+  const candidate = path.join(parent, name)
+  const relative = path.relative(root, candidate)
+  if (!relative || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) return 'skip'
+  try {
+    const stat = await fs.promises.lstat(candidate)
+    if (!stat.isDirectory() || stat.isSymbolicLink()) return 'skip'
+    // Junctions and other reparse points may not report as symbolic links through every Windows
+    // filesystem provider. Inspect first, then compare realpath, so traversal never follows one.
+    const real = await fs.promises.realpath(candidate)
+    return sameLocalPath(real, candidate) ? 'directory' : 'skip'
+  } catch {
+    return 'error'
+  }
 }
 
 function parseRepoName(url: string, fallback: string): string {
@@ -390,28 +417,53 @@ export class GitService {
    * it follows real directories only, skips generated/dependency trees, verifies every `.git`
    * marker with Git, and never treats a failed read as an empty successful scan.
    */
-  async discoverNestedRepos(cwd: string): Promise<import('../shared/types').GitNestedRepositoryDiscovery> {
-    if (!cwd) return { ok: false, repositories: [], message: 'A project folder is required.' }
+  async discoverNestedRepos(
+    cwd: string,
+    options: import('../shared/types').GitNestedRepositoryDiscoveryOptions = {}
+  ): Promise<import('../shared/types').GitNestedRepositoryDiscovery> {
+    const empty = {
+      repositories: [],
+      scannedDirectories: 0,
+      limited: false,
+      nextCursor: null
+    }
+    if (!cwd) return { ...empty, ok: false, message: 'A project folder is required.' }
     if (isRemoteRepo(cwd)) {
       return {
+        ...empty,
         ok: false,
-        repositories: [],
         message: 'Nested repository discovery is unavailable for SSH projects.'
       }
     }
     const root = path.resolve(cwd)
     try {
       const stat = await fs.promises.stat(root)
-      if (!stat.isDirectory()) return { ok: false, repositories: [], message: 'The project folder is not a directory.' }
+      if (!stat.isDirectory()) return { ...empty, ok: false, message: 'The project folder is not a directory.' }
     } catch {
-      return { ok: false, repositories: [], message: 'The project folder could not be read.' }
+      return { ...empty, ok: false, message: 'The project folder could not be read.' }
+    }
+
+    const rawLimit = Number(options.limit)
+    const limit = Number.isFinite(rawLimit)
+      ? Math.min(NESTED_REPOSITORY_MAX_PAGE_SIZE, Math.max(1, Math.floor(rawLimit)))
+      : NESTED_REPOSITORY_DEFAULT_PAGE_SIZE
+    const rawCursor = options.cursor == null || options.cursor === '' ? '0' : options.cursor
+    if (!/^\d+$/.test(rawCursor)) {
+      return { ...empty, ok: false, message: 'The nested repository page cursor is invalid.' }
+    }
+    const offset = Number(rawCursor)
+    if (!Number.isSafeInteger(offset)) {
+      return { ...empty, ok: false, message: 'The nested repository page cursor is out of range.' }
     }
 
     const queue: Array<{ directory: string; depth: number }> = [{ directory: root, depth: 0 }]
     const repositories: import('../shared/types').GitNestedRepository[] = []
     let readable = true
-    while (queue.length > 0 && queue.length + repositories.length <= NESTED_REPOSITORY_MAX_DIRECTORIES) {
+    let scannedDirectories = 0
+    let limited = false
+    while (queue.length > 0 && scannedDirectories < NESTED_REPOSITORY_MAX_DIRECTORIES) {
       const current = queue.shift() as { directory: string; depth: number }
+      scannedDirectories += 1
       let entries: import('fs').Dirent[]
       try {
         entries = await fs.promises.readdir(current.directory, { withFileTypes: true })
@@ -440,20 +492,52 @@ export class GitService {
       if (current.depth >= NESTED_REPOSITORY_MAX_DEPTH) continue
       for (const entry of entries) {
         if (!entry.isDirectory() || entry.isSymbolicLink() || NESTED_REPOSITORY_BLOCKLIST.has(entry.name)) continue
+        const safety = await safeNestedDirectory(root, current.directory, entry.name)
+        if (safety === 'error') {
+          readable = false
+          continue
+        }
+        if (safety === 'skip') continue
         queue.push({ directory: path.join(current.directory, entry.name), depth: current.depth + 1 })
-        if (queue.length + repositories.length >= NESTED_REPOSITORY_MAX_DIRECTORIES) break
+        if (queue.length + scannedDirectories >= NESTED_REPOSITORY_MAX_DIRECTORIES) {
+          limited = true
+          break
+        }
       }
     }
 
+    if (queue.length > 0) limited = true
     repositories.sort((a, b) => a.relativePath.localeCompare(b.relativePath))
+    if (offset > repositories.length) {
+      return {
+        repositories: [],
+        scannedDirectories,
+        limited,
+        nextCursor: null,
+        ok: false,
+        message: 'The nested repository page cursor is out of range.'
+      }
+    }
+    const page = repositories.slice(offset, offset + limit)
+    const nextCursor = offset + page.length < repositories.length ? String(offset + page.length) : null
     if (!readable) {
       return {
         ok: false,
-        repositories,
+        repositories: page,
+        scannedDirectories,
+        limited,
+        nextCursor,
         message: `Nested repository discovery could not read every folder within ${NESTED_REPOSITORY_MAX_DEPTH} levels.`
       }
     }
-    return { ok: true, repositories }
+    return {
+      ok: true,
+      repositories: page,
+      scannedDirectories,
+      limited,
+      nextCursor,
+      message: limited ? `Nested repository discovery stopped at its ${NESTED_REPOSITORY_MAX_DIRECTORIES}-directory safety limit.` : undefined
+    }
   }
   worktreeList(repoPath: string): Promise<WorktreeListResult> {
     // A repo on an SSH host cannot be stat'd from here (see `isRemoteRepo`): answer "the read

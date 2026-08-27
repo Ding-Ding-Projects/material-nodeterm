@@ -3,6 +3,7 @@
 // offset-based read + shared-interval pattern of subagent-tail.ts. Pushed to the renderer
 // as ContextWindowUsage keyed by sessionId.
 import fs from 'fs'
+import { randomUUID } from 'crypto'
 import type { ContextWindowUsage } from '../shared/types'
 import { cachedWindowFor, resolveModelWindow } from './model-window'
 import { splitCompleteLines } from './subagent-tail'
@@ -46,8 +47,9 @@ export function parseLatestUsage(
     }
     if (o.type !== 'assistant' || !o.message?.usage) continue
     const u = o.message.usage
-    const used =
-      (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0)
+    const parts = [u.input_tokens ?? 0, u.cache_read_input_tokens ?? 0, u.cache_creation_input_tokens ?? 0]
+    if (parts.some((value) => typeof value !== 'number' || !Number.isFinite(value) || value < 0)) continue
+    const used = parts[0] + parts[1] + parts[2]
     if (used <= 0) continue
     if (!found) {
       found = true
@@ -139,6 +141,10 @@ export function hasToolResult(text: string | string[]): boolean {
 }
 
 export interface ContextTailOptions {
+  /** Provider id for the telemetry record. */
+  provider?: string
+  /** Stable local/remote scope used to prevent same-session cross-host mixing. */
+  sourceKey?: string
   /** Fired when a tracked session's transcript announces a completed async subagent. */
   onTaskNotification?: (sessionId: string, n: TaskNotification) => void
   /** Fired when a tracked session's transcript records a tool RESULT — see `hasToolResult`. */
@@ -183,6 +189,7 @@ interface Tracked {
    * usage in it leaves the last known window alone.
    */
   parsedWindow: number | null
+  generation: number
 }
 
 export interface ContextTail {
@@ -201,18 +208,29 @@ export function createContextTail(
   // A custom parser also OWNS the window (see the window reconcile in `read`), so keep the
   // "is this claude's tail?" question to one place.
   const customParse = opts?.parse
+  const provider = opts?.provider ?? 'claude'
+  const sourceKey = opts?.sourceKey ?? `${provider}:local`
+  const sourceEpoch = randomUUID()
   // Typed as the OPTION so claude's `parseLatestUsage` (which returns no `window` at all) satisfies
   // it as the default — its `window` is simply always absent, which reads as "not stated".
   const parse: NonNullable<ContextTailOptions['parse']> = customParse ?? parseLatestUsage
 
   const push = (sessionId: string, t: Tracked): void => {
-    const usedPercent = Math.min(100, Math.max(0, (t.used / t.window) * 100))
+    const usedPercent =
+      Number.isFinite(t.used) && Number.isFinite(t.window) && t.used >= 0 && t.window > 0
+        ? Math.min(100, Math.max(0, (t.used / t.window) * 100))
+        : null
     const payload: ContextWindowUsage = {
       sessionId,
-      usedTokens: t.used,
-      windowTokens: t.window,
+      provider,
+      sourceKey,
+      usedTokens: Number.isFinite(t.used) && t.used >= 0 ? t.used : null,
+      windowTokens: Number.isFinite(t.window) && t.window > 0 ? t.window : null,
       usedPercent,
+      status: usedPercent === null ? 'unknown' : 'known',
       model: t.model,
+      generation: ++t.generation,
+      sourceEpoch,
       updatedAt: Date.now()
     }
     send(payload)
@@ -345,7 +363,8 @@ export function createContextTail(
         lastWindow: 0,
         reading: false,
         carry: null,
-        parsedWindow: null
+        parsedWindow: null,
+        generation: 0
       }
       sessions.set(sessionId, t)
       void read(sessionId, t) // immediate first value (resumed sessions already have content)

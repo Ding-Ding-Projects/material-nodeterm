@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useSettings } from '../../../state/settings'
 import { useScheduledSettings } from '../../../state/scheduledSettings'
 import { DEFAULT_SETTINGS } from '@shared/types'
+import { FUNNY_LEVEL_MAX, FUNNY_LEVEL_MIN } from '@shared/i18n'
 import {
   newScheduleRule,
   validateScheduleWindow,
@@ -578,6 +579,36 @@ const VALUE_FIELDS: {
         <option value="off">Off</option>
         <option value="shared">Shared</option>
       </Select>
+    )
+  },
+  {
+    key: 'funnyLevelEn',
+    label: 'English funny level',
+    render: (v, onChange) => (
+      <Input
+        type="number"
+        min={FUNNY_LEVEL_MIN}
+        max={FUNNY_LEVEL_MAX}
+        step={1}
+        className="w-20"
+        value={(v as number) ?? DEFAULT_SETTINGS.funnyLevelEn}
+        onChange={(e) => onChange(Number(e.target.value))}
+      />
+    )
+  },
+  {
+    key: 'funnyLevelYue',
+    label: 'Cantonese funny level',
+    render: (v, onChange) => (
+      <Input
+        type="number"
+        min={FUNNY_LEVEL_MIN}
+        max={FUNNY_LEVEL_MAX}
+        step={1}
+        className="w-20"
+        value={(v as number) ?? DEFAULT_SETTINGS.funnyLevelYue}
+        onChange={(e) => onChange(Number(e.target.value))}
+      />
     )
   }
 ]

@@ -25,10 +25,15 @@ with their project-relative path, so `frontend/` and `backend/` can be managed w
 second nodeterm project. A normal checkout can expose the same child scopes alongside its main
 checkout and bound worktrees.
 
-The scan is capped at 512 directories and reports a partial-read failure separately from an empty
-result. SSH projects keep the existing remote limitation because a local filesystem scan cannot
-prove anything about the remote host. A retry action is available when the scan cannot read every
-folder; no repository is initialized automatically.
+The scan is capped at 512 directories and returns bounded pages of at most 128 results through an
+opaque cursor. The UI follows those pages up to its own eight-page display bound and keeps the
+cursor and limit explicit in the result. It inspects directory metadata before resolving a child
+path, skips symbolic links and Windows reparse-point paths, and rejects any candidate that is not
+lexically inside the configured project folder. A partial-read or safety-limit result remains
+distinct from an empty result and includes the number of directories examined. SSH projects keep
+the existing remote limitation because a local filesystem scan cannot prove anything about the
+remote host. A retry action is available when the scan cannot read every folder; no repository is
+initialized automatically.
 
 **Worktrees.** A git worktree — a second working copy of the same repository, checked out to a
 different branch — binds to a canvas **group** node. Every terminal or agent node created
