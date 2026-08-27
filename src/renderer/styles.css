@@ -6255,6 +6255,7 @@ button.group-node__setup:disabled {
   opacity: 1;
 }
 
+.group-node__drill,
 .group-node__ungroup,
 .group-node__close {
   background: var(--md-surface-dim);
@@ -6266,9 +6267,102 @@ button.group-node__setup:disabled {
   cursor: pointer;
 }
 
+.group-node__drill {
+  padding: 3px 7px;
+}
+
 .group-node__close {
   padding: 3px 8px;
   line-height: 1;
+}
+
+.drill-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.drill-breadcrumb .announce-banner__content {
+  flex: 1;
+  min-width: 0;
+}
+
+.ss-repo {
+  border-bottom: 1px solid var(--border);
+}
+
+.ss-repo__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 4px 8px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ss-repo__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ss-repo__count {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.ss-adoptable__list {
+  display: grid;
+  gap: 4px;
+  padding: 4px 8px 6px 26px;
+}
+
+.ss-adoptable {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 5px 6px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.ss-adoptable.is-disabled {
+  opacity: 0.6;
+}
+
+.ss-adoptable__branch,
+.ss-adoptable__path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ss-adoptable__branch {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--text);
+}
+
+.ss-adoptable__path {
+  flex: 1;
+}
+
+.ss-adoptable__bind {
+  flex: 0 0 auto;
+  min-height: 28px;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--md-surface-dim);
+  color: var(--text);
+  cursor: pointer;
 }
 /* "Use for new sessions" affordance + current-default chip on an account row (issue #142).
    Same chip grammar as __host above; the button reads as quiet text until hovered so the

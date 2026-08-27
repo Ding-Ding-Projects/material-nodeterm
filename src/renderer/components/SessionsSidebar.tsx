@@ -10,22 +10,27 @@ import {
   projectCollapseKey,
   projectHeadClickAction,
   projectSignalCounts,
+  repoSignalCounts,
   pruneCollapsedItems,
   sessionStateAgeLabel,
   type GroupBucket,
+  type AdoptableWorktreeRow,
+  type RepoGroup,
+  type SessionGroup,
   type SessionNodeInput,
   type SessionRowVM,
   type StatusSection
 } from '../lib/sessionList'
 import { SessionRow } from './SessionRow'
 import { ProjectGlyph } from './ProjectGlyph'
-import { IconBellFilled, IconCircleCheck, IconPin } from './icons'
+import { IconBellFilled, IconBranch, IconCircleCheck, IconPin } from './icons'
 import { useProjects } from '../state/projects'
 import { useSettings } from '../state/settings'
 import { useAgentStatus } from '../state/agentStatus'
 import { useSessionNaming } from '../state/sessionNaming'
 import { useSession } from '../session/session'
-import { ProjectGlyph } from './ProjectGlyph'
+import { useWorktrees } from '../state/worktrees'
+import type { WorktreeEntry } from '@shared/worktree'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 export interface SessionsSidebarProps {
@@ -66,6 +71,8 @@ export interface SessionsSidebarProps {
   /** Reorder a project to sit before another (null = to the end). Shared order with the
    *  tab bar: both render the projects array, so one drag updates both surfaces. */
   onReorderProject(draggedId: string, beforeId: string | null): void
+  /** Bind an unbound worktree discovered in the active repository to a new group frame. */
+  onBindWorktree?(entry: WorktreeEntry): void
   onMouseEnter?(): void
   onMouseLeave?(): void
 }
@@ -81,6 +88,8 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
   const namingById = useSessionNaming((s) => s.byId)
   // This sidebar's core api (a stable context read — the branch lookups run on the session's git).
   const { api } = useSession()
+  const repoRootByProject = useWorktrees((s) => s.repoRootByProject)
+  const orphans = useWorktrees((s) => s.orphans)
 
   const [filter, setFilter] = useState('')
   const [statusNow, setStatusNow] = useState(() => Date.now())
@@ -137,12 +146,52 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
     // local session's api is referentially stable, so adding it changes nothing today.
   }, [open, projects, branches, api])
 
+  // Resolve non-active local project roots through the existing git read seam. Worktree listing
+  // remains owned by the worktree store, while this one-shot lookup lets the sidebar group open
+  // projects that share a repository without creating another poller.
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    for (const project of projects) {
+      if (project.id === activeProjectId || project.ssh || project.id in repoRootByProject) continue
+      if (!project.cwd) {
+        useWorktrees.setState((state) => ({
+          repoRootByProject: { ...state.repoRootByProject, [project.id]: null }
+        }))
+        continue
+      }
+      api.git
+        .repoRoot(project.cwd)
+        .then((root) => {
+          if (cancelled) return
+          useWorktrees.setState((state) => ({
+            repoRootByProject: { ...state.repoRootByProject, [project.id]: root ?? null }
+          }))
+        })
+        .catch(() => {
+          if (cancelled)
+            return
+          useWorktrees.setState((state) => ({
+            repoRootByProject: { ...state.repoRootByProject, [project.id]: null }
+          }))
+        })
+    }
+    return () => {
+      cancelled = true
+    }
+  }, [open, projects, activeProjectId, repoRootByProject, api])
+
   // Gated on `open`: this component stays mounted while the sidebar is closed (the common
   // case), and the O(projects × nodes) rebuild re-ran on every agent hook event otherwise.
   const groups = useMemo(
     () =>
-      open ? buildSessionList(projects, liveActiveNodes, activeProjectId, statusById, filter) : [],
-    [open, projects, liveActiveNodes, activeProjectId, statusById, filter]
+      open
+        ? buildSessionList(projects, liveActiveNodes, activeProjectId, statusById, filter, {
+            repoRootByProject,
+            orphansByProject: orphans.length ? { [activeProjectId]: orphans } : {}
+          })
+        : [],
+    [open, projects, liveActiveNodes, activeProjectId, statusById, filter, repoRootByProject, orphans]
   )
   // Status-grouped sections (only computed in status mode — flattens all projects' sessions by
   // live agent status so attention floats to the top). Same inputs as `groups`.
@@ -163,9 +212,11 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
     return () => window.clearInterval(timer)
   }, [open, grouping])
 
-  const projectCount = (g: (typeof groups)[number]): number =>
+  const sessionGroupCount = (g: SessionGroup): number =>
     g.groups.reduce((n, b) => n + groupSessionCount(b), 0) + g.ungrouped.length
-  const total = groups.reduce((n, g) => n + projectCount(g), 0)
+  const projectCount = (repo: RepoGroup): number =>
+    repo.projects.reduce((n, project) => n + sessionGroupCount(project), 0)
+  const total = groups.reduce((n, repo) => n + projectCount(repo), 0)
 
   // Every write prunes keys that no longer address a live project/frame — settings.json is
   // forever, and a canvas churns through group ids.
@@ -227,7 +278,7 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
   // A row is both draggable and a drop target: dropping another row onto it reorders the
   // dragged session to sit immediately before this one. stopPropagation keeps the enclosing
   // group/ungrouped drop zone (which appends) from also firing.
-  const renderRow = (projectId: string, row: (typeof groups)[number]['ungrouped'][number]): JSX.Element => {
+  const renderRow = (projectId: string, row: SessionRowVM): JSX.Element => {
     const rowKey = `row:${row.id}`
     const canDrop = !!drag && drag.projectId === projectId && drag.nodeId !== row.id
     return (
@@ -454,6 +505,110 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
     </div>
   )
 
+  const renderAdoptable = (row: AdoptableWorktreeRow): JSX.Element => {
+    const detached = !row.entry.branch
+    return (
+      <div
+        key={`adoptable:${row.entry.path}`}
+        className={`ss-adoptable${detached ? ' is-disabled' : ''}`}
+        title={detached ? 'Detached HEAD' : row.entry.path}
+      >
+        <span className="ss-adoptable__branch" title={row.entry.branch ?? 'detached'}>
+          <IconBranch /> {row.entry.branch ?? 'detached'}
+        </span>
+        <span className="ss-adoptable__path">{row.entry.path}</span>
+        <button
+          type="button"
+          className="ss-adoptable__bind"
+          disabled={detached || !props.onBindWorktree}
+          title={detached ? 'Detached HEAD' : 'Bind this worktree to a new group'}
+          onClick={(event) => {
+            event.stopPropagation()
+            if (!detached) props.onBindWorktree?.(row.entry)
+          }}
+        >
+          Bind
+        </button>
+      </div>
+    )
+  }
+
+  const renderProject = (
+    group: SessionGroup,
+    showHeader: boolean,
+    adoptable: AdoptableWorktreeRow[]
+  ): JSX.Element => {
+    const collapseKey = projectCollapseKey(group.projectId)
+    const collapsed = filter
+      ? false
+      : isGroupCollapsed(collapsedItems, collapseKey, group.isActive, autoCollapse)
+    const signals = projectSignalCounts(group)
+    return (
+      <div key={group.projectId} className={`ss-group${group.isActive ? ' is-active' : ''}`}>
+        {showHeader && (
+          <div
+            className={`ss-group__head${dropClass(group.projectId, null)}`}
+            onClick={() => {
+              if (projectHeadClickAction(group.isActive) === 'switch') props.onSwitchProject(group.projectId)
+              else toggleCollapse(collapseKey, collapsed)
+            }}
+            onContextMenu={(event) => props.onProjectContextMenu(event, group.projectId)}
+            draggable
+            onDragStart={(event) => {
+              event.dataTransfer.effectAllowed = 'move'
+              setDragProj(group.projectId)
+            }}
+            onDragEnd={() => {
+              setDragProj(null)
+              setDropProj(null)
+            }}
+            {...dropProps(group.projectId, null)}
+            {...(dragProj ? projDropProps(group.projectId) : {})}
+          >
+            <button
+              type="button"
+              className="ss-group__chev"
+              title={collapsed ? vocab('Expand') : vocab('Collapse')}
+              aria-label={collapsed ? `${vocab('Expand')} ${group.projectName}` : `${vocab('Collapse')} ${group.projectName}`}
+              aria-expanded={!collapsed}
+              onClick={(event) => {
+                event.stopPropagation()
+                toggleCollapse(collapseKey, collapsed)
+              }}
+            >
+              {collapsed ? '▶' : '▼'}
+            </button>
+            <ProjectGlyph icon={group.projectIcon} color={group.projectColor} name={group.projectName} variant="monogram" className="ss-group__monogram" />
+            <span className="ss-group__name">{group.projectName}</span>
+            {branches[group.projectId] && <span className="ss-group__branch">⎇ {branches[group.projectId]}</span>}
+            {signals.attention > 0 && <span className="ss-group__sig ss-group__sig--attention"><IconBellFilled />{signals.attention}</span>}
+            {signals.unread > 0 && <span className="ss-group__sig ss-group__sig--unread"><IconCircleCheck />{signals.unread}</span>}
+            {signals.working > 0 && <span className="ss-group__sig ss-group__sig--working"><span className="ss-group__sig-spin" />{signals.working}</span>}
+            <span className="ss-group__count">{sessionGroupCount(group)}</span>
+            <button className="ss-group__add" title="Add a node to this project" onClick={(event) => {
+              event.stopPropagation()
+              props.onAddToProject(group.projectId, { clientX: event.clientX, clientY: event.clientY })
+            }}>+</button>
+          </div>
+        )}
+        {!collapsed && (
+          <>
+            {group.groups.map((bucket) => renderBucket(group.projectId, group.cwd, bucket, null))}
+            {adoptable.length > 0 && <div className="ss-adoptable__list">{adoptable.map(renderAdoptable)}</div>}
+            {group.ungrouped.length === 0 && group.groups.length === 0 && adoptable.length === 0 ? (
+              <div className="ss-group__empty">{vocab('No sessions')}</div>
+            ) : (
+              <div className={`ss-ungrouped${dropClass(group.projectId, null)}`} {...dropProps(group.projectId, null)}>
+                {group.groups.length > 0 && group.ungrouped.length > 0 && <div className="ss-ungrouped__label">{vocab('Ungrouped')}</div>}
+                {group.ungrouped.map((row) => renderRow(group.projectId, row))}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    )
+  }
+
   if (!open) return null
 
   return (
@@ -526,7 +681,6 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
         }}
       >
         {groups.length === 0 && <div className="sessions-sidebar__empty">{vocab('No sessions yet.')}</div>}
-        {groups.map((g) => {
         {groups.length === 0 && grouping !== 'status' && (
           <div className="sessions-sidebar__empty">No sessions yet.</div>
         )}
@@ -550,158 +704,36 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
             </div>
           ))
         ) : (
-          groups.map((g) => {
-          const collapseKey = projectCollapseKey(g.projectId)
-          // While filtering, never collapse — a collapsed project would hide its own matches.
-          const isCollapsed = filter
-            ? false
-            : isGroupCollapsed(collapsedItems, collapseKey, g.isActive, autoCollapse)
-          const signals = projectSignalCounts(g)
-          return (
-            <div
-              key={g.projectId}
-              className={`ss-group${g.isActive ? ' is-active' : ''}${dropProj === g.projectId ? ' is-drop-before' : ''}`}
-              // While a project drag is in flight the whole block is a REORDER target (the
-              // session drop handlers below no-op and let the events bubble up here).
-              {...(dragProj ? projDropProps(g.projectId) : {})}
-            >
-              <div
-                className={`ss-group__head${dropClass(g.projectId, null)}`}
-                // One click, one action (projectHeadClickAction documents why it is never both):
-                // an inactive project switches — through Canvas, so the outgoing project's live
-                // nodes are committed and the new active id is persisted — and the active one
-                // toggles its own collapse, so the row keeps no dead zone.
-                onClick={() => {
-                  if (projectHeadClickAction(g.isActive) === 'switch') props.onSwitchProject(g.projectId)
-                  else toggleCollapse(collapseKey, isCollapsed)
-                }}
-                onContextMenu={(e) => props.onProjectContextMenu(e, g.projectId)}
-                title={drag?.projectId === g.projectId ? vocab('Drop here to remove from group') : undefined}
-                draggable
-                onDragStart={(e) => {
-                  e.dataTransfer.effectAllowed = 'move'
-                  setDragProj(g.projectId)
-                }}
-                onDragEnd={() => {
-                  setDragProj(null)
-                  setDropProj(null)
-                }}
-                {...dropProps(g.projectId, null)}
-              >
-                {/* Collapse is now the chevron's job alone on an inactive row, so it has to be a
-                    real target: a button with its own hit area and keyboard focus, not the bare
-                    9px glyph. It stops propagation so peeking into a project never switches. */}
-                <button
-                  type="button"
-                  className="ss-group__chev"
-                  title={isCollapsed ? vocab('Expand') : vocab('Collapse')}
-                  aria-label={isCollapsed ? `${vocab('Expand')} ${g.projectName}` : `${vocab('Collapse')} ${g.projectName}`}
-                  aria-expanded={!isCollapsed}
-                  draggable={false}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    toggleCollapse(collapseKey, isCollapsed)
-                  }}
-                >
-                  {isCollapsed ? '▶' : '▼'}
-                </button>
-                <ProjectGlyph
-                  className="ss-group__monogram"
-                  icon={g.projectIcon}
-                  color={g.projectColor}
-                  name={g.projectName}
-                  icon={g.projectIcon}
-                  color={g.projectColor}
-                  name={g.projectName}
-                  variant="monogram"
-                  className="ss-group__monogram"
-                />
-                <span className="ss-group__name">{g.projectName}</span>
-                {branches[g.projectId] && (
-                  <span className="ss-group__branch">⎇ {branches[g.projectId]}</span>
-                )}
-                {signals.attention > 0 && (
-                  <span className="ss-group__sig ss-group__sig--attention" title={vocab('Sessions that need you')}>
-                    <IconBellFilled />
-                    {signals.attention}
-                  </span>
-                )}
-                {signals.unread > 0 && (
-                  <span className="ss-group__sig ss-group__sig--unread" title={vocab('Finished — new for you')}>
-                    <IconCircleCheck />
-                    {signals.unread}
-                  </span>
-                )}
-                {signals.working > 0 && (
-                  <span className="ss-group__sig ss-group__sig--working" title={vocab('Sessions running right now')}>
-                    <span className="ss-group__sig-spin" />
-                    {signals.working}
-                  </span>
-                )}
-                <span className="ss-group__count">{projectCount(g)}</span>
-                <button
-                  className="ss-group__add"
-                  title={vocab('New terminal in this project')}
-                  title="Add a node to this project"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    props.onAddToProject(g.projectId, { clientX: e.clientX, clientY: e.clientY })
-                  }}
-                >
-                  +
-                </button>
+          groups.map((repo) => {
+            const collapsed = filter ? false : (collapsedItems[repo.key] ?? false)
+            const signals = repoSignalCounts(repo)
+            return (
+              <div key={repo.key} className="ss-repo">
+                <div className="ss-repo__head" title={repo.repoRoot ?? undefined} onClick={() => toggleCollapse(repo.key, collapsed)}>
+                  <button
+                    type="button"
+                    className="ss-group__chev"
+                    title={collapsed ? vocab('Expand') : vocab('Collapse')}
+                    aria-label={collapsed ? `${vocab('Expand')} ${repo.repoName}` : `${vocab('Collapse')} ${repo.repoName}`}
+                    aria-expanded={!collapsed}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      toggleCollapse(repo.key, collapsed)
+                    }}
+                  >
+                    {collapsed ? '▶' : '▼'}
+                  </button>
+                  <span className="ss-repo__name">{repo.repoName}</span>
+                  {repo.projects.length > 1 && <span className="ss-repo__count">{repo.projects.length}</span>}
+                  {signals.attention > 0 && <span className="ss-group__sig ss-group__sig--attention"><IconBellFilled />{signals.attention}</span>}
+                  {signals.unread > 0 && <span className="ss-group__sig ss-group__sig--unread"><IconCircleCheck />{signals.unread}</span>}
+                  {signals.working > 0 && <span className="ss-group__sig ss-group__sig--working"><span className="ss-group__sig-spin" />{signals.working}</span>}
+                  <span className="ss-group__count">{projectCount(repo)}</span>
+                </div>
+                {!collapsed && repo.projects.map((project) => renderProject(project, !repo.collapsedProject, project.isActive ? repo.adoptable : []))}
               </div>
-              {!isCollapsed && (
-                <>
-                  {g.groups.map((bucket) => renderBucket(g.projectId, g.cwd, bucket, null))}
-                  {g.groups.length > 0 && (
-                    <div
-                      className={`ss-subgroup__reorder-end ss-subgroup__reorder-end--root${dropKey === `group-end:${g.projectId}` ? ' is-drop-before' : ''}`}
-                      onDragOver={(e) => {
-                        if (
-                          !drag ||
-                          drag.kind !== 'group' ||
-                          drag.projectId !== g.projectId ||
-                          (drag.parentGroupId ?? null) !== null
-                        ) return
-                        e.preventDefault()
-                        e.stopPropagation()
-                        setDropKey(`group-end:${g.projectId}`)
-                      }}
-                      onDragLeave={() => setDropKey((k) => (k === `group-end:${g.projectId}` ? null : k))}
-                      onDrop={(e) => {
-                        if (
-                          !drag ||
-                          drag.kind !== 'group' ||
-                          drag.projectId !== g.projectId ||
-                          (drag.parentGroupId ?? null) !== null
-                        ) return
-                        e.preventDefault()
-                        e.stopPropagation()
-                        props.onReorderGroup(g.projectId, drag.nodeId, null, null)
-                        setDrag(null)
-                        setDropKey(null)
-                      }}
-                    />
-                  )}
-                  {g.ungrouped.length === 0 && g.groups.length === 0 ? (
-                    <div className="ss-group__empty">{vocab('No sessions')}</div>
-                  ) : (
-                    <div
-                      className={`ss-ungrouped${dropClass(g.projectId, null)}`}
-                      {...dropProps(g.projectId, null)}
-                    >
-                      {g.groups.length > 0 && g.ungrouped.length > 0 && (
-                        <div className="ss-ungrouped__label">{vocab('Ungrouped')}</div>
-                      )}
-                      {g.ungrouped.map((row) => renderRow(g.projectId, row))}
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          )
-        })
+            )
+          })
         )}
       </div>
     </aside>

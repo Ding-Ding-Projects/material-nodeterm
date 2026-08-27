@@ -349,6 +349,8 @@ export interface NodeData {
   codexAccountId?: string
   /** group-only: the git worktree this group is bound to (single source of truth). */
   worktree?: import('@shared/worktree').GroupWorktree
+  /** group-only: safe reference to another open project's canvas. */
+  projectRef?: { projectId: string }
   /**
    * When set, this terminal runs `ssh` to a remote host on the LOCAL PTY (LocalTransport).
    * Unlike `remote` (relay), this IS persisted — the node auto-reconnects on relaunch.
@@ -2293,6 +2295,72 @@ export function mergeSingleNode(
   )
 }
 
+/** The transient view opened when a group or linked project is drilled into. It is not persisted. */
+export type DrillContext =
+  | { kind: 'group'; groupId: string; projectId: string }
+  | { kind: 'project-ref'; projectId: string; targetId: string }
+
+/**
+ * Promote a group's direct children into a root-space sub-canvas.
+ *
+ * The frame itself and its siblings stay out of the drilled view. Children retain their own
+ * descendants in the source array, but only direct children are promoted, which preserves nested
+ * group structure without inventing a second ownership model.
+ */
+export function drillGroupChildren(
+  nodes: CanvasNode[],
+  groupId: string
+): { flow: CanvasNode[]; childIds: Set<string> } {
+  const childIds = new Set<string>()
+  const flow: CanvasNode[] = []
+  for (const node of nodes) {
+    if (node.parentId !== groupId) continue
+    childIds.add(node.id)
+    flow.push({
+      ...node,
+      parentId: undefined,
+      extent: undefined,
+      position: rootPosition(node, nodes)
+    })
+  }
+  return { flow: groupsFirst(flow), childIds }
+}
+
+/**
+ * Merge an edited drilled child view back into the complete canvas snapshot.
+ *
+ * Drilling changes only the view coordinate space. Persistence remains parent-relative, so direct
+ * children are re-nested against the group's root-space origin. Siblings and the frame survive,
+ * deleted direct children stay deleted, and newly-created drilled children are appended safely.
+ */
+export function remergeDrilledNodes(
+  fullStored: CanvasNodeState[],
+  drilledStates: CanvasNodeState[],
+  groupId: string,
+  fullNodesForRoot: CanvasNode[]
+): CanvasNodeState[] {
+  const drilledById = new Map(drilledStates.map((state) => [state.id, state]))
+  const group = fullNodesForRoot.find((node) => node.id === groupId)
+  const groupRoot = group ? rootPosition(group, fullNodesForRoot) : { x: 0, y: 0 }
+  const directIds = new Set(fullStored.filter((state) => state.parentId === groupId).map((state) => state.id))
+  const renest = (state: CanvasNodeState): CanvasNodeState => ({
+    ...state,
+    parentId: groupId,
+    position: { x: state.position.x - groupRoot.x, y: state.position.y - groupRoot.y }
+  })
+  const merged: CanvasNodeState[] = []
+  for (const state of fullStored) {
+    if (directIds.has(state.id) && !drilledById.has(state.id)) continue
+    const drilled = drilledById.get(state.id)
+    merged.push(drilled ? renest(drilled) : state)
+  }
+  const known = new Set(fullStored.map((state) => state.id))
+  for (const state of drilledStates) {
+    if (!known.has(state.id)) merged.push(renest(state))
+  }
+  return merged
+}
+
 function isDescendant(nodes: CanvasNode[], candidateId: string, ancestorId: string): boolean {
   const byId = new Map(nodes.map((node) => [node.id, node]))
   const seen = new Set<string>()
@@ -3101,6 +3169,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         sshRemoteTmux: n.sshRemoteTmux,
         sshFs: n.sshFs,
         worktree: n.worktree,
+        projectRef: n.projectRef,
         annotationVariant: n.annotationVariant,
         annotationDir: n.annotationDir,
         ...(n.kind === 'annotation' && normalizeAnnotationLabel(n.annotationLabel) !== undefined
@@ -3252,6 +3321,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         sshRemoteTmux: n.data.sshRemoteTmux,
         sshFs: n.data.sshFs,
         worktree: n.data.worktree,
+        projectRef: n.data.projectRef,
         annotationVariant: n.data.annotationVariant,
         annotationDir: n.data.annotationDir,
         ...(kind === 'annotation' && normalizeAnnotationLabel(n.data.annotationLabel) !== undefined
