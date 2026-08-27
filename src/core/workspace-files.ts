@@ -11,6 +11,7 @@ import type {
   BridgeLink,
   BrowserProfile,
   CanvasNodeState,
+  Link,
   NavStop,
   Project,
   ProjectMultiverseCanvas,
@@ -57,6 +58,41 @@ function sanitizeCalendarConfigs(nodes: CanvasNodeState[]): CanvasNodeState[] {
 
 export const PROJECT_DIR = '.nodeterm'
 export const PROJECT_FILE = 'project.json'
+
+/**
+ * Lift legacy bridge and rope arrays into the unified link substrate while reading a project.
+ *
+ * Bridge ids and rope ids remain unchanged so existing edge identity and deduplication survive
+ * the migration. Ropes are explicitly marked display-only, preserving their historical
+ * non-context semantics. An already-written links array wins over stale legacy fields, and an
+ * empty legacy canvas stays empty so loading it does not create a needless file change.
+ */
+export function migrateLinks(f: {
+  links?: Link[]
+  bridges?: BridgeLink[]
+  ropes?: BridgeLink[]
+}): Link[] | undefined {
+  if (f.links) return f.links
+  const out: Link[] = []
+  for (const bridge of f.bridges ?? []) {
+    out.push({
+      id: bridge.id,
+      kind: 'context',
+      source: { ref: 'node', nodeId: bridge.source },
+      target: { ref: 'node', nodeId: bridge.target }
+    })
+  }
+  for (const rope of f.ropes ?? []) {
+    out.push({
+      id: rope.id,
+      kind: 'lineage',
+      source: { ref: 'node', nodeId: rope.source },
+      target: { ref: 'node', nodeId: rope.target },
+      meta: { displayOnly: true }
+    })
+  }
+  return out.length > 0 ? out : undefined
+}
 
 /**
  * On-disk shape of <cwd>/.nodeterm/project.json — a GIT-SHARED document (users are asked to
@@ -108,12 +144,16 @@ export interface ProjectFileV1 {
    */
   viewport?: Viewport
   nodes: CanvasNodeState[]
+  /** Unified typed links written by current builds. Legacy arrays remain read-only migration input. */
+  links?: Link[]
   /** Safe shared hierarchy. Runtime selection remains machine-local and is never written here. */
   multiverseCanvases?: ProjectMultiverseCanvas[]
   /** Schema 3 child-canvas content. These fields contain safe presentation only. */
   childCanvases?: ProjectChildCanvas[]
   portals?: ProjectPortalState[]
+  /** LEGACY read-only migration source; new writes emit `links` instead. */
   bridges?: BridgeLink[]
+  /** LEGACY read-only migration source; new writes emit `links` instead. */
   ropes?: BridgeLink[]
   /**
    * LEGACY (read-only), same rule as `viewport`: a managed Claude account id names a credential
@@ -257,7 +297,7 @@ export function resolveNodes(nodes: CanvasNodeState[], root: string): CanvasNode
  * Dropped on the way out, because a second machine opening the same repo would legitimately
  * disagree about them: the project `id` (identity — see `IndexEntryV3.id`), the `viewport` (this
  * user's camera) and `defaultAccountId` (a credential dir under this userData). Kept, because a
- * team genuinely shares them: name, color, nodes, bridges/ropes, the kanban board, the permission
+ * team genuinely shares them: name, color, nodes, links, the kanban board, the permission
  * default, the dino record.
  *
  * The two fields a pre-change build cannot do without are still emitted, as machine-INDEPENDENT
@@ -287,6 +327,7 @@ export function projectToFile(
     nodes: sanitizeCalendarConfigs(stripSharedNodeExec(p.cwd ? toPortableNodes(canvas.nodes, p.cwd) : canvas.nodes))
   }))
   const icon = sanitizeProjectIcon(p.icon)
+  const links = p.links ?? migrateLinks(p)
   return {
     version: 1,
     rev,
@@ -300,8 +341,7 @@ export function projectToFile(
     ...(childCanvases && childCanvases.length > 0 ? { childCanvases } : {}),
     ...(p.portals && p.portals.length > 0 ? { portals: p.portals.map((portal) => ({ ...portal })) } : {}),
     ...(icon ? { icon } : {}),
-    ...(p.bridges ? { bridges: p.bridges } : {}),
-    ...(p.ropes ? { ropes: p.ropes } : {}),
+    ...(links ? { links } : {}),
     ...(p.defaultPermissionMode ? { defaultPermissionMode: p.defaultPermissionMode } : {}),
     // Strict-normalised (literal true only, known keys only) and omitted when off — an off
     // capability adds no bytes to the committed file. `capabilityAck` is deliberately NOT here:
@@ -359,6 +399,7 @@ function validChildCanvases(value: unknown, _projectId: string): ProjectChildCan
       typeof candidate.order !== 'number' || !Number.isFinite(candidate.order) ||
       !Array.isArray(candidate.nodes)
     ) continue
+    if (candidate.scope === 'aws-universe' && (candidate.parentCanvasId !== 'root' || candidate.depth !== 1)) continue
     const viewport = candidate.viewport && typeof candidate.viewport === 'object' &&
       typeof candidate.viewport.x === 'number' && Number.isFinite(candidate.viewport.x) &&
       typeof candidate.viewport.y === 'number' && Number.isFinite(candidate.viewport.y) &&
@@ -373,7 +414,9 @@ function validChildCanvases(value: unknown, _projectId: string): ProjectChildCan
       title: candidate.title,
       order: candidate.order,
       ...(viewport ? { viewport } : {}),
-      nodes: candidate.nodes.filter((node): node is CanvasNodeState => !!node && typeof node === 'object' && typeof node.id === 'string' && typeof node.kind === 'string')
+      nodes: candidate.nodes.filter((node): node is CanvasNodeState => !!node && typeof node === 'object' && typeof node.id === 'string' && typeof node.kind === 'string'),
+      ...(Array.isArray(candidate.bridges) ? { bridges: candidate.bridges } : {}),
+      ...(Array.isArray(candidate.ropes) ? { ropes: candidate.ropes } : {})
     })
   }
   return result.length > 0 ? result : undefined
@@ -441,6 +484,7 @@ export function fileToProject(
   }))
   const childCanvases = validChildCanvases(f.childCanvases, base.id)
   const icon = sanitizeProjectIcon(f.icon)
+  const links = migrateLinks(f)
   return {
     id: base.id,
     name: f.name,
@@ -468,8 +512,7 @@ export function fileToProject(
       }))
     } : {}),
     ...(validPortals(f.portals) ? { portals: f.portals.map((portal) => ({ ...portal })) } : {}),
-    ...(f.bridges ? { bridges: f.bridges } : {}),
-    ...(f.ropes ? { ropes: f.ropes } : {}),
+    ...(links ? { links } : {}),
     ...(defaultAccountId ? { defaultAccountId } : {}),
     ...(base.settingsOverrides ? { settingsOverrides: base.settingsOverrides } : {}),
     // Machine-local, from the index entry ONLY: a file field named `breadcrumbs` is a forgery

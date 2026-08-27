@@ -28,6 +28,10 @@ import type { PlannerSchedule } from '../shared/planner-occurrences'
 import { normalizeRecoveryGameSnapshot, RECOVERY_ENERGY_KEYS, type RecoveryGameSnapshot } from '../shared/recovery-game'
 import { repairPortablePortals, validatePortablePortals, type PortablePortalV3 } from './portal-lifecycle'
 import { portableKioskPwaIntent, type PortableKioskPwaIntent } from '../shared/kiosk-pwa'
+import { normalizeCloudflareIntent as normalizeCloudflareZeroTrustIntent, type CloudflarePortableIntent as CloudflareZeroTrustPortableIntent } from '../shared/cloudflare-zero-trust'
+import { normalizeCloudflareIntent as normalizeCloudflareCoreIntent, type CloudflarePortableIntent as CloudflareCorePortableIntent } from '../shared/cloudflare-core-managers'
+import { normalizeNextcloudAioConfig, type NextcloudAioConfig } from '../shared/nextcloud-aio'
+import type { AwsManagerPortableIntent } from '../shared/aws-resource'
 
 export type PortableCanvasScope = 'root' | 'multiverse' | 'aws-universe'
 
@@ -66,6 +70,13 @@ export interface PortableCanvasNodeV3 {
   browserTabs?: Array<{ id: string; url?: string; title: string }>
   kioskPwaIntent?: PortableKioskPwaIntent
   serviceLabel?: string
+  /** Safe AWS manager intent; local bindings and provider state remain outside the project file. */
+  awsManagerIntent?: AwsManagerPortableIntent
+  /** Typed Cloudflare operation intent only; credentials and provider bindings are local. */
+  cloudflareZeroTrustIntent?: CloudflareZeroTrustPortableIntent
+  cloudflareCoreIntent?: CloudflareCorePortableIntent
+  /** Safe Nextcloud AIO hosting intent; Docker context and live state remain local. */
+  nextcloudAioConfig?: NextcloudAioConfig
   /** Safe public-catalog identity and display copy. Image bytes and network state are excluded. */
   wildDimSumDish?: PublicDimSumSelection
   homeAssistantIntent?: { transport: 'rest' | 'websocket'; domain: string }
@@ -153,6 +164,8 @@ const ALLOWED_NODE = new Set([
   'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel',
   'kioskPwaIntent',
   'wildDimSumDish', 'homeAssistantIntent', 'homeAssistantControlConfig', 'homeAssistantSensorConfig',
+  'awsManagerIntent',
+  'cloudflareZeroTrustIntent', 'cloudflareCoreIntent', 'nextcloudAioConfig',
   'alarmSchedule', 'alarmTimeZone', 'alarmEnabled', 'alarmSnoozeMinutes',
   'alarmSoundEnabled', 'alarmNarratorEnabled', 'alarmHistory', 'mediaAssets',
   'mediaActiveAssetId', 'recoveryGame'
@@ -259,6 +272,7 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
   if (strict && node.parentId !== undefined && typeof node.parentId !== 'string') throw new PortableProjectV3Error('manifest', 'Portable node parent is invalid.')
   if (strict && node.text !== undefined && typeof node.text !== 'string') throw new PortableProjectV3Error('manifest', 'Portable node text is invalid.')
   if (strict && node.serviceLabel !== undefined && typeof node.serviceLabel !== 'string') throw new PortableProjectV3Error('manifest', 'Portable service label is invalid.')
+  if (strict && node.cloudflareZeroTrustIntent !== undefined && !normalizeCloudflareZeroTrustIntent(node.cloudflareZeroTrustIntent)) throw new PortableProjectV3Error('manifest', 'Portable Cloudflare manager intent is invalid.')
   if (strict && node.homeAssistantControlConfig !== undefined) {
     if (!record(node.homeAssistantControlConfig)) throw new PortableProjectV3Error('manifest', 'Portable Home Assistant control intent is invalid.')
     exactKeys(node.homeAssistantControlConfig, ALLOWED_HOME_ASSISTANT_CONTROL, 'Home Assistant control intent')
@@ -280,6 +294,32 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
   if (node.text !== undefined) out.text = content(node.text, 'node text')
   if (node.url !== undefined) { const url = safeUrl(node.url, 'node URL'); if (url) out.url = url }
   if (node.serviceLabel !== undefined) out.serviceLabel = text(node.serviceLabel, 'service label')
+  if (node.awsManagerIntent !== undefined) {
+    const intent = node.awsManagerIntent
+    if (!record(intent) || intent.schemaVersion !== 1 || !['resource-explorer', 'cloud-control', 'core-services'].includes(intent.mode)) throw new PortableProjectV3Error('manifest', 'Portable AWS manager intent is invalid.')
+    if (!text(intent.regionIntent, 'AWS region intent') || intent.regionIntent.length > 64 || typeof intent.resourceQuery !== 'string' || intent.resourceQuery.length > 1024 || typeof intent.cloudControlTypeName !== 'string' || intent.cloudControlTypeName.length > 256) throw new PortableProjectV3Error('manifest', 'Portable AWS manager intent exceeds its bounds.')
+    const coreService = intent.coreService
+    const coreOperation = intent.coreOperation
+    const coreInput = intent.coreInput
+    if (intent.mode === 'core-services' && (!['s3', 'ec2', 'iam', 'sts', 'lambda', 'cloudwatch', 'logs'].includes(String(coreService)) || typeof coreOperation !== 'string')) throw new PortableProjectV3Error('manifest', 'Portable AWS core-service intent is incomplete.')
+    out.awsManagerIntent = { schemaVersion: 1, mode: intent.mode, regionIntent: intent.regionIntent, resourceQuery: intent.resourceQuery, cloudControlTypeName: intent.cloudControlTypeName, ...(coreService ? { coreService } : {}), ...(coreOperation ? { coreOperation } : {}), ...(coreInput ? { coreInput: { ...coreInput } } : {}) }
+  }
+  if (node.cloudflareZeroTrustIntent !== undefined) {
+    const intent = normalizeCloudflareZeroTrustIntent(node.cloudflareZeroTrustIntent)
+    if (!intent) throw new PortableProjectV3Error('manifest', 'Portable Cloudflare manager intent is invalid.')
+    out.cloudflareZeroTrustIntent = intent
+  }
+  if (node.cloudflareCoreIntent !== undefined) {
+    if (!record(node.cloudflareCoreIntent)) throw new PortableProjectV3Error('manifest', 'Portable Cloudflare manager intent is invalid.')
+    const normalized = normalizeCloudflareCoreIntent(node.cloudflareCoreIntent)
+    if (strict && (node.cloudflareCoreIntent.schemaVersion !== 1 || normalized.manager !== node.cloudflareCoreIntent.manager || normalized.operation !== node.cloudflareCoreIntent.operation)) throw new PortableProjectV3Error('manifest', 'Portable Cloudflare manager intent is unsupported.')
+    out.cloudflareCoreIntent = normalized
+  }
+  if (node.nextcloudAioConfig !== undefined) {
+    const normalized = normalizeNextcloudAioConfig(node.nextcloudAioConfig)
+    if (node.kind !== 'nextcloud-aio' || !normalized || (strict && JSON.stringify(normalized) !== JSON.stringify(node.nextcloudAioConfig))) throw new PortableProjectV3Error('manifest', 'Portable Nextcloud AIO intent is invalid or exceeds its bounds.')
+    out.nextcloudAioConfig = normalized
+  }
   if (node.wildDimSumDish !== undefined) {
     const dish = normalizePublicDimSumSelection(node.wildDimSumDish)
     if (!dish) throw new PortableProjectV3Error('manifest', 'Portable Wild dim sum selection is invalid.')
@@ -395,6 +435,12 @@ function relationships(project: Project): PortableRelationshipV3[] {
   append('root', 'bridge', project.bridges)
   append('root', 'rope', project.ropes)
   for (const canvas of project.multiverseCanvases ?? []) {
+    append(canvas.id, 'bridge', canvas.bridges)
+    append(canvas.id, 'rope', canvas.ropes)
+  }
+  const multiverseIds = new Set((project.multiverseCanvases ?? []).map((canvas) => canvas.id))
+  for (const canvas of project.childCanvases ?? []) {
+    if (multiverseIds.has(canvas.id)) continue
     append(canvas.id, 'bridge', canvas.bridges)
     append(canvas.id, 'rope', canvas.ropes)
   }
@@ -546,6 +592,9 @@ export function validatePortableCanvasProjectionV3(value: unknown): PortableCanv
     if (canvas.scope === 'multiverse' && (canvas.depth === undefined || measuredDepth < 1 || measuredDepth > MAX_MULTIVERSE_DEPTH)) {
       throw new PortableProjectV3Error('manifest', `Multiverse canvases require a persisted depth from 1 through ${MAX_MULTIVERSE_DEPTH}.`)
     }
+    if (canvas.scope === 'aws-universe' && (canvas.parentCanvasId !== value.rootCanvasId || canvas.depth !== 1 || measuredDepth !== 1)) {
+      throw new PortableProjectV3Error('manifest', 'AWS Universe canvases must be direct root children at depth 1.')
+    }
     if (canvas.depth !== undefined && canvas.depth !== measuredDepth) throw new PortableProjectV3Error('manifest', 'Portable canvas depth does not match its containing canvas chain.')
   }
   const membership = new Map<string, number>()
@@ -639,6 +688,10 @@ export function portableCanvasProjectionToProject(
     ...(node.browserTabs ? { browserTabs: node.browserTabs.map((tab) => ({ ...tab })) } : {}),
     ...(node.kioskPwaIntent ? { kioskPwaIntent: { ...node.kioskPwaIntent, target: { ...node.kioskPwaIntent.target }, requestedPermissions: [...node.kioskPwaIntent.requestedPermissions] } } : {}),
     ...(node.serviceLabel !== undefined ? { serviceLabel: node.serviceLabel } : {}),
+    ...(node.awsManagerIntent !== undefined ? { awsManagerIntent: { ...node.awsManagerIntent } } : {}),
+    ...(node.cloudflareZeroTrustIntent !== undefined ? { cloudflareZeroTrustIntent: normalizeCloudflareZeroTrustIntent(node.cloudflareZeroTrustIntent)! } : {}),
+    ...(node.cloudflareCoreIntent !== undefined ? { cloudflareCoreIntent: normalizeCloudflareCoreIntent(node.cloudflareCoreIntent) } : {}),
+    ...(node.nextcloudAioConfig !== undefined ? { nextcloudAioConfig: normalizeNextcloudAioConfig(node.nextcloudAioConfig) } : {}),
     ...(node.mediaAssets ? { mediaAssets: node.mediaAssets.map((asset) => ({ ...asset })) } : {}),
     ...(node.mediaActiveAssetId !== undefined ? { mediaActiveAssetId: node.mediaActiveAssetId } : {}),
     ...(node.wildDimSumDish !== undefined ? { wildDimSumDish: node.wildDimSumDish } : {}),
@@ -695,7 +748,9 @@ export function portableCanvasProjectionToProject(
            title: canvas.title,
            order: canvas.order,
            ...(canvas.viewport ? { viewport: { ...canvas.viewport } } : {}),
-             nodes: canvas.nodeIds.map((nodeId) => nodeById.get(nodeId)).filter((node): node is CanvasNodeState => !!node)
+           nodes: canvas.nodeIds.map((nodeId) => nodeById.get(nodeId)).filter((node): node is CanvasNodeState => !!node),
+           bridges: value.relationships.filter((link) => link.kind === 'bridge' && link.canvasId === canvas.id).map((link) => ({ id: link.id, source: link.source, target: link.target })),
+           ropes: value.relationships.filter((link) => link.kind === 'rope' && link.canvasId === canvas.id).map((link) => ({ id: link.id, source: link.source, target: link.target }))
          }))
      } : {}),
      ...(value.portals ? { portals: value.portals } : {})

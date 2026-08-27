@@ -6,8 +6,12 @@ The pan/zoom surface nodeterm is built around, and everything that lives on it.
   what each one is for.
 - [Unified Node Catalog](./node-catalog.md) — the typed registry, guided picker, creation event
   idempotence, availability reasons, and collision-free placement shared by every creation path.
+- [AWS Universe portal](./aws-universe.md) - unlimited AWS-only child canvases, guided navigation,
+  scoped Shop ownership, and portable schema 3 intent.
 - [Photo, Video, and Gallery nodes](./media-gallery.md): content-addressed media, mixed galleries,
   portable byte carriers, local bindings, and explicit missing-asset recovery.
+- [Comment attachments](./comment-attachments.md): bounded file and media queues, safe previews,
+  transactional board-log storage, and portable archive carriers.
 - [Door-only universe navigation](./door-only-universe-navigation.md) - paired entry and return
   doors, shared refusal of tab and direct-selection bypasses, and safe schema 3 intent.
 - [Interactive Multiverse door construction](./door-construction.md) - guided frame, hinges, panel,
@@ -21,7 +25,11 @@ The pan/zoom surface nodeterm is built around, and everything that lives on it.
 - [Alarm Clock nodes](../../alarm-clock.md) — one-shot and recurring reminders with timezone,
   daylight-saving, snooze, dismiss, and missed-occurrence handling.
 - [Canvas & node lifecycle](./canvas-and-lifecycle.md) — how nodes mount, unmount, park, and
-  release memory as you pan around a large canvas; context menus, undo/redo, and selection.
+  release memory as you pan around a large canvas; context menus, undo/redo, selection, and
+  bounded wheel zoom speed.
+- [Bounded wheel zoom and speed](./wheel-zoom-speed.md) — the shared 40 ms burst budget, plain-
+  wheel-only speed multiplier, point-of-use validation, persistence, and verification boundary.
+  desktop trackpad gesture facts for wheel routing.
 - [Terminal sharpness under pan and zoom](./terminal-sharpness.md) — why terminal text goes soft on
   a fractional-dpr display, the two independent causes, and what the app does about each.
 - [Timer nodes](./timer-nodes.md) — countdowns, stopwatches, work/rest sequences, laps, repeats,

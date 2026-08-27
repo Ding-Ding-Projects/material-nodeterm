@@ -23,8 +23,9 @@ site/
     features/           one module per canonical feature, each registering its own
                          room and/or settings card (see app/features/index.js)
     shared/             pure data tables and logic shared by the features above
-  content/changelog.json  historical changelog data generated from this fork's CHANGELOG.md,
-                          plus a verified current-release overlay for the latest stable build
+  content/changelog.json  Windows-scope history derived from this fork's CHANGELOG.md,
+                          plus a verified current-release overlay for the latest stable build;
+                          CHANGELOG.md remains the complete canonical audit record
   docs/                one article per feature, plus docs/index.html
   assets/              logo + hero illustration + fonts/ (Outfit, Roboto Mono — the exact
                         committed .woff2 files the desktop app bundles, copied byte-for-byte)
