@@ -156,6 +156,8 @@ Feature requests open on GitHub with no landed implementation yet, newest first:
 - [ ] **#347** — Cleanup/uninstall script or portable install.
 - [ ] **#299** — High-DPI UI text scaling setting.
 - [ ] **#295** — Auto-rotate Claude accounts when usage crosses a threshold (default 90%).
+      Implementation landed in the Program 70 lane, but verification and release evidence remain
+      intentionally unrun under the ultra-speed boundary.
 - [ ] **#292** — Auto-handle OAuth localhost callbacks for remote sessions (MCP auth on SSH /
       Server Edition).
 - [ ] **#291** — Node type icons alongside color coding.

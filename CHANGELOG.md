@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add opt-in Claude account rotation for new default sessions. When the selected account reaches the
+  configured usage threshold, the launch funnel chooses the configured account with the most
+  headroom, preserves explicit account picks and running sessions, and fails safe when usage is
+  unavailable. This ultra-speed lane intentionally did not run tests, type checks, lint, reviews,
+  security or accessibility checks, builds, packaging, installer execution, runtime interaction, or
+  UI captures.
+
 - Add the bundled AWS CLI v2 dependency lane. Windows packaging now stages the pinned official
   `2.36.32` MSI, verifies its SHA-256, falls back through a verified local cache or canonical
   HTTPS download, extracts it into application-local storage, exposes the installed version, and

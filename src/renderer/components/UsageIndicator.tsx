@@ -31,6 +31,7 @@ import {
   providerLabel
 } from '@shared/usage-limits'
 import { systemAccountDisplay } from '../state/workspace'
+import { recordClaudeUsage } from '../lib/usageAccountRotation'
 
 /** Grace period before a hover-opened popover closes, so the pointer can cross the pill's own
  *  gap (or clip a corner en route elsewhere) without the panel flickering shut. */
@@ -303,12 +304,19 @@ export function UsageIndicator({
   }
 
   useEffect(() => {
-    void window.nodeTerminal.usage.fetch().then(setUsage)
-    return window.nodeTerminal.usage.onUpdate(setUsage)
+    void window.nodeTerminal.usage.fetch().then((next) => {
+      setUsage(next)
+      recordClaudeUsage(undefined, next)
+    })
+    return window.nodeTerminal.usage.onUpdate((next) => {
+      setUsage(next)
+      recordClaudeUsage(undefined, next)
+    })
   }, [])
 
-  // Fetched once on mount and again whenever the popover opens (the service caches, so the
-  // second call is usually free). On mount rather than popover-only because the pill itself
+  // Fetched once on mount so default-account rotation has a current snapshot even before the
+  // popover opens. The service caches subsequent reads, so opening the popover remains cheap. On
+  // mount rather than popover-only because the pill itself
   // surfaces enabled providers now — and a provider the user has never signed into costs no
   // network call at all: every fetcher short-circuits to 'unavailable' on a missing credentials
   // file. So the price of asking is one failed read per unused provider, not five round-trips.
@@ -347,17 +355,18 @@ export function UsageIndicator({
   // Fetch each account's usage on demand when the popover opens (system row uses `usage`).
   // Skipped entirely on an SSH project: those identities are not what this project spends.
   useEffect(() => {
-    if (scope.kind !== 'local' || !open || accounts.length === 0) return
+    if (scope.kind !== 'local' || accounts.length === 0) return
     let cancelled = false
     for (const a of accounts) {
       void window.nodeTerminal.usage.fetch(a.id).then((u) => {
         if (!cancelled) setAcctUsage((m) => ({ ...m, [a.id]: u }))
+        recordClaudeUsage(a.id, u)
       })
     }
     return () => {
       cancelled = true
     }
-  }, [open, accounts, scope.kind])
+  }, [accounts, scope.kind])
 
   // Close the popover on an outside click.
   useEffect(() => {
