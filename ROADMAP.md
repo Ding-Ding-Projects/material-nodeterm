@@ -62,6 +62,12 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## In progress / partially landed
 
+- [ ] **Agent-to-agent drag collaboration, issue #90**: the bounded collaboration handle and
+      keyboard/touch equivalent now reuse the existing context-link path for two compatible agent
+      nodes. Credentials, accounts, projects, working directories, and live sessions remain
+      unchanged. Tests, builds, runtime interaction, accessibility review, security review, and
+      captures remain unverified under the lane's explicit boundary.
+
 - [ ] **Desktop trackpad gesture facts, issue #108**: main-process scroll and pinch edges now feed
       a depth-safe typed bridge so macOS desktop wheel routing distinguishes a precise-pixel mouse
       from a trackpad, including the bounded momentum-gap linger. Server Edition keeps its browser
