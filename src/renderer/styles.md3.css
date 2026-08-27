@@ -12273,3 +12273,54 @@ button.term-node__title-text:focus-visible {
     justify-content: flex-start;
   }
 }
+/* Door construction ---------------------------------------------------------
+ * The constructor is a guided surface, not a free-form request editor. Each part picker paints
+ * its own anchored surface and keeps the regex builder beside its own search field. */
+.door-construction-dialog {
+  width: min(720px, calc(100vw - 32px));
+  max-height: min(860px, calc(100vh - 32px));
+  overflow: auto;
+}
+.door-construction__intro,
+.door-construction__route,
+.door-construction__status,
+.door-construction__message { margin: 0 0 14px; color: var(--md-on-surface-variant); line-height: 1.5; }
+.door-construction__route { padding: 10px 12px; border: 1px solid var(--md-outline-variant); border-radius: var(--md-shape-medium); font-family: var(--mono-font); overflow-wrap: anywhere; }
+.door-construction__field { display: grid; gap: 6px; margin: 14px 0; }
+.door-construction__field span,
+.door-construction__picker-label { font-weight: 650; color: var(--md-on-surface); }
+.door-construction__field input,
+.door-construction__search input { min-height: 44px; border: 1px solid var(--md-outline); border-radius: var(--md-shape-medium); background: var(--md-surface-container-low); color: var(--md-on-surface); padding: 0 12px; }
+.door-construction__parts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.door-construction__picker,
+.door-construction__core { display: grid; gap: 8px; padding: 14px; border: 1px solid var(--md-outline-variant); border-radius: var(--md-shape-large); background: var(--md-surface-container-low); }
+.door-construction__core { grid-column: 1 / -1; background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
+.door-construction__picker-trigger { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 48px; width: 100%; padding: 0 14px; border: 1px solid var(--md-outline); border-radius: var(--md-shape-medium); background: var(--md-surface-container); color: var(--md-on-surface); text-align: start; }
+.door-construction__picker-trigger:focus-visible,
+.door-construction__core button:focus-visible,
+.door-construction__actions button:focus-visible,
+.door-construction__picker-list button:focus-visible { outline: 3px solid var(--md-primary); outline-offset: 2px; }
+.door-construction__search { display: grid; gap: 6px; }
+.door-construction__search-row { display: flex; align-items: stretch; gap: 6px; }
+.door-construction__search-row input { min-width: 0; flex: 1; }
+.door-construction__search-row .md3-regex-trigger { min-width: 44px; }
+.door-construction__picker-heading { display: grid; gap: 3px; margin-bottom: 10px; }
+.door-construction__picker-heading span,
+.door-construction__search > span { color: var(--md-on-surface-variant); font-size: 0.82rem; }
+.door-construction__picker-list { display: grid; gap: 6px; max-height: 280px; overflow: auto; }
+.door-construction__picker-list button { display: grid; gap: 3px; padding: 10px 12px; border: 1px solid var(--md-outline-variant); border-radius: var(--md-shape-medium); background: var(--md-surface-container); color: var(--md-on-surface); text-align: start; }
+.door-construction__picker-list button.is-selected { border-color: var(--md-primary); background: var(--md-primary-container); color: var(--md-on-primary-container); }
+.door-construction__picker-list button span { color: var(--md-on-surface-variant); font-size: 0.85rem; }
+.door-construction__picker-list button small { text-transform: capitalize; color: var(--md-on-surface-variant); }
+.door-construction__core button,
+.door-construction__actions button { min-height: 44px; padding: 0 16px; border: 1px solid var(--md-outline); border-radius: var(--md-shape-full); background: var(--md-primary); color: var(--md-on-primary); font-weight: 650; }
+.door-construction__core button:disabled,
+.door-construction__actions button:disabled { cursor: not-allowed; opacity: 0.55; }
+.door-construction__actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+.door-construction__actions button:first-child { background: var(--md-surface-container-high); color: var(--md-on-surface); }
+@media (max-width: 560px) {
+  .door-construction__parts { grid-template-columns: 1fr; }
+  .door-construction__core { grid-column: auto; }
+  .door-construction__actions { justify-content: stretch; }
+  .door-construction__actions button { flex: 1; }
+}
