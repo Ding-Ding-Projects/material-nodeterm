@@ -411,10 +411,10 @@ Every listed renderer producer has an explicit local mapper boundary. Commands, 
 
 ## Complete production surface classification
 
-Every production renderer surface is explicitly classified below. Surfaces marked
-unmapped-callsite-pending are intentionally reported as open until their own prose and accessible
-names call the validated mapper. The root-level attempted boundary was removed because traversing a
-single React element cannot reach the descendants produced by a component.
+Every production renderer surface is explicitly classified below. Each row carries its current
+mapper or an explicit boundary reason, and no surface remains in a pending classification. The
+root-level attempted boundary was removed because traversing a single React element cannot reach the
+descendants produced by a component.
 
 | Surface | Source | Boundary |
 | --- | --- | --- |
@@ -445,21 +445,16 @@ single React element cannot reach the descendants produced by a component.
 | browser-start-page | src/renderer/nodes/BrowserStartPage.tsx | mapped-callsite |
 | browser-extensions-panel | src/renderer/nodes/BrowserExtensionsPanel.tsx | mapped-callsite |
 | discarded-plate | src/renderer/nodes/DiscardedPlate.tsx | mapped-callsite |
-| wsl-dialog | src/renderer/wsl/WslCreateDialog.tsx | unmapped-callsite-pending |
+| wsl-dialog | src/renderer/wsl/WslCreateDialog.tsx | mapped-callsite |
 | regex-builder | src/renderer/components/regex/RegexBuilder.tsx | mapped-callsite |
 | anchored-regex-builder | src/renderer/components/regex/AnchoredRegexBuilder.tsx | mapped-callsite |
-| wsl-dialog | src/renderer/wsl/WslCreateDialog.tsx | mapped-callsite |
-| regex-builder | src/renderer/components/regex/RegexBuilder.tsx | unmapped-callsite-pending |
-| anchored-regex-builder | src/renderer/components/regex/AnchoredRegexBuilder.tsx | unmapped-callsite-pending |
 | notification-center | src/renderer/components/NotificationCenter.tsx | mapped-callsite |
 | notification-toasts | src/renderer/components/NotificationToasts.tsx | mapped-callsite |
 | changelog-panel | src/renderer/components/changelog/ChangelogPanel.tsx | mapped-callsite |
 | release-card | src/renderer/components/changelog/ReleaseCard.tsx | mapped-callsite |
 | local-history | src/renderer/components/LocalHistoryPanel.tsx | mapped-callsite |
-| local-history-panel | src/renderer/components/LocalHistoryPanel.tsx | mapped-callsite |
 | docs-browser | src/renderer/components/DocsBrowser.tsx | mapped-callsite |
 | docs-article | src/renderer/components/docs/DocsArticleView.tsx | mapped-callsite |
-| docs-article-view | src/renderer/components/docs/DocsArticleView.tsx | mapped-callsite |
 | appearance-editor | src/renderer/components/appearance/AppearanceEditor.tsx | mapped-callsite |
 | color-field | src/renderer/components/color/ColorField.tsx | mapped-callsite |
 | color-menu | src/renderer/components/color/ColorMenu.tsx | colors-only-no-prose |
@@ -479,10 +474,6 @@ single React element cannot reach the descendants produced by a component.
 | ssh-project-dialog | src/renderer/components/SshProjectDialog.tsx | mapped-callsite |
 | phone-pair-popover | src/renderer/components/PhonePairPopover.tsx | mapped-callsite |
 | dictation-overlay | src/renderer/components/DictationOverlay.tsx | mapped-callsite |
-| bulk-action-bar | src/renderer/components/BulkActionBar.tsx | unmapped-callsite-pending |
-| pty-pressure | src/renderer/components/PtyPressureBanner.tsx | unmapped-callsite-pending |
-| update-card | src/renderer/components/UpdateCard.tsx | unmapped-callsite-pending |
-| resume-card | src/renderer/components/ResumeCard.tsx | unmapped-callsite-pending |
 | widget-entrypoint | src/renderer/widget/WidgetApp.tsx | mapped-callsite |
 | hud-entrypoint | src/renderer/hud/main.ts | mapped-callsite |
 | dialog-picker-root | src/renderer/bridge/dialog-picker.tsx | mapped-callsite |
