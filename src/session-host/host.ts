@@ -913,7 +913,6 @@ async function main(): Promise<void> {
       }
     }
     socket.on('data', (chunk: Buffer) => {
-      const frames = framer.push<SessionHostRequest>(chunk.toString('utf8'))
       let frames: SessionHostRequest[]
       try {
         frames = framer.push<SessionHostRequest>(chunk.toString('utf8'))

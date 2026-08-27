@@ -32,7 +32,6 @@ export function trySessionHostHello(
     })
     const framer = new LineFramer()
     socket.on('data', (chunk: Buffer) => {
-      for (const frame of framer.push<{ id: number; ok?: boolean }>(chunk.toString('utf8'))) {
       let frames: { id: number; ok?: boolean }[]
       try {
         frames = framer.push<{ id: number; ok?: boolean }>(chunk.toString('utf8'))

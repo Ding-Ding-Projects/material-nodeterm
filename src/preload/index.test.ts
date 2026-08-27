@@ -131,6 +131,7 @@ describe('preload IPC wiring', () => {
 
     await expect(api.clipboard.writeText('safe fallback')).resolves.toBe(false)
     expect(h.invoke).toHaveBeenCalledWith(IPC.clipboardWrite, 'safe fallback')
+  })
 describe('preload sshProject passphrase wiring', () => {
   it('routes foreground process termination through request IPC', async () => {
     await api.pty.terminateForeground('node-1', 'claude')
@@ -296,4 +297,5 @@ describe('preload sshProject passphrase wiring', () => {
     await api.passwordManager.credentialCode(pid, 'mgr-1', 'cred-1')
     expect(h.invoke).toHaveBeenCalledWith(IPC.passwordManagerCredentialCode, pid, 'mgr-1', 'cred-1')
   })
+})
 })
