@@ -32,6 +32,7 @@ import { resolveAppDisplayName } from '../shared/appIdentity'
 import { applyAccentTokens } from './lib/accentTokens'
 import { adhdCssVars, anyAdhdModeOn, normalizeAdhdModes } from './lib/adhdModes'
 import { RemoteOAuthCallbackNotice } from './components/RemoteOAuthCallbackNotice'
+import { EasterEggs } from './components/EasterEggs'
 
 export default function App() {
   // Apply the terminal-rendering setting to the two GPU coordinators, live. 'auto' is
@@ -191,6 +192,7 @@ export default function App() {
             regardless of whether Kids mode is currently on. Renders nothing while closed. */}
         <EnableKidsModeDialogHost />
         <RemoteOAuthCallbackNotice />
+        <EasterEggs />
       </ReactFlowProvider>
       {/* Kids mode explicitly KEEPS the dim-sum surprise (see kids-mode.ts's header) — it is not
           suppressed here, unlike the developer-only surfaces above. */}

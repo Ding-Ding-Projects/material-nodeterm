@@ -5,6 +5,7 @@
 // local tail; differs only in being async (the read is an ssh round-trip), so it async-polls
 // with a per-session in-flight `reading` flag that skips a tick instead of overlapping reads.
 import { type BrowserWindow } from 'electron'
+import { randomUUID } from 'crypto'
 import { IPC } from '../shared/ipc'
 import type { ContextWindowUsage } from '../shared/types'
 import { cachedWindowFor, resolveModelWindow } from '../core/model-window'
@@ -37,6 +38,7 @@ interface Tracked {
   lastWindow: number
   /** Partial trailing line held back until the next read completes it (see subagent-tail.ts). */
   carry: Buffer | null
+  generation: number
 }
 
 export interface RemoteContextTail {
@@ -53,6 +55,9 @@ export function createRemoteContextTail(
 ): RemoteContextTail {
   const sessions = new Map<string, Tracked>()
   let timer: ReturnType<typeof setInterval> | null = null
+  const provider = opts?.provider ?? 'claude'
+  const sourceKey = opts?.sourceKey ?? `${provider}:remote`
+  const sourceEpoch = randomUUID()
 
   // Usage parses the whole read (carry included) — it tolerates torn lines and the latest
   // value wins, so it must not wait for a newline. Notifications scan COMPLETE lines only,
@@ -79,13 +84,21 @@ export function createRemoteContextTail(
 
   const push = (sessionId: string, t: Tracked): void => {
     if (win.isDestroyed()) return
-    const usedPercent = Math.min(100, Math.max(0, (t.used / t.window) * 100))
+    const usedPercent =
+      Number.isFinite(t.used) && Number.isFinite(t.window) && t.used >= 0 && t.window > 0
+        ? Math.min(100, Math.max(0, (t.used / t.window) * 100))
+        : null
     const payload: ContextWindowUsage = {
       sessionId,
-      usedTokens: t.used,
-      windowTokens: t.window,
+      provider,
+      sourceKey,
+      usedTokens: Number.isFinite(t.used) && t.used >= 0 ? t.used : null,
+      windowTokens: Number.isFinite(t.window) && t.window > 0 ? t.window : null,
       usedPercent,
+      status: usedPercent === null ? 'unknown' : 'known',
       model: t.model,
+      generation: ++t.generation,
+      sourceEpoch,
       updatedAt: Date.now()
     }
     win.webContents.send(IPC.contextUpdate, payload)
@@ -98,11 +111,14 @@ export function createRemoteContextTail(
     t.reading = true
     try {
       if (t.offset === 0) {
-        // First read: grab the tail of the (possibly huge) file in one shot. We can't stat the
-        // remote size, so advance the offset by the bytes we actually received.
-        const text = await remoteFile.readTail(t.ref, INITIAL_READ_CAP)
-        t.offset = Buffer.byteLength(text)
-        scan(sessionId, t, text)
+        // First read: grab the tail plus the remote's absolute byte length in one round trip.
+        // Advancing by the returned tail length would make the next read replay most of a large
+        // transcript and could let stale lines win.
+        const first = await remoteFile.readTailWithSize(t.ref, INITIAL_READ_CAP)
+        if (first) {
+          t.offset = first.size
+          scan(sessionId, t, first.data.toString('utf-8'))
+        }
       } else {
         const { text, newOffset } = await remoteFile.readFrom(t.ref, t.offset)
         t.offset = newOffset
@@ -155,7 +171,8 @@ export function createRemoteContextTail(
         lastUsed: 0,
         lastModel: null,
         lastWindow: 0,
-        carry: null
+        carry: null,
+        generation: 0
       }
       sessions.set(sessionId, t)
       void read(sessionId, t) // immediate first value (resumed sessions already have content)

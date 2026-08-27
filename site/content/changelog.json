@@ -1,17 +1,17 @@
 {
   "schemaVersion": 1,
   "generatedFrom": "CHANGELOG.md",
-  "generatedNote": "Historical entries are generated from the repository's real CHANGELOG.md. The currentRelease overlay is copied from the verified published release manifest so the landing site does not lag the latest stable build.",
+  "generatedNote": "Historical entries are derived from the repository changelog for the active Windows scope. The complete CHANGELOG.md remains the canonical audit record. The currentRelease overlay comes from the verified stable release manifest.",
   "currentRelease": {
-    "version": "0.4.117",
+    "version": "0.4.120",
     "date": "2026-08-26",
-    "commit": "727287b8eddd5c30f98306ea442a2584945668d0",
-    "commitUrl": "https://github.com/Ding-Ding-Projects/material-nodeterm/commit/727287b8eddd5c30f98306ea442a2584945668d0",
+    "commit": "c682073037fe7b7e34d19568ced6e3d3a9037e22",
+    "commitUrl": "https://github.com/Ding-Ding-Projects/material-nodeterm/commit/c682073037fe7b7e34d19568ced6e3d3a9037e22",
     "published": true,
     "assets": [
-      "nodeterm-Setup-0.4.117.exe",
+      "nodeterm-Setup-0.4.120.exe",
       "RELEASES",
-      "node-terminal-0.4.117-full.nupkg"
+      "node-terminal-0.4.120-full.nupkg"
     ]
   },
   "entries": [
@@ -22,8 +22,7 @@
       "commitUrl": "https://github.com/Ding-Ding-Projects/material-nodeterm/commit/cd0441b8b48f32ec11f7b94d24d23239e93a8da7",
       "categories": {
         "Added": [
-          "build the bundled tmux with utf8proc (correct emoji widths)",
-          "bundle a static tmux in the macOS app as the last-resort fallback"
+          "build the bundled tmux with utf8proc (correct emoji widths)"
         ],
         "Chores": [
           "v0.3.0 — bundled tmux fallback"
@@ -37,7 +36,6 @@
       "commitUrl": "https://github.com/Ding-Ding-Projects/material-nodeterm/commit/003f83791bf59116ec91859981a4cc4bdbe09faf",
       "categories": {
         "Fixed": [
-          "the panel reads phys_footprint on macOS, not ps's rss",
           "age the working park snapshot; correct the relay claim (#126)",
           "snapshot agent state at park time; review fixes (#126)",
           "gate the offscreen release on live work too (#126)",
@@ -46,9 +44,7 @@
         "Documentation": [
           "§10 — record the second-device measurements (items 5 partial, 6 re-verified)"
         ],
-        "Tests": [
-          "darwin-gated behavioural guard — the default reader may never reap on bytes"
-        ],
+        "Tests": [],
         "Chores": [
           "v0.2.47"
         ]
@@ -72,9 +68,7 @@
           "process-table reader and per-pane tree rollup"
         ],
         "Fixed": [
-          "the reaper must not cull on a byte watermark on macOS either",
           "a failed vm_stat is no signal, not a fall back to os.freemem()",
-          "read macOS memory from vm_stat — os.freemem() reads ~0 there",
           "record hostDeviceId on entitled relay mints too",
           "restore the usage pill — the shell is SHARED, not the resource pill's",
           "the resource pill is an icon at rest, and sits left of usage",
@@ -91,7 +85,6 @@
           "read VmRSS, route ps through the seam, fail when no socket answered"
         ],
         "Documentation": [
-          "parseVmStat verified on a real Mac; sharpen why darwin stays silent",
           "renumber the checklist, widen two claims, and file the sidebar gap",
           "say what the kill actually covers, and correct three overstatements",
           "session memory pill + panel"
@@ -115,9 +108,7 @@
       "commit": "0ba1f599980e7a586389d0f075972fe74fb4d3a9",
       "commitUrl": "https://github.com/Ding-Ding-Projects/material-nodeterm/commit/0ba1f599980e7a586389d0f075972fe74fb4d3a9",
       "categories": {
-        "Fixed": [
-          "patch node-pty's darwin fd leak locally (microsoft/node-pty#950)"
-        ],
+        "Fixed": [],
         "Chores": [
           "v0.2.45"
         ]
@@ -165,7 +156,6 @@
           "refuse a non-positive hibernation idle window",
           "subtract a shadow from tmux's client COUNT, never force detached",
           "keep shadowed sessions cullable, and refuse what a shadow cannot reach",
-          "silence the host memory leg on darwin (freemem lies there)",
           "refuse multi-line control-mode commands",
           "queue the pressure lever's releases through the drain",
           "only close a control-mode block on its own ts+num",
@@ -375,8 +365,7 @@
         ],
         "Documentation": [
           "the README's iOS link pointed at a 404",
-          "the tap step is not optional, and trust does not prompt",
-          "the Homebrew cask was live but undocumented"
+          "the tap step is not optional, and trust does not prompt"
         ],
         "Chores": [
           "v0.2.40"
@@ -422,7 +411,6 @@
       "commitUrl": "https://github.com/Ding-Ding-Projects/material-nodeterm/commit/eec630982df86201aa223a48e750fe65c01e58f3",
       "categories": {
         "Added": [
-          "auto now means the shared renderer on macOS",
           "the blink restarts on input, like xterm's own cursor",
           "survive a lost context — restore once, fall back if it happens again",
           "wire the blink phase into the addon — the cursor actually blinks",
@@ -454,8 +442,7 @@
         "Documentation": [
           "the plate's half-side clamp is unreachable through the UI — say so",
           "the separate alpha blend fixes the mip-frontier rim — say so where it is set",
-          "say what the top-layer skip really deviates from, and re-unify the subscription order",
-          "Phase 2 plan — close the promotion gate, then make shared the macOS default"
+          "say what the top-layer skip really deviates from, and re-unify the subscription order"
         ],
         "Chores": [
           "v0.2.37"
@@ -583,10 +570,8 @@
           "gitignore update"
         ],
         "Fixed": [
-          "macOS defaults to the DOM renderer — WebGL becomes a deliberate opt-in",
           "the gesture latch — renderer swaps never run mid-pan/zoom, and drain as a trickle",
           "treat the webgl renderer swap as a transaction — verify, sweep, restore",
-          "zoom-gated context suspension + lower macOS budget",
           "heal stuck blank/partial terminals after pan/zoom renderer churn",
           "place cursor-less new nodes in free space, not on a pile (#76)",
           "harden the askpass relay per socket-switch review",
@@ -615,8 +600,7 @@
         "Chores": [
           "v0.2.34",
           "drop exports nothing imports",
-          "use the mock keychain in NT_MULTI sandboxes",
-          "badge NT_MULTI test instances on the macOS dock"
+          "use the mock keychain in NT_MULTI sandboxes"
         ]
       }
     },
@@ -665,9 +649,7 @@
       "commit": "9bbb62df7312c2833c6fbce77ea12a2ba11d74a4",
       "commitUrl": "https://github.com/Ding-Ding-Projects/material-nodeterm/commit/9bbb62df7312c2833c6fbce77ea12a2ba11d74a4",
       "categories": {
-        "Added": [
-          "GPU-rendering toggle (escape hatch for macOS window flicker)"
-        ],
+        "Added": [],
         "Fixed": [
           "gate the QR on Remote Login, working Open Settings, 10-min window",
           "resolve HOME in install-server.sh when systemd runs it without one",
@@ -731,12 +713,10 @@
           "node menu + bulk palette action to restart & resume agent CLIs",
           "terminal nodes register their in-place restart closure",
           "pane-command IPC — pane_current_command for restart choreography",
-          "board polish — usage margin, macOS no-drag, menu icons",
           "in-place restart choreography, registry and bulk summary",
           "eligibility + exit-sequence helpers for in-place agent restart",
           "browser nodes on the board — cards + live webview in the card modal",
           "drop files into the card modal's terminal (shared drop path with the canvas node)",
-          "a Notch settings section + a macOS step in the setup tour",
           "retro sound effects when a turn finishes / a session needs you",
           "usage pill over the board + right-click card menu (open / move / delete)",
           "dismiss a stuck row (hover × / right-click)",
@@ -804,7 +784,7 @@
           "Trello-style tab toggle, board title strip, collapsible cards with meter detail row",
           "view toggle moves to the controls cluster; column half-pill on session nodes",
           "re-validate masters on wake instead of waiting out ServerAlive",
-          "default dictation shortcut → Cmd+Alt+D",
+          "default dictation shortcut → Ctrl+Alt+D",
           "livelier recording equalizer — faster poll, sqrt gain, per-bar silhouette",
           "mic button on the terminal node header — dictate into that node (dictation)",
           "session cards with Ungrouped column, live status badges, click-to-focus",
@@ -813,7 +793,6 @@
           "diagnosable smart-whisper load failures (press-to-talk Task 3)",
           "press-to-talk pill — record on press, insert on stop (press-to-talk Task 2)",
           "configurable dictation shortcut (press-to-talk Task 1)",
-          "platform-aware shortcut labels (⌘ → Ctrl off-mac, incl. Server Edition)",
           "window/taskbar icon from bundled png",
           "electron-builder AppImage + deb target, dist:linux script",
           "full-page board toggle (tab bar, palette, cmd-shift-b) over the mounted canvas",
@@ -873,7 +852,6 @@
           "seats in the entitlement (premium→N, absent→1, free→0) (team-access Task 1)",
           "echo your own cursor-chat back as a timed bubble",
           "quick-pair popover on a top-right phone button",
-          "tmux banner bootstraps Homebrew on Macs that lack it",
           "the Remote Login warning opens System Settings and clears itself",
           "'?' opens a help menu — shortcuts, bug report, repo link, version",
           "Report-a-bug dialog (prefilled GitHub issue)",
@@ -1018,7 +996,7 @@
           "link map carries agent identity; per-agent link messages",
           "codex + gemini join CONTEXT_LINK_CAPABLE",
           "tidy the right-click menu — grouped sections, no New chat",
-          "terminal chat icon toggles the Cmd+M view instead of forking",
+          "terminal chat icon toggles the Ctrl+M view instead of forking",
           "branch verb — agents can branch a Claude node's conversation",
           "richer skill triggering — creation/grouping/team phrases",
           "open-agent verb — open codex/gemini/custom agent sessions",
@@ -1065,7 +1043,6 @@
           "status glow + pulse — amber working, red needs-you, blue unread",
           "red pulsing glow behind terminal nodes waiting on the user",
           "needs-you and unread counts on project group headers",
-          "surface macOS permission denial + Open System Settings repair path",
           "unread shows as a pulsing accent-blue check in the status slot",
           "needs-attention rings a bell — red filled bell replaces the attention dot",
           "soft pulsing amber glow behind terminal nodes while the agent works",
@@ -1200,7 +1177,7 @@
           "add section shell, searchable row, and field row",
           "add search matcher and navigation data",
           "add ui/ primitives and relocate SegmentedPill",
-          "Cmd+M opens chat panel on chat-capable agent nodes",
+          "Ctrl+M opens chat panel on chat-capable agent nodes",
           "ChatPanel component + styles",
           "structured transcript reader + chat:read-transcript IPC",
           "inject idle-gated discovery note on connect",
@@ -1237,7 +1214,7 @@
           "surface git action errors as a banner atop the panel",
           "wire commits graph into Source Control + canvas",
           "entitlement store + Settings License section",
-          "wire find-bar into terminal node (button, Cmd+F, xterm highlight)",
+          "wire find-bar into terminal node (button, Ctrl+F, xterm highlight)",
           "useTerminalSearch hook (snapshot index over scrollback + transcript)",
           "IconSearch + FindBar presentational component and styles",
           "main-process Claude transcript reader + claude.readTranscript IPC",
@@ -1310,7 +1287,7 @@
           "polished notification-consent dialog (REF-style)",
           "ask notification permission on first launch + Settings control",
           "/branch node action + document Claude Code support",
-          "session-name chip + Cmd+K content search",
+          "session-name chip + Ctrl+K content search",
           "busy indicator, unread badge, completion notification",
           "foundation — status store, sendText, notify/focus IPC",
           "dashed frame + floating label pill, fix radius mismatch",
@@ -1327,16 +1304,11 @@
           "Revert \"Revert the pane double-click overview zoom, keep the empty-canvas fly-back\"",
           "Revert the pane double-click overview zoom, keep the empty-canvas fly-back",
           "name the two actions Refresh and Restart",
-          "caffeinate the mac upload step too",
-          "drop npm cache on the self-hosted mac runner",
           "publish job writes commit-derived release notes before promoting",
           "security pipeline — CodeQL, dependency review, Dependabot",
           "cask sync moved into the tap's own workflow (org disables deploy keys)",
-          "Homebrew cask lives in the official org tap (nodeterm/homebrew-tap)",
-          "publish job updates the Homebrew cask (eneskirca/homebrew-tap)",
           "platform jobs create a prerelease; a publish job promotes to latest only when both succeed",
           "click opens the card, Trello-style drop highlight, bigger type, motion pass",
-          "caffeinate the mac build; idempotent asset upload with retries",
           "move the usage service into core so Server Edition serves it (#7)",
           "move isMac below the import block (Task 1 review nit)",
           "release-linux job (AppImage + deb to the same GitHub Release)",
@@ -1374,7 +1346,6 @@
           "drop the dead createClaudeNode wrapper, ⌘⇧G toggles Source Control",
           "activePermissionMode reuses getProject; add store-wiring tests",
           "move commit-message into src/core (electron-free leaf)",
-          "run on self-hosted Apple Silicon runner (no billed macOS minutes)",
           "finish phase-1 extraction — docs + reverse-import guard",
           "move license + context-link onto CorePlatform",
           "move git-service onto CorePlatform",
@@ -1490,11 +1461,9 @@
           "dedupe user message.updated — post-idle touch pinned nodes on RUNNING",
           "last-column delete is a no-op, not a dead confirm dialog",
           "dead hook exports + missing unix-socket transport killed all statuses",
-          "keychain version warning is macOS-only",
           "reject unknown model ids in delete() — no path traversal via the authed surface (final review)",
           "route Pro errors to License, actionable consent message (final review)",
           "cap takes at 2:30 — an oversized ws frame would drop the whole bridge (final review)",
-          "mac mic usage description + hardened-runtime audio-input entitlement (final review)",
           "externalize smart-whisper in the server bundle — inlined loader can't find its native binding (final review)",
           "a failed has-session probe is not a cold start",
           "notification click into a closed project reopens its tab first",
@@ -1697,7 +1666,6 @@
           "async subagent cards flipped to done instantly with no output",
           "don't lose subagent transcript lines torn mid-write",
           "don't let the status badge stick on RUNNING after the turn ended",
-          "status badges died after macOS close→dock-reopen (stale window ref)",
           "drop autoFocus on start-page search to avoid focus-steal on restore",
           "navigate via the src attribute, not webview.loadURL()",
           "don't lose Pro to the launch broadcast race or mid-session token expiry",
@@ -1720,7 +1688,6 @@
           "reject non-absolute upload localPath (argv flag-smuggling guard)",
           "basename upload fileName (no remote path traversal) + scp BatchMode=yes (final-review)",
           "scope git routing to the active project + panel re-fetch on connect + findSsh login-shell probe (final-review)",
-          "short, space-free ControlMaster socket path (macOS userData too long/spaced)",
           "quoteRemotePath for remote fs paths (tilde) + explicit sshFs flag (no dialog wrong-write) (final-review)",
           "raise ssh runner maxBuffer for remote transcript reads + bound subagent cancel set (final-review)",
           "raw node id in remote hook env + sync master kill on quit + transcript_path jail (final-review)",
@@ -1734,7 +1701,7 @@
           "clear resize debounce timer before detached-node guard",
           "add icon scaffold, guard detached-node listeners, fix key isolation",
           "host co-attaches tmux (no -D) so connecting a client doesn't detach the host",
-          "mirror zooms like the local canvas (Cmd+wheel/pinch zoom-to-cursor)",
+          "mirror zooms like the local canvas (Ctrl+wheel/pinch zoom-to-cursor)",
           "untrack accidental node_modules symlink, ignore bare node_modules",
           "render drop-target ring on the project header too",
           "use relative import for worktree-ops in main process",
@@ -1750,7 +1717,7 @@
           "mirror shows host nodes — fitView on first snapshot + client requests canvas on connect",
           "card padding, toggle geometry, focus chrome, title-bar inset",
           "give sidebar buttons explicit backgrounds",
-          "allow native text selection + Cmd+C in chat panel",
+          "allow native text selection + Ctrl+C in chat panel",
           "move appearance reset to styles.css so it works in dev",
           "match REF visual language",
           "map opus/sonnet/fable to 1M window (bare model id can't reveal active 1M)",
@@ -1784,7 +1751,7 @@
           "render the parent->subagent edges (add source handle)",
           "flag unread unless actively viewing that node",
           "consent prompt re-asked every launch (hydration race)",
-          "Cmd+C copies the xterm selection to the clipboard",
+          "Ctrl+C copies the xterm selection to the clipboard",
           "poll the signal dir so in-file hook appends aren't missed",
           "proper labels on the notification-consent dialog",
           "detect state via Claude hooks instead of output parsing",

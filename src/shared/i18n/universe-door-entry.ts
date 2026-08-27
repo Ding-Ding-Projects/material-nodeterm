@@ -1,7 +1,7 @@
-import type { Catalog, FiveVariants } from './types'
+import type { Catalog, FunnyVariants } from './types'
 
-function flat(text: string): FiveVariants {
-  return [text, text, text, text, text]
+function flat(text: string): FunnyVariants {
+  return [text, text, text, text, text, text, text, text, text, text]
 }
 
 /** Localized copy for the door-entry panel. Kept separate so the entry lane can land alongside
