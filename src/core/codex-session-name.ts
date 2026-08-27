@@ -17,8 +17,6 @@ import { createHash } from 'crypto'
 import { readFileSync } from 'fs'
 import { homedir } from 'os'
 import path from 'path'
-import { createHash } from 'crypto'
-import { readFileSync } from 'fs'
 import { WebSocket } from 'ws'
 // Minting a thread is a multi-step conversation with a typically COLD server, so it needs a real
 // budget — and the hook route serving it must raise its socket guard to match (CONTROL_CEILING_MS in hook-server).
@@ -93,24 +91,6 @@ const REQUEST_TIMEOUT_MS = 2_000
 const names = new Map<string, { name: string | null; at: number }>()
 const inflight = new Map<string, Promise<string | null>>()
 
-/** Relay-observed fallback title, isolated by the selected app-server socket. */
-export function relayedCodexSessionName(
-  socketPath: string,
-  threadId: string,
-  home = homedir()
-): string | null {
-  try {
-    const scope = createHash('sha256').update(socketPath).digest('hex').slice(0, 16)
-    const value = readFileSync(
-      path.join(home, '.nodeterm', 'codex-thread-names', scope, threadId),
-      'utf8'
-    ).trim()
-    return value ? value.slice(0, 500) : null
-  } catch {
-    return null
-  }
-}
-
 function connectCodexAppServer(socketPath: string): WebSocket {
   return new WebSocket(codexUnixWebSocketUrl(socketPath), { perMessageDeflate: false })
 }
@@ -130,16 +110,6 @@ export function codexUnixWebSocketUrl(socketPath: string): string {
     throw new Error('Unsupported Codex app-server socket path')
   }
   return `ws+unix://${socketPath}:/rpc`
-}
-
-export function rememberCodexSessionName(
-  threadId: string,
-  name: unknown,
-  socketPath = defaultCodexAppServerSocket()
-): void {
-  if (!threadId) return
-  const value = typeof name === 'string' && name.trim() ? name.trim() : null
-  names.set(`${socketPath}\0${threadId}`, { name: value, at: Date.now() })
 }
 
 export function readCodexSessionNameAt(
@@ -281,118 +251,6 @@ function probeCodexThread(
     })
     ws.once('error', () => finish(answered ? 'no' : 'unreachable'))
     ws.once('close', () => finish(answered ? 'no' : 'unreachable'))
-  })
-}
-
-/** Read the exact thread metadata from one account-scoped app-server. */
-export function readCodexThreadAt(
-  socketPath: string,
-  threadId: string,
-  timeoutMs = REQUEST_TIMEOUT_MS
-): Promise<{ id: string; name: string | null; path: string | null } | null> {
-  if (!isSafeThreadId(threadId)) return Promise.resolve(null)
-  return new Promise((resolve) => {
-    let settled = false
-    let ws: WebSocket
-    const finish = (value: { id: string; name: string | null; path: string | null } | null): void => {
-      if (settled) return
-      settled = true
-      clearTimeout(timer)
-      try {
-        ws.close()
-      } catch {
-        /* the connection may never have opened */
-      }
-      resolve(value)
-    }
-    const timer = setTimeout(() => finish(null), timeoutMs)
-    timer.unref?.()
-    try {
-      ws = connectCodexAppServer(socketPath)
-    } catch {
-      clearTimeout(timer)
-      resolve(null)
-      return
-    }
-    ws.once('open', () => {
-      ws.send(JSON.stringify({
-        id: 1,
-        method: 'initialize',
-        params: { clientInfo: { name: 'nodeterm', version: '1' } }
-      }))
-    })
-    ws.on('message', (raw) => {
-      let message: Record<string, any>
-      try { message = JSON.parse(raw.toString()) } catch { return }
-      if (message.id === 1) {
-        if (message.error) return finish(null)
-        ws.send(JSON.stringify({ method: 'initialized' }))
-        ws.send(JSON.stringify({ id: 2, method: 'thread/read', params: { threadId, includeTurns: false } }))
-      } else if (message.id === 2) {
-        const thread = message.result?.thread
-        if (message.error || typeof thread?.id !== 'string' || thread.id !== threadId) {
-          finish(null)
-          return
-        }
-        finish({
-          id: thread.id,
-          name: typeof thread.name === 'string' && thread.name.trim() ? thread.name.trim() : null,
-          path: typeof thread.path === 'string' && path.isAbsolute(thread.path) ? thread.path : null
-        })
-      }
-    })
-    ws.once('error', () => finish(null))
-    ws.once('close', () => finish(null))
-  })
-}
-
-export function readCodexAccountAt(
-  socketPath: string,
-  timeoutMs = REQUEST_TIMEOUT_MS
-): Promise<{ email: string | null } | null> {
-  return new Promise((resolve) => {
-    let settled = false
-    let ws: WebSocket
-    const finish = (value: { email: string | null } | null): void => {
-      if (settled) return
-      settled = true
-      clearTimeout(timer)
-      try { ws.close() } catch { /* connection may never have opened */ }
-      resolve(value)
-    }
-    const timer = setTimeout(() => finish(null), timeoutMs)
-    timer.unref?.()
-    try {
-      ws = connectCodexAppServer(socketPath)
-    } catch {
-      clearTimeout(timer)
-      resolve(null)
-      return
-    }
-    ws.once('open', () => {
-      ws.send(JSON.stringify({
-        id: 1,
-        method: 'initialize',
-        params: { clientInfo: { name: 'nodeterm', version: '1' } }
-      }))
-    })
-    ws.on('message', (raw) => {
-      let message: Record<string, any>
-      try { message = JSON.parse(raw.toString()) } catch { return }
-      if (message.id === 1) {
-        ws.send(JSON.stringify({ method: 'initialized' }))
-        ws.send(JSON.stringify({ id: 2, method: 'account/read', params: { refreshToken: false } }))
-      } else if (message.id === 2) {
-        const account = message.result?.account
-        if (!account) return finish(null)
-        const email = typeof account.email === 'string' && account.email.trim()
-          ? account.email.trim()
-          : null
-        finish({ email })
-      }
-    })
-    ws.once('error', () => finish(null))
-    ws.once('close', () => finish(null))
   })
 }
 
@@ -799,12 +657,6 @@ export function readCodexAccountAt(
     ws.once('error', () => finish(null))
     ws.once('close', () => finish(null))
   })
-}
-
-/** Drop the memoized/coalesced name state — for tests and for a relay/account-set change. */
-export function forgetCodexSessionNames(): void {
-  names.clear()
-  inflight.clear()
 }
 
 /**
