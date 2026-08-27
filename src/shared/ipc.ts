@@ -677,6 +677,11 @@ export const IPC = {
   dockerHostManagerGitlabBackups: 'docker-host-manager:gitlab-backups',
   dockerHostManagerGitlabCredential: 'docker-host-manager:gitlab-credential',
   dockerHostManagerGitlabRun: 'docker-host-manager:gitlab-run',
+  nextcloudAioContexts: 'nextcloud-aio:contexts',
+  nextcloudAioSnapshot: 'nextcloud-aio:snapshot',
+  nextcloudAioRun: 'nextcloud-aio:run',
+  nextcloudAioCancel: 'nextcloud-aio:cancel',
+  nextcloudAioProgress: 'nextcloud-aio:progress',
   // Guided Cloudflare account, zone, DNS, SSL/TLS, ruleset, redirect, cache, and analytics managers.
   // Tokens stay in the host credential vault; canvas data carries only safe intent.
   cloudflareCoreRuntime: 'cloudflare-core:runtime',

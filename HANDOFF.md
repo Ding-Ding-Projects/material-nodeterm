@@ -1,5 +1,30 @@
 # Handoff
 
+## 2026-08-27, Nextcloud AIO hosting implementation, issue #52
+
+The implementation lane is `feat/program-41-nextcloud-aio`, based on `12055e96` before the
+current-main integration. The canvas catalog creates a `nextcloud-aio` service node from
+`nextcloud-hosting`, with a typed shared contract in `src/shared/nextcloud-aio.ts`, a desktop
+manager in `src/main/remote/nextcloud-aio-manager.ts`, and a guided renderer surface in
+`src/renderer/components/nextcloud/NextcloudAioPanel.tsx`.
+
+The profile pins `nextcloud/all-in-one:2025.8.0` from the official source, discloses that its
+read-only Docker socket mount can control the Docker host, refuses `--privileged`, uses dropped
+capabilities and `no-new-privileges`, and sends fixed argument arrays only. It exposes discovered
+context selection, loopback/private binding, bounded port validation, health, lifecycle, update,
+backup, restore, rollback, cancellation, partial progress, and explicit failure recovery. Every
+search field has its own adjacent anchored regex builder.
+
+Schema 3 carries only `nextcloudAioConfig` safe intent. Context names, endpoints, socket paths,
+container ids, volume contents, backup records, process state, host paths, and credentials remain
+local and import has no external side effect. Direct documentation is in
+`docs/features/integrations/nextcloud-aio-hosting.md`, the category index, the offline docs bundle,
+and `site/docs/nextcloud-aio-hosting.html`.
+
+No tests, type checks, lint, reviews, security or accessibility checks, builds, packaging,
+installer execution, runtime interaction, or captures were run in this ultra-speed lane. The source
+is committed for the parent integration lane to verify against the exact integrated commit.
+
 ## 2026-08-27, bundled AWS CLI v2 lane, issue #41
 
 Issue #41 is implemented on `feat/program-30-bundled-aws-cli`, reconciled with
@@ -2484,3 +2509,26 @@ This ultra-speed lane intentionally ran no tests, type checks, lint, builds, pac
 security checks, accessibility checks, installer execution, runtime interaction, or UI captures.
 The parent integration lane must verify the exact commit, reconcile any central-file overlap with
 other lanes, and supply the remaining release evidence before claiming the feature verified.
+# 2026-08-27, Easter egg suite, issue #103
+
+Implemented a hand-written 60-entry Easter egg catalog in `src/shared/easter-eggs.ts` and a
+bounded renderer cabinet in `src/renderer/components/EasterEggs.tsx`. The cabinet is mounted at
+the app root, hidden fail-closed under School mode, and exposes a three-second keyboard arm route
+plus a functional Try button for keyboard, touch, and assistive technology users. Discovery state
+is private local storage containing only catalog ids, with an explicit reset action. The status card
+is non-blocking, uses a polite live region, and has a dismissal control. Reduced motion receives a
+static presentation.
+
+The catalog spans canvas, nodes, title bar, settings, command palette, notifications,
+documentation, changelog, search, project switcher, source control, media, scheduling, hosting,
+account, converter, local model management, authenticator, support, and status. Directly related
+surface markers were added to the app bar, canvas, navigation rail, project switcher,
+documentation, settings, history, source control, converter, and local model drawers.
+
+Documentation is in `docs/features/appearance/easter-eggs.md` and indexed from the appearance
+category. `ROADMAP.md` and `CHANGELOG.md` record the implementation and its intentionally pending
+verification state.
+
+No tests, lint, type checks, builds, packaging, runtime interaction, reviews, audits, or HuiShots
+were run, as required by issue #103. The feature jer remains separate from `main`; the parent Dog
+must perform integration and any later verification.
