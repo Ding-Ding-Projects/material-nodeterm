@@ -413,6 +413,7 @@ export type NodeKind =
   | 'gitlab'
   | 'homeassistant'
   | 'freepbx'
+  | 'awsidentity'
   | 'torrent'
   /** One-shot Linux ISO virtual machine, distinct from the WSL terminal profile. */
   | 'linux-vm'
@@ -428,7 +429,8 @@ export const SERVICE_NODE_KINDS = [
   'proxmox',
   'gitlab',
   'homeassistant',
-  'freepbx'
+  'freepbx',
+  'awsidentity'
 ] as const
 
 export type ServiceNodeKind = (typeof SERVICE_NODE_KINDS)[number]
@@ -630,6 +632,10 @@ export interface CanvasNodeState {
    * `localExec` on the index entry, exactly where the shell and Windows profile already live.
    */
   serviceLabel?: string
+  /** AWS-only portable requirements. Profile/account/role/endpoints remain machine-local. */
+  awsIdentityIntent?: import('./aws-identity').AwsIdentityIntent
+  /** AWS-only machine binding, stripped into IndexEntryV3.localExec by shared/node-exec.ts. */
+  awsIdentityBinding?: import('./aws-identity').AwsIdentityBinding
   /** torrent-only: safe display intent shared with the canvas; task state and paths stay local. */
   torrentMagnet?: string
   /** Linux ISO VM settings stored in the shared project projection. */
@@ -4498,6 +4504,8 @@ export interface NodeTerminalApi {
   torrent: import('./torrent').TorrentApi
   /** Local Minecraft server create-and-manage — docs/minecraft-server-manager.md. */
   minecraft: import('./minecraft').MinecraftApi
+  /** Desktop-local AWS profile discovery. Credentials and provider sessions never cross IPC. */
+  awsIdentity: import('./aws-identity').AwsIdentityApi
   /** Local Linux ISO VM lifecycle — docs/linux-iso-vm.md. */
   virtualMachine: import('./virtual-machine').VirtualMachineApi
   ssh: SshApi

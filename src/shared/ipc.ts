@@ -772,6 +772,10 @@ export const IPC = {
   // Shell → renderer: one multiplexed status/console stream, like ollama:chat-stream above.
   // Payload: MinecraftEvent. A listener filters to the instance id it owns.
   minecraftEvent: 'minecraft:event',
+
+  // Local AWS profile and non-secret identity metadata. Credentials remain in AWS's own local
+  // stores and never cross this channel.
+  awsIdentityDiscover: 'aws-identity:discover',
   // Local WebTorrent downloader. Task state remains machine-local; only explicit task events cross
   // the shell bridge. See shared/torrent.ts and core/torrent/.
   torrentRuntime: 'torrent:runtime',

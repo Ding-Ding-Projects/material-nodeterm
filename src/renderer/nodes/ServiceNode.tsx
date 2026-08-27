@@ -7,6 +7,7 @@ import { safeServiceEndpoint } from '@shared/node-exec'
 import { nodeBorderStyle, nodeColorStyle } from '../lib/nodeColor'
 import { ColorMenu } from '../components/color/ColorMenu'
 import { MinecraftServerPanel } from '../components/minecraft/MinecraftServerPanel'
+import { AwsIdentityManager } from '../components/aws/AwsIdentityManager'
 import { EditableNodeTitle } from '../components/EditableNodeTitle'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { mapAroundExactFacts } from './nodeVocabulary'
@@ -50,6 +51,7 @@ const ENDPOINT_PLACEHOLDER: Record<ServiceNodeKind, string> = {
   gitlab: 'https://gitlab.example.com',
   homeassistant: 'http://homeassistant.local:8123',
   freepbx: 'https://pbx.local'
+  ,awsidentity: 'https://sts.amazonaws.com'
 }
 
 /**
@@ -231,7 +233,15 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
 
         {!collapsed && kind === 'minecraft' && <MinecraftServerPanel nodeId={id} />}
 
-        {!collapsed && kind !== 'minecraft' && (
+        {!collapsed && kind === 'awsidentity' && (
+          <AwsIdentityManager
+            binding={data.awsIdentityBinding as never}
+            intent={data.awsIdentityIntent as never}
+            onChange={(awsIdentityBinding, awsIdentityIntent) => updateNodeData(id, { awsIdentityBinding, awsIdentityIntent })}
+          />
+        )}
+
+        {!collapsed && kind !== 'minecraft' && kind !== 'awsidentity' && (
           <div className="service-node__body">
             <label className="service-node__field" htmlFor={`${id}-endpoint`}>
               <span className="service-node__field-label">{vocab('Address')}</span>

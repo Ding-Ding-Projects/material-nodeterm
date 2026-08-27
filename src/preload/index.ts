@@ -1130,6 +1130,9 @@ const api: NodeTerminalApi = {
     deleteBackup: (id, backupId) => ipcRenderer.invoke(IPC.minecraftBackupDelete, id, backupId),
     onEvent: (listener) => subscribeMinecraftEvent(listener)
   },
+  awsIdentity: {
+    discover: () => ipcRenderer.invoke(IPC.awsIdentityDiscover)
+  },
   torrent: {
     runtime: () => ipcRenderer.invoke(IPC.torrentRuntime),
     list: (nodeId) => ipcRenderer.invoke(IPC.torrentList, nodeId),

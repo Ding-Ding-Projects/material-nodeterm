@@ -56,6 +56,7 @@ import { registerConverterIpc } from '../core/converter/register-ipc'
 import { registerNodeDependencyIpc } from '../core/node-dependencies/register-ipc'
 import { registerOllamaIpc } from '../core/ollama/register-ipc'
 import { registerMinecraftIpc } from '../core/minecraft/register-ipc'
+import { registerAwsIdentityIpc } from '../core/aws-identity'
 import { registerTorrentIpc } from '../core/torrent/register-ipc'
 import { registerVirtualMachineIpc } from '../core/virtual-machine/register-ipc'
 import { registerCalendarIpc } from '../core/calendar/register-ipc'
@@ -2292,6 +2293,7 @@ app.whenReady().then(async () => {
   registerNodeDependencyIpc(corePlatform)
   registerOllamaIpc(corePlatform)
   minecraftServers = registerMinecraftIpc(corePlatform).manager
+  registerAwsIdentityIpc(corePlatform)
   registerTorrentIpc(corePlatform)
   virtualMachineManager = registerVirtualMachineIpc(corePlatform).manager
   registerCalendarIpc(corePlatform)

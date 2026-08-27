@@ -49,6 +49,7 @@ import { newUniverseCreationEventId, shopNodeIdForCanvas } from '../../core/univ
 import { TORRENT_NODE_CATALOG_ENTRY } from '@shared/torrent'
 import { DEFAULT_VIRTUAL_MACHINE_CONFIG } from '@shared/virtual-machine'
 import { TIMER_DEFAULT_DURATION_MS, type TimerNodeData } from '@shared/timer'
+import { normalizeAwsIdentityIntent } from '@shared/aws-identity'
 
 // Re-exported so Canvas (and anything else in the renderer) keeps importing it from here, while the
 // single implementation lives in src/shared and is shared with the relay host + the canvas-sync
@@ -1488,7 +1489,8 @@ export const SERVICE_NODE_LABELS: Record<ServiceNodeKind, string> = {
   proxmox: 'Proxmox',
   gitlab: 'GitLab',
   homeassistant: 'Home Assistant',
-  freepbx: 'FreePBX'
+  freepbx: 'FreePBX',
+  awsidentity: 'AWS identity'
 }
 
 /**
@@ -2119,9 +2121,10 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   gitlab: true,
   homeassistant: true,
   freepbx: true,
+  awsidentity: true,
   nsis: true,
-  shop: true
-  torrent: true
+  shop: true,
+  torrent: true,
   'linux-vm': true
 }
 
@@ -2166,9 +2169,10 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   gitlab: SERVICE_SUMMARY_SIZE,
   homeassistant: SERVICE_SUMMARY_SIZE,
   freepbx: SERVICE_SUMMARY_SIZE,
+  awsidentity: SERVICE_CONSOLE_SIZE,
   nsis: NSIS_SIZE,
-  shop: SHOP_SIZE
-  torrent: TORRENT_SIZE
+  shop: SHOP_SIZE,
+  torrent: TORRENT_SIZE,
   'linux-vm': LINUX_VM_SIZE
 }
 
@@ -2621,6 +2625,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         cwd: n.cwd,
         text: n.text,
         serviceLabel: n.serviceLabel,
+        awsIdentityIntent: normalizeAwsIdentityIntent(n.awsIdentityIntent) ?? undefined,
         universeCanvasId: n.universeCanvasId,
         universeScope: n.universeScope,
         universeDepth: n.universeDepth,
@@ -2739,6 +2744,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         cwd: n.data.cwd,
         text: n.data.text,
         serviceLabel: n.data.serviceLabel,
+        awsIdentityIntent: normalizeAwsIdentityIntent(n.data.awsIdentityIntent) ?? undefined,
         universeCanvasId: n.data.universeCanvasId,
         universeScope: n.data.universeScope,
         universeDepth: n.data.universeDepth,
@@ -2784,7 +2790,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         sshFs: n.data.sshFs,
         worktree: n.data.worktree,
         annotationVariant: n.data.annotationVariant,
-        annotationDir: n.data.annotationDir
+        annotationDir: n.data.annotationDir,
         premaxRect: n.data.premaxRect
       }
     })
