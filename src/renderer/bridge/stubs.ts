@@ -736,7 +736,7 @@ export function buildStubApi(): Omit<
       remove: U('torrent.remove'),
       setSeedPolicy: U('torrent.setSeedPolicy'),
       reconcile: U('torrent.reconcile'),
-      onTask: noopUnsub
+      onTask: noopUnsub,
     },
     virtualMachine: {
       tools: U('virtualMachine.tools'),
@@ -749,7 +749,7 @@ export function buildStubApi(): Omit<
       restore: U('virtualMachine.restore'),
       openDisplay: U('virtualMachine.openDisplay'),
       reset: U('virtualMachine.reset'),
-      onEvent: noopUnsub
+      onEvent: noopUnsub,
     },
     calendar: {
       status: U('calendar.status'),
@@ -770,6 +770,17 @@ export function buildStubApi(): Omit<
       discover: U('homeAssistant.discover'),
       cancel: U('homeAssistant.cancel'),
       onEvent: noopUnsub
+    },
+    homeAssistantControl: {
+      connections: U('homeAssistantControl.connections'),
+      configure: U('homeAssistantControl.configure'),
+      bind: U('homeAssistantControl.bind'),
+      status: U('homeAssistantControl.status'),
+      entities: U('homeAssistantControl.entities'),
+      services: U('homeAssistantControl.services'),
+      call: U('homeAssistantControl.call'),
+      cancel: U('homeAssistantControl.cancel')
+    },
     // Browser control is desktop-only (no <webview>, no CDP on the Server Edition / relay), so the
     // resolve round-trip is inert here — the verb is refused by name before it reaches a handler.
     onBrowserControlResolve: noopUnsub,

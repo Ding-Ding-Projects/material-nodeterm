@@ -832,6 +832,14 @@ export const IPC = {
   homeAssistantDiscover: 'home-assistant:discover',
   homeAssistantCancel: 'home-assistant:cancel',
   homeAssistantEvent: 'home-assistant:event',
+  homeAssistantConnections: 'home-assistant-control:connections',
+  homeAssistantConfigure: 'home-assistant-control:configure',
+  homeAssistantBind: 'home-assistant-control:bind',
+  homeAssistantStatus: 'home-assistant-control:status',
+  homeAssistantEntities: 'home-assistant-control:entities',
+  homeAssistantServices: 'home-assistant-control:services',
+  homeAssistantCall: 'home-assistant-control:call',
+  homeAssistantControlCancel: 'home-assistant-control:cancel',
   // "Open in Visual Studio Code" (src/core/vscode-detect.ts, src/core/vscode-handlers.ts).
   // Registered on BOTH shells via the generic `platform.handle` seam, so it opens VS Code on
   // whichever machine is actually running the shell (this desktop, or the Server Edition host).

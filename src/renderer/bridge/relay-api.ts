@@ -216,11 +216,12 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     // call for it yet. Refuse cleanly rather than silently provisioning/spawning on the WRONG
     // machine (`...local` would run java on the VIEWER, not the host it joined).
     minecraft: stub.minecraft,
-    torrent: stub.torrent
+    torrent: stub.torrent,
     calendar: stub.calendar,
     // Home Assistant bindings, access tokens, sockets, and entity caches are machine-local. A
     // relay project must not silently discover against the viewer's instance registry.
     homeAssistant: stub.homeAssistant,
+    homeAssistantControl: stub.homeAssistantControl,
     // Browser control never rides the relay either (no CDP off the desktop) — inert no-ops.
     onBrowserControlResolve: stub.onBrowserControlResolve,
     sendBrowserControlResolveResult: stub.sendBrowserControlResolveResult,

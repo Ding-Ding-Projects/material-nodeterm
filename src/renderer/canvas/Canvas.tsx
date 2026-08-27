@@ -93,6 +93,7 @@ import { GroupNode, setWorktreeActionHandler, setWslActionHandler } from '../nod
 import { AnnotationNode } from '../nodes/AnnotationNode'
 import AuthenticatorNode from '../nodes/AuthenticatorNode'
 import CalendarNode from '../nodes/CalendarNode'
+import HomeAssistantControlNode from '../nodes/HomeAssistantControlNode'
 import { useAnnotationDrawTool } from './useAnnotationDrawTool'
 import { annotationEndpoints } from '../lib/annotation'
 import { LazyEditorNode, LazyDiffNode } from '../nodes/lazyMonacoNodes'
@@ -706,6 +707,7 @@ import {
   createSshTerminalNode,
   createAuthenticatorNode,
   createCalendarNode,
+  createHomeAssistantControlNode,
   createNsisNode,
   createTorrentNode,
   createStickyNode,
@@ -2042,6 +2044,7 @@ export function Canvas() {
       annotation: withNodeBoundary(AnnotationNode),
       authenticator: withNodeBoundary(AuthenticatorNode),
       calendar: withNodeBoundary(CalendarNode),
+      'homeassistant-control': withNodeBoundary(HomeAssistantControlNode),
       editor: withNodeBoundary(LazyEditorNode),
       diff: withNodeBoundary(LazyDiffNode),
       subagent: withNodeBoundary(SubagentNode),
@@ -5368,6 +5371,7 @@ export function Canvas() {
             if (catalogEntry.id === 'alarm') return createAlarmClockNode(index, center)
             if (catalogEntry.id === 'nsis') return createNsisNode(index, center)
             if (catalogEntry.id === 'wild-dim-sum') return createWildDimSumNode(index, undefined, center)
+            if (catalogEntry.id === 'homeassistant-control') return createHomeAssistantControlNode(index, center)
             if (catalogEntry.id.startsWith('service:')) {
               return createServiceNode(catalogEntry.nodeKind as ServiceNodeKind, index, center)
             }

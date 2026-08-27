@@ -44,6 +44,12 @@
   lane intentionally ran no tests, type checks, lint, builds, packaging, reviews, security checks,
   accessibility checks, installer execution, runtime interaction checks, or UI captures.
 
+- Add Home Assistant control nodes with machine-local sealed connections, real entity and service
+  discovery, rich controls for common domains, a schema-driven fallback, cancellation, recovery,
+  and portable selection intent that omits credentials, endpoints, caches, and host identity. This
+  ultra-speed lane intentionally ran no tests, type checks, lint, reviews, security checks,
+  accessibility checks, builds, packaging, installer execution, runtime interaction, or captures.
+
 - Add a source-only desktop Material Design 3 audit with a hand-written inventory of 212 rendered
   surfaces, including onboarding, profile picking, conversion, password management, Minecraft
   management, dialogs, find bars, and notifications. Shared NumberField, Radio, Progress, and Tabs

@@ -15,13 +15,14 @@ substrate described in CLAUDE.md rather than inventing a surface each.
 | [Linux ISO VM](linux-iso-vm.md) | implemented canvas node with bundled QEMU, WHPX preference, QMP lifecycle, loopback display, persistent/disposable modes, and network-off default |
 | [Planner occurrences](planner-occurrences.md) | host-owned durable recurrence, timezone/DST handling, missed history, and UI-closure continuity |
 | [Shared provider services](provider-services.md) | shared account metadata, sealed credentials, bounded OAuth PKCE callbacks, resource discovery, and local binding integration |
+| [Home Assistant controls](home-assistant-controls.md) | implemented schema-driven entity controls with machine-local connections and portable selection intent; verification intentionally unrun |
 
 Planned, not yet researched here:
 
 - **Proxmox** — a MANAGER for an existing instance. It is a bare-metal hypervisor distribution, so
   there is nothing to host from a right-click; the node drives its API.
-- **Home Assistant controls and sensor displays** are separate Program 16 and Program 17 surfaces.
-  They reuse the multi-instance client and discovery contract documented above.
+- **Home Assistant sensor displays** remain the separate Program 17 surface. They reuse the
+  multi-instance client and discovery contract documented above.
 - **Docker** — the highest-value angle is exec-into-a-container as a real terminal node, since that
   is what this app already is.
 - **GitLab** — two halves: self-hosting Community Edition, and a Material client over its API. The

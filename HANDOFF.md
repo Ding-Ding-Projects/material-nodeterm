@@ -709,7 +709,7 @@ and indexed by [`docs/plans/README.md`](docs/plans/README.md).
 The plan source baseline is `27ecfa62e5b3180070abaa241f8bac6b1e079861`, which was an ancestor of
 `origin/main` when this lane started. It covers schema 3 portable project saves, portable
 blueprints and local bindings, the unified Node Catalog, universe Shop nodes, Material Design 3
-surfaces, media and file conversion, torrents, Linux ISO virtual machines, Home Assistant,
+surfaces, media and file conversion, torrents, Linux ISO virtual machines, Home Assistant sensor displays,
 calendar, timer and alarm tools, Multiverse portals, a complete interactive AWS CLI GUI, Docker
 host management, GitLab, Nextcloud, Open WebUI, Cloudflare managers and tunnels, clean-room
 WinForge-inspired nodes, upstream parity, public issue records, and the new upstream pull request.

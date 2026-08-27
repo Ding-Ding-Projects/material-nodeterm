@@ -60,6 +60,7 @@ import { registerTorrentIpc } from '../core/torrent/register-ipc'
 import { registerVirtualMachineIpc } from '../core/virtual-machine/register-ipc'
 import { registerCalendarIpc } from '../core/calendar/register-ipc'
 import { registerHomeAssistantIpc } from '../core/home-assistant/register-ipc'
+import { registerHomeAssistantControlIpc } from '../core/home-assistant-control/register-ipc'
 import { AtomicJsonArrayStore } from '../core/atomic-json-store'
 import { TimerOccurrenceService } from '../core/timer-service'
 import type { TimerOccurrence } from '../shared/timer'
@@ -2361,6 +2362,7 @@ app.whenReady().then(async () => {
   virtualMachineManager = registerVirtualMachineIpc(corePlatform).manager
   registerCalendarIpc(corePlatform)
   registerHomeAssistantIpc(corePlatform)
+  registerHomeAssistantControlIpc(corePlatform)
 
   const githubSecret = new ElectronGitHubSecretStore(app.getPath('userData'), safeStorage)
   const github = registerGitHubIntegration({

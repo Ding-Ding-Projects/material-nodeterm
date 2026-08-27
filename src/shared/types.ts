@@ -23,6 +23,7 @@ import type { VsCodeInstall, VsCodeOpenResult } from './vscode'
 import type { HistoryFilters, HistoryListResult, HistoryRestoreResult } from './local-history'
 import type { CalendarApi, CalendarNodeConfig } from './calendar'
 import type { HomeAssistantApi } from './home-assistant'
+import type { HomeAssistantControlApi, HomeAssistantControlConfig } from './home-assistant-control'
 import type {
   ToyLockBeginTotpInput,
   ToyLockBeginTotpResult,
@@ -391,6 +392,7 @@ export type NodeKind =
   // A portable calendar view. Provider credentials and event cache stay in the core vault/local
   // data, while this node carries only safe selection intent.
   | 'calendar'
+  | 'homeassistant-control'
   | 'timer'
   // Alarm Clock nodes persist wall-clock intent and occurrence history. Runtime timers and
   // notification handles stay machine-local; a shared project never claims powered-off wake.
@@ -665,6 +667,9 @@ export interface CanvasNodeState {
   /** calendar-only, GIT-SHARED safe intent. Tokens, provider sessions, paths and event cache stay
    * in the machine-local calendar service. */
   calendarConfig?: CalendarNodeConfig
+  /** Home Assistant control-only portable selection intent. Local connection identity, URL,
+   * bearer, discovery cache and request state never enter project data. */
+  homeAssistantControlConfig?: HomeAssistantControlConfig
   // editor / diff
   filePath?: string
   /** Photo/video/gallery media is represented by a portable content reference, never an absolute path. */
@@ -4533,6 +4538,8 @@ export interface NodeTerminalApi {
   virtualMachine: import('./virtual-machine').VirtualMachineApi
   /** Machine-local Home Assistant instances with bounded REST and WebSocket discovery. */
   homeAssistant: HomeAssistantApi
+  /** Schema-driven Home Assistant controls through host-owned local connection bindings. */
+  homeAssistantControl: HomeAssistantControlApi
   ssh: SshApi
   sshProject: SshProjectApi
   sshFs: SshFsApi
