@@ -1,5 +1,29 @@
 # Handoff
 
+## 2026-08-27, Express File Converter completion, issue #21
+
+The implementation lane is `feat/program-10-file-converter`, refreshed by fast-forward before edits
+to `origin/main` at `7c14db981f9e130cda2b9100285805f9646d7e58`. The later base already contained the
+per-category, plain-text-first searches and adjacent anchored regex builders, so this lane did not
+duplicate them.
+
+`src/core/converter/service.ts` now reserves the first unused `name.ext`, `name (2).ext`, and later
+destination across both the filesystem and every live queue item. It repeats the reservation check
+after the asynchronous filesystem probe, records a suffix index for visible disclosure, rebuilds
+reservations when terminal rows are removed, and retains the existing final atomic no-clobber
+publication and explicit race-time overwrite path. `src/shared/converter.ts` carries the optional
+suffix index. `FileConverterPanel.tsx` explains adjusted names and gives every completed row an
+active-session **Open in Visual Studio Code** action while retaining desktop **Reveal**.
+
+The converter remains a global, machine-local tool rather than a canvas node. Schema 3 projects omit
+its source and destination paths, progress, process state, editor actions, and queue data. Project
+import therefore causes no converter detection, conversion, folder creation, or process launch.
+
+Verification boundary: the ultra-speed lane intentionally ran no tests, lint, type checks, builds,
+packaging, installer execution, reviews, security or accessibility audits, runtime interaction, or
+captures. The parent integration lane must record any later build, package, release, or runtime
+evidence without treating it as evidence for checks that did not run here.
+
 ## 2026-08-26, desktop Material Design 3 and personal vocabulary reconciliation
 
 This source-only lane is on feat/full-app-material3-reconciliation at the current integration tip.

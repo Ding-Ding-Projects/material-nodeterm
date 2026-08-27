@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Complete the Express File Converter flow with queue-wide collision-safe destination names,
+  visible rename disclosure, final atomic no-clobber publication, and a completed-output action that
+  opens the exact result in Visual Studio Code through the active project API. The converter queue
+  and all source/destination paths remain machine-local and absent from portable schema 3 projects.
+  Tests, lint, type checks, builds, packaging, runtime interaction, and captures were intentionally
+  not run in this ultra-speed implementation lane.
+
 - Add a source-only desktop Material Design 3 audit with a hand-written inventory of 212 rendered
   surfaces, including onboarding, profile picking, conversion, password management, Minecraft
   management, dialogs, find bars, and notifications. Shared NumberField, Radio, Progress, and Tabs
