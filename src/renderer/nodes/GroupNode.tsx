@@ -34,6 +34,12 @@ export function setWorktreeActionHandler(
   worktreeActionHandler = fn
 }
 
+/** Canvas registers the group drill-through action because React Flow owns node instantiation. */
+let drillHandler: ((groupId: string) => void) | null = null
+export function setDrillHandler(fn: ((groupId: string) => void) | null): void {
+  drillHandler = fn
+}
+
 /** Same bridge shape, for the WSL chip's sleep/wake/unregister/unbind buttons. */
 let wslActionHandler: ((groupId: string, action: WslAction) => void) | null = null
 export function setWslActionHandler(fn: ((groupId: string, action: WslAction) => void) | null): void {
@@ -446,6 +452,14 @@ export function GroupNode({ id, data, selected }: NodeProps<CanvasNode>) {
         })()}
 
       <div className="group-node__actions nodrag">
+        <button
+          className="group-node__drill"
+          title="Open as canvas"
+          aria-label="Open group as canvas"
+          onClick={() => drillHandler?.(id)}
+        >
+          ⤢
+        </button>
         <button
           className="group-node__ungroup"
           title={vocab(frameLocked ? 'Locked — click to unlock' : 'Ungroup')}

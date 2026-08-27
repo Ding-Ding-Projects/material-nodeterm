@@ -54,7 +54,9 @@ interface WorktreesState {
   orphans: WorktreeEntry[]
   staleGroupIds: string[]
   statusByPath: Record<string, WorktreeStatus>
-  refresh(projectCwd: string, bound: BoundGroup[]): Promise<void>
+  /** Resolved roots for open projects, retained across active-project switches for sidebar grouping. */
+  repoRootByProject: Record<string, string | null>
+  refresh(projectCwd: string, bound: BoundGroup[], projectId?: string): Promise<void>
   /**
    * Poll one bound worktree's status. Pass the bound group's id to also keep its staleness LIVE:
    * `refresh()` only runs on project load / mutation, so without this a worktree deleted while the
@@ -128,8 +130,9 @@ export const useWorktrees = create<WorktreesState>((set) => ({
   orphans: [],
   staleGroupIds: [],
   statusByPath: {},
+  repoRootByProject: {},
 
-  async refresh(projectCwd, bound) {
+  async refresh(projectCwd, bound, projectId) {
     // Bump the epoch at the START, before any await. This ensures a newer refresh always
     // supersedes an older one: if two refreshes are called in quick succession without an
     // intervening reset(), the second one bumps the epoch, making the first's epoch stale.
@@ -145,8 +148,10 @@ export const useWorktrees = create<WorktreesState>((set) => ({
       if (mineEpoch !== epoch) return
       if (!root) {
         set(empty())
+        if (projectId) set((state) => ({ repoRootByProject: { ...state.repoRootByProject, [projectId]: null } }))
         return
       }
+      if (projectId) set((state) => ({ repoRootByProject: { ...state.repoRootByProject, [projectId]: root } }))
       // `entries` stays in git's order — reconcileWorktrees identifies the main checkout positionally.
       // A REJECTION here (a dead WS bridge in the Server Edition) is the same fact as `ok:false` —
       // the list could not be read — so it must not fall through to the catch below, which empties
@@ -274,6 +279,10 @@ export const useWorktrees = create<WorktreesState>((set) => ({
     // switch away from a project does not resurrect its dead worktrees. Clearing it here handed a
     // struck-out group a clean slate on every switch-back — one poll window in which it looked
     // healthy. Its keys are pruned by `refresh` (per project), not by the switch.
-    set({ ...empty(), statusByPath: {} })
+    set((state) => ({
+      ...empty(),
+      statusByPath: {},
+      repoRootByProject: state.repoRootByProject
+    }))
   }
 }))

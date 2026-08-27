@@ -89,7 +89,8 @@ import {
   WEBGL_GESTURE_SETTLE_MS
 } from '../terminal/webgl-budget'
 import { StickyNode } from '../nodes/StickyNode'
-import { GroupNode, setWorktreeActionHandler, setWslActionHandler } from '../nodes/GroupNode'
+import { GroupNode, setDrillHandler, setWorktreeActionHandler, setWslActionHandler } from '../nodes/GroupNode'
+import { DrillBreadcrumb } from '../components/DrillBreadcrumb'
 import { AnnotationNode } from '../nodes/AnnotationNode'
 import AuthenticatorNode from '../nodes/AuthenticatorNode'
 import CalendarNode from '../nodes/CalendarNode'
@@ -734,10 +735,12 @@ import {
   createWebNode,
   isVideoFile,
   duplicateNode,
+  drillGroupChildren,
   flowToNodeStates,
   addSelectionToGroup,
   groupSelectedNodes,
   nodeStatesToFlow,
+  remergeDrilledNodes,
   reorderGroupWithinParent,
   reorderNodeBefore,
   reparentNode,
@@ -749,6 +752,7 @@ import {
   ungroupNodes,
   placeNodeInRect,
   type CanvasNode,
+  type DrillContext,
   type TerminalNodeCreationOptions
   maximizeNodeToRect,
   restoreMaximizedNode,
@@ -1778,6 +1782,12 @@ export function Canvas() {
   ])
   const viewportRef = useRef<Viewport>({ x: 0, y: 0, zoom: 1 })
   const nodesRef = useRef<CanvasNode[]>(nodes)
+  // Group drill-through keeps the complete parent canvas in memory while React Flow renders only
+  // the selected group's direct children. The refs let autosave merge the subset without dropping
+  // siblings, and keep the return path independent of render timing.
+  const drillContextRef = useRef<DrillContext | null>(null)
+  const drillParentNodesRef = useRef<CanvasNode[] | null>(null)
+  const drillParentViewportRef = useRef<Viewport | null>(null)
   const terminalProfileRestartPendingRef = useRef(new Set<string>())
   const [terminalProfileRestartPending, setTerminalProfileRestartPending] = useState<Set<string>>(
     () => new Set()
@@ -2829,6 +2839,12 @@ export function Canvas() {
       nodesProjectIdRef.current = null
       return
     }
+    if (drillContextRef.current) {
+      drillContextRef.current = null
+      drillParentNodesRef.current = null
+      drillParentViewportRef.current = null
+      setDrill(null)
+    }
     const canvasView = projectCanvasView(project)
     // SSH project: (re)open its ControlMaster and record the controlPath so this project's
     // terminal nodes can run over it. Idempotent in main (a live master is reused), so a tab
@@ -2912,7 +2928,11 @@ export function Canvas() {
     // that never refresh (SSH, no cwd), which must not inherit the last project's scope.
     useWorktrees.getState().reset(project.id)
     if (project.cwd && !project.ssh) {
-      void useWorktrees.getState().refresh(project.cwd, boundGroups(flow))
+      void useWorktrees.getState().refresh(project.cwd, boundGroups(flow), project.id)
+    } else {
+      useWorktrees.setState((state) => ({
+        repoRootByProject: { ...state.repoRootByProject, [project.id]: null }
+      }))
     }
     setLinkEdges((canvasView.bridges ?? []).map((b) => ({ id: b.id, source: b.source, target: b.target })))
     // Restore control ropes with the source agent's color (falls back to the browser blue).
@@ -3193,6 +3213,17 @@ export function Canvas() {
   // ---- persistence helpers ----
   const commitActiveToStore = useCallback(() => {
     const store = useProjects.getState()
+    const drill = drillContextRef.current
+    const parent = drillParentNodesRef.current
+    const nodeStates =
+      drill?.kind === 'group' && parent
+        ? remergeDrilledNodes(
+            flowToNodeStates(parent),
+            flowToNodeStates(nodesRef.current),
+            drill.groupId,
+            parent
+          )
+        : flowToNodeStates(nodesRef.current)
     // Epoch pairing: only commit while the nodes React Flow holds belong to the ACTIVE project.
     // The normal switch flow still commits — every caller commits BEFORE `setActive`, while the two
     // ids still agree — but an autosave timer armed under the previous project now skips instead of
@@ -3202,7 +3233,7 @@ export function Canvas() {
       {
         nodesProjectId: nodesProjectIdRef.current,
         activeProjectId: store.activeProjectId,
-        nodes: flowToNodeStates(nodesRef.current),
+        nodes: nodeStates,
         viewport: viewportRef.current,
         bridges: linkEdgesRef.current.map(toBridgeLink),
         ropes: controlEdgesRef.current.map(toBridgeLink)
@@ -4422,7 +4453,7 @@ export function Canvas() {
       const touched = new Set([change?.bind?.groupId, ...unbound].filter(Boolean))
       const bound: BoundGroup[] = boundGroups(nodesRef.current).filter((b) => !touched.has(b.groupId))
       if (change?.bind) bound.push(change.bind)
-      void useWorktrees.getState().refresh(project.cwd, bound)
+      void useWorktrees.getState().refresh(project.cwd, bound, activeProjectId)
     },
     [activeProjectId]
   )
@@ -7424,6 +7455,22 @@ export function Canvas() {
     [attachWorktree, worktreeDialog]
   )
 
+  // Sidebar adoption uses the same binding conversion and Canvas attach path as the picker, but
+  // does not reopen a second dialog after the row has already supplied the exact worktree entry.
+  const bindSidebarWorktree = useCallback(
+    (entry: WorktreeEntry): void => {
+      const { repoRoot, entries } = useWorktrees.getState()
+      if (!repoRoot) return
+      const wt = worktreeFromEntry(entry, repoRoot, resolveBaseRef(entries))
+      if (!wt) {
+        setNotice({ kind: 'error', text: 'That worktree has a detached HEAD.' })
+        return
+      }
+      attachWorktree({ groupId: null }, wt)
+    },
+    [attachWorktree]
+  )
+
   /** Mint and persist a stable generation id before a legacy binding can be disclosed. */
   const normalizeWorktreeBinding = useCallback((projectId: string, groupId: string): boolean => {
     if (
@@ -9350,6 +9397,76 @@ export function Canvas() {
   // Focus mode (issue #78): one terminal fills the window (reparented into the always-mounted
   // focus surface below); the chrome hides behind it and reveals on pointer proximity.
   const focusedId = useFocusNode((s) => s.focusedId)
+  const [drill, setDrill] = useState<DrillContext | null>(null)
+  // Keep the imperative registration in step with React state so GroupNode's bridge and the
+  // persistence path see the same context during an autosave tick.
+  drillContextRef.current = drill
+
+  const exitDrill = useCallback(() => {
+    const context = drillContextRef.current
+    const parent = drillParentNodesRef.current
+    if (!context || !parent || context.kind !== 'group') return
+    const restored = nodeStatesToFlow(
+      remergeDrilledNodes(
+        flowToNodeStates(parent),
+        flowToNodeStates(nodesRef.current),
+        context.groupId,
+        parent
+      )
+    )
+    drillContextRef.current = null
+    drillParentNodesRef.current = null
+    nodesRef.current = restored
+    setNodes(restored)
+    setDrill(null)
+    if (drillParentViewportRef.current) {
+      const viewport = drillParentViewportRef.current
+      drillParentViewportRef.current = null
+      void setViewport(viewport)
+    }
+    commitActiveToStore()
+    void writeDisk()
+  }, [commitActiveToStore, setNodes, setViewport, writeDisk])
+
+  const openNodeGroupAsCanvas = useCallback(
+    (groupId: string) => {
+      if (drillContextRef.current) return
+      const projectId = useProjects.getState().activeProjectId
+      if (!projectId || nodesProjectIdRef.current !== projectId) return
+      const parent = nodesRef.current
+      const group = parent.find((node) => node.id === groupId && node.type === 'group')
+      if (!group) return
+      const { flow } = drillGroupChildren(parent, groupId)
+      drillParentNodesRef.current = parent
+      drillParentViewportRef.current = getViewport()
+      drillContextRef.current = { kind: 'group', groupId, projectId }
+      nodesRef.current = flow
+      setNodes(flow)
+      setDrill({ kind: 'group', groupId, projectId })
+      requestAnimationFrame(() => {
+        void fitView({ duration: 200, padding: 0.12, ...(flow.length ? { nodes: flow.map((node) => ({ id: node.id })) } : {}) })
+      })
+    },
+    [fitView, getViewport, setNodes]
+  )
+
+  useEffect(() => {
+    setDrillHandler(openNodeGroupAsCanvas)
+    return () => setDrillHandler(null)
+  }, [openNodeGroupAsCanvas])
+
+  useEffect(() => {
+    if (!drill) return
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape') return
+      const target = event.target as HTMLElement | null
+      if (target?.closest('input, textarea, [contenteditable="true"], .xterm')) return
+      event.preventDefault()
+      exitDrill()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [drill, exitDrill])
   // Where to land the camera after an exit — set by toggleFocusMode, consumed below AFTER the
   // body class flips back. goToNode cannot run inside the toggle: the flow wrapper is
   // display:none while focused (so the WebGL budget can reclaim covered holders), and fitView
@@ -9421,6 +9538,7 @@ export function Canvas() {
   const switchProject = useCallback(
     (id: string) => {
       if (id === useProjects.getState().activeProjectId) return
+      if (drillContextRef.current) exitDrill()
       if (worktreeRemovalInFlightRef.current.size > 0) {
         setNotice({
           kind: 'error',
@@ -9432,7 +9550,7 @@ export function Canvas() {
       useProjects.getState().setActive(id)
       void writeDisk()
     },
-    [commitActiveToStore, writeDisk]
+    [commitActiveToStore, exitDrill, writeDisk]
   )
 
   /**
@@ -16866,6 +16984,7 @@ export function Canvas() {
         <MinecraftConnectBanner minecraftNodeIds={minecraftNodeIds} />
         <AnnouncementBanner />
         <TmuxBanner onInstall={runInTerminal} />
+        {drill && <DrillBreadcrumb drill={drill} onExit={exitDrill} />}
         {/* This MACHINE is running out of pty devices — subscribes for itself; a failed
             "Fix automatically…" lands in the same notice strip as every other async op. */}
         <PtyPressureBanner onError={(text) => setNotice({ kind: 'error', text })} />
@@ -18041,6 +18160,7 @@ export function Canvas() {
         onMoveToGroup={moveSessionToGroup}
         onReorder={reorderSession}
         onReorderGroup={reorderSidebarGroup}
+        onBindWorktree={bindSidebarWorktree}
         onRowContextMenu={onRowContextMenu}
         onProjectContextMenu={onProjectContextMenu}
         onSwitchProject={switchProject}

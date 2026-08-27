@@ -1964,7 +1964,8 @@ function groupsFirst(nodes: CanvasNode[]): CanvasNode[] {
   return [...groups, ...nodes.filter((node) => node.type !== 'group')]
 }
 
-function rootPosition(node: CanvasNode, nodes: CanvasNode[]): { x: number; y: number } {
+/** A node's position in root space, including every ancestor frame offset. */
+export function rootPosition(node: CanvasNode, nodes: CanvasNode[]): { x: number; y: number } {
   const byId = new Map(nodes.map((candidate) => [candidate.id, candidate]))
   const seen = new Set<string>([node.id])
   let x = node.position.x
@@ -1979,6 +1980,70 @@ function rootPosition(node: CanvasNode, nodes: CanvasNode[]): { x: number; y: nu
     parentId = parent.parentId
   }
   return { x, y }
+}
+
+/** The transient view opened when a group is drilled into. It is intentionally not persisted. */
+export type DrillContext = { kind: 'group'; groupId: string; projectId: string }
+
+/**
+ * Promote a group's direct children into a root-space sub-canvas.
+ *
+ * The frame itself and its siblings stay out of the drilled view. Children retain their own
+ * descendants in the source array, but only direct children are promoted, which preserves nested
+ * group structure without inventing a second ownership model.
+ */
+export function drillGroupChildren(
+  nodes: CanvasNode[],
+  groupId: string
+): { flow: CanvasNode[]; childIds: Set<string> } {
+  const childIds = new Set<string>()
+  const flow: CanvasNode[] = []
+  for (const node of nodes) {
+    if (node.parentId !== groupId) continue
+    childIds.add(node.id)
+    flow.push({
+      ...node,
+      parentId: undefined,
+      extent: undefined,
+      position: rootPosition(node, nodes)
+    })
+  }
+  return { flow: groupsFirst(flow), childIds }
+}
+
+/**
+ * Merge an edited drilled child view back into the complete canvas snapshot.
+ *
+ * Drilling changes only the view coordinate space. Persistence remains parent-relative, so direct
+ * children are re-nested against the group's root-space origin. Siblings and the frame survive,
+ * deleted direct children stay deleted, and newly-created drilled children are appended safely.
+ */
+export function remergeDrilledNodes(
+  fullStored: CanvasNodeState[],
+  drilledStates: CanvasNodeState[],
+  groupId: string,
+  fullNodesForRoot: CanvasNode[]
+): CanvasNodeState[] {
+  const drilledById = new Map(drilledStates.map((state) => [state.id, state]))
+  const group = fullNodesForRoot.find((node) => node.id === groupId)
+  const groupRoot = group ? rootPosition(group, fullNodesForRoot) : { x: 0, y: 0 }
+  const directIds = new Set(fullStored.filter((state) => state.parentId === groupId).map((state) => state.id))
+  const renest = (state: CanvasNodeState): CanvasNodeState => ({
+    ...state,
+    parentId: groupId,
+    position: { x: state.position.x - groupRoot.x, y: state.position.y - groupRoot.y }
+  })
+  const merged: CanvasNodeState[] = []
+  for (const state of fullStored) {
+    if (directIds.has(state.id) && !drilledById.has(state.id)) continue
+    const drilled = drilledById.get(state.id)
+    merged.push(drilled ? renest(drilled) : state)
+  }
+  const known = new Set(fullStored.map((state) => state.id))
+  for (const state of drilledStates) {
+    if (!known.has(state.id)) merged.push(renest(state))
+  }
+  return merged
 }
 
 function isDescendant(nodes: CanvasNode[], candidateId: string, ancestorId: string): boolean {

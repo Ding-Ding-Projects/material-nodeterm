@@ -1,10 +1,12 @@
 import type { AgentNodeStatus } from '../state/agentStatus'
 import type { AgentId } from '@shared/agents/config'
 import type { NodeKind } from '@shared/types'
-import type { ProjectIcon } from '@shared/project-icon'
 import { hasUsage } from '@shared/agents/config'
 import type { SshConnection } from '@shared/ssh'
 import type { ProjectIcon } from '@shared/project-icon'
+import { sshHostKey } from '@shared/ssh'
+import { normWorktreePath } from '@shared/worktree-reconcile'
+import type { WorktreeEntry } from '@shared/worktree'
 import { relativeTime } from './relativeTime'
 
 export interface SessionNodeInput {
@@ -27,6 +29,7 @@ export interface ProjectInput {
    *  `SessionGroup`) so the sidebar can show it instead of the plain color monogram. */
   icon?: ProjectIcon
   cwd?: string
+  ssh?: { server: SshConnection; remoteCwd: string }
   nodes: SessionNodeInput[]
 }
 
@@ -114,15 +117,18 @@ export function isGroupCollapsed(
  * to `settings.json`, so without pruning it grows forever: one entry per project and per group
  * frame that ever existed, kept alive long after the node was deleted or the project closed.
  */
-export function liveCollapseKeys(groups: SessionGroup[]): Set<string> {
+export function liveCollapseKeys(groups: RepoGroup[]): Set<string> {
   const keys = new Set<string>()
   const walk = (projectId: string, bucket: GroupBucket): void => {
     keys.add(groupCollapseKey(projectId, bucket.id))
     bucket.children.forEach((child) => walk(projectId, child))
   }
-  for (const group of groups) {
-    keys.add(projectCollapseKey(group.projectId))
-    group.groups.forEach((bucket) => walk(group.projectId, bucket))
+  for (const repo of groups) {
+    keys.add(repo.key)
+    for (const group of repo.projects) {
+      keys.add(projectCollapseKey(group.projectId))
+      group.groups.forEach((bucket) => walk(group.projectId, bucket))
+    }
   }
   return keys
 }
@@ -183,6 +189,21 @@ export function projectSignalCounts(group: SessionGroup): { attention: number; u
     if (s.statusKind === 'working') working++
   }
   return { attention, unread, working }
+}
+
+/** Aggregate attention, unread, and active counts for a repository header. */
+export function repoSignalCounts(repo: RepoGroup): { attention: number; unread: number; working: number } {
+  return repo.projects.reduce(
+    (sum, project) => {
+      const next = projectSignalCounts(project)
+      return {
+        attention: sum.attention + next.attention,
+        unread: sum.unread + next.unread,
+        working: sum.working + next.working
+      }
+    },
+    { attention: 0, unread: 0, working: 0 }
+  )
 }
 
 export function sessionStatusKind(state: AgentNodeStatus['state']): StatusKind {
@@ -267,6 +288,27 @@ export interface SessionGroup {
   ungrouped: SessionRowVM[]
 }
 
+/** A worktree with no bound group frame, offered as a bindable sidebar row. */
+export interface AdoptableWorktreeRow {
+  kind: 'adoptable-worktree'
+  entry: WorktreeEntry
+  repoRoot: string
+}
+
+/** Repository-level grouping for the sessions sidebar. */
+export interface RepoGroup {
+  key: string
+  repoRoot: string | null
+  repoName: string
+  collapsedProject: boolean
+  projects: SessionGroup[]
+  adoptable: AdoptableWorktreeRow[]
+}
+
+function repoMachineKey(project: ProjectInput): string {
+  return project.ssh ? sshHostKey(project.ssh.server) || '' : ''
+}
+
 function toRow(
   n: SessionNodeInput,
   status: AgentNodeStatus | undefined,
@@ -322,12 +364,16 @@ export function buildSessionList(
   liveActiveNodes: SessionNodeInput[] | null,
   activeProjectId: string,
   statusById: Record<string, AgentNodeStatus>,
-  filter: string
-): SessionGroup[] {
+  filter: string,
+  worktreeFacts: {
+    repoRootByProject?: Record<string, string | null | undefined>
+    orphansByProject?: Record<string, WorktreeEntry[]>
+  } = {}
+): RepoGroup[] {
   const needle = filter.trim().toLowerCase()
   const keep = (r: SessionRowVM): boolean => !needle || matches(r, needle)
 
-  const groups: SessionGroup[] = projects.map((p) => {
+  const sessionGroups: SessionGroup[] = projects.map((p) => {
     const isActive = p.id === activeProjectId
     const source = isActive && liveActiveNodes ? liveActiveNodes : p.nodes
     const groupNodes = source.filter((n) => n.kind === 'group')
@@ -394,9 +440,62 @@ export function buildSessionList(
     }
   })
 
-  // Store order, NOT active-first: the sidebar mirrors the tab bar (both read the projects
-  // array), and hoisting the active project to the top made every click reshuffle the list.
-  return needle ? groups.filter((g) => g.groups.length > 0 || g.ungrouped.length > 0) : groups
+  const repoRootByProject = worktreeFacts.repoRootByProject ?? {}
+  const orphansByProject = worktreeFacts.orphansByProject ?? {}
+  const repoOrder: string[] = []
+  const repoMap = new Map<string, { repoRoot: string | null; projects: SessionGroup[] }>()
+  for (const group of sessionGroups) {
+    const project = projects.find((item) => item.id === group.projectId)!
+    const resolved = repoRootByProject[group.projectId]
+    const key = resolved
+      ? `repo:${repoMachineKey(project)}:${normWorktreePath(resolved)}`
+      : `repo:__norepo__:${group.projectId}`
+    const existing = repoMap.get(key)
+    if (existing) existing.projects.push(group)
+    else {
+      repoOrder.push(key)
+      repoMap.set(key, {
+        repoRoot: resolved ? normWorktreePath(resolved) : null,
+        projects: [group]
+      })
+    }
+  }
+
+  const repos = repoOrder.map((key): RepoGroup => {
+    const entry = repoMap.get(key)!
+    const sole = entry.projects.length === 1 ? entry.projects[0] : undefined
+    const collapsedProject =
+      !entry.repoRoot ||
+      (!!sole?.cwd && normWorktreePath(sole.cwd) === entry.repoRoot)
+    const repoName = entry.repoRoot
+      ? entry.repoRoot.split('/').filter(Boolean).pop() ?? entry.repoRoot
+      : sole?.projectName ?? 'Repo'
+    const active = entry.projects.find((group) => group.isActive)
+    const adoptable = active && entry.repoRoot
+      ? (orphansByProject[active.projectId] ?? []).map((worktree) => ({
+          kind: 'adoptable-worktree' as const,
+          entry: worktree,
+          repoRoot: entry.repoRoot
+        }))
+      : []
+    return {
+      key,
+      repoRoot: entry.repoRoot,
+      repoName,
+      collapsedProject,
+      projects: entry.projects,
+      adoptable
+    }
+  })
+
+  if (!needle) return repos
+  const adoptableMatches = (row: AdoptableWorktreeRow): boolean =>
+    `${row.entry.branch ?? ''} ${row.entry.path}`.toLowerCase().includes(needle)
+  return repos.filter(
+    (repo) =>
+      repo.adoptable.some(adoptableMatches) ||
+      repo.projects.some((group) => group.groups.length > 0 || group.ungrouped.length > 0)
+  )
 }
 
 /** A status section in status-grouping mode: one status group and the sessions in it, flattened
