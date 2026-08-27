@@ -33,10 +33,13 @@ Sound uses the existing notification sound setting and the narrator uses the exi
 English, Cantonese, or bilingual narrator queue. The node's two toggles are additional per-alarm
 choices, so turning either one off does not change the app-wide preference.
 
-The planner is durable while the app is running and persists its snapshot after every mutation. It
-does not claim to wake a powered-off computer. If the app or computer is off when an occurrence
-passes, the next launch records the late occurrence as missed when it is outside the grace window.
-There is no arbitrary shell command, remote wake request, or network service in this feature.
+The host owns a file-backed planner lifecycle in both the desktop and Server Edition processes. The
+desktop node mirrors each validated schedule into that local planner, receives bounded due events,
+and sends Snooze and Dismiss transitions back through the host bridge. The planner persists its
+local snapshot after every mutation and stays alive after the renderer closes. It does not claim to
+wake a powered-off computer. If the app or computer is off when an occurrence passes, the next
+launch records the late occurrence as missed when it is outside the grace window. There is no
+arbitrary shell command, remote wake request, or network service in this feature.
 
 ## Portability and privacy
 
@@ -48,7 +51,8 @@ projection.
 
 ## Verification boundary
 
-The shared planner and canvas node are implemented in `src/shared/alarm-clock.ts` and
+The shared planner, file-backed host lifecycle, bridge, and canvas node are implemented in
+`src/shared/alarm-clock.ts`, `src/core/alarm-planner.ts`, `src/preload/index.ts`, and
 `src/renderer/nodes/AlarmClockNode.tsx`. The portable schema projection carries only the safe alarm
 fields. Sound and narration call the existing `src/renderer/lib/sfx.ts` and
 `src/renderer/lib/narrator.ts` seams. This lane's ultra-speed delivery boundary intentionally did

@@ -181,6 +181,14 @@ export function buildStubApi(): Omit<
   | 'passwordManager'
 > {
   const api = {
+    providerServices: {
+      catalog: () => Promise.resolve([]),
+      accounts: () => Promise.resolve([]),
+      resources: () => Promise.resolve([]),
+      beginOAuth: (providerId: string) => Promise.resolve({ status: 'unsupported' as const, providerId, authorizationUrl: null, redirectUri: null, expiresAt: null, reason: mapLocalVocabularyText('Provider accounts are not connected on this surface.') }),
+      completeOAuth: () => Promise.resolve({ status: 'rejected' as const, account: null, reason: mapLocalVocabularyText('Provider callbacks are not accepted on this surface.') }),
+      removeAccount: () => Promise.resolve({ ok: false as const, error: mapLocalVocabularyText('Provider accounts are not connected on this surface.') })
+    },
     ssh: {
       list: U('ssh.list'),
       save: U('ssh.save'),
@@ -500,6 +508,14 @@ export function buildStubApi(): Omit<
     // inert no-ops (there is no connectionId to act on) and the subscriptions are no-op unsubscribes.
     relayHost: {
       dockerContexts: U('relayHost.dockerContexts'),
+      manager: {
+        contexts: U('relayHost.manager.contexts'),
+        snapshot: U('relayHost.manager.snapshot'),
+        logs: U('relayHost.manager.logs'),
+        run: U('relayHost.manager.run'),
+        cancel: noop,
+        onProgress: noopUnsub
+      },
       start: U('relayHost.start'),
       invite: U('relayHost.invite'),
       stop: U('relayHost.stop'),
@@ -721,7 +737,8 @@ export function buildStubApi(): Omit<
       remove: U('torrent.remove'),
       setSeedPolicy: U('torrent.setSeedPolicy'),
       reconcile: U('torrent.reconcile'),
-      onTask: noopUnsub
+      onTask: noopUnsub,
+    },
     virtualMachine: {
       tools: U('virtualMachine.tools'),
       status: U('virtualMachine.status'),
@@ -733,7 +750,8 @@ export function buildStubApi(): Omit<
       restore: U('virtualMachine.restore'),
       openDisplay: U('virtualMachine.openDisplay'),
       reset: U('virtualMachine.reset'),
-      onEvent: noopUnsub
+      onEvent: noopUnsub,
+    },
     calendar: {
       status: U('calendar.status'),
       accounts: U('calendar.accounts'),
@@ -742,9 +760,37 @@ export function buildStubApi(): Omit<
       importIcs: U('calendar.importIcs'),
       refresh: U('calendar.refresh'),
       beginOAuth: U('calendar.beginOAuth'),
+      connectCalDav: U('calendar.connectCalDav'),
+      disconnectAccount: U('calendar.disconnectAccount'),
       create: U('calendar.create'),
       update: U('calendar.update'),
       remove: U('calendar.remove')
+    },
+    homeAssistant: {
+      instances: U('homeAssistant.instances'),
+      saveInstance: U('homeAssistant.saveInstance'),
+      removeInstance: U('homeAssistant.removeInstance'),
+      discover: U('homeAssistant.discover'),
+      cancel: U('homeAssistant.cancel'),
+      onEvent: noopUnsub
+    },
+    homeAssistantControl: {
+      connections: U('homeAssistantControl.connections'),
+      configure: U('homeAssistantControl.configure'),
+      bind: U('homeAssistantControl.bind'),
+      status: U('homeAssistantControl.status'),
+      entities: U('homeAssistantControl.entities'),
+      services: U('homeAssistantControl.services'),
+      call: U('homeAssistantControl.call'),
+      cancel: U('homeAssistantControl.cancel')
+    },
+    homeAssistantSensor: {
+      binding: U('homeAssistantSensor.binding'),
+      configure: U('homeAssistantSensor.configure'),
+      leaveUnbound: U('homeAssistantSensor.leaveUnbound'),
+      discover: U('homeAssistantSensor.discover'),
+      refresh: U('homeAssistantSensor.refresh')
+    },
     // Browser control is desktop-only (no <webview>, no CDP on the Server Edition / relay), so the
     // resolve round-trip is inert here — the verb is refused by name before it reaches a handler.
     onBrowserControlResolve: noopUnsub,

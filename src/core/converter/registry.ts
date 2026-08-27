@@ -39,6 +39,19 @@ import {
   utf8ToLatin1,
   utf8ToUtf16le
 } from './text-codec'
+import {
+  imageAdapter,
+  mergePdfsFromZipAdapter,
+  ocrEnglishAdapter,
+  pdfExtractFirstPageAdapter,
+  pdfRemoveMetadataAdapter,
+  pdfReversePagesAdapter,
+  pdfRotateClockwiseAdapter,
+  pdfSplitPagesAdapter,
+  pdfToManifestAdapter,
+  pdfToTextAdapter,
+  zipToManifestAdapter
+} from './advanced-pipeline'
 
 export interface AdapterRunResult {
   output: Buffer
@@ -48,10 +61,10 @@ export interface AdapterRunResult {
 export interface ConverterAdapter {
   /** Run the conversion. Throws on malformed/unsupported input — the caller (service.ts) catches
    *  this and reports the item `failed` with the exact message; the source file is never touched. */
-  convert(input: Buffer): AdapterRunResult
+  convert(input: Buffer): AdapterRunResult | Promise<AdapterRunResult>
   /** Validate the produced bytes before they are written to disk. Returns an error message when
    *  invalid, or null when the output is accepted. */
-  validate(output: Buffer): string | null
+  validate(output: Buffer): string | null | Promise<string | null>
 }
 
 const structuredCodecs: Record<
@@ -117,6 +130,18 @@ function nonEmpty(output: Buffer): string | null {
 
 const REGISTRY: Record<string, ConverterAdapter> = {}
 
+function canonicalStructured(value: StructuredValue): StructuredValue {
+  if (Array.isArray(value)) return value.map(canonicalStructured)
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.keys(value)
+        .sort()
+        .map((key) => [key, canonicalStructured(value[key])])
+    )
+  }
+  return value
+}
+
 // Structured-data mesh — generated from the same STRUCTURED_KINDS pairing as the catalog.
 const STRUCTURED_IDS = Object.keys(structuredCodecs)
 for (const from of STRUCTURED_IDS) {
@@ -165,6 +190,40 @@ REGISTRY['any-to-brotli'] = simple(anyToBrotli, (out) => {
   }
 })
 REGISTRY['brotli-to-any'] = simple(brotliToAny)
+
+// Advanced, fully local pipelines. Each one carries explicit byte/page/pixel/entry ceilings in
+// the implementation and a matching safe portable intent in the shared catalog.
+REGISTRY['pdf-to-text'] = pdfToTextAdapter
+REGISTRY['pdf-to-manifest'] = pdfToManifestAdapter
+REGISTRY['pdf-rotate-clockwise'] = pdfRotateClockwiseAdapter
+REGISTRY['pdf-remove-metadata'] = pdfRemoveMetadataAdapter
+REGISTRY['pdf-split-pages'] = pdfSplitPagesAdapter
+REGISTRY['pdf-extract-first-page'] = pdfExtractFirstPageAdapter
+REGISTRY['pdf-reverse-pages'] = pdfReversePagesAdapter
+REGISTRY['zip-pdfs-to-pdf'] = mergePdfsFromZipAdapter
+REGISTRY['zip-to-manifest'] = zipToManifestAdapter
+for (const id of ['png-to-jpeg', 'heic-to-jpeg']) {
+  if (CONVERTER_CATALOG.find((row) => row.id === id)?.available) REGISTRY[id] = imageAdapter('jpeg')
+}
+REGISTRY['json-canonicalize'] = {
+  convert(input) {
+    const value = parseJson(input.toString('utf8'))
+    return { output: Buffer.from(serializeJson(canonicalStructured(value)), 'utf8'), warnings: [] }
+  },
+  validate(output) {
+    try {
+      parseJson(output.toString('utf8'))
+      return null
+    } catch (error) {
+      return `Produced canonical JSON failed to reopen: ${(error as Error).message}`
+    }
+  }
+}
+for (const id of ['jpeg-to-png', 'webp-to-png', 'svg-to-png', 'gif-to-png', 'bmp-to-png', 'ico-to-png']) {
+  if (CONVERTER_CATALOG.find((row) => row.id === id)?.available) REGISTRY[id] = imageAdapter('png')
+}
+REGISTRY['png-to-webp'] = imageAdapter('webp')
+for (const kind of ['png', 'jpeg', 'webp', 'bmp']) REGISTRY[`${kind}-ocr-to-text`] = ocrEnglishAdapter
 
 export function getAdapter(id: string): ConverterAdapter | undefined {
   return REGISTRY[id]

@@ -12,7 +12,20 @@ import { PortableProjectV3Error, PORTABLE_PROJECT_SCHEMA, PORTABLE_PROJECT_SCHEM
 import { sanitizeProjectIcon } from '../shared/project-icon'
 import type { PortableMediaManifest } from './portable-media-assets'
 import { validatePortableMediaManifest } from './portable-media-assets'
-import { repairUniverseShops } from './universe-shop'
+import { normalizeMediaReference, type MediaAssetReference } from '../shared/media-catalog'
+import { MAX_MULTIVERSE_DEPTH, repairUniverseShops } from './universe-shop'
+import { validatePortableUniverseDoors, type PortableUniverseDoorV3 } from './universe-door-navigation'
+import { normalizePublicDimSumSelection, type PublicDimSumSelection } from '../shared/public-dim-sum'
+import { validateHomeAssistantControlConfig, type HomeAssistantControlConfig } from '../shared/home-assistant-control'
+import { validateHomeAssistantSensorConfig, type HomeAssistantSensorConfig } from '../shared/home-assistant-sensor'
+import {
+  plannerDefinitionsToPortable,
+  validatePortablePlannerDefinitions,
+  type PortablePlannerDefinitions
+} from './portable-planner'
+import type { PlannerSchedule } from '../shared/planner-occurrences'
+import { normalizeRecoveryGameSnapshot, RECOVERY_ENERGY_KEYS, type RecoveryGameSnapshot } from '../shared/recovery-game'
+import { repairPortablePortals, validatePortablePortals, type PortablePortalV3 } from './portal-lifecycle'
 
 export type PortableCanvasScope = 'root' | 'multiverse' | 'aws-universe'
 
@@ -50,6 +63,10 @@ export interface PortableCanvasNodeV3 {
   url?: string
   browserTabs?: Array<{ id: string; url?: string; title: string }>
   serviceLabel?: string
+  /** Safe public-catalog identity and display copy. Image bytes and network state are excluded. */
+  wildDimSumDish?: PublicDimSumSelection
+  homeAssistantIntent?: { transport: 'rest' | 'websocket'; domain: string }
+  homeAssistantControlConfig?: HomeAssistantControlConfig
   alarmSchedule?: { recurrence: string; date?: string; time: string; weekdays?: number[]; monthDay?: number }
   alarmTimeZone?: string
   alarmEnabled?: boolean
@@ -57,11 +74,19 @@ export interface PortableCanvasNodeV3 {
   alarmSoundEnabled?: boolean
   alarmNarratorEnabled?: boolean
   alarmHistory?: Array<{ id: string; alarmId: string; scheduledAt: number; status: string; createdAt: number; resolvedAt?: number; snoozedUntil?: number; timeZone: string }>
+  /** Ordered content references only. Absolute source paths are rejected at this boundary. */
+  mediaAssets?: MediaAssetReference[]
+  mediaActiveAssetId?: string
+  homeAssistantSensorConfig?: HomeAssistantSensorConfig
+  /** Portable recovery-game progress only. It contains board intent, never host or process state. */
+  recoveryGame?: RecoveryGameSnapshot
 }
 
 export interface PortableRelationshipV3 {
   id: string
   kind: 'bridge' | 'rope'
+  /** Owning canvas. Older schema 3 payloads omit it and therefore belong to root. */
+  canvasId?: string
   source: string
   target: string
   order: number
@@ -81,8 +106,14 @@ export interface PortableCanvasProjectionV3 {
   canvases: PortableCanvasV3[]
   nodes: PortableCanvasNodeV3[]
   relationships: PortableRelationshipV3[]
+  /** Safe paired-door intent. Runtime history, sessions, and machine bindings are never stored. */
+  doors?: PortableUniverseDoorV3[]
+  /** Safe portal lifecycle intent. Runtime windows, sessions, bindings, and process state stay out. */
+  portals?: PortablePortalV3[]
   appearance?: Record<string, unknown>
   media?: PortableMediaManifest
+  /** Safe schedule intent only. Occurrences and host state stay machine-local. */
+  planner?: PortablePlannerDefinitions
 }
 
 export interface PortableCanvasProjectionInput {
@@ -91,6 +122,11 @@ export interface PortableCanvasProjectionInput {
   appearance?: Record<string, unknown>
   /** Project-owned media manifest. Source paths and machine bindings are intentionally absent. */
   media?: PortableMediaManifest
+  /** Door-only universe navigation intent supplied by the Multiverse construction lane. */
+  doors?: PortableUniverseDoorV3[]
+  /** User-authored planner definitions to carry in the portable projection. */
+  planner?: readonly PlannerSchedule[]
+  portals?: PortablePortalV3[]
 }
 
 export const PORTABLE_CANVAS_LIMITS = {
@@ -103,20 +139,30 @@ export const PORTABLE_CANVAS_LIMITS = {
 } as const
 
 const UNSAFE_KEYS = new Set(['__proto__', 'prototype', 'constructor'])
-const ALLOWED_TOP = new Set(['format', 'schemaVersion', 'project', 'rootCanvasId', 'canvases', 'nodes', 'relationships', 'appearance', 'media'])
+const ALLOWED_TOP = new Set(['format', 'schemaVersion', 'project', 'rootCanvasId', 'canvases', 'nodes', 'relationships', 'doors', 'portals', 'appearance', 'media', 'planner'])
 const ALLOWED_PROJECT = new Set(['name', 'color', 'icon'])
 const ALLOWED_ICON = new Set(['type', 'name'])
 const ALLOWED_CANVAS = new Set(['id', 'scope', 'parentCanvasId', 'depth', 'title', 'order', 'viewport', 'nodeIds'])
 const ALLOWED_VIEWPORT = new Set(['x', 'y', 'zoom'])
-const ALLOWED_NODE = new Set(['id', 'kind', 'creationEventId', 'position', 'size', 'title', 'color', 'group', 'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel'])
-const ALLOWED_NODE = new Set(['id', 'kind', 'creationEventId', 'position', 'size', 'title', 'color', 'group', 'universeCanvasId', 'universeScope', 'universeDepth', 'nonDeletable', 'shopSelection', 'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel'])
-const ALLOWED_NODE = new Set(['id', 'kind', 'position', 'size', 'title', 'color', 'group', 'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel', 'alarmSchedule', 'alarmTimeZone', 'alarmEnabled', 'alarmSnoozeMinutes', 'alarmSoundEnabled', 'alarmNarratorEnabled', 'alarmHistory'])
+const ALLOWED_NODE = new Set([
+  'id', 'kind', 'creationEventId', 'position', 'size', 'title', 'color', 'group',
+  'universeCanvasId', 'universeScope', 'universeDepth', 'nonDeletable', 'shopSelection',
+  'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel',
+  'wildDimSumDish', 'homeAssistantIntent', 'homeAssistantControlConfig', 'homeAssistantSensorConfig',
+  'alarmSchedule', 'alarmTimeZone', 'alarmEnabled', 'alarmSnoozeMinutes',
+  'alarmSoundEnabled', 'alarmNarratorEnabled', 'alarmHistory', 'mediaAssets',
+  'mediaActiveAssetId', 'recoveryGame'
+])
+const ALLOWED_HOME_ASSISTANT_INTENT = new Set(['transport', 'domain'])
+const ALLOWED_RECOVERY_GAME = new Set(['player', 'energizedKeys', 'coreActivated', 'hazardHits'])
+const ALLOWED_RECOVERY_POINT = new Set(['x', 'y'])
 const ALLOWED_POSITION = new Set(['x', 'y'])
 const ALLOWED_SIZE = new Set(['width', 'height'])
 const ALLOWED_TAB = new Set(['id', 'url', 'title'])
 const ALLOWED_ALARM_SCHEDULE = new Set(['recurrence', 'date', 'time', 'weekdays', 'monthDay'])
 const ALLOWED_ALARM_OCCURRENCE = new Set(['id', 'alarmId', 'scheduledAt', 'status', 'createdAt', 'resolvedAt', 'snoozedUntil', 'timeZone'])
-const ALLOWED_RELATIONSHIP = new Set(['id', 'kind', 'source', 'target', 'order'])
+const ALLOWED_HOME_ASSISTANT_CONTROL = new Set(['entityHint', 'domainHint', 'serviceHint', 'controlMode'])
+const ALLOWED_RELATIONSHIP = new Set(['id', 'kind', 'canvasId', 'source', 'target', 'order'])
 const ALLOWED_APPEARANCE = new Set(['theme', 'density', 'seedColor', 'fontFamily', 'fontSize', 'fontWeight', 'motion'])
 
 function record(value: unknown): value is Record<string, unknown> {
@@ -166,6 +212,22 @@ function safeAppearance(value: unknown, depth = 0, seen = { count: 0 }): unknown
   return out
 }
 
+function portableMediaReferences(value: unknown): MediaAssetReference[] {
+  if (!Array.isArray(value) || value.length > 10_000) {
+    throw new PortableProjectV3Error('entry-limit', 'Portable node media references exceed their bound.')
+  }
+  const seen = new Set<string>()
+  return value.map((item) => {
+    if (!record(item)) throw new PortableProjectV3Error('manifest', 'Portable node media reference is invalid.')
+    const { sourcePath: _sourcePath, ...portable } = item as unknown as MediaAssetReference
+    const normalized = normalizeMediaReference(portable)
+    if (!normalized) throw new PortableProjectV3Error('manifest', 'Portable node media reference is invalid.')
+    if (seen.has(normalized.assetId)) throw new PortableProjectV3Error('manifest', `Duplicate portable node media reference: ${normalized.assetId}`)
+    seen.add(normalized.assetId)
+    return normalized
+  })
+}
+
 function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV3 {
   if (!record(node)) throw new PortableProjectV3Error('manifest', 'Portable node is not an object.')
   if (strict) exactKeys(node, ALLOWED_NODE, 'node')
@@ -193,6 +255,10 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
   if (strict && node.parentId !== undefined && typeof node.parentId !== 'string') throw new PortableProjectV3Error('manifest', 'Portable node parent is invalid.')
   if (strict && node.text !== undefined && typeof node.text !== 'string') throw new PortableProjectV3Error('manifest', 'Portable node text is invalid.')
   if (strict && node.serviceLabel !== undefined && typeof node.serviceLabel !== 'string') throw new PortableProjectV3Error('manifest', 'Portable service label is invalid.')
+  if (strict && node.homeAssistantControlConfig !== undefined) {
+    if (!record(node.homeAssistantControlConfig)) throw new PortableProjectV3Error('manifest', 'Portable Home Assistant control intent is invalid.')
+    exactKeys(node.homeAssistantControlConfig, ALLOWED_HOME_ASSISTANT_CONTROL, 'Home Assistant control intent')
+  }
   if (strict && node.browserTabs !== undefined && !Array.isArray(node.browserTabs)) throw new PortableProjectV3Error('manifest', 'Portable browser tabs must be an array.')
   if (node.collapsed !== undefined) out.collapsed = node.collapsed
   if (node.universeCanvasId !== undefined) out.universeCanvasId = text(node.universeCanvasId, 'universe canvas id')
@@ -205,6 +271,33 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
   if (node.text !== undefined) out.text = content(node.text, 'node text')
   if (node.url !== undefined) { const url = safeUrl(node.url, 'node URL'); if (url) out.url = url }
   if (node.serviceLabel !== undefined) out.serviceLabel = text(node.serviceLabel, 'service label')
+  if (node.wildDimSumDish !== undefined) {
+    const dish = normalizePublicDimSumSelection(node.wildDimSumDish)
+    if (!dish) throw new PortableProjectV3Error('manifest', 'Portable Wild dim sum selection is invalid.')
+    out.wildDimSumDish = dish
+  }
+  if (node.homeAssistantIntent !== undefined) {
+    if (!record(node.homeAssistantIntent)) throw new PortableProjectV3Error('manifest', 'Portable Home Assistant intent is invalid.')
+    exactKeys(node.homeAssistantIntent, ALLOWED_HOME_ASSISTANT_INTENT, 'Home Assistant intent')
+    if (!['rest', 'websocket'].includes(String(node.homeAssistantIntent.transport))) throw new PortableProjectV3Error('manifest', 'Portable Home Assistant transport is invalid.')
+    const domain = text(node.homeAssistantIntent.domain, 'Home Assistant domain')
+    if (domain !== 'all' && !/^[a-z0-9_]{1,64}$/.test(domain)) throw new PortableProjectV3Error('manifest', 'Portable Home Assistant domain is invalid.')
+    out.homeAssistantIntent = { transport: node.homeAssistantIntent.transport as 'rest' | 'websocket', domain }
+  }
+  if (node.homeAssistantControlConfig !== undefined) out.homeAssistantControlConfig = validateHomeAssistantControlConfig(node.homeAssistantControlConfig)
+  if (node.recoveryGame !== undefined) {
+    if (!record(node.recoveryGame)) throw new PortableProjectV3Error('manifest', 'Portable recovery game state is invalid.')
+    exactKeys(node.recoveryGame, ALLOWED_RECOVERY_GAME, 'recovery game state')
+    if (!record(node.recoveryGame.player)) throw new PortableProjectV3Error('manifest', 'Portable recovery game player is invalid.')
+    exactKeys(node.recoveryGame.player, ALLOWED_RECOVERY_POINT, 'recovery game player')
+    if (!Array.isArray(node.recoveryGame.energizedKeys) || node.recoveryGame.energizedKeys.length > RECOVERY_ENERGY_KEYS.length) throw new PortableProjectV3Error('entry-limit', 'Portable recovery game key count exceeds its bound.')
+    const keys = node.recoveryGame.energizedKeys
+    if (keys.some((key) => typeof key !== 'string' || !(RECOVERY_ENERGY_KEYS as readonly string[]).includes(key)) || new Set(keys).size !== keys.length) throw new PortableProjectV3Error('manifest', 'Portable recovery game key state is invalid.')
+    if (typeof node.recoveryGame.coreActivated !== 'boolean' || typeof node.recoveryGame.hazardHits !== 'number' || !Number.isInteger(node.recoveryGame.hazardHits) || node.recoveryGame.hazardHits < 0 || node.recoveryGame.hazardHits > 999_999) throw new PortableProjectV3Error('manifest', 'Portable recovery game progress is invalid.')
+    const normalized = normalizeRecoveryGameSnapshot(node.recoveryGame)
+    if (normalized.coreActivated !== node.recoveryGame.coreActivated) throw new PortableProjectV3Error('manifest', 'Portable recovery game core state is inconsistent.')
+    out.recoveryGame = normalized
+  }
   if (node.alarmSchedule !== undefined) {
     if (!record(node.alarmSchedule)) throw new PortableProjectV3Error('manifest', 'Portable alarm schedule is invalid.')
     exactKeys(node.alarmSchedule, ALLOWED_ALARM_SCHEDULE, 'alarm schedule')
@@ -227,11 +320,55 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
       return value
     })
   }
+  if (node.homeAssistantSensorConfig !== undefined) {
+    const normalized = validateHomeAssistantSensorConfig(node.homeAssistantSensorConfig)
+    if (strict && JSON.stringify(normalized) !== JSON.stringify(node.homeAssistantSensorConfig)) throw new PortableProjectV3Error('manifest', 'Portable Home Assistant sensor intent is invalid or exceeds its bounds.')
+    out.homeAssistantSensorConfig = normalized
+  }
   if (node.browserTabs !== undefined) {
     if (node.browserTabs.length > 1024) throw new PortableProjectV3Error('entry-limit', 'Portable browser tab count exceeds its bound.')
     out.browserTabs = node.browserTabs.map((tab) => { if (!record(tab)) throw new PortableProjectV3Error('manifest', 'Portable browser tab is invalid.'); exactKeys(tab, ALLOWED_TAB, 'browser tab'); const url = safeUrl(tab.url, 'browser tab URL'); return { id: text(tab.id, 'browser tab id'), ...(url ? { url } : {}), title: content(tab.title, 'browser tab title') } })
   }
+  if (node.mediaAssets !== undefined) {
+    if (!['photo', 'video', 'gallery'].includes(node.kind)) throw new PortableProjectV3Error('manifest', 'Only media nodes may carry portable media references.')
+    out.mediaAssets = portableMediaReferences(node.mediaAssets)
+    if (node.mediaActiveAssetId !== undefined) {
+      const active = text(node.mediaActiveAssetId, 'active media asset id')
+      if (!out.mediaAssets.some((asset) => asset.assetId === active)) throw new PortableProjectV3Error('manifest', 'Active media asset is not present in the node.')
+      out.mediaActiveAssetId = active
+    }
+  } else if (node.mediaActiveAssetId !== undefined) {
+    throw new PortableProjectV3Error('manifest', 'Active media asset requires a media reference list.')
+  }
   return out
+}
+
+function reconcileMediaReferences(
+  nodes: PortableCanvasNodeV3[],
+  media: PortableMediaManifest | undefined
+): PortableCanvasNodeV3[] {
+  const included = new Map(media?.assets.map((asset) => [asset.id, asset]) ?? [])
+  const omitted = new Set(media?.omissions.map((omission) => omission.assetId) ?? [])
+  return nodes.map((node) => {
+    if (!node.mediaAssets) return node
+    const mediaAssets = node.mediaAssets.map((reference) => {
+      const asset = included.get(reference.assetId)
+      if (!asset) return { ...reference, missing: true }
+      const expectedKind = reference.kind === 'photo' ? 'image' : 'video'
+      const expectedPath = `./assets/media/${asset.id}.${asset.extension}`
+      if (
+        asset.kind !== expectedKind || asset.sha256 !== reference.sha256 ||
+        asset.mime !== reference.mime || asset.bytes !== reference.bytes ||
+        expectedPath !== reference.portablePath || asset.unresolved === true ||
+        omitted.has(reference.assetId)
+      ) {
+        throw new PortableProjectV3Error('manifest', `Portable media carrier does not match node reference: ${reference.assetId}`)
+      }
+      const { missing: _missing, ...available } = reference
+      return available
+    })
+    return { ...node, mediaAssets }
+  })
 }
 
 function safeUrl(value: unknown, label: string): string | undefined {
@@ -245,26 +382,63 @@ function safeUrl(value: unknown, label: string): string | undefined {
 
 function relationships(project: Project): PortableRelationshipV3[] {
   const all: PortableRelationshipV3[] = []
-  const append = (kind: 'bridge' | 'rope', links: BridgeLink[] | undefined) => links?.forEach((link, order) => all.push({ id: text(link.id, 'relationship id'), kind, source: text(link.source, 'relationship source'), target: text(link.target, 'relationship target'), order }))
-  append('bridge', project.bridges)
-  append('rope', project.ropes)
+  const append = (canvasId: string, kind: 'bridge' | 'rope', links: BridgeLink[] | undefined) => links?.forEach((link, order) => all.push({ id: text(link.id, 'relationship id'), kind, ...(canvasId === 'root' ? {} : { canvasId }), source: text(link.source, 'relationship source'), target: text(link.target, 'relationship target'), order }))
+  append('root', 'bridge', project.bridges)
+  append('root', 'rope', project.ropes)
+  for (const canvas of project.multiverseCanvases ?? []) {
+    append(canvas.id, 'bridge', canvas.bridges)
+    append(canvas.id, 'rope', canvas.ropes)
+  }
   return all.sort((a, b) => a.kind.localeCompare(b.kind) || a.order - b.order || a.id.localeCompare(b.id)).map((link, order) => ({ ...link, order }))
 }
 
 /** Project only the portable presentation and safe intent fields. Forbidden live fields are never read. */
 export function projectToPortableCanvasV3(project: Project, input: PortableCanvasProjectionInput = {}): PortableCanvasProjectionV3 {
-  const nodes = project.nodes.map(projectNode).sort((a, b) => a.id.localeCompare(b.id))
+  const multiverseChildren = (project.multiverseCanvases ?? []).map((canvas) => ({
+    id: canvas.id,
+    scope: 'multiverse' as const,
+    parentCanvasId: canvas.parentCanvasId,
+    depth: canvas.depth,
+    title: canvas.title,
+    order: canvas.order,
+    viewport: canvas.viewport,
+    nodes: canvas.nodes,
+    nodeIds: canvas.nodes.map((node) => node.id)
+  }))
+  const knownIds = new Set(multiverseChildren.map((canvas) => canvas.id))
+  const lifecycleChildren = (project.childCanvases ?? []).filter((canvas) => !knownIds.has(canvas.id)).map((canvas) => ({
+    id: canvas.id,
+    scope: canvas.scope,
+    parentCanvasId: canvas.parentCanvasId,
+    depth: canvas.depth,
+    title: canvas.title,
+    order: canvas.order,
+    viewport: canvas.viewport,
+    nodes: canvas.nodes,
+    nodeIds: canvas.nodes.map((node) => node.id)
+  }))
+  const projectChildren = [...multiverseChildren, ...lifecycleChildren]
+  const childInputs = input.canvases ?? projectChildren
+  const childNodes = input.canvases === undefined ? projectChildren.flatMap((canvas) => canvas.nodes) : []
+  const projectedNodes = [...project.nodes, ...childNodes].map(projectNode).sort((a, b) => a.id.localeCompare(b.id))
+  const childNodeIds = new Set(childInputs?.flatMap((canvas) => canvas.nodeIds ?? []) ?? [])
+  const media = input.media === undefined ? undefined : validatePortableMediaManifest(input.media)
+  const nodes = reconcileMediaReferences(projectedNodes, media)
   if (nodes.length > PORTABLE_CANVAS_LIMITS.maxNodes) throw new PortableProjectV3Error('entry-limit', 'Portable node count exceeds its bound.')
-  const root: PortableCanvasV3 = { id: 'root', scope: 'root', title: text(project.name, 'project name'), order: 0, viewport: project.viewport, nodeIds: nodes.map((node) => node.id) }
-  const children = (input.canvases ?? []).map((canvas) => ({ id: text(canvas.id, 'canvas id'), scope: canvas.scope, ...(canvas.parentCanvasId ? { parentCanvasId: text(canvas.parentCanvasId, 'parent canvas id') } : {}), ...(canvas.depth !== undefined ? { depth: finite(canvas.depth, 'canvas depth') } : {}), title: text(canvas.title, 'canvas title'), order: finite(canvas.order, 'canvas order'), ...(canvas.viewport ? { viewport: { x: finite(canvas.viewport.x, 'viewport x'), y: finite(canvas.viewport.y, 'viewport y'), zoom: finite(canvas.viewport.zoom, 'viewport zoom') } } : {}), nodeIds: [...(canvas.nodeIds ?? [])].map((id) => text(id, 'canvas node id')).sort() }))
+  const root: PortableCanvasV3 = { id: 'root', scope: 'root', title: text(project.name, 'project name'), order: 0, viewport: project.viewport, nodeIds: nodes.filter((node) => !childNodeIds.has(node.id)).map((node) => node.id) }
+  const children = (childInputs ?? []).map((canvas) => ({ id: text(canvas.id, 'canvas id'), scope: canvas.scope, ...(canvas.parentCanvasId ? { parentCanvasId: text(canvas.parentCanvasId, 'parent canvas id') } : {}), ...(canvas.depth !== undefined ? { depth: finite(canvas.depth, 'canvas depth') } : {}), title: text(canvas.title, 'canvas title'), order: finite(canvas.order, 'canvas order'), ...(canvas.viewport ? { viewport: { x: finite(canvas.viewport.x, 'viewport x'), y: finite(canvas.viewport.y, 'viewport y'), zoom: finite(canvas.viewport.zoom, 'viewport zoom') } } : {}), nodeIds: [...(canvas.nodeIds ?? [])].map((id) => text(id, 'canvas node id')).sort() }))
   if (children.length + 1 > PORTABLE_CANVAS_LIMITS.maxCanvases) throw new PortableProjectV3Error('entry-limit', 'Portable canvas count exceeds its bound.')
   const canvases = [root, ...children].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))
   const icon = project.icon && sanitizeProjectIcon(project.icon)
   const portableIcon = icon?.type === 'emoji' ? { type: icon.type, name: icon.emoji } : icon ? { type: icon.type, name: icon.name } : undefined
-  const media = input.media === undefined ? undefined : validatePortableMediaManifest(input.media)
-  const result: PortableCanvasProjectionV3 = { format: PORTABLE_PROJECT_SCHEMA, schemaVersion: PORTABLE_PROJECT_SCHEMA_VERSION, project: { name: text(project.name, 'project name'), color: text(project.color, 'project color'), ...(portableIcon ? { icon: portableIcon } : {}) }, rootCanvasId: 'root', canvases, nodes, relationships: relationships(project), ...(input.appearance ? { appearance: safeAppearance(input.appearance) as Record<string, unknown> } : {}), ...(media ? { media } : {}) }
+  const doorCanvasIds = new Set(canvases.map((canvas) => canvas.id))
+  const doors = input.doors === undefined ? undefined : validatePortableUniverseDoors(input.doors, doorCanvasIds)
+  const planner = input.planner === undefined ? undefined : plannerDefinitionsToPortable(input.planner)
+  const portalInput = input.portals ?? project.portals
+  const portals = portalInput === undefined ? undefined : validatePortablePortals(portalInput, canvases)
+  const result: PortableCanvasProjectionV3 = { format: PORTABLE_PROJECT_SCHEMA, schemaVersion: PORTABLE_PROJECT_SCHEMA_VERSION, project: { name: text(project.name, 'project name'), color: text(project.color, 'project color'), ...(portableIcon ? { icon: portableIcon } : {}) }, rootCanvasId: 'root', canvases, nodes, relationships: relationships(project), ...(doors ? { doors } : {}), ...(portals ? { portals } : {}), ...(input.appearance ? { appearance: safeAppearance(input.appearance) as Record<string, unknown> } : {}), ...(media ? { media } : {}), ...(planner ? { planner } : {}) }
   if (result.relationships.length > PORTABLE_CANVAS_LIMITS.maxRelationships) throw new PortableProjectV3Error('entry-limit', 'Portable relationship count exceeds its bound.')
-  return repairUniverseShops(validatePortableCanvasProjectionV3(result)).projection
+  return repairPortablePortals(repairUniverseShops(validatePortableCanvasProjectionV3(result)).projection).projection
 }
 
 function canonical(value: unknown): unknown {
@@ -348,30 +522,64 @@ export function validatePortableCanvasProjectionV3(value: unknown): PortableCanv
       while (parent !== undefined) { value += 1; parent = canvasById.get(parent)?.parentCanvasId }
       return value
     })()
+    if (canvas.scope === 'multiverse' && (canvas.depth === undefined || measuredDepth < 1 || measuredDepth > MAX_MULTIVERSE_DEPTH)) {
+      throw new PortableProjectV3Error('manifest', `Multiverse canvases require a persisted depth from 1 through ${MAX_MULTIVERSE_DEPTH}.`)
+    }
     if (canvas.depth !== undefined && canvas.depth !== measuredDepth) throw new PortableProjectV3Error('manifest', 'Portable canvas depth does not match its containing canvas chain.')
   }
   const membership = new Map<string, number>()
-  for (const canvas of value.canvases) for (const nodeId of canvas.nodeIds) membership.set(nodeId, (membership.get(nodeId) ?? 0) + 1)
+  const nodeCanvas = new Map<string, string>()
+  for (const canvas of value.canvases) for (const nodeId of canvas.nodeIds) {
+    membership.set(nodeId, (membership.get(nodeId) ?? 0) + 1)
+    nodeCanvas.set(nodeId, canvas.id)
+  }
   for (const node of value.nodes) if (membership.get(node.id) !== 1) throw new PortableProjectV3Error('manifest', `Portable node must belong to exactly one canvas: ${node.id}`)
   for (const link of value.relationships) {
     if (!record(link) || !['bridge', 'rope'].includes(String(link.kind))) throw new PortableProjectV3Error('manifest', 'Portable relationship is invalid.')
     exactKeys(link, ALLOWED_RELATIONSHIP, 'relationship')
     text(link.id, 'relationship id'); text(link.source, 'relationship source'); text(link.target, 'relationship target'); finite(link.order, 'relationship order')
+    if (link.canvasId !== undefined && !canvasIds.has(text(link.canvasId, 'relationship canvas id'))) throw new PortableProjectV3Error('manifest', 'Portable relationship references an unknown canvas.')
     if (!ids.has(link.source) || !ids.has(link.target)) throw new PortableProjectV3Error('manifest', 'Portable relationship references an unknown node.')
+    const owningCanvas = link.canvasId ?? value.rootCanvasId
+    if (nodeCanvas.get(link.source) !== owningCanvas || nodeCanvas.get(link.target) !== owningCanvas) {
+      throw new PortableProjectV3Error('manifest', 'Portable relationships must remain inside their owning canvas.')
+    }
   }
   const relationshipIds = new Set<string>(); const foldedRelationshipIds = new Set<string>()
   for (const link of value.relationships) { const folded = link.id.toLocaleLowerCase('en-US'); if (relationshipIds.has(link.id) || foldedRelationshipIds.has(folded)) throw new PortableProjectV3Error('manifest', `Duplicate or case-colliding relationship: ${link.id}`); relationshipIds.add(link.id); foldedRelationshipIds.add(folded) }
   if (!canvasIds.has(value.rootCanvasId)) throw new PortableProjectV3Error('manifest', 'Portable root canvas is missing.')
+  const doors = value.doors === undefined
+    ? undefined
+    : Array.isArray(value.doors)
+      ? validatePortableUniverseDoors(value.doors as unknown as PortableUniverseDoorV3[], canvasIds)
+      : (() => { throw new PortableProjectV3Error('manifest', 'Portable doors must be an array.') })()
   if (value.appearance !== undefined) safeAppearance(value.appearance)
-  const normalizedRelationships = value.relationships.map((link) => ({ id: link.id, kind: link.kind as 'bridge' | 'rope', source: link.source, target: link.target, order: link.order }))
+  const normalizedRelationships = value.relationships.map((link) => ({ id: link.id, kind: link.kind as 'bridge' | 'rope', ...(link.canvasId ? { canvasId: link.canvasId } : {}), source: link.source, target: link.target, order: link.order }))
   const media = value.media === undefined ? undefined : validatePortableMediaManifest(value.media)
-  return { format: PORTABLE_PROJECT_SCHEMA, schemaVersion: 3, project: { name: value.project.name, color: value.project.color, ...(icon ? { icon } : {}) }, rootCanvasId: value.rootCanvasId, canvases: normalizedCanvases, nodes: normalizedNodes, relationships: normalizedRelationships, ...(value.appearance !== undefined ? { appearance: safeAppearance(value.appearance) as Record<string, unknown> } : {}), ...(media ? { media } : {}) }
+  const mediaNodes = reconcileMediaReferences(normalizedNodes, media)
+  const planner = value.planner === undefined ? undefined : validatePortablePlannerDefinitions(value.planner)
+  const portals = value.portals === undefined ? undefined : validatePortablePortals(value.portals, normalizedCanvases)
+  return { format: PORTABLE_PROJECT_SCHEMA, schemaVersion: 3, project: { name: value.project.name, color: value.project.color, ...(icon ? { icon } : {}) }, rootCanvasId: value.rootCanvasId, canvases: normalizedCanvases, nodes: mediaNodes, relationships: normalizedRelationships, ...(doors ? { doors } : {}), ...(portals ? { portals } : {}), ...(value.appearance !== undefined ? { appearance: safeAppearance(value.appearance) as Record<string, unknown> } : {}), ...(media ? { media } : {}), ...(planner ? { planner } : {}) }
 }
 
 export function parsePortableCanvasProjectionV3(bytes: Uint8Array): PortableCanvasProjectionV3 {
   if (bytes.byteLength > PORTABLE_CANVAS_LIMITS.maxJsonBytes) throw new PortableProjectV3Error('raw-limit', 'Portable project.json exceeds its byte bound.')
   try {
-    const validated = validatePortableCanvasProjectionV3(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)))
+    const parsed = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)) as unknown
+    let validated: PortableCanvasProjectionV3
+    try {
+      validated = validatePortableCanvasProjectionV3(parsed)
+    } catch (error) {
+      // A portal's safe intent is sufficient to reconstruct a missing or stale reciprocal door
+      // pair. Keep strict validation for every other malformed field and never repair arbitrary
+      // project data by guessing.
+      if (!record(parsed) || !Array.isArray(parsed.portals) || parsed.portals.length === 0) throw error
+      const withoutDoors = { ...parsed, doors: undefined }
+      validated = validatePortableCanvasProjectionV3(withoutDoors)
+    }
+    // Portal repair is performed by the archive importer so it can return the repair ledger and
+    // refresh the manifest hash for the repaired project.json. Parsing alone remains side-effect
+    // free and only applies the existing Shop normalization.
     return repairUniverseShops(validated).projection
   } catch (error) { if (error instanceof PortableProjectV3Error) throw error; throw new PortableProjectV3Error('manifest', 'Portable project.json is not valid UTF-8 JSON.') }
 }
@@ -387,8 +595,8 @@ export function portableCanvasProjectionToProject(
   input: PortableCanvasProjectionV3,
   base: { id: string; cwd?: string } = { id: 'imported-project' }
 ): Project {
-  const value = validatePortableCanvasProjectionV3(input)
-  const nodes: CanvasNodeState[] = value.nodes.map((node) => ({
+  const value = repairPortablePortals(repairUniverseShops(validatePortableCanvasProjectionV3(input)).projection).projection
+  const runtimeNode = (node: PortableCanvasNodeV3): CanvasNodeState => ({
     id: node.id,
     kind: node.kind as NodeKind,
     position: { ...node.position },
@@ -396,19 +604,35 @@ export function portableCanvasProjectionToProject(
     title: node.title,
     color: node.color,
     group: node.group,
+    ...(node.creationEventId !== undefined ? { creationEventId: node.creationEventId } : {}),
+    ...(node.universeCanvasId !== undefined ? { universeCanvasId: node.universeCanvasId } : {}),
+    ...(node.universeScope !== undefined ? { universeScope: node.universeScope } : {}),
+    ...(node.universeDepth !== undefined ? { universeDepth: node.universeDepth } : {}),
+    ...(node.nonDeletable !== undefined ? { nonDeletable: node.nonDeletable } : {}),
+    ...(node.shopSelection !== undefined ? { shopSelection: node.shopSelection } : {}),
     ...(node.collapsed !== undefined ? { collapsed: node.collapsed } : {}),
     ...(node.parentId !== undefined ? { parentId: node.parentId } : {}),
     ...(node.tags ? { tags: [...node.tags] } : {}),
     ...(node.text !== undefined ? { text: node.text } : {}),
     ...(node.url !== undefined ? { url: node.url } : {}),
     ...(node.browserTabs ? { browserTabs: node.browserTabs.map((tab) => ({ ...tab })) } : {}),
-    ...(node.serviceLabel !== undefined ? { serviceLabel: node.serviceLabel } : {})
-  }))
+    ...(node.serviceLabel !== undefined ? { serviceLabel: node.serviceLabel } : {}),
+    ...(node.mediaAssets ? { mediaAssets: node.mediaAssets.map((asset) => ({ ...asset })) } : {}),
+    ...(node.mediaActiveAssetId !== undefined ? { mediaActiveAssetId: node.mediaActiveAssetId } : {}),
+    ...(node.wildDimSumDish !== undefined ? { wildDimSumDish: node.wildDimSumDish } : {}),
+    ...(node.homeAssistantIntent !== undefined ? { homeAssistantIntent: { ...node.homeAssistantIntent } } : {}),
+    ...(node.homeAssistantControlConfig !== undefined ? { homeAssistantControlConfig: validateHomeAssistantControlConfig(node.homeAssistantControlConfig) } : {}),
+    ...(node.homeAssistantSensorConfig !== undefined ? { homeAssistantSensorConfig: validateHomeAssistantSensorConfig(node.homeAssistantSensorConfig) } : {}),
+    ...(node.recoveryGame !== undefined ? { recoveryGame: normalizeRecoveryGameSnapshot(node.recoveryGame) } : {})
+  })
+  const nodeById = new Map(value.nodes.map((node) => [node.id, runtimeNode(node)]))
+  const rootCanvas = value.canvases.find((canvas) => canvas.id === value.rootCanvasId)!
+  const rootNodes = rootCanvas.nodeIds.map((id) => nodeById.get(id)).filter((node): node is CanvasNodeState => !!node)
   const bridgeLinks = value.relationships
-    .filter((link) => link.kind === 'bridge')
+    .filter((link) => link.kind === 'bridge' && (link.canvasId ?? value.rootCanvasId) === value.rootCanvasId)
     .map((link) => ({ id: link.id, source: link.source, target: link.target }))
   const ropeLinks = value.relationships
-    .filter((link) => link.kind === 'rope')
+    .filter((link) => link.kind === 'rope' && (link.canvasId ?? value.rootCanvasId) === value.rootCanvasId)
     .map((link) => ({ id: link.id, source: link.source, target: link.target }))
   const icon = value.project.icon
     ? value.project.icon.type === 'emoji'
@@ -420,11 +644,39 @@ export function portableCanvasProjectionToProject(
     name: value.project.name,
     color: value.project.color,
     ...(icon ? { icon } : {}),
-    viewport: value.canvases.find((canvas) => canvas.id === value.rootCanvasId)?.viewport ?? { x: 0, y: 0, zoom: 1 },
-    nodes,
+    viewport: rootCanvas.viewport ?? { x: 0, y: 0, zoom: 1 },
+    nodes: rootNodes,
+    multiverseCanvases: value.canvases
+      .filter((canvas) => canvas.scope === 'multiverse')
+      .map((canvas) => ({
+        id: canvas.id,
+        title: canvas.title,
+        parentCanvasId: canvas.parentCanvasId!,
+        depth: canvas.depth!,
+        order: canvas.order,
+        viewport: canvas.viewport ?? { x: 0, y: 0, zoom: 1 },
+        nodes: canvas.nodeIds.map((id) => nodeById.get(id)).filter((node): node is CanvasNodeState => !!node),
+        bridges: value.relationships.filter((link) => link.kind === 'bridge' && link.canvasId === canvas.id).map((link) => ({ id: link.id, source: link.source, target: link.target })),
+        ropes: value.relationships.filter((link) => link.kind === 'rope' && link.canvasId === canvas.id).map((link) => ({ id: link.id, source: link.source, target: link.target }))
+      })),
     ...(bridgeLinks.length > 0 ? { bridges: bridgeLinks } : {}),
     ...(ropeLinks.length > 0 ? { ropes: ropeLinks } : {}),
-    ...(base.cwd ? { cwd: base.cwd } : {})
+     ...(base.cwd ? { cwd: base.cwd } : {}),
+     ...(value.canvases.some((canvas) => canvas.id !== value.rootCanvasId) ? {
+       childCanvases: value.canvases
+         .filter((canvas) => canvas.id !== value.rootCanvasId)
+         .map((canvas) => ({
+           id: canvas.id,
+           scope: canvas.scope as 'multiverse' | 'aws-universe',
+           parentCanvasId: canvas.parentCanvasId!,
+           depth: canvas.depth ?? 0,
+           title: canvas.title,
+           order: canvas.order,
+           ...(canvas.viewport ? { viewport: { ...canvas.viewport } } : {}),
+             nodes: canvas.nodeIds.map((nodeId) => nodeById.get(nodeId)).filter((node): node is CanvasNodeState => !!node)
+         }))
+     } : {}),
+     ...(value.portals ? { portals: value.portals } : {})
   }
 }
 

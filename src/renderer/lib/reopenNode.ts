@@ -11,14 +11,17 @@ import {
   createVideoNode,
   createPhotoNode,
   createGalleryNode,
+  createWildDimSumNode,
   createWebNode,
   createBrowserNode,
   createDiffNode,
   createStickyNode,
   createDinoNode,
+  createRecoveryGameNode,
   createVirtualMachineNode,
   createTorrentNode,
   createCalendarNode,
+  createHomeAssistantControlNode,
   createTimerNode,
   isAccountLoginNode
 } from '@renderer/state/workspace'
@@ -182,6 +185,8 @@ function buildBase(snapshot: ReopenNodeSnapshot, ctx: RecreateContext): CanvasNo
       return d.filePath ? createPhotoNode(0, d.filePath, undefined, d.sshFs) : null
     case 'gallery':
       return createGalleryNode(0, (d.mediaAssets as import('@shared/media-catalog').MediaAssetReference[]) ?? [])
+    case 'wild-dim-sum':
+      return createWildDimSumNode(0, d.wildDimSumDish)
     case 'diff':
       return d.cwd && d.filePath
         ? createDiffNode(0, d.cwd, d.filePath, !!d.diffStaged, undefined, d.commitOid)
@@ -192,6 +197,8 @@ function buildBase(snapshot: ReopenNodeSnapshot, ctx: RecreateContext): CanvasNo
       return createBrowserNode(0, d.url ?? '', undefined, undefined, d.browserProfileId)
     case 'dino':
       return createDinoNode(0, undefined, d.highScore ?? 0)
+    case 'recovery-game':
+      return createRecoveryGameNode(0, undefined, d.recoveryGame)
     case 'linux-vm': {
       const node = createVirtualMachineNode(0)
       return {
@@ -207,6 +214,10 @@ function buildBase(snapshot: ReopenNodeSnapshot, ctx: RecreateContext): CanvasNo
       return createTorrentNode(0)
     case 'calendar':
       return createCalendarNode(0)
+    case 'homeassistant-control': {
+      const node = createHomeAssistantControlNode(0)
+      return { ...node, data: { ...node.data, homeAssistantControlConfig: d.homeAssistantControlConfig } }
+    }
     case 'timer': {
       const node = createTimerNode(0)
       return { ...node, data: { ...node.data, ...d, running: false, paused: false, elapsedMs: 0, lapsMs: [], occurrenceId: undefined, occurrenceState: 'scheduled' } }

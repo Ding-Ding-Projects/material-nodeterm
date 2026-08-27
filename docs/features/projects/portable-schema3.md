@@ -32,6 +32,13 @@ publishes an optional destination from an import-owned sibling stage. The staged
 re-readable by the workspace store, while the original schema 3 projection is retained beside it
 for future canvas scopes.
 
+Planner schedules are represented by the optional `planner` projection member. It contains the
+validated schema 1 planner definition and its user-authored schedule intent only. Occurrence
+history, last-tick state, credentials, process state, paths, and provider state remain excluded.
+Import returns this definition without applying it. The completed import notification provides the
+explicit Configure route, which merges the definitions into the destination host store only after
+the user chooses it.
+
 ## Migration boundary
 
 Pure V1 and V2 migration removes exact identity fields such as `id`, paths, account references,
