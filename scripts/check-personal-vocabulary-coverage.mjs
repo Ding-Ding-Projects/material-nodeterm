@@ -289,17 +289,21 @@ if (dropSectionIndex >= 0 && scriptArgs[dropSectionIndex + 1]) {
   const index = SETTINGS_SECTION_BOUNDARY_MANIFEST.findIndex(([id]) => id === dropped)
   if (index >= 0) SETTINGS_SECTION_BOUNDARY_MANIFEST.splice(index, 1)
 }
-const CANONICAL_CANVAS_NOTIFY_CALL_IDS = `terminal-profile-create-unavailable explorer-folder-drop-stale explorer-agent-drop-missing explorer-folder-open-stale terminal-profile-restart-disabled terminal-profile-restart-failed branch-failed transfer-not-ready transfer-failed explorer-terminal-profile-unavailable project-save-busy project-save-progress project-save-success project-save-cancelled project-save-failed project-password-mismatch project-open-busy project-open-cancelled project-open-password-check project-open-success project-open-failed test-notification`.split(/\s+/)
+const CANONICAL_CANVAS_NOTIFY_CALL_IDS = `terminal-profile-create-unavailable terminal-create-placement-failed file-open-node-placement-failed working-diff-node-placement-failed commit-diff-node-placement-failed commit-explanation-node-placement-failed service-node-placement-failed sticky-node-placement-failed authenticator-node-placement-failed native-loop-node-placement-failed nsis-node-placement-failed dino-node-placement-failed web-node-placement-failed browser-node-placement-failed files-node-placement-failed catalog-node-unavailable aws-universe-create-unavailable catalog-node-placement-failed claude-account-login-node-placement-failed codex-account-login-node-placement-failed agent-node-placement-failed explorer-agent-folder-drop-stale-project explorer-agent-folder-drop-missing-source explorer-agent-folder-node-placement-failed explorer-terminal-folder-drop-stale-project explorer-terminal-folder-node-placement-failed ssh-terminal-node-placement-failed wsl-group-node-placement-failed worktree-group-node-placement-failed duplicate-node-placement-failed terminal-profile-restart-disabled terminal-profile-restart-failed conversation-branch-failed conversation-branch-node-placement-failed conversation-transfer-not-ready conversation-transfer-failed conversation-transfer-node-placement-failed reopen-last-closed-node-placement-failed board-terminal-profile-unavailable board-node-placement-failed transcript-resume-node-placement-failed canvas-control-node-placement-failed canvas-control-verify-node-placement-failed portable-media-inspection-failed project-save-busy project-save-progress project-save-success project-save-cancelled project-save-failed project-password-mismatch project-open-busy project-open-cancelled project-open-password-check project-open-success project-open-failed test-notification kiosk-pwa-node-placement-failed`.split(/\s+/)
 // Keep the expected title evidence independent from the mutable callsite count. A replacement
 // notification with the same number of arguments must not make the inventory look complete.
 const CANONICAL_CANVAS_NOTIFY_TITLE_MARKERS = [
   ['terminalProfiles.common.unavailableHereTitle', 2],
+  ['Node placement unavailable', 32],
+  ['Node unavailable', 1],
+  ['AWS Universe unavailable', 1],
   ['Folder drop cancelled', 2],
   ['Agent drop cancelled', 1],
   ['terminalProfiles.restart.failedTitle', 2],
   ['Branch failed', 1],
   ['Conversation not ready to transfer yet.', 1],
   ['Transfer failed', 1],
+  ['Media inspection failed', 1],
   ['Project save already running', 1],
   ['Saving project…', 1],
   ['Protected project saved as one file', 1],
@@ -311,6 +315,8 @@ const CANONICAL_CANVAS_NOTIFY_TITLE_MARKERS = [
   ['Project open cancelled', 1],
   ['Unlocking project file…', 1],
   ['Project opened from file', 1],
+  ['Planner definitions configured', 1],
+  ['Planner configuration failed', 1],
   ['Project open failed', 1],
   ['Test notification', 1]
 ]

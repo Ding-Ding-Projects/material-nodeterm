@@ -1,5 +1,26 @@
 # Handoff
 
+## 2026-08-27, Canvas notification inventory repair
+
+Release run `33123084094` at `e6697feb31e5e59f36e916b4e5b00966e9b57891` executed the repaired
+coverage checker. Producer manifest, producer uniqueness, speech marker, project-save markers,
+surface manifest, and mutation checks passed. The remaining three base failures were the Canvas
+notification count, title-ownership, and body-ownership checks, with one aggregate complete-fixture
+failure.
+
+An independent parser matching the current `callArguments` algorithm selected 57 production object
+payloads. The hand-written Canvas call manifest now contains 57 IDs, with no unmatched calls or
+IDs. All 57 selected calls carry `titleKind`; 54 carry a body and all 54 carry `bodyKind`. The
+title-marker manifest was expanded for the current placement, unavailable-node, AWS Universe,
+media, planner, and project notification calls, while the separate save-cancelled and save-failed
+markers remain at one each. Canvas now supplies explicit title and body ownership for every selected
+notification payload.
+
+This lane intentionally ran no production checker, tests, lint, type checks, builds, packaging,
+installer execution, runtime interaction, reviews, audits, or UI captures. The parser comparison was
+read-only and separate from the production checker, so the repair remains unverified by those
+activities until the integration owner evaluates the exact merged commit.
+
 ## 2026-08-27, personal vocabulary producer and save-notification repair
 
 Release run `33121962513` at `9c5cbc2883c0218ff159cf39874d5e94c1db45c4` executed the coverage checker
