@@ -1183,4 +1183,103 @@ export const CATALOG: Catalog = {
   'virtualMachine.browse': { en: flat('Browse'), yue: flat('瀏覽') },
   'virtualMachine.note': { en: flat('Linux ISO VM is separate from WSL. It runs one isolated QEMU machine with a loopback-only display.'), yue: flat('Linux ISO 虛擬機同 WSL 分開，會用只限本機回環顯示嘅 QEMU 隔離機器。') }
   }
+  // WSL creation dialog (WslCreateDialog.tsx). Labels stay flat, while explanatory copy gets
+  // five honest levels. Runtime distribution names, versions, instance names, paths, operation
+  // ids, parser details, and executable names are supplied by the caller and never live here.
+  // ---------------------------------------------------------------------------------------
+  'wsl.create.title': { en: flat('New {brand} instance'), yue: flat('新增 {brand} 實例') },
+  'wsl.create.actions.cancel': { en: flat('Cancel'), yue: flat('取消') },
+  'wsl.create.actions.create': { en: flat('Create'), yue: flat('建立') },
+  'wsl.create.actions.cancelling': { en: flat('Cancelling…'), yue: flat('正在取消…') },
+  'wsl.create.actions.creating': { en: flat('Creating…'), yue: flat('正在建立…') },
+  'wsl.create.description': {
+    en: [
+      'Choose a distribution from the live {brand} catalogue, then give this machine-local instance a unique name.',
+      'Pick a distribution from the live {brand} catalogue, then give this local instance a unique name.',
+      'Choose the distribution first, then name this local {brand} instance something unique.',
+      'Pick a distribution and give the new local {brand} instance a name that will not bump into another one.',
+      'Choose your distribution, then give this local {brand} instance a name so tidy even the catalogue smiles.'
+    ],
+    yue: [
+      '喺即時 {brand} 目錄揀一個發行版，再為呢個本機實例改個獨一無二嘅名。',
+      '先揀即時 {brand} 目錄入面嘅發行版，再幫本機實例改個唔撞名嘅名。',
+      '揀好發行版，再為本機 {brand} 實例改個獨特名稱。',
+      '揀個發行版，再幫新嘅本機 {brand} 實例改個唔會同其他實例打交嘅名。',
+      '揀好發行版，再幫本機 {brand} 實例改個連目錄都會點頭嘅靚名。'
+    ]
+  },
+  'wsl.create.filter.label': { en: flat('Filter distributions'), yue: flat('篩選發行版') },
+  'wsl.create.filter.regex': { en: flat('Regex for {brand} distributions'), yue: flat('{brand} 發行版 Regex') },
+  'wsl.create.list.aria': { en: flat('Available {brand} distributions'), yue: flat('可用 {brand} 發行版') },
+  'wsl.create.status.loading': { en: flat('Loading available distributions…'), yue: flat('正在載入可用發行版…') },
+  'wsl.create.error.cataloguePrefix': { en: flat('Could not load available distributions:'), yue: flat('無法載入可用發行版：') },
+  'wsl.create.empty.none': { en: flat('No distributions available.'), yue: flat('沒有可用發行版。') },
+  'wsl.create.empty.noMatch': { en: flat('No distributions match that filter.'), yue: flat('沒有發行版符合呢個篩選。') },
+  'wsl.create.field.name': { en: flat('Instance name'), yue: flat('實例名稱') },
+  'wsl.create.field.nameAria': { en: flat('{brand} instance name'), yue: flat('{brand} 實例名稱') },
+  'wsl.create.field.placeholder': { en: flat('my-project'), yue: flat('my-project') },
+  'wsl.create.field.support': {
+    en: flat('Letters, numbers, spaces, dots, hyphens, and underscores are accepted.'),
+    yue: flat('接受字母、數字、空格、句點、連字號同底線。')
+  },
+  'wsl.create.error.prefix': { en: flat('The {brand} operation reported an error:'), yue: flat('{brand} 操作回報錯誤：') },
+  'wsl.create.progress.starting': {
+    en: [
+      'Starting {brand} creation…',
+      'Starting the {brand} creation operation…',
+      'Beginning local {brand} setup…',
+      'Starting {brand} setup, with the progress board ready…',
+      'Starting {brand} creation, the tiny progress parade is leaving the station…'
+    ],
+    yue: [
+      '正在開始建立 {brand}…',
+      '而家開始 {brand} 建立操作…',
+      '開始設定本機 {brand}…',
+      '開始設定 {brand}，進度板已經準備好…',
+      '開始建立 {brand}，迷你進度巡遊而家出發…'
+    ]
+  },
+  'wsl.create.progress.cancelling': {
+    en: [
+      'Cancelling {brand} creation…',
+      'Requesting cancellation of {brand} creation…',
+      'Stopping the local {brand} operation…',
+      'Asking {brand} creation to step aside safely…',
+      'Cancelling {brand} creation before the progress parade gets too dramatic…'
+    ],
+    yue: [
+      '正在取消建立 {brand}…',
+      '正在要求取消建立 {brand}…',
+      '正在停止本機 {brand} 操作…',
+      '請 {brand} 建立操作安全咁行埋一邊…',
+      '趁 {brand} 進度巡遊未變大龍先取消佢…'
+    ]
+  },
+  'wsl.create.progress.validating': { en: flat('Validating the selected distribution and name.'), yue: flat('正在驗證所選發行版同名稱。') },
+  'wsl.create.progress.checking': { en: flat('Checking {brand} availability.'), yue: flat('正在檢查 {brand} 可用性。') },
+  'wsl.create.progress.installing': { en: flat('Installing the selected distribution through {exe}.'), yue: flat('正透過 {exe} 安裝所選發行版。') },
+  'wsl.create.progress.recording': { en: flat('Recording the new local {brand} instance.'), yue: flat('正在記錄新嘅本機 {brand} 實例。') },
+  'wsl.create.progress.completed': { en: flat('{brand} creation completed.'), yue: flat('{brand} 建立完成。') },
+  'wsl.create.progress.failed': { en: flat('{brand} creation failed.'), yue: flat('{brand} 建立失敗。') },
+  'wsl.create.progress.cancelled': { en: flat('{brand} creation was cancelled.'), yue: flat('{brand} 建立已取消。') },
+  'wsl.create.progress.step': { en: flat('Step'), yue: flat('步驟') },
+  'wsl.create.progress.of': { en: flat('of'), yue: flat('共') },
+  'wsl.create.progress.aria': { en: flat('{brand} creation phase progress'), yue: flat('{brand} 建立階段進度') },
+  'wsl.create.progress.elapsed': { en: flat('Elapsed time:'), yue: flat('已用時間：') },
+  'wsl.create.progress.seconds': { en: flat('seconds.'), yue: flat('秒。') },
+  'wsl.create.progress.telemetry': {
+    en: flat('Installation progress is reported by phase because {exe} provides no byte or percentage telemetry.'),
+    yue: flat('由於 {exe} 沒有提供位元組或百分比遙測，安裝進度會按階段報告。')
+  },
+  'wsl.create.progress.cancellable': { en: flat('The operation is bounded and can be cancelled.'), yue: flat('呢個操作有界限，而且可以取消。') },
+  'wsl.create.error.noActive': { en: flat('Cancellation could not be sent because there is no active {brand} operation.'), yue: flat('因為沒有進行中嘅 {brand} 操作，所以無法送出取消。') },
+  'wsl.create.error.cancelRejected': { en: flat('Cancellation was not accepted because the {brand} operation is no longer active. You can retry or close this dialog.'), yue: flat('取消未被接受，因為 {brand} 操作已經唔再進行中。你可以再試，或者關閉呢個對話框。') },
+  'wsl.create.error.cancelPrefix': { en: flat('Could not cancel {brand} creation:'), yue: flat('無法取消建立 {brand}：') },
+  'wsl.create.validation.required': { en: flat('Name is required.'), yue: flat('必須輸入名稱。') },
+  'wsl.create.validation.whitespace': { en: flat('Name cannot start or end with whitespace.'), yue: flat('名稱開頭同結尾唔可以有空白。') },
+  'wsl.create.validation.length': { en: flat('Name must be 64 characters or fewer.'), yue: flat('名稱最多 64 個字元。') },
+  'wsl.create.validation.characters': { en: flat('Name contains characters that are not allowed.'), yue: flat('名稱包含唔容許嘅字元。') },
+  'wsl.create.validation.shape': { en: flat('Use letters, numbers, spaces, dots, hyphens, or underscores, starting and ending with a letter or number.'), yue: flat('請用字母、數字、空格、句點、連字號或底線，而且要由字母或數字開頭同結尾。') },
+  'wsl.create.validation.duplicate': { en: flat('A {brand} instance with this name already exists.'), yue: flat('已經有一個同名嘅 {brand} 實例。') },
+  'wsl.create.validation.chooseDistribution': { en: flat('Choose a distribution.'), yue: flat('請揀一個發行版。') }
 }

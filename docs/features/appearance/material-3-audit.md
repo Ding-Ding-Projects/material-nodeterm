@@ -286,6 +286,7 @@ Every listed renderer producer has an explicit local mapper boundary. Commands, 
 | `find-bar` | Find bar | `src/renderer/components/FindBar.tsx` | `useVocabularyMapper()` |
 | `remote-picker` | Remote picker | `src/renderer/components/RemotePicker.tsx` | `useVocabularyMapper()` |
 | `browser-profile-picker` | Browser profile picker | `src/renderer/nodes/BrowserProfilePicker.tsx` | `useVocabularyMapper()` |
+| `wsl-create-dialog` | WSL distribution and instance creation dialog | `src/renderer/wsl/WslCreateDialog.tsx` | `useI18n()`, `useVocabularyMapper()`, `WSL_COPY_IDS`, and typed template parameters that preserve runtime facts |
 | `terminal-node` | Terminal node chrome and status copy | `src/renderer/nodes/TerminalNode.tsx` | `useVocabularyMapper()` and `useLocalizedVocabularyText()` |
 | `sticky-node` | Sticky note node chrome | `src/renderer/nodes/StickyNode.tsx` | `useVocabularyMapper()` |
 | `group-node` | Group and WSL/worktree node chrome | `src/renderer/nodes/GroupNode.tsx` | `useVocabularyMapper()` |
@@ -401,6 +402,9 @@ single React element cannot reach the descendants produced by a component.
 | wsl-dialog | src/renderer/wsl/WslCreateDialog.tsx | unmapped-callsite-pending |
 | regex-builder | src/renderer/components/regex/RegexBuilder.tsx | mapped-callsite |
 | anchored-regex-builder | src/renderer/components/regex/AnchoredRegexBuilder.tsx | mapped-callsite |
+| wsl-dialog | src/renderer/wsl/WslCreateDialog.tsx | mapped-callsite |
+| regex-builder | src/renderer/components/regex/RegexBuilder.tsx | unmapped-callsite-pending |
+| anchored-regex-builder | src/renderer/components/regex/AnchoredRegexBuilder.tsx | unmapped-callsite-pending |
 | notification-center | src/renderer/components/NotificationCenter.tsx | mapped-callsite |
 | notification-toasts | src/renderer/components/NotificationToasts.tsx | mapped-callsite |
 | changelog-panel | src/renderer/components/changelog/ChangelogPanel.tsx | mapped-callsite |
