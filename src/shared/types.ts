@@ -3841,18 +3841,31 @@ export interface UsageApi {
   onUpdate(listener: (usage: ClaudeUsage) => void): () => void
 }
 
-/** A Claude session's context-window fill, pushed per sessionId from the transcript tailer. */
+export type ContextWindowStatus = 'known' | 'unknown' | 'not-reported' | 'stale' | 'unavailable'
+
+/** A session's context-window telemetry, pushed per sessionId from a provider tailer. */
 export interface ContextWindowUsage {
   sessionId: string
-  /** input + cache_read + cache_creation tokens of the latest assistant message. */
-  usedTokens: number
-  /** Model context window (200k default, 1M for 1m-context models). */
-  windowTokens: number
-  /** 0–100 fullness. */
-  usedPercent: number
+  /** Provider id that produced this snapshot, for example claude, codex, or gemini. */
+  provider: string
+  /** Stable machine scope, never a portable-project identifier. */
+  sourceKey: string
+  /** input-side tokens of the latest request, when the provider reports them. */
+  usedTokens: number | null
+  /** Provider-reported or otherwise verified model context window. */
+  windowTokens: number | null
+  /** 0–100 fullness, only when both token values are finite and verified. */
+  usedPercent: number | null
+  /** Explicit state keeps unknown, stale, and unavailable distinct. */
+  status: ContextWindowStatus
   /** Model id from the transcript, or null if not seen yet. */
   model: string | null
-  updatedAt: number
+  /** Monotonic generation within one source epoch. Never persist this field. */
+  generation: number
+  /** Source epoch changes on process restart, so generation 1 is always fresh. */
+  sourceEpoch: string
+  /** Unix ms when this snapshot was produced, or null when no telemetry arrived. */
+  updatedAt: number | null
 }
 
 export interface ContextApi {
@@ -3864,7 +3877,7 @@ export interface ContextApi {
    * the continuing session is idle. `cwd` is a transcript-path fallback only.
    * `accountId` scopes resolution to a managed Claude account's transcript root (default `~/.claude`).
    */
-  ensure(sessionId: string, cwd?: string, accountId?: string): void
+  ensure(sessionId: string, cwd?: string, accountId?: string, agentId?: string): void
 }
 
 /**

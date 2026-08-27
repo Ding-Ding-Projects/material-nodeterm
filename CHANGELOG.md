@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add the context-window progress meter to every agent-backed node and session surface. Provider
+  telemetry is source-scoped and generation-fenced, exact values are shown only when reported, and
+  unknown, not-reported, stale, and unavailable states remain visible. Local and remote transcript
+  reads are bounded and machine-local. This issue #89 implementation lane intentionally did not run
+  tests, lint, type checks, builds, packaging, runtime interaction, reviews, audits, or captures.
+
 - Add first-class Cognition Devin CLI support from the measured `devin 3000.4.25 (7e8e528a)`
   contract: builtin registry and mark, argv/interactive prompt forms, prompt-file and print
   helpers, resume and continue commands, project-level `.devin/hooks.v1.json` lifecycle hooks,

@@ -7505,6 +7505,7 @@ button.group-node__setup:disabled {
   display: inline-flex;
   align-items: center;
 }
+.subagent-node__head .ctx-meter { margin-left: auto; flex: 0 0 auto; }
 .ctx-pill {
   display: inline-flex;
   align-items: center;
@@ -7519,6 +7520,24 @@ button.group-node__setup:disabled {
   font-variant-numeric: tabular-nums;
   cursor: pointer;
 }
+.ctx-pill:focus-visible {
+  outline: 3px solid var(--md-primary, var(--accent));
+  outline-offset: 2px;
+}
+.ctx-pill__label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+.ctx-meter[data-context-status='stale'] .ctx-pill,
+.ctx-meter[data-context-status='unknown'] .ctx-pill,
+.ctx-meter[data-context-status='not-reported'] .ctx-pill,
+.ctx-meter[data-context-status='unavailable'] .ctx-pill {
+  color: var(--md-on-surface-variant, var(--muted));
+  border-color: var(--md-outline, var(--border));
+}
+.ctx-meter[data-context-status='stale'] .ctx-pill__fill,
+.ctx-meter[data-context-status='unknown'] .ctx-pill__fill,
+.ctx-meter[data-context-status='not-reported'] .ctx-pill__fill,
+.ctx-meter[data-context-status='unavailable'] .ctx-pill__fill { background: var(--md-outline, var(--muted)) !important; }
+.ctx-meter[data-context-level='warning'] .ctx-pill { border-color: var(--md-warning, var(--caution)); }
+.ctx-meter[data-context-level='critical'] .ctx-pill { border-color: var(--md-error, var(--danger)); }
 
 .ctx-pill__model {
   max-width: 72px;
@@ -7549,6 +7568,9 @@ button.group-node__setup:disabled {
   box-shadow: 0 10px 32px rgba(0, 0, 0, calc(0.5 * var(--shadow-k)));
   color: var(--text-strong);
   z-index: 20;
+  max-width: min(320px, calc(100vw - 24px));
+  max-height: min(260px, calc(100vh - 32px));
+  overflow: auto;
 }
 .ctx-popover__title { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
 .ctx-bar {
@@ -7560,6 +7582,13 @@ button.group-node__setup:disabled {
 .ctx-bar__fill { height: 100%; border-radius: 4px; }
 .ctx-popover__meta { margin-top: 8px; font-size: 12px; }
 .ctx-popover__sub { margin-top: 4px; font-size: 11px; color: rgba(var(--tint-rgb), 0.5); }
+@media (max-width: 520px) {
+  .ctx-popover { left: auto; right: 0; width: min(260px, calc(100vw - 24px)); }
+  .ctx-pill { min-width: 44px; min-height: 32px; padding-inline: 8px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ctx-pill, .ctx-popover, .ctx-pill__fill, .ctx-bar__fill { transition: none !important; animation: none !important; }
+}
 .usage-account__email { font-size: 13px; }
 
 .seg-pill {

@@ -69,6 +69,12 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## In progress / partially landed
 
+- [ ] **Context-window progress, issue #89**: every agent-backed node, session row, Kanban card,
+      and card modal now keeps a visible meter with provider-scoped telemetry, exact known values,
+      explicit unknown/not-reported/stale/unavailable states, restart-safe generation fencing, and
+      bounded local/remote transcript reads. The implementation lane intentionally has no tests,
+      lint, type checks, builds, packaging, runtime interaction, reviews, audits, or captures yet.
+
 - [ ] **Bounded wheel zoom and persisted wheel speed, issue #107**: the renderer now shares a ±50
       `deltaY` budget across each 40 ms burst and applies a persisted 0.2×–2.0× multiplier only to
       plain-wheel zoom. The Behavior setting has localized copy, point-of-use validation, and

@@ -11,6 +11,8 @@ Cognition Devin are built in; any other CLI can be added as a custom agent.
 - [Linked-agent inbox notifications](./linked-agent-inbox-notifications.md) — the fixed,
   app-authored `notify --node <id>` prompt, project consent, runtime ownership checks, and
   bounded deliver-on-idle queue.
+- [Context-window progress](./context-window-progress.md) — provider telemetry sources, honest
+  unknown and stale states, generation fencing, and the shared meter across node and board views.
 
 See also [Canvas → Node kinds](../canvas/README.md) for the agent node itself,
 [Kanban](../kanban/README.md) for how agent status renders on a board card, and
