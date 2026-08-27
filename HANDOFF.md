@@ -32,7 +32,7 @@ The generated offline documentation bundle was not regenerated because this lane
 builds and checks. The parent integration lane must regenerate it before claiming offline docs are
 current. This lane also did not run tests, type checks, lint, builds, packaging, runtime
 interaction, reviews, security or accessibility checks, or captures. No issue, pull request,
-release, main-jer merge, deletion, or cleanup mutation was performed by this lane.
+release, default branch merge, deletion, or cleanup mutation was performed by this lane.
 
 ## 2026-08-27, AWS core-service managers, issue #46 PR preparation
 
