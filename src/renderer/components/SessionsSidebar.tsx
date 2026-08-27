@@ -25,7 +25,6 @@ import { useSettings } from '../state/settings'
 import { useAgentStatus } from '../state/agentStatus'
 import { useSessionNaming } from '../state/sessionNaming'
 import { useSession } from '../session/session'
-import { ProjectGlyph } from './ProjectGlyph'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 
 export interface SessionsSidebarProps {
@@ -526,10 +525,6 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
         }}
       >
         {groups.length === 0 && <div className="sessions-sidebar__empty">{vocab('No sessions yet.')}</div>}
-        {groups.map((g) => {
-        {groups.length === 0 && grouping !== 'status' && (
-          <div className="sessions-sidebar__empty">No sessions yet.</div>
-        )}
         {grouping === 'status' ? (
           statusSections.map((section: StatusSection) => (
             <div key={section.kind} className="ss-status">
@@ -610,11 +605,7 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
                   icon={g.projectIcon}
                   color={g.projectColor}
                   name={g.projectName}
-                  icon={g.projectIcon}
-                  color={g.projectColor}
-                  name={g.projectName}
                   variant="monogram"
-                  className="ss-group__monogram"
                 />
                 <span className="ss-group__name">{g.projectName}</span>
                 {branches[g.projectId] && (
@@ -642,7 +633,6 @@ export function SessionsSidebar(props: SessionsSidebarProps): JSX.Element | null
                 <button
                   className="ss-group__add"
                   title={vocab('New terminal in this project')}
-                  title="Add a node to this project"
                   onClick={(e) => {
                     e.stopPropagation()
                     props.onAddToProject(g.projectId, { clientX: e.clientX, clientY: e.clientY })
