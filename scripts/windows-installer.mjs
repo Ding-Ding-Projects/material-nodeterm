@@ -630,8 +630,10 @@ function downloadMatchingIconOverHttps(iconUrl, expected) {
 
 /** Prove the generated ICO is committed at HEAD and downloadable through its immutable URL. */
 export async function verifySourceIcon(root = REPO_ROOT, options = {}) {
-  const { fetchImpl, env = process.env } = options
-  const identity = await runStage('source identity resolution', () => resolveSourceIdentity(root, env))
+  const { fetchImpl, env = process.env, sourceIdentity } = options
+  const identity = sourceIdentity
+    ? validateSourceIdentity(sourceIdentity)
+    : await runStage('source identity resolution', () => resolveSourceIdentity(root, env))
   const iconPath = path.join(root, ...ICON_RELATIVE_PATH.split('/'))
   const local = await runStage('read generated source icon', () => readFile(iconPath))
   if (local.length === 0 || local.length > MAX_ICON_BYTES) fail('build/icon.ico has an invalid byte size')
@@ -650,6 +652,13 @@ export async function verifySourceIcon(root = REPO_ROOT, options = {}) {
     sha256: sha256(local),
     frames: frames.map((frame) => frame.width),
   }
+}
+
+function validateSourceIdentity(identity) {
+  if (!identity || typeof identity !== 'object' || !FULL_SHA_RE.test(identity.sourceSha)) {
+    fail('validated installer source identity has an invalid commit SHA')
+  }
+  return { sourceSha: identity.sourceSha, repository: parseGitHubRepository(identity.repository) }
 }
 
 export function validateIconMetadata(value) {
@@ -917,10 +926,11 @@ async function buildWindowsInstaller() {
   const squirrelOutput = path.join(REPO_ROOT, 'dist', 'squirrel-windows')
   await runStage('clean Windows package outputs', () => cleanWindowsPackageOutputs(REPO_ROOT))
   await runStage('build preflight', () => run(process.execPath, [path.join(REPO_ROOT, 'scripts', 'check-build-preflight.mjs')], { description: 'build preflight' }))
+  const sourceIdentity = await runStage('source identity resolution', () => resolveSourceIdentity(REPO_ROOT))
   await runStage('pinned QEMU resource bootstrap', () => run(process.execPath, [path.join(REPO_ROOT, 'scripts', 'ensure-qemu-resources.mjs'), '--output', path.join(REPO_ROOT, 'resources', 'qemu')], { description: 'pinned QEMU resource bootstrap' }))
   await runStage('pinned AWS CLI resource bootstrap', () => run(process.execPath, [path.join(REPO_ROOT, 'scripts', 'ensure-aws-cli-resources.mjs'), '--output', path.join(REPO_ROOT, 'resources', 'aws-cli-v2')], { description: 'pinned AWS CLI v2 resource bootstrap' }))
   await runStage('icon generation', () => run(process.execPath, [path.join(REPO_ROOT, 'scripts', 'make-icon.mjs')], { description: 'icon generation' }))
-  const metadata = await runStage('source icon verification', () => verifySourceIcon(REPO_ROOT))
+  const metadata = await runStage('source icon verification', () => verifySourceIcon(REPO_ROOT, { sourceIdentity }))
   await runStage('write Windows icon contract metadata', () => writeMetadataAtomic(metadataFile, metadata))
   const npmCli = process.env.npm_execpath
   if (!npmCli) fail('npm_execpath is required; invoke the Windows installer through npm run dist:win')
@@ -942,7 +952,7 @@ async function buildWindowsInstaller() {
       env: { ...process.env, CSC_IDENTITY_AUTO_DISCOVERY: 'false' },
     },
   ))
-  await runStage('packaged Windows icon contract verification', () => assertPackagedIconContract(squirrelOutput, metadataFile))
+  await runStage('packaged Windows icon contract verification', () => assertPackagedIconContract(squirrelOutput, metadataFile, REPO_ROOT, { sourceIdentity }))
 }
 
 async function main(argv) {
