@@ -59,9 +59,11 @@ import { registerMinecraftIpc } from '../core/minecraft/register-ipc'
 import { registerTorrentIpc } from '../core/torrent/register-ipc'
 import { registerVirtualMachineIpc } from '../core/virtual-machine/register-ipc'
 import { registerCalendarIpc } from '../core/calendar/register-ipc'
+import { registerCloudflareCoreManagersIpc } from '../core/cloudflare-core-managers'
 import { registerHomeAssistantIpc } from '../core/home-assistant/register-ipc'
 import { registerHomeAssistantControlIpc } from '../core/home-assistant-control/register-ipc'
 import { registerHomeAssistantSensorIpc } from '../core/home-assistant-sensor/register-ipc'
+import { registerCloudflareZeroTrustIpc } from '../core/cloudflare-zero-trust/service'
 import { AtomicJsonArrayStore } from '../core/atomic-json-store'
 import { TimerOccurrenceService } from '../core/timer-service'
 import type { TimerOccurrence } from '../shared/timer'
@@ -263,6 +265,7 @@ import { startSessionMemoryService, sshScopePredicate } from '../core/session-me
 import { startWslService, defaultWslRuntime, fileWslOwnershipStore } from '../core/wsl'
 import { startToyLockService } from '../core/toylocks/toylock-service'
 import { startAuthenticatorService } from '../core/toylocks/authenticator-service'
+import { startUniverseDoorEntryService } from '../core/universe-door-entry-service'
 import { createMemoryPressureMonitor } from '../core/memory-pressure'
 import { createPtyPressureMonitor } from '../core/pty-pressure'
 import { registerPtmxLimitHandler } from './ptmx-limit'
@@ -1874,7 +1877,8 @@ app.whenReady().then(async () => {
         archiveVersion: outcome.archiveVersion,
         contents: outcome.contents,
         ...(outcome.plannerDefinitions ? { plannerDefinitions: outcome.plannerDefinitions } : {}),
-        ...(outcome.restoredTo ? { restoredTo: outcome.restoredTo } : {})
+        ...(outcome.restoredTo ? { restoredTo: outcome.restoredTo } : {}),
+        ...(outcome.repairs?.length ? { repairs: outcome.repairs } : {})
       }
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
@@ -2362,9 +2366,11 @@ app.whenReady().then(async () => {
   registerTorrentIpc(corePlatform)
   virtualMachineManager = registerVirtualMachineIpc(corePlatform).manager
   registerCalendarIpc(corePlatform)
+  registerCloudflareCoreManagersIpc(corePlatform)
   registerHomeAssistantIpc(corePlatform)
   registerHomeAssistantControlIpc(corePlatform)
   registerHomeAssistantSensorIpc(corePlatform)
+  registerCloudflareZeroTrustIpc(corePlatform)
 
   const githubSecret = new ElectronGitHubSecretStore(app.getPath('userData'), safeStorage)
   const github = registerGitHubIntegration({
@@ -3589,6 +3595,7 @@ app.whenReady().then(async () => {
   // a node (see pty-manager.sendText). Wired here because the service starts after the manager.
   ptyManager.setTextWriteGate((persistKey) => toyLockService.mayWriteToNode(persistKey))
   startAuthenticatorService()
+  startUniverseDoorEntryService()
 
   const ackSweeper = createAckSweeper({
     handlers: { ackDone, onUnreadClear: (id) => sendToMain(IPC.agentUnreadClear, id) }

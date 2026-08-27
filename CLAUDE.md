@@ -2689,6 +2689,20 @@ worktree list`: a worktree deleted outside the app makes its group **stale** (ch
   against the old literal would make every fresh install compute and inject an inline
   purple-on-purple override for the colour the stylesheet already ships.
 
+## Shared hosted-resource backup and restore
+
+`src/shared/backup-restore.ts` is the platform-free contract consumed by future hosting nodes. It
+keeps safe resource intent and evidence separate from provider sessions, credentials, machine
+paths, host identifiers, process state, caches, and generated runtime data. Version, edition,
+resource kind, ownership, entry hashes, byte totals, and omissions are validated before an archive
+can be used. `src/core/backup-restore.ts` supplies bounded ZIP framing, collision-safe atomic
+publication, restore review, progress, cancellation, and expiry-bound rollback callbacks. Import
+and review are side-effect free; only an explicitly accepted provider adapter may publish a restore.
+
+Every hosting list or picker that consumes this framework owns an isolated plain-text search and
+adjacent anchored regex builder, plus a concrete disabled-state reason when verified metadata or
+review is missing.
+
 ## Remote access (Docker-hosted relay) — free, not Pro
 
 The interactive surface is **Docker host**. It retains the existing relay transport, single-use

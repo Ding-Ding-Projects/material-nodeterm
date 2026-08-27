@@ -2,10 +2,10 @@
 
 ## 2026-08-27, Nextcloud AIO hosting implementation, issue #52
 
-The implementation lane is `feat/program-41-nextcloud-aio`, based on `12055e96`. The canvas
-catalog now creates a `nextcloud-aio` service node from `nextcloud-hosting`, with a typed shared
-contract in `src/shared/nextcloud-aio.ts`, a desktop manager in
-`src/main/remote/nextcloud-aio-manager.ts`, and a guided renderer surface in
+The implementation lane is `feat/program-41-nextcloud-aio`, based on `12055e96` before the
+current-main integration. The canvas catalog creates a `nextcloud-aio` service node from
+`nextcloud-hosting`, with a typed shared contract in `src/shared/nextcloud-aio.ts`, a desktop
+manager in `src/main/remote/nextcloud-aio-manager.ts`, and a guided renderer surface in
 `src/renderer/components/nextcloud/NextcloudAioPanel.tsx`.
 
 The profile pins `nextcloud/all-in-one:2025.8.0` from the official source, discloses that its
@@ -24,6 +24,119 @@ and `site/docs/nextcloud-aio-hosting.html`.
 No tests, type checks, lint, reviews, security or accessibility checks, builds, packaging,
 installer execution, runtime interaction, or captures were run in this ultra-speed lane. The source
 is committed for the parent integration lane to verify against the exact integrated commit.
+
+## 2026-08-27, bundled AWS CLI v2 lane, issue #41
+
+Issue #41 is implemented on `feat/program-30-bundled-aws-cli`, reconciled with
+`origin/main` at `12055e96d66c7e4cfdb143295b78ed20d68fd97e`, and dewed at
+`d60a25fa0f8d4665cc3e898c531cb4440ea72d9b` plus the reconciliation commit recorded below.
+The lane keeps AWS CLI v2 `2.36.32` in the immutable dependency manifest and stages the official
+Windows x64 MSI through `scripts/ensure-aws-cli-resources.mjs`. The resource path checks the
+download size, rejects redirects, verifies SHA-256, and uses a unique staged file before packaging.
+
+The host-owned dependency service checks the packaged resource first, then a verified local cache,
+then the canonical HTTPS source. It extracts the MSI through `msiexec.exe /a` into application-local
+storage, records archive provenance, requires the pinned `aws-cli/2.36.32` version prefix, and
+returns parsed version details. The `nodeDependencyDetails` IPC route also inventories the installed
+`awscli/botocore/data` tree by service and model version, with bounded service and file traversal
+and an incomplete state for missing, empty, or truncated model data. Desktop preload, renderer
+stubs, and Server Edition WebSocket bridges expose the same typed route.
+
+Direct fetch evidence: the official URL returned HTTP 200, a 49,405,952-byte MSI, and SHA-256
+`bc695531b7fd83490e02741777dfda109cfab7fd9bef85fa1d5db21684cbaee2`, matching
+`dependencies.manifest.json`.
+
+Direct documentation is in `docs/features/dependencies/aws-cli-v2.md`, indexed from the dependency
+category. `src/shared/docs-data.ts` contains both the category link and bundled article. The roadmap
+item remains unticked because the full implementation lane has no test, build, package, installer,
+runtime, or UI evidence yet. A bundled-doc generator invocation was attempted but could not start
+because this isolated checkout has no `esbuild` installation; the generated entries were reconciled
+manually and matched the checked-in Markdown bodies.
+
+The reconciliation commit merged `origin/main` non-destructively and kept main's current package
+version, engine range, scripts, package dependencies, and unsigned Squirrel settings. `package.json`
+contains exactly one AWS preparation script and one AWS packaged-resource entry. `package-lock.json`,
+the dependency manifest, installer, IPC, bridge, and shared-type changes from main are retained.
+
+No tests, type checks, lint, reviews, security or accessibility checks, builds, packaging, installer
+execution, runtime interaction, or HuiShots were run, per the issue's explicit ultra-speed boundary.
+The feature jer was not integrated into main and no cleanup was performed in this lane.
+
+## 2026-08-27, AWS CLI model documentation index
+
+Issue #42 is implemented on `feat/program-31-aws-model-docs`. The platform-free
+`src/core/aws-model-documentation.ts` module consumes bounded decoded official AWS CLI service,
+paginator, and waiter models and projects them into deterministic service, command, option,
+paginator, waiter, input, output, and input-skeleton documentation records. It generates official
+`docs.aws.amazon.com` CLI reference links, accepts only allowlisted optional API reference URLs,
+flattens documentation text, rejects malformed source records, duplicate required members, missing
+required shape members, duplicate CLI service tokens, and opaque future shape kinds that cannot be
+represented safely.
+
+The module also provides local plain-text or explicit regular-expression search, guided service,
+command, and section picker models with exact disabled-state reasons, and a strict portable
+selection projection. Only `serviceId`, `commandName`, and the selected documentation section can
+enter schema 3 intent. Installed executable paths, decoded model caches, generated runtime indexes,
+credentials, profiles, provider sessions, account or role identity, endpoints, pagination cursors,
+waiter progress, results, and process state are explicitly omitted.
+
+The article is bundled in `src/shared/docs-data.ts` for the offline documentation browser. The AWS
+service catalog row remains planned for the later executor and typed-wizard lanes, but links to the
+implemented documentation-index article rather than only the program plan.
+
+This lane intentionally did not run tests, type checks, lint, reviews, security checks, accessibility
+checks, builds, packaging, installer execution, runtime interaction, or UI captures. No runtime,
+accessibility, packaged-artifact, or visual correctness verdict is claimed. The later AWS CLI
+inventory lane must supply decoded official models, and the later wizard lane must render the picker
+and shape records as typed controls without adding a blank command textbox.
+
+## 2026-08-27, AWS Universe portal with unlimited instances
+
+Issue #39 is implemented on `feat/program-28-aws-universe`. The renderer now exposes an AWS Universe
+navigator with local plain-text search and an adjacent anchored full regex builder, guided naming,
+keyboard-operable instance selection, and explicit AWS-only scope. Root portal cards open their
+matching child canvas through a real event route. Each child starts with one permanent scope-bound
+Shop node.
+
+Portable project files preserve safe AWS child-canvas intent, node membership, viewport, and
+canvas-owned relationships. Schema 3 projection and hydration keep credentials, profiles, SSO and
+role sessions, CLI paths, local files, process state, caches, and account bindings out of shared
+content. Import remains data-only and validates relationship ownership before accepting the result.
+
+Changed implementation paths include `src/shared/aws-universes.ts`, `src/shared/types.ts`,
+`src/shared/node-catalog.ts`, `src/shared/i18n/catalog.ts`, `src/core/workspace-files.ts`,
+`src/core/portable-canvas-projection.ts`, `src/renderer/state/projects.ts`,
+`src/renderer/components/AwsUniverseNavigator.tsx`, `src/renderer/nodes/AwsUniversePortalNode.tsx`,
+`src/renderer/canvas/Canvas.tsx`, and `src/renderer/styles.md3.css`. Related README, roadmap,
+changelog, offline documentation, and site documentation accompany the implementation.
+
+This lane intentionally did not run tests, type checks, lint, reviews, security checks,
+accessibility checks, builds, packaging, installer execution, runtime interaction, or UI captures.
+Those checks remain unverified and are delegated to a later integration lane.
+
+## 2026-08-27, Cloudflare core managers source implementation, issue #57
+
+This lane is `feat/program-46-cloudflare-core-managers` in the task-owned linked worktree at
+`C:/Users/cntow/Documents/GitHub/material-nodeterm-worktrees/issue-57`. It adds the typed Cloudflare
+account, zone, DNS, SSL/TLS, ruleset, redirect, cache, and analytics contract in
+`src/shared/cloudflare-core-managers.ts`, the host service and shared IPC registration in
+`src/core/cloudflare-core-managers.ts`, and Desktop and Server Edition bridge wiring. The canvas node
+is `src/renderer/nodes/CloudflareCoreManagersNode.tsx`; safe operation intent is persisted through
+`src/renderer/state/workspace.ts` and `src/core/portable-canvas-projection.ts`, while local sealed
+credentials and bindings remain under the application data directory.
+
+The manager uses a fixed HTTPS API base, typed allowlisted paths and fields, bounded request inputs,
+4 MiB response handling, 500-row output, 90-second cancellation, safe previews, destructive-action
+classification, and explicit unavailable states. Credential values never cross IPC or enter portable
+data. The account, zone, DNS, SSL/TLS, ruleset, redirect, cache, and analytics result lists each have
+an isolated search field with its own adjacent anchored full regex builder. No raw request editor or
+arbitrary shell path is provided.
+
+The direct feature article is `docs/features/integrations/cloudflare-core-managers.md`, with its
+category index, roadmap, and changelog entries updated. No tests, type checks, lint, reviews, security
+or accessibility checks, builds, packaging, installer execution, runtime interaction, or UI captures
+were run in this ultra-speed lane. The owning integration lane must verify the exact integrated
+commit and regenerate the offline documentation bundle after review.
 
 ## 2026-08-27, Express File Converter completion, issue #21
 
@@ -1644,13 +1757,37 @@ Already present via convergence or the concurrent session: **#112 #189 #113 #156
 
 Three deliberate exclusions, with reasons — do not "finish" these without revisiting the reasoning:
 
-- **#111 psmux — skipped.** This fork already has its own Windows persistence backend (the session
-  host: ~4,000 lines, protocol v2, ConPTY, process-tree termination; `sessionHost` appears 62 times
-  in `pty-manager.ts`). psmux is a competing implementation of the same job. Its **NSIS packaging
-  commit `daecb26e` is excluded permanently** — Squirrel is the only Windows installer path here.
+- **#111 psmux discovery — implemented on `feat/program-64-psmux-discovery`.** The resolver now
+  checks `tmux` then the tmux-compatible `psmux` executable through Windows `PATHEXT`, and the
+  missing-multiplexer banner offers the exact Windows Package Manager install action when it is
+  available. The standalone Windows session host remains the fallback when neither executable is
+  installed. PR #111's **NSIS packaging commit `daecb26e` remains excluded permanently** because
+  Squirrel is the only Windows installer path here.
 - **#98 — skipped, superseded.** `main` has `send`/`reply`/`status` persistent inter-agent messaging
   with authenticated routes and safe-turn-boundary delivery; #98's `notify` is a weaker fixed-prompt
   predecessor of it.
+
+## 2026-08-27, Program 57 linked-agent inbox documentation lane
+
+Issue #68 records the upstream PR #98 linked-agent notification request. The current default source
+already carries the stronger successor implementation: `notify --node <id>` is app-authored and
+fixed in `src/shared/agents/agent-messaging.ts`, substituted in the main process, and routed through
+the verified `send`/`reply` delivery service. Project capability consent lives in the shared
+`agentMessaging` registry, runtime pane ownership is rechecked, and permitted busy targets use the
+bounded deliver-on-idle queue with FIFO ordering, 16-entry capacity, five-minute expiry, sender
+outcomes, and trace records. The relevant source history is `4aefbfbd`, with the upstream design and
+prototype preserved by links to commits `43f58420` and `8d3b00b3` in
+`docs/features/agents/linked-agent-inbox-notifications.md`.
+
+This lane added the per-feature article, category index link, generated offline documentation bundle
+input, Pages article and index link, site documentation list, site and app completeness inventory
+rows, changelog entry, and roadmap record. The implementation is desktop-only; Server Edition
+returns its explicit unsupported result, and portable project files omit runtime queues, credentials,
+machine paths, process state, and pane ownership records. No tests, type checks, lint, reviews,
+security or accessibility checks, builds, packaging, installer execution, runtime interaction, or
+UI captures were run under the issue's explicit ultra-speed boundary. Integration into `main`, the
+default-branch merge and push, remote verification, and any release proof remain the parent lane's
+responsibility.
 - **#149 configurable shortcuts — NOT DONE.** A 9-file architectural change replacing the hardcoded
   shortcut rows with a registry driven from `settings.shortcuts`, colliding with the focus-mode
   binding added in `7fef4719`. Cherry-pick aborted cleanly rather than half-merged. This is the
@@ -2303,6 +2440,33 @@ switcher and FAB menu on a real screen — nothing above substitutes for that. T
 the `.mc-console` styling defect and the two atomic-write violations found above are worth a
 one-line fix before the next release, since both are small, both are diagnosed, and neither
 requires touching anything MD3-specific to correct.
+
+## Issue #51: GitLab Server hosting source lane
+
+The `feat/program-40-gitlab-hosting` jer adds the `gitlab-hosting` canvas node and the typed
+GitLab hosting surface. The implementation lives in `src/shared/gitlab-hosting.ts`, the guided
+Docker manager extension in `src/main/remote/docker-host-manager.ts`, the preload and unsupported
+bridge shape in `src/preload/index.ts` and `src/renderer/bridge/stubs.ts`, the node factory and
+canvas registration in `src/renderer/state/workspace.ts` and `src/renderer/canvas/Canvas.tsx`, and
+the UI in `src/renderer/nodes/GitLabHostingNode.tsx` plus
+`src/renderer/components/gitlab/GitLabHostingPanel.tsx`.
+
+The node offers pinned official Community Edition and Enterprise Edition image digests, four
+managed volumes, loopback-only ports, readiness through `/-/readiness`, one-session initial root
+credential handoff without logging or persistence, backup enumeration, restore, update, rollback,
+bounded progress, and existing two-key confirmation for destructive actions. The project projection
+stores only schema-versioned edition, image, binding, and guided ports. Contexts, container and
+volume identifiers, backup files, credentials, and process state remain machine-local.
+
+Directly related records are `docs/features/integrations/gitlab-hosting.md`, the integrations
+index, the site card and `site/docs/gitlab-hosting.html`, the offline docs bundle entry in
+`src/shared/docs-data.ts`, `CHANGELOG.md`, and the hosting row in `ROADMAP.md`.
+
+This ultra-speed source lane intentionally ran no tests, type checks, lint, reviews, security or
+accessibility checks, builds, packaging, installer execution, runtime interaction, or captures.
+The parent integration lane must supply those verdicts and release evidence. The Server Edition
+bridge reports its unavailable Docker boundary through the existing unsupported relay-manager
+surface; no fake success is claimed.
 ## Timer nodes lane, issue #31
 
 Implemented the timer node model in `src/shared/timer.ts`, the persistent occurrence coordinator in
@@ -2331,3 +2495,17 @@ This ultra-speed lane intentionally ran no tests, type checks, lint, builds, pac
 interaction, accessibility or security audits, reviews, or captures. The parent integration lane
 must supply every verification verdict and release evidence before describing the feature as
 verified.
+## Issue #58, Cloudflare manager lane
+
+The isolated `feat/program-47-cloudflare-zero-trust` lane adds `src/shared/cloudflare-zero-trust.ts`,
+`src/core/cloudflare-zero-trust/service.ts`, the Cloudflare manager canvas panel and styles, IPC and
+Server Edition registration, and schema 3 portable intent handling. The seven fixed manager families
+are Access, Zero Trust, Workers, Pages, R2, D1 and Queues. Credentials are sealed locally, while
+portable project data carries only neutral selection intent. Typed fields, fixed routes, bounded
+responses, per-search anchored regex builders, progress, cancellation, and destructive confirmation
+are included.
+
+This ultra-speed lane intentionally ran no tests, type checks, lint, builds, packaging, reviews,
+security checks, accessibility checks, installer execution, runtime interaction, or UI captures.
+The parent integration lane must verify the exact commit, reconcile any central-file overlap with
+other lanes, and supply the remaining release evidence before claiming the feature verified.

@@ -15,6 +15,7 @@ import { validatePortableMediaManifest } from './portable-media-assets'
 import { normalizeMediaReference, type MediaAssetReference } from '../shared/media-catalog'
 import { MAX_MULTIVERSE_DEPTH, repairUniverseShops } from './universe-shop'
 import { validatePortableUniverseDoors, type PortableUniverseDoorV3 } from './universe-door-navigation'
+import { createPortableUniverseDoorPair } from './universe-door-navigation'
 import { normalizePublicDimSumSelection, type PublicDimSumSelection } from '../shared/public-dim-sum'
 import { validateHomeAssistantControlConfig, type HomeAssistantControlConfig } from '../shared/home-assistant-control'
 import { validateHomeAssistantSensorConfig, type HomeAssistantSensorConfig } from '../shared/home-assistant-sensor'
@@ -26,6 +27,8 @@ import {
 import type { PlannerSchedule } from '../shared/planner-occurrences'
 import { normalizeRecoveryGameSnapshot, RECOVERY_ENERGY_KEYS, type RecoveryGameSnapshot } from '../shared/recovery-game'
 import { repairPortablePortals, validatePortablePortals, type PortablePortalV3 } from './portal-lifecycle'
+import { normalizeCloudflareIntent as normalizeCloudflareZeroTrustIntent, type CloudflarePortableIntent as CloudflareZeroTrustPortableIntent } from '../shared/cloudflare-zero-trust'
+import { normalizeCloudflareIntent as normalizeCloudflareCoreIntent, type CloudflarePortableIntent as CloudflareCorePortableIntent } from '../shared/cloudflare-core-managers'
 import { normalizeNextcloudAioConfig, type NextcloudAioConfig } from '../shared/nextcloud-aio'
 
 export type PortableCanvasScope = 'root' | 'multiverse' | 'aws-universe'
@@ -64,13 +67,16 @@ export interface PortableCanvasNodeV3 {
   url?: string
   browserTabs?: Array<{ id: string; url?: string; title: string }>
   serviceLabel?: string
+  /** Typed Cloudflare operation intent only; credentials and provider bindings are local. */
+  cloudflareZeroTrustIntent?: CloudflareZeroTrustPortableIntent
+  cloudflareCoreIntent?: CloudflareCorePortableIntent
+  /** Safe Nextcloud AIO hosting intent; Docker context and live state remain local. */
+  nextcloudAioConfig?: NextcloudAioConfig
   /** Safe public-catalog identity and display copy. Image bytes and network state are excluded. */
   wildDimSumDish?: PublicDimSumSelection
   homeAssistantIntent?: { transport: 'rest' | 'websocket'; domain: string }
   homeAssistantControlConfig?: HomeAssistantControlConfig
   alarmSchedule?: { recurrence: string; date?: string; time: string; weekdays?: number[]; monthDay?: number }
-  /** Safe Nextcloud AIO hosting intent; Docker context and live state remain local. */
-  nextcloudAioConfig?: NextcloudAioConfig
   alarmTimeZone?: string
   alarmEnabled?: boolean
   alarmSnoozeMinutes?: number
@@ -151,8 +157,7 @@ const ALLOWED_NODE = new Set([
   'id', 'kind', 'creationEventId', 'position', 'size', 'title', 'color', 'group',
   'universeCanvasId', 'universeScope', 'universeDepth', 'nonDeletable', 'shopSelection',
   'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel',
-  'wildDimSumDish', 'homeAssistantIntent', 'homeAssistantControlConfig', 'homeAssistantSensorConfig',
-  'nextcloudAioConfig',
+  'wildDimSumDish', 'homeAssistantIntent', 'homeAssistantControlConfig', 'homeAssistantSensorConfig', 'cloudflareZeroTrustIntent', 'cloudflareCoreIntent', 'nextcloudAioConfig',
   'alarmSchedule', 'alarmTimeZone', 'alarmEnabled', 'alarmSnoozeMinutes',
   'alarmSoundEnabled', 'alarmNarratorEnabled', 'alarmHistory', 'mediaAssets',
   'mediaActiveAssetId', 'recoveryGame'
@@ -259,6 +264,7 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
   if (strict && node.parentId !== undefined && typeof node.parentId !== 'string') throw new PortableProjectV3Error('manifest', 'Portable node parent is invalid.')
   if (strict && node.text !== undefined && typeof node.text !== 'string') throw new PortableProjectV3Error('manifest', 'Portable node text is invalid.')
   if (strict && node.serviceLabel !== undefined && typeof node.serviceLabel !== 'string') throw new PortableProjectV3Error('manifest', 'Portable service label is invalid.')
+  if (strict && node.cloudflareZeroTrustIntent !== undefined && !normalizeCloudflareZeroTrustIntent(node.cloudflareZeroTrustIntent)) throw new PortableProjectV3Error('manifest', 'Portable Cloudflare manager intent is invalid.')
   if (strict && node.homeAssistantControlConfig !== undefined) {
     if (!record(node.homeAssistantControlConfig)) throw new PortableProjectV3Error('manifest', 'Portable Home Assistant control intent is invalid.')
     exactKeys(node.homeAssistantControlConfig, ALLOWED_HOME_ASSISTANT_CONTROL, 'Home Assistant control intent')
@@ -275,6 +281,22 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
   if (node.text !== undefined) out.text = content(node.text, 'node text')
   if (node.url !== undefined) { const url = safeUrl(node.url, 'node URL'); if (url) out.url = url }
   if (node.serviceLabel !== undefined) out.serviceLabel = text(node.serviceLabel, 'service label')
+  if (node.cloudflareZeroTrustIntent !== undefined) {
+    const intent = normalizeCloudflareZeroTrustIntent(node.cloudflareZeroTrustIntent)
+    if (!intent) throw new PortableProjectV3Error('manifest', 'Portable Cloudflare manager intent is invalid.')
+    out.cloudflareZeroTrustIntent = intent
+  }
+  if (node.cloudflareCoreIntent !== undefined) {
+    if (!record(node.cloudflareCoreIntent)) throw new PortableProjectV3Error('manifest', 'Portable Cloudflare manager intent is invalid.')
+    const normalized = normalizeCloudflareCoreIntent(node.cloudflareCoreIntent)
+    if (strict && (node.cloudflareCoreIntent.schemaVersion !== 1 || normalized.manager !== node.cloudflareCoreIntent.manager || normalized.operation !== node.cloudflareCoreIntent.operation)) throw new PortableProjectV3Error('manifest', 'Portable Cloudflare manager intent is unsupported.')
+    out.cloudflareCoreIntent = normalized
+  }
+  if (node.nextcloudAioConfig !== undefined) {
+    const normalized = normalizeNextcloudAioConfig(node.nextcloudAioConfig)
+    if (node.kind !== 'nextcloud-aio' || !normalized || (strict && JSON.stringify(normalized) !== JSON.stringify(node.nextcloudAioConfig))) throw new PortableProjectV3Error('manifest', 'Portable Nextcloud AIO intent is invalid or exceeds its bounds.')
+    out.nextcloudAioConfig = normalized
+  }
   if (node.wildDimSumDish !== undefined) {
     const dish = normalizePublicDimSumSelection(node.wildDimSumDish)
     if (!dish) throw new PortableProjectV3Error('manifest', 'Portable Wild dim sum selection is invalid.')
@@ -289,11 +311,6 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
     out.homeAssistantIntent = { transport: node.homeAssistantIntent.transport as 'rest' | 'websocket', domain }
   }
   if (node.homeAssistantControlConfig !== undefined) out.homeAssistantControlConfig = validateHomeAssistantControlConfig(node.homeAssistantControlConfig)
-  if (node.nextcloudAioConfig !== undefined) {
-    const normalized = normalizeNextcloudAioConfig(node.nextcloudAioConfig)
-    if (node.kind !== 'nextcloud-aio' || !normalized || (strict && JSON.stringify(normalized) !== JSON.stringify(node.nextcloudAioConfig))) throw new PortableProjectV3Error('manifest', 'Portable Nextcloud AIO intent is invalid or exceeds its bounds.')
-    out.nextcloudAioConfig = normalized
-  }
   if (node.recoveryGame !== undefined) {
     if (!record(node.recoveryGame)) throw new PortableProjectV3Error('manifest', 'Portable recovery game state is invalid.')
     exactKeys(node.recoveryGame, ALLOWED_RECOVERY_GAME, 'recovery game state')
@@ -398,6 +415,12 @@ function relationships(project: Project): PortableRelationshipV3[] {
     append(canvas.id, 'bridge', canvas.bridges)
     append(canvas.id, 'rope', canvas.ropes)
   }
+  const multiverseIds = new Set((project.multiverseCanvases ?? []).map((canvas) => canvas.id))
+  for (const canvas of project.childCanvases ?? []) {
+    if (multiverseIds.has(canvas.id)) continue
+    append(canvas.id, 'bridge', canvas.bridges)
+    append(canvas.id, 'rope', canvas.ropes)
+  }
   return all.sort((a, b) => a.kind.localeCompare(b.kind) || a.order - b.order || a.id.localeCompare(b.id)).map((link, order) => ({ ...link, order }))
 }
 
@@ -441,7 +464,19 @@ export function projectToPortableCanvasV3(project: Project, input: PortableCanva
   const icon = project.icon && sanitizeProjectIcon(project.icon)
   const portableIcon = icon?.type === 'emoji' ? { type: icon.type, name: icon.emoji } : icon ? { type: icon.type, name: icon.name } : undefined
   const doorCanvasIds = new Set(canvases.map((canvas) => canvas.id))
-  const doors = input.doors === undefined ? undefined : validatePortableUniverseDoors(input.doors, doorCanvasIds)
+  const derivedDoors = input.doors === undefined
+    ? project.portals?.flatMap((portal) => createPortableUniverseDoorPair({
+      entryDoorId: portal.entryDoorId,
+      returnDoorId: portal.returnDoorId,
+      parentCanvasId: portal.parentCanvasId,
+      childCanvasId: portal.childCanvasId,
+      entryLabel: portal.title,
+      returnLabel: `Return to ${portal.title}`,
+      ...(portal.entryConstruction ? { entryConstruction: portal.entryConstruction } : {}),
+      ...(portal.returnConstruction ? { returnConstruction: portal.returnConstruction } : {})
+    }))
+    : input.doors
+  const doors = derivedDoors === undefined ? undefined : validatePortableUniverseDoors(derivedDoors, doorCanvasIds)
   const planner = input.planner === undefined ? undefined : plannerDefinitionsToPortable(input.planner)
   const portalInput = input.portals ?? project.portals
   const portals = portalInput === undefined ? undefined : validatePortablePortals(portalInput, canvases)
@@ -533,6 +568,9 @@ export function validatePortableCanvasProjectionV3(value: unknown): PortableCanv
     })()
     if (canvas.scope === 'multiverse' && (canvas.depth === undefined || measuredDepth < 1 || measuredDepth > MAX_MULTIVERSE_DEPTH)) {
       throw new PortableProjectV3Error('manifest', `Multiverse canvases require a persisted depth from 1 through ${MAX_MULTIVERSE_DEPTH}.`)
+    }
+    if (canvas.scope === 'aws-universe' && (canvas.parentCanvasId !== value.rootCanvasId || canvas.depth !== 1 || measuredDepth !== 1)) {
+      throw new PortableProjectV3Error('manifest', 'AWS Universe canvases must be direct root children at depth 1.')
     }
     if (canvas.depth !== undefined && canvas.depth !== measuredDepth) throw new PortableProjectV3Error('manifest', 'Portable canvas depth does not match its containing canvas chain.')
   }
@@ -626,12 +664,14 @@ export function portableCanvasProjectionToProject(
     ...(node.url !== undefined ? { url: node.url } : {}),
     ...(node.browserTabs ? { browserTabs: node.browserTabs.map((tab) => ({ ...tab })) } : {}),
     ...(node.serviceLabel !== undefined ? { serviceLabel: node.serviceLabel } : {}),
+    ...(node.cloudflareZeroTrustIntent !== undefined ? { cloudflareZeroTrustIntent: normalizeCloudflareZeroTrustIntent(node.cloudflareZeroTrustIntent)! } : {}),
+    ...(node.cloudflareCoreIntent !== undefined ? { cloudflareCoreIntent: normalizeCloudflareCoreIntent(node.cloudflareCoreIntent) } : {}),
+    ...(node.nextcloudAioConfig !== undefined ? { nextcloudAioConfig: normalizeNextcloudAioConfig(node.nextcloudAioConfig) } : {}),
     ...(node.mediaAssets ? { mediaAssets: node.mediaAssets.map((asset) => ({ ...asset })) } : {}),
     ...(node.mediaActiveAssetId !== undefined ? { mediaActiveAssetId: node.mediaActiveAssetId } : {}),
     ...(node.wildDimSumDish !== undefined ? { wildDimSumDish: node.wildDimSumDish } : {}),
     ...(node.homeAssistantIntent !== undefined ? { homeAssistantIntent: { ...node.homeAssistantIntent } } : {}),
     ...(node.homeAssistantControlConfig !== undefined ? { homeAssistantControlConfig: validateHomeAssistantControlConfig(node.homeAssistantControlConfig) } : {}),
-    ...(node.nextcloudAioConfig !== undefined ? { nextcloudAioConfig: normalizeNextcloudAioConfig(node.nextcloudAioConfig) } : {}),
     ...(node.homeAssistantSensorConfig !== undefined ? { homeAssistantSensorConfig: validateHomeAssistantSensorConfig(node.homeAssistantSensorConfig) } : {}),
     ...(node.recoveryGame !== undefined ? { recoveryGame: normalizeRecoveryGameSnapshot(node.recoveryGame) } : {})
   })
@@ -683,7 +723,9 @@ export function portableCanvasProjectionToProject(
            title: canvas.title,
            order: canvas.order,
            ...(canvas.viewport ? { viewport: { ...canvas.viewport } } : {}),
-             nodes: canvas.nodeIds.map((nodeId) => nodeById.get(nodeId)).filter((node): node is CanvasNodeState => !!node)
+           nodes: canvas.nodeIds.map((nodeId) => nodeById.get(nodeId)).filter((node): node is CanvasNodeState => !!node),
+           bridges: value.relationships.filter((link) => link.kind === 'bridge' && link.canvasId === canvas.id).map((link) => ({ id: link.id, source: link.source, target: link.target })),
+           ropes: value.relationships.filter((link) => link.kind === 'rope' && link.canvasId === canvas.id).map((link) => ({ id: link.id, source: link.source, target: link.target }))
          }))
      } : {}),
      ...(value.portals ? { portals: value.portals } : {})

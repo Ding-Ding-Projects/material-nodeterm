@@ -8,9 +8,10 @@ import { DEFAULT_HOME_ASSISTANT_NODE_INTENT } from '@shared/home-assistant'
 import type { HomeAssistantControlConfig } from '@shared/home-assistant-control'
 import { DEFAULT_HOME_ASSISTANT_CONTROL_CONFIG, validateHomeAssistantControlConfig } from '@shared/home-assistant-control'
 import { DEFAULT_HOME_ASSISTANT_SENSOR_CONFIG, type HomeAssistantSensorConfig } from '@shared/home-assistant-sensor'
-import { NEXTCLOUD_AIO_DEFAULT_CONFIG } from '@shared/nextcloud-aio'
 import type { AlarmOccurrence, AlarmRecurrence } from '@shared/alarm-clock'
 import type { ServiceConnection } from '@shared/node-exec'
+import { DEFAULT_GITLAB_HOSTING_CONFIG, type GitLabHostingConfig } from '@shared/gitlab-hosting'
+import { NEXTCLOUD_AIO_DEFAULT_CONFIG } from '@shared/nextcloud-aio'
 import type { NsisLocalPaths, NsisSpec } from '@shared/nsis-form-types'
 import { defaultNsisLocalPaths, defaultNsisSpec } from '@shared/nsis-form-types'
 import type { AgentId, AgentPermissionMode, BuiltinAgentId } from '@shared/agents/config'
@@ -57,6 +58,7 @@ import { TORRENT_NODE_CATALOG_ENTRY } from '@shared/torrent'
 import { DEFAULT_VIRTUAL_MACHINE_CONFIG } from '@shared/virtual-machine'
 import { TIMER_DEFAULT_DURATION_MS, type TimerNodeData } from '@shared/timer'
 import { createRecoveryGameSnapshot, normalizeRecoveryGameSnapshot, type RecoveryGameSnapshot } from '@shared/recovery-game'
+import { CLOUDFLARE_DEFAULT_INTENT, type CloudflarePortableIntent } from '@shared/cloudflare-core-managers'
 
 // Re-exported so Canvas (and anything else in the renderer) keeps importing it from here, while the
 // single implementation lives in src/shared and is shared with the relay host + the canvas-sync
@@ -96,6 +98,7 @@ const BROWSER_SIZE = { width: 800, height: 560 }
 const NATIVE_LOOP_SIZE = { width: 340, height: 280 }
 const SHOP_SIZE = { width: 480, height: 420 }
 export const TORRENT_SIZE = { width: 620, height: 520 }
+export const CLOUDFLARE_CORE_MANAGERS_SIZE = { width: 760, height: 680 }
 const LINUX_VM_SIZE = { width: 760, height: 560 }
 const TIMER_SIZE = { width: 380, height: 360 }
 const ALARM_SIZE = { width: 380, height: 360 }
@@ -256,8 +259,13 @@ export interface NodeData {
   recoveryGame?: RecoveryGameSnapshot
   /** service-kinds only: the display name the user gave this manager. See `CanvasNodeState`. */
   serviceLabel?: string
+  gitlabHostingConfig?: GitLabHostingConfig
   /** Nextcloud AIO safe deployment intent; live Docker bindings remain outside project data. */
   nextcloudAioConfig?: import('@shared/nextcloud-aio').NextcloudAioConfig
+  /** Cloudflare manager safe intent; local credential and provider state never enters project data. */
+  cloudflareCoreIntent?: CloudflarePortableIntent
+  /** Access, Zero Trust, Workers, Pages, R2, D1 and Queues intent; account state stays local. */
+  cloudflareZeroTrustIntent?: import('@shared/cloudflare-zero-trust').CloudflarePortableIntent
   homeAssistantIntent?: HomeAssistantNodeIntent
   /** Safe ownership metadata for a special-universe Shop node. */
   universeCanvasId?: string
@@ -1493,6 +1501,28 @@ export function createTimerNode(index: number, center?: { x: number; y: number }
   return { id: nextId('timer'), type: 'timer', position: placeAt(center, index, TIMER_SIZE.width, TIMER_SIZE.height), width: TIMER_SIZE.width, height: TIMER_SIZE.height, style: { width: TIMER_SIZE.width, height: TIMER_SIZE.height }, data }
 }
 
+/** Creates a root portal card for one AWS-only child canvas. */
+export function createAwsUniversePortalNode(index: number, canvasId: string, title: string, center?: { x: number; y: number }): CanvasNode {
+  const size = NODE_START_SIZE['aws-universe']
+  return {
+    id: nextId('aws-universe'),
+    type: 'aws-universe',
+    position: placeAt(center, index, size.width, size.height),
+    width: size.width,
+    height: size.height,
+    style: { width: size.width, height: size.height },
+    data: {
+      title,
+      color: '#7d5260',
+      group: null,
+      universeCanvasId: canvasId,
+      universeScope: 'aws-universe',
+      universeDepth: 1,
+      tags: ['aws-universe', 'universe-portal']
+    }
+  }
+}
+
 /** Creates an unbound Home Assistant control. Import and creation perform no network request. */
 export function createHomeAssistantControlNode(index: number, center?: { x: number; y: number }): CanvasNode {
   return {
@@ -1557,6 +1587,7 @@ export const SERVICE_NODE_LABELS: Record<ServiceNodeKind, string> = {
   gitlab: 'GitLab',
   homeassistant: 'Home Assistant',
   freepbx: 'FreePBX',
+  'cloudflare-zero-trust': 'Cloudflare managers',
   'nextcloud-aio': 'Nextcloud AIO'
 }
 
@@ -1594,7 +1625,47 @@ export function createServiceNode(
       group: null,
       serviceLabel: '',
       ...(kind === 'homeassistant' ? { homeAssistantIntent: { ...DEFAULT_HOME_ASSISTANT_NODE_INTENT } } : {}),
+      ...(kind === 'cloudflare-zero-trust' ? { cloudflareZeroTrustIntent: { schemaVersion: 1, manager: null, operation: null, accountHint: null, resourceHint: null, values: {} } } : {}),
       ...(kind === 'nextcloud-aio' ? { nextcloudAioConfig: { ...NEXTCLOUD_AIO_DEFAULT_CONFIG } } : {})
+    }
+  }
+}
+
+/** Creates a portable GitLab hosting blueprint. Deployment, context, volumes, and credentials
+ * remain machine-local until the user chooses a guided operation on the node. */
+export function createGitLabHostingNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  const size = { width: 700, height: 620 }
+  return {
+    id: nextId('gitlab-hosting'),
+    type: 'gitlab-hosting',
+    position: placeAt(center, index, size.width, size.height),
+    width: size.width,
+    height: size.height,
+    style: { width: size.width, height: size.height },
+    data: {
+      title: 'GitLab hosting',
+      color: NODE_COLORS[(index + 1) % NODE_COLORS.length],
+      group: null,
+      gitlabHostingConfig: { ...DEFAULT_GITLAB_HOSTING_CONFIG }
+    }
+  }
+}
+
+/** Creates an unbound Cloudflare manager. Only typed safe operation intent is portable. */
+export function createCloudflareCoreManagersNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  return {
+    id: nextId('cloudflare-core-managers'),
+    type: 'cloudflare-core-managers',
+    position: placeAt(center, index, CLOUDFLARE_CORE_MANAGERS_SIZE.width, CLOUDFLARE_CORE_MANAGERS_SIZE.height),
+    width: CLOUDFLARE_CORE_MANAGERS_SIZE.width,
+    height: CLOUDFLARE_CORE_MANAGERS_SIZE.height,
+    style: { width: CLOUDFLARE_CORE_MANAGERS_SIZE.width, height: CLOUDFLARE_CORE_MANAGERS_SIZE.height },
+    data: {
+      title: 'Cloudflare managers',
+      color: '#f38020',
+      group: null,
+      cloudflareCoreIntent: { ...CLOUDFLARE_DEFAULT_INTENT, input: {} },
+      tags: ['cloudflare', 'account', 'zone', 'dns', 'ssl-tls', 'ruleset', 'redirect', 'cache', 'analytics']
     }
   }
 }
@@ -2217,8 +2288,12 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   'homeassistant-sensor': true,
   freepbx: true,
   'nextcloud-aio': true,
+  'gitlab-hosting': true,
+  'cloudflare-zero-trust': true,
+  'cloudflare-core-managers': true,
   nsis: true,
   shop: true,
+  'aws-universe': true,
   torrent: true,
   'linux-vm': true
 }
@@ -2269,8 +2344,12 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   'homeassistant-sensor': HOME_ASSISTANT_SENSOR_SIZE,
   freepbx: SERVICE_SUMMARY_SIZE,
   'nextcloud-aio': SERVICE_CONSOLE_SIZE,
+  'gitlab-hosting': { width: 700, height: 620 },
+  'cloudflare-zero-trust': SERVICE_CONSOLE_SIZE,
+  'cloudflare-core-managers': CLOUDFLARE_CORE_MANAGERS_SIZE,
   nsis: NSIS_SIZE,
   shop: SHOP_SIZE,
+  'aws-universe': { width: 320, height: 220 },
   torrent: TORRENT_SIZE,
   'linux-vm': LINUX_VM_SIZE
 }
@@ -2724,6 +2803,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         cwd: n.cwd,
         text: n.text,
         serviceLabel: n.serviceLabel,
+        gitlabHostingConfig: n.gitlabHostingConfig,
         nextcloudAioConfig: n.nextcloudAioConfig,
         homeAssistantIntent: n.homeAssistantIntent,
         universeCanvasId: n.universeCanvasId,
@@ -2734,6 +2814,8 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         shopSelection: (n as CanvasNodeState & { shopSelection?: string }).shopSelection,
         torrentMagnet: n.torrentMagnet,
         serviceConnection: n.serviceConnection,
+        cloudflareZeroTrustIntent: n.cloudflareZeroTrustIntent,
+        cloudflareCoreIntent: n.cloudflareCoreIntent,
         nsisSpec: n.nsisSpec,
         nsisLocalPaths: n.nsisLocalPaths,
         virtualMachineConfig: n.virtualMachineConfig,
@@ -2850,6 +2932,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         cwd: n.data.cwd,
         text: n.data.text,
         serviceLabel: n.data.serviceLabel,
+        gitlabHostingConfig: n.data.gitlabHostingConfig,
         nextcloudAioConfig: n.data.nextcloudAioConfig,
         homeAssistantIntent: n.data.homeAssistantIntent,
         universeCanvasId: n.data.universeCanvasId,
@@ -2860,6 +2943,8 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         shopSelection: n.data.shopSelection,
         torrentMagnet: n.data.torrentMagnet,
         serviceConnection: n.data.serviceConnection,
+        cloudflareZeroTrustIntent: n.data.cloudflareZeroTrustIntent,
+        cloudflareCoreIntent: n.data.cloudflareCoreIntent,
         nsisSpec: n.data.nsisSpec,
         nsisLocalPaths: n.data.nsisLocalPaths,
         // Media paths remain in the live node long enough for the machine-local index to retain

@@ -52,7 +52,8 @@
     "postinstall": "node scripts/patch-node-pty.mjs && electron-rebuild -f -w node-pty,smart-whisper",
     "design:compare": "electron design/compare",
     "design:v2": "electron design/v2-preview",
-    "prepare:qemu": "node scripts/ensure-qemu-resources.mjs --output resources/qemu"
+    "prepare:qemu": "node scripts/ensure-qemu-resources.mjs --output resources/qemu",
+    "prepare:aws-cli": "node scripts/ensure-aws-cli-resources.mjs --output resources/aws-cli-v2"
   },
   "build": {
     "appId": "com.nodeterm.app",
@@ -83,6 +84,10 @@
       {
         "from": "resources/qemu",
         "to": "qemu"
+      },
+      {
+        "from": "resources/aws-cli-v2",
+        "to": "node-dependencies/aws-cli-v2"
       },
       {
         "from": "out/session-host",

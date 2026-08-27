@@ -23,9 +23,11 @@ import type { NodeDependenciesApi } from '../../shared/node-dependencies'
 import type { TorrentApi, TorrentTaskState } from '../../shared/torrent'
 import type { VirtualMachineApi } from '../../shared/virtual-machine'
 import type { CalendarApi, CalendarProvider } from '../../shared/calendar'
+import type { CloudflareCoreManagersApi } from '../../shared/cloudflare-core-managers'
 import type { HomeAssistantApi } from '../../shared/home-assistant'
 import type { HomeAssistantControlApi } from '../../shared/home-assistant-control'
 import type { HomeAssistantSensorApi } from '../../shared/home-assistant-sensor'
+import type { CloudflareApi, CloudflareExecutionProgress } from '../../shared/cloudflare-zero-trust'
 import {
   UNKNOWN_CLAUDE_CLI_CAPS,
   type BoardLogApi,
@@ -1101,12 +1103,31 @@ export function buildOllamaApi(client: RpcClient): Pick<NodeTerminalApi, 'ollama
   return { ollama }
 }
 
+/** Guided Cloudflare managers over the authenticated WS bridge. */
+export function buildCloudflareCoreManagersApi(client: RpcClient): Pick<NodeTerminalApi, 'cloudflareCoreManagers'> {
+  const cloudflareCoreManagers: CloudflareCoreManagersApi = {
+    runtime: () => client.request(IPC.cloudflareCoreRuntime) as ReturnType<CloudflareCoreManagersApi['runtime']>,
+    credentials: () => client.request(IPC.cloudflareCoreCredentials) as ReturnType<CloudflareCoreManagersApi['credentials']>,
+    saveCredential: (input) => client.request(IPC.cloudflareCoreSaveCredential, input) as ReturnType<CloudflareCoreManagersApi['saveCredential']>,
+    removeCredential: (credentialId) => client.request(IPC.cloudflareCoreRemoveCredential, credentialId) as ReturnType<CloudflareCoreManagersApi['removeCredential']>,
+    binding: (nodeId) => client.request(IPC.cloudflareCoreBinding, nodeId) as ReturnType<CloudflareCoreManagersApi['binding']>,
+    bind: (input) => client.request(IPC.cloudflareCoreBind, input) as ReturnType<CloudflareCoreManagersApi['bind']>,
+    unbind: (nodeId) => client.request(IPC.cloudflareCoreUnbind, nodeId) as ReturnType<CloudflareCoreManagersApi['unbind']>,
+    preview: (nodeId, request) => client.request(IPC.cloudflareCorePreview, nodeId, request) as ReturnType<CloudflareCoreManagersApi['preview']>,
+    execute: (nodeId, request) => client.request(IPC.cloudflareCoreExecute, nodeId, request) as ReturnType<CloudflareCoreManagersApi['execute']>,
+    cancel: (operationId) => client.request(IPC.cloudflareCoreCancel, operationId) as ReturnType<CloudflareCoreManagersApi['cancel']>,
+    onProgress: (listener) => client.subscribe(IPC.cloudflareCoreProgress, listener as Listener)
+  }
+  return { cloudflareCoreManagers }
+}
+
 /** Automatic node-feature dependency lifecycle over the authenticated server RPC. Downloads and
  * installation remain on the server host, so the browser never uses its own PATH as proof. */
 export function buildNodeDependenciesApi(client: RpcClient): Pick<NodeTerminalApi, 'nodeDependencies'> {
   const nodeDependencies: NodeDependenciesApi = {
     catalog: () => client.request(IPC.nodeDependencyCatalog) as ReturnType<NodeDependenciesApi['catalog']>,
     status: (id) => client.request(IPC.nodeDependencyStatus, id) as ReturnType<NodeDependenciesApi['status']>,
+    details: (id) => client.request(IPC.nodeDependencyDetails, id) as ReturnType<NodeDependenciesApi['details']>,
     install: (id) => client.request(IPC.nodeDependencyInstall, id) as ReturnType<NodeDependenciesApi['install']>,
     cancel: (operationId) => client.request(IPC.nodeDependencyCancel, operationId) as ReturnType<NodeDependenciesApi['cancel']>,
     repair: (id) => client.request(IPC.nodeDependencyRepair, id) as ReturnType<NodeDependenciesApi['repair']>,
@@ -1246,6 +1267,25 @@ export function buildHomeAssistantSensorApi(client: RpcClient): Pick<NodeTermina
     refresh: (nodeId, config) => client.request(IPC.homeAssistantSensorRefresh, nodeId, config) as ReturnType<HomeAssistantSensorApi['refresh']>
   }
   return { homeAssistantSensor }
+}
+
+export function buildCloudflareZeroTrustApi(client: RpcClient): Pick<NodeTerminalApi, 'cloudflareZeroTrust'> {
+  const cloudflareZeroTrust: CloudflareApi = {
+    catalog: () => client.request(IPC.cloudflareCatalog) as ReturnType<CloudflareApi['catalog']>,
+    accounts: () => client.request(IPC.cloudflareAccounts) as ReturnType<CloudflareApi['accounts']>,
+    configure: (input) => client.request(IPC.cloudflareConfigure, input) as ReturnType<CloudflareApi['configure']>,
+    removeAccount: (id) => client.request(IPC.cloudflareRemoveAccount, id) as ReturnType<CloudflareApi['removeAccount']>,
+    binding: (nodeId) => client.request(IPC.cloudflareBinding, nodeId) as ReturnType<CloudflareApi['binding']>,
+    saveBinding: (nodeId, binding) => client.request(IPC.cloudflareSaveBinding, nodeId, binding) as ReturnType<CloudflareApi['saveBinding']>,
+    resources: (nodeId, manager) => client.request(IPC.cloudflareResources, nodeId, manager) as ReturnType<CloudflareApi['resources']>,
+    execute: (nodeId, request, onProgress) => {
+      const unsubscribe = client.subscribe(IPC.cloudflareProgress, (value) => { const progress = value as CloudflareExecutionProgress & { nodeId?: string }; if (progress.nodeId === nodeId) onProgress(progress) })
+      return (client.request(IPC.cloudflareExecute, nodeId, request) as ReturnType<CloudflareApi['execute']>).finally(unsubscribe)
+    },
+    cancel: (nodeId) => client.request(IPC.cloudflareCancel, nodeId) as ReturnType<CloudflareApi['cancel']>,
+    onProgress: (listener) => client.subscribe(IPC.cloudflareProgress, listener as Listener)
+  }
+  return { cloudflareZeroTrust }
 }
 
 /**
@@ -1471,6 +1511,18 @@ export function buildPasswordManagerApi(client: RpcClient): Pick<NodeTerminalApi
       ) as Promise<ListCredentialsResult>
   }
   return { passwordManager }
+}
+
+/** Build the host-owned Multiverse door-entry vault API. Credential values are sent only for the
+ * immediate configure or verify request and the server returns no stored value. */
+export function buildUniverseDoorEntryApi(client: RpcClient): Pick<NodeTerminalApi, 'universeDoorEntry'> {
+  return {
+    universeDoorEntry: {
+      configure: (input) => client.request(IPC.universeDoorEntryConfigure, input),
+      verify: (input) => client.request(IPC.universeDoorEntryVerify, input),
+      remove: (doorId) => client.request(IPC.universeDoorEntryRemove, doorId)
+    }
+  }
 }
 
 /**
@@ -1704,6 +1756,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildConverterApi(client),
     ...buildNodeDependenciesApi(client),
     ...buildOllamaApi(client),
+    ...buildCloudflareCoreManagersApi(client),
     ...buildMinecraftApi(client),
     ...buildTorrentApi(client),
     ...buildVirtualMachineApi(client),
@@ -1712,6 +1765,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildHomeAssistantApi(client),
     ...buildHomeAssistantControlApi(client),
     ...buildHomeAssistantSensorApi(client),
+    ...buildCloudflareZeroTrustApi(client),
     ...buildUsageApi(client),
     ...buildSessionMemoryApi(client),
     ...buildVsCodeApi(client),
@@ -1720,6 +1774,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildToylockApi(client),
     ...buildAuthenticatorApi(client),
     ...buildPasswordManagerApi(client),
+    ...buildUniverseDoorEntryApi(client),
     ...buildGitHubApi(client),
     ...buildClaudeAccountsApi(client),
     codex: buildCodexApi(client),

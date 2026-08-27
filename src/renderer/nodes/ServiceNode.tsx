@@ -9,6 +9,7 @@ import { ColorMenu } from '../components/color/ColorMenu'
 import { MinecraftServerPanel } from '../components/minecraft/MinecraftServerPanel'
 import { DockerHostManagerPanel } from '../components/docker/DockerHostManagerPanel'
 import { HomeAssistantPanel } from '../components/home-assistant/HomeAssistantPanel'
+import { CloudflareZeroTrustPanel } from '../components/cloudflare/CloudflareZeroTrustPanel'
 import { NextcloudAioPanel } from '../components/nextcloud/NextcloudAioPanel'
 import { EditableNodeTitle } from '../components/EditableNodeTitle'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
@@ -54,6 +55,7 @@ const ENDPOINT_PLACEHOLDER: Record<ServiceNodeKind, string> = {
   gitlab: 'https://gitlab.example.com',
   homeassistant: 'http://homeassistant.local:8123',
   freepbx: 'https://pbx.local',
+  'cloudflare-zero-trust': 'https://api.cloudflare.com',
   'nextcloud-aio': 'http://127.0.0.1:8080'
 }
 
@@ -248,7 +250,15 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
           />
         )}
 
-        {!collapsed && kind !== 'minecraft' && kind !== 'dockerhost' && kind !== 'homeassistant' && kind !== 'nextcloud-aio' && (
+        {!collapsed && kind === 'cloudflare-zero-trust' && (
+          <CloudflareZeroTrustPanel
+            nodeId={id}
+            intent={data.cloudflareZeroTrustIntent ?? { schemaVersion: 1, manager: null, operation: null, accountHint: null, resourceHint: null, values: {} }}
+            onIntentChange={(cloudflareZeroTrustIntent) => updateNodeData(id, { cloudflareZeroTrustIntent })}
+          />
+        )}
+
+        {!collapsed && kind !== 'minecraft' && kind !== 'dockerhost' && kind !== 'homeassistant' && kind !== 'cloudflare-zero-trust' && kind !== 'nextcloud-aio' && (
           <div className="service-node__body">
             <label className="service-node__field" htmlFor={`${id}-endpoint`}>
               <span className="service-node__field-label">{vocab('Address')}</span>

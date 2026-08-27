@@ -210,6 +210,9 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     // (E_UNSUPPORTED) rather than either wrong-machine option; a future pass can route these to the
     // host the same way `fs`/`git` are routed above.
     converter: stub.converter,
+    // Cloudflare account credentials and provider mutations are local to the host application.
+    // Relay v1 has no remote-routed manager channel, so refuse rather than contacting the viewer.
+    cloudflareZeroTrust: stub.cloudflareZeroTrust,
     ollama: stub.ollama,
     // Same reasoning as converter/ollama immediately above: creating and running a Minecraft
     // server is ONE machine's filesystem/java/process table, and there is no remote-routed core
@@ -224,6 +227,13 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     homeAssistantControl: stub.homeAssistantControl,
     // A relay viewer must not contact or rebind Home Assistant on its own machine.
     homeAssistantSensor: stub.homeAssistantSensor,
+    // A relay viewer never receives or submits the host's door credentials. Keep this explicit
+    // refusal rather than falling through to the viewer's own local vault.
+    universeDoorEntry: {
+      configure: () => relayUnsupported('universeDoorEntry.configure'),
+      verify: () => relayUnsupported('universeDoorEntry.verify'),
+      remove: () => relayUnsupported('universeDoorEntry.remove')
+    },
     // Browser control never rides the relay either (no CDP off the desktop) — inert no-ops.
     onBrowserControlResolve: stub.onBrowserControlResolve,
     sendBrowserControlResolveResult: stub.sendBrowserControlResolveResult,

@@ -103,11 +103,15 @@ import RecoveryGameNode from '../nodes/RecoveryGameNode'
 import { SERVICE_NODE_KINDS, type ServiceNodeKind, type ProjectArchiveContents } from '@shared/types'
 import { VIRTUAL_MACHINE_NODE_CATALOG } from '@shared/virtual-machine'
 import type { ProjectIcon } from '@shared/project-icon'
+import type { PortableDoorConstructionV3 } from '@shared/door-construction'
 import BrowserNode from '../nodes/BrowserNode'
 import { ServiceNode } from '../nodes/ServiceNode'
+import GitLabHostingNode from '../nodes/GitLabHostingNode'
+import CloudflareCoreManagersNode from '../nodes/CloudflareCoreManagersNode'
 import VirtualMachineNode from '../nodes/VirtualMachineNode'
 import NsisInstallerNode from '../nodes/NsisInstallerNode'
 import ShopNode from '../nodes/ShopNode'
+import { AwsUniversePortalNode } from '../nodes/AwsUniversePortalNode'
 import TorrentNode from '../nodes/TorrentNode'
 import { normalizeAddress } from '../nodes/browserUrl'
 import VideoNode from '../nodes/VideoNode'
@@ -136,7 +140,10 @@ import {
 import { TopAppBar } from '../components/TopAppBar'
 import { ProjectSwitcher } from '../components/ProjectSwitcher'
 import { MultiverseNavigator } from '../components/MultiverseNavigator'
+import { AwsUniverseNavigator } from '../components/AwsUniverseNavigator'
+import { PortalLifecycleDialog } from '../components/PortalLifecycleDialog'
 import { projectCanvasView } from '@shared/multiverse-canvases'
+import { portableCanvasProjectionToProject, projectToPortableCanvasV3 } from '../../core/portable-canvas-projection'
 import { type MenuItem } from '../components/ContextMenu'
 import { devicePixelSnapOffset } from '../terminal/device-pixel-fit'
 import { VocabularyContextMenu } from '../components/menu/VocabularyContextMenu'
@@ -496,6 +503,9 @@ import { useTeamAccessEvents } from '../state/teamAccess'
 import { useAgentNodes } from '../state/agentNodes'
 import { SubagentNode } from '../nodes/SubagentNode'
 import { LoopNode } from '../nodes/LoopNode'
+import { XProjectNode } from '../nodes/XProjectNode'
+import { setTravelNodeHandler } from '../nodes/travel-handler'
+import { resolveForeignNodeProjections } from '../lib/foreignNodeProjection'
 import type { NormalizedAgentEvent } from '@shared/agents/normalize'
 import {
   computeWorktreePath,
@@ -720,6 +730,8 @@ import {
   createTerminalNode,
   nodeSshFor,
   createServiceNode,
+  createGitLabHostingNode,
+  createCloudflareCoreManagersNode,
   createVirtualMachineNode,
   SERVICE_NODE_LABELS,
   createVideoNode,
@@ -1243,6 +1255,9 @@ export function Canvas() {
   const [controlEdges, setControlEdges] = useState<Edge[]>([])
   const controlEdgesRef = useRef<Edge[]>([])
   controlEdgesRef.current = controlEdges
+  // Foreign projections are derived viewers. Their drag positions are session-local and never
+  // enter either project's serialized node list.
+  const [xprojPositions, setXprojPositions] = useState<Record<string, { x: number; y: number }>>({})
   const [dirty, setDirty] = useState(false)
   // Bumped only when a save finished with `dirty` still set (an edit raced it). It exists purely to
   // give the debounced-autosave effect a dependency that CHANGES in that case — `dirty` stays true
@@ -1898,6 +1913,15 @@ export function Canvas() {
   }, [getViewport, setViewport])
 
   const activeProjectId = useProjects((s) => s.activeProjectId)
+  const activeProject = useProjects((s) => s.projects.find((p) => p.id === s.activeProjectId))
+  const portalProjection = useMemo(() => {
+    if (!activeProject) return null
+    try {
+      return projectToPortableCanvasV3(activeProject)
+    } catch {
+      return null
+    }
+  }, [activeProject])
   const activeProjectSettingsOverrides = useProjects(
     (s) => s.projects.find((p) => p.id === s.activeProjectId)?.settingsOverrides
   )
@@ -2056,6 +2080,7 @@ export function Canvas() {
       diff: withNodeBoundary(LazyDiffNode),
       subagent: withNodeBoundary(SubagentNode),
       loop: withNodeBoundary(LoopNode),
+      xproject: withNodeBoundary(XProjectNode),
       scheduler: withNodeBoundary(NativeLoopNode),
       timer: withNodeBoundary(TimerNode),
       alarm: withNodeBoundary(AlarmClockNode),
@@ -2072,14 +2097,18 @@ export function Canvas() {
       // tell them apart without six registrations of six near-identical files.
       nsis: withNodeBoundary(NsisInstallerNode),
       shop: withNodeBoundary(ShopNode),
+      'aws-universe': withNodeBoundary(AwsUniversePortalNode),
       torrent: withNodeBoundary(TorrentNode),
       minecraft: withNodeBoundary(ServiceNode),
       dockerhost: withNodeBoundary(ServiceNode),
       proxmox: withNodeBoundary(ServiceNode),
       gitlab: withNodeBoundary(ServiceNode),
+      'gitlab-hosting': withNodeBoundary(GitLabHostingNode),
       homeassistant: withNodeBoundary(ServiceNode),
       freepbx: withNodeBoundary(ServiceNode),
+      'cloudflare-zero-trust': withNodeBoundary(ServiceNode),
       'nextcloud-aio': withNodeBoundary(ServiceNode),
+      'cloudflare-core-managers': withNodeBoundary(CloudflareCoreManagersNode),
       'linux-vm': withNodeBoundary(VirtualMachineNode)
     }),
     []
@@ -2091,6 +2120,7 @@ export function Canvas() {
   const ephemeralPos = useAgentNodes((s) => s.positions)
   const ephSizes = useAgentNodes((s) => s.sizes)
   const ephExpanded = useAgentNodes((s) => s.expanded)
+  const projectCatalog = useProjects((s) => s.projects)
   // Deliberately NOT `useAgentStatus((s) => s.byId)`: that map's identity changes on every
   // working/waiting flip of any agent node, which re-rendered the whole canvas per hook event.
   // Canvas only needs the /loop entries (for the ephemeral LoopNodes), so subscribe to a
@@ -2275,7 +2305,10 @@ export function Canvas() {
     const claudeById = useAgentStatus.getState().byId // re-read on loopSig change (see above)
     const hasLoops = loopSig !== ''
     const hasAgents = Object.keys(agentById).length > 0
-    if (!hasLoops && !hasAgents) return NO_EPHEMERAL
+    const activeId = useProjects.getState().activeProjectId
+    const activeProjectForProjection = projectCatalog.find((project) => project.id === activeId)
+    const foreign = resolveForeignNodeProjections(activeProjectForProjection, projectCatalog, nodes)
+    if (!hasLoops && !hasAgents && foreign.length === 0) return NO_EPHEMERAL
     // Explicit width/height for an ephemeral node (so it resizes like any other node).
     // Defaults switch with expand; a user resize override wins.
     const dims = (id: string, baseW: number, expW: number, baseH: number, expH: number) => {
@@ -2388,9 +2421,52 @@ export function Canvas() {
         })
       })
     }
+    // Foreign projections are derived from A's lineage links and B's serialized node. They have
+    // no React Flow persistence path and no parent frame, so dragging one only updates the local
+    // ephemeral position map. The source node remains the lineage anchor for the dashed edge.
+    foreign.forEach(({ link, sourceNode, targetProject, targetNode }, index) => {
+      const projectionId = `xproj-${targetProject.id}-${targetNode.id}-${link.id}`
+      const source = nodes.find((node) => node.id === sourceNode.id)
+      const sourceHeight = source?.measured?.height ?? source?.height ?? 400
+      const fallback = {
+        x: (source?.position.x ?? 80) + 360 + (index % 3) * 30,
+        y: (source?.position.y ?? 120) + sourceHeight + 80 + Math.floor(index / 3) * 300
+      }
+      const size = targetNode.size ?? { width: 600, height: 400 }
+      eNodes.push({
+        id: projectionId,
+        type: 'xproject',
+        position: xprojPositions[projectionId] ?? fallback,
+        draggable: true,
+        selectable: false,
+        width: Math.max(280, size.width),
+        height: Math.max(160, size.height),
+        style: { width: Math.max(280, size.width), height: Math.max(160, size.height) },
+        data: {
+          title: targetNode.title,
+          color: targetProject.color,
+          group: null,
+          xprojOriginName: targetProject.name,
+          xprojOriginColor: targetProject.color,
+          xprojSpawn: {
+            bProjectId: targetProject.id,
+            bNodeId: targetNode.id,
+            bNode: targetNode,
+            bProject: targetProject
+          }
+        }
+      } as CanvasNode)
+      eEdges.push({
+        id: `xproj-edge-${link.id}`,
+        source: sourceNode.id,
+        sourceHandle: 'flow-out',
+        target: projectionId,
+        style: { stroke: targetProject.color, strokeWidth: 1.5, strokeDasharray: '5 4' }
+      })
+    })
     return { ephemeralNodes: eNodes, ephemeralEdges: eEdges }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- loopSig stands in for the byId read
-  }, [agentById, loopSig, ephemeralPos, ephSizes, ephExpanded, ephSelId, nodes])
+  }, [agentById, loopSig, ephemeralPos, ephSizes, ephExpanded, ephSelId, nodes, projectCatalog, xprojPositions])
 
   // Merge the persisted nodes with the ephemeral ones once per change (not per render),
   // so React Flow's array-identity short-circuit holds while panning/zooming.
@@ -3214,6 +3290,87 @@ export function Canvas() {
     return result
   }, [activeProjectId, bumpDirty, commitActiveToStore])
 
+  const navigateAwsUniverse = useCallback((canvasId: string) => {
+    if (!activeProjectId) return
+    commitActiveToStore()
+    nodesProjectIdRef.current = null
+    useProjects.getState().openAwsUniverseCanvas(activeProjectId, canvasId)
+  }, [activeProjectId, commitActiveToStore])
+
+  const createAwsUniverse = useCallback((title: string) => {
+    if (!activeProjectId) return { reason: 'Choose an open project before creating an AWS Universe.' }
+    commitActiveToStore()
+    const result = useProjects.getState().createAwsUniverseCanvas(activeProjectId, title)
+    if (result.canvasId) bumpDirty()
+    return result
+  }, [activeProjectId, bumpDirty, commitActiveToStore])
+
+  useEffect(() => {
+    const onOpen = (event: Event): void => {
+      const canvasId = (event as CustomEvent<{ canvasId?: string }>).detail?.canvasId
+      if (canvasId) navigateAwsUniverse(canvasId)
+    }
+    window.addEventListener('nodeterm:open-aws-universe', onOpen)
+    return () => window.removeEventListener('nodeterm:open-aws-universe', onOpen)
+  }, [navigateAwsUniverse])
+  const attachMultiverseDoor = useCallback((input: {
+    parentCanvasId: string
+    childCanvasId: string
+    entryDoorId: string
+    returnDoorId: string
+    title: string
+    entryConstruction: PortableDoorConstructionV3
+    returnConstruction: PortableDoorConstructionV3
+  }) => {
+    if (!activeProjectId) return { reason: 'Choose an open project before attaching a door.' }
+    commitActiveToStore()
+    const result = useProjects.getState().attachMultiverseDoor(activeProjectId, input)
+    if (result.portalId) bumpDirty()
+    return result
+  }, [activeProjectId, bumpDirty, commitActiveToStore])
+
+  const updatePortalProjection = useCallback((projection: ReturnType<typeof projectToPortableCanvasV3>) => {
+    if (!activeProjectId) return
+    commitActiveToStore()
+    const current = useProjects.getState().getProject(activeProjectId)
+    if (!current) return
+    const hydrated = portableCanvasProjectionToProject(projection, { id: current.id, ...(current.cwd ? { cwd: current.cwd } : {}) })
+    useProjects.getState().replaceProject({
+      ...current,
+      nodes: hydrated.nodes,
+      viewport: hydrated.viewport,
+      multiverseCanvases: hydrated.multiverseCanvases,
+      portals: hydrated.portals,
+      ...(hydrated.childCanvases ? { childCanvases: hydrated.childCanvases } : {})
+    })
+    bumpDirty()
+  }, [activeProjectId, bumpDirty, commitActiveToStore])
+
+  const openPortal = useCallback((portalId: string) => {
+    if (!activeProjectId) return
+    commitActiveToStore()
+    const result = useProjects.getState().openPortal(activeProjectId, portalId, useProjects.getState().getProject(activeProjectId)?.activeCanvasId ?? 'root')
+    if (!result.ok) setNotice({ kind: 'error', text: result.reason })
+  }, [activeProjectId, commitActiveToStore, setNotice])
+
+  const requestDeletePortal = useCallback((portal: import('../../core/portal-lifecycle').PortablePortalV3) => {
+    const anchor = document.activeElement instanceof HTMLElement ? document.activeElement : undefined
+    openDestructiveGate({
+      title: `Delete portal “${portal.title}” permanently`,
+      description: 'This removes the portal and its child canvas records, then preserves the child nodes in the containing canvas. It cannot be undone.',
+      ...(anchor ? { restoreFocusEl: anchor } : {}),
+      onConfirm: () => {
+        if (!activeProjectId) return
+        const result = useProjects.getState().deletePortal(activeProjectId, portal.id)
+        if (!result.ok) {
+          setNotice({ kind: 'error', text: result.reason })
+          return
+        }
+        bumpDirty()
+      }
+    })
+  }, [activeProjectId, bumpDirty, setNotice])
+
   const writeDisk = useCallback(async () => {
     // Captured BEFORE the snapshot is built (`toWorkspace()` runs synchronously on this line), so
     // it names exactly the edits this save carries. A save is not instant — an SSH mirror write
@@ -3864,6 +4021,20 @@ export function Canvas() {
         // so without this a closed browser node's page would keep running unseen.
         if (c.type === 'remove') useWebviewKeepAlive.getState().drop(c.id)
         if ('id' in c && isEph(c.id)) {
+          // Cross-project projections have no agent-nodes entry. Keep their transient absolute
+          // position in Canvas-local state, and never route a projection change into a real node.
+          if (c.id.startsWith('xproj-')) {
+            if (c.type === 'position' && c.position) {
+              setXprojPositions((positions) => ({ ...positions, [c.id]: c.position! }))
+            } else if (c.type === 'remove') {
+              setXprojPositions((positions) => {
+                const next = { ...positions }
+                delete next[c.id]
+                return next
+              })
+            }
+            return false
+          }
           const store = useAgentNodes.getState()
           // Stored as an OFFSET from the parent agent, never as a canvas position — see offsetFrom.
           if (c.type === 'position' && c.position) {
@@ -5347,6 +5518,12 @@ export function Canvas() {
         notify({ kind: 'error', title: 'Node unavailable', body: availability.reason ?? 'Choose another node.' })
         return
       }
+      if (entry.id === 'aws-universe') {
+        const result = createAwsUniverse('New AWS Universe')
+        if (result.canvasId) navigateAwsUniverse(result.canvasId)
+        else notify({ kind: 'error', title: 'AWS Universe unavailable', body: result.reason ?? 'The AWS Universe could not be created.' })
+        return
+      }
       setNodes((existing) => {
         const appended = nodeCreationCoordinatorRef.current.append(
           existing,
@@ -5401,10 +5578,12 @@ export function Canvas() {
             if (catalogEntry.id === 'wild-dim-sum') return createWildDimSumNode(index, undefined, center)
             if (catalogEntry.id === 'homeassistant-control') return createHomeAssistantControlNode(index, center)
             if (catalogEntry.id === 'homeassistant-sensor') return createHomeAssistantSensorNode(index, center)
+            if (catalogEntry.id === 'gitlab-hosting') return createGitLabHostingNode(index, center)
             if (catalogEntry.id === 'nextcloud-hosting') return createServiceNode('nextcloud-aio', index, center)
             if (catalogEntry.id.startsWith('service:')) {
               return createServiceNode(catalogEntry.nodeKind as ServiceNodeKind, index, center)
             }
+            if (catalogEntry.id === 'cloudflare-core-managers') return createCloudflareCoreManagersNode(index, center)
             // File and diff rows stay visible but disabled until their picker prerequisites exist.
             return null
           },
@@ -5418,7 +5597,7 @@ export function Canvas() {
       // The shared node-data signature effect marks a real append dirty after React commits. This
       // keeps duplicate retries a true no-op rather than writing an unnecessary project snapshot.
     },
-    [activeProjectId, emptyNodePos, offersTerminalProfiles, parentInto, sessionSource, setNodes]
+    [activeProjectId, createAwsUniverse, emptyNodePos, navigateAwsUniverse, offersTerminalProfiles, parentInto, sessionSource, setNodes]
   )
 
   // Task 6: the Settings → Accounts "Add account" flow dispatches 'nodeterm:add-account-login'
@@ -9045,7 +9224,7 @@ export function Canvas() {
     const on = settings.autoAlignGrid
     if (on && !prevAutoAlignRef.current) {
       const ids = nodesRef.current
-        .filter((n) => n.type !== 'subagent' && n.type !== 'loop')
+        .filter((n) => n.type !== 'subagent' && n.type !== 'loop' && n.type !== 'xproject')
         .map((n) => n.id)
       if (ids.length) alignToGrid(ids)
     }
@@ -9172,7 +9351,7 @@ export function Canvas() {
       // <ReactFlow nodes> prop but NEVER persisted — they are cleared on the next turn — and both
       // double-click focus and the minimap's double-click land here. A breadcrumb for one is a
       // permanently unresolvable id burning one of the 20 slots, so it is never recorded.
-      if (activeId && node.type !== 'subagent' && node.type !== 'loop') {
+      if (activeId && node.type !== 'subagent' && node.type !== 'loop' && node.type !== 'xproject') {
         const target: BreadcrumbTarget = {
           id: node.id,
           kind: node.type as BreadcrumbTarget['kind'],
@@ -11350,7 +11529,7 @@ export function Canvas() {
       const items =
         node.type === 'group'
           ? groupItems(node.id, screenToFlowPosition({ x: e.clientX, y: e.clientY }))
-          : node.type === 'subagent' || node.type === 'loop'
+          : node.type === 'subagent' || node.type === 'loop' || node.type === 'xproject'
             ? ephemeralItems(node.id)
             : selectionItems(targetIds(node), screenToFlowPosition({ x: e.clientX, y: e.clientY }))
       setMenu({ x: e.clientX, y: e.clientY, items })
@@ -11368,7 +11547,9 @@ export function Canvas() {
         y: e.clientY,
         items: selectionItems(
           // Derived cards can't be acted on; filtering keeps the "N nodes" count honest too.
-          selected.filter((n) => n.type !== 'subagent' && n.type !== 'loop').map((n) => n.id),
+          selected
+            .filter((n) => n.type !== 'subagent' && n.type !== 'loop' && n.type !== 'xproject')
+            .map((n) => n.id),
           screenToFlowPosition({ x: e.clientX, y: e.clientY })
         )
       })
@@ -11578,6 +11759,12 @@ export function Canvas() {
     [setNodes, goToNode, switchProject]
   )
   focusNodeRef.current = focusNodeById
+  // The projection's secondary jump uses the same cross-project focus funnel as notifications and
+  // the sessions sidebar. Clear the registration when this Canvas unmounts.
+  useEffect(() => {
+    setTravelNodeHandler(focusNodeById)
+    return () => setTravelNodeHandler(null)
+  }, [focusNodeById])
 
   // Session board cards are derived LIVE from the canvas nodes; the board stores only assignments.
   // Only while the board is OPEN: `nodes` gets a fresh identity on every drag frame, so a closed
@@ -15552,6 +15739,7 @@ export function Canvas() {
     candidates: PortableMediaCandidate[]
     resolve: (plan: PortableMediaExportPlan | null) => void
   } | null>(null)
+  const [portalLifecycleOpen, setPortalLifecycleOpen] = useState(false)
   const choosePortableMedia = useCallback(async (project: Project): Promise<PortableMediaExportPlan | null> => {
     const selected = await window.nodeTerminal.dialog.selectFiles()
     if (!selected || selected.length === 0) return null
@@ -15719,12 +15907,15 @@ export function Canvas() {
         useProjects.getState().adoptProject(result.project)
         await writeDisk()
         const where = result.restoredTo ? `Repository and files restored to ${result.restoredTo}. ` : ''
+        const repairNote = result.repairs?.length
+          ? ` ${result.repairs.length} portal repair${result.repairs.length === 1 ? '' : 's'} applied; child content was preserved.`
+          : ''
         const plannerDefinitions = result.plannerDefinitions
         notify({
           kind: 'success',
           titleKind: 'authored',
           title: 'Project opened from file',
-          body: `${where}${archiveContentsSummary(result.contents)}`.trim() || 'The project and its complete local history are ready.',
+          body: `${where}${archiveContentsSummary(result.contents)}${repairNote}`.trim() || 'The project and its complete local history are ready.',
           bodyKind: 'fact',
           ...(plannerDefinitions ? {
             actions: [{
@@ -16638,7 +16829,19 @@ export function Canvas() {
           onOpenArchive={() => void importProjectArchive()}
           archiveBusy={() => projectArchiveBusyRef.current}
         />
-        <MultiverseNavigator onNavigate={navigateMultiverseCanvas} onCreate={createMultiverseCanvas} />
+        <AwsUniverseNavigator onNavigate={navigateAwsUniverse} onCreate={createAwsUniverse} />
+        <MultiverseNavigator onNavigate={navigateMultiverseCanvas} onCreate={createMultiverseCanvas} onConstructDoor={attachMultiverseDoor} />
+        <button
+          type="button"
+          className="multiverse-nav__portal-trigger"
+          title="Manage portal lifecycle"
+          onClick={() => {
+            commitActiveToStore()
+            setPortalLifecycleOpen(true)
+          }}
+        >
+          Portals
+        </button>
         <div className="md3-app-bar__spacer" />
         {/* The docked search bar — the SAME `.cluster-search` button/title the packaged-app
             driver script selects; re-themed, never renamed. */}
@@ -17708,6 +17911,18 @@ export function Canvas() {
             setDocsInitialPath(path)
             setDocsOpen(true)
           }}
+        />
+      )}
+
+      {portalLifecycleOpen && portalProjection && activeProject && (
+        <PortalLifecycleDialog
+          open
+          projection={portalProjection}
+          currentCanvasId={activeProject.activeCanvasId ?? 'root'}
+          onClose={() => setPortalLifecycleOpen(false)}
+          onChange={updatePortalProjection}
+          onOpenCanvas={openPortal}
+          onRequestDelete={requestDeletePortal}
         />
       )}
 

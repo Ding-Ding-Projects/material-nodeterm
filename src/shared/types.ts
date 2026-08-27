@@ -20,6 +20,7 @@ import type { ProjectIcon } from './project-icon'
 import type { ShortcutMap } from './shortcuts'
 import { DEFAULT_SHORTCUTS } from './shortcuts'
 import type { FunnyLevel, LanguageMode } from './i18n/types'
+import type { PortableDoorConstructionV3 } from './door-construction'
 import type { VsCodeInstall, VsCodeOpenResult } from './vscode'
 import type { HistoryFilters, HistoryListResult, HistoryRestoreResult } from './local-history'
 import type { CalendarApi, CalendarNodeConfig } from './calendar'
@@ -220,6 +221,9 @@ export interface PtyCreateOptions {
    * "not connected" overlay and re-spawns when the master is back.
    */
   requireRemote?: boolean
+  /** Join an already-live session only. Foreign canvas projections are viewers, never owners, so
+   * a missing target session is returned as `unavailable: 'no-session'` instead of spawning it. */
+  requireExisting?: boolean
 }
 
 /** A tmux pane's cursor, as tmux reports it: 0-based column/row within the pane, plus whether the
@@ -344,7 +348,8 @@ export interface PtyCreateResult {
    * managed account whose home is missing refuses rather than spawning against the system login
    * (§5 property 4). Same contract — nothing spawned, the renderer shows the node's refusal.
    */
-  unavailable?: 'ssh' | 'codex-account'
+  /** Refusal for a foreign projection that had no live session to join. */
+  unavailable?: 'ssh' | 'codex-account' | 'no-session'
 }
 
 /** Payload of `pty:recycled` — see IPC.ptyRecycled and `recycleAction` in the renderer. */
@@ -384,6 +389,8 @@ export type NodeKind =
   // intentionally a distinct kind so the canvas can refuse deletion, duplication, grouping, and
   // cross-universe movement at every mutation boundary.
   | 'shop'
+  // AWS Universe portal. The portal is a safe project intent and never carries provider state.
+  | 'aws-universe'
   // A GUI for authoring a Windows NSIS installer script for ANOTHER project (not this app's
   // own installer, which stays Squirrel.Windows — see CLAUDE.md's Packaging section). See
   // `NsisSpec`/`NsisLocalPaths` in `./nsis-form-types` for the shared-vs-machine-local split.
@@ -419,10 +426,14 @@ export type NodeKind =
   | 'dockerhost'
   | 'proxmox'
   | 'gitlab'
+  | 'gitlab-hosting'
   | 'homeassistant'
   | 'homeassistant-sensor'
   | 'freepbx'
   | 'nextcloud-aio'
+  | 'cloudflare-zero-trust'
+  /** Guided Cloudflare account, zone, DNS, SSL/TLS, ruleset, redirect, cache, and analytics manager. */
+  | 'cloudflare-core-managers'
   | 'torrent'
   /** One-shot Linux ISO virtual machine, distinct from the WSL terminal profile. */
   | 'linux-vm'
@@ -439,6 +450,7 @@ export const SERVICE_NODE_KINDS = [
   'gitlab',
   'homeassistant',
   'freepbx',
+  'cloudflare-zero-trust',
   'nextcloud-aio'
 ] as const
 
@@ -645,9 +657,15 @@ export interface CanvasNodeState {
   serviceLabel?: string
   /** Nextcloud AIO safe deployment intent. Context, container state, backups, and socket bindings remain local. */
   nextcloudAioConfig?: import('./nextcloud-aio').NextcloudAioConfig
+  /** Cloudflare manager selection intent. Account ids, credentials and resource ids stay local. */
+  cloudflareZeroTrustIntent?: import('./cloudflare-zero-trust').CloudflarePortableIntent
+  /** Cloudflare manager safe intent. Credentials and local bindings stay in the host overlay. */
+  cloudflareCoreIntent?: import('./cloudflare-core-managers').CloudflarePortableIntent
   /** Home Assistant node presentation intent safe for schema 3. Hosts, instance ids, credentials,
    *  sessions, and entity caches stay in the machine-local service and binding overlay. */
   homeAssistantIntent?: import('./home-assistant').HomeAssistantNodeIntent
+  /** GitLab hosting intent. Docker context, container, volumes, credentials, and process state stay local. */
+  gitlabHostingConfig?: import('./gitlab-hosting').GitLabHostingConfig
   /** torrent-only: safe display intent shared with the canvas; task state and paths stay local. */
   torrentMagnet?: string
   /** Linux ISO VM settings stored in the shared project projection. */
@@ -811,6 +829,32 @@ export interface BridgeLink {
   id: string
   source: string
   target: string
+}
+
+/**
+ * One endpoint of a typed Link. The ref discriminator keeps endpoint handling exhaustive and
+ * avoids inferring meaning from legacy id prefixes.
+ *
+ * A node endpoint names a node in the project that owns the link. An xnode endpoint names a node
+ * in another project without copying that node. A branch endpoint names a git branch for links
+ * that model branch relationships.
+ */
+export type Endpoint =
+  | { ref: 'node'; nodeId: string }
+  | { ref: 'xnode'; projectId: string; nodeId: string }
+  | { ref: 'branch'; repoPath: string; branch: string }
+
+/** The persisted kind discriminator for the unified link model. */
+export type LinkKind = 'context' | 'lineage' | 'dependency'
+
+/** A typed link between two endpoints. */
+export interface Link {
+  id: string
+  kind: LinkKind
+  source: Endpoint
+  target: Endpoint
+  /** Optional kind-specific metadata, such as display-only or note information. */
+  meta?: Record<string, unknown>
 }
 
 /**
@@ -1046,6 +1090,16 @@ export interface ProjectChildCanvas {
   order: number
   viewport?: Viewport
   nodes: CanvasNodeState[]
+  bridges?: BridgeLink[]
+  ropes?: BridgeLink[]
+}
+
+/** Narrow AWS Universe view over the shared child-canvas projection. */
+export type ProjectAwsUniverseCanvas = ProjectChildCanvas & {
+  scope: 'aws-universe'
+  parentCanvasId: 'root'
+  depth: 1
+  viewport: Viewport
 }
 
 /** Safe portal intent shared by the runtime project and schema 3 projection. */
@@ -1058,6 +1112,9 @@ export interface ProjectPortalState {
   title: string
   depth: number
   status: 'open' | 'closed'
+  /** Safe construction intent for each side. Credentials and runtime bindings are never stored. */
+  entryConstruction?: PortableDoorConstructionV3
+  returnConstruction?: PortableDoorConstructionV3
 }
 
 /** A project is one canvas/page: its own nodes, viewport, and default working dir. */
@@ -1145,6 +1202,8 @@ export interface Project {
    * behavior.
    */
   browserProfiles?: BrowserProfile[]
+  /** Unified typed links whose source belongs to this project. */
+  links?: Link[]
   /** Bridge links between Claude nodes (optional; absent in pre-bridge files). */
   bridges?: BridgeLink[]
   /**
@@ -1554,6 +1613,8 @@ export interface WorkspaceApi {
       schedules: import('./planner-occurrences').PlannerSchedule[]
     }
     restoredTo?: string
+    /** Non-fatal portal metadata repairs applied while preserving child content. */
+    repairs?: Array<{ portalId?: string; canvasId?: string; action: string; detail: string; preservedNodeIds: string[] }>
   }>
   /** Hand out the next unlock-ladder question for a rate-limited protected project file. `null`
    *  means no ladder is on offer (no wait to end, this climb already failed to the bottom, or the
@@ -4547,6 +4608,25 @@ export interface PasswordManagerApi {
   listCredentials(projectId: string, managerId: string): Promise<ListCredentialsResult>
 }
 
+/** Portal-door entry uses a separate host-owned local vault, never toy-lock state. Values cross
+ * the protected renderer boundary only for the immediate configure or verify call and are never
+ * returned, projected, logged, or exported. */
+export interface UniverseDoorEntryApi {
+  configure(input: {
+    doorId: string
+    method: 'numeric-code' | 'passphrase'
+    value: string
+    numericCodeDigits?: number
+    passphraseMinLength?: number
+  }): Promise<{ ok: true; credentialKey: string } | { ok: false; error: string }>
+  verify(input: {
+    doorId: string
+    method: 'numeric-code' | 'passphrase'
+    value: string
+  }): Promise<{ verified: true } | { verified: false; reason: string }>
+  remove(doorId: string): Promise<void>
+}
+
 export interface TimerApi {
   occurrences(): Promise<import('./timer').TimerOccurrence[]>
   schedule(timerId: string, scheduledAt: number): Promise<import('./timer').TimerOccurrence | null>
@@ -4581,6 +4661,8 @@ export interface NodeTerminalApi {
   workspace: WorkspaceApi
   /** Shared provider-account, credential-vault, OAuth-callback, and resource-picker services. */
   providerServices: import('./provider-services').ProviderServicesApi
+  /** Typed Cloudflare Access, Zero Trust, Workers, Pages, R2, D1 and Queues managers. */
+  cloudflareZeroTrust: import('./cloudflare-zero-trust').CloudflareApi
   timer: TimerApi
   serverDeployment: ServerDeploymentApi
   projectSettings: ProjectSettingsApi
@@ -4602,6 +4684,8 @@ export interface NodeTerminalApi {
   nodeDependencies: import('./node-dependencies').NodeDependenciesApi
   /** Local Ollama suite manager — docs/ollama-manager.md. */
   ollama: import('./ollama').OllamaApi
+  /** Guided Cloudflare managers — docs/features/integrations/cloudflare-core-managers.md. */
+  cloudflareCoreManagers?: import('./cloudflare-core-managers').CloudflareCoreManagersApi
   /** Local WebTorrent downloader — docs/torrent-downloader.md. */
   torrent: import('./torrent').TorrentApi
   /** Local Minecraft server create-and-manage — docs/minecraft-server-manager.md. */
@@ -4663,6 +4747,8 @@ export interface NodeTerminalApi {
   toylock: ToylockApi
   authenticator: AuthenticatorApi
   passwordManager: PasswordManagerApi
+  /** Host-owned portal-door entry vault. This is deliberately separate from toy locks. */
+  universeDoorEntry: UniverseDoorEntryApi
   /** "Escape to widget" — one node's session in its own always-on-top-configurable window. */
   canvasWidget: CanvasWidgetApi
   shortcuts: ShortcutsApi

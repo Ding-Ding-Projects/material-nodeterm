@@ -22,6 +22,7 @@ import {
   createTorrentNode,
   createCalendarNode,
   createHomeAssistantControlNode,
+  createGitLabHostingNode,
   createTimerNode,
   isAccountLoginNode
 } from '@renderer/state/workspace'
@@ -217,6 +218,10 @@ function buildBase(snapshot: ReopenNodeSnapshot, ctx: RecreateContext): CanvasNo
     case 'homeassistant-control': {
       const node = createHomeAssistantControlNode(0)
       return { ...node, data: { ...node.data, homeAssistantControlConfig: d.homeAssistantControlConfig } }
+    }
+    case 'gitlab-hosting': {
+      const node = createGitLabHostingNode(0)
+      return { ...node, data: { ...node.data, gitlabHostingConfig: d.gitlabHostingConfig ?? node.data.gitlabHostingConfig } }
     }
     case 'timer': {
       const node = createTimerNode(0)
