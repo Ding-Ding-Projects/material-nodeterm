@@ -50,8 +50,8 @@ HTTP only for loopback development. STS never exposes temporary credentials.
 ## Verification boundary
 
 This PR-preparation lane intentionally ran no tests, type checks, lint, builds, packaging, runtime
-interaction, reviews, security or accessibility audits, or HuiShots. The source is mounted and
-dewed for the parent integration lane, where those Chuts and built-surface checks remain pending.
+interaction, reviews, security or accessibility audits, or UI captures. The source is mounted and
+pushed for the parent integration lane, where those checks and built-surface checks remain pending.
 
 ## Suggested articles
 
