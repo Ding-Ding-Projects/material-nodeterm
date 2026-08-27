@@ -41,6 +41,7 @@ import type { CloudflareProgress } from '../shared/cloudflare-core-managers'
 import type { HomeAssistantClientEvent } from '../shared/home-assistant'
 import type { ProjectConsentRequest, ProjectSetupEvent } from '../shared/project-settings'
 import type { CloudflareApi, CloudflareCatalog, CloudflareExecutionProgress, CloudflareExecutionResult } from '../shared/cloudflare-zero-trust'
+import type { GitHubApiRequest, GitHubApiProgress } from '../shared/github-api'
 
 // Fan a single ipcRenderer listener per channel out to many renderer subscribers. Without
 // this, every node that subscribes (e.g. Cmd+M markdown toggle on each terminal/editor) adds
@@ -427,6 +428,12 @@ const api: NodeTerminalApi = {
     selectProvider: (input) => ipcRenderer.invoke(IPC.githubControlSelectProvider, input),
     saveToken: (token) => ipcRenderer.invoke(IPC.githubControlSaveToken, token),
     clearToken: () => ipcRenderer.invoke(IPC.githubControlClearToken)
+  },
+  githubApi: {
+    capabilities: () => ipcRenderer.invoke(IPC.githubApiCapabilities),
+    execute: (request: GitHubApiRequest) => ipcRenderer.invoke(IPC.githubApiExecute, request),
+    cancel: (operationId: string) => ipcRenderer.invoke(IPC.githubApiCancel, operationId),
+    onProgress: subscribe<[GitHubApiProgress]>(IPC.githubApiProgress)
   },
   speech: {
     // IPC carries the raw Float32 samples as an ArrayBuffer (structured clone; decodePcmPayload's

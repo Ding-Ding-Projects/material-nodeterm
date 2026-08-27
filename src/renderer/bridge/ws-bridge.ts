@@ -16,6 +16,7 @@ import {
 import { IPC } from '../../shared/ipc'
 import { mapLocalVocabularyText } from '../lib/personalVocabulary/hostMessage'
 import type { GitHubControlApi, GitHubIssuesApi } from '../../shared/github-issues'
+import type { GitHubApiApi, GitHubApiProgress, GitHubApiRequest } from '../../shared/github-api'
 import type { ConverterApi } from '../../shared/converter'
 import type { OllamaApi } from '../../shared/ollama'
 import type { MinecraftApi } from '../../shared/minecraft'
@@ -681,7 +682,7 @@ export function buildRealApi(
 
 export function buildGitHubApi(
   client: RpcClient
-): Pick<NodeTerminalApi, 'githubIssues' | 'githubControl'> {
+): Pick<NodeTerminalApi, 'githubIssues' | 'githubControl' | 'githubApi'> {
   const githubIssues: GitHubIssuesApi = {
     subscribe: (projectId) =>
       client.request(IPC.githubIssuesSubscribe, { projectId }) as ReturnType<
@@ -727,7 +728,17 @@ export function buildGitHubApi(
       client.request(IPC.githubControlClearToken) as ReturnType<GitHubControlApi['clearToken']>
   }
 
-  return { githubIssues, githubControl }
+  const githubApi: GitHubApiApi = {
+    capabilities: () => client.request(IPC.githubApiCapabilities) as ReturnType<GitHubApiApi['capabilities']>,
+    execute: (request: GitHubApiRequest) =>
+      client.request(IPC.githubApiExecute, request) as ReturnType<GitHubApiApi['execute']>,
+    cancel: (operationId: string) =>
+      client.request(IPC.githubApiCancel, operationId) as ReturnType<GitHubApiApi['cancel']>,
+    onProgress: (listener: (progress: GitHubApiProgress) => void) =>
+      client.subscribe(IPC.githubApiProgress, listener as Listener)
+  }
+
+  return { githubIssues, githubControl, githubApi }
 }
 
 export function buildProviderServicesApi(
