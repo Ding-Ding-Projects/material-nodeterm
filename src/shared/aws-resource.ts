@@ -6,7 +6,12 @@
  * machine-local or transient.
  */
 
-export type AwsManagerMode = 'resource-explorer' | 'cloud-control'
+export type AwsManagerMode = 'resource-explorer' | 'cloud-control' | 'core-services'
+
+/** Core AWS services use the same binding, preview, pagination and progress seam as the
+ * Resource Explorer and Cloud Control managers. Keeping one operation contract avoids a second
+ * credential or CLI stack. */
+export type AwsCoreServiceId = 's3' | 'ec2' | 'iam' | 'sts' | 'lambda' | 'cloudwatch' | 'logs'
 
 export interface AwsManagerPortableIntent {
   schemaVersion: 1
@@ -14,6 +19,9 @@ export interface AwsManagerPortableIntent {
   regionIntent: string
   resourceQuery: string
   cloudControlTypeName: string
+  coreService?: AwsCoreServiceId
+  coreOperation?: AwsCoreOperation
+  coreInput?: Record<string, string | number | boolean>
 }
 
 export interface AwsCliRuntimeStatus {
@@ -46,9 +54,34 @@ export type AwsManagerOperation =
   | 'cloud-update-resource'
   | 'cloud-delete-resource'
   | 'cloud-request-status'
+  | 's3-list-buckets' | 's3-list-objects' | 's3-create-bucket' | 's3-delete-bucket'
+  | 'ec2-describe-instances' | 'ec2-describe-security-groups' | 'ec2-start-instances' | 'ec2-stop-instances' | 'ec2-terminate-instances'
+  | 'iam-list-users' | 'iam-list-roles' | 'iam-get-user' | 'iam-get-role' | 'iam-create-user' | 'iam-delete-user'
+  | 'sts-get-caller-identity'
+  | 'lambda-list-functions' | 'lambda-get-function' | 'lambda-delete-function'
+  | 'cloudwatch-list-metrics' | 'cloudwatch-get-metric-data'
+  | 'logs-describe-log-groups' | 'logs-describe-log-streams' | 'logs-get-log-events' | 'logs-filter-log-events'
+
+export type AwsCoreOperation = Exclude<AwsManagerOperation,
+  'resource-list-views' | 'resource-search' | 'cloud-list-types' | 'cloud-list-resources' |
+  'cloud-get-resource' | 'cloud-create-resource' | 'cloud-update-resource' | 'cloud-delete-resource' |
+  'cloud-request-status'>
+
+export const AWS_CORE_SERVICES: readonly AwsCoreServiceId[] = ['s3', 'ec2', 'iam', 'sts', 'lambda', 'cloudwatch', 'logs']
+export const AWS_CORE_OPERATIONS: Record<AwsCoreServiceId, readonly AwsCoreOperation[]> = {
+  s3: ['s3-list-buckets', 's3-list-objects', 's3-create-bucket', 's3-delete-bucket'],
+  ec2: ['ec2-describe-instances', 'ec2-describe-security-groups', 'ec2-start-instances', 'ec2-stop-instances', 'ec2-terminate-instances'],
+  iam: ['iam-list-users', 'iam-list-roles', 'iam-get-user', 'iam-get-role', 'iam-create-user', 'iam-delete-user'],
+  sts: ['sts-get-caller-identity'],
+  lambda: ['lambda-list-functions', 'lambda-get-function', 'lambda-delete-function'],
+  cloudwatch: ['cloudwatch-list-metrics', 'cloudwatch-get-metric-data'],
+  logs: ['logs-describe-log-groups', 'logs-describe-log-streams', 'logs-get-log-events', 'logs-filter-log-events']
+}
 
 export interface AwsManagerRequest {
   operation: AwsManagerOperation
+  service?: AwsCoreServiceId
+  input?: Record<string, unknown>
   query?: string
   viewArn?: string
   typeName?: string
@@ -58,12 +91,14 @@ export interface AwsManagerRequest {
   requestToken?: string
   nextToken?: string
   maxResults?: number
+  /** Renderer-side confirmation is rechecked by the core before a destructive action. */
+  confirmed?: boolean
 }
 
 export type AwsOperationRisk = 'read-only' | 'write' | 'destructive'
 
 export interface AwsOperationPreview {
-  service: 'resource-explorer-2' | 'cloudcontrol' | 'cloudformation'
+  service: AwsCoreServiceId | 'resource-explorer-2' | 'cloudcontrol' | 'cloudformation'
   operation: string
   profileName: string
   region: string
@@ -83,6 +118,16 @@ export interface AwsManagerResult {
   requestToken: string | null
   summary: string
   completedAt: number
+}
+
+export const AWS_CORE_OPERATION_LABELS: Record<AwsCoreOperation, string> = {
+  's3-list-buckets': 'S3: List buckets', 's3-list-objects': 'S3: List objects', 's3-create-bucket': 'S3: Create bucket', 's3-delete-bucket': 'S3: Delete bucket',
+  'ec2-describe-instances': 'EC2: Describe instances', 'ec2-describe-security-groups': 'EC2: Describe security groups', 'ec2-start-instances': 'EC2: Start instances', 'ec2-stop-instances': 'EC2: Stop instances', 'ec2-terminate-instances': 'EC2: Terminate instances',
+  'iam-list-users': 'IAM: List users', 'iam-list-roles': 'IAM: List roles', 'iam-get-user': 'IAM: Get user', 'iam-get-role': 'IAM: Get role', 'iam-create-user': 'IAM: Create user', 'iam-delete-user': 'IAM: Delete user',
+  'sts-get-caller-identity': 'STS: Get caller identity',
+  'lambda-list-functions': 'Lambda: List functions', 'lambda-get-function': 'Lambda: Get function', 'lambda-delete-function': 'Lambda: Delete function',
+  'cloudwatch-list-metrics': 'CloudWatch: List metrics', 'cloudwatch-get-metric-data': 'CloudWatch: Get metric data',
+  'logs-describe-log-groups': 'Logs: Describe log groups', 'logs-describe-log-streams': 'Logs: Describe log streams', 'logs-get-log-events': 'Logs: Get log events', 'logs-filter-log-events': 'Logs: Filter log events'
 }
 
 export interface AwsManagerProgress {
@@ -144,6 +189,14 @@ export function normalizeAwsPortableIntent(value: unknown): AwsManagerPortableIn
   const cloudControlTypeName = isCloudControlTypeName(raw.cloudControlTypeName)
     ? raw.cloudControlTypeName.trim()
     : ''
-  return { schemaVersion: 1, mode, regionIntent, resourceQuery, cloudControlTypeName }
+  const coreService = AWS_CORE_SERVICES.includes(raw.coreService as AwsCoreServiceId) ? raw.coreService as AwsCoreServiceId : 's3'
+  const coreOperation = AWS_CORE_OPERATIONS[coreService].includes(raw.coreOperation as AwsCoreOperation) ? raw.coreOperation as AwsCoreOperation : AWS_CORE_OPERATIONS[coreService][0]
+  const coreInput: Record<string, string | number | boolean> = {}
+  if (raw.coreInput && typeof raw.coreInput === 'object' && !Array.isArray(raw.coreInput)) {
+    for (const [key, value] of Object.entries(raw.coreInput as Record<string, unknown>).slice(0, 32)) {
+      if ((typeof value === 'string' && value.length <= 2048) || typeof value === 'number' || typeof value === 'boolean') coreInput[key] = value as string | number | boolean
+    }
+  }
+  return { schemaVersion: 1, mode, regionIntent, resourceQuery, cloudControlTypeName, coreService, coreOperation, coreInput }
 }
 

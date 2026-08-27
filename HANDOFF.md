@@ -1,5 +1,30 @@
 # Handoff
 
+## 2026-08-27, AWS core-service managers, issue #46 PR preparation
+
+The issue jer was reconciled with the exact `origin/main` tip `2472cf23b99559005476841d3db5e6bc4691ac06`.
+The earlier standalone AWS core-service stack was removed. The current AWS Resource Explorer and Cloud
+Control stack now owns the complete core-service lane through `src/shared/aws-resource.ts`,
+`src/core/aws-resource-manager.ts`, `src/renderer/nodes/AwsResourceNode.tsx`, and the existing AWS
+Shop routes.
+
+The AWS Shop entries `aws-s3`, `aws-ec2`, `aws-iam`, `aws-sts`, `aws-lambda`, `aws-cloudwatch`, and
+`aws-logs` are now current and scope-bound to AWS Universe canvases. Each creates the shared
+`aws-resource` node in `core-services` mode. The node provides service tabs, typed operation controls,
+local profile and region binding, generated previews, bounded pagination, progress, cancellation,
+and the existing two-key destructive confirmation flow. Operations use the shared `spawn` and
+`shell: false` path with no arbitrary shell or argv input. STS exposes caller identity only, never
+temporary credentials.
+
+Portable schema 3 keeps the core service, operation, region intent, and bounded safe input fields.
+Profiles, endpoints, account sessions, request tokens, CLI paths, results, process state, and
+credentials remain local. The feature article is
+`docs/features/integrations/aws-core-services.md`, with the AWS index and site page updated too.
+
+No tests, type checks, lint, builds, packaging, runtime interaction, reviews, accessibility or
+security audits, or HuiShots were run in this PR-preparation lane. The parent owns the next Chuts,
+integration into the default jer, PR creation, issue comments and closure, and upstream PR #463.
+
 ## 2026-08-27, portable Comment and Activity attachments, issue #94
 
 The implementation is on `feat/comment-attachments`, based on the reconciled `origin/main` tip

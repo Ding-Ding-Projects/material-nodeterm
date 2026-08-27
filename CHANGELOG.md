@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Mount the seven AWS core-service routes on the shared AWS manager: S3, EC2, IAM, STS, Lambda,
+  CloudWatch, and CloudWatch Logs. Typed operation controls now cover bounded reads, selected writes,
+  destructive confirmation, pagination, cancellation, and progress while reusing the current local
+  profile, region, endpoint, and verified AWS CLI seams. STS is limited to caller identity and never
+  returns session credentials. Project data carries only safe intent. This issue #46 preparation
+  lane did not run tests, type checks, lint, builds, packaging, runtime interaction, reviews,
+  accessibility or security checks, or captures.
+
 - Extend the special-universe Shop with the complete AWS catalog inventory: identity, Resource
   Explorer, Cloud Control, S3, EC2, IAM, STS, Lambda, CloudWatch, CloudWatch Logs, CloudFormation,
   CDK, ECR, ECS, EKS, RDS, databases, VPC, Route 53, cost management, and all-service rows. The

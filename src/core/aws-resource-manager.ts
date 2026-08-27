@@ -90,6 +90,22 @@ function maxResults(value: unknown): number {
   return value
 }
 
+function coreInput(request: AwsManagerRequest): Record<string, unknown> {
+  const value = (request as AwsManagerRequest & { input?: unknown }).input
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
+function coreInputText(request: AwsManagerRequest, key: string, label: string, max = 2048): string {
+  return text(coreInput(request)[key], label, max)
+}
+
+function coreIds(request: AwsManagerRequest): string {
+  const raw = coreInputText(request, 'instanceIds', 'Instance IDs')
+  const ids = raw.split(',').map((value) => value.trim()).filter(Boolean)
+  if (!ids.length || ids.length > 100 || ids.some((id) => !/^[A-Za-z0-9_-]{1,128}$/.test(id))) throw new Error('Instance IDs must be a comma-separated list of safe identifiers.')
+  return ids.join(',')
+}
+
 function safeBinding(value: unknown): AwsManagerBinding | null {
   if (!value || typeof value !== 'object') return null
   const raw = value as Record<string, unknown>
@@ -203,12 +219,45 @@ function operationSpec(request: AwsManagerRequest): CommandSpec {
         risk: 'read-only',
         pagination: 'none'
       }
+    case 's3-list-buckets': return { service: 's3', operation: request.operation, args: ['s3api', 'list-buckets'], risk: 'read-only', pagination: 'none' }
+    case 's3-list-objects': return { service: 's3', operation: request.operation, args: ['s3api', 'list-objects-v2', '--bucket', coreInputText(request, 'bucket', 'Bucket name'), '--max-keys', String(maxResults(request.maxResults)), ...(token ? ['--continuation-token', token] : [])], risk: 'read-only', pagination: 'manual-next-token' }
+    case 's3-create-bucket': return { service: 's3', operation: request.operation, args: ['s3api', 'create-bucket', '--bucket', coreInputText(request, 'bucket', 'Bucket name', 63)], risk: 'write', pagination: 'none' }
+    case 's3-delete-bucket': return { service: 's3', operation: request.operation, args: ['s3api', 'delete-bucket', '--bucket', coreInputText(request, 'bucket', 'Bucket name', 63)], risk: 'destructive', pagination: 'none' }
+    case 'ec2-describe-instances': return { service: 'ec2', operation: request.operation, args: ['ec2', 'describe-instances', '--max-results', String(maxResults(request.maxResults)), ...(token ? ['--next-token', token] : [])], risk: 'read-only', pagination: 'manual-next-token' }
+    case 'ec2-describe-security-groups': return { service: 'ec2', operation: request.operation, args: ['ec2', 'describe-security-groups'], risk: 'read-only', pagination: 'none' }
+    case 'ec2-start-instances': return { service: 'ec2', operation: request.operation, args: ['ec2', 'start-instances', '--instance-ids', coreIds(request)], risk: 'write', pagination: 'none' }
+    case 'ec2-stop-instances': return { service: 'ec2', operation: request.operation, args: ['ec2', 'stop-instances', '--instance-ids', coreIds(request)], risk: 'write', pagination: 'none' }
+    case 'ec2-terminate-instances': return { service: 'ec2', operation: request.operation, args: ['ec2', 'terminate-instances', '--instance-ids', coreIds(request)], risk: 'destructive', pagination: 'none' }
+    case 'iam-list-users': return { service: 'iam', operation: request.operation, args: ['iam', 'list-users', '--max-items', String(maxResults(request.maxResults)), ...(token ? ['--starting-token', token] : [])], risk: 'read-only', pagination: 'manual-next-token' }
+    case 'iam-list-roles': return { service: 'iam', operation: request.operation, args: ['iam', 'list-roles', '--max-items', String(maxResults(request.maxResults)), ...(token ? ['--starting-token', token] : [])], risk: 'read-only', pagination: 'manual-next-token' }
+    case 'iam-get-user': return { service: 'iam', operation: request.operation, args: ['iam', 'get-user', '--user-name', coreInputText(request, 'userName', 'User name')], risk: 'read-only', pagination: 'none' }
+    case 'iam-get-role': return { service: 'iam', operation: request.operation, args: ['iam', 'get-role', '--role-name', coreInputText(request, 'roleName', 'Role name')], risk: 'read-only', pagination: 'none' }
+    case 'iam-create-user': return { service: 'iam', operation: request.operation, args: ['iam', 'create-user', '--user-name', coreInputText(request, 'userName', 'User name')], risk: 'write', pagination: 'none' }
+    case 'iam-delete-user': return { service: 'iam', operation: request.operation, args: ['iam', 'delete-user', '--user-name', coreInputText(request, 'userName', 'User name')], risk: 'destructive', pagination: 'none' }
+    case 'sts-get-caller-identity': return { service: 'sts', operation: request.operation, args: ['sts', 'get-caller-identity'], risk: 'read-only', pagination: 'none' }
+    case 'lambda-list-functions': return { service: 'lambda', operation: request.operation, args: ['lambda', 'list-functions', '--max-items', String(maxResults(request.maxResults)), ...(token ? ['--starting-token', token] : [])], risk: 'read-only', pagination: 'manual-next-token' }
+    case 'lambda-get-function': return { service: 'lambda', operation: request.operation, args: ['lambda', 'get-function', '--function-name', coreInputText(request, 'functionName', 'Function name')], risk: 'read-only', pagination: 'none' }
+    case 'lambda-delete-function': return { service: 'lambda', operation: request.operation, args: ['lambda', 'delete-function', '--function-name', coreInputText(request, 'functionName', 'Function name')], risk: 'destructive', pagination: 'none' }
+    case 'cloudwatch-list-metrics': {
+      const namespace = coreInput(request).namespace
+      if (namespace !== undefined && (typeof namespace !== 'string' || namespace.trim().length > 255)) throw new Error('Namespace is invalid.')
+      return { service: 'cloudwatch', operation: request.operation, args: ['cloudwatch', 'list-metrics', ...(typeof namespace === 'string' && namespace.trim() ? ['--namespace', namespace.trim()] : [])], risk: 'read-only', pagination: 'none' }
+    }
+    case 'cloudwatch-get-metric-data': return { service: 'cloudwatch', operation: request.operation, args: ['cloudwatch', 'get-metric-data', '--metric-data-queries', coreInputText(request, 'metricDataQueries', 'Metric data queries', 128_000), '--start-time', coreInputText(request, 'startTime', 'Start time'), '--end-time', coreInputText(request, 'endTime', 'End time')], risk: 'read-only', pagination: 'none' }
+    case 'logs-describe-log-groups': return { service: 'logs', operation: request.operation, args: ['logs', 'describe-log-groups', '--limit', String(maxResults(request.maxResults)), ...(token ? ['--next-token', token] : [])], risk: 'read-only', pagination: 'manual-next-token' }
+    case 'logs-describe-log-streams': return { service: 'logs', operation: request.operation, args: ['logs', 'describe-log-streams', '--log-group-name', coreInputText(request, 'logGroupName', 'Log group name')], risk: 'read-only', pagination: 'none' }
+    case 'logs-get-log-events': return { service: 'logs', operation: request.operation, args: ['logs', 'get-log-events', '--log-group-name', coreInputText(request, 'logGroupName', 'Log group name'), '--log-stream-name', coreInputText(request, 'logStreamName', 'Log stream name'), '--limit', String(maxResults(request.maxResults)), ...(token ? ['--next-token', token] : [])], risk: 'read-only', pagination: 'manual-next-token' }
+    case 'logs-filter-log-events': return { service: 'logs', operation: request.operation, args: ['logs', 'filter-log-events', '--log-group-name', coreInputText(request, 'logGroupName', 'Log group name'), '--filter-pattern', coreInputText(request, 'filterPattern', 'Filter pattern'), '--limit', String(maxResults(request.maxResults)), ...(token ? ['--next-token', token] : [])], risk: 'read-only', pagination: 'manual-next-token' }
     default:
       throw new Error('The AWS manager operation is not supported.')
   }
 }
 
 function rowsFor(operation: AwsManagerOperation, payload: Record<string, unknown>): Array<Record<string, unknown>> {
+  if (operation === 'sts-get-caller-identity') {
+    const { ResponseMetadata: _metadata, ...identity } = payload
+    return [identity]
+  }
   const keys: Record<AwsManagerOperation, string> = {
     'resource-list-views': 'Views',
     'resource-search': 'Resources',
@@ -218,12 +267,31 @@ function rowsFor(operation: AwsManagerOperation, payload: Record<string, unknown
     'cloud-create-resource': 'ProgressEvent',
     'cloud-update-resource': 'ProgressEvent',
     'cloud-delete-resource': 'ProgressEvent',
-    'cloud-request-status': 'ProgressEvent'
+    'cloud-request-status': 'ProgressEvent',
+    's3-list-buckets': 'Buckets', 's3-list-objects': 'Contents', 's3-create-bucket': 'Location', 's3-delete-bucket': 'ResponseMetadata',
+    'ec2-describe-instances': 'Reservations', 'ec2-describe-security-groups': 'SecurityGroups', 'ec2-start-instances': 'StartingInstances', 'ec2-stop-instances': 'StoppingInstances', 'ec2-terminate-instances': 'TerminatingInstances',
+    'iam-list-users': 'Users', 'iam-list-roles': 'Roles', 'iam-get-user': 'User', 'iam-get-role': 'Role', 'iam-create-user': 'User', 'iam-delete-user': 'ResponseMetadata',
+    'sts-get-caller-identity': 'ResponseMetadata',
+    'lambda-list-functions': 'Functions', 'lambda-get-function': 'Configuration', 'lambda-delete-function': 'ResponseMetadata',
+    'cloudwatch-list-metrics': 'Metrics', 'cloudwatch-get-metric-data': 'MetricDataResults',
+    'logs-describe-log-groups': 'logGroups', 'logs-describe-log-streams': 'logStreams', 'logs-get-log-events': 'events', 'logs-filter-log-events': 'events'
   }
   const value = payload[keys[operation]]
   if (Array.isArray(value)) return value.filter((item): item is Record<string, unknown> => !!item && typeof item === 'object' && !Array.isArray(item))
   if (value && typeof value === 'object' && !Array.isArray(value)) return [value as Record<string, unknown>]
   return []
+}
+
+/** Remove credential-bearing values before any core-service result crosses into the renderer. */
+function redactCorePayload(value: unknown, depth = 0): unknown {
+  if (depth > 8 || value === null || typeof value !== 'object') return value
+  if (Array.isArray(value)) return value.map((item) => redactCorePayload(item, depth + 1))
+  const blocked = new Set(['AccessKeyId', 'SecretAccessKey', 'SessionToken', 'Credentials', 'PresignedUrl', 'Code'])
+  const output: Record<string, unknown> = {}
+  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+    if (!blocked.has(key)) output[key] = redactCorePayload(item, depth + 1)
+  }
+  return output
 }
 
 function requestTokenFor(payload: Record<string, unknown>): string | null {
@@ -324,6 +392,7 @@ export class AwsResourceManagerService {
     const runtime = await this.resolveRuntime()
     if (!runtime.status.available) throw new Error(runtime.status.disabledReason ?? 'AWS CLI v2 is unavailable.')
     const preview = await this.preview(nodeId, request)
+    if (preview.destructive && request.confirmed !== true) throw new Error('Destructive AWS operations require explicit confirmation.')
     this.progress({ operationId: id, nodeId, phase: 'started', message: `${preview.service} ${preview.operation} started.` })
     try {
       const output = await this.run(runtime.executable, preview.argv, id)
@@ -334,7 +403,9 @@ export class AwsResourceManagerService {
         throw new Error('AWS CLI returned output that was not valid JSON.')
       }
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('AWS CLI returned an unexpected JSON shape.')
-      const payload = parsed as Record<string, unknown>
+      const payload = request.operation.startsWith('s3-') || request.operation.startsWith('ec2-') || request.operation.startsWith('iam-') || request.operation.startsWith('sts-') || request.operation.startsWith('lambda-') || request.operation.startsWith('cloudwatch-') || request.operation.startsWith('logs-')
+        ? redactCorePayload(parsed) as Record<string, unknown>
+        : parsed as Record<string, unknown>
       const rows = rowsFor(request.operation, payload)
       const nextToken = typeof payload.NextToken === 'string' && payload.NextToken.length <= 16_384 ? payload.NextToken : null
       const result: AwsManagerResult = {

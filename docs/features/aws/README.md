@@ -8,13 +8,16 @@ endpoints, request state, result pages, and credentials on the current computer.
 
 - [Resource Explorer](./resource-explorer.md)
 - [Cloud Control](./cloud-control.md)
+- [AWS core-service managers](../integrations/aws-core-services.md)
 
 ## Shared behavior
 
 Each manager offers a local profile and region picker, an optional HTTPS endpoint override (or an
 explicit loopback HTTP endpoint), a generated-operation preview, bounded output, manual pagination,
 progress, cancellation, and a local result search with an anchored full regex builder. The node
-stores only mode, region intent, and query in the portable project projection.
+stores only mode, region intent, query, and safe typed core-service fields in the portable project
+projection. Core services are S3, EC2, IAM, STS, Lambda, CloudWatch, and CloudWatch Logs. STS is
+limited to caller identity, so temporary credentials never reach the renderer or project data.
 
 The server edition receives the shared node shape, but only a host exposing the typed AWS bridge can
 execute operations. When that bridge is unavailable the node says so and keeps all controls honest.

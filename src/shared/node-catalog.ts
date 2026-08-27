@@ -154,6 +154,25 @@ const plannedEntry = (
   }
 })
 
+const awsCoreEntry = (id: string, service: string, label: string, description: string): NodeCatalogEntry => ({
+  id,
+  nodeKind: 'aws-resource',
+  category: 'managers',
+  label,
+  description,
+  keywords: ['aws', service, 'guided', 'manager'],
+  documentationPath: 'docs/features/integrations/aws-core-services.md',
+  safeDefaults: { mode: 'core-services', coreService: service, regionIntent: 'us-east-1' },
+  dependencies: ['aws-cli-v2'],
+  status: 'available',
+  availabilityMode: 'configure-later',
+  scope: 'aws-universe',
+  availability: (context) => {
+    const scope = inScope('aws-universe')(context)
+    return scope.available ? unsupportedInRelay(context) : scope
+  }
+})
+
 const awsUniverseEntry: NodeCatalogEntry = {
   id: 'aws-universe',
   nodeKind: 'aws-universe',
@@ -602,13 +621,13 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
     scope: 'aws-universe',
     availability: unsupportedInRelay
   },
-  plannedEntry('aws-s3', 'managers', 'Amazon S3', 'Browse buckets and objects through guided S3 operations.', 'aws-core-service-managers', 'aws-universe'),
-  plannedEntry('aws-ec2', 'managers', 'Amazon EC2', 'Inspect and manage EC2 instances, images, volumes, and networking through typed controls.', 'aws-core-service-managers', 'aws-universe'),
-  plannedEntry('aws-iam', 'managers', 'AWS IAM', 'Review IAM identities and policies through explicit typed operations.', 'aws-core-service-managers', 'aws-universe'),
-  plannedEntry('aws-sts', 'managers', 'AWS STS', 'Inspect caller identity and guided temporary-role operations without storing credentials in the project.', 'aws-core-service-managers', 'aws-universe'),
-  plannedEntry('aws-lambda', 'managers', 'AWS Lambda', 'Browse and operate Lambda functions through model-backed forms.', 'aws-core-service-managers', 'aws-universe'),
-  plannedEntry('aws-cloudwatch', 'managers', 'Amazon CloudWatch', 'Explore metrics, alarms, and dashboards through guided controls.', 'aws-core-service-managers', 'aws-universe'),
-  plannedEntry('aws-logs', 'managers', 'Amazon CloudWatch Logs', 'Browse log groups and streams with bounded searches and explicit export actions.', 'aws-core-service-managers', 'aws-universe'),
+  awsCoreEntry('aws-s3', 's3', 'Amazon S3', 'Browse buckets and objects through guided S3 operations.'),
+  awsCoreEntry('aws-ec2', 'ec2', 'Amazon EC2', 'Inspect and manage EC2 instances through typed controls.'),
+  awsCoreEntry('aws-iam', 'iam', 'AWS IAM', 'Review IAM identities through explicit typed operations.'),
+  awsCoreEntry('aws-sts', 'sts', 'AWS STS', 'Inspect caller identity without exposing session credentials.'),
+  awsCoreEntry('aws-lambda', 'lambda', 'AWS Lambda', 'Browse and operate Lambda functions through guided controls.'),
+  awsCoreEntry('aws-cloudwatch', 'cloudwatch', 'Amazon CloudWatch', 'Explore metrics through guided controls.'),
+  awsCoreEntry('aws-logs', 'logs', 'Amazon CloudWatch Logs', 'Browse log groups and streams with bounded searches.'),
   plannedEntry('aws-cloudformation', 'managers', 'AWS CloudFormation', 'Preview change sets before reviewed stack operations.', 'aws-cloudformation-manager', 'aws-universe'),
   plannedEntry('aws-cdk', 'tools', 'AWS CDK', 'Choose a trusted project folder, then synthesize and review changes before deployment.', 'aws-cdk-manager', 'aws-universe'),
   plannedEntry('aws-ecr', 'managers', 'Amazon ECR', 'Manage container repositories and images through typed controls.', 'aws-container-and-network-managers', 'aws-universe'),
@@ -727,13 +746,13 @@ export const NODE_CATALOG_COMPLETENESS: readonly NodeCatalogCompletenessRecord[]
   { id: 'aws-universe', state: 'current', scope: 'root', reason: 'AWS-only Universe portal and child canvas' },
   { id: 'aws-resource-explorer', state: 'current', scope: 'aws-universe', reason: 'guided Resource Explorer manager' },
   { id: 'aws-cloud-control', state: 'current', scope: 'aws-universe', reason: 'guided Cloud Control manager' },
-  { id: 'aws-s3', state: 'planned', scope: 'aws-universe', reason: 'Amazon S3 manager not implemented' },
-  { id: 'aws-ec2', state: 'planned', scope: 'aws-universe', reason: 'Amazon EC2 manager not implemented' },
-  { id: 'aws-iam', state: 'planned', scope: 'aws-universe', reason: 'AWS IAM manager not implemented' },
-  { id: 'aws-sts', state: 'planned', scope: 'aws-universe', reason: 'AWS STS manager not implemented' },
-  { id: 'aws-lambda', state: 'planned', scope: 'aws-universe', reason: 'AWS Lambda manager not implemented' },
-  { id: 'aws-cloudwatch', state: 'planned', scope: 'aws-universe', reason: 'Amazon CloudWatch manager not implemented' },
-  { id: 'aws-logs', state: 'planned', scope: 'aws-universe', reason: 'Amazon CloudWatch Logs manager not implemented' },
+  { id: 'aws-s3', state: 'current', scope: 'aws-universe', reason: 'guided S3 operations through shared AWS manager' },
+  { id: 'aws-ec2', state: 'current', scope: 'aws-universe', reason: 'guided EC2 operations through shared AWS manager' },
+  { id: 'aws-iam', state: 'current', scope: 'aws-universe', reason: 'guided IAM operations through shared AWS manager' },
+  { id: 'aws-sts', state: 'current', scope: 'aws-universe', reason: 'caller identity through shared AWS manager' },
+  { id: 'aws-lambda', state: 'current', scope: 'aws-universe', reason: 'guided Lambda operations through shared AWS manager' },
+  { id: 'aws-cloudwatch', state: 'current', scope: 'aws-universe', reason: 'guided CloudWatch operations through shared AWS manager' },
+  { id: 'aws-logs', state: 'current', scope: 'aws-universe', reason: 'guided CloudWatch Logs operations through shared AWS manager' },
   { id: 'aws-cloudformation', state: 'planned', scope: 'aws-universe', reason: 'AWS CloudFormation manager not implemented' },
   { id: 'aws-cdk', state: 'planned', scope: 'aws-universe', reason: 'AWS CDK manager not implemented' },
   { id: 'aws-ecr', state: 'planned', scope: 'aws-universe', reason: 'Amazon ECR manager not implemented' },

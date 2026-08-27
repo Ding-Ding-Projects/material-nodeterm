@@ -286,9 +286,13 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
   if (node.serviceLabel !== undefined) out.serviceLabel = text(node.serviceLabel, 'service label')
   if (node.awsManagerIntent !== undefined) {
     const intent = node.awsManagerIntent
-    if (!record(intent) || intent.schemaVersion !== 1 || !['resource-explorer', 'cloud-control'].includes(intent.mode)) throw new PortableProjectV3Error('manifest', 'Portable AWS manager intent is invalid.')
+    if (!record(intent) || intent.schemaVersion !== 1 || !['resource-explorer', 'cloud-control', 'core-services'].includes(intent.mode)) throw new PortableProjectV3Error('manifest', 'Portable AWS manager intent is invalid.')
     if (!text(intent.regionIntent, 'AWS region intent') || intent.regionIntent.length > 64 || typeof intent.resourceQuery !== 'string' || intent.resourceQuery.length > 1024 || typeof intent.cloudControlTypeName !== 'string' || intent.cloudControlTypeName.length > 256) throw new PortableProjectV3Error('manifest', 'Portable AWS manager intent exceeds its bounds.')
-    out.awsManagerIntent = { schemaVersion: 1, mode: intent.mode, regionIntent: intent.regionIntent, resourceQuery: intent.resourceQuery, cloudControlTypeName: intent.cloudControlTypeName }
+    const coreService = intent.coreService
+    const coreOperation = intent.coreOperation
+    const coreInput = intent.coreInput
+    if (intent.mode === 'core-services' && (!['s3', 'ec2', 'iam', 'sts', 'lambda', 'cloudwatch', 'logs'].includes(String(coreService)) || typeof coreOperation !== 'string')) throw new PortableProjectV3Error('manifest', 'Portable AWS core-service intent is incomplete.')
+    out.awsManagerIntent = { schemaVersion: 1, mode: intent.mode, regionIntent: intent.regionIntent, resourceQuery: intent.resourceQuery, cloudControlTypeName: intent.cloudControlTypeName, ...(coreService ? { coreService } : {}), ...(coreOperation ? { coreOperation } : {}), ...(coreInput ? { coreInput: { ...coreInput } } : {}) }
   }
   if (node.cloudflareZeroTrustIntent !== undefined) {
     const intent = normalizeCloudflareZeroTrustIntent(node.cloudflareZeroTrustIntent)

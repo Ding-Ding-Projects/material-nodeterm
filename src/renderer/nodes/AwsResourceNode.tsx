@@ -9,7 +9,12 @@ import type {
   AwsManagerResult,
   AwsManagerPortableIntent,
   AwsOperationPreview,
-  AwsProfileChoice
+  AwsProfileChoice,
+  AwsCoreOperation,
+  AwsCoreServiceId,
+  AWS_CORE_OPERATIONS,
+  AWS_CORE_OPERATION_LABELS,
+  AWS_CORE_SERVICES
 } from '@shared/aws-resource'
 import type { CanvasNode } from '../state/workspace'
 import { useActiveSessionApi } from '../session/session'
@@ -31,6 +36,7 @@ const CLOUD_OPERATIONS: readonly AwsManagerOperation[] = [
   'cloud-list-types', 'cloud-list-resources', 'cloud-get-resource', 'cloud-create-resource',
   'cloud-update-resource', 'cloud-delete-resource', 'cloud-request-status'
 ]
+const CORE_SERVICE_LABELS: Record<AwsCoreServiceId, string> = { s3: 'S3', ec2: 'EC2', iam: 'IAM', sts: 'STS', lambda: 'Lambda', cloudwatch: 'CloudWatch', logs: 'CloudWatch Logs' }
 
 const OPERATION_LABELS: Record<AwsManagerOperation, string> = {
   'resource-list-views': 'List views',
@@ -41,11 +47,14 @@ const OPERATION_LABELS: Record<AwsManagerOperation, string> = {
   'cloud-create-resource': 'Create resource',
   'cloud-update-resource': 'Update resource',
   'cloud-delete-resource': 'Delete resource',
-  'cloud-request-status': 'Check request status'
+  'cloud-request-status': 'Check request status',
+  ...AWS_CORE_OPERATION_LABELS
 }
 
 function operationRisk(operation: AwsManagerOperation): 'read-only' | 'write' | 'destructive' {
-  return operation === 'cloud-delete-resource' ? 'destructive' : operation.startsWith('cloud-') && ['cloud-create-resource', 'cloud-update-resource'].includes(operation) ? 'write' : 'read-only'
+  if (['cloud-delete-resource', 's3-delete-bucket', 'ec2-terminate-instances', 'iam-delete-user', 'lambda-delete-function'].includes(operation)) return 'destructive'
+  if (['cloud-create-resource', 'cloud-update-resource', 's3-create-bucket', 'ec2-start-instances', 'ec2-stop-instances', 'iam-create-user'].includes(operation)) return 'write'
+  return 'read-only'
 }
 
 function resultCorpus(row: Record<string, unknown>): string {
@@ -56,7 +65,7 @@ function newOperationId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `aws-operation-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
 }
 
-function requestFor(operation: AwsManagerOperation, values: { query: string; viewArn: string; typeName: string; identifier: string; desiredState: string; patchDocument: string; requestToken: string; nextToken: string; maxResults: number }): AwsManagerRequest {
+function requestFor(operation: AwsManagerOperation, values: { query: string; viewArn: string; typeName: string; identifier: string; desiredState: string; patchDocument: string; requestToken: string; nextToken: string; maxResults: number; confirmed?: boolean }): AwsManagerRequest {
   return {
     operation,
     ...(values.query.trim() ? { query: values.query } : {}),
@@ -67,7 +76,8 @@ function requestFor(operation: AwsManagerOperation, values: { query: string; vie
     ...(values.patchDocument.trim() ? { patchDocument: values.patchDocument } : {}),
     ...(values.requestToken.trim() ? { requestToken: values.requestToken } : {}),
     ...(values.nextToken.trim() ? { nextToken: values.nextToken } : {}),
-    maxResults: values.maxResults
+    maxResults: values.maxResults,
+    confirmed: values.confirmed === true
   }
 }
 
@@ -86,8 +96,10 @@ export default function AwsResourceNode({ id, data, selected }: NodeProps<Canvas
   const api = useActiveSessionApi()
   const vocab = useVocabularyMapper()
   const nodeIntent = data.awsManagerIntent
-  const [mode, setMode] = useState<AwsManagerMode>(nodeIntent?.mode === 'cloud-control' ? 'cloud-control' : 'resource-explorer')
-  const [operation, setOperation] = useState<AwsManagerOperation>(mode === 'cloud-control' ? CLOUD_OPERATIONS[0] : RESOURCE_OPERATIONS[0])
+  const [mode, setMode] = useState<AwsManagerMode>(nodeIntent?.mode === 'cloud-control' ? 'cloud-control' : nodeIntent?.mode === 'core-services' ? 'core-services' : 'resource-explorer')
+  const [coreService, setCoreService] = useState<AwsCoreServiceId>(nodeIntent?.coreService ?? 's3')
+  const [operation, setOperation] = useState<AwsManagerOperation>(mode === 'cloud-control' ? CLOUD_OPERATIONS[0] : mode === 'core-services' ? (nodeIntent?.coreOperation ?? AWS_CORE_OPERATIONS.s3[0]) : RESOURCE_OPERATIONS[0])
+  const [coreInput, setCoreInput] = useState<Record<string, unknown>>(nodeIntent?.coreInput ?? {})
   const [runtime, setRuntime] = useState<{ available: boolean; origin: string; version: string | null; disabledReason: string | null } | null>(null)
   const [profiles, setProfiles] = useState<AwsProfileChoice[]>([])
   const [binding, setBinding] = useState<AwsManagerBinding | null>(null)
@@ -139,7 +151,7 @@ export default function AwsResourceNode({ id, data, selected }: NodeProps<Canvas
     })
   }, [api.awsResource, id, load])
 
-  const operations = mode === 'cloud-control' ? CLOUD_OPERATIONS : RESOURCE_OPERATIONS
+  const operations: readonly AwsManagerOperation[] = mode === 'cloud-control' ? CLOUD_OPERATIONS : mode === 'core-services' ? AWS_CORE_OPERATIONS[coreService] : RESOURCE_OPERATIONS
   useEffect(() => {
     if (!operations.includes(operation)) setOperation(operations[0])
   }, [mode, operation, operations])
@@ -149,14 +161,17 @@ export default function AwsResourceNode({ id, data, selected }: NodeProps<Canvas
     return rows.filter((row) => resultSearch.test(resultCorpus(row)))
   }, [result, resultSearch])
 
-  const persistIntent = (nextMode: AwsManagerMode = mode, overrides: Partial<Pick<AwsManagerPortableIntent, 'regionIntent' | 'resourceQuery' | 'cloudControlTypeName'>> = {}): void => {
+  const persistIntent = (nextMode: AwsManagerMode = mode, overrides: Partial<Pick<AwsManagerPortableIntent, 'regionIntent' | 'resourceQuery' | 'cloudControlTypeName' | 'coreService' | 'coreOperation' | 'coreInput'>> = {}): void => {
     updateNodeData(id, {
       awsManagerIntent: {
         schemaVersion: 1,
         mode: nextMode,
         regionIntent: (overrides.regionIntent ?? region.trim()) || 'us-east-1',
         resourceQuery: overrides.resourceQuery ?? query,
-        cloudControlTypeName: overrides.cloudControlTypeName ?? typeName
+        cloudControlTypeName: overrides.cloudControlTypeName ?? typeName,
+        coreService: overrides.coreService ?? coreService,
+        coreOperation: overrides.coreOperation ?? (operation as AwsCoreOperation),
+        coreInput: overrides.coreInput ?? coreInput as AwsManagerPortableIntent['coreInput']
       }
     })
   }
@@ -172,7 +187,9 @@ export default function AwsResourceNode({ id, data, selected }: NodeProps<Canvas
     } finally { setBusy(false) }
   }
 
-  const buildRequest = (): AwsManagerRequest => requestFor(operation, { query, viewArn, typeName, identifier, desiredState, patchDocument, requestToken, nextToken, maxResults })
+  const buildRequest = (confirmed = false): AwsManagerRequest => mode === 'core-services'
+    ? { operation, service: coreService, input: coreInput, nextToken: nextToken.trim() || undefined, maxResults, confirmed }
+    : requestFor(operation, { query, viewArn, typeName, identifier, desiredState, patchDocument, requestToken, nextToken, maxResults, confirmed })
 
   const makePreview = async (): Promise<void> => {
     if (!api.awsResource) return
@@ -184,16 +201,16 @@ export default function AwsResourceNode({ id, data, selected }: NodeProps<Canvas
     if (!api.awsResource || !preview) return
     const run = async (): Promise<void> => {
       setBusy(true); setError(null); setResult(null)
-      try { setResult(await api.awsResource!.execute(id, newOperationId(), buildRequest())) } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)) } finally { setBusy(false) }
+      try { setResult(await api.awsResource!.execute(id, newOperationId(), buildRequest(true))) } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)) } finally { setBusy(false) }
     }
     if (operationRisk(operation) !== 'destructive') { await run(); return }
     const target = document.activeElement instanceof HTMLElement ? document.activeElement : null
     const rect = target?.getBoundingClientRect()
     openDestructiveGate({
-      title: 'Delete AWS resource',
-      description: 'This action asks AWS Cloud Control to delete the named resource. Review the preview before authorizing.',
-      affected: [typeName || 'Resource type', identifier || 'Resource identifier'],
-      confirmLabel: 'Delete resource',
+      title: mode === 'core-services' ? `Confirm ${OPERATION_LABELS[operation]}` : 'Delete AWS resource',
+      description: mode === 'core-services' ? 'This AWS operation changes provider state. Review the generated operation before authorizing.' : 'This action asks AWS Cloud Control to delete the named resource. Review the preview before authorizing.',
+      affected: mode === 'core-services' ? [`${CORE_SERVICE_LABELS[coreService]} · ${OPERATION_LABELS[operation]}`] : [typeName || 'Resource type', identifier || 'Resource identifier'],
+      confirmLabel: mode === 'core-services' ? 'Run operation' : 'Delete resource',
       anchor: rect ? { x: rect.left, y: rect.bottom } : undefined,
       restoreFocusEl: target,
       onConfirm: () => { void run() }
@@ -201,7 +218,7 @@ export default function AwsResourceNode({ id, data, selected }: NodeProps<Canvas
   }
 
   const fill = nodeHeaderFillStyle(data.color)
-  const title = data.title || (mode === 'cloud-control' ? 'AWS Cloud Control' : 'AWS Resource Explorer')
+  const title = data.title || (mode === 'cloud-control' ? 'AWS Cloud Control' : mode === 'core-services' ? `${CORE_SERVICE_LABELS[coreService]} manager` : 'AWS Resource Explorer')
   const note = runtime?.available ? `AWS CLI ${runtime.origin}${runtime.version ? `: ${runtime.version}` : ''}` : runtime ? runtime.disabledReason ?? 'AWS CLI is unavailable.' : 'Checking AWS CLI availability…'
 
   return (
@@ -217,6 +234,7 @@ export default function AwsResourceNode({ id, data, selected }: NodeProps<Canvas
         <div className="aws-resource-node__modes" role="tablist" aria-label="AWS manager mode">
           <button type="button" role="tab" aria-selected={mode === 'resource-explorer'} onClick={() => { setMode('resource-explorer'); persistIntent('resource-explorer') }}>Resource Explorer</button>
           <button type="button" role="tab" aria-selected={mode === 'cloud-control'} onClick={() => { setMode('cloud-control'); persistIntent('cloud-control') }}>Cloud Control</button>
+          <button type="button" role="tab" aria-selected={mode === 'core-services'} onClick={() => { setMode('core-services'); setCoreService('s3'); setOperation(AWS_CORE_OPERATIONS.s3[0]); setCoreInput({}); persistIntent('core-services', { coreService: 's3', coreOperation: AWS_CORE_OPERATIONS.s3[0], coreInput: {} }) }}>Core services</button>
         </div>
         <section className="aws-resource-node__binding" aria-label="Local AWS binding">
           <div className="aws-resource-node__binding-grid">
@@ -237,10 +255,25 @@ export default function AwsResourceNode({ id, data, selected }: NodeProps<Canvas
             <span className="aws-resource-node__binding-state">{binding ? `Bound to ${binding.profileName} in ${binding.region}` : 'Not bound. Choose a local profile and region.'}</span>
           </div>
         </section>
+        {mode === 'core-services' && <div className="aws-resource-node__operations" role="tablist" aria-label="AWS core services">
+          {AWS_CORE_SERVICES.map((item) => <button key={item} type="button" role="tab" aria-selected={coreService === item} className={coreService === item ? 'is-selected' : ''} onClick={() => { setCoreService(item); const next = AWS_CORE_OPERATIONS[item][0]; setOperation(next); setCoreInput({}); setPreview(null); persistIntent('core-services', { coreService: item, coreOperation: next, coreInput: {} }) }}>{CORE_SERVICE_LABELS[item]}</button>)}
+        </div>}
         <div className="aws-resource-node__operations" role="tablist" aria-label="AWS operations">
-          {operations.map((item) => <button key={item} type="button" role="tab" aria-selected={operation === item} className={operation === item ? 'is-selected' : ''} onClick={() => { setOperation(item); setPreview(null); setError(null) }}>{OPERATION_LABELS[item]}</button>)}
+          {operations.map((item) => <button key={item} type="button" role="tab" aria-selected={operation === item} className={operation === item ? 'is-selected' : ''} onClick={() => { setOperation(item); setPreview(null); setError(null); if (mode === 'core-services') { setCoreInput({}); persistIntent('core-services', { coreOperation: item as AwsCoreOperation, coreInput: {} }) } }}>{OPERATION_LABELS[item] ?? AWS_CORE_OPERATION_LABELS[item as AwsCoreOperation]}</button>)}
         </div>
         <section className="aws-resource-node__inputs" aria-label={fieldLabel(operation)}>
+          {mode === 'core-services' && <>
+            {['s3-list-objects', 's3-create-bucket', 's3-delete-bucket'].includes(operation) && <label>Bucket name<input value={String(coreInput.bucket ?? '')} onChange={(event) => { const next = { ...coreInput, bucket: event.target.value }; setCoreInput(next); persistIntent('core-services', { coreOperation: operation as AwsCoreOperation, coreInput: next as AwsManagerPortableIntent['coreInput'] }) }} placeholder="Choose a bucket name" /></label>}
+            {['ec2-start-instances', 'ec2-stop-instances', 'ec2-terminate-instances'].includes(operation) && <label>Instance IDs<input value={String(coreInput.instanceIds ?? '')} onChange={(event) => { const next = { ...coreInput, instanceIds: event.target.value }; setCoreInput(next); persistIntent('core-services', { coreInput: next as AwsManagerPortableIntent['coreInput'] }) }} placeholder="i-0123..., i-0456..." /></label>}
+            {['iam-get-user', 'iam-create-user', 'iam-delete-user'].includes(operation) && <label>User name<input value={String(coreInput.userName ?? '')} onChange={(event) => { const next = { ...coreInput, userName: event.target.value }; setCoreInput(next); persistIntent('core-services', { coreInput: next as AwsManagerPortableIntent['coreInput'] }) }} /></label>}
+            {['iam-get-role'].includes(operation) && <label>Role name<input value={String(coreInput.roleName ?? '')} onChange={(event) => { const next = { ...coreInput, roleName: event.target.value }; setCoreInput(next); persistIntent('core-services', { coreInput: next as AwsManagerPortableIntent['coreInput'] }) }} /></label>}
+            {['lambda-get-function', 'lambda-delete-function'].includes(operation) && <label>Function name<input value={String(coreInput.functionName ?? '')} onChange={(event) => { const next = { ...coreInput, functionName: event.target.value }; setCoreInput(next); persistIntent('core-services', { coreInput: next as AwsManagerPortableIntent['coreInput'] }) }} /></label>}
+            {operation === 'cloudwatch-get-metric-data' && <><label>Metric data queries JSON<textarea value={String(coreInput.metricDataQueries ?? '')} onChange={(event) => { const next = { ...coreInput, metricDataQueries: event.target.value }; setCoreInput(next); persistIntent('core-services', { coreInput: next as AwsManagerPortableIntent['coreInput'] }) }} /></label><label>Start time<input value={String(coreInput.startTime ?? '')} onChange={(event) => { const next = { ...coreInput, startTime: event.target.value }; setCoreInput(next); persistIntent('core-services', { coreInput: next as AwsManagerPortableIntent['coreInput'] }) }} type="datetime-local" /></label><label>End time<input value={String(coreInput.endTime ?? '')} onChange={(event) => { const next = { ...coreInput, endTime: event.target.value }; setCoreInput(next); persistIntent('core-services', { coreInput: next as AwsManagerPortableIntent['coreInput'] }) }} type="datetime-local" /></label></>}
+            {operation === 'cloudwatch-list-metrics' && <label>Namespace (optional)<input value={String(coreInput.namespace ?? '')} onChange={(event) => { const next = { ...coreInput, namespace: event.target.value }; setCoreInput(next); persistIntent('core-services', { coreInput: next as AwsManagerPortableIntent['coreInput'] }) }} /></label>}
+            {['logs-describe-log-streams', 'logs-get-log-events', 'logs-filter-log-events'].includes(operation) && <label>Log group name<input value={String(coreInput.logGroupName ?? '')} onChange={(event) => { const next = { ...coreInput, logGroupName: event.target.value }; setCoreInput(next); persistIntent('core-services', { coreInput: next as AwsManagerPortableIntent['coreInput'] }) }} /></label>}
+            {['logs-get-log-events'].includes(operation) && <label>Log stream name<input value={String(coreInput.logStreamName ?? '')} onChange={(event) => { const next = { ...coreInput, logStreamName: event.target.value }; setCoreInput(next); persistIntent('core-services', { coreInput: next as AwsManagerPortableIntent['coreInput'] }) }} /></label>}
+            {['logs-filter-log-events'].includes(operation) && <label>Filter pattern<input value={String(coreInput.filterPattern ?? '')} onChange={(event) => { const next = { ...coreInput, filterPattern: event.target.value }; setCoreInput(next); persistIntent('core-services', { coreInput: next as AwsManagerPortableIntent['coreInput'] }) }} /></label>}
+          </>}
           {operation === 'resource-search' && <label>Resource query<input value={query} onChange={(event) => { setQuery(event.target.value); persistIntent(mode, { resourceQuery: event.target.value }) }} placeholder="Use Resource Explorer query syntax" /></label>}
           {operation === 'resource-list-views' && <label>View ARN (optional)<input value={viewArn} onChange={(event) => setViewArn(event.target.value)} placeholder="Use the default view when empty" /></label>}
           {['cloud-list-resources', 'cloud-get-resource', 'cloud-create-resource', 'cloud-update-resource', 'cloud-delete-resource'].includes(operation) && <label>Resource type<input value={typeName} onChange={(event) => { setTypeName(event.target.value); persistIntent(mode, { cloudControlTypeName: event.target.value }) }} placeholder="AWS::Service::ResourceType" /></label>}

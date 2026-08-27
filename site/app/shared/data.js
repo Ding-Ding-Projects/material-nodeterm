@@ -38,6 +38,7 @@ export const FEATURES = [
   { id: 'update', icon: '⬆️', color: 'var(--green)', title: 'Keeps itself fresh', body: 'The app checks its own update feed and shows news right inside the window.' },
   { id: 'offline', icon: '📴', color: 'var(--blue)', title: 'Works with no internet', body: 'Projects save to a plain file next to your code, so you can share it or carry it to another machine.' },
   { id: 'gitlab-hosting', icon: '🦊', color: 'var(--orange)', title: 'Private GitLab hosting', body: 'Choose Community or Enterprise Edition, deploy a pinned official image with four managed volumes, and back it up or roll it back from guided controls.' },
+  { id: 'aws-core', icon: '☁️', color: 'var(--orange)', title: 'Guided AWS core services', body: 'S3, EC2, IAM, STS, Lambda, CloudWatch and Logs operations with typed fields, previews and local bindings.' },
 ]
 
 export const DOCS = [
@@ -68,6 +69,7 @@ export const DOCS = [
   ['Toy locks', 'a padlock for fun, not for safety', 'toy-locks'],
   ['Windows support', 'the current desktop package and its known limits', 'windows-support'],
   ['GitLab Server hosting', 'private deployment, backups, restore, and rollback', 'gitlab-hosting'],
+  ['AWS core-service managers', 'guided S3, EC2, IAM, STS, Lambda, CloudWatch and Logs', 'aws-core-services'],
 ]
 
 // A hand-picked six from the design's dumpling list, kept to exactly the

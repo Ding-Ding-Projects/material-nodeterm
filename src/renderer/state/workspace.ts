@@ -1507,7 +1507,7 @@ export function createTimerNode(index: number, center?: { x: number; y: number }
 }
 
 /** Creates one guided AWS manager node; local profiles and provider state remain in core. */
-export function createAwsResourceNode(index: number, mode: AwsManagerMode = 'resource-explorer', center?: { x: number; y: number }): CanvasNode {
+export function createAwsResourceNode(index: number, mode: AwsManagerMode = 'resource-explorer', center?: { x: number; y: number }, coreService?: import('@shared/aws-resource').AwsCoreServiceId): CanvasNode {
   return {
     id: nextId('aws-resource'),
     type: 'aws-resource',
@@ -1516,10 +1516,10 @@ export function createAwsResourceNode(index: number, mode: AwsManagerMode = 'res
     height: AWS_RESOURCE_SIZE.height,
     style: { width: AWS_RESOURCE_SIZE.width, height: AWS_RESOURCE_SIZE.height },
     data: {
-      title: mode === 'cloud-control' ? 'AWS Cloud Control' : 'AWS Resource Explorer',
+      title: mode === 'cloud-control' ? 'AWS Cloud Control' : mode === 'core-services' ? `${coreService?.toUpperCase() ?? 'AWS'} manager` : 'AWS Resource Explorer',
       color: '#ff9900',
       group: null,
-      awsManagerIntent: { ...AWS_MANAGER_DEFAULT_INTENT, mode }
+      awsManagerIntent: { ...AWS_MANAGER_DEFAULT_INTENT, mode, ...(coreService ? { coreService, coreOperation: import('@shared/aws-resource').AWS_CORE_OPERATIONS[coreService][0] } : {}) }
     }
   }
 }
