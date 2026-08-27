@@ -217,7 +217,8 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     // machine (`...local` would run java on the VIEWER, not the host it joined).
     minecraft: stub.minecraft,
     torrent: stub.torrent
-    calendar: stub.calendar
+    calendar: stub.calendar,
+    homeAssistantControl: stub.homeAssistantControl,
     // Browser control never rides the relay either (no CDP off the desktop) — inert no-ops.
     onBrowserControlResolve: stub.onBrowserControlResolve,
     sendBrowserControlResolveResult: stub.sendBrowserControlResolveResult,

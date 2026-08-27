@@ -19,7 +19,7 @@ visible and explain the exact missing capability and the next action. An editor 
 example, waits for a project file picker instead of accepting an arbitrary path.
 
 The registry also carries explicit disabled blueprint rows for planned Photo, Gallery, Torrent,
-Linux VM, wild dim sum, Home Assistant control and sensor, Calendar, Timer, Alarm Clock, Planner,
+wild dim sum, Home Assistant sensor, Planner,
 Multiverse, AWS Universe, AWS service, Cloudflare hosting, GitLab hosting, Nextcloud hosting, and
 Open WebUI hosting nodes. A planned row is never mistaken for an available feature. Remote terminal
 creation remains disabled until the dedicated saved-connection picker supplies a concrete binding.

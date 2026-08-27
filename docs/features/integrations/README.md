@@ -13,13 +13,12 @@ substrate described in CLAUDE.md rather than inventing a surface each.
 | [Torrent Downloader](../torrents/torrent-downloader.md) | local WebTorrent downloads with safe machine-local task state |
 | [Linux ISO VM](linux-iso-vm.md) | implemented canvas node with bundled QEMU, WHPX preference, QMP lifecycle, loopback display, persistent/disposable modes, and network-off default |
 | [Planner occurrences](planner-occurrences.md) | host-owned durable recurrence, timezone/DST handling, missed history, and UI-closure continuity |
+| [Home Assistant controls](home-assistant-controls.md) | implemented schema-driven entity controls with machine-local connections and portable selection intent; verification intentionally unrun |
 
 Planned, not yet researched here:
 
 - **Proxmox** — a MANAGER for an existing instance. It is a bare-metal hypervisor distribution, so
   there is nothing to host from a right-click; the node drives its API.
-- **Home Assistant** — note the repo already talks to Home Assistant for scheduled settings, so a
-  fuller integration must extend that rather than open a second client.
 - **Docker** — the highest-value angle is exec-into-a-container as a real terminal node, since that
   is what this app already is.
 - **GitLab** — two halves: self-hosting Community Edition, and a Material client over its API. The

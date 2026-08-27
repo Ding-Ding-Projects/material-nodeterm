@@ -2,6 +2,8 @@ import type { Node } from '@xyflow/react'
 import type { AgentLaunchIntent, BrowserTab, CanvasMutation, CanvasNodeState, ClaudeAccount, NodeKind, PendingLaunch, Project, ServiceNodeKind } from '@shared/types'
 import { normalizeMediaReference, type MediaAssetReference } from '@shared/media-catalog'
 import type { CalendarNodeConfig } from '@shared/calendar'
+import type { HomeAssistantControlConfig } from '@shared/home-assistant-control'
+import { DEFAULT_HOME_ASSISTANT_CONTROL_CONFIG, validateHomeAssistantControlConfig } from '@shared/home-assistant-control'
 import type { AlarmOccurrence, AlarmRecurrence } from '@shared/alarm-clock'
 import type { ServiceConnection } from '@shared/node-exec'
 import type { NsisLocalPaths, NsisSpec } from '@shared/nsis-form-types'
@@ -264,6 +266,8 @@ export interface NodeData {
   nsisLocalPaths?: NsisLocalPaths
   /** calendar-only, portable selection intent; local cache and credentials are never here. */
   calendarConfig?: CalendarNodeConfig
+  /** Home Assistant control portable intent. Local connection state belongs to the host service. */
+  homeAssistantControlConfig?: HomeAssistantControlConfig
   /** Which agent runs in this terminal node (claude/codex/gemini/custom). */
   agentId?: AgentId
   /** Model selected for this node through the shared model gateway. */
@@ -1363,6 +1367,7 @@ export function createDiffNode(
 /** Creates a new sticky note. */
 const AUTHENTICATOR_SIZE = { width: 340, height: 260 }
 const CALENDAR_SIZE = { width: 620, height: 520 }
+const HOME_ASSISTANT_CONTROL_SIZE = { width: 620, height: 620 }
 const NSIS_SIZE = { width: 460, height: 520 }
 
 /**
@@ -1459,6 +1464,24 @@ export function createTimerNode(index: number, center?: { x: number; y: number }
     alarmTone: 'chime', missedCount: 0
   }
   return { id: nextId('timer'), type: 'timer', position: placeAt(center, index, TIMER_SIZE.width, TIMER_SIZE.height), width: TIMER_SIZE.width, height: TIMER_SIZE.height, style: { width: TIMER_SIZE.width, height: TIMER_SIZE.height }, data }
+}
+
+/** Creates an unbound Home Assistant control. Import and creation perform no network request. */
+export function createHomeAssistantControlNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  return {
+    id: nextId('homeassistant-control'),
+    type: 'homeassistant-control',
+    position: placeAt(center, index, HOME_ASSISTANT_CONTROL_SIZE.width, HOME_ASSISTANT_CONTROL_SIZE.height),
+    width: HOME_ASSISTANT_CONTROL_SIZE.width,
+    height: HOME_ASSISTANT_CONTROL_SIZE.height,
+    style: { width: HOME_ASSISTANT_CONTROL_SIZE.width, height: HOME_ASSISTANT_CONTROL_SIZE.height },
+    data: {
+      title: 'Home Assistant control',
+      color: NODE_COLORS[index % NODE_COLORS.length],
+      group: null,
+      homeAssistantControlConfig: { ...DEFAULT_HOME_ASSISTANT_CONTROL_CONFIG }
+    }
+  }
 }
 
 export function createStickyNode(index: number, center?: { x: number; y: number }): CanvasNode {
@@ -2097,6 +2120,7 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   terminal: true,
   authenticator: true,
   calendar: true,
+  'homeassistant-control': true,
   timer: true,
   alarm: true,
   sticky: true,
@@ -2142,6 +2166,7 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   terminal: TERMINAL_SIZE,
   authenticator: AUTHENTICATOR_SIZE,
   calendar: CALENDAR_SIZE,
+  'homeassistant-control': HOME_ASSISTANT_CONTROL_SIZE,
   timer: TIMER_SIZE,
   alarm: ALARM_SIZE,
   sticky: STICKY_SIZE,
@@ -2634,6 +2659,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         virtualMachineConfig: n.virtualMachineConfig,
         virtualMachineLocalPaths: n.virtualMachineLocalPaths,
         calendarConfig: n.calendarConfig,
+        homeAssistantControlConfig: n.kind === 'homeassistant-control' ? validateHomeAssistantControlConfig(n.homeAssistantControlConfig) : undefined,
         textUpdatedAt: n.textUpdatedAt,
         textUpdatedBy: n.textUpdatedBy,
         filePath: n.filePath,
@@ -2757,6 +2783,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         virtualMachineConfig: n.data.virtualMachineConfig,
         virtualMachineLocalPaths: n.data.virtualMachineLocalPaths,
         calendarConfig: n.data.calendarConfig,
+        homeAssistantControlConfig: kind === 'homeassistant-control' ? validateHomeAssistantControlConfig(n.data.homeAssistantControlConfig) : undefined,
         filePath: n.data.filePath,
         fileMissing: n.data.fileMissing,
         url: n.data.url,

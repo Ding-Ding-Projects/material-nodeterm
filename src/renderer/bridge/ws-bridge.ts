@@ -23,6 +23,7 @@ import type { NodeDependenciesApi } from '../../shared/node-dependencies'
 import type { TorrentApi, TorrentTaskState } from '../../shared/torrent'
 import type { VirtualMachineApi } from '../../shared/virtual-machine'
 import type { CalendarApi, CalendarProvider } from '../../shared/calendar'
+import type { HomeAssistantControlApi } from '../../shared/home-assistant-control'
 import {
   UNKNOWN_CLAUDE_CLI_CAPS,
   type BoardLogApi,
@@ -1185,6 +1186,20 @@ export function buildCalendarApi(client: RpcClient): Pick<NodeTerminalApi, 'cale
   return { calendar }
 }
 
+export function buildHomeAssistantControlApi(client: RpcClient): Pick<NodeTerminalApi, 'homeAssistantControl'> {
+  const homeAssistantControl: HomeAssistantControlApi = {
+    connections: () => client.request(IPC.homeAssistantConnections) as ReturnType<HomeAssistantControlApi['connections']>,
+    configure: (input) => client.request(IPC.homeAssistantConfigure, input) as ReturnType<HomeAssistantControlApi['configure']>,
+    bind: (nodeId, connectionId) => client.request(IPC.homeAssistantBind, nodeId, connectionId) as ReturnType<HomeAssistantControlApi['bind']>,
+    status: (nodeId) => client.request(IPC.homeAssistantStatus, nodeId) as ReturnType<HomeAssistantControlApi['status']>,
+    entities: (nodeId) => client.request(IPC.homeAssistantEntities, nodeId) as ReturnType<HomeAssistantControlApi['entities']>,
+    services: (nodeId) => client.request(IPC.homeAssistantServices, nodeId) as ReturnType<HomeAssistantControlApi['services']>,
+    call: (input) => client.request(IPC.homeAssistantCall, input) as ReturnType<HomeAssistantControlApi['call']>,
+    cancel: (nodeId) => client.request(IPC.homeAssistantCancel, nodeId) as ReturnType<HomeAssistantControlApi['cancel']>
+  }
+  return { homeAssistantControl }
+}
+
 /**
  * Build the `usage` namespace over an RpcClient. The server shell runs the same core usage
  * service the desktop does, so this is real end to end — including `onUpdate`, which subscribes
@@ -1645,6 +1660,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildTorrentApi(client),
     ...buildVirtualMachineApi(client),
     ...buildCalendarApi(client),
+    ...buildHomeAssistantControlApi(client),
     ...buildUsageApi(client),
     ...buildSessionMemoryApi(client),
     ...buildVsCodeApi(client),

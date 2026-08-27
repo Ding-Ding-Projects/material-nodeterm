@@ -19,6 +19,7 @@ import {
   createVirtualMachineNode,
   createTorrentNode,
   createCalendarNode,
+  createHomeAssistantControlNode,
   createTimerNode,
   isAccountLoginNode
 } from '@renderer/state/workspace'
@@ -207,6 +208,10 @@ function buildBase(snapshot: ReopenNodeSnapshot, ctx: RecreateContext): CanvasNo
       return createTorrentNode(0)
     case 'calendar':
       return createCalendarNode(0)
+    case 'homeassistant-control': {
+      const node = createHomeAssistantControlNode(0)
+      return { ...node, data: { ...node.data, homeAssistantControlConfig: d.homeAssistantControlConfig } }
+    }
     case 'timer': {
       const node = createTimerNode(0)
       return { ...node, data: { ...node.data, ...d, running: false, paused: false, elapsedMs: 0, lapsMs: [], occurrenceId: undefined, occurrenceState: 'scheduled' } }

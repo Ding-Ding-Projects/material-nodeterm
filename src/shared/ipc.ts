@@ -802,6 +802,14 @@ export const IPC = {
   calendarCreate: 'calendar:create',
   calendarUpdate: 'calendar:update',
   calendarRemove: 'calendar:remove',
+  homeAssistantConnections: 'home-assistant-control:connections',
+  homeAssistantConfigure: 'home-assistant-control:configure',
+  homeAssistantBind: 'home-assistant-control:bind',
+  homeAssistantStatus: 'home-assistant-control:status',
+  homeAssistantEntities: 'home-assistant-control:entities',
+  homeAssistantServices: 'home-assistant-control:services',
+  homeAssistantCall: 'home-assistant-control:call',
+  homeAssistantCancel: 'home-assistant-control:cancel',
   // "Open in Visual Studio Code" (src/core/vscode-detect.ts, src/core/vscode-handlers.ts).
   // Registered on BOTH shells via the generic `platform.handle` seam, so it opens VS Code on
   // whichever machine is actually running the shell (this desktop, or the Server Edition host).

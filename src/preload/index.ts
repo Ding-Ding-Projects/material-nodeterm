@@ -1170,6 +1170,17 @@ const api: NodeTerminalApi = {
     create: (input) => ipcRenderer.invoke(IPC.calendarCreate, input),
     update: (input) => ipcRenderer.invoke(IPC.calendarUpdate, input),
     remove: (id, eventId) => ipcRenderer.invoke(IPC.calendarRemove, id, eventId)
+  },
+  homeAssistantControl: {
+    connections: () => ipcRenderer.invoke(IPC.homeAssistantConnections),
+    configure: (input) => ipcRenderer.invoke(IPC.homeAssistantConfigure, input),
+    bind: (nodeId, connectionId) => ipcRenderer.invoke(IPC.homeAssistantBind, nodeId, connectionId),
+    status: (nodeId) => ipcRenderer.invoke(IPC.homeAssistantStatus, nodeId),
+    entities: (nodeId) => ipcRenderer.invoke(IPC.homeAssistantEntities, nodeId),
+    services: (nodeId) => ipcRenderer.invoke(IPC.homeAssistantServices, nodeId),
+    call: (input) => ipcRenderer.invoke(IPC.homeAssistantCall, input),
+    cancel: (nodeId) => ipcRenderer.invoke(IPC.homeAssistantCancel, nodeId)
+  },
   // The `browser` verb resolve round-trip (S8 PR 7): main asks the renderer which project owns the
   // source, whether it is control-capable, and whether the capability is on right now — the renderer
   // NEVER runs a CDP command.
