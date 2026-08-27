@@ -1,5 +1,14 @@
 # nodeterm Server Edition (Phase 2)
 
+## Host-owned planner occurrences
+
+The Server Edition starts the same `PlannerOccurrenceRuntime` as the Desktop shell. Schedules live
+in the configured data directory and continue while every browser tab is closed. WS-RPC exposes the
+guided Planner surface's load, save, history, export, and occurrence event channels. A headless host
+records fired and missed occurrences without pretending it can wake a powered-off computer or show a
+desktop notification. Both serving and headless shutdown paths stop the runtime before the host
+closes.
+
 The Windows desktop app's top-right device button drives this same deployment automatically. It
 obtains Docker Desktop through Windows Package Manager when missing, invokes the validated
 `host.bat` path, builds `nodeterm-server:local` when absent, reuses the named data volume, waits for

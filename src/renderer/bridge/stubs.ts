@@ -11,7 +11,7 @@
 // benign value, and everything else rejects with a coded error.
 //
 // The object is `satisfies Omit<NodeTerminalApi, 'pty' | 'workspace' | 'settings' |
-// 'scheduledSettings' | 'fs' | 'git' | 'files' | 'context' | 'boardLog' | 'dialog'>`, so the
+// 'scheduledSettings' | 'planner' | 'fs' | 'git' | 'files' | 'context' | 'boardLog' | 'dialog'>`, so the
 // TypeScript compiler is the completeness test: if `NodeTerminalApi` gains a member, this file
 // fails to typecheck until the stub is declared.
 
@@ -141,6 +141,7 @@ export function buildStubApi(): Omit<
   | 'schoolMode'
   | 'kidsMode'
   | 'scheduledSettings'
+  | 'planner'
   | 'toylock'
   | 'authenticator'
   | 'fs'
@@ -638,6 +639,7 @@ export function buildStubApi(): Omit<
     | 'schoolMode'
   | 'kidsMode'
     | 'scheduledSettings'
+    | 'planner'
     | 'toylock'
     | 'authenticator'
     | 'passwordManager'

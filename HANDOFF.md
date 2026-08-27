@@ -367,6 +367,27 @@ startup cancellation generations, stale-process reconciliation, serialized atomi
 transient rename retries, awaited shutdown, a desktop display-open action, and a Server Edition
 honest no-proxy response. VM duplication now clears machine-local ISO and disk bindings. Added
 source coverage entries for these boundaries. No tests, builds, captures, commit, or dew was made.
+## 2026-08-26, planner occurrence service lane
+
+Implemented a host-owned planner occurrence service that keeps durable schedules alive after the
+Desktop window or Server Edition browser tab closes while the computer remains available. Added
+`src/shared/planner-occurrences.ts` for bounded schema, recurrence, timezone, DST, repeated and
+nonexistent wall-clock handling, cross-midnight descriptions, deterministic occurrence ids, and
+missed-occurrence classification. Added `src/core/planner-occurrence-service.ts` for atomic local
+storage, bounded background evaluation, deduplication, occurrence history, JSON/CSV export, IPC/WS
+events, and lifecycle stop handling. Desktop starts the service with an OS notification callback;
+Server Edition starts the same core service and stops it in both close paths. Neither surface claims
+to wake a powered-off computer.
+
+Added the guided Planner settings surface with native date/time controls, populated timezone
+selection, recurrence choices, an anchored regex builder, schedule toggles, history, and exports.
+Updated `src/shared/ipc.ts`, `src/shared/types.ts`, `src/preload/index.ts`,
+`src/renderer/bridge/ws-bridge.ts`, `src/renderer/bridge/stubs.ts`, settings navigation/icons,
+the integrations feature index and planner article, the feature inventory, ROADMAP, and CHANGELOG.
+The committed offline docs bundle still needs regeneration through `scripts/build-docs-bundle.mjs`.
+
+This ultra-speed lane deliberately did not run tests, type checks, lint, security checks, builds,
+packaging, installer execution, runtime interaction, or screenshots. No commit or remote update was made here.
 
 ## 2026-08-26, portable canvas projection implementation
 

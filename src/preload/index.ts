@@ -21,6 +21,7 @@ import type {
   WorkspaceMigrationKind
 } from '../shared/types'
 import type { ScheduledSettingsActiveState, ScheduledSettingsFile } from '../shared/scheduled-settings'
+import type { PlannerFile, PlannerLoadState, PlannerOccurrence } from '../shared/planner-occurrences'
 import type { HistoryFilters } from '../shared/local-history'
 import type { ClientId, PeerDiff, PeerIdentity, PeerState } from '../shared/presence'
 import type { ConvertQueueItem, ConverterQueueState } from '../shared/converter'
@@ -90,6 +91,7 @@ const subscribeRelayHostClosed = subscribe<[{ id: string }]>(IPC.relayHostClosed
 const subscribeScheduledSettingsActive = subscribe<[ScheduledSettingsActiveState]>(
   IPC.scheduledSettingsActiveChange
 )
+const subscribePlannerOccurrence = subscribe<[PlannerOccurrence]>(IPC.plannerOccurrence)
 
 const api: NodeTerminalApi = {
   pty: {
@@ -273,6 +275,13 @@ const api: NodeTerminalApi = {
     refreshRule: (ruleId: string) => ipcRenderer.invoke(IPC.scheduledSettingsRefreshRule, ruleId),
     activeState: () => ipcRenderer.invoke(IPC.scheduledSettingsActiveState),
     onActiveChange: subscribeScheduledSettingsActive
+  },
+  planner: {
+    load: () => ipcRenderer.invoke(IPC.plannerLoad) as Promise<PlannerLoadState>,
+    save: (file: PlannerFile) => ipcRenderer.invoke(IPC.plannerSave, file),
+    history: () => ipcRenderer.invoke(IPC.plannerHistory),
+    export: (format: 'json' | 'csv') => ipcRenderer.invoke(IPC.plannerExport, format),
+    onOccurrence: subscribePlannerOccurrence
   },
   githubIssues: {
     subscribe: (projectId) => ipcRenderer.invoke(IPC.githubIssuesSubscribe, { projectId }),
