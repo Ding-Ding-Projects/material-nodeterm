@@ -1,5 +1,28 @@
 # Handoff
 
+## 2026-08-27, main-process keyboard interception repair
+
+Release run `33127262674` at `35f76e8fdb8a6921fc7dc2a3caf9ddb2d3ec93cb` passed both coverage checkers,
+packaging, provenance, and icon phases, then failed during the application build at
+`src/main/index.ts:1448:0` with `Expected ")" but found "app"`. The cause was an obsolete inline
+`win.webContents.on('before-input-event', ...)` block that lacked its closing `})`, immediately
+followed by the current `installKeydownIntercepts(...)` registration and a duplicated mid-sentence
+comment.
+
+The repair removes only the obsolete inline handler and stale rationale. It keeps one coherent
+comment and the current helper registration, including `currentInterceptBindings`, recorder
+stand-down, terminal-policy stand-down, and fixed physical-code zoom handling. Read-only occurrence
+checks showed that `matchesShortcut`, `isMacMain`, and `shouldHideOnClose` were used only by the
+deleted or superseded splice, so those imports and the unused modifier constant were removed. The
+current `closeAction`, `setMainWindow`, `getMainWindow`, `sendToMain`, and
+`createCrashReloadPolicy` uses remain. AWS, Cloudflare, hosted services, diagnostics, browser guests,
+updater, account, relay, and no-signing registrations were preserved.
+
+This lane intentionally ran no tests, checkers, lint, type checks, builds, packaging, installer
+execution, runtime interaction, reviews, audits, or UI captures. Read-only source and history scans
+identified the duplicate registration boundary and import usage. The integration owner must evaluate
+the exact commit and the follow-up GitHub Actions run before treating this repair as verified.
+
 ## 2026-08-27, main-process parser repair
 
 Release run `33126389977` reached the application build after both coverage checkers and all
@@ -20,7 +43,7 @@ unrelated refactor was used.
 This lane intentionally ran no tests, checkers, lint, type checks, builds, packaging, installer
 execution, runtime interaction, reviews, audits, or UI captures. Read-only source and history scans
 were used to identify the exact duplicate splices. The integration owner must evaluate the exact
-commit and the follow-up Der Machine run before treating this repair as verified.
+commit and the follow-up GitHub Actions run before treating this repair as verified.
 
 ## 2026-08-27, Canvas notification inventory repair
 
