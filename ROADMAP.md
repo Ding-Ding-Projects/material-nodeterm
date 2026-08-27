@@ -33,6 +33,10 @@ later commit, since this file will not be kept in lockstep with every merge).
       process entrypoint also removes stale duplicate imports, declarations, handlers, object keys,
       notification composition, quit conditions, and teardown while retaining the corrected SSH
       project argument order; its single-file esbuild transform also reports syntax-only success.
+      The SSH project manager now keeps one safe-home-validated remote Codex account lifecycle,
+      one executable-only runtime installer, one relay-source provider, and the existing node-token,
+      host-status, OAuth, project, and canvas wiring; its single-file esbuild transform reports
+      syntax-only success.
       The combined recovery remains unchecked until the parent integration
       lane records build, packaging, and release-workflow evidence. The ultra-speed pass
       intentionally omits tests, type checks, lint, reviews, accessibility and security checks,
