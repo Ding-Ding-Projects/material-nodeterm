@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- Pin source builds to Node 24.19.0 before native dependency lifecycle scripts run. Node 26.4.0
+  publishes Clang thin-LTO settings through its build metadata, which caused node-gyp to forward
+  `-flto=thin` and `/opt:lldltojobs=2` into MSVC while compiling `smart-whisper`. The one-click
+  dependency bootstrap now selects the SHA-pinned manifest runtime before `npm ci`, and npm's
+  source-tree `devEngines` check refuses a direct install under a different Node version. The
+  portable manifest record is validated by the same JavaScript contract used for the build-runtime
+  probe, avoiding shell-specific JSON parsing. The shipped runtime support range is unchanged. The
+  fresh build reached the root native rebuild without the thin-LTO flags or `LNK1117`, then stopped
+  on the separate `node-pty` `MSB8040` caused by a Visual Studio 18 Spectre-library mismatch. The
+  bootstrap now selects one exact C++ installation whose default toolset owns matching Spectre
+  libraries, passes that installation to node-gyp through `VCINSTALLDIR`, and makes preflight check
+  that exact active toolset instead of accepting any older mitigated directory. A fresh
+  `build.bat /s` completed `npm ci` and the full native rebuild, then the later source build stopped
+  on a pre-existing duplicate declaration in `scripts/check-personal-vocabulary-coverage.mjs`. The
+  ultra-speed pass intentionally runs no tests, type checks, lint, reviews, audits, runtime
+  interaction, or screen captures.
+
 - Consolidate the malformed TypeScript merge recovery into the combined recovery pull request.
   The implementation lane repairs parser-invalid remnants across core services, host and bridge
   code, renderer surfaces, shared contracts, account and identity handling, and release workflow

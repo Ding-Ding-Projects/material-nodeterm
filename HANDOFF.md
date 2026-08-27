@@ -3520,6 +3520,32 @@ services, host and bridge code, renderer surfaces, shared contracts, account and
 and release workflow wiring. The same recovery also adds the source-parse validation path and
 aligns the Windows installer contract with the unsigned Squirrel.Windows packaging policy.
 
+The native source-build lane traces the MSVC `LNK1117` failure to Node 26.4.0 build metadata, not
+to `smart-whisper`. Node 26.4.0 reports Clang thin LTO and two LTO jobs, and its downloaded
+`common.gypi` translates those values to `-flto=thin` and `/opt:lldltojobs=2` for native add-ons.
+The supported bootstrap now selects the exact Node 24.19.0 manifest pin before `npm ci`, while a
+source-tree `devEngines` requirement refuses direct npm installation under a different Node
+version. The wider installed-runtime support range remains unchanged.
+
+Build evidence is scoped to the blocker. A direct Node 26.4.0 dry-run stopped before dependency
+work with `EBADDEVENGINES`. A fresh `build.bat /s` then downloaded and SHA-verified Node 24.19.0,
+completed the Visual Studio, Python, and preflight phases, and reached the root native rebuild with
+no thin-LTO option or `LNK1117`. The next distinct blocker is `node-pty` `MSB8040`: preflight found
+Spectre libraries for toolset `14.44.35207`, while MSBuild selected Visual Studio 18 under `v180`.
+The failing projects are `conpty.vcxproj`, `conpty_console_list.vcxproj`, `winpty-agent.vcxproj`, and
+`winpty.vcxproj`. The expanded lane now selects one exact installed C++ instance whose default
+toolset contains the required Spectre libraries, returns that path to the normal-user bootstrap,
+sets `VCINSTALLDIR` before npm, and makes preflight validate that exact active default toolset.
+
+The final lane build used Node 24.19.0 and selected
+`C:\ProgramData\LibreOfficeMaterialTools\VS2022`, whose declared default toolset is `14.44.35207`
+and contains matching x86/x64 Spectre libraries. `npm ci` completed in 204 seconds and
+`electron-rebuild` reported `Rebuild Complete`. The build then advanced through the current
+vocabulary lock and Material audit before stopping on the pre-existing duplicate
+`CANONICAL_CANVAS_NOTIFY_CALL_IDS` declaration in
+`scripts/check-personal-vocabulary-coverage.mjs:306`. That source file is outside this lane and is
+the remaining build blocker after the native route.
+
 The parent integration lane owns the final merge and all verification. At handoff, the parser,
 type-check, build, packaging, and release-workflow verdicts are not yet recorded here. The
 ultra-speed pass intentionally skipped tests, reviews, accessibility and security checks,

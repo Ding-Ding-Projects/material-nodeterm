@@ -100,12 +100,12 @@ if errorlevel 1 goto :node_missing
 call :probe_node
 set "NODE_PATH_PROBE_EXIT=%ERRORLEVEL%"
 if not "%NODE_PATH_PROBE_EXIT%"=="0" goto :node_unsupported
-echo   Found node %NODE_PROBE_VERSION% already on PATH - nothing to install.
+echo   Found manifest-pinned build node %NODE_PROBE_VERSION% already on PATH - nothing to install.
 goto :node_done
 
 :node_unsupported
-echo   The node executable on PATH is missing, broken, or outside the supported range.
-echo   Required Node range: ^22.22.2 or ^24.15.0 or 26.0.0 and newer.
+echo   The node executable on PATH is missing, broken, outside the supported runtime range,
+echo   or does not match the exact build version pinned in dependencies.manifest.json.
 echo   Using the manifest-pinned portable runtime instead; details are in "%TEMP%\nodeterm-node-version.log".
 goto :node_portable
 
@@ -159,10 +159,12 @@ rem so a missing component is repaired rather than merely diagnosed without ever
 rem Administrator token.
 rem ---------------------------------------------------------------------------------------------
 call :phase_begin "Visual Studio C++ build toolchain"
+set "NODETERM_VS_RESULT_FILE=%TEMP%\nodeterm-vs-installation-%RANDOM%-%RANDOM%.txt"
+if exist "%NODETERM_VS_RESULT_FILE%" del /f /q "%NODETERM_VS_RESULT_FILE%" >nul 2>nul
 if "%NODETERM_SILENT%"=="1" (
-    call node "%NODETERM_ROOT%\scripts\ensure-windows-build-toolchain.mjs" --silent
+    call node "%NODETERM_ROOT%\scripts\ensure-windows-build-toolchain.mjs" --silent --result-file "%NODETERM_VS_RESULT_FILE%"
 ) else (
-    call node "%NODETERM_ROOT%\scripts\ensure-windows-build-toolchain.mjs"
+    call node "%NODETERM_ROOT%\scripts\ensure-windows-build-toolchain.mjs" --result-file "%NODETERM_VS_RESULT_FILE%"
 )
 set "TOOLCHAIN_EXIT=%ERRORLEVEL%"
 rem The Visual Studio installer is the one declared dependency that genuinely needs elevation.
@@ -170,7 +172,12 @@ rem An interactive one-click run may hand only this narrowly-scoped helper to UA
 rem result, and then return to the normal-user process. Silent mode must never open UAC or hang;
 rem the helper's exact elevated-only recovery text remains the honest result there.
 if "%TOOLCHAIN_EXIT%"=="5" if not "%NODETERM_SILENT%"=="1" goto :elevate_toolchain
-if not "%TOOLCHAIN_EXIT%"=="0" exit /b %TOOLCHAIN_EXIT%
+if not "%TOOLCHAIN_EXIT%"=="0" (
+    del /f /q "%NODETERM_VS_RESULT_FILE%" >nul 2>nul
+    exit /b %TOOLCHAIN_EXIT%
+)
+call :accept_toolchain_result
+if errorlevel 1 exit /b %ERRORLEVEL%
 :toolchain_phase_complete
 call :phase_end "Visual Studio C++ build toolchain"
 
@@ -319,7 +326,34 @@ rem the whole file so a legitimate `!` in an inherited PATH survives this handof
 set "NODETERM_RETURN_PATH=%PATH%"
 set "NODETERM_RETURN_NODE_HOME=%NODETERM_NODE_HOME%"
 set "NODETERM_RETURN_PYTHON=%PYTHON%"
-endlocal & set "PATH=%NODETERM_RETURN_PATH%" & set "NODETERM_NODE_HOME=%NODETERM_RETURN_NODE_HOME%" & set "PYTHON=%NODETERM_RETURN_PYTHON%" & set "NODE_GYP_FORCE_PYTHON=%NODETERM_RETURN_PYTHON%" & set "npm_config_python=%NODETERM_RETURN_PYTHON%"
+set "NODETERM_RETURN_VCINSTALLDIR=%VCINSTALLDIR%"
+endlocal & set "PATH=%NODETERM_RETURN_PATH%" & set "NODETERM_NODE_HOME=%NODETERM_RETURN_NODE_HOME%" & set "PYTHON=%NODETERM_RETURN_PYTHON%" & set "NODE_GYP_FORCE_PYTHON=%NODETERM_RETURN_PYTHON%" & set "npm_config_python=%NODETERM_RETURN_PYTHON%" & set "VCINSTALLDIR=%NODETERM_RETURN_VCINSTALLDIR%"
+exit /b 0
+
+:accept_toolchain_result
+if not exist "%NODETERM_VS_RESULT_FILE%" (
+    echo.
+    echo [FAILED] Visual Studio C++ build toolchain
+    echo   Dependency : selected Visual Studio installation path
+    echo   Constraint : the helper must return the exact verified instance before npm runs
+    echo   Source     : "%NODETERM_VS_RESULT_FILE%"
+    echo   Error      : helper exited successfully without writing its result file
+    exit /b 1
+)
+set "NODETERM_VS_INSTALLATION="
+set /p "NODETERM_VS_INSTALLATION="<"%NODETERM_VS_RESULT_FILE%"
+del /f /q "%NODETERM_VS_RESULT_FILE%" >nul 2>nul
+set "NODETERM_VS_RESULT_FILE="
+if not defined NODETERM_VS_INSTALLATION (
+    echo [FAILED] Visual Studio C++ build toolchain - helper returned an empty installation path
+    exit /b 1
+)
+if not exist "%NODETERM_VS_INSTALLATION%\VC\Tools\MSVC" (
+    echo [FAILED] Visual Studio C++ build toolchain - selected installation has no VC toolset
+    exit /b 1
+)
+set "VCINSTALLDIR=%NODETERM_VS_INSTALLATION%\VC"
+echo   Native build instance: "%NODETERM_VS_INSTALLATION%"
 exit /b 0
 
 :elevate_toolchain
@@ -354,7 +388,7 @@ if not "%ELEVATED_TOOLCHAIN_EXIT%"=="0" (
     exit /b %ELEVATED_TOOLCHAIN_EXIT%
 )
 echo --- Elevated helper completed; verifying from the normal user process ---
-call node "%NODETERM_ROOT%\scripts\ensure-windows-build-toolchain.mjs"
+call node "%NODETERM_ROOT%\scripts\ensure-windows-build-toolchain.mjs" --result-file "%NODETERM_VS_RESULT_FILE%"
 set "TOOLCHAIN_VERIFY_EXIT=%ERRORLEVEL%"
 if not "%TOOLCHAIN_VERIFY_EXIT%"=="0" (
     echo.
@@ -365,6 +399,8 @@ if not "%TOOLCHAIN_VERIFY_EXIT%"=="0" (
     echo   Error      : verification exited with code %TOOLCHAIN_VERIFY_EXIT%
     exit /b %TOOLCHAIN_VERIFY_EXIT%
 )
+call :accept_toolchain_result
+if errorlevel 1 exit /b %ERRORLEVEL%
 call :phase_end "Visual Studio C++ build toolchain"
 goto :toolchain_phase_complete
 
@@ -395,16 +431,10 @@ set "NODE_VERSION="
 rem Parse AND validate manifest-controlled strings entirely inside PowerShell before cmd ever
 rem expands them. Emitting an unvalidated quote/ampersand through FOR /F would turn JSON data into
 rem batch source. Only canonical digits/dots, the exact official URL, and hex reach this file.
-set "NODETERM_MANIFEST_FILE=%MANIFEST%"
-set "NODETERM_NODE_ARCH=%NODE_ARCH%"
 set "NODE_MANIFEST_RESULT=%TEMP%\nodeterm-node-manifest-%RANDOM%-%RANDOM%.txt"
 if exist "%NODE_MANIFEST_RESULT%" del /f /q "%NODE_MANIFEST_RESULT%" >nul 2>nul
-set "NODETERM_MANIFEST_RESULT=%NODE_MANIFEST_RESULT%"
-powershell -NoProfile -NonInteractive -Command "$ErrorActionPreference='Stop'; $m=Get-Content -Raw -LiteralPath $env:NODETERM_MANIFEST_FILE | ConvertFrom-Json; $v=[string]$m.node.version; $e=$m.node.portable.PSObject.Properties[$env:NODETERM_NODE_ARCH].Value; $u=[string]$e.url; $s=[string]$e.sha256; $expected='https://nodejs.org/dist/v'+$v+'/node-v'+$v+'-'+$env:NODETERM_NODE_ARCH+'.zip'; if($v -notmatch '^\d+\.\d+\.\d+$' -or $s -notmatch '^[a-fA-F0-9]{64}$' -or $u -cne $expected){exit 87}; [IO.File]::WriteAllLines($env:NODETERM_MANIFEST_RESULT,@('NODE_VERSION='+$v,'NODE_URL='+$u,'NODE_SHA256='+$s),[Text.UTF8Encoding]::new($false))" >nul 2>nul
+call node "%NODETERM_ROOT%\scripts\check-node-version.cjs" --print-portable "%NODE_ARCH%" 1>"%NODE_MANIFEST_RESULT%" 2>"%TEMP%\nodeterm-node-version.log"
 set "NODE_MANIFEST_VALID=%ERRORLEVEL%"
-set "NODETERM_MANIFEST_FILE="
-set "NODETERM_NODE_ARCH="
-set "NODETERM_MANIFEST_RESULT="
 if not "%NODE_MANIFEST_VALID%"=="0" goto :node_manifest_invalid
 if not exist "%NODE_MANIFEST_RESULT%" goto :node_manifest_invalid
 for /f "usebackq tokens=1,* delims==" %%K in ("%NODE_MANIFEST_RESULT%") do set "%%K=%%L"
@@ -567,7 +597,11 @@ exit /b 0
 set "NODE_PROBE_VERSION="
 set "NODE_PROBE_RESULT=%TEMP%\nodeterm-node-version-%RANDOM%-%RANDOM%.txt"
 if exist "%NODE_PROBE_RESULT%" del /f /q "%NODE_PROBE_RESULT%" >nul 2>nul
-call node "%NODETERM_ROOT%\scripts\check-node-version.cjs" 1>"%NODE_PROBE_RESULT%" 2>"%TEMP%\nodeterm-node-version.log"
+rem Native package lifecycle scripts inherit Node's own build configuration. Node 26.4.0 was built
+rem with Clang thin LTO, so its common.gypi passes -flto=thin and /opt:lldltojobs to MSVC while
+rem compiling smart-whisper. The shipped application supports a wider runtime range, but this
+rem source build must use the exact SHA-pinned Node version from dependencies.manifest.json.
+call node "%NODETERM_ROOT%\scripts\check-node-version.cjs" --manifest-pin 1>"%NODE_PROBE_RESULT%" 2>"%TEMP%\nodeterm-node-version.log"
 set "NODE_PROBE_EXIT=%ERRORLEVEL%"
 if not "%NODE_PROBE_EXIT%"=="0" goto :probe_node_done
 if not exist "%NODE_PROBE_RESULT%" set "NODE_PROBE_EXIT=1"

@@ -10,7 +10,7 @@
 
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs'
+import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve, win32 } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -146,6 +146,23 @@ export function spectreLibrariesPresent(toolsetPath, fs, libraryArchitectures) {
   })
 }
 
+function defaultToolsetVersion(installationPath, fs) {
+  const file = join(
+    installationPath,
+    'VC',
+    'Auxiliary',
+    'Build',
+    'Microsoft.VCToolsVersion.default.txt'
+  )
+  try {
+    const version = String(fs.readFile(file, 'utf8')).trim()
+    return /^\d+\.\d+\.\d+$/.test(version) ? version : null
+  } catch (error) {
+    if (error?.code === 'ENOENT') return null
+    throw new Error(`could not read ${file}: ${error.message}`)
+  }
+}
+
 function visualStudioTools(instance, fs, requiredComponentPaths, libraryArchitectures) {
   const installationPath = instance?.installationPath
   if (typeof installationPath !== 'string' || !win32.isAbsolute(installationPath)) return null
@@ -165,6 +182,7 @@ function visualStudioTools(instance, fs, requiredComponentPaths, libraryArchitec
           )
         }))
     : []
+  const defaultVersion = defaultToolsetVersion(installationPath, fs)
 
   return {
     installationPath,
@@ -172,6 +190,7 @@ function visualStudioTools(instance, fs, requiredComponentPaths, libraryArchitec
       typeof instance.installationVersion === 'string' ? instance.installationVersion : '0',
     displayName: instance.displayName || installationPath,
     hasRequiredComponent: requiredComponentPaths.has(installationPath.toLowerCase()),
+    defaultToolsetVersion: defaultVersion,
     toolsets
   }
 }
@@ -181,12 +200,21 @@ function compareVersionsNewestFirst(a, b) {
 }
 
 function selectedCxxToolset(instances) {
-  const instance = instances.find((candidate) => candidate.toolsets.length > 0)
-  if (!instance) return null
-  const toolset = [...instance.toolsets].sort((a, b) =>
-    compareVersionsNewestFirst(a.version, b.version)
-  )[0]
-  return { instance, toolset }
+  const candidates = instances
+    .filter((instance) => instance.toolsets.length > 0)
+    .map((instance) => {
+      const toolset =
+        instance.toolsets.find((candidate) => candidate.version === instance.defaultToolsetVersion) ??
+        [...instance.toolsets].sort((a, b) => compareVersionsNewestFirst(a.version, b.version))[0]
+      return { instance, toolset }
+    })
+  return (
+    candidates.find(
+      ({ instance, toolset }) => instance.hasRequiredComponent && toolset.hasSpectre
+    ) ??
+    candidates[0] ??
+    null
+  )
 }
 
 function discoverInstances({
@@ -244,15 +272,49 @@ function discoverInstances({
     vswhere,
     installerPresent: true,
     instances: raw
-      // The manifest IDs below are VS 2022 (17.x) selectors. A complete VS 2019 instance is not a
-      // safe modify target; leave it alone and install the side-by-side 2022 Build Tools product.
-      .filter((instance) => /^17\./.test(String(instance?.installationVersion ?? '')))
+      // Current node-gyp supports Visual Studio 2022 and 2026. Older instances are not safe modify
+      // targets for this build, and accepting only 17.x lets an incomplete 18.x installation win
+      // node-gyp's automatic selection after this helper has declared an older toolset ready.
+      .filter((instance) => /^1[78]\./.test(String(instance?.installationVersion ?? '')))
       .map((instance) =>
         visualStudioTools(instance, fs, requiredComponentPaths, libraryArchitectures)
       )
       .filter(Boolean)
       .sort((a, b) => compareVersionsNewestFirst(a.installationVersion, b.installationVersion))
   }
+}
+
+export function activeVisualStudioSpectreComplaints(options = {}) {
+  const platform = options.platform ?? process.platform
+  if (platform !== 'win32') return []
+  const arch = options.arch ?? process.arch
+  const fs = options.fs ?? { readFile: readFileSync, readdir: readdirSync }
+  const vcInstallDir = options.vcInstallDir ?? process.env.VCINSTALLDIR
+  if (!vcInstallDir || !win32.isAbsolute(vcInstallDir)) {
+    return ['VCINSTALLDIR does not identify the Visual Studio instance selected by the bootstrap']
+  }
+  const installationPath = win32.resolve(vcInstallDir, '..')
+  const defaultVersion = defaultToolsetVersion(installationPath, fs)
+  if (!defaultVersion) {
+    return [`${installationPath} has no readable default MSVC toolset version`]
+  }
+  const toolsetPath = join(installationPath, 'VC', 'Tools', 'MSVC', defaultVersion)
+  const libraryArchitectures = arch === 'arm64' ? ['x86', 'x64', 'arm64'] : ['x86', 'x64']
+  if (!spectreLibrariesPresent(toolsetPath, fs, libraryArchitectures)) {
+    return [
+      `${installationPath} default toolset ${defaultVersion} has no real Spectre .lib files for ` +
+        libraryArchitectures.join(', ')
+    ]
+  }
+  return []
+}
+
+function writeSelectionResult(resultFile, selection) {
+  if (!resultFile) return
+  if (!selection?.instance?.installationPath) {
+    throw new Error('the build-toolchain selection has no installation path')
+  }
+  writeFileSync(resultFile, selection.instance.installationPath, 'utf8')
 }
 
 function defaultAdministratorStatus(run, systemPowerShell) {
@@ -320,6 +382,7 @@ export function ensureWindowsBuildToolchain(options = {}) {
   const nodePath = options.nodePath ?? process.execPath
   const helperPath = options.helperPath ?? fileURLToPath(import.meta.url)
   const elevatedToolchainOnly = options.elevatedToolchainOnly ?? false
+  const resultFile = options.resultFile
   let config
 
   if (platform !== 'win32') {
@@ -386,8 +449,20 @@ export function ensureWindowsBuildToolchain(options = {}) {
     return { code: ERROR_ACCESS_DENIED, changed: false }
   }
   if (selectedCxx?.toolset.hasSpectre && selectedCxx.instance.hasRequiredComponent) {
+    try {
+      writeSelectionResult(resultFile, selectedCxx)
+    } catch (error) {
+      emitFailure(report, [
+        'Dependency : selected Visual Studio instance handoff',
+        'Constraint : the normal-user build must receive the exact verified installation path',
+        `Source     : ${resultFile}`,
+        `Error      : ${error.message}`
+      ])
+      return { code: 1, changed: false }
+    }
     report.log(
-      `  Found Spectre-mitigated MSVC libraries in ${selectedCxx.toolset.version} - nothing to install.`
+      `  Selected ${selectedCxx.instance.displayName} toolset ${selectedCxx.toolset.version} ` +
+        'with matching Spectre-mitigated libraries.'
     )
     return { code: 0, changed: false }
   }
@@ -583,15 +658,35 @@ export function ensureWindowsBuildToolchain(options = {}) {
     return { code: 1, changed: false }
   }
 
+  try {
+    writeSelectionResult(resultFile, verified)
+  } catch (error) {
+    emitFailure(report, [
+      'Dependency : selected Visual Studio instance handoff',
+      'Constraint : the normal-user build must receive the exact verified installation path',
+      `Source     : ${resultFile}`,
+      `Error      : ${error.message}`
+    ])
+    return { code: 1, changed: false }
+  }
+
   report.log('  Installed and verified the Spectre-mitigated MSVC libraries.')
   return { code: 0, changed: true }
 }
 
 const invokedPath = process.argv[1] ? resolve(process.argv[1]) : ''
 if (invokedPath && resolve(fileURLToPath(import.meta.url)).toLowerCase() === invokedPath.toLowerCase()) {
+  const resultFileIndex = process.argv.indexOf('--result-file')
+  const resultFile = resultFileIndex >= 0 ? process.argv[resultFileIndex + 1] : undefined
+  if (resultFileIndex >= 0 && !resultFile) {
+    console.error('--result-file requires a path')
+    process.exitCode = 2
+  } else {
   const result = ensureWindowsBuildToolchain({
     silent: process.argv.includes('--silent'),
-    elevatedToolchainOnly: process.argv.includes('--elevated-toolchain-only')
+    elevatedToolchainOnly: process.argv.includes('--elevated-toolchain-only'),
+    resultFile
   })
   process.exitCode = result.code
+  }
 }
