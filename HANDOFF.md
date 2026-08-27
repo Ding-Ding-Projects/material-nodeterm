@@ -243,6 +243,29 @@ and its ancestry was verified with `git merge-base --is-ancestor`.
 Verification boundary: this ultra-speed lane intentionally ran no tests, lint, type checks, builds,
 packaging, installer execution, reviews, security or accessibility checks, runtime interaction, or
 captures. The parent integration lane must keep those verdicts unverified.
+## 2026-08-27, seamless agent messaging, issue #69 / Program 58
+
+This lane adds `Settings.agentSeamlessWrites`, defaulting to `false`, and a searchable Settings →
+Agents row. Agent `send` and `reply` requests use the existing confirmation surface while the
+switch is off. When enabled, they call the same main-process mailbox delivery path without opening
+the repeated per-message confirmation. Project capability consent, source and target scope checks,
+idle-target checks, restart serialization, rate limits, bounded queue outcomes, and delivery traces
+remain in force. Node closing remains confirmation-gated.
+
+The upstream PR #113 receive-phase defect was already refined on this base to the bounded
+`CONTROL_CEILING_MS` handoff. This lane preserves that ceiling rather than disarming the socket.
+
+Changed implementation and documentation paths include `src/renderer/canvas/Canvas.tsx`,
+`src/renderer/components/settings/sections/AgentsSection.tsx`, `src/shared/types.ts`,
+`docs/features/agents/agent-messaging.md`, `docs/features/agents/README.md`,
+`src/shared/docs-data.ts`, `CHANGELOG.md`, and `ROADMAP.md`.
+
+The canonical docs generator could not start because this isolated checkout has no `esbuild`
+installation. The offline bundle entry was reconciled manually. This ultra-speed lane intentionally
+did not run tests, type checks, lint, reviews, security checks, accessibility checks, builds,
+packaging, installer execution, runtime interaction, or UI captures. The feature branch was not
+merged into `main` and no cleanup was performed in this lane.
+
 ## 2026-08-27, AWS core-service managers, issue #46 PR preparation
 
 The issue jer was reconciled with the exact `origin/main` tip `2472cf23b99559005476841d3db5e6bc4691ac06`.

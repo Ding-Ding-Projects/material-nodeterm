@@ -93,6 +93,14 @@
   The lane was later reconciled with `origin/main` at
   `54164b84dce0b7e62787b1de2885405ff4ed821c`; the reconciliation merge was recorded on its feature
   ref and does not change the no-check verification boundary.
+- Add the opt-in **Seamless agent messaging** setting. With it off, agent `send` and `reply`
+  requests use the existing confirmation surface; with it on, they use the same guarded mailbox
+  delivery path without the repeated per-message decision. Project capability consent, idle-target
+  checks, flow limits, delivery traces, bounded queue outcomes, and confirmation for node closing
+  remain unchanged. The bounded hook `CONTROL_CEILING_MS` is preserved. This ultra-speed lane did
+  not run tests, type checks, lint, reviews, security or accessibility checks, builds, packaging,
+  installer execution, runtime interaction, or UI captures.
+
 - Mount the seven AWS core-service routes on the shared AWS manager: S3, EC2, IAM, STS, Lambda,
   CloudWatch, and CloudWatch Logs. Typed operation controls now cover bounded reads, selected writes,
   destructive confirmation, pagination, cancellation, and progress while reusing the current local

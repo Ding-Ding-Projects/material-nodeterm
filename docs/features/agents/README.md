@@ -11,6 +11,8 @@ Cognition Devin are built in; any other CLI can be added as a custom agent.
 - [Linked-agent inbox notifications](./linked-agent-inbox-notifications.md) — the fixed,
   app-authored `notify --node <id>` prompt, project consent, runtime ownership checks, and
   bounded deliver-on-idle queue.
+- [Seamless agent messaging](./agent-messaging.md): bounded send/reply delivery, confirmation
+  control, project capability consent, idle queuing, and the portable versus local boundary.
 - [Agent-to-agent drag collaboration](./agent-drag-collaboration.md) — the bounded drag, keyboard,
   and touch route to the existing context-link behavior.
 - [Context-window progress](./context-window-progress.md) — provider telemetry sources, honest
