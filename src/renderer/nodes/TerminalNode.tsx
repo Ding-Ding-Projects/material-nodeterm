@@ -50,6 +50,7 @@ import { fileLinkDialect } from '../terminal/file-link-dialect'
 import { hostPlatformFor } from '../terminal/host-platform'
 import { sshFs } from '../terminal/ssh-fs'
 import type { FsApi, LaunchIntentExecutionResult, PendingLaunch } from '@shared/types'
+import { detectRemoteOAuthAuthorizeUrl, REMOTE_OAUTH_MAX_OUTPUT, type RemoteOAuthDetection } from '@shared/remote-oauth'
 import {
   attachReplay,
   closedByLabel,
@@ -3268,6 +3269,37 @@ export function TerminalNode({
     // node, the host attachment for a node attached to another endpoint — so the reconnect
     // coordinator re-establishes the master this node actually died on.
     const sshProjectId = sshRemoteTmux && ssh ? sshConnectionScope(ssh) : null
+    // OAuth authorize URLs may be split across PTY chunks. Keep only a bounded tail and never
+    // retain the callback URL itself after it has been handed to the local browser or completer.
+    let oauthOutput = ''
+    const oauthSeen = new Set<string>()
+    const handleRemoteOAuthOutput = (chunk: string): void => {
+      oauthOutput = `${oauthOutput}${chunk}`.slice(-REMOTE_OAUTH_MAX_OUTPUT)
+      const detection: RemoteOAuthDetection | null = detectRemoteOAuthAuthorizeUrl(oauthOutput)
+      if (!detection) return
+      const key = `${detection.port}:${detection.callbackPath}:${detection.authorizationUrl}`
+      if (oauthSeen.has(key)) return
+      oauthSeen.add(key)
+      if (sshProjectId) {
+        void window.nodeTerminal.sshProject
+          .forwardOAuthCallback(sshProjectId, detection.port)
+          .then((result) => {
+            if (result.ok) void window.nodeTerminal.shell.openExternal(detection.authorizationUrl)
+          })
+          .catch(() => {})
+        return
+      }
+      // Server Edition cannot create a local SSH forward. Arm the host-local completer and expose
+      // only the observed port/path to the UI; the pasted callback remains in component memory.
+      const remoteOAuth = window.nodeTerminal.remoteOAuth
+      if (!remoteOAuth) return
+      void remoteOAuth.arm({ port: detection.port, callbackPath: detection.callbackPath }).then((result) => {
+        if (!result.ok) return
+        window.dispatchEvent(new CustomEvent('nodeterm:remote-oauth-callback', {
+          detail: { port: result.port, callbackPath: result.callbackPath, expiresAt: result.expiresAt }
+        }))
+      }).catch(() => {})
+    }
     // Prefetch the persisted scrollback in parallel with the spawn so it's ready to replay the
     // instant the session resolves (a cold restart after a reboot recreates the tmux session
     // empty — see the `fresh` handling below). Cheap no-op ('') when there's no snapshot.
@@ -3562,6 +3594,7 @@ export function TerminalNode({
             // still count towards `pending`, so a flood during the gap pauses the source.
             const gate = createDataGate(writeChunk)
             offData = transport.onData(sid, (chunk) => {
+              handleRemoteOAuthOutput(chunk)
               // "Something changed here" for ADHD time awareness / momentum. Deliberately on the
               // hottest path in the app, because output IS the change — and deliberately cheap
               // enough to sit there: one Map lookup and one number, no allocation, no store write

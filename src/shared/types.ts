@@ -3312,6 +3312,13 @@ export interface SshProjectApi {
     nodeIds: string[],
     opts?: { everySocket?: boolean }
   ): Promise<void>
+  /** Forward one loopback OAuth callback port from this machine to the connected SSH host. */
+  forwardOAuthCallback(
+    projectId: string,
+    port: number
+  ): Promise<{ ok: true; port: number; expiresAt: number } | { ok: false; error: string }>
+  /** Cancel a temporary OAuth callback forward, if one is active for this project. */
+  cancelOAuthCallback(projectId: string, port?: number): Promise<boolean>
   /** List remote sub-directories of `path` (default ~). */
   listDir(projectId: string, path: string): Promise<{ path: string; dirs: string[] }>
   /** Create a remote directory (mkdir -p). Resolves false when not connected or the mkdir fails. */
@@ -4834,6 +4841,8 @@ export interface NodeTerminalApi {
   providerServices: import('./provider-services').ProviderServicesApi
   /** Host-owned Cloudflare tunnel inventory, route preservation, and reviewed DNS adoption. */
   cloudflareTunnels: import('./cloudflare-tunnels').CloudflareTunnelApi
+  /** Server Edition callback completer; absent on the desktop, which uses sshProject forwarding. */
+  remoteOAuth?: import('./remote-oauth').RemoteOAuthApi
   /** Typed Cloudflare Access, Zero Trust, Workers, Pages, R2, D1 and Queues managers. */
   cloudflareZeroTrust: import('./cloudflare-zero-trust').CloudflareApi
   timer: TimerApi

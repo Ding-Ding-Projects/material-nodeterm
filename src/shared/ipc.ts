@@ -567,6 +567,16 @@ export const IPC = {
   /** Cache a remote media file locally (scp over the ControlMaster) and allowlist it for
    *  nt-media:// playback — how a VideoNode plays a file that lives on an SSH project's host. */
   sshMediaAllow: 'ssh:media-allow',
+  /** Temporary local forward for a loopback OAuth callback emitted by an SSH-hosted CLI. */
+  sshOAuthForward: 'ssh-project:oauth-forward',
+  /** Cancel the exact temporary OAuth forward, normally after consent or expiry. */
+  sshOAuthForwardCancel: 'ssh-project:oauth-forward-cancel',
+  /** Server Edition: arm the exact localhost callback port observed in terminal output. */
+  remoteOAuthArm: 'remote-oauth:arm',
+  /** Server Edition: fetch one armed callback locally, consuming the arm first. */
+  remoteOAuthComplete: 'remote-oauth:complete',
+  /** Server Edition: cancel the current one-shot callback arm. */
+  remoteOAuthCancel: 'remote-oauth:cancel',
   sshFsList: 'sshFs:list',
   sshFsRead: 'sshFs:read',
   sshFsReadBinary: 'sshFs:read-binary',

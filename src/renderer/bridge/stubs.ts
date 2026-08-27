@@ -234,6 +234,8 @@ export function buildStubApi(): Omit<
       mkdir: U('sshProject.mkdir'),
       uploadFile: U('sshProject.uploadFile'),
       downloadFile: U('sshProject.downloadFile'),
+      forwardOAuthCallback: U('sshProject.forwardOAuthCallback'),
+      cancelOAuthCallback: U('sshProject.cancelOAuthCallback'),
       onStatus: noopUnsub,
       submitPassphrase: U('sshProject.submitPassphrase'),
       onPassphraseRequest: noopUnsub,

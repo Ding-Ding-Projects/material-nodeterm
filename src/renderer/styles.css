@@ -15911,3 +15911,29 @@ body.focus-mode .dock:hover {
 .files-node__empty { padding: 10px 8px; font-size: 12px; color: var(--muted); }
 .files-node__empty--error { color: var(--danger); }
 .files-node.collapsed .files-node__header { border-bottom: none; }
+
+/* Server Edition's remote OAuth callback completer. It is a non-blocking, bounded surface: the
+   terminal remains usable while the person pastes the one callback URL the detector armed. */
+.md3-remote-oauth-notice {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 80;
+  width: min(460px, calc(100vw - 40px));
+  box-sizing: border-box;
+  display: grid;
+  gap: 10px;
+  padding: 20px;
+  border: 1px solid var(--md-outline-variant, var(--border));
+  border-radius: var(--md-shape-sm, 12px);
+  background: var(--md-surface-container-high, var(--panel));
+  color: var(--md-on-surface, var(--text));
+  box-shadow: var(--md-elevation-3, 0 8px 24px rgba(0, 0, 0, 0.32));
+}
+.md3-remote-oauth-notice h2,
+.md3-remote-oauth-notice p {
+  margin: 0;
+}
+.md3-remote-oauth-notice input {
+  min-width: 0;
+}

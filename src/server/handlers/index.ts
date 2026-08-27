@@ -17,6 +17,7 @@ import { registerVirtualMachineIpc } from '../../core/virtual-machine/register-i
 import { registerCalendarIpc } from '../../core/calendar/register-ipc'
 import { registerCloudflareCoreManagersIpc } from '../../core/cloudflare-core-managers'
 import { registerProviderServicesIpc } from '../../core/provider-services'
+import { registerRemoteOAuthCallbackIpc } from '../../core/remote-oauth-callback'
 import { registerHomeAssistantIpc } from '../../core/home-assistant/register-ipc'
 import { registerHomeAssistantControlIpc } from '../../core/home-assistant-control/register-ipc'
 import { registerHomeAssistantSensorIpc } from '../../core/home-assistant-sensor/register-ipc'
@@ -96,6 +97,7 @@ export function registerCoreHandlers(
   registerCalendarIpc(platform)
   const cloudflareCoreManagers = registerCloudflareCoreManagersIpc(platform)
   registerProviderServicesIpc(platform)
+  registerRemoteOAuthCallbackIpc(platform)
   registerHomeAssistantIpc(platform)
   registerHomeAssistantControlIpc(platform)
   registerHomeAssistantSensorIpc(platform)
