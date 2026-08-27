@@ -422,12 +422,12 @@ export function initCodexAccounts(getSshManager?: () => SshProjectManager | unde
     async (
       _event,
       threadId: string,
-      cwd: string,
-      projectId: string,
-      targetAccountId?: string,
-      sourceAccountId?: string
+       sourceAccountId: string | undefined,
+       targetAccountId: string | undefined,
+       ctx: { projectId?: string }
     ) => {
-      if (!SAFE_THREAD_ID.test(threadId) || !path.isAbsolute(cwd) || !projectId) {
+       const projectId = ctx?.projectId
+       if (!SAFE_THREAD_ID.test(threadId) || !projectId) {
         throw new Error('Invalid Codex transfer request')
       }
       if (sourceAccountId) assertCodexAccountId(sourceAccountId)

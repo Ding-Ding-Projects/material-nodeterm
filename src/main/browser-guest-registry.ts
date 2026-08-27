@@ -89,7 +89,7 @@ export interface BrowserGuestRegistrationRefusal {
  * Handle the renderer-facing registration request through the validation boundary.
  *
  * `surface` remains optional on the wire for compatibility with the original two-argument
- * registration. Only absence defaults to `canvas`; a present invalid value is refused. Keeping the
+ * registration. Absence remains unknown; a present invalid value is refused. Keeping the
  * compatibility decision beside `registerBrowserGuest` makes the production IPC callback a thin
  * transport adapter and lets the complete request behavior run without importing Electron.
  */

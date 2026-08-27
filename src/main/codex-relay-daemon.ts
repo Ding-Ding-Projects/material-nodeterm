@@ -1685,9 +1685,8 @@ export async function exposeForeignThread(
     throw new Error('invalid Codex exposure request')
   }
   const resolved = await resolveForeignThreadAt(targetSocket, catalogSockets, threadId)
-  if (resolved.kind === 'native') return
-  if (resolved.kind !== 'foreign') throw new Error('Codex session id is unavailable or ambiguous')
   if (resolved.kind === 'native') return { kind: 'native' }
+  if (resolved.kind !== 'foreign') throw new Error('Codex session id is unavailable or ambiguous')
   if (resolved.kind !== 'foreign') throw new Error('Codex session id is unavailable or ambiguous')
   const sourceHome = path.dirname(path.dirname(resolved.thread.socketPath))
   const targetHome = path.dirname(path.dirname(targetSocket))

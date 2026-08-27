@@ -338,7 +338,6 @@ describe('Codex shared relay thread observation', () => {
 
   // Needs a real AF_UNIX socket — see the fakeCodexServer comment above.
   it.skipIf(process.platform === 'win32')('lists and freshly verifies a paginated foreign fixture before path resume', async () => {
-  it('lists and freshly verifies a paginated foreign fixture before path resume', async () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'nodeterm-relay-accounts-'))
     const sourceSocket = path.join(dir, 'source.sock')
     const sourceRequests: any[] = []
@@ -595,7 +594,6 @@ describe('Codex shared relay thread observation', () => {
     expect(Date.now() - started).toBeLessThan(2_000)
     await new Promise<void>((resolve) => server.close(() => resolve()))
   })
-})
 })
 
 describe('Codex relay per-thread reservation (Property 3 / Property 10)', () => {

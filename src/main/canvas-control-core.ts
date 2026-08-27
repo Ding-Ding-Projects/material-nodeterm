@@ -177,7 +177,6 @@ const VERBS: ControlVerb[] = [
   'browser',
   'notify',
   'sticky',
-  'browser',
   // Issue #338 PR 1: registered in the model (parse + gates + the grant ledger run in main), but
   // INERT until PR 2 adds the renderer dispatch case — today the renderer's `default:` answers
   // `unknown verb: open-project`. Deliberately undocumented in the skill/instructions bodies until
