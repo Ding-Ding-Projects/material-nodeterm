@@ -106,7 +106,7 @@ Every other feature module renders its own chrome through `t(id)` /
 changes copy across the whole site, not just on its own panel.
 
 **Storage keys** (all under the `nodeterm.site.` prefix):
-`lang.mode` (`en`|`yue`|`bi`), `lang.funnyEn` (1–5), `lang.funnyYue` (1–5),
+`lang.mode` (`en`|`yue`|`bi`), `lang.funnyEn` (1–10), `lang.funnyYue` (1–10),
 `lang.emoji` (bool).
 
 **The "voice, never facts" contract, in code:** `COPY` is a dictionary of

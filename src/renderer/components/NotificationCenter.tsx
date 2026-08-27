@@ -175,7 +175,7 @@ export function NotificationCenter({
 
   return createPortal(
     <div className="drawer-overlay" onClick={onClose}>
-      <div className="notif-center" onClick={(e) => e.stopPropagation()}>
+      <div className="notif-center" data-easter-surface="notifications" onClick={(e) => e.stopPropagation()}>
         <div className="notif-center__head">
           <h2>{vocab('Notifications')}</h2>
           <button className="drawer__close" onClick={onClose} aria-label={vocab('Close')}>

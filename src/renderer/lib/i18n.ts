@@ -2,6 +2,7 @@ import { useCallback, useMemo } from 'react'
 import { useSettings } from '../state/settings'
 import {
   formatText,
+  normalizeFunnyLevel,
   normalizeLanguageMode,
   t as resolveText,
   ts as resolveString,
@@ -54,8 +55,8 @@ export function useI18n(): {
   // Unknown hydration is fail-closed, and a hand-edited invalid mode is English rather than an
   // `undefined` resolver result. Level 1 is the documented plain/professional voice.
   const mode: LanguageMode = languageFeaturesAllowed ? normalizeLanguageMode(configuredMode) : 'en'
-  const effectiveFunnyLevelEn = languageFeaturesAllowed ? funnyLevelEn : 1
-  const effectiveFunnyLevelYue = languageFeaturesAllowed ? funnyLevelYue : 1
+  const effectiveFunnyLevelEn = languageFeaturesAllowed ? normalizeFunnyLevel(funnyLevelEn) : 1
+  const effectiveFunnyLevelYue = languageFeaturesAllowed ? normalizeFunnyLevel(funnyLevelYue) : 1
 
   const levels: FunnyLevels = useMemo(
     () => ({ en: effectiveFunnyLevelEn, yue: effectiveFunnyLevelYue }),

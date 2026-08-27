@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nextcloud AIO hosting - nodeterm docs</title>
+    <meta name="description" content="Guided private-first Nextcloud AIO hosting with explicit Docker socket authority disclosure." />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" href="./assets/docs.css" />
+  </head>
+  <body>
+    <div class="doc-topbar"><a href="../index.html">← nodeterm</a><span aria-hidden="true">/</span><a href="./index.html">Docs</a></div>
+    <article class="doc-body">
+      <p class="doc-kicker">Remote and services</p>
+      <h1>Nextcloud AIO hosting</h1>
+      <p>Nextcloud AIO is a guided, private-first hosting profile. It uses the pinned official <code>nextcloud/all-in-one:2025.8.0</code> image through a selected Docker context and does not accept arbitrary images, shell commands, Compose text, or free-form environment values.</p>
+      <h2>Guided controls</h2>
+      <p>The node provides a Docker-context picker, loopback or private-network binding, a bounded port field, and explicit Deploy, Start, Stop, Update image, Create backup, Restore, and Rollback actions. Queued, running, completed, failed, and cancelled progress is shown at the node that started the operation. Context and backup searches are independent plain-text fields with adjacent anchored regex builders.</p>
+      <h2>Docker authority and safety</h2>
+      <p>The AIO master container needs Docker control to supervise its child containers, so the profile mounts the Docker socket read-only. The node says plainly that this socket can control the Docker host and is not a security boundary. The fixed invocation uses <code>no-new-privileges</code>, drops capabilities, uses a read-only root filesystem, and never passes <code>--privileged</code>.</p>
+      <h2>Portability and recovery</h2>
+      <p>Schema 3 carries only safe image, binding, port, and profile intent. Context names, endpoints, socket paths, container ids, volume contents, backup records, process state, host paths, and credentials remain local. Import has no external side effect. Missing Docker, vanished contexts or backups, invalid ports, and failed operations remain distinct and name their refresh or retry route.</p>
+      <h2>Verification</h2>
+      <p>This ultra-speed implementation lane did not run tests, type checking, lint, review, security or accessibility checks, builds, packaging, installer execution, runtime interaction, or captures. Later verification must use the exact integrated commit.</p>
+      <section class="doc-suggested"><h2>Suggested articles</h2><ul><li><a href="./docker-host-manager.html">Docker host manager</a></li><li><a href="./node-catalog.html">Unified Node Catalog</a></li><li><a href="./portable-media-assets.html">Portable project assets</a></li></ul></section>
+    </article>
+  </body>
+</html>

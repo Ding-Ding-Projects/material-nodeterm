@@ -1,6 +1,7 @@
 import type { NodeKind } from './types'
 import { DOCKER_HOST_PORTABLE_BLUEPRINT } from './docker-host-manager'
 import { OPEN_WEBUI_DEFAULT_INTENT } from './open-webui-hosting'
+import { NEXTCLOUD_AIO_PORTABLE_BLUEPRINT } from './nextcloud-aio'
 
 /** The guided categories shown by the Node Catalog. Keep this list explicit so a new category
  * cannot disappear from the picker simply because no current entry happens to use it. */
@@ -154,6 +155,47 @@ const plannedEntry = (
     return planned(label, dependencyId)(context)
   }
 })
+
+const awsCoreEntry = (id: string, service: string, label: string, description: string): NodeCatalogEntry => ({
+  id,
+  nodeKind: 'aws-resource',
+  category: 'managers',
+  label,
+  description,
+  keywords: ['aws', service, 'guided', 'manager'],
+  documentationPath: 'docs/features/integrations/aws-core-services.md',
+  safeDefaults: { mode: 'core-services', coreService: service, regionIntent: 'us-east-1' },
+  dependencies: ['aws-cli-v2'],
+  status: 'available',
+  availabilityMode: 'configure-later',
+  scope: 'aws-universe',
+  availability: (context) => {
+    const scope = inScope('aws-universe')(context)
+    return scope.available ? unsupportedInRelay(context) : scope
+  }
+})
+
+const awsUniverseEntry: NodeCatalogEntry = {
+  id: 'aws-universe',
+  nodeKind: 'aws-universe',
+  category: 'universes',
+  label: 'AWS Universe',
+  description: 'Create an AWS-only child canvas with a dedicated Shop node.',
+  keywords: ['aws', 'cloud', 'universe', 'portal', 'canvas'],
+  documentationPath: 'docs/features/canvas/aws-universe.md',
+  safeDefaults: { scope: 'aws-universe', depth: 1 },
+  dependencies: [],
+  status: 'available',
+  availabilityMode: 'configure-later',
+  scope: 'root',
+  availability: (context) => context.universeScope === 'root'
+    ? { available: true }
+    : {
+        available: false,
+        reason: 'AWS Universe portals can only be created from the root canvas.',
+        dependencyIds: ['canvas-scope:root']
+      }
+}
 
 /**
  * The one source of truth for user-created node intents. Labels and descriptions deliberately stay
@@ -432,6 +474,33 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
     availability: alwaysAvailable
   },
   {
+    id: 'service:cloudflare-zero-trust',
+    nodeKind: 'cloudflare-zero-trust',
+    category: 'managers',
+    label: 'Cloudflare managers',
+    description: 'Open typed Access, Zero Trust, Workers, Pages, R2, D1 and Queues managers.',
+    keywords: ['service', 'cloudflare', 'access', 'zero trust', 'workers', 'pages', 'r2', 'd1', 'queues'],
+    documentationPath: 'docs/features/integrations/cloudflare-zero-trust-managers.md',
+    safeDefaults: { serviceLabel: '' },
+    dependencies: ['cloudflare-api'],
+    availability: alwaysAvailable
+  },
+  {
+    id: 'service:awsidentity',
+    nodeKind: 'awsidentity',
+    category: 'managers',
+    label: 'AWS identity manager',
+    description: 'Open guided local AWS profile, SSO, role, MFA, endpoint, and region controls.',
+    keywords: ['service', 'aws', 'profile', 'sso', 'role', 'mfa', 'endpoint', 'region'],
+    documentationPath: 'docs/features/integrations/aws-identity.md',
+    safeDefaults: { serviceLabel: '' },
+    dependencies: ['aws-cli-v2'],
+    status: 'available',
+    availabilityMode: 'configure-later',
+    scope: 'aws-universe',
+    availability: unsupportedInRelay
+  },
+  {
     id: 'editor',
     nodeKind: 'editor',
     category: 'files',
@@ -525,11 +594,115 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
   },
   plannedEntry('planner', 'automation', 'Planner', 'Create a planner occurrence definition with explicit local binding.', 'planner-service'),
   plannedEntry('multiverse-portal', 'universes', 'Multiverse portal', 'Create a door-only Multiverse canvas below the depth limit.', 'multiverse-service', 'multiverse', 8),
-  plannedEntry('aws-universe', 'universes', 'AWS Universe', 'Create an AWS-only child canvas with a dedicated Shop node.', 'aws-cli-v2', 'aws-universe'),
-  plannedEntry('aws-service', 'universes', 'AWS service node', 'Create a typed AWS service blueprint from installed CLI models.', 'aws-cli-v2', 'aws-universe'),
+  awsUniverseEntry,
+  {
+    id: 'aws-resource-explorer',
+    nodeKind: 'aws-resource',
+    category: 'managers',
+    label: 'AWS Resource Explorer',
+    description: 'Search indexed AWS resources through a guided, account-bound manager.',
+    keywords: ['aws', 'resource explorer', 'resources', 'search', 'views'],
+    documentationPath: 'docs/features/aws/resource-explorer.md',
+    safeDefaults: { mode: 'resource-explorer', regionIntent: 'us-east-1', resourceQuery: '*' },
+    dependencies: ['aws-cli-v2'],
+    availabilityMode: 'configure-later',
+    scope: 'aws-universe',
+    availability: unsupportedInRelay
+  },
+  {
+    id: 'aws-cloud-control',
+    nodeKind: 'aws-resource',
+    category: 'managers',
+    label: 'AWS Cloud Control',
+    description: 'Inspect and manage supported AWS resource types through typed controls.',
+    keywords: ['aws', 'cloud control', 'cloudcontrol', 'resources', 'types'],
+    documentationPath: 'docs/features/aws/cloud-control.md',
+    safeDefaults: { mode: 'cloud-control', regionIntent: 'us-east-1', cloudControlTypeName: '' },
+    dependencies: ['aws-cli-v2'],
+    availabilityMode: 'configure-later',
+    scope: 'aws-universe',
+    availability: unsupportedInRelay
+  },
+  awsCoreEntry('aws-s3', 's3', 'Amazon S3', 'Browse buckets and objects through guided S3 operations.'),
+  awsCoreEntry('aws-ec2', 'ec2', 'Amazon EC2', 'Inspect and manage EC2 instances through typed controls.'),
+  awsCoreEntry('aws-iam', 'iam', 'AWS IAM', 'Review IAM identities through explicit typed operations.'),
+  awsCoreEntry('aws-sts', 'sts', 'AWS STS', 'Inspect caller identity without exposing session credentials.'),
+  awsCoreEntry('aws-lambda', 'lambda', 'AWS Lambda', 'Browse and operate Lambda functions through guided controls.'),
+  awsCoreEntry('aws-cloudwatch', 'cloudwatch', 'Amazon CloudWatch', 'Explore metrics through guided controls.'),
+  awsCoreEntry('aws-logs', 'logs', 'Amazon CloudWatch Logs', 'Browse log groups and streams with bounded searches.'),
+  {
+    id: 'aws-cloudformation',
+    nodeKind: 'aws-resource',
+    category: 'managers',
+    label: 'AWS CloudFormation',
+    description: 'Validate templates and preview, execute, or remove change sets through the shared AWS manager.',
+    keywords: ['aws', 'cloudformation', 'stack', 'change set', 'template'],
+    documentationPath: 'docs/features/integrations/cloudformation-manager.md',
+    safeDefaults: { mode: 'cloudformation', regionIntent: 'us-east-1', cloudFormation: { schemaVersion: 1, stackName: '', changeSetType: 'CREATE', parameterKeys: [], capabilities: [] } },
+    dependencies: ['aws-cli-v2'],
+    availabilityMode: 'configure-later',
+    scope: 'aws-universe',
+    availability: unsupportedInRelay
+  },
+  plannedEntry('aws-cdk', 'tools', 'AWS CDK', 'Choose a trusted project folder, then synthesize and review changes before deployment.', 'aws-cdk-manager', 'aws-universe'),
+  plannedEntry('aws-ecr', 'managers', 'Amazon ECR', 'Manage container repositories and images through typed controls.', 'aws-container-and-network-managers', 'aws-universe'),
+  plannedEntry('aws-ecs', 'managers', 'Amazon ECS', 'Inspect clusters, services, tasks, and deployments through guided controls.', 'aws-container-and-network-managers', 'aws-universe'),
+  plannedEntry('aws-eks', 'managers', 'Amazon EKS', 'Inspect clusters and workloads through explicit model-backed controls.', 'aws-container-and-network-managers', 'aws-universe'),
+  plannedEntry('aws-rds', 'managers', 'Amazon RDS', 'Manage database instances and clusters through guided controls.', 'aws-container-and-network-managers', 'aws-universe'),
+  plannedEntry('aws-databases', 'managers', 'AWS databases', 'Browse supported AWS database services through typed service models.', 'aws-container-and-network-managers', 'aws-universe'),
+  plannedEntry('aws-vpc', 'managers', 'Amazon VPC', 'Inspect networks, subnets, routes, gateways, and security groups through guided controls.', 'aws-container-and-network-managers', 'aws-universe'),
+  plannedEntry('aws-route53', 'managers', 'Amazon Route 53', 'Manage hosted zones, records, and health checks through reviewed operations.', 'aws-container-and-network-managers', 'aws-universe'),
+  plannedEntry('aws-cost', 'managers', 'AWS cost management', 'Explore cost and usage data with explicit account, period, and grouping controls.', 'aws-container-and-network-managers', 'aws-universe'),
+  {
+    ...plannedEntry('aws-service', 'universes', 'All AWS services', 'Create a typed AWS service workspace from installed CLI models without a raw command fallback.', 'aws-all-services-manager', 'aws-universe'),
+    documentationPath: 'docs/features/integrations/aws-cli-model-documentation.md'
+  },
+  {
+    id: 'cloudflare-core-managers',
+    nodeKind: 'cloudflare-core-managers',
+    category: 'managers',
+    label: 'Cloudflare core managers',
+    description: 'Manage accounts, zones, DNS, SSL/TLS, rulesets, redirects, cache, and analytics with typed operations.',
+    keywords: ['cloudflare', 'account', 'zone', 'dns', 'ssl', 'tls', 'ruleset', 'redirect', 'cache', 'analytics', 'manager'],
+    documentationPath: 'docs/features/integrations/cloudflare-core-managers.md',
+    safeDefaults: { manager: 'account', operation: 'account-list' },
+    dependencies: [],
+    status: 'available',
+    availabilityMode: 'configure-later',
+    scope: 'any',
+    availability: alwaysAvailable
+  },
   plannedEntry('cloudflare-hosting', 'hosting', 'Cloudflare hosting', 'Create a private-first hosting blueprint with explicit tunnel exposure later.', 'hosting-adapter'),
-  plannedEntry('gitlab-hosting', 'hosting', 'GitLab hosting', 'Create a guided GitLab hosting blueprint with local credentials later.', 'hosting-adapter'),
-  plannedEntry('nextcloud-hosting', 'hosting', 'Nextcloud hosting', 'Create a managed Nextcloud hosting blueprint with local binding later.', 'hosting-adapter'),
+  {
+    id: 'gitlab-hosting',
+    nodeKind: 'gitlab-hosting',
+    category: 'hosting',
+    label: 'GitLab hosting',
+    description: 'Deploy a private GitLab Server with a pinned Community or Enterprise image.',
+    keywords: ['gitlab', 'hosting', 'community edition', 'enterprise edition', 'backup', 'restore'],
+    documentationPath: 'docs/features/integrations/gitlab-hosting.md',
+    safeDefaults: { gitlabHostingConfig: 'default-private-loopback' },
+    dependencies: ['docker-context'],
+    status: 'available',
+    availabilityMode: 'configure-later',
+    scope: 'any',
+    availability: unsupportedInRelay
+  },
+  {
+    id: 'nextcloud-hosting',
+    nodeKind: 'nextcloud-aio',
+    category: 'hosting',
+    label: 'Nextcloud AIO hosting',
+    description: 'Deploy a private-first Nextcloud AIO profile with disclosed Docker socket authority and no privileged mode.',
+    keywords: ['hosting', 'nextcloud', 'aio', 'backup', 'restore', 'rollback', 'docker socket'],
+    documentationPath: 'docs/features/integrations/nextcloud-aio-hosting.md',
+    safeDefaults: { nextcloudAioBlueprint: NEXTCLOUD_AIO_PORTABLE_BLUEPRINT },
+    dependencies: ['docker-cli', 'nextcloud-aio-image'],
+    status: 'available',
+    availabilityMode: 'configure-later',
+    scope: 'any',
+    availability: unsupportedInRelay
+  },
   {
     id: 'open-webui-hosting',
     nodeKind: 'open-webui-hosting',
@@ -583,6 +756,8 @@ export const NODE_CATALOG_COMPLETENESS: readonly NodeCatalogCompletenessRecord[]
   { id: 'service:gitlab', state: 'current', scope: 'any', reason: 'service manager node' },
   { id: 'service:homeassistant', state: 'current', scope: 'any', reason: 'service manager node' },
   { id: 'service:freepbx', state: 'current', scope: 'any', reason: 'service manager node' },
+  { id: 'service:cloudflare-zero-trust', state: 'current', scope: 'any', reason: 'typed Cloudflare manager node' },
+  { id: 'service:awsidentity', state: 'current', scope: 'aws-universe', reason: 'guided AWS identity manager node' },
   { id: 'subagent', state: 'ephemeral', scope: 'none', reason: 'hook-derived render-only card' },
   { id: 'loop-card', state: 'ephemeral', scope: 'none', reason: 'schedule-derived render-only card' },
   { id: 'photo', state: 'planned', scope: 'any', reason: 'photo adapter not implemented' },
@@ -597,11 +772,31 @@ export const NODE_CATALOG_COMPLETENESS: readonly NodeCatalogCompletenessRecord[]
   { id: 'alarm', state: 'current', scope: 'any', reason: 'persisted Alarm Clock node with host planner' },
   { id: 'planner', state: 'planned', scope: 'any', reason: 'planner service not implemented' },
   { id: 'multiverse-portal', state: 'planned', scope: 'multiverse', reason: 'Multiverse portal not implemented' },
-  { id: 'aws-universe', state: 'planned', scope: 'aws-universe', reason: 'AWS Universe not implemented' },
-  { id: 'aws-service', state: 'planned', scope: 'aws-universe', reason: 'AWS service node not implemented' },
+  { id: 'aws-universe', state: 'current', scope: 'root', reason: 'AWS-only Universe portal and child canvas' },
+  { id: 'aws-resource-explorer', state: 'current', scope: 'aws-universe', reason: 'guided Resource Explorer manager' },
+  { id: 'aws-cloud-control', state: 'current', scope: 'aws-universe', reason: 'guided Cloud Control manager' },
+  { id: 'aws-s3', state: 'current', scope: 'aws-universe', reason: 'guided S3 operations through shared AWS manager' },
+  { id: 'aws-ec2', state: 'current', scope: 'aws-universe', reason: 'guided EC2 operations through shared AWS manager' },
+  { id: 'aws-iam', state: 'current', scope: 'aws-universe', reason: 'guided IAM operations through shared AWS manager' },
+  { id: 'aws-sts', state: 'current', scope: 'aws-universe', reason: 'caller identity through shared AWS manager' },
+  { id: 'aws-lambda', state: 'current', scope: 'aws-universe', reason: 'guided Lambda operations through shared AWS manager' },
+  { id: 'aws-cloudwatch', state: 'current', scope: 'aws-universe', reason: 'guided CloudWatch operations through shared AWS manager' },
+  { id: 'aws-logs', state: 'current', scope: 'aws-universe', reason: 'guided CloudWatch Logs operations through shared AWS manager' },
+  { id: 'aws-cloudformation', state: 'current', scope: 'aws-universe', reason: 'AWS CloudFormation uses the shared AWS resource manager' },
+  { id: 'aws-cdk', state: 'planned', scope: 'aws-universe', reason: 'AWS CDK manager not implemented' },
+  { id: 'aws-ecr', state: 'planned', scope: 'aws-universe', reason: 'Amazon ECR manager not implemented' },
+  { id: 'aws-ecs', state: 'planned', scope: 'aws-universe', reason: 'Amazon ECS manager not implemented' },
+  { id: 'aws-eks', state: 'planned', scope: 'aws-universe', reason: 'Amazon EKS manager not implemented' },
+  { id: 'aws-rds', state: 'planned', scope: 'aws-universe', reason: 'Amazon RDS manager not implemented' },
+  { id: 'aws-databases', state: 'planned', scope: 'aws-universe', reason: 'AWS database managers not implemented' },
+  { id: 'aws-vpc', state: 'planned', scope: 'aws-universe', reason: 'Amazon VPC manager not implemented' },
+  { id: 'aws-route53', state: 'planned', scope: 'aws-universe', reason: 'Amazon Route 53 manager not implemented' },
+  { id: 'aws-cost', state: 'planned', scope: 'aws-universe', reason: 'AWS cost manager not implemented' },
+  { id: 'aws-service', state: 'planned', scope: 'aws-universe', reason: 'All-service AWS manager not implemented' },
+  { id: 'cloudflare-core-managers', state: 'current', scope: 'any', reason: 'typed Cloudflare account, zone, DNS, SSL/TLS, ruleset, redirect, cache, and analytics managers' },
   { id: 'cloudflare-hosting', state: 'planned', scope: 'any', reason: 'Cloudflare hosting not implemented' },
-  { id: 'gitlab-hosting', state: 'planned', scope: 'any', reason: 'GitLab hosting not implemented' },
-  { id: 'nextcloud-hosting', state: 'planned', scope: 'any', reason: 'Nextcloud hosting not implemented' },
+  { id: 'gitlab-hosting', state: 'current', scope: 'any', reason: 'guided private GitLab Server hosting node' },
+  { id: 'nextcloud-hosting', state: 'current', scope: 'any', reason: 'Nextcloud AIO hosting profile' },
   { id: 'open-webui-hosting', state: 'current', scope: 'any', reason: 'guided Open WebUI hosting node' }
 ]
 
