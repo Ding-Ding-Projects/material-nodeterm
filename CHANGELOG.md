@@ -36,6 +36,14 @@
   explicit offline/photo recovery without vendoring images. This ultra-speed lane ran no tests,
   type checks, lint, builds, packaging, runtime interaction, audits, reviews, or captures.
 
+- Add the Home Assistant multi-instance client with machine-local instance registration, sealed
+  write-only access tokens, explicit node binding, bounded REST and WebSocket entity discovery,
+  cancellable progress, retry and recovery states, searchable instance/domain/entity pickers with
+  adjacent anchored regex builders, and schema 3 safe discovery intent. Hosts, credentials,
+  sessions, sockets, caches, and entity results stay out of portable projects. This ultra-speed
+  lane intentionally ran no tests, type checks, lint, builds, packaging, reviews, security checks,
+  accessibility checks, installer execution, runtime interaction checks, or UI captures.
+
 - Add a source-only desktop Material Design 3 audit with a hand-written inventory of 212 rendered
   surfaces, including onboarding, profile picking, conversion, password management, Minecraft
   management, dialogs, find bars, and notifications. Shared NumberField, Radio, Progress, and Tabs

@@ -3,6 +3,8 @@ import type { AgentLaunchIntent, BrowserTab, CanvasMutation, CanvasNodeState, Cl
 import { normalizeMediaReference, type MediaAssetReference } from '@shared/media-catalog'
 import { normalizePublicDimSumSelection, type PublicDimSumSelection } from '@shared/public-dim-sum'
 import type { CalendarNodeConfig } from '@shared/calendar'
+import type { HomeAssistantNodeIntent } from '@shared/home-assistant'
+import { DEFAULT_HOME_ASSISTANT_NODE_INTENT } from '@shared/home-assistant'
 import type { AlarmOccurrence, AlarmRecurrence } from '@shared/alarm-clock'
 import type { ServiceConnection } from '@shared/node-exec'
 import type { NsisLocalPaths, NsisSpec } from '@shared/nsis-form-types'
@@ -246,6 +248,7 @@ export interface NodeData {
   highScore?: number
   /** service-kinds only: the display name the user gave this manager. See `CanvasNodeState`. */
   serviceLabel?: string
+  homeAssistantIntent?: HomeAssistantNodeIntent
   /** Safe ownership metadata for a special-universe Shop node. */
   universeCanvasId?: string
   universeScope?: 'multiverse' | 'aws-universe'
@@ -1536,7 +1539,8 @@ export function createServiceNode(
       title: SERVICE_NODE_LABELS[kind],
       color: NODE_COLORS[index % NODE_COLORS.length],
       group: null,
-      serviceLabel: ''
+      serviceLabel: '',
+      ...(kind === 'homeassistant' ? { homeAssistantIntent: { ...DEFAULT_HOME_ASSISTANT_NODE_INTENT } } : {})
     }
   }
 }
@@ -2636,6 +2640,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         cwd: n.cwd,
         text: n.text,
         serviceLabel: n.serviceLabel,
+        homeAssistantIntent: n.homeAssistantIntent,
         universeCanvasId: n.universeCanvasId,
         universeScope: n.universeScope,
         universeDepth: n.universeDepth,
@@ -2755,6 +2760,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         cwd: n.data.cwd,
         text: n.data.text,
         serviceLabel: n.data.serviceLabel,
+        homeAssistantIntent: n.data.homeAssistantIntent,
         universeCanvasId: n.data.universeCanvasId,
         universeScope: n.data.universeScope,
         universeDepth: n.data.universeDepth,

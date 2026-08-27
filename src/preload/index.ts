@@ -36,6 +36,7 @@ import type { WslCreateProgress } from '../shared/wsl'
 import type { TorrentTaskState } from '../shared/torrent'
 import type { VirtualMachineEvent } from '../shared/virtual-machine'
 import type { CalendarProvider } from '../shared/calendar'
+import type { HomeAssistantClientEvent } from '../shared/home-assistant'
 import type { ProjectConsentRequest, ProjectSetupEvent } from '../shared/project-settings'
 
 // Fan a single ipcRenderer listener per channel out to many renderer subscribers. Without
@@ -90,6 +91,7 @@ const subscribeNodeDependencyState = subscribe<[NodeDependencyAvailability]>(IPC
 const subscribeNodeDependencyProgress = subscribe<[NodeDependencyProgress]>(IPC.nodeDependencyProgress)
 const subscribeTorrentTask = subscribe<[TorrentTaskState]>(IPC.torrentTask)
 const subscribeVirtualMachineEvent = subscribe<[VirtualMachineEvent]>(IPC.virtualMachineEvent)
+const subscribeHomeAssistantEvent = subscribe<[HomeAssistantClientEvent]>(IPC.homeAssistantEvent)
 const subscribeWidgetState = subscribe<[CanvasWidgetLiveState]>(IPC.widgetStateChanged)
 
 const subscribeRelayPeerPending = subscribe<[RelayPeerPending]>(IPC.relayHostPeerPending)
@@ -1209,6 +1211,14 @@ const api: NodeTerminalApi = {
     create: (input) => ipcRenderer.invoke(IPC.calendarCreate, input),
     update: (input) => ipcRenderer.invoke(IPC.calendarUpdate, input),
     remove: (id, eventId) => ipcRenderer.invoke(IPC.calendarRemove, id, eventId)
+  },
+  homeAssistant: {
+    instances: () => ipcRenderer.invoke(IPC.homeAssistantInstances),
+    saveInstance: (input) => ipcRenderer.invoke(IPC.homeAssistantSaveInstance, input),
+    removeInstance: (id) => ipcRenderer.invoke(IPC.homeAssistantRemoveInstance, id),
+    discover: (request) => ipcRenderer.invoke(IPC.homeAssistantDiscover, request),
+    cancel: (operationId) => ipcRenderer.invoke(IPC.homeAssistantCancel, operationId),
+    onEvent: (listener) => subscribeHomeAssistantEvent(listener)
   // The `browser` verb resolve round-trip (S8 PR 7): main asks the renderer which project owns the
   // source, whether it is control-capable, and whether the capability is on right now — the renderer
   // NEVER runs a CDP command.

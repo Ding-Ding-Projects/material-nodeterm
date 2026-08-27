@@ -14591,6 +14591,203 @@ body.focus-mode .dock:hover {
   line-height: 1.4;
 }
 
+/* Home Assistant multi-instance client. It reuses the service node surface and the shared regex
+   builder, while keeping dense entity results scrollable inside the node instead of stretching it. */
+.ha-client {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 12px;
+  overflow: auto;
+  padding: 12px;
+  color: var(--md-sys-color-on-surface);
+}
+
+.ha-client label,
+.ha-client fieldset {
+  display: grid;
+  gap: 6px;
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 12px;
+}
+
+.ha-client input,
+.ha-client select,
+.ha-client__picker-button {
+  min-height: 40px;
+  min-width: 0;
+  border: 1px solid var(--md-sys-color-outline);
+  border-radius: 8px;
+  background: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface);
+  padding: 8px 10px;
+}
+
+.ha-client__picker-button {
+  width: 100%;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ha-client input:focus-visible,
+.ha-client select:focus-visible,
+.ha-client button:focus-visible {
+  outline: 3px solid var(--md-sys-color-primary);
+  outline-offset: 2px;
+}
+
+.ha-client button {
+  min-height: 40px;
+  border: 0;
+  border-radius: 20px;
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+  padding: 0 16px;
+}
+
+.ha-client button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.ha-client__status,
+.ha-client__form,
+.ha-client__picker,
+.ha-client__discovery,
+.ha-client__filters {
+  display: grid;
+  gap: 8px;
+  border-radius: 12px;
+  background: var(--md-sys-color-surface-container);
+  padding: 12px;
+}
+
+.ha-client__status span,
+.ha-client__note,
+.ha-client__empty {
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.ha-client__status progress {
+  width: 100%;
+  accent-color: var(--md-sys-color-primary);
+}
+
+.ha-client__actions,
+.ha-client__search-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ha-client__option-list {
+  display: grid;
+  gap: 4px;
+  max-height: 320px;
+  overflow: auto;
+  padding: 4px;
+}
+
+.ha-client__option-list button {
+  display: grid;
+  min-height: 48px;
+  gap: 2px;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--md-sys-color-on-surface);
+  text-align: left;
+}
+
+.ha-client__option-list button[aria-selected='true'] {
+  background: var(--md-sys-color-secondary-container);
+}
+
+.ha-client__option-list button span {
+  overflow: hidden;
+  color: var(--md-sys-color-on-surface-variant);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ha-client__search-row input {
+  flex: 1 1 180px;
+}
+
+.ha-client__discovery fieldset {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border: 0;
+  padding: 0;
+}
+
+.ha-client__discovery fieldset label {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  gap: 8px;
+}
+
+.ha-client__discovery fieldset input {
+  min-height: auto;
+}
+
+.ha-client__error {
+  color: var(--md-sys-color-error);
+}
+
+.ha-client__entities {
+  display: grid;
+  gap: 8px;
+}
+
+.ha-client__entity {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 12px;
+  background: var(--md-sys-color-surface-container-low);
+  padding: 10px 12px;
+}
+
+.ha-client__entity div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.ha-client__entity code {
+  overflow: hidden;
+  color: var(--md-sys-color-on-surface-variant);
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 520px) {
+  .ha-client__discovery fieldset {
+    grid-template-columns: 1fr;
+  }
+
+  .ha-client__entity {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ha-client *,
+  .ha-client *::before,
+  .ha-client *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 .service-node__input[aria-invalid='true'] + .service-node__note,
 .service-node__field:has(.service-node__input[aria-invalid='true']) + .service-node__note {
   color: var(--md-error, #ff453a);

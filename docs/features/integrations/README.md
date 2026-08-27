@@ -6,7 +6,8 @@ substrate described in CLAUDE.md rather than inventing a surface each.
 
 | feature | status |
 | --- | --- |
-| [Service nodes](service-nodes.md) | implemented as canvas objects (Minecraft, Docker host, Proxmox, GitLab, Home Assistant, FreePBX); none of them dial anything yet |
+| [Service nodes](service-nodes.md) | implemented as canvas objects (Minecraft, Docker host, Proxmox, GitLab, Home Assistant, FreePBX); Home Assistant and Minecraft have live clients |
+| [Home Assistant client](home-assistant-client.md) | multi-instance machine-local registration with bounded REST and WebSocket entity discovery |
 | [Minecraft server](minecraft-server.md) | research only: cited constraints, not implemented |
 | [Research findings](research-findings.md) | all seven subjects, adversarially checked |
 | [Special-universe Shop nodes](aws-universe-shop.md) | implemented deterministic, scope-bound Shop coordinator and catalog surface; AWS executors remain visibly unavailable until their later lanes |
@@ -19,8 +20,8 @@ Planned, not yet researched here:
 
 - **Proxmox** — a MANAGER for an existing instance. It is a bare-metal hypervisor distribution, so
   there is nothing to host from a right-click; the node drives its API.
-- **Home Assistant** — note the repo already talks to Home Assistant for scheduled settings, so a
-  fuller integration must extend that rather than open a second client.
+- **Home Assistant controls and sensor displays** are separate Program 16 and Program 17 surfaces.
+  They reuse the multi-instance client and discovery contract documented above.
 - **Docker** — the highest-value angle is exec-into-a-container as a real terminal node, since that
   is what this app already is.
 - **GitLab** — two halves: self-hosting Community Edition, and a Material client over its API. The

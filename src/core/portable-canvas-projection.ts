@@ -55,6 +55,7 @@ export interface PortableCanvasNodeV3 {
   serviceLabel?: string
   /** Safe public-catalog identity and display copy. Image bytes and network state are excluded. */
   wildDimSumDish?: PublicDimSumSelection
+  homeAssistantIntent?: { transport: 'rest' | 'websocket'; domain: string }
   alarmSchedule?: { recurrence: string; date?: string; time: string; weekdays?: number[]; monthDay?: number }
   alarmTimeZone?: string
   alarmEnabled?: boolean
@@ -124,11 +125,12 @@ const ALLOWED_NODE = new Set([
   'id', 'kind', 'creationEventId', 'position', 'size', 'title', 'color', 'group',
   'universeCanvasId', 'universeScope', 'universeDepth', 'nonDeletable', 'shopSelection',
   'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel',
-  'wildDimSumDish',
+  'wildDimSumDish', 'homeAssistantIntent',
   'alarmSchedule', 'alarmTimeZone', 'alarmEnabled', 'alarmSnoozeMinutes',
   'alarmSoundEnabled', 'alarmNarratorEnabled', 'alarmHistory', 'mediaAssets',
   'mediaActiveAssetId'
 ])
+const ALLOWED_HOME_ASSISTANT_INTENT = new Set(['transport', 'domain'])
 const ALLOWED_POSITION = new Set(['x', 'y'])
 const ALLOWED_SIZE = new Set(['width', 'height'])
 const ALLOWED_TAB = new Set(['id', 'url', 'title'])
@@ -243,6 +245,14 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
     const dish = normalizePublicDimSumSelection(node.wildDimSumDish)
     if (!dish) throw new PortableProjectV3Error('manifest', 'Portable Wild dim sum selection is invalid.')
     out.wildDimSumDish = dish
+  }
+  if (node.homeAssistantIntent !== undefined) {
+    if (!record(node.homeAssistantIntent)) throw new PortableProjectV3Error('manifest', 'Portable Home Assistant intent is invalid.')
+    exactKeys(node.homeAssistantIntent, ALLOWED_HOME_ASSISTANT_INTENT, 'Home Assistant intent')
+    if (!['rest', 'websocket'].includes(String(node.homeAssistantIntent.transport))) throw new PortableProjectV3Error('manifest', 'Portable Home Assistant transport is invalid.')
+    const domain = text(node.homeAssistantIntent.domain, 'Home Assistant domain')
+    if (domain !== 'all' && !/^[a-z0-9_]{1,64}$/.test(domain)) throw new PortableProjectV3Error('manifest', 'Portable Home Assistant domain is invalid.')
+    out.homeAssistantIntent = { transport: node.homeAssistantIntent.transport as 'rest' | 'websocket', domain }
   }
   if (node.alarmSchedule !== undefined) {
     if (!record(node.alarmSchedule)) throw new PortableProjectV3Error('manifest', 'Portable alarm schedule is invalid.')
@@ -492,7 +502,8 @@ export function portableCanvasProjectionToProject(
     ...(node.serviceLabel !== undefined ? { serviceLabel: node.serviceLabel } : {}),
     ...(node.mediaAssets ? { mediaAssets: node.mediaAssets.map((asset) => ({ ...asset })) } : {}),
     ...(node.mediaActiveAssetId !== undefined ? { mediaActiveAssetId: node.mediaActiveAssetId } : {}),
-    ...(node.wildDimSumDish !== undefined ? { wildDimSumDish: node.wildDimSumDish } : {})
+    ...(node.wildDimSumDish !== undefined ? { wildDimSumDish: node.wildDimSumDish } : {}),
+    ...(node.homeAssistantIntent !== undefined ? { homeAssistantIntent: { ...node.homeAssistantIntent } } : {})
   }))
   const bridgeLinks = value.relationships
     .filter((link) => link.kind === 'bridge')

@@ -23,6 +23,7 @@ import type { NodeDependenciesApi } from '../../shared/node-dependencies'
 import type { TorrentApi, TorrentTaskState } from '../../shared/torrent'
 import type { VirtualMachineApi } from '../../shared/virtual-machine'
 import type { CalendarApi, CalendarProvider } from '../../shared/calendar'
+import type { HomeAssistantApi } from '../../shared/home-assistant'
 import {
   UNKNOWN_CLAUDE_CLI_CAPS,
   type BoardLogApi,
@@ -1202,6 +1203,19 @@ export function buildCalendarApi(client: RpcClient): Pick<NodeTerminalApi, 'cale
   return { calendar }
 }
 
+/** Home Assistant uses the same host-owned core service in both shells. */
+export function buildHomeAssistantApi(client: RpcClient): Pick<NodeTerminalApi, 'homeAssistant'> {
+  const homeAssistant: HomeAssistantApi = {
+    instances: () => client.request(IPC.homeAssistantInstances) as ReturnType<HomeAssistantApi['instances']>,
+    saveInstance: (input) => client.request(IPC.homeAssistantSaveInstance, input) as ReturnType<HomeAssistantApi['saveInstance']>,
+    removeInstance: (id) => client.request(IPC.homeAssistantRemoveInstance, id) as ReturnType<HomeAssistantApi['removeInstance']>,
+    discover: (request) => client.request(IPC.homeAssistantDiscover, request) as ReturnType<HomeAssistantApi['discover']>,
+    cancel: (operationId) => client.request(IPC.homeAssistantCancel, operationId) as ReturnType<HomeAssistantApi['cancel']>,
+    onEvent: (listener) => client.subscribe(IPC.homeAssistantEvent, listener as Listener)
+  }
+  return { homeAssistant }
+}
+
 /**
  * Build the `usage` namespace over an RpcClient. The server shell runs the same core usage
  * service the desktop does, so this is real end to end — including `onUpdate`, which subscribes
@@ -1663,6 +1677,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildVirtualMachineApi(client),
     ...buildCalendarApi(client),
     ...buildProviderServicesApi(client),
+    ...buildHomeAssistantApi(client),
     ...buildUsageApi(client),
     ...buildSessionMemoryApi(client),
     ...buildVsCodeApi(client),
