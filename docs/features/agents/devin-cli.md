@@ -98,7 +98,7 @@ notification parser are source-level implementation. The real Devin binary was n
 this lane, so no runtime launch, hook delivery, status transition, resume, print, prompt-file,
 availability, Desktop, Server Edition, or SSH behavior is claimed as runtime-verified. The lane also
 intentionally ran no tests, lint, type checks, builds, packaging, debugging, reviews, audits, or
-HuiShots.
+UI captures.
 
 ## Suggested articles
 

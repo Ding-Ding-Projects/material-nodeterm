@@ -72,7 +72,7 @@ local-machine fallback.
 
 This ultra-speed implementation lane did not run unit tests, type checks, lint, security checks,
 accessibility checks, builds, packaging, installer execution, runtime interaction, or UI captures.
-The implementation and documentation are present, but those Chuts remain unverified. Build and
+The implementation and documentation are present, but those checks remain unverified. Build and
 packaging work, if performed by the release owner, proves artifact production only and does not
 prove runtime correctness.
 
