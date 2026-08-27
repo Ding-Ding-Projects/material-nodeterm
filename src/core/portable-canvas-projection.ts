@@ -27,7 +27,8 @@ import {
 import type { PlannerSchedule } from '../shared/planner-occurrences'
 import { normalizeRecoveryGameSnapshot, RECOVERY_ENERGY_KEYS, type RecoveryGameSnapshot } from '../shared/recovery-game'
 import { repairPortablePortals, validatePortablePortals, type PortablePortalV3 } from './portal-lifecycle'
-import { normalizeCloudflareIntent, type CloudflarePortableIntent } from '../shared/cloudflare-core-managers'
+import { normalizeCloudflareIntent as normalizeCloudflareZeroTrustIntent, type CloudflarePortableIntent as CloudflareZeroTrustPortableIntent } from '../shared/cloudflare-zero-trust'
+import { normalizeCloudflareIntent as normalizeCloudflareCoreIntent, type CloudflarePortableIntent as CloudflareCorePortableIntent } from '../shared/cloudflare-core-managers'
 
 export type PortableCanvasScope = 'root' | 'multiverse' | 'aws-universe'
 
@@ -66,7 +67,8 @@ export interface PortableCanvasNodeV3 {
   browserTabs?: Array<{ id: string; url?: string; title: string }>
   serviceLabel?: string
   /** Typed Cloudflare operation intent only; credentials and provider bindings are local. */
-  cloudflareCoreIntent?: CloudflarePortableIntent
+  cloudflareZeroTrustIntent?: CloudflareZeroTrustPortableIntent
+  cloudflareCoreIntent?: CloudflareCorePortableIntent
   /** Safe public-catalog identity and display copy. Image bytes and network state are excluded. */
   wildDimSumDish?: PublicDimSumSelection
   homeAssistantIntent?: { transport: 'rest' | 'websocket'; domain: string }
@@ -152,7 +154,7 @@ const ALLOWED_NODE = new Set([
   'id', 'kind', 'creationEventId', 'position', 'size', 'title', 'color', 'group',
   'universeCanvasId', 'universeScope', 'universeDepth', 'nonDeletable', 'shopSelection',
   'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel',
-  'wildDimSumDish', 'homeAssistantIntent', 'homeAssistantControlConfig', 'homeAssistantSensorConfig', 'cloudflareCoreIntent',
+  'wildDimSumDish', 'homeAssistantIntent', 'homeAssistantControlConfig', 'homeAssistantSensorConfig', 'cloudflareZeroTrustIntent', 'cloudflareCoreIntent',
   'alarmSchedule', 'alarmTimeZone', 'alarmEnabled', 'alarmSnoozeMinutes',
   'alarmSoundEnabled', 'alarmNarratorEnabled', 'alarmHistory', 'mediaAssets',
   'mediaActiveAssetId', 'recoveryGame'
@@ -259,6 +261,7 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
   if (strict && node.parentId !== undefined && typeof node.parentId !== 'string') throw new PortableProjectV3Error('manifest', 'Portable node parent is invalid.')
   if (strict && node.text !== undefined && typeof node.text !== 'string') throw new PortableProjectV3Error('manifest', 'Portable node text is invalid.')
   if (strict && node.serviceLabel !== undefined && typeof node.serviceLabel !== 'string') throw new PortableProjectV3Error('manifest', 'Portable service label is invalid.')
+  if (strict && node.cloudflareZeroTrustIntent !== undefined && !normalizeCloudflareZeroTrustIntent(node.cloudflareZeroTrustIntent)) throw new PortableProjectV3Error('manifest', 'Portable Cloudflare manager intent is invalid.')
   if (strict && node.homeAssistantControlConfig !== undefined) {
     if (!record(node.homeAssistantControlConfig)) throw new PortableProjectV3Error('manifest', 'Portable Home Assistant control intent is invalid.')
     exactKeys(node.homeAssistantControlConfig, ALLOWED_HOME_ASSISTANT_CONTROL, 'Home Assistant control intent')
@@ -275,9 +278,14 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
   if (node.text !== undefined) out.text = content(node.text, 'node text')
   if (node.url !== undefined) { const url = safeUrl(node.url, 'node URL'); if (url) out.url = url }
   if (node.serviceLabel !== undefined) out.serviceLabel = text(node.serviceLabel, 'service label')
+  if (node.cloudflareZeroTrustIntent !== undefined) {
+    const intent = normalizeCloudflareZeroTrustIntent(node.cloudflareZeroTrustIntent)
+    if (!intent) throw new PortableProjectV3Error('manifest', 'Portable Cloudflare manager intent is invalid.')
+    out.cloudflareZeroTrustIntent = intent
+  }
   if (node.cloudflareCoreIntent !== undefined) {
     if (!record(node.cloudflareCoreIntent)) throw new PortableProjectV3Error('manifest', 'Portable Cloudflare manager intent is invalid.')
-    const normalized = normalizeCloudflareIntent(node.cloudflareCoreIntent)
+    const normalized = normalizeCloudflareCoreIntent(node.cloudflareCoreIntent)
     if (strict && (node.cloudflareCoreIntent.schemaVersion !== 1 || normalized.manager !== node.cloudflareCoreIntent.manager || normalized.operation !== node.cloudflareCoreIntent.operation)) throw new PortableProjectV3Error('manifest', 'Portable Cloudflare manager intent is unsupported.')
     out.cloudflareCoreIntent = normalized
   }
@@ -648,7 +656,8 @@ export function portableCanvasProjectionToProject(
     ...(node.url !== undefined ? { url: node.url } : {}),
     ...(node.browserTabs ? { browserTabs: node.browserTabs.map((tab) => ({ ...tab })) } : {}),
     ...(node.serviceLabel !== undefined ? { serviceLabel: node.serviceLabel } : {}),
-    ...(node.cloudflareCoreIntent !== undefined ? { cloudflareCoreIntent: normalizeCloudflareIntent(node.cloudflareCoreIntent) } : {}),
+    ...(node.cloudflareZeroTrustIntent !== undefined ? { cloudflareZeroTrustIntent: normalizeCloudflareZeroTrustIntent(node.cloudflareZeroTrustIntent)! } : {}),
+    ...(node.cloudflareCoreIntent !== undefined ? { cloudflareCoreIntent: normalizeCloudflareCoreIntent(node.cloudflareCoreIntent) } : {}),
     ...(node.mediaAssets ? { mediaAssets: node.mediaAssets.map((asset) => ({ ...asset })) } : {}),
     ...(node.mediaActiveAssetId !== undefined ? { mediaActiveAssetId: node.mediaActiveAssetId } : {}),
     ...(node.wildDimSumDish !== undefined ? { wildDimSumDish: node.wildDimSumDish } : {}),

@@ -17,6 +17,13 @@
   security or accessibility checks, builds, packaging, installer execution, runtime interaction,
   or UI captures.
 
+- Add typed Cloudflare Access, Zero Trust, Workers, Pages, R2, D1, and Queues managers. The canvas
+  node uses guided pickers, local protected credentials, portable neutral intent, fixed API routes,
+  bounded responses, progress and cancellation, anchored regex builders for each search, and the
+  existing two-key destructive confirmation. This ultra-speed lane intentionally ran no tests, type
+  checks, lint, builds, packaging, reviews, security or accessibility checks, installer execution,
+  runtime interaction, or UI captures.
+
 - Add the bundled AWS CLI v2 dependency lane. Windows packaging now stages the pinned official
   `2.36.32` MSI, verifies its SHA-256, falls back through a verified local cache or canonical
   HTTPS download, extracts it into application-local storage, exposes the installed version, and

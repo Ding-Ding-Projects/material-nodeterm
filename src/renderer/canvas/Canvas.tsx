@@ -2103,6 +2103,7 @@ export function Canvas() {
       gitlab: withNodeBoundary(ServiceNode),
       homeassistant: withNodeBoundary(ServiceNode),
       freepbx: withNodeBoundary(ServiceNode),
+      'cloudflare-zero-trust': withNodeBoundary(ServiceNode),
       'cloudflare-core-managers': withNodeBoundary(CloudflareCoreManagersNode),
       'linux-vm': withNodeBoundary(VirtualMachineNode)
     }),

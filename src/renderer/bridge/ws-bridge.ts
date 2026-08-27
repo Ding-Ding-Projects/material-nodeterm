@@ -27,6 +27,7 @@ import type { CloudflareCoreManagersApi } from '../../shared/cloudflare-core-man
 import type { HomeAssistantApi } from '../../shared/home-assistant'
 import type { HomeAssistantControlApi } from '../../shared/home-assistant-control'
 import type { HomeAssistantSensorApi } from '../../shared/home-assistant-sensor'
+import type { CloudflareApi, CloudflareExecutionProgress } from '../../shared/cloudflare-zero-trust'
 import {
   UNKNOWN_CLAUDE_CLI_CAPS,
   type BoardLogApi,
@@ -1268,6 +1269,25 @@ export function buildHomeAssistantSensorApi(client: RpcClient): Pick<NodeTermina
   return { homeAssistantSensor }
 }
 
+export function buildCloudflareZeroTrustApi(client: RpcClient): Pick<NodeTerminalApi, 'cloudflareZeroTrust'> {
+  const cloudflareZeroTrust: CloudflareApi = {
+    catalog: () => client.request(IPC.cloudflareCatalog) as ReturnType<CloudflareApi['catalog']>,
+    accounts: () => client.request(IPC.cloudflareAccounts) as ReturnType<CloudflareApi['accounts']>,
+    configure: (input) => client.request(IPC.cloudflareConfigure, input) as ReturnType<CloudflareApi['configure']>,
+    removeAccount: (id) => client.request(IPC.cloudflareRemoveAccount, id) as ReturnType<CloudflareApi['removeAccount']>,
+    binding: (nodeId) => client.request(IPC.cloudflareBinding, nodeId) as ReturnType<CloudflareApi['binding']>,
+    saveBinding: (nodeId, binding) => client.request(IPC.cloudflareSaveBinding, nodeId, binding) as ReturnType<CloudflareApi['saveBinding']>,
+    resources: (nodeId, manager) => client.request(IPC.cloudflareResources, nodeId, manager) as ReturnType<CloudflareApi['resources']>,
+    execute: (nodeId, request, onProgress) => {
+      const unsubscribe = client.subscribe(IPC.cloudflareProgress, (value) => { const progress = value as CloudflareExecutionProgress & { nodeId?: string }; if (progress.nodeId === nodeId) onProgress(progress) })
+      return (client.request(IPC.cloudflareExecute, nodeId, request) as ReturnType<CloudflareApi['execute']>).finally(unsubscribe)
+    },
+    cancel: (nodeId) => client.request(IPC.cloudflareCancel, nodeId) as ReturnType<CloudflareApi['cancel']>,
+    onProgress: (listener) => client.subscribe(IPC.cloudflareProgress, listener as Listener)
+  }
+  return { cloudflareZeroTrust }
+}
+
 /**
  * Build the `usage` namespace over an RpcClient. The server shell runs the same core usage
  * service the desktop does, so this is real end to end — including `onUpdate`, which subscribes
@@ -1745,6 +1765,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildHomeAssistantApi(client),
     ...buildHomeAssistantControlApi(client),
     ...buildHomeAssistantSensorApi(client),
+    ...buildCloudflareZeroTrustApi(client),
     ...buildUsageApi(client),
     ...buildSessionMemoryApi(client),
     ...buildVsCodeApi(client),

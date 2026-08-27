@@ -63,6 +63,7 @@ import { registerCloudflareCoreManagersIpc } from '../core/cloudflare-core-manag
 import { registerHomeAssistantIpc } from '../core/home-assistant/register-ipc'
 import { registerHomeAssistantControlIpc } from '../core/home-assistant-control/register-ipc'
 import { registerHomeAssistantSensorIpc } from '../core/home-assistant-sensor/register-ipc'
+import { registerCloudflareZeroTrustIpc } from '../core/cloudflare-zero-trust/service'
 import { AtomicJsonArrayStore } from '../core/atomic-json-store'
 import { TimerOccurrenceService } from '../core/timer-service'
 import type { TimerOccurrence } from '../shared/timer'
@@ -2369,6 +2370,7 @@ app.whenReady().then(async () => {
   registerHomeAssistantIpc(corePlatform)
   registerHomeAssistantControlIpc(corePlatform)
   registerHomeAssistantSensorIpc(corePlatform)
+  registerCloudflareZeroTrustIpc(corePlatform)
 
   const githubSecret = new ElectronGitHubSecretStore(app.getPath('userData'), safeStorage)
   const github = registerGitHubIntegration({

@@ -308,6 +308,10 @@ intentionally unchecked because this task publishes the plan only.
 - [ ] Add Open WebUI hosting with existing Ollama reuse and honest bootstrap states.
 - [ ] Add Cloudflare account, zone, DNS, security, Workers, Pages, storage, queue, Access, and
       analytics managers.
+- [x] Add typed Cloudflare Access, Zero Trust, Workers, Pages, R2, D1, and Queues managers with
+      local protected credentials, portable neutral intent, bounded fixed-route API calls,
+      progress/cancellation, per-field regex builders, and destructive confirmation. Verification
+      remains intentionally unrun in the ultra-speed lane.
 - [ ] Add one-click Cloudflare Tunnel setup with private-first routing and connector choices.
 
 ### Clean-room features and upstream parity
