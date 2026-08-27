@@ -6705,6 +6705,121 @@ button.group-node__setup:disabled {
   font-weight: 700;
 }
 
+/* Cross-project projection: a live co-attached view whose owning node remains in another
+   project's canvas. The muted opacity and dotted origin-coloured outline distinguish the viewer
+   without making its terminal content unavailable. */
+.xproj-node {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--panel);
+  border: 1.5px dashed var(--xproj-stroke, var(--muted));
+  border-top-width: 3px;
+  border-radius: 10px;
+  opacity: 0.72;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, calc(0.35 * var(--shadow-k)));
+}
+
+.xproj-node.selected {
+  opacity: 0.92;
+  box-shadow:
+    0 0 0 1px var(--xproj-stroke, var(--muted)),
+    0 6px 20px rgba(0, 0, 0, calc(0.35 * var(--shadow-k)));
+}
+
+.xproj-node__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: color-mix(in srgb, var(--xproj-stroke, var(--muted)) 14%, transparent);
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font-size: 12px;
+  user-select: none;
+}
+
+.xproj-node__origin {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 1 50%;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.xproj-node__dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+}
+
+.xproj-node__title {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--text);
+  opacity: 0.85;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.xproj-node__jump {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.xproj-node__jump:hover,
+.xproj-node__jump:focus-visible {
+  background: color-mix(in srgb, var(--xproj-stroke, var(--muted)) 18%, transparent);
+  border-color: var(--xproj-stroke, var(--muted));
+  color: var(--text);
+}
+
+.xproj-node__body {
+  position: relative;
+  min-height: 0;
+  flex: 1;
+  background: var(--term-bg, var(--bg));
+}
+
+.xproj-node__plate {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  pointer-events: none;
+  text-align: center;
+}
+
 /* ---- Minimap ---- */
 .minimap {
   background: rgba(var(--menu-rgb), 0.85) !important; /* --menu-rgb is its own floating-surface

@@ -220,6 +220,9 @@ export interface PtyCreateOptions {
    * "not connected" overlay and re-spawns when the master is back.
    */
   requireRemote?: boolean
+  /** Join an already-live session only. Foreign canvas projections are viewers, never owners, so
+   * a missing target session is returned as `unavailable: 'no-session'` instead of spawning it. */
+  requireExisting?: boolean
 }
 
 /** A tmux pane's cursor, as tmux reports it: 0-based column/row within the pane, plus whether the
@@ -344,7 +347,8 @@ export interface PtyCreateResult {
    * managed account whose home is missing refuses rather than spawning against the system login
    * (§5 property 4). Same contract — nothing spawned, the renderer shows the node's refusal.
    */
-  unavailable?: 'ssh' | 'codex-account'
+  /** Refusal for a foreign projection that had no live session to join. */
+  unavailable?: 'ssh' | 'codex-account' | 'no-session'
 }
 
 /** Payload of `pty:recycled` — see IPC.ptyRecycled and `recycleAction` in the renderer. */

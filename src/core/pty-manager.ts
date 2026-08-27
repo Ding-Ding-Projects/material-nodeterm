@@ -1991,6 +1991,10 @@ export class PtyManager {
     // AFTER the in-flight barrier so a create racing the owner's own respawn joins it instead.
     const tomb = this.liveTombstone(key)
     if (tomb && tomb.by !== clientId) return { sessionId: '', fresh: false, closed: { by: tomb.by } }
+    // A foreign canvas projection is a viewer, not the owner of the target node. Once the live
+    // join and in-flight paths have been exhausted, refuse instead of spawning a session under the
+    // wrong project context. The owning project's node will create it when that canvas mounts.
+    if (options.requireExisting) return { sessionId: '', fresh: false, unavailable: 'no-session' }
     const spawn = this.spawnNew(clientId, options)
     this.inflight.set(key, spawn)
     // Clear on settle — INCLUDING on failure, or a single failed spawn would leave a rejected

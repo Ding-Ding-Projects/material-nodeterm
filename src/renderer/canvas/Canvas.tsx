@@ -501,6 +501,9 @@ import { useTeamAccessEvents } from '../state/teamAccess'
 import { useAgentNodes } from '../state/agentNodes'
 import { SubagentNode } from '../nodes/SubagentNode'
 import { LoopNode } from '../nodes/LoopNode'
+import { XProjectNode } from '../nodes/XProjectNode'
+import { setTravelNodeHandler } from '../nodes/travel-handler'
+import { resolveForeignNodeProjections } from '../lib/foreignNodeProjection'
 import type { NormalizedAgentEvent } from '@shared/agents/normalize'
 import {
   computeWorktreePath,
@@ -1248,6 +1251,9 @@ export function Canvas() {
   const [controlEdges, setControlEdges] = useState<Edge[]>([])
   const controlEdgesRef = useRef<Edge[]>([])
   controlEdgesRef.current = controlEdges
+  // Foreign projections are derived viewers. Their drag positions are session-local and never
+  // enter either project's serialized node list.
+  const [xprojPositions, setXprojPositions] = useState<Record<string, { x: number; y: number }>>({})
   const [dirty, setDirty] = useState(false)
   // Bumped only when a save finished with `dirty` still set (an edit raced it). It exists purely to
   // give the debounced-autosave effect a dependency that CHANGES in that case — `dirty` stays true
@@ -2070,6 +2076,7 @@ export function Canvas() {
       diff: withNodeBoundary(LazyDiffNode),
       subagent: withNodeBoundary(SubagentNode),
       loop: withNodeBoundary(LoopNode),
+      xproject: withNodeBoundary(XProjectNode),
       scheduler: withNodeBoundary(NativeLoopNode),
       timer: withNodeBoundary(TimerNode),
       alarm: withNodeBoundary(AlarmClockNode),
@@ -2105,6 +2112,7 @@ export function Canvas() {
   const ephemeralPos = useAgentNodes((s) => s.positions)
   const ephSizes = useAgentNodes((s) => s.sizes)
   const ephExpanded = useAgentNodes((s) => s.expanded)
+  const projectCatalog = useProjects((s) => s.projects)
   // Deliberately NOT `useAgentStatus((s) => s.byId)`: that map's identity changes on every
   // working/waiting flip of any agent node, which re-rendered the whole canvas per hook event.
   // Canvas only needs the /loop entries (for the ephemeral LoopNodes), so subscribe to a
@@ -2289,7 +2297,10 @@ export function Canvas() {
     const claudeById = useAgentStatus.getState().byId // re-read on loopSig change (see above)
     const hasLoops = loopSig !== ''
     const hasAgents = Object.keys(agentById).length > 0
-    if (!hasLoops && !hasAgents) return NO_EPHEMERAL
+    const activeId = useProjects.getState().activeProjectId
+    const activeProjectForProjection = projectCatalog.find((project) => project.id === activeId)
+    const foreign = resolveForeignNodeProjections(activeProjectForProjection, projectCatalog, nodes)
+    if (!hasLoops && !hasAgents && foreign.length === 0) return NO_EPHEMERAL
     // Explicit width/height for an ephemeral node (so it resizes like any other node).
     // Defaults switch with expand; a user resize override wins.
     const dims = (id: string, baseW: number, expW: number, baseH: number, expH: number) => {
@@ -2402,9 +2413,52 @@ export function Canvas() {
         })
       })
     }
+    // Foreign projections are derived from A's lineage links and B's serialized node. They have
+    // no React Flow persistence path and no parent frame, so dragging one only updates the local
+    // ephemeral position map. The source node remains the lineage anchor for the dashed edge.
+    foreign.forEach(({ link, sourceNode, targetProject, targetNode }, index) => {
+      const projectionId = `xproj-${targetProject.id}-${targetNode.id}-${link.id}`
+      const source = nodes.find((node) => node.id === sourceNode.id)
+      const sourceHeight = source?.measured?.height ?? source?.height ?? 400
+      const fallback = {
+        x: (source?.position.x ?? 80) + 360 + (index % 3) * 30,
+        y: (source?.position.y ?? 120) + sourceHeight + 80 + Math.floor(index / 3) * 300
+      }
+      const size = targetNode.size ?? { width: 600, height: 400 }
+      eNodes.push({
+        id: projectionId,
+        type: 'xproject',
+        position: xprojPositions[projectionId] ?? fallback,
+        draggable: true,
+        selectable: false,
+        width: Math.max(280, size.width),
+        height: Math.max(160, size.height),
+        style: { width: Math.max(280, size.width), height: Math.max(160, size.height) },
+        data: {
+          title: targetNode.title,
+          color: targetProject.color,
+          group: null,
+          xprojOriginName: targetProject.name,
+          xprojOriginColor: targetProject.color,
+          xprojSpawn: {
+            bProjectId: targetProject.id,
+            bNodeId: targetNode.id,
+            bNode: targetNode,
+            bProject: targetProject
+          }
+        }
+      } as CanvasNode)
+      eEdges.push({
+        id: `xproj-edge-${link.id}`,
+        source: sourceNode.id,
+        sourceHandle: 'flow-out',
+        target: projectionId,
+        style: { stroke: targetProject.color, strokeWidth: 1.5, strokeDasharray: '5 4' }
+      })
+    })
     return { ephemeralNodes: eNodes, ephemeralEdges: eEdges }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- loopSig stands in for the byId read
-  }, [agentById, loopSig, ephemeralPos, ephSizes, ephExpanded, ephSelId, nodes])
+  }, [agentById, loopSig, ephemeralPos, ephSizes, ephExpanded, ephSelId, nodes, projectCatalog, xprojPositions])
 
   // Merge the persisted nodes with the ephemeral ones once per change (not per render),
   // so React Flow's array-identity short-circuit holds while panning/zooming.
@@ -3959,6 +4013,20 @@ export function Canvas() {
         // so without this a closed browser node's page would keep running unseen.
         if (c.type === 'remove') useWebviewKeepAlive.getState().drop(c.id)
         if ('id' in c && isEph(c.id)) {
+          // Cross-project projections have no agent-nodes entry. Keep their transient absolute
+          // position in Canvas-local state, and never route a projection change into a real node.
+          if (c.id.startsWith('xproj-')) {
+            if (c.type === 'position' && c.position) {
+              setXprojPositions((positions) => ({ ...positions, [c.id]: c.position! }))
+            } else if (c.type === 'remove') {
+              setXprojPositions((positions) => {
+                const next = { ...positions }
+                delete next[c.id]
+                return next
+              })
+            }
+            return false
+          }
           const store = useAgentNodes.getState()
           // Stored as an OFFSET from the parent agent, never as a canvas position — see offsetFrom.
           if (c.type === 'position' && c.position) {
@@ -9145,7 +9213,7 @@ export function Canvas() {
     const on = settings.autoAlignGrid
     if (on && !prevAutoAlignRef.current) {
       const ids = nodesRef.current
-        .filter((n) => n.type !== 'subagent' && n.type !== 'loop')
+        .filter((n) => n.type !== 'subagent' && n.type !== 'loop' && n.type !== 'xproject')
         .map((n) => n.id)
       if (ids.length) alignToGrid(ids)
     }
@@ -9272,7 +9340,7 @@ export function Canvas() {
       // <ReactFlow nodes> prop but NEVER persisted — they are cleared on the next turn — and both
       // double-click focus and the minimap's double-click land here. A breadcrumb for one is a
       // permanently unresolvable id burning one of the 20 slots, so it is never recorded.
-      if (activeId && node.type !== 'subagent' && node.type !== 'loop') {
+      if (activeId && node.type !== 'subagent' && node.type !== 'loop' && node.type !== 'xproject') {
         const target: BreadcrumbTarget = {
           id: node.id,
           kind: node.type as BreadcrumbTarget['kind'],
@@ -11450,7 +11518,7 @@ export function Canvas() {
       const items =
         node.type === 'group'
           ? groupItems(node.id, screenToFlowPosition({ x: e.clientX, y: e.clientY }))
-          : node.type === 'subagent' || node.type === 'loop'
+          : node.type === 'subagent' || node.type === 'loop' || node.type === 'xproject'
             ? ephemeralItems(node.id)
             : selectionItems(targetIds(node), screenToFlowPosition({ x: e.clientX, y: e.clientY }))
       setMenu({ x: e.clientX, y: e.clientY, items })
@@ -11468,7 +11536,9 @@ export function Canvas() {
         y: e.clientY,
         items: selectionItems(
           // Derived cards can't be acted on; filtering keeps the "N nodes" count honest too.
-          selected.filter((n) => n.type !== 'subagent' && n.type !== 'loop').map((n) => n.id),
+          selected
+            .filter((n) => n.type !== 'subagent' && n.type !== 'loop' && n.type !== 'xproject')
+            .map((n) => n.id),
           screenToFlowPosition({ x: e.clientX, y: e.clientY })
         )
       })
@@ -11678,6 +11748,12 @@ export function Canvas() {
     [setNodes, goToNode, switchProject]
   )
   focusNodeRef.current = focusNodeById
+  // The projection's secondary jump uses the same cross-project focus funnel as notifications and
+  // the sessions sidebar. Clear the registration when this Canvas unmounts.
+  useEffect(() => {
+    setTravelNodeHandler(focusNodeById)
+    return () => setTravelNodeHandler(null)
+  }, [focusNodeById])
 
   // Session board cards are derived LIVE from the canvas nodes; the board stores only assignments.
   // Only while the board is OPEN: `nodes` gets a fresh identity on every drag frame, so a closed
