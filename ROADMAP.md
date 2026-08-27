@@ -290,7 +290,10 @@ intentionally unchecked because this task publishes the plan only.
 
 ### Clean-room features and upstream parity
 
-- [ ] Add clean-room browser, kiosk, PWA, proxy, and read-only diagnostics nodes.
+- [ ] Add clean-room browser, proxy, and read-only diagnostics nodes.
+- [x] Add guided clean-room kiosk and PWA sessions with portable intent, isolated local profiles,
+      explicit permissions, lifecycle recovery, and honest unavailable states. Source-only lane,
+      no tests, builds, packaging, runtime interaction, or captures.
 - [ ] Implement the outstanding upstream behavior from the planned issue and pull-request parity map.
 - [ ] Split the PR #422 behavior into independent link, endpoint, navigation, grouping, agent, and
       account lanes.

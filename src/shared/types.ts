@@ -77,6 +77,7 @@ import type {
   VaultUnlockResult
 } from './password-manager'
 import type { AlarmOccurrence, AlarmRecurrence } from './alarm-clock'
+import type { PortableKioskPwaIntent } from './kiosk-pwa'
 import type { CodexAccount } from './codex-account'
 import type { ProjectIcon, ProjectIconPickResult } from './project-icon'
 import type {
@@ -716,6 +717,8 @@ export interface CanvasNodeState {
   browserTabs?: BrowserTab[]
   /** browser-only: which `browserTabs[].id` is currently shown. Absent = the first tab. */
   browserActiveTabId?: string
+  /** Kiosk/PWA sessions carry only safe launch intent; profile and runtime state stay local. */
+  kioskPwaIntent?: PortableKioskPwaIntent
    * browser-only: the Electron session partition for an AGENT-opened browser node
    * (`persist:nt-agent-browser-<projectId>`), set once at creation and never mutated. Absent for a
    * USER-opened node (default session, no migration). Persisted so the jar survives reopen; carried
