@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add a bounded typed link endpoint model for canvas relationships. `Endpoint` now distinguishes
+  local nodes, foreign project-node references, and repository-relative branches, while `Link`
+  carries one explicit relationship kind and project-owned source semantics. The shared validator
+  rejects malformed or non-portable records, unsafe metadata, foreign mutation sources, duplicate
+  ids, and oversized collections. This issue #86 model lane did not run tests, type checks, lint,
+  builds, packaging, runtime interaction, reviews, accessibility or security checks, or captures.
+
 - Mount the seven AWS core-service routes on the shared AWS manager: S3, EC2, IAM, STS, Lambda,
   CloudWatch, and CloudWatch Logs. Typed operation controls now cover bounded reads, selected writes,
   destructive confirmation, pagination, cancellation, and progress while reusing the current local
