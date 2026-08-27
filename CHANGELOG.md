@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add the guided GitHub API capability surface. A hand-written operation catalog now covers
+  repository, source control, collaboration, Actions, release, package, deployment, organization,
+  account, search, security, ruleset, webhook, and app resources through fixed REST routes plus a
+  fixed GraphQL account profile query. The host derives approved repositories, keeps credentials out
+  of the renderer, bounds pagination and response data, reports progress and rate limits, supports
+  cancellation, and requires operation-scoped destructive confirmation. Tests, type checks, lint,
+  reviews, security or accessibility checks, builds, packaging, installer execution, runtime
+  interaction, and UI captures remain intentionally unrun for issue #101.
+
 - Add the guided Nextcloud AIO hosting profile for issue #52. It uses a pinned official image,
   explicitly discloses read-only Docker socket authority, refuses privileged mode and arbitrary
   shell input, and provides local binding, health, update, backup, restore, rollback, cancellation,

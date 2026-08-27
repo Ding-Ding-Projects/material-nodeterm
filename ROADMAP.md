@@ -118,6 +118,14 @@ later commit, since this file will not be kept in lockstep with every merge).
       checks, builds, packaging, installer execution, runtime interaction, and captures remain
       unverified under the ultra-speed lane.
 
+- [ ] **Guided GitHub API capabilities, issue #101**: typed REST and fixed GraphQL operations now
+      cover repository, source-control, collaboration, Actions, release, organization, account,
+      search, security, ruleset, webhook, and app resources. The host resolves approved project
+      scope and local credentials, validates semantic inputs, bounds pagination and response data,
+      reports progress and rate limits, supports cancellation, and requires exact destructive
+      confirmation. Tests, type checks, lint, reviews, builds, packaging, runtime interaction, and
+      captures remain unverified on the dedicated feature branch.
+
 - [ ] **ADHD modes** — Focus, Low stimulation, Time awareness, One thing at a time, and Momentum
       are all specced in `docs/adhd-modes.md`. Time awareness, Momentum, and the
       notification-filtering half of Low stimulation were wired 2026-08-20 (`d697f78f`). Still

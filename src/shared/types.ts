@@ -4716,6 +4716,8 @@ export interface NodeTerminalApi {
   logs: LogApi
   githubIssues: import('./github-issues').GitHubIssuesApi
   githubControl: import('./github-issues').GitHubControlApi
+  /** Typed, allowlisted REST and GraphQL capability catalog for contextual GitHub actions. */
+  githubApi: import('./github-api').GitHubApiApi
   /** Host-owned GitHub CLI account discovery and selection. Credential material never crosses this boundary. */
   githubCliAccounts: import('./github-issues').GitHubCliAccountsApi
   usage: UsageApi

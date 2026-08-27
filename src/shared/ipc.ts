@@ -448,6 +448,12 @@ export const IPC = {
   githubControlSelectProvider: 'githubControl:select-provider',
   githubControlSaveToken: 'githubControl:save-token',
   githubControlClearToken: 'githubControl:clear-token',
+  // Guided GitHub REST and GraphQL capabilities. The request carries an operation id and
+  // semantic parameters only. Credentials and endpoint construction remain host-side.
+  githubApiCapabilities: 'githubApi:capabilities',
+  githubApiExecute: 'githubApi:execute',
+  githubApiCancel: 'githubApi:cancel',
+  githubApiProgress: 'githubApi:progress',
   dialogSelectFolder: 'dialog:select-folder',
   dialogSelectFile: 'dialog:select-file',
   shellReveal: 'shell:reveal',
