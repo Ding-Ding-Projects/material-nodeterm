@@ -20,6 +20,30 @@ No tests, type checks, lint, builds, packaging, reviews, audits, runtime interac
 were run in this source lane, per issue #113. The parent integration lane must verify the complete
 tree against its exact integrated commit. No merge, release, issue comment, issue closure, or
 cleanup was performed here.
+## 2026-08-27, desktop trackpad gesture facts, issue #108
+
+The implementation is on `feat/trackpad-gesture-facts`, based on the current `origin/main` tip
+`00127bc0` and grounded in upstream PR `eneskirca/nodeterm#452`, commit
+`391056b81abd0b933757fa6a4aee23d84cb48884`. `src/main/trackpad-gesture.ts` reduces native macOS
+scroll and pinch begin/end input facts into depth-safe active-state edges and ignores unmatched end
+events. The main window sends those edges through `IPC.canvasTrackpadGesture`, the typed preload
+member `onCanvasTrackpadGesture`, and the browser stub's documented no-op.
+
+`MacWheelGestureRouter` now accepts desktop-only gesture reporting. An open gesture or a close less
+than 500 ms ago routes precise-pixel wheel packets to canvas panning. Reported silence routes them
+to wheel zoom, while the Server Edition keeps the existing renderer heuristic because its browser
+surface lacks the native input stream. Settings, the canvas article, canvas category index,
+`CHANGELOG.md`, and `ROADMAP.md` record the same behavior and boundary. Mobile has no mouse-wheel
+canvas route and is explicitly not applicable.
+
+The generated `src/shared/docs-data.ts` bundle was not regenerated because this lane's explicit
+boundary forbids builds; the parent integration lane must regenerate and verify it before merging
+the documentation update.
+
+This source lane intentionally did not run tests, lint, type checks, builds, packaging, runtime
+interaction, reviews, security or accessibility audits, or UI captures. The parent integration
+lane must verify the exact commit and handle the dedicated pull request, issue progress and closure,
+upstream PR #463, and any later evidence without treating this lane's unrun checks as green.
 
 ## 2026-08-27, Nextcloud AIO hosting implementation, issue #52
 
@@ -2530,6 +2554,38 @@ This ultra-speed lane intentionally ran no tests, type checks, lint, builds, pac
 security checks, accessibility checks, installer execution, runtime interaction, or UI captures.
 The parent integration lane must verify the exact commit, reconcile any central-file overlap with
 other lanes, and supply the remaining release evidence before claiming the feature verified.
+# 2026-08-27, guided GitHub API capabilities, issue #101
+
+Issue #101 is implemented on `feat/github-api-surface` in the dedicated feature checkout. The
+shared `githubApi` contract in `src/shared/github-api.ts` is a hand-written inventory of typed REST
+and fixed GraphQL operations covering repositories, source control, collaboration, projects,
+Actions, releases, packages, deployments, organizations, teams, users, notifications, search,
+security, rulesets, webhooks, apps, and account resources. Each operation records its scope,
+transport, method, required semantic fields, pagination support, and destructive status.
+
+`src/core/github/api-client.ts` builds only documented allowlisted routes and rejects endpoint input,
+unbounded values, unsafe paths, unknown body fields, and invalid identifiers. `GitHubIssuesClient`
+keeps the existing API version, redirect, timeout, bounded response, and rate-limit policy while
+adding the fixed `account.profile` GraphQL document. Results are normalized and bounded, and
+credential-shaped fields are omitted before they cross the bridge.
+
+`src/core/github/api-service.ts` resolves credentials in the host, requires an approved project for
+repository-scoped actions, limits concurrent work per UI, emits progress, supports cancellation,
+and requires exact operation-scoped destructive confirmation. `src/core/github/api-handlers.ts`,
+`src/shared/ipc.ts`, `src/preload/index.ts`, `src/renderer/bridge/ws-bridge.ts`, and the shared API
+type expose the same contract to Desktop and Server Edition. Relay tabs explicitly refuse this
+account-bound namespace so they cannot use the viewer's credential or expose the host account.
+
+Direct documentation is in `docs/features/integrations/github-api.md` and the integrations index.
+`ROADMAP.md` records the feature as implemented but unverified. The generated in-app docs bundle
+was not rebuilt because issue #101 forbids builds and verification; the feature pull request must
+run the normal docs-bundle path before claiming a complete packaged surface.
+
+No tests, type checks, lint, reviews, security or accessibility checks, builds, packaging, installer
+execution, runtime interaction, audits, or HuiShots were run, per the issue's explicit boundary.
+The feature branch remains separate from `main` and is intended to remain available for the dedicated
+pull request.
+
 # 2026-08-27, Easter egg suite, issue #103
 
 Implemented a hand-written 60-entry Easter egg catalog in `src/shared/easter-eggs.ts` and a

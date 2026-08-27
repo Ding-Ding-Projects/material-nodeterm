@@ -118,6 +118,14 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     context: files.context,
     githubIssues: github.githubIssues,
     githubControl: local.githubControl,
+    // GitHub account bindings are host-local. A relay tab cannot accidentally use the viewer's
+    // credential or expose the host's account-wide API surface, so this namespace refuses clearly.
+    githubApi: {
+      capabilities: () => relayUnsupported('githubApi.capabilities'),
+      execute: () => relayUnsupported('githubApi.execute'),
+      cancel: () => relayUnsupported('githubApi.cancel'),
+      onProgress: () => () => {}
+    },
     // Account credentials are scoped to the viewing desktop's local CLI store. They are never
     // relayed to the project host, and the host-only prefix prevents a peer from requesting them.
     githubCliAccounts: local.githubCliAccounts,

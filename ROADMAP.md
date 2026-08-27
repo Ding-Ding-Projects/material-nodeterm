@@ -57,8 +57,10 @@ later commit, since this file will not be kept in lockstep with every merge).
       (`scripts/check-app-contract.mjs`), 1,101 assertions across 59 features, run clean except
       for the one pending item below.
 - [x] Windows packaging path: Squirrel.Windows via `scripts/windows-installer.mjs`, unsigned by
-      permanent policy, with ICO regeneration/verification, nupkg/RELEASES agreement checks, and
-      a manual-dispatch-only `main`-only release workflow.
+      permanent policy, with ICO regeneration/verification, Setup.exe plus nupkg/RELEASES
+      agreement checks, and a Windows-only release workflow triggered by pushes to `main` and
+      manual dispatch. ZIP, NSIS-only, MSI-only, MSIX-only, and portable-only parallel installer
+      routes are retired.
 
 ## In progress / partially landed
 
@@ -67,6 +69,11 @@ later commit, since this file will not be kept in lockstep with every merge).
       site storage, exports, provenance copy, Easter eggs, and feature resolvers. This implementation
       lane intentionally has no tests, type checks, lint, builds, packaging, runtime interaction,
       reviews, audits, or captures; integrated verification remains pending.
+- [ ] **Desktop trackpad gesture facts, issue #108**: main-process scroll and pinch edges now feed
+      a depth-safe typed bridge so macOS desktop wheel routing distinguishes a precise-pixel mouse
+      from a trackpad, including the bounded momentum-gap linger. Server Edition keeps its browser
+      heuristic and mobile is not applicable. This implementation lane intentionally has no tests,
+      lint, type checks, builds, packaging, runtime interaction, reviews, audits, or captures yet.
 
 - [ ] **Shared provider services, issue #18**: provider catalog, account metadata, sealed
       credential payloads, bounded one-time OAuth PKCE callbacks, adapter-owned resource discovery,
@@ -123,6 +130,14 @@ later commit, since this file will not be kept in lockstep with every merge).
       schema 3 intent are present. Tests, type checks, lint, reviews, security or accessibility
       checks, builds, packaging, installer execution, runtime interaction, and captures remain
       unverified under the ultra-speed lane.
+
+- [ ] **Guided GitHub API capabilities, issue #101**: typed REST and fixed GraphQL operations now
+      cover repository, source-control, collaboration, Actions, release, organization, account,
+      search, security, ruleset, webhook, and app resources. The host resolves approved project
+      scope and local credentials, validates semantic inputs, bounds pagination and response data,
+      reports progress and rate limits, supports cancellation, and requires exact destructive
+      confirmation. Tests, type checks, lint, reviews, builds, packaging, runtime interaction, and
+      captures remain unverified on the dedicated feature branch.
 
 - [ ] **ADHD modes** — Focus, Low stimulation, Time awareness, One thing at a time, and Momentum
       are all specced in `docs/adhd-modes.md`. Time awareness, Momentum, and the

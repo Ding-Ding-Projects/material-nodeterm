@@ -8,6 +8,21 @@
   site-local storage, exports, provenance copy, and the Easter-egg and feature copy resolvers now
   accept the complete range. This source lane intentionally did not run tests, type checks, lint,
   builds, packaging, runtime interaction, reviews, audits, or UI captures.
+- Route macOS desktop canvas wheel input from main-process trackpad gesture facts. A depth-safe
+  ledger sends scroll and pinch edge transitions over typed IPC, the desktop router keeps a bounded
+  500 ms momentum-gap linger, and precise-pixel mouse packets zoom when no gesture is reported.
+  Server Edition keeps its documented browser heuristic and mobile remains not applicable. This
+  issue #108 implementation lane intentionally did not run tests, lint, type checks, builds,
+  packaging, runtime interaction, reviews, audits, or captures.
+
+- Add the guided GitHub API capability surface. A hand-written operation catalog now covers
+  repository, source control, collaboration, Actions, release, package, deployment, organization,
+  account, search, security, ruleset, webhook, and app resources through fixed REST routes plus a
+  fixed GraphQL account profile query. The host derives approved repositories, keeps credentials out
+  of the renderer, bounds pagination and response data, reports progress and rate limits, supports
+  cancellation, and requires operation-scoped destructive confirmation. Tests, type checks, lint,
+  reviews, security or accessibility checks, builds, packaging, installer execution, runtime
+  interaction, and UI captures remain intentionally unrun for issue #101.
 
 - Add the guided Nextcloud AIO hosting profile for issue #52. It uses a pinned official image,
   explicitly discloses read-only Docker socket authority, refuses privileged mode and arbitrary
