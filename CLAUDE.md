@@ -3287,14 +3287,12 @@ bootstrapper URL in `dependencies.manifest.json`, hashes it in Node, stages it b
 Program Files, and runs it only on a match; privileged executable lookup never trusts inherited PATH.
 
 Visual Studio has no user-scoped Build Tools installation, and Microsoft requires programmatic
-quiet/passive changes to start elevated. The script prechecks the token: unelevated callers exit
-with ERROR_ACCESS_DENIED before starting an installer or UAC and print an absolute command ending
-in `--silent --elevated-toolchain-only`. Only that helper command may run elevated. The helper then
-exits; the root BAT must be rerun normally, and explicitly refuses to continue into per-user Python
-or npm under an Administrator token. Do not “helpfully” add `Start-Process -Verb RunAs`: `/s`
-promises no prompts, and ordinary dependency installation is automatic too. This is measured, not
-inferred: an unelevated quiet modify parsed every option, then exited 5007 saying it must be run
-elevated from the beginning.
+quiet/passive changes to start elevated. The script prechecks the token: an interactive caller
+hands only the helper to a bounded UAC launch, waits for its exit code, and then reruns normal-user
+verification. Silent callers exit with ERROR_ACCESS_DENIED before starting UAC and remain prompt-free;
+the exact elevated-only recovery text names the helper route. The root BAT and npm lifecycle never
+run under an Administrator token. This is measured, not inferred: an unelevated quiet modify parsed
+every option, then exited 5007 saying it must be run elevated from the beginning.
 
 Python is a separate prerequisite, not part of `Microsoft.VisualStudio.Workload.VCTools`:
 `smart-whisper` runs node-gyp in its install lifecycle, and the root postinstall rebuilds it and

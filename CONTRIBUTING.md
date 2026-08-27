@@ -145,12 +145,12 @@ need it too, and wire it in the same change.
   Close every running instance of the app first: Windows will not delete a DLL a live process has
   loaded, so a dev window you forgot about makes the build die with an `EPERM` about a `.node`
   file that says nothing about the real cause. The bootstrap detects the
-  **Spectre-mitigated MSVC libs** and repairs them through the separately elevated helper-only
-  command when needed — node-pty asks for the mitigation in its own `binding.gyp`, and without them
-  the build dies minutes in with `MSB8040`. Visual Studio changes require elevation; the script
-  never triggers UAC, so an unelevated run exits access-denied and prints one exact
-  **helper-only** command. Run only that helper elevated, close the Administrator prompt, then rerun
-  the root BAT normally — npm lifecycle scripts must never inherit elevation. The BAT also ensures
+  **Spectre-mitigated MSVC libs** and repairs them through the narrowly scoped elevated helper when
+  needed — node-pty asks for the mitigation in its own `binding.gyp`, and without them the build
+  dies minutes in with `MSB8040`. Visual Studio changes require elevation; an interactive run hands
+  only that helper to UAC, waits for its result, and reruns normal-user verification. A silent run
+  stays prompt-free and exits access-denied with the exact helper route. The root BAT and npm
+  lifecycle scripts never inherit elevation. The BAT also ensures
   x86/x64 are always checked and ARM64 is added on ARM64 hosts. The BAT also ensures a supported
   per-user Python for node-gyp, with SHA-pinned fallbacks for machines without winget, and exports
   the verified interpreter through every node-gyp precedence channel.

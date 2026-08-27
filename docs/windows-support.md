@@ -321,11 +321,10 @@ outside that branding gate because the pinned builder has no supported resource-
 
    Visual Studio has no per-user Build Tools install, and Microsoft forbids programmatic
    `--quiet`/`--passive` use by an unelevated user. The script checks elevation before starting the
-   installer and exits access-denied with an absolute **helper-only** Administrator Command Prompt
-   remedy. Run only the printed `ensure-windows-build-toolchain.mjs ...
-   --elevated-toolchain-only` command elevated, close that prompt, and rerun the root BAT normally.
-   The root BAT refuses to continue toward Python/npm under an Administrator token. It does not
-   trigger UAC, because `/s` is prompt-free and ordinary dependency installs are automatic too.
+   installer. An interactive root BAT hands only the helper to UAC, waits for completion, and then
+   verifies the result from the normal user process. A `/s` run never opens UAC and exits
+   access-denied with the exact elevated-helper requirement. The root BAT refuses to continue toward
+   Python/npm under an Administrator token.
    An observed non-elevated `setup.exe modify ... --quiet --norestart` parsed the command but exited
    5007 with “run elevated from the beginning,” matching the documented boundary.
 3. **Python is missing or unsupported.** npm lifecycle scripts compile `smart-whisper`/`node-pty`
