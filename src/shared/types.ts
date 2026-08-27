@@ -435,6 +435,8 @@ export type NodeKind =
   | 'open-webui-hosting'
   | 'awsidentity'
   | 'nextcloud-aio'
+  /** Managed Nextcloud profile with PostgreSQL, Redis, and no container-runtime socket. */
+  | 'nextcloud-managed'
   | 'cloudflare-zero-trust'
   /** Guided Cloudflare account, zone, DNS, SSL/TLS, ruleset, redirect, cache, and analytics manager. */
   | 'cloudflare-core-managers'
@@ -457,6 +459,7 @@ export const SERVICE_NODE_KINDS = [
   'awsidentity',
   'cloudflare-zero-trust',
   'nextcloud-aio',
+  'nextcloud-managed',
   'cloudflare-core-managers'
 ] as const
 
@@ -671,6 +674,10 @@ export interface CanvasNodeState {
   awsIdentityBinding?: import('./aws-identity').AwsIdentityBinding
   /** Nextcloud AIO safe deployment intent. Context, container state, backups, and socket bindings remain local. */
   nextcloudAioConfig?: import('./nextcloud-aio').NextcloudAioConfig
+  /** Managed Nextcloud safe project intent; its destination binding and secret keys stay local. */
+  nextcloudManagedIntent?: import('./nextcloud-managed').NextcloudManagedIntent
+  /** Machine-local destination and vault-key bindings for the managed Nextcloud profile. */
+  nextcloudManagedBinding?: import('./nextcloud-managed').NextcloudManagedBinding
   /** Cloudflare manager selection intent. Account ids, credentials and resource ids stay local. */
   cloudflareZeroTrustIntent?: import('./cloudflare-zero-trust').CloudflarePortableIntent
   /** Cloudflare manager safe intent. Credentials and local bindings stay in the host overlay. */
@@ -4360,6 +4367,8 @@ export interface RelayHostApi {
   manager: DockerHostManagerApi
   /** Guided Nextcloud AIO lifecycle manager. Desktop-only; the browser shell reports unsupported. */
   nextcloudAio: NextcloudAioManagerApi
+  /** Guided managed Nextcloud profile without a container-runtime socket. */
+  nextcloudManaged: import('./nextcloud-managed').NextcloudManagedApi
   /**
    * Enter host mode over the relay: connect and return a pairing offer string to hand to a client.
    * Rejects when Docker or the configured relay is unavailable. `projectId` is the

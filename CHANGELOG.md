@@ -17,6 +17,12 @@
   contract remain in place. This correction lane did not run tests, lint, type checks, builds,
   packaging, runtime interaction, reviews, audits, or captures.
 
+- Add the managed no-socket Nextcloud hosting node with fixed PostgreSQL, Redis, and web services,
+  persistent local data, generated secret files, loopback-only binding, bounded health and progress
+  reporting, guided backup and restore snapshots, explicit update rollback sequencing, and no Docker
+  socket or privileged mode. Machine-local paths and secret-key names stay out of portable project
+  data. This ultra-speed lane intentionally did not run tests, type checks, lint, builds, packaging,
+
 - Mount the seven AWS core-service routes on the shared AWS manager: S3, EC2, IAM, STS, Lambda,
   CloudWatch, and CloudWatch Logs. Typed operation controls now cover bounded reads, selected writes,
   destructive confirmation, pagination, cancellation, and progress while reusing the current local

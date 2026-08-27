@@ -9,6 +9,7 @@ substrate described in CLAUDE.md rather than inventing a surface each.
 | [Service nodes](service-nodes.md) | implemented as canvas objects (Minecraft, Docker host, Proxmox, GitLab, Home Assistant, FreePBX); Home Assistant and Minecraft have live clients |
 | [GitLab Server hosting](gitlab-hosting.md) | guided Community Edition or Enterprise Edition deployment with pinned official image, four managed volumes, readiness, credential handoff, backup, restore, update, rollback, and loopback-only binding |
 | [Nextcloud AIO hosting](nextcloud-aio-hosting.md) | guided pinned official image profile with explicit Docker socket authority disclosure, no privileged mode, private binding, progress, health, update, backup, restore, and rollback |
+| [Managed Nextcloud, no socket](nextcloud-managed.md) | guided PostgreSQL, Redis, and Nextcloud web stack with persistent local data, secret files, loopback binding, update, backup, restore, and rollback sequencing |
 | [Home Assistant client](home-assistant-client.md) | multi-instance machine-local registration with bounded REST and WebSocket entity discovery |
 | [Minecraft server](minecraft-server.md) | research only: cited constraints, not implemented |
 | [Research findings](research-findings.md) | all seven subjects, adversarially checked |

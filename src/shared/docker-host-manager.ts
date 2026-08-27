@@ -153,4 +153,6 @@ export interface DockerHostManagerApi {
   gitlab: import('./gitlab-hosting').GitLabHostingApi
   cancel(jobId: string): void
   onProgress(listener: (progress: DockerHostJobProgress) => void): () => void
+  /** Fixed managed Nextcloud profile. The host owns secret-file creation and all Docker argv. */
+  nextcloud?: import('./nextcloud-managed').NextcloudManagedApi
 }

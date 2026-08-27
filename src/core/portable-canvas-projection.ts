@@ -30,6 +30,7 @@ import { repairPortablePortals, validatePortablePortals, type PortablePortalV3 }
 import { normalizeCloudflareIntent as normalizeCloudflareZeroTrustIntent, type CloudflarePortableIntent as CloudflareZeroTrustPortableIntent } from '../shared/cloudflare-zero-trust'
 import { normalizeCloudflareIntent as normalizeCloudflareCoreIntent, type CloudflarePortableIntent as CloudflareCorePortableIntent } from '../shared/cloudflare-core-managers'
 import { normalizeNextcloudAioConfig, type NextcloudAioConfig } from '../shared/nextcloud-aio'
+import { validateNextcloudManagedIntent, type NextcloudManagedIntent } from '../shared/nextcloud-managed'
 import type { AwsManagerPortableIntent } from '../shared/aws-resource'
 
 export type PortableCanvasScope = 'root' | 'multiverse' | 'aws-universe'
@@ -75,6 +76,7 @@ export interface PortableCanvasNodeV3 {
   cloudflareCoreIntent?: CloudflareCorePortableIntent
   /** Safe Nextcloud AIO hosting intent; Docker context and live state remain local. */
   nextcloudAioConfig?: NextcloudAioConfig
+  nextcloudManagedIntent?: NextcloudManagedIntent
   /** Safe public-catalog identity and display copy. Image bytes and network state are excluded. */
   wildDimSumDish?: PublicDimSumSelection
   homeAssistantIntent?: { transport: 'rest' | 'websocket'; domain: string }
@@ -160,7 +162,7 @@ const ALLOWED_NODE = new Set([
   'id', 'kind', 'creationEventId', 'position', 'size', 'title', 'color', 'group',
   'universeCanvasId', 'universeScope', 'universeDepth', 'nonDeletable', 'shopSelection',
   'collapsed', 'parentId', 'tags', 'text', 'url', 'browserTabs', 'serviceLabel', 'awsManagerIntent',
-  'wildDimSumDish', 'homeAssistantIntent', 'homeAssistantControlConfig', 'homeAssistantSensorConfig', 'cloudflareZeroTrustIntent', 'cloudflareCoreIntent', 'nextcloudAioConfig',
+  'wildDimSumDish', 'homeAssistantIntent', 'homeAssistantControlConfig', 'homeAssistantSensorConfig', 'cloudflareZeroTrustIntent', 'cloudflareCoreIntent', 'nextcloudAioConfig', 'nextcloudManagedIntent',
   'alarmSchedule', 'alarmTimeZone', 'alarmEnabled', 'alarmSnoozeMinutes',
   'alarmSoundEnabled', 'alarmNarratorEnabled', 'alarmHistory', 'mediaAssets',
   'mediaActiveAssetId', 'recoveryGame'
@@ -309,6 +311,14 @@ function projectNode(node: CanvasNodeState, strict = false): PortableCanvasNodeV
     const normalized = normalizeNextcloudAioConfig(node.nextcloudAioConfig)
     if (node.kind !== 'nextcloud-aio' || !normalized || (strict && JSON.stringify(normalized) !== JSON.stringify(node.nextcloudAioConfig))) throw new PortableProjectV3Error('manifest', 'Portable Nextcloud AIO intent is invalid or exceeds its bounds.')
     out.nextcloudAioConfig = normalized
+  }
+  if (node.nextcloudManagedIntent !== undefined) {
+    try {
+      if (node.kind !== 'nextcloud-managed') throw new Error('wrong kind')
+      out.nextcloudManagedIntent = validateNextcloudManagedIntent(node.nextcloudManagedIntent)
+    } catch {
+      throw new PortableProjectV3Error('manifest', 'Portable managed Nextcloud intent is invalid or exceeds its bounds.')
+    }
   }
   if (node.wildDimSumDish !== undefined) {
     const dish = normalizePublicDimSumSelection(node.wildDimSumDish)
@@ -681,6 +691,7 @@ export function portableCanvasProjectionToProject(
     ...(node.cloudflareZeroTrustIntent !== undefined ? { cloudflareZeroTrustIntent: normalizeCloudflareZeroTrustIntent(node.cloudflareZeroTrustIntent)! } : {}),
     ...(node.cloudflareCoreIntent !== undefined ? { cloudflareCoreIntent: normalizeCloudflareCoreIntent(node.cloudflareCoreIntent) } : {}),
     ...(node.nextcloudAioConfig !== undefined ? { nextcloudAioConfig: normalizeNextcloudAioConfig(node.nextcloudAioConfig) } : {}),
+    ...(node.nextcloudManagedIntent !== undefined ? { nextcloudManagedIntent: validateNextcloudManagedIntent(node.nextcloudManagedIntent) } : {}),
     ...(node.mediaAssets ? { mediaAssets: node.mediaAssets.map((asset) => ({ ...asset })) } : {}),
     ...(node.mediaActiveAssetId !== undefined ? { mediaActiveAssetId: node.mediaActiveAssetId } : {}),
     ...(node.wildDimSumDish !== undefined ? { wildDimSumDish: node.wildDimSumDish } : {}),

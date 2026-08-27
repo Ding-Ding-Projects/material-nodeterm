@@ -2,6 +2,7 @@ import type { NodeKind } from './types'
 import { DOCKER_HOST_PORTABLE_BLUEPRINT } from './docker-host-manager'
 import { OPEN_WEBUI_DEFAULT_INTENT } from './open-webui-hosting'
 import { NEXTCLOUD_AIO_PORTABLE_BLUEPRINT } from './nextcloud-aio'
+import { NEXTCLOUD_MANAGED_BLUEPRINT } from './nextcloud-managed'
 
 /** The guided categories shown by the Node Catalog. Keep this list explicit so a new category
  * cannot disappear from the picker simply because no current entry happens to use it. */
@@ -731,7 +732,22 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
     availabilityMode: 'configure-later',
     scope: 'any',
     availability: alwaysAvailable
-  }
+  },
+  {
+    id: 'nextcloud-managed-hosting',
+    nodeKind: 'nextcloud-managed',
+    category: 'hosting',
+    label: 'Managed Nextcloud, no socket',
+    description: 'Deploy a guided PostgreSQL, Redis, and Nextcloud web stack without a Docker socket or privileged mode.',
+    keywords: ['hosting', 'nextcloud', 'managed', 'postgresql', 'redis', 'backup', 'restore', 'rollback', 'no socket'],
+    documentationPath: 'docs/features/integrations/nextcloud-managed.md',
+    safeDefaults: { nextcloudManagedBlueprint: NEXTCLOUD_MANAGED_BLUEPRINT },
+    dependencies: ['docker-cli', 'nextcloud-managed-images'],
+    status: 'available',
+    availabilityMode: 'configure-later',
+    scope: 'any',
+    availability: unsupportedInRelay
+  },
 ] as const
 
 const CATALOG_BY_ID = new Map(NODE_CATALOG.map((entry) => [entry.id, entry]))
@@ -811,6 +827,7 @@ export const NODE_CATALOG_COMPLETENESS: readonly NodeCatalogCompletenessRecord[]
   { id: 'cloudflare-hosting', state: 'planned', scope: 'any', reason: 'Cloudflare hosting not implemented' },
   { id: 'gitlab-hosting', state: 'current', scope: 'any', reason: 'guided private GitLab Server hosting node' },
   { id: 'nextcloud-hosting', state: 'current', scope: 'any', reason: 'Nextcloud AIO hosting profile' },
+  { id: 'nextcloud-managed-hosting', state: 'current', scope: 'any', reason: 'managed Nextcloud no-socket hosting profile' },
   { id: 'open-webui-hosting', state: 'current', scope: 'any', reason: 'guided Open WebUI hosting node' }
 ]
 

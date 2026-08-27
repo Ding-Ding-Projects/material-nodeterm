@@ -694,6 +694,10 @@ export const IPC = {
   nextcloudAioRun: 'nextcloud-aio:run',
   nextcloudAioCancel: 'nextcloud-aio:cancel',
   nextcloudAioProgress: 'nextcloud-aio:progress',
+  nextcloudManagedRun: 'docker-host-manager:nextcloud-managed-run',
+  nextcloudManagedSnapshots: 'docker-host-manager:nextcloud-managed-snapshots',
+  nextcloudManagedCancel: 'docker-host-manager:nextcloud-managed-cancel',
+  nextcloudManagedProgress: 'docker-host-manager:nextcloud-managed-progress',
   // Guided Cloudflare account, zone, DNS, SSL/TLS, ruleset, redirect, cache, and analytics managers.
   // Tokens stay in the host credential vault; canvas data carries only safe intent.
   cloudflareCoreRuntime: 'cloudflare-core:runtime',

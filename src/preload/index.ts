@@ -33,6 +33,7 @@ import type { DockerHostAction, DockerHostJobProgress } from '../shared/docker-h
 import type { OpenWebUiApi, OpenWebUiIntent, OpenWebUiOperationInput, OpenWebUiJobProgress } from '../shared/open-webui-hosting'
 import type { GitLabHostingAction } from '../shared/gitlab-hosting'
 import type { NextcloudAioAction, NextcloudAioJobProgress } from '../shared/nextcloud-aio'
+import type { NextcloudManagedAction, NextcloudManagedBinding, NextcloudManagedProgress } from '../shared/nextcloud-managed'
 import type { MinecraftEvent } from '../shared/minecraft'
 import type { NodeDependencyAvailability, NodeDependencyProgress, NodeDependencyInstallResult } from '../shared/node-dependencies'
 import type { WslCreateProgress } from '../shared/wsl'
@@ -969,6 +970,16 @@ const api: NodeTerminalApi = {
         const handler = (_event: unknown, progress: NextcloudAioJobProgress) => listener(progress)
         ipcRenderer.on(IPC.nextcloudAioProgress, handler)
         return () => ipcRenderer.removeListener(IPC.nextcloudAioProgress, handler)
+      }
+    },
+    nextcloudManaged: {
+      snapshots: (binding: NextcloudManagedBinding) => ipcRenderer.invoke(IPC.nextcloudManagedSnapshots, binding),
+      run: (action: NextcloudManagedAction) => ipcRenderer.invoke(IPC.nextcloudManagedRun, action),
+      cancel: (jobId: string) => ipcRenderer.send(IPC.nextcloudManagedCancel, jobId),
+      onProgress: (listener: (progress: NextcloudManagedProgress) => void) => {
+        const handler = (_event: unknown, progress: NextcloudManagedProgress) => listener(progress)
+        ipcRenderer.on(IPC.nextcloudManagedProgress, handler)
+        return () => ipcRenderer.removeListener(IPC.nextcloudManagedProgress, handler)
       }
     },
     start: (projectId?: string) => ipcRenderer.invoke(IPC.relayHostStart, projectId),

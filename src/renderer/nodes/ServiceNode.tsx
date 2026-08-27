@@ -12,6 +12,7 @@ import { DockerHostManagerPanel } from '../components/docker/DockerHostManagerPa
 import { HomeAssistantPanel } from '../components/home-assistant/HomeAssistantPanel'
 import { CloudflareZeroTrustPanel } from '../components/cloudflare/CloudflareZeroTrustPanel'
 import { NextcloudAioPanel } from '../components/nextcloud/NextcloudAioPanel'
+import { NextcloudManagedPanel } from '../components/nextcloud/NextcloudManagedPanel'
 import { EditableNodeTitle } from '../components/EditableNodeTitle'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { mapAroundExactFacts } from './nodeVocabulary'
@@ -59,7 +60,8 @@ const ENDPOINT_PLACEHOLDER: Record<ServiceNodeKind, string> = {
   freepbx: 'https://pbx.local',
   awsidentity: 'https://sts.amazonaws.com',
   'cloudflare-zero-trust': 'https://api.cloudflare.com',
-  'nextcloud-aio': 'http://127.0.0.1:8080'
+  'nextcloud-aio': 'http://127.0.0.1:8080',
+  'nextcloud-managed': 'http://127.0.0.1:18080'
 }
 
 /**
@@ -242,6 +244,7 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
         {!collapsed && kind === 'minecraft' && <MinecraftServerPanel nodeId={id} />}
         {!collapsed && kind === 'dockerhost' && <DockerHostManagerPanel />}
         {!collapsed && kind === 'nextcloud-aio' && <NextcloudAioPanel nodeId={id} config={data.nextcloudAioConfig} onConfigChange={(nextcloudAioConfig) => updateNodeData(id, { nextcloudAioConfig })} />}
+        {!collapsed && kind === 'nextcloud-managed' && <NextcloudManagedPanel nodeId={id} intent={data.nextcloudManagedIntent} binding={data.nextcloudManagedBinding} onIntentChange={(nextcloudManagedIntent) => updateNodeData(id, { nextcloudManagedIntent })} onBindingChange={(nextcloudManagedBinding) => updateNodeData(id, { nextcloudManagedBinding })} />}
 
         {!collapsed && kind === 'awsidentity' && (
           <AwsIdentityManager
@@ -269,7 +272,7 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
           />
         )}
 
-        {!collapsed && kind !== 'minecraft' && kind !== 'dockerhost' && kind !== 'homeassistant' && kind !== 'awsidentity' && kind !== 'cloudflare-zero-trust' && kind !== 'nextcloud-aio' && (
+        {!collapsed && kind !== 'minecraft' && kind !== 'dockerhost' && kind !== 'homeassistant' && kind !== 'awsidentity' && kind !== 'cloudflare-zero-trust' && kind !== 'nextcloud-aio' && kind !== 'nextcloud-managed' && (
           <div className="service-node__body">
             <label className="service-node__field" htmlFor={`${id}-endpoint`}>
               <span className="service-node__field-label">{vocab('Address')}</span>

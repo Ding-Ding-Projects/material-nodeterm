@@ -1289,6 +1289,29 @@ packaging, installer execution, UI interaction, or captures. The roadmap item re
 until archive production/import wiring and those verification activities land. No commit or push was
 made by this lane.
 
+## 2026-08-27, managed Nextcloud no-socket hosting lane
+
+Issue #53 is implemented on feature branch `feat/program-42-nextcloud-managed` at pushed commit
+`9f1406a9dd9758471b6ebad77aed662f1cc22850`. The new `nextcloud-managed` node kind uses a fixed
+PostgreSQL, Redis, and Nextcloud Apache stack, an internal network, loopback-only web binding,
+generated local secret files, and no Docker socket mount or privileged mode. The renderer exposes
+verified Docker context selection, native data and backup folder pickers, bounded project name and
+port controls, separate operation and snapshot search fields with adjacent anchored regex builders,
+progress, cancellation, and two-key recovery confirmation. The host process owns the closed Docker
+argument vector and sequences deploy, update, backup, restore, and rollback operations.
+
+Portable schema 3 carries only `nextcloudManagedIntent`. Machine-local `nextcloudManagedBinding`
+holds the selected context, folders, loopback port, and opaque secret-key names through the local
+execution overlay. Import does not call Docker, write secrets, deploy, launch, or download.
+Updated source and direct documentation include `src/shared/nextcloud-managed.ts`,
+`src/main/remote/nextcloud-managed.ts`, the Nextcloud renderer panel, node registration, portable
+projection handling, `docs/features/integrations/nextcloud-managed.md`, and the offline article
+entry.
+
+This ultra-speed lane intentionally ran no tests, type checks, lint, reviews, security or
+accessibility checks, builds, packaging, installer execution, runtime interaction, or captures.
+Those verification results remain unrun. Default-branch integration is pending.
+
 ## 2026-08-26, portable Node Universes and hosting program plan
 
 Plan-only lane status. The public implementation plan is recorded in

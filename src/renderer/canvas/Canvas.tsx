@@ -2124,6 +2124,7 @@ export function Canvas() {
       'gitlab-hosting': withNodeBoundary(GitLabHostingNode),
       'cloudflare-zero-trust': withNodeBoundary(ServiceNode),
       'nextcloud-aio': withNodeBoundary(ServiceNode),
+      'nextcloud-managed': withNodeBoundary(ServiceNode),
       'cloudflare-core-managers': withNodeBoundary(CloudflareCoreManagersNode),
       'linux-vm': withNodeBoundary(VirtualMachineNode),
       'aws-resource': withNodeBoundary(AwsResourceNode)
@@ -5712,6 +5713,7 @@ export function Canvas() {
             }
             if (catalogEntry.id === 'gitlab-hosting') return createGitLabHostingNode(index, center)
             if (catalogEntry.id === 'nextcloud-hosting') return createServiceNode('nextcloud-aio', index, center)
+            if (catalogEntry.id === 'nextcloud-managed-hosting') return createServiceNode('nextcloud-managed', index, center)
             if (catalogEntry.id.startsWith('service:')) {
               return createServiceNode(catalogEntry.nodeKind as ServiceNodeKind, index, center)
             }

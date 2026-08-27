@@ -13,6 +13,7 @@ import type { ServiceConnection } from '@shared/node-exec'
 import { OPEN_WEBUI_DEFAULT_INTENT, type OpenWebUiIntent, type OpenWebUiLocalBinding } from '@shared/open-webui-hosting'
 import { DEFAULT_GITLAB_HOSTING_CONFIG, type GitLabHostingConfig } from '@shared/gitlab-hosting'
 import { NEXTCLOUD_AIO_DEFAULT_CONFIG } from '@shared/nextcloud-aio'
+import { DEFAULT_NEXTCLOUD_MANAGED_INTENT, type NextcloudManagedBinding, type NextcloudManagedIntent } from '@shared/nextcloud-managed'
 import type { NsisLocalPaths, NsisSpec } from '@shared/nsis-form-types'
 import { defaultNsisLocalPaths, defaultNsisSpec } from '@shared/nsis-form-types'
 import type { AgentId, AgentPermissionMode, BuiltinAgentId } from '@shared/agents/config'
@@ -267,6 +268,8 @@ export interface NodeData {
   gitlabHostingConfig?: GitLabHostingConfig
   /** Nextcloud AIO safe deployment intent; live Docker bindings remain outside project data. */
   nextcloudAioConfig?: import('@shared/nextcloud-aio').NextcloudAioConfig
+  nextcloudManagedIntent?: NextcloudManagedIntent
+  nextcloudManagedBinding?: NextcloudManagedBinding
   /** Cloudflare manager safe intent; local credential and provider state never enters project data. */
   cloudflareCoreIntent?: CloudflarePortableIntent
   /** Access, Zero Trust, Workers, Pages, R2, D1 and Queues intent; account state stays local. */
@@ -1617,7 +1620,8 @@ export const SERVICE_NODE_LABELS: Record<ServiceNodeKind, string> = {
   freepbx: 'FreePBX',
   awsidentity: 'AWS identity',
   'cloudflare-zero-trust': 'Cloudflare managers',
-  'nextcloud-aio': 'Nextcloud AIO'
+  'nextcloud-aio': 'Nextcloud AIO',
+  'nextcloud-managed': 'Managed Nextcloud'
 }
 
 /**
@@ -1667,7 +1671,8 @@ export function createServiceNode(
         : {}),
       ...(kind === 'homeassistant' ? { homeAssistantIntent: { ...DEFAULT_HOME_ASSISTANT_NODE_INTENT } } : {}),
       ...(kind === 'cloudflare-zero-trust' ? { cloudflareZeroTrustIntent: { schemaVersion: 1, manager: null, operation: null, accountHint: null, resourceHint: null, values: {} } } : {}),
-      ...(kind === 'nextcloud-aio' ? { nextcloudAioConfig: { ...NEXTCLOUD_AIO_DEFAULT_CONFIG } } : {})
+      ...(kind === 'nextcloud-aio' ? { nextcloudAioConfig: { ...NEXTCLOUD_AIO_DEFAULT_CONFIG } } : {}),
+      ...(kind === 'nextcloud-managed' ? { nextcloudManagedIntent: { ...DEFAULT_NEXTCLOUD_MANAGED_INTENT } } : {})
     }
   }
 }
@@ -2348,6 +2353,7 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   freepbx: true,
   awsidentity: true,
   'nextcloud-aio': true,
+  'nextcloud-managed': true,
   'gitlab-hosting': true,
   'cloudflare-zero-trust': true,
   'cloudflare-core-managers': true,
@@ -2407,6 +2413,7 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   freepbx: SERVICE_SUMMARY_SIZE,
   awsidentity: SERVICE_CONSOLE_SIZE,
   'nextcloud-aio': SERVICE_CONSOLE_SIZE,
+  'nextcloud-managed': SERVICE_CONSOLE_SIZE,
   'gitlab-hosting': { width: 700, height: 620 },
   'cloudflare-zero-trust': SERVICE_CONSOLE_SIZE,
   'cloudflare-core-managers': CLOUDFLARE_CORE_MANAGERS_SIZE,
@@ -2873,6 +2880,8 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         serviceLabel: n.serviceLabel,
         openWebUiIntent: n.openWebUiIntent,
         openWebUiLocalBinding: n.openWebUiLocalBinding,
+        nextcloudManagedIntent: n.nextcloudManagedIntent,
+        nextcloudManagedBinding: n.nextcloudManagedBinding,
         awsIdentityIntent: normalizeAwsIdentityIntent(n.awsIdentityIntent) ?? undefined,
         gitlabHostingConfig: n.gitlabHostingConfig,
         nextcloudAioConfig: n.nextcloudAioConfig,
@@ -3006,6 +3015,8 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         serviceLabel: n.data.serviceLabel,
         openWebUiIntent: n.data.openWebUiIntent,
         openWebUiLocalBinding: n.data.openWebUiLocalBinding,
+        nextcloudManagedIntent: n.data.nextcloudManagedIntent,
+        nextcloudManagedBinding: n.data.nextcloudManagedBinding,
         awsIdentityIntent: normalizeAwsIdentityIntent(n.data.awsIdentityIntent) ?? undefined,
         gitlabHostingConfig: n.data.gitlabHostingConfig,
         nextcloudAioConfig: n.data.nextcloudAioConfig,

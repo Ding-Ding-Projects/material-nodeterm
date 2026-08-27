@@ -33,6 +33,7 @@ import type { NsisLocalPaths } from './nsis-form-types'
 import { safeOpenWebUiLocalBinding, type OpenWebUiLocalBinding } from './open-webui-hosting'
 import { normalizeVirtualMachineLocalPaths, safeVirtualMachinePath, type VirtualMachineLocalPaths } from './virtual-machine'
 import { normalizeAwsIdentityBinding, type AwsIdentityBinding } from './aws-identity'
+import { validateNextcloudManagedBinding, type NextcloudManagedBinding } from './nextcloud-managed'
 
 /** Per-node exec values the LOCAL machine typed. Persisted only in the machine-local index. */
 export interface LocalNodeExec {
@@ -64,6 +65,8 @@ export interface LocalNodeExec {
   serviceConnection?: ServiceConnection
   /** Open WebUI container and provider binding, kept in the machine-local index. */
   openWebUiLocalBinding?: OpenWebUiLocalBinding
+  /** Managed Nextcloud destination paths and vault-key names, kept off shared project data. */
+  nextcloudManagedBinding?: NextcloudManagedBinding
   /** Local AWS profile, region and endpoint binding. Contains no credential bytes. */
   awsIdentityBinding?: AwsIdentityBinding
   /**
@@ -385,6 +388,7 @@ function stripNodeExec(n: CanvasNodeState): CanvasNodeState {
     withoutMediaPaths.pendingLaunch === undefined &&
     withoutMediaPaths.serviceConnection === undefined &&
     withoutMediaPaths.openWebUiLocalBinding === undefined &&
+    withoutMediaPaths.nextcloudManagedBinding === undefined &&
     withoutMediaPaths.awsIdentityBinding === undefined &&
     withoutMediaPaths.nsisLocalPaths === undefined &&
     withoutMediaPaths.virtualMachineLocalPaths === undefined &&
@@ -398,6 +402,7 @@ function stripNodeExec(n: CanvasNodeState): CanvasNodeState {
   delete out.pendingLaunch
   delete out.serviceConnection
   delete out.openWebUiLocalBinding
+  delete out.nextcloudManagedBinding
   delete out.awsIdentityBinding
   delete out.nsisLocalPaths
   delete out.virtualMachineLocalPaths
@@ -492,6 +497,9 @@ export function carryLocalNodeExec(
   const awsIdentityBinding = normalizeAwsIdentityBinding(prev.awsIdentityBinding)
   const mediaFilePath = safePathString(prev.filePath) ? prev.filePath : undefined
   const mediaSourcePaths = localMediaSourcePaths(prev)
+  const nextcloudBinding = prev.kind === 'nextcloud-managed' && next.kind === 'nextcloud-managed'
+    ? (() => { try { return validateNextcloudManagedBinding(prev.nextcloudManagedBinding) } catch { return undefined } })()
+    : undefined
   if (
     prev.shell === undefined &&
     prev.terminalProfileId === undefined &&
@@ -502,7 +510,8 @@ export function carryLocalNodeExec(
     Object.keys(vmPaths).length === 0 &&
     openWebUiBinding === undefined &&
     mediaFilePath === undefined &&
-    mediaSourcePaths === undefined
+    mediaSourcePaths === undefined &&
+    nextcloudBinding === undefined
   )
     return next
   const out: CanvasNodeState = { ...next }
@@ -514,6 +523,7 @@ export function carryLocalNodeExec(
   if (nsisPaths !== undefined) out.nsisLocalPaths = nsisPaths
   if (Object.keys(vmPaths).length > 0) out.virtualMachineLocalPaths = vmPaths
   if (openWebUiBinding) out.openWebUiLocalBinding = openWebUiBinding
+  if (nextcloudBinding) out.nextcloudManagedBinding = nextcloudBinding
   if (awsIdentityBinding) out.awsIdentityBinding = awsIdentityBinding
   return restoreMediaPaths(out, { mediaFilePath, mediaSourcePaths })
 }
@@ -565,6 +575,10 @@ export function localNodeExec(nodes: CanvasNodeState[]): LocalNodeExecMap | unde
     }
     const awsIdentityBinding = normalizeAwsIdentityBinding(n.awsIdentityBinding)
     if (awsIdentityBinding) entry.awsIdentityBinding = awsIdentityBinding
+    const nextcloudBinding = n.kind === 'nextcloud-managed'
+      ? (() => { try { return validateNextcloudManagedBinding(n.nextcloudManagedBinding) } catch { return undefined } })()
+      : undefined
+    if (nextcloudBinding) entry.nextcloudManagedBinding = nextcloudBinding
     const nsisPaths = safeNsisLocalPaths(n.nsisLocalPaths)
     if (nsisPaths) entry.nsisLocalPaths = nsisPaths
     const vmPaths = normalizeVirtualMachineLocalPaths(n.virtualMachineLocalPaths)
@@ -584,6 +598,7 @@ export function localNodeExec(nodes: CanvasNodeState[]): LocalNodeExecMap | unde
       entry.serviceConnection ||
       entry.openWebUiLocalBinding ||
       entry.awsIdentityBinding ||
+      entry.nextcloudManagedBinding ||
       entry.nsisLocalPaths ||
       entry.virtualMachineLocalPaths ||
       entry.mediaFilePath ||
@@ -630,6 +645,10 @@ export function applyLocalNodeExec(
     }
     const awsIdentityBinding = normalizeAwsIdentityBinding(mine?.awsIdentityBinding)
     if (awsIdentityBinding) out.awsIdentityBinding = awsIdentityBinding
+    const nextcloudBinding = out.kind === 'nextcloud-managed'
+      ? (() => { try { return validateNextcloudManagedBinding(mine?.nextcloudManagedBinding) } catch { return undefined } })()
+      : undefined
+    if (nextcloudBinding) out.nextcloudManagedBinding = nextcloudBinding
     const nsisPaths = safeNsisLocalPaths(mine?.nsisLocalPaths)
     if (nsisPaths) out.nsisLocalPaths = nsisPaths
     const vmPaths = normalizeVirtualMachineLocalPaths(mine?.virtualMachineLocalPaths)

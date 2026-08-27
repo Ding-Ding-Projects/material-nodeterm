@@ -545,6 +545,12 @@ export function buildStubApi(): Omit<
         cancel: noop,
         onProgress: noopUnsub
       },
+      nextcloudManaged: {
+        snapshots: U('relayHost.nextcloudManaged.snapshots'),
+        run: U('relayHost.nextcloudManaged.run'),
+        cancel: noop,
+        onProgress: noopUnsub
+      },
       start: U('relayHost.start'),
       invite: U('relayHost.invite'),
       stop: U('relayHost.stop'),
