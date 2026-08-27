@@ -44,6 +44,10 @@ export const DEFAULT_HOME_ASSISTANT_NODE_INTENT: HomeAssistantNodeIntent = {
   domain: 'all'
 }
 
+export function isHomeAssistantTransport(value: unknown): value is HomeAssistantTransport {
+  return value === 'rest' || value === 'websocket'
+}
+
 export interface HomeAssistantEntity {
   entityId: string
   domain: string
@@ -105,7 +109,11 @@ export function normalizeHomeAssistantBaseUrl(value: unknown): string {
   try { url = new URL(value.trim()) } catch { throw new Error('Enter a complete Home Assistant address.') }
   if (url.username || url.password) throw new Error('Remove credentials from the address. Store the access token separately.')
   if (url.search || url.hash) throw new Error('Home Assistant addresses cannot contain a query or fragment.')
-  const loopback = url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '::1'
+  // WHATWG URL keeps brackets around an IPv6 host in `hostname` on some supported runtimes.
+  // Accept both spellings so the explicit loopback exception does not reject a safe local HA
+  // instance merely because the runtime chose the bracketed representation.
+  const loopbackHost = url.hostname.replace(/^\[|\]$/g, '').toLowerCase()
+  const loopback = loopbackHost === 'localhost' || loopbackHost === '127.0.0.1' || loopbackHost === '::1'
   if (url.protocol !== 'https:' && !(url.protocol === 'http:' && loopback)) {
     throw new Error('Use HTTPS. Plain HTTP is allowed only for an explicit loopback address.')
   }
@@ -114,12 +122,14 @@ export function normalizeHomeAssistantBaseUrl(value: unknown): string {
 }
 
 export function validateHomeAssistantInstanceInput(input: HomeAssistantInstanceInput): HomeAssistantInstanceInput {
+  if (!input || typeof input !== 'object') throw new Error('Home Assistant instance details are invalid.')
+  if (typeof input.displayName !== 'string') throw new Error('Instance name must contain 1 to 120 printable characters.')
   const displayName = input.displayName.trim()
   if (!displayName || displayName.length > 120 || /[\u0000-\u001f\u007f]/.test(displayName)) {
     throw new Error('Instance name must contain 1 to 120 printable characters.')
   }
   if (input.id !== undefined && !isHomeAssistantInstanceId(input.id)) throw new Error('Home Assistant instance id is invalid.')
-  if (input.token !== null && (input.token.trim() !== input.token || input.token.length < 1 || input.token.length > 8192 || /[\r\n\0]/.test(input.token))) {
+  if (input.token !== null && (typeof input.token !== 'string' || input.token.trim() !== input.token || input.token.length < 1 || input.token.length > 8192 || /[\r\n\0]/.test(input.token))) {
     throw new Error('Home Assistant access token is empty or malformed.')
   }
   return { id: input.id, displayName, baseUrl: normalizeHomeAssistantBaseUrl(input.baseUrl), token: input.token }

@@ -6,6 +6,8 @@ import { renameAtomic, tempNameFor } from '../fs-atomic'
 import { getHomeAssistantInstanceToken, setHomeAssistantInstanceToken } from './secrets'
 import {
   isHomeAssistantInstanceId,
+  isHomeAssistantTransport,
+  normalizeHomeAssistantBaseUrl,
   normalizeHomeAssistantEntity,
   validateHomeAssistantInstanceInput,
   type HomeAssistantClientEvent,
@@ -25,7 +27,7 @@ interface StoredInstance {
 }
 
 interface StoredFile { version: 1; instances: StoredInstance[] }
-interface Operation { controller: AbortController; socket: WebSocket | null }
+interface Operation { controller: AbortController; socket: WebSocket | null; timedOut: boolean }
 
 const MAX_RESPONSE_BYTES = 5 * 1024 * 1024
 const MAX_ENTITIES = 20_000
@@ -34,25 +36,54 @@ const REQUEST_TIMEOUT_MS = 20_000
 function storedInstance(value: unknown): value is StoredInstance {
   if (!value || typeof value !== 'object') return false
   const item = value as Partial<StoredInstance>
-  return isHomeAssistantInstanceId(item.id) && typeof item.displayName === 'string' && item.displayName.length > 0 && item.displayName.length <= 120 &&
-    typeof item.baseUrl === 'string' && item.baseUrl.length <= 2048 && typeof item.createdAt === 'number' && Number.isFinite(item.createdAt) &&
-    typeof item.updatedAt === 'number' && Number.isFinite(item.updatedAt)
+  if (!isHomeAssistantInstanceId(item.id) || typeof item.displayName !== 'string' || item.displayName.length === 0 || item.displayName.length > 120 || /[\u0000-\u001f\u007f]/.test(item.displayName) ||
+    typeof item.baseUrl !== 'string' || item.baseUrl.length > 2048 || typeof item.createdAt !== 'number' || !Number.isFinite(item.createdAt) || item.createdAt < 0 ||
+    typeof item.updatedAt !== 'number' || !Number.isFinite(item.updatedAt) || item.updatedAt < 0) return false
+  try {
+    return normalizeHomeAssistantBaseUrl(item.baseUrl) === item.baseUrl
+  } catch {
+    return false
+  }
 }
 
 async function boundedJson(response: Response): Promise<unknown> {
   const length = Number(response.headers.get('content-length') ?? 0)
   if (Number.isFinite(length) && length > MAX_RESPONSE_BYTES) throw new Error('Home Assistant response exceeds the 5 MB safety limit.')
-  const bytes = new Uint8Array(await response.arrayBuffer())
-  if (bytes.byteLength > MAX_RESPONSE_BYTES) throw new Error('Home Assistant response exceeds the 5 MB safety limit.')
+  // Read incrementally. `arrayBuffer()` would allocate an unbounded body before the size check,
+  // which turns an advertised response limit into a post-allocation observation.
+  const reader = response.body?.getReader()
+  if (!reader) throw new Error('Home Assistant returned an empty response body.')
+  const chunks: Uint8Array[] = []
+  let total = 0
+  try {
+    while (true) {
+      const next = await reader.read()
+      if (next.done) break
+      total += next.value.byteLength
+      if (total > MAX_RESPONSE_BYTES) {
+        await reader.cancel()
+        throw new Error('Home Assistant response exceeds the 5 MB safety limit.')
+      }
+      chunks.push(next.value)
+    }
+  } finally {
+    reader.releaseLock()
+  }
+  const bytes = new Uint8Array(total)
+  let offset = 0
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset)
+    offset += chunk.byteLength
+  }
   try { return JSON.parse(new TextDecoder().decode(bytes)) } catch { throw new Error('Home Assistant returned malformed JSON.') }
 }
 
-function discoveryResult(instanceId: string, transport: 'rest' | 'websocket', entities: HomeAssistantEntity[], reason: string | null = null): HomeAssistantDiscoveryResult {
+function discoveryResult(instanceId: string, transport: 'rest' | 'websocket', entities: HomeAssistantEntity[], reason: string | null = null, state?: HomeAssistantDiscoveryResult['state']): HomeAssistantDiscoveryResult {
   const bounded = entities.slice(0, MAX_ENTITIES)
   return {
     instanceId,
     transport,
-    state: reason ? 'offline' : 'connected',
+    state: state ?? (reason ? 'offline' : 'connected'),
     entities: bounded,
     domains: [...new Set(bounded.map((entity) => entity.domain))].sort(),
     complete: !reason && entities.length <= MAX_ENTITIES,
@@ -145,11 +176,15 @@ export class HomeAssistantService {
   }
 
   async discover(request: HomeAssistantDiscoveryRequest): Promise<HomeAssistantDiscoveryResult> {
-    if (!isHomeAssistantInstanceId(request.instanceId) || !/^[a-zA-Z0-9][a-zA-Z0-9._:-]{5,160}$/.test(request.operationId)) {
+    if (!request || typeof request !== 'object' ||
+      !isHomeAssistantInstanceId(request.instanceId) ||
+      !isHomeAssistantTransport(request.transport) ||
+      typeof request.operationId !== 'string' ||
+      !/^[a-zA-Z0-9][a-zA-Z0-9._:-]{5,160}$/.test(request.operationId)) {
       throw new Error('Home Assistant discovery request is invalid.')
     }
     if (this.operations.has(request.operationId)) throw new Error('That Home Assistant discovery operation is already running.')
-    const operation: Operation = { controller: new AbortController(), socket: null }
+    const operation: Operation = { controller: new AbortController(), socket: null, timedOut: false }
     this.operations.set(request.operationId, operation)
     try {
       const { stored, token } = await this.instance(request.instanceId)
@@ -160,10 +195,10 @@ export class HomeAssistantService {
       this.event(request, 'completed', 1, `Discovered ${result.entities.length} entities over ${request.transport === 'rest' ? 'REST' : 'WebSocket'}.`)
       return result
     } catch (error) {
-      const cancelled = operation.controller.signal.aborted
-      const reason = cancelled ? 'Discovery was cancelled. Existing results were retained.' : error instanceof Error ? error.message : 'Home Assistant discovery failed.'
+      const cancelled = operation.controller.signal.aborted && !operation.timedOut
+      const reason = cancelled ? 'Discovery was cancelled. Existing results were retained.' : operation.timedOut ? 'Home Assistant discovery timed out after 20 seconds.' : error instanceof Error ? error.message : 'Home Assistant discovery failed.'
       this.event(request, cancelled ? 'cancelled' : 'failed', 0, reason)
-      if (cancelled) return discoveryResult(request.instanceId, request.transport, [], reason)
+      if (cancelled) return discoveryResult(request.instanceId, request.transport, [], reason, 'cancelled')
       throw error
     } finally {
       operation.socket?.terminate()
@@ -172,20 +207,26 @@ export class HomeAssistantService {
   }
 
   private async discoverRest(stored: StoredInstance, token: string, request: HomeAssistantDiscoveryRequest, operation: Operation): Promise<HomeAssistantDiscoveryResult> {
-    const timeout = setTimeout(() => operation.controller.abort(), REQUEST_TIMEOUT_MS)
+    const timeout = setTimeout(() => { operation.timedOut = true; operation.controller.abort() }, REQUEST_TIMEOUT_MS)
     try {
       this.event(request, 'authenticating', 0.25, 'Authenticating with the stored access token.')
       const response = await fetch(`${stored.baseUrl}/api/states`, {
         headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
-        redirect: 'error',
+        // Manual redirect handling keeps a hostile or misconfigured endpoint from moving the
+        // bearer request to another host, while still giving the user a useful recovery reason.
+        redirect: 'manual',
         signal: operation.controller.signal
       })
+      if (response.status >= 300 && response.status < 400) throw new Error('Home Assistant redirected the request, which is not allowed.')
       if (response.status === 401 || response.status === 403) throw new Error('Home Assistant rejected the stored access token.')
       if (!response.ok) throw new Error(`Home Assistant returned HTTP ${response.status}.`)
       this.event(request, 'discovering', 0.65, 'Reading bounded entity metadata from the REST API.')
       const body = await boundedJson(response)
       if (!Array.isArray(body)) throw new Error('Home Assistant returned an invalid states response.')
       return discoveryResult(stored.id, 'rest', body.map(normalizeHomeAssistantEntity).filter((value): value is HomeAssistantEntity => value !== null))
+    } catch (error) {
+      if (operation.timedOut) throw new Error('Home Assistant REST discovery timed out after 20 seconds.')
+      throw error
     } finally { clearTimeout(timeout) }
   }
 
@@ -197,22 +238,49 @@ export class HomeAssistantService {
       const socket = new WebSocket(base.href, { perMessageDeflate: false, maxPayload: MAX_RESPONSE_BYTES })
       operation.socket = socket
       let requestId = 1
-      const timeout = setTimeout(() => { socket.terminate(); reject(new Error('Home Assistant WebSocket discovery timed out.')) }, REQUEST_TIMEOUT_MS)
-      const finish = (fn: () => void): void => { clearTimeout(timeout); fn() }
+      let authSent = false
+      let stateRequested = false
+      let settled = false
+      const timeout = setTimeout(() => { operation.timedOut = true; finish(() => { socket.terminate(); reject(new Error('Home Assistant WebSocket discovery timed out after 20 seconds.')) }) }, REQUEST_TIMEOUT_MS)
+      const finish = (fn: () => void): void => {
+        if (settled) return
+        settled = true
+        clearTimeout(timeout)
+        fn()
+      }
+      const send = (message: Record<string, string | number>): void => {
+        try {
+          socket.send(JSON.stringify(message))
+        } catch {
+          finish(() => reject(new Error('Home Assistant WebSocket connection failed while sending discovery data.')))
+        }
+      }
       operation.controller.signal.addEventListener('abort', () => { socket.terminate(); finish(() => reject(new Error('Home Assistant WebSocket discovery was cancelled.'))) }, { once: true })
       socket.once('error', () => finish(() => reject(new Error('Home Assistant WebSocket connection failed.'))))
+      socket.once('close', () => finish(() => reject(new Error('Home Assistant WebSocket connection closed before discovery completed.'))))
       socket.on('message', (data) => {
-        if (data.byteLength > MAX_RESPONSE_BYTES) return finish(() => reject(new Error('Home Assistant WebSocket response exceeds the 5 MB safety limit.')))
+        const bytes = Buffer.isBuffer(data)
+          ? data
+          : Array.isArray(data)
+            ? Buffer.concat(data)
+            : Buffer.from(data as ArrayBuffer)
+        if (bytes.byteLength > MAX_RESPONSE_BYTES) return finish(() => reject(new Error('Home Assistant WebSocket response exceeds the 5 MB safety limit.')))
         let message: Record<string, unknown>
-        try { message = JSON.parse(data.toString()) as Record<string, unknown> } catch { return finish(() => reject(new Error('Home Assistant WebSocket returned malformed JSON.'))) }
+        try { message = JSON.parse(bytes.toString('utf8')) as Record<string, unknown> } catch { return finish(() => reject(new Error('Home Assistant WebSocket returned malformed JSON.'))) }
         if (message.type === 'auth_required') {
-          this.event(request, 'authenticating', 0.3, 'Authenticating the WebSocket with the stored access token.')
-          socket.send(JSON.stringify({ type: 'auth', access_token: token }))
+          if (!authSent) {
+            authSent = true
+            this.event(request, 'authenticating', 0.3, 'Authenticating the WebSocket with the stored access token.')
+            send({ type: 'auth', access_token: token })
+          }
         } else if (message.type === 'auth_invalid') {
           finish(() => reject(new Error('Home Assistant rejected the stored access token.')))
         } else if (message.type === 'auth_ok') {
-          this.event(request, 'discovering', 0.6, 'Requesting the current entity registry over WebSocket.')
-          socket.send(JSON.stringify({ id: requestId, type: 'get_states' }))
+          if (!stateRequested) {
+            stateRequested = true
+            this.event(request, 'discovering', 0.6, 'Requesting the current entity registry over WebSocket.')
+            send({ id: requestId, type: 'get_states' })
+          }
         } else if (message.type === 'result' && message.id === requestId) {
           if (message.success !== true || !Array.isArray(message.result)) return finish(() => reject(new Error('Home Assistant WebSocket discovery was refused.')))
           const entities = message.result.map(normalizeHomeAssistantEntity).filter((value): value is HomeAssistantEntity => value !== null)

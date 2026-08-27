@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import type { HomeAssistantClientEvent, HomeAssistantEntity, HomeAssistantInstance, HomeAssistantNodeIntent, HomeAssistantTransport } from '@shared/home-assistant'
 import { DEFAULT_HOME_ASSISTANT_NODE_INTENT, validateHomeAssistantInstanceInput } from '@shared/home-assistant'
 import { useActiveSessionApi } from '../../session/session'
 import { openDestructiveGate } from '../../state/destructiveGate'
 import { useRegexSearchField } from '../../lib/regex/useRegexSearchField'
+import { AnchoredPopover } from '../../ui/AnchoredPopover'
 import { AnchoredRegexBuilder } from '../regex/AnchoredRegexBuilder'
 
 interface Props {
@@ -36,9 +37,19 @@ export function HomeAssistantPanel({ nodeId, boundEndpoint, onBind, intent = DEF
   const instanceSearchRef = useRef<HTMLInputElement>(null)
   const entitySearchRef = useRef<HTMLInputElement>(null)
   const domainSearchRef = useRef<HTMLInputElement>(null)
+  const instancePickerRef = useRef<HTMLButtonElement>(null)
+  const domainPickerRef = useRef<HTMLButtonElement>(null)
+  const [instancePickerOpen, setInstancePickerOpen] = useState(false)
+  const [domainPickerOpen, setDomainPickerOpen] = useState(false)
   const [domain, setDomainState] = useState(intent.domain)
   const setTransport = (value: HomeAssistantTransport): void => { setTransportState(value); onIntentChange({ transport: value, domain }) }
   const setDomain = (value: string): void => { setDomainState(value); onIntentChange({ transport, domain: value }) }
+  const selectInstance = (id: string): void => {
+    setSelectedId(id)
+    setEntities([])
+    const next = instances.find((item) => item.id === id)
+    setMessage(next ? `${next.displayName} selected. Run discovery to load its current entities.` : 'Select a Home Assistant instance to continue.')
+  }
 
   const reload = async (): Promise<void> => {
     try {
@@ -121,15 +132,32 @@ export function HomeAssistantPanel({ nodeId, boundEndpoint, onBind, intent = DEF
 
     <div className="ha-client__picker">
       <label>Instance
-        <select value={selectedId} onChange={(event) => setSelectedId(event.target.value)} disabled={!filteredInstances.length || !!busyOperation} aria-describedby={`${nodeId}-ha-instance-help`}>
-          {!filteredInstances.length && <option value="">No matching instances</option>}
-          {filteredInstances.map((instance) => <option key={instance.id} value={instance.id}>{instance.displayName} · {instance.baseUrl}{instance.hasToken ? '' : ' · token required'}</option>)}
-        </select>
+        <button
+          ref={instancePickerRef}
+          type="button"
+          className="ha-client__picker-button"
+          aria-haspopup="listbox"
+          aria-expanded={instancePickerOpen}
+          aria-describedby={`${nodeId}-ha-instance-help`}
+          disabled={!filteredInstances.length || !!busyOperation}
+          onClick={() => setInstancePickerOpen(true)}
+          title={!filteredInstances.length ? 'No matching Home Assistant instances.' : 'Open the Home Assistant instance picker.'}
+        >
+          {selected ? `${selected.displayName} · ${selected.baseUrl}${selected.hasToken ? '' : ' · token required'}` : 'Choose a Home Assistant instance'}
+        </button>
       </label>
       <div className="ha-client__search-row">
         <input ref={instanceSearchRef} value={instanceSearch.value} onChange={(event) => instanceSearch.setValue(event.target.value)} placeholder="Filter instances" aria-label="Filter Home Assistant instances" />
         <AnchoredRegexBuilder search={instanceSearch} fieldRef={instanceSearchRef} label="Regex for Home Assistant instances" />
       </div>
+      <AnchoredPopover anchorRef={instancePickerRef as RefObject<HTMLElement>} open={instancePickerOpen} onClose={() => setInstancePickerOpen(false)} width={420} className="ha-client__option-popover">
+        <div className="ha-client__option-list" role="listbox" aria-label="Home Assistant instance choices">
+          {!filteredInstances.length && <p className="ha-client__empty">No matching instances. Clear the filter or add an instance.</p>}
+          {filteredInstances.map((instance) => <button key={instance.id} type="button" role="option" aria-selected={instance.id === selectedId} onClick={() => { selectInstance(instance.id); setInstancePickerOpen(false) }}>
+            <strong>{instance.displayName}</strong><span>{instance.baseUrl}{instance.hasToken ? '' : ' · token required'}</span>
+          </button>)}
+        </div>
+      </AnchoredPopover>
       <p id={`${nodeId}-ha-instance-help`} className="service-node__note">Instance addresses and access tokens stay on this computer. A project opened elsewhere shows an explicit unbound state until you configure or rebind it.</p>
     </div>
 
@@ -163,8 +191,19 @@ export function HomeAssistantPanel({ nodeId, boundEndpoint, onBind, intent = DEF
     </div>
 
     <div className="ha-client__filters">
-      <label>Domain<select value={domain} onChange={(event) => setDomain(event.target.value)}><option value="all">All domains</option>{filteredDomains.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+      <label>Domain
+        <button ref={domainPickerRef} type="button" className="ha-client__picker-button" aria-haspopup="listbox" aria-expanded={domainPickerOpen} onClick={() => setDomainPickerOpen(true)} title="Open the Home Assistant domain picker.">
+          {domain === 'all' ? 'All domains' : domain}
+        </button>
+      </label>
       <div className="ha-client__search-row"><input ref={domainSearchRef} value={domainSearch.value} onChange={(event) => domainSearch.setValue(event.target.value)} placeholder="Filter domains" aria-label="Filter Home Assistant domains" /><AnchoredRegexBuilder search={domainSearch} fieldRef={domainSearchRef} label="Regex for Home Assistant domains" /></div>
+      <AnchoredPopover anchorRef={domainPickerRef as RefObject<HTMLElement>} open={domainPickerOpen} onClose={() => setDomainPickerOpen(false)} width={280} className="ha-client__option-popover">
+        <div className="ha-client__option-list" role="listbox" aria-label="Home Assistant domain choices">
+          <button type="button" role="option" aria-selected={domain === 'all'} onClick={() => { setDomain('all'); setDomainPickerOpen(false) }}>All domains</button>
+          {!filteredDomains.length && <p className="ha-client__empty">No matching domains. Clear the filter or run discovery.</p>}
+          {filteredDomains.map((item) => <button key={item} type="button" role="option" aria-selected={item === domain} onClick={() => { setDomain(item); setDomainPickerOpen(false) }}>{item}</button>)}
+        </div>
+      </AnchoredPopover>
       <div className="ha-client__search-row"><input ref={entitySearchRef} value={entitySearch.value} onChange={(event) => entitySearch.setValue(event.target.value)} placeholder="Search entities" aria-label="Search Home Assistant entities" /><AnchoredRegexBuilder search={entitySearch} fieldRef={entitySearchRef} label="Regex for Home Assistant entities" /></div>
     </div>
     <div className="ha-client__entities" role="list" aria-label="Discovered Home Assistant entities">
