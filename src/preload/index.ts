@@ -204,6 +204,15 @@ const api: NodeTerminalApi = {
     completeOAuth: (callbackUrl: string) => ipcRenderer.invoke(IPC.providerCompleteOAuth, callbackUrl),
     removeAccount: (accountId: string) => ipcRenderer.invoke(IPC.providerRemoveAccount, accountId)
   },
+  awsManagers: {
+    catalog: () => ipcRenderer.invoke(IPC.awsManagerCatalog),
+    availability: (manager) => ipcRenderer.invoke(IPC.awsManagerAvailability, manager),
+    list: (request) => ipcRenderer.invoke(IPC.awsManagerList, request),
+    run: (request) => ipcRenderer.invoke(IPC.awsManagerRun, request),
+    progress: (jobId) => ipcRenderer.invoke(IPC.awsManagerProgress, jobId),
+    cancel: (jobId) => ipcRenderer.invoke(IPC.awsManagerCancel, jobId),
+    retry: (jobId) => ipcRenderer.invoke(IPC.awsManagerRetry, jobId)
+  },
   workspace: {
     load: () => ipcRenderer.invoke(IPC.workspaceLoad),
     save: (workspace: Workspace) => ipcRenderer.invoke(IPC.workspaceSave, workspace),

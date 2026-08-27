@@ -124,7 +124,19 @@ export interface AwsManagerOperationProgress {
 }
 
 export interface AwsResourceManagerAdapter {
+  /** One adapter owns one manager; the core rejects duplicate ownership. */
+  manager: AwsResourceManagerId
   availability(): Promise<{ available: boolean; reason?: string; nextAction?: string }>
+  list(request: AwsManagerListRequest): Promise<AwsManagerListResult>
+  run(request: AwsManagerRunRequest): Promise<AwsManagerOperationProgress>
+  progress(jobId: string): Promise<AwsManagerOperationProgress>
+  cancel(jobId: string): Promise<AwsManagerOperationProgress>
+  retry(jobId: string): Promise<AwsManagerOperationProgress>
+}
+
+export interface AwsResourceManagerApi {
+  catalog(): Promise<readonly AwsResourceManagerDefinition[]>
+  availability(manager: AwsResourceManagerId): Promise<{ available: boolean; reason?: string; nextAction?: string }>
   list(request: AwsManagerListRequest): Promise<AwsManagerListResult>
   run(request: AwsManagerRunRequest): Promise<AwsManagerOperationProgress>
   progress(jobId: string): Promise<AwsManagerOperationProgress>

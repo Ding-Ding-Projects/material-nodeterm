@@ -2065,6 +2065,7 @@ export function Canvas() {
       gitlab: withNodeBoundary(ServiceNode),
       homeassistant: withNodeBoundary(ServiceNode),
       freepbx: withNodeBoundary(ServiceNode),
+      'aws-service': withNodeBoundary(ServiceNode),
       'linux-vm': withNodeBoundary(VirtualMachineNode)
     }),
     []
@@ -5363,7 +5364,7 @@ export function Canvas() {
             if (catalogEntry.id === 'dino') return createDinoNode(index, center)
             if (catalogEntry.id === 'loop') return createNativeLoopNode(index, center)
             if (catalogEntry.id === 'nsis') return createNsisNode(index, center)
-            if (catalogEntry.id.startsWith('service:')) {
+            if (catalogEntry.id.startsWith('service:') || catalogEntry.id === 'aws-service') {
               return createServiceNode(catalogEntry.nodeKind as ServiceNodeKind, index, center)
             }
             // File and diff rows stay visible but disabled until their picker prerequisites exist.

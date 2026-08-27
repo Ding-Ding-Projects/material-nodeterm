@@ -731,6 +731,22 @@ export function buildProviderServicesApi(
   }
 }
 
+export function buildAwsResourceManagersApi(
+  client: RpcClient
+): Pick<NodeTerminalApi, 'awsManagers'> {
+  return {
+    awsManagers: {
+      catalog: () => client.request(IPC.awsManagerCatalog) as ReturnType<NodeTerminalApi['awsManagers']['catalog']>,
+      availability: (manager) => client.request(IPC.awsManagerAvailability, manager) as ReturnType<NodeTerminalApi['awsManagers']['availability']>,
+      list: (request) => client.request(IPC.awsManagerList, request) as ReturnType<NodeTerminalApi['awsManagers']['list']>,
+      run: (request) => client.request(IPC.awsManagerRun, request) as ReturnType<NodeTerminalApi['awsManagers']['run']>,
+      progress: (jobId) => client.request(IPC.awsManagerProgress, jobId) as ReturnType<NodeTerminalApi['awsManagers']['progress']>,
+      cancel: (jobId) => client.request(IPC.awsManagerCancel, jobId) as ReturnType<NodeTerminalApi['awsManagers']['cancel']>,
+      retry: (jobId) => client.request(IPC.awsManagerRetry, jobId) as ReturnType<NodeTerminalApi['awsManagers']['retry']>
+    }
+  }
+}
+
 /**
  * Build the real `fs` / `git` / `files` / `context` namespaces over an RpcClient, mirroring the
  * preload's invoke(→request) / send(→cast) / on*(→subscribe) split member-for-member. Every
@@ -1654,6 +1670,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildVirtualMachineApi(client),
     ...buildCalendarApi(client),
     ...buildProviderServicesApi(client),
+    ...buildAwsResourceManagersApi(client),
     ...buildUsageApi(client),
     ...buildSessionMemoryApi(client),
     ...buildVsCodeApi(client),

@@ -15085,3 +15085,45 @@ body.focus-mode .dock:hover {
   border: 1px solid var(--warn);
   background: transparent;
 }
+
+.aws-manager-panel {
+  gap: 12px;
+  overflow: auto;
+}
+.aws-manager-panel__section,
+.aws-manager-panel__fields {
+  display: grid;
+  gap: 8px;
+}
+.aws-manager-panel__search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.aws-manager-panel__search input {
+  min-width: 0;
+  flex: 1;
+}
+.aws-manager-panel__search button,
+.aws-manager-panel__actions button {
+  min-height: 36px;
+}
+.aws-manager-panel__resources {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 180px;
+  overflow: auto;
+}
+.aws-manager-panel__resources li {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--outline-variant);
+}
+.aws-manager-panel__resources small {
+  color: var(--on-surface-variant);
+}
+.aws-manager-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

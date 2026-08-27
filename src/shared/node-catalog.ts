@@ -1,5 +1,6 @@
 import type { NodeKind } from './types'
 import { DOCKER_HOST_PORTABLE_BLUEPRINT } from './docker-host-manager'
+import { createAwsResourceManagerIntent } from './aws-resource-managers'
 
 /** The guided categories shown by the Node Catalog. Keep this list explicit so a new category
  * cannot disappear from the picker simply because no current entry happens to use it. */
@@ -463,7 +464,21 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
   plannedEntry('planner', 'automation', 'Planner', 'Create a planner occurrence definition with explicit local binding.', 'planner-service'),
   plannedEntry('multiverse-portal', 'universes', 'Multiverse portal', 'Create a door-only Multiverse canvas below the depth limit.', 'multiverse-service', 'multiverse', 8),
   plannedEntry('aws-universe', 'universes', 'AWS Universe', 'Create an AWS-only child canvas with a dedicated Shop node.', 'aws-cli-v2', 'aws-universe'),
-  plannedEntry('aws-service', 'universes', 'AWS service node', 'Create a typed AWS service blueprint from installed CLI models.', 'aws-cli-v2', 'aws-universe'),
+  {
+    id: 'aws-service',
+    nodeKind: 'aws-service',
+    category: 'universes',
+    label: 'AWS resource managers',
+    description: 'Open guided ECR, ECS, EKS, RDS, database, VPC, Route 53, and cost managers.',
+    keywords: ['aws', 'ecr', 'ecs', 'eks', 'rds', 'database', 'vpc', 'route53', 'cost'],
+    documentationPath: 'docs/features/integrations/aws-resource-managers.md',
+    safeDefaults: { serviceLabel: '', awsResourceManagerIntent: createAwsResourceManagerIntent() },
+    dependencies: ['aws-cli-v2'],
+    scope: 'aws-universe',
+    status: 'available',
+    availabilityMode: 'configure-later',
+    availability: alwaysAvailable
+  },
   plannedEntry('cloudflare-hosting', 'hosting', 'Cloudflare hosting', 'Create a private-first hosting blueprint with explicit tunnel exposure later.', 'hosting-adapter'),
   plannedEntry('gitlab-hosting', 'hosting', 'GitLab hosting', 'Create a guided GitLab hosting blueprint with local credentials later.', 'hosting-adapter'),
   plannedEntry('nextcloud-hosting', 'hosting', 'Nextcloud hosting', 'Create a managed Nextcloud hosting blueprint with local binding later.', 'hosting-adapter'),
@@ -520,7 +535,7 @@ export const NODE_CATALOG_COMPLETENESS: readonly NodeCatalogCompletenessRecord[]
   { id: 'planner', state: 'planned', scope: 'any', reason: 'planner service not implemented' },
   { id: 'multiverse-portal', state: 'planned', scope: 'multiverse', reason: 'Multiverse portal not implemented' },
   { id: 'aws-universe', state: 'planned', scope: 'aws-universe', reason: 'AWS Universe not implemented' },
-  { id: 'aws-service', state: 'planned', scope: 'aws-universe', reason: 'AWS service node not implemented' },
+  { id: 'aws-service', state: 'current', scope: 'aws-universe', reason: 'guided AWS resource manager node' },
   { id: 'cloudflare-hosting', state: 'planned', scope: 'any', reason: 'Cloudflare hosting not implemented' },
   { id: 'gitlab-hosting', state: 'planned', scope: 'any', reason: 'GitLab hosting not implemented' },
   { id: 'nextcloud-hosting', state: 'planned', scope: 'any', reason: 'Nextcloud hosting not implemented' },

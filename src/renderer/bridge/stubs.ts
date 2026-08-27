@@ -189,6 +189,15 @@ export function buildStubApi(): Omit<
       completeOAuth: () => Promise.resolve({ status: 'rejected' as const, account: null, reason: mapLocalVocabularyText('Provider callbacks are not accepted on this surface.') }),
       removeAccount: () => Promise.resolve({ ok: false as const, error: mapLocalVocabularyText('Provider accounts are not connected on this surface.') })
     },
+    awsManagers: {
+      catalog: () => Promise.resolve([]),
+      availability: () => Promise.resolve({ available: false, reason: mapLocalVocabularyText('AWS managers are not connected on this surface.'), nextAction: mapLocalVocabularyText('Use the desktop surface with a configured AWS adapter.') }),
+      list: () => Promise.resolve({ resources: [], partial: false, warning: mapLocalVocabularyText('AWS managers are not connected on this surface.') }),
+      run: () => unsupported('awsManagers.run'),
+      progress: () => unsupported('awsManagers.progress'),
+      cancel: () => unsupported('awsManagers.cancel'),
+      retry: () => unsupported('awsManagers.retry')
+    },
     ssh: {
       list: U('ssh.list'),
       save: U('ssh.save'),

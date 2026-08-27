@@ -414,6 +414,7 @@ export type NodeKind =
   | 'gitlab'
   | 'homeassistant'
   | 'freepbx'
+  | 'aws-service'
   | 'torrent'
   /** One-shot Linux ISO virtual machine, distinct from the WSL terminal profile. */
   | 'linux-vm'
@@ -429,7 +430,8 @@ export const SERVICE_NODE_KINDS = [
   'proxmox',
   'gitlab',
   'homeassistant',
-  'freepbx'
+  'freepbx',
+  'aws-service'
 ] as const
 
 export type ServiceNodeKind = (typeof SERVICE_NODE_KINDS)[number]
@@ -644,6 +646,8 @@ export interface CanvasNodeState {
    * reasons. It never carries a secret; see `ServiceConnection` in shared/node-exec.ts.
    */
   serviceConnection?: ServiceConnection
+  /** AWS manager safe intent, portable across computers; live account and resource bindings stay local. */
+  awsResourceManagerIntent?: import('./aws-resource-managers').AwsResourceManagerIntent
   /**
    * nsis-only, GIT-SHARED: the installer's description (app name, version, publisher, output
    * filename, install root, shortcut/uninstaller/compression choices). Nothing here names a
@@ -4481,6 +4485,8 @@ export interface NodeTerminalApi {
   workspace: WorkspaceApi
   /** Shared provider-account, credential-vault, OAuth-callback, and resource-picker services. */
   providerServices: import('./provider-services').ProviderServicesApi
+  /** Guided ECR, ECS, EKS, RDS, database, VPC, Route 53, and cost managers. */
+  awsManagers: import('./aws-resource-managers').AwsResourceManagerApi
   timer: TimerApi
   serverDeployment: ServerDeploymentApi
   projectSettings: ProjectSettingsApi

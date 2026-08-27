@@ -3,6 +3,7 @@ import type { AgentLaunchIntent, BrowserTab, CanvasMutation, CanvasNodeState, Cl
 import { normalizeMediaReference, type MediaAssetReference } from '@shared/media-catalog'
 import type { CalendarNodeConfig } from '@shared/calendar'
 import type { AlarmOccurrence, AlarmRecurrence } from '@shared/alarm-clock'
+import { createAwsResourceManagerIntent } from '@shared/aws-resource-managers'
 import type { ServiceConnection } from '@shared/node-exec'
 import type { NsisLocalPaths, NsisSpec } from '@shared/nsis-form-types'
 import { defaultNsisLocalPaths, defaultNsisSpec } from '@shared/nsis-form-types'
@@ -1488,7 +1489,8 @@ export const SERVICE_NODE_LABELS: Record<ServiceNodeKind, string> = {
   proxmox: 'Proxmox',
   gitlab: 'GitLab',
   homeassistant: 'Home Assistant',
-  freepbx: 'FreePBX'
+  freepbx: 'FreePBX',
+  'aws-service': 'AWS resource managers'
 }
 
 /**
@@ -1523,7 +1525,8 @@ export function createServiceNode(
       title: SERVICE_NODE_LABELS[kind],
       color: NODE_COLORS[index % NODE_COLORS.length],
       group: null,
-      serviceLabel: ''
+      serviceLabel: '',
+      ...(kind === 'aws-service' ? { awsResourceManagerIntent: createAwsResourceManagerIntent() } : {})
     }
   }
 }
@@ -2119,6 +2122,7 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   gitlab: true,
   homeassistant: true,
   freepbx: true,
+  'aws-service': true,
   nsis: true,
   shop: true
   torrent: true
@@ -2166,6 +2170,7 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   gitlab: SERVICE_SUMMARY_SIZE,
   homeassistant: SERVICE_SUMMARY_SIZE,
   freepbx: SERVICE_SUMMARY_SIZE,
+  'aws-service': SERVICE_CONSOLE_SIZE,
   nsis: NSIS_SIZE,
   shop: SHOP_SIZE
   torrent: TORRENT_SIZE
@@ -2629,6 +2634,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         shopSelection: (n as CanvasNodeState & { shopSelection?: string }).shopSelection,
         torrentMagnet: n.torrentMagnet,
         serviceConnection: n.serviceConnection,
+        awsResourceManagerIntent: n.awsResourceManagerIntent,
         nsisSpec: n.nsisSpec,
         nsisLocalPaths: n.nsisLocalPaths,
         virtualMachineConfig: n.virtualMachineConfig,
@@ -2747,6 +2753,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         shopSelection: n.data.shopSelection,
         torrentMagnet: n.data.torrentMagnet,
         serviceConnection: n.data.serviceConnection,
+        awsResourceManagerIntent: n.data.awsResourceManagerIntent,
         nsisSpec: n.data.nsisSpec,
         nsisLocalPaths: n.data.nsisLocalPaths,
         // Media paths remain in the live node long enough for the machine-local index to retain

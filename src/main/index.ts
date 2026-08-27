@@ -180,6 +180,7 @@ import { initUpdater } from './updater'
 import { decryptArchive, encryptArchive, looksLikeEncryptedArchive } from '../core/project-archive-encryption'
 import { ArchiveUnlockGuard } from '../core/archive-unlock-guard'
 import { registerProviderServicesIpc } from '../core/provider-services'
+import { registerAwsResourceManagersIpc } from '../core/aws-resource-managers'
 import { desktopBuildPaths } from './desktop-build-paths'
 import { applyWindowsSquirrelAppUserModelId } from './windows-squirrel-identity'
 import { fetchCheck } from '../core/check'
@@ -1551,6 +1552,7 @@ app.whenReady().then(async () => {
   // bindings for both shells. Import never calls these handlers, so opening a project cannot start
   // consent, contact a provider, or mutate a destination resource as a side effect.
   registerProviderServicesIpc(corePlatform)
+  registerAwsResourceManagersIpc(corePlatform)
   // The packaged extraResources directory in a production install, the repo root in dev (see
   // resolveServerDeploymentRoot's own doc comment; `build.extraResources` in package.json ships
   // the matching `server-deployment/` directory). Writable state (the generated .env password,

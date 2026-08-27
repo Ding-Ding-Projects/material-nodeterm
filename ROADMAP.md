@@ -57,6 +57,12 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## In progress / partially landed
 
+- [ ] **AWS resource managers, issue #49**: guided ECR, ECS, EKS, RDS, database, VPC, Route 53,
+      and cost manager contracts, typed Desktop/Server Edition bridge, portable safe intent, and
+      searchable service-node panel are implemented on `feat/program-38-aws-containers`. Tests,
+      type checks, lint, builds, packaging, runtime interaction, and captures remain intentionally
+      unrun in the ultra-speed lane.
+
 - [ ] **Shared provider services, issue #18**: provider catalog, account metadata, sealed
       credential payloads, bounded one-time OAuth PKCE callbacks, adapter-owned resource discovery,
       and shared Desktop/Server local bindings are implemented in source. Individual provider

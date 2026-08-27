@@ -14,6 +14,7 @@ substrate described in CLAUDE.md rather than inventing a surface each.
 | [Linux ISO VM](linux-iso-vm.md) | implemented canvas node with bundled QEMU, WHPX preference, QMP lifecycle, loopback display, persistent/disposable modes, and network-off default |
 | [Planner occurrences](planner-occurrences.md) | host-owned durable recurrence, timezone/DST handling, missed history, and UI-closure continuity |
 | [Shared provider services](provider-services.md) | shared account metadata, sealed credentials, bounded OAuth PKCE callbacks, resource discovery, and local binding integration |
+| [AWS resource managers](aws-resource-managers.md) | guided ECR, ECS, EKS, RDS, database, VPC, Route 53, and cost operations with portable safe intent |
 
 Planned, not yet researched here:
 

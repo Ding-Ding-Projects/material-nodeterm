@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add guided AWS resource managers for ECR, ECS, EKS, RDS, database families, VPC, Route 53, and
+  cost operations. The typed core coordinator and both shell bridges keep portable manager intent
+  separate from local accounts, credentials, live resource identifiers, and operation state.
+  Tests, lint, type checks, reviews, security and accessibility checks, builds, packaging,
+  installer execution, runtime interaction, and captures were intentionally not run in this
+  ultra-speed implementation lane.
+
 - Complete the Express File Converter flow with queue-wide collision-safe destination names,
   visible rename disclosure, final atomic no-clobber publication, and a completed-output action that
   opens the exact result in Visual Studio Code through the active project API. The converter queue

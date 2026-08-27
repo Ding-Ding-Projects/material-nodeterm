@@ -8,6 +8,7 @@ import { nodeBorderStyle, nodeColorStyle } from '../lib/nodeColor'
 import { ColorMenu } from '../components/color/ColorMenu'
 import { MinecraftServerPanel } from '../components/minecraft/MinecraftServerPanel'
 import { DockerHostManagerPanel } from '../components/docker/DockerHostManagerPanel'
+import { AwsResourceManagerPanel } from '../components/aws/AwsResourceManagerPanel'
 import { EditableNodeTitle } from '../components/EditableNodeTitle'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
 import { mapAroundExactFacts } from './nodeVocabulary'
@@ -50,7 +51,8 @@ const ENDPOINT_PLACEHOLDER: Record<ServiceNodeKind, string> = {
   proxmox: 'https://proxmox.local:8006',
   gitlab: 'https://gitlab.example.com',
   homeassistant: 'http://homeassistant.local:8123',
-  freepbx: 'https://pbx.local'
+  freepbx: 'https://pbx.local',
+  'aws-service': 'aws://account-or-role'
 }
 
 /**
@@ -232,8 +234,9 @@ export function ServiceNode({ id, type, data, selected }: NodeProps<CanvasNode>)
 
         {!collapsed && kind === 'minecraft' && <MinecraftServerPanel nodeId={id} />}
         {!collapsed && kind === 'dockerhost' && <DockerHostManagerPanel />}
+        {!collapsed && kind === 'aws-service' && <AwsResourceManagerPanel nodeId={id} data={data} />}
 
-        {!collapsed && kind !== 'minecraft' && kind !== 'dockerhost' && (
+        {!collapsed && kind !== 'minecraft' && kind !== 'dockerhost' && kind !== 'aws-service' && (
           <div className="service-node__body">
             <label className="service-node__field" htmlFor={`${id}-endpoint`}>
               <span className="service-node__field-label">{vocab('Address')}</span>

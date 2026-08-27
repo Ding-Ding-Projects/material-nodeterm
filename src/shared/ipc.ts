@@ -348,6 +348,15 @@ export const IPC = {
   providerBeginOAuth: 'provider-services:begin-oauth',
   providerCompleteOAuth: 'provider-services:complete-oauth',
   providerRemoveAccount: 'provider-services:remove-account',
+  // Guided AWS resource managers. Requests carry only safe intent and selected opaque resource
+  // ids; credentials and provider sessions stay inside the core adapter.
+  awsManagerCatalog: 'aws-managers:catalog',
+  awsManagerAvailability: 'aws-managers:availability',
+  awsManagerList: 'aws-managers:list',
+  awsManagerRun: 'aws-managers:run',
+  awsManagerProgress: 'aws-managers:progress',
+  awsManagerCancel: 'aws-managers:cancel',
+  awsManagerRetry: 'aws-managers:retry',
   projectArchiveProgress: 'project-archive:progress',
   projectArchiveCancel: 'project-archive:cancel',
   /** The unlock ladder for a protected project file's password prompt — issue a challenge, and

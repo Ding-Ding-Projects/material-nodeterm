@@ -1,5 +1,30 @@
 # Handoff
 
+## 2026-08-27, AWS resource managers implementation, issue #49
+
+The implementation lane is `feat/program-38-aws-containers` in the isolated issue-owned checkout.
+An initial model checkpoint was preserved in `25443580e8a071f540af642e9b7b0c46f3717d09`, then the
+lane merged the fetched `origin/main` at `3bd32d00` before feature edits.
+
+`src/shared/aws-resource-managers.ts` defines typed ECR, ECS, EKS, RDS, database, VPC, Route 53,
+and cost manager operations, bounded fields, portable intent, resource summaries, and progress.
+`src/core/aws-resource-managers.ts` validates and routes requests through one injected adapter per
+manager, keeps job ownership local, and reports unavailable adapters explicitly. IPC, preload, and
+Server Edition WS bridges expose the same API; the browser fallback reports its unsupported state.
+The new `aws-service` canvas node uses `AwsResourceManagerPanel.tsx`, with manager, operation, and
+resource searches each carrying an adjacent anchored regex builder. Only manager intent is persisted
+through the workspace projection; account sessions, credentials, endpoints, live resource ids, and
+job state remain local.
+
+Documentation was added at `docs/features/integrations/aws-resource-managers.md` and
+`site/docs/aws-resource-managers.html`, with category and documentation-index links. The generated
+offline documentation bundle was not regenerated in this ultra-speed lane and must be refreshed by
+the owning integration lane.
+
+Verification boundary: no tests, lint, type checks, reviews, security or accessibility checks,
+builds, packaging, installer execution, runtime interaction, or UI captures were run, as required
+by issue #49. This source handoff does not claim runtime correctness or release readiness.
+
 ## 2026-08-27, Express File Converter completion, issue #21
 
 The implementation lane is `feat/program-10-file-converter`, refreshed by fast-forward before edits
