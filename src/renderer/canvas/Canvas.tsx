@@ -99,6 +99,7 @@ import { useAnnotationDrawTool } from './useAnnotationDrawTool'
 import { annotationEndpoints } from '../lib/annotation'
 import { LazyEditorNode, LazyDiffNode } from '../nodes/lazyMonacoNodes'
 import { DinoNode } from '../nodes/DinoNode'
+import RecoveryGameNode from '../nodes/RecoveryGameNode'
 import { SERVICE_NODE_KINDS, type ServiceNodeKind, type ProjectArchiveContents } from '@shared/types'
 import { VIRTUAL_MACHINE_NODE_CATALOG } from '@shared/virtual-machine'
 import type { ProjectIcon } from '@shared/project-icon'
@@ -700,6 +701,7 @@ import {
   createBrowserNode,
   defaultBrowserTabs,
   createDinoNode,
+  createRecoveryGameNode,
   createDiffNode,
   createEditorNode,
   createGroupNode,
@@ -2058,6 +2060,7 @@ export function Canvas() {
       timer: withNodeBoundary(TimerNode),
       alarm: withNodeBoundary(AlarmClockNode),
       dino: withNodeBoundary(DinoNode),
+      'recovery-game': withNodeBoundary(RecoveryGameNode),
       photo: withNodeBoundary(PhotoNode),
       gallery: withNodeBoundary(GalleryNode),
       'wild-dim-sum': withNodeBoundary(WildDimSumNode),
@@ -5390,6 +5393,7 @@ export function Canvas() {
             if (catalogEntry.id === 'web') return createWebNode(index, { url: '' }, center)
             if (catalogEntry.id === 'authenticator') return createAuthenticatorNode(index, center)
             if (catalogEntry.id === 'dino') return createDinoNode(index, center)
+            if (catalogEntry.id === 'recovery-game') return createRecoveryGameNode(index, center)
             if (catalogEntry.id === 'loop') return createNativeLoopNode(index, center)
             if (catalogEntry.id === 'alarm') return createAlarmClockNode(index, center)
             if (catalogEntry.id === 'nsis') return createNsisNode(index, center)

@@ -193,6 +193,27 @@ execution, reviews, audits, runtime interaction, accessibility checks, security 
 The owning integration lane must preserve that honest unverified state and run only the checks its
 own scope authorizes.
 
+## 2026-08-27, top-down recovery game
+
+Issue #36 implementation is on `feat/program-25-recovery-game` at source checkpoint
+`190fcff016a8acdbfc70c583d61c6bdda287bd81`, with the follow-up source changes in the current
+working directory. The lane adds a portable recovery-game node with three energy keys, hazards that
+return the player to the start while preserving energized keys, and an activation core that requires
+all keys plus the player's position. Arrow keys, `W`/`A`/`S`/`D`, adjacent board buttons, status
+announcements, reset, explicit disabled-state reasons, and a local board search with an anchored
+regex builder are included.
+
+The recovery snapshot is normalized at live-state and schema 3 portable-projection boundaries.
+Only bounded board intent is retained: coordinates, key ids, activation state, and hazard-contact
+count. Credentials, paths, processes, host identifiers, caches, and external side effects are not
+part of the projection. The feature article is `docs/features/canvas/recovery-game.md`, indexed by
+`docs/features/canvas/README.md`; `ROADMAP.md` and `CHANGELOG.md` record the source-only state.
+
+The lane did not run tests, type checks, lint, builds, packaging, installer execution, runtime
+interaction, reviews, security or accessibility checks, or UI captures. The integration owner must
+regenerate and verify the offline documentation bundle after the new article, then run the required
+checks against the built Windows desktop application before calling the issue verified.
+
 ## 2026-08-26, desktop Material Design 3 and personal vocabulary reconciliation
 
 This source-only lane is on feat/full-app-material3-reconciliation at the current integration tip.

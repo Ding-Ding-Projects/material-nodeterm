@@ -268,7 +268,9 @@ intentionally unchecked because this task publishes the plan only.
 - [ ] Add door-only Multiverse canvases to depth 8.
 - [ ] Wire the implemented paired-door navigation policy into the pending Multiverse canvas and
       door-rendering lanes; tab, palette, history, and direct-selection bypasses are refused in core.
-- [ ] Add interactive door construction, numeric or passphrase entry, and recovery game.
+- [ ] Add interactive door construction and numeric or passphrase entry. Source components and
+      portable intent are present; live navigator wiring remains pending.
+- [x] Add the top-down recovery game with three energy keys, hazards, core activation, and portable state. Source implementation is complete; built-artifact verification remains for integration.
 - [ ] Add unlimited AWS Universes with AWS-only scope and AWS Shop nodes.
 - [ ] Bundle AWS CLI v2 and maintain verified model and documentation indexing.
 - [ ] Generate interactive wizard forms for every AWS service, command, option, paginator, waiter,

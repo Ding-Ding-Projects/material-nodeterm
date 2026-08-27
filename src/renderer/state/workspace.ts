@@ -55,6 +55,7 @@ import { newUniverseCreationEventId, shopNodeIdForCanvas } from '../../core/univ
 import { TORRENT_NODE_CATALOG_ENTRY } from '@shared/torrent'
 import { DEFAULT_VIRTUAL_MACHINE_CONFIG } from '@shared/virtual-machine'
 import { TIMER_DEFAULT_DURATION_MS, type TimerNodeData } from '@shared/timer'
+import { createRecoveryGameSnapshot, normalizeRecoveryGameSnapshot, type RecoveryGameSnapshot } from '@shared/recovery-game'
 
 // Re-exported so Canvas (and anything else in the renderer) keeps importing it from here, while the
 // single implementation lives in src/shared and is shared with the relay host + the canvas-sync
@@ -84,6 +85,7 @@ export const WORKTREE_GROUP_SIZE = { width: 760, height: 540 }
 const EDITOR_SIZE = { width: 660, height: 460 }
 const DIFF_SIZE = { width: 860, height: 500 }
 const DINO_SIZE = { width: 600, height: 200 }
+const RECOVERY_GAME_SIZE = { width: 540, height: 620 }
 const VIDEO_SIZE = { width: 640, height: 420 }
 const PHOTO_SIZE = { width: 560, height: 440 }
 const GALLERY_SIZE = { width: 760, height: 520 }
@@ -249,6 +251,8 @@ export interface NodeData {
   commitOid?: string
   /** dino-only: best score reached in the T-Rex Runner game. */
   highScore?: number
+  /** recovery-game-only: bounded portable progress. */
+  recoveryGame?: RecoveryGameSnapshot
   /** service-kinds only: the display name the user gave this manager. See `CanvasNodeState`. */
   serviceLabel?: string
   homeAssistantIntent?: HomeAssistantNodeIntent
@@ -1707,6 +1711,28 @@ export function createDinoNode(
   }
 }
 
+/** Creates the deterministic three-key recovery game without launching any external operation. */
+export function createRecoveryGameNode(
+  index: number,
+  center?: { x: number; y: number },
+  recoveryGame: RecoveryGameSnapshot = createRecoveryGameSnapshot()
+): CanvasNode {
+  return {
+    id: nextId('recovery-game'),
+    type: 'recovery-game',
+    position: placeAt(center, index, RECOVERY_GAME_SIZE.width, RECOVERY_GAME_SIZE.height),
+    width: RECOVERY_GAME_SIZE.width,
+    height: RECOVERY_GAME_SIZE.height,
+    style: { width: RECOVERY_GAME_SIZE.width, height: RECOVERY_GAME_SIZE.height },
+    data: {
+      title: 'Recovery game',
+      color: NODE_COLORS[index % NODE_COLORS.length],
+      group: null,
+      recoveryGame
+    }
+  }
+}
+
 /** Creates a group frame node at a given position/size (children get parentId = its id). */
 export function createGroupNode(
   position: { x: number; y: number },
@@ -2176,6 +2202,7 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   loop: true,
   scheduler: true,
   dino: true,
+  'recovery-game': true,
   annotation: true,
   minecraft: true,
   dockerhost: true,
@@ -2226,6 +2253,7 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   loop: NATIVE_LOOP_SIZE,
   scheduler: NATIVE_LOOP_SIZE,
   dino: DINO_SIZE,
+  'recovery-game': RECOVERY_GAME_SIZE,
   annotation: ANNOTATION_SIZE,
   minecraft: SERVICE_CONSOLE_SIZE,
   dockerhost: SERVICE_CONSOLE_SIZE,
@@ -2720,6 +2748,9 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         diffStaged: n.diffStaged,
         commitOid: n.commitOid,
         highScore: n.highScore,
+        // The recovery board is project-portable intent, so normalize legacy or hand-edited
+        // snapshots at the load boundary instead of letting malformed coordinates reach the UI.
+        recoveryGame: n.recoveryGame ? normalizeRecoveryGameSnapshot(n.recoveryGame) : undefined,
         agentId,
         agentModel: n.agentModel,
         accountId: n.accountId,
@@ -2847,6 +2878,9 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         diffStaged: n.data.diffStaged,
         commitOid: n.data.commitOid,
         highScore: n.data.highScore,
+        // Persist only the bounded board snapshot. It contains no path, process, host, or account
+        // state, and normalization keeps old project files safe to reopen on another computer.
+        recoveryGame: n.data.recoveryGame ? normalizeRecoveryGameSnapshot(n.data.recoveryGame) : undefined,
         agentId: n.data.agentId,
         agentModel: n.data.agentModel,
         accountId: n.data.accountId,
@@ -2859,7 +2893,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         sshFs: n.data.sshFs,
         worktree: n.data.worktree,
         annotationVariant: n.data.annotationVariant,
-        annotationDir: n.data.annotationDir
+        annotationDir: n.data.annotationDir,
         premaxRect: n.data.premaxRect
       }
     })
