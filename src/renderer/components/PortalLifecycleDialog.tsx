@@ -7,11 +7,17 @@ import {
   setPortablePortalStatus,
   type PortablePortalV3
 } from '../../core/portal-lifecycle'
+import {
+  verifyUniverseDoorEntry,
+  type UniverseDoorEntrySubmission
+} from '../../core/universe-door-navigation'
 import { Dialog } from '../ui/md3/Dialog'
 import { TextField } from '../ui/md3/TextField'
 import { Button } from '../ui/md3/Button'
+import { AnchoredPopover } from '../ui/AnchoredPopover'
 import { AnchoredRegexBuilder } from './regex/AnchoredRegexBuilder'
 import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
+import { UniverseDoorEntryPanel } from './canvas/UniverseDoorEntryPanel'
 
 export interface PortalLifecycleDialogProps {
   open: boolean
@@ -20,6 +26,8 @@ export interface PortalLifecycleDialogProps {
   onClose: () => void
   onChange: (projection: PortableCanvasProjectionV3) => void
   onOpenCanvas: (canvasId: string, returnDoorId: string) => void
+  /** Optional override for non-desktop hosts. Default uses the host-owned bridge API. */
+  onVerifyEntry?: (doorId: string, submission: UniverseDoorEntrySubmission) => Promise<boolean>
   /** Deletion remains behind the app's existing two-key confirmation surface. */
   onRequestDelete: (portal: PortablePortalV3, apply: () => void) => void
 }
@@ -33,6 +41,7 @@ export function PortalLifecycleDialog({
   onClose,
   onChange,
   onOpenCanvas,
+  onVerifyEntry,
   onRequestDelete
 }: PortalLifecycleDialogProps) {
   const search = useRegexSearchField()
@@ -40,6 +49,10 @@ export function PortalLifecycleDialog({
   const [title, setTitle] = useState('')
   const [selectedParent, setSelectedParent] = useState(currentCanvasId)
   const [childId, setChildId] = useState('')
+  const entryAnchorRef = useRef<HTMLButtonElement>(null)
+  const [entryPortal, setEntryPortal] = useState<PortablePortalV3 | null>(null)
+  const [entryError, setEntryError] = useState<string | null>(null)
+  const [entryBusy, setEntryBusy] = useState(false)
   const portals = projection.portals ?? []
   const visible = useMemo(() => {
     const query = search.query.trim()
@@ -75,6 +88,62 @@ export function PortalLifecycleDialog({
     }
   }
 
+  const openEntry = (portal: PortablePortalV3, anchor: HTMLButtonElement): void => {
+    entryAnchorRef.current = anchor
+    const door = (projection.doors ?? []).find((candidate) => candidate.id === portal.entryDoorId)
+    const decision = navigatePortablePortal(projection, portal.id, currentCanvasId)
+    if (!decision.allowed) {
+      setEntryError(decision.reason)
+      setEntryPortal(null)
+      return
+    }
+    if (!door) {
+      setEntryError('The matching entry door is unavailable, so this portal remains closed.')
+      setEntryPortal(null)
+      return
+    }
+    if (!door.entryPolicy) {
+      setEntryError('This door has no entry policy configured on this computer.')
+      setEntryPortal(null)
+      return
+    }
+    setEntryError(null)
+    setEntryPortal(portal)
+  }
+
+  const submitEntry = async (submission: UniverseDoorEntrySubmission): Promise<void> => {
+    if (!entryPortal || entryBusy) return
+    const door = (projection.doors ?? []).find((candidate) => candidate.id === entryPortal.entryDoorId)
+    if (!door) {
+      setEntryError('The matching entry door is unavailable, so this portal remains closed.')
+      return
+    }
+    setEntryBusy(true)
+    try {
+      const decision = navigatePortablePortal(projection, entryPortal.id, currentCanvasId)
+      if (!decision.allowed) {
+        setEntryError(decision.reason)
+        return
+      }
+      const verifyWithHost = onVerifyEntry ?? (async (doorId: string, value: UniverseDoorEntrySubmission): Promise<boolean> => {
+        const result = await window.nodeTerminal.universeDoorEntry.verify({ doorId, method: value.method, value: value.value })
+        return result.verified
+      })
+      const result = await verifyUniverseDoorEntry(door, submission, verifyWithHost)
+      if (!result.verified) {
+        setEntryError(result.reason)
+        return
+      }
+      setEntryPortal(null)
+      setEntryError(null)
+      onOpenCanvas(decision.targetCanvasId, decision.returnDoorId)
+    } catch (error) {
+      setEntryError(error instanceof Error ? error.message : 'The door entry could not be verified.')
+    } finally {
+      setEntryBusy(false)
+    }
+  }
+
   return (
     <Dialog open={open} onClose={onClose} title="Portal lifecycle" className="portal-lifecycle-dialog">
       <p>Choose a containing canvas, give the child canvas a name, and create a closed portal. Import and repair never contact a provider or start a process.</p>
@@ -106,13 +175,48 @@ export function PortalLifecycleDialog({
           return (
             <article key={portal.id} className="portal-lifecycle-dialog__row" aria-label={portal.title}>
               <div><strong>{portal.title}</strong><span>{portal.id} · depth {portal.depth} · {portal.status}</span></div>
-              <Button disabled={!isCurrent || !isOpen} title={!isCurrent ? 'Open the containing canvas first.' : !isOpen ? 'Open this portal before entering it.' : undefined} onClick={() => onOpenCanvas(portal.childCanvasId, portal.returnDoorId)}>Open</Button>
+              <Button
+                disabled={!isCurrent || !isOpen}
+                title={!isCurrent ? 'Open the containing canvas first.' : !isOpen ? 'Open this portal before entering it.' : undefined}
+                onClick={(event) => openEntry(portal, event.currentTarget)}
+              >
+                Enter
+              </Button>
               <Button onClick={() => onChange(setPortablePortalStatus(projection, portal.id, isOpen ? 'closed' : 'open'))}>{isOpen ? 'Close' : 'Open portal'}</Button>
               <Button title="Deletion requires the app two-key confirmation." onClick={() => onRequestDelete(portal, () => { const result = deletePortablePortal(projection, portal.id); if (result.projection) onChange(result.projection) })}>Delete portal…</Button>
             </article>
           )
         })}
       </section>
+      {entryPortal && (() => {
+        const door = (projection.doors ?? []).find((candidate) => candidate.id === entryPortal.entryDoorId)
+        if (!door?.entryPolicy) return null
+        return (
+          <AnchoredPopover
+            anchorRef={entryAnchorRef}
+            open
+            onClose={() => {
+              setEntryPortal(null)
+              setEntryError(null)
+            }}
+            width={560}
+            className="universe-door-entry-popover"
+            zIndex={116}
+          >
+            <UniverseDoorEntryPanel
+              policy={door.entryPolicy}
+              destinationLabel={entryPortal.title}
+              busy={entryBusy}
+              error={entryError}
+              onSubmit={(submission) => { void submitEntry(submission) }}
+              onCancel={() => {
+                setEntryPortal(null)
+                setEntryError(null)
+              }}
+            />
+          </AnchoredPopover>
+        )
+      })()}
     </Dialog>
   )
 }

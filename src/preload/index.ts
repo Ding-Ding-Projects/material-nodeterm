@@ -765,6 +765,11 @@ const api: NodeTerminalApi = {
     listCredentials: (projectId, managerId) =>
       ipcRenderer.invoke(IPC.passwordManagerListCredentials, projectId, managerId)
   },
+  universeDoorEntry: {
+    configure: (input) => ipcRenderer.invoke(IPC.universeDoorEntryConfigure, input),
+    verify: (input) => ipcRenderer.invoke(IPC.universeDoorEntryVerify, input),
+    remove: (doorId) => ipcRenderer.invoke(IPC.universeDoorEntryRemove, doorId)
+  },
   context: {
     onUpdate: (listener) => {
       const handler = (_e: unknown, payload: Parameters<typeof listener>[0]) => listener(payload)
