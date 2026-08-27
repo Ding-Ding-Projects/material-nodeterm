@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add independent custom alert sound files for finished-agent and needs-attention events. Settings
+  → Notifications now validates bounded local audio, stores the bytes in app data so Server Edition
+  can replay them on its host, provides per-event preview and reset controls, and falls back to the
+  built-in cues whenever a custom file is missing or cannot be decoded. This ultra-speed lane did
+  not run tests, type checks, lint, reviews, security or accessibility checks, builds, packaging,
+  installer execution, runtime interaction, or UI captures.
+
 - Add the bundled AWS CLI v2 dependency lane. Windows packaging now stages the pinned official
   `2.36.32` MSI, verifies its SHA-256, falls back through a verified local cache or canonical
   HTTPS download, extracts it into application-local storage, exposes the installed version, and

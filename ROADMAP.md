@@ -160,7 +160,10 @@ Feature requests open on GitHub with no landed implementation yet, newest first:
       Server Edition).
 - [ ] **#291** — Node type icons alongside color coding.
 - [ ] **#290** — Source control for monorepos with multiple nested git repos.
-- [ ] **#289** — Custom sounds for agent alerts.
+- [ ] **#289** — Custom sounds for agent alerts. Finished-agent and needs-attention events now
+      accept bounded local audio with per-event preview, reset, persistence in app data, and
+      built-in fallback. Tests, builds, packaging, runtime interaction, and captures remain unrun
+      under the ultra-speed lane, so this row stays unchecked.
 - [ ] **#286** — Named terminal profiles (start directory).
 - [ ] **#284** — Per-terminal independent "repo context".
 - [ ] **#145** — Basic annotation tools (colored frame, lines, arrows) — note: an `annotation`
