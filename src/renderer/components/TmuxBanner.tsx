@@ -10,7 +10,7 @@ import { localSession } from '../session/localSession'
 // version, which dismissed the banner optimistically and left the user guessing (second field
 // report) — keeps the banner up as a status strip: installing → ready | failed. tmuxStatus()
 // re-probes on every call (ensureTmux), so `available` flipping true is also what makes NEW
-// terminals tmux-backed without a restart. Hidden on win32 and on any fetch error (fail-open).
+// terminals tmux-backed without a restart. Hidden on any fetch error (fail-open).
 
 export const INSTALL_POLL_MS = 3000
 export const INSTALL_CAP_MS = 5 * 60_000
@@ -22,6 +22,54 @@ export type InstallPhase = 'missing' | 'installing' | 'ready' | 'failed'
 export function pollOutcome(available: boolean, elapsedMs: number): InstallPhase {
   if (available) return 'ready'
   return elapsedMs >= INSTALL_CAP_MS ? 'failed' : 'installing'
+}
+
+/** The multiplexer name shown in copy must match the host's supported implementation. */
+export function multiplexerName(platform: string): string {
+  return platform === 'win32' ? 'psmux' : 'tmux'
+}
+
+/** Resolve banner copy from the install phase and host platform. */
+export function bannerCopy(
+  phase: InstallPhase,
+  platform: string,
+  hasInstallCommand: boolean
+): { title: string; body: string } {
+  const name = multiplexerName(platform)
+  const win = platform === 'win32'
+  if (phase === 'installing') {
+    return {
+      title: `Installing ${name}`,
+      body: 'Running the install in a terminal node — watch it for progress (it may ask for your password).'
+    }
+  }
+  if (phase === 'ready') {
+    return {
+      title: `${name} ready`,
+      body: 'New terminals will survive restarts from now on. Terminals opened before the install stay on the plain shell.'
+    }
+  }
+  const title = `${name} not found`
+  if (phase === 'failed') {
+    return {
+      title,
+      body: win
+        ? 'The install hasn’t completed. Check the terminal node for errors, or install psmux manually and restart nodeterm.'
+        : 'The install hasn’t completed. Check the terminal node for errors, or install tmux with your package manager and restart nodeterm.'
+    }
+  }
+  if (hasInstallCommand) {
+    return {
+      title,
+      body: `Terminals won’t survive restarts and the mobile app can’t attach until ${name} is installed.`
+    }
+  }
+  return {
+    title,
+    body: win
+      ? 'Terminals won’t survive restarts and the mobile app can’t attach. winget wasn’t found, so there is no one-click install — install psmux (a tmux-compatible multiplexer for Windows) and restart nodeterm.'
+      : 'Terminals won’t survive restarts and the mobile app can’t attach. Install tmux with your package manager (e.g. brew install tmux), then restart nodeterm.'
+  }
 }
 
 export function TmuxBanner({ onInstall }: { onInstall: (command: string) => void }): JSX.Element | null {
@@ -73,21 +121,10 @@ export function TmuxBanner({ onInstall }: { onInstall: (command: string) => void
     return () => clearTimeout(t)
   }, [phase])
 
-  if (!status || dismissed || status.platform === 'win32') return null
+  if (!status || dismissed) return null
   if (status.available && phase === 'missing') return null
 
-  const title =
-    phase === 'installing' ? 'Installing tmux' : phase === 'ready' ? 'tmux ready' : 'tmux not found'
-  const body =
-    phase === 'installing'
-      ? 'Running the install in a terminal node — watch it for progress (it may ask for your password).'
-      : phase === 'ready'
-        ? 'New terminals will survive restarts from now on. Terminals opened before the install stay on the plain shell.'
-        : phase === 'failed'
-          ? 'The install hasn’t completed. Check the terminal node for errors, or install tmux with your package manager and restart nodeterm.'
-          : status.installCommand
-            ? 'Terminals won’t survive restarts and the mobile app can’t attach until tmux is installed.'
-            : 'Terminals won’t survive restarts and the mobile app can’t attach. Install tmux with your package manager (e.g. brew install tmux), then restart nodeterm.'
+  const { title, body } = bannerCopy(phase, status.platform ?? '', !!status.installCommand)
 
   const showInstall = (phase === 'missing' || phase === 'failed') && !!status.installCommand
   return (

@@ -13,6 +13,14 @@ export const LANGUAGE_MODES = [
   { id: 'bi', label: 'Both at once' },
 ]
 
+export const FUNNY_LEVEL_MIN = 1
+export const FUNNY_LEVEL_MAX = 10
+export const DEFAULT_FUNNY_LEVEL = 10
+
+export function normalizeFunnyLevel(value, fallback = DEFAULT_FUNNY_LEVEL) {
+  return Number.isInteger(value) && value >= FUNNY_LEVEL_MIN && value <= FUNNY_LEVEL_MAX ? value : fallback
+}
+
 export function getEmojiEnabled(state) {
   return !!state.emoji
 }
@@ -34,14 +42,36 @@ export function effLang(state) {
   return state.school ? 'en' : state.lang
 }
 export function effFunnyEn(state) {
-  return state.school ? 1 : state.funnyEn
+  return state.school ? 1 : normalizeFunnyLevel(state.funnyEn)
 }
 export function effFunnyYue(state) {
-  return state.school ? 1 : state.funnyYue
+  return state.school ? 1 : normalizeFunnyLevel(state.funnyYue)
 }
 
-const EN_TAILS = ['', '', ' Neat, right?', ' Ta-da! 🎉', ' Zoom zoom, wheeeee! 🚀']
-const YUE_TAILS = ['', '', ' 幾好呀！', ' 好正呀！🎉', ' 勁到飛起呀！🚀']
+const EN_TAILS = [
+  '',
+  '',
+  ' Neat, right?',
+  ' Ta-da! 🎉',
+  ' Zoom zoom, wheeeee! 🚀',
+  ' A little extra sparkle, with the facts still firmly in charge.',
+  ' The copy has found a tasteful confetti button, and nothing factual moved.',
+  ' More whimsy has entered the room; the action and its consequences stay exact.',
+  ' Maximum playful voice engaged, while every useful detail remains on duty.',
+  ' Full comedy overdrive: same facts, same choices, spectacularly sillier delivery.'
+]
+const YUE_TAILS = [
+  '',
+  '',
+  ' 幾好呀！',
+  ' 好正呀！🎉',
+  ' 勁到飛起呀！🚀',
+  ' 加少少生氣，事實照樣企得穩陣。',
+  ' 文字掂咗下靚靚紙碎，重要資料一粒都冇郁。',
+  ' 多啲玩味入場，動作同後果仍然原原本本。',
+  ' 玩味開到盡，所有有用細節繼續當值。',
+  ' 全速搞笑模式：事實一樣，選擇一樣，語氣就放飛喇。'
+]
 
 function stripEmoji(text) {
   return text.replace(/[^\x00-\x7F]/g, '').trimEnd()

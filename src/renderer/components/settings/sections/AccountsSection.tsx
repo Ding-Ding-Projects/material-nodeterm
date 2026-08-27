@@ -1119,7 +1119,7 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
       searchEntries={ENTRIES}
     >
       <SearchableRow {...ROWS.accounts}>
-        <div className="space-y-4">
+    <div className="space-y-4" data-easter-surface="account">
           {versionWarning ? (
             <div className="flex items-start justify-between gap-3 rounded-md border border-[color:var(--danger)]/40 bg-[color:var(--danger)]/10 px-3 py-2 text-[13px] leading-relaxed text-[color:var(--danger)]">
               <span><SettingsText>Your installed Claude CLI is older than the version that scopes credentials per config dir. Accounts still isolate their config, but on macOS logins may collide in the shared keychain. Update the Claude CLI to keep them fully separate.</SettingsText></span>

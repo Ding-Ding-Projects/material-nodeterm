@@ -28,6 +28,21 @@ export function tailLastBytesArgs(conn: SshConnection, controlPath: string, path
   return childArgs(conn, controlPath, `tail -c ${bytes} ${posixQuote(path)}`)
 }
 
+/** Read a bounded tail and the remote file's absolute byte length in one round trip. */
+export function tailLastBytesWithSizeArgs(
+  conn: SshConnection,
+  controlPath: string,
+  path: string,
+  bytes: number
+): string[] {
+  const quoted = posixQuote(path)
+  return childArgs(
+    conn,
+    controlPath,
+    `size=$(wc -c < ${quoted}) || exit 1; printf '%s\\n' "$size"; tail -c ${bytes} ${quoted} | base64`
+  )
+}
+
 /** Reads a remote file over the project's ControlMaster. Fail-open: errors → empty. */
 export class RemoteFile {
   constructor(private run: (args: string[]) => Promise<{ code: number; stdout: string }>) {}
@@ -68,6 +83,25 @@ export class RemoteFile {
       return code === 0 ? stdout : ''
     } catch {
       return ''
+    }
+  }
+
+  /** The first tail read needs the absolute remote offset, not merely the bytes returned. */
+  async readTailWithSize(
+    ref: RemoteFileRef,
+    bytes: number
+  ): Promise<{ data: Buffer; size: number } | null> {
+    try {
+      const { code, stdout } = await this.run(tailLastBytesWithSizeArgs(ref.conn, ref.controlPath, ref.path, bytes))
+      if (code !== 0) return null
+      const newline = stdout.indexOf('\n')
+      if (newline < 1) return null
+      const size = Number(stdout.slice(0, newline).trim())
+      if (!Number.isSafeInteger(size) || size < 0) return null
+      const data = Buffer.from(stdout.slice(newline + 1).replace(/\s+/g, ''), 'base64')
+      return { data, size }
+    } catch {
+      return null
     }
   }
 }
