@@ -112,6 +112,7 @@ import PhotoNode from '../nodes/PhotoNode'
 import GalleryNode from '../nodes/GalleryNode'
 import WebNode from '../nodes/WebNode'
 import { NativeLoopNode, setNativeLoopRunHandler } from '../nodes/NativeLoopNode'
+import TimerNode from '../nodes/TimerNode'
 import {
   loopMessageId,
   loopRunDue,
@@ -591,6 +592,7 @@ import {
   createEditorNode,
   createGroupNode,
   createNativeLoopNode,
+  createTimerNode,
   WORKTREE_GROUP_SIZE,
   createSshTerminalNode,
   createAuthenticatorNode,
@@ -1837,6 +1839,7 @@ export function Canvas() {
       subagent: withNodeBoundary(SubagentNode),
       loop: withNodeBoundary(LoopNode),
       scheduler: withNodeBoundary(NativeLoopNode),
+      timer: withNodeBoundary(TimerNode),
       dino: withNodeBoundary(DinoNode),
       photo: withNodeBoundary(PhotoNode),
       gallery: withNodeBoundary(GalleryNode),
@@ -4722,6 +4725,17 @@ export function Canvas() {
         if (appended.result.error) notify({ kind: 'error', title: 'Node placement unavailable', body: appended.result.error })
         return appended.nodes
       })
+    },
+    [setNodes, markDirty, emptyNodePos, parentInto]
+  )
+
+  const addTimer = useCallback(
+    (center?: { x: number; y: number }, groupId?: string) => {
+      setNodes((ns) => {
+        const node = createTimerNode(ns.length, center ?? emptyNodePos())
+        return [...ns, groupId ? parentInto(node, groupId) : node]
+      })
+      markDirty()
     },
     [setNodes, markDirty, emptyNodePos, parentInto]
   )
@@ -9063,6 +9077,9 @@ export function Canvas() {
           label: 'New calendar',
           icon: <IconCalendar />,
           onClick: () => addCalendar(at, groupId)
+          label: 'New timer',
+          icon: <span aria-hidden="true">◷</span>,
+          onClick: () => addTimer(at, groupId)
         },
         { type: 'separator' },
         ...(isHidden('colors', useSettings.getState().settings.hiddenNodeMenuItems)
@@ -9123,6 +9140,7 @@ export function Canvas() {
       addGallery,
       addAuthenticator,
       addNativeLoop,
+      addTimer,
       addToExistingGroup,
       groupSelection
     ]
@@ -9389,6 +9407,7 @@ export function Canvas() {
       addNsis,
       addTorrent,
       addNativeLoop,
+      addTimer,
       addDino,
       addBrowser,
       openFileDialog,
@@ -13441,6 +13460,12 @@ export function Canvas() {
             run: () => addNativeLoop()
           },
           {
+            id: 'new-timer',
+            label: 'New timer',
+            icon: <span aria-hidden="true">◷</span>,
+            run: () => addTimer()
+          },
+          {
             id: 'new-authenticator',
             label: 'New authenticator',
             icon: <IconLock />,
@@ -13843,6 +13868,7 @@ export function Canvas() {
     addNsis,
     addTorrent,
     addNativeLoop,
+    addTimer,
     addDino,
     addWebView,
     addBrowser,
@@ -14429,6 +14455,7 @@ export function Canvas() {
             onAddSticky={addSticky}
             onAddAuthenticator={() => addAuthenticator()}
             onAddLoop={addNativeLoop}
+            onAddTimer={() => addTimer()}
             onAddDino={addDino}
             onAddAgent={(aid, accountId) => addAgentNode(aid, undefined, undefined, accountId)}
             onOpenFile={() => void openFileDialog()}

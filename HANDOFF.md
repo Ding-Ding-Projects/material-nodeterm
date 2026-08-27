@@ -1881,3 +1881,13 @@ switcher and FAB menu on a real screen — nothing above substitutes for that. T
 the `.mc-console` styling defect and the two atomic-write violations found above are worth a
 one-line fix before the next release, since both are small, both are diagnosed, and neither
 requires touching anything MD3-specific to correct.
+## Timer nodes lane, issue #31
+
+Implemented the timer node model in `src/shared/timer.ts`, the persistent occurrence coordinator in
+`src/core/timer-service.ts`, and the canvas surface in `src/renderer/nodes/TimerNode.tsx`. The node is
+registered as `timer`, has add-node, context-menu, and command-palette creation paths, and supports
+countdown, stopwatch, interval sequences, pause/resume, laps, repeats, missed/completed occurrence
+state, one-shot non-blocking alarms, and versioned JSON export data.
+
+Documentation is in `docs/features/canvas/timer-nodes.md`. Tests, builds, captures, commits, and dews
+were intentionally left to the parent integration lane.

@@ -30,6 +30,7 @@ import type { AnnotationRect, AnnotationVariant } from '../lib/annotation'
 import { newUniverseCreationEventId, shopNodeIdForCanvas } from '../../core/universe-shop'
 import { TORRENT_NODE_CATALOG_ENTRY } from '@shared/torrent'
 import { DEFAULT_VIRTUAL_MACHINE_CONFIG } from '@shared/virtual-machine'
+import { TIMER_DEFAULT_DURATION_MS, type TimerNodeData } from '@shared/timer'
 
 // Re-exported so Canvas (and anything else in the renderer) keeps importing it from here, while the
 // single implementation lives in src/shared and is shared with the relay host + the canvas-sync
@@ -68,6 +69,7 @@ const NATIVE_LOOP_SIZE = { width: 340, height: 280 }
 const SHOP_SIZE = { width: 480, height: 420 }
 export const TORRENT_SIZE = { width: 620, height: 520 }
 const LINUX_VM_SIZE = { width: 760, height: 560 }
+const TIMER_SIZE = { width: 380, height: 360 }
 /** Fallback bounding box `flowToNodeStates` uses if an annotation node somehow has no live
  *  width/height at all (every production creation path draws a real rect — see createAnnotationNode
  *  — so this is a defensive floor, matching how every other kind gets a fallback in `sizeFor`). */
@@ -1071,6 +1073,15 @@ export function createCalendarNode(index: number, center?: { x: number; y: numbe
       calendarConfig: { provider: 'local', accountId: null, calendarId: null, timezone: 'local', view: 'agenda', showWeekends: true, cacheEnabled: true }
     }
   }
+export function createTimerNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  const data: TimerNodeData = {
+    title: 'Timer', color: NODE_COLORS[index % NODE_COLORS.length], group: null,
+    timerMode: 'countdown', durationMs: TIMER_DEFAULT_DURATION_MS, remainingMs: TIMER_DEFAULT_DURATION_MS,
+    elapsedMs: 0, running: false, paused: false, repeatCount: 0, repeatRemaining: 0,
+    sequence: [], sequenceIndex: 0, lapsMs: [], occurrenceState: 'scheduled', alarmEnabled: true,
+    alarmTone: 'chime', missedCount: 0
+  }
+  return { id: nextId('timer'), type: 'timer', position: placeAt(center, index, TIMER_SIZE.width, TIMER_SIZE.height), width: TIMER_SIZE.width, height: TIMER_SIZE.height, style: { width: TIMER_SIZE.width, height: TIMER_SIZE.height }, data }
 }
 
 export function createStickyNode(index: number, center?: { x: number; y: number }): CanvasNode {
@@ -1582,6 +1593,7 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   terminal: true,
   authenticator: true,
   calendar: true,
+  timer: true,
   sticky: true,
   group: true,
   editor: true,
@@ -1625,6 +1637,7 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   terminal: TERMINAL_SIZE,
   authenticator: AUTHENTICATOR_SIZE,
   calendar: CALENDAR_SIZE,
+  timer: TIMER_SIZE,
   sticky: STICKY_SIZE,
   group: GROUP_SIZE,
   editor: EDITOR_SIZE,
@@ -1745,6 +1758,11 @@ export function duplicateNode(node: CanvasNode, offset = 28): CanvasNode {
       loopLastRunAt: undefined,
       // A duplicate owns a fresh VM identity and must never inherit another VM's ISO or disk.
       virtualMachineLocalPaths: undefined
+      ...(kind === 'timer' ? {
+        running: false, paused: false, elapsedMs: 0, remainingMs: (node.data as TimerNodeData).durationMs,
+        lapsMs: [], sequenceIndex: 0, repeatRemaining: 0, occurrenceId: undefined,
+        occurrenceState: 'scheduled', missedCount: 0, wallAnchorMs: undefined, monotonicAnchorMs: undefined
+      } : {})
     }
   }
 }
@@ -2065,6 +2083,23 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         loopNextRunAt: n.loopNextRunAt,
         loopLastRunAt: n.loopLastRunAt,
         loopTargetIds: n.loopTargetIds,
+        timerMode: n.timerMode ?? n.timerMode,
+        timerDurationMs: n.timerDurationMs ?? n.durationMs,
+        timerRemainingMs: n.timerRemainingMs ?? n.remainingMs,
+        timerElapsedMs: n.timerElapsedMs ?? n.elapsedMs,
+        timerRunning: n.timerRunning ?? n.running,
+        timerPaused: n.timerPaused ?? n.paused,
+        timerRepeatCount: n.timerRepeatCount ?? n.repeatCount,
+        timerRepeatRemaining: n.timerRepeatRemaining ?? n.repeatRemaining,
+        timerSequence: n.timerSequence ?? n.sequence,
+        timerSequenceIndex: n.timerSequenceIndex ?? n.sequenceIndex,
+        timerLapsMs: n.timerLapsMs ?? n.lapsMs,
+        timerNextOccurrenceAt: n.timerNextOccurrenceAt ?? n.nextOccurrenceAt,
+        timerOccurrenceId: n.timerOccurrenceId ?? n.occurrenceId,
+        timerOccurrenceState: n.timerOccurrenceState ?? n.occurrenceState,
+        timerAlarmEnabled: n.timerAlarmEnabled ?? n.alarmEnabled,
+        timerAlarmTone: n.timerAlarmTone ?? n.alarmTone,
+        timerMissedCount: n.timerMissedCount ?? n.missedCount,
         shell: n.shell,
         terminalProfileId: n.ssh ? undefined : n.terminalProfileId,
         cwd: n.cwd,
@@ -2152,6 +2187,23 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         loopNextRunAt: n.data.loopNextRunAt,
         loopLastRunAt: n.data.loopLastRunAt,
         loopTargetIds: n.data.loopTargetIds,
+        timerMode: n.data.timerMode,
+        timerDurationMs: n.data.timerDurationMs ?? (n.data as TimerNodeData).durationMs,
+        timerRemainingMs: n.data.timerRemainingMs ?? (n.data as TimerNodeData).remainingMs,
+        timerElapsedMs: n.data.timerElapsedMs ?? (n.data as TimerNodeData).elapsedMs,
+        timerRunning: n.data.timerRunning ?? (n.data as TimerNodeData).running,
+        timerPaused: n.data.timerPaused ?? (n.data as TimerNodeData).paused,
+        timerRepeatCount: n.data.timerRepeatCount ?? (n.data as TimerNodeData).repeatCount,
+        timerRepeatRemaining: n.data.timerRepeatRemaining ?? (n.data as TimerNodeData).repeatRemaining,
+        timerSequence: n.data.timerSequence ?? (n.data as TimerNodeData).sequence,
+        timerSequenceIndex: n.data.timerSequenceIndex ?? (n.data as TimerNodeData).sequenceIndex,
+        timerLapsMs: n.data.timerLapsMs ?? (n.data as TimerNodeData).lapsMs,
+        timerNextOccurrenceAt: n.data.timerNextOccurrenceAt ?? (n.data as TimerNodeData).nextOccurrenceAt,
+        timerOccurrenceId: n.data.timerOccurrenceId ?? (n.data as TimerNodeData).occurrenceId,
+        timerOccurrenceState: n.data.timerOccurrenceState ?? (n.data as TimerNodeData).occurrenceState,
+        timerAlarmEnabled: n.data.timerAlarmEnabled ?? (n.data as TimerNodeData).alarmEnabled,
+        timerAlarmTone: n.data.timerAlarmTone ?? (n.data as TimerNodeData).alarmTone,
+        timerMissedCount: n.data.timerMissedCount ?? (n.data as TimerNodeData).missedCount,
         parentId: n.parentId,
         shell: n.data.shell,
         terminalProfileId: n.data.ssh ? undefined : n.data.terminalProfileId,

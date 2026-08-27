@@ -218,6 +218,12 @@ const api: NodeTerminalApi = {
       return () => ipcRenderer.removeListener(IPC.workspaceExternalChange, h)
     }
   },
+  timer: {
+    occurrences: () => ipcRenderer.invoke(IPC.timerOccurrencesLoad),
+    schedule: (timerId: string, scheduledAt: number) => ipcRenderer.invoke(IPC.timerOccurrenceSchedule, timerId, scheduledAt),
+    transition: (id: string, state: string) => ipcRenderer.invoke(IPC.timerOccurrenceTransition, id, state),
+    lap: (id: string, elapsedMs: number) => ipcRenderer.invoke(IPC.timerOccurrenceLap, id, elapsedMs)
+  },
   serverDeployment: {
     start: () => ipcRenderer.invoke(IPC.serverDeploymentStart),
     currentTotp: () => ipcRenderer.invoke(IPC.serverDeploymentTotp),

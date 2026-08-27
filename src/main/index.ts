@@ -48,6 +48,9 @@ import { registerMinecraftIpc } from '../core/minecraft/register-ipc'
 import { registerTorrentIpc } from '../core/torrent/register-ipc'
 import { registerVirtualMachineIpc } from '../core/virtual-machine/register-ipc'
 import { registerCalendarIpc } from '../core/calendar/register-ipc'
+import { AtomicJsonArrayStore } from '../core/atomic-json-store'
+import { TimerOccurrenceService } from '../core/timer-service'
+import type { TimerOccurrence } from '../shared/timer'
 import { registerVsCodeHandlers } from '../core/vscode-handlers'
 import { LocalHistoryStore } from '../core/local-history'
 import { ProjectArchiveService } from '../core/project-archive'
@@ -323,6 +326,7 @@ initPlatform(corePlatform)
 // why that call is synchronous and unawaited rather than joining the flush Promise.allSettled below.
 let minecraftServers: ReturnType<typeof registerMinecraftIpc>['manager'] | undefined
 let virtualMachineManager: ReturnType<typeof registerVirtualMachineIpc>['manager'] | undefined
+let timerOccurrences: TimerOccurrenceService | undefined
 
 // Only hand the OS a URL with a vetted scheme. Blocks file://, smb://, and custom
 // protocol-handler schemes that could be smuggled in via remote announcement feeds or
@@ -885,6 +889,21 @@ app.whenReady().then(async () => {
 
   settingsStore.init()
   settingsStore.registerIpc()
+  timerOccurrences = new TimerOccurrenceService(new AtomicJsonArrayStore<TimerOccurrence>(join(app.getPath('userData'), 'timers', 'occurrences.json')))
+  await timerOccurrences.reconcileMissed()
+  ipcMain.handle(IPC.timerOccurrencesLoad, async () => timerOccurrences?.list() ?? [])
+  ipcMain.handle(IPC.timerOccurrenceSchedule, async (_event, timerId: unknown, scheduledAt: unknown) => {
+    if (typeof timerId !== 'string' || timerId.length > 160 || typeof scheduledAt !== 'number' || !Number.isSafeInteger(scheduledAt)) return null
+    return timerOccurrences?.schedule(timerId, scheduledAt)
+  })
+  ipcMain.handle(IPC.timerOccurrenceTransition, async (_event, id: unknown, state: unknown) => {
+    if (typeof id !== 'string' || typeof state !== 'string') return null
+    return timerOccurrences?.transition(id, state as TimerOccurrence['state'])
+  })
+  ipcMain.handle(IPC.timerOccurrenceLap, async (_event, id: unknown, elapsedMs: unknown) => {
+    if (typeof id !== 'string' || typeof elapsedMs !== 'number' || !Number.isSafeInteger(elapsedMs) || elapsedMs < 0) return null
+    return timerOccurrences?.addLap(id, elapsedMs)
+  })
   // "Escape to widget" — see main/canvas-widget-window.ts's module doc. Uses the same
   // `desktopBuildPaths(__dirname)` call every window creation path uses; cheap and pure, so
   // recomputing it here rather than threading the `createWindow()`-local `buildPaths` through

@@ -222,6 +222,8 @@ intentionally unchecked because this task publishes the plan only.
       vault wiring is supplied. Ultra-speed lane intentionally skipped tests, builds, packaging,
       runtime interaction, and captures.
 - [ ] Add Timer, Alarm Clock, and planner occurrence services.
+- [x] Add Timer nodes and persistent planner occurrence service. Calendar and Alarm Clock remain
+  separate follow-up surfaces.
 
 ### Multiverse and AWS
 

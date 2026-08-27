@@ -252,6 +252,10 @@ export const IPC = {
    *  rather than reset on it. */
   ptyResync: (sessionId: string) => `pty:resync:${sessionId}`,
   workspaceLoad: 'workspace:load',
+  timerOccurrencesLoad: 'timer:occurrences-load',
+  timerOccurrenceSchedule: 'timer:occurrence-schedule',
+  timerOccurrenceTransition: 'timer:occurrence-transition',
+  timerOccurrenceLap: 'timer:occurrence-lap',
   workspaceSave: 'workspace:save',
   workspaceProbeFolder: 'workspace:probe-folder',
   /** Explicit split/join for a local project's storage encoding (project-parts.ts). See

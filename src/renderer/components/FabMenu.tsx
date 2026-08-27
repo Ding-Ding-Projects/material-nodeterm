@@ -29,6 +29,7 @@ export interface FabMenuProps {
   onAddTerminalWithProfile?: (profileId: string) => void
   onAddSticky: () => void
   onAddLoop: () => void
+  onAddTimer?: () => void
   /** Create a TOTP code displayer. The row is also DRAGGABLE onto the canvas, which is what
    *  lets it land where the pointer is rather than at the default placement. */
   onAddAuthenticator: () => void
@@ -56,6 +57,7 @@ export function FabMenu({
   onAddTerminalWithProfile,
   onAddSticky,
   onAddLoop,
+  onAddTimer = () => {},
   onAddAuthenticator,
   onAddDino,
   onAddAgent,
@@ -269,6 +271,11 @@ export function FabMenu({
                 <button role="menuitem" onClick={pick(onAddLoop)}>
                   <LoopIcon />
                   <span>Loop</span>
+                </button>
+                <button role="menuitem" onClick={pick(onAddTimer)}>
+                  <span aria-hidden="true">◷</span>
+                  <span>Timer</span>
+                </button>
                 <button
                   role="menuitem"
                   draggable
@@ -280,7 +287,6 @@ export function FabMenu({
                 >
                   <IconLock />
                   <span>Authenticator</span>
-                </button>
                 </button>
                 <button role="menuitem" onClick={pick(onAddDino)}>
                   <DinoIcon />

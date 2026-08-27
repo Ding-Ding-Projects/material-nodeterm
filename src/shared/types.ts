@@ -362,6 +362,7 @@ export type NodeKind =
   // A portable calendar view. Provider credentials and event cache stay in the core vault/local
   // data, while this node carries only safe selection intent.
   | 'calendar'
+  | 'timer'
   // The SERVICE family: one node per external thing this canvas can manage. They are ordinary
   // nodes — dragged, resized, coloured, grouped, persisted and deleted exactly like a terminal —
   // because a managed service is a thing you arrange on a canvas beside the terminals working on
@@ -480,6 +481,41 @@ export interface CanvasNodeState {
   loopLastRunAt?: number
   /** scheduler-only: exact agent node ids receiving each fire. */
   loopTargetIds?: string[]
+  /** timer-only persisted state, validated and bounded by shared/timer.ts. */
+  timerMode?: import('./timer').TimerMode
+  timerDurationMs?: number
+  timerRemainingMs?: number
+  timerElapsedMs?: number
+  timerRunning?: boolean
+  timerPaused?: boolean
+  timerRepeatCount?: number
+  timerRepeatRemaining?: number
+  timerSequence?: import('./timer').TimerSequenceStep[]
+  timerSequenceIndex?: number
+  timerLapsMs?: number[]
+  timerNextOccurrenceAt?: number
+  timerOccurrenceId?: string
+  timerOccurrenceState?: import('./timer').TimerOccurrenceState
+  timerAlarmEnabled?: boolean
+  timerAlarmTone?: import('./timer').TimerNodeData['alarmTone']
+  timerMissedCount?: number
+  /** Legacy-compatible timer payload keys retained for renderer node data round-trips. */
+  durationMs?: number
+  remainingMs?: number
+  elapsedMs?: number
+  running?: boolean
+  paused?: boolean
+  repeatCount?: number
+  repeatRemaining?: number
+  sequence?: import('./timer').TimerSequenceStep[]
+  sequenceIndex?: number
+  lapsMs?: number[]
+  nextOccurrenceAt?: number
+  occurrenceId?: string
+  occurrenceState?: import('./timer').TimerOccurrenceState
+  alarmEnabled?: boolean
+  alarmTone?: import('./timer').TimerNodeData['alarmTone']
+  missedCount?: number
   /** Parent group node id, if this node belongs to a group frame. */
   parentId?: string
   // terminal-only
@@ -3869,11 +3905,19 @@ export interface PasswordManagerApi {
   listCredentials(projectId: string, managerId: string): Promise<ListCredentialsResult>
 }
 
+export interface TimerApi {
+  occurrences(): Promise<import('./timer').TimerOccurrence[]>
+  schedule(timerId: string, scheduledAt: number): Promise<import('./timer').TimerOccurrence | null>
+  transition(id: string, state: import('./timer').TimerOccurrenceState): Promise<import('./timer').TimerOccurrence | null>
+  lap(id: string, elapsedMs: number): Promise<number[] | null>
+}
+
 export interface NodeTerminalApi {
   pty: PtyApi
   /** Desktop-only Windows profile detection; absent on Server Edition and mobile bridges. */
   terminalProfiles?: TerminalProfilesApi
   workspace: WorkspaceApi
+  timer: TimerApi
   serverDeployment: ServerDeploymentApi
   dialog: DialogApi
   settings: SettingsApi

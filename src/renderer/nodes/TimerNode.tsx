@@ -1,0 +1,77 @@
+import { Handle, NodeResizer, Position, useReactFlow, type NodeProps } from '@xyflow/react'
+import type { CanvasNode } from '../state/workspace'
+import { clampTimerDuration, formatTimerMs, timerNextState, type TimerMode, type TimerNodeData } from '@shared/timer'
+import { useEffect, useRef, useState } from 'react'
+import { notify } from '../lib/adhdNotify'
+
+export default function TimerNode({ id, data, selected }: NodeProps<CanvasNode>) {
+  const { updateNodeData, deleteElements } = useReactFlow()
+  const timer = data as TimerNodeData
+  const [tick, setTick] = useState(Date.now())
+  const last = useRef(Date.now())
+  const monotonic = useRef(typeof performance === 'undefined' ? Date.now() : performance.now())
+  const timerRef = useRef(timer)
+  timerRef.current = timer
+  useEffect(() => {
+    if (!timer.running || timer.paused) return
+    const handle = window.setInterval(() => {
+      const now = Date.now()
+      const monoNow = typeof performance === 'undefined' ? now : performance.now()
+      const current = timerRef.current
+      const next = timerNextState(current, now, last.current)
+      const monotonicDelta = Math.max(0, monoNow - monotonic.current)
+      monotonic.current = monoNow
+      const safeNext = current.timerMode === 'stopwatch'
+        ? { ...next, elapsedMs: current.elapsedMs + monotonicDelta }
+        : { ...next, elapsedMs: current.elapsedMs + monotonicDelta }
+      last.current = now
+      if (safeNext.completed && current.timerMode === 'interval' && current.sequence.length > 0) {
+        const nextIndex = current.sequenceIndex + 1
+        if (nextIndex < current.sequence.length) {
+          const durationMs = clampTimerDuration(current.sequence[nextIndex].durationMs)
+          updateNodeData(id, { sequenceIndex: nextIndex, durationMs, remainingMs: durationMs, elapsedMs: 0, running: true, paused: false, occurrenceState: 'running' })
+        } else if (current.repeatRemaining > 0) {
+          const durationMs = clampTimerDuration(current.sequence[0].durationMs)
+          updateNodeData(id, { sequenceIndex: 0, repeatRemaining: current.repeatRemaining - 1, durationMs, remainingMs: durationMs, elapsedMs: 0, running: true, paused: false, occurrenceState: 'running' })
+        } else {
+          updateNodeData(id, { remainingMs: 0, elapsedMs: next.elapsedMs, running: false, paused: false, occurrenceState: 'completed' })
+          if (current.occurrenceId) void window.nodeTerminal.timer.transition(current.occurrenceId, 'completed')
+        }
+      } else {
+        updateNodeData(id, { remainingMs: safeNext.remainingMs, elapsedMs: safeNext.elapsedMs, running: safeNext.completed ? false : current.running, paused: false, occurrenceState: safeNext.completed ? 'completed' : 'running', wallAnchorMs: now, monotonicAnchorMs: monoNow })
+        if (safeNext.completed && current.occurrenceId) void window.nodeTerminal.timer.transition(current.occurrenceId, 'completed')
+      }
+      setTick(now)
+      if (next.completed && current.timerMode !== 'interval' && current.alarmEnabled) notify({ kind: 'success', title: `${current.title} complete`, body: current.alarmTone === 'silent' ? 'Alarm is silent.' : `Alarm tone: ${current.alarmTone}.` })
+    }, 250)
+    return () => window.clearInterval(handle)
+  }, [id, timer.running, timer.paused, updateNodeData])
+
+  const display = timer.timerMode === 'stopwatch' ? timer.elapsedMs : timer.remainingMs
+  const setMode = (mode: TimerMode) => updateNodeData(id, { timerMode: mode, running: false, paused: false, remainingMs: timer.durationMs, elapsedMs: 0, occurrenceState: 'scheduled' })
+  const start = () => {
+    last.current = Date.now()
+    monotonic.current = typeof performance === 'undefined' ? Date.now() : performance.now()
+    const first = timer.timerMode === 'interval' && timer.sequence.length > 0 ? clampTimerDuration(timer.sequence[0].durationMs) : timer.durationMs
+    const apply = (occurrenceId?: string) => updateNodeData(id, { running: true, paused: false, occurrenceState: 'running', repeatRemaining: timer.repeatCount, remainingMs: first, durationMs: first, sequenceIndex: 0, occurrenceId, wallAnchorMs: Date.now(), monotonicAnchorMs: monotonic.current })
+    void window.nodeTerminal.timer.schedule(id, Date.now()).then((occurrence) => apply(occurrence?.id)).catch(() => apply())
+  }
+  const reset = () => updateNodeData(id, { running: false, paused: false, remainingMs: timer.durationMs, elapsedMs: 0, lapsMs: [], sequenceIndex: 0, occurrenceState: 'scheduled' })
+  const lap = () => updateNodeData(id, { lapsMs: [...(timer.lapsMs ?? []), timer.elapsedMs] })
+  return <div className={`timer-node${selected ? ' selected' : ''}`}>
+    <NodeResizer minWidth={320} minHeight={300} isVisible={selected} color="var(--md-primary)" />
+    <Handle type="target" position={Position.Left} />
+    <div className="timer-node__header"><span aria-hidden="true">◷</span><input className="timer-node__title nodrag" aria-label="Timer title" value={timer.title} onChange={(e) => updateNodeData(id, { title: e.target.value })} /><button aria-label="Delete timer" onClick={() => deleteElements({ nodes: [{ id }] })}>×</button></div>
+    <div className="timer-node__modes nodrag" role="tablist" aria-label="Timer mode">
+      {(['countdown', 'stopwatch', 'interval'] as TimerMode[]).map((mode) => <button key={mode} role="tab" aria-selected={timer.timerMode === mode} onClick={() => setMode(mode)}>{mode === 'countdown' ? 'Countdown' : mode === 'stopwatch' ? 'Stopwatch' : 'Work / rest'}</button>)}
+    </div>
+    <output className="timer-node__display" aria-live="polite" aria-label={`${timer.title} ${timer.paused ? 'paused' : timer.running ? 'running' : 'ready'} ${formatTimerMs(display)}`}>{formatTimerMs(display)}</output>
+    {timer.timerMode !== 'stopwatch' && <label className="timer-node__duration nodrag">Duration <input type="number" min={1} value={Math.round(timer.durationMs / 1000)} aria-label="Duration seconds" onChange={(e) => { const durationMs = clampTimerDuration(Number(e.target.value) * 1000); updateNodeData(id, { durationMs, remainingMs: durationMs }) }} /> seconds</label>}
+    <label className="timer-node__repeat nodrag">Repeat <input type="number" min={0} max={999} value={timer.repeatCount} aria-label="Repeat count" onChange={(e) => updateNodeData(id, { repeatCount: Math.max(0, Math.min(999, Number(e.target.value) || 0)) })} /> times</label>
+    {timer.timerMode === 'interval' && <div className="timer-node__sequence nodrag"><strong>Work / rest sequence</strong>{(timer.sequence ?? []).map((step, i) => <div key={step.id}><input aria-label={`Sequence step ${i + 1} label`} maxLength={80} value={step.label} onChange={(e) => updateNodeData(id, { sequence: timer.sequence.map((s, j) => j === i ? { ...s, label: e.target.value } : s) })} /><input type="number" min={1} max={604800} aria-label={`Sequence step ${i + 1} seconds`} value={Math.round(step.durationMs / 1000)} onChange={(e) => updateNodeData(id, { sequence: timer.sequence.map((s, j) => j === i ? { ...s, durationMs: clampTimerDuration(Number(e.target.value) * 1000) } : s) })} /><button aria-label={`Move step ${i + 1} up`} disabled={i === 0} onClick={() => { const sequence = [...timer.sequence]; [sequence[i - 1], sequence[i]] = [sequence[i], sequence[i - 1]]; updateNodeData(id, { sequence }) }}>↑</button><button aria-label={`Move step ${i + 1} down`} disabled={i === timer.sequence.length - 1} onClick={() => { const sequence = [...timer.sequence]; [sequence[i], sequence[i + 1]] = [sequence[i + 1], sequence[i]]; updateNodeData(id, { sequence }) }}>↓</button><button aria-label={`Remove sequence step ${i + 1}`} onClick={() => updateNodeData(id, { sequence: timer.sequence.filter((_, j) => j !== i) })}>×</button></div>)}<button disabled={(timer.sequence ?? []).length >= 32} onClick={() => updateNodeData(id, { sequence: [...(timer.sequence ?? []), { id: `step-${Date.now()}`, label: 'New step', durationMs: 60_000 }] })}>Add step</button></div>}
+    <div className="timer-node__actions nodrag"><button onClick={timer.running ? () => updateNodeData(id, { paused: !timer.paused, occurrenceState: timer.paused ? 'running' : 'paused' }) : start}>{timer.running ? (timer.paused ? 'Resume' : 'Pause') : 'Start'}</button>{timer.timerMode === 'stopwatch' && <button onClick={lap} disabled={!timer.running}>Lap</button>}<button onClick={reset}>Reset</button></div>
+    <label className="timer-node__alarm nodrag"><input type="checkbox" checked={timer.alarmEnabled} onChange={(e) => updateNodeData(id, { alarmEnabled: e.target.checked })} /> Alarm</label>
+    <div className="timer-node__meta">{timer.occurrenceState} · {timer.lapsMs?.length ?? 0} laps · {timer.missedCount ?? 0} missed</div>
+    {tick < 0 && <span aria-hidden="true" />}
+  </div>
+}

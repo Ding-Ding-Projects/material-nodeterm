@@ -18,6 +18,7 @@ import {
   createVirtualMachineNode,
   createTorrentNode,
   createCalendarNode,
+  createTimerNode,
   isAccountLoginNode
 } from '@renderer/state/workspace'
 import { absolutePosition, type FocusableNode } from './nodeFocus'
@@ -199,6 +200,10 @@ function buildBase(snapshot: ReopenNodeSnapshot, ctx: RecreateContext): CanvasNo
       return createTorrentNode(0)
     case 'calendar':
       return createCalendarNode(0)
+    case 'timer': {
+      const node = createTimerNode(0)
+      return { ...node, data: { ...node.data, ...d, running: false, paused: false, elapsedMs: 0, lapsMs: [], occurrenceId: undefined, occurrenceState: 'scheduled' } }
+    }
     default:
       return null
   }
