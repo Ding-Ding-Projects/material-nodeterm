@@ -11933,6 +11933,9 @@ button.term-node__title-text:focus-visible {
   .node-catalog-dialog__docs {
     margin-right: 6px;
     padding-inline: 5px;
+  }
+}
+
 .torrent-node {
   min-width: 440px;
   background: var(--md-surface-container);
@@ -11949,7 +11952,7 @@ button.term-node__title-text:focus-visible {
 .torrent-node__runtime,
 .torrent-node__empty,
 .torrent-node__error,
-.torrent-node__regex,
+.torrent-node__hint,
 .torrent-node__task {
   border-radius: 12px;
   padding: 9px 11px;
@@ -11964,7 +11967,7 @@ button.term-node__title-text:focus-visible {
 .torrent-node__field,
 .torrent-node__destination,
 .torrent-node__search,
-.torrent-node__regex label {
+.torrent-node__picker-search {
   display: grid;
   gap: 5px;
 }
@@ -11972,7 +11975,7 @@ button.term-node__title-text:focus-visible {
 .torrent-node__field input,
 .torrent-node__destination input,
 .torrent-node__search input,
-.torrent-node__regex input {
+.torrent-node__picker-search input {
   min-height: 36px;
   border: 1px solid var(--md-outline);
   border-radius: 8px;
@@ -11983,6 +11986,7 @@ button.term-node__title-text:focus-visible {
 
 .torrent-node__actions,
 .torrent-node__task-actions,
+.torrent-node__selection-actions,
 .torrent-node__stats {
   display: flex;
   gap: 7px;
@@ -11993,8 +11997,10 @@ button.term-node__title-text:focus-visible {
 .torrent-node__actions button,
 .torrent-node__destination button,
 .torrent-node__search button,
+.torrent-node__picker-search button,
+.torrent-node__selection-actions button,
 .torrent-node__task-actions button,
-.torrent-node__task-actions select {
+.torrent-node__picker summary {
   min-height: 36px;
   border: 0;
   border-radius: 18px;
@@ -12005,6 +12011,7 @@ button.term-node__title-text:focus-visible {
 }
 
 .torrent-node__actions button:disabled,
+.torrent-node__selection-actions button:disabled,
 .torrent-node__task-actions button:disabled {
   cursor: not-allowed;
   opacity: .5;
@@ -12024,8 +12031,67 @@ button.term-node__title-text:focus-visible {
   align-items: end;
 }
 
-.torrent-node__search label {
+.torrent-node__search label,
+.torrent-node__picker-search label {
   grid-column: 1 / -1;
+}
+
+.torrent-node__picker {
+  margin-top: 9px;
+  border: 1px solid var(--md-outline-variant);
+  border-radius: 12px;
+  background: var(--md-surface-container-low);
+  overflow: clip;
+}
+
+.torrent-node__picker summary {
+  list-style-position: inside;
+  cursor: pointer;
+  padding-block: 8px;
+}
+
+.torrent-node__picker[open] summary {
+  border-bottom: 1px solid var(--md-outline-variant);
+}
+
+.torrent-node__picker-search,
+.torrent-node__selection-actions,
+.torrent-node__seed-options,
+.torrent-node__picker > .torrent-node__error {
+  margin: 9px;
+}
+
+.torrent-node__picker-search {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: 5px;
+}
+
+.torrent-node__seed-options {
+  display: grid;
+  gap: 6px;
+}
+
+.torrent-node__seed-options label {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 9px;
+  align-items: start;
+  min-height: 44px;
+  padding: 8px;
+  border-radius: 10px;
+  background: var(--md-surface-container-high);
+}
+
+.torrent-node__seed-options span,
+.torrent-node__seed-options small {
+  display: block;
+}
+
+.torrent-node__seed-options small,
+.torrent-node__hint {
+  color: var(--md-on-surface-variant);
 }
 
 .torrent-node__task-head,
@@ -12076,7 +12142,7 @@ button.term-node__title-text:focus-visible {
 
 .torrent-node button:focus-visible,
 .torrent-node input:focus-visible,
-.torrent-node select:focus-visible {
+.torrent-node summary:focus-visible {
   outline: 3px solid var(--md-primary);
   outline-offset: 2px;
 }
@@ -12087,7 +12153,8 @@ button.term-node__title-text:focus-visible {
   }
 
   .torrent-node__destination,
-  .torrent-node__search {
+  .torrent-node__search,
+  .torrent-node__picker-search {
     grid-template-columns: 1fr;
   }
 

@@ -80,11 +80,14 @@
   Local media is routed through the existing allowlisted protocol, gallery references carry bounded
   portable metadata, and missing assets remain visible instead of disappearing. Verification is
   pending in the parent integration lane.
-- Add the Torrent Downloader canvas node with packaged or pinned user-scoped WebTorrent runtime
-  discovery, magnet and `.torrent` intake, metadata/file selection, safe destination preflight,
-  progress/speed/peer/ETA reporting, pause/resume/cancel/retry, restart reconciliation, bounded
-  per-task seeding, and machine-local task persistence. The ultra-speed lane intentionally did not
-  run tests, builds, packaging, installer execution, runtime interaction checks, or captures.
+- Add the Torrent Downloader canvas node with ESM-compatible packaged or pinned user-scoped
+  WebTorrent runtime discovery, explicit magnet and `.torrent` metadata inspection, searchable
+  file selection and seeding policy pickers with anchored regex builders, safe destination
+  preflight, explicit start/remove actions, progress/speed/peer/ETA reporting,
+  pause/resume/cancel/retry, restart reconciliation, completion-based bounded seeding, and
+  machine-local task persistence. The ultra-speed lane intentionally did not run tests, type
+  checks, lint, builds, packaging, installer execution, runtime interaction checks, captures,
+  audits, or reviews.
 - Add a guided Linux ISO VM canvas node backed by bundled QEMU and qemu-img resolution, bounded
   memory/CPU settings, WHPX preference, loopback VNC/QMP lifecycle, persistent-install and
   disposable-live modes, machine-local ISO/disk bindings, snapshot controls, and network-off
