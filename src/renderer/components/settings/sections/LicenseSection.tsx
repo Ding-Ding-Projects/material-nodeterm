@@ -79,7 +79,7 @@ const ROWS = {
       'performance',
       'speed',
       'memory',
-      'battery'
+      'battery',
       'quota',
       'devices',
       'seats',
@@ -90,6 +90,10 @@ const ROWS = {
   teamSeats: {
     title: 'Team seats',
     keywords: ['team', 'seat', 'seats', 'invite', 'collaborate', 'share', 'performance', 'connections']
+  },
+  license: {
+    title: 'License',
+    keywords: ['license', 'licence', 'key', 'activate', 'deactivate', 'device', 'release']
   }
 }
 const ENTRIES = Object.values(ROWS)
