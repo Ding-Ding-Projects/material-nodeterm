@@ -183,6 +183,34 @@ describe('renameAtomicSync', () => {
 })
 
 describe('writeFileAtomic', () => {
+  it('creates the temporary file once with exclusive creation and requested mode', async () => {
+    const target = join(dir, 'private.json')
+    const writes: Array<{ path: string; options: unknown }> = []
+    const realWrite = fs.writeFile
+    vi.spyOn(fs, 'writeFile').mockImplementation((async (file: any, data: any, options: any) => {
+      writes.push({ path: String(file), options })
+      return (realWrite as any)(file, data, options)
+    }) as typeof fs.writeFile)
+
+    await writeFileAtomic(target, 'private', { mode: 0o600 })
+
+    expect(writes).toHaveLength(1)
+    expect(writes[0].path).toMatch(/\.tmp$/)
+    expect(writes[0].options).toMatchObject({ encoding: 'utf-8', flag: 'wx', mode: 0o600 })
+    if (process.platform !== 'win32') {
+      expect((await fs.stat(target)).mode & 0o777).toBe(0o600)
+    }
+  })
+
+  it('re-applies the requested mode after publication', async () => {
+    const target = join(dir, 'mode.json')
+    const chmod = vi.spyOn(fs, 'chmod')
+
+    await writeFileAtomic(target, 'private', { mode: 0o640 })
+
+    expect(chmod).toHaveBeenCalledWith(target, 0o640)
+  })
+
   it('publishes the new bytes', async () => {
     const target = join(dir, 'store.json')
     await writeFileAtomic(target, '{"a":1}')
