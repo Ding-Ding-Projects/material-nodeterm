@@ -92,6 +92,10 @@ const ROWS = {
     title: 'One-click approvals',
     keywords: ['approve', 'deny', 'approval', 'permission', 'hook', 'phone', 'canvas', 'one click', 'claude']
   },
+  agentSeamlessWrites: {
+    title: 'Seamless agent messaging',
+    keywords: ['seamless', 'write', 'send', 'reply', 'message', 'confirm', 'dialog', 'agent']
+  },
   nodeIdentity: {
     title: 'Verified node identity',
     keywords: [
@@ -421,6 +425,19 @@ export function AgentsSection({ isActive }: { isActive: boolean }): React.JSX.El
               checked={settings.hookReplyApprovals}
               ariaLabel="One-click hook-reply approvals"
               onChange={(on) => update({ hookReplyApprovals: on })}
+            />
+          }
+        />
+      </SearchableRow>
+      <SearchableRow {...ROWS.agentSeamlessWrites}>
+        <FieldRow
+          label="Seamless agent messaging"
+          description="Deliver agent-to-agent send and reply requests without the per-message confirmation dialog. The active project’s messaging capability, idle-agent delivery checks, rate limits, and delivery trace still apply. Closing nodes always confirms."
+          control={
+            <Switch
+              checked={settings.agentSeamlessWrites}
+              ariaLabel="Seamless agent messaging"
+              onChange={(on) => update({ agentSeamlessWrites: on })}
             />
           }
         />

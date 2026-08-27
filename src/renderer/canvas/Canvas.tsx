@@ -12251,32 +12251,50 @@ export function Canvas() {
           reply({ ok: false, error: 'source node is not a control-capable agent' })
           return
         }
-        // The SAME per-node lock every renderer-driven run that types into the target pane takes
-        // (restart, hibernate-exit, wake-resume, the confirmed `write`). Main serialises
-        // deliveries against each other; this lock serialises them against those runs — a
-        // delivery must never land inside a wake's un-submitted resume line.
-        let delivered: { ok: boolean; message?: string; result?: unknown; error?: string } | null =
-          null
-        const outcome = await guardConcurrentRestart(targetId, async () => {
-          delivered = await api.agentMessage.deliver({
-            verb,
-            sourceNodeId,
-            targetNodeId: targetId,
-            body: args.text ?? ''
-          })
-          return 'done' as const
-        })()
-        if (outcome === 'not-eligible') {
-          // The guard's own word for "that node is mid-restart/mid-wake": a retryable refusal in
-          // the same dialect main renders, so the caller learns the same way in both cases.
-          reply({
-            ok: false,
-            error:
-              'targetBusy: the target is mid-restart or mid-wake. Retryable — wait, then try once more.'
+        const deliverAgentMessage = async (): Promise<void> => {
+          let delivered: { ok: boolean; message?: string; result?: unknown; error?: string } | null =
+            null
+          const outcome = await guardConcurrentRestart(targetId, async () => {
+            delivered = await api.agentMessage.deliver({
+              verb,
+              sourceNodeId,
+              targetNodeId: targetId,
+              body: args.text ?? ''
+            })
+            return 'done' as const
+          })()
+          if (outcome === 'not-eligible') {
+            reply({
+              ok: false,
+              error:
+                'targetBusy: the target is mid-restart or mid-wake. Retryable — wait, then try once more.'
+            })
+            return
+          }
+          reply(delivered ?? { ok: false, error: 'delivery produced no reply' })
+        }
+        // The global setting is an explicit opt-in for the confirmation-free route. `notify` is
+        // app-owned text and remains non-blocking; send/reply still require the ordinary dialog
+        // unless the user enabled seamless messaging. The project capability and main-side
+        // delivery gates remain in force in either route.
+        if (verb !== 'notify' && !useSettings.getState().settings.agentSeamlessWrites) {
+          if (confirmBusy()) {
+            reply({ ok: false, error: 'a confirmation is already pending — try again' })
+            return
+          }
+          setConfirm({
+            message: `Agent "${srcTitle}" wants to send to ${targetId}:\n\n${args.text ?? ''}`,
+            confirmLabel: 'Send',
+            requestedBy: srcTitle,
+            onConfirm: async () => {
+              setConfirm(null)
+              await deliverAgentMessage()
+            },
+            onCancel: () => reply({ ok: false, error: 'denied by user' })
           })
           return
         }
-        reply(delivered ?? { ok: false, error: 'delivery produced no reply' })
+        await deliverAgentMessage()
         return
       }
 

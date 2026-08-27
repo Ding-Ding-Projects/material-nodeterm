@@ -1,5 +1,30 @@
 # Handoff
 
+## 2026-08-27, seamless agent messaging, issue #69 / Program 58
+
+This lane is implemented on `feat/program-58-seamless-agent-messaging` from the current `main`
+tip. It adds `Settings.agentSeamlessWrites`, defaulting to `false`, and a searchable Settings →
+Agents row. Agent `send` and `reply` requests use the existing confirmation surface while the
+switch is off. When enabled, they call the same main-process mailbox delivery path without opening
+the repeated per-message confirmation. The active project capability, machine-local capability
+consent, source and target scope checks, idle-target checks, restart serialization, rate limits,
+bounded queue, and delivery outcomes remain in force. Node closing remains confirmation-gated.
+
+The 2-second receive-phase hook failure from upstream PR #113 was already repaired on this base with
+the bounded `CONTROL_CEILING_MS` handoff. This lane keeps that newer timeout ceiling rather than
+disarming the socket indefinitely.
+
+Changed files: `src/shared/types.ts`, `src/renderer/components/settings/sections/AgentsSection.tsx`,
+`src/renderer/canvas/Canvas.tsx`, `docs/features/agents/agent-messaging.md`,
+`docs/features/agents/README.md`, `src/shared/docs-data.ts`, `CHANGELOG.md`, and `ROADMAP.md`.
+
+The offline documentation bundle was updated to include the checked-in article. The canonical
+generator could not start because this isolated checkout has no `esbuild` installation, so the
+bundle entry was reconciled manually and the limitation is retained here for the next owner to
+verify. This ultra-speed lane intentionally did not run tests, type checks, lint, reviews, security
+checks, accessibility checks, builds, packaging, installer execution, runtime interaction, or UI
+captures. The feature jer was not merged into `main` and no cleanup was performed in this lane.
+
 ## 2026-08-27, bundled AWS CLI v2 lane, issue #41
 
 Issue #41 is implemented on `feat/program-30-bundled-aws-cli`, reconciled with

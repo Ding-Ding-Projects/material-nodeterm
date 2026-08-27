@@ -57,6 +57,14 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## In progress / partially landed
 
+- [ ] **Seamless agent messaging, issue #69 / Program 58**: global confirmation-free `send` and
+      `reply` delivery is now opt-in through Settings → Agents, while the default keeps the
+      existing confirmation surface. The current mailbox, project capability consent, idle and
+      flow gates, bounded queue, and trace path remain shared by both routes. Offline documentation
+      and the feature article are updated. Tests, type checks, lint, reviews, security checks,
+      builds, packaging, runtime interaction, and captures remain pending under the ultra-speed
+      boundary.
+
 - [ ] **Shared provider services, issue #18**: provider catalog, account metadata, sealed
       credential payloads, bounded one-time OAuth PKCE callbacks, adapter-owned resource discovery,
       and shared Desktop/Server local bindings are implemented in source. Individual provider

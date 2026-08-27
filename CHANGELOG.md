@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add the opt-in **Seamless agent messaging** setting. With it off, agent `send` and `reply`
+  requests use the existing confirmation surface; with it on, they use the same guarded mailbox
+  delivery path without the repeated per-message decision. Project capability consent, idle-target
+  checks, flow limits, delivery traces, bounded queue outcomes, and confirmation for node closing
+  remain unchanged. The bounded hook `CONTROL_CEILING_MS` is preserved. This ultra-speed lane did
+  not run tests, type checks, lint, reviews, security or accessibility checks, builds, packaging,
+  installer execution, runtime interaction, or UI captures.
+
 - Add the bundled AWS CLI v2 dependency lane. Windows packaging now stages the pinned official
   `2.36.32` MSI, verifies its SHA-256, falls back through a verified local cache or canonical
   HTTPS download, extracts it into application-local storage, exposes the installed version, and
