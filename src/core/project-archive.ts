@@ -57,6 +57,7 @@ import {
 } from './portable-media-assets'
 import type { MediaAssetReference } from '../shared/media-catalog'
 import type { PortableProjectOmission } from './portable-project-v3'
+import type { PortalRepairRecord } from './portal-lifecycle'
 
 // Schema 3 is exposed from the established archive seam while its validation remains platform-free.
 export * from './portable-project-v3'
@@ -65,6 +66,7 @@ export * from './portable-media-assets'
 export * from './portable-project-import'
 export * from './portable-bindings'
 export * from './universe-shop'
+export * from './portal-lifecycle'
 
 /** V1 JSON-text archives keep their historical cap. */
 const MAX_ARCHIVE_BYTES_V1 = 180 * 1024 * 1024
@@ -128,6 +130,8 @@ export interface ProjectArchiveImportResult {
   /** The password-manager vault the archive carried for a FOLDER-LESS project, verbatim. The
    *  caller writes it to the new project's working-copy root - see the export note below. */
   vault?: Buffer
+  /** Portal metadata repaired during import, with child node ids retained. */
+  repairs?: PortalRepairRecord[]
 }
 
 export interface ProjectArchiveExportOptions {
@@ -578,7 +582,8 @@ export class ProjectArchiveService {
           excludedFiles: imported.omissions.length,
           excludedBytes: 0
         },
-        ...(imported.stagedPath ? { restoredTo: imported.stagedPath } : {})
+        ...(imported.stagedPath ? { restoredTo: imported.stagedPath } : {}),
+        ...(imported.repairs.length ? { repairs: imported.repairs } : {})
       }
     }
     if (!looksLikeContainer(bytes)) {

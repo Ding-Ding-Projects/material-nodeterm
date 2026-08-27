@@ -17,6 +17,7 @@ import {
   parsePortableProjectV3Manifest,
   PORTABLE_PROJECT_LIMITS,
   PortableProjectV3Error,
+  sha256Hex,
   validatePortableArchiveInventory,
   validatePortableProjectV3Entries,
   type PortableProjectV3Entry,
@@ -30,6 +31,7 @@ import {
   serializePortableCanvasProjectionV3,
   type PortableCanvasProjectionV3
 } from './portable-canvas-projection'
+import { repairPortablePortals, type PortalRepairRecord } from './portal-lifecycle'
 import { openContainer, packContainer } from './project-archive-container'
 import { renameAtomic } from './fs-atomic'
 import {
@@ -60,6 +62,8 @@ export interface PortableImportResult {
   /** Bindings are always empty on import. This is a visible fact, not an omitted state. */
   bindings: []
   omissions: PortableProjectOmission[]
+  /** Explicit, non-fatal repairs applied to portal metadata while preserving child content. */
+  repairs: PortalRepairRecord[]
 }
 
 export interface PortableProjectV3ExportOptions {
@@ -176,22 +180,24 @@ async function stageProjection(
 }
 
 function bindImportedMedia(project: Project, cwd: string): Project {
+  const bindNodes = (nodes: Project['nodes']): Project['nodes'] => nodes.map((node) => {
+    if (!node.mediaAssets) return node
+    const mediaAssets = node.mediaAssets.map((asset) => {
+      if (asset.missing) return asset
+      return { ...asset, sourcePath: path.join(cwd, ...asset.portablePath.slice(2).split('/')) }
+    })
+    const first = mediaAssets.find((asset) => !asset.missing)?.sourcePath
+    return {
+      ...node,
+      mediaAssets,
+      ...((node.kind === 'photo' || node.kind === 'video') && first ? { filePath: first } : {})
+    }
+  })
   return {
     ...project,
     cwd,
-    nodes: project.nodes.map((node) => {
-      if (!node.mediaAssets) return node
-      const mediaAssets = node.mediaAssets.map((asset) => {
-        if (asset.missing) return asset
-        return { ...asset, sourcePath: path.join(cwd, ...asset.portablePath.slice(2).split('/')) }
-      })
-      const first = mediaAssets.find((asset) => !asset.missing)?.sourcePath
-      return {
-        ...node,
-        mediaAssets,
-        ...((node.kind === 'photo' || node.kind === 'video') && first ? { filePath: first } : {})
-      }
-    })
+    nodes: bindNodes(project.nodes),
+    ...(project.childCanvases ? { childCanvases: project.childCanvases.map((canvas) => ({ ...canvas, nodes: bindNodes(canvas.nodes) })) } : {})
   }
 }
 
@@ -224,6 +230,21 @@ export async function importPortableProjectV3(bytes: Buffer, options: PortablePr
     const version = typeof parsed === 'object' && parsed !== null && 'version' in parsed && (parsed as { version?: unknown }).version === 1 ? 1 : 2
     projection = parseLegacyProject(parsed, version)
   }
+  const portalRepair = repairPortablePortals(projection)
+  projection = portalRepair.projection
+  const repairedProjectBytes = Buffer.from(serializePortableCanvasProjectionV3(projection))
+  // Repairs legitimately change project.json. Refresh only that manifest row so the staged
+  // portable files remain self-consistent and a later reader does not mistake a recorded repair
+  // for tampering.
+  const outputManifest = portalRepair.repairs.length
+    ? {
+        ...manifest,
+        entries: await Promise.all(manifest.entries.map(async (entry) => entry.path === 'project.json'
+          ? { ...entry, sha256: await sha256Hex(repairedProjectBytes), rawBytes: repairedProjectBytes.byteLength, compressedBytes: repairedProjectBytes.byteLength }
+          : entry))
+      }
+    : manifest
+  const outputManifestBytes = Buffer.from(JSON.stringify(outputManifest, null, 2) + '\n', 'utf8')
   ensureNotCancelled(options)
   const id = freshProjectId()
   const project = portableCanvasProjectionToProject(projection, { id })
@@ -233,10 +254,10 @@ export async function importPortableProjectV3(bytes: Buffer, options: PortablePr
     const mediaEntries = new Map(
       [...entries.entries()].filter(([entryPath]) => entryPath.startsWith('assets/media/'))
     )
-    stagedPath = await stageProjection(options.destination, project, Buffer.from(serializePortableCanvasProjectionV3(projection)), manifestBytes, mediaEntries, options)
+    stagedPath = await stageProjection(options.destination, project, repairedProjectBytes, outputManifestBytes, mediaEntries, options)
   }
   emit(options, 'completed', 1, 'Project import completed with local bindings left unconfigured.')
-  return { project: stagedPath ? bindImportedMedia(project, stagedPath) : project, manifest, projection, archiveVersion: 3, bindings: [], omissions: manifest.omissions }
+  return { project: stagedPath ? bindImportedMedia(project, stagedPath) : project, manifest: outputManifest, projection, archiveVersion: 3, bindings: [], omissions: outputManifest.omissions, repairs: portalRepair.repairs }
 }
 
 /** Marker used by archive callers without exposing container internals. */

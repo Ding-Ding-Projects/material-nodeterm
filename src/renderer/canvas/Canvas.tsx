@@ -15862,8 +15862,12 @@ export function Canvas() {
       const projectScope = projectSessionScope(id)
       const projectSession = projectScope.session
       const projectAgentStatus = projectScope.stores.agentStatus.store
+      const projectNodes = [
+        ...project.nodes,
+        ...(project.childCanvases?.flatMap((canvas) => canvas.nodes) ?? [])
+      ]
       const terminalIds =
-        project.nodes
+        projectNodes
           .filter((node) => (node.kind ?? 'terminal') === 'terminal')
           .map((node) => node.id)
       void settleProjectSessionDestroys(id, terminalIds).then(
@@ -15896,7 +15900,7 @@ export function Canvas() {
             return
           }
           // Every terminal is confirmed ended: dispose parked xterms and drop persisted status.
-          project.nodes.forEach((n) => {
+          projectNodes.forEach((n) => {
             if ((n.kind ?? 'terminal') === 'terminal')
               disposeTerminalOnUnmount(projectSession.id, n.id)
             projectAgentStatus.getState().remove(n.id)
@@ -15904,7 +15908,7 @@ export function Canvas() {
           // SSH project: the scoped destroy above reaches the core that owns the project, while
           // this separate leg authoritatively ends remote tmux sessions with no mounted client.
           if (project.ssh) {
-            const nodeIds = project.nodes
+            const nodeIds = projectNodes
               .filter((n) => (n.kind ?? 'terminal') === 'terminal')
               .map((n) => n.id)
             void window.nodeTerminal.sshProject
@@ -15917,7 +15921,7 @@ export function Canvas() {
           // deleting the canvas is the only chance to tear their masters down.
           for (const scopeId of useSshConn.getState().attachmentScopesOf(id)) {
             const nodeIds =
-              hostAttachmentsFor(id, project.nodes, project.ssh?.server).find(
+              hostAttachmentsFor(id, projectNodes, project.ssh?.server).find(
                 (a) => a.scopeId === scopeId
               )?.nodeIds ?? []
             void window.nodeTerminal.sshProject
