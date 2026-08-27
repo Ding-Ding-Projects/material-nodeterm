@@ -281,6 +281,10 @@ intentionally unchecked because this task publishes the plan only.
 
 ### Hosting and Cloudflare
 
+- [x] Add the shared hosted-resource backup and restore framework with version, edition, resource,
+      ownership, archive-safety, progress, cancellation, atomic publication, restore-review, and
+      rollback contracts. Source and direct documentation are present; tests, builds, packaging,
+      runtime interaction, and captures remain explicitly unrun under issue #55's ultra-speed boundary.
 - [ ] Add GitLab Server CE and EE hosting profiles with backup and restore.
 - [ ] Add Nextcloud AIO and managed no-socket hosting profiles.
 - [ ] Add Open WebUI hosting with existing Ollama reuse and honest bootstrap states.

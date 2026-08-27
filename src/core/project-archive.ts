@@ -75,6 +75,7 @@ export * from './portable-bindings'
 export * from './portable-planner'
 export * from './universe-shop'
 export * from './portal-lifecycle'
+export * from './backup-restore'
 
 /** V1 JSON-text archives keep their historical cap. */
 const MAX_ARCHIVE_BYTES_V1 = 180 * 1024 * 1024
