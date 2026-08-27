@@ -858,10 +858,6 @@ function shouldConfirmQuit(): boolean {
   return !quitConfirmed && !skipQuitConfirmation && ptyManager.hasSessionsAtRiskOnQuit()
 }
 
-/** Shows the native confirm dialog (all platforms) and resolves once the user answers. Only ever
- *  called after `shouldConfirmQuit()` is true. A "Quit" answer is remembered (`quitConfirmed`) so
- *  the re-issued app.quit() below is not re-prompted. */
-function confirmQuit(parentWin: BrowserWindow | null): Promise<boolean> {
 /** Resolves true once quitting may proceed. Shows a native confirm dialog (all platforms) on
  * first call; a Quit answer is remembered so the re-issued app.quit() below is not re-prompted.
  * Read at ASK TIME, not captured: the Settings toggle must apply to the very next ⌘Q. */
@@ -879,7 +875,6 @@ function confirmQuit(parentWin: BrowserWindow | null): Promise<boolean> {
     message: 'Quit nodeterm?',
     detail:
       "One or more terminals here aren't using a persistent session, so quitting will end whatever is running in them right now. Terminals using tmux or the session host will still be here next time you open nodeterm."
-    detail: 'Terminal sessions keep running in the background and will still be here next time you open nodeterm.'
   }
   const p =
     parentWin && !parentWin.isDestroyed() ? dialog.showMessageBox(parentWin, opts) : dialog.showMessageBox(opts)
@@ -1406,6 +1401,7 @@ function createWindow(): BrowserWindow {
       event.preventDefault()
       if (!input.isAutoRepeat) win.webContents.send(IPC.appZoomActualSize)
     }
+  })
   // resetZoom) and forward each to the renderer instead. The decision — and, importantly, what it
   // must REFUSE — is in `keydown-intercept.ts`, where it can be pressed by a test. The first two
   // are the user's effective `node.toggleMarkdown` / `node.close` bindings (⌘0 is not remappable).
@@ -2033,19 +2029,6 @@ app.whenReady().then(async () => {
           nodeId,
           typeof ownerNodeId === 'string' ? ownerNodeId : undefined
         )
-    (_e, webContentsId: number, nodeId: string, surface?: BrowserSurfaceKind) => {
-      // `surface` is passed through UNCHANGED, including when it is absent. Both mount sites
-      // (BrowserNode and the kanban CardModal) still send two arguments, so today it is always
-      // absent — and defaulting it to 'canvas' here would record every modal guest as a canvas
-      // guest, which is a false claim a later reverse lookup cannot detect. See `BrowserGuest`.
-      if (
-        !registerBrowserGuest(browserGuests, webContentsId, nodeId, surface, (id) =>
-          webContents.fromId(id) ?? null
-        )
-      ) {
-        // Loud, because the symptom otherwise is "popups from this node stopped opening" with
-        // nothing anywhere to explain it.
-        console.warn('[browser] refused guest registration', { webContentsId, nodeId, surface })
       }
     }
   )
@@ -2221,8 +2204,7 @@ app.whenReady().then(async () => {
       // `force` (permission request / confirmation) shows even when focused; normal
       // completion notifications only show when the window is in the background.
       if (!payload.force && win.isFocused()) return 'skipped'
-      if (!isPreparedNativeNotification(payload)) return 'failed'
-      const copy = composeNativeNotification(payload)
+      if (!isPreparedNativeNotification(prepared)) return 'failed'
       const copy = composeNativeNotification(prepared)
       const n = new Notification(copy)
       n.on('click', () => {
@@ -4513,13 +4495,6 @@ app.whenReady().then(async () => {
   // the canvas adopts the node live).
   const hostBridge = {
     git: gitService,
-    registerNode: (projectId: string, node: { id: string; title?: string; agentId?: string }) =>
-      workspaceStore.appendRemoteNode(
-        projectId,
-        node,
-        undefined,
-        process.platform === 'win32' ? settingsStore.get().defaultTerminalProfileId : undefined
-      ),
     // `accountId` = the managed Claude account the phone launched the session under. It has to be
     // declared here too, or the wire's honest shape stops at this boundary (see RemoteNodeInput).
     registerNode: (
@@ -4554,7 +4529,7 @@ app.whenReady().then(async () => {
       const project = workspaceStore.settingsOverridesForProject(projectId)?.dockerHost
       return { settings: { ...global, ...project }, cwd }
     }
-  })
+     })
   // Standing (phone) relay host: keep a host connection registered so a paired phone can reach
   // this Mac from anywhere. Honors settings.phoneAccessEnabled internally.
   const standingHost = initStandingHost(win, ptyManager, () => settingsStore.get(), listProjectsOutput, hostBridge)
@@ -4701,7 +4676,7 @@ app.whenReady().then(async () => {
     () => ({
       tmuxScrollback: settingsStore.get().tmuxScrollback,
       terminalWordSeparators: settingsStore.get().terminalWordSeparators
-    })
+    }),
     // The standalone relay bundle uploaded to a Linux host for managed Codex accounts (S6 PR 6).
     // Only executable code is ever uploaded — never a credential (Property 1). Reading it is
     // single-fd (openSync→fstatSync→readFileSync(fd)) so there is no stat-then-read TOCTOU on the
@@ -4858,9 +4833,6 @@ app.on('before-quit', (e) => {
   // gate is repeated here for that path. `quitConfirmed` short-circuits this on the re-issued
   // app.quit() below once the user has answered, or on the win.close() gate's own re-issue.
   if (shouldConfirmQuit()) {
-  // gate is repeated here for that path. quitConfirmed short-circuits this on the re-issued
-  // app.quit() below once the user has answered, and on the win.close() gate's own re-issue.
-  if (!quitConfirmed && !skipQuitConfirmation) {
     e.preventDefault()
     void confirmQuit(getMainWindow() as unknown as BrowserWindow | null).then((ok) => {
       if (ok) app.quit()

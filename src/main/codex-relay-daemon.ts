@@ -1,17 +1,7 @@
 /* A single tiny, detached WebSocket relay shared by every local Codex node. It keeps the TUI
  * connected across Electron restarts while observing thread/resume on that node's own connection.
  * The authenticated Codex app-server remains shared per account; this is only a routing shim. */
-import { createHash, randomUUID, timingSafeEqual } from 'crypto'
-import { renameAtomicSync, tempNameFor } from '../core/fs-atomic'
-import {
-  linkSync,
-  lstatSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  realpathSync,
-  renameSync,
- * The authenticated Codex app-server remains shared per account; this is only a routing shim.
+/* The authenticated Codex app-server remains shared per account; this is only a routing shim.
  *
  * Adapted from @Corvin's `src/main/codex-relay-daemon.ts` in external PR #112 (S6 PR 4 slice). The
  * one deliberate divergence from the reference: cross-account rollout exposure does NOT re-implement
@@ -86,7 +76,6 @@ const SAFE = /^[A-Za-z0-9._-]+$/
 // The canonical wire shape is `kid.mac` (see core/agents/node-auth-token.ts). This pinned the
 // OLD bare-MAC shape with no dot, so every real token failed the check even where one arrived.
 const SAFE_NODE_TOKEN = /^[A-Za-z0-9_-]+[.][A-Za-z0-9_-]{43}$/
-const SAFE_NODE_TOKEN = /^[A-Za-z0-9_-]{43}$/
 const SAFE_ENDPOINT = /^\/[A-Za-z0-9._/ -]+$/
 const INVALID_OWNER = '__invalid__'
 const root = path.join(homedir(), '.nodeterm')
@@ -421,12 +410,6 @@ export function acquireProcessLock(lock: string): boolean {
     }
   }
   if (attempt()) return true
-  let owner = 0
-  let directory = false
-  try {
-    directory = statSync(lock).isDirectory()
-    owner = Number(readFileSync(directory ? path.join(lock, 'owner') : lock, 'utf8').trim())
-  } catch {}
   // Read the lock's type, mtime and (legacy-file) owner from ONE descriptor, and the directory
   // owner file from ONE open+read — never a `statSync(path)` followed by a `readFileSync(path)` on
   // the same path (that check-then-use is a real fs race; here the fd IS the check-and-use, one
@@ -553,7 +536,6 @@ export function relayControlPost(
   })
 }
 
-async function ensureServer(): Promise<State> {
 /**
  * Create the `~/.nodeterm` relay root, mode `0o700`, idempotently. `serve()` already makes it, but
  * that runs in the DETACHED daemon child — a caller reaching for the relay from the app process
@@ -750,7 +732,6 @@ function indexedName(socketPath: string, threadId?: string): string | undefined 
   }
 }
 
-function hookEndpointOptions(
 /**
  * Read + parse the local endpoint env file for `hookRequest`/`hookJsonRequest`. Values are
  * `posixQuote`d since #351, so this must go through the shared quote-aware parser — a naive
@@ -1258,10 +1239,6 @@ function serve(): void {
     req.on('end', () => {
       try {
         const route = JSON.parse(Buffer.concat(chunks).toString()) as Route
-        if (
-          !SAFE.test(route.nodeId) ||
-          !SAFE_NODE_TOKEN.test(route.nodeToken) ||
-          (route.accountId && !SAFE.test(route.accountId)) ||
         // Account id becomes a directory/scope/mapping-file component, so it passes the shared
         // supply-chain predicate (must start alnum — blocks `.`/`..`/leading separator), not just
         // the looser wire charset (GC 7).
@@ -1371,7 +1348,7 @@ function serve(): void {
               !requestId ||
               !reservationKey ||
               requestReservations.has(requestId) ||
-              reservations.has(reservationKey)
+              reservations.has(reservationKey) ||
               !tryReserveRelayThread(
                 reservations,
                 requestReservations,
@@ -1529,14 +1506,6 @@ function serve(): void {
           }
           const observed = resolveRelayThreadResponse(pending, message)
           if (observed && !observed.ok) {
-            outbound = Buffer.from(
-              JSON.stringify({
-                id: message.id,
-                error: {
-                  code: -32004,
-                  message: 'Codex changed the conversation id during account switch'
-                }
-              })
             // Distinguish the silent-fork case (-32004) from a plain malformed-id response — see
             // relayThreadResponseError. Both used to be labelled "changed the conversation id".
             outbound = Buffer.from(
@@ -1661,9 +1630,6 @@ async function readTokenFromStdin(limit = 4096): Promise<string> {
 async function register(): Promise<void> {
   const [nodeId, accountRaw, socketPath, hookEndpoint] = process.argv.slice(3)
   const nodeToken = (await readTokenFromStdin()).trim()
-async function register(): Promise<void> {
-  const [nodeId, accountRaw, socketPath, hookEndpoint] = process.argv.slice(3)
-  const nodeToken = process.env.NODETERM_CODEX_NODE_TOKEN ?? ''
   const accountId = accountRaw || undefined
   if (
     !SAFE.test(nodeId) ||
@@ -1685,8 +1651,6 @@ async function register(): Promise<void> {
   process.stdout.write(`ws://127.0.0.1:${state.port}\n${key}\n`)
 }
 
-async function exposeThread(): Promise<void> {
-  const [targetSocket, threadId, ...catalogSockets] = process.argv.slice(3)
 export type ExposeThreadOutcome = { kind: 'native' } | { kind: 'exposed' }
 
 /**
@@ -1723,34 +1687,6 @@ export async function exposeForeignThread(
   const resolved = await resolveForeignThreadAt(targetSocket, catalogSockets, threadId)
   if (resolved.kind === 'native') return
   if (resolved.kind !== 'foreign') throw new Error('Codex session id is unavailable or ambiguous')
-  const sourceSocket = resolved.thread.socketPath
-  const sourceHome = path.dirname(path.dirname(sourceSocket))
-  const targetHome = path.dirname(path.dirname(targetSocket))
-  const sourceRoot = realpathSync(path.join(sourceHome, 'sessions'))
-  const sourcePath = realpathSync(resolved.thread.path)
-  const relative = path.relative(sourceRoot, sourcePath)
-  if (
-    !relative ||
-    relative === '..' ||
-    relative.startsWith(`..${path.sep}`) ||
-    path.isAbsolute(relative) ||
-    lstatSync(sourcePath).isSymbolicLink()
-  )
-    throw new Error('Unsafe Codex rollout path')
-  const targetPath = path.join(targetHome, 'sessions', relative)
-  mkdirSync(path.dirname(targetPath), { recursive: true, mode: 0o700 })
-  try {
-    linkSync(sourcePath, targetPath)
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
-    const sourceStat = statSync(sourcePath)
-    const targetStat = statSync(targetPath)
-    if (sourceStat.dev !== targetStat.dev || sourceStat.ino !== targetStat.ino) {
-      throw new Error('Target account has a different Codex rollout')
-    }
-  }
-}
-
   if (resolved.kind === 'native') return { kind: 'native' }
   if (resolved.kind !== 'foreign') throw new Error('Codex session id is unavailable or ambiguous')
   const sourceHome = path.dirname(path.dirname(resolved.thread.socketPath))

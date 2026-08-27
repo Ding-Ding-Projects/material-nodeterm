@@ -157,42 +157,6 @@ describe('checkCdpCommand', () => {
  * main file (the way upstream's `browser-drive.ts`/`index.ts` wiring eventually does) should widen
  * this scan to all of `src/main`, same as that PR does.
  */
-describe('debugger.sendCommand has exactly one call site among the agent-driving CDP files', () => {
-  const mainDir = path.resolve(__dirname)
-
-  /**
-   * KNOWN, OUT-OF-SCOPE EXCEPTION: `browser-use-backend-core.ts` (+ its thin Electron wrapper
-   * `browser-use-backend.ts`) is a pre-existing, separately-shipped feature -- a native-messaging
-   * bridge for the browser-use.com extension -- and it already sends CDP commands (`method` +
-   * `commandParams`) straight through with NO allowlist, taken directly from the native-messaging
-   * peer. That is real and it predates this port; it is a different attack surface (an installed
-   * browser extension talking native messaging, not an agent CLI in a tmux session) and fixing it
-   * is not in scope here. Naming it here, rather than silently widening the exclusion pattern,
-   * keeps this test honest about what it does and does not prove: it proves the AGENT-DRIVING path
-   * (the files below) has exactly one gate. It says nothing about browser-use-backend-core.ts.
-   */
-  const KNOWN_UNGATED_EXCEPTIONS = new Set(['browser-use-backend-core.ts', 'browser-use-backend.ts'])
-
-  it('every sendCommand( in the browser-*.ts agent-driving files is inside browser-cdp-send.ts', () => {
-    const offenders: string[] = []
-    for (const f of fs.readdirSync(mainDir)) {
-      if (!f.startsWith('browser-')) continue
-      if (!f.endsWith('.ts') || f.endsWith('.test.ts')) continue
-      if (f === 'browser-cdp-send.ts') continue
-      if (KNOWN_UNGATED_EXCEPTIONS.has(f)) continue
- * Structural pin (the analogue of Task 4.4's second half). `checkCdpCommand` is only THE gate if it
- * is unbypassable: every `sendCommand(` in `src/main` must live inside the one wrapper,
- * `browser-cdp-send.ts`, which calls this function. A direct `debugger.sendCommand` anywhere else is
- * arbitrary CDP that never met the allowlist.
- *
- * WIDENED IN PR 7 (carried obligation, PR 5/#306 MINOR-1). Until the `browser` VERB existed, the only
- * CDP callers were `browser-*.ts` files and the grep scanned only those. PR 7 adds the drive path
- * (`browser-drive.ts`, `browser-actions.ts`) and wires the real `webContents.debugger` into a
- * `BrowserSession` from `index.ts` — so a stray `sendCommand` could now be introduced in a
- * non-`browser-`prefixed main file too. The grep therefore scans ALL of `src/main`, so the single-gate
- * property is enforced across the whole surface the verb path now touches, not just the files that
- * happen to be named `browser-*`.
- */
 describe('debugger.sendCommand has exactly one call site in ALL of src/main', () => {
   const mainDir = path.resolve(__dirname)
 

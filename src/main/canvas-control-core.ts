@@ -179,7 +179,7 @@ const VERBS: ControlVerb[] = [
   'close',
   'board',
   'assign',
-  'browser'
+  'browser',
   'send',
   'reply',
   'notify',

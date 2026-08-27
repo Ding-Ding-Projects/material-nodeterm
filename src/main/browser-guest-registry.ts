@@ -107,32 +107,6 @@ export function registerBrowserGuestRequest(
   return accepted
 }
 
-  webContentsId: number,
-  nodeId: string,
-  /** `undefined` = the caller does not know which surface this is; see {@link BrowserGuest.surface}.
-   *  A value that is PRESENT and unrecognised is refused rather than treated as unknown. */
-  surface: BrowserSurfaceKind | undefined,
-  lookup: WebContentsLookup
-): boolean {
-  if (!Number.isInteger(webContentsId) || webContentsId <= 0) return false
-  if (!isSafeNodeId(nodeId)) return false
-  if (surface !== undefined && surface !== 'canvas' && surface !== 'modal') return false
-  // The lookup can throw for a destroyed id (Electron's own accessors do); a guest that cannot be
-  // looked at is not a guest.
-  let contents: { getType(): string } | null = null
-  try {
-    contents = lookup(webContentsId)
-  } catch {
-    return false
-  }
-  if (!contents || contents.getType() !== 'webview') return false
-  // The key is only written when it is known: an entry with no `surface` says "unknown", an entry
-  // with `surface: undefined` written explicitly says the same thing, and neither ever says
-  // "canvas" on a guess.
-  guests.set(webContentsId, surface === undefined ? { nodeId } : { nodeId, surface })
-  return true
-}
-
 /**
  * What to say when a node exists but its page does not, because the memory saver released it.
  *

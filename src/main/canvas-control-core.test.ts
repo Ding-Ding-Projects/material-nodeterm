@@ -509,16 +509,6 @@ describe('parseControlRequest', () => {
  * documents that the bucket actually names the verb this file now recognizes, so the two halves
  * of the boundary cannot silently drift apart (one naming a verb the other has never heard of).
  */
-describe('the `browser` verb', () => {
-  it('is a real verb, and its shape is decided by parseBrowserArgs', () => {
- * The claim `node-identity-policy.ts` makes about itself, checked against the real verb model.
- *
- * `STRICT_CONTROL_VERBS` is pre-positioned: the ordering is fixed before the verb it is for
- * exists, so the verb cannot arrive through the `override === false` hole. These two tests are
- * what stop that from quietly becoming a false claim in either direction — the first FAILS on the
- * day the real `browser` verb lands, which is exactly when the PR body, the changelog and the
- * Settings copy all have to stop saying "nothing changes for anyone".
- */
 describe('the strict identity bucket now gates a real verb', () => {
   it('`browser` IS a real verb (PR 7) AND is in the verified-only bucket', () => {
     // The day the real `browser` verb lands, this assertion FLIPS from "not a verb" to "a real,

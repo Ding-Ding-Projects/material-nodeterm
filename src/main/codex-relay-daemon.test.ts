@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { createServer } from 'http'
-import { linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'fs'
 import { spawnSync } from 'child_process'
 import {
   closeSync,
@@ -50,10 +49,6 @@ import {
 // test-side fix can route around. Every `it` below that calls this helper is therefore skipped on
 // win32; this is the same precedent already applied in src/core/codex-session-name.test.ts,
 // src/core/context-link.cli.test.ts, and src/main/canvas-control-shim.test.ts (see commit 99dfb2db).
-  tryReserveRelayThread,
-  type RelayThreadRequest
-} from './codex-relay-daemon'
-import { posixQuote } from '../shared/ssh'
 
 async function fakeCodexServer(
   socketPath: string,
@@ -386,12 +381,6 @@ describe('Codex shared relay thread observation', () => {
     }
   })
 
-  // Needs a real AF_UNIX socket — see the fakeCodexServer comment above.
-  it.skipIf(process.platform === 'win32')('resolves a direct resume to exactly one foreign account without picker state', async () => {
-      rmSync(dir, { recursive: true, force: true })
-    }
-  })
-
   it('resolves a direct resume to exactly one foreign account without picker state', async () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'nodeterm-relay-direct-resume-'))
     const currentSocket = path.join(dir, 'current.sock')
@@ -439,12 +428,6 @@ describe('Codex shared relay thread observation', () => {
     }
   })
 
-  // Needs a real AF_UNIX socket — see the fakeCodexServer comment above.
-  it.skipIf(process.platform === 'win32')('distinguishes a native thread from an unavailable id', async () => {
-      rmSync(dir, { recursive: true, force: true })
-    }
-  })
-
   it('distinguishes a native thread from an unavailable id', async () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'nodeterm-relay-native-resume-'))
     const currentSocket = path.join(dir, 'current.sock')
@@ -475,12 +458,6 @@ describe('Codex shared relay thread observation', () => {
     } finally {
       await stop()
       rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
-    }
-  })
-
-  // Needs a real AF_UNIX socket — see the fakeCodexServer comment above.
-  it.skipIf(process.platform === 'win32')('keeps direct resume fail-closed when two foreign accounts expose the same id', async () => {
-      rmSync(dir, { recursive: true, force: true })
     }
   })
 
@@ -521,12 +498,6 @@ describe('Codex shared relay thread observation', () => {
     }
   })
 
-  // Needs a real AF_UNIX socket — see the fakeCodexServer comment above.
-  it.skipIf(process.platform === 'win32')('deduplicates the same account-neutral rollout exposed by two foreign accounts', async () => {
-      rmSync(dir, { recursive: true, force: true })
-    }
-  })
-
   it('deduplicates the same account-neutral rollout exposed by two foreign accounts', async () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'nodeterm-relay-shared-resume-'))
     const currentSocket = path.join(dir, 'current.sock')
@@ -563,12 +534,6 @@ describe('Codex shared relay thread observation', () => {
     } finally {
       await Promise.all(stops.map((stop) => stop()))
       rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
-    }
-  })
-
-  // Needs a real AF_UNIX socket — see the fakeCodexServer comment above.
-  it.skipIf(process.platform === 'win32')('fails closed when one foreign account matches but another account is unavailable', async () => {
-      rmSync(dir, { recursive: true, force: true })
     }
   })
 
@@ -630,6 +595,7 @@ describe('Codex shared relay thread observation', () => {
     expect(Date.now() - started).toBeLessThan(2_000)
     await new Promise<void>((resolve) => server.close(() => resolve()))
   })
+})
 })
 
 describe('Codex relay per-thread reservation (Property 3 / Property 10)', () => {
