@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Extend the special-universe Shop with the complete AWS catalog inventory: identity, Resource
+  Explorer, Cloud Control, S3, EC2, IAM, STS, Lambda, CloudWatch, CloudWatch Logs, CloudFormation,
+  CDK, ECR, ECS, EKS, RDS, databases, VPC, Route 53, cost management, and all-service rows. The
+  AWS projection is scope-bound, revalidates selected entries at creation time, and keeps every
+  later-wave executor visible with its exact disabled reason. The issue #40 ultra-speed lane did
+  not run tests, type checks, lint, security or accessibility checks, builds, packaging, runtime
+  interaction, or captures.
 - Add portable Comments and Activity attachments for generic files plus image, audio, and video
   previews. The composer now has picker, drag/drop, and paste routes, a removable validation queue,
   bounded byte-signature detection, transactional board-log storage, remote-safe atomic writes, and
