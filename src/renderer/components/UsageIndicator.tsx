@@ -200,10 +200,9 @@ function ProviderBlock({
   identity
 }: {
   u: ProviderUsage
-  mode: 'used' | 'remaining'
+  mode: 'used' | 'remaining' | 'tokens'
   identity?: string | null
 }) {
-function ProviderBlock({ u, mode }: { u: ProviderUsage; mode: 'used' | 'remaining' | 'tokens' }) {
   if (u.status === 'unavailable') return null
   const label = labelFor(u.provider)
   return (
@@ -594,18 +593,11 @@ export function UsageIndicator({
               No usage from this host yet — it is read once the project connects.
             </div>
           )}
-          {visibleProviders.map((p) => (
-            <ProviderBlock
-              key={`${p.provider}:${p.accountId ?? 'system'}`}
-              u={p}
-              mode={percentMode}
-              identity={providerIdentity(p)}
-            />
           {/* U8 (owed from PR 7): Codex emits one row per account, all `provider: 'codex'`.
               Key on provider+accountId so each account renders distinctly, and reduce true
               duplicates (two settings entries → the same underlying account) to one row. */}
           {dedupeProviderRows(visibleProviders).map((p) => (
-            <ProviderBlock key={providerRowKey(p)} u={p} mode={percentMode} />
+            <ProviderBlock key={providerRowKey(p)} u={p} mode={percentMode} identity={providerIdentity(p)} />
           ))}
           {/* Issue #420 — "Switch account" where the limit is displayed: opens a terminal
               running the SYSTEM-scoped `claude /login` (createSystemLoginNode), so picking the
