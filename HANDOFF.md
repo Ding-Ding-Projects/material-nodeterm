@@ -2831,5 +2831,5 @@ was not regenerated because this lane explicitly forbids builds and checks.
 The original implementation commit was `414b785805251ab534bccf0a4a924a09d82f97e5`. The reconciled
 lane commit follows the exact `origin/main` tip after merge resolution. No tests, type checks, lint,
 reviews, security or accessibility checks, builds, packaging, installer execution, runtime
-interaction, or HuiShots were run. The parent owns the final integrated default jer, release
+interaction, or screenshots were run. The parent owns the final integrated default branch, release
 evidence, and any later verification.
