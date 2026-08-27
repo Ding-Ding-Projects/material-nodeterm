@@ -261,6 +261,8 @@ export interface NodeData {
   gitlabHostingConfig?: GitLabHostingConfig
   /** Cloudflare manager safe intent; local credential and provider state never enters project data. */
   cloudflareCoreIntent?: CloudflarePortableIntent
+  /** Access, Zero Trust, Workers, Pages, R2, D1 and Queues intent; account state stays local. */
+  cloudflareZeroTrustIntent?: import('@shared/cloudflare-zero-trust').CloudflarePortableIntent
   homeAssistantIntent?: HomeAssistantNodeIntent
   /** Safe ownership metadata for a special-universe Shop node. */
   universeCanvasId?: string
@@ -1581,7 +1583,8 @@ export const SERVICE_NODE_LABELS: Record<ServiceNodeKind, string> = {
   proxmox: 'Proxmox',
   gitlab: 'GitLab',
   homeassistant: 'Home Assistant',
-  freepbx: 'FreePBX'
+  freepbx: 'FreePBX',
+  'cloudflare-zero-trust': 'Cloudflare managers'
 }
 
 /**
@@ -1617,7 +1620,8 @@ export function createServiceNode(
       color: NODE_COLORS[index % NODE_COLORS.length],
       group: null,
       serviceLabel: '',
-      ...(kind === 'homeassistant' ? { homeAssistantIntent: { ...DEFAULT_HOME_ASSISTANT_NODE_INTENT } } : {})
+      ...(kind === 'homeassistant' ? { homeAssistantIntent: { ...DEFAULT_HOME_ASSISTANT_NODE_INTENT } } : {}),
+      ...(kind === 'cloudflare-zero-trust' ? { cloudflareZeroTrustIntent: { schemaVersion: 1, manager: null, operation: null, accountHint: null, resourceHint: null, values: {} } } : {})
     }
   }
 }
@@ -2279,6 +2283,7 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   'homeassistant-sensor': true,
   freepbx: true,
   'gitlab-hosting': true,
+  'cloudflare-zero-trust': true,
   'cloudflare-core-managers': true,
   nsis: true,
   shop: true,
@@ -2333,6 +2338,7 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   'homeassistant-sensor': HOME_ASSISTANT_SENSOR_SIZE,
   freepbx: SERVICE_SUMMARY_SIZE,
   'gitlab-hosting': { width: 700, height: 620 },
+  'cloudflare-zero-trust': SERVICE_CONSOLE_SIZE,
   'cloudflare-core-managers': CLOUDFLARE_CORE_MANAGERS_SIZE,
   nsis: NSIS_SIZE,
   shop: SHOP_SIZE,
@@ -2800,6 +2806,7 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         shopSelection: (n as CanvasNodeState & { shopSelection?: string }).shopSelection,
         torrentMagnet: n.torrentMagnet,
         serviceConnection: n.serviceConnection,
+        cloudflareZeroTrustIntent: n.cloudflareZeroTrustIntent,
         cloudflareCoreIntent: n.cloudflareCoreIntent,
         nsisSpec: n.nsisSpec,
         nsisLocalPaths: n.nsisLocalPaths,
@@ -2927,6 +2934,7 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         shopSelection: n.data.shopSelection,
         torrentMagnet: n.data.torrentMagnet,
         serviceConnection: n.data.serviceConnection,
+        cloudflareZeroTrustIntent: n.data.cloudflareZeroTrustIntent,
         cloudflareCoreIntent: n.data.cloudflareCoreIntent,
         nsisSpec: n.data.nsisSpec,
         nsisLocalPaths: n.data.nsisLocalPaths,

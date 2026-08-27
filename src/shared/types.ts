@@ -220,6 +220,9 @@ export interface PtyCreateOptions {
    * "not connected" overlay and re-spawns when the master is back.
    */
   requireRemote?: boolean
+  /** Join an already-live session only. Foreign canvas projections are viewers, never owners, so
+   * a missing target session is returned as `unavailable: 'no-session'` instead of spawning it. */
+  requireExisting?: boolean
 }
 
 /** A tmux pane's cursor, as tmux reports it: 0-based column/row within the pane, plus whether the
@@ -344,7 +347,8 @@ export interface PtyCreateResult {
    * managed account whose home is missing refuses rather than spawning against the system login
    * (§5 property 4). Same contract — nothing spawned, the renderer shows the node's refusal.
    */
-  unavailable?: 'ssh' | 'codex-account'
+  /** Refusal for a foreign projection that had no live session to join. */
+  unavailable?: 'ssh' | 'codex-account' | 'no-session'
 }
 
 /** Payload of `pty:recycled` — see IPC.ptyRecycled and `recycleAction` in the renderer. */
@@ -425,6 +429,7 @@ export type NodeKind =
   | 'homeassistant'
   | 'homeassistant-sensor'
   | 'freepbx'
+  | 'cloudflare-zero-trust'
   /** Guided Cloudflare account, zone, DNS, SSL/TLS, ruleset, redirect, cache, and analytics manager. */
   | 'cloudflare-core-managers'
   | 'torrent'
@@ -442,7 +447,8 @@ export const SERVICE_NODE_KINDS = [
   'proxmox',
   'gitlab',
   'homeassistant',
-  'freepbx'
+  'freepbx',
+  'cloudflare-zero-trust'
 ] as const
 
 export type ServiceNodeKind = (typeof SERVICE_NODE_KINDS)[number]
@@ -646,6 +652,8 @@ export interface CanvasNodeState {
    * `localExec` on the index entry, exactly where the shell and Windows profile already live.
    */
   serviceLabel?: string
+  /** Cloudflare manager selection intent. Account ids, credentials and resource ids stay local. */
+  cloudflareZeroTrustIntent?: import('./cloudflare-zero-trust').CloudflarePortableIntent
   /** Cloudflare manager safe intent. Credentials and local bindings stay in the host overlay. */
   cloudflareCoreIntent?: import('./cloudflare-core-managers').CloudflarePortableIntent
   /** Home Assistant node presentation intent safe for schema 3. Hosts, instance ids, credentials,
@@ -4646,6 +4654,8 @@ export interface NodeTerminalApi {
   workspace: WorkspaceApi
   /** Shared provider-account, credential-vault, OAuth-callback, and resource-picker services. */
   providerServices: import('./provider-services').ProviderServicesApi
+  /** Typed Cloudflare Access, Zero Trust, Workers, Pages, R2, D1 and Queues managers. */
+  cloudflareZeroTrust: import('./cloudflare-zero-trust').CloudflareApi
   timer: TimerApi
   serverDeployment: ServerDeploymentApi
   projectSettings: ProjectSettingsApi

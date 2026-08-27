@@ -1741,6 +1741,28 @@ Three deliberate exclusions, with reasons — do not "finish" these without revi
 - **#98 — skipped, superseded.** `main` has `send`/`reply`/`status` persistent inter-agent messaging
   with authenticated routes and safe-turn-boundary delivery; #98's `notify` is a weaker fixed-prompt
   predecessor of it.
+
+## 2026-08-27, Program 57 linked-agent inbox documentation lane
+
+Issue #68 records the upstream PR #98 linked-agent notification request. The current default source
+already carries the stronger successor implementation: `notify --node <id>` is app-authored and
+fixed in `src/shared/agents/agent-messaging.ts`, substituted in the main process, and routed through
+the verified `send`/`reply` delivery service. Project capability consent lives in the shared
+`agentMessaging` registry, runtime pane ownership is rechecked, and permitted busy targets use the
+bounded deliver-on-idle queue with FIFO ordering, 16-entry capacity, five-minute expiry, sender
+outcomes, and trace records. The relevant source history is `4aefbfbd`, with the upstream design and
+prototype preserved by links to commits `43f58420` and `8d3b00b3` in
+`docs/features/agents/linked-agent-inbox-notifications.md`.
+
+This lane added the per-feature article, category index link, generated offline documentation bundle
+input, Pages article and index link, site documentation list, site and app completeness inventory
+rows, changelog entry, and roadmap record. The implementation is desktop-only; Server Edition
+returns its explicit unsupported result, and portable project files omit runtime queues, credentials,
+machine paths, process state, and pane ownership records. No tests, type checks, lint, reviews,
+security or accessibility checks, builds, packaging, installer execution, runtime interaction, or
+UI captures were run under the issue's explicit ultra-speed boundary. Integration into `main`, the
+default-branch merge and push, remote verification, and any release proof remain the parent lane's
+responsibility.
 - **#149 configurable shortcuts — NOT DONE.** A 9-file architectural change replacing the hardcoded
   shortcut rows with a registry driven from `settings.shortcuts`, colliding with the focus-mode
   binding added in `7fef4719`. Cherry-pick aborted cleanly rather than half-merged. This is the
@@ -2448,3 +2470,17 @@ This ultra-speed lane intentionally ran no tests, type checks, lint, builds, pac
 interaction, accessibility or security audits, reviews, or captures. The parent integration lane
 must supply every verification verdict and release evidence before describing the feature as
 verified.
+## Issue #58, Cloudflare manager lane
+
+The isolated `feat/program-47-cloudflare-zero-trust` lane adds `src/shared/cloudflare-zero-trust.ts`,
+`src/core/cloudflare-zero-trust/service.ts`, the Cloudflare manager canvas panel and styles, IPC and
+Server Edition registration, and schema 3 portable intent handling. The seven fixed manager families
+are Access, Zero Trust, Workers, Pages, R2, D1 and Queues. Credentials are sealed locally, while
+portable project data carries only neutral selection intent. Typed fields, fixed routes, bounded
+responses, per-search anchored regex builders, progress, cancellation, and destructive confirmation
+are included.
+
+This ultra-speed lane intentionally ran no tests, type checks, lint, builds, packaging, reviews,
+security checks, accessibility checks, installer execution, runtime interaction, or UI captures.
+The parent integration lane must verify the exact commit, reconcile any central-file overlap with
+other lanes, and supply the remaining release evidence before claiming the feature verified.
