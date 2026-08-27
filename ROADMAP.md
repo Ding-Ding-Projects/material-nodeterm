@@ -57,6 +57,13 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## In progress / partially landed
 
+- [ ] **Per-node model switching, issue #86 / upstream PR #422 slice**: the shared model gateway,
+      capability inheritance, per-node `agentModel` persistence, model picker, identity-gated
+      foreground termination, session recycle, and cold-resume path are present in source. This
+      lane hardens stale same-model callbacks before termination. Focused tests, type checks,
+      builds, packaging, runtime interaction, and captures remain pending by the lane's explicit
+      no-check boundary.
+
 - [ ] **Shared provider services, issue #18**: provider catalog, account metadata, sealed
       credential payloads, bounded one-time OAuth PKCE callbacks, adapter-owned resource discovery,
       and shared Desktop/Server local bindings are implemented in source. Individual provider

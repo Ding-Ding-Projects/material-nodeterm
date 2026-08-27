@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Harden per-node model switching against stale menu callbacks. A request for the model the node
+  already runs now refuses before foreground termination or session recycling, preserving the
+  active conversation. The source implementation and documentation records were updated in this
+  lane; tests, type checks, lint, reviews, builds, packaging, runtime interaction, and UI captures
+  were intentionally not run.
+
 - Add the bundled AWS CLI v2 dependency lane. Windows packaging now stages the pinned official
   `2.36.32` MSI, verifies its SHA-256, falls back through a verified local cache or canonical
   HTTPS download, extracts it into application-local storage, exposes the installed version, and
