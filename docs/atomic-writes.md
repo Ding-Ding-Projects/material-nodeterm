@@ -283,7 +283,7 @@ FIFO before network validation so a later Clear in that controller cannot finish
 resurrected. Separate processes have no shared pre-validation invocation clock; their durable
 mutations are ordered when they enter the SQLite transaction.
 
-The process Chut runs real bundled peers and proves a second writer cannot read a stale snapshot,
+The process check runs real bundled peers and proves a second writer cannot read a stale snapshot,
 crash-released ownership, bounded busy timeout, local queue recovery, physical-directory alias
 convergence, and exact preservation of corrupt sidecar bytes. Temporarily replacing
 `BEGIN IMMEDIATE` with `BEGIN` makes the two-process barrier red.

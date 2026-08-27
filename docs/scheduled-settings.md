@@ -386,7 +386,7 @@ Automated coverage now lives in:
 - `src/core/scheduled-settings-store.test.ts` and `scheduled-settings-runtime.test.ts` — ENOENT,
   corrupt JSON, directory-at-path, EACCES/EIO, disabled fallback and evidence-preserving save lock;
 - `src/renderer/state/scheduled-settings-save.test.ts`, `scheduledSettings.test.ts`, and the
-  Schedule section Chuts — the rejected-save barrier, visible error/later-save recovery, owning-rule
+  Schedule section checks — the rejected-save barrier, visible error/later-save recovery, owning-rule
   flush before token mutation, unknown token status, draft retention, and truthful Clear errors; and
 - `test/server/scheduled-settings-startup.test.ts` — a real Server boot plus authenticated WS-RPC
   traversal for every startup read state and the recovery overwrite refusal.

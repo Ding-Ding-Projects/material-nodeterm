@@ -418,8 +418,8 @@ intentionally unchecked because this task publishes the plan only.
       ultra-speed boundary.
 - [ ] Bundle AWS CLI v2 and maintain verified model and documentation indexing. The pinned MSI,
       verified fallback, version details route, bounded installed-model inventory, feature article,
-      and offline documentation entry are present on the issue #41 jer. Tests, builds, packaging,
-      installer execution, runtime interaction, and HuiShots remain pending, so this item stays
+      and offline documentation entry are present on the issue #41 branch. Tests, builds, packaging,
+      installer execution, runtime interaction, and screenshots remain pending, so this item stays
       unticked.
 - [x] Add the platform-free AWS CLI model documentation index for services, commands, options,
       paginators, waiters, input and output shapes, and input skeletons. Tests, builds, runtime
