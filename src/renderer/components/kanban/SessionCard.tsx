@@ -3,6 +3,7 @@ import type { KanbanCardMeta, KanbanLabel, KanbanPriority } from '@shared/types'
 import { useAgentStatus } from '../../state/agentStatus'
 import { ContextMeter } from '../ContextMeter'
 import { NodeIconView } from '../NodeIcon'
+import { contextSourceKey } from '../../state/contextWindow'
 import { LabelChips } from './LabelChips'
 import type { KanbanSession } from './KanbanView'
 import type { KanbanTerminalProfilePresentation } from './terminal-profile-ui'
@@ -121,7 +122,11 @@ export const SessionCard = memo(function SessionCard({
   const due = meta?.dueAt
   const overdue = due !== undefined && due < Date.now()
   const priority = meta?.priority
-  const hasDetail = !!status?.sessionId || !!status?.session || stickyPreview.includes('\n')
+  const hasDetail =
+    (session.kind === 'terminal' && !!session.agentId) ||
+    !!status?.sessionId ||
+    !!status?.session ||
+    stickyPreview.includes('\n')
   return (
     <div
       className={`kanban-card kanban-card--session${dragging ? ' kanban-card--dragging' : ''}${
@@ -218,7 +223,11 @@ export const SessionCard = memo(function SessionCard({
             <span className="kanban-card__stickytext">{stickyPreview}</span>
           ) : (
             <>
-              <ContextMeter sessionId={status?.sessionId ?? null} />
+              <ContextMeter
+                sessionId={status?.sessionId ?? null}
+                agentId={session.agentId}
+                sourceKey={contextSourceKey(session.agentId, !!session.spawn.ssh || !!session.spawn.sshRemoteTmux)}
+              />
               {status?.session && (
                 <span className="kanban-card__session" title={status.session}>
                   {status.session}

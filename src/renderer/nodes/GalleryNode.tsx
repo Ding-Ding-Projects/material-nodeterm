@@ -51,7 +51,7 @@ export default function GalleryNode({ id, data, selected }: NodeProps<CanvasNode
     data.mediaActiveAssetId = next[0]?.assetId
     redraw((value) => value + 1)
   }
-  return <div className={`term-node gallery-node${selected ? ' selected' : ''}`} style={{ borderTopColor: data.color }}>
+  return <div className={`term-node gallery-node${selected ? ' selected' : ''}`} data-easter-surface="media" style={{ borderTopColor: data.color }}>
     <NodeResizer minWidth={360} minHeight={260} isVisible={selected} color={data.color} />
     <Handle id="flow-in" type="target" position={Position.Top} isConnectable={false} style={{ opacity: 0, pointerEvents: 'none', top: 0 }} />
     <div className={`term-node__header ${fill.className}${fill.filled ? ' term-node__header--filled' : ''}`} style={fill.style}>

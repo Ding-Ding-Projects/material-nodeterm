@@ -3,11 +3,10 @@ import { IconBellFilled, IconCircleCheck } from './icons'
 import { NodeIconView } from './NodeIcon'
 import { ProjectGlyph } from './ProjectGlyph'
 import type { SessionRowVM } from '../lib/sessionList'
-import { useContextWindow } from '../state/contextWindow'
 import { useSessionNaming } from '../state/sessionNaming'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
-import { useSettings } from '../state/settings'
-import { contextFillColor, contextPillText, percentText } from '../lib/usageFormat'
+import { ContextMeter } from './ContextMeter'
+import { contextSourceKey } from '../state/contextWindow'
 
 export interface SessionRowProps {
   row: SessionRowVM
@@ -44,9 +43,7 @@ export function SessionRow({
   // Naming progress lives in a store keyed by node id, so the spinner persists across the row
   // unmounting (sidebar close / hover-peek collapse) while the name is still generating.
   const naming = useSessionNaming((s) => !!s.byId[row.id])
-  const usage = useContextWindow((s) => (row.sessionId ? s.bySessionId[row.sessionId] : undefined))
   const vocab = useVocabularyMapper()
-  const percentMode = useSettings((s) => s.settings.usagePercentMode)
 
   const commit = (): void => {
     const t = draft.trim()
@@ -143,14 +140,12 @@ export function SessionRow({
               {row.loop.kind} · {row.loop.count}
             </span>
           )}
-          {row.usesContext && usage && (
-            <span
-              className="ss-ctx"
-              title={`Context window — ${percentText(usage.usedPercent, percentMode)}`}
-              style={{ background: contextFillColor(usage.usedPercent) }}
-            >
-              {contextPillText(usage.usedTokens, usage.windowTokens, usage.usedPercent, percentMode)}
-            </span>
+          {row.isAgent && (
+            <ContextMeter
+              sessionId={row.sessionId ?? null}
+              agentId={row.agentId}
+              sourceKey={contextSourceKey(row.agentId, !!row.sshHost)}
+            />
           )}
           <button
             className="ss-row__ai"

@@ -7,6 +7,7 @@ import { NodeIconView } from '../NodeIcon'
 import { nodeIconDialog } from '../NodeIconPicker'
 import { applyIconChoice } from '../../lib/nodeIconChoice'
 import { ContextMeter } from '../ContextMeter'
+import { contextSourceKey } from '../../state/contextWindow'
 import { AdhdElapsedChip } from '../AdhdNodeSurfaces'
 import { useAgentStatus } from '../../state/agentStatus'
 import { useCardPanel } from '../../state/cardPanel'
@@ -347,7 +348,11 @@ export function CardModal({
           {isTerminal && (
             <>
               {/* Same context-window pill + popover as the node header (null until usage data). */}
-              <ContextMeter sessionId={agentSessionId ?? null} />
+              <ContextMeter
+                sessionId={agentSessionId ?? null}
+                agentId={session.agentId}
+                sourceKey={contextSourceKey(session.agentId, !!session.spawn.ssh || !!session.spawn.sshRemoteTmux)}
+              />
               {/* ADHD time awareness. The card modal is a second live view of the SAME session, and
                 it is a place work actually happens — so the readout belongs here for the same
                 reason it belongs on the node: a clock the user has to go and look for does nothing
