@@ -13238,6 +13238,98 @@ button.term-node__title-text:focus-visible {
   }
 }
 
+/* CloudFormation manager: compact guided controls inside a service node. */
+.cloudformation-manager {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  overflow: auto;
+  color: var(--md-on-surface);
+  background: var(--md-surface-container-low);
+}
+
+.cloudformation-manager section {
+  display: grid;
+  gap: 8px;
+}
+
+.cloudformation-manager__status,
+.cloudformation-manager__preview,
+.cloudformation-manager__form,
+.cloudformation-manager__scope,
+.cloudformation-manager__stacks {
+  padding: 12px;
+  border-radius: 16px;
+  background: var(--md-surface-container);
+}
+
+.cloudformation-manager__status span,
+.cloudformation-manager__status small,
+.cloudformation-manager__rows span,
+.cloudformation-manager__rows small {
+  color: var(--md-on-surface-variant);
+  overflow-wrap: anywhere;
+}
+
+.cloudformation-manager__search,
+.cloudformation-manager__path,
+.cloudformation-manager__fields,
+.cloudformation-manager__parameter,
+.cloudformation-manager__actions,
+.cloudformation-manager__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.cloudformation-manager__search > .mdx-input {
+  min-width: 0;
+  flex: 1 1 180px;
+}
+
+.cloudformation-manager__path > .mdx-input,
+.cloudformation-manager__fields > .mdx-input,
+.cloudformation-manager__parameter > .mdx-input {
+  min-width: 0;
+  flex: 1 1 160px;
+}
+
+.cloudformation-manager__pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 120px;
+  overflow: auto;
+}
+
+.cloudformation-manager__pills button,
+.cloudformation-manager__rows > button {
+  min-height: 32px;
+  padding: 6px 10px;
+  border: 1px solid var(--md-outline-variant);
+  border-radius: 12px;
+  color: var(--md-on-surface);
+  background: var(--md-surface-container-high);
+  cursor: pointer;
+}
+
+.cloudformation-manager__pills button.selected,
+.cloudformation-manager__rows > button.selected {
+  border-color: var(--md-primary);
+  background: var(--md-primary-container);
+  color: var(--md-on-primary-container);
+}
+
+.cloudformation-manager__rows > button,
+.cloudformation-manager__rows > article {
+  display: grid;
+  gap: 3px;
+  text-align: left;
+}
+
+.cloudformation-manager__rows {
+  display: grid;
 /* AWS identity manager. Every picker is a real list with its own search and anchored regex
    builder. The card keeps long endpoint and SSO values readable without leaking into the canvas. */
 .aws-identity {
@@ -13319,6 +13411,14 @@ button.term-node__title-text:focus-visible {
   max-height: 180px;
   overflow: auto;
 }
+
+.cloudformation-manager__error {
+  color: var(--md-error);
+  overflow-wrap: anywhere;
+}
+
+.cloudformation-manager button:focus-visible,
+.cloudformation-manager input:focus-visible {
 .aws-identity__choices button,
 .aws-identity__endpoint-list button,
 .aws-identity__summary button,
@@ -13504,6 +13604,18 @@ button.term-node__title-text:focus-visible {
   outline-offset: 2px;
 }
 
+@media (max-width: 600px) {
+  .cloudformation-manager {
+    min-width: 320px;
+  }
+
+  .cloudformation-manager__path,
+  .cloudformation-manager__fields,
+  .cloudformation-manager__parameter {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+}
 .nextcloud-aio-panel__jobs progress {
   width: 100%;
 }

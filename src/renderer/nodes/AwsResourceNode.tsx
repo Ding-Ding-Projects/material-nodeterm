@@ -16,6 +16,7 @@ import type {
   AWS_CORE_OPERATION_LABELS,
   AWS_CORE_SERVICES
 } from '@shared/aws-resource'
+import { CLOUDFORMATION_CAPABILITIES, type CloudFormationCapability, type CloudFormationChangeSetType } from '@shared/cloudformation'
 import type { CanvasNode } from '../state/workspace'
 import { useActiveSessionApi } from '../session/session'
 import { EditableNodeTitle } from '../components/EditableNodeTitle'
@@ -36,6 +37,10 @@ const CLOUD_OPERATIONS: readonly AwsManagerOperation[] = [
   'cloud-list-types', 'cloud-list-resources', 'cloud-get-resource', 'cloud-create-resource',
   'cloud-update-resource', 'cloud-delete-resource', 'cloud-request-status'
 ]
+const CLOUDFORMATION_OPERATIONS: readonly AwsManagerOperation[] = [
+  'cloudformation-validate-template', 'cloudformation-list-stacks', 'cloudformation-create-change-set',
+  'cloudformation-describe-change-set', 'cloudformation-execute-change-set', 'cloudformation-delete-change-set'
+]
 const CORE_SERVICE_LABELS: Record<AwsCoreServiceId, string> = { s3: 'S3', ec2: 'EC2', iam: 'IAM', sts: 'STS', lambda: 'Lambda', cloudwatch: 'CloudWatch', logs: 'CloudWatch Logs' }
 
 const OPERATION_LABELS: Record<AwsManagerOperation, string> = {
@@ -48,11 +53,17 @@ const OPERATION_LABELS: Record<AwsManagerOperation, string> = {
   'cloud-update-resource': 'Update resource',
   'cloud-delete-resource': 'Delete resource',
   'cloud-request-status': 'Check request status',
+  'cloudformation-validate-template': 'Validate template',
+  'cloudformation-list-stacks': 'List stacks',
+  'cloudformation-create-change-set': 'Preview change set',
+  'cloudformation-describe-change-set': 'Describe change set',
+  'cloudformation-execute-change-set': 'Execute change set',
+  'cloudformation-delete-change-set': 'Delete change set',
   ...AWS_CORE_OPERATION_LABELS
 }
 
 function operationRisk(operation: AwsManagerOperation): 'read-only' | 'write' | 'destructive' {
-  if (['cloud-delete-resource', 's3-delete-bucket', 'ec2-terminate-instances', 'iam-delete-user', 'lambda-delete-function'].includes(operation)) return 'destructive'
+  if (['cloud-delete-resource', 's3-delete-bucket', 'ec2-terminate-instances', 'iam-delete-user', 'lambda-delete-function', 'cloudformation-delete-change-set'].includes(operation)) return 'destructive'
   if (['cloud-create-resource', 'cloud-update-resource', 's3-create-bucket', 'ec2-start-instances', 'ec2-stop-instances', 'iam-create-user'].includes(operation)) return 'write'
   return 'read-only'
 }
@@ -65,7 +76,7 @@ function newOperationId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `aws-operation-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
 }
 
-function requestFor(operation: AwsManagerOperation, values: { query: string; viewArn: string; typeName: string; identifier: string; desiredState: string; patchDocument: string; requestToken: string; nextToken: string; maxResults: number; confirmed?: boolean }): AwsManagerRequest {
+function requestFor(operation: AwsManagerOperation, values: { query: string; viewArn: string; typeName: string; identifier: string; desiredState: string; patchDocument: string; requestToken: string; nextToken: string; maxResults: number; templatePath: string; stackName: string; changeSetName: string; changeSetType: CloudFormationChangeSetType; parameters: Array<{ key: string; value?: string; usePreviousValue?: boolean }>; capabilities: CloudFormationCapability[]; confirmed?: boolean }): AwsManagerRequest {
   return {
     operation,
     ...(values.query.trim() ? { query: values.query } : {}),
@@ -76,6 +87,12 @@ function requestFor(operation: AwsManagerOperation, values: { query: string; vie
     ...(values.patchDocument.trim() ? { patchDocument: values.patchDocument } : {}),
     ...(values.requestToken.trim() ? { requestToken: values.requestToken } : {}),
     ...(values.nextToken.trim() ? { nextToken: values.nextToken } : {}),
+    ...(values.templatePath.trim() ? { templatePath: values.templatePath } : {}),
+    ...(values.stackName.trim() ? { stackName: values.stackName } : {}),
+    ...(values.changeSetName.trim() ? { changeSetName: values.changeSetName } : {}),
+    ...(values.changeSetType ? { changeSetType: values.changeSetType } : {}),
+    ...(values.parameters.length ? { parameters: values.parameters } : {}),
+    ...(values.capabilities.length ? { capabilities: values.capabilities } : {}),
     maxResults: values.maxResults,
     confirmed: values.confirmed === true
   }
@@ -87,6 +104,7 @@ function fieldLabel(operation: AwsManagerOperation): string {
   if (operation === 'cloud-list-resources') return 'Resource type'
   if (operation === 'cloud-get-resource' || operation === 'cloud-update-resource' || operation === 'cloud-delete-resource') return 'Resource type and identifier'
   if (operation === 'cloud-request-status') return 'Request token'
+  if (operation.startsWith('cloudformation-')) return 'CloudFormation inputs'
   return 'Operation inputs'
 }
 
@@ -96,9 +114,9 @@ export default function AwsResourceNode({ id, data, selected }: NodeProps<Canvas
   const api = useActiveSessionApi()
   const vocab = useVocabularyMapper()
   const nodeIntent = data.awsManagerIntent
-  const [mode, setMode] = useState<AwsManagerMode>(nodeIntent?.mode === 'cloud-control' ? 'cloud-control' : nodeIntent?.mode === 'core-services' ? 'core-services' : 'resource-explorer')
+  const [mode, setMode] = useState<AwsManagerMode>(nodeIntent?.mode === 'cloud-control' ? 'cloud-control' : nodeIntent?.mode === 'core-services' ? 'core-services' : nodeIntent?.mode === 'cloudformation' ? 'cloudformation' : 'resource-explorer')
   const [coreService, setCoreService] = useState<AwsCoreServiceId>(nodeIntent?.coreService ?? 's3')
-  const [operation, setOperation] = useState<AwsManagerOperation>(mode === 'cloud-control' ? CLOUD_OPERATIONS[0] : mode === 'core-services' ? (nodeIntent?.coreOperation ?? AWS_CORE_OPERATIONS.s3[0]) : RESOURCE_OPERATIONS[0])
+  const [operation, setOperation] = useState<AwsManagerOperation>(mode === 'cloud-control' ? CLOUD_OPERATIONS[0] : mode === 'core-services' ? (nodeIntent?.coreOperation ?? AWS_CORE_OPERATIONS.s3[0]) : mode === 'cloudformation' ? CLOUDFORMATION_OPERATIONS[0] : RESOURCE_OPERATIONS[0])
   const [coreInput, setCoreInput] = useState<Record<string, unknown>>(nodeIntent?.coreInput ?? {})
   const [runtime, setRuntime] = useState<{ available: boolean; origin: string; version: string | null; disabledReason: string | null } | null>(null)
   const [profiles, setProfiles] = useState<AwsProfileChoice[]>([])
@@ -115,6 +133,12 @@ export default function AwsResourceNode({ id, data, selected }: NodeProps<Canvas
   const [requestToken, setRequestToken] = useState('')
   const [nextToken, setNextToken] = useState('')
   const [maxResults, setMaxResults] = useState(100)
+  const [templatePath, setTemplatePath] = useState('')
+  const [stackName, setStackName] = useState(nodeIntent?.cloudFormation?.stackName ?? '')
+  const [changeSetName, setChangeSetName] = useState('preview')
+  const [changeSetType, setChangeSetType] = useState<CloudFormationChangeSetType>(nodeIntent?.cloudFormation?.changeSetType ?? 'CREATE')
+  const [cfParameters, setCfParameters] = useState<Array<{ key: string; value?: string; usePreviousValue?: boolean }>>([])
+  const [cfCapabilities, setCfCapabilities] = useState<CloudFormationCapability[]>(nodeIntent?.cloudFormation?.capabilities ?? [])
   const [preview, setPreview] = useState<AwsOperationPreview | null>(null)
   const [result, setResult] = useState<AwsManagerResult | null>(null)
   const [progress, setProgress] = useState<AwsManagerProgress | null>(null)
@@ -151,7 +175,7 @@ export default function AwsResourceNode({ id, data, selected }: NodeProps<Canvas
     })
   }, [api.awsResource, id, load])
 
-  const operations: readonly AwsManagerOperation[] = mode === 'cloud-control' ? CLOUD_OPERATIONS : mode === 'core-services' ? AWS_CORE_OPERATIONS[coreService] : RESOURCE_OPERATIONS
+  const operations: readonly AwsManagerOperation[] = mode === 'cloud-control' ? CLOUD_OPERATIONS : mode === 'core-services' ? AWS_CORE_OPERATIONS[coreService] : mode === 'cloudformation' ? CLOUDFORMATION_OPERATIONS : RESOURCE_OPERATIONS
   useEffect(() => {
     if (!operations.includes(operation)) setOperation(operations[0])
   }, [mode, operation, operations])
@@ -171,7 +195,8 @@ export default function AwsResourceNode({ id, data, selected }: NodeProps<Canvas
         cloudControlTypeName: overrides.cloudControlTypeName ?? typeName,
         coreService: overrides.coreService ?? coreService,
         coreOperation: overrides.coreOperation ?? (operation as AwsCoreOperation),
-        coreInput: overrides.coreInput ?? coreInput as AwsManagerPortableIntent['coreInput']
+        coreInput: overrides.coreInput ?? coreInput as AwsManagerPortableIntent['coreInput'],
+        ...(nextMode === 'cloudformation' ? { cloudFormation: { schemaVersion: 1, stackName: stackName.trim(), changeSetType, parameterKeys: cfParameters.map((item) => item.key).filter(Boolean), capabilities: cfCapabilities } } : {})
       }
     })
   }
@@ -189,7 +214,7 @@ export default function AwsResourceNode({ id, data, selected }: NodeProps<Canvas
 
   const buildRequest = (confirmed = false): AwsManagerRequest => mode === 'core-services'
     ? { operation, service: coreService, input: coreInput, nextToken: nextToken.trim() || undefined, maxResults, confirmed }
-    : requestFor(operation, { query, viewArn, typeName, identifier, desiredState, patchDocument, requestToken, nextToken, maxResults, confirmed })
+    : requestFor(operation, { query, viewArn, typeName, identifier, desiredState, patchDocument, requestToken, nextToken, maxResults, templatePath, stackName, changeSetName, changeSetType, parameters: cfParameters, capabilities: cfCapabilities, confirmed })
 
   const makePreview = async (): Promise<void> => {
     if (!api.awsResource) return
@@ -218,7 +243,7 @@ export default function AwsResourceNode({ id, data, selected }: NodeProps<Canvas
   }
 
   const fill = nodeHeaderFillStyle(data.color)
-  const title = data.title || (mode === 'cloud-control' ? 'AWS Cloud Control' : mode === 'core-services' ? `${CORE_SERVICE_LABELS[coreService]} manager` : 'AWS Resource Explorer')
+  const title = data.title || (mode === 'cloud-control' ? 'AWS Cloud Control' : mode === 'core-services' ? `${CORE_SERVICE_LABELS[coreService]} manager` : mode === 'cloudformation' ? 'AWS CloudFormation' : 'AWS Resource Explorer')
   const note = runtime?.available ? `AWS CLI ${runtime.origin}${runtime.version ? `: ${runtime.version}` : ''}` : runtime ? runtime.disabledReason ?? 'AWS CLI is unavailable.' : 'Checking AWS CLI availability…'
 
   return (
@@ -235,6 +260,7 @@ export default function AwsResourceNode({ id, data, selected }: NodeProps<Canvas
           <button type="button" role="tab" aria-selected={mode === 'resource-explorer'} onClick={() => { setMode('resource-explorer'); persistIntent('resource-explorer') }}>Resource Explorer</button>
           <button type="button" role="tab" aria-selected={mode === 'cloud-control'} onClick={() => { setMode('cloud-control'); persistIntent('cloud-control') }}>Cloud Control</button>
           <button type="button" role="tab" aria-selected={mode === 'core-services'} onClick={() => { setMode('core-services'); setCoreService('s3'); setOperation(AWS_CORE_OPERATIONS.s3[0]); setCoreInput({}); persistIntent('core-services', { coreService: 's3', coreOperation: AWS_CORE_OPERATIONS.s3[0], coreInput: {} }) }}>Core services</button>
+          <button type="button" role="tab" aria-selected={mode === 'cloudformation'} onClick={() => { setMode('cloudformation'); setOperation(CLOUDFORMATION_OPERATIONS[0]); persistIntent('cloudformation') }}>CloudFormation</button>
         </div>
         <section className="aws-resource-node__binding" aria-label="Local AWS binding">
           <div className="aws-resource-node__binding-grid">
@@ -258,6 +284,19 @@ export default function AwsResourceNode({ id, data, selected }: NodeProps<Canvas
         {mode === 'core-services' && <div className="aws-resource-node__operations" role="tablist" aria-label="AWS core services">
           {AWS_CORE_SERVICES.map((item) => <button key={item} type="button" role="tab" aria-selected={coreService === item} className={coreService === item ? 'is-selected' : ''} onClick={() => { setCoreService(item); const next = AWS_CORE_OPERATIONS[item][0]; setOperation(next); setCoreInput({}); setPreview(null); persistIntent('core-services', { coreService: item, coreOperation: next, coreInput: {} }) }}>{CORE_SERVICE_LABELS[item]}</button>)}
         </div>}
+        {mode === 'cloudformation' && <section className="aws-resource-node__inputs" aria-label="CloudFormation change-set inputs">
+          <label>Template file
+            <div className="aws-resource-node__path-row"><input value={templatePath} onChange={(event) => setTemplatePath(event.target.value)} placeholder="Choose a local YAML or JSON template" /><button type="button" onClick={async () => { const picked = await api.dialog.selectFile(); if (picked) setTemplatePath(picked) }}>Browse</button></div>
+          </label>
+          <label>Stack name<input value={stackName} onChange={(event) => setStackName(event.target.value)} placeholder="Choose a stack name" /></label>
+          <label>Change-set name<input value={changeSetName} onChange={(event) => setChangeSetName(event.target.value)} placeholder="preview" /></label>
+          {['cloudformation-describe-change-set', 'cloudformation-execute-change-set', 'cloudformation-delete-change-set'].includes(operation) && <label>Existing change-set name<input value={changeSetName} onChange={(event) => setChangeSetName(event.target.value)} placeholder="Choose a change-set name" /></label>}
+          <div className="aws-resource-node__operations" role="radiogroup" aria-label="CloudFormation change-set type"><button type="button" role="radio" aria-checked={changeSetType === 'CREATE'} className={changeSetType === 'CREATE' ? 'is-selected' : ''} onClick={() => setChangeSetType('CREATE')}>Create</button><button type="button" role="radio" aria-checked={changeSetType === 'UPDATE'} className={changeSetType === 'UPDATE' ? 'is-selected' : ''} onClick={() => setChangeSetType('UPDATE')}>Update</button></div>
+          <label>Template parameters</label>
+          {cfParameters.map((parameter, index) => <div key={`${parameter.key}-${index}`} className="aws-resource-node__parameter-row"><input value={parameter.key} onChange={(event) => setCfParameters((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, key: event.target.value } : item))} placeholder="Parameter key" /><input value={parameter.value ?? ''} disabled={parameter.usePreviousValue === true} onChange={(event) => setCfParameters((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, value: event.target.value } : item))} placeholder="Parameter value" /><label><input type="checkbox" checked={parameter.usePreviousValue === true} onChange={(event) => setCfParameters((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, usePreviousValue: event.target.checked } : item))} /> Use previous</label></div>)}
+          <button type="button" onClick={() => setCfParameters((current) => [...current, { key: '', value: '' }])}>Add parameter</button>
+          <div className="aws-resource-node__operations" role="group" aria-label="CloudFormation capabilities">{CLOUDFORMATION_CAPABILITIES.map((capability) => <button key={capability} type="button" aria-pressed={cfCapabilities.includes(capability)} className={cfCapabilities.includes(capability) ? 'is-selected' : ''} onClick={() => setCfCapabilities((current) => current.includes(capability) ? current.filter((item) => item !== capability) : [...current, capability])}>{capability}</button>)}</div>
+        </section>}
         <div className="aws-resource-node__operations" role="tablist" aria-label="AWS operations">
           {operations.map((item) => <button key={item} type="button" role="tab" aria-selected={operation === item} className={operation === item ? 'is-selected' : ''} onClick={() => { setOperation(item); setPreview(null); setError(null); if (mode === 'core-services') { setCoreInput({}); persistIntent('core-services', { coreOperation: item as AwsCoreOperation, coreInput: {} }) } }}>{OPERATION_LABELS[item] ?? AWS_CORE_OPERATION_LABELS[item as AwsCoreOperation]}</button>)}
         </div>

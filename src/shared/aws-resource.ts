@@ -5,8 +5,13 @@
  * endpoints, request tokens, resource identifiers, result pages, CLI paths, and credentials stay
  * machine-local or transient.
  */
+import type {
+  CloudFormationCapability,
+  CloudFormationChangeSetType
+} from './cloudformation'
 
 export type AwsManagerMode = 'resource-explorer' | 'cloud-control' | 'core-services'
+  | 'cloudformation'
 
 /** Core AWS services use the same binding, preview, pagination and progress seam as the
  * Resource Explorer and Cloud Control managers. Keeping one operation contract avoids a second
@@ -22,6 +27,13 @@ export interface AwsManagerPortableIntent {
   coreService?: AwsCoreServiceId
   coreOperation?: AwsCoreOperation
   coreInput?: Record<string, string | number | boolean>
+  cloudFormation?: {
+    schemaVersion: 1
+    stackName: string
+    changeSetType: CloudFormationChangeSetType
+    parameterKeys: string[]
+    capabilities: CloudFormationCapability[]
+  }
 }
 
 export interface AwsCliRuntimeStatus {
@@ -54,6 +66,12 @@ export type AwsManagerOperation =
   | 'cloud-update-resource'
   | 'cloud-delete-resource'
   | 'cloud-request-status'
+  | 'cloudformation-validate-template'
+  | 'cloudformation-list-stacks'
+  | 'cloudformation-create-change-set'
+  | 'cloudformation-describe-change-set'
+  | 'cloudformation-execute-change-set'
+  | 'cloudformation-delete-change-set'
   | 's3-list-buckets' | 's3-list-objects' | 's3-create-bucket' | 's3-delete-bucket'
   | 'ec2-describe-instances' | 'ec2-describe-security-groups' | 'ec2-start-instances' | 'ec2-stop-instances' | 'ec2-terminate-instances'
   | 'iam-list-users' | 'iam-list-roles' | 'iam-get-user' | 'iam-get-role' | 'iam-create-user' | 'iam-delete-user'
@@ -65,7 +83,9 @@ export type AwsManagerOperation =
 export type AwsCoreOperation = Exclude<AwsManagerOperation,
   'resource-list-views' | 'resource-search' | 'cloud-list-types' | 'cloud-list-resources' |
   'cloud-get-resource' | 'cloud-create-resource' | 'cloud-update-resource' | 'cloud-delete-resource' |
-  'cloud-request-status'>
+  'cloud-request-status' | 'cloudformation-validate-template' | 'cloudformation-list-stacks' |
+  'cloudformation-create-change-set' | 'cloudformation-describe-change-set' |
+  'cloudformation-execute-change-set' | 'cloudformation-delete-change-set'>
 
 export const AWS_CORE_SERVICES: readonly AwsCoreServiceId[] = ['s3', 'ec2', 'iam', 'sts', 'lambda', 'cloudwatch', 'logs']
 export const AWS_CORE_OPERATIONS: Record<AwsCoreServiceId, readonly AwsCoreOperation[]> = {
@@ -93,6 +113,12 @@ export interface AwsManagerRequest {
   maxResults?: number
   /** Renderer-side confirmation is rechecked by the core before a destructive action. */
   confirmed?: boolean
+  templatePath?: string
+  stackName?: string
+  changeSetName?: string
+  changeSetType?: CloudFormationChangeSetType
+  parameters?: Array<{ key: string; value?: string; usePreviousValue?: boolean }>
+  capabilities?: CloudFormationCapability[]
 }
 
 export type AwsOperationRisk = 'read-only' | 'write' | 'destructive'
@@ -181,7 +207,13 @@ export function isCloudControlTypeName(value: unknown): value is string {
 export function normalizeAwsPortableIntent(value: unknown): AwsManagerPortableIntent {
   if (!value || typeof value !== 'object') return { ...AWS_MANAGER_DEFAULT_INTENT }
   const raw = value as Record<string, unknown>
-  const mode: AwsManagerMode = raw.mode === 'cloud-control' ? 'cloud-control' : 'resource-explorer'
+  const mode: AwsManagerMode = raw.mode === 'cloud-control'
+    ? 'cloud-control'
+    : raw.mode === 'core-services'
+      ? 'core-services'
+      : raw.mode === 'cloudformation'
+        ? 'cloudformation'
+        : 'resource-explorer'
   const regionIntent = isAwsRegion(raw.regionIntent) ? raw.regionIntent.trim() : AWS_MANAGER_DEFAULT_INTENT.regionIntent
   const resourceQuery = typeof raw.resourceQuery === 'string' && raw.resourceQuery.length <= 1024
     ? raw.resourceQuery
@@ -197,6 +229,21 @@ export function normalizeAwsPortableIntent(value: unknown): AwsManagerPortableIn
       if ((typeof value === 'string' && value.length <= 2048) || typeof value === 'number' || typeof value === 'boolean') coreInput[key] = value as string | number | boolean
     }
   }
-  return { schemaVersion: 1, mode, regionIntent, resourceQuery, cloudControlTypeName, coreService, coreOperation, coreInput }
+  const rawCloudFormation = raw.cloudFormation && typeof raw.cloudFormation === 'object' && !Array.isArray(raw.cloudFormation)
+    ? raw.cloudFormation as Record<string, unknown>
+    : null
+  const cloudFormation = rawCloudFormation && typeof rawCloudFormation.stackName === 'string' && rawCloudFormation.stackName.length <= 128
+    ? {
+        stackName: rawCloudFormation.stackName,
+        changeSetType: rawCloudFormation.changeSetType === 'UPDATE' ? 'UPDATE' as const : 'CREATE' as const,
+        parameterKeys: Array.isArray(rawCloudFormation.parameterKeys)
+          ? rawCloudFormation.parameterKeys.filter((item): item is string => typeof item === 'string' && item.length <= 255).slice(0, 200)
+          : [],
+        capabilities: Array.isArray(rawCloudFormation.capabilities)
+          ? rawCloudFormation.capabilities.filter((item): item is CloudFormationCapability => item === 'CAPABILITY_IAM' || item === 'CAPABILITY_NAMED_IAM' || item === 'CAPABILITY_AUTO_EXPAND')
+          : []
+      }
+    : undefined
+  return { schemaVersion: 1, mode, regionIntent, resourceQuery, cloudControlTypeName, coreService, coreOperation, coreInput, ...(cloudFormation ? { cloudFormation } : {}) }
 }
 

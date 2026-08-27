@@ -1,6 +1,9 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { access } from 'node:fs/promises'
+import { accessSync, statSync } from 'node:fs'
 import { join } from 'node:path'
+import { isAbsolute } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import {
   isAwsProfileName,
   isAwsRegion,
@@ -17,10 +20,12 @@ import {
 } from '../shared/aws-resource'
 import { AtomicJsonArrayStore } from './atomic-json-store'
 import type { CorePlatform } from './platform'
+import { validateCloudFormationPreviewInput } from '../shared/cloudformation'
 
 const MAX_OUTPUT_BYTES = 8 * 1024 * 1024
 const MAX_TEXT_BYTES = 128 * 1024
 const COMMAND_TIMEOUT_MS = 90_000
+const CLOUDFORMATION_PREVIEW_TIMEOUT_MS = 12 * 60_000
 const MAX_RESULTS = 100
 
 interface CommandSpec {
@@ -97,6 +102,19 @@ function coreInput(request: AwsManagerRequest): Record<string, unknown> {
 
 function coreInputText(request: AwsManagerRequest, key: string, label: string, max = 2048): string {
   return text(coreInput(request)[key], label, max)
+}
+
+function localTemplate(value: unknown): string {
+  const file = text(value, 'Template path', 4096)
+  if (!isAbsolute(file)) throw new Error('Choose a local CloudFormation template with the Browse control.')
+  try {
+    accessSync(file)
+    if (!statSync(file).isFile()) throw new Error('Choose a local CloudFormation template file, not a folder.')
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('Choose a local')) throw error
+    throw new Error('The selected CloudFormation template could not be read. Choose it again with Browse.')
+  }
+  return file
 }
 
 function coreIds(request: AwsManagerRequest): string {
@@ -219,6 +237,34 @@ function operationSpec(request: AwsManagerRequest): CommandSpec {
         risk: 'read-only',
         pagination: 'none'
       }
+    case 'cloudformation-validate-template': {
+      const templatePath = localTemplate(request.templatePath)
+      return { service: 'cloudformation', operation: 'validate-template', args: ['cloudformation', 'validate-template', '--template-body', pathToFileURL(templatePath).href], risk: 'read-only', pagination: 'none' }
+    }
+    case 'cloudformation-list-stacks':
+      return { service: 'cloudformation', operation: 'list-stacks', args: ['cloudformation', 'list-stacks', '--max-items', String(maxResults(request.maxResults)), ...(token ? ['--starting-token', token] : [])], risk: 'read-only', pagination: 'manual-next-token' }
+    case 'cloudformation-create-change-set': {
+      const templatePath = localTemplate(request.templatePath)
+      const preview = validateCloudFormationPreviewInput({
+        requestId: 'preview',
+        profile: 'placeholder',
+        region: 'us-east-1',
+        templatePath,
+        stackName: text(request.stackName, 'Stack name', 128),
+        changeSetName: text(request.changeSetName, 'Change-set name', 128),
+        changeSetType: request.changeSetType === 'UPDATE' ? 'UPDATE' : 'CREATE',
+        parameters: Array.isArray(request.parameters) ? request.parameters : [],
+        capabilities: Array.isArray(request.capabilities) ? request.capabilities : []
+      })
+      const parameters = preview.parameters.flatMap((item) => ['--parameters', item.usePreviousValue ? `ParameterKey=${item.key},UsePreviousValue=true` : `ParameterKey=${item.key},ParameterValue=${item.value ?? ''}`])
+      return { service: 'cloudformation', operation: 'create-change-set', args: ['cloudformation', 'create-change-set', '--stack-name', preview.stackName, '--change-set-name', preview.changeSetName, '--change-set-type', preview.changeSetType, '--template-body', pathToFileURL(preview.templatePath).href, ...parameters, ...(preview.capabilities.length ? ['--capabilities', ...preview.capabilities] : [])], risk: 'write', pagination: 'none' }
+    }
+    case 'cloudformation-describe-change-set':
+      return { service: 'cloudformation', operation: 'describe-change-set', args: ['cloudformation', 'describe-change-set', '--change-set-name', text(request.changeSetName, 'Change-set name', 128)], risk: 'read-only', pagination: 'none' }
+    case 'cloudformation-execute-change-set':
+      return { service: 'cloudformation', operation: 'execute-change-set', args: ['cloudformation', 'execute-change-set', '--stack-name', text(request.stackName, 'Stack name', 128), '--change-set-name', text(request.changeSetName, 'Change-set name', 128)], risk: 'write', pagination: 'none' }
+    case 'cloudformation-delete-change-set':
+      return { service: 'cloudformation', operation: 'delete-change-set', args: ['cloudformation', 'delete-change-set', '--stack-name', text(request.stackName, 'Stack name', 128), '--change-set-name', text(request.changeSetName, 'Change-set name', 128)], risk: 'destructive', pagination: 'none' }
     case 's3-list-buckets': return { service: 's3', operation: request.operation, args: ['s3api', 'list-buckets'], risk: 'read-only', pagination: 'none' }
     case 's3-list-objects': return { service: 's3', operation: request.operation, args: ['s3api', 'list-objects-v2', '--bucket', coreInputText(request, 'bucket', 'Bucket name'), '--max-keys', String(maxResults(request.maxResults)), ...(token ? ['--continuation-token', token] : [])], risk: 'read-only', pagination: 'manual-next-token' }
     case 's3-create-bucket': return { service: 's3', operation: request.operation, args: ['s3api', 'create-bucket', '--bucket', coreInputText(request, 'bucket', 'Bucket name', 63)], risk: 'write', pagination: 'none' }
@@ -268,6 +314,12 @@ function rowsFor(operation: AwsManagerOperation, payload: Record<string, unknown
     'cloud-update-resource': 'ProgressEvent',
     'cloud-delete-resource': 'ProgressEvent',
     'cloud-request-status': 'ProgressEvent',
+    'cloudformation-validate-template': 'Parameters',
+    'cloudformation-list-stacks': 'StackSummaries',
+    'cloudformation-create-change-set': 'Changes',
+    'cloudformation-describe-change-set': 'Changes',
+    'cloudformation-execute-change-set': 'ResponseMetadata',
+    'cloudformation-delete-change-set': 'ResponseMetadata',
     's3-list-buckets': 'Buckets', 's3-list-objects': 'Contents', 's3-create-bucket': 'Location', 's3-delete-bucket': 'ResponseMetadata',
     'ec2-describe-instances': 'Reservations', 'ec2-describe-security-groups': 'SecurityGroups', 'ec2-start-instances': 'StartingInstances', 'ec2-stop-instances': 'StoppingInstances', 'ec2-terminate-instances': 'TerminatingInstances',
     'iam-list-users': 'Users', 'iam-list-roles': 'Roles', 'iam-get-user': 'User', 'iam-get-role': 'Role', 'iam-create-user': 'User', 'iam-delete-user': 'ResponseMetadata',
@@ -403,6 +455,41 @@ export class AwsResourceManagerService {
         throw new Error('AWS CLI returned output that was not valid JSON.')
       }
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('AWS CLI returned an unexpected JSON shape.')
+      if (request.operation === 'cloudformation-create-change-set') {
+        const changeSetId = typeof (parsed as Record<string, unknown>).Id === 'string'
+          ? (parsed as Record<string, unknown>).Id as string
+          : ''
+        if (!changeSetId) throw new Error('CloudFormation did not return a change-set identifier.')
+        const deadline = Date.now() + CLOUDFORMATION_PREVIEW_TIMEOUT_MS
+        let complete: Record<string, unknown> | null = null
+        while (Date.now() < deadline) {
+          const describe = operationSpec({ ...request, operation: 'cloudformation-describe-change-set', changeSetName: changeSetId })
+          const describeArgs = [
+            ...describe.args,
+            '--profile', preview.profileName,
+            '--region', preview.region,
+            ...(preview.endpointUrl ? ['--endpoint-url', preview.endpointUrl] : []),
+            '--output', 'json',
+            '--no-cli-pager'
+          ]
+          const described = await this.run(runtime.executable, describeArgs, id)
+          let describedPayload: unknown
+          try { describedPayload = JSON.parse(described.stdout || '{}') } catch { throw new Error('AWS CLI returned an invalid change-set preview.') }
+          if (!describedPayload || typeof describedPayload !== 'object' || Array.isArray(describedPayload)) throw new Error('AWS CLI returned an unexpected change-set preview shape.')
+          const status = typeof (describedPayload as Record<string, unknown>).Status === 'string' ? (describedPayload as Record<string, unknown>).Status : ''
+          if (status === 'CREATE_COMPLETE') {
+            complete = describedPayload as Record<string, unknown>
+            break
+          }
+          if (status === 'FAILED') {
+            const reason = typeof (describedPayload as Record<string, unknown>).StatusReason === 'string' ? (describedPayload as Record<string, unknown>).StatusReason : ''
+            throw new Error(reason || 'CloudFormation could not create the change-set preview.')
+          }
+          await new Promise((resolve) => setTimeout(resolve, 2000))
+        }
+        if (!complete) throw new Error('CloudFormation did not finish the change-set preview before the bounded wait expired.')
+        parsed = complete
+      }
       const payload = request.operation.startsWith('s3-') || request.operation.startsWith('ec2-') || request.operation.startsWith('iam-') || request.operation.startsWith('sts-') || request.operation.startsWith('lambda-') || request.operation.startsWith('cloudwatch-') || request.operation.startsWith('logs-')
         ? redactCorePayload(parsed) as Record<string, unknown>
         : parsed as Record<string, unknown>
