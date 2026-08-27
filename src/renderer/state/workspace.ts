@@ -106,6 +106,7 @@ const GALLERY_SIZE = { width: 760, height: 520 }
 const WILD_DIM_SUM_SIZE = { width: 560, height: 560 }
 const WEB_SIZE = { width: 720, height: 520 }
 const BROWSER_SIZE = { width: 800, height: 560 }
+const FILES_SIZE = { width: 520, height: 460 }
 const NATIVE_LOOP_SIZE = { width: 340, height: 280 }
 const SHOP_SIZE = { width: 480, height: 420 }
 export const AWS_RESOURCE_SIZE = { width: 720, height: 580 }
@@ -1283,6 +1284,34 @@ export function createEditorNode(
   }
 }
 
+/** Creates a persisted directory-listing node rooted at `cwd`. */
+export function createFilesNode(
+  index: number,
+  cwd: string,
+  center?: { x: number; y: number },
+  sshFs?: boolean
+): CanvasNode {
+  return {
+    id: nextId('files'),
+    type: 'files',
+    position: placeAt(center, index, FILES_SIZE.width, FILES_SIZE.height),
+    width: FILES_SIZE.width,
+    height: FILES_SIZE.height,
+    style: { width: FILES_SIZE.width, height: FILES_SIZE.height },
+    data: {
+      title: folderTitleForNode(cwd),
+      color: '#6ac4dc',
+      group: null,
+      cwd,
+      ...(sshFs ? { sshFs: true } : {})
+    }
+  }
+}
+
+function folderTitleForNode(path: string): string {
+  return path.split('/').filter(Boolean).pop() ?? '/'
+}
+
 const VIDEO_EXTS = ['mp4', 'webm', 'mov', 'm4v', 'mkv', 'ogv', 'avi']
 
 /** True when a path looks like a playable video file (by extension). */
@@ -2416,6 +2445,7 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   video: true,
   web: true,
   browser: true,
+  files: true,
   subagent: true,
   loop: true,
   scheduler: true,
@@ -2476,6 +2506,7 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   video: VIDEO_SIZE,
   web: WEB_SIZE,
   browser: BROWSER_SIZE,
+  files: FILES_SIZE,
   // Ephemeral kinds are never persisted (they are derived from live hook events), so these are
   // defensive floors rather than values a project.json will ever carry.
   subagent: TERMINAL_SIZE,

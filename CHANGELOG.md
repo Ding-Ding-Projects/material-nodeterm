@@ -114,6 +114,14 @@
   modal, and sessions sidebar. This source-only Program 61 lane intentionally did not run tests,
   type checks, lint, builds, packaging, installer execution, runtime interaction, security or
   accessibility checks, reviews, or UI captures.
+- Add the first-class Files node from upstream PR #294. Each node keeps one persisted directory
+  listing on the canvas with breadcrumb navigation, filtering through the shared anchored regex
+  builder, file and folder creation, path copy, local file-manager reveal, file routing, and a
+  terminal-in-folder action. SSH and relay listings stay on their owning filesystem, worktree
+  removal displaces stale directory nodes, and remote paths never reach the local operating-system
+  opener. This lane intentionally did not run tests, lint, type checks, builds, packaging, runtime
+  interaction, reviews, audits, security or accessibility checks, or UI captures.
+
 - Mount the seven AWS core-service routes on the shared AWS manager: S3, EC2, IAM, STS, Lambda,
   CloudWatch, and CloudWatch Logs. Typed operation controls now cover bounded reads, selected writes,
   destructive confirmation, pagination, cancellation, and progress while reusing the current local

@@ -19,6 +19,7 @@ export const NODE_MIN_SIZES: Record<NodeKind, { width: number; height: number }>
   video: { width: 320, height: 200 },
   web: { width: 320, height: 200 },
   browser: { width: 360, height: 240 },
+  files: { width: 280, height: 220 },
   'homeassistant-control': { width: 460, height: 480 },
   'nextcloud-aio': { width: 520, height: 420 },
   'nextcloud-managed': { width: 520, height: 420 },

@@ -313,6 +313,31 @@ Direct documentation is `docs/features/canvas/node-icons.md`, indexed from the C
 bundle was not regenerated. No tests, lint, type checks, builds, packaging, runtime interaction,
 reviews, audits, or UI captures were run. The parent integration lane owns those checks, the
 dedicated pull request, issue comments and closure, and any later bundle regeneration.
+## 2026-08-27, first-class Files node, issue #73
+
+The Files node lane is being reconciled on `feat/program-62-files-node` against the exact
+`origin/main` tip `54164b84dce0b7e62787b1de2885405ff4ed821c`. The implementation source commit is
+`d00d7c6c483a51468eb431a070a6b3032e5aadd4`, based on upstream PR #294 commit
+`462182664e3339792424f55f7b81764b48c68c12`.
+
+The canvas now has a persisted `files` node with one directory listing, breadcrumb and parent
+navigation, refresh, local file and folder creation, path copy, local file-manager reveal, file
+opening through the existing canvas routing event, and a terminal-in-folder action. Its search is
+plain-text-first and uses the shared adjacent anchored regex builder with bounded candidate
+matching. Loading, read failure, empty directory, and no-match states remain distinct. SSH and
+relay listings stay on their owning filesystem, remote paths never reach the local operating-system
+opener, and worktree removal displaces stale directory nodes by path.
+
+The feature is documented in `docs/features/files/files-node.md` and indexed from
+`docs/features/files/README.md`. `CHANGELOG.md` records the same scope and verification boundary.
+The current origin/main reconciliation also carries the latest shared filesystem bridge and shell
+changes without changing the Files node's local path or portability semantics.
+
+This ultra-speed lane intentionally did not run tests, lint, type checks, builds, packaging,
+installer execution, runtime interaction, reviews, audits, security or accessibility checks, or
+UI captures. The parent integration lane owns those checks, offline documentation regeneration,
+main integration, release evidence, and issue records. No issue or pull request mutation was done
+by this lane.
 
 ## 2026-08-27, AWS core-service managers, issue #46 PR preparation
 
