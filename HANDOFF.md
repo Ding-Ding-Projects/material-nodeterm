@@ -1,5 +1,25 @@
 # Handoff
 
+## 2026-08-27, ten-level funny controls, issue #113
+
+The implementation lane is `feat/funny-level-10`. It expands the shared funny-level union and
+resolver to levels 1–10, adds distinct voice-only level 6–10 handling for legacy five-slot
+catalogue rows, and keeps factual labels intentionally flat. New installations default both
+language values to level 10. Settings schema version 2 is written by the settings store; valid
+existing 1–5 values survive unchanged, while malformed or missing hand-edited values resolve to
+the level-10 shipped default. Renderer hydration and scheduled settings use the same bounded
+normalization.
+
+The Language settings controls now expose 1–10 with a level-10 label and saved-base versus
+scheduled-value provenance. The Easter-egg and portal-entry resolvers consume the full range.
+The site uses versioned `nodeterm-playground.v2` storage, reads the v1 key once for migration,
+preserves valid old values, defaults invalid values to 10, and exports the range/schema metadata.
+Related docs, site article copy, roadmap, and changelog are updated.
+
+No tests, type checks, lint, builds, packaging, reviews, audits, runtime interaction, or captures
+were run in this source lane, per issue #113. The parent integration lane must verify the complete
+tree against its exact integrated commit. No merge, release, issue comment, issue closure, or
+cleanup was performed here.
 ## 2026-08-27, desktop trackpad gesture facts, issue #108
 
 The implementation is on `feat/trackpad-gesture-facts`, based on the current `origin/main` tip

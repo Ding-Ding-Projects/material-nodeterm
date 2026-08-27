@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Expand English and Cantonese funny-level controls from 1–5 to 1–10 for issue #113. New
+  installations default both values to level 10, while settings schema version 2 preserves valid
+  established choices and safely normalizes malformed hand-edited values. Scheduled settings,
+  site-local storage, exports, provenance copy, and the Easter-egg and feature copy resolvers now
+  accept the complete range. This source lane intentionally did not run tests, type checks, lint,
+  builds, packaging, runtime interaction, reviews, audits, or UI captures.
 - Route macOS desktop canvas wheel input from main-process trackpad gesture facts. A depth-safe
   ledger sends scroll and pinch edge transitions over typed IPC, the desktop router keeps a bounded
   500 ms momentum-gap linger, and precise-pixel mouse packets zoom when no gesture is reported.

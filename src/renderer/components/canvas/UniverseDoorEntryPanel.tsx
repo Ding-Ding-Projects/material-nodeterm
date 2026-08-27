@@ -3,7 +3,7 @@ import { AnchoredRegexBuilder } from '../regex/AnchoredRegexBuilder'
 import { useRegexSearchField } from '@renderer/lib/regex/useRegexSearchField'
 import { useI18n } from '@renderer/lib/i18n'
 import { useVocabularyMapper } from '@renderer/lib/personalVocabulary/useVocabularyText'
-import { formatText, t as resolveText, type FunnyLevel } from '@shared/i18n'
+import { formatText, normalizeFunnyLevel, t as resolveText, type FunnyLevel } from '@shared/i18n'
 import { UNIVERSE_DOOR_ENTRY_CATALOG } from '@shared/i18n/universe-door-entry'
 import {
   validateUniverseDoorEntrySubmission,
@@ -31,7 +31,7 @@ function joinedCopy(copy: LocalizedCopy): string {
 }
 
 function safeFunnyLevel(value: number): FunnyLevel {
-  return value >= 1 && value <= 5 && Number.isInteger(value) ? (value as FunnyLevel) : 1
+  return normalizeFunnyLevel(value, 1)
 }
 
 /**

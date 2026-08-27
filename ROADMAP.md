@@ -64,6 +64,11 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## In progress / partially landed
 
+- [ ] **Ten-level funny controls, issue #113**: source and localization range now covers independent
+      English and Cantonese levels 1–10, schema-versioned settings migration, scheduled values,
+      site storage, exports, provenance copy, Easter eggs, and feature resolvers. This implementation
+      lane intentionally has no tests, type checks, lint, builds, packaging, runtime interaction,
+      reviews, audits, or captures; integrated verification remains pending.
 - [ ] **Desktop trackpad gesture facts, issue #108**: main-process scroll and pinch edges now feed
       a depth-safe typed bridge so macOS desktop wheel routing distinguishes a precise-pixel mouse
       from a trackpad, including the bounded momentum-gap linger. Server Edition keeps its browser
