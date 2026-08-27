@@ -90,10 +90,10 @@ The blocker is cleared only when the release record contains all of this evidenc
 
 1. The exact companion commit and built-artifact hash, plus an inventory of every companion path
    that reads and later rewrites `agent.json`; every path must enter the same lock before its read.
-2. A companion-side real two-process Chut that runs both orderings (companion holds while a
+2. A companion-side real two-process check that runs both orderings (companion holds while a
    desktop-shaped writer contends, then the reverse), observes contention, and proves the final
    registry preserves both writers' fields without a leftover lock.
-3. A fail-closed contention Chut that pre-creates the lock, reaches the bounded timeout, and proves
+3. A fail-closed contention check that pre-creates the lock, reaches the bounded timeout, and proves
    neither `agent.json` nor `authorized_keys` changed. It must also prove an old timestamp alone
    never causes lock deletion.
 4. A mixed-artifact run using the actual release companion binary and this desktop writer against
