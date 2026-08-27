@@ -92,8 +92,12 @@ export function mergePortablePlannerSchedules(existing: readonly PlannerSchedule
     const same = JSON.stringify(result.find((candidate) => candidate.id === schedule.id)) === JSON.stringify(schedule)
     if (same) continue
     let suffix = 1
-    let id = `${schedule.id}:import-${suffix}`
-    while (ids.has(id)) id = `${schedule.id}:import-${++suffix}`
+    const suffixText = () => `:import-${suffix}`
+    let id = `${schedule.id.slice(0, Math.max(1, 128 - suffixText().length))}${suffixText()}`
+    while (ids.has(id)) {
+      suffix += 1
+      id = `${schedule.id.slice(0, Math.max(1, 128 - suffixText().length))}${suffixText()}`
+    }
     result.push({ ...schedule, id })
     ids.add(id)
   }
