@@ -7,6 +7,7 @@ import {
 import type { RemoteLoginHelp } from '../../../../shared/types'
 import type { PairedDevice } from '@shared/types'
 import { SettingsSection } from '../SettingsSection'
+import { SettingsText } from '../SettingsText'
 import { SearchableRow } from '../SearchableRow'
 import { requiresDestructiveGate } from '@shared/kids-mode-policy'
 import { openDestructiveGate } from '../../../state/destructiveGate'
@@ -75,10 +76,10 @@ export function PhoneSection({ isActive }: { isActive: boolean }): React.JSX.Ele
         searchEntries={ENTRIES}
       >
         <div className="space-y-2" role="status">
-          <h4 className="text-[13px] font-medium text-text">Not available in Server Edition</h4>
+          <h4 className="text-[13px] font-medium text-text"><SettingsText>Not available in Server Edition</SettingsText></h4>
           <p className="text-sm text-muted">
-            This browser is already connected to the Server Edition host. Pair nodeterm mobile
-            from the desktop app running on the machine whose terminals you want to reach.
+            <SettingsText>This browser is already connected to the Server Edition host. Pair</SettingsText>{' '}
+            <strong>nodeterm mobile</strong>{' '}<SettingsText>from the desktop app running on the machine whose terminals you want to reach.</SettingsText>
           </p>
         </div>
       </SettingsSection>
@@ -266,12 +267,8 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
         <div className="space-y-3">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <h4 className="text-[13px] font-medium text-text">Remote access from your phone</h4>
-              <p className="mt-1 text-sm text-muted">
-                Reach this machine from anywhere — not just your local network — end-to-end encrypted
-                over the relay. Your paired phone connects through the relay; the connection is
-                verified with a code the first time.
-              </p>
+              <h4 className="text-[13px] font-medium text-text"><SettingsText>Remote access from your phone</SettingsText></h4>
+              <p className="mt-1 text-sm text-muted"><SettingsText>Reach this machine from anywhere — not just your local network — end-to-end encrypted over the relay. Your paired phone connects through the relay; the connection is verified with a code the first time.</SettingsText></p>
             </div>
             <Switch
               checked={phoneAccessEnabled}
@@ -284,23 +281,20 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
 
       <SearchableRow {...ROWS.pair}>
         <div className="space-y-4">
-          <h4 className="text-[13px] font-medium text-text">Pair a device</h4>
+              <h4 className="text-[13px] font-medium text-text"><SettingsText>Pair a device</SettingsText></h4>
           <p className="text-sm text-muted">
             {/* Said in the future tense on purpose. This paragraph renders in BOTH states, and when
                 Remote Login is off there is no QR below it — the old copy read "scan this QR" and
                 "inside this QR" over an empty space, telling the reader to scan something that was not
                 there. Every fact it carried is kept; only the tense moved. */}
-            Open <strong>nodeterm mobile</strong> on your iPhone and scan the QR below. The phone
-            generates and keeps its own key; the pairing request and the credentials sent back are
-            encrypted to the host key carried in that QR.
+            <SettingsText>Open</SettingsText>{' '}<strong>nodeterm mobile</strong>{' '}<SettingsText>on your iPhone and scan the QR below. The phone generates and keeps its own key; the pairing request and the credentials sent back are encrypted to the host key carried in that QR.</SettingsText>
           </p>
 
           {phase === 'idle' || phase === 'timeout' || phase === 'failed' ? (
             <div className="space-y-3">
               {phase === 'timeout' ? (
                 <p className="text-sm text-muted">
-                  Pairing timed out — that code no longer works. Start again and scan the fresh
-                  one within ten minutes.
+                  <SettingsText>Pairing timed out — that code no longer works. Start again and scan the fresh one within ten minutes.</SettingsText>
                 </p>
               ) : null}
               <Button variant="primary" disabled={busy} onClick={() => void start()}>
@@ -317,9 +311,7 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
                 // The live probe (usePhonePairing) flips sshOpen and the QR appears by itself.
                 <div className="space-y-2">
                   <p className="text-sm" style={{ color: '#ff9f0a' }}>
-                    {remoteLoginCopy.what} is off, so your phone wouldn&apos;t be able to connect
-                    after pairing. Turn it on — the QR appears here the moment it is, with no need to
-                    restart pairing.
+                      <SettingsText segments={[{ kind: 'fact', value: remoteLoginCopy.what }, { kind: 'copy', value: " is off, so your phone wouldn't be able to connect after pairing. Turn it on — the QR appears here the moment it is, with no need to restart pairing." }]} />
                   </p>
                   {/* Rendered from what the handler RETURNS, never from the platform we guessed. The
                       button was mac-only and the handler was `if (platform !== 'darwin') return` — so a
@@ -328,8 +320,7 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
                       settings surface worth opening, show the command instead of a button that misfires. */}
                   {remoteLoginHelp?.opened === 'none' && remoteLoginHelp.command ? (
                     <p className="text-sm text-muted">
-                      Run <code className="select-all">{remoteLoginHelp.command}</code>, then come back —
-                      this page is watching.
+                      <SettingsText>Run</SettingsText>{' '}<code className="select-all">{remoteLoginHelp.command}</code>, <SettingsText>then come back — this page is watching.</SettingsText>
                     </p>
                   ) : (
                     <Button onClick={() => void openRemoteLogin()}>{remoteLoginCopy.button}</Button>
@@ -344,23 +335,19 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
                     alt="Pairing QR code"
                     className="rounded-lg bg-white p-2"
                   />
-                  <p className="text-sm text-muted">Waiting for your phone… (10 min)</p>
+                  <p className="text-sm text-muted"><SettingsText>Waiting for your phone… (10 min)</SettingsText></p>
                   {relayPlan === 'dev' ? (
                     <p className="text-sm" style={{ color: '#ff9f0a' }}>
-                      Dev build: the relay is off regardless of the toggle, so this code pairs
-                      LAN-only. Run a packaged build — or set NODETERM_RELAY_URL — for remote
-                      access.
+                      <SettingsText>Dev build: the relay is off regardless of the toggle, so this code pairs LAN-only. Run a packaged build — or set</SettingsText>{' '}<code>NODETERM_RELAY_URL</code>{' '}<SettingsText>for remote access.</SettingsText>
                     </p>
                   ) : !phoneAccessEnabled ? (
                     <p className="text-sm" style={{ color: '#ff9f0a' }}>
-                      LAN-only code: the phone will reach this machine only on this network. Turn
-                      on <strong>Remote access from your phone</strong> above first to also
-                      connect from cellular — the QR refreshes by itself.
+                      <SettingsText>LAN-only code: the phone will reach this machine only on this network. Turn on</SettingsText>{' '}<strong><SettingsText>Remote access from your phone</SettingsText></strong>{' '}<SettingsText>above first to also connect from cellular — the QR refreshes by itself.</SettingsText>
                     </p>
                   ) : null}
                   {sshHealed ? (
                     <p className="text-sm" style={{ color: '#30d158' }}>
-                      ✓ Remote Login is on — scan away.
+                      ✓ <SettingsText>Remote Login is on — scan away.</SettingsText>
                     </p>
                   ) : null}
                 </>
@@ -372,11 +359,11 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
           {phase === 'paired' ? (
             <div className="space-y-3">
               <p className="text-sm font-medium" style={{ color: '#30d158' }}>
-                ✓ Paired. That device can now connect with its own key.
+                ✓ <SettingsText>Paired. That device can now connect with its own key.</SettingsText>
               </p>
               {relayResult === 'ok' ? (
                 <p className="text-sm" style={{ color: '#30d158' }}>
-                  Remote access is set up — the phone can reach this machine from anywhere.
+                  <SettingsText>Remote access is set up — the phone can reach this machine from anywhere.</SettingsText>
                 </p>
               ) : relayResult === 'failed' ? (
                 <p className="text-sm" style={{ color: '#ff9f0a' }}>
@@ -386,13 +373,11 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
                 </p>
               ) : relayResult === 'off' ? (
                 <p className="text-sm text-muted">
-                  LAN-only pairing — remote access is switched off above.
+                  <SettingsText>LAN-only pairing — remote access is switched off above.</SettingsText>
                 </p>
               ) : relayResult === 'dev' ? (
                 <p className="text-sm text-muted">
-                  LAN-only pairing — this is an unpackaged (dev) build, where the relay is
-                  disabled regardless of the toggle. Set NODETERM_RELAY_URL to test remote
-                  access, or use a packaged build.
+                  <SettingsText>LAN-only pairing — this is an unpackaged (dev) build, where the relay is disabled regardless of the toggle. Set NODETERM_RELAY_URL to test remote access, or use a packaged build.</SettingsText>
                 </p>
               ) : null}
               <Button onClick={reset}>Pair another device</Button>
@@ -401,7 +386,7 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
 
           {error ? (
             <p className="text-sm" style={{ color: '#ff9f0a' }}>
-              {error}
+              <SettingsText segments={[{ kind: 'fact', value: error }]} />
             </p>
           ) : null}
         </div>
@@ -409,14 +394,14 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
 
       <SearchableRow {...ROWS.devices}>
         <div className="space-y-3">
-          <h4 className="text-[13px] font-medium text-text">Paired devices</h4>
+              <h4 className="text-[13px] font-medium text-text"><SettingsText>Paired devices</SettingsText></h4>
           {revokeError ? (
             <p role="alert" className="text-sm" style={{ color: '#ff9f0a' }}>
               {revokeError}
             </p>
           ) : null}
           {devices.length === 0 ? (
-            <p className="text-sm text-muted">No devices paired yet</p>
+            <p className="text-sm text-muted"><SettingsText>No devices paired yet</SettingsText></p>
           ) : (
             <ul className="space-y-2">
               {devices.map((device) => (
@@ -442,11 +427,9 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
 
       <SearchableRow {...ROWS.relayPeers}>
         <div className="space-y-3">
-          <h4 className="text-[13px] font-medium text-text">Approved relay peers</h4>
+          <h4 className="text-[13px] font-medium text-text"><SettingsText>Approved relay peers</SettingsText></h4>
           <p className="text-sm text-muted">
-            Every phone or other desktop that has mutually approved a relay connection to this
-            machine, and can therefore reach its terminals whenever it connects. Public keys
-            only — never a credential.
+            <SettingsText>Every phone or other desktop that has mutually approved a relay connection to this machine, and can therefore reach its terminals whenever it connects. Public keys only — never a credential.</SettingsText>
           </p>
           {revokePeerError ? (
             <p role="alert" className="text-sm" style={{ color: '#ff9f0a' }}>
@@ -454,7 +437,7 @@ function SupportedPhoneSection({ isActive }: { isActive: boolean }): React.JSX.E
             </p>
           ) : null}
           {relayPeers.length === 0 ? (
-            <p className="text-sm text-muted">No relay peers approved yet</p>
+            <p className="text-sm text-muted"><SettingsText>No relay peers approved yet</SettingsText></p>
           ) : (
             <ul className="space-y-2">
               {relayPeers.map((peerKeyB64) => (

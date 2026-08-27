@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Input } from '@renderer/ui/Input'
 import { Select } from '@renderer/ui/Select'
 import { Button } from '@renderer/ui/Button'
+import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 import {
   MONO_FONT_CATALOG,
   buildFontStack,
@@ -45,6 +46,7 @@ export function FontPicker({
   value: string
   onChange: (stack: string) => void
 }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   // One measurer for the lifetime of the picker: it holds a single reused canvas, and building one
   // per probe is what turns a 31-font scan into a visible hitch.
   const measure = useMemo(() => createCanvasMeasurer(), [])
@@ -94,6 +96,7 @@ export function FontPicker({
     <div className="flex flex-col items-end gap-2">
       <Select
         className="w-64"
+        vocabularyOptions={false}
         value={selectValue}
         aria-label="Font family"
         onChange={(e) => {
@@ -121,13 +124,13 @@ export function FontPicker({
       />
       {missing ? (
         <p className="md3-settings-warn-text">
-          “{primary}” isn’t installed — the next font in the stack is being used.
+          “{primary}” {vocab('is not installed')} — {vocab('the next font in the stack is being used.')}
         </p>
       ) : null}
       {hasLocalFontAccess() && !extraFamilies.length ? (
-        <Button onClick={() => void browseAll()}>Browse all installed fonts</Button>
+        <Button onClick={() => void browseAll()}>{vocab('Browse all installed fonts')}</Button>
       ) : null}
-      {browseError ? <p className="md3-settings-hint">{browseError}</p> : null}
+      {browseError ? <p className="md3-settings-hint">{vocab(browseError)}</p> : null}
     </div>
   )
 }

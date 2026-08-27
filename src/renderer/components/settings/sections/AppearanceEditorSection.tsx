@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { useSettings } from '../../../state/settings'
 import { SettingsSection } from '../SettingsSection'
+import { SettingsText } from '../SettingsText'
 import { SearchableRow } from '../SearchableRow'
 import { Button } from '@renderer/ui/Button'
 import { Input } from '@renderer/ui/Input'
@@ -42,7 +43,7 @@ function RowAnchorButton({
   id: string
   label: string
   kind: string
-  children: React.ReactNode
+  children: string
 }): React.JSX.Element {
   const ref = useRef<HTMLButtonElement>(null)
   return (
@@ -52,7 +53,7 @@ function RowAnchorButton({
         if (ref.current) openAppearanceEditor(id, label, kind, ref.current)
       }}
     >
-      {children}
+      <SettingsText>{children}</SettingsText>
     </Button>
   )
 }
@@ -103,7 +104,7 @@ export function AppearanceEditorSection({ isActive }: { isActive: boolean }): Re
     >
       <SearchableRow {...ROWS.chrome}>
         <div>
-          <h4 className="text-[13px] font-medium text-text">App chrome</h4>
+          <h4 className="text-[13px] font-medium text-text"><SettingsText>App chrome</SettingsText></h4>
           <p className="mt-1 text-[13px] leading-relaxed text-muted">
             The editor themes its own chrome too — including the dialog you'd be looking at right
             now if you opened one of these.
@@ -120,7 +121,7 @@ export function AppearanceEditorSection({ isActive }: { isActive: boolean }): Re
 
       <SearchableRow {...ROWS.overrides}>
         <div>
-          <h4 className="text-[13px] font-medium text-text">Customized elements</h4>
+          <h4 className="text-[13px] font-medium text-text"><SettingsText>Customized elements</SettingsText></h4>
           {overrideIds.length === 0 ? (
             <p className="mt-1 text-[13px] leading-relaxed text-muted">
               Nothing customized yet — right-click any tab or node title and choose "Edit
@@ -136,7 +137,7 @@ export function AppearanceEditorSection({ isActive }: { isActive: boolean }): Re
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     <RowAnchorButton id={id} label={entries[id].label} kind={entries[id].kind}>
-                      Edit…
+              Edit…
                     </RowAnchorButton>
                     <Button onClick={() => resetElement(id)}>Reset</Button>
                   </div>
@@ -149,10 +150,9 @@ export function AppearanceEditorSection({ isActive }: { isActive: boolean }): Re
 
       <SearchableRow {...ROWS.presets}>
         <div>
-          <h4 className="text-[13px] font-medium text-text">Presets</h4>
+          <h4 className="text-[13px] font-medium text-text"><SettingsText>Presets</SettingsText></h4>
           <p className="mt-1 text-[13px] leading-relaxed text-muted">
-            Saved from any element's appearance editor. Export them to a file to share or back up,
-            import a file someone sent you.
+            <SettingsText>Saved from any element's appearance editor. Export them to a file to share or back up, import a file someone sent you.</SettingsText>
           </p>
           {presets.length > 0 && (
             <div className="mt-3 divide-y divide-border/60">
@@ -213,10 +213,9 @@ export function AppearanceEditorSection({ isActive }: { isActive: boolean }): Re
 
       <SearchableRow {...ROWS.reset}>
         <div>
-          <h4 className="text-[13px] font-medium text-text">Reset all appearance edits</h4>
+          <h4 className="text-[13px] font-medium text-text"><SettingsText>Reset all appearance edits</SettingsText></h4>
           <p className="mt-1 text-[13px] leading-relaxed text-muted">
-            Puts every tab, node and app-chrome element that was customized back to the platform
-            default. Saved presets are kept.
+            <SettingsText>Puts every tab, node and app-chrome element that was customized back to the platform default. Saved presets are kept.</SettingsText>
           </p>
           <div className="mt-3">
             <Button

@@ -21,6 +21,7 @@ import { schoolModeAllowsOptionalFeatures } from '@renderer/lib/schoolModePolicy
 import { executeNarratorPreview } from '@renderer/canvas/narration-policy'
 import type { NarratorLanguage } from '@shared/types'
 import { Slider } from '@renderer/ui/md3'
+import { SettingsText } from '../SettingsText'
 
 const ROWS = {
   enabled: {
@@ -112,7 +113,7 @@ function VoicePicker({
               value={voiceURI ?? ''}
               onChange={(e) => onChange(e.target.value === '' ? null : e.target.value)}
             >
-              <option value="">Choose automatically</option>
+              <option value=""><SettingsText>Choose automatically</SettingsText></option>
               {voices.map((v) => (
                 <option key={v.voiceURI} value={v.voiceURI}>
                   {v.name} ({v.lang}
@@ -134,19 +135,19 @@ function VoicePicker({
               disabled={disabled || !status.voice}
               title={status.voice ? 'Play a short sample' : 'No voice available to preview'}
             >
-              Preview
+              <SettingsText>Preview</SettingsText>
             </Button>
           </div>
           <p className="max-w-xs text-right text-[12px] leading-snug text-muted">
-            {!ready
-              ? 'Looking for installed voices…'
-              : status.noVoiceForTrack
-                ? `No ${track === 'yue' ? 'Cantonese' : 'English'} voice is installed on this computer.`
-                : status.missingChosen
-                  ? `Your chosen voice isn't installed here — falling back to “${status.voice?.name}”. Your choice is kept.`
-                  : status.networkOnly
-                    ? `Will speak with “${status.voice?.name}” — needs a network connection, and will go quiet offline.`
-                    : `Will speak with “${status.voice?.name}” (${status.voice?.lang}).`}
+            {!ready ? <SettingsText>Looking for installed voices…</SettingsText> : status.noVoiceForTrack ? (
+              <SettingsText>{`No ${track === 'yue' ? 'Cantonese' : 'English'} voice is installed on this computer.`}</SettingsText>
+            ) : status.missingChosen ? (
+              <SettingsText segments={[{ kind: 'copy', value: "Your chosen voice isn't installed here — falling back to “" }, { kind: 'fact', value: status.voice?.name ?? 'unknown' }, { kind: 'copy', value: '”. Your choice is kept.' }]} />
+            ) : status.networkOnly ? (
+              <SettingsText segments={[{ kind: 'copy', value: 'Will speak with “' }, { kind: 'fact', value: status.voice?.name ?? 'unknown' }, { kind: 'copy', value: '” — needs a network connection, and will go quiet offline.' }]} />
+            ) : (
+              <SettingsText segments={[{ kind: 'copy', value: 'Will speak with “' }, { kind: 'fact', value: status.voice?.name ?? 'unknown' }, { kind: 'copy', value: '” (' }, { kind: 'fact', value: status.voice?.lang ?? 'unknown' }, { kind: 'copy', value: ').' }]} />
+            )}
           </p>
         </div>
       }
@@ -184,7 +185,7 @@ export function NarratorSection({ isActive }: { isActive: boolean }): React.JSX.
     >
       {!available && (
         <p className="text-[13px] text-[color:var(--warn)]">
-          Speech synthesis isn't available in this window, so the narrator can't speak here.
+          <SettingsText>Speech synthesis isn't available in this window, so the narrator can't speak here.</SettingsText>
         </p>
       )}
       <SearchableRow {...ROWS.enabled}>

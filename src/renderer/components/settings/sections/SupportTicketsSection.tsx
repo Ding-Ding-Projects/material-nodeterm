@@ -6,6 +6,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSupportTickets, type SupportTicket, type TicketStatus } from '../../../state/supportTickets'
 import { isBrowserRuntime } from '../../../bridge/runtime'
 import { SettingsSection } from '../SettingsSection'
+import { SettingsText } from '../SettingsText'
+import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
 import { SearchableRow } from '../SearchableRow'
 import { TextArea } from '@renderer/ui/md3'
 import { Select } from '@renderer/ui/Select'
@@ -74,43 +76,43 @@ function TicketRow({ ticket }: { ticket: SupportTicket }): React.JSX.Element {
 
       {ticket.status !== 'resolved' ? (
         <button className="toylock-btn toylock-btn--sm" onClick={() => advance(ticket.id)}>
-          Check for updates
+          <SettingsText>Check for updates</SettingsText>
         </button>
       ) : (
         <div className="toylock-resolution">
           <p className="toylock-recovery__how">
-            Delete nodeterm's local application-data folder and every toy lock resets:
+            <SettingsText>Delete nodeterm's local application-data folder and every toy lock resets:</SettingsText>
           </p>
           <div className="toylock-recovery__path-row">
             <code className="toylock-recovery__path">{dir ?? '…'}</code>
             <button className="toylock-btn toylock-btn--sm" onClick={copyPath} disabled={!dir}>
-              Copy path
+              <SettingsText>Copy path</SettingsText>
             </button>
             {canOpenFolder && (
               <button className="toylock-btn toylock-btn--sm toylock-btn--primary" onClick={openFolder} disabled={!dir}>
-                Open folder
+                <SettingsText>Open folder</SettingsText>
               </button>
             )}
           </div>
           {!canOpenFolder && (
             <p className="toylock-hint">
-              Opening a folder isn't available from a browser tab — delete this path on the server
-              itself.
+              <SettingsText>Opening a folder isn't available from a browser tab — delete this path on the server itself.</SettingsText>
             </p>
           )}
           <p className="toylock-hint">
-            This app never deletes it for you — it just opens the folder and stands back.
+            <SettingsText>This app never deletes it for you — it just opens the folder and stands back.</SettingsText>
           </p>
         </div>
       )}
       <button className="toylock-btn--link" onClick={() => remove(ticket.id)}>
-        Close ticket
+        <SettingsText>Close ticket</SettingsText>
       </button>
     </li>
   )
 }
 
 export function SupportTicketsSection({ isActive }: { isActive: boolean }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   const tickets = useSupportTickets((s) => s.tickets)
   const create = useSupportTickets((s) => s.create)
   const [category, setCategory] = useState(CATEGORIES[0])
@@ -149,15 +151,14 @@ export function SupportTicketsSection({ isActive }: { isActive: boolean }): Reac
       <SearchableRow {...ROW}>
         <div className="space-y-4">
           <div className="toylock-support-disclosure">
-            Nothing on this page is sent anywhere. There is no ticket outside this computer, no
-            network request is made, no data is collected, and nobody is reading it.
+            <SettingsText>Nothing on this page is sent anywhere. There is no ticket outside this computer, no network request is made, no data is collected, and nobody is reading it.</SettingsText>
           </div>
 
           <div className="toylock-add-entry">
             <Select className="toylock-select" value={category} onChange={(e) => setCategory(e.target.value)}>
               {CATEGORIES.map((c) => (
                 <option key={c} value={c}>
-                  {c}
+                  <SettingsText>{c}</SettingsText>
                 </option>
               ))}
             </Select>
@@ -172,34 +173,34 @@ export function SupportTicketsSection({ isActive }: { isActive: boolean }): Reac
               value={severity}
               onChange={(e) => setSeverity(e.target.value as SupportTicket['severity'])}
             >
-              <option value="low">Low</option>
-              <option value="medium">Medium</option>
-              <option value="high">High</option>
-              <option value="critical-but-not-really">Critical (nobody will honour this)</option>
+              <option value="low"><SettingsText>Low</SettingsText></option>
+              <option value="medium"><SettingsText>Medium</SettingsText></option>
+              <option value="high"><SettingsText>High</SettingsText></option>
+              <option value="critical-but-not-really"><SettingsText>Critical (nobody will honour this)</SettingsText></option>
             </Select>
             <button className="toylock-btn toylock-btn--primary" onClick={submit}>
-              Submit ticket
+              <SettingsText>Submit ticket</SettingsText>
             </button>
           </div>
 
           <div className="flex items-center gap-2">
             <input
               type="text"
-              placeholder="Filter tickets…"
+              placeholder={vocab('Filter tickets…')}
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               className="min-w-0 flex-1 rounded-lg border border-border bg-transparent px-3 py-1.5 text-[13px] text-text placeholder:text-muted"
-              aria-label="Filter support tickets"
+              aria-label={vocab('Filter support tickets')}
             />
             {tickets.length > 0 && (
               <button className="toylock-btn toylock-btn--sm" onClick={exportAll}>
-                Copy all as text
+                <SettingsText>Copy all as text</SettingsText>
               </button>
             )}
           </div>
 
           {filtered.length === 0 ? (
-            <p className="text-[13px] text-muted">No tickets yet.</p>
+            <p className="text-[13px] text-muted"><SettingsText>No tickets yet.</SettingsText></p>
           ) : (
             <ul className="toylock-ticket-list">
               {filtered.map((t) => (

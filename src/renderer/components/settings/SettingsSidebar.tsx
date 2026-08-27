@@ -10,6 +10,8 @@ import { useSchoolMode } from '../../state/schoolMode'
 const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
 import { matchesEntry } from './search'
 import { SectionIcon } from './SettingsIcons'
+import { settingsSidebarSearchEntry } from './vocabulary'
+import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 
 export function SettingsSidebar({
   activeSectionId,
@@ -30,6 +32,7 @@ export function SettingsSidebar({
   // secondary on ONE line here (`ts`) rather than stacking a second row per item, which would
   // crowd badly. Contrast with LanguageSection's own body copy, which has room to stack.
   const { ts } = useI18n()
+  const vocab = useVocabularyMapper()
   // Once School mode is renamed, the shipped "School mode" label must never surface anywhere —
   // this is the one spot the sidebar nav's otherwise-static section titles need a live override.
   const schoolModeName = useSchoolMode((s) => s.name)
@@ -81,6 +84,7 @@ export function SettingsSidebar({
                 ? ts('settings.nav.searchRegex', 'Search settings (regex)')
                 : ts('settings.nav.search', 'Search settings')
             }
+            vocabularyMode="factual"
             aria-label={ts('settings.nav.search', 'Search settings')}
           />
           <AnchoredRegexBuilder
@@ -113,8 +117,7 @@ export function SettingsSidebar({
               //     "School mode" cannot light up a row the user has renamed away from it.
               const isSchoolMode = s.id === 'school-mode'
               const sectionTitle = isSchoolMode ? label : ts(`settings.section.${s.id}`, s.title)
-              const searchTitle = isSchoolMode ? label : s.title
-              const dimmed = hasQuery && !matchesEntry(search, { title: searchTitle })
+              const dimmed = hasQuery && !matchesEntry(search, settingsSidebarSearchEntry(s, schoolModeName, vocab, sectionTitle, true))
               return (
                 <button
                   key={s.id}

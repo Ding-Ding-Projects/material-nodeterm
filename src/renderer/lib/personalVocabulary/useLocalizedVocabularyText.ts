@@ -1,10 +1,5 @@
 import { useCallback } from 'react'
-import { formatText } from '@shared/i18n'
 import { useI18n } from '../i18n'
-import { usePersonalVocabulary } from '../../state/personalVocabulary'
-import { useSchoolMode } from '../../state/schoolMode'
-import { applyVocabulary } from './apply'
-import { schoolModeAllowsOptionalFeatures } from '../schoolModePolicy'
 
 /**
  * Resolve shipped UI prose through the active language/funny-level catalog and then through the
@@ -18,22 +13,13 @@ export function useLocalizedVocabularyText(): (
   params?: Record<string, string>
 ) => string {
   const { ts } = useI18n()
-  const entries = usePersonalVocabulary((state) => state.entries)
-  const schoolModeEnabled = useSchoolMode((state) => state.enabled)
-  const schoolModeHydrated = useSchoolMode((state) => state.hydrated)
-  const vocabularyAllowed = schoolModeAllowsOptionalFeatures({
-    enabled: schoolModeEnabled,
-    hydrated: schoolModeHydrated
-  })
 
   return useCallback(
     (id: string, fallback: string, params?: Record<string, string>): string => {
-      const localized = ts(id, fallback)
-      const prose = vocabularyAllowed ? applyVocabulary(localized, entries) : localized
-      // Substitute dynamic facts last: a personal-vocabulary entry must never rewrite a detected
-      // distro name, host error, executable path, or other verbatim value passed as a parameter.
-      return params ? formatText(prose, params) : prose
+      // `useI18n().ts()` resolves and maps the prose template before interpolation. Dynamic facts
+      // such as paths, ids, detected names and tool errors therefore remain exact.
+      return ts(id, fallback, params)
     },
-    [entries, vocabularyAllowed, ts]
+    [ts]
   )
 }

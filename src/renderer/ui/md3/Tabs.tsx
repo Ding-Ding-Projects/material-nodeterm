@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { cn } from '../cn'
+import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
+import type { VocabularyTextMode } from '../../lib/personalVocabulary/useVocabularyText'
 
 export interface TabOption {
   id: string
@@ -20,6 +22,7 @@ export interface TabsProps {
   activeTabClassName?: string
   idPrefix?: string
   panelIdPrefix?: string | null
+  vocabularyMode?: VocabularyTextMode
 }
 
 /**
@@ -41,8 +44,10 @@ export function Tabs({
   tabClassName,
   activeTabClassName,
   idPrefix = 'tab',
-  panelIdPrefix
+  panelIdPrefix,
+  vocabularyMode = 'authored'
 }: TabsProps): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   const refs = useRef<Record<string, HTMLButtonElement | null>>({})
   const enabledItems = items.filter((item) => !item.disabled)
   const selected = enabledItems.find((item) => item.id === value) ?? enabledItems[0]
@@ -64,7 +69,7 @@ export function Tabs({
     <div
       className={cn('mdx-tabs', orientation === 'vertical' && 'mdx-tabs--vertical', className)}
       role="tablist"
-      aria-label={ariaLabel}
+      aria-label={vocabularyMode === 'authored' ? vocab(ariaLabel) : ariaLabel}
       aria-orientation={orientation}
     >
       {items.map((item) => {
@@ -102,7 +107,7 @@ export function Tabs({
               }
             }}
           >
-            {item.label}
+            {vocabularyMode === 'authored' ? vocab(item.label) : item.label}
           </button>
         )
       })}

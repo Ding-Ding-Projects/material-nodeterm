@@ -4,6 +4,7 @@ import { ConfirmDialog } from '../ConfirmDialog'
 import { useSettings } from '../../state/settings'
 import { isPristine, resetPatch } from '@renderer/lib/settingsReset'
 import type { Settings } from '@shared/types'
+import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 
 /**
  * "Reset to defaults" for the settings ONE section owns.
@@ -31,22 +32,23 @@ export function SectionReset<K extends keyof Settings>({
   const update = useSettings((s) => s.update)
   const [asking, setAsking] = useState(false)
   const pristine = isPristine(keys, settings)
+  const vocab = useVocabularyMapper()
 
   return (
     <>
       <div className="md3-settings-row">
         <p className="md3-settings-hint">
           {pristine
-            ? `${what[0].toUpperCase()}${what.slice(1)} are at their defaults.`
-            : `Put ${what} back the way they shipped. Nothing else is touched.`}
+            ? `${vocab(what[0].toUpperCase() + what.slice(1))} are at their defaults.`
+            : `${vocab('Put')} ${what} ${vocab('back the way they shipped. Nothing else is touched.')}`}
         </p>
         <Button disabled={pristine} onClick={() => setAsking(true)}>
-          {label}
+          {vocab(label)}
         </Button>
       </div>
       {asking && (
         <ConfirmDialog
-          message={`Reset ${what} to their defaults?`}
+          message={`${vocab('Reset')} ${what} ${vocab('to their defaults?')}`}
           confirmLabel="Reset"
           onConfirm={() => {
             update(resetPatch(keys))

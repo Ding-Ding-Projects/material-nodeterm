@@ -100,6 +100,13 @@ export function ConfirmDialog({
   const cancelText = vocab(cancelLabel ?? ts('dialog.confirm.cancel', 'Cancel'))
   const confirmText = vocab(confirmLabel ?? (alert ? ts('dialog.confirm.ok', 'OK') : ts('dialog.confirm.delete', 'Delete')))
   const messageText = messageSegments ? mapOwnedSentence(vocab, messageSegments) : vocab(message)
+  const cancelText = cancelLabel ? vocab(cancelLabel) : ts('dialog.confirm.cancel', 'Cancel')
+  const confirmText = confirmLabel
+    ? vocab(confirmLabel)
+    : alert
+      ? ts('dialog.confirm.ok', 'OK')
+      : ts('dialog.confirm.delete', 'Delete')
+  const messageText = vocab(message)
   const optionLabel = vocab(option?.label)
   // Non-semantic decoration only (Settings → Language → "Show emojis…"): purely visual, never
   // part of the accessible name, and never a substitute for the message's actual words.

@@ -1,6 +1,7 @@
 import { forwardRef, type InputHTMLAttributes } from 'react'
 import './md3/primitives.css'
 import { cn } from './cn'
+import { useVocabularyMapper, type VocabularyTextMode } from '../lib/personalVocabulary/useVocabularyText'
 
 /**
  * Dense numeric field on the shared Material Design 3 outlined-field recipe.
@@ -20,6 +21,7 @@ export const NumberField = forwardRef<HTMLInputElement, {
   className?: string
   disabled?: boolean
   ariaLabel?: string
+  vocabularyMode?: VocabularyTextMode
 } & Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'type' | 'className'>>(
   function NumberField({ value, onChange, min, max, step, className, disabled, ariaLabel, ...rest }, ref) {
   function NumberField({
@@ -33,6 +35,8 @@ export const NumberField = forwardRef<HTMLInputElement, {
     ariaLabel,
     ...rest
   }, ref): React.JSX.Element {
+  function NumberField({ value, onChange, min, max, step, className, disabled, ariaLabel, vocabularyMode = 'authored', ...rest }, ref) {
+    const vocab = useVocabularyMapper()
     return (
       <input
         ref={ref}
@@ -42,10 +46,12 @@ export const NumberField = forwardRef<HTMLInputElement, {
         max={max}
         step={step}
         disabled={disabled}
-        aria-label={ariaLabel}
         onChange={(e) => onChange(Number(e.target.value))}
         className={cn('mdx-input mdx-number-field', className)}
         {...rest}
+        aria-label={vocabularyMode === 'authored' ? vocab(ariaLabel) : ariaLabel}
+        title={vocabularyMode === 'authored' ? vocab(rest.title) : rest.title}
+        placeholder={vocabularyMode === 'authored' ? vocab(rest.placeholder) : rest.placeholder}
       />
     )
   }

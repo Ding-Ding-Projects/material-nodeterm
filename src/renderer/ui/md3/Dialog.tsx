@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, type HTMLAttributes, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '../cn'
+import { useVocabularyMapper, type VocabularyTextMode } from '../../lib/personalVocabulary/useVocabularyText'
 
 export interface DialogProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title'> {
   open: boolean
@@ -16,6 +17,7 @@ export interface DialogProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title
   closeOnScrimClick?: boolean
   /** @default true */
   closeOnEscape?: boolean
+  vocabularyMode?: VocabularyTextMode
 }
 
 /**
@@ -41,9 +43,11 @@ export function Dialog({
   children,
   closeOnScrimClick = true,
   closeOnEscape = true,
+  vocabularyMode = 'authored',
   className,
   ...rest
 }: DialogProps): React.JSX.Element | null {
+  const vocab = useVocabularyMapper()
   const returnFocusRef = useRef<HTMLElement | null>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const titleId = useId()
@@ -133,11 +137,11 @@ export function Dialog({
         className={cn('mdx-dialog', className)}
         {...rest}
         aria-labelledby={title ? titleId : undefined}
-        aria-label={!title ? rest['aria-label'] : undefined}
+        aria-label={!title ? (vocabularyMode === 'authored' ? vocab(rest['aria-label']) : rest['aria-label']) : undefined}
       >
         {icon}
-        {title && <div id={titleId} className="mdx-dialog__title">{title}</div>}
-        {children}
+        {title && <div id={titleId} className="mdx-dialog__title">{vocabularyMode === 'authored' && typeof title === 'string' ? vocab(title) : title}</div>}
+        {vocabularyMode === 'authored' && typeof children === 'string' ? vocab(children) : children}
         {actions && <div className="mdx-dialog__actions">{actions}</div>}
       </div>
     </div>,

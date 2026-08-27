@@ -1,16 +1,26 @@
 import type React from 'react'
-import { useVocabularyText } from '../../lib/personalVocabulary/useVocabularyText'
+import { useVocabularyTemplate, useVocabularyText } from '../../lib/personalVocabulary/useVocabularyText'
+import { resolutionIncludes, useSettingsVocabularyResolution, type SettingsVocabularyResolution } from './context'
+import { SettingsText, type SettingsTextSegment } from './SettingsText'
 
 /** label (+ optional description, + optional highlighted note) on the left, a control on the right. */
 export function FieldRow({
   label,
+  labelSegments,
   description,
+  descriptionParams,
+  resolvedVocabulary,
   note,
   control,
   htmlFor
 }: {
   label: string
+  labelSegments?: readonly SettingsTextSegment[]
   description?: string
+  /** Dynamic facts are interpolated only after the local prose vocabulary is applied. */
+  descriptionParams?: Record<string, string>
+  /** Set when the caller already resolved this prose through the shared local boundary. */
+  resolvedVocabulary?: SettingsVocabularyResolution
   /** A caveat about the current value (e.g. "this setting can't take effect here") — same size as
    *  the description but in the warning accent, so it reads as a state, not as help text. */
   note?: string
@@ -20,14 +30,19 @@ export function FieldRow({
   // Personal-vocabulary boundary: every Settings label/description/note in the app funnels
   // through this one component, so this is where the substitution actually reaches users. Never
   // applied to `control` — that's live form widgets, not prose.
-  const vocabLabel = useVocabularyText(label)
-  const vocabDescription = useVocabularyText(description)
-  const vocabNote = useVocabularyText(note)
+  const mappedLabel = useVocabularyText(label)
+  const inheritedVocabularyResolution = useSettingsVocabularyResolution()
+  const alreadyApplied = resolutionIncludes(resolvedVocabulary, 'row') || resolutionIncludes(inheritedVocabularyResolution, 'row')
+  const vocabLabel = alreadyApplied ? label : mappedLabel
+  const mappedDescription = useVocabularyTemplate(description, descriptionParams)
+  const vocabDescription = alreadyApplied ? description : mappedDescription
+  const mappedNote = useVocabularyText(note)
+  const vocabNote = alreadyApplied ? note : mappedNote
   return (
     <div className="md3-settings-row">
       <div className="md3-settings-row__body">
         <label htmlFor={htmlFor} className="md3-settings-row__label">
-          {vocabLabel}
+          {labelSegments ? <SettingsText segments={labelSegments} /> : vocabLabel}
         </label>
         {vocabDescription ? <p className="md3-settings-row__desc">{vocabDescription}</p> : null}
         {vocabNote ? <p className="md3-settings-row__note">{vocabNote}</p> : null}

@@ -4,11 +4,11 @@ import { modelAfterDelete, modelAfterDownload } from '@shared/speech'
 import { DEFAULT_SETTINGS } from '@shared/types'
 import { useSettings } from '../../../state/settings'
 import { SettingsSection } from '../SettingsSection'
+import { SettingsText } from '../SettingsText'
 import { SearchableRow } from '../SearchableRow'
 import { FieldRow } from '../FieldRow'
 import { Select } from '@renderer/ui/Select'
 import { Radio } from '@renderer/ui/md3'
-import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
 import { SegmentedPill } from '@renderer/ui/SegmentedPill'
 import { Button } from '@renderer/ui/Button'
 import { formatShortcut, isHoldChord } from '@shared/shortcut'
@@ -79,7 +79,6 @@ function modelLabel(id: string): string {
 }
 
 export function SpeechSection({ isActive }: { isActive: boolean }): React.JSX.Element {
-  const vocab = useVocabularyMapper()
   const settings = useSettings((s) => s.settings)
   const update = useSettings((s) => s.update)
 
@@ -192,7 +191,7 @@ export function SpeechSection({ isActive }: { isActive: boolean }): React.JSX.El
   return (
     <SettingsSection
       id="speech"
-      title={vocab('Speech')}
+      title="Speech"
       description="Dictate into any terminal or chat node. Local Whisper runs fully on-device — nothing leaves this machine."
       isActive={isActive}
       searchEntries={ENTRIES}
@@ -237,9 +236,9 @@ export function SpeechSection({ isActive }: { isActive: boolean }): React.JSX.El
 
       <SearchableRow {...ROWS.models}>
         <div className="space-y-3">
-          <h4 className="text-[13px] font-medium text-text">Whisper models</h4>
+          <h4 className="text-[13px] font-medium text-text"><SettingsText>Whisper models</SettingsText></h4>
           {models.length === 0 ? (
-            <p className="text-[12px] text-muted">Loading models…</p>
+            <p className="text-[12px] text-muted"><SettingsText>Loading models…</SettingsText></p>
           ) : (
             <div className="space-y-2">
               {models.map((m) => {

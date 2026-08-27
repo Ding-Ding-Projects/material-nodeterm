@@ -48,26 +48,32 @@ const UNAVAILABLE_PROFILE_OPTION = '__configured-profile-unavailable__'
 type ProfileText = ReturnType<typeof useLocalizedVocabularyText>
 
 function localizedRows(profileText: ProfileText): typeof BASE_ROWS {
+  const localizeKeywords = (id: string, keywords: readonly string[]): string[] =>
+    keywords.map((keyword, index) => profileText(`terminalProfiles.settings.${id}.keyword.${index}`, keyword))
   return {
     ...BASE_ROWS,
     profile: {
       ...BASE_ROWS.profile,
-      title: profileText('terminalProfiles.settings.defaultLabel', 'Default terminal profile')
+      title: profileText('terminalProfiles.settings.defaultLabel', 'Default terminal profile'),
+      keywords: localizeKeywords('profile', BASE_ROWS.profile.keywords)
     },
     availability: {
       ...BASE_ROWS.availability,
       title: profileText(
         'terminalProfiles.settings.availabilityRowTitle',
         'Detected profile availability'
-      )
+      ),
+      keywords: localizeKeywords('availability', BASE_ROWS.availability.keywords)
     },
     custom: {
       ...BASE_ROWS.custom,
-      title: profileText('terminalProfiles.settings.customLabel', 'Custom executable')
+      title: profileText('terminalProfiles.settings.customLabel', 'Custom executable'),
+      keywords: localizeKeywords('custom', BASE_ROWS.custom.keywords)
     },
     legacyShell: {
       ...BASE_ROWS.legacyShell,
-      title: profileText('terminalProfiles.settings.legacyDefaultLabel', 'Default shell')
+      title: profileText('terminalProfiles.settings.legacyDefaultLabel', 'Default shell'),
+      keywords: localizeKeywords('legacyShell', BASE_ROWS.legacyShell.keywords)
     }
   }
 }
@@ -77,8 +83,9 @@ function LegacyShellControl({ rows }: { rows: typeof BASE_ROWS }): React.JSX.Ele
   const defaultShell = useSettings((state) => state.settings.defaultShell)
   const update = useSettings((state) => state.update)
   return (
-    <SearchableRow {...rows.legacyShell}>
+    <SearchableRow {...rows.legacyShell} resolvedVocabulary={{ source: 'localized-vocabulary', fields: 'all' }}>
       <FieldRow
+        resolvedVocabulary={{ source: 'localized-vocabulary', fields: 'all' }}
         label={profileText('terminalProfiles.settings.legacyDefaultLabel', 'Default shell')}
         htmlFor="settings-default-shell"
         control={
@@ -89,6 +96,7 @@ function LegacyShellControl({ rows }: { rows: typeof BASE_ROWS }): React.JSX.Ele
               'terminalProfiles.settings.systemDefaultPlaceholder',
               'system default'
             )}
+            vocabularyMode="factual"
             value={defaultShell}
             onChange={(event) => update({ defaultShell: event.target.value })}
           />
@@ -287,8 +295,9 @@ function WindowsProfileControls({ rows }: { rows: typeof BASE_ROWS }): React.JSX
 
   return (
     <>
-      <SearchableRow {...rows.profile}>
+      <SearchableRow {...rows.profile} resolvedVocabulary={{ source: 'localized-vocabulary', fields: 'all' }}>
         <FieldRow
+          resolvedVocabulary={{ source: 'localized-vocabulary', fields: 'all' }}
           label={profileText(
             'terminalProfiles.settings.defaultLabel',
             'Default terminal profile'
@@ -425,8 +434,9 @@ function WindowsProfileControls({ rows }: { rows: typeof BASE_ROWS }): React.JSX
         </div>
       </SearchableRow>
 
-      <SearchableRow {...rows.custom}>
+      <SearchableRow {...rows.custom} resolvedVocabulary={{ source: 'localized-vocabulary', fields: 'all' }}>
         <FieldRow
+          resolvedVocabulary={{ source: 'localized-vocabulary', fields: 'all' }}
           label={profileText('terminalProfiles.settings.customLabel', 'Custom executable')}
           description={profileText(
             'terminalProfiles.settings.customDescription',
@@ -440,6 +450,7 @@ function WindowsProfileControls({ rows }: { rows: typeof BASE_ROWS }): React.JSX
                 id="custom-shell-executable"
                 className="w-72 font-mono"
                 placeholder="C:\\Program Files\\PowerShell\\7\\pwsh.exe"
+                vocabularyMode="factual"
                 value={defaultShell}
                 spellCheck={false}
                 autoComplete="off"
@@ -480,6 +491,7 @@ export function ShellSection({ isActive }: { isActive: boolean }): React.JSX.Ele
   return (
     <SettingsSection
       id="shell"
+      resolvedVocabulary={{ source: 'localized-vocabulary', fields: 'all', searchEntries: 'mapped' }}
       title={profileText('terminalProfiles.settings.sectionTitle', 'Shell')}
       description={
         profileSupport

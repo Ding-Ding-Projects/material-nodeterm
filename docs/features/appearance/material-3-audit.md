@@ -264,6 +264,48 @@ Every listed renderer producer has an explicit local mapper boundary. Commands, 
 | --- | --- | --- | --- |
 | `settings-fields` | FieldRow | `src/renderer/components/settings/FieldRow.tsx` | `useVocabularyMapper()` |
 | `settings-sections` | SettingsSection | `src/renderer/components/settings/SettingsSection.tsx` | `useVocabularyMapper()` |
+| `settings-page` | Settings scope and every production section host | `src/renderer/components/settings/SettingsPage.tsx` | `useLocalizedVocabularyText()` |
+| `settings-page-registration` | Settings page vocabulary section registration | `src/renderer/components/settings/SettingsPage.tsx` | `<PersonalVocabularySection` |
+| `settings-sidebar` | Settings group and section navigation | `src/renderer/components/settings/SettingsSidebar.tsx` | `useI18n()` shared vocabulary boundary |
+| `settings-sidebar-registration` | Settings sidebar section registry | `src/renderer/components/settings/SettingsSidebar.tsx` | `visibleSettingsGroups(` |
+| `settings-search-corpus` | Settings search matches visible replacements and shipped aliases | `src/renderer/components/settings/SearchableRow.tsx` | `useVocabularyMapper()` |
+| `settings-inline-copy` | Explicit prose boundary for settings inline text | `src/renderer/components/settings/SettingsText.tsx` | `useVocabularyMapper()` |
+| `settings-reset` | Section reset copy | `src/renderer/components/settings/SectionReset.tsx` | `useVocabularyMapper()` |
+| `settings-font-picker` | Font picker labels and states | `src/renderer/components/settings/FontPicker.tsx` | `useVocabularyMapper()` |
+| `settings-theme-picker` | Theme picker labels | `src/renderer/components/settings/ThemeSelect.tsx` | `useVocabularyMapper()` |
+| `settings-section-inline-copy` | Standalone settings prose boundary | `src/renderer/components/settings/SettingsText.tsx` | `export function SettingsText` |
+| `settings-copy-facts` | Typed copy/fact segments and template facts | `src/renderer/components/settings/SettingsText.tsx`, `FieldRow.tsx` | `SettingsTextSegment`, `labelSegments` |
+| `settings-resolution-ownership` | Section versus row vocabulary ownership | `src/renderer/components/settings/context.ts`, `SettingsSection.tsx`, `FieldRow.tsx`, `SearchableRow.tsx` | `resolutionIncludes` |
+| `settings-section-registry` | Shared Settings section identity for routing and navigation | `src/renderer/components/settings/nav.ts`, `SettingsPage.tsx`, `SettingsSidebar.tsx` | `SETTINGS_SECTION_REGISTRY` |
+| `settings-search-policy` | Settings visible/shipped search and School-mode rename policy | `src/renderer/components/settings/vocabulary.ts` | `export function settingsSidebarSearchEntry` |
+| `school-mode-settings` | School-mode placeholders and settings prose | `src/renderer/components/settings/sections/SchoolModeSection.tsx` | `useVocabularyMapper()` |
+| `kids-mode-settings` | Kids-mode placeholders and settings prose | `src/renderer/components/settings/sections/KidsModeSection.tsx` | `useVocabularyMapper()` |
+| `usage-settings` | Usage credential placeholder copy | `src/renderer/components/settings/sections/UsageSection.tsx` | `useVocabularyMapper()` |
+| `shared-prose-primitives` | Shared controls carrying prose props | `src/renderer/ui/` | `useVocabularyMapper()` in each primitive |
+| `ui-button-wrapper-delegation` | Compatibility button delegates prose mapping to MD3 button | `src/renderer/ui/Button.tsx` | `<Md3Button` |
+| `ui-input` | Input accessible labels and placeholders | `src/renderer/ui/Input.tsx` | `useVocabularyMapper()` |
+| `ui-md3-button` | MD3 button authored/factual labels | `src/renderer/ui/md3/Button.tsx` | `useVocabularyMapper()` |
+| `ui-chip` | Chip authored/factual text | `src/renderer/ui/md3/Chip.tsx` | `useVocabularyMapper()` |
+| `ui-menu` | Menu authored/factual accessible text | `src/renderer/ui/md3/Menu.tsx` | `useVocabularyMapper()` |
+| `ui-status-chip` | Status chip authored/factual text | `src/renderer/ui/md3/StatusChip.tsx` | `useVocabularyMapper()` |
+| `ui-switch` | Switch accessible label intent | `src/renderer/ui/Switch.tsx` | `useVocabularyTemplate(` |
+| `ui-select` | Select labels and option groups | `src/renderer/ui/Select.tsx` | `useVocabularyMapper()` |
+| `ui-number-field` | Number field labels and placeholders | `src/renderer/ui/NumberField.tsx` | `useVocabularyMapper()` |
+| `ui-text-area` | Text area labels and placeholders | `src/renderer/ui/md3/TextArea.tsx` | `useVocabularyMapper()` |
+| `ui-text-field` | Text field labels and support text | `src/renderer/ui/md3/TextField.tsx` | `useVocabularyMapper()` |
+| `ui-fab` | Floating action button labels | `src/renderer/ui/md3/Fab.tsx` | `useVocabularyMapper()` |
+| `ui-icon-button` | Icon button labels | `src/renderer/ui/md3/IconButton.tsx` | `useVocabularyMapper()` |
+| `ui-segmented-button` | Segmented option labels | `src/renderer/ui/md3/SegmentedButton.tsx` | `useVocabularyMapper()` |
+| `ui-dialog` | Dialog title and accessible label | `src/renderer/ui/md3/Dialog.tsx` | `useVocabularyMapper()` |
+| `ui-list-row` | List-row authored/factual labels | `src/renderer/ui/md3/ListRow.tsx` | `useVocabularyMapper()` |
+| `ui-tabs` | Tab labels and accessible name | `src/renderer/ui/md3/Tabs.tsx` | `useVocabularyMapper()` |
+| `ui-slider` | Slider accessible labels | `src/renderer/ui/md3/Slider.tsx` | `useVocabularyMapper()` |
+| `ui-checkbox` | Checkbox accessible labels | `src/renderer/ui/md3/Checkbox.tsx` | `useVocabularyMapper()` |
+| `ui-radio` | Radio accessible labels | `src/renderer/ui/md3/Radio.tsx` | `useVocabularyMapper()` |
+| `filterable-menu` | Filter field prose | `src/renderer/components/menu/FilterableMenu.tsx` | `useVocabularyMapper()` |
+| `editable-node-title` | Editable title copy | `src/renderer/components/EditableNodeTitle.tsx` | `useVocabularyMapper()` |
+| `destructive-confirm-gate` | Destructive confirmation prose | `src/renderer/components/DestructiveConfirmGate.tsx` | `useVocabularyMapper()` |
+| `shared-input-controls` | Shared range, checkbox and radio accessible copy | `src/renderer/ui/md3/Slider.tsx`, `Checkbox.tsx`, `Radio.tsx` | `useVocabularyMapper()` |
 | `personal-vocabulary-upload` | Upload settings | `src/renderer/components/settings/sections/PersonalVocabularySection.tsx` | `usePersonalVocabulary` |
 | `command-palette` | Command palette | `src/renderer/components/CommandPalette.tsx` | `useVocabularyCommands` |
 | `context-menus` | Context menus | `src/renderer/components/menu/VocabularyContextMenu.tsx` | `useVocabularyMenuItems` |
@@ -362,6 +404,7 @@ Every listed renderer producer has an explicit local mapper boundary. Commands, 
 | `native-notification-canvas` | Native notification fact route | `src/renderer/canvas/Canvas.tsx` | `mapNativeNotification(` |
 | `native-notification-onboarding` | Native authored notification route | `src/renderer/components/onboarding/OnboardingFlow.tsx` | `mapNativeNotification(` |
 | `native-notification-settings` | Native authored notification route | `src/renderer/components/settings/sections/NotificationsSection.tsx` | `mapNativeNotification(` |
+| `personal-vocabulary-template` | Safe prose-template interpolation | `src/renderer/lib/personalVocabulary/apply.ts` | `export function applyVocabularyToTemplate` |
 
 ## Complete production surface classification
 

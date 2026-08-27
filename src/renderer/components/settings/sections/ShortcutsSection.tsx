@@ -11,6 +11,7 @@ import { SettingsSection } from '../SettingsSection'
 import { SearchableRow } from '../SearchableRow'
 import { FieldRow } from '../FieldRow'
 import { ShortcutCaptureField } from '../ShortcutCaptureField'
+import { SettingsText } from '../SettingsText'
 
 const DEFAULT_MAP = DEFAULT_SETTINGS.shortcuts
 
@@ -72,7 +73,7 @@ export function ShortcutsSection({ isActive }: { isActive: boolean }): React.JSX
           keywords={group.defs.flatMap((d) => [d.label, ...d.keywords])}
         >
           <div>
-            <h4 className="text-[13px] font-medium text-text">{group.title}</h4>
+            <h4 className="text-[13px] font-medium text-text"><SettingsText>{group.title}</SettingsText></h4>
             <div className="mt-3 space-y-3 border-l border-border pl-4">
               {group.defs.map((d) => {
                 const clash = conflicts.get(settings.shortcuts[d.id])
@@ -90,9 +91,10 @@ export function ShortcutsSection({ isActive }: { isActive: boolean }): React.JSX
                     htmlFor={`shortcut-${d.id}`}
                     description={
                       clashLabel
-                        ? `Also bound to: ${clashLabel}. The first one to match wins — pick a different key.`
+                        ? 'Also bound to: {clash}. The first one to match wins — pick a different key.'
                         : undefined
                     }
+                    descriptionParams={clashLabel ? { clash: clashLabel } : undefined}
                     control={
                       <ShortcutCaptureField
                         value={settings.shortcuts[d.id]}

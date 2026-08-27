@@ -15,6 +15,8 @@ import {
   type Weekday
 } from '@shared/scheduled-settings'
 import { SettingsSection } from '../SettingsSection'
+import { SettingsText } from '../SettingsText'
+import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
 import { SearchableRow } from '../SearchableRow'
 import { Button } from '@renderer/ui/Button'
 import { Input } from '@renderer/ui/Input'
@@ -70,14 +72,15 @@ function Labeled({
   error?: string
   children: React.ReactNode
 }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   return (
     <div className="min-w-0 space-y-1">
-      <span className="block text-[12px] font-medium text-muted">{label}</span>
+      <span className="block text-[12px] font-medium text-muted">{vocab(label)}</span>
       {children}
       {error ? (
-        <p className="text-[11px] leading-snug text-[color:var(--warn)]">{error}</p>
+        <p className="text-[11px] leading-snug text-[color:var(--warn)]"><SettingsText segments={[{ kind: 'fact', value: error }]} /></p>
       ) : hint ? (
-        <p className="text-[11px] leading-snug text-muted-2">{hint}</p>
+        <p className="text-[11px] leading-snug text-muted-2">{vocab(hint)}</p>
       ) : null}
     </div>
   )
@@ -104,6 +107,7 @@ function WeekdayPicker({
   days: 'every-day' | Weekday[]
   onChange: (days: 'every-day' | Weekday[]) => void
 }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   const everyDay = days === 'every-day'
   // Narrows directly off `days` (not off the `everyDay` alias) so this doesn't depend on
   // TypeScript's aliased-condition narrowing — a plain, unambiguous discriminant check.
@@ -116,11 +120,11 @@ function WeekdayPicker({
           onChange={(v) => onChange(v ? 'every-day' : [1, 2, 3, 4, 5])}
           ariaLabel="Every day"
         />
-        Every day
+        <SettingsText>Every day</SettingsText>
       </label>
       {!everyDay && (
         <>
-          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Weekdays">
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label={vocab('Weekdays')}>
             {WEEKDAY_SHORT.map((label, idx) => {
               const day = idx as Weekday
               const checked = selected.includes(day)
@@ -130,7 +134,7 @@ function WeekdayPicker({
                   type="button"
                   role="checkbox"
                   aria-checked={checked}
-                  aria-label={WEEKDAY_FULL[day]}
+                  aria-label={vocab(WEEKDAY_FULL[day])}
                   onClick={() =>
                     onChange(
                       checked
@@ -168,6 +172,7 @@ function WindowEditor({
   window: ScheduleWindow
   onChange: (w: ScheduleWindow) => void
 }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   const errors = validateScheduleWindow(window)
   return (
     <div className="space-y-3">
@@ -235,17 +240,20 @@ function StatusRow({
       <div className="min-w-0 text-[12px] leading-snug">
         {status?.error ? (
           <p className="text-[color:var(--warn)]">
-            {label} error: {status.error}
-            {lastSuccess
-              ? ` Still applying the value synced ${lastSuccess}.`
-              : ' Nothing has synced yet, so this rule cannot apply.'}
+            <SettingsText segments={[
+              { kind: 'copy', value: `${label} error: ` },
+              { kind: 'fact', value: status.error },
+              ...(lastSuccess
+                ? [{ kind: 'copy' as const, value: ' Still applying the value synced ' }, { kind: 'fact' as const, value: lastSuccess }, { kind: 'copy' as const, value: '.' }]
+                : [{ kind: 'copy' as const, value: ' Nothing has synced yet, so this rule cannot apply.' }])
+            ]} />
           </p>
         ) : status?.ok ? (
           <p className="text-muted">
-            {label} last synced {lastSuccess}.
+            <SettingsText segments={[{ kind: 'copy', value: `${label} last synced ` }, { kind: 'fact', value: lastSuccess ?? 'unknown' }, { kind: 'copy', value: '.' }]} />
           </p>
         ) : (
-          <p className="text-muted">{label} has not been checked yet.</p>
+          <p className="text-muted"><SettingsText>{label} has not been checked yet.</SettingsText></p>
         )}
       </div>
       <Button onClick={onRetry}>Retry</Button>
@@ -286,9 +294,9 @@ function SourceEditor({
             else onChange({ kind: 'local' })
           }}
         >
-          <option value="local">Local — apply the settings below whenever the window matches</option>
-          <option value="api">HTTPS API — fetch the settings to apply from a URL</option>
-          <option value="home-assistant">Home Assistant — gate this rule on a boolean entity</option>
+          <option value="local"><SettingsText>Local — apply the settings below whenever the window matches</SettingsText></option>
+          <option value="api"><SettingsText>HTTPS API — fetch the settings to apply from a URL</SettingsText></option>
+          <option value="home-assistant"><SettingsText>Home Assistant — gate this rule on a boolean entity</SettingsText></option>
         </Select>
       </Labeled>
 
@@ -301,6 +309,7 @@ function SourceEditor({
             <Input
               className="w-full"
               placeholder="https://example.com/nodeterm-schedule.json"
+              vocabularyMode="factual"
               value={source.url}
               onChange={(e) => onChange({ ...source, url: e.target.value })}
             />
@@ -315,6 +324,7 @@ function SourceEditor({
             <Input
               className="w-full"
               placeholder="https://homeassistant.example.com"
+              vocabularyMode="factual"
               value={source.baseUrl}
               onChange={(e) => onChange({ ...source, baseUrl: e.target.value })}
             />
@@ -326,6 +336,7 @@ function SourceEditor({
             <Input
               className="w-full"
               placeholder="input_boolean.evening_mode"
+              vocabularyMode="factual"
               value={source.entityId}
               onChange={(e) => onChange({ ...source, entityId: e.target.value })}
             />
@@ -346,6 +357,7 @@ function SourceEditor({
                 type="password"
                 className="w-full"
                 placeholder={hasToken ? '••••••••••••' : 'Paste a Home Assistant long-lived access token'}
+                vocabularyMode="factual"
                 value={tokenDraft}
                 onChange={(e) => setTokenDraft(e.target.value)}
                 autoComplete="off"
@@ -361,11 +373,11 @@ function SourceEditor({
                   })
                 }}
               >
-                Save
+                <SettingsText>Save</SettingsText>
               </Button>
               {(hasToken || tokenStatusUnknown) && (
                 <Button variant="ghost" onClick={() => void onSetToken(null)}>
-                  Clear
+                  <SettingsText>Clear</SettingsText>
                 </Button>
               )}
             </div>
@@ -392,9 +404,9 @@ const VALUE_FIELDS: {
     label: 'App appearance',
     render: (v, onChange) => (
       <Select className="w-40" value={(v as string) ?? 'auto'} onChange={(e) => onChange(e.target.value)}>
-        <option value="auto">Auto</option>
-        <option value="dark">Dark</option>
-        <option value="light">Light</option>
+        <option value="auto"><SettingsText>Auto</SettingsText></option>
+        <option value="dark"><SettingsText>Dark</SettingsText></option>
+        <option value="light"><SettingsText>Light</SettingsText></option>
       </Select>
     )
   },
@@ -660,7 +672,7 @@ function RuleCard({
         />
         {isActive && (
           <span className="shrink-0 rounded-full bg-accent/15 px-2 py-0.5 text-[11px] font-medium text-accent">
-            Active now
+            <SettingsText>Active now</SettingsText>
           </span>
         )}
         <div className="flex shrink-0 items-center gap-1">
@@ -682,19 +694,19 @@ function RuleCard({
           >
             ↓
           </Button>
-          <Button variant="ghost" onClick={onRemove} aria-label={`Remove ${rule.label || 'rule'}`}>
-            Remove
+          <Button variant="ghost" onClick={onRemove} aria-label={`${vocab('Remove')} ${rule.label || vocab('rule')}`}>
+            <SettingsText>Remove</SettingsText>
           </Button>
         </div>
       </div>
 
       <div>
-        <p className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-muted-2">When</p>
+        <p className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-muted-2"><SettingsText>When</SettingsText></p>
         <WindowEditor window={rule.window} onChange={(window) => onPatch({ window })} />
       </div>
 
       <div>
-        <p className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-muted-2">Source</p>
+        <p className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-muted-2"><SettingsText>Source</SettingsText></p>
         <SourceEditor
           source={rule.source}
           hasToken={hasToken}
@@ -709,7 +721,7 @@ function RuleCard({
 
       <div>
         <p className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-muted-2">
-          {rule.source.kind === 'api' ? 'Local fallback (before the first fetch)' : 'Apply while active'}
+          <SettingsText>{rule.source.kind === 'api' ? 'Local fallback (before the first fetch)' : 'Apply while active'}</SettingsText>
         </p>
         <ValuesEditor values={rule.values} onChange={(values) => onPatch({ values })} />
       </div>
@@ -758,7 +770,7 @@ export function ScheduleSection({ isActive }: { isActive: boolean }): React.JSX.
   if (!hydrated || !settingsHydrated) {
     return (
       <SettingsSection id="schedule" title="Schedule" isActive={isActive} searchEntries={ENTRIES}>
-        <p className="text-[13px] text-muted">Loading…</p>
+          <p className="text-[13px] text-muted"><SettingsText>Loading…</SettingsText></p>
       </SettingsSection>
     )
   }
@@ -777,14 +789,19 @@ export function ScheduleSection({ isActive }: { isActive: boolean }): React.JSX.
           className="space-y-2 rounded-md border border-[color:var(--warn)] bg-[color:var(--warn)]/10 px-3 py-3 text-[13px] text-[color:var(--warn)]"
         >
           <p>
-            Scheduled settings are off because the saved file is {loadError.kind === 'corrupt'
-              ? 'not valid JSON'
-              : 'unreadable'}{loadError.code ? ` (${loadError.code})` : ''}.
+            <SettingsText segments={[
+              { kind: 'copy', value: 'Scheduled settings are off because the saved file is ' },
+              { kind: 'copy', value: loadError.kind === 'corrupt' ? 'not valid JSON' : 'unreadable' },
+              ...(loadError.code ? [{ kind: 'fact' as const, value: ` (${loadError.code})` }] : []),
+              { kind: 'copy', value: '.' }
+            ]} />
           </p>
           <p>
-            The original evidence was left untouched at <code>{loadError.path}</code>. Repair or
-            move that file, then restart nodeterm. Editing stays locked so this recovery copy
-            cannot be overwritten.
+            <SettingsText segments={[
+              { kind: 'copy', value: 'The original evidence was left untouched at ' },
+              { kind: 'fact', value: <code>{loadError.path}</code> },
+              { kind: 'copy', value: '. Repair or move that file, then restart nodeterm. Editing stays locked so this recovery copy cannot be overwritten.' }
+            ]} />
           </p>
         </div>
       </SettingsSection>
@@ -821,10 +838,7 @@ export function ScheduleSection({ isActive }: { isActive: boolean }): React.JSX.
             </p>
           )}
           {file.rules.length === 0 && (
-            <p className="text-[13px] text-muted">
-              No rules yet. Add one to switch appearance settings automatically for a time of day,
-              a date range, or a Home Assistant entity.
-            </p>
+          <p className="text-[13px] text-muted"><SettingsText>No rules yet. Add one to switch appearance settings automatically for a time of day, a date range, or a Home Assistant entity.</SettingsText></p>
           )}
           {file.rules.map((rule, index) => (
             <RuleCard
@@ -844,7 +858,7 @@ export function ScheduleSection({ isActive }: { isActive: boolean }): React.JSX.
               onRetry={() => void refreshRule(rule.id)}
             />
           ))}
-          <Button onClick={addRule}>Add rule</Button>
+          <Button onClick={addRule}><SettingsText>Add rule</SettingsText></Button>
         </div>
       </SearchableRow>
     </SettingsSection>

@@ -6,6 +6,8 @@ import { FieldRow } from '../FieldRow'
 import { Input } from '@renderer/ui/Input'
 import { Button } from '@renderer/ui/Button'
 import { DEFAULT_SCHOOL_MODE_NAME } from '../../../lib/schoolModeName'
+import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
+import { SettingsText } from '../SettingsText'
 
 const ROWS = {
   toggle: {
@@ -22,6 +24,7 @@ const ENTRIES = Object.values(ROWS)
  * self-imposed, user-experience lock, never a security boundary, and the copy says so plainly.
  */
 export function SchoolModeSection({ isActive }: { isActive: boolean }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   const enabled = useSchoolMode((s) => s.enabled)
   const name = useSchoolMode((s) => s.name)
   const hasCredential = useSchoolMode((s) => s.hasCredential)
@@ -73,8 +76,7 @@ export function SchoolModeSection({ isActive }: { isActive: boolean }): React.JS
                   Turn off
                 </Button>
                 <p className="max-w-[22rem] text-right text-[12px] text-muted">
-                  No PIN was ever set on this machine, so none is needed to turn {name} off. Set
-                  one when you turn it back on if you want it to stay on.
+                  <SettingsText segments={[{ kind: 'copy', value: 'No PIN was ever set on this machine, so none is needed to turn ' }, { kind: 'fact', value: name }, { kind: 'copy', value: ' off. Set one when you turn it back on if you want it to stay on.' }]} />
                 </p>
               </div>
             ) : enabled ? (
@@ -86,9 +88,9 @@ export function SchoolModeSection({ isActive }: { isActive: boolean }): React.JS
                     setUnlockPin(e.target.value)
                     setError(null)
                   }}
-                  placeholder="PIN to turn off"
+                  placeholder={vocab('PIN to turn off')}
                   className="w-40"
-                  aria-label={`PIN to turn ${name} off`}
+                  aria-label={`${vocab('PIN to turn')} ${name} ${vocab('off')}`}
                 />
                 <Button
                   disabled={busy || unlockPin.length === 0}
@@ -115,7 +117,7 @@ export function SchoolModeSection({ isActive }: { isActive: boolean }): React.JS
                       type="password"
                       value={pin}
                       onChange={(e) => setPin(e.target.value)}
-                      placeholder="Choose a PIN"
+                      placeholder={vocab('Choose a PIN')}
                       className="w-32"
                       aria-label="Choose a PIN"
                     />
@@ -123,7 +125,7 @@ export function SchoolModeSection({ isActive }: { isActive: boolean }): React.JS
                       type="password"
                       value={pinConfirm}
                       onChange={(e) => setPinConfirm(e.target.value)}
-                      placeholder="Confirm PIN"
+                      placeholder={vocab('Confirm PIN')}
                       className="w-32"
                       aria-label="Confirm PIN"
                     />
@@ -151,13 +153,12 @@ export function SchoolModeSection({ isActive }: { isActive: boolean }): React.JS
             )
           }
         />
-        {error ? <p className="text-[12px] leading-relaxed text-[color:var(--warn)]">{error}</p> : null}
-        <p className="text-[12px] leading-relaxed text-muted-2">
-          Forgot the PIN? There is no reset flow — delete this machine's{' '}
-          <code>~/.nodeterm/shared</code> folder to turn the mode off and clear it (your other
-          per-app settings are untouched, and any of your prior language/funny-level/dim-sum
-          preferences return once the mode is off).
-        </p>
+        {error ? <p className="text-[12px] leading-relaxed text-[color:var(--warn)]"><SettingsText segments={[{ kind: 'fact', value: error }]} /></p> : null}
+        <p className="text-[12px] leading-relaxed text-muted-2"><SettingsText segments={[
+          { kind: 'copy', value: "Forgot the PIN? There is no reset flow — delete this machine's " },
+          { kind: 'fact', value: <code>~/.nodeterm/shared</code> },
+          { kind: 'copy', value: ' folder to turn the mode off and clear it (your other per-app settings are untouched, and any of your prior language/funny-level/dim-sum preferences return once the mode is off).' }
+        ]} /></p>
       </SearchableRow>
 
       <SearchableRow {...ROWS.rename}>
@@ -183,7 +184,7 @@ export function SchoolModeSection({ isActive }: { isActive: boolean }): React.JS
                   setRenameSaved(true)
                 }}
               >
-                {renameSaved ? 'Saved' : 'Save'}
+                <SettingsText>{renameSaved ? 'Saved' : 'Save'}</SettingsText>
               </Button>
             </div>
           }
@@ -202,7 +203,7 @@ export function SchoolModeSection({ isActive }: { isActive: boolean }): React.JS
                     type="password"
                     value={currentPinDraft}
                     onChange={(e) => setCurrentPinDraft(e.target.value)}
-                    placeholder="Current PIN"
+                placeholder={vocab('Current PIN')}
                     className="w-32"
                     aria-label="Current PIN"
                   />
@@ -210,7 +211,7 @@ export function SchoolModeSection({ isActive }: { isActive: boolean }): React.JS
                     type="password"
                     value={nextPinDraft}
                     onChange={(e) => setNextPinDraft(e.target.value)}
-                    placeholder="New PIN"
+                placeholder={vocab('New PIN')}
                     className="w-32"
                     aria-label="New PIN"
                   />
@@ -226,7 +227,7 @@ export function SchoolModeSection({ isActive }: { isActive: boolean }): React.JS
                       }
                     }}
                   >
-                    Save
+                    <SettingsText>Save</SettingsText>
                   </Button>
                 </div>
               ) : (

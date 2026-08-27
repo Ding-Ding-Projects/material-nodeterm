@@ -32,6 +32,11 @@ release cards, local history, offline documentation, appearance and colour edito
 Explorer, project switching, and the local model manager. The checker requires an exact local mapper
 boundary and an audit row for each producer. It also runs deliberate in-memory negative regressions
 for a removed producer row, mapper call, and documentation row.
+Minecraft panels, authenticator and speech settings, and toy-lock setup. The checker requires an
+exact local mapper boundary and an audit row for each producer. Its negative regression copies a
+complete producer and documentation fixture, removes a real mapper call and a real audit row, then
+executes the checker against that mutated fixture so a toothless in-memory assertion cannot report
+a false pass.
 
 None of this leaves your machine. The file is read, checked, and applied entirely where it sits —
 never uploaded, logged, exported, or synced, not even alongside the rest of your app settings. If
@@ -145,6 +150,8 @@ already passes through — rather than at individual call sites, so a new dialog
 the substitution without anyone remembering to opt in:
 
 - ✅ Every Settings section title and description (`SettingsSection.tsx`)
+- ✅ Every Settings sidebar group and section label (`SettingsSidebar.tsx`) and the scope chooser,
+  status text, and project/global controls (`SettingsPage.tsx`)
 - ✅ Every Settings field label, description, and note (`FieldRow.tsx` — the shared component
   nearly every Settings row in the app is built from, so wiring it there reaches broadly across
   the Settings surface with one boundary)
@@ -162,6 +169,38 @@ the substitution without anyone remembering to opt in:
   the query filter so a visible row can still be typed for)
 - ✅ Context menus whose rows are prose, through the `VocabularyContextMenu` wrapper: the kanban
   card menu (including its "Move to" column titles) and the source-control ⋯ menu
+- ✅ Shared localized copy (`useI18n()` and `Localized`) and the shared controls used by Settings:
+  `Input`, `Button`, `Switch`, `Select`, `NumberField`, `TextArea`, `TextField`, `Fab`,
+  `IconButton`, `SegmentedButton`, `Tabs`, `Dialog`, and `ListRow`. Their prose props, including
+  native option and option-group labels, are mapped before dynamic interpolation, while option
+  values, ids, paths, provider/account/user facts, and external errors remain exact.
+  Shared controls also expose a typed `vocabularyMode` prop so callers can mark a displayed value
+  as `factual` without disabling the authored-copy path for other controls.
+- ✅ The settings field boundary has focused coverage in
+  `src/renderer/components/settings/FieldRow.vocabulary.test.tsx`, including the unknown-School
+  hydration fail-closed state and protection for interpolated facts.
+- ✅ Standalone Settings prose uses the explicit `SettingsText` boundary, including section reset
+  feedback, font and theme pickers, status/empty states, and inline headings. The hand-written
+  inventory names every production Settings section and its audit row, so removing a section does
+  not silently remove its vocabulary review. `SettingsText` accepts typed `copy` and `fact`
+  segments, plus prose templates with named fact values, so provider names, paths, account labels,
+  error text, counts, and other runtime facts are never mapped accidentally.
+- ✅ Settings producer ownership is explicit. `SettingsVocabularyResolution.fields` is `section`,
+  `row`, or `all`; a section-level resolution does not suppress row mapping, and an already-mapped
+  sidebar title is never mapped a second time. `searchEntries: 'mapped'` is required before a
+  section may skip its search metadata mapping. The checker records each section's exact registered
+  `SettingsSection` id in an explicit boundary manifest, not a broad component substring, and each
+  mutation runs against a fresh complete fixture.
+- ✅ The Settings audit also carries an explicit mixed-string boundary manifest for the cited
+  Accounts, App Identity, Appearance, Narrator, Phone, Schedule, School, Kids, Speech, Terminal,
+  Workspace, Custom Agents, SSH, Shortcuts, and Support Tickets callsites. Each row names its
+  source file and exact shared boundary marker, so a section cannot pass merely because some other
+  text in the same file happens to be mapped.
+- ✅ Settings navigation and routing share `SETTINGS_SECTION_REGISTRY`; the coverage Chut mutates
+  the real registry in a fresh fixture in addition to mutating the Page and Sidebar registrations.
+- ✅ The coverage Chut also inventories the focused template, field, localization, and control
+  intent tests. Its fixture mutations remove a mapper, `SettingsText`, a section registration, an
+  audit row, and the fact-template test, then execute the complete checker against the mutation.
 - ✅ Node header chrome, dock, kanban cards/columns and the card modal, via the separate
   `useLocalizedVocabularyText` helper (shipped catalog prose → vocabulary → dynamic facts last)
 - ✅ Detached widget controls and its missing-node copy (`widget/WidgetApp.tsx`)
@@ -176,6 +215,7 @@ the substitution without anyone remembering to opt in:
 - ✅ The landing page uses the same JSON upload and cache-envelope contract in
   `site/app/shared/vocabulary-state.js` and `site/app/features/vocabulary.js`; it keeps its existing
   Kids-mode presentation and persists the validated cache only in per-visitor browser storage
+  `useLocalizedVocabularyText` helper (localized shipped prose → vocabulary → dynamic facts last)
 
 **Never** applied — these stay verbatim regardless of any uploaded file, by design:
 
@@ -193,6 +233,10 @@ Named exclusions worth knowing, each for a reason above:
 - **`DestructiveConfirmGate`.** Its own contract already says the funny-level/localization rules
   apply to copy elsewhere and never to that sentence, and its `affected` list names the exact
   items being destroyed.
+  action labels are ours; the body is quoted output.
+- **`DestructiveConfirmGate`.** Its `title` and `description` prose are mapped through the shared
+  template boundary, while the optional `titleParams` and `descriptionParams` values are inserted
+  verbatim. Its `affected` list remains an exact list of the items being destroyed.
 - **The source-control branch picker and commit menu.** A branch row's label IS the branch name
   handed to `git.merge/rebase/deleteBranch`, and commit rows carry commit identity. A string that
   is both displayed and executed is never translated.
@@ -227,6 +271,11 @@ because the substitution happens inside `CommandPalette` itself; the canvas cont
 **not** — closing that gap is a one-line swap of `ContextMenu` for `VocabularyContextMenu` at
 `Canvas.tsx`'s single render site, deliberately left out of the change that widened the rest.
 
+The Settings surface is complete at its own boundaries, but the project-wide audit intentionally
+keeps non-Settings producers that belong to other implementation lanes listed as open until their
+own real mapper, tests, documentation, and built-artifact evidence land. A green Settings section
+inventory must not be read as a claim that those unrelated surfaces are complete.
+
 ## School mode
 
 While [School mode](school-mode.md) is on, this whole capability behaves as if it were not
@@ -240,9 +289,10 @@ installed:
   is never touched by entering or leaving School mode.
 
 The gate is `schoolModeAllowsOptionalFeatures`, so an **unknown** mode (the pre-hydration
-`enabled: false` placeholder, or a failed read) suppresses the substitution too. Note that
-`useLocalizedVocabularyText` still reads `enabled` alone and does not fail closed on an unhydrated
-record — a pre-existing inconsistency, not something this boundary introduced.
+  `enabled: false` placeholder, or a failed read) suppresses the substitution too. The shared
+  `useI18n()` boundary and `useLocalizedVocabularyText()` now use that same hydrated policy, so a
+  partially initialized surface cannot apply private substitutions while the mode record is still
+  unknown.
 
 ## Accessibility
 

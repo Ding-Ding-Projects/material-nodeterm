@@ -2,16 +2,37 @@
 
 // Hand-written producer inventory for the renderer's local personal-vocabulary boundary.
 // Discovery is intentionally not used: a producer removed from this list must make this check red.
-import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { tmpdir } from 'node:os'
+import { spawnSync } from 'node:child_process'
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
+const SCRIPT_PATH = fileURLToPath(import.meta.url)
+const scriptArgs = process.argv.slice(2)
+const rootIndex = scriptArgs.indexOf('--root')
+const ROOT = rootIndex >= 0 && scriptArgs[rootIndex + 1]
+  ? scriptArgs[rootIndex + 1]
+  : join(dirname(SCRIPT_PATH), '..')
+const fixtureRun = scriptArgs.includes('--fixture-run')
+const dropSectionIndex = scriptArgs.indexOf('--drop-section')
 const PRODUCERS = [
   ['settings-fields', 'src/renderer/components/settings/FieldRow.tsx', 'useVocabularyText('],
   ['settings-sections', 'src/renderer/components/settings/SettingsSection.tsx', 'useVocabularyText('],
   ['personal-vocabulary-upload', 'src/renderer/components/settings/sections/PersonalVocabularySection.tsx', 'usePersonalVocabulary('],
+  ['settings-page', 'src/renderer/components/settings/SettingsPage.tsx', 'useLocalizedVocabularyText()'],
+  ['settings-page-registration', 'src/renderer/components/settings/SettingsPage.tsx', '<PersonalVocabularySection'],
+  ['settings-sidebar', 'src/renderer/components/settings/SettingsSidebar.tsx', 'useI18n()'],
+  ['settings-sidebar-registration', 'src/renderer/components/settings/SettingsSidebar.tsx', 'visibleSettingsGroups('],
+  ['settings-section-registry', 'src/renderer/components/settings/nav.ts', 'SETTINGS_SECTION_REGISTRY'],
+  ['settings-search-corpus', 'src/renderer/components/settings/SearchableRow.tsx', 'useVocabularyMapper()'],
+  ['settings-inline-copy', 'src/renderer/components/settings/SettingsText.tsx', 'useVocabularyMapper()'],
+  ['settings-reset', 'src/renderer/components/settings/SectionReset.tsx', 'useVocabularyMapper()'],
+  ['settings-font-picker', 'src/renderer/components/settings/FontPicker.tsx', 'useVocabularyMapper()'],
+  ['settings-theme-picker', 'src/renderer/components/settings/ThemeSelect.tsx', 'useVocabularyMapper()'],
+  ['settings-section-inline-copy', 'src/renderer/components/settings/SettingsText.tsx', 'export function SettingsText'],
+  ['settings-search-policy', 'src/renderer/components/settings/vocabulary.ts', 'export function settingsSidebarSearchEntry'],
+  ['personal-vocabulary-upload', 'src/renderer/components/settings/sections/PersonalVocabularySection.tsx', 'usePersonalVocabulary'],
   ['command-palette', 'src/renderer/components/CommandPalette.tsx', 'useVocabularyCommands'],
   ['context-menus', 'src/renderer/components/menu/VocabularyContextMenu.tsx', 'useVocabularyMenuItems'],
   ['confirm-dialog', 'src/renderer/components/ConfirmDialog.tsx', 'useVocabularyMapper()'],
@@ -80,7 +101,35 @@ const PRODUCERS = [
   ['minecraft-properties', 'src/renderer/components/minecraft/MinecraftPropertiesEditor.tsx', 'useVocabularyMapper()'],
   ['authenticator-settings', 'src/renderer/components/settings/sections/AuthenticatorSection.tsx', 'const vocab = useVocabularyMapper()'],
   ['speech-settings', 'src/renderer/components/settings/sections/SpeechSection.tsx', 'useVocabularyMapper()'],
+  ['authenticator-settings', 'src/renderer/components/settings/sections/AuthenticatorSection.tsx', 'SettingsText'],
+  ['speech-settings', 'src/renderer/components/settings/sections/SpeechSection.tsx', 'SettingsText'],
+  ['school-mode-settings', 'src/renderer/components/settings/sections/SchoolModeSection.tsx', 'useVocabularyMapper()'],
+  ['kids-mode-settings', 'src/renderer/components/settings/sections/KidsModeSection.tsx', 'useVocabularyMapper()'],
+  ['usage-settings', 'src/renderer/components/settings/sections/UsageSection.tsx', 'useVocabularyMapper()'],
   ['toy-lock-wizard', 'src/renderer/components/toylocks/LockWizard.tsx', 'useVocabularyMapper()'],
+  ['ui-input', 'src/renderer/ui/Input.tsx', 'useVocabularyMapper()'],
+  ['ui-button-wrapper-delegation', 'src/renderer/ui/Button.tsx', '<Md3Button'],
+  ['ui-md3-button', 'src/renderer/ui/md3/Button.tsx', 'useVocabularyMapper()'],
+  ['ui-chip', 'src/renderer/ui/md3/Chip.tsx', 'useVocabularyMapper()'],
+  ['ui-menu', 'src/renderer/ui/md3/Menu.tsx', 'useVocabularyMapper()'],
+  ['ui-status-chip', 'src/renderer/ui/md3/StatusChip.tsx', 'useVocabularyMapper()'],
+  ['ui-switch', 'src/renderer/ui/Switch.tsx', 'useVocabularyTemplate('],
+  ['ui-select', 'src/renderer/ui/Select.tsx', 'useVocabularyMapper()'],
+  ['ui-number-field', 'src/renderer/ui/NumberField.tsx', 'useVocabularyMapper()'],
+  ['ui-text-area', 'src/renderer/ui/md3/TextArea.tsx', 'useVocabularyMapper()'],
+  ['ui-text-field', 'src/renderer/ui/md3/TextField.tsx', 'useVocabularyMapper()'],
+  ['ui-fab', 'src/renderer/ui/md3/Fab.tsx', 'useVocabularyMapper()'],
+  ['ui-icon-button', 'src/renderer/ui/md3/IconButton.tsx', 'useVocabularyMapper()'],
+  ['ui-segmented-button', 'src/renderer/ui/md3/SegmentedButton.tsx', 'useVocabularyMapper()'],
+  ['ui-dialog', 'src/renderer/ui/md3/Dialog.tsx', 'useVocabularyMapper()'],
+  ['ui-list-row', 'src/renderer/ui/md3/ListRow.tsx', 'useVocabularyMapper()'],
+  ['ui-tabs', 'src/renderer/ui/md3/Tabs.tsx', 'useVocabularyMapper()'],
+  ['ui-slider', 'src/renderer/ui/md3/Slider.tsx', 'useVocabularyMapper()'],
+  ['ui-checkbox', 'src/renderer/ui/md3/Checkbox.tsx', 'useVocabularyMapper()'],
+  ['ui-radio', 'src/renderer/ui/md3/Radio.tsx', 'useVocabularyMapper()'],
+  ['filterable-menu', 'src/renderer/components/menu/FilterableMenu.tsx', 'useVocabularyMapper()'],
+  ['editable-node-title', 'src/renderer/components/EditableNodeTitle.tsx', 'useVocabularyMapper()'],
+  ['destructive-confirm-gate', 'src/renderer/components/DestructiveConfirmGate.tsx', 'useVocabularyMapper()'],
   ['personal-vocabulary-surface-mapper', 'src/renderer/lib/personalVocabulary/surfaces.ts', 'applyVocabularyToMenuItems'],
   ['personal-vocabulary-application', 'src/renderer/lib/personalVocabulary/apply.ts', 'export function applyVocabulary'],
   ['typed-copy-fact-boundary', 'src/renderer/lib/personalVocabulary/ownedCopy.ts', 'mapOwnedSentence']
@@ -96,6 +145,7 @@ const PRODUCERS = [
   ['native-notification-canvas', 'src/renderer/canvas/Canvas.tsx', 'mapNativeNotification('],
   ['native-notification-onboarding', 'src/renderer/components/onboarding/OnboardingFlow.tsx', 'mapNativeNotification('],
   ['native-notification-settings', 'src/renderer/components/settings/sections/NotificationsSection.tsx', 'mapNativeNotification(']
+  ['personal-vocabulary-template', 'src/renderer/lib/personalVocabulary/apply.ts', 'export function applyVocabularyToTemplate']
 ]
 
 const DOC = 'docs/features/appearance/material-3-audit.md'
@@ -175,6 +225,81 @@ const PRODUCTION_SURFACES = [
 const CANONICAL_PRODUCER_IDS = `settings-fields settings-sections personal-vocabulary-upload command-palette context-menus confirm-dialog input-dialog notifications tooltip conflict-banner canvas-prose fab-menu kanban-view kanban-column kanban-session-card kanban-card-modal source-control worktree-dialog onboarding dim-sum-surprise publish-dialog find-bar remote-picker browser-profile-picker password-manager converter-adapter-catalog converter-upload-limit minecraft-backups minecraft-players minecraft-properties authenticator-settings speech-settings toy-lock-wizard personal-vocabulary-surface-mapper personal-vocabulary-application personal-vocabulary-host-message widget-entrypoint hud-entrypoint dialog-picker-root ws-reconnect-overlay browser-bridge-stubs notification-body-classification site-vocabulary-json site-vocabulary-cache native-notification-canvas native-notification-onboarding native-notification-settings`.split(/\s+/)
 const CANONICAL_SURFACE_IDS = `app-shell welcome top-app-bar status-surface sessions-sidebar session-row terminal-node sticky-node group-node editor-node diff-node browser-node web-node video-node loop-node service-node wsl-dialog regex-builder anchored-regex-builder notification-center notification-toasts changelog-panel release-card local-history docs-browser docs-article appearance-editor color-field color-menu color-picker branch-select bulk-action-bar pty-pressure update-card resume-card widget-entrypoint hud-entrypoint dialog-picker-root ws-reconnect-overlay browser-bridge-stubs`.split(/\s+/)
 const CANONICAL_CANVAS_NOTIFY_CALL_IDS = `terminal-profile-create-unavailable explorer-folder-drop-stale explorer-agent-drop-missing explorer-folder-open-stale terminal-profile-restart-disabled terminal-profile-restart-failed branch-failed transfer-not-ready transfer-failed explorer-terminal-profile-unavailable project-save-busy project-save-progress project-save-success project-save-cancelled-or-failed project-password-mismatch project-open-busy project-open-cancelled project-open-password-check project-open-success-or-failed test-notification`.split(/\s+/)
+// Every Settings section is listed explicitly. The shared FieldRow/SettingsSection funnels cover
+// their ordinary rows, while SettingsText marks standalone inline prose and the shared primitives
+// cover labels/options. Keeping this list hand-written means deleting a section cannot make its
+// vocabulary audit disappear with it.
+const SETTINGS_SECTION_BOUNDARY_MANIFEST = [
+  ['settings-accounts', 'src/renderer/components/settings/sections/AccountsSection.tsx', 'accounts'],
+  ['settings-adhd', 'src/renderer/components/settings/sections/AdhdModesSection.tsx', 'adhd-modes'],
+  ['settings-agents', 'src/renderer/components/settings/sections/AgentsSection.tsx', 'agents'],
+  ['settings-appearance', 'src/renderer/components/settings/sections/AppearanceSection.tsx', 'appearance'],
+  ['settings-appearance-editor', 'src/renderer/components/settings/sections/AppearanceEditorSection.tsx', 'appearance-editor'],
+  ['settings-authenticator', 'src/renderer/components/settings/sections/AuthenticatorSection.tsx', 'authenticator'],
+  ['settings-behavior', 'src/renderer/components/settings/sections/BehaviorSection.tsx', 'behavior'],
+  ['settings-commit', 'src/renderer/components/settings/sections/CommitSection.tsx', 'commit'],
+  ['settings-custom-agents', 'src/renderer/components/settings/sections/CustomAgentsSection.tsx', 'custom-agents'],
+  ['settings-github-issues', 'src/renderer/components/settings/sections/GitHubIssuesSection.tsx', 'github-issues'],
+  ['settings-kids', 'src/renderer/components/settings/sections/KidsModeSection.tsx', 'kids-mode'],
+  ['settings-language', 'src/renderer/components/settings/sections/LanguageSection.tsx', 'language'],
+  ['settings-license', 'src/renderer/components/settings/sections/LicenseSection.tsx', 'license'],
+  ['settings-local-history', 'src/renderer/components/settings/sections/LocalHistorySection.tsx', 'history'],
+  ['settings-narrator', 'src/renderer/components/settings/sections/NarratorSection.tsx', 'narrator'],
+  ['settings-notch', 'src/renderer/components/settings/sections/NotchSection.tsx', 'notch'],
+  ['settings-notifications', 'src/renderer/components/settings/sections/NotificationsSection.tsx', 'notifications'],
+  ['settings-personal-vocabulary', 'src/renderer/components/settings/sections/PersonalVocabularySection.tsx', 'vocabulary'],
+  ['settings-phone', 'src/renderer/components/settings/sections/PhoneSection.tsx', 'phone'],
+  ['settings-presence', 'src/renderer/components/settings/sections/PresenceIdentitySection.tsx', 'presence'],
+  ['settings-privacy', 'src/renderer/components/settings/sections/PrivacySection.tsx', 'privacy'],
+  ['settings-remote', 'src/renderer/components/settings/sections/RemoteSection.tsx', 'remote'],
+  ['settings-schedule', 'src/renderer/components/settings/sections/ScheduleSection.tsx', 'schedule'],
+  ['settings-school', 'src/renderer/components/settings/sections/SchoolModeSection.tsx', 'school-mode'],
+  ['settings-shell', 'src/renderer/components/settings/sections/ShellSection.tsx', 'shell'],
+  ['settings-shortcuts', 'src/renderer/components/settings/sections/ShortcutsSection.tsx', 'shortcuts'],
+  ['settings-speech', 'src/renderer/components/settings/sections/SpeechSection.tsx', 'speech'],
+  ['settings-ssh', 'src/renderer/components/settings/sections/SshSection.tsx', 'ssh'],
+  ['settings-support', 'src/renderer/components/settings/sections/SupportTicketsSection.tsx', 'support'],
+  ['settings-team', 'src/renderer/components/settings/sections/TeamAccessSection.tsx', 'team-access'],
+  ['settings-terminal', 'src/renderer/components/settings/sections/TerminalSection.tsx', 'terminal'],
+  ['settings-tmux', 'src/renderer/components/settings/sections/TmuxSection.tsx', 'tmux'],
+  ['settings-toy-locks', 'src/renderer/components/settings/sections/ToyLocksSection.tsx', 'toylocks'],
+  ['settings-updates', 'src/renderer/components/settings/sections/UpdatesSection.tsx', 'updates'],
+  ['settings-usage', 'src/renderer/components/settings/sections/UsageSection.tsx', 'usage'],
+  ['settings-workspace', 'src/renderer/components/settings/sections/WorkspaceStorageSection.tsx', 'workspace-storage']
+]
+const FOCUSED_TEST_INVENTORY = [
+  ['settings-template-test', 'src/renderer/lib/personalVocabulary/apply.test.ts'],
+  ['settings-field-boundary-test', 'src/renderer/components/settings/FieldRow.vocabulary.test.tsx'],
+  ['settings-sidebar-corpus-test', 'src/renderer/components/settings/vocabulary.test.tsx'],
+  ['settings-i18n-boundary-test', 'src/renderer/lib/i18n.test.tsx'],
+  ['settings-control-intent-test', 'src/renderer/ui/personalVocabulary.test.tsx']
+]
+// Explicit mixed-copy callsites called out by the Settings audit. These ids are intentionally
+// narrower than a file-level section row: each one names the exact shared boundary expected in the
+// cited surface, so moving or deleting that boundary turns this check red.
+const MIXED_STRING_BOUNDARY_MANIFEST = [
+  ['accounts-mixed-facts', 'src/renderer/components/settings/sections/AccountsSection.tsx', 'SettingsText'],
+  ['app-identity-mixed-facts', 'src/renderer/components/settings/sections/AppIdentitySection.tsx', 'SettingsText'],
+  ['appearance-mixed-facts', 'src/renderer/components/settings/sections/AppearanceSection.tsx', 'SettingsText'],
+  ['narrator-mixed-facts', 'src/renderer/components/settings/sections/NarratorSection.tsx', 'SettingsText'],
+  ['phone-mixed-facts', 'src/renderer/components/settings/sections/PhoneSection.tsx', 'SettingsText'],
+  ['schedule-mixed-facts', 'src/renderer/components/settings/sections/ScheduleSection.tsx', 'SettingsText'],
+  ['school-mixed-facts', 'src/renderer/components/settings/sections/SchoolModeSection.tsx', 'SettingsText'],
+  ['kids-mixed-facts', 'src/renderer/components/settings/sections/KidsModeSection.tsx', 'SettingsText'],
+  ['speech-mixed-facts', 'src/renderer/components/settings/sections/SpeechSection.tsx', 'SettingsText'],
+  ['terminal-mixed-facts', 'src/renderer/components/settings/sections/TerminalSection.tsx', 'SettingsText'],
+  ['workspace-mixed-facts', 'src/renderer/components/settings/sections/WorkspaceStorageSection.tsx', '<FieldRow'],
+  ['custom-agents-mixed-facts', 'src/renderer/components/settings/sections/CustomAgentsSection.tsx', '<FieldRow'],
+  ['ssh-mixed-facts', 'src/renderer/components/settings/sections/SshSection.tsx', '<FieldRow'],
+  ['shortcuts-mixed-facts', 'src/renderer/components/settings/sections/ShortcutsSection.tsx', '<FieldRow'],
+  ['support-mixed-facts', 'src/renderer/components/settings/sections/SupportTicketsSection.tsx', 'SettingsText']
+]
+const expectedSettingsSectionCount = 36
+if (dropSectionIndex >= 0 && scriptArgs[dropSectionIndex + 1]) {
+  const dropped = scriptArgs[dropSectionIndex + 1]
+  const index = SETTINGS_SECTION_BOUNDARY_MANIFEST.findIndex(([id]) => id === dropped)
+  if (index >= 0) SETTINGS_SECTION_BOUNDARY_MANIFEST.splice(index, 1)
+}
 let failures = 0
 let checked = 0
 const read = (file) => existsSync(join(ROOT, file)) ? readFileSync(join(ROOT, file), 'utf8') : null
@@ -279,9 +404,30 @@ for (const [id, file, reason] of PRODUCTION_SURFACES) {
     check(id + ': mapper call is present', mapperMarkers.some((marker) => hasMarker(read(file), marker)))
   }
 }
+for (const [id, file, sectionId] of SETTINGS_SECTION_BOUNDARY_MANIFEST) {
+  const source = read(file)
+  check(id + ': exact settings section exists', source !== null)
+  check(id + ': exact Material/settings audit row', (read(DOC) || '').includes('| ' + String.fromCharCode(96) + id + String.fromCharCode(96) + ' |'))
+  check(id + ': section registration boundary', hasMarker(source, `id="${sectionId}"`))
+  check(id + ': active-state boundary', (source || '').includes('isActive'))
+  const uncommented = noComments(source || '')
+  // Classification is deliberately marker-exact. The registered section id above is the
+  // existence boundary, while these exact callsite markers record the shared funnels in use.
+  const hasExact = (markers) => markers.some((marker) => uncommented.includes(marker))
+  check(id + ': authored prose boundary', hasExact(['SettingsText', '<FieldRow', '<SettingsSection']))
+  check(id + ': accessible-control classification', hasExact(['aria-label=', 'ariaLabel=', 'htmlFor=', 'placeholder=', '<SettingsSection']))
+  check(id + ': option-or-fact classification', hasExact(['<option', 'options=', 'formatText', 'profileText', 'value=', `id="${sectionId}"`]))
+}
+for (const [id, file, marker] of MIXED_STRING_BOUNDARY_MANIFEST) {
+  check(id + ': exact source exists', read(file) !== null)
+  check(id + ': exact mixed-copy boundary', hasMarker(read(file), marker))
+}
+for (const [id, file] of FOCUSED_TEST_INVENTORY) check(id + ': focused test exists', read(file) !== null)
+check('settings section boundary manifest is complete', SETTINGS_SECTION_BOUNDARY_MANIFEST.length === expectedSettingsSectionCount)
+check('settings section boundary manifest has unique ids', new Set(SETTINGS_SECTION_BOUNDARY_MANIFEST.map(([id]) => id)).size === SETTINGS_SECTION_BOUNDARY_MANIFEST.length)
 const pendingProductionSurfaces = PRODUCTION_SURFACES.filter(([, , reason]) => reason === 'unmapped-callsite-pending')
-check('all listed production surfaces are mapper-covered', pendingProductionSurfaces.length === 0)
-if (pendingProductionSurfaces.length > 0) {
+if (!fixtureRun) check('all listed production surfaces are mapper-covered', pendingProductionSurfaces.length === 0)
+if (!fixtureRun && pendingProductionSurfaces.length > 0) {
   console.error('Open producer boundaries: ' + pendingProductionSurfaces.map(([id]) => id).join(', '))
 }
 check('producer inventory has no duplicate identifiers', errors.length === 0)
@@ -336,6 +482,82 @@ try {
   check('real-file Canvas body ownership mutation is rejected', !bodyMutationCalls.filter((args) => /\bbody\s*:/.test(args)).every((args) => /\bbodyKind\s*:/.test(args)))
 } finally {
   rmSync(mutationRoot, { recursive: true, force: true })
+// Mutate a complete fixture and execute this checker against it, rather than only invoking one
+// predicate in memory. This catches a broken checker that accidentally passes its own miniature
+// assertion while the real inventory path would still accept a missing producer.
+function copyCompleteFixture(fixtureRoot) {
+  for (const [, file] of [...PRODUCERS, ...PRODUCTION_SURFACES, ...SETTINGS_SECTION_BOUNDARY_MANIFEST, ...MIXED_STRING_BOUNDARY_MANIFEST, ...FOCUSED_TEST_INVENTORY, ['audit-doc', DOC, '']]) {
+    const source = join(ROOT, file)
+    const target = join(fixtureRoot, file)
+    mkdirSync(dirname(target), { recursive: true })
+    if (existsSync(source)) copyFileSync(source, target)
+  }
+}
+
+function runFreshFixtureMutation(label, mutate, args = []) {
+  const fixtureRoot = mkdtempSync(join(tmpdir(), 'nodeterm-vocabulary-audit-'))
+  try {
+    copyCompleteFixture(fixtureRoot)
+    mutate(fixtureRoot)
+    const result = spawnSync(process.execPath, [SCRIPT_PATH, '--root', fixtureRoot, '--fixture-run', ...args], {
+      encoding: 'utf8'
+    })
+    check(label, result.status !== 0)
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true })
+  }
+}
+
+if (!fixtureRun) {
+  const baselineRoot = mkdtempSync(join(tmpdir(), 'nodeterm-vocabulary-audit-baseline-'))
+  try {
+    copyCompleteFixture(baselineRoot)
+    const baselineResult = spawnSync(process.execPath, [SCRIPT_PATH, '--root', baselineRoot, '--fixture-run'], { encoding: 'utf8' })
+    if (baselineResult.status !== 0) {
+      console.error('Fixture baseline output:\n' + baselineResult.stdout + baselineResult.stderr)
+    }
+    check('complete fixture passes before mutation', baselineResult.status === 0)
+  } finally {
+    rmSync(baselineRoot, { recursive: true, force: true })
+  }
+
+  const target = PRODUCERS.find(([id]) => id === 'tooltip')
+  if (target) runFreshFixtureMutation('full checker rejects a removed mapper call', (root) => {
+    const path = join(root, target[1])
+    writeFileSync(path, readFileSync(path, 'utf8').replace(target[2], ''), 'utf8')
+  })
+
+  const inlineTarget = PRODUCERS.find(([id]) => id === 'settings-inline-copy')
+  if (inlineTarget) runFreshFixtureMutation('full checker rejects a removed SettingsText mapper', (root) => {
+    const path = join(root, inlineTarget[1])
+    writeFileSync(path, readFileSync(path, 'utf8').replace(inlineTarget[2], ''), 'utf8')
+  })
+
+  for (const id of ['settings-page-registration', 'settings-sidebar-registration']) {
+    const registrationTarget = PRODUCERS.find((row) => row[0] === id)
+    if (!registrationTarget) continue
+    runFreshFixtureMutation('full checker rejects removed ' + id, (root) => {
+      const path = join(root, registrationTarget[1])
+      writeFileSync(path, readFileSync(path, 'utf8').replace(registrationTarget[2], ''), 'utf8')
+    })
+  }
+
+  const registryTarget = PRODUCERS.find(([id]) => id === 'settings-section-registry')
+  if (registryTarget) runFreshFixtureMutation('full checker rejects a removed shared section registry', (root) => {
+    const path = join(root, registryTarget[1])
+    writeFileSync(path, readFileSync(path, 'utf8').replace(registryTarget[2], ''), 'utf8')
+  })
+
+  runFreshFixtureMutation('full checker rejects a removed settings section registration', () => {}, ['--drop-section', 'settings-accounts'])
+  runFreshFixtureMutation('full checker rejects a removed fact-template test', (root) => {
+    rmSync(join(root, 'src/renderer/lib/personalVocabulary/apply.test.ts'))
+  })
+  runFreshFixtureMutation('full checker rejects a removed audit row', (root) => {
+    const path = join(root, DOC)
+    const quote = String.fromCharCode(96)
+    const lines = readFileSync(path, 'utf8').split(/\r?\n/)
+    writeFileSync(path, lines.filter((line) => !line.includes('| ' + quote + 'tooltip' + quote + ' |')).join('\n'), 'utf8')
+  })
 }
 
 console.log('check-personal-vocabulary-coverage.mjs: ' + checked + ' assertions checked.')

@@ -4,11 +4,13 @@ import { useTeamAccess } from '../../../state/teamAccess'
 import { listSeats, usedCount, type SeatEntry } from '../../../state/teamAccessCore'
 import { inviteShare, seatFullMessage, teamAccessView } from '../teamAccessView'
 import { SettingsSection } from '../SettingsSection'
+import { SettingsText } from '../SettingsText'
 import { SearchableRow } from '../SearchableRow'
 import { FieldRow } from '../FieldRow'
 import { Button } from '@renderer/ui/Button'
 import { CopyButton } from '@renderer/ui/CopyButton'
 import { Input } from '@renderer/ui/Input'
+import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
 
 const ROWS = {
   team: {
@@ -19,6 +21,7 @@ const ROWS = {
 const ENTRIES = Object.values(ROWS)
 
 function SeatRow({ seat }: { seat: SeatEntry }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   const label = seat.email?.trim() || 'Teammate'
   const connected = seat.status === 'connected'
   return (
@@ -26,10 +29,10 @@ function SeatRow({ seat }: { seat: SeatEntry }): React.JSX.Element {
       <div className="min-w-0">
         <div className="truncate text-sm text-text">{label}</div>
         <div className="text-xs text-muted">
-          {connected ? 'connected' : 'waiting to connect…'}
+          {vocab(connected ? 'connected' : 'waiting to connect…')}
         </div>
       </div>
-      <Button onClick={() => window.nodeTerminal.relayHost.revoke(seat.id)}>Remove</Button>
+      <Button onClick={() => window.nodeTerminal.relayHost.revoke(seat.id)}><SettingsText>Remove</SettingsText></Button>
     </div>
   )
 }
@@ -91,18 +94,18 @@ export function TeamAccessSection({
             {/* Seat counter */}
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h4 className="text-[13px] font-medium text-text">Seats</h4>
-                <p className="text-sm text-muted">{view.counterText}</p>
-                <p className="text-xs text-muted">3 included with Pro · extra seats $5/seat/month</p>
+                <h4 className="text-[13px] font-medium text-text"><SettingsText>Seats</SettingsText></h4>
+                <p className="text-sm text-muted"><SettingsText segments={[{ kind: 'fact', value: view.counterText }]} /></p>
+                <p className="text-xs text-muted"><SettingsText>3 included with Pro · extra seats $5/seat/month</SettingsText></p>
               </div>
               <Button onClick={() => void ent.upgrade('seats')}>Add seats</Button>
             </div>
 
             {/* Connected devices */}
             <div className="space-y-2">
-              <h4 className="text-[13px] font-medium text-text">Connected devices</h4>
+                <h4 className="text-[13px] font-medium text-text"><SettingsText>Connected devices</SettingsText></h4>
               {seatList.length === 0 ? (
-                <p className="text-sm text-muted">No teammates connected yet.</p>
+                <p className="text-sm text-muted"><SettingsText>No teammates connected yet.</SettingsText></p>
               ) : (
                 <div className="space-y-2">
                   {seatList.map((seat) => (
@@ -114,11 +117,8 @@ export function TeamAccessSection({
 
             {/* Invite */}
             <div className="space-y-3">
-              <h4 className="text-[13px] font-medium text-text">Invite a teammate</h4>
-              <p className="text-sm text-muted">
-                A teammate on a seat can run commands on this Mac — the same as giving them SSH
-                access. Only invite people you trust.
-              </p>
+                <h4 className="text-[13px] font-medium text-text"><SettingsText>Invite a teammate</SettingsText></h4>
+              <p className="text-sm text-muted"><SettingsText>A teammate on a seat can run commands on this Mac — the same as giving them SSH access. Only invite people you trust.</SettingsText></p>
               <FieldRow
                 label="Teammate email"
                 control={
@@ -136,27 +136,29 @@ export function TeamAccessSection({
                 disabled={busy || !view.canInvite}
                 onClick={() => void generateInvite()}
               >
-                {busy ? 'Generating…' : 'Generate invite'}
+                <SettingsText>{busy ? 'Generating…' : 'Generate invite'}</SettingsText>
               </Button>
               {!view.canInvite ? (
-                <p className="text-sm text-muted">All seats in use — add a seat.</p>
+                <p className="text-sm text-muted"><SettingsText>All seats in use — add a seat.</SettingsText></p>
               ) : null}
               {atCap ? (
                 <p className="text-sm" style={{ color: '#ff9f0a' }}>
-                  All seats in use — add a seat.
+                  <SettingsText>All seats in use — add a seat.</SettingsText>
                 </p>
               ) : null}
               {error ? (
                 <p className="text-sm" style={{ color: '#ff9f0a' }}>
-                  {error}
+                  <SettingsText segments={[{ kind: 'fact', value: error }]} />
                 </p>
               ) : null}
               {offer && share ? (
                 <div className="space-y-2">
                   <p className="text-sm text-muted">
-                    Share this single-use pairing code with{' '}
-                    <strong className="text-text">{offerEmail || 'your teammate'}</strong> — they
-                    paste it in nodeterm → New Remote Connection:
+                    <SettingsText segments={[
+                      { kind: 'copy', value: 'Share this single-use pairing code with ' },
+                      { kind: 'fact', value: <strong className="text-text">{offerEmail || 'your teammate'}</strong> },
+                      { kind: 'copy', value: ' — they paste it in nodeterm → New Remote Connection:' }
+                    ]} />
                   </p>
                   <FieldRow
                     label="Pairing code"

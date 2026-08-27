@@ -30,11 +30,13 @@ import {
 } from '../../../lib/destructiveAuthorization'
 import { ConfirmDialog } from '../../ConfirmDialog'
 import { SettingsSection } from '../SettingsSection'
+import { SettingsText } from '../SettingsText'
 import { SearchableRow } from '../SearchableRow'
 import { Button } from '@renderer/ui/Button'
 import { Input } from '@renderer/ui/Input'
 import { presentAccount, type AccountPresentation } from '../../../lib/accountPresentation'
 import { AccountIdentityPills } from '../../AccountIdentityPills'
+import { useVocabularyMapper } from '../../../lib/personalVocabulary/useVocabularyText'
 
 const ROWS = {
   accounts: {
@@ -64,10 +66,11 @@ interface PendingAccountRemoval {
 }
 /** Spinner + label for an Add button that is mid-setup. */
 function AddingLabel({ where }: { where: string }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   return (
     <span className="inline-flex items-center gap-2">
       <span className="ui-spinner" aria-hidden />
-      Setting up on {where}…
+      <>{vocab('Setting up on')} {where}…</>
     </span>
   )
 }
@@ -85,13 +88,14 @@ function MachinePanel({
   connected?: boolean
   children: React.ReactNode
 }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   return (
     <section className="overflow-hidden rounded-lg border border-border bg-fill-weak/20">
       <header className="flex items-center justify-between gap-3 border-b border-border bg-fill-weak/40 px-3 py-2.5">
         <div className="flex min-w-0 items-center gap-2">
           <span
             className={`h-2 w-2 shrink-0 rounded-full ${connected ? 'bg-[color:var(--success)]' : 'bg-muted'}`}
-            aria-label={connected ? 'Connected' : 'Not connected'}
+            aria-label={vocab(connected ? 'Connected' : 'Not connected')}
           />
           <div className="min-w-0">
             <div className="flex items-center gap-2">
@@ -176,7 +180,7 @@ function AccountRow({
         ) : null}
         {labelControl}
         {unavailable ? (
-          <p className="text-[12px] text-muted">Not logged in or unavailable</p>
+          <p className="text-[12px] text-muted"><SettingsText>Not logged in or unavailable</SettingsText></p>
         ) : null}
         {details}
       </div>
@@ -254,6 +258,7 @@ function countNodesUsing(accountId: string): number {
 }
 
 export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   const accounts = useSettings((s) => s.settings.claudeAccounts)
   const codexAccounts = useSettings((s) => s.settings.codexAccounts)
   const systemLabelSetting = useSettings((s) => s.settings.systemAccountLabel)
@@ -845,16 +850,12 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
         <div className="space-y-4">
           {versionWarning ? (
             <div className="flex items-start justify-between gap-3 rounded-md border border-[color:var(--danger)]/40 bg-[color:var(--danger)]/10 px-3 py-2 text-[13px] leading-relaxed text-[color:var(--danger)]">
-              <span>
-                Your installed Claude CLI is older than the version that scopes credentials per
-                config dir. Accounts still isolate their config, but on macOS logins may collide in
-                the shared keychain. Update the Claude CLI to keep them fully separate.
-              </span>
+              <span><SettingsText>Your installed Claude CLI is older than the version that scopes credentials per config dir. Accounts still isolate their config, but on macOS logins may collide in the shared keychain. Update the Claude CLI to keep them fully separate.</SettingsText></span>
               <button
                 className="shrink-0 cursor-pointer text-muted hover:text-text"
                 onClick={() => setVersionWarning(false)}
               >
-                Dismiss
+                <SettingsText>Dismiss</SettingsText>
               </button>
             </div>
           ) : null}
@@ -995,7 +996,8 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
               labelControl={
                 <Input
                   className="w-56"
-                  aria-label={`Claude account display name on ${server.label || server.host}`}
+                      aria-label={`Claude account display name on ${server.label || server.host}`}
+                      vocabularyMode="factual"
                   placeholder="Display name (optional)"
                   value={remoteSystemAccountLabels[host] ?? ''}
                   onChange={(event) =>
@@ -1065,6 +1067,7 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
             <Input
               className="w-56"
               aria-label={`Codex account display name on ${server.label || server.host}`}
+              vocabularyMode="factual"
               placeholder="Display name (optional)"
               value={remoteSystemCodexAccountLabels[host] ?? ''}
               onChange={(event) =>
@@ -1091,12 +1094,11 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
               }
               details={
                 <label className="mt-2 flex max-w-lg items-center gap-2 text-[11px] text-muted">
-                  <span className="shrink-0 font-medium uppercase tracking-wide">
-                    Working directory
-                  </span>
+                  <span className="shrink-0 font-medium uppercase tracking-wide"><SettingsText>Working directory</SettingsText></span>
                   <Input
                     className="min-w-0 flex-1 font-mono"
-                    aria-label={`Remote working directory for ${account.label}`}
+                    aria-label={`${vocab('Remote working directory for ')}${account.label}`}
+                    vocabularyMode="factual"
                     placeholder="~/nf-management"
                     value={account.remoteCwd ?? '~'}
                     onChange={(event) =>
@@ -1150,10 +1152,7 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
                 <p className="text-[12px] leading-relaxed text-[color:var(--danger)]">{removeError}</p>
               ) : null}
 
-          <p className="text-[12px] leading-relaxed text-muted">
-            Each login has its own credentials. Remote logins stay on their SSH machine. Codex nodes
-            on the same machine and account reuse one shared app-server.
-          </p>
+          <p className="text-[12px] leading-relaxed text-muted"><SettingsText>Each login has its own credentials. Remote logins stay on their SSH machine. Codex nodes on the same machine and account reuse one shared app-server.</SettingsText></p>
         </div>
       </SearchableRow>
 

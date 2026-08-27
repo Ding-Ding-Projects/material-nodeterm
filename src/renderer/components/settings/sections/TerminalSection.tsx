@@ -1,5 +1,6 @@
 import { useSettings } from '../../../state/settings'
 import { SettingsSection } from '../SettingsSection'
+import { SettingsText } from '../SettingsText'
 import { SearchableRow } from '../SearchableRow'
 import { FieldRow } from '../FieldRow'
 import { TerminalPreview } from '../TerminalPreview'
@@ -146,13 +147,15 @@ const MIN_CONTRAST_OPTIONS: { value: number; label: string }[] = [
  *  every row in the group takes the heading with it. */
 function GroupHeading({ children }: { children: React.ReactNode }): React.JSX.Element {
   return (
-    <h4 className="text-[11px] font-semibold uppercase tracking-wide text-muted-2">{children}</h4>
+    <h4 className="text-[11px] font-semibold uppercase tracking-wide text-muted-2">
+      {typeof children === 'string' ? <SettingsText>{children}</SettingsText> : children}
+    </h4>
   )
 }
 
 /** A secondary label between two controls sharing one row ("13 · bold 700"). */
 function Sub({ children }: { children: React.ReactNode }): React.JSX.Element {
-  return <span className="text-[13px] text-muted">{children}</span>
+  return <span className="text-[13px] text-muted">{typeof children === 'string' ? <SettingsText>{children}</SettingsText> : children}</span>
 }
 
 export function TerminalSection({ isActive }: { isActive: boolean }): React.JSX.Element {

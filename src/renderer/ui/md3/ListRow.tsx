@@ -1,5 +1,7 @@
 import { Children, forwardRef, isValidElement, type ButtonHTMLAttributes, type ReactNode } from 'react'
 import { cn } from '../cn'
+import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
+import type { VocabularyTextMode } from '../../lib/personalVocabulary/useVocabularyText'
 
 export interface ListRowProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   /** Leading icon tile (40px, r12, `surface-container-highest`) — pass a `<MaterialSymbol/>` or
@@ -16,6 +18,7 @@ export interface ListRowProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   /** The row's one destructive action (a delete/remove entry in a context menu) — error-tinted
    *  icon tile and text, per the Overlays prototype's "destructive row in error red" contract. */
   danger?: boolean
+  vocabularyMode?: VocabularyTextMode
 }
 
 /**
@@ -24,9 +27,10 @@ export interface ListRowProps extends ButtonHTMLAttributes<HTMLButtonElement> {
  * "rows r14-20" range for menu/dialog surfaces (`ui/md3/primitives.css`).
  */
 export const ListRow = forwardRef<HTMLButtonElement, ListRowProps>(function ListRow(
-  { icon, label, sub, kbd, trailing, danger = false, className, type = 'button', ...rest },
+  { icon, label, sub, kbd, trailing, danger = false, className, type = 'button', vocabularyMode = 'authored', ...rest },
   ref
 ) {
+  const vocab = useVocabularyMapper()
   const trailingIsInteractive = Children.toArray(trailing).some((child) => {
     if (!isValidElement(child)) return false
     if (typeof child.type === 'string' && ['a', 'button', 'input', 'select', 'textarea'].includes(child.type)) return true
@@ -45,8 +49,8 @@ export const ListRow = forwardRef<HTMLButtonElement, ListRowProps>(function List
     >
       {icon && <span className="mdx-row__icon">{icon}</span>}
       <span className="mdx-row__body">
-        <span className="mdx-row__label">{label}</span>
-        {sub && <span className="mdx-row__sub">{sub}</span>}
+        <span className="mdx-row__label">{vocabularyMode === 'authored' && typeof label === 'string' ? vocab(label) : label}</span>
+        {sub && <span className="mdx-row__sub">{vocabularyMode === 'authored' && typeof sub === 'string' ? vocab(sub) : sub}</span>}
       </span>
       {(kbd || trailing) && (
         <span className="mdx-row__trailing">

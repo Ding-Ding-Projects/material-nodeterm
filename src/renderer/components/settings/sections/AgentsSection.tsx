@@ -39,6 +39,7 @@ import { Select } from '@renderer/ui/Select'
 import { Switch } from '@renderer/ui/Switch'
 import { NumberField } from '@renderer/ui/NumberField'
 import { SettingsSection } from '../SettingsSection'
+import { SettingsText } from '../SettingsText'
 import { SearchableRow } from '../SearchableRow'
 import { FieldRow } from '../FieldRow'
 
@@ -283,7 +284,8 @@ export function AgentsSection({ isActive }: { isActive: boolean }): React.JSX.El
                 )}
                 <SegmentedPill<'enabled' | 'disabled'>
                   value={enabled ? 'enabled' : 'disabled'}
-                  ariaLabel={`${row.label} availability`}
+                  ariaLabel="{agent} availability"
+                  ariaLabelParams={{ agent: row.label }}
                   options={[
                     { value: 'enabled', label: 'Enabled' },
                     { value: 'disabled', label: 'Disabled' }
@@ -315,6 +317,7 @@ export function AgentsSection({ isActive }: { isActive: boolean }): React.JSX.El
               <Input
                 className="w-72"
                 placeholder={AGENT_CONFIG[id].launchCmd}
+                vocabularyMode="factual"
                 aria-label={`${AGENT_CONFIG[id].label} launch command`}
                 value={settings.agentLaunchCommands[id] ?? ''}
                 onChange={(e) => {
@@ -446,7 +449,7 @@ export function AgentsSection({ isActive }: { isActive: boolean }): React.JSX.El
                 // real guard is `planHibernation`, which refuses any non-positive window outright.
                 onChange={(v) => update({ agentHibernationIdleMinutes: v || 30 })}
               />
-              <span className="text-[13px] text-muted">min</span>
+              <span className="text-[13px] text-muted"><SettingsText>min</SettingsText></span>
             </div>
           }
         />
