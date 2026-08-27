@@ -13,7 +13,7 @@
     <article class="doc-body">
       <p class="doc-kicker">Remote and services</p>
       <h1>Cloudflare Tunnel state</h1>
-      <p>The tunnel state surface reports six independent observations instead of one optimistic connection flag.</p>
+      <p>The tunnel state surface reports six independent observations instead of one optimistic connection flag. Each observation includes its timestamp, source, evidence, and bounded recovery reason.</p>
       <ol>
         <li>API creation</li>
         <li>DNS routing</li>
@@ -27,7 +27,7 @@
       <h2>Portability and local state</h2>
       <p>Schema 3 carries safe route intent such as the hostname, origin port, connector mode, access-policy intent, and route mode. Provider ids, credentials, connector ids, process state, local paths, and live observations remain on the local computer. Import does not contact or mutate a provider. Configure or Rebind is required on the destination computer.</p>
       <h2>Guided controls</h2>
-      <p>The state panel provides local plain-text search and a separate status filter. Each field has its own adjacent anchored full regex builder. Retry is offered only where a new check is meaningful, and disabled controls explain the exact reason.</p>
+      <p>The state panel provides local plain-text search and a separate status filter. Each field has its own adjacent anchored full regex builder. Retry is offered only where a new check is meaningful, and disabled controls explain the exact reason. The current Cloudflare core stack exposes this route but has no tunnel-specific provider or connector probes yet, so a configured binding remains visibly unknown rather than being presented as ready.</p>
       <h2>Verification</h2>
       <p>The ultra-speed implementation lane did not run tests, type checking, lint, review, security or accessibility checks, builds, packaging, installer execution, runtime interaction, or captures. This article records source intent, not runtime verification.</p>
       <section class="doc-suggested"><h2>Suggested articles</h2><ul><li><a href="./docker-host-manager.html">Docker host manager</a></li><li><a href="./node-catalog.html">Unified Node Catalog</a></li><li><a href="./server-edition.html">Server Edition</a></li></ul></section>

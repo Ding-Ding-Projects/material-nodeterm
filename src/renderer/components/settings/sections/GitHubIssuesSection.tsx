@@ -17,6 +17,7 @@ import { Input } from '@renderer/ui/Input'
 import { Select } from '@renderer/ui/Select'
 import { Switch } from '@renderer/ui/Switch'
 import { describeGitHubAuth, tokenFieldIsPrimary } from '../../../lib/githubAuthView'
+import { GitHubCliAccountsPanel } from './GitHubCliAccountsPanel'
 
 const ROWS = {
   enable: {
@@ -31,6 +32,11 @@ const ROWS = {
   authentication: {
     title: 'Authentication',
     keywords: ['github', 'token', 'personal access token', 'cli', 'authentication']
+  },
+  accounts: {
+    title: 'GitHub CLI accounts',
+    description: 'Discover, sign in, switch, refresh, and sign out GitHub CLI accounts.',
+    keywords: ['github', 'cli', 'accounts', 'account', 'owner', 'organization', 'scope', 'login']
   },
   mapping: {
     title: 'Column labels',
@@ -159,6 +165,7 @@ export function GitHubIssuesSection({ isActive }: { isActive: boolean }): React.
   if (!projectId || !project) {
     return (
       <SettingsSection id="github-issues" title="GitHub Issues" isActive={isActive} searchEntries={ENTRIES}>
+        <GitHubCliAccountsPanel />
         <p className="text-sm text-muted"><SettingsText>Open a project to configure GitHub Issues.</SettingsText></p>
       </SettingsSection>
     )
@@ -167,6 +174,7 @@ export function GitHubIssuesSection({ isActive }: { isActive: boolean }): React.
   if (project.remote) {
     return (
       <SettingsSection id="github-issues" title="GitHub Issues" isActive={isActive} searchEntries={ENTRIES}>
+        <GitHubCliAccountsPanel />
         <p className="text-sm text-muted"><SettingsText>Configure GitHub Issues on the computer hosting this project.</SettingsText></p>
       </SettingsSection>
     )
@@ -175,6 +183,7 @@ export function GitHubIssuesSection({ isActive }: { isActive: boolean }): React.
   if (!board) {
     return (
       <SettingsSection id="github-issues" title="GitHub Issues" isActive={isActive} searchEntries={ENTRIES}>
+        <GitHubCliAccountsPanel />
         <p className="text-sm text-muted"><SettingsText>Create this project’s Kanban board before enabling GitHub Issues.</SettingsText></p>
       </SettingsSection>
     )
@@ -292,6 +301,7 @@ export function GitHubIssuesSection({ isActive }: { isActive: boolean }): React.
       isActive={isActive}
       searchEntries={ENTRIES}
     >
+      <GitHubCliAccountsPanel />
       <SearchableRow {...ROWS.enable}>
         <FieldRow
           label="Include GitHub issues"

@@ -4,8 +4,8 @@ import { canChat, type AgentId } from '@shared/agents/config'
  * Does this node's conversation live in a file **claude's** transcript readers can locate and parse?
  *
  * This is the gate for every feature that goes through `core/transcript-ipc.ts`'s
- * `resolveTranscript` — today `context.ensure` (the context meter's mount-time rehydration) and the
- * find bar's transcript index (`claude.readTranscript`). It is deliberately NOT `hasUsage`.
+ * `resolveTranscript` — the find bar's transcript index (`claude.readTranscript`). It is deliberately
+ * NOT `hasUsage`; context.ensure now routes each provider to its own locator and tail.
  *
  * Those two used to share `hasUsage` with the context METER, back when all three were claude-only
  * and the distinction cost nothing. Then codex and gemini joined `USAGE_CAPABLE` (their own
@@ -22,15 +22,11 @@ import { canChat, type AgentId } from '@shared/agents/config'
  * agent's transcript ourselves" — so it is reused here rather than adding a fourth capability list
  * that would mean the same thing.
  *
- * The meter itself stays on `hasUsage` and spans three agents: it is fed by the per-agent context
+ * The meter itself is fed by the per-agent context
  * tails in the shells (`geminiContextParse` / `codexContextParse`), which need no resolver because
  * the hook envelope hands them the path. The only thing a non-claude agent gives up here is the
- * mount-time HEAD START: its meter fills on the first hook event after mount instead of instantly.
- * Correct-but-later beats instant-but-borrowed-from-another-session.
- *
- * FOLLOW-UP (own task): per-agent rehydration. Making `context.ensure` work for codex/gemini means
- * teaching it to resolve THEIR transcripts (`handoff/locate.ts` already has `locateCodex` /
- * `locateGemini` by sessionId) and to route to the matching tail — a real feature, not a gate.
+ * mount-time rehydration now resolves the provider's own transcript and routes to the matching tail,
+ * so an idle or resumed Codex/Gemini session gets a head start without borrowing Claude data.
  */
 export function readsClaudeTranscript(agentId: AgentId | undefined): boolean {
   return !!agentId && canChat(agentId)

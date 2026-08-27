@@ -49,6 +49,8 @@ export interface TunnelStatePanelProps {
   live: TunnelLiveState | null
   /** The host starts a fresh bounded observation for one facet. */
   onRetry?: (facet: TunnelFacet) => void
+  /** Cancels the current node observation while preserving its last trustworthy state. */
+  onCancel?: () => void
 }
 
 /**
@@ -56,7 +58,7 @@ export interface TunnelStatePanelProps {
  * a provider connection so imported intent can explain what still needs Configure or Rebind.
  * Search and status filtering keep isolated regex state and each exposes its own anchored builder.
  */
-export function TunnelStatePanel({ intent, live, onRetry }: TunnelStatePanelProps): React.JSX.Element {
+export function TunnelStatePanel({ intent, live, onRetry, onCancel }: TunnelStatePanelProps): React.JSX.Element {
   const vocab = useVocabularyMapper()
   const search = useRegexSearchField()
   const statusFilter = useRegexSearchField()
@@ -64,6 +66,7 @@ export function TunnelStatePanel({ intent, live, onRetry }: TunnelStatePanelProp
   const statusFilterRef = useRef<HTMLInputElement>(null)
   const [showPortableDetails, setShowPortableDetails] = useState(false)
   const overall = tunnelOverallStatus(live)
+  const probeRunning = live ? TUNNEL_FACETS.some((facet) => live.facets[facet].status === 'pending') : false
 
   const facets = useMemo(
     () => TUNNEL_FACETS.filter((facet) => {
@@ -136,11 +139,17 @@ export function TunnelStatePanel({ intent, live, onRetry }: TunnelStatePanelProp
 
       <div className="tunnel-state-panel__legend" aria-label={vocab('Available status filters')}>
         {STATUS_FILTERS.map((status) => <span key={status} className={stateClass(status)}>{vocab(statusLabel(status))}</span>)}
+        {probeRunning && onCancel ? <Button variant="ghost" onClick={onCancel}>{vocab('Cancel check')}</Button> : null}
       </div>
 
       <div className="tunnel-state-panel__rows" role="list" aria-label={vocab('Tunnel checks')}>
         {facets.map((facet) => {
-          const row = live?.facets[facet] ?? { status: 'unknown' as const, checkedAt: null }
+          const row = live?.facets[facet] ?? {
+            status: 'unknown' as const,
+            checkedAt: null,
+            source: 'unavailable' as const,
+            evidence: 'No trustworthy observation has been recorded.'
+          }
           const canRetry = row.status !== 'ready' && onRetry !== undefined
           const retryReason = row.status === 'unknown'
             ? vocab('Nothing has been observed yet. Configure the local binding, then retry this check.')
@@ -155,6 +164,7 @@ export function TunnelStatePanel({ intent, live, onRetry }: TunnelStatePanelProp
                 <h4>{vocab(TUNNEL_FACET_LABELS[facet])}</h4>
                 <span className={stateClass(row.status)}>{vocab(statusLabel(row.status))}</span>
                 <p>{row.detail ?? row.reason ?? vocab('No observation recorded.')}</p>
+                <small>{vocab('Evidence')}: {row.evidence} · {vocab('Source')}: {row.source}</small>
                 <small>
                   {row.checkedAt === null
                     ? vocab('Last checked: not recorded')

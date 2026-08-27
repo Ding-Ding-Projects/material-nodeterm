@@ -170,6 +170,8 @@ export const COMMAND_DEFINITIONS: readonly CommandDefinition[] = [
     scope: 'canvas', defaultBindings: both() },
   { id: 'node.newAgent.copilot', title: `New ${AGENT_CONFIG.copilot.label} node`, group: 'Nodes',
     scope: 'canvas', defaultBindings: both() },
+  { id: 'node.newAgent.devin', title: `New ${AGENT_CONFIG.devin.label} node`, group: 'Nodes',
+    scope: 'canvas', defaultBindings: both() },
   { id: 'node.newSticky', title: 'New sticky note', group: 'Nodes', scope: 'canvas',
     defaultBindings: both() },
   { id: 'node.newBrowser', title: 'New browser node', group: 'Nodes', scope: 'canvas',

@@ -33,11 +33,24 @@ export const TUNNEL_FACET_LABELS: Record<TunnelFacet, string> = {
 
 export type TunnelFacetStatus = 'unknown' | 'pending' | 'ready' | 'failed' | 'blocked'
 export type TunnelOverallStatus = TunnelFacetStatus
+export type TunnelFacetSource =
+  | 'unavailable'
+  | 'local-binding'
+  | 'cloudflare-api'
+  | 'dns-resolver'
+  | 'connector-runtime'
+  | 'access-api'
+  | 'origin-probe'
+  | 'external-probe'
 
 export interface TunnelFacetState {
   status: TunnelFacetStatus
   /** Epoch milliseconds for the observation, or null when nothing has been observed. */
   checkedAt: number | null
+  /** The bounded subsystem that supplied this observation, never a credential or path. */
+  source: TunnelFacetSource
+  /** Evidence is a short factual description of what was observed, not a success prediction. */
+  evidence: string
   /** Bounded, non-secret explanation of the observation. */
   detail?: string
   /** Bounded, non-secret recovery reason when status is failed or blocked. */
@@ -78,6 +91,8 @@ export interface TunnelLiveBinding {
 export interface TunnelLiveState {
   observedAt: number
   source: 'local'
+  /** Monotonic per-node probe generation. Older replies must never replace a newer generation. */
+  generation: number
   facets: Record<TunnelFacet, TunnelFacetState>
   /** Present only after the local binding has been selected and observed. */
   binding?: TunnelLiveBinding
@@ -101,6 +116,7 @@ export const TUNNEL_STATE_LIMITS = {
   hostname: 253,
   detail: 512,
   reason: 512,
+  evidence: 512,
   maxRetryAfterMs: 24 * 60 * 60 * 1000,
   minOriginPort: 1,
   maxOriginPort: 65535
@@ -117,6 +133,16 @@ const FACET_STATUS_SET: ReadonlySet<string> = new Set([
 const CONNECTOR_MODE_SET: ReadonlySet<string> = new Set(['process', 'windows-service', 'docker'])
 const ACCESS_POLICY_MODE_SET: ReadonlySet<string> = new Set(['unconfigured', 'public', 'protected'])
 const ROUTE_MODE_SET: ReadonlySet<string> = new Set(['unbound', 'managed-hostname'])
+const FACET_SOURCE_SET: ReadonlySet<string> = new Set([
+  'unavailable',
+  'local-binding',
+  'cloudflare-api',
+  'dns-resolver',
+  'connector-runtime',
+  'access-api',
+  'origin-probe',
+  'external-probe'
+])
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -146,13 +172,18 @@ function validHostname(value: string): boolean {
 /** Return a fresh empty facet map so callers cannot accidentally share mutable state. */
 export function createUnknownTunnelFacets(): Record<TunnelFacet, TunnelFacetState> {
   return Object.fromEntries(
-    TUNNEL_FACETS.map((facet) => [facet, { status: 'unknown', checkedAt: null }])
+    TUNNEL_FACETS.map((facet) => [facet, {
+      status: 'unknown',
+      checkedAt: null,
+      source: 'unavailable',
+      evidence: 'No trustworthy observation has been recorded.'
+    }])
   ) as Record<TunnelFacet, TunnelFacetState>
 }
 
 export function createUnknownTunnelLiveState(observedAt = 0): TunnelLiveState {
   const safeObservedAt = Number.isSafeInteger(observedAt) && observedAt >= 0 ? observedAt : 0
-  return { observedAt: safeObservedAt, source: 'local', facets: createUnknownTunnelFacets() }
+  return { observedAt: safeObservedAt, source: 'local', generation: 0, facets: createUnknownTunnelFacets() }
 }
 
 /**
@@ -202,6 +233,7 @@ const ALLOWED_TRANSITIONS: Record<TunnelFacetStatus, readonly TunnelFacetStatus[
 
 export type TunnelTransitionFailure =
   | 'invalid-status'
+  | 'invalid-source'
   | 'invalid-timestamp'
   | 'stale-observation'
   | 'invalid-transition'
@@ -216,6 +248,8 @@ export type TunnelFacetTransition =
 export interface TunnelFacetObservation {
   status: TunnelFacetStatus
   checkedAt: number
+  source: TunnelFacetSource
+  evidence: string
   detail?: string
   reason?: string
   retryAfterMs?: number
@@ -228,6 +262,9 @@ export function transitionTunnelFacet(
   if (!FACET_STATUS_SET.has(observation.status)) {
     return { ok: false, state: current, reason: 'invalid-status' }
   }
+  if (!FACET_SOURCE_SET.has(observation.source)) {
+    return { ok: false, state: current, reason: 'invalid-source' }
+  }
   if (!Number.isSafeInteger(observation.checkedAt) || observation.checkedAt < 0) {
     return { ok: false, state: current, reason: 'invalid-timestamp' }
   }
@@ -239,12 +276,14 @@ export function transitionTunnelFacet(
   }
   const detail = observation.detail === undefined ? undefined : boundedText(observation.detail, TUNNEL_STATE_LIMITS.detail)
   const reason = observation.reason === undefined ? undefined : boundedText(observation.reason, TUNNEL_STATE_LIMITS.reason)
+  const evidence = boundedText(observation.evidence, TUNNEL_STATE_LIMITS.evidence)
   if (observation.detail !== undefined && detail === undefined) {
     return { ok: false, state: current, reason: 'invalid-detail' }
   }
   if (observation.reason !== undefined && reason === undefined) {
     return { ok: false, state: current, reason: 'invalid-detail' }
   }
+  if (!evidence) return { ok: false, state: current, reason: 'invalid-detail' }
   if ((observation.status === 'failed' || observation.status === 'blocked') && reason === undefined) {
     return { ok: false, state: current, reason: 'missing-reason' }
   }
@@ -256,7 +295,12 @@ export function transitionTunnelFacet(
   ) {
     return { ok: false, state: current, reason: 'invalid-retry-after' }
   }
-  const next: TunnelFacetState = { status: observation.status, checkedAt: observation.checkedAt }
+  const next: TunnelFacetState = {
+    status: observation.status,
+    checkedAt: observation.checkedAt,
+    source: observation.source,
+    evidence
+  }
   if (detail !== undefined) next.detail = detail
   if (reason !== undefined) next.reason = reason
   if (observation.retryAfterMs !== undefined) next.retryAfterMs = observation.retryAfterMs

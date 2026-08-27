@@ -178,7 +178,8 @@ describe('ServiceNode', () => {
       proxmox: 'Proxmox',
       gitlab: 'GitLab',
       homeassistant: 'Home Assistant',
-      freepbx: 'FreePBX'
+      freepbx: 'FreePBX',
+      'nextcloud-aio': 'Nextcloud AIO'
     }
 
     for (const [kind, name] of Object.entries(expected)) {
@@ -323,7 +324,7 @@ describe('ServiceNode', () => {
     })
 
     it('is absent on every other kind', () => {
-      for (const kind of ['minecraft', 'proxmox', 'gitlab', 'homeassistant', 'freepbx']) {
+      for (const kind of ['minecraft', 'proxmox', 'gitlab', 'homeassistant', 'freepbx', 'nextcloud-aio']) {
         const node = render(kind, baseData())
         expect(localhostButton(node), `kind "${kind}" should have no localhost button`).toBeNull()
       }
