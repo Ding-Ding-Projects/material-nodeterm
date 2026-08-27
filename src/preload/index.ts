@@ -635,8 +635,8 @@ const api: NodeTerminalApi = {
       list: (partition) => ipcRenderer.invoke(IPC.browserExtensionsList, partition),
       pickDir: () => ipcRenderer.invoke(IPC.browserExtensionsPickDir),
       add: (partition, dirPath) => ipcRenderer.invoke(IPC.browserExtensionsAdd, partition, dirPath),
-      remove: (partition, dirPath) => ipcRenderer.invoke(IPC.browserExtensionsRemove, partition, dirPath)
-    }
+       remove: (partition, dirPath) => ipcRenderer.invoke(IPC.browserExtensionsRemove, partition, dirPath)
+    },
     onLeaseChanged: (listener) => {
       const handler = (_e: unknown, push: Parameters<typeof listener>[0]) => listener(push)
       ipcRenderer.on(IPC.browserLeaseChanged, handler)
@@ -883,12 +883,6 @@ const api: NodeTerminalApi = {
     remove: (id, ctx) => ipcRenderer.invoke(IPC.codexAccountsRemove, id, ctx),
     identity: (id, ctx) => ipcRenderer.invoke(IPC.codexAccountsIdentity, id, ctx),
     systemIdentity: (ctx) => ipcRenderer.invoke(IPC.codexAccountsSystemIdentity, ctx),
-    add: () => ipcRenderer.invoke(IPC.codexAccountsAdd),
-    waitLogin: (id) => ipcRenderer.invoke(IPC.codexAccountsWaitLogin, id),
-    cancelWaitLogin: (id) => ipcRenderer.invoke(IPC.codexAccountsCancelWait, id),
-    identity: (id) => ipcRenderer.invoke(IPC.codexAccountsIdentity, id),
-    systemIdentity: (ctx) => ipcRenderer.invoke(IPC.codexAccountsSystemIdentity, ctx),
-    remove: (id) => ipcRenderer.invoke(IPC.codexAccountsRemove, id),
     switchThread: (threadId, cwd, sourceAccountId, targetAccountId) =>
       ipcRenderer.invoke(
         IPC.codexAccountsSwitchThread,
@@ -910,19 +904,7 @@ const api: NodeTerminalApi = {
     finishSwitch: (rollbackToken) =>
       ipcRenderer.invoke(IPC.codexAccountsFinishSwitch, rollbackToken),
     rollbackSwitch: (rollbackToken) =>
-      ipcRenderer.invoke(IPC.codexAccountsRollbackSwitch, rollbackToken)
-    commitSwitch: (token) => ipcRenderer.invoke(IPC.codexAccountsCommitSwitch, token),
-    finishSwitch: (token) => ipcRenderer.invoke(IPC.codexAccountsFinishSwitch, token),
-    rollbackSwitch: (token) => ipcRenderer.invoke(IPC.codexAccountsRollbackSwitch, token),
-    transferThreadToSsh: (threadId, cwd, projectId, targetAccountId, sourceAccountId) =>
-      ipcRenderer.invoke(
-        IPC.codexAccountsTransferThreadToSsh,
-        threadId,
-        cwd,
-        projectId,
-        targetAccountId,
-        sourceAccountId
-      )
+      ipcRenderer.invoke(IPC.codexAccountsRollbackSwitch, rollbackToken),
   },
   transcripts: {
     search: (query: string) => ipcRenderer.invoke(IPC.transcriptSearch, query)

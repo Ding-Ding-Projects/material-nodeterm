@@ -154,7 +154,6 @@ describe('wireAgentStatus', () => {
     expect(sub.calls).toEqual([])
   })
 
-  it('a confirmed session end untracks the node context tail and finishes its subagents', () => {
   // Codex subagents (spawn_agent): payload shapes from the live codex-cli 0.146.0 capture —
   // SubagentStart's transcript_path is the CHILD's rollout, keyed by agent_id.
   it('codex SubagentStart tails the child rollout via trackFile, SubagentStop finishes it', () => {

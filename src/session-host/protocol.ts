@@ -194,11 +194,6 @@ export interface ListSessionsResult {
   names: string[]
 }
 
-/**
- * Splits a byte stream on `\n` into complete JSON lines, buffering a line that arrived split
- * across TCP/pipe chunks — the whole reason a delimiter-based framing needs a stateful parser
- * instead of `JSON.parse(chunk)`. Shared by both ends so the framing rule is written exactly once.
- */
 /** Hard cap on a single un-terminated line. This framer runs BEFORE the `hello` auth check on
  *  the host, and on the client against whatever is bound to the endpoint, so an unbounded buffer
  *  is a pre-auth memory-exhaustion DoS: a peer that streams bytes with no `\n` would grow `buf`
@@ -217,12 +212,9 @@ export class FrameTooLargeError extends Error {
 
 export class LineFramer {
   private buf = ''
-  /** Feed a raw chunk; returns every complete frame it now contains, in arrival order. A
-   *  malformed line is DROPPED rather than thrown — one corrupt frame must never wedge every
-   *  frame that follows it on the same connection. */
-  push<T>(chunk: string): T[] {
-    this.buf += chunk
-   *  frame that follows it on the same connection. A line that grows past `MAX_FRAME_BYTES`
+  /** Feed a raw chunk; returns every complete frame it now contains, in arrival order. A malformed
+   *  line is DROPPED rather than thrown, so one corrupt frame never wedges the stream. A line that
+   *  grows past `MAX_FRAME_BYTES`
    *  without terminating throws `FrameTooLargeError`; the caller destroys the connection. */
   push<T>(chunk: string): T[] {
     this.buf += chunk
