@@ -52,8 +52,10 @@ later commit, since this file will not be kept in lockstep with every merge).
       (`scripts/check-app-contract.mjs`), 1,101 assertions across 59 features, run clean except
       for the one pending item below.
 - [x] Windows packaging path: Squirrel.Windows via `scripts/windows-installer.mjs`, unsigned by
-      permanent policy, with ICO regeneration/verification, nupkg/RELEASES agreement checks, and
-      a manual-dispatch-only `main`-only release workflow.
+      permanent policy, with ICO regeneration/verification, Setup.exe plus nupkg/RELEASES
+      agreement checks, and a Windows-only release workflow triggered by pushes to `main` and
+      manual dispatch. ZIP, NSIS-only, MSI-only, MSIX-only, and portable-only parallel installer
+      routes are retired.
 
 ## In progress / partially landed
 
