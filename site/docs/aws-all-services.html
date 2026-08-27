@@ -18,7 +18,7 @@
     <article class="doc-body">
       <p class="doc-kicker">AWS Universe</p>
       <h1>Generic AWS all-service interface</h1>
-      <p>The AWS service node reads the installed AWS CLI model inventory. Newly installed services,
+      <p>The AWS Universe Shop reads the installed AWS CLI model inventory. Newly installed services,
         commands, and input shapes appear through the same typed interface without a new hand-written
         form.</p>
       <h2>Guided controls</h2>
@@ -27,7 +27,7 @@
         booleans, numbers, timestamps, and local files use controls matched to their shape. Unsupported
         model data stays visible as an honest unavailable state.</p>
       <h2>Review and execution</h2>
-      <p>Before execution, the node shows the service, command, account, role, region, endpoint,
+      <p>Before execution, the Shop uses the shared AWS resource manager to show the service, command, account, role, region, endpoint,
         pagination, waiter, retry, streaming, output mode, generated argument vector, risk, and
         portable omissions. The privileged host regenerates the argument vector from the current
         model and invokes the bundled CLI without a shell. Destructive operations use the existing

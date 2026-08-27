@@ -26,7 +26,7 @@ export function TopAppBar({ children }: TopAppBarProps) {
   const appLogo = useSettings((s) => s.settings.appLogo)
 
   return (
-    <div className="md3-app-bar">
+    <div className="md3-app-bar" data-easter-surface="title-bar">
       <div className="md3-app-bar__brand">
         <span className="md3-app-bar__brand-mark" aria-hidden="true">
           {appLogo.selection === 'custom' && appLogo.customImage ? (

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import {
   CONVERTER_CATALOG,
   converterAdapterById,
+  portableAdvancedPipelineIntent,
   type ConvertQueueItem,
   type ConverterAdapterDescriptor,
   type ConverterDetectionResult,
@@ -369,6 +370,15 @@ function FileConverterPanelForApi({
     [selectedAdapterId, catalog]
   )
 
+  const selectedPipelineIntent = useMemo(() => {
+    if (!selectedAdapter?.pipeline) return null
+    try {
+      return portableAdvancedPipelineIntent(selectedAdapter.id)
+    } catch {
+      return null
+    }
+  }, [selectedAdapter])
+
   const suggestedIds = useMemo(() => {
     const ids = new Set<string>()
     for (const f of pending) for (const id of f.detection?.compatibleAdapterIds ?? []) ids.add(id)
@@ -549,7 +559,7 @@ function FileConverterPanelForApi({
 
   return createPortal(
     <div className="drawer-overlay md3-converter" onClick={onClose}>
-      <aside className="drawer converter" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={vocab('File converter')}>
+      <aside className="drawer converter" data-easter-surface="converter" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={vocab('File converter')}>
         <div className="drawer__head">
           <h2>{vocab('File converter')}</h2>
           <button className="drawer__close" onClick={onClose} aria-label={vocab('Close')}>
@@ -620,6 +630,26 @@ function FileConverterPanelForApi({
               }}
               suggestedIds={suggestedIds}
             />
+            {selectedPipelineIntent && (
+              <div className="cv-pipeline-intent" aria-label={vocab('Portable pipeline intent')}>
+                <p>
+                  <MaterialSymbol name="database" size={16} />
+                  <strong>{vocab('Portable pipeline intent')}</strong>
+                </p>
+                <p>
+                  {mapOwnedSentence(vocab, [
+                    copy('Operation: '), fact(selectedPipelineIntent.operation),
+                    copy(' · Resource profile: '), fact(selectedPipelineIntent.resourceProfile)
+                  ])}
+                </p>
+                <p>
+                  {vocab('A transferred project keeps only this safe operation intent. Import does not read a file, start processing, create output, or contact a service.')}
+                </p>
+                <p>
+                  {vocab('On another computer choose Configure, Rebind, Adopt, Deploy, Locate Asset, or Leave Unbound. Source and destination paths, credentials, sessions, process state, host identifiers, caches, and generated output are omitted.')}
+                </p>
+              </div>
+            )}
             {selectedAdapter && selectedAdapter.lossy && (
               <div className="cv-lossy">
                 <p>

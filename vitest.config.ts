@@ -97,14 +97,6 @@ export default defineConfig({
     // --localstorage-file, and it occupies the slot before jsdom populates globals — so jsdom
     // suites got window === globalThis with localStorage undefined. Restores it per realm.
     setupFiles: ['./test/setup/jsdom-storage.ts']
-    environment: 'node',
-    // Issue #160: with the default (one worker per core), a 10-core Mac runs ~10 fs-heavy suites
-    // at once and transient fd exhaustion (EMFILE) turns into silent test flakiness — probes like
-    // `fs.existsSync` swallow the error and answer false, so whole files fail in ways that never
-    // reproduce alone and vanish with --no-file-parallelism. Half the cores keeps wall-clock
-    // close (the suite is fs/IO-bound, not CPU-bound) while halving peak fd pressure. CI's 2-core
-    // runners resolve to 1 worker, which is what they effectively ran anyway.
-    maxWorkers: '50%'
   },
   plugins: [stripShebang],
   resolve: {

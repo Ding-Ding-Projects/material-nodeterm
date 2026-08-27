@@ -4,6 +4,7 @@
 // it — SSH projects default to a home-relative remoteCwd); write content goes on stdin (never
 // interpolated). check-ignore entry NAMES are bare filenames, so they stay posixQuote'd.
 import { childArgs } from '../core/remote-ssh/control-master'
+import crypto from 'node:crypto'
 import { posixQuote, quoteRemotePath, type SshConnection } from '../shared/ssh'
 import {
   buildHiddenDirExcludeGlobs,
@@ -64,6 +65,40 @@ export function sshSizeArgs(conn: SshConnection, cp: string, path: string): stri
   // does not exist yet. `cat | wc -c` (not `wc -c < file`) stays quiet + prints 0 on a missing file
   // instead of erroring, so the poll never mistakes "not there yet" for a failure.
   return childArgs(conn, cp, `cat ${quoteRemotePath(path)} 2>/dev/null | wc -c`)
+}
+
+/** Write a bounded board attachment from base64 stdin using an atomic sibling temporary. */
+export function sshWriteAttachmentArgs(conn: SshConnection, cp: string, path: string): string[] {
+  const parent = dirname(path)
+  const temporary = `${parent}/.nodeterm-attachment-${crypto.randomUUID()}.tmp`
+  // BSD base64 uses -D while GNU and BusyBox use -d. openssl is the final common fallback. The
+  // probe consumes no input, so the actual payload remains on stdin for exactly one decoder.
+  const decoder = 'if base64 -d </dev/null >/dev/null 2>&1; then base64 -d; elif base64 -D </dev/null >/dev/null 2>&1; then base64 -D; elif command -v openssl >/dev/null 2>&1; then openssl base64 -d -A; else exit 127; fi'
+  const ancestors = [path, parent, dirname(parent), dirname(dirname(parent))]
+    .filter((value, index, all) => all.indexOf(value) === index)
+    .map((value) => `test ! -L ${quoteRemotePath(value)}`)
+    .join(' && ')
+  const command = `umask 077; ${ancestors} && mkdir -p -- ${quoteRemotePath(parent)} && { ${decoder} > ${quoteRemotePath(temporary)} && mv -f -- ${quoteRemotePath(temporary)} ${quoteRemotePath(path)}; status=$?; rm -f -- ${quoteRemotePath(temporary)}; exit "$status"; }`
+  return childArgs(conn, cp, command)
+}
+
+/** Read a board attachment as base64, bounded by the caller's decode budget. */
+export function sshReadAttachmentArgs(conn: SshConnection, cp: string, path: string, maxBytes: number): string[] {
+  const parent = dirname(path)
+  const ancestors = [path, parent, dirname(parent), dirname(dirname(parent))]
+    .filter((value, index, all) => all.indexOf(value) === index)
+    .map((value) => `test ! -L ${quoteRemotePath(value)}`)
+    .join(' && ')
+  return childArgs(conn, cp, `${ancestors} && test "$(wc -c < ${quoteRemotePath(path)} 2>/dev/null || echo 0)" -le ${Math.max(1, Math.trunc(maxBytes))} && base64 ${quoteRemotePath(path)}`)
+}
+
+export function sshRemoveAttachmentArgs(conn: SshConnection, cp: string, path: string): string[] {
+  const parent = dirname(path)
+  const ancestors = [path, parent, dirname(parent), dirname(dirname(parent))]
+    .filter((value, index, all) => all.indexOf(value) === index)
+    .map((value) => `test ! -L ${quoteRemotePath(value)}`)
+    .join(' && ')
+  return childArgs(conn, cp, `${ancestors} && rm -f -- ${quoteRemotePath(path)}`)
 }
 export function sshExistsArgs(conn: SshConnection, cp: string, path: string): string[] {
   return childArgs(conn, cp, `test -e ${quoteRemotePath(path)}`)

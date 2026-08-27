@@ -9,11 +9,12 @@
 
 import { isFreshVocabularyCache, validateVocabularyCacheJson } from '../shared/vocabulary-state.js'
 
-const STORAGE_KEY = 'nodeterm-playground.v1'
+const STORAGE_KEY = 'nodeterm-playground.v2'
+const LEGACY_STORAGE_KEY = 'nodeterm-playground.v1'
 const VOCAB_CACHE_KEY = 'nodeterm-playground.vocabulary.v1'
 
 const PERSISTED_KEYS = [
-  'theme', 'lang', 'funnyEn', 'funnyYue', 'emoji', 'bigText', 'sound', 'accent', 'nick', 'logo', 'preset',
+  'theme', 'lang', 'funnyEn', 'funnyYue', 'funnySchemaVersion', 'emoji', 'bigText', 'sound', 'accent', 'nick', 'logo', 'preset',
     'locks', 'notes', 'history', 'auth', 'school', 'schoolPin', 'narrate', 'voice', 'rate', 'vocab',
   'schedOn', 'schedTime', 'schedTheme', 'bestMem', 'bestQuiz', 'bestWhack',
 ]
@@ -86,7 +87,7 @@ export function createStore() {
     dataset: 'settings', lossPending: null, lossNote: 'Green shapes carry everything. Orange shapes lose something, and will tell you what.', lossBad: false,
     confirm: null, confirmTyped: '',
     unlockVals: {}, unlocked: {}, locks: {},
-    theme: 'day', lang: 'en', funnyEn: 2, funnyYue: 3, emoji: true, bigText: false, sound: false,
+    theme: 'day', lang: 'en', funnyEn: 10, funnyYue: 10, funnySchemaVersion: 2, emoji: true, bigText: false, sound: false,
     accent: '#ffd93d', nick: '', logo: '', preset: 'playground',
     school: false, schoolHydrated: true, schoolPin: '',
     narrate: false, voice: '', rate: 3,
@@ -102,8 +103,9 @@ export function createStore() {
 
   let saved = {}
   let sanitizedLegacyHistory = false
+  let migratedFunnyLevels = false
   try {
-    saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}')
+    saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY) || '{}')
   } catch (_err) {
     saved = {}
   }
@@ -115,6 +117,15 @@ export function createStore() {
   PERSISTED_KEYS.forEach((k) => {
     if (saved[k] !== undefined) state[k] = saved[k]
   })
+  // Version 2 expands the controls to ten levels. Valid legacy values are preserved exactly;
+  // malformed hand-edited values fail safely to the new-install default. The old key is read once
+  // so a returning visitor never loses their established language choices.
+  const normalizeFunny = (value) => Number.isInteger(value) && value >= 1 && value <= 10 ? value : 10
+  migratedFunnyLevels = saved.funnySchemaVersion !== 2
+  state.funnyLevelMigration = migratedFunnyLevels ? 'legacy-preserved' : 'current'
+  state.funnyEn = normalizeFunny(state.funnyEn)
+  state.funnyYue = normalizeFunny(state.funnyYue)
+  state.funnySchemaVersion = 2
   if (!state.notes || !state.notes.length) state.notes = defaultNotes()
   // An explicitly empty history means the user deleted every row. Treating [] as first-run data
   // resurrects the welcome entry on reload and makes the deletion button a lie.
@@ -202,7 +213,7 @@ export function createStore() {
 
   // Upgrade in place once: active authenticator/lock records stay where they are, while historical
   // duplicate credential material is removed immediately instead of waiting for another setting.
-  if (sanitizedLegacyHistory) persist()
+  if (sanitizedLegacyHistory || migratedFunnyLevels) persist()
 
   return api
 }

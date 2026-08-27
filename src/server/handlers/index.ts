@@ -8,13 +8,20 @@ import { generateCommitMessage } from '../../core/commit-message'
 import { registerFsHandlers } from '../../core/fs-handlers'
 import { registerConverterIpc } from '../../core/converter/register-ipc'
 import { registerNodeDependencyIpc } from '../../core/node-dependencies/register-ipc'
+import { registerAwsResourceIpc } from '../../core/aws-resource-register-ipc'
+import { AwsWizardModelService } from '../../core/aws-wizard/service'
 import { registerOllamaIpc } from '../../core/ollama/register-ipc'
 import { registerMinecraftIpc } from '../../core/minecraft/register-ipc'
 import { registerTorrentIpc } from '../../core/torrent/register-ipc'
 import { registerVirtualMachineIpc } from '../../core/virtual-machine/register-ipc'
 import { registerCalendarIpc } from '../../core/calendar/register-ipc'
-import { registerAwsAllServicesIpc } from '../../core/aws-all-services'
+import { registerCloudflareCoreManagersIpc } from '../../core/cloudflare-core-managers'
 import { registerProviderServicesIpc } from '../../core/provider-services'
+import { registerHomeAssistantIpc } from '../../core/home-assistant/register-ipc'
+import { registerHomeAssistantControlIpc } from '../../core/home-assistant-control/register-ipc'
+import { registerHomeAssistantSensorIpc } from '../../core/home-assistant-sensor/register-ipc'
+import { registerCloudflareZeroTrustIpc } from '../../core/cloudflare-zero-trust/service'
+import { registerAwsIdentityIpc } from '../../core/aws-identity'
 import type { MinecraftServerManager } from '../../core/minecraft/server-manager'
 import { registerVsCodeHandlers } from '../../core/vscode-handlers'
 import { LocalHistoryStore } from '../../core/local-history'
@@ -80,20 +87,28 @@ export function registerCoreHandlers(
   // docs/ollama-manager.md and docs/minecraft-server-manager.md.
   registerConverterIpc(platform)
   const nodeDependencyService = registerNodeDependencyIpc(platform)
-  registerAwsAllServicesIpc(platform, async () => {
-    try {
-      const availability = await nodeDependencyService.status('aws-cli-v2')
-      return availability.available ? availability.executablePath : null
-    } catch {
-      return null
-    }
-  })
+  const awsWizardModels = new AwsWizardModelService(nodeDependencyService)
   registerOllamaIpc(platform)
   const { manager: minecraftServers } = registerMinecraftIpc(platform)
   registerTorrentIpc(platform)
   const { manager: virtualMachineManager } = registerVirtualMachineIpc(platform)
   registerCalendarIpc(platform)
+  registerCloudflareCoreManagersIpc(platform)
   registerProviderServicesIpc(platform)
+  registerHomeAssistantIpc(platform)
+  registerHomeAssistantControlIpc(platform)
+  registerHomeAssistantSensorIpc(platform)
+  registerCloudflareZeroTrustIpc(platform)
+  registerAwsIdentityIpc(platform, {
+    resolveAwsCli: async () => {
+      const dependency = await nodeDependencyService.status('aws-cli-v2')
+      return { path: dependency.executablePath, reason: dependency.disabledReason }
+    }
+  })
+  registerAwsResourceIpc(platform, async () => {
+    const dependency = await nodeDependencyService.status('aws-cli-v2')
+    return { path: dependency.executablePath ?? null, reason: dependency.disabledReason }
+  }, awsWizardModels)
   // "Open in Visual Studio Code" + local settings history — same registrars the desktop shell
   // uses (src/main/index.ts), over the generic platform.handle seam, so the browser gets the
   // identical feature acting on the SERVER's own machine (docs/exports.md, docs/local-history.md).

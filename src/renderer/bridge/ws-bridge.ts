@@ -16,14 +16,22 @@ import {
 import { IPC } from '../../shared/ipc'
 import { mapLocalVocabularyText } from '../lib/personalVocabulary/hostMessage'
 import type { GitHubControlApi, GitHubIssuesApi } from '../../shared/github-issues'
+import type { GitHubApiApi, GitHubApiProgress, GitHubApiRequest } from '../../shared/github-api'
+import type { GitHubCliAccountsApi, GitHubControlApi, GitHubIssuesApi } from '../../shared/github-issues'
 import type { ConverterApi } from '../../shared/converter'
 import type { OllamaApi } from '../../shared/ollama'
 import type { MinecraftApi } from '../../shared/minecraft'
 import type { NodeDependenciesApi } from '../../shared/node-dependencies'
-import type { AwsAllServicesApi } from '../../shared/aws-all-services'
+import type { AwsWizardModelsApi } from '../../shared/aws-wizard'
+import type { AwsIdentityApi } from '../../shared/aws-identity'
 import type { TorrentApi, TorrentTaskState } from '../../shared/torrent'
 import type { VirtualMachineApi } from '../../shared/virtual-machine'
 import type { CalendarApi, CalendarProvider } from '../../shared/calendar'
+import type { CloudflareCoreManagersApi } from '../../shared/cloudflare-core-managers'
+import type { HomeAssistantApi } from '../../shared/home-assistant'
+import type { HomeAssistantControlApi } from '../../shared/home-assistant-control'
+import type { HomeAssistantSensorApi } from '../../shared/home-assistant-sensor'
+import type { CloudflareApi, CloudflareExecutionProgress } from '../../shared/cloudflare-zero-trust'
 import {
   UNKNOWN_CLAUDE_CLI_CAPS,
   type BoardLogApi,
@@ -470,6 +478,13 @@ export function buildRealApi(
       ok: false,
       error: mapLocalVocabularyText('Project archive import is available in the Windows desktop app.')
     }),
+    portableMedia: {
+      prepare: async () => ({
+        ok: false,
+        error: mapLocalVocabularyText('Portable media preparation is available in the Windows desktop app.')
+      }),
+      discard: async () => false
+    },
     portableBindings: {
       state: (input) => client.request(IPC.portableBindingState, input) as ReturnType<WorkspaceApi['portableBindings']['state']>,
       apply: (input) => client.request(IPC.portableBindingApply, input) as ReturnType<WorkspaceApi['portableBindings']['apply']>
@@ -621,7 +636,9 @@ export function buildRealApi(
     save: (file: PlannerFile) => client.request(IPC.plannerSave, file) as ReturnType<PlannerApi['save']>,
     history: () => client.request(IPC.plannerHistory) as Promise<PlannerOccurrence[]>,
     export: (format) => client.request(IPC.plannerExport, format) as ReturnType<PlannerApi['export']>,
+    configure: (schedules) => client.request(IPC.plannerConfigure, schedules) as ReturnType<PlannerApi['configure']>,
     onOccurrence: (cb) => client.subscribe(IPC.plannerOccurrence, cb as Listener)
+  }
   const agent: NodeTerminalApi['agent'] = {
     // Deliberately NOT a request: the server registers no env-snapshot handler (a full host-env
     // dump answerable by any authenticated WS client is the PR #195 leak class at the RPC layer).
@@ -668,7 +685,7 @@ export function buildRealApi(
 
 export function buildGitHubApi(
   client: RpcClient
-): Pick<NodeTerminalApi, 'githubIssues' | 'githubControl'> {
+): Pick<NodeTerminalApi, 'githubIssues' | 'githubControl' | 'githubApi' | 'githubCliAccounts'> {
   const githubIssues: GitHubIssuesApi = {
     subscribe: (projectId) =>
       client.request(IPC.githubIssuesSubscribe, { projectId }) as ReturnType<
@@ -714,7 +731,27 @@ export function buildGitHubApi(
       client.request(IPC.githubControlClearToken) as ReturnType<GitHubControlApi['clearToken']>
   }
 
-  return { githubIssues, githubControl }
+  const githubApi: GitHubApiApi = {
+    capabilities: () => client.request(IPC.githubApiCapabilities) as ReturnType<GitHubApiApi['capabilities']>,
+    execute: (request: GitHubApiRequest) =>
+      client.request(IPC.githubApiExecute, request) as ReturnType<GitHubApiApi['execute']>,
+    cancel: (operationId: string) =>
+      client.request(IPC.githubApiCancel, operationId) as ReturnType<GitHubApiApi['cancel']>,
+    onProgress: (listener: (progress: GitHubApiProgress) => void) =>
+      client.subscribe(IPC.githubApiProgress, listener as Listener)
+  }
+
+  const githubCliAccounts: GitHubCliAccountsApi = {
+    list: () => client.request(IPC.githubCliAccountsList) as ReturnType<GitHubCliAccountsApi['list']>,
+    switchActive: (host, login) => client.request(IPC.githubCliAccountsSwitch, host, login) as ReturnType<GitHubCliAccountsApi['switchActive']>,
+    signOut: (host, login) => client.request(IPC.githubCliAccountsSignOut, host, login) as ReturnType<GitHubCliAccountsApi['signOut']>,
+    startLogin: () => client.request(IPC.githubCliAccountsStartLogin) as ReturnType<GitHubCliAccountsApi['startLogin']>,
+    loginStatus: (id) => client.request(IPC.githubCliAccountsLoginStatus, id) as ReturnType<GitHubCliAccountsApi['loginStatus']>,
+    cancelLogin: (id) => client.request(IPC.githubCliAccountsCancelLogin, id) as ReturnType<GitHubCliAccountsApi['cancelLogin']>,
+    refreshAuthorization: (input) => client.request(IPC.githubCliAccountsRefresh, input) as ReturnType<GitHubCliAccountsApi['refreshAuthorization']>
+  }
+
+  return { githubIssues, githubControl, githubApi, githubCliAccounts }
 }
 
 export function buildProviderServicesApi(
@@ -864,8 +901,8 @@ export function buildFilesApi(
 
   const context: ContextApi = {
     onUpdate: (listener) => client.subscribe(IPC.contextUpdate, listener as Listener),
-    ensure: (sessionId, cwd, accountId) =>
-      client.cast(IPC.contextEnsure, sessionId, cwd, accountId)
+    ensure: (sessionId, cwd, accountId, agentId) =>
+      client.cast(IPC.contextEnsure, sessionId, cwd, accountId, agentId)
   }
 
   // Board-log: REAL over the bridge for local projects (the server routes local; SSH projects on the
@@ -874,6 +911,10 @@ export function buildFilesApi(
   const boardLog: BoardLogApi = {
     append: (projectId, entry) =>
       client.request(IPC.boardLogAppend, projectId, entry) as Promise<boolean>,
+    appendWithAttachments: (projectId, entry, attachments) =>
+      client.request(IPC.boardLogAppendWithAttachments, projectId, entry, attachments) as Promise<import('@shared/comment-attachments').BoardLogAppendResult>,
+    readAttachment: (projectId, attachment) =>
+      client.request(IPC.boardLogReadAttachment, projectId, attachment) as Promise<import('@shared/comment-attachments').BoardAttachmentReadResult>,
     read: (projectId, opts) =>
       client.request(IPC.boardLogRead, projectId, opts) as Promise<BoardLogReadResult>,
     onChanged: (projectId, cb) => {
@@ -1090,12 +1131,31 @@ export function buildOllamaApi(client: RpcClient): Pick<NodeTerminalApi, 'ollama
   return { ollama }
 }
 
+/** Guided Cloudflare managers over the authenticated WS bridge. */
+export function buildCloudflareCoreManagersApi(client: RpcClient): Pick<NodeTerminalApi, 'cloudflareCoreManagers'> {
+  const cloudflareCoreManagers: CloudflareCoreManagersApi = {
+    runtime: () => client.request(IPC.cloudflareCoreRuntime) as ReturnType<CloudflareCoreManagersApi['runtime']>,
+    credentials: () => client.request(IPC.cloudflareCoreCredentials) as ReturnType<CloudflareCoreManagersApi['credentials']>,
+    saveCredential: (input) => client.request(IPC.cloudflareCoreSaveCredential, input) as ReturnType<CloudflareCoreManagersApi['saveCredential']>,
+    removeCredential: (credentialId) => client.request(IPC.cloudflareCoreRemoveCredential, credentialId) as ReturnType<CloudflareCoreManagersApi['removeCredential']>,
+    binding: (nodeId) => client.request(IPC.cloudflareCoreBinding, nodeId) as ReturnType<CloudflareCoreManagersApi['binding']>,
+    bind: (input) => client.request(IPC.cloudflareCoreBind, input) as ReturnType<CloudflareCoreManagersApi['bind']>,
+    unbind: (nodeId) => client.request(IPC.cloudflareCoreUnbind, nodeId) as ReturnType<CloudflareCoreManagersApi['unbind']>,
+    preview: (nodeId, request) => client.request(IPC.cloudflareCorePreview, nodeId, request) as ReturnType<CloudflareCoreManagersApi['preview']>,
+    execute: (nodeId, request) => client.request(IPC.cloudflareCoreExecute, nodeId, request) as ReturnType<CloudflareCoreManagersApi['execute']>,
+    cancel: (operationId) => client.request(IPC.cloudflareCoreCancel, operationId) as ReturnType<CloudflareCoreManagersApi['cancel']>,
+    onProgress: (listener) => client.subscribe(IPC.cloudflareCoreProgress, listener as Listener)
+  }
+  return { cloudflareCoreManagers }
+}
+
 /** Automatic node-feature dependency lifecycle over the authenticated server RPC. Downloads and
  * installation remain on the server host, so the browser never uses its own PATH as proof. */
 export function buildNodeDependenciesApi(client: RpcClient): Pick<NodeTerminalApi, 'nodeDependencies'> {
   const nodeDependencies: NodeDependenciesApi = {
     catalog: () => client.request(IPC.nodeDependencyCatalog) as ReturnType<NodeDependenciesApi['catalog']>,
     status: (id) => client.request(IPC.nodeDependencyStatus, id) as ReturnType<NodeDependenciesApi['status']>,
+    details: (id) => client.request(IPC.nodeDependencyDetails, id) as ReturnType<NodeDependenciesApi['details']>,
     install: (id) => client.request(IPC.nodeDependencyInstall, id) as ReturnType<NodeDependenciesApi['install']>,
     cancel: (operationId) => client.request(IPC.nodeDependencyCancel, operationId) as ReturnType<NodeDependenciesApi['cancel']>,
     repair: (id) => client.request(IPC.nodeDependencyRepair, id) as ReturnType<NodeDependenciesApi['repair']>,
@@ -1106,27 +1166,25 @@ export function buildNodeDependenciesApi(client: RpcClient): Pick<NodeTerminalAp
   return { nodeDependencies }
 }
 
-/** Generic AWS service GUI over the authenticated server RPC. The server-side core owns model
- * discovery, local bindings, file selection, and argv-only execution. */
-export function buildAwsAllServicesApi(client: RpcClient): Pick<NodeTerminalApi, 'awsAllServices'> {
-  const awsAllServices: AwsAllServicesApi = {
-    catalog: () => client.request(IPC.awsAllServicesCatalog) as ReturnType<AwsAllServicesApi['catalog']>,
-    refreshCatalog: () => client.request(IPC.awsAllServicesRefreshCatalog) as ReturnType<AwsAllServicesApi['refreshCatalog']>,
-    binding: (nodeId) => client.request(IPC.awsAllServicesBinding, nodeId) as ReturnType<AwsAllServicesApi['binding']>,
-    saveBinding: (nodeId, binding) => client.request(IPC.awsAllServicesSaveBinding, nodeId, binding) as ReturnType<AwsAllServicesApi['saveBinding']>,
-    profiles: () => client.request(IPC.awsAllServicesProfiles) as ReturnType<AwsAllServicesApi['profiles']>,
-    regions: () => client.request(IPC.awsAllServicesRegions) as ReturnType<AwsAllServicesApi['regions']>,
-    execute: (nodeId, request, onProgress) => {
-      const unsubscribe = client.subscribe(IPC.awsAllServicesProgress, (value) => {
-        const progress = value as { nodeId?: string }
-        if (progress.nodeId === nodeId) onProgress(value as Parameters<typeof onProgress>[0])
-      })
-      return (client.request(IPC.awsAllServicesExecute, nodeId, request) as ReturnType<AwsAllServicesApi['execute']>).finally(unsubscribe)
-    },
-    cancel: (nodeId) => client.request(IPC.awsAllServicesCancel, nodeId) as ReturnType<AwsAllServicesApi['cancel']>,
-    onProgress: (listener) => client.subscribe(IPC.awsAllServicesProgress, listener as Listener)
+/** Current AWS model inventory and selected operation source over the authenticated server RPC. */
+export function buildAwsWizardModelsApi(client: RpcClient): Pick<NodeTerminalApi, 'awsWizardModels'> {
+  const awsWizardModels: AwsWizardModelsApi = {
+    catalog: () => client.request(IPC.awsWizardCatalog) as ReturnType<AwsWizardModelsApi['catalog']>,
+    commands: (serviceId) => client.request(IPC.awsWizardCommands, serviceId) as ReturnType<AwsWizardModelsApi['commands']>,
+    source: (serviceId, commandName) => client.request(IPC.awsWizardSource, serviceId, commandName) as ReturnType<AwsWizardModelsApi['source']>
   }
-  return { awsAllServices }
+  return { awsWizardModels }
+}
+
+/** Host-owned AWS identity discovery and bounded fixed-action runner. */
+export function buildAwsIdentityApi(client: RpcClient): Pick<NodeTerminalApi, 'awsIdentity'> {
+  const awsIdentity: AwsIdentityApi = {
+    discover: () => client.request(IPC.awsIdentityDiscover) as ReturnType<AwsIdentityApi['discover']>,
+    start: (action, profileName, binding) => client.request(IPC.awsIdentityStart, action, profileName, binding) as ReturnType<AwsIdentityApi['start']>,
+    cancel: (operationId) => client.request(IPC.awsIdentityCancel, operationId) as ReturnType<AwsIdentityApi['cancel']>,
+    onOperation: (listener) => client.subscribe(IPC.awsIdentityOperation, listener as Listener)
+  }
+  return { awsIdentity }
 }
 
 /** Local Minecraft server create-and-manage (docs/minecraft-server-manager.md) — same core engine
@@ -1184,6 +1242,7 @@ export function buildTorrentApi(client: RpcClient): Pick<NodeTerminalApi, 'torre
     onTask: (listener) => client.subscribe(IPC.torrentTask, listener as (payload: TorrentTaskState) => void)
   }
   return { torrent }
+}
 /** Linux ISO VM manager. The server process owns QEMU and exposes only the bounded lifecycle API. */
 export function buildVirtualMachineApi(client: RpcClient): Pick<NodeTerminalApi, 'virtualMachine'> {
   const virtualMachine: VirtualMachineApi = {
@@ -1200,6 +1259,7 @@ export function buildVirtualMachineApi(client: RpcClient): Pick<NodeTerminalApi,
     onEvent: (listener) => client.subscribe(IPC.virtualMachineEvent, listener as Listener)
   }
   return { virtualMachine }
+}
 /** Calendar nodes use the same host-owned CorePlatform in the desktop and Server Edition. */
 export function buildCalendarApi(client: RpcClient): Pick<NodeTerminalApi, 'calendar'> {
   const calendar: CalendarApi = {
@@ -1210,11 +1270,71 @@ export function buildCalendarApi(client: RpcClient): Pick<NodeTerminalApi, 'cale
     importIcs: (id, text, name) => client.request(IPC.calendarImportIcs, id, text, name) as ReturnType<CalendarApi['importIcs']>,
     refresh: (id, config) => client.request(IPC.calendarRefresh, id, config) as ReturnType<CalendarApi['refresh']>,
     beginOAuth: (provider: Exclude<CalendarProvider, 'local' | 'ics'>) => client.request(IPC.calendarBeginOAuth, provider) as ReturnType<CalendarApi['beginOAuth']>,
+    connectCalDav: (input) => client.request(IPC.calendarConnectCalDav, input) as ReturnType<CalendarApi['connectCalDav']>,
+    disconnectAccount: (accountId) => client.request(IPC.calendarDisconnectAccount, accountId) as ReturnType<CalendarApi['disconnectAccount']>,
     create: (input) => client.request(IPC.calendarCreate, input) as ReturnType<CalendarApi['create']>,
     update: (input) => client.request(IPC.calendarUpdate, input) as ReturnType<CalendarApi['update']>,
     remove: (id, eventId) => client.request(IPC.calendarRemove, id, eventId) as ReturnType<CalendarApi['remove']>
   }
   return { calendar }
+}
+
+/** Home Assistant uses the same host-owned core service in both shells. */
+export function buildHomeAssistantApi(client: RpcClient): Pick<NodeTerminalApi, 'homeAssistant'> {
+  const homeAssistant: HomeAssistantApi = {
+    instances: () => client.request(IPC.homeAssistantInstances) as ReturnType<HomeAssistantApi['instances']>,
+    saveInstance: (input) => client.request(IPC.homeAssistantSaveInstance, input) as ReturnType<HomeAssistantApi['saveInstance']>,
+    removeInstance: (id) => client.request(IPC.homeAssistantRemoveInstance, id) as ReturnType<HomeAssistantApi['removeInstance']>,
+    discover: (request) => client.request(IPC.homeAssistantDiscover, request) as ReturnType<HomeAssistantApi['discover']>,
+    cancel: (operationId) => client.request(IPC.homeAssistantCancel, operationId) as ReturnType<HomeAssistantApi['cancel']>,
+    onEvent: (listener) => client.subscribe(IPC.homeAssistantEvent, listener as Listener)
+  }
+  return { homeAssistant }
+}
+
+export function buildHomeAssistantControlApi(client: RpcClient): Pick<NodeTerminalApi, 'homeAssistantControl'> {
+  const homeAssistantControl: HomeAssistantControlApi = {
+    connections: () => client.request(IPC.homeAssistantConnections) as ReturnType<HomeAssistantControlApi['connections']>,
+    configure: (input) => client.request(IPC.homeAssistantConfigure, input) as ReturnType<HomeAssistantControlApi['configure']>,
+    bind: (nodeId, connectionId) => client.request(IPC.homeAssistantBind, nodeId, connectionId) as ReturnType<HomeAssistantControlApi['bind']>,
+    status: (nodeId) => client.request(IPC.homeAssistantStatus, nodeId) as ReturnType<HomeAssistantControlApi['status']>,
+    entities: (nodeId) => client.request(IPC.homeAssistantEntities, nodeId) as ReturnType<HomeAssistantControlApi['entities']>,
+    services: (nodeId) => client.request(IPC.homeAssistantServices, nodeId) as ReturnType<HomeAssistantControlApi['services']>,
+    call: (input) => client.request(IPC.homeAssistantCall, input) as ReturnType<HomeAssistantControlApi['call']>,
+    cancel: (nodeId) => client.request(IPC.homeAssistantControlCancel, nodeId) as ReturnType<HomeAssistantControlApi['cancel']>
+  }
+  return { homeAssistantControl }
+}
+
+/** Home Assistant sensor requests run on the host-owned core in both desktop and Server Edition. */
+export function buildHomeAssistantSensorApi(client: RpcClient): Pick<NodeTerminalApi, 'homeAssistantSensor'> {
+  const homeAssistantSensor: HomeAssistantSensorApi = {
+    binding: (nodeId) => client.request(IPC.homeAssistantSensorBinding, nodeId) as ReturnType<HomeAssistantSensorApi['binding']>,
+    configure: (input) => client.request(IPC.homeAssistantSensorConfigure, input) as ReturnType<HomeAssistantSensorApi['configure']>,
+    leaveUnbound: (nodeId) => client.request(IPC.homeAssistantSensorLeaveUnbound, nodeId) as ReturnType<HomeAssistantSensorApi['leaveUnbound']>,
+    discover: (nodeId) => client.request(IPC.homeAssistantSensorDiscover, nodeId) as ReturnType<HomeAssistantSensorApi['discover']>,
+    refresh: (nodeId, config) => client.request(IPC.homeAssistantSensorRefresh, nodeId, config) as ReturnType<HomeAssistantSensorApi['refresh']>
+  }
+  return { homeAssistantSensor }
+}
+
+export function buildCloudflareZeroTrustApi(client: RpcClient): Pick<NodeTerminalApi, 'cloudflareZeroTrust'> {
+  const cloudflareZeroTrust: CloudflareApi = {
+    catalog: () => client.request(IPC.cloudflareCatalog) as ReturnType<CloudflareApi['catalog']>,
+    accounts: () => client.request(IPC.cloudflareAccounts) as ReturnType<CloudflareApi['accounts']>,
+    configure: (input) => client.request(IPC.cloudflareConfigure, input) as ReturnType<CloudflareApi['configure']>,
+    removeAccount: (id) => client.request(IPC.cloudflareRemoveAccount, id) as ReturnType<CloudflareApi['removeAccount']>,
+    binding: (nodeId) => client.request(IPC.cloudflareBinding, nodeId) as ReturnType<CloudflareApi['binding']>,
+    saveBinding: (nodeId, binding) => client.request(IPC.cloudflareSaveBinding, nodeId, binding) as ReturnType<CloudflareApi['saveBinding']>,
+    resources: (nodeId, manager) => client.request(IPC.cloudflareResources, nodeId, manager) as ReturnType<CloudflareApi['resources']>,
+    execute: (nodeId, request, onProgress) => {
+      const unsubscribe = client.subscribe(IPC.cloudflareProgress, (value) => { const progress = value as CloudflareExecutionProgress & { nodeId?: string }; if (progress.nodeId === nodeId) onProgress(progress) })
+      return (client.request(IPC.cloudflareExecute, nodeId, request) as ReturnType<CloudflareApi['execute']>).finally(unsubscribe)
+    },
+    cancel: (nodeId) => client.request(IPC.cloudflareCancel, nodeId) as ReturnType<CloudflareApi['cancel']>,
+    onProgress: (listener) => client.subscribe(IPC.cloudflareProgress, listener as Listener)
+  }
+  return { cloudflareZeroTrust }
 }
 
 /**
@@ -1440,6 +1560,18 @@ export function buildPasswordManagerApi(client: RpcClient): Pick<NodeTerminalApi
       ) as Promise<ListCredentialsResult>
   }
   return { passwordManager }
+}
+
+/** Build the host-owned Multiverse door-entry vault API. Credential values are sent only for the
+ * immediate configure or verify request and the server returns no stored value. */
+export function buildUniverseDoorEntryApi(client: RpcClient): Pick<NodeTerminalApi, 'universeDoorEntry'> {
+  return {
+    universeDoorEntry: {
+      configure: (input) => client.request(IPC.universeDoorEntryConfigure, input),
+      verify: (input) => client.request(IPC.universeDoorEntryVerify, input),
+      remove: (doorId) => client.request(IPC.universeDoorEntryRemove, doorId)
+    }
+  }
 }
 
 /**
@@ -1672,13 +1804,19 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildSpeechApi(client),
     ...buildConverterApi(client),
     ...buildNodeDependenciesApi(client),
-    ...buildAwsAllServicesApi(client),
+    ...buildAwsWizardModelsApi(client),
+    ...buildAwsIdentityApi(client),
     ...buildOllamaApi(client),
+    ...buildCloudflareCoreManagersApi(client),
     ...buildMinecraftApi(client),
     ...buildTorrentApi(client),
     ...buildVirtualMachineApi(client),
     ...buildCalendarApi(client),
     ...buildProviderServicesApi(client),
+    ...buildHomeAssistantApi(client),
+    ...buildHomeAssistantControlApi(client),
+    ...buildHomeAssistantSensorApi(client),
+    ...buildCloudflareZeroTrustApi(client),
     ...buildUsageApi(client),
     ...buildSessionMemoryApi(client),
     ...buildVsCodeApi(client),
@@ -1687,6 +1825,7 @@ export async function installWsBridge(): Promise<boolean> {
     ...buildToylockApi(client),
     ...buildAuthenticatorApi(client),
     ...buildPasswordManagerApi(client),
+    ...buildUniverseDoorEntryApi(client),
     ...buildGitHubApi(client),
     ...buildClaudeAccountsApi(client),
     codex: buildCodexApi(client),
