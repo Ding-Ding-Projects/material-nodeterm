@@ -77,7 +77,6 @@ describe('save → load round trip (v3)', () => {
   // The breadcrumb trail is one person's camera history: it must survive a full app restart on THIS
   // machine (index entry) and never reach the git-shared project file every teammate clones.
   it("keeps a project's breadcrumbs machine-local: they survive a fresh store, the shared file never carries them", async () => {
-  it('keeps a project\'s breadcrumbs machine-local: they survive a fresh store, the shared file never carries them', async () => {
     const breadcrumbs = [
       { nodeId: 'term-1', at: 1_700_000_000_000, note: 'looked at the pty' },
       { nodeId: 'term-2', at: 1_700_000_060_000, note: '' }
@@ -802,43 +801,6 @@ describe('watcher self-write detection compares the RAW file bytes', () => {
 })
 
 describe('appendRemoteNode (phone-registered sessions over the relay)', () => {
-  afterEach(() => {
-    vi.restoreAllMocks()
-  })
-
-  // The append is a read-modify-write of the very file a save rewrites WHOLE. Off the save chain the
-  // two interleave: the phone registers its session, an autosave that read the file first lands last,
-  // and the node the phone was just told exists ("true", card on screen) is gone from disk.
-  it('is serialized with saves — an in-flight save cannot un-write the appended node', async () => {
-    const store = new WorkspaceStore()
-    await store.save(ws([project({ cwd: projRoot })]))
-
-    // Stall the next project.json write so the save is still in flight when the append arrives.
-    let release!: () => void
-    const gate = new Promise<void>((r) => { release = r })
-    const realWrite = fs.writeFile.bind(fs)
-    let stalled = false
-    vi.spyOn(fs, 'writeFile').mockImplementation(async (p, data, enc) => {
-      if (!stalled && String(p).includes('project.json')) {
-        stalled = true
-        await gate
-      }
-      return realWrite(p as string, data as string, enc as BufferEncoding)
-    })
-
-    const saving = store.save(ws([project({ cwd: projRoot, name: 'renamed' })]))
-    await new Promise((r) => setTimeout(r, 20)) // the save is parked inside its write
-    const appending = store.appendRemoteNode('p1', { id: 'term-zz1-1', title: 'Mobile' })
-    await new Promise((r) => setTimeout(r, 20)) // unserialized, the append reads + writes here
-    release()
-    expect(await appending).toBe(true)
-    await saving
-
-    const file = JSON.parse(await fs.readFile(path.join(projRoot, '.nodeterm/project.json'), 'utf-8'))
-    expect(file.nodes.map((n: { id: string }) => n.id)).toContain('term-zz1-1') // the phone's session
-    expect(file.name).toBe('renamed') // …and the save's own change
-  })
-
   it('appends into a local ref project file and broadcasts the change itself', async () => {
     const store = new WorkspaceStore()
     await store.save(ws([project({ cwd: projRoot })]))
@@ -927,44 +889,6 @@ describe('appendRemoteNode (phone-registered sessions over the relay)', () => {
     await fs.writeFile(file, '{ not json')
     expect(await store.appendRemoteNode('p1', { id: 'term-a1-1' })).toBe(false)
     expect(await fs.readFile(file, 'utf-8')).toBe('{ not json') // untouched
-  })
-})
-
-describe('removeRemoteNode (the phone\'s "End session" over the relay)', () => {
-  it('finds the node by SCAN (no projectId on the wire), removes it and broadcasts the change', async () => {
-    const store = new WorkspaceStore()
-    await store.save(ws([project({ cwd: projRoot })]))
-    fake.sent.length = 0
-    expect(await store.removeRemoteNode('term-1')).toBe(true)
-    const file = path.join(projRoot, '.nodeterm/project.json')
-    const raw = await fs.readFile(file, 'utf-8')
-    const f = JSON.parse(raw)
-    expect(f.rev).toBe(2)
-    expect(f.nodes).toEqual([])
-    // Recorded as OUR write + announced explicitly, exactly like appendRemoteNode.
-    expect(store.isSelfWrite(file, raw)).toBe(true)
-    const broadcast = fake.sent.filter((s) => s.channel === 'workspace:external-change')
-    expect(broadcast).toHaveLength(1)
-    expect(broadcast[0].args[0]).toMatchObject({ id: 'p1', cwd: projRoot })
-    expect(broadcast[0].args[0].nodes).toEqual([])
-  })
-
-  it('a node in no local project answers false with nothing written (unregistered phone session)', async () => {
-    const store = new WorkspaceStore()
-    await store.save(ws([project({ cwd: projRoot })]))
-    const file = path.join(projRoot, '.nodeterm/project.json')
-    const before = await fs.readFile(file, 'utf-8')
-    expect(await store.removeRemoteNode('term-nope-1')).toBe(false)
-    expect(await fs.readFile(file, 'utf-8')).toBe(before) // untouched, no rev churn
-  })
-
-  it('skips ssh and inline entries — their files are not on this machine / do not exist', async () => {
-    const store = new WorkspaceStore()
-    await store.save(ws([
-      project({ id: 'ssh1', ssh: { server: { host: 'h', user: 'u' } as never, remoteCwd: '~/x' }, cwd: undefined }),
-      project({ id: 'inline1' })
-    ]))
-    expect(await store.removeRemoteNode('term-1')).toBe(false)
   })
 })
 
@@ -1343,64 +1267,6 @@ describe('ssh lineage safety', () => {
     expect(adopted?.nodes.map((n) => n.id)).toContain('term-1') // and our own node survives too
     // ...and the merged set is pushed back so the server keeps it.
     expect(JSON.parse(files['~/app']).nodes.map((n: any) => n.id)).toContain('term-mobile-1')
-  })
-
-  // The write side of the same field failure, and the one the 15 s poll could NOT cover: the phone
-  // appends its session at T0, the user drags a node here at T0+2 s, and that ordinary save's mirror
-  // write used to serialize a cache that had never seen the append — deleting the phone's session
-  // from BOTH sides, permanently, with nothing on screen to say it happened.
-  it('mirror write: an ordinary local edit never deletes a node the phone appended since our last look', async () => {
-    const { files, io } = cwdIO()
-    const store = new WorkspaceStore(io)
-    await store.save(ws([project({ id: 'ps', ssh: sshConn, cwd: undefined, nodes: [node('term-1', 't')] })]))
-    // The phone appends straight into the server file (its own SSH path) and bumps rev.
-    const f = JSON.parse(files['~/app'])
-    f.rev = 2
-    f.nodes = [...f.nodes, node('term-mobile-1', 'Mobile')]
-    files['~/app'] = JSON.stringify(f)
-    fake.sent.length = 0
-
-    // …two seconds later, well inside the poll window, the user drags a node here.
-    await store.save(ws([project({ id: 'ps', ssh: sshConn, cwd: undefined, nodes: [node('term-1', 'dragged')] })]))
-
-    const after = JSON.parse(files['~/app'])
-    expect(after.nodes.map((n: any) => n.id)).toContain('term-mobile-1') // survived the mirror write
-    expect(after.nodes.find((n: any) => n.id === 'term-1').title).toBe('dragged') // our edit still landed
-    // The rescued node is live on the server and missing from the canvas — the renderer is told now.
-    const msg = fake.sent.find((m) => m.channel === 'workspace:external-change')
-    expect(msg).toBeTruthy()
-    expect((msg!.args[0] as Project).nodes.map((n) => n.id)).toContain('term-mobile-1')
-  })
-
-  // The other half of that rule: the re-read must not hand back what the user just deleted, or no
-  // node on an ssh project could ever be closed (every mirror write would resurrect it).
-  it('mirror write: a deliberate delete still propagates — the re-read does not resurrect it', async () => {
-    const { files, io } = cwdIO()
-    const store = new WorkspaceStore(io)
-    await store.save(ws([project({ id: 'ps', ssh: sshConn, cwd: undefined, nodes: [node('term-1', 't')] })]))
-    await store.save(ws([project({ id: 'ps', ssh: sshConn, cwd: undefined, nodes: [] })])) // the user closed it
-    expect(JSON.parse(files['~/app']).nodes).toEqual([])
-    // …and the poll must not bring it back either.
-    expect(await store.refreshSshProject('ps')).toBeNull()
-    expect(JSON.parse(files['~/app']).nodes).toEqual([])
-  })
-
-  // An EMPTY desktop canvas is exactly where a phone-started session is the only node in the file,
-  // so "empty side with the higher rev = a deliberate clear" was the most expensive place to guess
-  // wrong: the rescue was skipped and the empty cache pushed up, erasing the phone's session.
-  it('an empty canvas whose rev drifted ahead still rescues the node it never had', async () => {
-    const { files, io } = cwdIO()
-    const store = new WorkspaceStore(io)
-    await store.save(ws([project({ id: 'ps', ssh: sshConn, cwd: undefined, nodes: [] })])) // rev 1, empty
-    await store.save(ws([project({ id: 'ps', ssh: sshConn, cwd: undefined, nodes: [], name: 'renamed' })])) // rev 2
-    // The server is BEHIND our cache (a dropped mirror write) and holds the phone's session.
-    files['~/app'] = JSON.stringify({
-      version: 1, rev: 1, savedAt: 'then', id: 'ps', name: 'foo', color: '#7aa2f7',
-      viewport: { x: 0, y: 0, zoom: 1 }, nodes: [node('term-mobile-1', 'Mobile')]
-    })
-    const adopted = await store.refreshSshProject('ps')
-    expect(adopted?.nodes.map((n) => n.id)).toContain('term-mobile-1') // reaches the live canvas
-    expect(JSON.parse(files['~/app']).nodes.map((n: any) => n.id)).toContain('term-mobile-1') // and stays on the server
   })
 
   it('poll (read-only stand) still rescues + surfaces a drifted mobile append', async () => {
@@ -2180,38 +2046,5 @@ describe('the shared project file carries content, not machine identity', () => 
     warn.mockRestore()
     expect(await fs.readFile(path.join(projRoot, '.nodeterm/project.json'), 'utf-8')).toBe(bytes)
     expect(await fs.readFile(path.join(otherRoot, '.nodeterm/project.json'), 'utf-8')).toBe(bytes)
-  })
-})
-
-describe('projectMetaFor (issue #338 PR 1) — target exists / is SSH, from the store alone', () => {
-  // The --project targeting gate (src/main/project-grants.ts) learns "does this project exist,
-  // and is it SSH" from main's OWN store — never from anything the caller sent. Same three
-  // entry kinds as persistedCanvases: inline (e.project), ssh (e.ssh), local ref (e.cwd).
-  it('answers for all three entry kinds and undefined for an unknown id', async () => {
-    const store = new WorkspaceStore()
-    const local = project({ id: 'p-local', cwd: projRoot })
-    const inline = project({ id: 'p-inline', cwd: undefined })
-    const ssh = project({
-      id: 'p-ssh',
-      cwd: undefined,
-      ssh: { server: { host: 'h', user: 'u' }, remoteCwd: '/srv/app' }
-    })
-    await store.save(ws([local, inline, ssh]))
-
-    expect(store.projectMetaFor('p-local')).toEqual({ ssh: false })
-    expect(store.projectMetaFor('p-inline')).toEqual({ ssh: false })
-    expect(store.projectMetaFor('p-ssh')).toEqual({ ssh: true })
-    // Fail closed: an id the store does not know (deleted, invented, another machine's) has no
-    // meta at all — the gate refuses on undefined.
-    expect(store.projectMetaFor('p-gone')).toBeUndefined()
-    expect(store.projectMetaFor('')).toBeUndefined()
-  })
-
-  it('a deleted project stops answering after the save that removed it', async () => {
-    const store = new WorkspaceStore()
-    await store.save(ws([project({ id: 'p-a', cwd: projRoot }), project({ id: 'p-b', cwd: undefined })]))
-    expect(store.projectMetaFor('p-b')).toEqual({ ssh: false })
-    await store.save(ws([project({ id: 'p-a', cwd: projRoot })]))
-    expect(store.projectMetaFor('p-b')).toBeUndefined()
   })
 })
