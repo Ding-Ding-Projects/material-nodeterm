@@ -550,6 +550,21 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
     ...plannedEntry('aws-service', 'universes', 'AWS service node', 'Create a typed AWS service blueprint from installed CLI models.', 'aws-cli-v2', 'aws-universe'),
     documentationPath: 'docs/features/integrations/aws-cli-model-documentation.md'
   },
+  {
+    id: 'cloudflare-core-managers',
+    nodeKind: 'cloudflare-core-managers',
+    category: 'managers',
+    label: 'Cloudflare core managers',
+    description: 'Manage accounts, zones, DNS, SSL/TLS, rulesets, redirects, cache, and analytics with typed operations.',
+    keywords: ['cloudflare', 'account', 'zone', 'dns', 'ssl', 'tls', 'ruleset', 'redirect', 'cache', 'analytics', 'manager'],
+    documentationPath: 'docs/features/integrations/cloudflare-core-managers.md',
+    safeDefaults: { manager: 'account', operation: 'account-list' },
+    dependencies: [],
+    status: 'available',
+    availabilityMode: 'configure-later',
+    scope: 'any',
+    availability: alwaysAvailable
+  },
   plannedEntry('cloudflare-hosting', 'hosting', 'Cloudflare hosting', 'Create a private-first hosting blueprint with explicit tunnel exposure later.', 'hosting-adapter'),
   {
     id: 'gitlab-hosting',
@@ -622,6 +637,7 @@ export const NODE_CATALOG_COMPLETENESS: readonly NodeCatalogCompletenessRecord[]
   { id: 'multiverse-portal', state: 'planned', scope: 'multiverse', reason: 'Multiverse portal not implemented' },
   { id: 'aws-universe', state: 'current', scope: 'root', reason: 'AWS-only Universe portal and child canvas' },
   { id: 'aws-service', state: 'planned', scope: 'aws-universe', reason: 'AWS service node not implemented' },
+  { id: 'cloudflare-core-managers', state: 'current', scope: 'any', reason: 'typed Cloudflare account, zone, DNS, SSL/TLS, ruleset, redirect, cache, and analytics managers' },
   { id: 'cloudflare-hosting', state: 'planned', scope: 'any', reason: 'Cloudflare hosting not implemented' },
   { id: 'gitlab-hosting', state: 'current', scope: 'any', reason: 'guided private GitLab Server hosting node' },
   { id: 'nextcloud-hosting', state: 'planned', scope: 'any', reason: 'Nextcloud hosting not implemented' },

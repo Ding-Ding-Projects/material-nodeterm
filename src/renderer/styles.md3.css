@@ -3901,6 +3901,90 @@ button.term-node__title-text:focus-visible {
   }
 }
 
+/* Cloudflare core managers: all controls use shared Material 3 roles and remain usable when a
+ * node is resized or the renderer is shown at a narrow width. */
+.cloudflare-core-manager {
+  color: var(--md-sys-color-on-surface);
+  background: var(--md-sys-color-surface-container);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: var(--md-sys-shape-corner-large, 16px);
+  box-shadow: var(--md-sys-elevation-level2, 0 3px 8px rgb(0 0 0 / 20%));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+}
+.cloudflare-core-manager__header,
+.cloudflare-core-manager__toolbar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: space-between;
+}
+.cloudflare-core-manager__header strong { color: var(--md-sys-color-primary); }
+.cloudflare-core-manager__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.cloudflare-core-manager button,
+.cloudflare-core-manager select,
+.cloudflare-core-manager input {
+  min-height: 40px;
+}
+.cloudflare-core-manager button:focus-visible,
+.cloudflare-core-manager select:focus-visible,
+.cloudflare-core-manager input:focus-visible {
+  outline: 3px solid var(--md-sys-color-secondary);
+  outline-offset: 2px;
+}
+.cloudflare-core-manager__search {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+  min-width: min(280px, 100%);
+}
+.cloudflare-core-manager [role='listbox'] {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  max-height: 160px;
+  overflow: auto;
+}
+.cloudflare-core-manager [role='listbox'] button {
+  align-items: flex-start;
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
+.cloudflare-core-manager [role='list'] {
+  display: grid;
+  gap: 8px;
+  max-height: 280px;
+  overflow: auto;
+}
+.cloudflare-core-manager article {
+  background: var(--md-sys-color-surface-container-high);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: var(--md-sys-shape-corner-medium, 12px);
+  padding: 8px;
+}
+.cloudflare-core-manager pre {
+  font: var(--md-sys-typescale-body-small, 0.8125rem/1.4 monospace);
+  margin: 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 720px) {
+  .cloudflare-core-manager { padding: 10px; }
+  .cloudflare-core-manager__search { width: 100%; }
+  .cloudflare-core-manager__toolbar > * { max-width: 100%; }
+}
+
 /* ---------------------------------------------------------------------------------------------
    Recovery game node
    --------------------------------------------------------------------------------------------- */

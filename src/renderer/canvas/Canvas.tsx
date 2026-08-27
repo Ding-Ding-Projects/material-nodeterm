@@ -107,6 +107,7 @@ import type { PortableDoorConstructionV3 } from '@shared/door-construction'
 import BrowserNode from '../nodes/BrowserNode'
 import { ServiceNode } from '../nodes/ServiceNode'
 import GitLabHostingNode from '../nodes/GitLabHostingNode'
+import CloudflareCoreManagersNode from '../nodes/CloudflareCoreManagersNode'
 import VirtualMachineNode from '../nodes/VirtualMachineNode'
 import NsisInstallerNode from '../nodes/NsisInstallerNode'
 import ShopNode from '../nodes/ShopNode'
@@ -727,6 +728,7 @@ import {
   nodeSshFor,
   createServiceNode,
   createGitLabHostingNode,
+  createCloudflareCoreManagersNode,
   createVirtualMachineNode,
   SERVICE_NODE_LABELS,
   createVideoNode,
@@ -2097,6 +2099,7 @@ export function Canvas() {
       'gitlab-hosting': withNodeBoundary(GitLabHostingNode),
       homeassistant: withNodeBoundary(ServiceNode),
       freepbx: withNodeBoundary(ServiceNode),
+      'cloudflare-core-managers': withNodeBoundary(CloudflareCoreManagersNode),
       'linux-vm': withNodeBoundary(VirtualMachineNode)
     }),
     []
@@ -5509,6 +5512,7 @@ export function Canvas() {
             if (catalogEntry.id.startsWith('service:')) {
               return createServiceNode(catalogEntry.nodeKind as ServiceNodeKind, index, center)
             }
+            if (catalogEntry.id === 'cloudflare-core-managers') return createCloudflareCoreManagersNode(index, center)
             // File and diff rows stay visible but disabled until their picker prerequisites exist.
             return null
           },

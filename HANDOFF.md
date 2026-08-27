@@ -89,6 +89,30 @@ This lane intentionally did not run tests, type checks, lint, reviews, security 
 accessibility checks, builds, packaging, installer execution, runtime interaction, or UI captures.
 Those checks remain unverified and are delegated to a later integration lane.
 
+## 2026-08-27, Cloudflare core managers source implementation, issue #57
+
+This lane is `feat/program-46-cloudflare-core-managers` in the task-owned linked worktree at
+`C:/Users/cntow/Documents/GitHub/material-nodeterm-worktrees/issue-57`. It adds the typed Cloudflare
+account, zone, DNS, SSL/TLS, ruleset, redirect, cache, and analytics contract in
+`src/shared/cloudflare-core-managers.ts`, the host service and shared IPC registration in
+`src/core/cloudflare-core-managers.ts`, and Desktop and Server Edition bridge wiring. The canvas node
+is `src/renderer/nodes/CloudflareCoreManagersNode.tsx`; safe operation intent is persisted through
+`src/renderer/state/workspace.ts` and `src/core/portable-canvas-projection.ts`, while local sealed
+credentials and bindings remain under the application data directory.
+
+The manager uses a fixed HTTPS API base, typed allowlisted paths and fields, bounded request inputs,
+4 MiB response handling, 500-row output, 90-second cancellation, safe previews, destructive-action
+classification, and explicit unavailable states. Credential values never cross IPC or enter portable
+data. The account, zone, DNS, SSL/TLS, ruleset, redirect, cache, and analytics result lists each have
+an isolated search field with its own adjacent anchored full regex builder. No raw request editor or
+arbitrary shell path is provided.
+
+The direct feature article is `docs/features/integrations/cloudflare-core-managers.md`, with its
+category index, roadmap, and changelog entries updated. No tests, type checks, lint, reviews, security
+or accessibility checks, builds, packaging, installer execution, runtime interaction, or UI captures
+were run in this ultra-speed lane. The owning integration lane must verify the exact integrated
+commit and regenerate the offline documentation bundle after review.
+
 ## 2026-08-27, Express File Converter completion, issue #21
 
 The implementation lane is `feat/program-10-file-converter`, refreshed by fast-forward before edits
@@ -1708,10 +1732,12 @@ Already present via convergence or the concurrent session: **#112 #189 #113 #156
 
 Three deliberate exclusions, with reasons — do not "finish" these without revisiting the reasoning:
 
-- **#111 psmux — skipped.** This fork already has its own Windows persistence backend (the session
-  host: ~4,000 lines, protocol v2, ConPTY, process-tree termination; `sessionHost` appears 62 times
-  in `pty-manager.ts`). psmux is a competing implementation of the same job. Its **NSIS packaging
-  commit `daecb26e` is excluded permanently** — Squirrel is the only Windows installer path here.
+- **#111 psmux discovery — implemented on `feat/program-64-psmux-discovery`.** The resolver now
+  checks `tmux` then the tmux-compatible `psmux` executable through Windows `PATHEXT`, and the
+  missing-multiplexer banner offers the exact Windows Package Manager install action when it is
+  available. The standalone Windows session host remains the fallback when neither executable is
+  installed. PR #111's **NSIS packaging commit `daecb26e` remains excluded permanently** because
+  Squirrel is the only Windows installer path here.
 - **#98 — skipped, superseded.** `main` has `send`/`reply`/`status` persistent inter-agent messaging
   with authenticated routes and safe-turn-boundary delivery; #98's `notify` is a weaker fixed-prompt
   predecessor of it.

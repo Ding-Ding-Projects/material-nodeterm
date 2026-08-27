@@ -98,6 +98,14 @@ later commit, since this file will not be kept in lockstep with every merge).
       an honest Server Edition boundary. Tests, build/package evidence, generated docs bundle,
       runtime interaction, and captures remain outstanding.
 
+- [ ] **Cloudflare core managers, issue #57**: typed account, zone, DNS, SSL/TLS, ruleset, redirect,
+      cache, and analytics operations are implemented in the shared contract, host service, Desktop
+      and Server Edition bridges, and canvas node. Local sealed credentials, bounded output,
+      cancellation, safe previews, destructive confirmation, explicit unavailable states, and safe
+      schema 3 intent are present. Tests, type checks, lint, reviews, security or accessibility
+      checks, builds, packaging, installer execution, runtime interaction, and captures remain
+      unverified under the ultra-speed lane.
+
 - [ ] **ADHD modes** — Focus, Low stimulation, Time awareness, One thing at a time, and Momentum
       are all specced in `docs/adhd-modes.md`. Time awareness, Momentum, and the
       notification-filtering half of Low stimulation were wired 2026-08-20 (`d697f78f`). Still
