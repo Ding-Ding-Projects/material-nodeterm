@@ -16,6 +16,20 @@ actions depending on whether you clicked empty space, a single node, or a multi-
 A bottom-left canvas lock freezes the *camera* only — nodes stay draggable, resizable, and
 usable while locked; the point is to stop the map itself from sliding, not to freeze your work.
 
+When **Scroll wheel zooms** is enabled, a plain wheel zooms toward the pointer. High-resolution
+ratchet wheels may report one physical detent as several packets, so the handler gives all packets
+inside one 40 ms burst one shared ±50 delta budget. A later click receives a fresh budget. This
+keeps one detent from becoming several compounded zoom steps while leaving the existing modifier
+wheel and trackpad-pinch routes intact.
+
+The adjacent **Wheel zoom speed** setting is persisted from 0.2× through 2.0×. The historical
+wheel feel is 1.0×. It changes only the plain-wheel exponent, so tuning a chunky mouse does not
+alter modifier zoom or pinch. Values loaded from hand-edited settings are clamped at point of use;
+invalid or missing values fall back to 1.0×. The setting's provenance line identifies the compiled
+default, a saved override, or an active scheduled value. Its label and explanation follow the
+same language mode and funny-level controls as the rest of Settings, with the numeric value kept
+factual.
+
 **Undo/redo** is a debounced snapshot of the node array taken whenever a drag or edit settles,
 with independent past/future stacks per project. It's suspended while you're typing into an
 input, a terminal, or Monaco, so `⌘Z` in a terminal reaches the shell, not the canvas.
@@ -45,9 +59,15 @@ each one only decides whether a *view* of that session is currently instantiated
 
 - **Settings → Canvas / tmux** — grid snapping, default node size, pan-hover delay (how long
   you must dwell over a terminal before it starts capturing your input instead of letting a
-  drag move the node), double-click-to-focus behaviour, and the offscreen-release timeout
-  (`0` disables release entirely).
+  drag move the node), double-click-to-focus behaviour, plain-wheel zoom, wheel zoom speed, and
+  the offscreen-release timeout (`0` disables release entirely). The speed slider is available
+  directly below **Scroll wheel zooms** and is inactive only when the toggle is off.
 - **Settings → Appearance** — which context-menu items and header buttons are shown.
+
+Desktop and Server Edition use the same renderer wheel handler and the same persisted settings
+record, so the 40 ms budget, point-of-use clamping, and plain-wheel-only speed multiplier behave
+identically on both surfaces. The mobile companion has no wheel input and does not expose this
+mouse setting.
 
 ## Failure modes
 
@@ -57,6 +77,9 @@ each one only decides whether a *view* of that session is currently instantiated
 - **A node's size can't be measured yet** (the very first tick after a project loads): a
   "jump to node" action deliberately does nothing rather than guessing and landing the camera
   at the canvas origin — the camera holds still until the node's real size is known.
+- A hand-edited wheel speed is missing, non-numeric, or outside 0.2–2.0: the renderer clamps it
+  at the point of use and uses 1.0× for an invalid value. The persisted file is not rewritten as
+  a side effect of reading it, so the user can inspect and correct the source value deliberately.
 
 ## Security considerations
 
@@ -73,6 +96,11 @@ transmitted anywhere beyond that.
   redraw from the live session rather than restarting.
 - Undo a drag, a color change, and a delete in sequence, confirming each step reverts cleanly
   and that undo does nothing while a terminal or input has focus.
+- Enable **Scroll wheel zooms**, send several packets within 40 ms, and confirm one detent spends
+  only one shared budget. Wait beyond the burst window and confirm a later click gets a fresh
+  budget. Change the speed to 0.2× and 2.0×, reload, and confirm the plain-wheel distance changes
+  while modifier zoom and pinch retain their fixed step. Inspect missing, invalid, and out-of-range
+  hand-edited values and confirm the point-of-use fallback is 1.0×.
 
 ## Suggested articles
 

@@ -57,6 +57,14 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## In progress / partially landed
 
+- [ ] **Bounded wheel zoom and persisted wheel speed, issue #107**: the renderer now shares a ±50
+      `deltaY` budget across each 40 ms burst and applies a persisted 0.2×–2.0× multiplier only to
+      plain-wheel zoom. The Behavior setting has localized copy, point-of-use validation, and
+      provenance text. Server Edition shares the same renderer and settings record. Tests, type
+      checks, lint, builds, packaging, runtime interaction, reviews, audits, and captures remain
+      unrun in this implementation lane; the generated offline-doc bundle awaits the normal docs
+      generation step in integration.
+
 - [ ] **Shared provider services, issue #18**: provider catalog, account metadata, sealed
       credential payloads, bounded one-time OAuth PKCE callbacks, adapter-owned resource discovery,
       and shared Desktop/Server local bindings are implemented in source. Individual provider

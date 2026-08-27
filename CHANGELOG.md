@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add a shared 40 ms burst budget for plain-wheel canvas zoom and a persisted 0.2×–2.0× wheel
+  zoom speed control. The historical 1.0× feel remains the default; modifier zoom and trackpad
+  pinch keep their fixed behavior. Hand-edited values are clamped at the point of use, and the
+  Behavior setting explains its compiled-in, saved, or scheduled provenance in the active language
+  mode and funny-level voice. This source lane intentionally did not run tests, lint, type checks,
+  builds, packaging, runtime interaction, reviews, audits, or UI captures.
+
 - Rebuild the README from the ground up around the current Windows delivery path, genuine product
   captures, explicit evidence boundaries, and a compact top-level index. Keep 9 current key
   screenshots visible without disclosure controls, add 25 committed feature GIF recordings for
