@@ -214,8 +214,20 @@ export function AwsIdentityManager({ binding: inputBinding, intent, onChange }: 
 
   const startAction = async (action: AwsIdentityAction): Promise<void> => {
     if (!binding || plan.state !== 'ready') return
-    const next = await window.nodeTerminal.awsIdentity.start(action, binding.profileName, binding)
-    setOperation(next)
+    try {
+      const next = await window.nodeTerminal.awsIdentity.start(action, binding.profileName, binding)
+      setOperation(next)
+    } catch {
+      setOperation({
+        operationId: `unavailable-${Date.now()}`,
+        action,
+        state: 'failed',
+        message: 'The host-owned AWS identity action is unavailable. Nothing was changed.',
+        startedAt: null,
+        completedAt: Date.now(),
+        identity: null
+      })
+    }
   }
 
   return (
