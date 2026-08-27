@@ -215,28 +215,21 @@
           "arch": [
             "x64"
           ]
-        },
-        {
-          "target": "zip",
-          "arch": [
-            "x64"
-          ]
         }
       ],
       "forceCodeSigning": false,
-      "signExecutable": false
+      "signExecutable": false,
+      "signAndEditExecutable": true
     },
     "squirrelWindows": {
-      "artifactName": "${productName}-Setup-${version}.${ext}"
-    },
-    "nsis": {
       "artifactName": "${productName}-Setup-${version}.${ext}",
-      "oneClick": true,
-      "perMachine": false
+      "msi": false
     },
     "publish": {
-      "provider": "generic",
-      "url": "https://nodeterm.dev/updates"
+      "provider": "github",
+      "owner": "Ding-Ding-Projects",
+      "repo": "material-nodeterm",
+      "releaseType": "release"
     },
     "forceCodeSigning": false
   },

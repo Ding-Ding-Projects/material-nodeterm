@@ -377,7 +377,7 @@ export function ProjectSwitcher({
         />
       )}
 
-      <div className="md3-switcher">
+      <div className="md3-switcher" data-easter-surface="project-switcher">
         <button
           ref={switcherBtnRef}
           className="md3-switcher__trigger"

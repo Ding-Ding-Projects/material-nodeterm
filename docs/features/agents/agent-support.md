@@ -4,8 +4,8 @@
 
 nodeterm treats an AI coding agent CLI as just another kind of terminal node — with extra
 behaviour layered on top wherever the specific agent supports it. Claude Code, Codex, Gemini,
-opencode, and Grok are built in; any other CLI can be added as a custom agent with basic
-support (spawn, terminal-title tracking, process status).
+opencode, Grok, and Cognition Devin are built in; any other CLI can be added as a custom agent
+with basic support (spawn, terminal-title tracking, process status).
 
 ## Behaviour
 
@@ -109,6 +109,8 @@ sent automatically, an agent has to ask for the linked context when it wants it.
 
 ## Suggested articles
 
+- [Devin CLI](./devin-cli.md) — the measured launch, hook, and capability details for Cognition
+  Devin CLI 3000.4.25.
 - [Node kinds](../canvas/node-kinds.md) — the agent node itself, alongside the terminal node
   it's built from.
 - [Kanban board](../kanban/kanban-board.md) — how agent status renders on a card instead of a

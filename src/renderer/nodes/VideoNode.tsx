@@ -83,6 +83,7 @@ export default function VideoNode({ id, data, selected }: NodeProps<CanvasNode>)
   return (
     <div
       className={`term-node video-node${selected ? ' selected' : ''}`}
+      data-easter-surface="media"
       style={{ borderTopColor: data.color }}
     >
       <NodeResizer minWidth={NODE_MIN_SIZES.video.width} minHeight={NODE_MIN_SIZES.video.height} isVisible={selected} color={data.color} />
