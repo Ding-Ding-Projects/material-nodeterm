@@ -353,7 +353,7 @@ export const CATALOG: Catalog = {
   'nodeCatalog.entry.group.label': { en: flat('Group frame'), yue: flat('群組框') },
   'nodeCatalog.entry.group.description': { en: flat('Add an empty frame for organizing related nodes.'), yue: flat('加個空框，整理相關節點。') },
   'nodeCatalog.entry.annotation.label': { en: flat('Drawing annotation'), yue: flat('繪圖註解') },
-  'nodeCatalog.entry.annotation.description': { en: flat('Arm the drawing tool, then drag a line or arrow on the canvas.'), yue: flat('啟用繪圖工具，再喺畫布拖出直線或箭嘴。') },
+  'nodeCatalog.entry.annotation.description': { en: flat('Arm the drawing tool, then drag a line or arrow with an optional label and editable thickness.'), yue: flat('啟用繪圖工具，再喺畫布拖出直線或箭嘴，仲可以加標籤同調校粗幼。') },
   'nodeCatalog.entry.browser.label': { en: flat('Browser'), yue: flat('瀏覽器') },
   'nodeCatalog.entry.browser.description': { en: flat('Open a browser node with a blank address bar.'), yue: flat('開個有空白網址列嘅瀏覽器節點。') },
   'nodeCatalog.entry.authenticator.label': { en: flat('Authenticator'), yue: flat('驗證器') },

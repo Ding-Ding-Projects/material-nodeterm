@@ -128,6 +128,11 @@
   precedence. Unread remains a row-level affordance, so completed and unknown sessions stay in
   their workflow sections. This ultra-speed lane did not run tests, type checks, lint, builds,
   packaging, runtime interaction, reviews, security or accessibility checks, or captures.
+- Add optional labels and bounded editable line thickness to canvas annotations. Labels, stroke
+  widths, variants, and diagonals now persist through ordinary project files and schema 3 portable
+  projections with validation at the import boundary. Issue #76's ultra-speed lane intentionally
+  did not run tests, type checks, lint, reviews, security or accessibility checks, builds, packaging,
+  installer execution, runtime interaction, or UI captures.
 
 - Mount the seven AWS core-service routes on the shared AWS manager: S3, EC2, IAM, STS, Lambda,
   CloudWatch, and CloudWatch Logs. Typed operation controls now cover bounded reads, selected writes,

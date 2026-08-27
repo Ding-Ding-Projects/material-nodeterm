@@ -803,6 +803,10 @@ export interface CanvasNodeState {
    *  `annotationRectFromPoints` (src/renderer/lib/annotation.ts) from the draw gesture; unaffected
    *  by a later resize, which just stretches the same diagonal to the new box. */
   annotationDir?: 'tl-br' | 'tr-bl'
+  /** annotation-only: optional user-authored label rendered beside the stroke. */
+  annotationLabel?: string
+  /** annotation-only: bounded SVG stroke width in the node's local px space. */
+  annotationThickness?: number
   /**
    * Set while the node is maximized to fill the viewport (issue #399): the rect to give back on
    * the toggle's second click — the node's ROOT-space (absolute canvas) position plus its size.
