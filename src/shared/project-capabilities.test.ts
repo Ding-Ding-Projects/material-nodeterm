@@ -22,17 +22,9 @@ describe('projectCapabilityFlagInFile is STRICT — never a grant check', () => 
       ).toBe(false)
     }
   )
+})
 
 describe('projectCapabilityFlagInFile is STRICT (and NEVER a grant check — see project-capability-consent)', () => {
-  it('true enables', () => {
-    expect(projectCapabilityFlagInFile({ agentBrowserControl: true }, 'agentBrowserControl')).toBe(true)
-  })
-  it.each([undefined, false, null, 0, 1, 'true', 'yes', {}, [], 'false'])(
-    'everything else is OFF (%j) — project.json is hostile input, not a truthiness exercise',
-    (v) => {
-      expect(projectCapabilityFlagInFile({ agentBrowserControl: v } as never, 'agentBrowserControl')).toBe(false)
-    }
-  )
   it('an absent project is off, never a throw', () => {
     expect(projectCapabilityFlagInFile(undefined, 'agentBrowserControl')).toBe(false)
     expect(projectCapabilityFlagInFile(null, 'agentBrowserControl')).toBe(false)
@@ -42,6 +34,7 @@ describe('projectCapabilityFlagInFile is STRICT (and NEVER a grant check — see
     const proto = { agentBrowserControl: true }
     const p = Object.create(proto)
     expect(projectCapabilityFlagInFile(p, 'agentBrowserControl')).toBe(false)
+  })
   it('a prototype-inherited true is OFF — own properties only (M-1)', () => {
     const inherited = Object.create({ agentBrowserControl: true }) as Record<string, unknown>
     expect(projectCapabilityFlagInFile(inherited, 'agentBrowserControl')).toBe(false)

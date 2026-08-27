@@ -461,7 +461,8 @@ function codexResumeProgram(route: boolean | ResumeCommandOptions): string {
 export function resumeCommand(
   id: AgentId,
   sessionId: string,
-  route: boolean | ResumeCommandOptions = false
+  route: boolean | ResumeCommandOptions = false,
+  legacyBase?: string
 ): string | null {
   if (!canResume(id)) return null
   const sid = sessionId.trim()
@@ -469,7 +470,7 @@ export function resumeCommand(
   // An explicit user override wins over every routing decision below (see the `base` doc comment
   // on ResumeCommandOptions) — resolved once, up front, so it applies uniformly to every agent id
   // rather than being threaded into each case's own program-resolution helper.
-  const override = typeof route === 'object' ? route.base?.trim() || undefined : undefined
+  const override = (typeof route === 'object' ? route.base : legacyBase)?.trim() || undefined
   switch (id) {
     case 'codex':
       return `${override ?? codexResumeProgram(route)} resume ${sid}`
@@ -479,36 +480,13 @@ export function resumeCommand(
     case 'gemini':
     case 'grok':
       return `${override ?? id} --resume ${sid}`
- * `sharedIdentity` routes a SHARED_IDENTITY_CAPABLE agent's resume through the managed launcher,
- * so the resumed session re-claims the node's own thread instead of opening it as an anonymous
- * client. Default false = the bare command this has always emitted (see `agentLaunchProgram`).
- *
- * `base` is the user's launch-command override for this agent (`settings.agentLaunchCommands`,
- * e.g. an account-switching wrapper), PASSED IN rather than read here: this module is imported by
- * main/core/server and cannot reach the renderer's settings store, so the renderer resolves the
- * override and threads it through — the same shape as `performRestartResume`'s `command` param.
- * When set (non-blank) it replaces the program part outright, INCLUDING codex's shared-identity
- * launcher: an explicit override is the user saying "launch it exactly like this", and silently
- * substituting the managed launcher would un-say it. Blank/absent = unchanged behavior.
- */
-export function resumeCommand(
-  id: AgentId,
-  sessionId: string,
-  sharedIdentity = false,
-  base?: string
-): string | null {
-  const builtin = agentConfig(id)
-  // A builtin resumes with its own command; a custom agent has no resume grammar here (its
-  // baseAgent-aware path is `resumeCommandWith`, called by the shared launcher).
-  if (!builtin) return null
-  // A per-builtin launch-command override (Settings → Agents → Launch commands, threaded here as
-  // `base`) replaces the program outright, INCLUDING codex's shared-identity launcher: an explicit
-  // override is the user saying "launch it exactly like this". Blank/absent → route a
-  // SHARED_IDENTITY_CAPABLE builtin (codex) through its managed launcher when present, else the
-  // bare command this has always emitted.
-  const custom = base?.trim() || undefined
-  const program = custom ?? agentLaunchProgram(id, builtin.launchCmd, sharedIdentity)
-  return resumeCommandWith(program, id, sessionId)
+    case 'copilot':
+      return `${override ?? id} --resume=${sid}`
+    case 'devin':
+      return `${override ?? id} -r ${sid}`
+    default:
+      return null
+  }
 }
 
 /**

@@ -18,6 +18,7 @@ describe('sanitizeProjectIcon: kept', () => {
   it('keeps a known material-symbol id', () => {
     expect(sanitizeProjectIcon({ type: 'material-symbol', name: 'terminal' }))
       .toEqual({ type: 'material-symbol', name: 'terminal' })
+  })
   it('keeps a known lucide id', () => {
     expect(sanitizeProjectIcon({ type: 'lucide', name: 'rocket' })).toEqual({ type: 'lucide', name: 'rocket' })
   })
@@ -45,7 +46,7 @@ describe('sanitizeProjectIcon: rejected (never throws, degrades to undefined)', 
   })
   it('rejects an unknown type', () => {
     expect(sanitizeProjectIcon({ type: 'image', src: 'data:image/png;base64,AA==' })).toBeUndefined()
-    expect(sanitizeProjectIcon({ type: 'lucide', name: 'folder' })).toBeUndefined()
+    expect(sanitizeProjectIcon({ type: 'lucide', name: 'not-a-real-icon' })).toBeUndefined()
     expect(sanitizeProjectIcon({ type: 'svg', markup: '<svg/>' })).toBeUndefined()
     expect(sanitizeProjectIcon({})).toBeUndefined()
   })
@@ -70,6 +71,7 @@ describe('PROJECT_SYMBOL_IDS', () => {
   it('is a non-empty curated list with no duplicates', () => {
     expect(PROJECT_SYMBOL_IDS.length).toBeGreaterThan(0)
     expect(new Set(PROJECT_SYMBOL_IDS).size).toBe(PROJECT_SYMBOL_IDS.length)
+  })
   it('rejects an unknown lucide id', () => {
     expect(sanitizeProjectIcon({ type: 'lucide', name: 'not-a-real-icon' })).toBeUndefined()
   })
