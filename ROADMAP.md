@@ -17,7 +17,13 @@ later commit, since this file will not be kept in lockstep with every merge).
 - [ ] **Combined merge-recovery pull request**: repair the parser-invalid merge remnants across
       core services, host and bridge code, renderer surfaces, shared contracts, account and
       identity handling, and release workflow wiring; add the source-parse validation path and
-      align the unsigned Squirrel.Windows installer contract. Source changes are in progress and
+      align the unsigned Squirrel.Windows installer contract. The source build now selects the
+      manifest-pinned Node 24.19.0 runtime before native dependency lifecycle scripts, preventing
+      Node 26.4.0 thin-LTO metadata from reaching MSVC. A fresh build reached the root native
+      rebuild without `LNK1117`; the bootstrap now selects one exact C++ instance with Spectre
+      libraries for its default toolset and passes it consistently to preflight and node-gyp. The
+      native rebuild now completes; the later build phase remains blocked by a duplicate declaration
+      in `scripts/check-personal-vocabulary-coverage.mjs`. Source changes are in progress and
       remain unchecked until the parent integration lane records parser, type-check, build,
       packaging, and release-workflow evidence. The ultra-speed pass intentionally omits tests,
       reviews, accessibility and security checks, runtime interaction, and screen captures after

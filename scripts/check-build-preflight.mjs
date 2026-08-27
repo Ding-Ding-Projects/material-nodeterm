@@ -5,7 +5,8 @@
 // minutes. Two preconditions today, both Windows-only in practice:
 //
 //   1. no running process holds a binary under node_modules that a rebuild must delete;
-//   2. the toolchain has the Spectre-mitigated MSVC libraries node-pty requires.
+//   2. the exact VCINSTALLDIR-selected default toolset has the Spectre-mitigated MSVC libraries
+//      node-pty requires.
 //
 // It reports EVERY failed precondition in one run, deliberately. Discovering these one at a
 // time cost three separate multi-minute builds: the locked DLL hid the missing Spectre libs
@@ -48,7 +49,7 @@ import { readdirSync, openSync, closeSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, relative } from 'node:path'
-import { spectreLibComplaints } from './windows-spectre-preflight.mjs'
+import { activeVisualStudioSpectreComplaints } from './ensure-windows-build-toolchain.mjs'
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const MODULES = join(REPO_ROOT, 'node_modules')
@@ -136,7 +137,7 @@ for (const file of lockableBinaries(MODULES)) {
 
 const problems = []
 
-const spectreComplaints = spectreLibComplaints({ execFile: execFileSync })
+const spectreComplaints = activeVisualStudioSpectreComplaints()
 if (spectreComplaints.length > 0) {
   problems.push({
     title: 'the Spectre-mitigated MSVC libraries are not installed',

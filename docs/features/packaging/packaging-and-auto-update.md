@@ -14,6 +14,28 @@ Squirrel emits for the candidate. ZIP, NSIS-only, MSI-only, MSIX-only, and porta
 outputs are not supported parallel release routes. Native dependencies are rebuilt against the
 Electron ABI during installation.
 
+Source builds use the exact Node 24.19.0 runtime and SHA-256 recorded in
+`dependencies.manifest.json`. `download-dependencies.bat` checks that manifest pin before its first
+PATH runtime is accepted, so a different compatible application runtime is replaced by the pinned
+portable build runtime before `npm ci`. The root `devEngines` requirement also refuses direct npm
+source operations under a different Node version before dependency lifecycle scripts run. This is
+separate from the wider Node range supported by the installed Server Edition. The runtime probe and
+portable URL/SHA record are validated by one JavaScript contract before any manifest value returns
+to the batch bootstrap.
+
+The separation prevents toolchain metadata from leaking into native add-ons. In particular, Node
+26.4.0 reports Clang thin LTO with two linker jobs; its downloaded `common.gypi` maps those values to
+`-flto=thin` and `/opt:lldltojobs=2`. MSVC does not accept that inherited linker option when
+building `smart-whisper`. The package itself does not declare those flags, so patching generated
+`node_modules` is neither necessary nor a supported fix.
+
+The C++ bootstrap similarly binds discovery, preflight, and node-gyp to one installation. It reads
+each supported Visual Studio instance's declared default toolset, prefers an already complete
+instance with matching x86/x64 Spectre libraries, and returns that exact installation through
+`VCINSTALLDIR` before npm starts. Preflight then checks the active default toolset at that path.
+An older mitigated toolset elsewhere on the machine cannot hide missing libraries in the instance
+MSBuild will actually use, and the bootstrap does not modify an unrelated complete installation.
+
 The supported Windows entry point is `npm run dist:win`. Its wrapper starts from a clean checkout,
 regenerates the committed seven-frame ICO, proves that the bytes match the current commit, derives
 an immutable raw URL from that full source SHA, and verifies the public download byte-for-byte.
