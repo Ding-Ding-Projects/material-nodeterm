@@ -1,5 +1,32 @@
 # Handoff
 
+## 2026-08-27, Cloudflare Tunnel state model implementation
+
+Issue #62 is implemented on `feat/program-51-tunnel-state` at the source level. The shared
+`src/shared/tunnel-state.ts` module keeps API creation, DNS routing, connector health, Access policy,
+origin reachability, and external reachability as six separately timestamped facets. Transitions are
+bounded, reject stale observations, require a fresh check after failure, and preserve `unknown` as a
+distinct state when no trustworthy observation exists. Schema 3 intent is limited to the node label,
+hostname, origin protocol and port, connector mode, access-policy intent, and route mode. Provider
+ids, connector ids, process state, local paths, credentials, and observations are local-only.
+
+`src/renderer/components/tunnel/TunnelStatePanel.tsx` provides a guided accessible display. Its
+plain-text check search and status filter each own an adjacent anchored full regex builder. Rows
+show independent status, bounded detail or recovery reason, localized timestamps, and a retry
+control with an explicit disabled-state reason.
+
+Direct documentation is in `docs/features/remote/cloudflare-tunnel-state.md`, indexed from
+`docs/features/remote/README.md`. The static documentation site has the matching
+`site/docs/cloudflare-tunnel-state.html` article and index link. `CHANGELOG.md` and `ROADMAP.md`
+record the source state and the remaining verification boundary. The generated offline docs bundle
+was not rebuilt in this lane because the requested ultra-speed boundary forbids builds and runtime
+work.
+
+The lane intentionally did not run tests, type checks, lint, reviews, security or accessibility
+checks, builds, packaging, installer execution, runtime interaction, or captures. The next owner
+must wire the panel into the Cloudflare tunnel node and host APIs, regenerate the offline bundle,
+then run the appropriate focused verification against the integrated commit.
+
 ## 2026-08-27, Express File Converter completion, issue #21
 
 The implementation lane is `feat/program-10-file-converter`, refreshed by fast-forward before edits

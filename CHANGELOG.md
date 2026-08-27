@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Add the tunnel state model for six independent observations: API creation, DNS routing, connector
+  health, Access policy, origin reachability, and external reachability. The shared model uses
+  bounded, timestamp-ordered transitions with honest `unknown`, `pending`, `ready`, `failed`, and
+  `blocked` states. Schema 3 carries only safe route intent, while provider ids, connector ids,
+  process state, local paths, and live observations remain local. Add the guided state panel with
+  separate plain-text search and status filtering, each with its own adjacent anchored regex
+  builder. This ultra-speed implementation lane intentionally did not run tests, type checks, lint,
+  reviews, security or accessibility checks, builds, packaging, installer execution, runtime
+  interaction, or captures.
+
 - Complete the Express File Converter flow with queue-wide collision-safe destination names,
   visible rename disclosure, final atomic no-clobber publication, and a completed-output action that
   opens the exact result in Visual Studio Code through the active project API. The converter queue

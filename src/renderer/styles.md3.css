@@ -2574,6 +2574,157 @@ button.term-node__title-text:focus-visible {
   outline: 2px solid var(--md-primary);
   outline-offset: 2px;
 }
+
+/* Cloudflare Tunnel state panel. Each facet is intentionally its own row so a partial provider
+   outage cannot make the whole route look ready. Search controls keep the builder trigger beside
+   the field, and all interactive targets retain the shared 44px minimum. */
+.tunnel-state-panel {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  padding: 16px;
+  color: var(--md-on-surface);
+  background: var(--md-surface-container);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-large);
+}
+.tunnel-state-panel__header,
+.tunnel-state-panel__row,
+.tunnel-state-panel__search-row,
+.tunnel-state-panel__portable-details > div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.tunnel-state-panel__header,
+.tunnel-state-panel__row {
+  justify-content: space-between;
+}
+.tunnel-state-panel__title,
+.tunnel-state-panel__row h4 {
+  margin: 0;
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 500;
+}
+.tunnel-state-panel__hostname,
+.tunnel-state-panel__explanation,
+.tunnel-state-panel__row p,
+.tunnel-state-panel__row small,
+.tunnel-state-panel__message {
+  margin: 4px 0 0;
+  color: var(--md-on-surface-variant);
+  font-size: 14px;
+  line-height: 20px;
+}
+.tunnel-state-panel__row small {
+  display: block;
+  font-size: 12px;
+  line-height: 16px;
+}
+.tunnel-state-panel__filters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.tunnel-state-panel__field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  color: var(--md-on-surface-variant);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+}
+.tunnel-state-panel__search-row > input {
+  min-width: 0;
+  flex: 1;
+}
+.tunnel-state-panel__search-row > .md3-regex-trigger,
+.tunnel-state-panel__portable-toggle {
+  min-width: 44px;
+  min-height: 44px;
+}
+.tunnel-state-panel__legend,
+.tunnel-state-panel__rows {
+  display: grid;
+  gap: 8px;
+}
+.tunnel-state-panel__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.tunnel-state-panel__row {
+  align-items: flex-start;
+  padding: 12px;
+  background: var(--md-surface-container-high);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-medium);
+}
+.tunnel-state-panel__row-copy {
+  min-width: 0;
+}
+.tunnel-state-panel__status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 4px 10px;
+  border-radius: var(--md-shape-full);
+  color: var(--md-on-surface-variant);
+  background: var(--md-surface-container-highest);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.tunnel-state-panel__status--ready { color: var(--md-on-success-container); background: var(--md-success-container); }
+.tunnel-state-panel__status--failed { color: var(--md-on-error-container); background: var(--md-error-container); }
+.tunnel-state-panel__status--blocked { color: var(--md-on-warning-container); background: var(--md-warning-container); }
+.tunnel-state-panel__status--pending { color: var(--md-on-primary-container); background: var(--md-primary-container); }
+.tunnel-state-panel__portable {
+  padding-top: 4px;
+  border-top: 1px solid var(--md-outline-variant);
+}
+.tunnel-state-panel__portable-toggle {
+  color: var(--md-primary);
+  background: transparent;
+  border: 0;
+  border-radius: var(--md-shape-small);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.tunnel-state-panel__portable-toggle:focus-visible,
+.tunnel-state-panel :is(button, input):focus-visible {
+  outline: 3px solid var(--md-primary);
+  outline-offset: 2px;
+}
+.tunnel-state-panel__portable-details {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 0;
+  color: var(--md-on-surface-variant);
+  font-size: 12px;
+  line-height: 16px;
+}
+.tunnel-state-panel__portable-details dt {
+  min-width: 100px;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+}
+.tunnel-state-panel__portable-details dd {
+  margin: 0;
+}
+.tunnel-state-panel__portable-note {
+  align-items: flex-start !important;
+}
+@media (max-width: 620px) {
+  .tunnel-state-panel__filters { grid-template-columns: 1fr; }
+  .tunnel-state-panel__row { display: grid; }
+}
 @media (max-width: 540px) {
   .docker-manager__toolbar,
   .docker-manager article > header {

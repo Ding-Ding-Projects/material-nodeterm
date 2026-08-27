@@ -287,6 +287,10 @@ intentionally unchecked because this task publishes the plan only.
 - [ ] Add Cloudflare account, zone, DNS, security, Workers, Pages, storage, queue, Access, and
       analytics managers.
 - [ ] Add one-click Cloudflare Tunnel setup with private-first routing and connector choices.
+- [ ] Add independent Cloudflare Tunnel state observations for API creation, DNS routing, connector
+      health, Access policy, origin reachability, and external reachability. Source model and
+      guided searchable display are present in issue #62; focused verification and runtime evidence
+      remain pending because the ultra-speed lane intentionally did not run them.
 
 ### Clean-room features and upstream parity
 
