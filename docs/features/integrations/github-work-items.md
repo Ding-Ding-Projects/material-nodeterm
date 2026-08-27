@@ -26,7 +26,7 @@ never guessed from a title or URL.
 ## Verification boundary
 
 This source lane intentionally did not run tests, lint, type checking, builds, packaging, runtime
-interaction, reviews, audits, debugging, repairs, or HuiShots. Those checks belong to the owning
+interaction, reviews, audits, debugging, repairs, or UI captures. Those checks belong to the owning
 integration task.
 
 Suggested articles: [Guided GitHub API capabilities](github-api.md), [GitHub CLI account selector](github-cli-accounts.md), and [Canvas node kinds](../canvas/node-kinds.md).

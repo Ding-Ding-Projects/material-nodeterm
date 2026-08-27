@@ -2842,6 +2842,6 @@ Source implementation for upstream issue #462 and downstream issue #132 is on
 serialization, and the categorized article at `docs/features/integrations/github-work-items.md`.
 
 The lane intentionally ran no tests, lint, typecheck, build, packaging, runtime interaction,
-review, audit, debugging, repair, or HuiShot. The next owner must verify Desktop and Server Edition
+review, audit, debugging, repair, or UI capture. The next owner must verify Desktop and Server Edition
 bridge parity, guided repository/item actions, refresh and permission/offline states, local search
 and anchored regex builder behavior, and real built-artifact interaction.
