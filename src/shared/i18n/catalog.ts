@@ -319,6 +319,8 @@ export const CATALOG: Catalog = {
   'nodeCatalog.entry.homeassistant-sensor.description': { en: flat('Display selected Home Assistant values, states, gauges, trends, events, weather, calendars, and attributes through a local binding.'), yue: flat('用本機綁定顯示揀好嘅 Home Assistant 數值、狀態、儀表、趨勢、事件、天氣、日曆同屬性。') },
   'nodeCatalog.entry.service.freepbx.label': { en: flat('FreePBX manager'), yue: flat('FreePBX 管理器') },
   'nodeCatalog.entry.service.freepbx.description': { en: flat('Open a typed manager for a saved FreePBX connection.'), yue: flat('開已儲存 FreePBX 連線嘅有類型管理器。') },
+  'nodeCatalog.entry.open-webui-hosting.label': { en: flat('Open WebUI hosting'), yue: flat('Open WebUI 託管') },
+  'nodeCatalog.entry.open-webui-hosting.description': { en: flat('Run Open WebUI with persistent data, local Ollama reuse, and a guided provider choice.'), yue: flat('用持久資料、本機 Ollama 重用同引導式供應商選擇執行 Open WebUI。') },
   'nodeCatalog.entry.editor.label': { en: flat('Editor'), yue: flat('編輯器') },
   'nodeCatalog.entry.editor.description': { en: flat('Open a selected project file in the embedded editor.'), yue: flat('喺內置編輯器開揀好嘅項目檔案。') },
   'nodeCatalog.entry.diff.label': { en: flat('Diff viewer'), yue: flat('差異檢視器') },

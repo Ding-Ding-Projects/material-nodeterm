@@ -10,6 +10,7 @@ import { DEFAULT_HOME_ASSISTANT_CONTROL_CONFIG, validateHomeAssistantControlConf
 import { DEFAULT_HOME_ASSISTANT_SENSOR_CONFIG, type HomeAssistantSensorConfig } from '@shared/home-assistant-sensor'
 import type { AlarmOccurrence, AlarmRecurrence } from '@shared/alarm-clock'
 import type { ServiceConnection } from '@shared/node-exec'
+import { OPEN_WEBUI_DEFAULT_INTENT, type OpenWebUiIntent, type OpenWebUiLocalBinding } from '@shared/open-webui-hosting'
 import type { NsisLocalPaths, NsisSpec } from '@shared/nsis-form-types'
 import { defaultNsisLocalPaths, defaultNsisSpec } from '@shared/nsis-form-types'
 import type { AgentId, AgentPermissionMode, BuiltinAgentId } from '@shared/agents/config'
@@ -98,6 +99,7 @@ export const TORRENT_SIZE = { width: 620, height: 520 }
 const LINUX_VM_SIZE = { width: 760, height: 560 }
 const TIMER_SIZE = { width: 380, height: 360 }
 const ALARM_SIZE = { width: 380, height: 360 }
+const OPEN_WEBUI_SIZE = { width: 680, height: 560 }
 /** Fallback bounding box `flowToNodeStates` uses if an annotation node somehow has no live
  *  width/height at all (every production creation path draws a real rect — see createAnnotationNode
  *  — so this is a defensive floor, matching how every other kind gets a fallback in `sizeFor`). */
@@ -269,6 +271,9 @@ export interface NodeData {
   /** service-kinds only, MACHINE-LOCAL: where this node reaches its service. Stripped from the
    *  shared document and from inbound peers; see shared/node-exec.ts. */
   serviceConnection?: ServiceConnection
+  /** Open WebUI safe provider/port intent is project-portable; the live binding stays local. */
+  openWebUiIntent?: OpenWebUiIntent
+  openWebUiLocalBinding?: OpenWebUiLocalBinding
   /** Safe torrent magnet intent shared with the canvas. */
   torrentMagnet?: string
   /** nsis-only, GIT-SHARED: the installer's description. See `NsisSpec`. */
@@ -1594,6 +1599,24 @@ export function createServiceNode(
   }
 }
 
+/** Creates a guided Open WebUI hosting node. Only safe provider intent enters the project file. */
+export function createOpenWebUiNode(index: number, center?: { x: number; y: number }): CanvasNode {
+  return {
+    id: nextId('open-webui-hosting'),
+    type: 'open-webui-hosting',
+    position: placeAt(center, index, OPEN_WEBUI_SIZE.width, OPEN_WEBUI_SIZE.height),
+    width: OPEN_WEBUI_SIZE.width,
+    height: OPEN_WEBUI_SIZE.height,
+    style: { width: OPEN_WEBUI_SIZE.width, height: OPEN_WEBUI_SIZE.height },
+    data: {
+      title: 'Open WebUI hosting',
+      color: '#6ac4dc',
+      group: null,
+      openWebUiIntent: { ...OPEN_WEBUI_DEFAULT_INTENT }
+    }
+  }
+}
+
 /** Creates a Linux ISO VM node. The node is a canvas object, not a WSL terminal profile. */
 export function createVirtualMachineNode(index: number, center?: { x: number; y: number }): CanvasNode {
   return {
@@ -2214,7 +2237,8 @@ const NODE_KIND_TABLE: Record<NodeKind, true> = {
   nsis: true,
   shop: true,
   torrent: true,
-  'linux-vm': true
+  'linux-vm': true,
+  'open-webui-hosting': true
 }
 
 /**
@@ -2265,7 +2289,8 @@ const NODE_START_SIZE: Record<NodeKind, { width: number; height: number }> = {
   nsis: NSIS_SIZE,
   shop: SHOP_SIZE,
   torrent: TORRENT_SIZE,
-  'linux-vm': LINUX_VM_SIZE
+  'linux-vm': LINUX_VM_SIZE,
+  'open-webui-hosting': OPEN_WEBUI_SIZE
 }
 
 /** A `Set`, not `type in NODE_KIND_TABLE`: `in` walks the prototype, so `'constructor'` and
@@ -2717,6 +2742,8 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         cwd: n.cwd,
         text: n.text,
         serviceLabel: n.serviceLabel,
+        openWebUiIntent: n.openWebUiIntent,
+        openWebUiLocalBinding: n.openWebUiLocalBinding,
         homeAssistantIntent: n.homeAssistantIntent,
         universeCanvasId: n.universeCanvasId,
         universeScope: n.universeScope,
@@ -2842,6 +2869,8 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         cwd: n.data.cwd,
         text: n.data.text,
         serviceLabel: n.data.serviceLabel,
+        openWebUiIntent: n.data.openWebUiIntent,
+        openWebUiLocalBinding: n.data.openWebUiLocalBinding,
         homeAssistantIntent: n.data.homeAssistantIntent,
         universeCanvasId: n.data.universeCanvasId,
         universeScope: n.data.universeScope,

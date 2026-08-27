@@ -30,6 +30,7 @@ import type { ClientId, PeerDiff, PeerIdentity, PeerState } from '../shared/pres
 import type { ConvertQueueItem, ConverterQueueState } from '../shared/converter'
 import type { PullQueueItem, PullQueueState } from '../shared/ollama'
 import type { DockerHostAction, DockerHostJobProgress } from '../shared/docker-host-manager'
+import type { OpenWebUiApi, OpenWebUiIntent, OpenWebUiOperationInput, OpenWebUiJobProgress } from '../shared/open-webui-hosting'
 import type { MinecraftEvent } from '../shared/minecraft'
 import type { NodeDependencyAvailability, NodeDependencyProgress, NodeDependencyInstallResult } from '../shared/node-dependencies'
 import type { WslCreateProgress } from '../shared/wsl'
@@ -86,6 +87,7 @@ const subscribeOllamaPullSummary = subscribe<[Pick<PullQueueState, 'running' | '
 const subscribeOllamaChatStream = subscribe<
   [{ sessionId: string; kind: 'token' | 'done' | 'error' | 'stopped'; delta?: string; error?: string }]
 >(IPC.ollamaChatStream)
+const subscribeOpenWebUiProgress = subscribe<[OpenWebUiJobProgress]>(IPC.openWebUiProgress)
 const subscribeMinecraftEvent = subscribe<[MinecraftEvent]>(IPC.minecraftEvent)
 const subscribeNodeDependencyState = subscribe<[NodeDependencyAvailability]>(IPC.nodeDependencyState)
 const subscribeNodeDependencyProgress = subscribe<[NodeDependencyProgress]>(IPC.nodeDependencyProgress)
@@ -1151,6 +1153,14 @@ const api: NodeTerminalApi = {
     chatStop: (id) => ipcRenderer.invoke(IPC.ollamaChatStop, id),
     onChatStream: (listener) => subscribeOllamaChatStream(listener)
   },
+  openWebUi: {
+    contexts: () => ipcRenderer.invoke(IPC.openWebUiContexts),
+    state: (nodeId: string, intent: OpenWebUiIntent) => ipcRenderer.invoke(IPC.openWebUiState, nodeId, intent),
+    health: (nodeId: string, intent: OpenWebUiIntent) => ipcRenderer.invoke(IPC.openWebUiState, nodeId, intent),
+    run: (input: OpenWebUiOperationInput) => ipcRenderer.invoke(IPC.openWebUiRun, input),
+    cancel: (jobId: string) => ipcRenderer.send(IPC.openWebUiCancel, jobId),
+    onProgress: (listener) => subscribeOpenWebUiProgress(listener)
+  } satisfies OpenWebUiApi,
   minecraft: {
     versions: () => ipcRenderer.invoke(IPC.minecraftVersions),
     status: (id) => ipcRenderer.invoke(IPC.minecraftStatus, id),

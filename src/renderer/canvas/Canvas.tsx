@@ -107,6 +107,7 @@ import BrowserNode from '../nodes/BrowserNode'
 import { ServiceNode } from '../nodes/ServiceNode'
 import VirtualMachineNode from '../nodes/VirtualMachineNode'
 import NsisInstallerNode from '../nodes/NsisInstallerNode'
+import OpenWebUiHostingNode from '../nodes/OpenWebUiHostingNode'
 import ShopNode from '../nodes/ShopNode'
 import TorrentNode from '../nodes/TorrentNode'
 import { normalizeAddress } from '../nodes/browserUrl'
@@ -720,6 +721,7 @@ import {
   createTerminalNode,
   nodeSshFor,
   createServiceNode,
+  createOpenWebUiNode,
   createVirtualMachineNode,
   SERVICE_NODE_LABELS,
   createVideoNode,
@@ -2079,6 +2081,7 @@ export function Canvas() {
       gitlab: withNodeBoundary(ServiceNode),
       homeassistant: withNodeBoundary(ServiceNode),
       freepbx: withNodeBoundary(ServiceNode),
+      'open-webui-hosting': withNodeBoundary(OpenWebUiHostingNode),
       'linux-vm': withNodeBoundary(VirtualMachineNode)
     }),
     []
@@ -5400,6 +5403,7 @@ export function Canvas() {
             if (catalogEntry.id === 'wild-dim-sum') return createWildDimSumNode(index, undefined, center)
             if (catalogEntry.id === 'homeassistant-control') return createHomeAssistantControlNode(index, center)
             if (catalogEntry.id === 'homeassistant-sensor') return createHomeAssistantSensorNode(index, center)
+            if (catalogEntry.id === 'open-webui-hosting') return createOpenWebUiNode(index, center)
             if (catalogEntry.id.startsWith('service:')) {
               return createServiceNode(catalogEntry.nodeKind as ServiceNodeKind, index, center)
             }

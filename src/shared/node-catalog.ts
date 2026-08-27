@@ -1,5 +1,6 @@
 import type { NodeKind } from './types'
 import { DOCKER_HOST_PORTABLE_BLUEPRINT } from './docker-host-manager'
+import { OPEN_WEBUI_DEFAULT_INTENT } from './open-webui-hosting'
 
 /** The guided categories shown by the Node Catalog. Keep this list explicit so a new category
  * cannot disappear from the picker simply because no current entry happens to use it. */
@@ -131,10 +132,11 @@ const plannedEntry = (
   description: string,
   dependencyId: string,
   scope: 'root' | 'multiverse' | 'aws-universe' | 'any' = 'any',
-  maxUniverseDepth?: number
+  maxUniverseDepth?: number,
+  nodeKind: NodeKind | null = null
 ): NodeCatalogEntry => ({
   id,
-  nodeKind: null,
+  nodeKind,
   category,
   label,
   description,
@@ -528,7 +530,21 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
   plannedEntry('cloudflare-hosting', 'hosting', 'Cloudflare hosting', 'Create a private-first hosting blueprint with explicit tunnel exposure later.', 'hosting-adapter'),
   plannedEntry('gitlab-hosting', 'hosting', 'GitLab hosting', 'Create a guided GitLab hosting blueprint with local credentials later.', 'hosting-adapter'),
   plannedEntry('nextcloud-hosting', 'hosting', 'Nextcloud hosting', 'Create a managed Nextcloud hosting blueprint with local binding later.', 'hosting-adapter'),
-  plannedEntry('open-webui-hosting', 'hosting', 'Open WebUI hosting', 'Create an Open WebUI hosting blueprint that can reuse local Ollama.', 'hosting-adapter')
+  {
+    id: 'open-webui-hosting',
+    nodeKind: 'open-webui-hosting',
+    category: 'hosting',
+    label: 'Open WebUI hosting',
+    description: 'Create a guided Open WebUI host that reuses local Ollama or an OpenAI-compatible provider.',
+    keywords: ['open webui', 'hosting', 'ollama', 'openai-compatible', 'backup', 'restore', 'rollback'],
+    documentationPath: 'docs/features/hosting/open-webui-hosting.md',
+    safeDefaults: { openWebUiIntent: OPEN_WEBUI_DEFAULT_INTENT },
+    dependencies: ['hosting-adapter', 'docker', 'ollama-or-openai-provider'],
+    status: 'available',
+    availabilityMode: 'configure-later',
+    scope: 'any',
+    availability: alwaysAvailable
+  }
 ] as const
 
 const CATALOG_BY_ID = new Map(NODE_CATALOG.map((entry) => [entry.id, entry]))
@@ -586,7 +602,7 @@ export const NODE_CATALOG_COMPLETENESS: readonly NodeCatalogCompletenessRecord[]
   { id: 'cloudflare-hosting', state: 'planned', scope: 'any', reason: 'Cloudflare hosting not implemented' },
   { id: 'gitlab-hosting', state: 'planned', scope: 'any', reason: 'GitLab hosting not implemented' },
   { id: 'nextcloud-hosting', state: 'planned', scope: 'any', reason: 'Nextcloud hosting not implemented' },
-  { id: 'open-webui-hosting', state: 'planned', scope: 'any', reason: 'Open WebUI hosting not implemented' }
+  { id: 'open-webui-hosting', state: 'current', scope: 'any', reason: 'guided Open WebUI hosting node' }
 ]
 
 /** Completeness guard data is intentionally exact and red when a row is removed, duplicated, or

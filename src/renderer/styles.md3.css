@@ -12878,3 +12878,30 @@ button.term-node__title-text:focus-visible {
     flex: 1 1 120px;
   }
 }
+/* Open WebUI hosting node: guided controls, explicit state, and anchored search affordances. */
+.open-webui-node { min-width: 0; overflow: hidden; color: var(--md-sys-color-on-surface); background: var(--md-sys-color-surface-container); border-radius: 18px; box-shadow: var(--md-sys-elevation-level2); }
+.open-webui-node__header { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 10px 14px; border-radius: 18px 18px 0 0; }
+.open-webui-node__icon { display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); }
+.open-webui-node__label { min-width: 0; font-weight: 650; }
+.open-webui-node__body { display: grid; gap: 14px; max-height: calc(100% - 52px); overflow: auto; padding: 14px; }
+.open-webui-node__intro, .open-webui-node__hint, .open-webui-node__empty, .open-webui-node__setup { margin: 0; color: var(--md-sys-color-on-surface-variant); font-size: 12px; line-height: 1.45; }
+.open-webui-node__section { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--md-sys-color-outline-variant); border-radius: 14px; background: var(--md-sys-color-surface-container-low); }
+.open-webui-node__section h4, .open-webui-node__state header { margin: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.open-webui-node__field { display: grid; gap: 5px; font-size: 12px; font-weight: 600; }
+.open-webui-node__field small { color: var(--md-sys-color-on-surface-variant); font-weight: 400; }
+.open-webui-node__search { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.open-webui-node__search > *:first-child { flex: 1 1 auto; min-width: 0; }
+.open-webui-node__pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.open-webui-node__pills button { min-height: 36px; padding: 6px 10px; border: 1px solid var(--md-sys-color-outline); border-radius: 999px; background: var(--md-sys-color-surface); color: var(--md-sys-color-on-surface); cursor: pointer; }
+.open-webui-node__pills button.selected, .open-webui-node__pills button[aria-checked=true] { border-color: var(--md-sys-color-primary); background: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); }
+.open-webui-node__pills button:focus-visible, .open-webui-node__actions button:focus-visible { outline: 3px solid var(--md-sys-color-primary); outline-offset: 2px; }
+.open-webui-node__pills button small { display: block; color: var(--md-sys-color-on-surface-variant); }
+.open-webui-node__state > p { margin: 0; font-size: 12px; line-height: 1.45; }
+.open-webui-node__setup { padding: 8px; border-radius: 10px; background: var(--md-sys-color-tertiary-container); color: var(--md-sys-color-on-tertiary-container); }
+.open-webui-node__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.open-webui-node__error { margin: 0; padding: 8px; border-radius: 10px; background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); font-size: 12px; }
+.open-webui-node__jobs { display: grid; gap: 8px; }
+.open-webui-node__jobs h4 { margin: 0; }
+.open-webui-node__jobs article { display: grid; gap: 5px; padding: 8px; border-radius: 10px; background: var(--md-sys-color-surface-container-high); font-size: 12px; }
+.open-webui-node__jobs article header { display: flex; justify-content: space-between; gap: 8px; }
+@media (max-width: 640px) { .open-webui-node__body { padding: 10px; } .open-webui-node__actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); } .open-webui-node__actions button { width: 100%; } }

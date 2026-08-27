@@ -283,7 +283,8 @@ intentionally unchecked because this task publishes the plan only.
 
 - [ ] Add GitLab Server CE and EE hosting profiles with backup and restore.
 - [ ] Add Nextcloud AIO and managed no-socket hosting profiles.
-- [ ] Add Open WebUI hosting with existing Ollama reuse and honest bootstrap states.
+- [x] Add Open WebUI hosting with existing Ollama reuse, OpenAI-compatible provider choice, honest
+  bootstrap states, persistent data, health, backup, restore, update, rollback, and local bindings.
 - [ ] Add Cloudflare account, zone, DNS, security, Workers, Pages, storage, queue, Access, and
       analytics managers.
 - [ ] Add one-click Cloudflare Tunnel setup with private-first routing and connector choices.

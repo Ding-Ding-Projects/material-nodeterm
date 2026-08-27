@@ -211,6 +211,7 @@ export function buildRelayApi(connectionId: string, transport?: FrameTransport):
     // host the same way `fs`/`git` are routed above.
     converter: stub.converter,
     ollama: stub.ollama,
+    openWebUi: stub.openWebUi,
     // Same reasoning as converter/ollama immediately above: creating and running a Minecraft
     // server is ONE machine's filesystem/java/process table, and there is no remote-routed core
     // call for it yet. Refuse cleanly rather than silently provisioning/spawning on the WRONG

@@ -2355,3 +2355,8 @@ git tag --sort=-creatordate
 or on GitHub's [tags](https://github.com/eneskirca/nodeterm/tags) and
 [releases](https://github.com/eneskirca/nodeterm/releases) pages.
 
+# Unreleased
+
+- Add a guided Open WebUI hosting node with persistent data, local Ollama reuse, an
+  OpenAI-compatible provider option, honest first-user setup and health states, backup and restore,
+  pinned-image update and rollback, local-only bindings, and anchored regex search for its pickers.

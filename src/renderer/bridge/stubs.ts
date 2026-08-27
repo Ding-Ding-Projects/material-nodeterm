@@ -701,6 +701,14 @@ export function buildStubApi(): Omit<
       chatStop: U('ollama.chatStop'),
       onChatStream: noopUnsub
     },
+    openWebUi: {
+      contexts: U('openWebUi.contexts'),
+      state: U('openWebUi.state'),
+      health: U('openWebUi.health'),
+      run: U('openWebUi.run'),
+      cancel: noop,
+      onProgress: noopUnsub
+    },
     minecraft: {
       versions: U('minecraft.versions'),
       status: U('minecraft.status'),

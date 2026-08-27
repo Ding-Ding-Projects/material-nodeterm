@@ -421,6 +421,7 @@ export type NodeKind =
   | 'homeassistant'
   | 'homeassistant-sensor'
   | 'freepbx'
+  | 'open-webui-hosting'
   | 'torrent'
   /** One-shot Linux ISO virtual machine, distinct from the WSL terminal profile. */
   | 'linux-vm'
@@ -640,6 +641,10 @@ export interface CanvasNodeState {
    * `localExec` on the index entry, exactly where the shell and Windows profile already live.
    */
   serviceLabel?: string
+  /** Open WebUI provider and port intent safe to share in schema 3 project files. */
+  openWebUiIntent?: import('./open-webui-hosting').OpenWebUiIntent
+  /** Open WebUI container and provider binding kept only in the machine-local index. */
+  openWebUiLocalBinding?: import('./open-webui-hosting').OpenWebUiLocalBinding
   /** Home Assistant node presentation intent safe for schema 3. Hosts, instance ids, credentials,
    *  sessions, and entity caches stay in the machine-local service and binding overlay. */
   homeAssistantIntent?: import('./home-assistant').HomeAssistantNodeIntent
@@ -4595,6 +4600,8 @@ export interface NodeTerminalApi {
   nodeDependencies: import('./node-dependencies').NodeDependenciesApi
   /** Local Ollama suite manager — docs/ollama-manager.md. */
   ollama: import('./ollama').OllamaApi
+  /** Guided local Open WebUI hosting with persistent volume and explicit provider setup. */
+  openWebUi: import('./open-webui-hosting').OpenWebUiApi
   /** Local WebTorrent downloader — docs/torrent-downloader.md. */
   torrent: import('./torrent').TorrentApi
   /** Local Minecraft server create-and-manage — docs/minecraft-server-manager.md. */
