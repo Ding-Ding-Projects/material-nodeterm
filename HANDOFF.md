@@ -1,5 +1,32 @@
 # Handoff
 
+## 2026-08-27, session budget parser repair
+
+Release run `33135784814` stopped while parsing `src/core/session-budget.ts` at line 264 with
+`Expected '}' but found maxDetached`. The source had two merged budget-object generations, including
+competing `graceSec` and `batchMax` entries, a missing comma, two eligibility declarations, and two
+listing calls with the same local name.
+
+The repair keeps the host-derived `maxDetached` cap, the legacy `NODETERM_SESSION_MAX_DETACHED`
+fallback, the newer `NODETERM_SESSION_MAX_IDLE` override, the documented 24-hour grace period, the
+validated fractional-hour environment parser, the bounded batch size of 8, the swap and PSI pressure
+settings, and the existing disabled switch. Reaping keeps the current output-silence clock and does
+not use tmux attachment as a live-work signal. The duplicate session-list generation is removed so
+`list-windows -a` remains the single source that supplies pane output timestamps, and kill-time
+revalidation uses that same timestamp. Existing shadow-client normalization, socket traversal,
+exact-match kills, and caller signatures are unchanged.
+
+Changed files: `src/core/session-budget.ts` and `HANDOFF.md`.
+
+This lane intentionally ran no tests, checkers, lint, type checks, builds, packaging, reviews, audits,
+runtime interaction, or UI captures. The repair is committed on `fix/session-budget-parser` from
+`origin/main` at `6e4a663cfc87517158b40c45a1e166ca4d4d1798`; hosted compilation and the manual release
+remain unverified until the coordinating owner integrates the lane.
+
+合併碎片今次收返一條龍：derived cap、24 小時 grace、batch 8 同環境變數驗證全部留低，重複
+budget object 同兩套 tmux listing 就唔再爭咪。Reaper 繼續睇 pane output silence，唔會畀 attachment
+呢個假訊號扮忙；不過今次冇跑 tests、build 或 packaging，未可以當 release 已經驗證。
+
 ## 2026-08-28, native child toolchain binding repair
 
 The fresh `0.4.121` build candidate at commit `43587f87390287bad0036ca20f91a37e2a44acd8` still
