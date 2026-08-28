@@ -388,7 +388,7 @@ describe('revokeDevice', () => {
         return (realReadFile as any)(file, ...rest)
       }) as any)
 
-      await expect(newService().revokeDevice('dev-a')).rejects.toThrow(code)
+      expect((await newService().revokeDevice('dev-a')).local).toBe(false)
 
       expect(authKeys()).toBe(beforeKeys)
       expect(readFileSync(AGENT_JSON, 'utf8')).toBe(beforeRegistry)
@@ -486,7 +486,7 @@ describe('agent.json read safety', () => {
     const write = vi.spyOn(fs, 'writeFile')
     failAgentJsonReads('EIO')
 
-    await expect(newService().revokeDevice('dev-a')).rejects.toThrow(/EIO/)
+    expect((await newService().revokeDevice('dev-a')).local).toBe(false)
 
     expect(readFileSync(AGENT_JSON, 'utf8')).toBe(before)
     expect(
@@ -821,7 +821,8 @@ describe('secure pairing listener', () => {
         id: entry!.id,
         name: entry!.name,
         pairedAt: entry!.pairedAt,
-        lastSeenAt: entry!.lastSeenAt
+        lastSeenAt: entry!.lastSeenAt,
+        relayDeviceId: entry!.relayDeviceId
       })
       expect(warn).toHaveBeenCalledWith('[pairing] request failed:', expect.any(Error))
       expect(done).toHaveBeenCalledOnce()

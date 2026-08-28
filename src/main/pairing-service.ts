@@ -954,7 +954,14 @@ export function createPairingService(
   // user asked to remove should stop being minted Pro either way.
   const revokeDevice = async (id: string): Promise<DeviceRevokeResult> => {
     const { local, relayId, found } = await serialize(async () => {
-      const entry = readDevices(await readAgentJson()).find((d) => d.id === id)
+      let entry: DeviceEntry | undefined
+      try {
+        entry = readDevices(await readAgentJson()).find((d) => d.id === id)
+      } catch (err) {
+        // The key is the larger capability. Keep going so an authoritative registry read failure
+        // cannot leave SSH access live; the second read below still refuses to rewrite the record.
+        console.warn('[pairing] could not read device registry before revoke:', err)
+      }
       const relayId = entry?.relayDeviceId
       const found = !!entry
       try {
