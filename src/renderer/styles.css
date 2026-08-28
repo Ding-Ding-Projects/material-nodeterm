@@ -15922,6 +15922,10 @@ body.focus-mode .dock:hover {
 .repository-graph-node__search { display: flex; flex: 1 1 280px; align-items: center; gap: 4px; }
 .repository-graph-node__search input { width: 100%; }
 .repository-graph-node__summary { font-size: 0.85em; opacity: 0.8; }
+.repository-graph-node__visual { border: 1px solid var(--md-sys-color-outline-variant); border-radius: 12px; background: var(--md-sys-color-surface-container-low); overflow: auto; min-height: 120px; }
+.repository-graph-node__visual svg { display: block; width: 100%; min-width: 560px; color: var(--md-sys-color-primary); }
+.repository-graph-node__visual g[role="button"] { cursor: pointer; outline: none; }
+.repository-graph-node__visual g[role="button"]:focus rect, .repository-graph-node__visual g[role="button"]:hover rect { stroke: var(--md-sys-color-primary); stroke-width: 2; }
 .repository-graph-node__list { display: flex; flex-direction: column; gap: 4px; overflow: auto; min-height: 100px; }
 .repository-graph-node__row { border: 1px solid var(--md-sys-color-outline-variant); border-radius: 10px; overflow: hidden; }
 .repository-graph-node__node { width: 100%; border: 0; display: flex; justify-content: space-between; align-items: center; text-align: left; background: transparent; color: inherit; padding: 8px 10px; cursor: pointer; }

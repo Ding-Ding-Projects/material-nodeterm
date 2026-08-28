@@ -1,11 +1,12 @@
 import { createHash } from 'node:crypto'
 import { execFile } from 'node:child_process'
-import { access, mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises'
+import { access, mkdir, readFile, readdir, stat } from 'node:fs/promises'
 import { constants as fsConstants } from 'node:fs'
 import { basename, extname, join, relative, resolve, sep } from 'node:path'
 import { promisify } from 'node:util'
 import ts from 'typescript'
 import { platform, type CorePlatform } from './platform'
+import { writeFileAtomic } from './fs-atomic'
 import {
   REPOSITORY_GRAPH_ADAPTERS,
   REPOSITORY_GRAPH_LIMITS,
@@ -110,7 +111,7 @@ function dependencyNameFromLine(line: string): string | null {
 function addManifestDependencies(content: string, path: string, revision: string, nodes: Map<string, RepositoryGraphNode>, edges: Map<string, RepositoryGraphEdge>, omissions: string[]): void {
   const manager = basename(path).toLowerCase()
   let names: string[] = []
-  if (manager === 'package.json' || manager === 'composer.json') {
+  if (manager === 'package.json') {
     try {
       const value = JSON.parse(content) as Record<string, unknown>
       for (const key of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies', 'require']) {
@@ -118,7 +119,20 @@ function addManifestDependencies(content: string, path: string, revision: string
         if (group && typeof group === 'object') names.push(...Object.keys(group as Record<string, unknown>))
       }
     } catch { omissions.push(`${path}: malformed JSON manifest`) }
+  } else if (manager === 'package-lock.json') {
+    try {
+      const value = JSON.parse(content) as Record<string, unknown>
+      const packages = value.packages
+      if (packages && typeof packages === 'object') {
+        for (const [key, record] of Object.entries(packages as Record<string, unknown>)) {
+          if (!key || key === '' || !record || typeof record !== 'object') continue
+          names.push(key.startsWith('node_modules/') ? key.slice('node_modules/'.length) : key)
+        }
+      }
+    } catch { omissions.push(`${path}: malformed package-lock JSON`) }
   } else {
+    omissions.push(`${path}: no bundled semantic adapter for this manifest format`)
+    return
     names = content.split(/\r?\n/u).map(dependencyNameFromLine).filter((v): v is string => !!v).slice(0, 5000)
   }
   const file = nodeId('file', path)
@@ -257,11 +271,23 @@ export class RepositoryGraphService implements RepositoryGraphApi {
         const manifests = files.filter((file) => isManifestName(basename(file.rel)))
         for (let i = 0; i < manifests.length; i++) {
           if (operation.cancelled) break
-          addManifestDependencies(manifests[i].bytes.toString('utf8'), manifests[i].rel, revision, nodes, edges, omissions)
+          const manifest = REPOSITORY_GRAPH_ADAPTERS.find((item) => item.patterns.some((pattern) => pattern === basename(manifests[i].rel) || (pattern.includes('*') && new RegExp(`^${pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replaceAll('*', '.*')}$`, 'u').test(basename(manifests[i].rel)))))
+          if (!manifest?.available) omissions.push(`${manifests[i].rel}: ${manifest?.reason ?? 'No bundled semantic adapter is available.'}`)
+          else addManifestDependencies(manifests[i].bytes.toString('utf8'), manifests[i].rel, revision, nodes, edges, omissions)
           this.emit(input.projectId, operationId, 'dependencies', i + 1, manifests.length, 'running', `Read ${i + 1} of ${manifests.length} dependency manifests`)
         }
       }
       const fingerprint: RepositoryGraphFingerprint = { revision, files: files.length, bytes: files.reduce((sum, file) => sum + file.bytes.byteLength, 0), contentHash: boundedHash(files.map((file) => ({ path: file.rel, bytes: file.bytes }))), generatedAt: Date.now() }
+      let revisionAfter = revision
+      try { revisionAfter = (await execFileAsync('git', ['-C', target.root, 'rev-parse', 'HEAD'], { windowsHide: true, maxBuffer: 1024 * 1024 })).stdout.trim() || revision } catch { /* retain the pre-parse revision */ }
+      const endFiles = await listFiles(target.root, operation, () => undefined)
+      const endHash = boundedHash(endFiles.map((file) => ({ path: file.rel, bytes: file.bytes })))
+      if (revisionAfter !== revision || endHash !== fingerprint.contentHash) {
+        const retained = { ...old, status: 'stale' as const, omissions: [...old.omissions, old.fingerprint.contentHash ? 'Source changed while indexing; previous verified snapshot retained.' : 'Source changed while indexing; no stable snapshot was published.'] }
+        this.snapshots.set(input.projectId, retained)
+        this.emit(input.projectId, operationId, 'finalizing', 1, 1, 'stale', retained.omissions.at(-1)!)
+        return retained
+      }
       const stale = old.fingerprint.contentHash !== '' && old.fingerprint.contentHash !== fingerprint.contentHash && old.fingerprint.revision !== revision
       const snapshot: RepositoryGraphSnapshot = { version: 1, projectId: input.projectId, mode, status: operation.cancelled ? 'cancelled' : omissions.length ? 'partial' : stale ? 'stale' : 'ready', rootLabel: target.name, fingerprint, nodes: [...nodes.values()], edges: [...edges.values()], adapters: REPOSITORY_GRAPH_ADAPTERS.map((item) => ({ ...item, patterns: [...item.patterns] })), omissions, createdAt: Date.now(), ...(old.fingerprint.contentHash ? { previousFingerprint: old.fingerprint } : {}) }
       if (operation.cancelled) return { ...old, status: 'cancelled', omissions: [...old.omissions, 'Refresh was cancelled; the previous verified snapshot was retained.'] }
@@ -281,8 +307,8 @@ export class RepositoryGraphService implements RepositoryGraphApi {
     const run = async (): Promise<void> => {
       const dir = join(this.options.userDataDir, 'repository-graph', safeProjectId(projectId))
       await mkdir(dir, { recursive: true })
-      if (previous.fingerprint.contentHash) await writeFile(this.previousPath(projectId), JSON.stringify(previous), { encoding: 'utf8', mode: 0o600 })
-      await writeFile(this.cachePath(projectId), JSON.stringify(snapshot), { encoding: 'utf8', mode: 0o600 })
+      if (previous.fingerprint.contentHash) await writeFileAtomic(this.previousPath(projectId), JSON.stringify(previous), { mode: 0o600 })
+      await writeFileAtomic(this.cachePath(projectId), JSON.stringify(snapshot), { mode: 0o600 })
     }
     const queued = (this.writeQueue.get(projectId) ?? Promise.resolve()).then(run, run)
     this.writeQueue.set(projectId, queued.catch(() => {}))
