@@ -8,6 +8,24 @@ import type { WorktreeEntry } from '@shared/worktree'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
+// jsdom does not provide ResizeObserver, while the anchored regex builder measures its own
+// viewport-bounded popover. Keep this fixture deterministic, matching the other anchored-dialog
+// tests, so the test exercises filtering rather than a missing browser primitive.
+class TestResizeObserver {
+  observe(): void {}
+  disconnect(): void {}
+  unobserve(): void {}
+}
+Object.defineProperty(globalThis, 'ResizeObserver', { configurable: true, value: TestResizeObserver })
+
+class TestWorker {
+  onmessage: ((event: MessageEvent) => void) | null = null
+  onerror: ((event: ErrorEvent) => void) | null = null
+  postMessage(): void {}
+  terminate(): void {}
+}
+Object.defineProperty(globalThis, 'Worker', { configurable: true, value: TestWorker })
+
 const EXISTING: WorktreeEntry[] = [
   { path: 'C:/w/api-checkout', branch: 'feature/api', head: '1111111', isBare: false },
   { path: 'C:/w/ui-checkout', branch: 'feature/ui', head: '2222222', isBare: false },
@@ -21,10 +39,10 @@ describe('WorktreeDialog existing-worktree picker', () => {
 
   beforeEach(() => {
     resetDialogStack()
-    host = document.createElement('div')
     opener = document.createElement('button')
     opener.textContent = 'Open picker'
-    host.appendChild(opener)
+    document.body.appendChild(opener)
+    host = document.createElement('div')
     document.body.appendChild(host)
     opener.focus()
   })
@@ -33,6 +51,7 @@ describe('WorktreeDialog existing-worktree picker', () => {
     act(() => root?.unmount())
     root = undefined
     host.remove()
+    opener.remove()
   })
 
   function render(existing = EXISTING): { onBindExisting: ReturnType<typeof vi.fn>; onCancel: ReturnType<typeof vi.fn> } {

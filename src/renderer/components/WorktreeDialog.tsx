@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useDialogStack } from './dialog-stack'
 import { BranchSelect } from './BranchSelect'
@@ -80,10 +80,13 @@ export function WorktreeDialog({
 
   const hasBranches = branches.length > 0
   const filteredExisting = useMemo(
-    () =>
-      existing.filter((entry) =>
-        existingSearch.test(`${entry.branch ?? '(detached HEAD — check out a branch first)'} ${entry.path}`)
-      ),
+    () => existing.filter((entry) => {
+      const branchText = entry.branch ?? '(detached HEAD — check out a branch first)'
+      // Branch and path are two visible fields. Test them independently so an anchored regex
+      // such as `feature/(api|ui)$` can match the branch without being invalidated by the path
+      // that follows it in the rendered row.
+      return existingSearch.test(branchText) || existingSearch.test(entry.path)
+    }),
     [
       existing,
       existingSearch.mode,
@@ -96,7 +99,7 @@ export function WorktreeDialog({
 
   // Search is the only field in this picker that can narrow the collection, so it receives focus
   // on open and returns focus to the control that launched the dialog when the portal closes.
-  useEffect(() => {
+  useLayoutEffect(() => {
     existingSearchInputRef.current?.focus()
     return () => returnFocusRef.current?.focus()
   }, [])
