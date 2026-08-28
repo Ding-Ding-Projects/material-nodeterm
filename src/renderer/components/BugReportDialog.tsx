@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom'
 import { useDialogStack } from './dialog-stack'
 import { BODY_BUDGET, buildBugReportUrl, envBlock, type BugReportEnv } from '../lib/bugReport'
 import { TextArea } from '@renderer/ui/md3'
+import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { copy, fact, mapOwnedSentence } from '../lib/personalVocabulary/ownedCopy'
 
 export interface BugReportDialogProps {
   env: BugReportEnv
@@ -20,6 +22,7 @@ export function BugReportDialog({ env, onOpen, onClose }: BugReportDialogProps) 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const titleRef = useRef<HTMLInputElement>(null)
+  const vocab = useVocabularyMapper()
   useDialogStack()
 
   useEffect(() => {
@@ -48,12 +51,13 @@ export function BugReportDialog({ env, onOpen, onClose }: BugReportDialogProps) 
           }
         }}
       >
-        <p className="confirm__msg">Report a bug</p>
+        <p className="confirm__msg">{vocab('Report a bug')}</p>
         <input
           ref={titleRef}
           className="confirm__input"
           value={title}
-          placeholder="Short summary of the problem"
+          placeholder={vocab('Short summary of the problem')}
+          aria-label={vocab('Issue title')}
           spellCheck={false}
           onChange={(e) => setTitle(e.target.value)}
           onKeyDown={(e) => {
@@ -66,22 +70,26 @@ export function BugReportDialog({ env, onOpen, onClose }: BugReportDialogProps) 
         <TextArea
           className="confirm__input bug-report__desc"
           value={description}
-          placeholder={'What did you do?\nWhat did you expect?\nWhat happened instead?'}
+          placeholder={vocab('What did you do?\nWhat did you expect?\nWhat happened instead?')}
+          aria-label={vocab('Issue description')}
           spellCheck={false}
           onChange={(e) => setDescription(e.target.value)}
         />
         <pre className="bug-report__env">{envBlock(env)}</pre>
         <p className="bug-report__note">
-          Opens a prefilled issue on GitHub — you submit it from your own account. Screenshots or
-          logs can be pasted there.
-          {willTruncate ? ' Long descriptions are truncated to fit the URL.' : ''}
+          {mapOwnedSentence(vocab, [
+            copy('Opens a prefilled issue on '),
+            fact('GitHub'),
+            copy(' — you submit it from your own account. Screenshots or logs can be pasted there.'),
+            ...(willTruncate ? [copy(' Long descriptions are truncated to fit the URL.')] : [])
+          ])}
         </p>
         <div className="confirm__actions">
           <button className="confirm__btn" onClick={onClose}>
-            Cancel
+            {vocab('Cancel')}
           </button>
           <button className="confirm__btn primary" disabled={!canSubmit} onClick={submit}>
-            Open on GitHub
+            {mapOwnedSentence(vocab, [copy('Open on '), fact('GitHub')])}
           </button>
         </div>
       </div>

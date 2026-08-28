@@ -17,6 +17,8 @@ import { createRoot, type Root } from 'react-dom/client'
 import type { ProjectConsentRequest, ProjectSetupConsentRequest } from '@shared/project-settings'
 import { CONFIRM_ARM_MS } from './confirm-key'
 import { SETUP_LABEL_MAX, SetupConsentDialog } from './SetupConsentDialog'
+import { usePersonalVocabulary } from '../state/personalVocabulary'
+import { useSchoolMode } from '../state/schoolMode'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -82,11 +84,15 @@ beforeEach(() => {
       }
     }
   }
+  usePersonalVocabulary.setState({ entries: {}, status: 'no-file', entryCount: 0, loadedAt: null, lastError: null })
+  useSchoolMode.setState({ enabled: false, hydrated: false })
 })
 
 afterEach(() => {
   act(() => root.unmount())
   host.remove()
+  usePersonalVocabulary.setState({ entries: {}, status: 'no-file', entryCount: 0, loadedAt: null, lastError: null })
+  useSchoolMode.setState({ enabled: false, hydrated: false })
 })
 
 describe('SetupConsentDialog', () => {
@@ -307,6 +313,32 @@ describe('SetupConsentDialog', () => {
     expect(offDismiss).toHaveBeenCalledTimes(1)
     // The afterEach unmount must stay harmless.
     root = createRoot(host)
+  })
+
+  it('maps authored consent copy while preserving project, location, and script facts', () => {
+    usePersonalVocabulary.setState({
+      entries: { shared: 'common', project: 'canvas', script: 'recipe', changed: 'updated' },
+      status: 'loaded',
+      entryCount: 4
+    })
+    useSchoolMode.setState({ enabled: false, hydrated: true })
+    mount()
+    act(() => emitRequest(request({ projectName: 'project', locationLabel: 'C:/project', scripts: { setup: 'run project script' } })))
+    expect(text()).toContain('canvas')
+    expect(text()).toContain('C:/project')
+    expect(text()).toContain('run project script')
+    expect(text()).toContain('common')
+    expect(text()).toContain('recipe')
+  })
+
+  it('keeps shipped consent identity when School mode is on', () => {
+    usePersonalVocabulary.setState({ entries: { Run: 'Launch', Skip: 'Later' }, status: 'loaded', entryCount: 2 })
+    useSchoolMode.setState({ enabled: true, hydrated: true })
+    mount()
+    act(() => emitRequest(request()))
+    expect(text()).toContain('Run the setup script')
+    expect(text()).toContain('Run once')
+    expect(text()).not.toContain('Launch the setup script')
   })
 })
 
