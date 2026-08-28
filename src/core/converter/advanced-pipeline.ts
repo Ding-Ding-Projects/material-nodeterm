@@ -49,9 +49,9 @@ async function validatePdf(output: Buffer): Promise<string | null> {
   }
 }
 
-function pdfDate(read: () => Date): string | null {
+function pdfDate(read: () => Date | undefined): string | null {
   try {
-    return read().toISOString()
+    return read()?.toISOString() ?? null
   } catch {
     return null
   }
@@ -90,7 +90,6 @@ export const pdfToTextAdapter: ConverterAdapter = {
     const task = pdfjs.getDocument({
       data: new Uint8Array(input),
       disableFontFace: true,
-      isEvalSupported: false,
       useSystemFonts: false
     })
     const document = await task.promise
@@ -112,7 +111,7 @@ export const pdfToTextAdapter: ConverterAdapter = {
       }
       return { output: boundedOutput(Buffer.from(`${pages.join('\n\n')}\n`, 'utf8'), 'Extracted PDF text'), warnings: [] }
     } finally {
-      await document.destroy()
+      document.cleanup()
     }
   },
   validate: nonEmpty
@@ -207,7 +206,7 @@ export const mergePdfsFromZipAdapter: ConverterAdapter = {
         throw new Error(`ZIP entry path exceeds the ${MAX_ARCHIVE_ENTRY_NAME_BYTES.toLocaleString()}-byte limit.`)
       }
       if (sanitizeZipPath(path) !== path) throw new Error(`ZIP contains an unsafe entry path: ${path}`)
-      expandedBytes += Number(entry.vars.uncompressedSize)
+      expandedBytes += entry.uncompressedSize
       if (!Number.isSafeInteger(expandedBytes) || expandedBytes > MAX_ARCHIVE_EXPANDED_BYTES) {
         throw new Error(`PDF inputs exceed the ${MAX_ARCHIVE_EXPANDED_BYTES.toLocaleString()}-byte expanded limit.`)
       }
@@ -290,7 +289,7 @@ export const zipToManifestAdapter: ConverterAdapter = {
         throw new Error(`ZIP entry path exceeds the ${MAX_ARCHIVE_ENTRY_NAME_BYTES.toLocaleString()}-byte limit.`)
       }
       if (sanitizeZipPath(path) !== path) throw new Error(`ZIP contains an unsafe entry path: ${path}`)
-      const size = Number(entry.vars.uncompressedSize)
+      const size = entry.uncompressedSize
       if (!Number.isSafeInteger(size) || size < 0) throw new Error(`ZIP entry has an invalid size: ${path}`)
       total += size
       if (total > MAX_ARCHIVE_EXPANDED_BYTES) {
