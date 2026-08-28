@@ -123,10 +123,11 @@ export class HomeAssistantControlService implements HomeAssistantControlApi {
     const label = input.label.trim()
     if (!label || label.length > 120) throw new Error('Connection name must be between 1 and 120 characters.')
     const origin = normalizeOrigin(input.baseUrl)
-    if (typeof input.token !== 'string' || !validToken(input.token)) throw new Error('Enter a valid long-lived access token. It stays in this computer credential store.')
-    const id = input.id && /^[0-9a-f-]{36}$/u.test(input.id) ? input.id : randomUUID()
+    const token = input.token
+    if (typeof token !== 'string' || !validToken(token)) throw new Error('Enter a valid long-lived access token. It stays in this computer credential store.')
+    const id = typeof input.id === 'string' && /^[0-9a-f-]{36}$/u.test(input.id) ? input.id : randomUUID()
     return this.store.mutate((entries) => {
-      const next: SealedEntry<ConnectionMeta> = { meta: { id, label, origin }, secretEnc: this.store.seal({ token: input.token } satisfies ConnectionSecret) }
+      const next: SealedEntry<ConnectionMeta> = { meta: { id, label, origin }, secretEnc: this.store.seal({ token } satisfies ConnectionSecret) }
       const existing = entries.findIndex((entry) => entry.meta.id === id)
       if (existing >= 0) entries[existing] = next
       else entries.push(next)
