@@ -24,9 +24,11 @@ import {
   explicitCodexResumeSession,
   mintsSessionId,
   resumeCommand,
-  withSessionId
+  withSessionId,
+  isPermissionMode
 } from '@shared/agents/config'
 import { withPermissionMode } from '@shared/agents/approval-mode'
+import { withAgentModel } from '@shared/agents/model-gateway'
 import { uuid } from '@renderer/lib/uuid'
 import {
   claudeCliCapsNow,
@@ -466,6 +468,8 @@ export interface TerminalNodeCreationOptions {
   terminalProfileId?: string
   /** Explicit user-owned named profile; omitted means the saved default named profile. */
   namedTerminalProfileId?: string
+  /** Optional model selection used by the shared agent launch assembler. */
+  model?: string
 }
 
 /**
@@ -845,10 +849,23 @@ export function createAgentNode(
   initialPrompt?: string,
   ssh?: Project['ssh'],
   accountId?: string,
-  projectId?: string,
+  projectId?: string | ActiveAgentLaunchPlan | AgentPermissionMode,
   launchPlanOrPermission?: ActiveAgentLaunchPlan | AgentPermissionMode,
-  options?: TerminalNodeCreationOptions
+  options?: TerminalNodeCreationOptions | string
 ): CanvasNode {
+  // Keep older call sites source-compatible: before project-aware launch plans, argument eight
+  // carried the plan or permission mode directly and argument ten carried the model string.
+  let resolvedProjectId: string | undefined = typeof projectId === 'string' && !isPermissionMode(projectId) ? projectId : undefined
+  let resolvedLaunchPlan = launchPlanOrPermission
+  let resolvedOptions: TerminalNodeCreationOptions | undefined = typeof options === 'object' ? options : undefined
+  if (typeof projectId === 'object' || isPermissionMode(projectId)) {
+    resolvedProjectId = undefined
+    resolvedLaunchPlan = projectId as ActiveAgentLaunchPlan | AgentPermissionMode
+    resolvedOptions = typeof launchPlanOrPermission === 'object'
+      ? launchPlanOrPermission as unknown as TerminalNodeCreationOptions
+      : undefined
+  }
+  if (typeof options === 'string') resolvedOptions = { sessionSource: 'local', model: options }
   const { label, color: agentColor } = resolveAgent(agentId)
   const settings = useSettings.getState().settings
   const bound = boundAccountId(accountId, agentId)
@@ -862,10 +879,10 @@ export function createAgentNode(
   // command. Threaded into the shared assembler below as `launchCmdOverride` so fresh launch,
   // cold-restore resume and in-place restart all pick it up identically. Custom agents already own
   // their `launchCmd`, so the global layer returns undefined for them.
-  const launchCmdOverride = agentLaunchOverride(agentId, projectId)
+  const launchCmdOverride = agentLaunchOverride(agentId, resolvedProjectId)
   const launchCmd = resolveAgent(agentId).launchCmd
   const baseCmd = agentId === 'claude'
-    ? claudeLaunchCommand(projectId)
+    ? claudeLaunchCommand(resolvedProjectId)
     : (launchCmdOverride ?? agentLaunchProgram(agentId, launchCmd, codexSharedIdentity(ssh)))
   const normalizedPrompt = initialPrompt?.replace(/\s+/g, ' ').trim() || undefined
   const promptArg = normalizedPrompt ? shellSingleQuote(normalizedPrompt) : null
@@ -887,9 +904,9 @@ export function createAgentNode(
   const mintedSessionId =
     mintsSessionId(agentId) && claudeCliCapsNow().sessionIdFlag ? uuid() : undefined
   const launchPlan =
-    typeof launchPlanOrPermission === 'object' ? launchPlanOrPermission : undefined
+    typeof resolvedLaunchPlan === 'object' ? resolvedLaunchPlan : undefined
   const explicitPermissionMode =
-    typeof launchPlanOrPermission === 'string' ? launchPlanOrPermission : undefined
+    typeof resolvedLaunchPlan === 'string' ? resolvedLaunchPlan : undefined
   const permissionMode =
     explicitPermissionMode ?? permissionModeFromLaunchPlan(launchPlan, agentId)
   // No plan passed (e.g. a legacy/test call site) = bare command, exactly as before this setting.
@@ -923,14 +940,15 @@ export function createAgentNode(
     ...(mintedSessionId ? { newSessionId: mintedSessionId } : {})
   }
   const size = terminalNodeSize()
-  const terminalProfileId = terminalProfileForNewNode(ssh, options)
-  const namedProfile = namedTerminalProfileForNewNode(ssh, options)
+  const terminalProfileId = terminalProfileForNewNode(ssh, resolvedOptions)
+  const namedProfile = namedTerminalProfileForNewNode(ssh, resolvedOptions)
   const effectiveCwd = namedProfile?.cwd ?? (ssh ? ssh.remoteCwd : cwd)
   const effectiveInitialCommand = namedProfile?.startupCommand
     ? initialCommand
       ? `${namedProfile.startupCommand}\n${initialCommand}`
       : namedProfile.startupCommand
     : initialCommand
+  const modeledInitialCommand = withAgentModel(effectiveInitialCommand, agentId, resolvedOptions?.model)
   return {
     id: nextId('term'),
     type: 'terminal',
@@ -968,7 +986,8 @@ export function createAgentNode(
       // builtin the account picker offered it for. The Codex spawn side honours `data.accountId`
       // (resolveCodexSessionScope), the same field Claude uses.
       cwd: effectiveCwd,
-      initialCommand: effectiveInitialCommand,
+      initialCommand: modeledInitialCommand,
+      ...(resolvedOptions?.model ? { agentModel: resolvedOptions.model } : {}),
       agentLaunchIntent,
       ...(terminalProfileId !== undefined ? { terminalProfileId } : {}),
       ...(namedProfile ? { namedTerminalProfileId: namedProfile.id } : {}),
