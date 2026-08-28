@@ -41,7 +41,7 @@ function detailText(
   level: 'healthy' | 'warning' | 'critical' | ContextWindowUsage['status'],
   vocab: Copy
 ): string {
-  if (status !== 'known' || usage?.usedTokens === null || usage?.windowTokens === null || usage.usedPercent === null) {
+  if (!usage || status !== 'known' || usage.usedTokens === null || usage.windowTokens === null || usage.usedPercent === null) {
     return statusText(status, vocab)
   }
   const remaining = Math.max(0, usage.windowTokens - usage.usedTokens)

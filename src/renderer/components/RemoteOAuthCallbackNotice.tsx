@@ -25,9 +25,10 @@ export function RemoteOAuthCallbackNotice(): React.JSX.Element | null {
   useEffect(() => {
     const onDetected = (event: Event): void => {
       const value = (event as CustomEvent<Partial<PendingRemoteOAuth>>).detail
-      if (!Number.isInteger(value?.port) || value.port! < 1 || value.port! > 65_535) return
+      const port = value?.port
+      if (typeof port !== 'number' || !Number.isInteger(port) || port < 1 || port > 65_535) return
       if (typeof value.callbackPath !== 'string' || typeof value.expiresAt !== 'number') return
-      setPending({ port: value.port, callbackPath: value.callbackPath, expiresAt: value.expiresAt })
+      setPending({ port, callbackPath: value.callbackPath, expiresAt: value.expiresAt })
       setCallbackUrl('')
       setMessage('After the browser redirects to localhost, paste that complete callback URL here.')
     }
