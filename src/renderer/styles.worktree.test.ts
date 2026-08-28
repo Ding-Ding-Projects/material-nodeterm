@@ -14,7 +14,7 @@ describe('New Worktree existing-worktree list', () => {
   })
 
   it('offers a branch/path search before the scrolling list', () => {
-    expect(DIALOG).toContain('aria-label="Search existing worktrees"')
+    expect(DIALOG).toContain("aria-label={vocabulary('Filter existing worktrees')}")
     expect(DIALOG.indexOf('bind-existing__search')).toBeLessThan(
       DIALOG.indexOf('bind-existing__list')
     )
