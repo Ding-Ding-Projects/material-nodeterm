@@ -33,6 +33,8 @@
 export type ProjectIcon =
   | { type: 'emoji'; emoji: string }
   | { type: 'material-symbol'; name: string }
+  | { type: 'lucide'; name: string }
+  | { type: 'image'; src: string; source: 'github' | 'upload' | 'favicon' }
 
 /**
  * Curated allowlist of Material Symbol names a project icon's `name` may be — glyphs suited to
@@ -64,11 +66,6 @@ export const PROJECT_SYMBOL_IDS = [
  *
  * Browser-safe: this module is bundled into the renderer, so no node builtins (no `Buffer`).
  */
-export type ProjectIcon =
-  | { type: 'emoji'; emoji: string }
-  | { type: 'lucide'; name: string }
-  | { type: 'image'; src: string; source: 'github' | 'upload' | 'favicon' }
-
 /**
  * Curated allowlist of lucide-react export ids (kebab-case) a project icon's `name` may be. Closed
  * set, not "any string lucide ships": an open set would let a hostile project.json name an icon

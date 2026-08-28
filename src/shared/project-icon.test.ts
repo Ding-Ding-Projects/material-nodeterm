@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { sanitizeProjectIcon, PROJECT_SYMBOL_IDS } from './project-icon'
 import {
-  sanitizeProjectIcon, dataUrlByteLength, LUCIDE_ICON_IDS, PROJECT_ICON_MAX_BYTES
+  sanitizeProjectIcon, dataUrlByteLength, LUCIDE_ICON_IDS, PROJECT_ICON_MAX_BYTES, PROJECT_SYMBOL_IDS
 } from './project-icon'
 
 const png1x1 =

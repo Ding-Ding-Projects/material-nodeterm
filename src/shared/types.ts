@@ -83,7 +83,7 @@ import type {
 import type { AlarmOccurrence, AlarmRecurrence } from './alarm-clock'
 import type { PortableKioskPwaIntent } from './kiosk-pwa'
 import type { CodexAccount } from './codex-account'
-import type { ProjectIcon, ProjectIconPickResult } from './project-icon'
+import type { ProjectIconPickResult } from './project-icon'
 import type {
   ModelDiscoveryResult,
   ModelGatewayCredentialStatus,
