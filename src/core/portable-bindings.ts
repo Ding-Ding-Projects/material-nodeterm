@@ -99,7 +99,7 @@ function safeRecord(value: unknown, label: string): Record<string, string | numb
     }
     if (typeof item === 'string') safeText(item, `${label}.${key}`)
     if (typeof item === 'number' && !Number.isSafeInteger(item)) throw new Error(`${label}.${key} is invalid.`)
-    out[key] = item
+    out[key] = item as string | number | boolean
   }
   return out
 }
@@ -138,7 +138,7 @@ export function validatePortableNodeBlueprint(value: unknown): PortableNodeBluep
   if (!Array.isArray(value.relationships) || value.relationships.length > 4096) throw new Error('Portable blueprint relationships are invalid.')
   const relationships = value.relationships.map((entry) => {
     if (!record(entry) || !['id', 'kind', 'source', 'target'].every((key) => key in entry) || (entry.kind !== 'bridge' && entry.kind !== 'rope')) throw new Error('Portable blueprint relationship is invalid.')
-    return { id: safeText(entry.id, 'Portable relationship id', 128), kind: entry.kind, source: safeText(entry.source, 'Portable relationship source', 128), target: safeText(entry.target, 'Portable relationship target', 128) }
+    return { id: safeText(entry.id, 'Portable relationship id', 128), kind: entry.kind as 'bridge' | 'rope', source: safeText(entry.source, 'Portable relationship source', 128), target: safeText(entry.target, 'Portable relationship target', 128) }
   })
   let assets: PortableNodeBlueprint['assets']
   if (value.assets !== undefined) {
