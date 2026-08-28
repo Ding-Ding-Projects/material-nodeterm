@@ -112,16 +112,6 @@ export function codexUnixWebSocketUrl(socketPath: string): string {
   return `ws+unix://${socketPath}:/rpc`
 }
 
-export function rememberCodexSessionName(
-  threadId: string,
-  name: unknown,
-  socketPath = defaultCodexAppServerSocket()
-): void {
-  if (!threadId) return
-  const value = typeof name === 'string' && name.trim() ? name.trim() : null
-  names.set(`${socketPath}\0${threadId}`, { name: value, at: Date.now() })
-}
-
 export interface CodexThreadSnapshot {
   id: string
   name?: string | null
