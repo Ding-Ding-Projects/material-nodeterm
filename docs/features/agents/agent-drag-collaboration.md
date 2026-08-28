@@ -12,6 +12,8 @@ read the other's linked transcript through the normal context-link tooling.
   context-link-capable.
 - The drop creates the same `bridge-<source>-<target>` context edge used by the existing handle
   connection path. Duplicate links and self-links remain no-ops under that path.
+- Each idle linked agent receives the informational link notice as one submitted prompt. The
+  delivery explicitly requests Enter, so the notice does not remain unsubmitted in the composer.
 - Keyboard and touch users can activate the link button on two nodes in sequence. Selecting exactly
   two compatible agent nodes first also exposes **Link selected agents** in the node context menu.
 - The pending source is shown with an accessible pressed state and a visible outline. Activating the
@@ -44,9 +46,9 @@ same-agent sibling creation flow, and ordinary React Flow node movement remains 
 
 ## Verification boundary
 
-This source lane was intentionally limited to implementation and documentation. Tests, lint, type
-checking, builds, packaging, runtime interaction, accessibility review, security review, and screen
-captures were not run. They remain unverified and are owned by the integration workflow.
+The link-notice formatter and terminal-delivery planners have focused regression coverage. The
+project-wide type check and built-artifact interaction remain unverified because the current base
+contains unrelated syntax errors in other modules.
 
 Suggested articles:
 

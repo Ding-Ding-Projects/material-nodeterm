@@ -4170,31 +4170,6 @@ export class PtyManager {
     const target = sessionName(persistKey)
     const live = this.liveSessionForPersistKey(persistKey)
     const sshRemote = live?.sshRemote
-    if (sshRemote) {
-      const ssh = findSsh()
-      if (!ssh) return false
-      try {
-        await runAsync(ssh, remoteTmuxSendKeysArgs(sshRemote.conn, sshRemote.controlPath, target, text, enter))
-        return true
-      } catch {
-        return false
-      }
-    }
-    // No local tmux: this machine persists sessions via the session-host backend instead (see
-    // docs/windows-session-host.md). Its `sendKeys` needs no attached client, exactly like
-    // tmux's own `send-keys -t <name>` below — the host looks the session up by NAME.
-    if (live?.sessionHost || !this.tmuxPath) {
-      return this.getSettings().tmuxEnabled && sessionHostSupported()
-        ? sessionHostSendKeys(target, text, enter)
-        : false
-    }
-    try {
-      if (await this.bracketPasteRequested(target)) {
-        // Paste-aware target (agent TUIs, multiplexers like herdr): one atomic write — the
-        // text framed in paste markers plus the Enter — so the composer sees a definitive
-        // paste boundary and the Enter can never be re-chunked into the paste (issue #47).
-        await runAsync(this.tmuxPath, localTmuxSendKeysArgs(TMUX_SOCKET, target, bracketedInjection(text, enter)))
-        return true
     try {
       if (sshRemote) {
         const ssh = findSsh()
