@@ -75,6 +75,7 @@ import { registerHomeAssistantControlIpc } from '../core/home-assistant-control/
 import { registerHomeAssistantSensorIpc } from '../core/home-assistant-sensor/register-ipc'
 import { registerCloudflareTunnelIpc } from '../core/cloudflare/register-ipc'
 import { registerWindowsDiagnosticsIpc } from '../core/windows-diagnostics'
+import { registerVeraCryptIpc } from '../core/veracrypt/register-ipc'
 import { registerCloudflareZeroTrustIpc } from '../core/cloudflare-zero-trust/service'
 import { AtomicJsonArrayStore } from '../core/atomic-json-store'
 import { TimerOccurrenceService } from '../core/timer-service'
@@ -2315,6 +2316,7 @@ app.whenReady().then(async () => {
   registerHomeAssistantSensorIpc(corePlatform)
   registerCloudflareTunnelIpc(corePlatform, cloudflareCoreManagers)
   registerWindowsDiagnosticsIpc()
+  registerVeraCryptIpc(corePlatform)
   registerCloudflareZeroTrustIpc(corePlatform)
 
   const githubSecret = new ElectronGitHubSecretStore(app.getPath('userData'), safeStorage)

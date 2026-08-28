@@ -37,6 +37,7 @@ export const NODE_MIN_SIZES: Record<NodeKind, { width: number; height: number }>
   dino: { width: 400, height: 160 },
   'recovery-game': { width: 480, height: 520 },
   'windows-diagnostics': { width: 520, height: 360 },
+  veracrypt: { width: 560, height: 420 },
   'gitlab-hosting': { width: 560, height: 360 },
   'aws-universe': { width: 320, height: 220 },
   'aws-resource': { width: 520, height: 420 }

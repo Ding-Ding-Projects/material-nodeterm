@@ -38,6 +38,7 @@ import type { MinecraftEvent } from '../shared/minecraft'
 import type { NodeDependencyAvailability, NodeDependencyProgress, NodeDependencyInstallResult } from '../shared/node-dependencies'
 import type { WslCreateProgress } from '../shared/wsl'
 import type { WindowsDiagnosticsApi } from '../shared/windows-diagnostics'
+import type { VeraCryptApi, VeraCryptOperation } from '../shared/veracrypt'
 import type { TorrentTaskState } from '../shared/torrent'
 import type { VirtualMachineEvent } from '../shared/virtual-machine'
 import type { CalendarProvider } from '../shared/calendar'
@@ -112,6 +113,7 @@ const subscribeHomeAssistantEvent = subscribe<[HomeAssistantClientEvent]>(IPC.ho
 const subscribeCloudflareProgress = subscribe<[CloudflareExecutionProgress & { nodeId: string }]>(IPC.cloudflareProgress)
 const subscribeAwsResourceProgress = subscribe<[AwsManagerProgress]>(IPC.awsResourceProgress)
 const subscribeWidgetState = subscribe<[CanvasWidgetLiveState]>(IPC.widgetStateChanged)
+const subscribeVeraCryptOperation = subscribe<[VeraCryptOperation]>(IPC.veracryptOperation)
 
 const subscribeRelayPeerPending = subscribe<[RelayPeerPending]>(IPC.relayHostPeerPending)
 const subscribeRelayHostOpen = subscribe<[{ id: string; email?: string }]>(IPC.relayHostOpen)
@@ -1282,6 +1284,20 @@ const api: NodeTerminalApi = {
     chatStop: (id) => ipcRenderer.invoke(IPC.ollamaChatStop, id),
     onChatStream: (listener) => subscribeOllamaChatStream(listener)
   },
+  veracrypt: {
+    availability: () => ipcRenderer.invoke(IPC.veracryptAvailability),
+    favorites: () => ipcRenderer.invoke(IPC.veracryptFavorites),
+    saveFavorite: (favorite) => ipcRenderer.invoke(IPC.veracryptSaveFavorite, favorite),
+    removeFavorite: (id) => ipcRenderer.invoke(IPC.veracryptRemoveFavorite, id),
+    preflight: (options) => ipcRenderer.invoke(IPC.veracryptPreflight, options),
+    mount: (options) => ipcRenderer.invoke(IPC.veracryptMount, options),
+    refresh: () => ipcRenderer.invoke(IPC.veracryptRefresh),
+    explore: (driveLetter) => ipcRenderer.invoke(IPC.veracryptExplore, driveLetter),
+    unmount: (driveLetter, force) => ipcRenderer.invoke(IPC.veracryptUnmount, driveLetter, force === true),
+    wipeCache: () => ipcRenderer.invoke(IPC.veracryptWipeCache),
+    cancel: (operationId) => ipcRenderer.invoke(IPC.veracryptCancel, operationId),
+    onOperation: (listener) => subscribeVeraCryptOperation(listener)
+  } satisfies VeraCryptApi,
   openWebUi: {
     contexts: () => ipcRenderer.invoke(IPC.openWebUiContexts),
     state: (nodeId: string, intent: OpenWebUiIntent) => ipcRenderer.invoke(IPC.openWebUiState, nodeId, intent),

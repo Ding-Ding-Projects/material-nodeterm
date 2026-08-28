@@ -283,6 +283,20 @@ export const IPC = {
   wslDelete: 'wsl:delete',
   /** Desktop and Server Edition host snapshot for the read-only Windows diagnostics node. */
   windowsDiagnosticsSnapshot: 'windows-diagnostics:snapshot',
+  // Existing file-hosted VeraCrypt container management. Password, PIM, keyfiles, and hidden
+  // volume protection stay inside VeraCrypt's own native prompt and never cross this boundary.
+  veracryptAvailability: 'veracrypt:availability',
+  veracryptFavorites: 'veracrypt:favorites',
+  veracryptSaveFavorite: 'veracrypt:save-favorite',
+  veracryptRemoveFavorite: 'veracrypt:remove-favorite',
+  veracryptPreflight: 'veracrypt:preflight',
+  veracryptMount: 'veracrypt:mount',
+  veracryptRefresh: 'veracrypt:refresh',
+  veracryptExplore: 'veracrypt:explore',
+  veracryptUnmount: 'veracrypt:unmount',
+  veracryptWipeCache: 'veracrypt:wipe-cache',
+  veracryptCancel: 'veracrypt:cancel',
+  veracryptOperation: 'veracrypt:operation',
   contextUpdate: 'context:update',
   contextEnsure: 'context:ensure',
   // Team presence (docs/team-presence.md). `presence:hello` is a REQUEST: its response tells the

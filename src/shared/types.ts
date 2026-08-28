@@ -456,6 +456,8 @@ export type NodeKind =
   | 'github-work-item'
   /** Read-only Windows host diagnostics, with no mutation controls. */
   | 'windows-diagnostics'
+  /** Desktop-only manager for existing file-hosted VeraCrypt containers. */
+  | 'veracrypt'
 
 /**
  * The service kinds, as a runtime list. Exported because both the renderer (menu rows, one shared
@@ -4932,6 +4934,8 @@ export interface NodeTerminalApi {
   wsl?: import('./wsl').WslApi
   /** Read-only host facts for the Windows diagnostics node. No mutation methods are exposed. */
   windowsDiagnostics: import('./windows-diagnostics').WindowsDiagnosticsApi
+  /** Existing file-hosted VeraCrypt containers. Server, relay, and mobile bridges return unsupported. */
+  veracrypt: import('./veracrypt').VeraCryptApi
   export: ExportApi
   history: LocalHistoryApi
   context: ContextApi

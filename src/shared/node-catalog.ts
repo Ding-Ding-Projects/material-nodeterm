@@ -544,6 +544,21 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
     availability: alwaysAvailable
   },
   {
+    id: 'veracrypt',
+    nodeKind: 'veracrypt',
+    category: 'managers',
+    label: 'VeraCrypt containers',
+    description: 'Mount and manage existing file-hosted VeraCrypt containers through the native prompt.',
+    keywords: ['veracrypt', 'container', 'mount', 'unmount', 'drive', 'encryption'],
+    documentationPath: 'docs/features/integrations/veracrypt.md',
+    safeDefaults: {},
+    dependencies: ['veracrypt-desktop'],
+    status: 'available',
+    availabilityMode: 'configure-later',
+    scope: 'any',
+    availability: alwaysAvailable
+  },
+  {
     id: 'service:cloudflare-zero-trust',
     nodeKind: 'cloudflare-zero-trust',
     category: 'managers',
@@ -870,6 +885,7 @@ export const NODE_CATALOG_COMPLETENESS: readonly NodeCatalogCompletenessRecord[]
   { id: 'service:freepbx', state: 'current', scope: 'any', reason: 'service manager node' },
   { id: 'service:cloudflare-tunnel', state: 'current', scope: 'any', reason: 'typed Cloudflare Tunnel inventory and reviewed DNS adoption' },
   { id: 'windows-diagnostics', state: 'current', scope: 'any', reason: 'read-only host diagnostics with fixed queries' },
+  { id: 'veracrypt', state: 'current', scope: 'any', reason: 'existing file-hosted VeraCrypt container manager with native credential prompt' },
   { id: 'service:cloudflare-zero-trust', state: 'current', scope: 'any', reason: 'typed Cloudflare manager node' },
   { id: 'service:awsidentity', state: 'current', scope: 'aws-universe', reason: 'guided AWS identity manager node' },
   { id: 'subagent', state: 'ephemeral', scope: 'none', reason: 'hook-derived render-only card' },
