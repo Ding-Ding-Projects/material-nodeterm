@@ -3903,6 +3903,17 @@ This bounded parser repair ran no tests, checkers, lint, type checks, builds, pa
 audits, runtime interaction, or UI captures. The coordinating owner must reconcile the repair with
 the current default branch, observe hosted build verification, and rerun the manual release path
 before making a release claim.
+
+# 2026-08-28, PTY manager review follow-up
+
+Copilot review comment `https://github.com/Ding-Ding-Projects/material-nodeterm/pull/206#discussion_r3877439420`
+identified an orphaned duplicate doc-comment block immediately after the `ConfirmedProcessRun` type
+in `src/core/pty-manager.ts:222`. The follow-up removes only that comment block. The single type and
+all PTY, SSH, relay, session-host, lifecycle, and shutdown behavior remain unchanged.
+
+No tests, checkers, lint, type checks, builds, packaging, reviews, audits, runtime interaction, or UI
+captures were run in this lane. The coordinating owner must observe the hosted workflow after this
+follow-up before treating the repair as verified.
 # Issue #60, Cloudflare Tunnel wizard source lane
 
 The isolated `feat/program-49-tunnel-wizard` lane adds the bounded wizard contract in
