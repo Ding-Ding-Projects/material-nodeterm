@@ -94,7 +94,7 @@ describe('WelcomeScreen dismiss control', () => {
 
   it('reassures the user that dismissing does not touch their other projects', () => {
     renderScreen(vi.fn())
-    expect(host.textContent).toContain("They're untouched")
+    expect(host.textContent).toContain('blissfully untouched')
   })
 
   it('shows no dismiss control at all when there is nothing to return to', () => {
