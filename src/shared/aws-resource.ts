@@ -65,6 +65,7 @@ export interface AwsManagerBinding {
 export type AwsManagerOperation =
   | 'generic'
   | 'resource-list-views'
+  | 'resource-search'
   | 'cloud-list-types'
   | 'cloud-list-resources'
   | 'cloud-get-resource'
@@ -273,7 +274,10 @@ export function normalizeAwsPortableIntent(value: unknown): AwsManagerPortableIn
     ? raw.cloudControlTypeName.trim()
     : ''
   const coreService = AWS_CORE_SERVICES.includes(raw.coreService as AwsCoreServiceId) ? raw.coreService as AwsCoreServiceId : 's3'
-  const coreOperation = AWS_CORE_OPERATIONS[coreService].includes(raw.coreOperation as AwsCoreOperation) ? raw.coreOperation as AwsCoreOperation : AWS_CORE_OPERATIONS[coreService][0]
+  const coreOperations = AWS_CORE_OPERATIONS[coreService]
+  const coreOperation = coreOperations.includes(raw.coreOperation as AwsCoreOperation)
+    ? raw.coreOperation as AwsCoreOperation
+    : coreOperations[0]!
   const platformService = AWS_PLATFORM_SERVICES.includes(raw.platformService as AwsPlatformServiceId) ? raw.platformService as AwsPlatformServiceId : 'ecr'
   const platformOperation = AWS_PLATFORM_OPERATIONS.filter((item) => item.startsWith(`${platformService}-`)).includes(raw.platformOperation as AwsPlatformOperation)
     ? raw.platformOperation as AwsPlatformOperation
@@ -295,6 +299,7 @@ export function normalizeAwsPortableIntent(value: unknown): AwsManagerPortableIn
     : null
   const cloudFormation = rawCloudFormation && typeof rawCloudFormation.stackName === 'string' && rawCloudFormation.stackName.length <= 128
     ? {
+        schemaVersion: 1 as const,
         stackName: rawCloudFormation.stackName,
         changeSetType: rawCloudFormation.changeSetType === 'UPDATE' ? 'UPDATE' as const : 'CREATE' as const,
         parameterKeys: Array.isArray(rawCloudFormation.parameterKeys)
