@@ -1,5 +1,35 @@
 # Handoff
 
+## 2026-08-28, published release and final preservation state
+
+The current `main` tip is `c2acffb963468be3cb1f539e7e8a24f0cc1582d8`, and the hui ref matches it.
+Release `v0.4.122` is published and non-draft at
+`https://github.com/Ding-Ding-Projects/material-nodeterm/releases/tag/v0.4.122`. It targets
+`28234e3bfdfe209f60a000b55b630ee53f1d79b7` and contains `RELEASES`, the full Squirrel.Windows
+package, and the unsigned `nodeterm-Setup-0.4.122.exe`, with SHA-256 digests recorded in the
+release notes. Release run `33148795793` completed the hosted Windows build, packaging, and
+publication path. The release notes explicitly state that tests, type-checking, and lint did not
+run in that workflow.
+
+The focused settings repair Chut passes 14 of 14 tests after commits
+`fa9d822189994910042803255d2c625211502191`, `93a0e9166887f92417ff798055d98e957071cd98`, and
+`c2acffb963468be3cb1f539e7e8a24f0cc1582d8`. The full local suite remains red with 164 failed
+files, 763 failed tests, 14 unhandled errors, 11,910 passed tests, and 260 skipped tests. Local
+type-checking also remains red with duplicate declarations, bridge mismatches, and related
+existing integration failures. No claim of a green full-suite or type-check Chut is made.
+
+The primary Gerk Tong Hui is otherwise 🧹. The nested `upstream/nodeterm` checkout remains
+retained because it owns uncommitted bootstrap files: `build.bat`, `build-installer.bat`,
+`download-dependencies.bat`, and `dependencies.manifest.json`. The linked recovery Gerk Tong Hui
+at `C:\Users\cntow\Documents\GitHub\material-nodeterm-worktrees\red-recovery-final-25ad9e10`
+also remains retained with its untracked `resources/qemu/.qemu-w64-29620.exe`. These are not
+task-owned cleanup candidates, so no deletion or forced integration was performed.
+
+The open issues scan found #198 and #11 still requiring separate product work. Issue #104 has
+the current release and settings-repair progress records. PR #463 has the same release milestone
+comment. The private vocabulary update is recorded separately in @uh and is not copied into this
+public document.
+
 ## 2026-08-28, settings persistence and filter crash repairs
 
 Two local runtime failures found by the full test run are repaired and dewed to `main`:
