@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Repair the renderer stylesheet merge remnants around the destructive confirmation surface. The
+  destination gate now has complete standalone overlay, heading, key, progress, completion, action,
+  exit, hover, reduced-motion, and anchored-scrim rules. The interleaved card-modal resize, header,
+  and rendered-markdown rules remain available as independent selectors, and the other ten missing
+  declaration boundaries in the stylesheet are closed. This ultra-speed repair ran no tests, type
+  checks, lint, reviews, audits, builds, packaging, runtime interaction, or screen captures.
+
+  Stylesheet merge leftovers 清走晒：destructive confirmation gate 而家有返完整 overlay、heading、key、
+  progress、completion、action、exit、hover、reduced-motion 同 anchored-scrim rules。card modal 嘅
+  resize、header 同 rendered-markdown styles 亦保留，而且各自企返喺獨立 selector 入面。今次
+  ultra-speed repair 沒有執行 tests、type checks、lint、reviews、audits、builds、packaging、runtime
+  interaction 或 screen captures。
+
 - Restore the core board-attachment detector export used by portable project import. The detector
   remains byte-derived and shared, preserving MIME and extension classification, bounded attachment
   carriers, path safety, and archive integrity validation while restoring the correct core import
