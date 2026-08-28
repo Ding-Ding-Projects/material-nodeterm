@@ -343,7 +343,6 @@ export function xtermOptionsFromSettings(
   return {
     fontFamily: s.fontFamily,
     fontSize: s.fontSize,
-    wordSeparator: s.terminalWordSeparator,
     fontWeight: terminalFontWeight(s.fontWeight, 400),
     fontWeightBold: terminalFontWeight(s.fontWeightBold, 700),
     drawBoldTextInBrightColors: s.drawBoldTextInBrightColors,
