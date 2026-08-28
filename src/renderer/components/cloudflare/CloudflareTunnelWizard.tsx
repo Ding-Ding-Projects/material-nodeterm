@@ -15,7 +15,7 @@ import {
   type CloudflareTunnelPortableIntent,
   type CloudflareTunnelProgress,
   type CloudflareTunnelPreview,
-  type CloudflareTunnelSelection,
+  type CloudflareTunnelWizardSelection,
   type CloudflareTunnelWizardApi,
   type TunnelChoice
 } from '@shared/cloudflare-tunnel-wizard'
@@ -99,7 +99,7 @@ function errorText(cause: unknown): string {
  */
 export function CloudflareTunnelWizard({ api, nodeId, onClose, onPortableIntent, onBound }: CloudflareTunnelWizardProps): React.JSX.Element {
   const [discovery, setDiscovery] = useState<CloudflareTunnelDiscovery | null>(null)
-  const [selection, setSelection] = useState<CloudflareTunnelSelection>({ accountId: '', zoneId: '', hostname: '', hostId: '', containerId: '', networkId: '', portId: '', originId: '' })
+  const [selection, setSelection] = useState<CloudflareTunnelWizardSelection>({ accountId: '', zoneId: '', hostname: '', hostId: '', containerId: '', networkId: '', portId: '', originId: '' })
   const [preview, setPreview] = useState<CloudflareTunnelPreview | null>(null)
   const [progress, setProgress] = useState<CloudflareTunnelProgress | null>(null)
   const [message, setMessage] = useState('Loading available accounts, zones, hosts, and origins.')
@@ -266,7 +266,7 @@ export function CloudflareTunnelWizard({ api, nodeId, onClose, onPortableIntent,
       <p className="cloudflare-tunnel-wizard__message" role="status">{message}</p>
       <footer className="cloudflare-tunnel-wizard__actions">
         <Button type="button" onClick={cancel}>{busy ? 'Cancel operation' : 'Close'}</Button>
-        {!preview ? <Button type="button" variant="primary" disabled={!canPreview} title={canPreview ? 'Review the tunnel operation' : validation.error} onClick={showPreview}>Review tunnel</Button> : <Button type="button" variant="primary" disabled={busy || Boolean(progress && progress.phase === 'completed')} title={busy ? 'Tunnel creation is already running' : 'Create the reviewed tunnel'} onClick={() => void submit()}>{busy ? 'Creating tunnel…' : 'Create tunnel'}</Button>}
+        {!preview ? <Button type="button" variant="primary" disabled={!canPreview} title={validation.ok ? 'Review the tunnel operation' : validation.error} onClick={showPreview}>Review tunnel</Button> : <Button type="button" variant="primary" disabled={busy || Boolean(progress && progress.phase === 'completed')} title={busy ? 'Tunnel creation is already running' : 'Create the reviewed tunnel'} onClick={() => void submit()}>{busy ? 'Creating tunnel…' : 'Create tunnel'}</Button>}
         {!discovery && !busy ? <Button type="button" onClick={() => void refresh()}>Refresh discovery</Button> : null}
       </footer>
     </div>
