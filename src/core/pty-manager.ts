@@ -3166,6 +3166,11 @@ export class PtyManager {
         ...Object.keys(customEnvMerged),
         ...Object.keys(projectEnv ?? {})
       ])
+      const hookEnvArgs = Object.entries(hookEnv).flatMap(([k, v]) => ['-e', `${k}=${v}`])
+      const pathEnvArgs = env.PATH ? ['-e', `PATH=${env.PATH}`] : []
+      const langEnvArgs = env.LANG ? ['-e', `LANG=${env.LANG}`] : []
+      const colortermEnvArgs = ['-e', 'COLORTERM=truecolor']
+      const accountEnvArgs = accountDir ? accountTmuxEnvArgs(accountDir) : []
       const attachFlags = tmuxAttachFlags(!!sinks)
       args = [
         '-L',
@@ -3248,6 +3253,8 @@ export class PtyManager {
             settings.tmuxScrollback
           )) as unknown as pty.IPty
     } else {
+      file = localSessionShell
+      args = localSessionArgs
       try {
         proc = pty.spawn(file, args, {
           name: 'xterm-256color',
@@ -3267,7 +3274,6 @@ export class PtyManager {
         // (and, per the leak above, kept) devices of its own, so the number the user is shown should
         // be the one that was true when the failure happened.
         throw this.spawnFailureError(reason, spawnHelperArchMismatch(), readPtyDevices())
-        throw this.spawnFailureError(reason, file, cwd, spawnHelperArchMismatch(), readPtyDevices())
       }
     }
 
