@@ -112,8 +112,7 @@ export interface SessionBudgetConfig {
   minAvailableMb: number
   /** Backstop: max idle-past-grace nt- sessions across sockets; excess is reaped without pressure. */
   maxIdle: number
-  /** A session with activity newer than this is never reaped. Sole guard — see the header. */
-  /** Backstop: max detached nt- sessions across sockets; excess is reaped even without pressure. */
+  /** Host-scaled detached cap retained for callers that inspect the derived budget. */
   maxDetached: number
   /**
    * Swap term: pressure when the free fraction of swap falls to or below this AND available memory
@@ -259,10 +258,8 @@ export function sessionBudgetConfig(
     disabled: env.NODETERM_SESSION_REAP_DISABLED === '1' || env.NODETERM_SESSION_REAP_DISABLED === 'true',
     minAvailableMb: envInt(env, 'NODETERM_SESSION_MIN_AVAILABLE_MB', Math.max(1024, Math.round(totalMb * 0.1))),
     maxIdle: envInt(env, 'NODETERM_SESSION_MAX_IDLE', envInt(env, 'NODETERM_SESSION_MAX_DETACHED', 48)),
-    graceSec: envHours(env, 'NODETERM_SESSION_GRACE_HOURS', 24),
-    batchMax: envInt(env, 'NODETERM_SESSION_REAP_BATCH', 8)
     maxDetached: envInt(env, 'NODETERM_SESSION_MAX_DETACHED', derivedCap),
-    graceSec: envHours(env, 'NODETERM_SESSION_GRACE_HOURS', 6),
+    graceSec: envHours(env, 'NODETERM_SESSION_GRACE_HOURS', 24),
     batchMax: envInt(env, 'NODETERM_SESSION_REAP_BATCH', 8),
     // Percentages, so `envInt`'s `>= 1` floor is not the trap it is for a cap: 0 and junk both fall
     // back to the default, and an operator who wants the term OFF sets the ratio via a value the
@@ -336,9 +333,8 @@ export function hostUnderMemoryPressure(mem: MemInfo | null, cfg: SessionBudgetC
  * never eligible at all, a single keystroke's echo restamps the clock, and the grace window still
  * applies — and because the alternative is the attach clock this module just stopped trusting.
  *
- * Eligible = named `nt-*` AND idle past the grace window. Attachment is deliberately NOT consulted
+ * Eligible = named `nt-*` AND silent past the grace window. Attachment is deliberately NOT consulted
  * — see the header for why it separated nothing on a canvas app. Then:
- * Eligible = named `nt-*` AND detached AND silent past the grace window. Then:
  *   - memory below the watermark → up to `batchMax` (a failed memory read — `mem === null` — is
  *     NOT pressure: absence of evidence never triggers the primary path);
  *   - `externalPressure` → the same allowance, for a resource this module cannot measure (today:
@@ -365,13 +361,8 @@ export function planReap(
   externalPressure = false
 ): string[] {
   if (cfg.disabled) return []
-  const eligible = sessions
-    .filter((s) => s.name.startsWith('nt-'))
-    .filter((s) => nowSec - s.activitySec >= cfg.graceSec)
-    .sort((a, b) => a.activitySec - b.activitySec)
   const nt = sessions.filter((s) => s.name.startsWith('nt-'))
-  const detached = nt.filter((s) => s.clients === 0)
-  const eligible = detached
+  const eligible = nt
     .filter((s) => nowSec - s.outputSec >= cfg.graceSec)
     .sort((a, b) => a.outputSec - b.outputSec)
 
@@ -508,9 +499,6 @@ export function createSessionReaper(opts: SessionReaperOpts): SessionReaper {
 
   const listSocket = async (bin: string, socket: string): Promise<SessionInfo[] | null> => {
     try {
-      const listed = parseSessionList(await exec(bin, ['-L', socket, 'list-sessions', '-F', LIST_FMT]))
-      // Preserve the existing per-socket client-count normalization for callers and diagnostics.
-      // The reaper's decision intentionally ignores the resulting count and follows activity age.
       const listed = parseSessionList(await exec(bin, ['-L', socket, 'list-windows', '-a', '-F', LIST_FMT]))
       // Our own shadows are subtracted from tmux's client COUNT here, at the one place every
       // listing comes through, so the plan and the kill-time re-verify can never disagree about it
@@ -564,7 +552,7 @@ export function createSessionReaper(opts: SessionReaperOpts): SessionReaper {
       if (!fresh) continue
       const now = nowSec()
       const stillIdle = new Set(
-        fresh.filter((s) => now - s.activitySec >= cfg.graceSec).map((s) => s.name)
+        fresh.filter((s) => now - s.outputSec >= cfg.graceSec).map((s) => s.name)
       )
       for (const name of names) {
         if (!stillIdle.has(name)) continue
