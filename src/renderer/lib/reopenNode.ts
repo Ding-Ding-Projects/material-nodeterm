@@ -1,7 +1,6 @@
 import type { NodeKind, Project } from '@shared/types'
 import type { AgentId } from '@shared/agents/config'
 import type { ActiveAgentLaunchPlan } from '@renderer/state/permissionMode'
-import type { AgentId, AgentPermissionMode } from '@shared/agents/config'
 import {
   type CanvasNode,
   type NodeData,
@@ -95,6 +94,7 @@ export interface RecreateContext {
    *  needs to reflect nodes that were never deleted. */
   liveNodeIds: ReadonlySet<string>
   project: { ssh?: Project['ssh'] } | undefined
+  permissionModeFor: (agentId: AgentId) => ActiveAgentLaunchPlan | undefined
   /** Validates/redirects an account id against the accounts that exist right now (a removed
    *  account must not be stamped onto a new node). */
   resolveAccountId: (accountId: string | undefined) => string | undefined

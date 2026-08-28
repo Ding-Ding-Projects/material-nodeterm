@@ -8499,7 +8499,7 @@ export function Canvas() {
             notify({ kind: 'error', titleKind: 'authored', title: 'Node placement unavailable', body: appended.result.error, bodyKind: 'fact' })
             continue
           }
-          next = appended.nodes
+          next = appended.nodes as CanvasNode[]
         }
         return next
       })
