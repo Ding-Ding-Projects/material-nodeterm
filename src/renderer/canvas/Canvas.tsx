@@ -12943,6 +12943,7 @@ export function Canvas() {
           return
         }
         const srcAgent = (live?.data.agentId ?? stored?.agentId) as string | undefined
+        const srcTitle = (live?.data.title ?? stored?.title ?? sourceNodeId) as string
         if (!sourceIsControlCapable(srcAgent)) {
           reply({ ok: false, error: 'source node is not a control-capable agent' })
           return
