@@ -132,7 +132,7 @@ export class AwsWizardModelService {
   async source(serviceId: string, commandName: string): Promise<AwsWizardModelSource | null> {
     id(serviceId, 'serviceId')
     id(commandName, 'commandName')
-    const { model } = await this.serviceModel(serviceId)
+    const { model, versionRoot } = await this.serviceModel(serviceId)
     const operations = model.operations && typeof model.operations === 'object' ? model.operations as JsonRecord : {}
     const operationEntry = Object.entries(operations).find(([apiName]) => kebab(apiName) === commandName)
     if (!operationEntry) return null
