@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { NodeResizer, useReactFlow, type NodeProps } from '@xyflow/react'
+import { NodeResizer, useReactFlow, useStore, type NodeProps } from '@xyflow/react'
 import { ungroupNodes, type CanvasNode } from '../state/workspace'
 import { useToyLocks } from '../state/toylocks'
 import { UnlockPrompt } from '../components/toylocks/UnlockPrompt'
@@ -10,6 +10,7 @@ import { canManageWslDistro, sanitizeGroupWsl, WSL_NOT_OWNED_HINT } from '@share
 import { ColorMenu } from '../components/color/ColorMenu'
 import { alphaTint } from '../components/color/tint'
 import { useVocabularyMapper } from '../lib/personalVocabulary/useVocabularyText'
+import { GitHubWorkItemAttachment } from './GitHubWorkItemAttachment'
 
 export type WorktreeAction = 'merge' | 'remove' | 'unbind'
 export type WslAction = 'sleep' | 'wake' | 'delete' | 'unbind'
@@ -55,6 +56,7 @@ export function setWslActionHandler(fn: ((groupId: string, action: WslAction) =>
 export function GroupNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const vocab = useVocabularyMapper()
   const { updateNodeData, setNodes } = useReactFlow()
+  const flowNodes = useStore((state) => state.nodes) as CanvasNode[]
   /** Viewport anchor for the colour surface, or null when it is closed (see ColorMenu). */
   const [colorAnchor, setColorAnchor] = useState<{ x: number; y: number } | null>(null)
   // The frame element, observed for viewport visibility by the worktree-status tick below.
@@ -74,6 +76,19 @@ export function GroupNode({ id, data, selected }: NodeProps<CanvasNode>) {
   // (WORKTREE_STATUS_THROTTLE_MS) and is epoch-guarded, so asking often is free.
   const status = useWorktrees((s) => (wt ? s.statusByPath[wt.path] : undefined))
   const stale = useWorktrees((s) => (wt ? s.staleGroupIds.includes(id) : false))
+  const frameBranch = status?.branch ?? wt?.branch
+  const frameItems = flowNodes
+    .filter((node) => {
+      let parent = node.parentId
+      const seen = new Set<string>()
+      while (parent && !seen.has(parent)) {
+        if (parent === id) return true
+        seen.add(parent)
+        parent = flowNodes.find((candidate) => candidate.id === parent)?.parentId
+      }
+      return false
+    })
+    .flatMap((node) => node.data.githubWorkItems ?? [])
   // The project setup/archive script Canvas launched for THIS checkout, resolved through the
   // attachment its ack made (an event carries no lane — see the store's header). Selected as the
   // entry itself, so a render happens only when this group's run changes, not on every chunk of
@@ -464,6 +479,8 @@ export function GroupNode({ id, data, selected }: NodeProps<CanvasNode>) {
           </div>
         )}
       </div>
+
+      <GitHubWorkItemAttachment items={frameItems} frameId={id} frameBranch={frameBranch} />
 
       {unlockAnchor &&
         (() => {
