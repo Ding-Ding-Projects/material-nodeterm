@@ -143,6 +143,7 @@ export function rememberCodexSessionName(
 
 export interface CodexThreadSnapshot {
   id: string
+  path?: string
   name?: string | null
   status?: { type?: unknown; activeFlags?: unknown }
   updatedAt?: number

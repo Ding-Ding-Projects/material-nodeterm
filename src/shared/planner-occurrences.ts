@@ -109,7 +109,7 @@ export function validatePlannerFile(raw: unknown): string | null {
   if (!Array.isArray(file.occurrences) || file.occurrences.length > PLANNER_LIMITS.maxOccurrences) {
     return 'Planner occurrence history is too large.'
   }
-  if (file.lastTickMs !== null && file.lastTickMs !== undefined && (!Number.isSafeInteger(file.lastTickMs) || file.lastTickMs < 0)) {
+  if (file.lastTickMs !== null && file.lastTickMs !== undefined && (typeof file.lastTickMs !== 'number' || !Number.isSafeInteger(file.lastTickMs) || file.lastTickMs < 0)) {
     return 'Planner last-tick time is invalid.'
   }
   const ids = new Set<string>()

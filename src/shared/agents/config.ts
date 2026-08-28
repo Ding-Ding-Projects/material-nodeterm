@@ -114,6 +114,7 @@ export const AGENT_CONFIG: Record<BuiltinAgentId, AgentConfig> = {
   devin: {
     label: 'Devin',
     color: '#7c3aed',
+    launchCmd: 'devin',
     // Devin 3000.4.25 takes an initial prompt after `--`. The separator is required because the
     // CLI also exposes subcommands, so a prompt such as "login" remains prompt text instead of
     // becoming a command. The same argv shape is used by interactive REPL launches and the

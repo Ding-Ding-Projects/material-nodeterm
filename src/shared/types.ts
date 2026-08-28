@@ -513,7 +513,7 @@ export interface PendingLaunch {
   /** Executed once the wait is over. This whole record is machine-local execution state. */
   launch: TerminalLaunchIntent
   /** Delivered to the node's shell once the wait is over (agent CLI + prompt, or a plain command). */
-  command: string
+  command?: string
   /**
    * Also wait for this worktree GROUP's project setup script to finish (`waitForSetup`). Set when
    * the node is opened into a frame whose checkout is still being prepared — running a command in a
@@ -2052,6 +2052,10 @@ export interface BrowserApi {
   onBrowserNewWindow(listener: (e: { url: string; sourceNodeId: string }) => void): () => void
   extensions: BrowserExtensionsApi
   profile: BrowserProfileApi
+  onLeaseChanged(listener: (push: BrowserLeasePush) => void): () => void
+  stop(nodeId: string): void
+  stopAll(): void
+  stopProject(projectId: string): void
 }
 
 /** Browser control operations for the agent-driven browser node surface. */
@@ -4886,6 +4890,7 @@ export interface NodeTerminalApi {
   homeAssistantControl: HomeAssistantControlApi
   /** Machine-local Home Assistant sensor discovery and bounded observations. */
   homeAssistantSensor: HomeAssistantSensorApi
+  calendar: import('./calendar').CalendarApi
   ssh: SshApi
   sshProject: SshProjectApi
   sshFs: SshFsApi

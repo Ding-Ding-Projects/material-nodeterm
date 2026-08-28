@@ -179,7 +179,9 @@ export function validateNextcloudManagedIntent(value: unknown): NextcloudManaged
   const expected: NextcloudManagedIntent = DEFAULT_NEXTCLOUD_MANAGED_INTENT
   const keys = Object.keys(expected)
   if (Object.keys(value).length !== keys.length || Object.keys(value).some((key) => !keys.includes(key))) throw new Error('Nextcloud managed intent contains an unknown or missing field.')
-  for (const key of keys) if (value[key] !== expected[key]) throw new Error(`Nextcloud managed intent ${key} is invalid.`)
+  const actual = value as Record<string, unknown>
+  const expectedValues = expected as unknown as Record<string, unknown>
+  for (const key of keys) if (actual[key] !== expectedValues[key]) throw new Error(`Nextcloud managed intent ${key} is invalid.`)
   return { ...expected }
 }
 

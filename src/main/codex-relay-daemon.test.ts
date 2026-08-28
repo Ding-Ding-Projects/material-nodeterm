@@ -34,8 +34,10 @@ import {
   retargetRelayResumeByPath,
   resolveRelayThreadResponse,
   trackRelayThreadRequest,
-  type RelayThreadRequest
+  type RelayThreadRequest,
+  tryReserveRelayThread
 } from './codex-relay-daemon'
+import { posixQuote } from '../shared/ssh'
 
 // This helper drives the relay against a REAL AF_UNIX socket on purpose (`server.listen(socketPath)`
 // below, with socketPath a plain filesystem path) — codex's own app-server only ever speaks over one,

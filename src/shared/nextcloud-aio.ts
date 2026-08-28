@@ -161,7 +161,8 @@ export function validateNextcloudAioAction(value: unknown): NextcloudAioAction |
     const config = normalizeNextcloudAioConfig(raw.config)
     return config ? { type: 'update', context: raw.context.trim(), config } : undefined
   }
-  return { type: raw.type as 'start' | 'stop' | 'update', context: raw.context.trim() }
+  if (raw.type === 'start' || raw.type === 'stop') return { type: raw.type, context: raw.context.trim() }
+  return undefined
 }
 
 export interface NextcloudAioManagerApi {

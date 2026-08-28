@@ -168,7 +168,7 @@ export class ElectronSecretStore implements SecretStore {
           value: this.safeStorage.encryptString(token).toString('base64')
         }
       : { version: 1, kind: 'restricted-file', token }
-    await atomicWrite(this.filePath, document, current.revision, lease)
+    await atomicWrite(this.filePath, document)
   }
 
   clear(): Promise<void> {

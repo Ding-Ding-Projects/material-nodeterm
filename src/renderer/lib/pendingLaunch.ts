@@ -102,9 +102,6 @@ export function launchesToFire(
     if (p.after.every((d) => depSatisfied(d, status, live))) {
       out.push({ id: n.id, launchId: p.launchId, launch: p.launch })
     }
-    if (!p || !p.command) continue
-    if (p.awaitSetupGroup && !(setupDone?.(p.awaitSetupGroup) ?? true)) continue
-    if (p.after.every((d) => depSatisfied(d, status, live))) out.push({ id: n.id, command: p.command })
   }
   return out
 }

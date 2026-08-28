@@ -342,7 +342,7 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
     documentationPath: 'docs/features/remote/kiosk-pwa-sessions.md',
     safeDefaults: { mode: 'kiosk', requestedPermissions: [] },
     dependencies: ['secure-url'],
-    status: 'current',
+    status: 'available',
     availabilityMode: 'required-for-creation',
     availability: alwaysAvailable
   },
@@ -356,7 +356,7 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
     documentationPath: 'docs/features/remote/kiosk-pwa-sessions.md',
     safeDefaults: { mode: 'pwa', requestedPermissions: [] },
     dependencies: ['installed-web-app'],
-    status: 'current',
+    status: 'available',
     availabilityMode: 'configure-later',
     availability: alwaysAvailable
   },
@@ -643,7 +643,7 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
     documentationPath: 'docs/features/integrations/home-assistant-sensor-display.md',
     safeDefaults: { entities: [], refreshSeconds: 30, historyLimit: 60 },
     dependencies: ['homeassistant-adapter'],
-    status: 'current',
+    status: 'available',
     availabilityMode: 'configure-later',
     scope: 'any',
     availability: unsupportedInRelay

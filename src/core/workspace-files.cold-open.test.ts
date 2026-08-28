@@ -13,7 +13,11 @@ import type { CanvasNodeState, PendingLaunch, Project } from '../shared/types'
  */
 describe('cold-open pin (c): pendingLaunch survives the disk round-trip', () => {
   it('projectToFile → serialize → parse → fileToProject keeps pendingLaunch', () => {
-    const pending: PendingLaunch = { after: [], command: 'claude "do the thing"' }
+    const pending: PendingLaunch = {
+      after: [],
+      launchId: '123e4567-e89b-42d3-a456-426614174000',
+      launch: { kind: 'shell-command', command: 'claude "do the thing"' }
+    }
     const armedState: CanvasNodeState = {
       id: 'term-cold1',
       kind: 'terminal',

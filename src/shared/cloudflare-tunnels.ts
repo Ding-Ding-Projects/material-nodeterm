@@ -200,7 +200,7 @@ export function normalizeCloudflareService(value: unknown, protocol?: unknown): 
   return { service, path: url.pathname === '/' ? '' : url.pathname, protocol: actual }
 }
 
-export function validateCloudflareRouteInput(input: CloudflareTunnelRouteInput): CloudflareTunnelRouteInput {
+export function validateCloudflareRouteInput(input: CloudflareTunnelRouteInput): CloudflareTunnelRouteInput & { path: string; protocol: CloudflareTunnelOrigin['protocol'] } {
   if (!input || typeof input !== 'object' || !isCloudflareAccountId(input.accountId) || !isCloudflareTunnelId(input.tunnelId) || !isCloudflareZoneId(input.zoneId)) {
     throw new Error('Tunnel and zone selections are invalid. Refresh the inventory and choose them again.')
   }
@@ -281,7 +281,7 @@ export function cloudflareTunnelPortableIntent(input: CloudflareTunnelRouteInput
 export function searchCloudflareTunnelInventory<T extends CloudflareTunnelSummary | CloudflareTunnelRoute | CloudflareDnsRecordSummary>(items: readonly T[], query: string, tester?: (corpus: string) => boolean): T[] {
   const normalized = query.trim().toLocaleLowerCase()
   return items.filter((item) => {
-    const corpus = Object.values(item as Record<string, unknown>).flatMap((value) => Array.isArray(value) ? value : [value]).filter((value) => typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean').join(' ')
+    const corpus = Object.values(item as unknown as Record<string, unknown>).flatMap((value) => Array.isArray(value) ? value : [value]).filter((value) => typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean').join(' ')
     return tester ? tester(corpus) : !normalized || corpus.toLocaleLowerCase().includes(normalized)
   })
 }

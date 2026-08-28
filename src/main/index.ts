@@ -73,6 +73,7 @@ import { registerHomeAssistantIpc } from '../core/home-assistant/register-ipc'
 import { registerHomeAssistantControlIpc } from '../core/home-assistant-control/register-ipc'
 import { registerHomeAssistantSensorIpc } from '../core/home-assistant-sensor/register-ipc'
 import { registerCloudflareTunnelIpc } from '../core/cloudflare/register-ipc'
+import { LocalNodeBindingStore, bindingActionStates, validateLocalNodeBinding } from '../core/portable-bindings'
 import { registerWindowsDiagnosticsIpc } from '../core/windows-diagnostics'
 import { registerCloudflareZeroTrustIpc } from '../core/cloudflare-zero-trust/service'
 import { AtomicJsonArrayStore } from '../core/atomic-json-store'
@@ -3169,7 +3170,7 @@ app.whenReady().then(async () => {
     notchHudOnContextUpdate(payload as { sessionId?: string; model?: string; usedPercent?: number })
     // Feed the mirror's per-node context ring (mobile-usage-inbox). The context tail keys by
     // sessionId; map it back to the node via the raw-listener's nodeId↔sessionId association.
-    const cw = payload as { sessionId?: string; usedPercent?: number }
+    const cw = payload as { sessionId?: string; usedPercent?: number; sourceKey?: string }
     for (const [nid, sid] of nodeContextSession) {
       if (
         sid === cw.sessionId &&

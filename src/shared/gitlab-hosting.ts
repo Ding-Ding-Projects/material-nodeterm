@@ -94,8 +94,8 @@ export function isGitLabHostingConfig(value: unknown): value is GitLabHostingCon
     (candidate.edition === 'ce' || candidate.edition === 'ee') &&
     GITLAB_HOSTING_IMAGES.some((image) => image.edition === candidate.edition && image.ref === candidate.image) &&
     candidate.binding === 'loopback' &&
-    Number.isInteger(candidate.httpPort) && candidate.httpPort >= 1024 && candidate.httpPort <= 65535 &&
-    Number.isInteger(candidate.sshPort) && candidate.sshPort >= 1024 && candidate.sshPort <= 65535 &&
+    typeof candidate.httpPort === 'number' && Number.isInteger(candidate.httpPort) && candidate.httpPort >= 1024 && candidate.httpPort <= 65535 &&
+    typeof candidate.sshPort === 'number' && Number.isInteger(candidate.sshPort) && candidate.sshPort >= 1024 && candidate.sshPort <= 65535 &&
     candidate.httpPort !== candidate.sshPort
 }
 

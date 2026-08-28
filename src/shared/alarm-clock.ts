@@ -366,7 +366,13 @@ export class DurableAlarmPlanner {
           alarm.nextOccurrenceAt = undefined
           break
         }
-        next = nextAlarmOccurrence(alarm, next)
+        const following = nextAlarmOccurrence(alarm, next)
+        if (following === null) {
+          alarm.enabled = false
+          alarm.nextOccurrenceAt = undefined
+          break
+        }
+        next = following
         alarm.nextOccurrenceAt = next ?? undefined
       }
     }

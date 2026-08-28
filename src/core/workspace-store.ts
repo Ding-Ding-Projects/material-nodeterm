@@ -15,7 +15,6 @@ import {
 } from './workspace-files'
 import {
   applyLocalNodeExec,
-  hoistLegacyNodeExec,
   localNodeExec,
   normalizeLocalPendingLaunch,
   stripSharedNodeExec,
@@ -1644,12 +1643,12 @@ export class WorkspaceStore {
     now = new Date(),
     defaultTerminalProfileId?: string
   ): Promise<boolean> {
-    const run = this.saveChain.then(() => this.appendRemoteNodeNow(projectId, input, now))
+    const run = this.saveChain.then(() => this.appendRemoteNodeNow(projectId, input, now, defaultTerminalProfileId))
     this.saveChain = run.catch(() => {})
     return run
   }
 
-  private async appendRemoteNodeNow(projectId: string, input: RemoteNodeInput, now: Date): Promise<boolean> {
+  private async appendRemoteNodeNow(projectId: string, input: RemoteNodeInput, now: Date, defaultTerminalProfileId?: string): Promise<boolean> {
     const e = this.index?.entries.find((x) => x.id === projectId && x.cwd)
     if (!e?.cwd) return false
     const file = projectFilePath(e.cwd)

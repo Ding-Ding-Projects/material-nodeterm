@@ -139,6 +139,24 @@ export function parseWindowsProcessTable(stdout: string): ProcEntry[] {
   return out
 }
 
+/** Parse the macOS `top -stats pid,mem` process block into resident kilobytes. */
+export function parseTopFootprint(stdout: string): Map<number, number> {
+  const out = new Map<number, number>()
+  const lines = stdout.split('\n')
+  const head = lines.findIndex((line) => /^\s*PID\s+MEM\s*$/.test(line))
+  if (head < 0) return out
+  const unitScale: Record<string, number> = { K: 1, M: 1024, G: 1024 * 1024 }
+  for (const line of lines.slice(head + 1)) {
+    const match = /^\s*(\d+)\s+(\d+(?:\.\d+)?)([A-Za-z])\s*$/.exec(line)
+    if (!match) continue
+    const factor = unitScale[match[3].toUpperCase()]
+    if (factor === undefined) continue
+    const pid = Number(match[1])
+    if (Number.isFinite(pid)) out.set(pid, Number(match[2]) * factor)
+  }
+  return out
+}
+
 /** Linux `/proc/meminfo` (MemAvailable is the honest number); `os.freemem()` fallback elsewhere.
  *  Returns null when nothing is readable — callers treat that as "no signal", never as zero.
  *

@@ -120,7 +120,7 @@ export function isGitHubWorkItem(value: unknown): value is GitHubWorkItem {
   const item = value as Partial<GitHubWorkItem>
   return item.schemaVersion === 1 && (item.kind === 'issue' || item.kind === 'pull-request') &&
     typeof item.repository === 'string' && /^[^/\\s]+\/[^/\\s]+$/.test(item.repository) &&
-    Number.isInteger(item.number) && item.number > 0 && typeof item.title === 'string' &&
+    typeof item.number === 'number' && Number.isInteger(item.number) && item.number > 0 && typeof item.title === 'string' &&
     typeof item.bodyMarkdown === 'string' && typeof item.htmlUrl === 'string' &&
     Array.isArray(item.labels) && Array.isArray(item.sessionIds)
 }

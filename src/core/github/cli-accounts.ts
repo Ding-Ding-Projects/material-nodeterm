@@ -181,7 +181,7 @@ export class GitHubCliAccountService {
     return this.startInteractive(args)
   }
 
-  loginStatus(sessionId: string): GitHubCliLoginSession {
+  async loginStatus(sessionId: string): Promise<GitHubCliLoginSession> {
     const item = this.logins.get(sessionId)
     if (!item) return { id: sessionId, state: 'expired', startedAt: 0, expiresAt: 0 }
     if (Date.now() >= item.session.expiresAt && item.session.state === 'waiting') {

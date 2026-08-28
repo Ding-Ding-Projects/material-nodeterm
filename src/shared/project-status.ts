@@ -363,7 +363,7 @@ export function releaseGate(
         { kind: 'authored' as const, text: 'The newest release this tree records is ' },
         { kind: 'factual' as const, text: newest.version },
         { kind: 'authored' as const, text: ' (' },
-        { kind: 'factual' as const, text: newest.date },
+        { kind: 'factual' as const, text: newest.date ?? 'unknown date' },
         { kind: 'authored' as const, text: '). ' },
         { kind: 'factual' as const, text: String(pendingItems) },
         { kind: 'authored' as const, text: pendingItems === 1 ? ' recorded change' : ' recorded changes' },
@@ -379,7 +379,7 @@ export function releaseGate(
         { kind: 'authored' as const, text: 'Everything the changelog records has shipped in ' },
         { kind: 'factual' as const, text: newest.version },
         { kind: 'authored' as const, text: ' (' },
-        { kind: 'factual' as const, text: newest.date },
+        { kind: 'factual' as const, text: newest.date ?? 'unknown date' },
         { kind: 'authored' as const, text: '). No packaged-install verification is recorded in this tree, so none is claimed.' }
       ]
   return {

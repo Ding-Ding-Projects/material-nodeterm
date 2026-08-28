@@ -156,7 +156,7 @@ export function electronPlatform(options: ElectronPlatformOptions = {}): Electro
       addListener(ch, { fn, withSender: true })
       ipcMain.on(ch, (e, ...args) => fn(e.sender.id, ...args))
     },
-    async dispatch(clientId, req) {
+    async dispatch(clientId, req, source) {
       // Host-control admission, from the ONE shared list (src/shared/host-control.ts) rather than a
       // prefix test written out here — the second shell copying a stale copy of that test is the
       // failure mode this closes.
@@ -193,6 +193,12 @@ export function electronPlatform(options: ElectronPlatformOptions = {}): Electro
                 code: 'E_FORBIDDEN',
                 message: 'relay terminal launch authority is unavailable'
               }
+            }
+          }
+          if (!source) {
+            return {
+              t: 'res', id: req.id, ok: false,
+              error: { code: 'E_FORBIDDEN', message: 'relay terminal source is unavailable' }
             }
           }
           let decision: RelayPtyCreateDecision

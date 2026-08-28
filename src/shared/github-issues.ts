@@ -220,7 +220,7 @@ export interface GitHubCliAccountsApi {
   switchActive(host: string, login: string): Promise<GitHubCliAccountList>
   signOut(host: string, login: string): Promise<GitHubCliAccountList>
   startLogin(): Promise<GitHubCliLoginSession>
-  loginStatus(sessionId: string): GitHubCliLoginSession
+  loginStatus(sessionId: string): Promise<GitHubCliLoginSession>
   cancelLogin(sessionId: string): Promise<void>
   refreshAuthorization(input: GitHubCliRefreshInput): Promise<GitHubCliLoginSession>
 }
