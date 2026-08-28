@@ -10,6 +10,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { fireEvent } from '@testing-library/react'
 import { BrowserProfilePicker } from './BrowserProfilePicker'
 import type { BrowserProfile } from '@shared/types'
 
@@ -160,14 +161,14 @@ describe('BrowserProfilePicker', () => {
       b.textContent?.includes('New profile')
     )!
     act(() => (newBtn as HTMLButtonElement).click())
-    const input = document.querySelector<HTMLInputElement>('input')!
-    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+    const inputs = document.querySelectorAll<HTMLInputElement>('input')
+    const input = inputs[inputs.length - 1]!
     act(() => {
-      setter.call(input, 'Shopping')
-      input.dispatchEvent(new Event('input', { bubbles: true }))
+      fireEvent.change(input, { target: { value: 'Shopping' } })
     })
     act(() => {
       input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+      input.dispatchEvent(new Event('blur', { bubbles: true }))
     })
     expect(h.onCreate).toHaveBeenCalledOnce()
     const created = h.onCreate.mock.calls[0][0]
