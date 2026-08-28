@@ -19,13 +19,13 @@ describe('browser node', () => {
   })
 
   it('an agent-opened node carries its partition, set once at creation', () => {
-    const n = createBrowserNode(0, 'https://x.test/', undefined, 'persist:nt-agent-browser-p1')
+    const n = createBrowserNode(0, 'https://x.test/', undefined, undefined, undefined, undefined, 'persist:nt-agent-browser-p1')
     expect(n.data.partition).toBe('persist:nt-agent-browser-p1')
   })
 
   it("an agent node's partition survives the persistence round-trip; a user node's stays absent", () => {
     // The jar must outlive a reopen, or the agent is logged out on the next app start.
-    const agent = createBrowserNode(0, 'https://a.dev', undefined, 'persist:nt-agent-browser-p1')
+    const agent = createBrowserNode(0, 'https://a.dev', undefined, undefined, undefined, undefined, 'persist:nt-agent-browser-p1')
     const user = createBrowserNode(1, 'https://b.dev')
     const round = nodeStatesToFlow(flowToNodeStates([agent, user]))
     expect(round.find((n) => n.id === agent.id)!.data.partition).toBe('persist:nt-agent-browser-p1')
