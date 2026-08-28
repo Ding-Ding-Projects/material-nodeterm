@@ -4,7 +4,6 @@ import { ZONES, ZONE_GUTTER_PX, ZONE_MARGIN_PX, zoneTargetRect } from './nodeZon
 // Zone snapping (issue #394 v1, ported): the viewport→flow subdivision the keyboard chords and
 // the "Snap to zone" menu both use. All screen-px assertions run at zoom 1 / camera origin so
 // flow equals screen; one case pins the zoom conversion.
-import { ZONES, ZONE_GUTTER_PX, zoneTargetRect } from './nodeZones'
 import { NODE_MAXIMIZE_MARGIN_PX, maximizeTargetRect } from './nodeMaximize'
 
 // Zone snapping (issue #394 v1): the viewport→flow subdivision the keyboard chords and the
