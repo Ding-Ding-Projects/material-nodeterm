@@ -5,7 +5,7 @@ import type { CommandResult, CommandRunner } from './credentials'
 import { IPC } from '../../shared/ipc'
 import type {
   GitHubCliAccount,
-  GitHubCliAccountApi,
+  GitHubCliAccountsApi,
   GitHubCliAccountList,
   GitHubCliLoginSession,
   GitHubCliRefreshInput
@@ -70,14 +70,15 @@ function parseHosts(stdout: string): Array<{ host: string; users: Array<{
   for (const candidate of (parsed as { hosts: unknown[] }).hosts) {
     if (!candidate || typeof candidate !== 'object') continue
     const host = safeHost((candidate as RawHost).host)
-    if (!host || !Array.isArray((candidate as RawHost).users)) continue
+    const rawUsers = (candidate as RawHost).users
+    if (!host || !Array.isArray(rawUsers)) continue
     const users = [] as Array<{
       login: string
       active: boolean
       state: GitHubCliAccount['state']
       tokenSource?: string
     }>
-    for (const item of (candidate as RawHost).users) {
+    for (const item of rawUsers) {
       if (!item || typeof item !== 'object') continue
       const login = safeLogin((item as RawUser).login)
       if (!login) continue
@@ -200,8 +201,8 @@ export class GitHubCliAccountService {
     return Promise.resolve()
   }
 
-  register(platform: CorePlatform): GitHubCliAccountApi {
-    const api: GitHubCliAccountApi = {
+  register(platform: CorePlatform): GitHubCliAccountsApi {
+    const api: GitHubCliAccountsApi = {
       list: () => this.listAccounts(),
       switchActive: (host, login) => this.switchActive(host, login),
       signOut: (host, login) => this.signOut(host, login),
