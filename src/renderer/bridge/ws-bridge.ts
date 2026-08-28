@@ -15,7 +15,6 @@ import {
 } from '../../shared/rpc'
 import { IPC } from '../../shared/ipc'
 import { mapLocalVocabularyText } from '../lib/personalVocabulary/hostMessage'
-import type { GitHubControlApi, GitHubIssuesApi } from '../../shared/github-issues'
 import type { GitHubApiApi, GitHubApiProgress, GitHubApiRequest } from '../../shared/github-api'
 import type { GitHubCliAccountsApi, GitHubControlApi, GitHubIssuesApi } from '../../shared/github-issues'
 import type { ConverterApi } from '../../shared/converter'

@@ -27,7 +27,7 @@ import { useSettings } from '../state/settings'
 import { useProjects } from '../state/projects'
 import { useSshServers } from '../state/sshServers'
 import { useSessionMemory } from '../state/sessionMemory'
-import { releaseGate } from '../../../shared/project-status'
+import { releaseGate } from '../../shared/project-status'
 
 const mapAuthored = (text: string): string =>
   text.replace('Update', 'Refresh').replace('Built', 'Assembled').replace('built', 'assembled').replace('terminal', 'shell box')

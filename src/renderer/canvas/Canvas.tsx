@@ -445,7 +445,6 @@ import {
   type ProjectEndRequestEpoch,
   type SessionTerminationScope
 } from '../lib/sessionKill'
-import { planSessionKill } from '../lib/sessionKill'
 import { RemoteAccessDialog } from '../components/RemoteAccessDialog'
 import { SshProjectDialog } from '../components/SshProjectDialog'
 import { SshPassphrasePrompt } from '../components/SshPassphrasePrompt'
@@ -528,7 +527,6 @@ import { resolveDeliveryScope } from '../state/agentMessageScope'
 import { checkFlow, noteNewTurn, noteSent } from '../state/agentMessageFlow'
 import { useBrowserLease, drivingNodeIds } from '../state/browserLease'
 import { useTerminalFocus } from '../state/terminalFocus'
-import { useCodexIdentity, codexFallbackText } from '../state/codexIdentity'
 import { useTeamAccessEvents } from '../state/teamAccess'
 import { useAgentNodes } from '../state/agentNodes'
 import { SubagentNode } from '../nodes/SubagentNode'
@@ -632,9 +630,6 @@ import {
 import { uuid } from '../lib/uuid'
 import { freeSpot } from '../lib/placement'
 import { pushSessionRename } from '../lib/sessionRename'
-import { useReopenHistory } from '../state/reopenHistory'
-import { snapshotNode, recreateNodeFromSnapshot } from '../lib/reopenNode'
-import { planReopen } from '../lib/reopenPlan'
 import { oneLine } from '@shared/one-line'
 import { isDestructiveVerb } from '@shared/control-verbs'
 import { parseLenses, verifyLensPrompt, verifySynthesisPrompt } from '../lib/verifyPanel'
@@ -651,7 +646,7 @@ import {
   agentLaunchPlanForProject,
   commandForAgentLaunch
 } from '../state/permissionMode'
-import { activePermissionMode, projectPermissionMode } from '../state/permissionMode'
+import { projectPermissionMode } from '../state/permissionMode'
 import { useContextWindow } from '../state/contextWindow'
 import { useSessionNaming } from '../state/sessionNaming'
 import { useSshServers } from '../state/sshServers'
@@ -661,8 +656,6 @@ import { useSystemCodexAccount } from '../state/systemCodexAccount'
 import { useEntitlement } from '../state/entitlement'
 import type { SshServer, SshConnection } from '@shared/ssh'
 import { sshAttachmentId, sshHostKey } from '@shared/ssh'
-import type { SshServer } from '@shared/ssh'
-import { sshHostKey } from '@shared/ssh'
 import type {
   BridgeLink,
   CanvasNodeState,
@@ -683,24 +676,12 @@ import { canClearDirty, commitActiveCanvas } from '../state/persistGuards'
 import { isHidden, tidySeparators } from '../lib/ui-visibility'
 import { ZONES, ZONE_ARROW_KEYS, zoneForPointer, zoneTargetRect, type ZoneId } from '../lib/nodeZones'
 import { applySavedLayout, captureSavedLayout } from '../lib/nodeLayouts'
-import {
-  explorerIsOpen,
-  nextExplorerPin,
-  nextExplorerShow,
-  readExplorerPinned,
-  writeExplorerPinned,
-  type ExplorerShowAction
-} from '../lib/explorerPin'
 import { presentAccount, type AccountPresentation } from '../lib/accountPresentation'
 import { boardLogEvents } from '../lib/boardLogDiff'
 import { useBoardLog } from '../state/boardLog'
 import { isKanbanOpen, isMobileServerEdition, useViewMode, viewFor } from '../state/viewMode'
 import { snapNodeToGrid } from '../lib/nodeSizing'
-import { canClearDirty, canCommitCanvas } from '../state/persistGuards'
-import { isHidden } from '../lib/ui-visibility'
-import { boardLogEvents } from '../lib/boardLogDiff'
-import { useBoardLog } from '../state/boardLog'
-import { isKanbanOpen, useViewMode, viewFor } from '../state/viewMode'
+import { canCommitCanvas } from '../state/persistGuards'
 import { useFocusNode, FOCUS_SURFACE_ID } from '../state/focusNode'
 import { focusTargetId } from '../lib/focusTarget'
 import {
@@ -725,8 +706,6 @@ import { CanvasPills } from './CanvasPills'
 import {
   applyCanvasMutation,
   applyMutationToFlow,
-  agentLaunchOverride,
-  claudeLaunchCommand,
   COLLAPSED_HEIGHT,
   alignNodes,
   arrangeNodes,
@@ -800,14 +779,15 @@ import {
   type CanvasNode,
   type DrillContext,
   type TerminalNodeCreationOptions,
+  NODE_COLORS,
   maximizeNodeToRect,
   restoreMaximizedNode,
 } from '../state/workspace'
-import { codexAccountSelectable, codexAccountSwitchStillEligible } from './codex-account-switch'
+import { codexAccountSelectable } from './codex-account-switch'
 import { resolveNewCodexNodeAccount, planCodexAccountSwitch } from './codex-account-ops'
 import type { CodexAccount } from '@shared/codex-account'
-import { useSystemCodexAccount } from '../state/systemCodexAccount'
-import { toKanbanSession } from './toKanbanSession'
+import { Dock } from '../components/Dock'
+import { TabBar } from '../components/TabBar'
 import type { SavedCanvasLayout } from '@shared/types'
 import { setFocusNodeHandler } from '../nodes/focus-handler'
 
