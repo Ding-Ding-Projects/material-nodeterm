@@ -16,6 +16,32 @@ Changed files: `src/core/session-budget.ts` and `HANDOFF.md`.
 This follow-up intentionally ran no tests, builds, reviews, or UI captures. The source-only change is
 ready for the coordinating owner to integrate and observe through the hosted workflow.
 
+## 2026-08-28, workspace store parser repair
+
+Release run `33136945595` and build check `33136931071` stopped while parsing
+`src/core/workspace-store.ts:396:14` with `Expected '}' but found breadcrumbs`. The `loadV3`
+project-entry mappings had a truncated merge generation in both the local-folder and SSH-cache
+paths: each carried one complete settings and execution mapping followed by a duplicate
+`breadcrumbs`, `capabilityAck`, and `localExec` block, and the duplicate local execution calls
+passed an obsolete second argument.
+
+The repair keeps one coherent mapping per path. It preserves the index entry identity, closed
+state, viewport, default account, capability acknowledgement, breadcrumbs, settings overrides,
+and the validated machine-local execution overlay. The SSH path keeps the same cache
+canonicalization and uses the same overlay boundary. No caller or persistence behavior outside
+this `loadV3` function was changed.
+
+Changed files: `src/core/workspace-store.ts` and `HANDOFF.md`.
+
+This lane intentionally ran no tests, checkers, lint, type checks, builds, packaging, reviews,
+audits, runtime interaction, or UI captures. The retained generation and parser repair remain
+unverified until the coordinating owner integrates the lane and observes a fresh hosted build.
+
+合併碎片今次收返一條龍：local folder 同 SSH cache 各自保留一份完整 mapping，breadcrumbs、
+capability acknowledgement、settings overrides 同 local execution overlay 全部留低，重複
+欄位同過時參數就唔再同 parser 玩椅仔樂。今次冇跑 tests、build 或 packaging，所以 hosted
+編譯同 manual release 仍然未驗證。
+
 ## 2026-08-27, session budget parser repair
 
 Release run `33135784814` stopped while parsing `src/core/session-budget.ts` at line 264 with
