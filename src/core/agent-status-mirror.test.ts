@@ -2162,18 +2162,6 @@ describe('a restored entry is never proof', () => {
     expect(_snapshot().n1?.stateVerified).toBe(false)
   })
 
-  it('the first live event clears `restored`', () => {
-    const a = { state: 'done', stateVerified: false, restored: true, updatedAt: 0 } as MirrorEntry
-    expect(reduceEntry(a, ev({ state: 'working', verified: true }), 5).restored).toBeUndefined()
-  })
-
-  it('even an event that changes nothing clears it — the entry is live evidence now', () => {
-    // A context/usage event is not a state transition, but it IS this run's traffic from that
-    // node. What `restored` means is "nothing has been heard from this node since boot".
-    const a = { state: 'done', restored: true, updatedAt: 0 } as MirrorEntry
-    expect(reduceEntry(a, ev({ kind: 'context' } as never), 5).restored).toBeUndefined()
-  })
-
   it('the first live event that COMMITS a state clears `restored`', () => {
     // `newTurn` matters here and the first draft of this test omitted it: at now=5 against a
     // restored `done` stamped 0, a bare `working` is inside the done-holdoff, commits nothing, and

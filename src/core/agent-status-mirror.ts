@@ -1,7 +1,6 @@
 import { basenameForPathSyntax } from './path-basename'
 import fs from 'fs'
 import path from 'path'
-import { writeFileAtomic } from './fs-atomic'
 import { platform } from './platform'
 import { publishMirrorGeneration, reserveMirrorGeneration } from './mirror-publication'
 import type { AgentId } from '@shared/agents/config'
@@ -376,10 +375,6 @@ export function reduceEntry(
   now: number
 ): MirrorEntry {
   const next: MirrorEntry = prev ? { ...prev } : { updatedAt: now }
-  // ANY event is this run's traffic from this node, so the entry is no longer "restored and
-  // unheard-from". Done before every branch — including the ones that return early — because what
-  // the flag means is "nothing has been heard since boot", not "the state is still the restored one".
-  delete next.restored
   /**
    * Commit a state onto `next` — and everything that must move WITH it. One function rather than
    * the same four lines at each branch, because the alternative was measured: of the three branches
@@ -1975,11 +1970,6 @@ export async function flush(): Promise<void> {
   const queued = flushWriteChain.then(() => flushOne(file), () => flushOne(file))
   flushWriteChain = queued.then(() => undefined, () => undefined)
   await queued
-  try {
-    await writeFileAtomic(file, JSON.stringify(doc), { mode: 0o600 })
-  } catch {
-    // best-effort: listeners already got the doc; a failed local write cleans up its own temp
-  }
 }
 
 // ---- Test helpers --------------------------------------------------------------------------
