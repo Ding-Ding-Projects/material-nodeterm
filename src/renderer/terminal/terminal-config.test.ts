@@ -793,7 +793,7 @@ describe('xtermOptionsFromSettings', () => {
       visual({
         fontFamily: 'JetBrains Mono',
         fontSize: 15,
-        terminalWordSeparator: ' ',
+        terminalWordSeparators: ' ',
         cursorBlink: false,
         cursorStyle: 'bar',
         cursorInactiveStyle: 'none',
@@ -871,7 +871,7 @@ describe('applyLiveOptions', () => {
 
   it('applies a word-separator change without refitting the terminal', () => {
     const term = fakeTerm(visual())
-    const r = applyLiveOptions(term, visual({ terminalWordSeparator: ' ' }))
+    const r = applyLiveOptions(term, visual({ terminalWordSeparators: ' ' }))
     expect(r).toEqual({ metricsChanged: false, themeChanged: false })
     expect(term.options.wordSeparator).toBe(' ')
     expect(term.writes).toEqual(['wordSeparator'])
