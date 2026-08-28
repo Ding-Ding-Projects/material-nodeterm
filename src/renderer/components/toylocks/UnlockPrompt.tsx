@@ -7,6 +7,8 @@ import type { ToyLockRecord } from '@shared/toylock'
 import { useToyLocks } from '../../state/toylocks'
 import { UnlockLadderPanel } from './UnlockLadder'
 import { PasswordField } from './PasswordField'
+import { copy, fact, mapOwnedSentence } from '../../lib/personalVocabulary/ownedCopy'
+import { useVocabularyMapper } from '../../lib/personalVocabulary/useVocabularyText'
 
 export function UnlockPrompt({
   record,
@@ -19,6 +21,7 @@ export function UnlockPrompt({
   onUnlocked: () => void
   onClose: () => void
 }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   // `password` carries a plain password OR a Windows PIN (same field on the wire — see
   // ToyLockVerifyInput); `code` carries a TOTP code. The combo kind (`password-totp`) is the only
   // one that reads both.
@@ -73,7 +76,7 @@ export function UnlockPrompt({
         onUnlocked()
         return
       }
-      setError(res.reason ?? 'That did not match.')
+      setError(res.reason ?? vocab('That did not match.'))
       if (res.retryAfterMs) setRetryAfterMs(res.retryAfterMs)
     } finally {
       setBusy(false)
@@ -97,9 +100,11 @@ export function UnlockPrompt({
         style={{ top: Math.max(8, top), left: Math.max(8, left) }}
         role="dialog"
         aria-modal="false"
-        aria-label={`Unlock ${record.target.label}`}
+        aria-label={mapOwnedSentence(vocab, [copy('Unlock '), fact(record.target.label)])}
       >
-        <div className="toylock-wizard__title">🔒 “{record.target.label}” is locked</div>
+        <div className="toylock-wizard__title">
+          {mapOwnedSentence(vocab, [copy('🔒 “'), fact(record.target.label), copy('” is locked')])}
+        </div>
         {needsPassword && (
           <PasswordField
             inputRef={inputRef}
@@ -117,8 +122,10 @@ export function UnlockPrompt({
         {needsCode && (
           <div className="toylock-field">
             <span className="toylock-field__label">
-              Authenticator code
-              {record.credentialKind === 'password-totp' && ' (both required)'}
+              {mapOwnedSentence(vocab, [
+                copy('Authenticator code'),
+                ...(record.credentialKind === 'password-totp' ? [copy(' (both required)')] : [])
+              ])}
             </span>
             <input
               ref={needsPassword ? undefined : inputRef}
@@ -126,6 +133,10 @@ export function UnlockPrompt({
               inputMode="numeric"
               autoComplete="one-time-code"
               className="toylock-input toylock-input--code"
+              aria-label={mapOwnedSentence(vocab, [
+                copy('Authenticator code'),
+                ...(record.credentialKind === 'password-totp' ? [copy(' (both required)')] : [])
+              ])}
               value={code}
               onChange={(e) => setCode(e.target.value.replace(/[^0-9]/g, ''))}
               onKeyDown={(e) => {
@@ -139,7 +150,8 @@ export function UnlockPrompt({
         {error && (
           <div className="toylock-error">
             {error}
-            {retryAfterMs > 0 && ` Try again in ${waitSeconds}s.`}
+            {retryAfterMs > 0 &&
+              mapOwnedSentence(vocab, [copy(' Try again in '), fact(String(waitSeconds)), copy('s.')])}
           </div>
         )}
         {retryAfterMs > 0 &&
@@ -157,12 +169,12 @@ export function UnlockPrompt({
             />
           ) : (
             <button className="toylock-btn--link" onClick={() => setPlaying(true)}>
-              Play your way out of the wait
+              {vocab('Play your way out of the wait')}
             </button>
           ))}
         <div className="toylock-wizard__actions">
           <button className="toylock-btn" onClick={onClose}>
-            Cancel
+            {vocab('Cancel')}
           </button>
           <button
             className="toylock-btn toylock-btn--primary"
@@ -171,11 +183,11 @@ export function UnlockPrompt({
             }
             onClick={() => void submit()}
           >
-            {busy ? 'Checking…' : 'Unlock'}
+            {busy ? vocab('Checking…') : vocab('Unlock')}
           </button>
         </div>
         <button className="toylock-btn--link" onClick={openSupportTickets}>
-          Forgotten your password?
+          {vocab('Forgotten your password?')}
         </button>
       </div>
     </>,
