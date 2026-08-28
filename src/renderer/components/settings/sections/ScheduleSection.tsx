@@ -254,7 +254,7 @@ function StatusRow({
             <SettingsText segments={[{ kind: 'copy', value: `${label} last synced ` }, { kind: 'fact', value: lastSuccess ?? 'unknown' }, { kind: 'copy', value: '.' }]} />
           </p>
         ) : (
-          <p className="text-muted"><SettingsText>{label} has not been checked yet.</SettingsText></p>
+          <p className="text-muted"><SettingsText>{`${label} has not been checked yet.`}</SettingsText></p>
         )}
       </div>
       <Button onClick={onRetry}>Retry</Button>
@@ -690,6 +690,7 @@ function RuleCard({
   onSetToken: (token: string | null) => Promise<boolean>
   onRetry: () => void
 }): React.JSX.Element {
+  const vocab = useVocabularyMapper()
   return (
     <div className="space-y-4 rounded-md border border-border p-3">
       <div className="flex flex-wrap items-center gap-3">

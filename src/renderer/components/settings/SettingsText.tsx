@@ -17,7 +17,7 @@ export function SettingsText(props: SettingsTextProps): React.JSX.Element {
     'template' in props ? props.template : undefined,
     'facts' in props ? props.facts : undefined
   )
-  if ('segments' in props) {
+  if ('segments' in props && props.segments) {
     return (
       <>
         {props.segments.map((segment, index) =>

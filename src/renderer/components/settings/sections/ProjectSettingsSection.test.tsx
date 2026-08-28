@@ -42,7 +42,7 @@ describe('ProjectSettingsSection', () => {
   const mount = async (node: React.JSX.Element, query = ''): Promise<void> => {
     root = createRoot(host)
     await act(async () => {
-      root.render(<SettingsSearchContext.Provider value={query}>{node}</SettingsSearchContext.Provider>)
+    root.render(<SettingsSearchContext.Provider value={{ mode: 'text', query, pattern: '', flags: 'i' }}>{node}</SettingsSearchContext.Provider>)
     })
   }
 
@@ -795,7 +795,7 @@ describe('ProjectSettingsSection — setup run controls', () => {
     root = createRoot(host)
     await act(async () => {
       root.render(
-        <SettingsSearchContext.Provider value="">
+        <SettingsSearchContext.Provider value={{ mode: 'text', query: '', pattern: '', flags: 'i' }}>
           <ProjectSettingsSection projectId={p.id} isActive />
         </SettingsSearchContext.Provider>
       )

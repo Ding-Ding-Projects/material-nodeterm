@@ -348,7 +348,6 @@ export function AgentsSection({ isActive }: { isActive: boolean }): React.JSX.El
                 <SegmentedPill<'enabled' | 'disabled'>
                   value={enabled ? 'enabled' : 'disabled'}
                   ariaLabel="{agent} availability"
-                  ariaLabelParams={{ agent: row.label }}
                   options={[
                     { value: 'enabled', label: 'Enabled' },
                     { value: 'disabled', label: 'Disabled' }

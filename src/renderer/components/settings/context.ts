@@ -28,7 +28,7 @@ export const SettingsVocabularyContext = createContext<SettingsVocabularyResolut
  *  right thing in either mode. */
 export function useSettingsSearch(): string {
   const s = useContext(SettingsSearchContext)
-  return s.mode === 'text' ? s.query : s.pattern
+  return s.mode === 'text' ? s.query ?? '' : s.pattern ?? ''
 }
 
 /** The full mode-aware search state — for SearchableRow and the sidebar's own dimming. */

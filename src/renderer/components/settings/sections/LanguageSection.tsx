@@ -88,6 +88,13 @@ function FunnyLevelSlider({
  * carries the same rule as a comment for anyone adding a string).
  */
 export function LanguageSection({ isActive }: { isActive: boolean }): React.JSX.Element | null {
+  const vocab = useVocabularyMapper()
+  const mappedRows = {
+    mode: settingsSearchEntryWithVocabulary(ROWS.mode, vocab),
+    funnyEn: settingsSearchEntryWithVocabulary(ROWS.funnyEn, vocab),
+    funnyYue: settingsSearchEntryWithVocabulary(ROWS.funnyYue, vocab),
+    emoji: settingsSearchEntryWithVocabulary(ROWS.emoji, vocab)
+  }
   const languageMode = useSettings((s) => s.settings.languageMode)
   const funnyLevelEn = useSettings((s) => s.settings.funnyLevelEn)
   const funnyLevelYue = useSettings((s) => s.settings.funnyLevelYue)

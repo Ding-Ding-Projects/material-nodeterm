@@ -57,7 +57,7 @@ export function SettingsSection({
   // answers depending on whether a section happened to pass `searchEntries` — never the section's
   // own real rows, which is what SearchableRow was faithfully filtering all along.
   const search = useSettingsSearchState()
-  const hasQuery = (search.mode === 'text' ? search.query : search.pattern).trim() !== ''
+  const hasQuery = (search.mode === 'text' ? search.query : search.pattern ?? '').trim() !== ''
   // Personal-vocabulary boundary for section chrome (unconditional). Search matching below keeps
   // the shipped aliases beside visible replacements, so a rename never breaks existing lookup.
   const mappedTitle = useVocabularyText(title)
@@ -89,9 +89,9 @@ export function SettingsSection({
         ) : null}
       </div>
       <div className="divide-y divide-border/60 rounded-2xl border border-border bg-white/[0.02] px-6 shadow-sm [&>*]:py-5">
-        <SettingsSearchContext.Provider value={childQuery}>{children}</SettingsSearchContext.Provider>
+        <SettingsSearchContext.Provider value={search}>{children}</SettingsSearchContext.Provider>
       </div>
-      <SettingsSearchContext.Provider value={childQuery}>
+      <SettingsSearchContext.Provider value={search}>
         <div className="md3-settings-card">{children}</div>
       </SettingsSearchContext.Provider>
       </section>

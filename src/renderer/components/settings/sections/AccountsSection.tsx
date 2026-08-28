@@ -723,7 +723,7 @@ export function AccountsSection({ isActive }: { isActive: boolean }): React.JSX.
               <Button
                 variant="ghost"
                 aria-label="Remove Codex account"
-                onClick={() => setPendingRemoveCodex(account)}
+                onClick={() => setPendingCodexRemove(account)}
               >
                 ×
               </Button>
