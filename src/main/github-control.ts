@@ -59,10 +59,6 @@ async function atomicWrite(
     mode: 0o600
   })
 } */
-function validToken(token: string): boolean {
-  return token.trim() === token && token.length > 0 && token.length <= 4096 && !/[\r\n\0]/.test(token)
-}
-
 /**
  * Remove temp files no writer in THIS process owns: the legacy fixed `<file>.tmp` (written by
  * builds before per-call names) and any `<file>.<pid>.<seq>[.<uuid>].tmp` whose pid is not ours.

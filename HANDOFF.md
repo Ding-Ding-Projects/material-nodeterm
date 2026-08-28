@@ -3876,6 +3876,19 @@ This bounded parser repair ran no tests, checkers, lint, type checks, builds, pa
 audits, runtime interaction, or UI captures. The coordinating owner must reconcile the repair with
 the current default branch, observe hosted build verification, and rerun the manual release path
 before making a release claim.
+
+# 2026-08-28, GitHub control dead-validator follow-up
+
+Copilot review comment [discussion_r3877552847](https://github.com/Ding-Ding-Projects/material-nodeterm/pull/207#discussion_r3877552847)
+identified the local `validToken()` helper in `src/main/github-control.ts` as dead code. All live
+credential paths already use `validGitHubToken`, so the helper was removed without changing token
+validation, encryption, restricted-file storage, locking, atomic writes, host checks, or IPC behavior.
+
+Changed files: `src/main/github-control.ts` and `HANDOFF.md`.
+
+This follow-up ran no tests, checkers, lint, type checks, builds, packaging, reviews, audits, runtime
+interaction, or UI captures. The repair remains unverified until the coordinating owner observes the
+hosted build and reruns the manual release path.
 # Issue #60, Cloudflare Tunnel wizard source lane
 
 The isolated `feat/program-49-tunnel-wizard` lane adds the bounded wizard contract in
