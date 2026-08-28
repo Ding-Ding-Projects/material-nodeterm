@@ -1,5 +1,42 @@
 # Handoff
 
+## 2026-08-28, VS2022 Spectre component selection repair
+
+The fresh `0.4.121` manual build from commit `9f3527b248cde672d24f8ed71cae4b081517bf18` ran
+`build.bat /s` and exited with code `1` during the native `electron-rebuild` path. The complete
+build and npm logs report `MSB8040` for `node-pty` projects whose generated files request
+`<PlatformToolset>v143</PlatformToolset>` and `<SpectreMitigation>Spectre</SpectreMitigation>`.
+The generated projects use `PreferredToolArchitecture` set to `x64` and the expected Windows SDK,
+so the failure is specifically the Spectre library location rather than an unrequested toolset or
+architecture.
+
+The installed machine has several VS2022 instances. The user-local `MaterialPhoneToolchain\VS2022`
+instance contains MSBuild v170 and the `14.44.35207` toolset, but its
+`VC\Tools\MSVC\14.44.35207\lib\spectre\x86` and `lib\spectre\x64` directories are absent. A
+separate shared-data `LibreOfficeMaterialTools\VS2022` instance has the same toolset version and
+real Spectre directories for `x86` and `x64`, and the combined `vswhere -requires` query for
+`Microsoft.VisualStudio.Workload.VCTools` plus
+`Microsoft.VisualStudio.Component.VC.Runtimes.x86.x64.Spectre` identifies that instance. Multiple
+IDs passed to `-requires` use all-components semantics unless `-requiresAny` is supplied.
+
+The previous bootstrap validated that a compatible instance existed, then exported only
+`GYP_MSVS_VERSION=2022` and `npm_config_msvs_version=2022`. `node-gyp` was therefore still free to
+select another VS2022 instance by discovery order, and the build used the instance without the
+required Spectre directories. The repair makes the helper select only an instance that has both
+the declared Spectre component and real per-architecture `.lib` files, writes that validated
+installation path to a bounded result file, and makes `download-dependencies.bat` export it as
+`GYP_MSVS_OVERRIDE_PATH` alongside both version selectors. The result survives the normal-user
+post-UAC verification and the final `endlocal` handoff. If no compatible instance exists, the
+existing installer route still fails before npm and names the exact component IDs and library
+architectures required. Spectre mitigation remains enabled, and no global npm or Visual Studio
+configuration is changed.
+
+No tests, lint, type checks, full builds, packaging, reviews, audits, runtime interaction, or UI
+captures were run in this repair lane. The manual build logs are pre-repair evidence; a post-repair
+build is still required before this repair can be called verified. The external toolchain remains
+machine state, so the coordinator must confirm that the selected path resolves to the instance
+with the required Spectre directories.
+
 ## 2026-08-27, duplicate Codex usage callback repair
 
 Release run `33130189125` reported a duplicate `codexAccounts` property in the object passed to
@@ -36,27 +73,6 @@ This lane intentionally ran no tests, lint, type checks, builds, packaging, inst
 runtime interaction, reviews, audits, or UI captures. Read-only source and history inspection was
 used to locate the shutdown boundary. The integration owner must evaluate the exact commit and the
 follow-up GitHub Actions run before treating this repair as verified.
-## 2026-08-27, VS2022 Spectre toolchain selection for native npm builds
-
-The fresh full checkout build for version `0.4.121` ran `build.bat /s` and exited `1` during the
-npm postinstall path for `electron-rebuild` and `node-pty`. The diagnostic was `MSB8040`, which
-requires the Spectre-mitigated libraries. Bootstrap discovery found Node `24.19.0`, Python
-`3.13`, and the required x86/x64 Spectre libraries in the VS2022 toolset `14.44.35207`, but the
-native build selected `C:\Program Files\Microsoft Visual Studio\18\Enterprise\MSBuild\Microsoft\VC\v180`,
-where the matching Spectre libraries were absent.
-
-The cause was that `download-dependencies.bat` validated the supported VS2022 toolchain but left
-node-gyp and npm free to auto-select the newer VS18 installation. The repair sets both
-`GYP_MSVS_VERSION=2022` and `npm_config_msvs_version=2022` immediately after successful VS2022
-validation, including the interactive post-UAC path, and exports both values through the final
-`endlocal` handoff so later npm, node-gyp, and electron-rebuild commands receive the same choice.
-The script does not modify global npm configuration, Visual Studio, or Spectre mitigation.
-
-No tests, checkers, lint, type checks, builds, packaging, installer execution, runtime interaction,
-reviews, audits, or UI captures were run in this lane. The manual build result above is the source
-diagnostic, not a post-repair verification. The coordinating owner must run the supported build
-path and inspect the resulting GitHub Actions run before claiming the repair verified.
-
 ## 2026-08-27, notification preparation and relay argument punctuation repair
 
 Release run `33128741581` at `7117d7bc97b6a7a7f83f0d4607d30a018b741922` passed all repository,

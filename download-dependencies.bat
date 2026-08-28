@@ -159,7 +159,7 @@ rem so a missing component is repaired rather than merely diagnosed without ever
 rem Administrator token.
 rem ---------------------------------------------------------------------------------------------
 call :phase_begin "Visual Studio C++ build toolchain"
-set "NODETERM_VS_RESULT_FILE=%TEMP%\nodeterm-vs-installation-%RANDOM%-%RANDOM%.txt"
+set "NODETERM_VS_RESULT_FILE=%TEMP%\nodeterm-vs-selection-%RANDOM%-%RANDOM%.txt"
 if exist "%NODETERM_VS_RESULT_FILE%" del /f /q "%NODETERM_VS_RESULT_FILE%" >nul 2>nul
 if "%NODETERM_SILENT%"=="1" (
     call node "%NODETERM_ROOT%\scripts\ensure-windows-build-toolchain.mjs" --silent --result-file "%NODETERM_VS_RESULT_FILE%"
@@ -179,13 +179,16 @@ if not "%TOOLCHAIN_EXIT%"=="0" (
 call :accept_toolchain_result
 if errorlevel 1 exit /b %ERRORLEVEL%
 :toolchain_phase_complete
-rem The toolchain helper has independently validated the supported VS2022 v143 instance and its
-rem Spectre libraries. Pin both node-gyp selectors for this process so a newer VS18 installation
-rem cannot silently win auto-detection and fail native builds with MSB8040. These values are
-rem exported below beside the verified Python selection for callers such as build.bat.
+rem The toolchain helper has independently validated one supported VS2022 v143 instance, its
+rem Spectre libraries, and all manifest-declared C++ components. The result-file reader above has
+rem already validated that exact installation path and set VCINSTALLDIR for the active toolset.
+rem Pin both npm/node-gyp's version and node-gyp's exact installation path for this process. The
+rem path is essential when multiple VS2022 instances exist, because the year alone permits
+rem enumeration-order selection of an instance whose v143 Spectre directories are absent.
 set "GYP_MSVS_VERSION=2022"
 set "npm_config_msvs_version=2022"
-echo   Selected Visual Studio 2022 for node-gyp and electron-rebuild; the validated VS2022 Spectre libraries prevent unsupported toolset auto-selection.
+set "GYP_MSVS_OVERRIDE_PATH=%NODETERM_VS_INSTALLATION%"
+echo   Selected Visual Studio 2022 at "%GYP_MSVS_OVERRIDE_PATH%" for node-gyp and electron-rebuild; the path has validated v143 Spectre libraries.
 call :phase_end "Visual Studio C++ build toolchain"
 
 rem ---------------------------------------------------------------------------------------------
@@ -336,7 +339,8 @@ set "NODETERM_RETURN_PYTHON=%PYTHON%"
 set "NODETERM_RETURN_VCINSTALLDIR=%VCINSTALLDIR%"
 set "NODETERM_RETURN_GYP_MSVS_VERSION=%GYP_MSVS_VERSION%"
 set "NODETERM_RETURN_NPM_CONFIG_MSVS_VERSION=%npm_config_msvs_version%"
-endlocal & set "PATH=%NODETERM_RETURN_PATH%" & set "NODETERM_NODE_HOME=%NODETERM_RETURN_NODE_HOME%" & set "PYTHON=%NODETERM_RETURN_PYTHON%" & set "NODE_GYP_FORCE_PYTHON=%NODETERM_RETURN_PYTHON%" & set "npm_config_python=%NODETERM_RETURN_PYTHON%" & set "VCINSTALLDIR=%NODETERM_RETURN_VCINSTALLDIR%" & set "GYP_MSVS_VERSION=%NODETERM_RETURN_GYP_MSVS_VERSION%" & set "npm_config_msvs_version=%NODETERM_RETURN_NPM_CONFIG_MSVS_VERSION%"
+set "NODETERM_RETURN_GYP_MSVS_OVERRIDE_PATH=%GYP_MSVS_OVERRIDE_PATH%"
+endlocal & set "PATH=%NODETERM_RETURN_PATH%" & set "NODETERM_NODE_HOME=%NODETERM_RETURN_NODE_HOME%" & set "PYTHON=%NODETERM_RETURN_PYTHON%" & set "NODE_GYP_FORCE_PYTHON=%NODETERM_RETURN_PYTHON%" & set "npm_config_python=%NODETERM_RETURN_PYTHON%" & set "VCINSTALLDIR=%NODETERM_RETURN_VCINSTALLDIR%" & set "GYP_MSVS_VERSION=%NODETERM_RETURN_GYP_MSVS_VERSION%" & set "npm_config_msvs_version=%NODETERM_RETURN_NPM_CONFIG_MSVS_VERSION%" & set "GYP_MSVS_OVERRIDE_PATH=%NODETERM_RETURN_GYP_MSVS_OVERRIDE_PATH%"
 exit /b 0
 
 :accept_toolchain_result
@@ -354,11 +358,21 @@ set /p "NODETERM_VS_INSTALLATION="<"%NODETERM_VS_RESULT_FILE%"
 del /f /q "%NODETERM_VS_RESULT_FILE%" >nul 2>nul
 set "NODETERM_VS_RESULT_FILE="
 if not defined NODETERM_VS_INSTALLATION (
-    echo [FAILED] Visual Studio C++ build toolchain - helper returned an empty installation path
+    echo.
+    echo [FAILED] Visual Studio C++ build toolchain
+    echo   Dependency : selected Visual Studio installation path
+    echo   Constraint : the helper must return a non-empty absolute installation path
+    echo   Source     : "%NODETERM_ROOT%\scripts\ensure-windows-build-toolchain.mjs"
+    echo   Error      : helper returned an empty installation path
     exit /b 1
 )
 if not exist "%NODETERM_VS_INSTALLATION%\VC\Tools\MSVC" (
-    echo [FAILED] Visual Studio C++ build toolchain - selected installation has no VC toolset
+    echo.
+    echo [FAILED] Visual Studio C++ build toolchain
+    echo   Dependency : selected Visual Studio installation path
+    echo   Constraint : the selected path must still contain VC\Tools\MSVC
+    echo   Source     : "%NODETERM_VS_INSTALLATION%"
+    echo   Error      : validated installation path is no longer present
     exit /b 1
 )
 set "VCINSTALLDIR=%NODETERM_VS_INSTALLATION%\VC"
