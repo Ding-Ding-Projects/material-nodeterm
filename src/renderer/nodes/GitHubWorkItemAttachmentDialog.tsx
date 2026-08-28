@@ -63,12 +63,23 @@ export function GitHubWorkItemAttachmentDialog({
             const normalized = githubPullRequestFromApiItem(item, repository)
             if (normalized) collected.push(normalized)
           }
+          if (result.items.length > 100) partial = true
           partial = partial || result.partial
-          if (!result.nextPage || result.nextPage <= page) break
-          page = result.nextPage
+          const hasNextPage = typeof result.nextPage === 'number' && result.nextPage > page
+          if (!hasNextPage) break
+          // The three-page ceiling is a deliberate resource bound. A provider continuation after
+          // the last allowed request means the visible list is partial even when the provider did
+          // not label its own page that way.
+          if (requestCount === 2) {
+            partial = true
+            break
+          }
+          page = result.nextPage as number
         }
         if (cancelled) return
-        setPullRequests(collected.slice(0, 300))
+        const bounded = collected.slice(0, 300)
+        if (bounded.length < collected.length) partial = true
+        setPullRequests(bounded)
         if (partial) setProviderError('The approved GitHub API returned a bounded partial pull-request list. Refresh to try again.')
         setProviderState('ready')
       } catch (error) {

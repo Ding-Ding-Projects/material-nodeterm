@@ -8,6 +8,9 @@
   unavailable provider states remain visible. No tests, lint, typecheck, builds, packaging, reviews,
   audits, runtime interaction, or captures were run in this ultra-speed lane.
 
+- Mark a pull-request list as partial when the provider continues beyond the three-page, 300-item
+  bound or when local result truncation occurs, even if the provider response omits its partial flag.
+
 - Add a guided attach and adopt surface for GitHub work items. Terminal and owning-frame context
   menus now open a searchable provider-backed picker with a review step, exact frame adoption, and
   explicit legacy-card conversion that preserves the complete record. No tests, type checks, lint,

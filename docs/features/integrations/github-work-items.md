@@ -30,8 +30,9 @@ normalized record to the session node, marks the old record with the same exact 
 and hides only the old duplicate indicator, so no provider fields are discarded.
 
 When the guide opens, it also requests pull requests through the typed `pull-request.list` operation
-for the active project and approved repository. It follows at most three pages and 300 pull requests,
-keeps `head.ref`, review, checks, labels, and provider timestamps, and surfaces partial, unavailable,
+for the active project and approved repository. It follows at most three pages and 300 pull requests;
+any continuation after that bound, provider partial flag, or local truncation at the ceiling is shown
+as partial. It keeps `head.ref`, review, checks, labels, and provider timestamps, and surfaces partial, unavailable,
 offline, and capability errors without guessing. It never accepts an arbitrary endpoint or a renderer
 credential. The guide's final mutation rechecks the exact `headRef ===` app-owned frame branch rule.
 
