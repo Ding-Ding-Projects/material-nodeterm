@@ -23,7 +23,6 @@ export interface AgentContinuationEvent {
   summary: string
   preview?: string
 }
-
 export interface AgentContinuationPacket {
   version: 1
   nodeId: string
@@ -66,4 +65,3 @@ export interface AgentContinuationApi {
   /** Fires when a packet changes, including cold-relaunch hydration. */
   onUpdate(listener: (packets: AgentContinuationPreview[]) => void): () => void
 }
-

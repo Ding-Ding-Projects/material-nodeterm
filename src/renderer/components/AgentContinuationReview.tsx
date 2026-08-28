@@ -7,7 +7,6 @@ interface AgentContinuationReviewProps {
   nodeId: string
   api?: AgentContinuationApi
 }
-
 /**
  * An anchored, explicit review surface for a recovered Codex turn.
  *
@@ -90,4 +89,3 @@ export function AgentContinuationReview({ nodeId, api }: AgentContinuationReview
     </aside>
   )
 }
-

@@ -4541,7 +4541,6 @@ Changed files: `src/main/codex-relay-daemon.ts` and `HANDOFF.md`. No tests, chec
 checks, builds, packaging, installer execution, runtime interaction, reviews, audits, or UI
 captures were run in this lane. The coordinating owner must evaluate the exact merged commit and
 the resulting remote workflow before treating the release as recovered.
-
 # 2026-08-27, duplicate registerNode property repair
 
 Release run `33130189125` reported a duplicate `registerNode` property in the `hostBridge` object

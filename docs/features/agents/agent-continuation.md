@@ -51,4 +51,3 @@ checks, builds, packaging, reviews, audits, runtime interaction, and screen capt
 - [Context-window progress](./context-window-progress.md)
 - [Managed Codex account behavior](./codex-account-behavior.md)
 - [Local version history](../local-history.md)
-

@@ -126,9 +126,9 @@ later commit, since this file will not be kept in lockstep with every merge).
 
 ## In progress / partially landed
 
-- [ ] **Codex crash-recovery continuation, issue #198:** bounded encrypted one-packet-per-node
+- [ ] **Codex crash-recovery continuation, downstream issue #198:** bounded encrypted one-packet-per-node
       provider-event state, typed IPC and preload boundaries, verified provider start and next-turn
-      receipt, and an anchored explicit review card are implemented on this jer. Focused tests are
+      receipt, and an anchored explicit review card are implemented on this feature branch. Focused tests are
       authored but were not run under the ultra-speed boundary; type checks, builds, packaging,
       runtime interaction, reviews, audits, and captures remain pending.
 
