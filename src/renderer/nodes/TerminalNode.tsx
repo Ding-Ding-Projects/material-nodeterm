@@ -149,6 +149,7 @@ import { FindBar } from '../components/FindBar'
 import { IconSearch, IconChat, IconMic, IconReload, IconPictureInPicture } from '../components/icons'
 import { IconSearch, IconChat, IconMic, IconReload, IconEye, IconEyeOff, IconGrid, IconFocus } from '../components/icons'
 import { NodeLabels } from '../components/kanban/NodeLabels'
+import { GitHubWorkItemAttachment } from './GitHubWorkItemAttachment'
 import { Tooltip } from '../components/Tooltip'
 import { useTerminalSearch } from '../terminal/useTerminalSearch'
 import { useCopyFeedback } from '../terminal/useCopyFeedback'
@@ -6021,6 +6022,7 @@ export function TerminalNode({
         )}
 
         {!collapsed && <NodeLabels nodeId={id} />}
+        {!collapsed && <GitHubWorkItemAttachment items={data.githubWorkItems} nodeId={id} />}
 
         {/* Body always mounted (keeps xterm alive); hidden via CSS when collapsed. */}
         <div

@@ -14,7 +14,7 @@ import { OPEN_WEBUI_DEFAULT_INTENT, type OpenWebUiIntent, type OpenWebUiLocalBin
 import { DEFAULT_GITLAB_HOSTING_CONFIG, type GitLabHostingConfig } from '@shared/gitlab-hosting'
 import { NEXTCLOUD_AIO_DEFAULT_CONFIG } from '@shared/nextcloud-aio'
 import { DEFAULT_NEXTCLOUD_MANAGED_INTENT, type NextcloudManagedBinding, type NextcloudManagedIntent } from '@shared/nextcloud-managed'
-import { GITHUB_WORK_ITEM_NODE_SIZE } from '@shared/github-work-items'
+import { GITHUB_WORK_ITEM_NODE_SIZE, normalizeGitHubWorkItem } from '@shared/github-work-items'
 import type { NsisLocalPaths, NsisSpec } from '@shared/nsis-form-types'
 import { defaultNsisLocalPaths, defaultNsisSpec } from '@shared/nsis-form-types'
 import type { AgentId, AgentPermissionMode, BuiltinAgentId } from '@shared/agents/config'
@@ -316,6 +316,8 @@ export interface NodeData {
   torrentMagnet?: string
   /** AWS Resource Explorer and Cloud Control safe portable intent. */
   awsManagerIntent?: AwsManagerPortableIntent
+  /** Compact GitHub issue and pull-request attachments owned by this canvas node. */
+  githubWorkItems?: import('@shared/github-work-items').GitHubWorkItem[]
   /** nsis-only, GIT-SHARED: the installer's description. See `NsisSpec`. */
   nsisSpec?: NsisSpec
   /** nsis-only, MACHINE-LOCAL: absolute source/license/icon paths on this machine. Stripped
@@ -3149,6 +3151,9 @@ export function nodeStatesToFlow(states: CanvasNodeState[]): CanvasNode[] {
         virtualMachineConfig: n.virtualMachineConfig,
         virtualMachineLocalPaths: n.virtualMachineLocalPaths,
         githubWorkItem: n.githubWorkItem,
+        githubWorkItems: Array.isArray(n.githubWorkItems)
+          ? n.githubWorkItems.map(normalizeGitHubWorkItem).filter((item): item is NonNullable<typeof item> => !!item).slice(0, 100)
+          : undefined,
         calendarConfig: n.calendarConfig,
         homeAssistantControlConfig: n.kind === 'homeassistant-control' ? validateHomeAssistantControlConfig(n.homeAssistantControlConfig) : undefined,
         homeAssistantSensorConfig: n.homeAssistantSensorConfig,
@@ -3309,6 +3314,9 @@ export function flowToNodeStates(nodes: CanvasNode[]): CanvasNodeState[] {
         virtualMachineConfig: n.data.virtualMachineConfig,
         virtualMachineLocalPaths: n.data.virtualMachineLocalPaths,
         githubWorkItem: n.data.githubWorkItem,
+        githubWorkItems: Array.isArray(n.data.githubWorkItems)
+          ? n.data.githubWorkItems.map(normalizeGitHubWorkItem).filter((item): item is NonNullable<typeof item> => !!item).slice(0, 100)
+          : undefined,
         calendarConfig: n.data.calendarConfig,
         homeAssistantControlConfig: kind === 'homeassistant-control' ? validateHomeAssistantControlConfig(n.data.homeAssistantControlConfig) : undefined,
         homeAssistantSensorConfig: n.data.homeAssistantSensorConfig,

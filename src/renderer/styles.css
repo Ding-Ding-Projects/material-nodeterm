@@ -15826,6 +15826,40 @@ body.focus-mode .dock:hover {
 .github-work-item-node__body h3 { margin: 0 0 10px; font-size: 1.05rem; }
 .github-work-item-node__body p { margin: 6px 0; }
 .github-work-item-node footer { padding: 8px 16px; color: var(--md-sys-color-on-surface-variant); font-size: .82rem; }
+
+/* Compact work-item metadata lives on the owning node and frame. It is a real link, not a
+   decorative badge, so long provider titles are bounded without hiding the state text. */
+.github-work-item-chip,
+.github-work-item-pill {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  max-width: min(100%, 560px);
+  min-height: 30px;
+  padding: 3px 6px;
+  overflow: hidden;
+  color: var(--md-sys-color-on-surface);
+  background: var(--md-sys-color-surface-container-high);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 999px;
+  box-shadow: var(--md-sys-elevation-1);
+}
+.github-work-item-chip { margin: 4px 8px 0; }
+.github-work-item-pill { position: absolute; top: 5px; left: 50%; transform: translateX(-50%); z-index: 3; max-width: min(72%, 480px); }
+.github-work-item-chip__item { display: inline-flex; align-items: center; gap: 4px; min-width: 0; max-width: 100%; padding: 4px 7px; color: inherit; text-decoration: none; border-radius: 999px; outline: none; }
+.github-work-item-chip__item:hover, .github-work-item-chip__item:focus-visible { background: var(--md-sys-color-secondary-container); box-shadow: 0 0 0 2px var(--md-sys-color-primary); }
+.github-work-item-chip__kind, .github-work-item-chip__state { flex: 0 0 auto; font-size: 9px; font-weight: 800; letter-spacing: .04em; }
+.github-work-item-chip__number { flex: 0 0 auto; font-size: 10px; color: var(--md-sys-color-on-surface-variant); }
+.github-work-item-chip__title { min-width: 0; overflow: hidden; font-size: 11px; font-weight: 600; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+.github-work-item-chip__state { color: var(--md-sys-color-on-surface-variant); }
+.github-work-item-chip__item--running .github-work-item-chip__state { color: var(--md-sys-color-primary); }
+.github-work-item-chip__item--needs-you .github-work-item-chip__state { color: var(--md-sys-color-tertiary); }
+.github-work-item-chip__item--passed .github-work-item-chip__state { color: var(--md-sys-color-primary); }
+.github-work-item-chip__item--failed .github-work-item-chip__state { color: var(--md-sys-color-error); }
+@media (max-width: 720px) {
+  .github-work-item-pill { left: 8px; right: 8px; max-width: none; transform: none; }
+  .github-work-item-chip__title { font-size: 10px; }
+}
 .aws-manager-panel {
   gap: 12px;
   overflow: auto;
