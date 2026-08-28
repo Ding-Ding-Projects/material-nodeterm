@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Load pull requests for the attach guide through the typed `pull-request.list` capability with
+  bounded pagination and provider head-ref facts. Open an attached chip or frame pill in the in-app
+  Markdown detail and review surface, with an explicit secondary link to GitHub. Partial and
+  unavailable provider states remain visible. No tests, lint, typecheck, builds, packaging, reviews,
+  audits, runtime interaction, or captures were run in this ultra-speed lane.
+
 - Add a guided attach and adopt surface for GitHub work items. Terminal and owning-frame context
   menus now open a searchable provider-backed picker with a review step, exact frame adoption, and
   explicit legacy-card conversion that preserves the complete record. No tests, type checks, lint,

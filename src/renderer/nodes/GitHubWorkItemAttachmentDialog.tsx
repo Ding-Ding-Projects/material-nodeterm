@@ -1,6 +1,6 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { GitHubWorkItem } from '@shared/github-work-items'
-import { canAdoptPullRequestOnFrame } from '@shared/github-work-items'
+import { canAdoptPullRequestOnFrame, githubPullRequestFromApiItem } from '@shared/github-work-items'
 import { Dialog } from '../ui/md3/Dialog'
 import { TextField } from '../ui/md3/TextField'
 import { useRegexSearchField } from '../lib/regex/useRegexSearchField'
@@ -9,6 +9,8 @@ import { AnchoredRegexBuilder } from '../components/regex/AnchoredRegexBuilder'
 export interface GitHubWorkItemAttachmentDialogProps {
   open: boolean
   targetNodeId: string
+  projectId: string
+  repository?: string
   frameId?: string
   frameBranch?: string
   items: readonly GitHubWorkItem[]
@@ -20,6 +22,8 @@ export interface GitHubWorkItemAttachmentDialogProps {
 export function GitHubWorkItemAttachmentDialog({
   open,
   targetNodeId,
+  projectId,
+  repository,
   frameId,
   frameBranch,
   items,
@@ -29,15 +33,71 @@ export function GitHubWorkItemAttachmentDialog({
   const search = useRegexSearchField()
   const searchRef = useRef<HTMLInputElement>(null)
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
+  const [pullRequests, setPullRequests] = useState<GitHubWorkItem[]>([])
+  const [providerState, setProviderState] = useState<'idle' | 'loading' | 'ready' | 'unavailable'>('idle')
+  const [providerError, setProviderError] = useState<string | null>(null)
+  useEffect(() => {
+    if (!open) return
+    setSelectedKey(null)
+    setPullRequests([])
+    setProviderError(null)
+    if (!repository || !projectId) {
+      setProviderState('unavailable')
+      return
+    }
+    let cancelled = false
+    const load = async (): Promise<void> => {
+      setProviderState('loading')
+      try {
+        const collected: GitHubWorkItem[] = []
+        let page = 1
+        let partial = false
+        for (let requestCount = 0; requestCount < 3 && !cancelled; requestCount += 1) {
+          const result = await window.nodeTerminal.githubApi.execute({
+            operation: 'pull-request.list',
+            projectId,
+            page,
+            params: { repository, perPage: 100 }
+          })
+          for (const item of result.items.slice(0, 100)) {
+            const normalized = githubPullRequestFromApiItem(item, repository)
+            if (normalized) collected.push(normalized)
+          }
+          partial = partial || result.partial
+          if (!result.nextPage || result.nextPage <= page) break
+          page = result.nextPage
+        }
+        if (cancelled) return
+        setPullRequests(collected.slice(0, 300))
+        if (partial) setProviderError('The approved GitHub API returned a bounded partial pull-request list. Refresh to try again.')
+        setProviderState('ready')
+      } catch (error) {
+        if (cancelled) return
+        setProviderError(error instanceof Error ? error.message : 'Pull requests are unavailable from the approved GitHub API.')
+        setProviderState('unavailable')
+      }
+    }
+    void load()
+    return () => { cancelled = true }
+  }, [open, projectId, repository])
+  const availableItems = useMemo(() => {
+    const seen = new Set<string>()
+    return [...items, ...pullRequests].filter((item) => {
+      const key = `${item.repository}#${item.number}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    }).slice(0, 500)
+  }, [items, pullRequests])
   const filteredItems = useMemo(() => {
     const query = search.query.trim().toLocaleLowerCase()
-    const source = items.slice(0, 500)
+    const source = availableItems
     if (!query) return source
     return source.filter((item) => {
       const text = `${item.repository} #${item.number} ${item.title}`
       return search.mode === 'regex' && !search.error ? search.test(text) : text.toLocaleLowerCase().includes(query)
     })
-  }, [items, search.error, search.flags, search.mode, search.pattern, search.query, search.test])
+  }, [availableItems, search.error, search.flags, search.mode, search.pattern, search.query, search.test])
   const selected = filteredItems.find((item) => `${item.repository}#${item.number}` === selectedKey) ?? null
   const adopt = !!selected && !!frameId && canAdoptPullRequestOnFrame(selected, frameBranch)
 
@@ -84,13 +144,13 @@ export function GitHubWorkItemAttachmentDialog({
         placeholder="Search by repository, number, or title"
         aria-controls="github-work-item-attachment-results"
         trailingSlot={<AnchoredRegexBuilder search={search} fieldRef={searchRef} label="Regex: work item search" />}
-        supportText={search.error ?? `${filteredItems.length} provider-backed item${filteredItems.length === 1 ? '' : 's'} available`}
+        supportText={search.error ?? (providerState === 'loading' ? 'Loading provider-backed issues and pull requests…' : providerError ?? `${filteredItems.length} provider-backed item${filteredItems.length === 1 ? '' : 's'} available`)}
         invalid={!!search.error}
       />
       <div id="github-work-item-attachment-results" className="github-work-item-attachment-dialog__list" role="listbox" aria-label="Provider-backed GitHub work items">
         {filteredItems.length === 0 ? (
           <p className="github-work-item-attachment-dialog__empty" role="status">
-            No provider-backed work items are available. Refresh the GitHub issue surface, then reopen this guide.
+            {providerState === 'loading' ? 'Loading provider-backed issues and pull requests…' : providerState === 'unavailable' ? 'Provider-backed work items are unavailable. Check the approved GitHub API capability, then reopen this guide.' : 'No provider-backed work items are available. Refresh the GitHub issue surface, then reopen this guide.'}
           </p>
         ) : filteredItems.map((item) => {
           const key = `${item.repository}#${item.number}`

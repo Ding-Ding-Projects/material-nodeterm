@@ -68,6 +68,53 @@ export function workItemVisibleOnFrame(
   if (item.owningGroupId === frameId) return true
   return item.binding === 'adopted' && canAdoptPullRequestOnFrame(item, frameBranch)
 }
+
+/** Convert one bounded typed API result into the portable work-item shape. */
+export function githubPullRequestFromApiItem(
+  item: Record<string, unknown>,
+  repository: string
+): GitHubWorkItem | undefined {
+  const number = Number.isInteger(item.number) ? Number(item.number) : undefined
+  const title = typeof item.title === 'string' ? item.title : undefined
+  if (!number || number < 1 || !title || !repository) return undefined
+  const text = (key: string): string | undefined => typeof item[key] === 'string' ? String(item[key]) : undefined
+  const nested = (key: string): Record<string, unknown> | undefined =>
+    item[key] && typeof item[key] === 'object' ? item[key] as Record<string, unknown> : undefined
+  const state = text('state')
+  const mergedAt = text('merged_at')
+  const labels = Array.isArray(item.labels)
+    ? item.labels.slice(0, 100).flatMap((label) => {
+        if (!label || typeof label !== 'object') return []
+        const record = label as Record<string, unknown>
+        return typeof record.name === 'string'
+          ? [{ name: record.name.slice(0, 200), ...(typeof record.color === 'string' ? { color: record.color.slice(0, 32) } : {}) }]
+          : []
+      })
+    : []
+  const head = nested('head')
+  const user = nested('user')
+  return normalizeGitHubWorkItem({
+    schemaVersion: 1,
+    kind: 'pull-request',
+    repository,
+    number,
+    title: title.slice(0, 1000),
+    bodyMarkdown: text('body') ?? '',
+    state: mergedAt ? 'merged' : state === 'open' || state === 'closed' ? state : 'unknown',
+    author: typeof user?.login === 'string' ? { login: user.login.slice(0, 200), ...(typeof user.avatar_url === 'string' ? { avatarUrl: user.avatar_url.slice(0, 1000) } : {}) } : null,
+    labels,
+    reviewState: item.draft === true ? 'draft' : text('review_state'),
+    checksState: text('mergeable_state') ?? text('status'),
+    createdAt: text('created_at'),
+    updatedAt: text('updated_at'),
+    closedAt: text('closed_at'),
+    mergedAt,
+    htmlUrl: text('htmlUrl') ?? text('html_url') ?? '',
+    sessionIds: [],
+    headRef: typeof head?.ref === 'string' ? head.ref.slice(0, 512) : undefined,
+    refreshState: 'fresh'
+  })
+}
 export function isGitHubWorkItem(value: unknown): value is GitHubWorkItem {
   if (!value || typeof value !== 'object') return false
   const item = value as Partial<GitHubWorkItem>

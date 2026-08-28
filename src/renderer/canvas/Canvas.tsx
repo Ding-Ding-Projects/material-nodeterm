@@ -18922,6 +18922,8 @@ export function Canvas() {
         <GitHubWorkItemAttachmentDialog
           open
           targetNodeId={githubAttachment.targetNodeId}
+          projectId={activeProjectId}
+          repository={activeProject?.kanban?.github?.repository}
           frameId={githubAttachment.frameId}
           frameBranch={githubAttachment.frameBranch}
           items={githubAttachmentItems}

@@ -29,6 +29,12 @@ Legacy standalone cards are also offered for explicit conversion. Conversion cop
 normalized record to the session node, marks the old record with the same exact attachment identity,
 and hides only the old duplicate indicator, so no provider fields are discarded.
 
+When the guide opens, it also requests pull requests through the typed `pull-request.list` operation
+for the active project and approved repository. It follows at most three pages and 300 pull requests,
+keeps `head.ref`, review, checks, labels, and provider timestamps, and surfaces partial, unavailable,
+offline, and capability errors without guessing. It never accepts an arbitrary endpoint or a renderer
+credential. The guide's final mutation rechecks the exact `headRef ===` app-owned frame branch rule.
+
 Session relationships are never inferred from terminal or conversation text. The attached node id
 is explicit app-owned data. A frame may adopt a pull request only when its provider head ref exactly
 equals the app-owned worktree branch for that frame. Missing head-ref or branch data leaves adoption
@@ -36,8 +42,11 @@ explicit and guided. Relay and Server Edition hosts expose the same typed bridge
 unsupported or unavailable state when no authenticated host route exists.
 
 The legacy detail card renders provider-authored Markdown through the shared isolated renderer. The
-compact chip and pill are links into the reviewed detail route and remain keyboard and screen-reader
-operable. Search remains local and plain-text-first, with the app's anchored full regex builder
+compact chip and pill open an in-app detail and review surface and remain keyboard and screen-reader
+operable. The surface renders provider-authored Markdown through the shared isolated renderer, shows
+state, labels, review and check facts, and names the attached node and owning frame. **Open on GitHub**
+is a secondary explicit action, so the compact indicator remains useful without sending the user away
+for its primary details. Search remains local and plain-text-first, with the app's anchored full regex builder
 beside the field. Item state, author, labels, reviews, checks, and timestamps are facts from the
 normalized provider response, never guessed from a title or URL.
 
