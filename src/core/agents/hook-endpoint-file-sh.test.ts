@@ -30,7 +30,7 @@ afterAll(() => {
 })
 
 describe('endpoint file sources cleanly under real /bin/sh with a spaced path', () => {
-  it('preserves the exact NODETERM_NODE_TOKEN_DIR path, space intact', () => {
+  it.skipIf(process.platform === 'win32')('preserves the exact NODETERM_NODE_TOKEN_DIR path, space intact', () => {
     const p = hookServer.endpointFilePath()
     // Sanity: the writer really is exercising a spaced path this run.
     expect(nodeTokenDir()).toContain(' ')
