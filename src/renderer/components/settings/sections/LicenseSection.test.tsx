@@ -30,7 +30,11 @@ let writeText: Mock<(text: string) => void>
  * Returns the section already mounted with `status` applied, so the mount-time `loadDetail` effect
  * runs exactly as it does in the app.
  */
-async function mount(status: LicenseStatus, read: LicenseDetail = KEYGEN): Promise<void> {
+async function mount(
+  status: LicenseStatus,
+  read: LicenseDetail = KEYGEN,
+  featuresUnlocked = true
+): Promise<void> {
   vi.resetModules()
   detail = vi.fn(async () => read)
   releaseOthers = vi.fn(async () => ({ key: null, used: 1, seats: 3, source: null, error: null }))
@@ -52,7 +56,9 @@ async function mount(status: LicenseStatus, read: LicenseDetail = KEYGEN): Promi
     clipboard: { writeText }
   }
   const { useEntitlement } = await import('../../../state/entitlement')
+  const { useSettings } = await import('../../../state/settings')
   const { LicenseSection } = await import('./LicenseSection')
+  useSettings.getState().update({ proFeaturesEnabled: featuresUnlocked })
   await act(async () => {
     await useEntitlement.getState().hydrate()
   })
@@ -71,6 +77,12 @@ function click(label: string, from: ParentNode = document.body): void {
   const el = [...from.querySelectorAll('button')].find((b) => b.textContent?.trim() === label)
   expect(el, `a rendered "${label}" button`).toBeTruthy()
   ;(el as HTMLButtonElement).click()
+}
+
+function setInputValue(input: HTMLInputElement, value: string): void {
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+  setter.call(input, value)
+  input.dispatchEvent(new Event('input', { bubbles: true }))
 }
 
 /** The confirm dialog's own button, which portals onto body after everything else. */
@@ -250,7 +262,13 @@ describe('LicenseSection — the key field and the paste-elsewhere line', () => 
 
 describe('LicenseSection — activation failures', () => {
   it('renders seat_limit as a way out, never as a code', async () => {
-    await mount({ ...FREE, error: 'seat_limit' })
+    await mount(FREE, KEYGEN, false)
+    activate.mockResolvedValue({ ...FREE, error: 'seat_limit' })
+    await act(async () => document.querySelector('summary')?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    const input = document.querySelector<HTMLInputElement>('input[placeholder="paste your key"]')!
+    await act(async () => setInputValue(input, 'NT-KEY-1'))
+    await act(async () => click('Activate'))
+    await act(async () => undefined)
 
     const text = screenText()
     expect(text).not.toContain('seat_limit')
@@ -259,7 +277,13 @@ describe('LicenseSection — activation failures', () => {
   })
 
   it('renders an unknown reason as an apology with an action, not as a code', async () => {
-    await mount({ ...FREE, error: 'gremlins' })
+    await mount(FREE, KEYGEN, false)
+    activate.mockResolvedValue({ ...FREE, error: 'gremlins' })
+    await act(async () => document.querySelector('summary')?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    const input = document.querySelector<HTMLInputElement>('input[placeholder="paste your key"]')!
+    await act(async () => setInputValue(input, 'NT-KEY-1'))
+    await act(async () => click('Activate'))
+    await act(async () => undefined)
 
     const text = screenText()
     expect(text).not.toContain('gremlins')
